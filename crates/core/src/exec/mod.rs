@@ -18,6 +18,14 @@ pub trait BashExecutor: Send + Sync {
     fn execute(&self, script: &str) -> Option<ToolResult>;
 }
 
+/// Where one command's sandbox status documents go as they arrive (ADR-0006).
+/// A run killed mid-command never reaches its own end, so the documents must be
+/// handed over one at a time rather than collected and written afterwards.
+pub trait StatusSink: Send + Sync {
+    /// One document, exactly as bubblewrap wrote it.
+    fn document(&self, call: u64, document: &str);
+}
+
 /// Reads the configured command timeout, refusing anything outside the contract.
 pub fn timeout_from_secs(secs: u64) -> Result<Duration, String> {
     if secs == 0 || secs > MAX_TIMEOUT_SECS {

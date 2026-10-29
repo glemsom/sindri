@@ -9,11 +9,13 @@ pub use event::Event;
 pub use report::{Report, Stopped};
 pub use tool::BashTool;
 
+use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use std::time::Instant;
 
 use crate::cancel::Cancel;
 use crate::provider::{Error, Message, Model};
+use crate::record::Recorder;
 
 /// Drives the model until it stops asking for tools, or the turn cap is hit.
 pub struct Agent {
@@ -23,6 +25,8 @@ pub struct Agent {
     thinking: bool,
     events: Option<Sender<Event>>,
     cancel: Cancel,
+    /// Where the run is written down, when a front end asked for a record.
+    recorder: Option<Arc<Recorder>>,
 }
 
 impl Agent {
@@ -37,7 +41,14 @@ impl Agent {
             thinking,
             events: None,
             cancel: Cancel::new(),
+            recorder: None,
         }
+    }
+
+    /// Records the run as it happens, so a cancelled or crashed run still says
+    /// what it did (ADR-0006).
+    pub fn set_recorder(&mut self, recorder: Arc<Recorder>) {
+        self.recorder = Some(recorder);
     }
 
     /// Where events go. Without a receiver the loop still runs; it simply says
@@ -55,6 +66,9 @@ impl Agent {
     /// Runs one prompt to an answer, or reports why the model failed.
     pub fn run(&mut self, prompt: &str) -> Result<Report, Error> {
         let started = Instant::now();
+        if let Some(recorder) = &self.recorder {
+            recorder.user(prompt);
+        }
         let mut history = vec![Message::User(prompt.to_string())];
         let mut report = Report {
             answer: String::new(),
@@ -92,6 +106,9 @@ impl Agent {
                 report.model.get_or_insert(model);
             }
             self.reasoning(report.turns, &turn.reasoning);
+            if let Some(recorder) = &self.recorder {
+                recorder.assistant(report.turns, &turn.text, turn.reasoning.as_deref());
+            }
             if !turn.text.trim().is_empty() {
                 report.answer.clone_from(&turn.text);
             }
@@ -110,8 +127,16 @@ impl Agent {
                     break;
                 }
                 self.announce(report.turns, call);
+                if let Some(recorder) = &self.recorder {
+                    recorder.tool_call(report.turns, call);
+                }
                 match self.tool.call(call) {
-                    Some(outcome) => outcomes.push(outcome),
+                    Some(outcome) => {
+                        if let Some(recorder) = &self.recorder {
+                            recorder.tool_result(report.turns, &outcome);
+                        }
+                        outcomes.push(outcome);
+                    }
                     // The command was killed mid-flight; there is no result to
                     // feed back, and no model left to read it.
                     None => cancelled = true,

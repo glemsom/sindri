@@ -6,7 +6,7 @@ mod rig_wire;
 
 use std::time::Duration;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
 
@@ -134,7 +134,7 @@ impl ToolOutcome {
 ///
 /// The field order is the JSON output contract's own (ADR-0004), and a counter
 /// nobody reported is left out of the object rather than sent as null.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Usage {
     /// Every input token, cached or not.
     #[serde(skip_serializing_if = "Option::is_none")]

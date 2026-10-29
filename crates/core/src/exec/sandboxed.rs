@@ -3,17 +3,18 @@
 //! (ADR-0007).
 
 use std::fs::File;
-use std::io::{self, Read};
+use std::io::{self, BufRead, Read};
 use std::os::fd::{FromRawFd, RawFd};
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Child, Command, ExitStatus, Stdio};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use super::BashExecutor;
 use super::result::{Outcome, OutputLimit, ToolResult, truncate};
 use super::status::{exit_code, exit_status_code, first_line};
+use super::{BashExecutor, StatusSink};
 use crate::cancel::Cancel;
 use crate::sandbox::SandboxPolicy;
 
@@ -46,6 +47,9 @@ pub struct SandboxExecutor {
     spill_dir: PathBuf,
     cancel: Cancel,
     limit: OutputLimit,
+    /// Where bubblewrap's own account of each command is handed over as it
+    /// arrives, so a run that never finished still leaves the record.
+    status: Option<Arc<dyn StatusSink>>,
     /// Names each command's spill files, so turn n's path is still turn n's.
     calls: AtomicU64,
 }
@@ -65,8 +69,16 @@ impl SandboxExecutor {
             spill_dir,
             cancel,
             limit: OutputLimit::default(),
+            status: None,
             calls: AtomicU64::new(0),
         }
+    }
+
+    /// Records bubblewrap's status documents as they arrive (ADR-0006).
+    #[must_use]
+    pub fn with_status_sink(mut self, status: Arc<dyn StatusSink>) -> Self {
+        self.status = Some(status);
+        self
     }
 }
 
@@ -105,6 +117,9 @@ impl SandboxExecutor {
             .stderr(Stdio::piped())
             .process_group(0);
 
+        // Numbered before the spawn, because the status thread has to name the
+        // command it is describing while it is still running.
+        let call = self.calls.fetch_add(1, Ordering::Relaxed) + 1;
         let mut status_pipe = None;
         if sandboxed {
             let (read_end, write_end) = match pipe() {
@@ -144,7 +159,7 @@ impl SandboxExecutor {
         // three channels while the child runs.
         let status_docs = status_pipe.take().map(|(writer, reader)| {
             drop(writer);
-            drain(reader)
+            drain_documents(reader, call, self.status.clone())
         });
         let stdout = child.stdout.take().map(drain);
         let stderr = child.stderr.take().map(drain);
@@ -159,7 +174,6 @@ impl SandboxExecutor {
         }
         let timed_out = stopped == Stop::TimedOut;
 
-        let call = self.calls.fetch_add(1, Ordering::Relaxed) + 1;
         let (stdout, stdout_trouble) = collect(stdout);
         let (stderr, stderr_trouble) = collect(stderr);
         let docs = collect(status_docs).0;
@@ -296,6 +310,34 @@ fn drain<R: Read + Send + 'static>(mut source: R) -> std::thread::JoinHandle<io:
         let mut buffer = Vec::new();
         source.read_to_end(&mut buffer)?;
         Ok(buffer)
+    })
+}
+
+/// Reads the status channel one document at a time, handing each to the sink the
+/// moment it is complete and keeping the lot for classification: a run killed
+/// between two documents has still recorded the ones that arrived.
+fn drain_documents<R: Read + Send + 'static>(
+    source: R,
+    call: u64,
+    sink: Option<Arc<dyn StatusSink>>,
+) -> std::thread::JoinHandle<io::Result<Vec<u8>>> {
+    std::thread::spawn(move || {
+        let mut reader = io::BufReader::new(source);
+        let mut seen = Vec::new();
+        loop {
+            let mut line = Vec::new();
+            if reader.read_until(b'\n', &mut line)? == 0 {
+                return Ok(seen);
+            }
+            seen.extend_from_slice(&line);
+            if let Some(sink) = &sink {
+                let document = String::from_utf8_lossy(&line);
+                let document = document.trim();
+                if !document.is_empty() {
+                    sink.document(call, document);
+                }
+            }
+        }
     })
 }
 

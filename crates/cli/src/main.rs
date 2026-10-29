@@ -4,6 +4,7 @@
 mod batch;
 mod doctor;
 mod sandbox;
+mod sessions;
 mod signal;
 mod verbose;
 
@@ -68,6 +69,21 @@ enum Command {
         #[command(subcommand)]
         command: SandboxCommand,
     },
+    /// The record a run left behind (ADR-0006).
+    Sessions {
+        #[command(subcommand)]
+        command: SessionsCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum SessionsCommand {
+    /// Print one session's transcript: what was asked, what the model said,
+    /// what it ran and what came back.
+    Show {
+        /// The session GUID, from the JSON output or the `-v` footer.
+        id: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -95,6 +111,9 @@ fn main() {
             writable: (!cli.writable.is_empty()).then_some(cli.writable),
             ..Overrides::default()
         }),
+        Some(Command::Sessions {
+            command: SessionsCommand::Show { id },
+        }) => sessions::show(&id),
         Some(Command::Sandbox {
             command: SandboxCommand::Exec { timeout, command },
         }) => match sindri_core::exec::timeout_from_secs(timeout) {

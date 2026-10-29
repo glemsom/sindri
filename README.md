@@ -41,6 +41,37 @@ provider that billed nothing — is left out rather than sent as `null`, so a
 script can tell "not available" from "empty". Exit codes do not depend on the
 format. See [ADR-0004](docs/adr/0004-output-contract-and-exit-codes.md).
 
+## Session records
+
+Every run leaves a record under `$XDG_STATE_HOME/sindri/sessions/<guid>/`
+(ADR-0006), written as the run goes rather than at the end:
+
+| file | what it holds |
+| --- | --- |
+| `session.json` | provider, model, whether the run was sandboxed or `unsafe`, start, end, turns, usage and why it stopped |
+| `transcript.jsonl` | one entry per thing that happened — prompt, assistant turns, tool calls, tool results — in order |
+| `status.json` | bubblewrap's own status documents, one per line, as they arrived |
+| `tmp/`, `tmp/home/` | the session temp, with the empty `HOME` the sandbox mounted |
+
+The GUID is the `session` field of `--format json` and the last line of `-v`:
+
+```console
+$ sindri -b "why does this test fail?" < failing.log -v
+sindri: bash (turn 1): cargo test 2>&1 | tail -20
+sindri: session 4f1c8f2e-8a24-4b93-9c0e-0d3f0e5c1a77
+$ sindri sessions show 4f1c8f2e-8a24-4b93-9c0e-0d3f0e5c1a77
+```
+
+Because it is written incrementally, a cancelled or `kill -9`ed run still reads:
+the transcript holds everything up to the crash, metadata says `running` (or
+`cancelled`), and the sandbox's `child-pid` document says whether the sandbox
+started at all. Credentials are redacted before anything is written.
+
+**Known gap:** nothing is pruned, ever — every run keeps its transcript, its
+spill files and its session temp. That is deliberate for v0.1 (evidence is
+cheaper than re-running), and a `sessions prune` command is a later issue; until
+then the directory only grows.
+
 ## Configuration
 
 One file, `$XDG_CONFIG_HOME/sindri/config.toml`, holding provider, model, base
