@@ -4,13 +4,18 @@ use std::time::Duration;
 
 use crate::provider::Usage;
 
-/// Why the loop ended (the glossary's `stopped`).
+/// Why the loop ended (the glossary's `stopped`). Every word below appears in
+/// the JSON output, and the set is closed: a run ends for one of these reasons.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Stopped {
     /// The model stopped asking for tools: the answer is final.
     Final,
     /// The turn cap was reached; the answer is whatever the last turn said.
     MaxTurns,
+    /// The run was cancelled with SIGINT; stdout stays empty (ADR-0004).
+    Cancelled,
+    /// The model or its provider failed; stdout stays empty (ADR-0004).
+    Error,
 }
 
 impl Stopped {
@@ -19,6 +24,8 @@ impl Stopped {
         match self {
             Stopped::Final => "final",
             Stopped::MaxTurns => "max_turns",
+            Stopped::Cancelled => "cancelled",
+            Stopped::Error => "error",
         }
     }
 }

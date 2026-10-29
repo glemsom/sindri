@@ -6,6 +6,8 @@ mod rig_wire;
 
 use std::time::Duration;
 
+use serde::Serialize;
+
 use crate::config::Config;
 
 /// How many times one request is attempted before the failure is reported.
@@ -129,21 +131,34 @@ impl ToolOutcome {
 }
 
 /// The token counters a provider reports. Absent means unreported, never zero.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+///
+/// The field order is the JSON output contract's own (ADR-0004), and a counter
+/// nobody reported is left out of the object rather than sent as null.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct Usage {
     /// Every input token, cached or not.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub input_tokens: Option<u64>,
     /// Every output token, reasoning included.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub output_tokens: Option<u64>,
     /// The input tokens a provider served from its cache.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cached_input_tokens: Option<u64>,
     /// The output tokens the model spent reasoning, where the provider says.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_tokens: Option<u64>,
     /// Input plus output, when the provider reports both.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub total_tokens: Option<u64>,
 }
 
 impl Usage {
+    /// Whether the provider reported nothing at all: such a `usage` object
+    /// carries no information, so the contract leaves it out.
+    pub fn is_empty(&self) -> bool {
+        *self == Usage::default()
+    }
     /// Adds one turn's counters to the run's: a counter nobody reported stays
     /// unreported, and one reported once stays reported (ADR-0004).
     pub fn accumulate(&mut self, turn: &Usage) {

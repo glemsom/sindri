@@ -5,6 +5,7 @@ pub mod agent;
 pub mod config;
 pub mod doctor;
 pub mod exec;
+pub mod output;
 pub mod paths;
 pub mod provider;
 pub mod sandbox;

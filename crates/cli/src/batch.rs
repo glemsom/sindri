@@ -7,9 +7,11 @@ use std::io::{IsTerminal, Read};
 use std::sync::Arc;
 use std::sync::mpsc;
 
+use clap::ValueEnum;
 use sindri_core::agent::{Agent, BashTool, Event, Stopped};
 use sindri_core::config::{Config, ConfigError, Overrides};
 use sindri_core::exec::SandboxExecutor;
+use sindri_core::output;
 use sindri_core::provider::{Client, Error};
 use sindri_core::sandbox::Enforcement;
 use sindri_core::session;
@@ -17,10 +19,24 @@ use sindri_types::ExitCode;
 
 use crate::verbose;
 
+/// How a finished run reaches stdout (ADR-0004): the answer plus one newline,
+/// which is what a shell pipeline wants, or one compact object, which is what a
+/// parser wants.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
+pub enum OutputFormat {
+    /// The answer, then exactly one newline.
+    #[default]
+    Text,
+    /// One compact object with a fixed field order.
+    Json,
+}
+
 /// The flag overrides `sindri -b` accepts, taken from the command line as
 /// written.
 #[derive(Debug, Default)]
 pub struct Flags {
+    /// The shape stdout takes.
+    pub format: OutputFormat,
     pub provider: Option<String>,
     pub model: Option<String>,
     pub base_url: Option<String>,
@@ -56,7 +72,7 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
         Err(message) => return usage_error(&message),
     };
 
-    let verbose = flags.verbose;
+    let (format, verbose) = (flags.format, flags.verbose);
     let config = match Config::resolve(flags.into()) {
         Ok(config) => config,
         Err(error) => return config_error(&error),
@@ -100,8 +116,13 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
 
     match agent.run(&prompt) {
         Ok(report) => {
-            // The answer and exactly one newline, so `| wc -l` counts answers.
-            println!("{}", report.answer.trim_end());
+            match format {
+                // The answer and exactly one newline, so `| wc -l` counts
+                // answers.
+                OutputFormat::Text => println!("{}", report.answer.trim_end()),
+                // One compact object on one line, so `| jq` reads fields.
+                OutputFormat::Json => println!("{}", output::to_json(&report, session.id())),
+            }
             if verbose {
                 for line in verbose::lines(events.try_iter().collect(), session.id()) {
                     eprintln!("{line}");
@@ -110,6 +131,8 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
             match report.stopped {
                 Stopped::Final => ExitCode::Success.code(),
                 Stopped::MaxTurns => ExitCode::TurnCap.code(),
+                Stopped::Cancelled => ExitCode::Cancelled.code(),
+                Stopped::Error => ExitCode::ModelError.code(),
             }
         }
         Err(error) => model_error(&error),
