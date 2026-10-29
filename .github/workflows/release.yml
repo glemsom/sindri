@@ -1,0 +1,75 @@
+name: Release
+
+# A tag is the only trigger: the version the binary reports comes from
+# `git describe`, so a release must be built from a tag, never from a branch.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # `git describe` needs the tags, and the changelog needs the merge
+          # commits since the previous one.
+          fetch-depth: 0
+
+      - uses: jetify-com/devbox-install-action@v0.12.0
+        with:
+          enable-cache: true
+
+      # The release image is generated from the committed devbox.json, so dev,
+      # CI and release share one toolchain definition (ADR-0009).
+      - name: Generate the release image
+        run: |
+          devbox generate dockerfile --force --root-user
+          docker build --tag sindri-release .
+
+      - name: Build the static binaries, their checksums and the changelog
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          docker run --rm --volume "$PWD:/src" --workdir /src \
+            --env TAG="$TAG" sindri-release bash -euo pipefail -c '
+              # build.rs asks git for the version; the mount is root'"'"'s.
+              git config --global --add safe.directory /src
+              # nixpkgs'"'"' rustc ships no musl std and refuses the upstream
+              # one, so the image adds a rustup toolchain of the *same* rustc
+              # version for the release build only (docs/install.md, ADR-0009).
+              version=$(rustc --version | cut -d" " -f2)
+              curl -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal
+              . "$HOME/.cargo/env"
+              rustup toolchain install "$version" --profile minimal \
+                --target x86_64-unknown-linux-musl,aarch64-unknown-linux-musl
+              CARGO="cargo +$version" scripts/release-build.sh "$TAG" dist
+            '
+          scripts/release-checksums.sh dist
+          scripts/release-changelog.sh "$TAG" > dist/CHANGELOG.md
+
+      # Only real, verified binaries reach the release page: every file in
+      # SHA256SUMS is checked again here, statically linked or it does not ship.
+      - name: Verify the artefacts before publishing
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum -c SHA256SUMS
+          for binary in sindri-*; do
+            file "$binary" | grep -q 'statically linked'
+          done
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$TAG" \
+            --notes-file dist/CHANGELOG.md \
+            dist/sindri-* dist/SHA256SUMS
