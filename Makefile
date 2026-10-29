@@ -4,13 +4,14 @@
 DEVBOX ?= devbox
 CARGO  ?= $(DEVBOX) run -- cargo
 
-.PHONY: all check fmt clippy audit test relink eval eval-live build run install clean
+.PHONY: all check fmt clippy audit test relink eval eval-live scripts-check build release run install clean
 
 all: check
 
 ## check: the gate. fmt, clippy with warnings denied, the 400-line audit, tests,
-## the evals, and proof that an unchanged tree does not relink.
-check: fmt clippy audit test relink eval
+## the evals, proof that an unchanged tree does not relink, and the release
+## scripts run as processes.
+check: fmt clippy audit test relink eval scripts-check
 
 fmt:
 	$(CARGO) fmt --all --check
@@ -44,8 +45,21 @@ eval-live:
 	$(CARGO) build --quiet --package sindri-cli --bin sindri
 	$(CARGO) run --quiet --package sindri-evals -- --live
 
+## scripts-check: the installer and the release scripts, driven through `sh` and
+## `bash` with a `file://` release, a throwaway git repository and dry runs —
+## offline, and the one place the artefact naming contract is proven.
+scripts-check:
+	@scripts/test-scripts.sh
+
 build:
 	$(CARGO) build --release
+
+## release: both static musl binaries for TAG, plus SHA256SUMS and the changelog,
+## into dist/. Run it inside the release image; see docs/install.md.
+release:
+	@scripts/release-build.sh "$(TAG)" dist
+	@scripts/release-checksums.sh dist
+	@scripts/release-changelog.sh "$(TAG)" > dist/CHANGELOG.md
 
 run:
 	$(CARGO) run -- $(ARGS)
