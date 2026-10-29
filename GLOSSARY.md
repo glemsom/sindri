@@ -35,6 +35,10 @@ the workspace plus configured extras.
 **session temp** — per-run writable scratch directory, mapped to `TMPDIR`,
 `TEMP` and `TMP` inside the sandbox, and mounted as `HOME` beneath it.
 
+**read-only root** — `--ro-bind / /`: the whole host filesystem mounted inside
+the sandbox read-only. A boundary on writes, not on reads — everything under
+the host root, credentials included, stays readable in there (ADR-0010).
+
 **description** — the model-facing text derived from the sandbox policy, also
 printed by `sindri doctor`.
 

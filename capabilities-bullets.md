@@ -28,7 +28,7 @@ Sindri enables the LLM to write small scripts, to for example spawn mutible tool
 - `bash` (Always executed in sandbox, unless `--yolo-unsafe`)
  - Default timeout: 120s, max timeput: 3600s.
  - Tell LLM about exit codes
-- Sandbox: `--share-net` (so `curl` works — the sandbox bounds the filesystem, not the network), read-only `/`, writable workspace plus session temp plus extras, `TMPDIR/TEMP/TMP` redirected to session temp.
+- Sandbox: `--share-net` (so `curl` works — the sandbox bounds the filesystem, not the network), read-only `/` (**readable but not writable** — the host root, credentials included, stays readable; the boundary is on writes, see ADR-0010), writable workspace plus session temp plus extras, `TMPDIR/TEMP/TMP` redirected to session temp.
 - Boot verifies `bwrap, bash, rg, curl, lynx, patch, python3, git, jq, yq, xdg-open` — so the system prompt can never lie about the environment.
 
 ### Batch mode (the Unix-filter contract)

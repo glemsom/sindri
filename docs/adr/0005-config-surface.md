@@ -27,6 +27,8 @@ opened.
 ## Consequences
 
 - The future `/settings` TUI modal edits this same file — one writer, one schema.
-- The sandbox `HOME` starts empty: the user's real dotfiles, git config and
-  credentials are never mounted or copied in. Opting in is a later, explicit
-  feature.
+- The sandbox `HOME` starts empty, so the user's real dotfiles and git config
+  do not reach the sandbox *as `HOME`*, and are never copied in. They are not
+  hidden, though: the read-only host root leaves them readable at their host
+  paths, credentials included — writes are blocked, reads are not (ADR-0010).
+  Opting in to a populated `HOME` is a later, explicit feature.

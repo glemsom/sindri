@@ -9,8 +9,10 @@ $ git diff | sindri -b "summarise this"
 
 stdout is the answer and exactly one newline; stderr is silent unless `-v`.
 Every `bash` call the model makes runs inside bubblewrap with a read-only host
-root and a writable set you chose. See `capabilities-bullets.md` for the whole
-idea, `GLOSSARY.md` for the vocabulary, and `docs/adr/` for the decisions.
+root — a boundary on writes, not on reads: the host root, credentials included,
+stays readable in there (ADR-0010) — and a writable set you chose. See
+`capabilities-bullets.md` for the whole idea, `GLOSSARY.md` for the vocabulary,
+and `docs/adr/` for the decisions.
 
 ## Install
 
