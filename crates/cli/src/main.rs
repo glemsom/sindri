@@ -9,6 +9,7 @@ mod verbose;
 use std::io::IsTerminal;
 
 use clap::{CommandFactory, Parser, Subcommand};
+use sindri_core::config::Overrides;
 
 #[derive(Parser)]
 #[command(name = "sindri", version = sindri_types::VERSION_LONG, about = "A Unix filter with an agent behind it")]
@@ -85,11 +86,21 @@ fn main() {
         ));
     }
     let code = match cli.command {
-        Some(Command::Doctor) => doctor::run(),
+        Some(Command::Doctor) => doctor::run(Overrides {
+            writable: (!cli.writable.is_empty()).then_some(cli.writable),
+            ..Overrides::default()
+        }),
         Some(Command::Sandbox {
             command: SandboxCommand::Exec { timeout, command },
         }) => match sindri_core::exec::timeout_from_secs(timeout) {
-            Ok(timeout) => sandbox::exec(timeout, &command),
+            Ok(timeout) => sandbox::exec(
+                timeout,
+                Overrides {
+                    writable: (!cli.writable.is_empty()).then_some(cli.writable),
+                    ..Overrides::default()
+                },
+                &command,
+            ),
             Err(message) => batch::usage_error(&message),
         },
         None => match cli.batch {

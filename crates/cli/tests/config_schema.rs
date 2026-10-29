@@ -13,26 +13,15 @@ mod common;
 use std::process::Output;
 
 use common::provider::{MockProvider, Reply};
-use common::{Env, TEST_KEY, stderr, stdout};
+use common::{Env, TEST_KEY, stderr, stdout, write_config};
 
-/// Writes `$XDG_CONFIG_HOME/sindri/config.toml`.
-fn write_config(env: &Env, toml: &str) {
-    let dir = env.config.join("sindri");
-    std::fs::create_dir_all(&dir).expect("config dir");
-    std::fs::write(dir.join("config.toml"), toml).expect("write config");
-}
-
-/// Runs batch mode with only the settings the test supplies, alongside the
-/// mock's base URL so no request can leave the machine.
+/// Runs batch mode with the mock's base URL and the test's own settings, so no
+/// request can leave the machine and each test states its own precedence.
 fn run(env: &Env, mock: &MockProvider, args: &[&str], vars: &[(&str, &str)]) -> Output {
-    let mut cmd = env.cmd();
-    cmd.args(args)
-        .env("SINDRI_BASE_URL", mock.base_url())
-        .envs(vars.iter().copied())
-        .write_stdin("")
-        .assert()
-        .get_output()
-        .clone()
+    let base_url = mock.base_url();
+    let mut all: Vec<(&str, &str)> = vec![("SINDRI_BASE_URL", base_url.as_str())];
+    all.extend(vars.iter().copied());
+    common::run_with(env, args, &all)
 }
 
 /// The one request the mock served.
@@ -334,7 +323,15 @@ fn a_credential_from_the_file_is_redacted_from_errors() {
         "authentication_error",
         &format!("invalid x-api-key `{FROM_FILE}`"),
     )]);
-    let output = run(&env, &mock, &["-b", "summarise this"], &[]);
+    // No credential in the environment: the file's is the one that must not leak.
+    let output = env
+        .cmd()
+        .args(["-b", "summarise this"])
+        .env("SINDRI_BASE_URL", mock.base_url())
+        .write_stdin("")
+        .assert()
+        .get_output()
+        .clone();
 
     assert_eq!(output.status.code(), Some(1), "an auth failure is exit 1");
     let message = stderr(&output);
@@ -345,5 +342,39 @@ fn a_credential_from_the_file_is_redacted_from_errors() {
     assert!(
         message.contains("[redacted]"),
         "the credential is replaced, not dropped: {message}"
+    );
+}
+
+#[test]
+fn a_syntax_error_in_the_file_never_echoes_a_credential() {
+    const FROM_FILE: &str = "sk-ant-never-print-me";
+    let env = Env::new();
+    // A parse error on the credential's own line: the parser's own snippet is
+    // exactly the text that must not reach the terminal.
+    write_config(
+        &env,
+        &format!("model = \"claude-from-file\"\napi_key = \"{FROM_FILE}\" oops\n"),
+    );
+
+    let output = common::run_with(&env, &["-b", "summarise this"], &[]);
+
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "a broken file is a usage error: {}",
+        stderr(&output)
+    );
+    let message = stderr(&output);
+    assert!(
+        !message.contains(FROM_FILE),
+        "the credential is never echoed, not even by a parse error: {message}"
+    );
+    assert!(
+        message.contains("config.toml"),
+        "the error names the file: {message}"
+    );
+    assert!(
+        message.contains("line 2"),
+        "the error still locates the problem: {message}"
     );
 }

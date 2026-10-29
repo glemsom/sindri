@@ -72,6 +72,26 @@ impl Env {
     }
 }
 
+/// Writes `$XDG_CONFIG_HOME/sindri/config.toml`.
+pub fn write_config(env: &Env, toml: &str) {
+    let dir = env.config.join("sindri");
+    std::fs::create_dir_all(&dir).expect("config dir");
+    std::fs::write(dir.join("config.toml"), toml).expect("write config");
+}
+
+/// Runs batch mode with exactly the settings the test supplies, so each test
+/// states its own precedence rather than inheriting the harness's.
+pub fn run_with(env: &Env, args: &[&str], vars: &[(&str, &str)]) -> std::process::Output {
+    env.cmd()
+        .args(args)
+        .env("SINDRI_API_KEY", TEST_KEY)
+        .envs(vars.iter().copied())
+        .write_stdin("")
+        .assert()
+        .get_output()
+        .clone()
+}
+
 /// A credential shaped like a real one but belonging to nothing.
 pub const TEST_KEY: &str = "sk-ant-test-not-a-real-key";
 

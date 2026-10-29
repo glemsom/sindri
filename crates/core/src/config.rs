@@ -20,6 +20,7 @@ use std::time::Duration;
 use serde::Deserialize;
 
 use crate::paths;
+use crate::sandbox::WritableSet;
 
 /// How many turns the run may take before it stops (the turn cap).
 pub const DEFAULT_MAX_TURNS: u32 = 250;
@@ -227,13 +228,7 @@ impl Config {
             .or(file.thinking)
             .unwrap_or(false);
 
-        let extra_writable = overrides
-            .writable
-            .or_else(|| list("SINDRI_EXTRA_WRITABLE_PATHS"))
-            .or(file.extra_writable_paths)
-            .map(|paths| extra_paths(&paths))
-            .transpose()?
-            .unwrap_or_default();
+        let extra_writable = extras(overrides.writable, file.extra_writable_paths)?;
 
         Ok(Config {
             refused_repo_config: repo_config(),
@@ -254,12 +249,51 @@ impl Config {
 fn read_file() -> Result<FileConfig, ConfigError> {
     let path = file_path();
     match std::fs::read_to_string(&path) {
-        Ok(text) => {
-            toml::from_str(&text).map_err(|error| ConfigError::Usage(format!("{path}: {error}")))
-        }
+        Ok(text) => toml::from_str(&text)
+            .map_err(|error| ConfigError::Usage(parse_error(&path, &text, &error))),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(FileConfig::default()),
         Err(error) => Err(ConfigError::Usage(format!("{path}: {error}"))),
     }
+}
+
+impl Config {
+    /// The extras a run would be granted, from the file and the environment
+    /// alone: `sindri doctor` needs them to describe the sandbox a run really
+    /// gets, and must not need a model or a credential to find out (ADR-0002).
+    pub fn configured_extras(overrides: Overrides) -> Result<Vec<PathBuf>, ConfigError> {
+        let file = read_file()?;
+        extras(overrides.writable, file.extra_writable_paths)
+    }
+}
+
+/// The extras that win: a flag, then the environment, then the file. The
+/// highest level that names any replaces the rest rather than adding to them,
+/// so a pipeline can grant exactly what it means.
+fn extras(
+    flag: Option<Vec<String>>,
+    from_file: Option<Vec<String>>,
+) -> Result<Vec<PathBuf>, ConfigError> {
+    flag.or_else(|| list("SINDRI_EXTRA_WRITABLE_PATHS"))
+        .or(from_file)
+        .map(|paths| extra_paths(&paths))
+        .transpose()
+        .map(Option::unwrap_or_default)
+}
+
+/// A parse error, without the source snippet TOML would print: that snippet is
+/// the file's own text, and the credential may well be on that line. The
+/// message and the position are kept, because those are what a user acts on.
+fn parse_error(path: &str, text: &str, error: &toml::de::Error) -> String {
+    let Some(span) = error.span() else {
+        return format!("{path}: {}", error.message());
+    };
+    let before = &text[..span.start.min(text.len())];
+    let line = before.matches('\n').count() + 1;
+    let column = before.rsplit('\n').next().map_or(0, str::len) + 1;
+    format!(
+        "{path}: {} at line {line}, column {column}",
+        error.message()
+    )
 }
 
 /// The repository-local config sitting in the working directory, if any. Its
@@ -297,39 +331,13 @@ fn list(name: &str) -> Option<Vec<String>> {
 }
 
 /// The extras, checked before the sandbox is built so a bad path is a value
-/// error (exit 2) rather than a mystery setup failure. Emptiness is permitted:
-/// a list can be cleared by overriding it with nothing.
+/// error (exit 2) rather than a mystery setup failure. The rules are the
+/// writable set's own — absolute, canonical, not `/`, no duplicate, no nesting —
+/// asked once, here, so the two can never disagree.
 fn extra_paths(given: &[String]) -> Result<Vec<PathBuf>, ConfigError> {
-    let mut accepted: Vec<PathBuf> = Vec::with_capacity(given.len());
-    for path in given {
-        let given_path = PathBuf::from(path);
-        if !given_path.is_absolute() {
-            return Err(ConfigError::Usage(format!(
-                "extra writable path `{path}` is not absolute"
-            )));
-        }
-        let canonical = given_path.canonicalize().map_err(|error| {
-            ConfigError::Usage(format!("extra writable path `{path}`: {error}"))
-        })?;
-        if canonical.parent().is_none() {
-            return Err(ConfigError::Usage(format!(
-                "extra writable path `{path}`: the whole filesystem cannot be writable"
-            )));
-        }
-        if canonical.as_os_str() != given_path.as_os_str() {
-            return Err(ConfigError::Usage(format!(
-                "extra writable path `{path}` is not canonical; use `{}`",
-                canonical.display()
-            )));
-        }
-        if accepted.contains(&canonical) {
-            return Err(ConfigError::Usage(format!(
-                "extra writable path `{path}` is granted twice"
-            )));
-        }
-        accepted.push(canonical);
-    }
-    Ok(accepted)
+    WritableSet::new(given.iter().map(PathBuf::from))
+        .map(|set| set.paths().to_vec())
+        .map_err(|error| ConfigError::Usage(format!("extra_writable_paths: {error}")))
 }
 
 /// A toggle from the environment. Present but neither `true` nor `false` is a

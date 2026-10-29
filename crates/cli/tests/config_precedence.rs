@@ -9,29 +9,13 @@
 
 mod common;
 
-use std::process::Output;
-
 use common::provider::{MockProvider, Reply};
-use common::{Env, TEST_KEY, stderr, stdout};
+use common::{Env, stderr, stdout, write_config};
 
-/// Writes `$XDG_CONFIG_HOME/sindri/config.toml`.
-fn write_config(env: &Env, toml: &str) {
-    let dir = env.config.join("sindri");
-    std::fs::create_dir_all(&dir).expect("config dir");
-    std::fs::write(dir.join("config.toml"), toml).expect("write config");
-}
-
-/// Runs batch mode with exactly the settings the test supplies, so a test can
-/// own every level of the precedence instead of inheriting the harness's.
-fn run(env: &Env, args: &[&str], vars: &[(&str, &str)]) -> Output {
-    env.cmd()
-        .args(args)
-        .env("SINDRI_API_KEY", TEST_KEY)
-        .envs(vars.iter().copied())
-        .write_stdin("")
-        .assert()
-        .get_output()
-        .clone()
+/// The run, through the shared harness: exactly the settings the test supplies,
+/// so a test owns every level of the precedence.
+fn run(env: &Env, args: &[&str], vars: &[(&str, &str)]) -> std::process::Output {
+    common::run_with(env, args, vars)
 }
 
 #[test]
