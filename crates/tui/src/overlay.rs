@@ -5,6 +5,8 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::settings::Settings;
+
 /// One way into the frame: the keys that reach it, the gesture that also
 /// reaches it, and what it does.
 pub struct Binding {
@@ -41,9 +43,9 @@ pub const BINDINGS: &[Binding] = &[
         what: "complete a workspace path",
     },
     Binding {
-        keys: "/new, /help, /quit",
+        keys: "/new, /settings, /help, /quit",
         mouse: None,
-        what: "start a fresh session, show this, leave",
+        what: "start a fresh session, edit the config, show this, leave",
     },
     Binding {
         keys: "Esc",
@@ -99,6 +101,8 @@ pub enum Overlay {
     Help,
     /// A command's output, untruncated.
     Spill(Spill),
+    /// The config file, edited through its own schema (ADR-0014).
+    Settings(Settings),
 }
 
 /// The help overlay's rows: the keys, and what it does with the gesture that
@@ -202,7 +206,7 @@ mod tests {
         "Ctrl-Q",
         "?",
         "@",
-        "/new, /help, /quit",
+        "/new, /settings, /help, /quit",
     ];
 
     #[test]

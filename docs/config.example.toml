@@ -5,7 +5,8 @@
 # An unknown key is an error naming both the key and this file, so a typo never
 # runs silently on defaults.
 
-# Which wire to speak. The only provider so far is "anthropic".
+# Which wire to speak: "anthropic", or "openai" for OpenAI itself and every
+# server that speaks its shape (Ollama, vLLM, LM Studio, OpenRouter).
 provider = "anthropic"
 
 # The model to ask. Required: there is no default, so a missing model is an
@@ -13,8 +14,11 @@ provider = "anthropic"
 model = "claude-sonnet-4-6"
 
 # The credential. Prefer the provider's own environment variable —
-# ANTHROPIC_API_KEY, or SINDRI_API_KEY for any provider — because this file is
-# world-readable text. Either way it is redacted from all output and records.
+# ANTHROPIC_API_KEY, or SINDRI_API_KEY for any provider — because a file is
+# plaintext. `sindri` writes this file only from `/settings`, readable by its
+# owner alone (0600) and replaced atomically; a secret typed there is announced
+# on screen before it lands. Either way it is redacted from all output and
+# records.
 api_key = "sk-ant-…"
 
 # Another API root: a gateway, a proxy, or a local server. Left out, the

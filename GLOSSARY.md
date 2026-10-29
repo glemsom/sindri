@@ -75,7 +75,9 @@ whole, and the thing this repository calls the TUI when it is being precise
 **rail** — the right column of the TUI: cache hit percentage, turns against the
 cap, tokens, live context meter, session GUID, session temp path, git branch,
 sandbox posture, and the face, where Kitty graphics allows one (ADR-0011). At
-100 columns and above it is always visible; below, a one-line strip.
+100 columns and above it is always visible; below, a one-line strip. The face
+takes only the rows the facts leave, so the rail is complete with or without it
+(ADR-0014).
 
 **composer** — the input at the bottom: 2–8 rows, `Shift+Enter` for a newline,
 `@` for a path completion, `/` for a command.
@@ -84,7 +86,11 @@ sandbox posture, and the face, where Kitty graphics allows one (ADR-0011). At
 `ReasoningDelta`). Batch accumulates deltas into the same answer it prints.
 
 **thread** — the growing conversation of one TUI session: every prompt, answer
-and tool result, in order. `/new` throws it away and starts a new session.
+and tool result, in order, as the model is shown it. One launch is one thread,
+so a second prompt is a follow-up and a model changed in `/settings` answers the
+next turn on the thread the last one built (ADR-0014). `/new` throws it away and
+starts a new session. A prompt cut short — by the turn cap, a cancel or a
+failure — leaves no unanswered half-exchange behind.
 
 **queued prompt** — a prompt typed while a run is in flight, sent when that run
 ends rather than interrupting it.
@@ -115,6 +121,35 @@ key that does the same thing.
 
 **live tail** — the last five lines of a running command's output, shown under
 its call line while it runs and folded away when it ends.
+
+**settings modal** — the `/settings` overlay: one row per key of the config
+file's schema — provider, model, base URL, API key, turn cap, timeout, thinking,
+extra writable paths, extra headers — the path a save writes to, and the
+warning a secret earns. `Enter` saves, `Esc` discards, `Ctrl-U` empties the
+field with the cursor, and `Space` flips a toggle (ADR-0014).
+
+**config document** — `Document` in `sindri-core`: the one config file staged
+for editing, validated by the one schema. `editable`, `is_set`, `set` and
+`save` are the whole of it, so the frame edits settings without ever parsing
+TOML (ADR-0014).
+
+**staged setting** — a field's value in the settings modal, held in memory. It
+is not a setting until `Enter` writes it; `Esc` throws away everything staged
+and touches nothing.
+
+**reload** — the frame's request, after a save, that the front end read the
+config file again so the next prompt runs on it. `Driver::reload` answers with
+what the rail should now show, or with why the next run cannot start (ADR-0014).
+
+**from environment** — the API key field's default, and the one the modal
+returns to when the field is emptied: the credential comes from
+`ANTHROPIC_API_KEY`/`OPENAI_API_KEY` or `SINDRI_API_KEY`, and nothing is
+written to disk.
+
+**masked field** — a settings row whose value is never drawn: `api_key` and
+`extra_headers`. The document does not hand their values back at all, so the
+row can say *set in the file* or *from environment* and nothing more
+(ADR-0014).
 
 **strip** — the rail as one line, on a terminal narrower than 100 columns: the
 same facts, never hidden behind a keystroke.

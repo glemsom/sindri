@@ -148,6 +148,7 @@ fn apply(app: &mut App, message: Msg) {
         Msg::Finished(finished) => app.finished(finished),
         Msg::Paths(generation, paths, capped) => app.paths(generation, paths, capped),
         Msg::Renewed(launch) => app.renewed(launch),
+        Msg::Reloaded(reloaded) => app.reloaded(reloaded),
     }
 }
 
@@ -155,6 +156,9 @@ fn apply(app: &mut App, message: Msg) {
 /// draft. A prompt typed mid-run waits here, not in the model's way.
 fn begin(app: &mut App, jobs: &Sender<Task>) {
     if app.take_renew() && jobs.send(Task::Renew).is_err() {
+        return;
+    }
+    if app.take_reload() && jobs.send(Task::Reload).is_err() {
         return;
     }
     while let Some(job) = app.start() {
@@ -226,6 +230,8 @@ fn drive(mut driver: Box<dyn Driver>, tx: Sender<Msg>) -> Sender<Task> {
                 }
                 // `/new`: a fresh GUID and a fresh record, in the same frame.
                 Task::Renew => tx.send(Msg::Renewed(driver.renew())),
+                // `/settings`: the config file again, before the next prompt.
+                Task::Reload => tx.send(Msg::Reloaded(driver.reload())),
             };
             if sent.is_err() {
                 return;

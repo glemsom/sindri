@@ -10,6 +10,7 @@ use ratatui::widgets::{Block, Clear, Paragraph, Widget};
 use crate::app::App;
 use crate::markdown::text;
 use crate::overlay::{Overlay, help_rows};
+use crate::render::settings;
 use crate::theme;
 
 /// How wide the keys column of the help overlay is.
@@ -22,9 +23,13 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
     let Some(overlay) = app.overlay_mut() else {
         return;
     };
+    if let Overlay::Settings(settings) = &*overlay {
+        settings::draw(settings, area, buf);
+        return;
+    }
     let height = match &*overlay {
         Overlay::Help => (help_rows().len() as u16 + 2).min(area.height),
-        Overlay::Spill(_) => area.height,
+        Overlay::Spill(_) | Overlay::Settings(_) => area.height,
     };
     let width = area.width.saturating_sub(8).clamp(20, 110);
     let boxed = Rect {
@@ -43,6 +48,7 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
                 .collect::<Vec<_>>();
             render(buf, boxed, inner, "keys", lines);
         }
+        Overlay::Settings(_) => {}
         Overlay::Spill(spill) => {
             spill.settled(inner.height as usize);
             let title = format!(

@@ -5,7 +5,7 @@
 use crossterm::event::{KeyEvent, MouseEvent};
 use sindri_core::agent::Event;
 
-use crate::driver::{CallOver, Finished, Side, Spilled};
+use crate::driver::{CallOver, Finished, Reloaded, Side, Spilled};
 use crate::rail::Launch;
 
 /// One thing that happened, on its way to the frame.
@@ -28,4 +28,6 @@ pub enum Msg {
     Paths(u64, Vec<String>, bool),
     /// A fresh session, when a front end could start one.
     Renewed(Option<Launch>),
+    /// A saved config, taken up — or refused, with the reason.
+    Reloaded(Reloaded),
 }

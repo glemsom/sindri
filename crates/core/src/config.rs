@@ -18,8 +18,6 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use serde::Deserialize;
-
 use crate::paths;
 use crate::sandbox::WritableSet;
 
@@ -27,14 +25,16 @@ use crate::sandbox::WritableSet;
 pub const DEFAULT_MAX_TURNS: u32 = 250;
 /// The default per-command timeout the sandbox enforces.
 pub const DEFAULT_TIMEOUT_SECS: u64 = 120;
-use std::collections::BTreeMap;
 
 /// The longest a single command may be allowed to run.
 pub const MAX_TIMEOUT_SECS: u64 = 3600;
 
+mod document;
+mod file;
 mod headers;
 mod provider;
 
+pub use document::{Document, KEYS, Key};
 pub use provider::Provider;
 
 /// What the command line says, before anything else has a say.
@@ -111,29 +111,11 @@ impl ConfigError {
     }
 }
 
-/// The config file's own shape: every key optional, every key a string or a
-/// count. A key the file does not name is left unset; a key the schema does not
-/// name is an error, because a typo'd `max_turn` would otherwise run on
-/// defaults the user never chose.
-#[derive(Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct FileConfig {
-    provider: Option<String>,
-    model: Option<String>,
-    api_key: Option<String>,
-    base_url: Option<String>,
-    max_turns: Option<u32>,
-    timeout: Option<u64>,
-    thinking: Option<bool>,
-    extra_writable_paths: Option<Vec<String>>,
-    extra_headers: Option<BTreeMap<String, String>>,
-}
-
 impl Config {
     /// The settings this run uses: file, then environment, then flags, with
     /// every value checked.
     pub fn resolve(overrides: Overrides) -> Result<Config, ConfigError> {
-        let file = read_file()?;
+        let file = file::read()?;
 
         let provider = match overrides
             .provider
@@ -230,24 +212,12 @@ impl Config {
     }
 }
 
-/// Reads the config file. An absent file is an empty one; an unreadable or
-/// unparsable file is a usage error, never silently ignored.
-fn read_file() -> Result<FileConfig, ConfigError> {
-    let path = file_path();
-    match std::fs::read_to_string(&path) {
-        Ok(text) => toml::from_str(&text)
-            .map_err(|error| ConfigError::Usage(parse_error(&path, &text, &error))),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(FileConfig::default()),
-        Err(error) => Err(ConfigError::Usage(format!("{path}: {error}"))),
-    }
-}
-
 impl Config {
     /// The extras a run would be granted, from the file and the environment
     /// alone: `sindri doctor` needs them to describe the sandbox a run really
     /// gets, and must not need a model or a credential to find out (ADR-0002).
     pub fn configured_extras(overrides: Overrides) -> Result<Vec<PathBuf>, ConfigError> {
-        let file = read_file()?;
+        let file = file::read()?;
         extras(overrides.writable, file.extra_writable_paths)
     }
 }
@@ -264,22 +234,6 @@ fn extras(
         .map(|paths| extra_paths(&paths))
         .transpose()
         .map(Option::unwrap_or_default)
-}
-
-/// A parse error, without the source snippet TOML would print: that snippet is
-/// the file's own text, and the credential may well be on that line. The
-/// message and the position are kept, because those are what a user acts on.
-fn parse_error(path: &str, text: &str, error: &toml::de::Error) -> String {
-    let Some(span) = error.span() else {
-        return format!("{path}: {}", error.message());
-    };
-    let before = &text[..span.start.min(text.len())];
-    let line = before.matches('\n').count() + 1;
-    let column = before.rsplit('\n').next().map_or(0, str::len) + 1;
-    format!(
-        "{path}: {} at line {line}, column {column}",
-        error.message()
-    )
 }
 
 /// The repository-local config sitting in the working directory, if any. Its

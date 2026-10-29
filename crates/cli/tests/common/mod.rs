@@ -13,6 +13,10 @@
 /// The mock provider, from the harness crate every process-seam test drives.
 pub use sindri_harness as provider;
 
+/// A pseudo-terminal, for the tests that have to be a terminal to test the
+/// front door (ADR-0011).
+pub mod pty;
+
 use std::path::{Path, PathBuf};
 
 use assert_cmd::Command;
@@ -51,8 +55,14 @@ impl Env {
         cmd.current_dir(&self.workspace)
             .env("XDG_STATE_HOME", &self.state)
             .env("XDG_CONFIG_HOME", &self.config);
-        // The host's own settings must not leak into a test's run.
+        // The host's own settings must not leak into a test's run, and that
+        // includes what it says about its terminal: a frame that hears a
+        // Kitty-capable terminal asks it a question, and the answer it gets is
+        // not the pty's (ADR-0012).
         for name in provider::PROVIDER_ENV {
+            cmd.env_remove(name);
+        }
+        for name in TERMINAL_ENV {
             cmd.env_remove(name);
         }
         cmd
@@ -68,6 +78,16 @@ impl Env {
         self.workspace.canonicalize().expect("canonical workspace")
     }
 }
+
+/// What the host says about its terminal, so a test's pty is the only terminal
+/// a run can hear.
+pub const TERMINAL_ENV: &[&str] = &[
+    "TERM_PROGRAM",
+    "TERM_PROGRAM_VERSION",
+    "LC_TERMINAL",
+    "KITTY_WINDOW_ID",
+    "COLORTERM",
+];
 
 /// Writes `$XDG_CONFIG_HOME/sindri/config.toml`.
 pub fn write_config(env: &Env, toml: &str) {

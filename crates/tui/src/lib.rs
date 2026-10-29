@@ -12,6 +12,8 @@
 //!   screen, the input thread and the frame loop.
 //! - [`driver`] is the seam a front end implements, and [`face`] is the one
 //!   optional ornament.
+//! - [`settings`] is the one place the frame writes the user's disk outside the
+//!   session record: the config file, through the core's own schema (ADR-0014).
 
 pub mod app;
 pub mod command;
@@ -30,6 +32,7 @@ pub mod rail;
 pub mod render;
 pub mod run;
 pub mod selection;
+pub mod settings;
 pub mod theme;
 
 pub use app::App;

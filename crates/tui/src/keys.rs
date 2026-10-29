@@ -103,6 +103,10 @@ impl App {
     /// What a key does while an overlay has the screen: close it, page it, or
     /// leave. Nothing types behind an overlay the user cannot see through.
     fn overlay_key(&mut self, key: KeyEvent, ctrl: bool) {
+        if matches!(self.overlay, Some(Overlay::Settings(_))) {
+            self.settings_key(key);
+            return;
+        }
         match key.code {
             KeyCode::Esc | KeyCode::Enter => self.overlay = None,
             KeyCode::PageUp => self.scroll_page(true),
@@ -132,7 +136,7 @@ impl App {
 
     /// Ctrl-C: the run stops and the draft stays; with nothing running, the
     /// draft is cleared.
-    fn cancel_or_clear(&mut self) {
+    pub(crate) fn cancel_or_clear(&mut self) {
         match &self.running {
             Some(cancel) => cancel.trigger(),
             None => {
@@ -171,6 +175,7 @@ impl App {
     fn run(&mut self, named: Command) {
         match named {
             Command::New => self.new_session(),
+            Command::Settings => self.open_settings(),
             Command::Help => self.show(Overlay::Help),
             Command::Quit => self.quit = true,
             Command::Unknown(name) => {

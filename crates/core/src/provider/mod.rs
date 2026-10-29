@@ -270,7 +270,10 @@ pub trait DeltaSink {
 
 /// The model, behind one seam: ask one turn, and get a reply or a failure that
 /// is safe to print.
-pub trait Model {
+///
+/// `Send`, because the agent that holds one outlives a single prompt: a front
+/// end keeps its conversation on the thread that runs prompts (ADR-0014).
+pub trait Model: Send {
     /// One round trip: `history` with `tools` available, and whether the run
     /// pays for reasoning. The fragments of the reply are handed to `deltas` as
     /// they arrive; the returned [`Turn`] is the whole of it.

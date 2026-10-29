@@ -304,6 +304,11 @@ impl Harness {
         self.agent.run(prompt).expect("the loop completed")
     }
 
+    /// Starts the thread over, the way `/new` does.
+    pub fn forget(&mut self) {
+        self.agent.forget();
+    }
+
     pub fn events(&self) -> Vec<Event> {
         self.events.try_iter().collect()
     }
