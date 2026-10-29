@@ -241,18 +241,33 @@ fn convert(error: ProviderError) -> Error {
 /// field name; a user needs to know it is the server's capability, not their
 /// configuration, that is missing.
 fn refused_tools(error: Error) -> Error {
-    let about_tools = ["tool", "function"]
-        .iter()
-        .any(|word| error.message().to_ascii_lowercase().contains(word));
-    match error.status() {
-        Some(status) if about_tools && matches!(status, 400 | 404 | 422 | 501) => Error::answered(
-            Some(status),
-            format!(
-                "the model server does not support tool calling, which `bash` needs: {} \
-                     (use a model or server that serves function calls)",
-                error.message()
-            ),
-        ),
-        _ => error,
+    let status_refused = matches!(error.status(), Some(400 | 404 | 422 | 501));
+    if !status_refused || !refuses_capability(error.message()) {
+        return error;
     }
+    Error::answered(
+        error.status(),
+        format!(
+            "the model server does not support tool calling, which `bash` needs: {} \
+             (use a model or server that serves function calls)",
+            error.message()
+        ),
+    )
+}
+
+/// What a server says when the capability, not the request, is what it lacks.
+/// Naming a field it will not take is not enough: a malformed tool call is
+/// also a 400 naming tools, and telling that user their server cannot call
+/// functions would send them shopping for a server they already have.
+fn refuses_capability(message: &str) -> bool {
+    let message = message.to_ascii_lowercase();
+    const REFUSALS: [&str; 5] = [
+        "does not support tool",
+        "doesn't support tool",
+        "tools are not supported",
+        "tool calling is not supported",
+        "function calling is not supported",
+    ];
+    REFUSALS.iter().any(|refusal| message.contains(refusal))
+        || (message.contains("tool") && message.contains("not supported"))
 }

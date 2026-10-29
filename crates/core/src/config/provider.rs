@@ -62,13 +62,14 @@ impl Provider {
     }
 
     /// Where a model this run has none comes from, in this wire's own terms: a
-    /// server names the models it serves, an API sells them by name.
-    pub(super) fn model_hint(self) -> &'static str {
+    /// server names the models it serves, an API sells them by name, so only
+    /// the wire reached by base URL has anywhere new to point.
+    pub(super) fn model_hint(self) -> Option<&'static str> {
         match self {
-            Provider::Anthropic => "",
-            Provider::Openai => {
-                "; the server names its own, e.g. `curl <base-url>/models`, or the aggregator's model list"
-            }
+            Provider::Anthropic => None,
+            Provider::Openai => Some(
+                "; the server names its own, e.g. `curl <base-url>/models`, or the aggregator's model list",
+            ),
         }
     }
 }

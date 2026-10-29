@@ -172,7 +172,7 @@ impl Config {
                     "no model configured for the {} wire: pass --model, set SINDRI_MODEL, or set `model` in {}{}",
                     provider.as_str(),
                     file_path(),
-                    provider.model_hint()
+                    provider.model_hint().unwrap_or_default()
                 ))
             })?;
 

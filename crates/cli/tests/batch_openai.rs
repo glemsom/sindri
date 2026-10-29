@@ -310,3 +310,47 @@ fn the_wire_and_its_base_url_can_be_configured_in_the_file() {
         "the file configured the wire, its base URL and its model"
     );
 }
+
+#[test]
+fn the_providers_own_variables_configure_the_wire() {
+    let env = Env::new();
+    let mock = MockProvider::start(vec![Reply::recorded("chat-answer", 200)]);
+
+    let output = run(
+        &env,
+        &[
+            ("SINDRI_PROVIDER", "openai"),
+            ("SINDRI_MODEL", "llama3.2"),
+            ("OPENAI_BASE_URL", &format!("{}/v1", mock.base_url())),
+        ],
+    );
+
+    assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
+    assert_eq!(mock.requests()[0].path, CHAT_PATH);
+}
+
+#[test]
+fn a_rejected_tool_call_is_not_mistaken_for_a_server_without_tools() {
+    let env = Env::new();
+    let mock = MockProvider::start(vec![Reply::recorded("tool-call-rejected", 400)]);
+
+    let output = run(
+        &env,
+        &[
+            ("SINDRI_PROVIDER", "openai"),
+            ("SINDRI_BASE_URL", &format!("{}/v1", mock.base_url())),
+            ("SINDRI_MODEL", "llama3.2"),
+        ],
+    );
+
+    assert_eq!(output.status.code(), Some(1), "a refusal is a model error");
+    let stderr = stderr(&output);
+    assert!(
+        stderr.contains("not valid JSON"),
+        "the server's complaint reaches the user: {stderr}"
+    );
+    assert!(
+        !stderr.contains("does not support tool calling"),
+        "a rejected call is not a missing capability: {stderr}"
+    );
+}
