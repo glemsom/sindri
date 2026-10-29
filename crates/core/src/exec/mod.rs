@@ -12,8 +12,10 @@ use std::time::Duration;
 
 /// The single seam between the turn loop and the sandbox.
 pub trait BashExecutor: Send + Sync {
-    /// Runs one `bash` script and reports a structured outcome.
-    fn execute(&self, script: &str) -> ToolResult;
+    /// Runs one `bash` script and reports a structured outcome, or `None` when
+    /// the run was cancelled before the command finished: a cancelled command
+    /// has no result worth feeding back to a model that is no longer asked.
+    fn execute(&self, script: &str) -> Option<ToolResult>;
 }
 
 /// Reads the configured command timeout, refusing anything outside the contract.

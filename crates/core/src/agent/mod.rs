@@ -12,6 +12,7 @@ pub use tool::BashTool;
 use std::sync::mpsc::Sender;
 use std::time::Instant;
 
+use crate::cancel::Cancel;
 use crate::provider::{Error, Message, Model};
 
 /// Drives the model until it stops asking for tools, or the turn cap is hit.
@@ -21,6 +22,7 @@ pub struct Agent {
     max_turns: u32,
     thinking: bool,
     events: Option<Sender<Event>>,
+    cancel: Cancel,
 }
 
 impl Agent {
@@ -34,6 +36,7 @@ impl Agent {
             max_turns,
             thinking,
             events: None,
+            cancel: Cancel::new(),
         }
     }
 
@@ -41,6 +44,12 @@ impl Agent {
     /// nothing, because nothing is listening.
     pub fn set_events(&mut self, events: Sender<Event>) {
         self.events = Some(events);
+    }
+
+    /// The flag that stops the run dead. The executor must share it, or a
+    /// cancel would only be noticed once the command had finished on its own.
+    pub fn set_cancel(&mut self, cancel: Cancel) {
+        self.cancel = cancel;
     }
 
     /// Runs one prompt to an answer, or reports why the model failed.
@@ -59,12 +68,25 @@ impl Agent {
         let tools = [self.tool.spec().clone()];
 
         loop {
+            if self.cancel.is_triggered() {
+                report.stopped = Stopped::Cancelled;
+                break;
+            }
             if report.turns >= self.max_turns {
                 report.stopped = Stopped::MaxTurns;
                 break;
             }
             report.turns += 1;
-            let turn = self.model.turn(&history, &tools, self.thinking)?;
+            let turn = match self.model.turn(&history, &tools, self.thinking) {
+                Ok(turn) => turn,
+                // A request cut short by a cancel is a cancellation, not a
+                // provider failure: the shell must see 130, not 1.
+                Err(_) if self.cancel.is_triggered() => {
+                    report.stopped = Stopped::Cancelled;
+                    break;
+                }
+                Err(error) => return Err(error),
+            };
             report.usage.accumulate(&turn.usage);
             if let Some(model) = turn.model {
                 report.model.get_or_insert(model);
@@ -81,10 +103,27 @@ impl Agent {
                 break;
             }
             let mut outcomes = Vec::with_capacity(turn.calls.len());
+            let mut cancelled = false;
             for call in &turn.calls {
+                if self.cancel.is_triggered() {
+                    cancelled = true;
+                    break;
+                }
                 self.announce(report.turns, call);
-                outcomes.push(self.tool.call(call));
+                match self.tool.call(call) {
+                    Some(outcome) => outcomes.push(outcome),
+                    // The command was killed mid-flight; there is no result to
+                    // feed back, and no model left to read it.
+                    None => cancelled = true,
+                }
                 report.tool_calls += 1;
+                if cancelled {
+                    break;
+                }
+            }
+            if cancelled {
+                report.stopped = Stopped::Cancelled;
+                break;
             }
             history.push(Message::ToolResults(outcomes));
         }

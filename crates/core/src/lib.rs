@@ -2,6 +2,7 @@
 //! environment probe. Knows nothing about a terminal.
 
 pub mod agent;
+pub mod cancel;
 pub mod config;
 pub mod doctor;
 pub mod exec;
