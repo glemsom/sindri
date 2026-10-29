@@ -10,7 +10,7 @@
 mod common;
 
 use common::provider::{MockProvider, Reply};
-use common::{Env, TEST_KEY, stderr, stdout};
+use common::{Env, stderr, stdout};
 
 /// A directory under the workspace that the repository's config asks for.
 fn extra(env: &Env) -> std::path::PathBuf {

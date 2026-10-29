@@ -319,3 +319,31 @@ fn an_extra_path_that_could_not_be_mounted_is_a_usage_error() {
     }
     assert_eq!(mock.requests().len(), 0, "no run leaves the machine");
 }
+
+#[test]
+fn a_credential_from_the_file_is_redacted_from_errors() {
+    const FROM_FILE: &str = "sk-ant-from-the-config-file";
+    let env = Env::new();
+    write_config(
+        &env,
+        &format!("model = \"claude-from-file\"\napi_key = \"{FROM_FILE}\"\n"),
+    );
+
+    let mock = MockProvider::start(vec![Reply::error(
+        401,
+        "authentication_error",
+        &format!("invalid x-api-key `{FROM_FILE}`"),
+    )]);
+    let output = run(&env, &mock, &["-b", "summarise this"], &[]);
+
+    assert_eq!(output.status.code(), Some(1), "an auth failure is exit 1");
+    let message = stderr(&output);
+    assert!(
+        !message.contains(FROM_FILE),
+        "the file's credential is never printed: {message}"
+    );
+    assert!(
+        message.contains("[redacted]"),
+        "the credential is replaced, not dropped: {message}"
+    );
+}

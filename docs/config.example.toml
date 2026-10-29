@@ -1,0 +1,39 @@
+# $XDG_CONFIG_HOME/sindri/config.toml — the one file Sindri reads.
+#
+# Every key is optional, and every key can be overridden without editing this
+# file: environment variables win over it, and flags win over them (ADR-0005).
+# An unknown key is an error naming both the key and this file, so a typo never
+# runs silently on defaults.
+
+# Which wire to speak. The only provider so far is "anthropic".
+provider = "anthropic"
+
+# The model to ask. Required: there is no default, so a missing model is an
+# explicit error rather than a guess.
+model = "claude-sonnet-4-6"
+
+# The credential. Prefer the provider's own environment variable —
+# ANTHROPIC_API_KEY, or SINDRI_API_KEY for any provider — because this file is
+# world-readable text. Either way it is redacted from all output and records.
+api_key = "sk-ant-…"
+
+# Another API root: a gateway, a proxy, or a local server. Left out, the
+# provider's own default is used. ANTHROPIC_BASE_URL is read below this file's
+# value, so an already-exported variable needs no configuration at all.
+base_url = "https://api.anthropic.com"
+
+# Whether to pay for the model's reasoning. Off by default, because cheap tasks
+# should stay cheap.
+thinking = false
+
+# Extra directories mounted read-write inside the sandbox, besides the
+# workspace and the session temp. Absolute, canonical, never "/", and never one
+# inside another. This is the setting that makes a repository-local config
+# dangerous, which is why none is ever honoured.
+extra_writable_paths = ["/home/you/go/pkg/mod"]
+
+# How many turns one run may take before it stops with exit 100.
+max_turns = 250
+
+# How long one command may run inside the sandbox, in seconds (1–3600).
+timeout = 120
