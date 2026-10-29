@@ -55,6 +55,19 @@ impl SessionDir {
     pub fn temp(&self) -> PathBuf {
         self.root.join("tmp")
     }
+
+    /// Where over-long command output is written, one file per stream.
+    pub fn spill(&self) -> PathBuf {
+        self.temp().join("spill")
+    }
+
+    /// The GUID this run is recorded under (ADR-0006).
+    pub fn id(&self) -> &str {
+        self.root
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default()
+    }
 }
 
 /// A fresh session directory under the state directory.

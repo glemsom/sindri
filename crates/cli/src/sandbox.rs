@@ -6,7 +6,6 @@
 //! was produced, 3 when the sandbox itself failed. The command's own status is
 //! in the JSON, and only there — that is the whole point of the outcome.
 
-use std::path::PathBuf;
 use std::time::Duration;
 
 use sindri_core::exec::{BashExecutor, SandboxExecutor};
@@ -16,20 +15,8 @@ use sindri_types::ExitCode;
 
 /// Runs the command and prints one JSON object describing what happened.
 pub fn exec(timeout: Duration, command: &[String]) -> i32 {
-    let prepared = session::begin().and_then(|session| {
-        let session_temp = session.temp();
-        let policy = session::policy_for(
-            &workspace()?,
-            session_temp.clone(),
-            session::search_path(),
-            Enforcement::Bubblewrap,
-        )
-        .map_err(|error| std::io::Error::other(error.to_string()))?;
-        Ok((policy, session_temp))
-    });
-
-    let (policy, session_temp) = match prepared {
-        Ok(prepared) => prepared,
+    let (policy, session) = match session::prepare(Enforcement::Bubblewrap) {
+        Ok((session, policy)) => (policy, session),
         Err(error) => {
             eprintln!("sindri: sandbox exec: {error}");
             return ExitCode::EnvironmentFailure.code();
@@ -37,7 +24,7 @@ pub fn exec(timeout: Duration, command: &[String]) -> i32 {
     };
 
     let script = shell_join(command);
-    let executor = SandboxExecutor::new(policy, timeout, session_temp.join("spill"));
+    let executor = SandboxExecutor::new(policy, timeout, session.spill());
     let result = executor.execute(&script);
 
     match serde_json::to_string(&result) {
@@ -57,10 +44,6 @@ pub fn exec(timeout: Duration, command: &[String]) -> i32 {
             ExitCode::EnvironmentFailure.code()
         }
     }
-}
-
-fn workspace() -> std::io::Result<PathBuf> {
-    std::env::current_dir()?.canonicalize()
 }
 
 /// Turns an argv into one script, quoting each word so the shell sees exactly

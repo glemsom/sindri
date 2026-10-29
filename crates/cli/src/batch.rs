@@ -1,13 +1,21 @@
 //! Batch mode: the Unix filter front end. It reads the prompt and the stdin
-//! context, asks the model and prints the answer plus exactly one newline;
+//! context, runs the agent to an answer and prints it plus exactly one newline;
 //! everything else is a decision made in `sindri-core`. Exit codes, not prose,
 //! tell a script what happened (ADR-0004).
 
 use std::io::{IsTerminal, Read};
+use std::sync::Arc;
+use std::sync::mpsc;
 
+use sindri_core::agent::{Agent, BashTool, Event, Stopped};
 use sindri_core::config::{Config, ConfigError, Overrides};
+use sindri_core::exec::SandboxExecutor;
 use sindri_core::provider::{Client, Error};
+use sindri_core::sandbox::Enforcement;
+use sindri_core::session;
 use sindri_types::ExitCode;
+
+use crate::verbose;
 
 /// The flag overrides `sindri -b` accepts, taken from the command line as
 /// written.
@@ -18,6 +26,10 @@ pub struct Flags {
     pub base_url: Option<String>,
     pub max_turns: Option<u32>,
     pub timeout: Option<u64>,
+    /// Pay for the model's reasoning.
+    pub thinking: bool,
+    /// Report the run on stderr when it is over.
+    pub verbose: bool,
 }
 
 impl From<Flags> for Overrides {
@@ -39,17 +51,53 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
         Err(message) => return usage_error(&message),
     };
 
+    let verbose = flags.verbose;
+    let thinking = flags.thinking;
     let config = match Config::resolve(flags.into()) {
         Ok(config) => config,
         Err(error) => return config_error(&error),
     };
 
-    let client = Client::new(&config);
-    match client.ask(&prompt) {
-        Ok(answer) => {
+    let (session, policy) = match session::prepare(Enforcement::Bubblewrap) {
+        Ok(prepared) => prepared,
+        Err(error) => {
+            eprintln!("sindri: sandbox: {error}");
+            return ExitCode::EnvironmentFailure.code();
+        }
+    };
+
+    let executor = Arc::new(SandboxExecutor::new(
+        policy.clone(),
+        config.timeout,
+        session.spill(),
+    ));
+    let tool = BashTool::new(&policy, executor);
+    let mut agent = Agent::new(
+        Box::new(Client::new(&config)),
+        tool,
+        config.max_turns,
+        thinking,
+    );
+    // Events are buffered only for `-v`: a silent run should not carry a
+    // transcript nobody asked for.
+    let (sender, events) = mpsc::channel::<Event>();
+    if verbose {
+        agent.set_events(sender);
+    }
+
+    match agent.run(&prompt) {
+        Ok(report) => {
             // The answer and exactly one newline, so `| wc -l` counts answers.
-            println!("{}", answer.text.trim_end());
-            ExitCode::Success.code()
+            println!("{}", report.answer.trim_end());
+            if verbose {
+                for line in verbose::lines(events.try_iter().collect(), session.id()) {
+                    eprintln!("{line}");
+                }
+            }
+            match report.stopped {
+                Stopped::Final => ExitCode::Success.code(),
+                Stopped::MaxTurns => ExitCode::TurnCap.code(),
+            }
         }
         Err(error) => model_error(&error),
     }

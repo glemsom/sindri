@@ -4,6 +4,7 @@
 mod batch;
 mod doctor;
 mod sandbox;
+mod verbose;
 
 use std::io::IsTerminal;
 
@@ -32,6 +33,14 @@ struct Cli {
     /// Override how long one command may run, in seconds.
     #[arg(long, value_name = "SECONDS")]
     timeout: Option<u64>,
+    /// Pay for the model's reasoning. Off by default, because cheap tasks
+    /// should stay cheap.
+    #[arg(long)]
+    thinking: bool,
+    /// Report the run on stderr when it is over: reasoning, one line per tool
+    /// call, and the session it was recorded in. stdout is untouched.
+    #[arg(short = 'v', long = "verbose")]
+    verbose: bool,
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -84,6 +93,8 @@ fn main() {
                     base_url: cli.base_url,
                     max_turns: cli.max_turns,
                     timeout: cli.timeout,
+                    thinking: cli.thinking,
+                    verbose: cli.verbose,
                 },
             ),
             None => refuse_stdin(),
