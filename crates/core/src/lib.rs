@@ -2,5 +2,7 @@
 //! environment probe. Knows nothing about a terminal.
 
 pub mod doctor;
+pub mod exec;
 pub mod paths;
 pub mod sandbox;
+pub mod session;

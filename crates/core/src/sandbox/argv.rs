@@ -5,6 +5,8 @@
 //! ambient environment, so enforcement cannot change behind the description's
 //! back.
 
+use std::os::fd::RawFd;
+
 use super::SandboxPolicy;
 
 /// The locale inside the sandbox is fixed, not inherited: a UTF-8 locale makes
@@ -34,7 +36,7 @@ impl Invocation {
 impl SandboxPolicy {
     /// The argv that enforces this policy. Mount order is load-bearing: the
     /// read-only root first, or the writable binds are shadowed.
-    pub fn to_argv(&self, command: &[String]) -> Invocation {
+    pub fn to_argv(&self, command: &[String], status_fd: Option<RawFd>) -> Invocation {
         if self.is_unsafe() {
             return Invocation::Unsandboxed(command.to_vec());
         }
@@ -50,6 +52,9 @@ impl SandboxPolicy {
         }
         push(&mut argv, &["--bind", &temp, &temp]);
         push(&mut argv, &["--dev", "/dev"]);
+        // A fresh procfs, or the pid namespace is a lie: `/proc` would still
+        // list the host's processes, which this sandbox cannot reach.
+        push(&mut argv, &["--proc", "/proc"]);
 
         push(
             &mut argv,
@@ -63,6 +68,10 @@ impl SandboxPolicy {
                 "--new-session",
             ],
         );
+
+        if let Some(fd) = status_fd {
+            push(&mut argv, &["--json-status-fd", &fd.to_string()]);
+        }
 
         push(&mut argv, &["--clearenv"]);
         for (key, value) in [

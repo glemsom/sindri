@@ -39,6 +39,9 @@ impl SandboxPolicy {
         out.push_str(&format!(
             "  environment: cleared, then PATH, HOME, TMPDIR and LANG={LOCALE} set explicitly\n"
         ));
+        out.push_str(
+            "  isolation: own pid, ipc, uts and cgroup namespaces; /proc lists only this sandbox\n",
+        );
         out.push_str("  read-only: the rest of the host filesystem, readable but not writable\n");
         out
     }

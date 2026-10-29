@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::paths;
-use crate::sandbox::{Enforcement, NetworkPosture, PolicyError, SandboxPolicy, WritableSet};
+use crate::sandbox::{Enforcement, PolicyError, SandboxPolicy};
 
 /// The binaries the system prompt may claim exist; `doctor` resolves each one
 /// through the same `PATH` the sandbox will use. `bwrap` itself is checked
@@ -101,12 +101,10 @@ pub fn probe() -> Result<Report, DoctorError> {
 }
 
 fn build_policy(workspace: &Path, session_temp: PathBuf) -> Result<SandboxPolicy, DoctorError> {
-    let writable = WritableSet::new([workspace.to_path_buf()]).map_err(DoctorError::Policy)?;
-    SandboxPolicy::new(
-        writable,
+    crate::session::policy_for(
+        workspace,
         session_temp,
-        search_path(),
-        NetworkPosture::Shared,
+        crate::session::search_path(),
         Enforcement::Bubblewrap,
     )
     .map_err(DoctorError::Policy)
@@ -124,7 +122,7 @@ fn run_probe(
         REQUIRED_BINARIES.join(" ")
     );
     let command = vec![bash.display().to_string(), "-c".to_string(), script];
-    let invocation = policy.to_argv(&command);
+    let invocation = policy.to_argv(&command, None);
 
     // `_` keeps the resolved bwrap only as the reason the check exists; the
     // invocation itself is built from the argv, never assembled by hand.
@@ -160,15 +158,6 @@ fn run_probe(
         return Err(DoctorError::BinariesMissing { missing });
     }
     Ok(())
-}
-
-/// The `PATH` the sandbox will be given: the user's own, so that tools in a
-/// nix profile or `~/.local/bin` keep working.
-fn search_path() -> String {
-    std::env::var("PATH")
-        .ok()
-        .filter(|path| !path.is_empty())
-        .unwrap_or_else(|| crate::sandbox::FALLBACK_PATH.to_string())
 }
 
 /// Resolves a binary the way the shell would.

@@ -17,6 +17,31 @@ pub fn state_dir() -> io::Result<PathBuf> {
     }
 }
 
+/// One run's directory: `<state>/sindri/sessions/<guid>` (ADR-0006).
+#[derive(Debug, Clone)]
+pub struct SessionDir {
+    root: PathBuf,
+}
+
+impl SessionDir {
+    /// Creates the directory for a fresh session.
+    pub fn create() -> io::Result<Self> {
+        let root = state_dir()?.join("sessions").join(new_session_id()?);
+        std::fs::create_dir_all(&root)?;
+        Ok(SessionDir { root })
+    }
+
+    /// The session temp: writable scratch, and the parent of the sandbox HOME.
+    pub fn temp(&self) -> PathBuf {
+        self.root.join("tmp")
+    }
+}
+
+/// A fresh session directory under the state directory.
+pub fn new_session_dir() -> io::Result<SessionDir> {
+    SessionDir::create()
+}
+
 /// A fresh session GUID, taken from the kernel rather than guessed at.
 pub fn new_session_id() -> io::Result<String> {
     let uuid = std::fs::read_to_string("/proc/sys/kernel/random/uuid")?;

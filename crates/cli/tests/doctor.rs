@@ -71,6 +71,7 @@ fn doctor_prints_only_the_description() {
                 "session temp: ",
                 "home: ",
                 "environment: ",
+                "isolation: ",
                 "read-only: ",
             ]
             .iter()

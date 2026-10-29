@@ -83,7 +83,7 @@ fn the_writable_set_rejects_nested_and_duplicate_paths() {
 #[test]
 fn the_argv_mounts_the_read_only_root_first_then_writable_paths_then_dev() {
     let (workspace, session_temp, policy) = fixtures();
-    let Invocation::Sandboxed(argv) = policy.to_argv(&["true".to_string()]) else {
+    let Invocation::Sandboxed(argv) = policy.to_argv(&["true".to_string()], None) else {
         panic!("a policy without --yolo-unsafe must be sandboxed");
     };
 
@@ -111,7 +111,7 @@ fn the_argv_mounts_the_read_only_root_first_then_writable_paths_then_dev() {
 #[test]
 fn the_argv_never_skips_a_bind_silently() {
     let (_, _, policy) = fixtures();
-    let Invocation::Sandboxed(argv) = policy.to_argv(&["true".to_string()]) else {
+    let Invocation::Sandboxed(argv) = policy.to_argv(&["true".to_string()], None) else {
         panic!("sandboxed");
     };
     const SKIPPING: [&str; 3] = ["--bind-try", "--ro-bind-try", "--dev-bind-try"];
@@ -126,7 +126,7 @@ fn the_argv_never_skips_a_bind_silently() {
 #[test]
 fn the_argv_redirects_the_temp_variables_and_a_writable_home_into_the_session_temp() {
     let (_workspace, session_temp, policy) = fixtures();
-    let Invocation::Sandboxed(argv) = policy.to_argv(&["true".to_string()]) else {
+    let Invocation::Sandboxed(argv) = policy.to_argv(&["true".to_string()], None) else {
         panic!("sandboxed");
     };
     let value = |key: &str| -> String {
@@ -175,7 +175,7 @@ fn binds(argv: &[String]) -> Vec<&String> {
 #[test]
 fn the_argv_unshares_the_namespaces_that_matter_and_keeps_the_network() {
     let (_, _, policy) = fixtures();
-    let Invocation::Sandboxed(argv) = policy.to_argv(&["true".to_string()]) else {
+    let Invocation::Sandboxed(argv) = policy.to_argv(&["true".to_string()], None) else {
         panic!("sandboxed");
     };
     for flag in [
@@ -195,7 +195,7 @@ fn the_argv_unshares_the_namespaces_that_matter_and_keeps_the_network() {
 #[test]
 fn the_argv_parsed_back_into_a_writable_set_describes_the_same_sandbox() {
     let (_workspace, session_temp, policy) = fixtures();
-    let Invocation::Sandboxed(argv) = policy.to_argv(&["true".to_string()]) else {
+    let Invocation::Sandboxed(argv) = policy.to_argv(&["true".to_string()], None) else {
         panic!("sandboxed");
     };
 
@@ -236,7 +236,7 @@ fn an_unsafe_policy_wraps_nothing_and_says_so() {
     .expect("policy");
 
     assert_eq!(
-        unsafe_policy.to_argv(&["echo".to_string(), "hi".to_string()]),
+        unsafe_policy.to_argv(&["echo".to_string(), "hi".to_string()], None),
         Invocation::Unsandboxed(vec!["echo".to_string(), "hi".to_string()]),
         "bwrap is bypassed entirely"
     );
@@ -249,5 +249,26 @@ fn an_unsafe_policy_wraps_nothing_and_says_so() {
         unsafe_policy.describe().contains("your own privileges"),
         "{}",
         unsafe_policy.describe()
+    );
+}
+
+#[test]
+fn the_argv_mounts_a_fresh_procfs_so_the_pid_namespace_is_not_a_lie() {
+    let (_workspace, _, policy) = fixtures();
+    let Invocation::Sandboxed(argv) = policy.to_argv(&["true".to_string()], None) else {
+        panic!("sandboxed");
+    };
+    let proc_mount = argv
+        .iter()
+        .position(|arg| arg == "--proc")
+        .expect("a fresh procfs is mounted");
+    assert_eq!(argv[proc_mount + 1], "/proc");
+    assert!(
+        proc_mount
+            > argv
+                .iter()
+                .position(|arg| arg == "--ro-bind")
+                .expect("root bind"),
+        "the procfs mount follows the read-only root"
     );
 }
