@@ -13,6 +13,10 @@ extra writable paths, turn cap, tool timeout.
 
 Credentials come from the provider's environment variable
 (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) or an `api_key` field in the config.
+A wire that needs none is not asked for one: the OpenAI-compatible wire serves
+local servers, which have no credential to give, so an absent one leaves the
+request unauthenticated rather than blocking the run. A hosted server that wants
+one answers 401, and that refusal is reported as itself.
 
 **No repository-local config file.** A checked-in config that grants extra
 writable paths turns every `git clone && sindri` into a privilege escalation.

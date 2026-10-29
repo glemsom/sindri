@@ -21,7 +21,8 @@ struct Cli {
     /// argument, stdin is the prompt.
     #[arg(short = 'b', long = "batch", value_name = "PROMPT", num_args = 0..=1)]
     batch: Option<Option<String>>,
-    /// Override the configured provider (`anthropic`).
+    /// Override the configured provider (`anthropic`, or `openai` for any
+    /// OpenAI-compatible server: Ollama, vLLM, LM Studio, OpenRouter).
     #[arg(long, value_name = "NAME")]
     provider: Option<String>,
     /// Override the configured model.
