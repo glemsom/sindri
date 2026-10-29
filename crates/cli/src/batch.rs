@@ -14,6 +14,7 @@ use sindri_core::config::{Config, ConfigError, Overrides};
 use sindri_core::exec::SandboxExecutor;
 use sindri_core::output;
 use sindri_core::provider::{Client, Error};
+use sindri_core::record::{Recorder, Redaction, Start};
 use sindri_core::sandbox::Enforcement;
 use sindri_core::session;
 use sindri_types::ExitCode;
@@ -96,17 +97,40 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
         }
     };
 
+    // Every run leaves a record (ADR-0006), and a run that cannot write one is
+    // not a run: the evidence is what makes the agent's actions reviewable.
+    let recorder = match Recorder::start(
+        &session,
+        Start {
+            provider: config.provider.as_str().to_string(),
+            model: config.model.clone(),
+            enforcement: Enforcement::Bubblewrap,
+        },
+        Redaction::new([config.api_key.clone()]),
+    ) {
+        Ok(recorder) => Arc::new(recorder),
+        Err(error) => {
+            eprintln!("sindri: session {}: {error}", session.root().display());
+            return ExitCode::EnvironmentFailure.code();
+        }
+    };
+
     // One flag for the whole run: Ctrl-C raises it, the loop stops on it between
     // turns, and the executor kills a running command's group on it.
     let cancel = Cancel::new();
     signal::install(cancel.clone());
 
-    let executor = Arc::new(SandboxExecutor::new(
-        policy.clone(),
-        config.timeout,
-        session.spill(),
-        cancel.clone(),
-    ));
+    let executor = Arc::new(
+        SandboxExecutor::new(
+            policy.clone(),
+            config.timeout,
+            session.spill(),
+            cancel.clone(),
+        )
+        // bubblewrap's own account of each command goes into the same record,
+        // document by document, so a killed run still says how far the sandbox got.
+        .with_status_sink(recorder.clone()),
+    );
     let tool = BashTool::new(&policy, executor);
     let mut agent = Agent::new(
         Box::new(Client::new(&config)),
@@ -121,18 +145,36 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
         agent.set_events(sender);
     }
     agent.set_cancel(cancel);
+    agent.set_recorder(Arc::clone(&recorder));
 
-    match agent.run(&prompt) {
-        // A cancelled run writes nothing: stdout must never let a half-finished
-        // run be mistaken for an answer (ADR-0004).
-        Ok(report) if report.stopped == Stopped::Cancelled => ExitCode::Cancelled.code(),
+    let outcome = agent.run(&prompt);
+    // The record's end is written before anything is printed, so the session the
+    // output names is already on disk and complete.
+    let written = match &outcome {
+        Ok(report) => recorder.finish(report),
+        Err(error) => recorder.failed(error.message()),
+    };
+    if let Err(error) = written {
+        eprintln!(
+            "sindri: session {}: the record could not be finished: {error}",
+            recorder.root().display()
+        );
+    }
+
+    match outcome {
         Ok(report) => {
-            match format {
-                // The answer and exactly one newline, so `| wc -l` counts
-                // answers.
-                OutputFormat::Text => println!("{}", report.answer.trim_end()),
-                // One compact object on one line, so `| jq` reads fields.
-                OutputFormat::Json => println!("{}", output::to_json(&report, session.id())),
+            // A cancelled run writes nothing: stdout must never let a
+            // half-finished run be mistaken for an answer (ADR-0004). `-v` still
+            // says what happened and where the record is, which is the whole
+            // point of recording the run that went wrong.
+            if report.stopped != Stopped::Cancelled {
+                match format {
+                    // The answer and exactly one newline, so `| wc -l` counts
+                    // answers.
+                    OutputFormat::Text => println!("{}", report.answer.trim_end()),
+                    // One compact object on one line, so `| jq` reads fields.
+                    OutputFormat::Json => println!("{}", output::to_json(&report, session.id())),
+                }
             }
             if verbose {
                 for line in verbose::lines(events.try_iter().collect(), session.id()) {
