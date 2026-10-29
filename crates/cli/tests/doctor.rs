@@ -149,3 +149,23 @@ fn doctor_exits_three_with_one_line_when_bwrap_cannot_create_a_sandbox() {
                 })),
         );
 }
+
+#[test]
+fn doctor_describes_the_configured_extras_the_model_is_told_about() {
+    let env = Env::new();
+    let extra = env.workspace.parent().expect("root").join("extra");
+    std::fs::create_dir_all(&extra).expect("extra dir");
+    let extra = extra.canonicalize().expect("canonical extra");
+    common::write_config(
+        &env,
+        &format!("extra_writable_paths = [\"{}\"]\n", extra.display()),
+    );
+
+    let assert = env.cmd().arg("doctor").assert().success();
+    let output = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
+
+    assert!(
+        output.contains(&extra.display().to_string()),
+        "doctor prints the description a run would really give the model: {output}"
+    );
+}

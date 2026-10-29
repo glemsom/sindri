@@ -8,14 +8,24 @@
 
 use std::time::Duration;
 
+use sindri_core::config::{Config, Overrides};
 use sindri_core::exec::{BashExecutor, SandboxExecutor};
 use sindri_core::sandbox::Enforcement;
 use sindri_core::session;
 use sindri_types::ExitCode;
 
-/// Runs the command and prints one JSON object describing what happened.
-pub fn exec(timeout: Duration, command: &[String]) -> i32 {
-    let (policy, session) = match session::prepare(Enforcement::Bubblewrap) {
+/// Runs the command and prints one JSON object describing what happened. The
+/// extras a run would be granted are granted here too, so a diagnostic cannot
+/// probe a different sandbox than the run it is diagnosing.
+pub fn exec(timeout: Duration, overrides: Overrides, command: &[String]) -> i32 {
+    let extras = match Config::configured_extras(overrides) {
+        Ok(extras) => extras,
+        Err(error) => {
+            eprintln!("sindri: {}", error.message());
+            return ExitCode::UsageError.code();
+        }
+    };
+    let (policy, session) = match session::prepare(extras.as_slice(), Enforcement::Bubblewrap) {
         Ok((session, policy)) => (policy, session),
         Err(error) => {
             eprintln!("sindri: sandbox exec: {error}");

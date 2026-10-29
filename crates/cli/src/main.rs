@@ -9,6 +9,7 @@ mod verbose;
 use std::io::IsTerminal;
 
 use clap::{CommandFactory, Parser, Subcommand};
+use sindri_core::config::Overrides;
 
 #[derive(Parser)]
 #[command(name = "sindri", version = sindri_types::VERSION_LONG, about = "A Unix filter with an agent behind it")]
@@ -30,13 +31,21 @@ struct Cli {
     /// Override how many turns the run may take.
     #[arg(long, value_name = "N")]
     max_turns: Option<u32>,
+    /// Grant an extra directory read-write inside the sandbox. Repeatable;
+    /// replaces the configured extras rather than adding to them.
+    #[arg(long, value_name = "PATH")]
+    writable: Vec<String>,
     /// Override how long one command may run, in seconds.
     #[arg(long, value_name = "SECONDS")]
     timeout: Option<u64>,
     /// Pay for the model's reasoning. Off by default, because cheap tasks
     /// should stay cheap.
-    #[arg(long)]
+    #[arg(long, conflicts_with = "no_thinking")]
     thinking: bool,
+    /// Do not pay for the model's reasoning, whatever the config or the
+    /// environment says.
+    #[arg(long = "no-thinking")]
+    no_thinking: bool,
     /// Report the run on stderr when it is over: reasoning, one line per tool
     /// call, and the session it was recorded in. stdout is untouched.
     #[arg(short = 'v', long = "verbose")]
@@ -77,11 +86,21 @@ fn main() {
         ));
     }
     let code = match cli.command {
-        Some(Command::Doctor) => doctor::run(),
+        Some(Command::Doctor) => doctor::run(Overrides {
+            writable: (!cli.writable.is_empty()).then_some(cli.writable),
+            ..Overrides::default()
+        }),
         Some(Command::Sandbox {
             command: SandboxCommand::Exec { timeout, command },
         }) => match sindri_core::exec::timeout_from_secs(timeout) {
-            Ok(timeout) => sandbox::exec(timeout, &command),
+            Ok(timeout) => sandbox::exec(
+                timeout,
+                Overrides {
+                    writable: (!cli.writable.is_empty()).then_some(cli.writable),
+                    ..Overrides::default()
+                },
+                &command,
+            ),
             Err(message) => batch::usage_error(&message),
         },
         None => match cli.batch {
@@ -93,7 +112,12 @@ fn main() {
                     base_url: cli.base_url,
                     max_turns: cli.max_turns,
                     timeout: cli.timeout,
-                    thinking: cli.thinking,
+                    writable: (!cli.writable.is_empty()).then_some(cli.writable),
+                    thinking: match (cli.thinking, cli.no_thinking) {
+                        (true, _) => Some(true),
+                        (_, true) => Some(false),
+                        _ => None,
+                    },
                     verbose: cli.verbose,
                 },
             ),

@@ -26,8 +26,11 @@ pub struct Flags {
     pub base_url: Option<String>,
     pub max_turns: Option<u32>,
     pub timeout: Option<u64>,
-    /// Pay for the model's reasoning.
-    pub thinking: bool,
+    /// Pay for the model's reasoning, or refuse to: both override the file
+    /// and the environment (ADR-0005).
+    pub thinking: Option<bool>,
+    /// `--writable`, as written.
+    pub writable: Option<Vec<String>>,
     /// Report the run on stderr when it is over.
     pub verbose: bool,
 }
@@ -40,6 +43,8 @@ impl From<Flags> for Overrides {
             base_url: flags.base_url,
             max_turns: flags.max_turns,
             timeout: flags.timeout,
+            thinking: flags.thinking,
+            writable: flags.writable,
         }
     }
 }
@@ -52,13 +57,21 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     };
 
     let verbose = flags.verbose;
-    let thinking = flags.thinking;
     let config = match Config::resolve(flags.into()) {
         Ok(config) => config,
         Err(error) => return config_error(&error),
     };
+    // Nothing written by a clone may configure the agent, and staying silent
+    // about it would leave a user editing a file that is read by nobody.
+    if let Some(path) = &config.refused_repo_config {
+        eprintln!(
+            "sindri: ignoring {}: a config committed in a repository is never honoured (ADR-0005)",
+            path.display()
+        );
+    }
 
-    let (session, policy) = match session::prepare(Enforcement::Bubblewrap) {
+    let (session, policy) = match session::prepare(&config.extra_writable, Enforcement::Bubblewrap)
+    {
         Ok(prepared) => prepared,
         Err(error) => {
             eprintln!("sindri: sandbox: {error}");
@@ -76,7 +89,7 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
         Box::new(Client::new(&config)),
         tool,
         config.max_turns,
-        thinking,
+        config.thinking,
     );
     // Events are buffered only for `-v`: a silent run should not carry a
     // transcript nobody asked for.

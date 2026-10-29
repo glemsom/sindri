@@ -71,7 +71,7 @@ impl std::error::Error for DoctorError {}
 /// The probe runs in a scratch directory of its own — not in the session
 /// namespace — and removes it afterwards, so `doctor` leaves no record behind
 /// and prunes nothing that a run wrote (ADR-0006).
-pub fn probe() -> Result<Report, DoctorError> {
+pub fn probe(extras: &[PathBuf]) -> Result<Report, DoctorError> {
     let bwrap = which("bwrap").ok_or(DoctorError::BwrapMissing)?;
     let bash = which("bash").ok_or_else(|| DoctorError::BinariesMissing {
         missing: vec!["bash".to_string()],
@@ -87,22 +87,27 @@ pub fn probe() -> Result<Report, DoctorError> {
     let session_temp = scratch.join("tmp");
     std::fs::create_dir_all(session_temp.join("home")).map_err(DoctorError::Setup)?;
 
-    let probed = run_probe(&bwrap, &bash, &workspace, &session_temp);
+    let probed = run_probe(&bwrap, &bash, &workspace, extras, &session_temp);
     let _ = std::fs::remove_dir_all(&scratch);
 
     probed?;
 
     // The description states the shape a run gets, named by its session GUID.
     let shown_temp = state.join("sessions").join("<session>").join("tmp");
-    let policy = build_policy(&workspace, shown_temp)?;
+    let policy = build_policy(&workspace, extras, shown_temp)?;
     Ok(Report {
         description: policy.describe(),
     })
 }
 
-fn build_policy(workspace: &Path, session_temp: PathBuf) -> Result<SandboxPolicy, DoctorError> {
+fn build_policy(
+    workspace: &Path,
+    extras: &[PathBuf],
+    session_temp: PathBuf,
+) -> Result<SandboxPolicy, DoctorError> {
     crate::session::policy_for(
         workspace,
+        extras,
         session_temp,
         crate::session::search_path(),
         Enforcement::Bubblewrap,
@@ -114,9 +119,10 @@ fn run_probe(
     bwrap: &Path,
     bash: &Path,
     workspace: &Path,
+    extras: &[PathBuf],
     session_temp: &Path,
 ) -> Result<(), DoctorError> {
-    let policy = build_policy(workspace, session_temp.to_path_buf())?;
+    let policy = build_policy(workspace, extras, session_temp.to_path_buf())?;
     let script = format!(
         "echo {MARKER}; for b in {}; do command -v \"$b\" >/dev/null 2>&1 || echo \"missing:$b\"; done",
         REQUIRED_BINARIES.join(" ")
