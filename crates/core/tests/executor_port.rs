@@ -158,7 +158,7 @@ fn a_cancelled_executor_kills_its_command_group_and_reports_no_result() {
     let started = workspace.join("started");
     let late = workspace.join("late");
     let script = format!(
-        "touch {}; sleep 30; touch {}",
+        "touch {}; sleep 3; touch {}",
         started.display(),
         late.display()
     );
@@ -184,7 +184,8 @@ fn a_cancelled_executor_kills_its_command_group_and_reports_no_result() {
         result.is_none(),
         "a cancelled command has no result to report"
     );
-    std::thread::sleep(std::time::Duration::from_secs(2));
+    // Long enough that the command would have written the marker had it lived.
+    std::thread::sleep(std::time::Duration::from_secs(5));
     assert!(
         !late.exists(),
         "the cancelled command's group was killed, grandchildren included"

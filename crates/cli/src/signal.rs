@@ -11,9 +11,10 @@ use sindri_core::cancel::Cancel;
 /// the handler never runs while it is still empty.
 static RAISED: OnceLock<Cancel> = OnceLock::new();
 
-/// Makes the next SIGINT stop `cancel`. A failure to install is reported and
-/// survivable: the default disposition then kills the process, which a shell
-/// still reads as a cancellation.
+/// Makes the next SIGINT stop `cancel`. One process runs one thing, so only the
+/// first call has any effect. A failure to install is reported and survivable:
+/// the default disposition then kills the process, which a shell still reads as
+/// a cancellation.
 pub fn install(cancel: Cancel) {
     if RAISED.set(cancel).is_err() {
         return;

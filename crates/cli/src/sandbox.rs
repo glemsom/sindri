@@ -15,6 +15,8 @@ use sindri_core::sandbox::Enforcement;
 use sindri_core::session;
 use sindri_types::ExitCode;
 
+use crate::signal;
+
 /// Runs the command and prints one JSON object describing what happened. The
 /// extras a run would be granted are granted here too, so a diagnostic cannot
 /// probe a different sandbox than the run it is diagnosing.
@@ -38,7 +40,7 @@ pub fn exec(timeout: Duration, overrides: Overrides, command: &[String]) -> i32 
     // Ctrl-C here kills the command's group too, so a diagnostic cannot leave a
     // process behind either.
     let cancel = Cancel::new();
-    crate::signal::install(cancel.clone());
+    signal::install(cancel.clone());
     let executor = SandboxExecutor::new(policy, timeout, session.spill(), cancel);
     let Some(result) = executor.execute(&script) else {
         return ExitCode::Cancelled.code();
