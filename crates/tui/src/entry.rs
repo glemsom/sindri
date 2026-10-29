@@ -1,6 +1,7 @@
 //! One row of the transcript, and the state a tool call carries while it runs.
 
 use std::collections::VecDeque;
+use std::path::{Path, PathBuf};
 
 use crate::driver::{CallOver, Side};
 
@@ -45,6 +46,12 @@ pub struct Call {
     /// The last few lines of its output, oldest first, each with the stream it
     /// came from.
     pub tail: VecDeque<(Side, String)>,
+    /// Where the untruncated streams were written, when they did not fit
+    /// (ADR-0007). The frame offers them rather than holding them.
+    pub spill: Vec<PathBuf>,
+    /// Whether the model-facing output was cut down, so there is more to show
+    /// than the tail.
+    pub truncated: bool,
 }
 
 impl Call {
@@ -55,7 +62,18 @@ impl Call {
             command,
             over: None,
             tail: VecDeque::with_capacity(TAIL_LINES),
+            spill: Vec::new(),
+            truncated: false,
         }
+    }
+
+    /// The spill file this call offers to open, when its output was too large
+    /// to display in full.
+    pub fn spill_file(&self) -> Option<&Path> {
+        if !self.truncated {
+            return None;
+        }
+        self.spill.first().map(PathBuf::as_path)
     }
 
     /// One more line of output, keeping only the last few.

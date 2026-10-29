@@ -30,6 +30,32 @@ impl Composer {
         (self.column as u16, self.row as u16)
     }
 
+    /// The row the cursor is on: what `@` completion reads.
+    pub fn row(&self) -> &str {
+        let row = self.row.min(self.rows.len().saturating_sub(1));
+        self.rows.get(row).map_or("", String::as_str)
+    }
+
+    /// Replaces the token that starts at column `from` with `text`, and leaves
+    /// the cursor after it: how an accepted completion lands. A token is a run
+    /// of non-space characters, so whatever followed it on the row survives.
+    pub fn splice(&mut self, from: usize, text: &str) {
+        self.ensure_row();
+        if let Some(row) = self.rows.get_mut(self.row) {
+            let start = byte_index(row, from);
+            let rest = row[start..].to_string();
+            let end = rest
+                .find(char::is_whitespace)
+                .map(|at| start + at)
+                .unwrap_or(row.len());
+            let tail = row[end..].to_string();
+            row.truncate(start);
+            row.push_str(text);
+            self.column = row.chars().count();
+            row.push_str(&tail);
+        }
+    }
+
     /// The whole draft, its rows joined the way it will be sent.
     pub fn text(&self) -> String {
         self.rows.join("\n")
@@ -172,6 +198,17 @@ mod tests {
         composer.backspace();
         composer.backspace();
         assert_eq!(composer.text(), "");
+    }
+
+    #[test]
+    fn a_splice_replaces_one_token_and_leaves_the_rest_of_the_row() {
+        let mut composer = Composer::new();
+        for ch in "look at @src/ma please".chars() {
+            composer.insert(ch);
+        }
+        composer.splice(8, "src/main.rs");
+        assert_eq!(composer.text(), "look at src/main.rs please");
+        assert_eq!(composer.cursor(), (19, 0), "the cursor sits after the path");
     }
 
     #[test]

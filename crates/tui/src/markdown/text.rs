@@ -68,6 +68,23 @@ pub fn wrap(
     rows
 }
 
+/// The first `width` display columns of `text`, cut rather than wrapped: for a
+/// row that shows an excerpt of something longer. A character is never split,
+/// so a wide glyph is either wholly in or wholly out.
+pub fn clip(text: &str, width: usize) -> String {
+    let mut used = 0;
+    let mut shown = String::new();
+    for ch in text.chars() {
+        let cells = UnicodeWidthChar::width(ch).unwrap_or(0);
+        if used + cells > width {
+            break;
+        }
+        used += cells;
+        shown.push(ch);
+    }
+    shown
+}
+
 /// One row of glyphs as a line, trailing spaces dropped and equal styles joined.
 fn line(mut glyphs: Vec<Glyph>, prefix: &str, prefix_style: Style) -> Line<'static> {
     while glyphs.last().is_some_and(|(ch, _)| *ch == ' ') {

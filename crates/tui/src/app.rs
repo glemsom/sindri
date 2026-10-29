@@ -1,41 +1,89 @@
 //! The frame's state: the transcript, the composer, the queue and the rail. It
 //! knows nothing of the model, the sandbox or the terminal: it is told what
 //! happened and it knows how to show it (ADR-0011 §1).
+//!
+//! The hands — what a key or a mouse does to this state — live in [`keys`], so
+//! this file stays a description of what the frame holds.
 
 use std::collections::VecDeque;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use sindri_core::agent::Event;
+use ratatui::layout::Rect;
 use sindri_core::cancel::Cancel;
 
+use crate::completion::Completion;
 use crate::composer::Composer;
-use crate::driver::{CallOver, Finished, Job, Side, Stop};
-use crate::entry::{Call, Entry, Note};
+use crate::copy::{Clipboard, System};
+use crate::driver::Side;
+use crate::entry::{Entry, Note};
 use crate::face::Face;
+use crate::overlay::Overlay;
 use crate::rail::{Launch, Rail};
+use crate::selection::{Selection, Viewport};
+
+/// A screenful is the default page, before a frame has said how tall it is.
+const DEFAULT_PAGE: usize = 10;
 
 /// Everything the frame draws, and everything it has been told.
 pub struct App {
-    rail: Rail,
-    entries: Vec<Entry>,
-    composer: Composer,
+    pub(crate) rail: Rail,
+    pub(crate) entries: Vec<Entry>,
+    pub(crate) composer: Composer,
     /// Prompts typed while a run was in flight, in the order they were typed.
-    queue: VecDeque<String>,
+    pub(crate) queue: VecDeque<String>,
     /// The flag of the run in flight, if there is one.
-    running: Option<Cancel>,
+    pub(crate) running: Option<Cancel>,
     /// Whether Enter has been pressed on the draft since it was last started:
     /// typing alone never launches a run.
-    sent: bool,
+    pub(crate) sent: bool,
     /// Output that arrived before the call it belongs to was announced.
-    early: Vec<(Side, String)>,
-    quit: bool,
+    pub(crate) early: Vec<(Side, String)>,
+    pub(crate) quit: bool,
     face: Option<Face>,
+    /// How many rows of the thread are scrolled past above the window.
+    pub(crate) scroll: usize,
+    /// One screenful: what `PgUp` and `PgDn` move by.
+    pub(crate) page: usize,
+    /// What the transcript column last drew: what a selection resolves against.
+    pub(crate) viewport: Viewport,
+    /// One row count per entry at the width it was measured at, dropped
+    /// whenever an entry changes, so the window never lays out a row it does
+    /// not show (ADR-0011 §4).
+    pub(crate) heights: Vec<Option<usize>>,
+    /// The width `heights` was measured at.
+    pub(crate) width: Option<u16>,
+    /// The drag in progress, if any.
+    pub(crate) selection: Selection,
+    /// Where a copy goes: the terminal, the shell, or nowhere.
+    pub(crate) clipboard: Box<dyn Clipboard>,
+    /// The `@` completion being offered, if any.
+    pub(crate) completion: Option<Completion>,
+    /// The overlay that has the screen, if any.
+    pub(crate) overlay: Option<Overlay>,
+    /// The completion whose walk is still running, if any.
+    pub(crate) walking: Option<(u64, String)>,
+    /// Whether `/new` has asked the front end for a fresh session.
+    pub(crate) renew: bool,
+    /// How many rows a keyboard selection spans, from the newest row upwards.
+    pub(crate) selecting: usize,
+    /// A counter for the walks that answer a completion: a stale answer is
+    /// never applied to a question that has moved on.
+    pub(crate) generation: u64,
 }
 
 impl App {
     /// A frame that has run nothing yet, with the face when the terminal can
     /// show it.
     pub fn new(launch: Launch, face: Option<Face>) -> Self {
+        App::with_clipboard(launch, face, Box::new(System::detect()))
+    }
+
+    /// The same frame, with a clipboard of its own: a test never reaches the
+    /// user's real one (ADR-0013).
+    pub fn with_clipboard(
+        launch: Launch,
+        face: Option<Face>,
+        clipboard: Box<dyn Clipboard>,
+    ) -> Self {
         App {
             rail: Rail::new(launch),
             entries: Vec::new(),
@@ -46,7 +94,25 @@ impl App {
             early: Vec::new(),
             quit: false,
             face,
+            scroll: 0,
+            page: DEFAULT_PAGE,
+            viewport: Viewport::default(),
+            heights: Vec::new(),
+            width: None,
+            selection: Selection::default(),
+            clipboard,
+            completion: None,
+            overlay: None,
+            walking: None,
+            renew: false,
+            selecting: 0,
+            generation: 0,
         }
+    }
+
+    /// The session GUID the rail is showing.
+    pub fn rail_guid(&self) -> String {
+        self.rail.session()
     }
 
     /// The transcript, in the order it happened.
@@ -79,190 +145,131 @@ impl App {
         self.quit
     }
 
+    /// How far up the thread the window is scrolled.
+    pub fn scroll(&self) -> usize {
+        self.scroll
+    }
+
+    /// The drag in progress, or the last one.
+    pub fn selection(&self) -> Selection {
+        self.selection
+    }
+
+    /// The completion on offer, if any.
+    pub fn completion(&self) -> Option<&Completion> {
+        self.completion.as_ref()
+    }
+
+    /// The overlay that has the screen, if any.
+    pub fn overlay(&self) -> Option<&Overlay> {
+        self.overlay.as_ref()
+    }
+
+    /// The same, to draw: a spill's scroll and its window belong to the frame.
+    pub fn overlay_mut(&mut self) -> Option<&mut Overlay> {
+        self.overlay.as_mut()
+    }
+
+    /// What the transcript column last drew.
+    pub fn viewport(&self) -> &Viewport {
+        &self.viewport
+    }
+
     /// The face, when the terminal can show one.
     pub fn face_mut(&mut self) -> Option<&mut Face> {
         self.face.as_mut()
     }
 
-    /// One key. Enter sends or queues, Shift+Enter breaks the line, Ctrl-C
-    /// cancels the run and keeps the draft, Ctrl-Q leaves (ADR-0011 §14).
-    pub fn key(&mut self, key: KeyEvent) {
-        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        match key.code {
-            KeyCode::Char('q') if ctrl => self.quit = true,
-            KeyCode::Char('c') if ctrl => self.cancel_or_clear(),
-            KeyCode::Enter if key.modifiers.contains(KeyModifiers::SHIFT) => {
-                self.composer.newline()
-            }
-            KeyCode::Enter => self.submit(),
-            KeyCode::Backspace => self.composer.backspace(),
-            KeyCode::Left => self.composer.left(),
-            KeyCode::Right => self.composer.right(),
-            KeyCode::Up => self.composer.up(),
-            KeyCode::Down => self.composer.down(),
-            KeyCode::Char(ch) if !ctrl => self.composer.insert(ch),
-            _ => {}
-        }
+    /// The walk a frame still has to start: the completion it answers, and the
+    /// fragment to rank. Taken once, so no keystroke starts two walks.
+    pub fn take_walk(&mut self) -> Option<(u64, String)> {
+        self.walking.take()
     }
 
-    /// Ctrl-C: the run stops and the draft stays; with nothing running, the
-    /// draft is cleared.
-    fn cancel_or_clear(&mut self) {
-        match &self.running {
-            Some(cancel) => cancel.trigger(),
-            None => {
-                self.composer.clear();
-                self.sent = false;
+    /// Whether `/new` is waiting for a fresh session from the front end.
+    pub fn take_renew(&mut self) -> bool {
+        std::mem::take(&mut self.renew)
+    }
+
+    /// What one background walk found, for the completion it was started for.
+    /// A walk whose completion has already moved on is not applied.
+    pub fn paths(&mut self, generation: u64, paths: Vec<String>, capped: bool) {
+        if let Some(completion) = self.completion.as_mut() {
+            if completion.generation == generation {
+                completion.items = crate::completion::offered(&paths, &completion.typed);
+                completion.capped = capped;
             }
         }
     }
 
-    /// Enter: send now, or queue when a run is in flight. With nothing running
-    /// the draft stays where it is until the loop collects it, so a run always
-    /// begins with the prompt Enter was pressed on.
-    fn submit(&mut self) {
-        if self.composer.is_blank() {
-            return;
-        }
-        if self.running.is_some() {
-            self.queue.push_back(self.composer.take());
-        } else {
-            self.sent = true;
-        }
-    }
-
-    /// Starts the next prompt — the queue first, then a draft Enter sent —
-    /// when nothing is running.
-    pub fn start(&mut self) -> Option<Job> {
-        if self.running.is_some() {
-            return None;
-        }
-        let prompt = match self.queue.pop_front() {
-            Some(queued) => queued,
-            None if !self.sent || self.composer.is_blank() => return None,
-            None => self.composer.take(),
-        };
-        self.sent = false;
-        let cancel = Cancel::new();
-        self.running = Some(cancel.clone());
-        self.entries.push(Entry::Prompt(prompt.clone()));
-        Some(Job { prompt, cancel })
-    }
-
-    /// One fragment of the run.
-    pub fn event(&mut self, event: Event) {
-        match event {
-            Event::TextDelta { turn, text } => {
-                self.rail.turn(turn);
-                self.append(turn, text, false);
+    /// A fresh session from the front end: the rail is replaced, the transcript
+    /// is already empty, and the new GUID is said where it happened.
+    pub fn renewed(&mut self, launch: Option<Launch>) {
+        match launch {
+            Some(launch) => {
+                let session = launch.session.clone();
+                self.rail = Rail::new(launch);
+                self.note_info(format!("new session {session}"));
             }
-            Event::ReasoningDelta { turn, text } => {
-                self.rail.turn(turn);
-                self.append(turn, text, true);
-            }
-            Event::Reasoning { turn, text } => {
-                self.entries.retain(
-                    |entry| !matches!(entry, Entry::Reasoning { turn: open, .. } if *open == turn),
-                );
-                self.entries.push(Entry::Reasoning {
-                    turn,
-                    text,
-                    done: true,
-                });
-            }
-            Event::ToolCall { turn, command } => {
-                self.rail.turn(turn);
-                self.close_answers();
-                let mut call = Call::new(turn, command);
-                for (side, line) in self.early.drain(..) {
-                    call.push(side, line);
-                }
-                self.entries.push(Entry::Call(call));
-            }
+            None => self.note_error("this front end cannot start a new session".to_string()),
         }
     }
 
-    /// One fragment of a streamed turn, appended to the entry it belongs to or
-    /// opening a new one: text and reasoning differ only in which entry.
-    fn append(&mut self, turn: u32, text: String, reasoning: bool) {
-        let open = match self.entries.last_mut() {
-            Some(Entry::Reasoning {
-                turn: open,
-                text: streamed,
-                done: false,
-            }) if reasoning && *open == turn => Some(streamed),
-            Some(Entry::Answer {
-                turn: open,
-                text: streamed,
-                done: false,
-            }) if !reasoning && *open == turn => Some(streamed),
-            _ => None,
-        };
-        if let Some(streamed) = open {
-            streamed.push_str(&text);
-            return;
-        }
-        self.close_answers();
-        if reasoning {
-            self.entries.push(Entry::Reasoning {
-                turn,
-                text,
-                done: false,
-            });
-        } else {
-            self.entries.push(Entry::Answer {
-                turn,
-                text,
-                done: false,
-            });
+    /// A line the frame has to say, said in the transcript (ADR-0011 §15).
+    pub fn note_info(&mut self, text: impl Into<String>) {
+        self.entries.push(Entry::Note(Note::info(text)));
+        self.dirty();
+    }
+
+    /// A failure the frame has to say, said where it happened.
+    pub fn note_error(&mut self, text: impl Into<String>) {
+        self.entries.push(Entry::Note(Note::error(text)));
+        self.dirty();
+    }
+
+    /// The rows the window must build for, at this width.
+    pub(crate) fn note_width(&mut self, width: u16) {
+        if self.width != Some(width) {
+            self.width = Some(width);
+            self.dirty();
         }
     }
 
-    /// One line of a running command's output, with the stream it came from.
-    pub fn output(&mut self, side: Side, text: &str) {
-        match self.entries.last_mut() {
-            Some(Entry::Call(call)) if call.running() => call.push(side, text.to_string()),
-            // Output can arrive a moment before the call that produced it was
-            // announced, because the two travel different threads.
-            _ => self.early.push((side, text.to_string())),
+    /// How many rows one entry takes at `width`, laid out once and remembered.
+    pub(crate) fn measure(&mut self, index: usize, width: u16) -> usize {
+        if self.heights.len() < self.entries.len() {
+            self.heights.resize(self.entries.len(), None);
         }
+        if let Some(Some(rows)) = self.heights.get(index) {
+            return *rows;
+        }
+        let rows = crate::render::transcript::entry_rows(&self.entries[index], width).len();
+        if let Some(slot) = self.heights.get_mut(index) {
+            *slot = Some(rows);
+        }
+        rows
     }
 
-    /// How one command ended.
-    pub fn over(&mut self, over: CallOver) {
-        let last = self.entries.iter_mut().rev().find_map(|entry| match entry {
-            Entry::Call(call) if call.running() => Some(call),
-            _ => None,
-        });
-        if let Some(call) = last {
-            call.over = Some(over);
-        }
+    /// The window adopted its own clamped scroll: a thread has an end, and
+    /// scrolling past it shows nothing new.
+    pub(crate) fn settled(&mut self, scroll: usize, page: usize) {
+        self.scroll = scroll;
+        self.page = page.max(1);
     }
 
-    /// The run is over: the rail settles and a failure is said where it
-    /// happened (ADR-0011 §15).
-    pub fn finished(&mut self, finished: Finished) {
-        self.running = None;
-        self.rail
-            .settled(finished.turns, finished.tokens, finished.stopped);
-        self.close_answers();
-        if let Some(error) = finished.error {
-            self.entries.push(Entry::Note(Note::error(error)));
-        }
-        if finished.stopped == Stop::Cancelled {
-            self.entries.push(Entry::Note(Note::info(
-                "cancelled — the draft is kept, and a prompt typed now queues",
-            )));
-        }
+    /// What the transcript column drew, for the mouse and the clipboard.
+    pub(crate) fn set_viewport(
+        &mut self,
+        area: Rect,
+        rows: Vec<String>,
+        spill: Vec<(usize, std::path::PathBuf)>,
+    ) {
+        self.viewport = Viewport { area, rows, spill };
     }
 
-    /// An answer whose turn has ended is folded away.
-    fn close_answers(&mut self) {
-        for entry in &mut self.entries {
-            match entry {
-                Entry::Answer { done, .. } | Entry::Reasoning { done, .. } => *done = true,
-                _ => {}
-            }
-        }
+    /// Every entry changed: the row counts are stale. Cleared rather than
+    /// recomputed, because only the window's own entries are ever measured.
+    pub(crate) fn dirty(&mut self) {
+        self.heights.fill(None);
     }
 }

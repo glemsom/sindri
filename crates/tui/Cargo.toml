@@ -19,3 +19,9 @@ image.workspace = true
 pulldown-cmark.workspace = true
 syntect.workspace = true
 unicode-width.workspace = true
+
+[dev-dependencies]
+# The OSC 52 escape and the tool fallback are proven without a terminal and
+# without touching the user's clipboard: a test writes to its own buffer and
+# runs a fake `wl-copy` from a temporary `PATH`.
+tempfile = "3"
