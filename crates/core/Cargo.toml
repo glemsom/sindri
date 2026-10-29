@@ -20,6 +20,7 @@ toml = "1"
 # `provider/rig_wire.rs` and nothing else.
 rig-core = { version = "=0.45.0", default-features = false, features = ["rustls", "reqwest"] }
 rig-reqwest = "=0.45.0"
+futures = "0.3"
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 tokio = { version = "1", features = ["rt"] }
 

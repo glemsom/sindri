@@ -248,12 +248,36 @@ pub struct Turn {
     pub usage: Usage,
 }
 
+/// One fragment of a streamed turn, in our vocabulary: provider types never
+/// leave the adapter (ADR-0003).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Delta {
+    /// A fragment of the answer.
+    Text(String),
+    /// A fragment of the reasoning.
+    Reasoning(String),
+}
+
+/// Where a streamed turn reports its fragments as they arrive. Returning
+/// `false` stops the stream: the loop does that when a cancel is raised.
+pub trait DeltaSink {
+    /// One fragment; `false` means the stream must stop now.
+    fn delta(&mut self, delta: Delta) -> bool;
+}
+
 /// The model, behind one seam: ask one turn, and get a reply or a failure that
 /// is safe to print.
 pub trait Model {
     /// One round trip: `history` with `tools` available, and whether the run
-    /// pays for reasoning.
-    fn turn(&self, history: &[Message], tools: &[ToolSpec], thinking: bool) -> Result<Turn, Error>;
+    /// pays for reasoning. The fragments of the reply are handed to `deltas` as
+    /// they arrive; the returned [`Turn`] is the whole of it.
+    fn turn(
+        &self,
+        history: &[Message],
+        tools: &[ToolSpec],
+        thinking: bool,
+        deltas: &mut dyn DeltaSink,
+    ) -> Result<Turn, Error>;
 }
 
 /// One configured provider endpoint: the wire, the credential and the model.
@@ -310,14 +334,41 @@ impl Client {
     }
 }
 
+/// A sink that remembers whether any fragment reached it, so a retry never
+/// repeats fragments a front end has already shown.
+struct RetryGuard<'a> {
+    inner: &'a mut dyn DeltaSink,
+    streamed: bool,
+}
+
+impl DeltaSink for RetryGuard<'_> {
+    fn delta(&mut self, delta: Delta) -> bool {
+        self.streamed = true;
+        self.inner.delta(delta)
+    }
+}
+
 impl Model for Client {
     /// One turn, retried while retrying can help and reported otherwise.
-    fn turn(&self, history: &[Message], tools: &[ToolSpec], thinking: bool) -> Result<Turn, Error> {
+    fn turn(
+        &self,
+        history: &[Message],
+        tools: &[ToolSpec],
+        thinking: bool,
+        deltas: &mut dyn DeltaSink,
+    ) -> Result<Turn, Error> {
         let mut attempt = 1;
         loop {
-            match rig_wire::turn(self, history, tools, thinking) {
+            let mut guard = RetryGuard {
+                inner: &mut *deltas,
+                streamed: false,
+            };
+            let outcome = rig_wire::turn(self, history, tools, thinking, &mut guard);
+            match outcome {
                 Ok(turn) => return Ok(turn),
-                Err(error) if error.retryable() && attempt < MAX_ATTEMPTS => {
+                // Fragments already shown are not shown twice: a retry after
+                // the stream opened would repeat them.
+                Err(error) if error.retryable() && attempt < MAX_ATTEMPTS && !guard.streamed => {
                     std::thread::sleep(BASE_BACKOFF * 2u32.pow(attempt - 1));
                     attempt += 1;
                 }

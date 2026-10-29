@@ -1,11 +1,17 @@
 //! A mock provider on loopback: canned replies in order, and every request
 //! recorded, so a process test can prove what the binary actually sent. No
 //! network, no credential, no live model.
+//!
+//! A reply is served whole when the request asks for a whole answer, and as a
+//! `text/event-stream` when the client asks the provider to stream (`Reply`).
 
 #![allow(
     clippy::expect_used,
     reason = "a panicking harness is how a process test reports a setup failure"
 )]
+
+pub mod frames;
+mod reply;
 
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -13,6 +19,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::Value;
+
+pub use reply::Reply;
 
 /// Every variable that can point a run at a provider, or set its limits, so a
 /// test or an eval states its own rather than inheriting the host's.
@@ -69,150 +77,6 @@ impl Request {
     }
 }
 
-/// One canned reply.
-#[derive(Debug, Clone)]
-pub struct Reply {
-    pub status: u16,
-    pub body: String,
-}
-
-impl Reply {
-    /// A finished Anthropic message answering `text`.
-    pub fn answer(text: &str) -> Self {
-        Reply {
-            status: 200,
-            body: json(serde_json::json!({
-                "id": "msg_mock",
-                "type": "message",
-                "role": "assistant",
-                "model": "claude-mock",
-                "content": [{"type": "text", "text": text}],
-                "stop_reason": "end_turn",
-                "usage": {"input_tokens": 11, "output_tokens": 7},
-            })),
-        }
-    }
-
-    /// A finished Anthropic message asking for one `bash` call with `command`,
-    /// after `text`.
-    pub fn tool_call(id: &str, command: &str, text: &str) -> Self {
-        Reply::tool_calls(&[(id, command)], text)
-    }
-
-    /// A finished Anthropic message asking for several `bash` calls in one
-    /// turn, after `text`.
-    pub fn tool_calls(calls: &[(&str, &str)], text: &str) -> Self {
-        let mut content = Vec::new();
-        if !text.is_empty() {
-            content.push(serde_json::json!({"type": "text", "text": text}));
-        }
-        for (id, command) in calls {
-            content.push(serde_json::json!({
-                "type": "tool_use",
-                "id": id,
-                "name": "bash",
-                "input": {"command": command},
-            }));
-        }
-        Reply {
-            status: 200,
-            body: json(serde_json::json!({
-                "id": "msg_mock",
-                "type": "message",
-                "role": "assistant",
-                "model": "claude-mock",
-                "content": content,
-                "stop_reason": "tool_use",
-                "usage": {"input_tokens": 20, "output_tokens": 5, "cache_read_input_tokens": 4},
-            })),
-        }
-    }
-
-    /// A finished Anthropic message that shows `reasoning` before answering
-    /// `text`.
-    pub fn thinking_answer(reasoning: &str, text: &str) -> Self {
-        Reply {
-            status: 200,
-            body: json(serde_json::json!({
-                "id": "msg_mock",
-                "type": "message",
-                "role": "assistant",
-                "model": "claude-mock",
-                "content": [
-                    {"type": "thinking", "thinking": reasoning, "signature": "sig"},
-                    {"type": "text", "text": text},
-                ],
-                "stop_reason": "end_turn",
-                "usage": {
-                    "input_tokens": 11,
-                    "output_tokens": 7,
-                    "cache_read_input_tokens": 3,
-                    "output_tokens_details": {"reasoning_tokens": 2},
-                },
-            })),
-        }
-    }
-
-    /// A tool call whose arguments are not a JSON object.
-    pub fn malformed_tool_call(id: &str) -> Self {
-        Reply {
-            status: 200,
-            body: json(serde_json::json!({
-                "id": "msg_mock",
-                "type": "message",
-                "role": "assistant",
-                "model": "claude-mock",
-                "content": [{
-                    "type": "tool_use",
-                    "id": id,
-                    "name": "bash",
-                    "input": "{oops",
-                }],
-                "stop_reason": "tool_use",
-                "usage": {"input_tokens": 20, "output_tokens": 5},
-            })),
-        }
-    }
-
-    /// A body recorded from an OpenAI-compatible server, served at `status`:
-    /// the fixture names a file under `fixtures/openai`, so the wire format the
-    /// test proves is a document about that format, not a literal buried in a
-    /// test.
-    pub fn recorded(name: &str, status: u16) -> Self {
-        Reply::from_file(HARNESS_FIXTURES, name, status)
-    }
-
-    /// A body read from a file in `dir`, served at `status`: how the eval suite
-    /// replays a recorded conversation instead of asking a live model.
-    pub fn from_file(dir: &str, name: &str, status: u16) -> Self {
-        let path = format!("{dir}/{name}.json");
-        Reply {
-            status,
-            body: std::fs::read_to_string(&path)
-                .unwrap_or_else(|error| panic!("read fixture {path}: {error}"))
-                .trim()
-                .to_string(),
-        }
-    }
-
-    /// A provider failure with `status` and `message`, in the provider's own
-    /// error envelope.
-    pub fn error(status: u16, kind: &str, message: &str) -> Self {
-        Reply {
-            status,
-            body: json(serde_json::json!({
-                "type": "error",
-                "error": {"type": kind, "message": message},
-            })),
-        }
-    }
-}
-
-/// A body as the wire sends it: one line, escaped by serde.
-fn json(value: Value) -> String {
-    serde_json::to_string(&value).expect("serialize canned reply")
-}
-
 /// A running mock provider.
 pub struct MockProvider {
     url: String,
@@ -248,9 +112,7 @@ impl MockProvider {
                             .expect("at least one canned reply")
                             .clone();
                         served += 1;
-                        if let Some(request) = serve(stream, &reply) {
-                            recorded.lock().expect("record request").push(request);
-                        }
+                        serve(stream, &reply, &recorded);
                     }
                     Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                         std::thread::sleep(Duration::from_millis(5));
@@ -284,8 +146,10 @@ impl Drop for MockProvider {
     }
 }
 
-/// Reads one request off `stream` and writes `reply`, then closes.
-fn serve(mut stream: TcpStream, reply: &Reply) -> Option<Request> {
+/// Reads one request off `stream`, records it, and writes `reply`. The request
+/// is recorded before the reply finishes, so a test can act while a paced
+/// stream is still open.
+fn serve(mut stream: TcpStream, reply: &Reply, recorded: &Arc<Mutex<Vec<Request>>>) {
     stream
         .set_read_timeout(Some(Duration::from_secs(10)))
         .expect("read timeout");
@@ -296,7 +160,7 @@ fn serve(mut stream: TcpStream, reply: &Reply) -> Option<Request> {
             break position;
         }
         match stream.read(&mut chunk) {
-            Ok(0) | Err(_) => return None,
+            Ok(0) | Err(_) => return,
             Ok(read) => buffer.extend_from_slice(&chunk[..read]),
         }
     };
@@ -325,6 +189,38 @@ fn serve(mut stream: TcpStream, reply: &Reply) -> Option<Request> {
         }
     }
 
+    let body = String::from_utf8_lossy(&body).to_string();
+    let request = Request {
+        method,
+        path,
+        headers,
+        body,
+    };
+    let streaming = streams(reply, &request.body);
+    recorded.lock().expect("record request").push(request);
+    if streaming {
+        write_stream(&mut stream, reply);
+    } else {
+        write_whole(&mut stream, reply);
+    }
+}
+
+/// Whether this reply and request call for an event stream: a reply with
+/// explicit chunks always does, and a successful whole reply does when the
+/// client asked the provider to stream.
+fn streams(reply: &Reply, body: &str) -> bool {
+    if !reply.chunks.is_empty() {
+        return true;
+    }
+    reply.status == 200
+        && serde_json::from_str::<Value>(body)
+            .ok()
+            .and_then(|body| body.get("stream").and_then(Value::as_bool))
+            .unwrap_or(false)
+}
+
+/// One whole body, the way a non-streaming provider answers.
+fn write_whole(stream: &mut TcpStream, reply: &Reply) {
     let response = format!(
         "HTTP/1.1 {} {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
         reply.status,
@@ -334,13 +230,57 @@ fn serve(mut stream: TcpStream, reply: &Reply) -> Option<Request> {
     );
     let _ = stream.write_all(response.as_bytes());
     let _ = stream.flush();
+}
 
-    Some(Request {
-        method,
-        path,
-        headers,
-        body: String::from_utf8_lossy(&body).to_string(),
-    })
+/// An event stream: each chunk written as its own transfer, flushed, and
+/// optionally paused so the client sees the reply arrive rather than finish.
+/// A whole reply the client asked to stream is one SSE frame carrying it.
+fn write_stream(stream: &mut TcpStream, reply: &Reply) {
+    let explicit = !reply.chunks.is_empty();
+    let chunks = if explicit {
+        reply.chunks.clone()
+    } else {
+        vec![sse(reply.body.as_str())]
+    };
+    let head = if explicit {
+        "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-store\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n".to_string()
+    } else {
+        format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-store\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            chunks.iter().map(String::len).sum::<usize>()
+        )
+    };
+    let _ = stream.write_all(head.as_bytes());
+    for chunk in chunks {
+        let written = if explicit {
+            stream.write_all(format!("{:x}\r\n{chunk}\r\n", chunk.len()).as_bytes())
+        } else {
+            stream.write_all(chunk.as_bytes())
+        };
+        if written.is_err() || stream.flush().is_err() {
+            return;
+        }
+        if !reply.pause.is_zero() {
+            std::thread::sleep(reply.pause);
+        }
+    }
+    if explicit {
+        let _ = stream.write_all(b"0\r\n\r\n");
+        let _ = stream.flush();
+    }
+}
+
+/// A whole body as one SSE frame: every line of it is a `data:` line, so even a
+/// pretty-printed document reassembles to exactly itself.
+fn sse(body: &str) -> String {
+    let mut frame = String::new();
+    for line in body.lines() {
+        frame.push_str("data: ");
+        frame.push_str(line);
+        frame.push('\n');
+    }
+    frame.push('\n');
+    frame
 }
 
 fn reason(status: u16) -> &'static str {

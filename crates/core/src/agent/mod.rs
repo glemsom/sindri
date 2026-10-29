@@ -14,7 +14,7 @@ use std::sync::mpsc::Sender;
 use std::time::Instant;
 
 use crate::cancel::Cancel;
-use crate::provider::{Error, Message, Model};
+use crate::provider::{Delta, DeltaSink, Error, Message, Model};
 use crate::record::Recorder;
 
 /// Drives the model until it stops asking for tools, or the turn cap is hit.
@@ -91,7 +91,12 @@ impl Agent {
                 break;
             }
             report.turns += 1;
-            let turn = match self.model.turn(&history, &tools, self.thinking) {
+            let mut sink = StreamSink {
+                events: self.events.as_ref(),
+                cancel: &self.cancel,
+                turn: report.turns,
+            };
+            let turn = match self.model.turn(&history, &tools, self.thinking, &mut sink) {
                 Ok(turn) => turn,
                 // A request cut short by a cancel is a cancellation, not a
                 // provider failure: the shell must see 130, not 1.
@@ -182,5 +187,35 @@ impl Agent {
         if let Some(events) = &self.events {
             let _ = events.send(event);
         }
+    }
+}
+
+/// The loop's side of a streamed turn: each fragment becomes an event at once,
+/// and a raised cancel flag ends the stream rather than buffering the rest.
+struct StreamSink<'a> {
+    events: Option<&'a Sender<Event>>,
+    cancel: &'a Cancel,
+    turn: u32,
+}
+
+impl DeltaSink for StreamSink<'_> {
+    fn delta(&mut self, delta: Delta) -> bool {
+        if self.cancel.is_triggered() {
+            return false;
+        }
+        let event = match delta {
+            Delta::Text(text) => Event::TextDelta {
+                turn: self.turn,
+                text,
+            },
+            Delta::Reasoning(text) => Event::ReasoningDelta {
+                turn: self.turn,
+                text,
+            },
+        };
+        if let Some(events) = self.events {
+            let _ = events.send(event);
+        }
+        true
     }
 }
