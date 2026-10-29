@@ -33,9 +33,9 @@ const THINKING_BUDGET: u32 = 4096;
 /// arrives with the `bash` tool's definition (ADR-0002).
 const PREAMBLE: &str = "You are Sindri, an assistant answering a developer at a Unix \
 terminal. Answer the question you were given, using the context after it when there is \
-some. You have one tool, `bash`, and can run commands with it: check a fact with it \
-rather than guessing. Reply with the answer itself: no preamble, no closing offer of \
-further help.";
+some. You have one tool, `bash`: run commands with it rather than guessing, and check \
+the exit code it reports before believing the output. Reply with the answer itself: no \
+preamble, no closing offer of further help.";
 
 /// One turn, straight through: no retries, no redaction, no policy.
 pub(super) fn turn(
@@ -141,10 +141,7 @@ fn wire_message(message: &Message) -> Result<WireMessage, Error> {
             for call in calls {
                 content.push(AssistantContent::ToolCall(ToolCall::new(
                     CallId::from_wire(call.id.clone()),
-                    ToolFunction::new(
-                        tool_name(&call.name)?,
-                        serde_json::Value::Object(call.decoded()),
-                    ),
+                    tool_function(call)?,
                 )));
             }
             WireMessage::Assistant(AssistantMessage::new(content))
@@ -162,6 +159,16 @@ fn wire_message(message: &Message) -> Result<WireMessage, Error> {
                 })
                 .collect::<Result<Vec<_>, Error>>()?,
         ),
+    })
+}
+
+/// One call's function, replayed as the model wrote it: its object of
+/// arguments, or the text it sent instead of one.
+fn tool_function(call: &Call) -> Result<ToolFunction, Error> {
+    let name = tool_name(&call.name)?;
+    Ok(match call.sent() {
+        Ok(arguments) => ToolFunction::new(name, serde_json::Value::Object(arguments.clone())),
+        Err(sent) => ToolFunction::parse(name, sent),
     })
 }
 

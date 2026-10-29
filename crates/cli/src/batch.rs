@@ -10,9 +10,8 @@ use std::sync::mpsc;
 use sindri_core::agent::{Agent, BashTool, Event, Stopped};
 use sindri_core::config::{Config, ConfigError, Overrides};
 use sindri_core::exec::SandboxExecutor;
-use sindri_core::paths::SessionDir;
 use sindri_core::provider::{Client, Error};
-use sindri_core::sandbox::{Enforcement, SandboxPolicy};
+use sindri_core::sandbox::Enforcement;
 use sindri_core::session;
 use sindri_types::ExitCode;
 
@@ -59,7 +58,7 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
         Err(error) => return config_error(&error),
     };
 
-    let (session, policy) = match prepare() {
+    let (session, policy) = match session::prepare(Enforcement::Bubblewrap) {
         Ok(prepared) => prepared,
         Err(error) => {
             eprintln!("sindri: sandbox: {error}");
@@ -70,7 +69,7 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     let executor = Arc::new(SandboxExecutor::new(
         policy.clone(),
         config.timeout,
-        session.temp().join("spill"),
+        session.spill(),
     ));
     let tool = BashTool::new(&policy, executor);
     let mut agent = Agent::new(
@@ -79,15 +78,19 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
         config.max_turns,
         thinking,
     );
+    // Events are buffered only for `-v`: a silent run should not carry a
+    // transcript nobody asked for.
     let (sender, events) = mpsc::channel::<Event>();
-    agent.set_events(sender);
+    if verbose {
+        agent.set_events(sender);
+    }
 
     match agent.run(&prompt) {
         Ok(report) => {
             // The answer and exactly one newline, so `| wc -l` counts answers.
             println!("{}", report.answer.trim_end());
             if verbose {
-                for line in verbose::lines(events.try_iter().collect(), session.id(), &report) {
+                for line in verbose::lines(events.try_iter().collect(), session.id()) {
                     eprintln!("{line}");
                 }
             }
@@ -98,23 +101,6 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
         }
         Err(error) => model_error(&error),
     }
-}
-
-/// One run's session and the sandbox policy every command inside it is bounded
-/// by. A failure here is the environment's, not the model's: exit 3.
-fn prepare() -> Result<(SessionDir, SandboxPolicy), String> {
-    let session = session::begin().map_err(|error| error.to_string())?;
-    let workspace = std::env::current_dir()
-        .and_then(|dir| dir.canonicalize())
-        .map_err(|error| error.to_string())?;
-    let policy = session::policy_for(
-        &workspace,
-        session.temp(),
-        session::search_path(),
-        Enforcement::Bubblewrap,
-    )
-    .map_err(|error| error.to_string())?;
-    Ok((session, policy))
 }
 
 /// The question actually asked: the prompt argument, with piped stdin appended

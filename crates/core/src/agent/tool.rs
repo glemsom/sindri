@@ -36,7 +36,8 @@ impl BashTool {
             Err(reason) => return ToolOutcome::malformed(call, &reason),
         };
         let result = self.executor.execute(&script);
-        ToolOutcome::from_result(call, render(&result))
+        let failed = matches!(result.outcome, Outcome::SandboxError { .. });
+        ToolOutcome::new(call, render(&result), failed)
     }
 }
 

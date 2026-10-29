@@ -56,6 +56,11 @@ impl SessionDir {
         self.root.join("tmp")
     }
 
+    /// Where over-long command output is written, one file per stream.
+    pub fn spill(&self) -> PathBuf {
+        self.temp().join("spill")
+    }
+
     /// The GUID this run is recorded under (ADR-0006).
     pub fn id(&self) -> &str {
         self.root

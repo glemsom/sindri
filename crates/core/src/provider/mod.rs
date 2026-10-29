@@ -33,11 +33,13 @@ pub struct Call {
     pub id: String,
     /// The tool the model named.
     pub name: String,
+    /// The arguments if they were an object, else exactly the text that was
+    /// sent in their place, so the turn can be replayed as the model wrote it.
     arguments: Result<serde_json::Map<String, serde_json::Value>, String>,
 }
 
 impl Call {
-    /// A call whose arguments are an object, or the reason they were not.
+    /// A call whose arguments are an object, or the text sent in their place.
     pub fn new(
         id: impl Into<String>,
         name: impl Into<String>,
@@ -50,16 +52,19 @@ impl Call {
         }
     }
 
-    /// The arguments as the wire replays them: an object, empty when the model
-    /// sent something else, because the result already says it was rejected.
-    pub(crate) fn decoded(&self) -> serde_json::Map<String, serde_json::Value> {
-        self.arguments.clone().unwrap_or_default()
+    /// The arguments as the model sent them, for replaying its own turn: the
+    /// object it wrote, or the text it wrote instead of one.
+    pub(crate) fn sent(&self) -> Result<&serde_json::Map<String, serde_json::Value>, &String> {
+        self.arguments.as_ref()
     }
 
     /// The script this call asks for, or why the call cannot be run: malformed
     /// arguments are answered, never dropped, so the model can correct itself.
     pub fn command(&self) -> Result<String, String> {
-        let arguments = self.arguments.as_ref().map_err(Clone::clone)?;
+        let arguments = self
+            .arguments
+            .as_ref()
+            .map_err(|sent| format!("the arguments were not a JSON object: `{sent}`"))?;
         match arguments.get("command") {
             Some(serde_json::Value::String(command)) if !command.trim().is_empty() => {
                 Ok(command.clone())
@@ -102,9 +107,8 @@ pub struct ToolOutcome {
 }
 
 impl ToolOutcome {
-    /// A result with what the model reads.
-    pub fn from_result(call: &Call, content: String) -> Self {
-        let is_error = content.starts_with("outcome: sandbox_error");
+    /// A result with what the model reads, and whether the tool itself failed.
+    pub fn new(call: &Call, content: String, is_error: bool) -> Self {
         ToolOutcome {
             call_id: call.id.clone(),
             name: call.name.clone(),

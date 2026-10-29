@@ -16,8 +16,6 @@ pub enum Event {
     ToolCall {
         /// The turn it belongs to, counted from 1.
         turn: u32,
-        /// The provider's id for the call.
-        id: String,
         /// The script that will run, or `None` when the call's arguments were
         /// unusable and nothing ran.
         command: Option<String>,

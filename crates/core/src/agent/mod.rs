@@ -43,11 +43,6 @@ impl Agent {
         self.events = Some(events);
     }
 
-    /// The tool this run offers, for a front end that needs to name it.
-    pub fn tool(&self) -> &BashTool {
-        &self.tool
-    }
-
     /// Runs one prompt to an answer, or reports why the model failed.
     pub fn run(&mut self, prompt: &str) -> Result<Report, Error> {
         let started = Instant::now();
@@ -75,7 +70,9 @@ impl Agent {
                 report.model.get_or_insert(model);
             }
             self.reasoning(report.turns, &turn.reasoning);
-            report.answer.clone_from(&turn.text);
+            if !turn.text.trim().is_empty() {
+                report.answer.clone_from(&turn.text);
+            }
             history.push(Message::Assistant {
                 text: turn.text,
                 calls: turn.calls.clone(),
@@ -112,7 +109,6 @@ impl Agent {
     fn announce(&self, turn: u32, call: &crate::provider::Call) {
         self.emit(Event::ToolCall {
             turn,
-            id: call.id.clone(),
             command: call.command().ok(),
         });
     }
