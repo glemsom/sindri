@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
 use serde_json::Value;
-use sindri_harness::{MockProvider, Reply, Request};
+use sindri_harness::{MockProvider, PROVIDER_ENV, Reply, Request};
 
 use crate::case::Case;
 use crate::workspace::Workspace;
@@ -55,16 +55,25 @@ impl Run {
             .map(|request| request.body.as_str())
     }
 
-    /// The one session directory the run recorded itself in.
-    pub fn session_dir(&self) -> Option<PathBuf> {
-        let root = self.state.join("sindri/sessions");
-        let mut found: Vec<PathBuf> = std::fs::read_dir(&root)
-            .ok()?
+    /// Every session directory under this eval's state, which a single run
+    /// leaves exactly one of.
+    pub fn session_dirs(&self) -> Vec<PathBuf> {
+        let mut found: Vec<PathBuf> = std::fs::read_dir(self.state.join("sindri/sessions"))
+            .into_iter()
+            .flatten()
             .filter_map(|entry| entry.ok())
             .map(|entry| entry.path())
             .collect();
         found.sort();
-        found.pop()
+        found
+    }
+
+    /// The one session directory the run recorded itself in.
+    pub fn session_dir(&self) -> Option<PathBuf> {
+        let found = self.session_dirs();
+        (found.len() == 1)
+            .then(|| found.into_iter().next())
+            .flatten()
     }
 
     /// `session.json`, as the record wrote it.
@@ -93,6 +102,10 @@ pub fn exists(path: &Path) -> bool {
     path.symlink_metadata().is_ok()
 }
 
+/// A credential shaped like a real one but belonging to nothing: a recorded run
+/// never reaches a provider, so it must never need a real key.
+pub const RECORDED_KEY: &str = "sk-ant-eval-not-a-real-key";
+
 /// The first line of a stream, for a finding that has to fit on one line.
 pub fn first_line(text: &str) -> String {
     let line = text.lines().next().unwrap_or_default().trim();
@@ -103,22 +116,14 @@ pub fn first_line(text: &str) -> String {
     }
 }
 
-/// The provider variables a host may have exported; an eval must never inherit
-/// them, because a credential or an unsafe setting is exactly what the suite is
-/// checking is not in play.
-const SCRUBBED: &[&str] = &[
-    "SINDRI_PROVIDER",
-    "SINDRI_MODEL",
-    "SINDRI_API_KEY",
-    "SINDRI_BASE_URL",
+/// The host's limits, which no eval may inherit: each eval states the cap and
+/// the deadline it is testing, and a stray extra writable path would make the
+/// sandbox eval probe a different sandbox.
+const HOST_LIMITS: &[&str] = &[
     "SINDRI_MAX_TURNS",
     "SINDRI_TIMEOUT",
     "SINDRI_THINKING",
     "SINDRI_EXTRA_WRITABLE_PATHS",
-    "ANTHROPIC_API_KEY",
-    "ANTHROPIC_BASE_URL",
-    "OPENAI_API_KEY",
-    "OPENAI_BASE_URL",
 ];
 
 /// Runs one eval's script: the real binary, in its own workspace, with the
@@ -135,18 +140,27 @@ pub fn execute(bin: &Path, ws: &Workspace, case: &Case, live: bool) -> Result<Ru
         .current_dir(&ws.repo)
         .args(["-b", case.prompt, "--format", "json"])
         .args(case.args)
+        // The record is always kept in the eval's own state, so evaluating never
+        // litters a developer's history. A recorded run also keeps its own empty
+        // config, so nothing of the host's can reach it; a live run reads the
+        // developer's own configuration, which is where its model usually is.
         .env("XDG_STATE_HOME", &ws.state)
-        .env("XDG_CONFIG_HOME", &ws.config)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    for name in SCRUBBED {
+    if !live {
+        command.env("XDG_CONFIG_HOME", &ws.config);
+    }
+    // A recorded run names its own provider and credential; a live one keeps the
+    // developer's, which is the whole point of it, and drops only the limits.
+    let scrubbed: &[&str] = if live { HOST_LIMITS } else { PROVIDER_ENV };
+    for name in scrubbed {
         command.env_remove(name);
     }
     if let Some(mock) = &mock {
         command
             .env("SINDRI_PROVIDER", "anthropic")
-            .env("SINDRI_API_KEY", "sk-ant-eval-not-a-real-key")
+            .env("SINDRI_API_KEY", RECORDED_KEY)
             .env("SINDRI_MODEL", "claude-sonnet-4-6")
             .env("SINDRI_BASE_URL", mock.base_url());
     }

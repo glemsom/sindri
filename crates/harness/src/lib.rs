@@ -14,6 +14,23 @@ use std::time::Duration;
 
 use serde_json::Value;
 
+/// Every variable that can point a run at a provider, or set its limits, so a
+/// test or an eval states its own rather than inheriting the host's.
+pub const PROVIDER_ENV: &[&str] = &[
+    "SINDRI_PROVIDER",
+    "SINDRI_MODEL",
+    "SINDRI_API_KEY",
+    "SINDRI_BASE_URL",
+    "SINDRI_MAX_TURNS",
+    "SINDRI_TIMEOUT",
+    "SINDRI_THINKING",
+    "SINDRI_EXTRA_WRITABLE_PATHS",
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_BASE_URL",
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+];
+
 /// Where the harness's own fixtures live, so a caller names only the file.
 pub const HARNESS_FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/openai");
 

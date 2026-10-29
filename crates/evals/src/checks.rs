@@ -36,8 +36,8 @@ pub fn answered(run: &Run) -> Vec<String> {
             first_line(&run.stdout)
         )),
         Some(json) => {
-            let stopped = json.get("stopped").map(|value| value.to_string());
-            if stopped.as_deref() != Some("\"final\"") {
+            let stopped = json.get("stopped").and_then(|value| value.as_str());
+            if stopped != Some("final") {
                 problems.push(format!("stopped is {stopped:?}, not final"));
             }
             if json
@@ -64,8 +64,13 @@ pub fn answered(run: &Run) -> Vec<String> {
 /// really started (ADR-0002, ADR-0006).
 fn record(run: &Run) -> Vec<String> {
     let mut problems = Vec::new();
+    let sessions = run.session_dirs().len();
+    if sessions != 1 {
+        problems.push(format!("the run left {sessions} session records, not one"));
+    }
     let Some(meta) = run.session_meta() else {
-        return vec!["the run left no readable session.json".to_string()];
+        problems.push("the run left no readable session.json".to_string());
+        return problems;
     };
     match meta.get("enforcement").and_then(|value| value.as_str()) {
         Some("bubblewrap") => {}
@@ -261,8 +266,8 @@ pub fn turn_cap_stops_a_loop(run: &Run, cap: u32) -> Vec<String> {
             first_line(&run.stdout)
         )),
         Some(json) => {
-            let stopped = json.get("stopped").map(|value| value.to_string());
-            if stopped.as_deref() != Some("\"max_turns\"") {
+            let stopped = json.get("stopped").and_then(|value| value.as_str());
+            if stopped != Some("max_turns") {
                 problems.push(format!("stopped is {stopped:?}, not max_turns"));
             }
             let turns = json.get("turns").and_then(|value| value.as_u64());

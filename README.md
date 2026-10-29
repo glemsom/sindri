@@ -154,7 +154,10 @@ $ ANTHROPIC_API_KEY=… make eval-live
 
 A live run asserts the same structural properties and skips the two that need
 a recorded conversation: what the model was shown on an earlier turn, and how
-many requests it made. Nothing is recorded automatically; see
+many requests it made. It reads your own configuration and credential, and
+keeps its session records in a temporary state directory so evaluating never
+litters your history. A model still has to be configured — `SINDRI_MODEL` or
+your config file. Nothing is recorded automatically; see
 [`crates/evals/fixtures/README.md`](crates/evals/fixtures/README.md).
 
 ## Working on Sindri
