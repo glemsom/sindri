@@ -11,8 +11,9 @@
 //! The environment's keys mirror the file's: `SINDRI_PROVIDER`, `SINDRI_MODEL`,
 //! `SINDRI_API_KEY`, `SINDRI_BASE_URL`, `SINDRI_MAX_TURNS`, `SINDRI_TIMEOUT`,
 //! `SINDRI_THINKING`, `SINDRI_EXTRA_WRITABLE_PATHS`;
-//! a provider's own `ANTHROPIC_API_KEY` and `ANTHROPIC_BASE_URL` are read below
-//! those, so a user with a key already exported needs no configuration at all.
+//! a provider's own `ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL` or
+//! `OPENAI_API_KEY`/`OPENAI_BASE_URL` are read below those, so a user with one
+//! already exported needs no configuration at all.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -29,45 +30,9 @@ pub const DEFAULT_TIMEOUT_SECS: u64 = 120;
 /// The longest a single command may be allowed to run.
 pub const MAX_TIMEOUT_SECS: u64 = 3600;
 
-/// The wire a run speaks.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Provider {
-    /// Anthropic's Messages API. The OpenAI-compatible wire is a later slice.
-    Anthropic,
-}
+mod provider;
 
-impl Provider {
-    /// The provider a name selects.
-    pub fn parse(name: &str) -> Result<Self, ConfigError> {
-        match name {
-            "anthropic" => Ok(Provider::Anthropic),
-            other => Err(ConfigError::Usage(format!(
-                "unknown provider `{other}`: the only provider so far is `anthropic`"
-            ))),
-        }
-    }
-
-    /// The name this provider is configured and recorded as.
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Provider::Anthropic => "anthropic",
-        }
-    }
-
-    /// The variable this provider's credential normally lives in.
-    pub const fn api_key_env(self) -> &'static str {
-        match self {
-            Provider::Anthropic => "ANTHROPIC_API_KEY",
-        }
-    }
-
-    /// The variable this provider's own client would read its base URL from.
-    pub const fn base_url_env(self) -> &'static str {
-        match self {
-            Provider::Anthropic => "ANTHROPIC_BASE_URL",
-        }
-    }
-}
+pub use provider::Provider;
 
 /// What the command line says, before anything else has a say.
 #[derive(Debug, Default, Clone)]
@@ -204,23 +169,31 @@ impl Config {
             .filter(|model| !model.trim().is_empty())
             .ok_or_else(|| {
                 ConfigError::Missing(format!(
-                    "no model configured: pass --model, set SINDRI_MODEL, or set `model` in {}",
-                    file_path()
+                    "no model configured for the {} wire: pass --model, set SINDRI_MODEL, or set `model` in {}{}",
+                    provider.as_str(),
+                    file_path(),
+                    provider.model_hint().unwrap_or_default()
                 ))
             })?;
 
         let api_key = env("SINDRI_API_KEY")
             .or_else(|| env(provider.api_key_env()))
             .or(file.api_key)
-            .filter(|key| !key.trim().is_empty())
-            .ok_or_else(|| {
-                ConfigError::Missing(format!(
+            .filter(|key| !key.trim().is_empty());
+        // A wire that needs no credential runs without one; a wire that does
+        // says so, naming every way to set it.
+        let api_key = match api_key {
+            Some(key) => key,
+            None if !provider.needs_credential() => String::new(),
+            None => {
+                return Err(ConfigError::Missing(format!(
                     "no credential for {}: set {} or SINDRI_API_KEY, or set `api_key` in {}",
                     provider.as_str(),
                     provider.api_key_env(),
                     file_path()
-                ))
-            })?;
+                )));
+            }
+        };
 
         let thinking = overrides
             .thinking

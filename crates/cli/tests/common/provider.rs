@@ -143,6 +143,24 @@ impl Reply {
         }
     }
 
+    /// A body recorded from an OpenAI-compatible server, served at `status`:
+    /// the fixture names a file under `tests/fixtures/openai`, so the wire
+    /// format the test proves is a document about that format, not a literal
+    /// buried in a test.
+    pub fn recorded(name: &str, status: u16) -> Self {
+        let path = format!(
+            "{}/tests/fixtures/openai/{name}.json",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        Reply {
+            status,
+            body: std::fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("read fixture {path}: {error}"))
+                .trim()
+                .to_string(),
+        }
+    }
+
     /// A provider failure with `status` and `message`, in the provider's own
     /// error envelope.
     pub fn error(status: u16, kind: &str, message: &str) -> Self {

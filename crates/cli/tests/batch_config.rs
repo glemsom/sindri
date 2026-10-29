@@ -166,7 +166,7 @@ fn a_wrong_setting_is_a_usage_error() {
         &["-b", "q", "--timeout", "0"][..],
         &["-b", "q", "--timeout", "3601"],
         &["-b", "q", "--max-turns", "0"],
-        &["-b", "q", "--provider", "openai"],
+        &["-b", "q", "--provider", "gemini"],
     ] {
         let output = run(
             &env,

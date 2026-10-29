@@ -158,9 +158,10 @@ fn the_command_timeout_comes_from_the_file_then_the_environment_then_a_flag() {
 #[test]
 fn the_provider_comes_from_the_file_and_a_flag_overrides_it() {
     let env = Env::new();
+    // A provider no wire claims: the file's value is read, and refused.
     write_config(
         &env,
-        "model = \"claude-from-file\"\nprovider = \"openai\"\n",
+        "model = \"claude-from-file\"\nprovider = \"gemini\"\n",
     );
     let mock = MockProvider::start(vec![Reply::answer("ok")]);
 
@@ -179,7 +180,7 @@ fn the_provider_comes_from_the_file_and_a_flag_overrides_it() {
         stderr(&output)
     );
     assert!(
-        stderr(&output).contains("openai"),
+        stderr(&output).contains("gemini"),
         "the error names the provider: {}",
         stderr(&output)
     );

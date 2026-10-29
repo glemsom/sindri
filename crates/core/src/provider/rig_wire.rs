@@ -1,6 +1,7 @@
 //! The only module that knows the provider library exists (ADR-0003): the
-//! Anthropic Messages wire, our own HTTP client with explicit timeouts, and
-//! the translation of the library's vocabulary into ours.
+//! Anthropic Messages wire, the OpenAI-compatible Chat Completions wire, our
+//! own HTTP client with explicit timeouts, and the translation of the
+//! library's vocabulary into ours.
 //!
 //! Nothing rig-shaped leaves this file: callers see [`Message`], [`ToolSpec`],
 //! [`Turn`] and [`Error`].
@@ -12,11 +13,16 @@ use rig_core::completion::message::{
     AssistantContent, AssistantMessage, CallId, Message as WireMessage, ToolCall, ToolFunction,
     ToolName, ToolResult, ToolResultContent,
 };
-use rig_core::completion::{CompletionRequest, GenerationOptions, Reasoning, ToolDefinition};
+use rig_core::completion::{
+    CompletionRequest, CompletionResponse, Effort, GenerationOptions, Reasoning, ToolDefinition,
+};
 use rig_core::error::ProviderError;
 use rig_core::providers::anthropic::AnthropicConfig;
+use rig_core::providers::openai::{OpenAIConfig, Route, wire::Auth};
 use rig_reqwest::ReqwestClient;
 use rig_reqwest::reqwest;
+
+use crate::config::Provider;
 
 use super::{Call, Client, Error, Message, ToolSpec, Turn, Usage};
 
@@ -29,6 +35,9 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(180);
 const MAX_OUTPUT_TOKENS: u64 = 8192;
 /// The most tokens the model may spend reasoning when the run pays for it.
 const THINKING_BUDGET: u32 = 4096;
+/// The effort an OpenAI-compatible server is asked for when the run pays for
+/// reasoning: that wire names a level, not a budget.
+const THINKING_EFFORT: Effort = Effort::Medium;
 /// The instructions every batch turn carries. The sandbox's own description
 /// arrives with the `bash` tool's definition (ADR-0002).
 const PREAMBLE: &str = "You are Sindri, an assistant answering a developer at a Unix \
@@ -52,22 +61,45 @@ pub(super) fn turn(
         .build()
         .map_err(|error| Error::transport(format!("could not build the HTTP client: {error}")))?;
 
-    let mut config = AnthropicConfig::new(api_key);
-    if let Some(base_url) = base_url {
-        config = config.with_base_url(base_url);
-    }
-    let endpoint = config.connect(ReqwestClient::from(http));
-    let model = endpoint.completion(model);
-
-    let request = request(history, tools, thinking)?;
+    let request = request(history, tools, thinking, client.provider())?;
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|error| Error::transport(format!("could not start the runtime: {error}")))?;
-    let response = runtime.block_on(model.call(request)).map_err(convert)?;
 
+    let response = match client.provider() {
+        Provider::Anthropic => {
+            let mut config = AnthropicConfig::new(api_key);
+            if let Some(base_url) = base_url {
+                config = config.with_base_url(base_url);
+            }
+            let model = config.connect(ReqwestClient::from(http)).completion(model);
+            runtime.block_on(model.call(request)).map_err(convert)?
+        }
+        // Every OpenAI-shaped server serves Chat Completions, and only some
+        // serve `/responses`, so the wire is named rather than inferred.
+        Provider::Openai => {
+            let mut config = OpenAIConfig::new(api_key).with_route(Route::Chat);
+            // A server that wants no credential must not be sent a blank one.
+            config.auth = Auth::OptionalBearer;
+            if let Some(base_url) = base_url {
+                config = config.with_base_url(base_url);
+            }
+            let model = config.connect(ReqwestClient::from(http)).completion(model);
+            runtime
+                .block_on(model.call(request))
+                .map_err(convert)
+                .map_err(refused_tools)?
+        }
+    };
+
+    Ok(finish(response))
+}
+
+/// A finished reply, in our vocabulary: what it said, asked for, and cost.
+fn finish(response: CompletionResponse) -> Turn {
     let reasoning = response.reasoning();
-    Ok(Turn {
+    Turn {
         text: response.text(),
         reasoning: (!reasoning.trim().is_empty()).then_some(reasoning),
         calls: response
@@ -88,7 +120,7 @@ pub(super) fn turn(
             reasoning_tokens: response.usage.reasoning_tokens,
             total_tokens: response.usage.total_tokens,
         },
-    })
+    }
 }
 
 /// The request one turn sends: the conversation so far, the one tool, and
@@ -97,6 +129,7 @@ fn request(
     history: &[Message],
     tools: &[ToolSpec],
     thinking: bool,
+    provider: Provider,
 ) -> Result<CompletionRequest, Error> {
     let mut request = CompletionRequest::new(WireMessage::user(String::new()));
     request.chat_history = history
@@ -113,9 +146,15 @@ fn request(
                 .collect::<Result<Vec<_>, Error>>()?,
         );
     if thinking {
-        request.options = GenerationOptions::default().reasoning(Reasoning::Budget {
-            tokens: THINKING_BUDGET,
-        });
+        let reasoning = match provider {
+            Provider::Anthropic => Reasoning::Budget {
+                tokens: THINKING_BUDGET,
+            },
+            // Chat Completions takes an effort level, not a budget: asking for
+            // a budget there is a request the wire refuses outright.
+            Provider::Openai => Reasoning::Effort(THINKING_EFFORT),
+        };
+        request.options = GenerationOptions::default().reasoning(reasoning);
     }
     Ok(request)
 }
@@ -194,4 +233,41 @@ fn arguments(
 fn convert(error: ProviderError) -> Error {
     let report = error.report();
     Error::answered(report.http_status, report.message)
+}
+
+/// A failure, said plainly when what the server refused was the `bash` tool.
+/// An OpenAI-compatible server without function calling rejects the request
+/// the moment it is asked to describe one, and its own words are usually a
+/// field name; a user needs to know it is the server's capability, not their
+/// configuration, that is missing.
+fn refused_tools(error: Error) -> Error {
+    let status_refused = matches!(error.status(), Some(400 | 404 | 422 | 501));
+    if !status_refused || !refuses_capability(error.message()) {
+        return error;
+    }
+    Error::answered(
+        error.status(),
+        format!(
+            "the model server does not support tool calling, which `bash` needs: {} \
+             (use a model or server that serves function calls)",
+            error.message()
+        ),
+    )
+}
+
+/// What a server says when the capability, not the request, is what it lacks.
+/// Naming a field it will not take is not enough: a malformed tool call is
+/// also a 400 naming tools, and telling that user their server cannot call
+/// functions would send them shopping for a server they already have.
+fn refuses_capability(message: &str) -> bool {
+    let message = message.to_ascii_lowercase();
+    const REFUSALS: [&str; 5] = [
+        "does not support tool",
+        "doesn't support tool",
+        "tools are not supported",
+        "tool calling is not supported",
+        "function calling is not supported",
+    ];
+    REFUSALS.iter().any(|refusal| message.contains(refusal))
+        || (message.contains("tool") && message.contains("not supported"))
 }

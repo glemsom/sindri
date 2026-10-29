@@ -60,6 +60,8 @@ impl Env {
             "SINDRI_TIMEOUT",
             "ANTHROPIC_API_KEY",
             "ANTHROPIC_BASE_URL",
+            "OPENAI_API_KEY",
+            "OPENAI_BASE_URL",
         ] {
             cmd.env_remove(name);
         }

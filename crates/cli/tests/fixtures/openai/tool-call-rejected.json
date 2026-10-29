@@ -1,0 +1,8 @@
+{
+  "error": {
+    "message": "Invalid tool call: arguments for `bash` is not valid JSON",
+    "type": "invalid_request_error",
+    "param": "tools",
+    "code": null
+  }
+}
