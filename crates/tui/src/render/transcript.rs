@@ -29,8 +29,8 @@ pub struct View {
     pub at_top: bool,
     /// How many entries were laid out to build the window.
     pub laid_out: usize,
-    /// The screen row holding the spill affordance, with the file it offers.
-    pub spill: Option<(usize, PathBuf)>,
+    /// Every screen row holding a spill affordance, with the file it offers.
+    pub spill: Vec<(usize, PathBuf)>,
 }
 
 /// Draws the transcript window, and tells the frame what the mouse and the
@@ -60,14 +60,14 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
     }
 
     let mut rows: Vec<Line<'static>> = Vec::new();
-    let mut spill = None;
+    let mut spill: Vec<(usize, PathBuf)> = Vec::new();
     for index in first..count {
         if index > 0 {
             rows.push(Line::default());
         }
         let rows_here = entry_rows(&app.entries()[index], width);
         if let Some(path) = spill_of(&app.entries()[index]) {
-            spill = Some((rows.len() + rows_here.len().saturating_sub(1), path));
+            spill.push((rows.len() + rows_here.len().saturating_sub(1), path));
         }
         rows.extend(rows_here);
     }
@@ -84,11 +84,14 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
     let laid_out = count.saturating_sub(first);
     app.settled(scroll, plain.len());
     // A row above the window is not on screen, and a row below it is not either.
-    let spill = spill.and_then(|(row, path)| {
-        row.checked_sub(start)
-            .filter(|row| *row < shown.len())
-            .map(|row| (row, path))
-    });
+    let spill = spill
+        .into_iter()
+        .filter_map(|(row, path)| {
+            row.checked_sub(start)
+                .filter(|row| *row < shown.len())
+                .map(|row| (row, path))
+        })
+        .collect();
     View {
         rows: shown,
         plain,
@@ -120,12 +123,10 @@ fn spill_of(entry: &Entry) -> Option<PathBuf> {
 /// One entry, as the rows it takes.
 pub fn entry_rows(entry: &Entry, width: u16) -> Vec<Line<'static>> {
     match entry {
-        Entry::Prompt(text) => markdown::text::wrap(
-            markdown::text::glyphs(&[Span::styled(text.clone(), theme::faint())]),
-            "› ",
-            theme::prompt(),
-            width as usize,
-        ),
+        Entry::Prompt(text) => vec![Line::from(vec![
+            Span::styled("› ", theme::prompt()),
+            Span::styled(text.clone(), theme::faint()),
+        ])],
         Entry::Answer { text, .. } => markdown::lines(text, width),
         Entry::Reasoning { text, done, .. } => {
             if *done {
@@ -174,7 +175,7 @@ fn call_rows(call: &Call, width: u16) -> Vec<Line<'static>> {
                     Side::Stderr => theme::bad(),
                 };
                 let keep = width.saturating_sub(4) as usize;
-                let shown: String = format!("  {line}").chars().take(keep).collect();
+                let shown = markdown::text::clip(line, keep);
                 rows.push(Line::from(Span::styled(format!("  │ {shown}"), style)));
             }
         }
@@ -197,7 +198,7 @@ fn call_rows(call: &Call, width: u16) -> Vec<Line<'static>> {
         let keep = width.saturating_sub(2) as usize;
         let offer = format!("… output too large · Ctrl-O opens {}", path.display());
         rows.push(Line::from(Span::styled(
-            offer.chars().take(keep).collect::<String>(),
+            markdown::text::clip(&offer, keep),
             theme::faint(),
         )));
     }

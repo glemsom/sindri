@@ -8,6 +8,7 @@
 use std::path::PathBuf;
 
 use ratatui::layout::{Position, Rect};
+use unicode_width::UnicodeWidthChar;
 
 /// What the transcript column last drew: its rectangle, the plain text of each
 /// visible row, and the row that offers a spill file.
@@ -17,8 +18,8 @@ pub struct Viewport {
     pub area: Rect,
     /// One entry per visible row, ANSI stripped.
     pub rows: Vec<String>,
-    /// The row holding the spill affordance, with the file it offers.
-    pub spill: Option<(usize, PathBuf)>,
+    /// Every row holding a spill affordance, with the file it offers.
+    pub spill: Vec<(usize, PathBuf)>,
 }
 
 impl Viewport {
@@ -28,6 +29,14 @@ impl Viewport {
             && at.x < self.area.x + self.area.width
             && at.y >= self.area.y
             && at.y < self.area.y + self.area.height
+    }
+
+    /// The spill file a row offers, when it offers one.
+    pub fn spilled(&self, row: usize) -> Option<&PathBuf> {
+        self.spill
+            .iter()
+            .find(|(at, _)| *at == row)
+            .map(|(_, path)| path)
     }
 
     /// Which row of the column a screen row is, when it is one.
@@ -87,14 +96,14 @@ pub fn copied(viewport: &Viewport, selection: &Selection) -> Option<String> {
     for index in first..=last {
         let row = &viewport.rows[index];
         let from = if index == first {
-            (start.x.saturating_sub(area.x)) as usize
+            char_at(row, (start.x.saturating_sub(area.x)) as usize)
         } else {
             0
         };
         let to = if index != last || below {
             row.chars().count()
         } else {
-            (end.x.saturating_sub(area.x)) as usize + 1
+            char_after(row, (end.x.saturating_sub(area.x)) as usize)
         };
         let taken: String = row
             .chars()
@@ -109,6 +118,32 @@ pub fn copied(viewport: &Viewport, selection: &Selection) -> Option<String> {
     }
     let text = lines.join("\n").trim().to_string();
     (!text.is_empty()).then_some(text)
+}
+
+/// The character a screen column falls on. A cell is not a character: a wide
+/// glyph takes two, and a selection takes it whole rather than half of it.
+fn char_at(row: &str, column: usize) -> usize {
+    let mut used = 0;
+    for (index, ch) in row.chars().enumerate() {
+        if used >= column {
+            return index;
+        }
+        used += UnicodeWidthChar::width(ch).unwrap_or(0);
+    }
+    row.chars().count()
+}
+
+/// The character just past the one covering `column`, so a selection that ends
+/// on a wide glyph includes all of it.
+fn char_after(row: &str, column: usize) -> usize {
+    let mut used = 0;
+    for (index, ch) in row.chars().enumerate() {
+        used += UnicodeWidthChar::width(ch).unwrap_or(0);
+        if used > column {
+            return index + 1;
+        }
+    }
+    row.chars().count()
 }
 
 /// Two cells, in reading order.
@@ -138,7 +173,7 @@ mod tests {
         Viewport {
             area: Rect::new(0, 2, 60, rows.len() as u16),
             rows: rows.iter().map(|row| row.to_string()).collect(),
-            spill: None,
+            spill: Vec::new(),
         }
     }
 
@@ -180,6 +215,23 @@ mod tests {
             copied(&rows, &drag((0, 2), (0, 40))).as_deref(),
             Some("alpha\nbravo"),
             "a drag past the last row stops at it"
+        );
+    }
+
+    #[test]
+    fn a_wide_glyph_is_taken_whole_rather_than_cut_in_half() {
+        let rows = viewport(&["日本語"]);
+        let taken = copied(&rows, &drag((0, 2), (4, 2)));
+        assert_eq!(
+            taken.as_deref(),
+            Some("日本語"),
+            "a column in the middle of a wide glyph is still that glyph"
+        );
+        let rows = viewport(&["ab日本"]);
+        assert_eq!(
+            copied(&rows, &drag((2, 2), (3, 2))).as_deref(),
+            Some("日"),
+            "two cells of a wide glyph are the glyph"
         );
     }
 

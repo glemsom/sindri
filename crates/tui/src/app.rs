@@ -63,6 +63,8 @@ pub struct App {
     pub(crate) walking: Option<(u64, String)>,
     /// Whether `/new` has asked the front end for a fresh session.
     pub(crate) renew: bool,
+    /// How many rows a keyboard selection spans, from the newest row upwards.
+    pub(crate) selecting: usize,
     /// A counter for the walks that answer a completion: a stale answer is
     /// never applied to a question that has moved on.
     pub(crate) generation: u64,
@@ -103,6 +105,7 @@ impl App {
             overlay: None,
             walking: None,
             renew: false,
+            selecting: 0,
             generation: 0,
         }
     }
@@ -162,6 +165,12 @@ impl App {
         self.overlay.as_ref()
     }
 
+    /// The spill overlay, as the frame last drew it: its scroll and the rows it
+    /// had room for belong to the frame, not to the file.
+    pub fn hold_spill(&mut self, spill: crate::overlay::Spill) {
+        self.overlay = Some(crate::overlay::Overlay::Spill(spill));
+    }
+
     /// What the transcript column last drew.
     pub fn viewport(&self) -> &Viewport {
         &self.viewport
@@ -185,10 +194,11 @@ impl App {
 
     /// What one background walk found, for the completion it was started for.
     /// A walk whose completion has already moved on is not applied.
-    pub fn paths(&mut self, generation: u64, paths: Vec<String>) {
+    pub fn paths(&mut self, generation: u64, paths: Vec<String>, capped: bool) {
         if let Some(completion) = self.completion.as_mut() {
             if completion.generation == generation {
                 completion.items = crate::completion::offered(&paths, &completion.typed);
+                completion.capped = capped;
             }
         }
     }
@@ -253,7 +263,7 @@ impl App {
         &mut self,
         area: Rect,
         rows: Vec<String>,
-        spill: Option<(usize, std::path::PathBuf)>,
+        spill: Vec<(usize, std::path::PathBuf)>,
     ) {
         self.viewport = Viewport { area, rows, spill };
     }

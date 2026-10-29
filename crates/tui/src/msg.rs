@@ -23,9 +23,9 @@ pub enum Msg {
     Over(CallOver, Spilled),
     /// The run is over.
     Finished(Finished),
-    /// What one background walk of the workspace found, for the completion it
-    /// was started for.
-    Paths(u64, Vec<String>),
+    /// What one background walk of the workspace found — and whether it hit the
+    /// cap before the tree ended — for the completion it was started for.
+    Paths(u64, Vec<String>, bool),
     /// A fresh session, when a front end could start one.
     Renewed(Option<Launch>),
 }

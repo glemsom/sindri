@@ -105,10 +105,19 @@ fn session(terminal: &mut DefaultTerminal, launch: Launch, driver: Box<dyn Drive
     let (tx, rx) = mpsc::channel::<Msg>();
     listen_for_keys(tx.clone());
     let jobs = drive(driver, tx.clone());
+    // At most one walk of the workspace at a time: a keystroke during a walk
+    // asks for the newest answer, and the frame asks again when that one lands
+    // (ADR-0013). Typing never queues ten walks.
+    let mut walking = false;
 
     loop {
         match rx.recv_timeout(FRAME) {
-            Ok(message) => apply(&mut app, message),
+            Ok(message) => {
+                if matches!(message, Msg::Paths(..)) {
+                    walking = false;
+                }
+                apply(&mut app, message);
+            }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => break,
         }
@@ -116,7 +125,7 @@ fn session(terminal: &mut DefaultTerminal, launch: Launch, driver: Box<dyn Drive
             break;
         }
         begin(&mut app, &jobs);
-        walk(&mut app, &tx);
+        walk(&mut app, &tx, &mut walking);
         if terminal
             .draw(|frame| render::draw(&mut app, frame))
             .is_err()
@@ -136,7 +145,7 @@ fn apply(app: &mut App, message: Msg) {
         Msg::Output(side, text) => app.output(side, &text),
         Msg::Over(over, spilled) => app.over(over, spilled),
         Msg::Finished(finished) => app.finished(finished),
-        Msg::Paths(generation, paths) => app.paths(generation, paths),
+        Msg::Paths(generation, paths, capped) => app.paths(generation, paths, capped),
         Msg::Renewed(launch) => app.renewed(launch),
     }
 }
@@ -156,13 +165,17 @@ fn begin(app: &mut App, jobs: &Sender<Task>) {
 
 /// Walks the workspace on a thread of its own for the completion that just
 /// asked for it: the composer never waits for a filesystem (ADR-0011 §16).
-fn walk(app: &mut App, tx: &Sender<Msg>) {
+fn walk(app: &mut App, tx: &Sender<Msg>, walking: &mut bool) {
+    if *walking {
+        return;
+    }
     let Some((generation, typed)) = app.take_walk() else {
         return;
     };
     let Ok(root) = std::env::current_dir() else {
         return;
     };
+    *walking = true;
     let tx = tx.clone();
     std::thread::spawn(move || {
         let found = crate::completion::scan(&root, crate::completion::CAP);
@@ -171,7 +184,7 @@ fn walk(app: &mut App, tx: &Sender<Msg>) {
             .into_iter()
             .filter(|path| crate::completion::visible(path, &typed))
             .collect();
-        let _ = tx.send(Msg::Paths(generation, paths));
+        let _ = tx.send(Msg::Paths(generation, paths, found.capped));
     });
 }
 

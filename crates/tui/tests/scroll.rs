@@ -12,13 +12,23 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use sindri_core::agent::Event;
+use sindri_tui::copy::{Clipboard, Copied};
 use sindri_tui::driver::{Finished, Stop};
 use sindri_tui::render::transcript;
 use sindri_tui::selection::Selection;
 use sindri_tui::{App, Launch};
 
+/// A clipboard that refuses everything: a test never reaches the user's.
+struct Nowhere;
+
+impl Clipboard for Nowhere {
+    fn copy(&self, _text: &str) -> Copied {
+        Copied::Refused("a test does not copy".to_string())
+    }
+}
+
 fn app() -> App {
-    App::new(
+    App::with_clipboard(
         Launch {
             session: "4f1c8f2e-8a24-4b93-9c0e-0d3f0e5c1a77".to_string(),
             temp: "/state/sindri/sessions/4f1c8f2e/tmp".to_string(),
@@ -28,6 +38,7 @@ fn app() -> App {
             context_limit: Some(200_000),
         },
         None,
+        Box::new(Nowhere),
     )
 }
 

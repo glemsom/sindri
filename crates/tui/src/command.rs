@@ -15,18 +15,6 @@ pub enum Command {
     Unknown(String),
 }
 
-impl Command {
-    /// How the frame names the command.
-    pub fn as_str(&self) -> &str {
-        match self {
-            Command::New => "/new",
-            Command::Help => "/help",
-            Command::Quit => "/quit",
-            Command::Unknown(name) => name,
-        }
-    }
-}
-
 /// The command a draft is, when it is one: a `/` on the first row and nothing
 /// before it. A prompt that starts with a slash mid-sentence is a prompt.
 pub fn parse(draft: &str) -> Option<Command> {

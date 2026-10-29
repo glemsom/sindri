@@ -42,6 +42,16 @@ impl App {
             }
             KeyCode::Left => self.composer.left(),
             KeyCode::Right => self.composer.right(),
+            KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                self.select_by_keyboard(true)
+            }
+            KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                self.select_by_keyboard(false)
+            }
+            // Up and Down walk the completion while one is open, and the
+            // composer's own rows otherwise.
+            KeyCode::Up if self.choose_completion(false) => {}
+            KeyCode::Down if self.choose_completion(true) => {}
             KeyCode::Up => self.composer.up(),
             KeyCode::Down => self.composer.down(),
             KeyCode::Char(ch) if !ctrl => {
@@ -79,14 +89,13 @@ impl App {
     /// A click: the spill affordance opens its file, and anywhere else in the
     /// transcript begins a selection.
     fn press(&mut self, at: Position) {
-        let row = self.viewport.row_of(at);
-        if self
+        let offered = self
             .viewport
-            .spill
-            .as_ref()
-            .is_some_and(|(spill, _)| Some(*spill) == row)
-        {
-            self.open_spill();
+            .row_of(at)
+            .and_then(|row| self.viewport.spilled(row))
+            .cloned();
+        if let Some(path) = offered {
+            self.show_spill(&path);
             return;
         }
         if self.viewport.holds(at) {
@@ -238,8 +247,15 @@ impl App {
         self.composer.splice(at, &path);
     }
 
-    /// Ctrl-Y, the keyboard twin of a drag: the newest answer, ANSI stripped.
+    /// Ctrl-Y, the keyboard twin of a drag: the rows a keyboard selection
+    /// covers, or the newest answer when nothing is selected.
     fn copy_last_answer(&mut self) {
+        if !self.selection.is_empty() {
+            self.copy_selection();
+            self.selecting = 0;
+            self.selection = Selection::default();
+            return;
+        }
         let answer = self.entries.iter().rev().find_map(|entry| match entry {
             Entry::Answer { text, .. } if !text.trim().is_empty() => Some(text.clone()),
             _ => None,
@@ -248,6 +264,50 @@ impl App {
             Some(text) => self.copy(&text),
             None => self.note_info("nothing to copy yet"),
         }
+    }
+
+    /// Shift+Up and Shift+Down: a selection made without a pointer, over whole
+    /// rows from the newest one upwards (ADR-0011 §7).
+    fn select_by_keyboard(&mut self, grow: bool) {
+        let area = self.viewport.area;
+        let rows = self.viewport.rows.len();
+        if rows == 0 {
+            return;
+        }
+        self.selecting = if grow {
+            (self.selecting + 1).min(rows)
+        } else {
+            self.selecting.saturating_sub(1)
+        };
+        if self.selecting == 0 {
+            self.selection = Selection::default();
+            return;
+        }
+        let bottom = area.y + rows as u16 - 1;
+        let top = bottom - (self.selecting as u16 - 1);
+        self.selection = Selection {
+            anchor: Position::new(area.x, top),
+            head: Position::new(area.x + area.width.saturating_sub(1), bottom),
+            dragging: false,
+        };
+    }
+
+    /// Moves the mark down or up the offered paths, and says whether there was
+    /// an offer to move in.
+    fn choose_completion(&mut self, down: bool) -> bool {
+        let Some(completion) = self.completion.as_mut() else {
+            return false;
+        };
+        if completion.items.is_empty() {
+            return false;
+        }
+        let last = completion.items.len() - 1;
+        completion.chosen = if down {
+            (completion.chosen + 1).min(last)
+        } else {
+            completion.chosen.saturating_sub(1)
+        };
+        true
     }
 
     /// The selection, as the rows it covers (ADR-0011 §7).
@@ -281,11 +341,15 @@ impl App {
             Entry::Call(call) => call.spill_file().map(std::path::Path::to_path_buf),
             _ => None,
         });
-        let Some(path) = path else {
-            self.note_info("no output in this session was too large to show");
-            return;
-        };
-        match Spill::open(&path) {
+        match path {
+            Some(path) => self.show_spill(&path),
+            None => self.note_info("no output in this session was too large to show"),
+        }
+    }
+
+    /// The spill file one row of the transcript offers, opened.
+    fn show_spill(&mut self, path: &std::path::Path) {
+        match Spill::open(path) {
             Ok(spill) => self.overlay = Some(Overlay::Spill(spill)),
             Err(error) => self.note_error(format!("cannot open {}: {error}", path.display())),
         }

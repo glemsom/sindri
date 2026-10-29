@@ -14,7 +14,7 @@ pub const CAP: usize = 20_000;
 /// after it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Query {
-    /// The `@`'s column, so an accepted path replaces what was typed after it.
+    /// The `@`'s column, so an accepted path replaces the whole token.
     pub at: usize,
     /// What has been typed since the `@`.
     pub typed: String,
@@ -24,7 +24,7 @@ pub struct Query {
 /// walk answered with.
 #[derive(Debug, Clone)]
 pub struct Completion {
-    /// The `@`'s column, so an accepted path replaces what was typed after it.
+    /// The `@`'s column, so an accepted path replaces the whole token it begins.
     pub at: usize,
     /// What was typed after the `@`.
     pub typed: String,
@@ -34,6 +34,9 @@ pub struct Completion {
     pub chosen: usize,
     /// The walk this belonged to; a later walk's answer must not fill it in.
     pub generation: u64,
+    /// Whether the walk stopped at the cap with the workspace unfinished: a
+    /// completion that is not showing everything says so (ADR-0013).
+    pub capped: bool,
 }
 
 impl Completion {
@@ -45,6 +48,7 @@ impl Completion {
             items: Vec::new(),
             chosen: 0,
             generation,
+            capped: false,
         }
     }
 }
@@ -66,10 +70,7 @@ pub fn query(row: &str) -> Option<Query> {
 /// Whether a path is offered for a typed fragment: a dotfile only when a dot
 /// was typed, and never a fragment that cannot lead to it.
 pub fn visible(path: &str, typed: &str) -> bool {
-    let typed = typed.to_ascii_lowercase();
-    if !path.is_ascii() {
-        return !path.starts_with('.') || typed.starts_with('.');
-    }
+    let typed = typed.to_lowercase();
     let dots_welcome = typed.starts_with('.') || typed.split('/').any(|part| part.starts_with('.'));
     path.split('/')
         .all(|part| dots_welcome || !part.starts_with('.'))
@@ -93,8 +94,8 @@ pub fn offered(paths: &[String], typed: &str) -> Vec<String> {
 /// How close a path is to what was typed: 0 is the whole path, 4 is a
 /// subsequence of it. `None` is not a match at all.
 fn proximity(path: &str, typed: &str) -> Option<usize> {
-    let typed = typed.trim_start_matches("./").to_ascii_lowercase();
-    let path_lower = path.to_ascii_lowercase();
+    let typed = typed.strip_prefix("./").unwrap_or(typed).to_lowercase();
+    let path_lower = path.to_lowercase();
     if typed.is_empty() {
         return Some(3);
     }
@@ -242,6 +243,10 @@ mod tests {
         assert!(visible(".gitignore", ".gi"));
         assert!(visible("src/main.rs", "ma"));
         assert!(!visible("src/.hidden/file", "src/hi"));
+        assert!(
+            !visible("src/日本語/.hidden", "src/日本"),
+            "a dotfile waits for a dot whatever the alphabet"
+        );
         let offered = offered(&paths(&[".github/workflows/ci.yml", "gist.md"]), "gi");
         assert_eq!(offered, paths(&["gist.md"]), "no dotfile without a dot");
     }

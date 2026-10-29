@@ -5,25 +5,25 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Clear, Paragraph, Widget, Wrap};
+use ratatui::widgets::{Block, Clear, Paragraph, Widget};
 
 use crate::app::App;
-use crate::overlay::{Overlay, Spill};
+use crate::markdown::text;
+use crate::overlay::Overlay;
 use crate::theme;
 
 /// How wide the keys column of the help overlay is.
-const KEYS: usize = 16;
+const KEYS: usize = 20;
 
 /// Draws the overlay that has the screen, over everything else.
-pub fn draw(app: &App, area: Rect, buf: &mut Buffer) {
-    let Some(overlay) = app.overlay() else {
+pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
+    let Some(overlay) = app.overlay().cloned() else {
         return;
     };
-    let (title, rows) = match overlay {
-        Overlay::Help => (" keys ", marked(&Overlay::Help.rows())),
-        Overlay::Spill(spill) => (" output ", scrolled(spill, area)),
+    let height = match overlay {
+        Overlay::Help => (overlay.rows().len() as u16 + 2).min(area.height),
+        Overlay::Spill(_) => area.height,
     };
-    let height = (rows.len() as u16).saturating_add(2).min(area.height);
     let width = area.width.saturating_sub(8).clamp(20, 110);
     let boxed = Rect {
         x: area.x + (area.width.saturating_sub(width)) / 2,
@@ -32,38 +32,42 @@ pub fn draw(app: &App, area: Rect, buf: &mut Buffer) {
         height,
     };
     Clear.render(boxed, buf);
-    let block = Block::bordered()
-        .border_style(theme::faint())
-        .title(Span::styled(title, theme::faint()));
+    let block = Block::bordered().border_style(theme::faint());
     let inner = block.inner(boxed);
-    let lines: Vec<Line<'static>> = rows
-        .into_iter()
-        .map(|(keys, what)| {
-            let keys = format!("{keys:<KEYS$}");
-            Line::from(vec![
-                Span::styled(keys, theme::prompt()),
-                Span::styled(what, theme::faint()),
-            ])
-        })
-        .collect();
-    Paragraph::new(lines)
-        .wrap(Wrap { trim: false })
-        .render(inner, buf);
+    let (title, lines, held) = match &overlay {
+        Overlay::Help => (
+            "keys".to_string(),
+            overlay
+                .rows()
+                .into_iter()
+                .map(|(keys, what)| help_row(keys, &what))
+                .collect::<Vec<_>>(),
+            None,
+        ),
+        Overlay::Spill(spill) => {
+            let mut spill = spill.clone();
+            spill.settled(inner.height as usize);
+            let lines = spill
+                .window()
+                .iter()
+                .map(|line| Line::from(Span::styled(line.clone(), theme::faint())))
+                .collect::<Vec<_>>();
+            let title = format!("output: {}", spill.path.display());
+            (title, lines, Some(spill))
+        }
+    };
+    let block = block.title(Span::styled(format!(" {title} "), theme::faint()));
+    Paragraph::new(lines).render(inner, buf);
     block.render(boxed, buf);
+    if let Some(spill) = held {
+        app.hold_spill(spill);
+    }
 }
 
-/// The help's rows, with the mouse gesture beside the key that does the same.
-fn marked(rows: &[(&'static str, String)]) -> Vec<(&'static str, String)> {
-    rows.iter()
-        .map(|(keys, what)| (*keys, what.clone()))
-        .collect()
-}
-
-/// A spill file's rows, from where the reader has scrolled, as many as fit.
-fn scrolled(spill: &Spill, area: Rect) -> Vec<(&'static str, String)> {
-    let mut rows = spill.shown();
-    let skip = spill.scroll.min(rows.len().saturating_sub(1));
-    let mut rows: Vec<(&'static str, String)> = rows.drain(skip..).collect();
-    rows.truncate(area.height.saturating_sub(4) as usize);
-    rows
+/// One binding: the keys, and what it does with the gesture that also does it.
+fn help_row(keys: &str, what: &str) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(format!("{keys:<KEYS$}"), theme::prompt()),
+        Span::styled(text::clip(what, 200), theme::faint()),
+    ])
 }

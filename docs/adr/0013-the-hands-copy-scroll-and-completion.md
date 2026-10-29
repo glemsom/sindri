@@ -40,22 +40,33 @@ entry changes, so scrolling costs what was scrolled and a thread of ten thousand
 turns still lays out a handful of entries per frame. The offset is clamped by
 the window itself — the thread's top is where the walking stopped — so no
 separate total is kept. Scrolling a thread whose rows all fit is a no-op, and
-`PgUp`/`PgDn`, the wheel and `Ctrl-Y`/`Ctrl-O` mean every mouse action here has
-a key.
+every gesture has a key: the wheel is `PgUp`/`PgDn`, a click on a spill
+affordance is `Ctrl-O`, and a drag is `Shift+Up`/`Shift+Down` to select whole
+rows from the newest upwards and `Ctrl-Y` to copy them — or, with nothing
+selected, the last answer. A selection is resolved against the plain text of
+what the last frame drew and by display columns, so a wide glyph is taken whole
+rather than cut in half.
 
-**The walk is capped, on a thread, and ranked, not exhaustive.** `@` starts a
-scan of the workspace on its own thread; the frame keeps asking for the newest
-one and ignores every answer whose generation is stale, so typing fast never
-builds a queue of walks. The scan stops after `CAP` (20 000) paths and says it
-was capped; it skips `.git` and nothing else, because a file the model can read
-is a file the user can point at. Ranking is proximity: whole-path prefix, then
+**The walk is capped, on a thread, one at a time, and ranked, not exhaustive.**
+`@` starts a scan of the workspace on its own thread. At most one walk runs at
+any moment: a keystroke during a walk updates the query the frame is waiting
+for, that walk's answer is applied only if its generation is still the newest,
+and the frame then asks again for whatever is current — so typing fast costs one
+walk at a time rather than a queue of them. The scan stops after `CAP` (20 000)
+paths and says so twice: in the `capped` flag `Scan` returns, and as a row in
+the completion itself, because a list that is not everything should say so. It
+skips `.git` and nothing else, because a file the model can read is a file the
+user can point at. Ranking is proximity: whole-path prefix, then
 file-name prefix, then substring, then subsequence — eight rows at a time, and a
 dotfile only once a dot has been typed.
 
-**A spill file is read only when it is opened.** The transcript offers the file
-(`… output too large · Ctrl-O opens …`) from what the executor already wrote
-(ADR-0007); the untruncated text is read into the overlay when the user asks for
-it, and scrolling the overlay moves within the file rather than the frame.
+**A spill file is read only when it is opened, and never re-copied.** The
+transcript offers the file (`… output too large · Ctrl-O opens …`) from what the
+executor already wrote (ADR-0007). Opening it — `Ctrl-O`, or a click on that
+row, which opens *that* row's file rather than the newest one — reads the file
+once, and each frame draws a slice of the lines it already holds, scrolled by
+whole screenfuls so that the last one is reachable. The render tree holds one
+screen of text, not the file.
 
 ## Consequences
 

@@ -1,5 +1,6 @@
 //! The `@` completion, as a column of paths just above the composer: the eight
-//! nearest matches, the chosen one marked (ADR-0011 §16).
+//! nearest matches, the chosen one marked, and a word when the walk stopped at
+//! its cap (ADR-0011 §16, ADR-0013).
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -7,6 +8,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 
 use crate::app::App;
+use crate::markdown::text;
 use crate::theme;
 
 /// Draws the offers that are open, chosen row marked.
@@ -18,23 +20,28 @@ pub fn draw(app: &App, area: Rect, buf: &mut Buffer) {
         return;
     }
     let width = area.width as usize;
-    let lines: Vec<Line<'static>> = completion
-        .items
-        .iter()
-        .enumerate()
-        .take(area.height as usize)
-        .map(|(index, path)| {
-            let (marker, style) = if index == completion.chosen {
-                ("▸ ", theme::prompt())
-            } else {
-                ("  ", theme::faint())
-            };
-            let shown: String = path.chars().take(width.saturating_sub(2)).collect();
-            Line::from(vec![
-                Span::styled(marker, style),
-                Span::styled(shown, style),
-            ])
-        })
-        .collect();
+    let mut lines: Vec<Line<'static>> = Vec::new();
+    if completion.capped {
+        lines.push(Line::from(Span::styled(
+            text::clip(
+                "· the walk stopped at its cap: not every path is here",
+                width.saturating_sub(2),
+            ),
+            theme::bad(),
+        )));
+    }
+    let room = (area.height as usize).saturating_sub(lines.len());
+    for (index, path) in completion.items.iter().enumerate().take(room) {
+        let (marker, style) = if index == completion.chosen {
+            ("▸ ", theme::prompt())
+        } else {
+            ("  ", theme::faint())
+        };
+        let shown = text::clip(path, width.saturating_sub(2));
+        lines.push(Line::from(vec![
+            Span::styled(marker, style),
+            Span::styled(shown, style),
+        ]));
+    }
     Paragraph::new(lines).render(area, buf);
 }
