@@ -62,6 +62,79 @@ impl Reply {
         }
     }
 
+    /// A finished Anthropic message asking for one `bash` call with `command`,
+    /// after `text`.
+    pub fn tool_call(id: &str, command: &str, text: &str) -> Self {
+        let mut content = Vec::new();
+        if !text.is_empty() {
+            content.push(serde_json::json!({"type": "text", "text": text}));
+        }
+        content.push(serde_json::json!({
+            "type": "tool_use",
+            "id": id,
+            "name": "bash",
+            "input": {"command": command},
+        }));
+        Reply {
+            status: 200,
+            body: json(serde_json::json!({
+                "id": "msg_mock",
+                "type": "message",
+                "role": "assistant",
+                "model": "claude-mock",
+                "content": content,
+                "stop_reason": "tool_use",
+                "usage": {"input_tokens": 20, "output_tokens": 5, "cache_read_input_tokens": 4},
+            })),
+        }
+    }
+
+    /// A finished Anthropic message that shows `reasoning` before answering
+    /// `text`.
+    pub fn thinking_answer(reasoning: &str, text: &str) -> Self {
+        Reply {
+            status: 200,
+            body: json(serde_json::json!({
+                "id": "msg_mock",
+                "type": "message",
+                "role": "assistant",
+                "model": "claude-mock",
+                "content": [
+                    {"type": "thinking", "thinking": reasoning, "signature": "sig"},
+                    {"type": "text", "text": text},
+                ],
+                "stop_reason": "end_turn",
+                "usage": {
+                    "input_tokens": 11,
+                    "output_tokens": 7,
+                    "cache_read_input_tokens": 3,
+                    "output_tokens_details": {"reasoning_tokens": 2},
+                },
+            })),
+        }
+    }
+
+    /// A tool call whose arguments are not a JSON object.
+    pub fn malformed_tool_call(id: &str) -> Self {
+        Reply {
+            status: 200,
+            body: json(serde_json::json!({
+                "id": "msg_mock",
+                "type": "message",
+                "role": "assistant",
+                "model": "claude-mock",
+                "content": [{
+                    "type": "tool_use",
+                    "id": id,
+                    "name": "bash",
+                    "input": "{oops",
+                }],
+                "stop_reason": "tool_use",
+                "usage": {"input_tokens": 20, "output_tokens": 5},
+            })),
+        }
+    }
+
     /// A provider failure with `status` and `message`, in the provider's own
     /// error envelope.
     pub fn error(status: u16, kind: &str, message: &str) -> Self {

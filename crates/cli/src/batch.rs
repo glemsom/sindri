@@ -1,13 +1,22 @@
 //! Batch mode: the Unix filter front end. It reads the prompt and the stdin
-//! context, asks the model and prints the answer plus exactly one newline;
+//! context, runs the agent to an answer and prints it plus exactly one newline;
 //! everything else is a decision made in `sindri-core`. Exit codes, not prose,
 //! tell a script what happened (ADR-0004).
 
 use std::io::{IsTerminal, Read};
+use std::sync::Arc;
+use std::sync::mpsc;
 
+use sindri_core::agent::{Agent, BashTool, Event, Stopped};
 use sindri_core::config::{Config, ConfigError, Overrides};
+use sindri_core::exec::SandboxExecutor;
+use sindri_core::paths::SessionDir;
 use sindri_core::provider::{Client, Error};
+use sindri_core::sandbox::{Enforcement, SandboxPolicy};
+use sindri_core::session;
 use sindri_types::ExitCode;
+
+use crate::verbose;
 
 /// The flag overrides `sindri -b` accepts, taken from the command line as
 /// written.
@@ -18,6 +27,10 @@ pub struct Flags {
     pub base_url: Option<String>,
     pub max_turns: Option<u32>,
     pub timeout: Option<u64>,
+    /// Pay for the model's reasoning.
+    pub thinking: bool,
+    /// Report the run on stderr when it is over.
+    pub verbose: bool,
 }
 
 impl From<Flags> for Overrides {
@@ -39,20 +52,69 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
         Err(message) => return usage_error(&message),
     };
 
+    let verbose = flags.verbose;
+    let thinking = flags.thinking;
     let config = match Config::resolve(flags.into()) {
         Ok(config) => config,
         Err(error) => return config_error(&error),
     };
 
-    let client = Client::new(&config);
-    match client.ask(&prompt) {
-        Ok(answer) => {
+    let (session, policy) = match prepare() {
+        Ok(prepared) => prepared,
+        Err(error) => {
+            eprintln!("sindri: sandbox: {error}");
+            return ExitCode::EnvironmentFailure.code();
+        }
+    };
+
+    let executor = Arc::new(SandboxExecutor::new(
+        policy.clone(),
+        config.timeout,
+        session.temp().join("spill"),
+    ));
+    let tool = BashTool::new(&policy, executor);
+    let mut agent = Agent::new(
+        Box::new(Client::new(&config)),
+        tool,
+        config.max_turns,
+        thinking,
+    );
+    let (sender, events) = mpsc::channel::<Event>();
+    agent.set_events(sender);
+
+    match agent.run(&prompt) {
+        Ok(report) => {
             // The answer and exactly one newline, so `| wc -l` counts answers.
-            println!("{}", answer.text.trim_end());
-            ExitCode::Success.code()
+            println!("{}", report.answer.trim_end());
+            if verbose {
+                for line in verbose::lines(events.try_iter().collect(), session.id(), &report) {
+                    eprintln!("{line}");
+                }
+            }
+            match report.stopped {
+                Stopped::Final => ExitCode::Success.code(),
+                Stopped::MaxTurns => ExitCode::TurnCap.code(),
+            }
         }
         Err(error) => model_error(&error),
     }
+}
+
+/// One run's session and the sandbox policy every command inside it is bounded
+/// by. A failure here is the environment's, not the model's: exit 3.
+fn prepare() -> Result<(SessionDir, SandboxPolicy), String> {
+    let session = session::begin().map_err(|error| error.to_string())?;
+    let workspace = std::env::current_dir()
+        .and_then(|dir| dir.canonicalize())
+        .map_err(|error| error.to_string())?;
+    let policy = session::policy_for(
+        &workspace,
+        session.temp(),
+        session::search_path(),
+        Enforcement::Bubblewrap,
+    )
+    .map_err(|error| error.to_string())?;
+    Ok((session, policy))
 }
 
 /// The question actually asked: the prompt argument, with piped stdin appended
