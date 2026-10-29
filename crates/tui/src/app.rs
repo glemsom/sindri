@@ -6,6 +6,7 @@
 //! this file stays a description of what the frame holds.
 
 use std::collections::VecDeque;
+use std::path::PathBuf;
 
 use ratatui::layout::Rect;
 use sindri_core::cancel::Cancel;
@@ -68,6 +69,12 @@ pub struct App {
     /// A counter for the walks that answer a completion: a stale answer is
     /// never applied to a question that has moved on.
     pub(crate) generation: u64,
+    /// The config file `/settings` edits. `None` is the file a run reads; a
+    /// test points it at a temporary directory instead.
+    pub(crate) config: Option<PathBuf>,
+    /// Whether a saved setting is waiting for the front end to take it up,
+    /// which is how a change applies without a restart (ADR-0014).
+    pub(crate) reload: bool,
 }
 
 impl App {
@@ -107,7 +114,16 @@ impl App {
             renew: false,
             selecting: 0,
             generation: 0,
+            config: None,
+            reload: false,
         }
+    }
+
+    /// The same frame, editing the config file at `path`: the seam a test uses
+    /// so that no test can write a real user's config (ADR-0014).
+    pub fn with_config(mut self, path: impl Into<PathBuf>) -> Self {
+        self.config = Some(path.into());
+        self
     }
 
     /// The session GUID the rail is showing.
@@ -189,6 +205,23 @@ impl App {
     /// Whether `/new` is waiting for a fresh session from the front end.
     pub fn take_renew(&mut self) -> bool {
         std::mem::take(&mut self.renew)
+    }
+
+    /// Whether a saved setting is waiting for the front end to read it again.
+    pub fn take_reload(&mut self) -> bool {
+        std::mem::take(&mut self.reload)
+    }
+
+    /// The front end has read the saved settings: the rail shows the limits the
+    /// next run will actually use, and a config that cannot start a run is said
+    /// where it happened (ADR-0011 §15).
+    pub fn reloaded(&mut self, reloaded: Result<Launch, String>) {
+        match reloaded {
+            Ok(launch) => self.rail.reconfigured(launch),
+            Err(error) => self.note_error(format!(
+                "settings saved, but the next run cannot start: {error}"
+            )),
+        }
     }
 
     /// What one background walk found, for the completion it was started for.

@@ -46,10 +46,10 @@ fn help_and_quit_are_commands_too() {
     assert!(app.wants_quit(), "/quit leaves the frame");
 
     let mut unknown = app_with(Fake::taking());
-    type_text(&mut unknown, "/settings");
+    type_text(&mut unknown, "/settle");
     press(&mut unknown, KeyCode::Enter, KeyModifiers::NONE);
     assert!(
-        notes(&unknown).contains("/settings: no such command"),
+        notes(&unknown).contains("/settle: no such command"),
         "an unknown command is said in the transcript: {:?}",
         notes(&unknown)
     );

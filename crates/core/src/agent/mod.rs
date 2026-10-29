@@ -1,5 +1,9 @@
 //! The agent: the turn loop and the one tool it drives. It emits events on a
 //! channel and returns a report, so it holds no terminal concerns.
+//!
+//! The agent also owns the conversation: the messages the model was shown, kept
+//! across prompts, so a second question builds on the first answer (ADR-0012,
+//! ADR-0014). One launch is one thread; `/new` forgets it.
 
 mod event;
 mod report;
@@ -17,6 +21,21 @@ use crate::cancel::Cancel;
 use crate::provider::{Delta, DeltaSink, Error, Message, Model};
 use crate::record::Recorder;
 
+/// What one conversation runs on: the model to ask, the tool to run it with,
+/// how many turns it may take, and whether it pays for reasoning. A front end
+/// replaces the whole set between prompts, because a saved setting can change
+/// any of them and none of them is the conversation (ADR-0014).
+pub struct Dials {
+    /// The model to ask.
+    pub model: Box<dyn Model>,
+    /// The tool, bounded by the sandbox the run has now.
+    pub tool: BashTool,
+    /// The turn cap.
+    pub max_turns: u32,
+    /// Whether the run pays for the model's reasoning.
+    pub thinking: bool,
+}
+
 /// Drives the model until it stops asking for tools, or the turn cap is hit.
 pub struct Agent {
     model: Box<dyn Model>,
@@ -27,6 +46,10 @@ pub struct Agent {
     cancel: Cancel,
     /// Where the run is written down, when a front end asked for a record.
     recorder: Option<Arc<Recorder>>,
+    /// Everything the model has been shown in this conversation, oldest first:
+    /// the thread that makes a second prompt a follow-up rather than a
+    /// one-shot. It grows by one exchange per answered prompt.
+    history: Vec<Message>,
 }
 
 impl Agent {
@@ -42,7 +65,24 @@ impl Agent {
             events: None,
             cancel: Cancel::new(),
             recorder: None,
+            history: Vec::new(),
         }
+    }
+
+    /// The dials this conversation runs on, replaced between prompts: the
+    /// thread is the conversation's, not the model's, so a saved setting is a
+    /// change of dials and not a change of subject (ADR-0014).
+    pub fn set_dials(&mut self, dials: Dials) {
+        self.model = dials.model;
+        self.tool = dials.tool;
+        self.max_turns = dials.max_turns;
+        self.thinking = dials.thinking;
+    }
+
+    /// Forget the thread, so the next prompt is the first of a new
+    /// conversation. The record on disk keeps everything it already has.
+    pub fn forget(&mut self) {
+        self.history.clear();
     }
 
     /// Records the run as it happens, so a cancelled or crashed run still says
@@ -57,6 +97,12 @@ impl Agent {
         self.events = Some(events);
     }
 
+    /// Stops saying anything: dropping the channel is how the thread reading it
+    /// learns the run it was carrying is over. The conversation stays.
+    pub fn close_events(&mut self) {
+        self.events = None;
+    }
+
     /// The flag that stops the run dead. The executor must share it, or a
     /// cancel would only be noticed once the command had finished on its own.
     pub fn set_cancel(&mut self, cancel: Cancel) {
@@ -69,7 +115,7 @@ impl Agent {
         if let Some(recorder) = &self.recorder {
             recorder.user(prompt);
         }
-        let mut history = vec![Message::User(prompt.to_string())];
+        self.history.push(Message::User(prompt.to_string()));
         let mut report = Report {
             answer: String::new(),
             turns: 0,
@@ -96,7 +142,10 @@ impl Agent {
                 cancel: &self.cancel,
                 turn: report.turns,
             };
-            let turn = match self.model.turn(&history, &tools, self.thinking, &mut sink) {
+            let turn = match self
+                .model
+                .turn(&self.history, &tools, self.thinking, &mut sink)
+            {
                 Ok(turn) => turn,
                 // A request cut short by a cancel is a cancellation, not a
                 // provider failure: the shell must see 130, not 1.
@@ -117,7 +166,7 @@ impl Agent {
             if !turn.text.trim().is_empty() {
                 report.answer.clone_from(&turn.text);
             }
-            history.push(Message::Assistant {
+            self.history.push(Message::Assistant {
                 text: turn.text,
                 calls: turn.calls.clone(),
             });
@@ -155,11 +204,26 @@ impl Agent {
                 report.stopped = Stopped::Cancelled;
                 break;
             }
-            history.push(Message::ToolResults(outcomes));
+            self.history.push(Message::ToolResults(outcomes));
         }
 
         report.duration = started.elapsed();
+        self.settle();
         Ok(report)
+    }
+
+    /// Ends the thread where a model turn ended: a prompt cut short by a cap, a
+    /// cancel or a failure would otherwise leave an exchange with no reply, and
+    /// the next request would carry a question nobody answered (T17).
+    fn settle(&mut self) {
+        let answered = self
+            .history
+            .iter()
+            .rposition(
+                |message| matches!(message, Message::Assistant { calls, .. } if calls.is_empty()),
+            )
+            .map_or(0, |last| last + 1);
+        self.history.truncate(answered);
     }
 
     /// Says one turn's reasoning, when there is any to say.

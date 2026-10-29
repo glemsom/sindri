@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use std::sync::mpsc;
 
-use sindri_core::agent::{Agent, BashTool, Event};
+use sindri_core::agent::{Agent, BashTool, Dials, Event};
 use sindri_core::cancel::Cancel;
 use sindri_core::config::{Config, Overrides};
 use sindri_core::doctor::{self, DoctorError};
@@ -25,7 +25,7 @@ use crate::batch;
 
 /// Runs the frame for one launch, and says how the process should end.
 pub fn run(overrides: Overrides) -> i32 {
-    let config = match Config::resolve(overrides) {
+    let config = match Config::resolve(overrides.clone()) {
         Ok(config) => config,
         Err(error) => return batch::config_error(&error),
     };
@@ -69,9 +69,11 @@ pub fn run(overrides: Overrides) -> i32 {
     let launch = launch(&session, &policy, &config);
     let driver = Front {
         config,
+        overrides,
         policy,
         session,
         recorder,
+        agent: None,
     };
     match run::open(launch, Box::new(driver)) {
         Ending::Left => ExitCode::Success.code(),
@@ -97,9 +99,15 @@ fn launch(session: &SessionDir, policy: &SandboxPolicy, config: &Config) -> Laun
 /// wired to the frame instead of to stdout.
 struct Front {
     config: Config,
+    /// The flags the launch was asked with. A reload resolves the config again
+    /// from these, so a flag still wins over the file after a save (ADR-0005).
+    overrides: Overrides,
     policy: SandboxPolicy,
     session: SessionDir,
     recorder: Arc<Recorder>,
+    /// The conversation, kept across prompts: a second question is a follow-up,
+    /// and a model changed in `/settings` answers it (ADR-0014).
+    agent: Option<Agent>,
 }
 
 impl Driver for Front {
@@ -121,26 +129,46 @@ impl Driver for Front {
                 tap: tap.clone(),
             }),
         );
-        let mut agent = Agent::new(
-            Box::new(Client::new(&self.config)),
-            tool,
-            self.config.max_turns,
-            self.config.thinking,
-        );
-        agent.set_cancel(cancel);
-        agent.set_recorder(self.recorder.clone());
+        let recorder = self.recorder.clone();
+        let (max_turns, thinking) = (self.config.max_turns, self.config.thinking);
+        let model = Box::new(Client::new(&self.config));
 
         // The core writes events to a channel of its own; one small thread
         // carries them to the frame, so a turn's fragments arrive in order.
         let (events, stream) = mpsc::channel::<Event>();
-        agent.set_events(events);
         let forward = std::thread::spawn(move || {
             for event in stream {
                 tap.event(event);
             }
         });
+
+        // The thread is the conversation's, so a new model, tool, cap or
+        // thinking toggle is a change of dials and not a change of subject.
+        let dials = Dials {
+            model,
+            tool,
+            max_turns,
+            thinking,
+        };
+        let agent = match self.agent.as_mut() {
+            Some(agent) => {
+                agent.set_dials(dials);
+                agent
+            }
+            None => self.agent.insert(Agent::new(
+                dials.model,
+                dials.tool,
+                dials.max_turns,
+                dials.thinking,
+            )),
+        };
+        agent.set_cancel(cancel);
+        agent.set_recorder(recorder);
+        agent.set_events(events);
+        // The agent stays: the thread it holds is the conversation's. Only its
+        // channel is dropped, so the forwarding thread sees the stream end.
         let outcome = agent.run(prompt);
-        drop(agent);
+        agent.close_events();
         let _ = forward.join();
 
         match outcome {
@@ -167,7 +195,24 @@ impl Driver for Front {
     }
 
     fn renew(&mut self) -> Option<Launch> {
+        // A new session is a new conversation: `/new` forgets the thread, so
+        // the fresh GUID and the fresh record agree.
+        if let Some(agent) = self.agent.as_mut() {
+            agent.forget();
+        }
         self.fresh_session()
+    }
+
+    fn reload(&mut self) -> Result<Launch, String> {
+        let config =
+            Config::resolve(self.overrides.clone()).map_err(|error| error.message().to_string())?;
+        // The same session, bounded by the policy the new settings grant: a
+        // saved extra path is in force for the very next command.
+        let policy = session::rebounded(&self.session, &config.extra_writable)
+            .map_err(|error| format!("extra_writable_paths: {error}"))?;
+        self.config = config;
+        self.policy = policy;
+        Ok(launch(&self.session, &self.policy, &self.config))
     }
 }
 

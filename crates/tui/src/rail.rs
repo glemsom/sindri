@@ -52,6 +52,13 @@ impl Rail {
         self.turns = self.turns.max(turn);
     }
 
+    /// The limits a saved setting changed: a new turn cap, a new context
+    /// window, a new posture — with everything this conversation has already
+    /// spent still on screen (ADR-0014).
+    pub fn reconfigured(&mut self, launch: Launch) {
+        self.launch = launch;
+    }
+
     /// What the run that just ended spent, and why it ended.
     pub fn settled(&mut self, turns: u32, tokens: Tokens, stop: Stop) {
         self.turns = self.turns.max(turns);

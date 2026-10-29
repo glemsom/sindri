@@ -41,7 +41,7 @@ pub(super) fn resolve(
 /// `Name: value` lines, as a shell and a flag write them. A line with no colon
 /// is refused without echoing it: whatever it is, it may be the header's
 /// secret, and a usage error is not the place to print one.
-fn pairs_from_lines(lines: &[String]) -> Result<Vec<(String, String)>, ConfigError> {
+pub(super) fn pairs_from_lines(lines: &[String]) -> Result<Vec<(String, String)>, ConfigError> {
     lines
         .iter()
         .enumerate()
@@ -63,7 +63,9 @@ fn pairs_from_lines(lines: &[String]) -> Result<Vec<(String, String)>, ConfigErr
 /// is a usage error (exit 2) rather than a 400 at the first turn. Names are
 /// lowercased because HTTP names are case-insensitive, and two spellings of one
 /// name are a duplicate, not two headers.
-fn header_pairs(given: &[(String, String)]) -> Result<Vec<(String, String)>, ConfigError> {
+pub(super) fn header_pairs(
+    given: &[(String, String)],
+) -> Result<Vec<(String, String)>, ConfigError> {
     let mut pairs: Vec<(String, String)> = Vec::with_capacity(given.len());
     for (name, value) in given {
         let name = name.trim().to_ascii_lowercase();

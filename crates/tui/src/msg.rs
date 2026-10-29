@@ -28,4 +28,6 @@ pub enum Msg {
     Paths(u64, Vec<String>, bool),
     /// A fresh session, when a front end could start one.
     Renewed(Option<Launch>),
+    /// A saved config, taken up — or refused, with the reason.
+    Reloaded(Result<Launch, String>),
 }

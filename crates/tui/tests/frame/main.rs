@@ -51,9 +51,14 @@ fn screen(app: &mut App, width: u16, height: u16) -> Vec<String> {
         .collect()
 }
 
-/// The rail's own columns of a row.
+/// The rail's own columns of a row, at a frame of `width` columns.
+fn rail_of_width(row: &str, width: usize) -> String {
+    row.chars().skip(width - RAIL).collect()
+}
+
+/// The rail's own columns of a row of a 100-column frame.
 fn rail_of(row: &str) -> String {
-    row.chars().skip(100 - RAIL).collect()
+    rail_of_width(row, 100)
 }
 
 fn any(rows: &[String], needle: &str) -> bool {
@@ -242,7 +247,9 @@ fn without_kitty_graphics_the_rail_closes_up_and_starts_at_the_cache_meter() {
 fn with_kitty_graphics_the_face_draws_in_the_top_of_the_rail() {
     let face = Face::kitty().expect("the embedded face decodes");
     let mut app = App::new(launch(), Some(face));
-    let rows = screen(&mut app, 100, 26);
+    // Tall enough for the face and every fact: the picture is the ornament, and
+    // a frame that cannot hold both gives its room to the facts.
+    let rows = screen(&mut app, 100, 40);
     let top = rail_of(&rows[0]);
     assert!(
         !top.contains("cache"),
@@ -254,3 +261,5 @@ fn with_kitty_graphics_the_face_draws_in_the_top_of_the_rail() {
         "and the rail still says everything, below it: {rail:#?}"
     );
 }
+
+mod rail;

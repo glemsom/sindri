@@ -84,8 +84,10 @@ degraded frame.
 - **The rail** is 32 columns on the right and always visible: cache hit
   percentage, turns against the cap, tokens, a context meter, the session GUID,
   the session temp path, the git branch and the sandbox posture, plus the reason
-  the last run stopped. Below 100 columns it becomes the same facts as one strip
-  under the transcript — never hidden behind a keystroke.
+  the last run stopped. It reads the same at 100 columns as at 160. Below 100 it
+  becomes the same facts as one strip under the transcript — never hidden behind
+  a keystroke. The face takes only the rows the facts leave, so a terminal too
+  short for both keeps the posture and the record and loses the picture.
 - **The composer** is at the bottom: `Enter` sends, `Shift+Enter` breaks the
   line, `Ctrl-C` cancels the run and keeps the draft, `Ctrl-Q` leaves. A prompt
   typed while a run is in flight queues and is sent when the run ends.
@@ -104,8 +106,11 @@ degraded frame.
   one, `Esc` dismisses the offer, and a dotfile is offered only once you type a
   dot.
 - **`/` runs commands.** `/new` starts a fresh session GUID with an empty
-  transcript, `/help` lists every binding, `/quit` leaves. `/settings` is not
-  here yet.
+  transcript, `/settings` opens the modal below, `/help` lists every binding,
+  `/quit` leaves.
+- **The conversation is one thread.** A second prompt builds on the first: the
+  transcript and the model's history grow together, tool calls included, and
+  `/new` is what starts over.
 - **`?` lists every binding**, on an empty prompt: the keys, the mouse gesture
   beside each, and the key that does the same thing as every gesture.
 - **Boot runs `doctor`'s checks first.** A sandbox that cannot be created is a
@@ -117,12 +122,59 @@ Answers stream as they are written, so the frame is never frozen for the length
 of a model call. Each prompt is recorded in the same session record as a batch
 run (ADR-0006).
 
-Not here yet, by design: `/settings`, the one slice that writes the user's
-config. This release also keeps the model-facing history starting afresh
-with each prompt while the frame's transcript grows: a later question does not
-yet see an earlier one's messages. Copying, scrolling, `@` completion, the `/`
-commands and the help overlay are
-[ADR-0013](docs/adr/0013-the-hands-copy-scroll-and-completion.md)'s decisions.
+Copying, scrolling, `@` completion, the `/` commands and the help overlay are
+[ADR-0013](docs/adr/0013-the-hands-copy-scroll-and-completion.md)'s decisions;
+the settings modal, the conversation that survives a change of model, and the
+rail's last polish are
+[ADR-0014](docs/adr/0014-the-dials-one-schema-one-writer.md)'s.
+
+### Settings
+
+`/settings` edits the file everything else reads — the same
+`$XDG_CONFIG_HOME/sindri/config.toml`, the same schema, the same checks — so
+there is one source of truth and no second parser:
+
+```text
+settings · /home/you/.config/sindri/config.toml
+  provider             anthropic
+  model                claude-sonnet-4-6
+  base_url
+  api_key              from environment
+  max_turns            250
+  timeout              120
+  thinking             off (default)
+  extra_writable_paths
+  extra_headers
+```
+
+- **`↑`/`↓` or `Tab`** move between the keys, **`Ctrl-U`** empties the field
+  with the cursor, **`Space`** flips the thinking toggle, an empty value unsets
+  the key so the environment or the default speaks instead.
+- **`Enter` writes the file immediately**, and the next prompt runs on it — no
+  restart, no lost session. The front end reads the config again and rebuilds
+  the sandbox policy over the session already in flight, so a saved extra
+  writable path is in force for the very next command. A model changed here
+  answers the next turn **on the same thread**.
+- **`Esc` discards** everything you typed. Nothing is written until `Enter`, and
+  then only the fields you touched: the modal stages them in memory, validates
+  them against the schema, and writes once, atomically. A key the file holds and
+  you never touched stays in the file.
+- **An unknown key or a bad value** is an error, exactly as it is for a run: the
+  modal opens over a file the schema refuses only to say so in the transcript,
+  and a value that fails on save keeps the modal open and the file untouched.
+
+**The API key.** The field starts at *from environment*, and that is the one
+default: nothing is written to disk unless you type a key into that field. Typing
+is the explicit act, and it turns on a warning that names the file the value
+will land in — in plaintext. The value is masked while you type, never echoed
+into the transcript, and never in the session record: the modal cannot print a
+key even by accident, because the config document does not hand one back.
+Emptying the field is the explicit act that returns to the environment.
+
+One thing the modal cannot see: the environment is read **above** the file, so
+a run with `SINDRI_API_KEY` (or the provider's own variable) exported uses that
+credential whatever the file says. The modal reports what the file holds, which
+is all it can honestly report.
 
 ## Session records
 
@@ -188,7 +240,11 @@ to set it (exit 1).
 
 Credentials come from the provider's environment variable (`ANTHROPIC_API_KEY`,
 `OPENAI_API_KEY`) or the `api_key` field, and are redacted from all output,
-errors and records.
+errors and records. A file carrying one is written readable by its owner alone
+(`0600`), and replaced atomically.
+
+The `sindri` binary never writes that file except when you ask it to — from
+`/settings`. Everything else in a TUI launch writes only the session record.
 
 ### No repository config
 

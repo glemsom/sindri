@@ -1,6 +1,7 @@
 //! What covers the transcript when something has to: the list of every binding
-//! `?` opens, and a command's untruncated output (ADR-0011 §9, §14). Both are
-//! boxes in the middle of the frame, closed with `Esc`.
+//! `?` opens, a command's untruncated output, and the settings modal
+//! (ADR-0011 §9, §14, ADR-0014). Each is a box in the middle of the frame,
+//! closed with `Esc`; the modal sizes itself to what it has to say.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -10,6 +11,7 @@ use ratatui::widgets::{Block, Clear, Paragraph, Widget};
 use crate::app::App;
 use crate::markdown::text;
 use crate::overlay::{Overlay, help_rows};
+use crate::render::settings;
 use crate::theme;
 
 /// How wide the keys column of the help overlay is.
@@ -22,29 +24,23 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
     let Some(overlay) = app.overlay_mut() else {
         return;
     };
-    let height = match &*overlay {
-        Overlay::Help => (help_rows().len() as u16 + 2).min(area.height),
-        Overlay::Spill(_) => area.height,
-    };
-    let width = area.width.saturating_sub(8).clamp(20, 110);
-    let boxed = Rect {
-        x: area.x + (area.width.saturating_sub(width)) / 2,
-        y: area.y + (area.height.saturating_sub(height)) / 2,
-        width,
-        height,
-    };
-    let block = Block::bordered().border_style(theme::faint());
-    let inner = block.inner(boxed);
-    match overlay {
-        Overlay::Help => {
-            let lines = help_rows()
+    // Settings measures its own box against what it has to say, so it draws
+    // itself; the two that are lists are one box each, drawn below.
+    let (height, title, lines) = match &mut *overlay {
+        Overlay::Settings(settings) => {
+            settings::draw(settings, area, buf);
+            return;
+        }
+        Overlay::Help => (
+            (help_rows().len() as u16 + 2).min(area.height),
+            "keys".to_string(),
+            help_rows()
                 .into_iter()
                 .map(|(keys, what)| help_row(keys, &what))
-                .collect::<Vec<_>>();
-            render(buf, boxed, inner, "keys", lines);
-        }
+                .collect(),
+        ),
         Overlay::Spill(spill) => {
-            spill.settled(inner.height as usize);
+            spill.settled(spill_window(area).height as usize);
             let title = format!(
                 "output: {} · {} lines",
                 spill.path.display(),
@@ -54,9 +50,26 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
                 .window()
                 .iter()
                 .map(|line| Line::from(Span::styled(line.as_str(), theme::faint())))
-                .collect::<Vec<_>>();
-            render(buf, boxed, inner, &title, lines);
+                .collect();
+            (area.height, title, lines)
         }
+    };
+    let width = area.width.saturating_sub(8).clamp(20, 110);
+    let boxed = Rect {
+        x: area.x + (area.width.saturating_sub(width)) / 2,
+        y: area.y + (area.height.saturating_sub(height)) / 2,
+        width,
+        height,
+    };
+    let inner = Block::bordered().inner(boxed);
+    render(buf, boxed, inner, &title, lines);
+}
+
+/// How much room a spill's text has inside its box: the box is the screen.
+fn spill_window(area: Rect) -> Rect {
+    Rect {
+        height: area.height.saturating_sub(2),
+        ..area
     }
 }
 

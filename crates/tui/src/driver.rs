@@ -99,6 +99,14 @@ pub trait Driver: Send {
     fn renew(&mut self) -> Option<Launch> {
         None
     }
+
+    /// Reads the config file again, so the next prompt runs on what was just
+    /// saved — no restart, and no second source of truth. `/settings` is the
+    /// only caller. `Ok` is what the rail should now show; `Err` is why the
+    /// next run cannot start, said in the transcript where an error belongs.
+    fn reload(&mut self) -> Result<Launch, String> {
+        Err("this front end cannot read the config again".to_string())
+    }
 }
 
 /// One thing the frame asks the front end's thread to do.
@@ -108,6 +116,8 @@ pub enum Task {
     Run(Job),
     /// Start a fresh session.
     Renew,
+    /// Read the config file again.
+    Reload,
 }
 
 /// One prompt on its way to a driver, with the flag that stops it.

@@ -1,12 +1,14 @@
 //! The `/` commands the composer can send (ADR-0011 §8, §14, §12). `/settings`
-//! is deliberately absent: it is the one slice that writes the user's config,
-//! and it ships once this read path is proven.
+//! is the one that writes the user's disk, and it writes through the schema the
+//! run reads (ADR-0014).
 
 /// A command the composer sent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
     /// Start over: a fresh session GUID and an empty transcript.
     New,
+    /// Edit the one config file, through the one schema.
+    Settings,
     /// The list of every binding.
     Help,
     /// Leave the frame.
@@ -23,6 +25,7 @@ pub fn parse(draft: &str) -> Option<Command> {
     let name = rest.split_whitespace().next().unwrap_or_default();
     Some(match name {
         "new" => Command::New,
+        "settings" => Command::Settings,
         "help" => Command::Help,
         "quit" => Command::Quit,
         "" => return None,
@@ -42,10 +45,11 @@ mod tests {
     }
 
     #[test]
-    fn settings_is_not_a_command_yet_and_an_unknown_one_says_so() {
+    fn settings_opens_the_config_and_an_unknown_command_says_so() {
+        assert_eq!(parse("/settings"), Some(Command::Settings));
         assert_eq!(
-            parse("/settings"),
-            Some(Command::Unknown("/settings".to_string()))
+            parse("/settle"),
+            Some(Command::Unknown("/settle".to_string()))
         );
         assert_eq!(parse("not a command"), None);
         assert_eq!(parse("/"), None);

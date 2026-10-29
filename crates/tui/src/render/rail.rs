@@ -12,28 +12,47 @@ use crate::face;
 use crate::markdown::text;
 use crate::theme;
 
+/// What the face needs to draw at all: its own rows, and no cutting. A
+/// terminal too short for the face and the facts together gets the facts, and
+/// the picture is simply absent — no placeholder, no gap (ADR-0011 §5, and
+/// nothing in the layout depends on the face).
+const FACE_FLOOR: u16 = face::ROWS;
+
 /// The rail as a 32-column column.
 pub fn column(app: &mut App, area: Rect, buf: &mut Buffer) {
+    let width = area.width.saturating_sub(2) as usize;
+    let lines = facts(app, width);
+    // The facts are laid out first, so the pictures takes what is left of the
+    // rail and no more: the rail is complete with or without the face.
+    let spare = area.height.saturating_sub(lines.len() as u16);
     let mut rows = area;
-    if let Some(face) = app.face_mut() {
-        let height = face::ROWS.min(area.height);
-        let face_area = Rect { height, ..area };
-        face.render(face_area, buf);
-        rows = Rect {
-            y: area.y + height,
-            height: area.height - height,
-            ..area
-        };
+    if spare >= FACE_FLOOR {
+        if let Some(face) = app.face_mut() {
+            let height = face::ROWS.min(spare);
+            face.render(Rect { height, ..area }, buf);
+            rows = Rect {
+                y: area.y + height,
+                height: area.height - height,
+                ..area
+            };
+        }
     }
     if rows.height == 0 || rows.width == 0 {
         return;
     }
-    let width = rows.width.saturating_sub(2) as usize;
+    Paragraph::new(lines).render(rows, buf);
+}
+
+/// The rail's facts as rows: one fact per group, wrapped at the rail's width,
+/// with a rule down the left of every row — including the blank one that keeps
+/// the session apart.
+fn facts(app: &App, width: usize) -> Vec<Line<'static>> {
+    let rule = || Line::from(Span::styled("│", theme::faint()));
     let mut lines: Vec<Line<'static>> = Vec::new();
     for (label, value) in app.rail().facts() {
         // The session's facts are a group of their own: one blank row apart.
         if label == "session" {
-            lines.push(Line::default());
+            lines.push(rule());
         }
         lines.extend(text::wrap(
             text::glyphs(&[
@@ -46,7 +65,7 @@ pub fn column(app: &mut App, area: Rect, buf: &mut Buffer) {
             width,
         ));
     }
-    Paragraph::new(lines).render(rows, buf);
+    lines
 }
 
 /// The rail as one line, for a terminal below 100 columns.
