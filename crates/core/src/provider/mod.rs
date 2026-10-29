@@ -3,6 +3,9 @@
 //! only in [`rig_wire`], so a library rewrite is one file's problem (ADR-0003).
 
 mod rig_wire;
+mod window;
+
+pub use window::context_window;
 
 use std::time::Duration;
 

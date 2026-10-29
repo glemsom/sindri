@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 
 use super::result::{Outcome, OutputLimit, ToolResult, truncate};
 use super::status::{exit_code, exit_status_code, first_line};
+use super::tap::{self, OutputSink, Side};
 use super::{BashExecutor, StatusSink};
 use crate::cancel::Cancel;
 use crate::sandbox::SandboxPolicy;
@@ -50,6 +51,9 @@ pub struct SandboxExecutor {
     /// Where bubblewrap's own account of each command is handed over as it
     /// arrives, so a run that never finished still leaves the record.
     status: Option<Arc<dyn StatusSink>>,
+    /// Where each command's output is handed over as it arrives, for a front
+    /// end showing the tail of a running command.
+    output: Option<Arc<dyn OutputSink>>,
     /// Names each command's spill files, so turn n's path is still turn n's.
     calls: AtomicU64,
 }
@@ -70,6 +74,7 @@ impl SandboxExecutor {
             cancel,
             limit: OutputLimit::default(),
             status: None,
+            output: None,
             calls: AtomicU64::new(0),
         }
     }
@@ -78,6 +83,14 @@ impl SandboxExecutor {
     #[must_use]
     pub fn with_status_sink(mut self, status: Arc<dyn StatusSink>) -> Self {
         self.status = Some(status);
+        self
+    }
+
+    /// Hands each line of a running command's output over as it arrives, so a
+    /// human can tell a slow build from a hung one (ADR-0011 §9).
+    #[must_use]
+    pub fn with_output_sink(mut self, output: Arc<dyn OutputSink>) -> Self {
+        self.output = Some(output);
         self
     }
 }
@@ -161,8 +174,14 @@ impl SandboxExecutor {
             drop(writer);
             drain_documents(reader, call, self.status.clone())
         });
-        let stdout = child.stdout.take().map(drain);
-        let stderr = child.stderr.take().map(drain);
+        let stdout = child
+            .stdout
+            .take()
+            .map(|source| tap::drain(source, Side::Stdout, self.output.clone()));
+        let stderr = child
+            .stderr
+            .take()
+            .map(|source| tap::drain(source, Side::Stderr, self.output.clone()));
 
         let stopped = wait_until_done(&mut child, self.timeout, &self.cancel);
         let status = match child.wait() {
@@ -302,15 +321,6 @@ fn pipe() -> io::Result<(RawFd, RawFd)> {
         return Err(io::Error::last_os_error());
     }
     Ok((fds[0], fds[1]))
-}
-
-/// Reads a pipe to EOF on its own thread, so a full pipe never blocks the wait.
-fn drain<R: Read + Send + 'static>(mut source: R) -> std::thread::JoinHandle<io::Result<Vec<u8>>> {
-    std::thread::spawn(move || {
-        let mut buffer = Vec::new();
-        source.read_to_end(&mut buffer)?;
-        Ok(buffer)
-    })
 }
 
 /// Reads the status channel one document at a time, handing each to the sink the

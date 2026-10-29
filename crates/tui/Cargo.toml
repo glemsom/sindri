@@ -1,0 +1,21 @@
+[package]
+name = "sindri-tui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "The terminal UI: a renderer of the core's event stream, holding no loop of its own (ADR-0011)."
+
+[lints]
+workspace = true
+
+[dependencies]
+sindri-core.workspace = true
+ratatui.workspace = true
+crossterm.workspace = true
+ratatui-image.workspace = true
+image.workspace = true
+pulldown-cmark.workspace = true
+syntect.workspace = true
+unicode-width.workspace = true

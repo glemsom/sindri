@@ -232,8 +232,9 @@ pub fn usage_error(message: &str) -> i32 {
 }
 
 /// A configuration value that is wrong is a usage error; one that is absent is
-/// a model error with a hint, as the batch contract promises.
-fn config_error(error: &ConfigError) -> i32 {
+/// a model error with a hint, as the batch contract promises. One wording for
+/// both front ends.
+pub fn config_error(error: &ConfigError) -> i32 {
     eprintln!("sindri: {}", error.message());
     match error {
         ConfigError::Usage(_) => ExitCode::UsageError.code(),
@@ -243,12 +244,15 @@ fn config_error(error: &ConfigError) -> i32 {
 
 /// A provider or transport failure: the provider's message, one line, exit 1.
 fn model_error(error: &Error) -> i32 {
-    match error.status() {
-        Some(status) => eprintln!(
-            "sindri: provider error (HTTP {status}): {}",
-            error.message()
-        ),
-        None => eprintln!("sindri: provider error: {}", error.message()),
-    }
+    eprintln!("sindri: {}", provider_message(error));
     ExitCode::ModelError.code()
+}
+
+/// The provider's complaint as one line, so a shell and a transcript read the
+/// same words.
+pub fn provider_message(error: &Error) -> String {
+    match error.status() {
+        Some(status) => format!("provider error (HTTP {status}): {}", error.message()),
+        None => format!("provider error: {}", error.message()),
+    }
 }
