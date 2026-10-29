@@ -1,0 +1,22 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.18.4/.schema/devbox.schema.json",
+  "packages": [
+    "cargo@latest",
+    "rustc@latest",
+    "rustfmt@latest",
+    "clippy@latest",
+    "cargo-nextest@latest",
+    "gnumake@latest",
+    "bash@latest",
+    "ripgrep@latest",
+    "curl@latest",
+    "lynx@latest",
+    "patch@latest",
+    "python3@latest",
+    "git@latest",
+    "jq@latest",
+    "yq-go@latest",
+    "xdg-utils@latest",
+    "bubblewrap@latest"
+  ]
+}

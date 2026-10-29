@@ -1,0 +1,26 @@
+[workspace]
+resolver = "3"
+members = ["crates/types", "crates/core", "crates/cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/glemsom/sindri"
+
+[workspace.dependencies]
+sindri-types = { path = "crates/types" }
+sindri-core = { path = "crates/core" }
+
+# A curated set, not blanket `pedantic` (ADR-0008): lints that catch mistakes an
+# agent would otherwise ship, and no noise about trivial functions.
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+mem_forget = "deny"
+undocumented_unsafe_blocks = "deny"
+allow_attributes_without_reason = "deny"

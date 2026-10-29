@@ -1,0 +1,17 @@
+[package]
+name = "sindri-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "The agent core: the sandbox policy, the two derivations from it, and the environment probe. Knows nothing about a terminal."
+
+[lints]
+workspace = true
+
+[dependencies]
+sindri-types.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

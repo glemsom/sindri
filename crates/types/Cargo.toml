@@ -1,0 +1,13 @@
+[package]
+name = "sindri-types"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Shared values with no dependency on the rest of Sindri: the exit-code taxonomy and the build version."
+
+[lints]
+workspace = true
+
+[dependencies]

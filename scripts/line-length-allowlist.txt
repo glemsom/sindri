@@ -1,0 +1,2 @@
+# Files allowed to exceed the 400-line limit, one path per line, with a reason
+# on the line above. Empty on purpose: nothing has needed it yet (ADR-0008).
