@@ -12,6 +12,7 @@ use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 
 use sindri_core::agent::{Agent, Event, Report};
+use sindri_core::cancel::Cancel;
 use sindri_core::exec::{BashExecutor, Outcome, ToolResult};
 use sindri_core::provider::{Call, Error, Message, Model, ToolSpec, Turn, Usage};
 use sindri_core::sandbox::{Enforcement, NetworkPosture, SandboxPolicy, WritableSet};
@@ -39,18 +40,45 @@ pub fn policy(workspace: &TempDir, session_temp: &Path) -> SandboxPolicy {
     .expect("policy")
 }
 
+/// When the run's cancel flag is raised, so a test can prove the loop stops the
+/// way a signal stops it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Interrupt {
+    /// Nothing cancels the run.
+    #[default]
+    Never,
+    /// The flag is already up when the run starts: no request is ever made.
+    BeforeFirstTurn,
+    /// The model's first request is cut short by the cancel.
+    DuringFirstTurn,
+    /// The first command is killed mid-flight and reports no result.
+    DuringFirstCommand,
+}
+
 /// An executor that answers from a script and remembers what it was asked to
 /// run. An exhausted script answers a bare success.
 pub struct Scripted {
     replies: Mutex<Vec<ToolResult>>,
     seen: Arc<Mutex<Vec<String>>>,
+    /// Raised when the first command runs, and no result is returned: exactly
+    /// what a killed command group looks like to the loop.
+    interrupt: Option<Cancel>,
 }
 
 impl Scripted {
     pub fn new(replies: Vec<ToolResult>, seen: Arc<Mutex<Vec<String>>>) -> Self {
+        Scripted::interrupting(replies, seen, None)
+    }
+
+    fn interrupting(
+        replies: Vec<ToolResult>,
+        seen: Arc<Mutex<Vec<String>>>,
+        interrupt: Option<Cancel>,
+    ) -> Self {
         Scripted {
             replies: Mutex::new(replies),
             seen,
+            interrupt,
         }
     }
 
@@ -61,13 +89,17 @@ impl Scripted {
 }
 
 impl BashExecutor for Scripted {
-    fn execute(&self, script: &str) -> ToolResult {
+    fn execute(&self, script: &str) -> Option<ToolResult> {
         self.seen.lock().expect("seen").push(script.to_string());
+        if let Some(cancel) = &self.interrupt {
+            cancel.trigger();
+            return None;
+        }
         let mut replies = self.replies.lock().expect("replies");
         if replies.is_empty() {
-            return exited("");
+            return Some(exited(""));
         }
-        replies.remove(0)
+        Some(replies.remove(0))
     }
 }
 
@@ -90,6 +122,9 @@ pub struct ScriptedModel {
     seen: Arc<Mutex<Vec<Vec<Message>>>>,
     /// Whether the run paid for reasoning, one entry per turn.
     pub thinking: Arc<Mutex<Vec<bool>>>,
+    /// Raised while the first request is in flight, which then fails: a request
+    /// cut short by Ctrl-C looks exactly like this to the loop.
+    interrupt: Option<Cancel>,
 }
 
 impl ScriptedModel {
@@ -104,7 +139,13 @@ impl ScriptedModel {
             replies: Mutex::new(replies),
             seen,
             thinking,
+            interrupt: None,
         }
+    }
+
+    fn interrupting(mut self, interrupt: Option<Cancel>) -> Self {
+        self.interrupt = interrupt;
+        self
     }
 }
 
@@ -117,6 +158,10 @@ impl Model for ScriptedModel {
     ) -> Result<Turn, Error> {
         self.seen.lock().expect("seen").push(history.to_vec());
         self.thinking.lock().expect("thinking").push(thinking);
+        if let Some(cancel) = &self.interrupt {
+            cancel.trigger();
+            return Err(Error::transport("the request was cut short"));
+        }
         let mut replies = self.replies.lock().expect("replies");
         assert!(
             !replies.is_empty(),
@@ -147,17 +192,48 @@ impl Harness {
         max_turns: u32,
         thinking: bool,
     ) -> Self {
+        Harness::build(replies, commands, max_turns, thinking, Interrupt::Never)
+    }
+
+    /// A harness whose run is cancelled at `interrupt`, with a shared flag
+    /// raised by the model or the executor, the way a signal would raise it.
+    pub fn interrupted(
+        replies: Vec<Turn>,
+        commands: Vec<ToolResult>,
+        interrupt: Interrupt,
+    ) -> Self {
+        Harness::build(replies, commands, 8, false, interrupt)
+    }
+
+    fn build(
+        replies: Vec<Turn>,
+        commands: Vec<ToolResult>,
+        max_turns: u32,
+        thinking: bool,
+        interrupt: Interrupt,
+    ) -> Self {
         let (workspace, _session_temp, policy) = fixtures();
         let seen_scripts = Arc::new(Mutex::new(Vec::new()));
-        let executor = Arc::new(Scripted::new(commands, Arc::clone(&seen_scripts)));
+        let cancel = Cancel::new();
+        if interrupt == Interrupt::BeforeFirstTurn {
+            cancel.trigger();
+        }
+        let mid_command = (interrupt == Interrupt::DuringFirstCommand).then(|| cancel.clone());
+        let executor = Arc::new(Scripted::interrupting(
+            commands,
+            Arc::clone(&seen_scripts),
+            mid_command,
+        ));
         let tool = sindri_core::agent::BashTool::new(&policy, executor);
         let seen = Arc::new(Mutex::new(Vec::new()));
         let told = Arc::new(Mutex::new(Vec::new()));
-        let model = ScriptedModel::new(replies, Arc::clone(&seen), Arc::clone(&told));
+        let model = ScriptedModel::new(replies, Arc::clone(&seen), Arc::clone(&told))
+            .interrupting((interrupt == Interrupt::DuringFirstTurn).then(|| cancel.clone()));
         let (sender, events) = std::sync::mpsc::channel();
 
         let mut agent = Agent::new(Box::new(model), tool, max_turns, thinking);
         agent.set_events(sender);
+        agent.set_cancel(cancel);
         Harness {
             agent,
             seen,

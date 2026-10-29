@@ -18,6 +18,10 @@ cap** (`max_turns`, default 250).
 **stopped** — why the loop ended: `final` (the model finished), `max_turns`,
 `cancelled`, `error`. Appears in the JSON output.
 
+**cancel** — Ctrl-C (SIGINT): one flag the loop and the bash executor share. The
+loop stops between turns; a running command's process group is killed; nothing
+reaches stdout; exit 130.
+
 ## Sandbox
 
 **sandbox policy** — the value holding writable set, network posture and temp

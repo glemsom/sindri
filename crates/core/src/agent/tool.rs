@@ -29,15 +29,16 @@ impl BashTool {
         &self.spec
     }
 
-    /// Runs one call and renders its result for the model.
-    pub fn call(&self, call: &Call) -> ToolOutcome {
+    /// Runs one call and renders its result for the model, or `None` when the
+    /// run was cancelled before the command finished.
+    pub fn call(&self, call: &Call) -> Option<ToolOutcome> {
         let script = match call.command() {
             Ok(script) => script,
-            Err(reason) => return ToolOutcome::malformed(call, &reason),
+            Err(reason) => return Some(ToolOutcome::malformed(call, &reason)),
         };
-        let result = self.executor.execute(&script);
+        let result = self.executor.execute(&script)?;
         let failed = matches!(result.outcome, Outcome::SandboxError { .. });
-        ToolOutcome::new(call, render(&result), failed)
+        Some(ToolOutcome::new(call, render(&result), failed))
     }
 }
 

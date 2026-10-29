@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 use super::BashExecutor;
 use super::result::{Outcome, OutputLimit, ToolResult, truncate};
 use super::status::{exit_code, exit_status_code, first_line};
+use crate::cancel::Cancel;
 use crate::sandbox::SandboxPolicy;
 
 /// The deadline one command gets when nobody configured one.
@@ -28,24 +29,41 @@ const KILL_GRACE: Duration = Duration::from_secs(2);
 /// How often the deadline is re-checked.
 const POLL: Duration = Duration::from_millis(10);
 
+/// Why a command stopped, before it becomes a result the model reads.
+enum Done {
+    /// The command finished; this is what the model is told.
+    Result(ToolResult),
+    /// The run was cancelled: the group is dead and there is nothing to report.
+    Cancelled,
+    /// The sandbox itself could not run the command.
+    Broken(String),
+}
+
 /// Runs `bash` scripts inside the sandbox described by one policy.
 pub struct SandboxExecutor {
     policy: SandboxPolicy,
     timeout: Duration,
     spill_dir: PathBuf,
+    cancel: Cancel,
     limit: OutputLimit,
     /// Names each command's spill files, so turn n's path is still turn n's.
     calls: AtomicU64,
 }
 
 impl SandboxExecutor {
-    /// Builds an executor for one session: its policy, its deadline, and where
-    /// over-long output is spilled.
-    pub fn new(policy: SandboxPolicy, timeout: Duration, spill_dir: PathBuf) -> Self {
+    /// Builds an executor for one session: its policy, its deadline, where
+    /// over-long output is spilled, and the flag that stops it mid-command.
+    pub fn new(
+        policy: SandboxPolicy,
+        timeout: Duration,
+        spill_dir: PathBuf,
+        cancel: Cancel,
+    ) -> Self {
         SandboxExecutor {
             policy,
             timeout,
             spill_dir,
+            cancel,
             limit: OutputLimit::default(),
             calls: AtomicU64::new(0),
         }
@@ -53,24 +71,25 @@ impl SandboxExecutor {
 }
 
 impl BashExecutor for SandboxExecutor {
-    fn execute(&self, script: &str) -> ToolResult {
+    fn execute(&self, script: &str) -> Option<ToolResult> {
         let started = Instant::now();
         match self.run(script, started) {
-            Ok(result) => result,
-            Err(detail) => ToolResult {
+            Done::Result(result) => Some(result),
+            Done::Cancelled => None,
+            Done::Broken(detail) => Some(ToolResult {
                 outcome: Outcome::SandboxError { detail },
                 stdout: String::new(),
                 stderr: String::new(),
                 truncated: false,
                 spill: Vec::new(),
                 duration_ms: started.elapsed().as_millis() as u64,
-            },
+            }),
         }
     }
 }
 
 impl SandboxExecutor {
-    fn run(&self, script: &str, started: Instant) -> Result<ToolResult, String> {
+    fn run(&self, script: &str, started: Instant) -> Done {
         let command = vec!["bash".to_string(), "-c".to_string(), script.to_string()];
         let sandboxed = !self.policy.is_unsafe();
         let invocation = self
@@ -88,7 +107,10 @@ impl SandboxExecutor {
 
         let mut status_pipe = None;
         if sandboxed {
-            let (read_end, write_end) = pipe().map_err(|error| error.to_string())?;
+            let (read_end, write_end) = match pipe() {
+                Ok(ends) => ends,
+                Err(error) => return Done::Broken(error.to_string()),
+            };
             // SAFETY: `pipe()` returned two fresh, exclusively owned descriptors;
             // wrapping each exactly once means nothing double-closes them.
             let (writer, reader) =
@@ -113,7 +135,10 @@ impl SandboxExecutor {
             status_pipe = Some((writer, reader));
         }
 
-        let mut child = process.spawn().map_err(|error| error.to_string())?;
+        let mut child = match process.spawn() {
+            Ok(child) => child,
+            Err(error) => return Done::Broken(error.to_string()),
+        };
 
         // Release our own write end so the reader can reach EOF, then drain all
         // three channels while the child runs.
@@ -124,8 +149,15 @@ impl SandboxExecutor {
         let stdout = child.stdout.take().map(drain);
         let stderr = child.stderr.take().map(drain);
 
-        let timed_out = wait_with_deadline(&mut child, self.timeout);
-        let status = child.wait().map_err(|error| error.to_string())?;
+        let stopped = wait_until_done(&mut child, self.timeout, &self.cancel);
+        let status = match child.wait() {
+            Ok(status) => status,
+            Err(error) => return Done::Broken(error.to_string()),
+        };
+        if stopped == Stop::Cancelled {
+            return Done::Cancelled;
+        }
+        let timed_out = stopped == Stop::TimedOut;
 
         let call = self.calls.fetch_add(1, Ordering::Relaxed) + 1;
         let (stdout, stdout_trouble) = collect(stdout);
@@ -154,7 +186,7 @@ impl SandboxExecutor {
             }
         }
 
-        Ok(ToolResult {
+        Done::Result(ToolResult {
             outcome: self.classify(timed_out, &status, &docs, sandboxed, &stderr),
             stdout: stdout_text.text,
             stderr: stderr_text.text,
@@ -194,18 +226,32 @@ impl SandboxExecutor {
     }
 }
 
-/// True when the deadline fired; the process group has been signalled and reaped.
-fn wait_with_deadline(child: &mut Child, timeout: Duration) -> bool {
+/// Why the wait ended: the command finished, our deadline fired, or the run was
+/// cancelled. In the last two cases the process group has been signalled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Stop {
+    Finished,
+    TimedOut,
+    Cancelled,
+}
+
+/// Waits for the command, killing its whole group the moment the deadline fires
+/// or the run is cancelled, so nothing outlives the reason it was stopped.
+fn wait_until_done(child: &mut Child, timeout: Duration, cancel: &Cancel) -> Stop {
     let started = Instant::now();
     loop {
         match child.try_wait() {
-            Ok(Some(_)) => return false,
+            Ok(Some(_)) => return Stop::Finished,
             Ok(None) => {}
-            Err(_) => return false,
+            Err(_) => return Stop::Finished,
+        }
+        if cancel.is_triggered() {
+            terminate(child);
+            return Stop::Cancelled;
         }
         if started.elapsed() >= timeout {
             terminate(child);
-            return true;
+            return Stop::TimedOut;
         }
         std::thread::sleep(POLL);
     }

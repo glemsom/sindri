@@ -26,10 +26,16 @@ impl Scripted {
 }
 
 impl BashExecutor for Scripted {
-    fn execute(&self, script: &str) -> ToolResult {
+    fn execute(&self, script: &str) -> Option<ToolResult> {
         self.seen.lock().expect("seen").push(script.to_string());
-        self.replies.lock().expect("replies").remove(0)
+        Some(self.replies.lock().expect("replies").remove(0))
     }
+}
+
+/// The stdout of a result the run produced, or a loud failure when the run was
+/// cancelled instead: these scripts never cancel.
+fn name(result: Option<ToolResult>) -> String {
+    result.expect("the run was not cancelled").stdout
 }
 
 fn exited(stdout: &str) -> ToolResult {
@@ -51,8 +57,8 @@ fn a_scripted_executor_satisfies_the_port_without_a_sandbox() {
         Arc::clone(&seen),
     ));
 
-    assert_eq!(executor.execute("echo one").stdout, "first");
-    assert_eq!(executor.execute("echo two").stdout, "second");
+    assert_eq!(name(executor.execute("echo one")), "first");
+    assert_eq!(name(executor.execute("echo two")), "second");
     assert_eq!(*seen.lock().expect("seen"), vec!["echo one", "echo two"]);
 }
 
@@ -64,7 +70,7 @@ fn the_port_crosses_threads_so_the_loop_can_hold_it() {
 
     let worker = {
         let executor = Arc::clone(&executor);
-        std::thread::spawn(move || executor.execute("true").stdout)
+        std::thread::spawn(move || name(executor.execute("true")))
     };
     assert_eq!(worker.join().expect("thread"), "from another thread");
 }
@@ -107,13 +113,81 @@ fn the_real_executor_honours_the_unsafe_enforcement() {
         policy,
         std::time::Duration::from_secs(120),
         scratch.path().join("spill"),
+        sindri_core::cancel::Cancel::new(),
     );
-    let result = executor.execute("echo unsafe-but-running; exit 7");
+    let result = executor
+        .execute("echo unsafe-but-running; exit 7")
+        .expect("the run was not cancelled");
 
     assert_eq!(result.outcome, Outcome::Exited { exit_code: 7 });
     assert!(
         result.stdout.contains("unsafe-but-running"),
         "{}",
         result.stdout
+    );
+}
+
+#[test]
+fn a_cancelled_executor_kills_its_command_group_and_reports_no_result() {
+    use sindri_core::cancel::Cancel;
+    use sindri_core::sandbox::Enforcement;
+
+    let scratch = tempfile::TempDir::new().expect("scratch");
+    let session_temp = scratch.path().join("tmp");
+    std::fs::create_dir_all(session_temp.join("home")).expect("session temp");
+    let workspace = scratch.path().canonicalize().expect("canonical");
+    let policy = sindri_core::session::policy_for(
+        &workspace,
+        &[],
+        session_temp,
+        sindri_core::session::search_path(),
+        Enforcement::Bubblewrap,
+    )
+    .expect("policy");
+
+    let cancel = Cancel::new();
+    let executor = sindri_core::exec::SandboxExecutor::new(
+        policy,
+        std::time::Duration::from_secs(120),
+        scratch.path().join("spill"),
+        cancel.clone(),
+    );
+
+    // The command says where it got to, then waits long enough that only a
+    // killed process group can stop it.
+    let started = workspace.join("started");
+    let late = workspace.join("late");
+    let script = format!(
+        "touch {}; sleep 3; touch {}",
+        started.display(),
+        late.display()
+    );
+    let cancelling = {
+        let started = started.clone();
+        std::thread::spawn(move || {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            while !started.exists() {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the command never started"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            cancel.trigger();
+        })
+    };
+
+    let result = executor.execute(&script);
+    cancelling.join().expect("the cancelling thread");
+
+    assert!(
+        result.is_none(),
+        "a cancelled command has no result to report"
+    );
+    // Long enough that the command would have written the marker had it lived.
+    std::thread::sleep(std::time::Duration::from_secs(5));
+    assert!(
+        !late.exists(),
+        "the cancelled command's group was killed, grandchildren included"
     );
 }

@@ -8,11 +8,14 @@
 
 use std::time::Duration;
 
+use sindri_core::cancel::Cancel;
 use sindri_core::config::{Config, Overrides};
 use sindri_core::exec::{BashExecutor, SandboxExecutor};
 use sindri_core::sandbox::Enforcement;
 use sindri_core::session;
 use sindri_types::ExitCode;
+
+use crate::signal;
 
 /// Runs the command and prints one JSON object describing what happened. The
 /// extras a run would be granted are granted here too, so a diagnostic cannot
@@ -34,8 +37,14 @@ pub fn exec(timeout: Duration, overrides: Overrides, command: &[String]) -> i32 
     };
 
     let script = shell_join(command);
-    let executor = SandboxExecutor::new(policy, timeout, session.spill());
-    let result = executor.execute(&script);
+    // Ctrl-C here kills the command's group too, so a diagnostic cannot leave a
+    // process behind either.
+    let cancel = Cancel::new();
+    signal::install(cancel.clone());
+    let executor = SandboxExecutor::new(policy, timeout, session.spill(), cancel);
+    let Some(result) = executor.execute(&script) else {
+        return ExitCode::Cancelled.code();
+    };
 
     match serde_json::to_string(&result) {
         Ok(json) => {

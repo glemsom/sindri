@@ -34,6 +34,19 @@ exit 2 and a hint, never silently drained.
 | 100  | turn cap reached (partial answer allowed; `stopped` says why) |
 | 130  | cancelled (SIGINT); nothing on stdout |
 
+**Cancellation.** SIGINT raises one flag, shared by the turn loop and the bash
+executor; the signal handler does nothing else, because one atomic store is the
+only thing a handler may safely do. The loop stops between turns, and a command
+already running has its whole process group signalled and then killed, so no
+child outlives the cancel. A cancelled command reports no tool result: there is
+no model left to read it. `--die-with-parent` in the sandbox argv is what makes
+a `kill -9` of Sindri take the command with it.
+
+A provider request already in flight is not interruptible — our own client
+bounds it — but it is never retried after a cancel, and a failure it produces is
+reported as a cancellation rather than a provider error, so the shell still
+sees 130 and not 1.
+
 ## Consequences
 
 - Scripts can distinguish "the model failed" from "our sandbox is broken".

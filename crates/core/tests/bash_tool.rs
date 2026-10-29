@@ -57,7 +57,9 @@ fn a_tool_result_reaches_the_model_with_every_field_it_needs() {
     ));
     let tool = BashTool::new(&policy, executor);
 
-    let outcome = tool.call(&command_call("call_1", "ls | wc -l"));
+    let outcome = tool
+        .call(&command_call("call_1", "ls | wc -l"))
+        .expect("the run was not cancelled");
 
     assert_eq!(*seen.lock().expect("seen"), vec!["ls | wc -l"]);
     assert_eq!(outcome.call_id, "call_1");
@@ -103,7 +105,9 @@ fn a_call_the_sandbox_never_started_is_reported_as_a_tool_error() {
     ));
     let tool = BashTool::new(&policy, executor);
 
-    let outcome = tool.call(&command_call("call_1", "true"));
+    let outcome = tool
+        .call(&command_call("call_1", "true"))
+        .expect("the run was not cancelled");
 
     assert!(
         outcome.is_error,

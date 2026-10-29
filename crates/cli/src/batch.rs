@@ -9,6 +9,7 @@ use std::sync::mpsc;
 
 use clap::ValueEnum;
 use sindri_core::agent::{Agent, BashTool, Event, Stopped};
+use sindri_core::cancel::Cancel;
 use sindri_core::config::{Config, ConfigError, Overrides};
 use sindri_core::exec::SandboxExecutor;
 use sindri_core::output;
@@ -17,7 +18,7 @@ use sindri_core::sandbox::Enforcement;
 use sindri_core::session;
 use sindri_types::ExitCode;
 
-use crate::verbose;
+use crate::{signal, verbose};
 
 /// How a finished run reaches stdout (ADR-0004): the answer plus one newline,
 /// which is what a shell pipeline wants, or one compact object, which is what a
@@ -95,10 +96,16 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
         }
     };
 
+    // One flag for the whole run: Ctrl-C raises it, the loop stops on it between
+    // turns, and the executor kills a running command's group on it.
+    let cancel = Cancel::new();
+    signal::install(cancel.clone());
+
     let executor = Arc::new(SandboxExecutor::new(
         policy.clone(),
         config.timeout,
         session.spill(),
+        cancel.clone(),
     ));
     let tool = BashTool::new(&policy, executor);
     let mut agent = Agent::new(
@@ -113,8 +120,12 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     if verbose {
         agent.set_events(sender);
     }
+    agent.set_cancel(cancel);
 
     match agent.run(&prompt) {
+        // A cancelled run writes nothing: stdout must never let a half-finished
+        // run be mistaken for an answer (ADR-0004).
+        Ok(report) if report.stopped == Stopped::Cancelled => ExitCode::Cancelled.code(),
         Ok(report) => {
             match format {
                 // The answer and exactly one newline, so `| wc -l` counts

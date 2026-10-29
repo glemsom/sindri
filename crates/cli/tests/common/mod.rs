@@ -44,9 +44,9 @@ impl Env {
     }
 
     /// The `sindri` binary with this environment applied and the workspace as
-    /// the current directory.
-    pub fn cmd(&self) -> Command {
-        let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("sindri"));
+    /// the current directory, for a test that must spawn it itself.
+    pub fn command(&self) -> std::process::Command {
+        let mut cmd = std::process::Command::new(assert_cmd::cargo::cargo_bin!("sindri"));
         cmd.current_dir(&self.workspace)
             .env("XDG_STATE_HOME", &self.state)
             .env("XDG_CONFIG_HOME", &self.config);
@@ -64,6 +64,11 @@ impl Env {
             cmd.env_remove(name);
         }
         cmd
+    }
+
+    /// The same command, for assertions.
+    pub fn cmd(&self) -> Command {
+        Command::from_std(self.command())
     }
 
     /// The workspace as the agent will see it: canonical.
@@ -90,6 +95,44 @@ pub fn run_with(env: &Env, args: &[&str], vars: &[(&str, &str)]) -> std::process
         .assert()
         .get_output()
         .clone()
+}
+
+/// Starts batch mode as a live child, so a test can signal it mid-run. Its
+/// stdin is closed, its streams are pipes, and the mock is its provider.
+pub fn spawn(env: &Env, mock: &provider::MockProvider, args: &[&str]) -> std::process::Child {
+    env.command()
+        .args(args)
+        .env("SINDRI_API_KEY", TEST_KEY)
+        .env("SINDRI_MODEL", "claude-sonnet-4-6")
+        .env("SINDRI_BASE_URL", mock.base_url())
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("spawn sindri")
+}
+
+/// Sends `signal` to `pid`, as a shell would on Ctrl-C or `kill -9`.
+pub fn signal(pid: u32, signal: i32) {
+    let pid = libc::pid_t::try_from(pid).expect("a pid fits in a pid_t");
+    // SAFETY: `kill` is called with a pid the caller just spawned and owns;
+    // a failure means the process is already gone, which the caller's own
+    // assertions will report.
+    let sent = unsafe { libc::kill(pid, signal) };
+    assert_eq!(sent, 0, "signal {signal} to {pid}");
+}
+
+/// Waits until `path` exists, then returns. A marker that never appears is the
+/// failure: the thing the test meant to interrupt never started.
+pub fn wait_until(path: &Path) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while std::time::Instant::now() < deadline {
+        if path.exists() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    panic!("{} never appeared", path.display());
 }
 
 /// A credential shaped like a real one but belonging to nothing.

@@ -12,7 +12,7 @@ mod support;
 
 use sindri_core::agent::{Event, Stopped};
 use sindri_core::provider::{Call, Message, ToolOutcome, Turn, Usage};
-use support::{Harness, answer, call, calls, exited, usage};
+use support::{Harness, Interrupt, answer, call, calls, exited, usage};
 
 /// The outcome of the first tool result in the conversation shown on turn
 /// `index`.
@@ -321,4 +321,75 @@ fn a_counter_nobody_reported_stays_absent_rather_than_becoming_zero() {
     assert_eq!(report.usage.cached_input_tokens, None);
     assert_eq!(report.usage.reasoning_tokens, None);
     assert_eq!(report.usage.total_tokens, None);
+}
+
+#[test]
+fn a_cancel_before_the_first_turn_asks_the_model_nothing() {
+    let mut h = Harness::interrupted(
+        vec![answer("never asked")],
+        Vec::new(),
+        Interrupt::BeforeFirstTurn,
+    );
+
+    let report = h.run("do something");
+
+    assert_eq!(report.stopped, Stopped::Cancelled);
+    assert_eq!(report.turns, 0, "a cancelled run spends no turn");
+    assert_eq!(report.answer, "", "a cancelled run has no answer");
+    assert!(
+        h.conversations().is_empty(),
+        "the model was never asked: {:?}",
+        h.conversations()
+    );
+}
+
+#[test]
+fn a_request_cut_short_by_a_cancel_is_a_cancellation_not_a_provider_failure() {
+    let mut h = Harness::interrupted(
+        vec![answer("never arrives")],
+        Vec::new(),
+        Interrupt::DuringFirstTurn,
+    );
+
+    let report = h.run("do something");
+
+    assert_eq!(
+        report.stopped,
+        Stopped::Cancelled,
+        "the shell must see 130, not 1"
+    );
+    assert_eq!(report.answer, "");
+}
+
+#[test]
+fn a_command_cancelled_mid_flight_ends_the_run_without_a_result_fed_back() {
+    let mut h = Harness::interrupted(
+        vec![
+            calls(vec![call("call_1", "sleep 30")]),
+            answer("never asked"),
+        ],
+        vec![exited("")],
+        Interrupt::DuringFirstCommand,
+    );
+
+    let report = h.run("probe the tree");
+
+    assert_eq!(report.stopped, Stopped::Cancelled);
+    assert_eq!(report.turns, 1, "the turn that asked for the command");
+    assert_eq!(report.tool_calls, 1, "the command was started");
+    assert_eq!(h.scripts(), vec!["sleep 30"], "and then killed");
+    let conversations = h.conversations();
+    assert_eq!(
+        conversations.len(),
+        1,
+        "no result is fed back to a model nobody is waiting for"
+    );
+    assert_eq!(
+        h.events(),
+        vec![Event::ToolCall {
+            turn: 1,
+            command: Some("sleep 30".to_string()),
+        }],
+        "the call was announced before it was killed"
+    );
 }
