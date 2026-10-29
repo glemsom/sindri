@@ -15,7 +15,7 @@ use sindri_types::ExitCode;
 
 /// Runs the command and prints one JSON object describing what happened.
 pub fn exec(timeout: Duration, command: &[String]) -> i32 {
-    let (policy, session) = match session::prepare(Enforcement::Bubblewrap) {
+    let (policy, session) = match session::prepare(&[], Enforcement::Bubblewrap) {
         Ok((session, policy)) => (policy, session),
         Err(error) => {
             eprintln!("sindri: sandbox exec: {error}");

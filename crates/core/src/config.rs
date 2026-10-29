@@ -14,6 +14,7 @@
 //! a provider's own `ANTHROPIC_API_KEY` and `ANTHROPIC_BASE_URL` are read below
 //! those, so a user with a key already exported needs no configuration at all.
 
+use std::path::PathBuf;
 use std::time::Duration;
 
 use serde::Deserialize;
@@ -82,6 +83,8 @@ pub struct Overrides {
     pub timeout: Option<u64>,
     /// `--thinking` (`Some(true)`) or `--no-thinking` (`Some(false)`).
     pub thinking: Option<bool>,
+    /// `--writable`, as written.
+    pub writable: Option<Vec<String>>,
 }
 
 /// A run's settings, resolved and validated: nothing optional that the run
@@ -102,6 +105,9 @@ pub struct Config {
     pub timeout: Duration,
     /// Whether the run pays for the model's reasoning.
     pub thinking: bool,
+    /// Extra paths granted read-write besides the workspace, checked to be
+    /// mountable.
+    pub extra_writable: Vec<PathBuf>,
 }
 
 /// Why a run could not be configured.
@@ -136,6 +142,7 @@ struct FileConfig {
     max_turns: Option<u32>,
     timeout: Option<u64>,
     thinking: Option<bool>,
+    extra_writable_paths: Option<Vec<String>>,
 }
 
 impl Config {
@@ -213,6 +220,14 @@ impl Config {
             .or(file.thinking)
             .unwrap_or(false);
 
+        let extra_writable = overrides
+            .writable
+            .or_else(|| list("SINDRI_EXTRA_WRITABLE_PATHS"))
+            .or(file.extra_writable_paths)
+            .map(|paths| extra_paths(&paths))
+            .transpose()?
+            .unwrap_or_default();
+
         Ok(Config {
             provider,
             model,
@@ -221,6 +236,7 @@ impl Config {
             max_turns,
             timeout: Duration::from_secs(timeout_secs),
             thinking,
+            extra_writable,
         })
     }
 }
@@ -249,6 +265,54 @@ fn file_path() -> String {
 /// variable left empty is how a shell un-sets one for a single command.
 fn env(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|value| !value.is_empty())
+}
+
+/// A list from the environment, `:`-separated the way `PATH` is. Present but
+/// empty is an unset variable: an exported but empty list grants nothing.
+fn list(name: &str) -> Option<Vec<String>> {
+    env(name).map(|value| {
+        value
+            .split(':')
+            .filter(|item| !item.trim().is_empty())
+            .map(str::to_string)
+            .collect()
+    })
+}
+
+/// The extras, checked before the sandbox is built so a bad path is a value
+/// error (exit 2) rather than a mystery setup failure. Emptiness is permitted:
+/// a list can be cleared by overriding it with nothing.
+fn extra_paths(given: &[String]) -> Result<Vec<PathBuf>, ConfigError> {
+    let mut accepted: Vec<PathBuf> = Vec::with_capacity(given.len());
+    for path in given {
+        let given_path = PathBuf::from(path);
+        if !given_path.is_absolute() {
+            return Err(ConfigError::Usage(format!(
+                "extra writable path `{path}` is not absolute"
+            )));
+        }
+        let canonical = given_path.canonicalize().map_err(|error| {
+            ConfigError::Usage(format!("extra writable path `{path}`: {error}"))
+        })?;
+        if canonical.parent().is_none() {
+            return Err(ConfigError::Usage(format!(
+                "extra writable path `{path}`: the whole filesystem cannot be writable"
+            )));
+        }
+        if canonical.as_os_str() != given_path.as_os_str() {
+            return Err(ConfigError::Usage(format!(
+                "extra writable path `{path}` is not canonical; use `{}`",
+                canonical.display()
+            )));
+        }
+        if accepted.contains(&canonical) {
+            return Err(ConfigError::Usage(format!(
+                "extra writable path `{path}` is granted twice"
+            )));
+        }
+        accepted.push(canonical);
+    }
+    Ok(accepted)
 }
 
 /// A toggle from the environment. Present but neither `true` nor `false` is a

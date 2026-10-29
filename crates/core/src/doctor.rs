@@ -103,6 +103,7 @@ pub fn probe() -> Result<Report, DoctorError> {
 fn build_policy(workspace: &Path, session_temp: PathBuf) -> Result<SandboxPolicy, DoctorError> {
     crate::session::policy_for(
         workspace,
+        &[],
         session_temp,
         crate::session::search_path(),
         Enforcement::Bubblewrap,

@@ -180,3 +180,142 @@ fn a_wrong_reasoning_toggle_is_a_usage_error() {
         stderr(&output)
     );
 }
+
+/// A directory the run may be granted writable, existing and canonical so the
+/// sandbox accepts it.
+fn extra_dir(env: &Env, name: &str) -> std::path::PathBuf {
+    let dir = env.workspace.parent().expect("root").join(name);
+    std::fs::create_dir_all(&dir).expect("extra dir");
+    dir.canonicalize().expect("canonical extra")
+}
+
+#[test]
+fn the_file_grants_an_extra_writable_path_to_both_enforcement_and_description() {
+    let env = Env::new();
+    let extra = extra_dir(&env, "shared");
+    write_config(
+        &env,
+        &format!(
+            "model = \"claude-from-file\"\nextra_writable_paths = [\"{}\"]\n",
+            extra.display()
+        ),
+    );
+
+    let mock = MockProvider::start(vec![
+        Reply::tool_call(
+            "t1",
+            &format!("touch {}/from-the-agent", extra.display()),
+            "",
+        ),
+        Reply::answer("done"),
+    ]);
+    let output = run(
+        &env,
+        &mock,
+        &["-b", "write over there"],
+        &[("SINDRI_API_KEY", TEST_KEY)],
+    );
+
+    assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
+    let body = mock.requests()[0].json().to_string();
+    assert!(
+        body.contains(&extra.display().to_string()),
+        "the model is told the extra path is writable: {body}"
+    );
+    assert!(
+        extra.join("from-the-agent").is_file(),
+        "the extra path really is writable, not merely described"
+    );
+}
+
+#[test]
+fn the_environment_and_a_flag_override_the_files_extra_paths() {
+    let env = Env::new();
+    let from_file = extra_dir(&env, "from-file");
+    let from_env = extra_dir(&env, "from-env");
+    let from_flag = extra_dir(&env, "from-flag");
+    write_config(
+        &env,
+        &format!(
+            "model = \"claude-from-file\"\nextra_writable_paths = [\"{}\"]\n",
+            from_file.display()
+        ),
+    );
+
+    let mock = MockProvider::start(vec![Reply::answer("ok")]);
+    let output = run(
+        &env,
+        &mock,
+        &["-b", "summarise this"],
+        &[
+            ("SINDRI_API_KEY", TEST_KEY),
+            (
+                "SINDRI_EXTRA_WRITABLE_PATHS",
+                &from_env.display().to_string(),
+            ),
+        ],
+    );
+    assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
+    let body = only_request(&mock).json().to_string();
+    assert!(
+        body.contains(&from_env.display().to_string())
+            && !body.contains(&from_file.display().to_string()),
+        "the environment replaces the file's extra paths rather than adding to them: {body}"
+    );
+
+    let mock = MockProvider::start(vec![Reply::answer("ok")]);
+    let output = run(
+        &env,
+        &mock,
+        &[
+            "-b",
+            "summarise this",
+            "--writable",
+            &from_flag.display().to_string(),
+        ],
+        &[
+            ("SINDRI_API_KEY", TEST_KEY),
+            (
+                "SINDRI_EXTRA_WRITABLE_PATHS",
+                &from_env.display().to_string(),
+            ),
+        ],
+    );
+    assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
+    let body = only_request(&mock).json().to_string();
+    assert!(
+        body.contains(&from_flag.display().to_string())
+            && !body.contains(&from_env.display().to_string()),
+        "the flag replaces the environment's extra paths: {body}"
+    );
+}
+
+#[test]
+fn an_extra_path_that_could_not_be_mounted_is_a_usage_error() {
+    let env = Env::new();
+    let mock = MockProvider::start(vec![Reply::answer("ok")]);
+
+    for bad in ["relative/dir", "/", "/nonexistent-sindri-extra"] {
+        let output = run(
+            &env,
+            &mock,
+            &["-b", "summarise this", "--writable", bad],
+            &[
+                ("SINDRI_API_KEY", TEST_KEY),
+                ("SINDRI_MODEL", "claude-sonnet-4-6"),
+            ],
+        );
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "`{bad}` is a usage error: {}",
+            stderr(&output)
+        );
+        let message = stderr(&output);
+        assert!(
+            message.contains(bad),
+            "the error names the path `{bad}`: {message}"
+        );
+    }
+    assert_eq!(mock.requests().len(), 0, "no run leaves the machine");
+}

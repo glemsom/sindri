@@ -30,6 +30,10 @@ struct Cli {
     /// Override how many turns the run may take.
     #[arg(long, value_name = "N")]
     max_turns: Option<u32>,
+    /// Grant an extra directory read-write inside the sandbox. Repeatable;
+    /// replaces the configured extras rather than adding to them.
+    #[arg(long, value_name = "PATH")]
+    writable: Vec<String>,
     /// Override how long one command may run, in seconds.
     #[arg(long, value_name = "SECONDS")]
     timeout: Option<u64>,
@@ -97,6 +101,7 @@ fn main() {
                     base_url: cli.base_url,
                     max_turns: cli.max_turns,
                     timeout: cli.timeout,
+                    writable: (!cli.writable.is_empty()).then_some(cli.writable),
                     thinking: match (cli.thinking, cli.no_thinking) {
                         (true, _) => Some(true),
                         (_, true) => Some(false),

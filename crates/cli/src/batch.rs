@@ -29,6 +29,8 @@ pub struct Flags {
     /// Pay for the model's reasoning, or refuse to: both override the file
     /// and the environment (ADR-0005).
     pub thinking: Option<bool>,
+    /// `--writable`, as written.
+    pub writable: Option<Vec<String>>,
     /// Report the run on stderr when it is over.
     pub verbose: bool,
 }
@@ -42,6 +44,7 @@ impl From<Flags> for Overrides {
             max_turns: flags.max_turns,
             timeout: flags.timeout,
             thinking: flags.thinking,
+            writable: flags.writable,
         }
     }
 }
@@ -59,7 +62,8 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
         Err(error) => return config_error(&error),
     };
 
-    let (session, policy) = match session::prepare(Enforcement::Bubblewrap) {
+    let (session, policy) = match session::prepare(&config.extra_writable, Enforcement::Bubblewrap)
+    {
         Ok(prepared) => prepared,
         Err(error) => {
             eprintln!("sindri: sandbox: {error}");

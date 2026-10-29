@@ -10,15 +10,17 @@ use crate::sandbox::{
     Enforcement, FALLBACK_PATH, NetworkPosture, PolicyError, SandboxPolicy, WritableSet,
 };
 
-/// The policy every run starts from: the workspace writable, everything else
-/// read-only, network shared, bubblewrap unless asked otherwise.
+/// The policy every run starts from: the workspace and the extras writable,
+/// everything else read-only, network shared, bubblewrap unless asked otherwise.
 pub fn policy_for(
     workspace: &std::path::Path,
+    extras: &[PathBuf],
     session_temp: PathBuf,
     search_path: String,
     enforcement: Enforcement,
 ) -> Result<SandboxPolicy, PolicyError> {
-    let writable = WritableSet::new([workspace.to_path_buf()])?;
+    let writable =
+        WritableSet::new(std::iter::once(workspace.to_path_buf()).chain(extras.iter().cloned()))?;
     SandboxPolicy::new(
         writable,
         session_temp,
@@ -45,14 +47,24 @@ pub fn begin() -> io::Result<SessionDir> {
 }
 
 /// One run's session and the policy its commands are bounded by: the workspace
-/// writable, everything else read-only. The one place every front end builds
-/// it, so `doctor`, the debug subcommand and the turn loop cannot drift apart.
-pub fn prepare(enforcement: Enforcement) -> Result<(SessionDir, SandboxPolicy), String> {
+/// and the configured extras writable, everything else read-only. The one place
+/// every front end builds it, so `doctor`, the debug subcommand and the turn
+/// loop cannot drift apart.
+pub fn prepare(
+    extras: &[PathBuf],
+    enforcement: Enforcement,
+) -> Result<(SessionDir, SandboxPolicy), String> {
     let session = begin().map_err(|error| error.to_string())?;
     let workspace = std::env::current_dir()
         .and_then(|dir| dir.canonicalize())
         .map_err(|error| error.to_string())?;
-    let policy = policy_for(&workspace, session.temp(), search_path(), enforcement)
-        .map_err(|error| error.to_string())?;
+    let policy = policy_for(
+        &workspace,
+        extras,
+        session.temp(),
+        search_path(),
+        enforcement,
+    )
+    .map_err(|error| error.to_string())?;
     Ok((session, policy))
 }

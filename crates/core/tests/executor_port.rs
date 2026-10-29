@@ -96,6 +96,7 @@ fn the_real_executor_honours_the_unsafe_enforcement() {
     let workspace = scratch.path().canonicalize().expect("canonical");
     let policy = sindri_core::session::policy_for(
         &workspace,
+        &[],
         session_temp,
         sindri_core::session::search_path(),
         Enforcement::YoloUnsafe,
