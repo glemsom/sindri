@@ -148,3 +148,33 @@ fn a_batch_run_with_no_prompt_at_all_is_a_usage_error() {
     );
     assert_eq!(mock.requests().len(), 0, "no prompt sends no request");
 }
+
+#[test]
+fn a_trailing_newline_from_the_model_does_not_become_two() {
+    let env = Env::new();
+    let mock = MockProvider::start(vec![Reply::answer("Two files changed.\n\n")]);
+    let output = batch(&env, &mock, &["-b", "summarise this"], "");
+
+    assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
+    assert_eq!(
+        stdout(&output),
+        "Two files changed.\n",
+        "the answer is followed by exactly one newline, whatever the model sent"
+    );
+}
+
+#[test]
+fn batch_mode_alongside_a_subcommand_is_a_usage_error() {
+    let env = Env::new();
+    let mock = MockProvider::start(vec![Reply::answer("never sent")]);
+    let output = batch(&env, &mock, &["-b", "summarise this", "doctor"], "");
+
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "one run, one front end: {}",
+        stderr(&output)
+    );
+    assert_eq!(stdout(&output), "");
+    assert_eq!(mock.requests().len(), 0, "nothing is asked");
+}

@@ -29,7 +29,7 @@ struct Cli {
     /// Override how many turns the run may take.
     #[arg(long, value_name = "N")]
     max_turns: Option<u32>,
-    /// Override the per-request timeout, in seconds.
+    /// Override how long one command may run, in seconds.
     #[arg(long, value_name = "SECONDS")]
     timeout: Option<u64>,
     #[command(subcommand)]
@@ -62,6 +62,11 @@ enum SandboxCommand {
 
 fn main() {
     let cli = Cli::parse();
+    if cli.batch.is_some() && cli.command.is_some() {
+        std::process::exit(batch::usage_error(
+            "batch mode takes no subcommand: `sindri -b \"your prompt\"`",
+        ));
+    }
     let code = match cli.command {
         Some(Command::Doctor) => doctor::run(),
         Some(Command::Sandbox {
@@ -91,7 +96,10 @@ fn main() {
 /// into a program that ignores it is data lost without a word (ADR-0004).
 fn refuse_stdin() -> i32 {
     if std::io::stdin().is_terminal() {
-        let _ = Cli::command().print_help();
+        // A bare invocation is a usage error, so its help goes where errors go:
+        // stdout stays empty for a script that ran the wrong thing.
+        let help = Cli::command().render_help();
+        eprint!("{help}");
         return sindri_types::ExitCode::UsageError.code();
     }
     batch::usage_error(r#"piped stdin needs -b: `… | sindri -b "your prompt"`"#)

@@ -7,6 +7,11 @@
 //! a value that is present but wrong is a usage error (exit 2), while a value
 //! the run cannot do without is a model error (exit 1) with a hint naming
 //! every way to set it.
+//!
+//! The environment's keys mirror the file's: `SINDRI_PROVIDER`, `SINDRI_MODEL`,
+//! `SINDRI_API_KEY`, `SINDRI_BASE_URL`, `SINDRI_MAX_TURNS`, `SINDRI_TIMEOUT`;
+//! a provider's own `ANTHROPIC_API_KEY` and `ANTHROPIC_BASE_URL` are read below
+//! those, so a user with a key already exported needs no configuration at all.
 
 use std::time::Duration;
 

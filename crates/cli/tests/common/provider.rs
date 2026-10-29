@@ -50,10 +50,15 @@ impl Reply {
     pub fn answer(text: &str) -> Self {
         Reply {
             status: 200,
-            body: format!(
-                r#"{{"id":"msg_mock","type":"message","role":"assistant","model":"claude-mock","content":[{{"type":"text","text":"{}"}}],"stop_reason":"end_turn","usage":{{"input_tokens":11,"output_tokens":7}}}}"#,
-                text.replace('\\', r"\\").replace('"', "\\\"")
-            ),
+            body: json(serde_json::json!({
+                "id": "msg_mock",
+                "type": "message",
+                "role": "assistant",
+                "model": "claude-mock",
+                "content": [{"type": "text", "text": text}],
+                "stop_reason": "end_turn",
+                "usage": {"input_tokens": 11, "output_tokens": 7},
+            })),
         }
     }
 
@@ -62,12 +67,17 @@ impl Reply {
     pub fn error(status: u16, kind: &str, message: &str) -> Self {
         Reply {
             status,
-            body: format!(
-                r#"{{"type":"error","error":{{"type":"{kind}","message":"{}"}}}}"#,
-                message.replace('"', "\\\"")
-            ),
+            body: json(serde_json::json!({
+                "type": "error",
+                "error": {"type": kind, "message": message},
+            })),
         }
     }
+}
+
+/// A body as the wire sends it: one line, escaped by serde.
+fn json(value: Value) -> String {
+    serde_json::to_string(&value).expect("serialize canned reply")
 }
 
 /// A running mock provider.
