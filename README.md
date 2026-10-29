@@ -25,6 +25,22 @@ silently swallowed. Exit codes: `0` answer, `1` model or provider error, `2`
 usage error, `3` sandbox or setup failure, `100` turn cap — so a script can
 branch without parsing prose.
 
+### For scripts
+
+`--format json` prints one compact object on one line instead of the answer:
+
+```console
+$ sindri -b "summarise this diff" --format json | jq -r .session
+{"answer":"…","session":"…","turns":2,"stopped":"final","model":"claude-sonnet-4-6","duration_ms":4312,"tool_calls":1,"usage":{…}}
+```
+
+The field order is fixed and later fields only append, so a parser written
+today keeps working. `stopped` is one of `final`, `max_turns`, `cancelled`,
+`error`. Nothing the run has nothing to say about — an unreported model, a
+provider that billed nothing — is left out rather than sent as `null`, so a
+script can tell "not available" from "empty". Exit codes do not depend on the
+format. See [ADR-0004](docs/adr/0004-output-contract-and-exit-codes.md).
+
 ## Configuration
 
 One file, `$XDG_CONFIG_HOME/sindri/config.toml`, holding provider, model, base

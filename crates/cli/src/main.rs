@@ -46,6 +46,10 @@ struct Cli {
     /// environment says.
     #[arg(long = "no-thinking")]
     no_thinking: bool,
+    /// Shape of the run's output: `text` is the answer plus one newline,
+    /// `json` is one compact object for a script (ADR-0004).
+    #[arg(long, value_name = "FORMAT", default_value = "text")]
+    format: batch::OutputFormat,
     /// Report the run on stderr when it is over: reasoning, one line per tool
     /// call, and the session it was recorded in. stdout is untouched.
     #[arg(short = 'v', long = "verbose")]
@@ -107,6 +111,7 @@ fn main() {
             Some(prompt) => batch::run(
                 prompt,
                 batch::Flags {
+                    format: cli.format,
                     provider: cli.provider,
                     model: cli.model,
                     base_url: cli.base_url,
