@@ -26,8 +26,9 @@ pub struct Flags {
     pub base_url: Option<String>,
     pub max_turns: Option<u32>,
     pub timeout: Option<u64>,
-    /// Pay for the model's reasoning.
-    pub thinking: bool,
+    /// Pay for the model's reasoning, or refuse to: both override the file
+    /// and the environment (ADR-0005).
+    pub thinking: Option<bool>,
     /// Report the run on stderr when it is over.
     pub verbose: bool,
 }
@@ -40,6 +41,7 @@ impl From<Flags> for Overrides {
             base_url: flags.base_url,
             max_turns: flags.max_turns,
             timeout: flags.timeout,
+            thinking: flags.thinking,
         }
     }
 }
@@ -52,7 +54,6 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     };
 
     let verbose = flags.verbose;
-    let thinking = flags.thinking;
     let config = match Config::resolve(flags.into()) {
         Ok(config) => config,
         Err(error) => return config_error(&error),
@@ -76,7 +77,7 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
         Box::new(Client::new(&config)),
         tool,
         config.max_turns,
-        thinking,
+        config.thinking,
     );
     // Events are buffered only for `-v`: a silent run should not carry a
     // transcript nobody asked for.

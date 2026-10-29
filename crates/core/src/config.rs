@@ -9,7 +9,8 @@
 //! every way to set it.
 //!
 //! The environment's keys mirror the file's: `SINDRI_PROVIDER`, `SINDRI_MODEL`,
-//! `SINDRI_API_KEY`, `SINDRI_BASE_URL`, `SINDRI_MAX_TURNS`, `SINDRI_TIMEOUT`;
+//! `SINDRI_API_KEY`, `SINDRI_BASE_URL`, `SINDRI_MAX_TURNS`, `SINDRI_TIMEOUT`,
+//! `SINDRI_THINKING`, `SINDRI_EXTRA_WRITABLE_PATHS`;
 //! a provider's own `ANTHROPIC_API_KEY` and `ANTHROPIC_BASE_URL` are read below
 //! those, so a user with a key already exported needs no configuration at all.
 
@@ -79,6 +80,8 @@ pub struct Overrides {
     pub max_turns: Option<u32>,
     /// `--timeout`, in seconds.
     pub timeout: Option<u64>,
+    /// `--thinking` (`Some(true)`) or `--no-thinking` (`Some(false)`).
+    pub thinking: Option<bool>,
 }
 
 /// A run's settings, resolved and validated: nothing optional that the run
@@ -97,6 +100,8 @@ pub struct Config {
     pub max_turns: u32,
     /// How long one command may run inside the sandbox.
     pub timeout: Duration,
+    /// Whether the run pays for the model's reasoning.
+    pub thinking: bool,
 }
 
 /// Why a run could not be configured.
@@ -118,8 +123,11 @@ impl ConfigError {
 }
 
 /// The config file's own shape: every key optional, every key a string or a
-/// count, and nothing else. A key the file does not name is left unset.
+/// count. A key the file does not name is left unset; a key the schema does not
+/// name is an error, because a typo'd `max_turn` would otherwise run on
+/// defaults the user never chose.
 #[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct FileConfig {
     provider: Option<String>,
     model: Option<String>,
@@ -127,6 +135,7 @@ struct FileConfig {
     base_url: Option<String>,
     max_turns: Option<u32>,
     timeout: Option<u64>,
+    thinking: Option<bool>,
 }
 
 impl Config {
@@ -198,6 +207,12 @@ impl Config {
                 ))
             })?;
 
+        let thinking = overrides
+            .thinking
+            .or(boolean("SINDRI_THINKING")?)
+            .or(file.thinking)
+            .unwrap_or(false);
+
         Ok(Config {
             provider,
             model,
@@ -205,6 +220,7 @@ impl Config {
             base_url,
             max_turns,
             timeout: Duration::from_secs(timeout_secs),
+            thinking,
         })
     }
 }
@@ -233,6 +249,21 @@ fn file_path() -> String {
 /// variable left empty is how a shell un-sets one for a single command.
 fn env(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|value| !value.is_empty())
+}
+
+/// A toggle from the environment. Present but neither `true` nor `false` is a
+/// usage error, so a typo cannot silently mean "off".
+fn boolean(name: &str) -> Result<Option<bool>, ConfigError> {
+    let Some(value) = env(name) else {
+        return Ok(None);
+    };
+    match value.trim() {
+        "true" | "1" | "yes" | "on" => Ok(Some(true)),
+        "false" | "0" | "no" | "off" => Ok(Some(false)),
+        other => Err(ConfigError::Usage(format!(
+            "{name} is not a toggle: `{other}` (use true or false)"
+        ))),
+    }
 }
 
 /// A count from the environment. Present but unparsable is a usage error: a

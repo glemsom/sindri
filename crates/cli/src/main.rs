@@ -35,8 +35,12 @@ struct Cli {
     timeout: Option<u64>,
     /// Pay for the model's reasoning. Off by default, because cheap tasks
     /// should stay cheap.
-    #[arg(long)]
+    #[arg(long, conflicts_with = "no_thinking")]
     thinking: bool,
+    /// Do not pay for the model's reasoning, whatever the config or the
+    /// environment says.
+    #[arg(long = "no-thinking")]
+    no_thinking: bool,
     /// Report the run on stderr when it is over: reasoning, one line per tool
     /// call, and the session it was recorded in. stdout is untouched.
     #[arg(short = 'v', long = "verbose")]
@@ -93,7 +97,11 @@ fn main() {
                     base_url: cli.base_url,
                     max_turns: cli.max_turns,
                     timeout: cli.timeout,
-                    thinking: cli.thinking,
+                    thinking: match (cli.thinking, cli.no_thinking) {
+                        (true, _) => Some(true),
+                        (_, true) => Some(false),
+                        _ => None,
+                    },
                     verbose: cli.verbose,
                 },
             ),
