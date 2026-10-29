@@ -17,6 +17,26 @@ pub fn state_dir() -> io::Result<PathBuf> {
     }
 }
 
+/// `$XDG_CONFIG_HOME/sindri`, falling back to `$HOME/.config/sindri`.
+pub fn config_dir() -> io::Result<PathBuf> {
+    match std::env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty()) {
+        Some(dir) => Ok(PathBuf::from(dir).join("sindri")),
+        None => {
+            let home = std::env::var_os("HOME")
+                .filter(|v| !v.is_empty())
+                .ok_or_else(|| io::Error::other("neither XDG_CONFIG_HOME nor HOME is set"))?;
+            Ok(PathBuf::from(home).join(".config/sindri"))
+        }
+    }
+}
+
+/// The one config file a run reads (ADR-0005). Never a repository-local one: a
+/// checked-in file that grants writable paths turns cloning into privilege
+/// escalation.
+pub fn config_file() -> io::Result<PathBuf> {
+    Ok(config_dir()?.join("config.toml"))
+}
+
 /// One run's directory: `<state>/sindri/sessions/<guid>` (ADR-0006).
 #[derive(Debug, Clone)]
 pub struct SessionDir {

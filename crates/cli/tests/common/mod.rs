@@ -10,6 +10,8 @@
     reason = "each test binary uses a different slice of the harness"
 )]
 
+pub mod provider;
+
 use std::path::{Path, PathBuf};
 
 use assert_cmd::Command;
@@ -48,6 +50,19 @@ impl Env {
         cmd.current_dir(&self.workspace)
             .env("XDG_STATE_HOME", &self.state)
             .env("XDG_CONFIG_HOME", &self.config);
+        // The host's own settings must not leak into a test's run.
+        for name in [
+            "SINDRI_PROVIDER",
+            "SINDRI_MODEL",
+            "SINDRI_API_KEY",
+            "SINDRI_BASE_URL",
+            "SINDRI_MAX_TURNS",
+            "SINDRI_TIMEOUT",
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_BASE_URL",
+        ] {
+            cmd.env_remove(name);
+        }
         cmd
     }
 
@@ -55,6 +70,38 @@ impl Env {
     pub fn canonical_workspace(&self) -> PathBuf {
         self.workspace.canonicalize().expect("canonical workspace")
     }
+}
+
+/// A credential shaped like a real one but belonging to nothing.
+pub const TEST_KEY: &str = "sk-ant-test-not-a-real-key";
+
+/// Everything a process wrote.
+pub fn stdout(output: &std::process::Output) -> String {
+    String::from_utf8_lossy(&output.stdout).to_string()
+}
+
+/// Everything a process complained about.
+pub fn stderr(output: &std::process::Output) -> String {
+    String::from_utf8_lossy(&output.stderr).to_string()
+}
+
+/// Runs batch mode against `mock`, with a credential, a model and the mock's
+/// base URL supplied through the environment.
+pub fn batch(
+    env: &Env,
+    mock: &provider::MockProvider,
+    args: &[&str],
+    stdin: &str,
+) -> std::process::Output {
+    let mut cmd = env.cmd();
+    cmd.args(args)
+        .env("SINDRI_API_KEY", TEST_KEY)
+        .env("SINDRI_MODEL", "claude-sonnet-4-6")
+        .env("SINDRI_BASE_URL", mock.base_url())
+        .write_stdin(stdin.to_string())
+        .assert()
+        .get_output()
+        .clone()
 }
 
 /// Every binary the sandbox must be able to resolve: the required set, plus

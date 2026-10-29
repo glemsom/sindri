@@ -1,16 +1,39 @@
 //! The `sindri` binary: the batch front end. Argument parsing and output only;
 //! every decision lives in `sindri-core`.
 
+mod batch;
 mod doctor;
 mod sandbox;
 
-use clap::{Parser, Subcommand};
+use std::io::IsTerminal;
+
+use clap::{CommandFactory, Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(name = "sindri", version = sindri_types::VERSION_LONG, about = "A Unix filter with an agent behind it")]
 struct Cli {
+    /// Batch mode: ask the model and print the answer. The prompt is the
+    /// argument; piped stdin is appended after it as context. With no
+    /// argument, stdin is the prompt.
+    #[arg(short = 'b', long = "batch", value_name = "PROMPT", num_args = 0..=1)]
+    batch: Option<Option<String>>,
+    /// Override the configured provider (`anthropic`).
+    #[arg(long, value_name = "NAME")]
+    provider: Option<String>,
+    /// Override the configured model.
+    #[arg(long, value_name = "NAME")]
+    model: Option<String>,
+    /// Override the configured provider base URL.
+    #[arg(long, value_name = "URL")]
+    base_url: Option<String>,
+    /// Override how many turns the run may take.
+    #[arg(long, value_name = "N")]
+    max_turns: Option<u32>,
+    /// Override how long one command may run, in seconds.
+    #[arg(long, value_name = "SECONDS")]
+    timeout: Option<u64>,
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 #[derive(Subcommand)]
@@ -39,21 +62,45 @@ enum SandboxCommand {
 
 fn main() {
     let cli = Cli::parse();
+    if cli.batch.is_some() && cli.command.is_some() {
+        std::process::exit(batch::usage_error(
+            "batch mode takes no subcommand: `sindri -b \"your prompt\"`",
+        ));
+    }
     let code = match cli.command {
-        Command::Doctor => doctor::run(),
-        Command::Sandbox {
+        Some(Command::Doctor) => doctor::run(),
+        Some(Command::Sandbox {
             command: SandboxCommand::Exec { timeout, command },
-        } => match sindri_core::exec::timeout_from_secs(timeout) {
+        }) => match sindri_core::exec::timeout_from_secs(timeout) {
             Ok(timeout) => sandbox::exec(timeout, &command),
-            Err(message) => usage_error(&message),
+            Err(message) => batch::usage_error(&message),
+        },
+        None => match cli.batch {
+            Some(prompt) => batch::run(
+                prompt,
+                batch::Flags {
+                    provider: cli.provider,
+                    model: cli.model,
+                    base_url: cli.base_url,
+                    max_turns: cli.max_turns,
+                    timeout: cli.timeout,
+                },
+            ),
+            None => refuse_stdin(),
         },
     };
     std::process::exit(code);
 }
 
-/// Rejects a bad argument the way the exit-code contract requires: exit 2, one
-/// line on stderr.
-fn usage_error(message: &str) -> i32 {
-    eprintln!("sindri: {message}");
-    sindri_types::ExitCode::UsageError.code()
+/// A non-batch launch with a pipe is refused rather than drained: data piped
+/// into a program that ignores it is data lost without a word (ADR-0004).
+fn refuse_stdin() -> i32 {
+    if std::io::stdin().is_terminal() {
+        // A bare invocation is a usage error, so its help goes where errors go:
+        // stdout stays empty for a script that ran the wrong thing.
+        let help = Cli::command().render_help();
+        eprint!("{help}");
+        return sindri_types::ExitCode::UsageError.code();
+    }
+    batch::usage_error(r#"piped stdin needs -b: `… | sindri -b "your prompt"`"#)
 }
