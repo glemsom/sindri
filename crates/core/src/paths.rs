@@ -2,7 +2,7 @@
 //! identifiers that name a record (ADR-0006).
 
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// `$XDG_STATE_HOME/sindri`, falling back to `$HOME/.local/state/sindri`.
 pub fn state_dir() -> io::Result<PathBuf> {
@@ -59,6 +59,17 @@ impl SessionDir {
     /// Where over-long command output is written, one file per stream.
     pub fn spill(&self) -> PathBuf {
         self.temp().join("spill")
+    }
+
+    /// One session directory as it already exists on disk: what a reader opens,
+    /// and what a test points at a temporary state directory.
+    pub fn at(root: PathBuf) -> Self {
+        SessionDir { root }
+    }
+
+    /// The directory itself, where the record's documents live (ADR-0006).
+    pub fn root(&self) -> &Path {
+        &self.root
     }
 
     /// The GUID this run is recorded under (ADR-0006).

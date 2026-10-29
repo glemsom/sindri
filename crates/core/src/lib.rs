@@ -9,5 +9,6 @@ pub mod exec;
 pub mod output;
 pub mod paths;
 pub mod provider;
+pub mod record;
 pub mod sandbox;
 pub mod session;

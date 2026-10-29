@@ -1,0 +1,229 @@
+//! Reading a record back: `sindri sessions show <id>` and, later, a TUI's
+//! session restore, from the same files the run wrote (ADR-0006).
+
+use std::fmt;
+use std::io;
+use std::path::{Path, PathBuf};
+
+use super::entry::{Entry, Meta};
+use crate::paths::{SessionDir, state_dir};
+
+/// A record that cannot be shown, said in a way a shell can act on.
+#[derive(Debug)]
+pub enum ShowError {
+    /// The id is not a session GUID: never a path, so a lookup cannot escape.
+    BadId { id: String },
+    /// No session is recorded under that id.
+    Missing { path: PathBuf },
+    /// The record is there and cannot be read.
+    Unreadable { path: PathBuf, source: io::Error },
+    /// The record is there and is not a record.
+    Corrupt { path: PathBuf, detail: String },
+}
+
+impl fmt::Display for ShowError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ShowError::BadId { id } => write!(f, "`{id}` is not a session id"),
+            ShowError::Missing { path } => write!(f, "no session recorded in {}", path.display()),
+            ShowError::Unreadable { path, source } => {
+                write!(f, "{} cannot be read: {source}", path.display())
+            }
+            ShowError::Corrupt { path, detail } => {
+                write!(f, "{} is not a record: {detail}", path.display())
+            }
+        }
+    }
+}
+
+impl std::error::Error for ShowError {}
+
+/// One run as it was written down: its metadata and its transcript in order.
+pub struct Stored {
+    /// What `session.json` says.
+    pub meta: Meta,
+    /// What `transcript.jsonl` says, line for line.
+    pub entries: Vec<Entry>,
+}
+
+impl Stored {
+    /// The record a session GUID names, read from the state directory.
+    pub fn load(id: &str) -> Result<Self, ShowError> {
+        if !is_session_id(id) {
+            return Err(ShowError::BadId { id: id.to_string() });
+        }
+        let session = state_dir()
+            .map(|state| SessionDir::at(state.join("sessions").join(id)))
+            .map_err(|source| ShowError::Unreadable {
+                path: PathBuf::from("<state dir>"),
+                source,
+            })?;
+        Stored::load_in(&session)
+    }
+
+    /// The record in one session directory.
+    pub fn load_in(session: &SessionDir) -> Result<Self, ShowError> {
+        let root = session.root();
+        let meta = read(&root.join("session.json"))?;
+        let meta: Meta = serde_json::from_str(&meta).map_err(|error| ShowError::Corrupt {
+            path: root.join("session.json"),
+            detail: error.to_string(),
+        })?;
+
+        let path = root.join("transcript.jsonl");
+        let text = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => String::new(),
+            Err(source) => return Err(ShowError::Unreadable { path, source }),
+        };
+        let mut entries = Vec::new();
+        for line in text.lines().filter(|line| !line.trim().is_empty()) {
+            entries.push(
+                serde_json::from_str(line).map_err(|error| ShowError::Corrupt {
+                    path: path.clone(),
+                    detail: error.to_string(),
+                })?,
+            );
+        }
+        Ok(Stored { meta, entries })
+    }
+
+    /// The record as a human reads it: who ran, what they were asked, what the
+    /// model said, what it ran and what came back.
+    pub fn render(&self) -> String {
+        let mut out = format!(
+            "session {} ({}/{}); recorded by sindri {}\n",
+            self.meta.id, self.meta.provider, self.meta.model, self.meta.version
+        );
+        out.push_str(&format!("sandbox: {}\n", self.meta.enforcement));
+        out.push_str(&format!(
+            "started: {} ms since the epoch\n",
+            self.meta.started_ms
+        ));
+        match (self.meta.ended_ms, self.meta.duration_ms) {
+            (Some(ended), Some(duration)) => {
+                out.push_str(&format!("ended: {ended} after {duration} ms\n"));
+            }
+            (Some(ended), None) => out.push_str(&format!("ended: {ended}\n")),
+            (None, _) => out.push_str("ended: never — the run did not finish\n"),
+        }
+        out.push_str(&format!("stopped: {}", self.meta.stopped));
+        if let (Some(turns), Some(tool_calls)) = (self.meta.turns, self.meta.tool_calls) {
+            out.push_str(&format!(
+                ", after {turns} turns and {tool_calls} tool calls"
+            ));
+        }
+        out.push('\n');
+        if let Some(answered) = &self.meta.answered_model {
+            out.push_str(&format!("answered by: {answered}\n"));
+        }
+        out.push_str(&format!("usage: {}\n", usage(self.meta.usage.as_ref())));
+        if let Some(error) = &self.meta.error {
+            out.push_str(&format!("error: {error}\n"));
+        }
+
+        for entry in &self.entries {
+            match entry {
+                Entry::User { text } => {
+                    out.push_str("\n--- user ---\n");
+                    out.push_str(text);
+                    end_line(&mut out, text);
+                }
+                Entry::Assistant {
+                    turn,
+                    text,
+                    reasoning,
+                } => {
+                    out.push_str(&format!("\n--- assistant (turn {turn}) ---\n"));
+                    out.push_str(text);
+                    end_line(&mut out, text);
+                    if let Some(reasoning) = reasoning {
+                        out.push_str(&format!("reasoning: {reasoning}\n"));
+                    }
+                }
+                Entry::ToolCall {
+                    turn,
+                    call_id,
+                    tool,
+                    command,
+                    problem,
+                } => {
+                    out.push_str(&format!("\n--- {tool} (turn {turn}) {call_id} ---\n"));
+                    match command {
+                        Some(command) => {
+                            out.push_str(&format!("$ {command}\n"));
+                        }
+                        None => out.push_str(&format!(
+                            "not run: {}\n",
+                            problem.as_deref().unwrap_or("the arguments were unusable")
+                        )),
+                    }
+                }
+                Entry::ToolResult {
+                    turn,
+                    call_id,
+                    content,
+                    is_error,
+                } => {
+                    let failed = if *is_error { " (failed)" } else { "" };
+                    out.push_str(&format!(
+                        "\n--- result (turn {turn}) {call_id}{failed} ---\n"
+                    ));
+                    for line in content.lines() {
+                        out.push_str(&format!("  {line}\n"));
+                    }
+                }
+            }
+        }
+        out
+    }
+}
+
+/// One file of the record, read as text.
+fn read(path: &Path) -> Result<String, ShowError> {
+    std::fs::read_to_string(path).map_err(|source| {
+        if source.kind() == io::ErrorKind::NotFound {
+            ShowError::Missing {
+                path: path.to_path_buf(),
+            }
+        } else {
+            ShowError::Unreadable {
+                path: path.to_path_buf(),
+                source,
+            }
+        }
+    })
+}
+
+/// A transcript block always ends on its own line, so the next heading starts
+/// one rather than running on.
+fn end_line(out: &mut String, text: &str) {
+    if !text.ends_with('\n') {
+        out.push('\n');
+    }
+}
+
+/// The counters the provider reported, or that it reported nothing.
+fn usage(usage: Option<&crate::provider::Usage>) -> String {
+    let Some(usage) = usage else {
+        return "none reported".to_string();
+    };
+    let counter = |name: &str, value: Option<u64>| match value {
+        Some(value) => format!("{name} {value}"),
+        None => format!("{name} unreported"),
+    };
+    [
+        counter("input", usage.input_tokens),
+        counter("output", usage.output_tokens),
+        counter("cached", usage.cached_input_tokens),
+        counter("reasoning", usage.reasoning_tokens),
+        counter("total", usage.total_tokens),
+    ]
+    .join(", ")
+}
+
+/// Whether `id` is a session GUID: hex and dashes only, so a lookup can never be
+/// a path and `sessions show ../../etc` can never leave the state directory.
+fn is_session_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
+}
