@@ -16,6 +16,9 @@ Credentials come from the provider's environment variable
 
 **No repository-local config file.** A checked-in config that grants extra
 writable paths turns every `git clone && sindri` into a privilege escalation.
+The name such a file would have, `.sindri.toml` in the working directory, is
+looked for only so the refusal can be said once on stderr; the file is never
+opened.
 
 ## Consequences
 

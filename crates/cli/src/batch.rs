@@ -61,6 +61,14 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
         Ok(config) => config,
         Err(error) => return config_error(&error),
     };
+    // Nothing written by a clone may configure the agent, and staying silent
+    // about it would leave a user editing a file that is read by nobody.
+    if let Some(path) = &config.refused_repo_config {
+        eprintln!(
+            "sindri: ignoring {}: a config committed in a repository is never honoured (ADR-0005)",
+            path.display()
+        );
+    }
 
     let (session, policy) = match session::prepare(&config.extra_writable, Enforcement::Bubblewrap)
     {

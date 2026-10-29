@@ -14,7 +14,7 @@
 //! a provider's own `ANTHROPIC_API_KEY` and `ANTHROPIC_BASE_URL` are read below
 //! those, so a user with a key already exported needs no configuration at all.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde::Deserialize;
@@ -108,7 +108,14 @@ pub struct Config {
     /// Extra paths granted read-write besides the workspace, checked to be
     /// mountable.
     pub extra_writable: Vec<PathBuf>,
+    /// A repository-local config that was found and refused, for the front end
+    /// to note once. It is never read (ADR-0005).
+    pub refused_repo_config: Option<PathBuf>,
 }
+
+/// The name a config committed in a repository would have. It is looked for so
+/// the refusal can be said out loud, and never opened.
+pub const REPO_CONFIG_NAME: &str = ".sindri.toml";
 
 /// Why a run could not be configured.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -229,6 +236,7 @@ impl Config {
             .unwrap_or_default();
 
         Ok(Config {
+            refused_repo_config: repo_config(),
             provider,
             model,
             api_key,
@@ -252,6 +260,15 @@ fn read_file() -> Result<FileConfig, ConfigError> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(FileConfig::default()),
         Err(error) => Err(ConfigError::Usage(format!("{path}: {error}"))),
     }
+}
+
+/// The repository-local config sitting in the working directory, if any. Its
+/// existence is all that is ever looked at: a checked-in file that grants extra
+/// writable paths would turn every clone into a privilege escalation, so it is
+/// refused rather than merged.
+fn repo_config() -> Option<PathBuf> {
+    let candidate = Path::new(REPO_CONFIG_NAME);
+    candidate.is_file().then(|| candidate.to_path_buf())
 }
 
 /// Where the config file would be, for hints.
