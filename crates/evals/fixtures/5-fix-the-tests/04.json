@@ -1,0 +1,17 @@
+{
+  "id": "msg_eval",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "The test failed because `say_hello` printed `Hello!` and dropped its argument. It now prints `Hello, $1!`, and `sh tests/run.sh` passes."
+    }
+  ],
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 120,
+    "output_tokens": 40
+  }
+}

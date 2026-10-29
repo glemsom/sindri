@@ -1,0 +1,21 @@
+{
+  "id": "msg_eval",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "tool_use",
+      "id": "toolu_flag",
+      "name": "bash",
+      "input": {
+        "command": "sed -i 's/echo \"Hello!\"/echo \"Hello, $1!\"/' src/greet.sh\ncat > bin/greet <<'SH'\n#!/bin/sh\n# greet: print a greeting for one name.\nset -eu\nhere=$(dirname \"$0\")\n. \"$here/../src/greet.sh\"\nupper=no\ncase \"${1:-}\" in\n    --upper) upper=yes; shift ;;\n    --help) echo \"usage: greet [--upper] [NAME]\"; exit 0 ;;\nesac\nname=${1:-world}\ngreeting=$(say_hello \"$name\")\nif [ \"$upper\" = yes ]; then\n    printf '%s\\n' \"$greeting\" | tr '[:lower:]' '[:upper:]'\nelse\n    printf '%s\\n' \"$greeting\"\nfi\nSH\nchmod +x bin/greet\nsh bin/greet --upper Ada"
+      }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 120,
+    "output_tokens": 40
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "msg_eval",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "tool_use",
+      "id": "toolu_fix",
+      "name": "bash",
+      "input": {
+        "command": "sed -i 's/echo \"Hello!\"/echo \"Hello, $1!\"/' src/greet.sh"
+      }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 120,
+    "output_tokens": 40
+  }
+}

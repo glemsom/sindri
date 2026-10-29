@@ -1,0 +1,17 @@
+{
+  "id": "msg_eval",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "Renamed `say_hello` to `greet_name` in `src/greet.sh`, `bin/greet` and `tests/run.sh`; the tests still pass."
+    }
+  ],
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 120,
+    "output_tokens": 40
+  }
+}

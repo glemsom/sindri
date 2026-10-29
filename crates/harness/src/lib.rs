@@ -27,6 +27,16 @@ pub struct Request {
 }
 
 impl Request {
+    /// A request built by hand, for a test that needs a body without a server.
+    pub fn literal(method: &str, path: &str, body: &str) -> Self {
+        Request {
+            method: method.to_string(),
+            path: path.to_string(),
+            headers: Vec::new(),
+            body: body.to_string(),
+        }
+    }
+
     /// A request header, case-insensitively.
     pub fn header(&self, name: &str) -> Option<&str> {
         self.headers

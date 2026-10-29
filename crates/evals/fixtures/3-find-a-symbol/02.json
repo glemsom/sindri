@@ -1,0 +1,17 @@
+{
+  "id": "msg_eval",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "`say_hello` is defined once, in `src/greet.sh`, and used from `bin/greet` and from `tests/run.sh`. Two of those call sites expect it to print the name it is given."
+    }
+  ],
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 120,
+    "output_tokens": 40
+  }
+}
