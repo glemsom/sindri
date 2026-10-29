@@ -27,9 +27,12 @@ use crate::sandbox::WritableSet;
 pub const DEFAULT_MAX_TURNS: u32 = 250;
 /// The default per-command timeout the sandbox enforces.
 pub const DEFAULT_TIMEOUT_SECS: u64 = 120;
+use std::collections::BTreeMap;
+
 /// The longest a single command may be allowed to run.
 pub const MAX_TIMEOUT_SECS: u64 = 3600;
 
+mod headers;
 mod provider;
 
 pub use provider::Provider;
@@ -51,6 +54,8 @@ pub struct Overrides {
     pub thinking: Option<bool>,
     /// `--writable`, as written.
     pub writable: Option<Vec<String>>,
+    /// `--header`, as written: `Name: value` lines.
+    pub extra_headers: Option<Vec<String>>,
 }
 
 /// A run's settings, resolved and validated: nothing optional that the run
@@ -74,6 +79,11 @@ pub struct Config {
     /// Extra paths granted read-write besides the workspace, checked to be
     /// mountable.
     pub extra_writable: Vec<PathBuf>,
+    /// Headers every provider request carries, for a gateway that asks for its
+    /// own: lowercased names and their values, in name order. Never printed,
+    /// never recorded — a gateway's header is as likely to be a secret as the
+    /// credential is.
+    pub extra_headers: Vec<(String, String)>,
     /// A repository-local config that was found and refused, for the front end
     /// to note once. It is never read (ADR-0005).
     pub refused_repo_config: Option<PathBuf>,
@@ -116,6 +126,7 @@ struct FileConfig {
     timeout: Option<u64>,
     thinking: Option<bool>,
     extra_writable_paths: Option<Vec<String>>,
+    extra_headers: Option<BTreeMap<String, String>>,
 }
 
 impl Config {
@@ -202,6 +213,7 @@ impl Config {
             .unwrap_or(false);
 
         let extra_writable = extras(overrides.writable, file.extra_writable_paths)?;
+        let extra_headers = headers::resolve(overrides.extra_headers, file.extra_headers)?;
 
         Ok(Config {
             refused_repo_config: repo_config(),
@@ -213,6 +225,7 @@ impl Config {
             timeout: Duration::from_secs(timeout_secs),
             thinking,
             extra_writable,
+            extra_headers,
         })
     }
 }
@@ -287,7 +300,7 @@ fn file_path() -> String {
 
 /// One environment variable, with an empty value read as unset: an exported
 /// variable left empty is how a shell un-sets one for a single command.
-fn env(name: &str) -> Option<String> {
+pub(super) fn env(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|value| !value.is_empty())
 }
 

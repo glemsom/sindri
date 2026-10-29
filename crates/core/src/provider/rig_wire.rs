@@ -21,6 +21,7 @@ use rig_core::providers::anthropic::AnthropicConfig;
 use rig_core::providers::openai::{OpenAIConfig, Route, wire::Auth};
 use rig_reqwest::ReqwestClient;
 use rig_reqwest::reqwest;
+use rig_reqwest::reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
 use crate::config::Provider;
 
@@ -55,11 +56,7 @@ pub(super) fn turn(
 ) -> Result<Turn, Error> {
     let (api_key, base_url, model) = client.parts();
 
-    let http = reqwest::Client::builder()
-        .connect_timeout(CONNECT_TIMEOUT)
-        .timeout(REQUEST_TIMEOUT)
-        .build()
-        .map_err(|error| Error::transport(format!("could not build the HTTP client: {error}")))?;
+    let http = http(client)?;
 
     let request = request(history, tools, thinking, client.provider())?;
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -94,6 +91,28 @@ pub(super) fn turn(
     };
 
     Ok(finish(response))
+}
+
+/// The HTTP client one run speaks through: the deadlines, and the headers the
+/// config asked for. A gateway that routes on a header of its own — a session
+/// id, a referer — has no other way to be told, and the request cannot be
+/// routed without it.
+fn http(client: &Client) -> Result<reqwest::Client, Error> {
+    let mut headers = HeaderMap::with_capacity(client.extra_headers().len());
+    for (name, value) in client.extra_headers() {
+        let name = HeaderName::from_bytes(name.as_bytes())
+            .map_err(|_| Error::transport(format!("`{name}` is not an HTTP header name")))?;
+        let value = HeaderValue::from_str(value).map_err(|_| {
+            Error::transport(format!("the value of `{name}` is not a header value"))
+        })?;
+        headers.insert(name, value);
+    }
+    reqwest::Client::builder()
+        .connect_timeout(CONNECT_TIMEOUT)
+        .timeout(REQUEST_TIMEOUT)
+        .default_headers(headers)
+        .build()
+        .map_err(|error| Error::transport(format!("could not build the HTTP client: {error}")))
 }
 
 /// A finished reply, in our vocabulary: what it said, asked for, and cost.

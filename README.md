@@ -112,6 +112,7 @@ $ sindri -b "…" --model claude-haiku-4-5 --timeout 30 --writable /tmp/build
 | Base URL | `base_url` | `SINDRI_BASE_URL` | `--base-url` |
 | Reasoning | `thinking` | `SINDRI_THINKING` | `--thinking`, `--no-thinking` |
 | Extra writable paths | `extra_writable_paths` | `SINDRI_EXTRA_WRITABLE_PATHS` (`:`-separated) | `--writable` (repeatable) |
+| Extra request headers | `extra_headers` (table) | `SINDRI_EXTRA_HEADERS` (`Name: value` lines) | `--header` (repeatable) |
 | Turn cap | `max_turns` | `SINDRI_MAX_TURNS` | `--max-turns` |
 | Command timeout | `timeout` | `SINDRI_TIMEOUT` | `--timeout` |
 

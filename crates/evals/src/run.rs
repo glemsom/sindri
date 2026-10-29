@@ -124,6 +124,7 @@ const HOST_LIMITS: &[&str] = &[
     "SINDRI_TIMEOUT",
     "SINDRI_THINKING",
     "SINDRI_EXTRA_WRITABLE_PATHS",
+    "SINDRI_EXTRA_HEADERS",
 ];
 
 /// Runs one eval's script: the real binary, in its own workspace, with the

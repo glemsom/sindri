@@ -263,6 +263,7 @@ pub struct Client {
     api_key: String,
     base_url: Option<String>,
     model: String,
+    extra_headers: Vec<(String, String)>,
 }
 
 impl Client {
@@ -273,6 +274,7 @@ impl Client {
             api_key: config.api_key.clone(),
             base_url: config.base_url.clone(),
             model: config.model.clone(),
+            extra_headers: config.extra_headers.clone(),
         }
     }
 
@@ -300,6 +302,11 @@ impl Client {
     /// The pieces the wire needs, named for it so `rig_wire` holds no policy.
     pub(crate) fn parts(&self) -> (&str, Option<&str>, &str) {
         (&self.api_key, self.base_url.as_deref(), &self.model)
+    }
+
+    /// The headers every request carries, as the config validated them.
+    pub(crate) fn extra_headers(&self) -> &[(String, String)] {
+        &self.extra_headers
     }
 }
 

@@ -26,6 +26,17 @@ base_url = "https://api.anthropic.com"
 # should stay cheap.
 thinking = false
 
+# Headers every provider request carries, for a gateway that routes on one of
+# its own — a session id, a referer, a routing hint. A table of names to
+# values; SINDRI_EXTRA_HEADERS takes the same headers as `Name: value` lines,
+# and --header takes one per flag. Names are case-insensitive, and the level
+# that names any replaces the rest rather than adding to them. Never printed
+# and never recorded, because a gateway's header is as likely to be a secret as
+# the credential is.
+#
+# [extra_headers]
+# x-opencode-session = "sindri-batch"
+
 # Extra directories mounted read-write inside the sandbox, besides the
 # workspace and the session temp. Absolute, canonical, never "/", and never one
 # inside another. This is the setting that makes a repository-local config

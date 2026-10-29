@@ -9,7 +9,12 @@ Precedence, lowest to highest: `$XDG_CONFIG_HOME/sindri/config.toml` →
 `SINDRI_*` environment variables → CLI flags.
 
 Config holds: provider, model, base URL, whether thinking/reasoning is enabled,
-extra writable paths, turn cap, tool timeout.
+extra writable paths, extra request headers, turn cap, tool timeout.
+
+Extra request headers exist because a gateway may route on a header of its own
+(a session id, a referer) and cannot be reached without one. Their values are
+never printed and never recorded: a gateway's header is as likely to be a
+secret as the credential is.
 
 Credentials come from the provider's environment variable
 (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) or an `api_key` field in the config.

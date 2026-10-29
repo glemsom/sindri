@@ -49,6 +49,8 @@ pub struct Flags {
     pub thinking: Option<bool>,
     /// `--writable`, as written.
     pub writable: Option<Vec<String>>,
+    /// `--header`, as written: `Name: value` lines.
+    pub extra_headers: Option<Vec<String>>,
     /// Report the run on stderr when it is over.
     pub verbose: bool,
 }
@@ -63,6 +65,7 @@ impl From<Flags> for Overrides {
             timeout: flags.timeout,
             thinking: flags.thinking,
             writable: flags.writable,
+            extra_headers: flags.extra_headers,
         }
     }
 }

@@ -38,6 +38,11 @@ struct Cli {
     /// replaces the configured extras rather than adding to them.
     #[arg(long, value_name = "PATH")]
     writable: Vec<String>,
+    /// Send a header with every provider request, as `Name: value`. Repeatable;
+    /// replaces the configured headers rather than adding to them. A gateway
+    /// that routes on a header of its own needs one.
+    #[arg(long, value_name = "NAME: VALUE")]
+    header: Vec<String>,
     /// Override how long one command may run, in seconds.
     #[arg(long, value_name = "SECONDS")]
     timeout: Option<u64>,
@@ -139,6 +144,7 @@ fn main() {
                     max_turns: cli.max_turns,
                     timeout: cli.timeout,
                     writable: (!cli.writable.is_empty()).then_some(cli.writable),
+                    extra_headers: (!cli.header.is_empty()).then_some(cli.header),
                     thinking: match (cli.thinking, cli.no_thinking) {
                         (true, _) => Some(true),
                         (_, true) => Some(false),
