@@ -10,7 +10,9 @@
 3. `clippy -D warnings` with a curated lint set — not blanket `pedantic`, which
    flags trivial functions and produces noise that derails automated edits.
 4. `cargo nextest` for tests, `assert_cmd` for the CLI contract as a process,
-   `insta` snapshots for the JSON shape, a mock provider server for the loop.
+   exact-literal snapshots for the JSON shape (a whole expected object written
+   out in the test, rather than a new dependency), a mock provider server for
+   the loop.
 5. `make check` (wrapping devbox) is the single definition of done: fmt, clippy,
    400-line audit, tests.
 6. Virtual workspace, never a crate named `core` (it shadows the sysroot).

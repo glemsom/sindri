@@ -25,8 +25,9 @@ const FIELD_ORDER: [&str; 8] = [
     "usage",
 ];
 
-/// One compact object, one line, and the contract's fields in its order.
-fn one_ordered_object(output: &std::process::Output) -> String {
+/// The run's stdout as the contract wrote it: the line itself, and the same
+/// line parsed, so every assertion below reads one admitted object.
+fn ordered(output: &std::process::Output) -> (String, serde_json::Value) {
     let stdout = stdout(output);
     assert_eq!(
         stdout.matches('\n').count(),
@@ -51,11 +52,8 @@ fn one_ordered_object(output: &std::process::Output) -> String {
         !line.contains("null"),
         "absent data is absent, never null: {line}"
     );
-    line
-}
-
-fn json(output: &std::process::Output) -> serde_json::Value {
-    serde_json::from_str(&one_ordered_object(output)).expect("one JSON object")
+    let object = serde_json::from_str(&line).expect("the line is one JSON object");
+    (line, object)
 }
 
 #[test]
@@ -70,13 +68,12 @@ fn a_finished_run_is_one_compact_object_in_the_contract_order() {
     );
 
     assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
-    let line = one_ordered_object(&output);
+    let (line, object) = ordered(&output);
     assert!(
         line.starts_with(r#"{"answer":"Two files changed.","session":""#),
         "byte-exact up to the session: {line}"
     );
 
-    let object = json(&output);
     assert_eq!(object["answer"], "Two files changed.");
     assert_eq!(object["turns"], 1);
     assert_eq!(object["stopped"], "final");
@@ -91,11 +88,26 @@ fn a_finished_run_is_one_compact_object_in_the_contract_order() {
         object["duration_ms"].as_u64().is_some(),
         "the run's duration is a number of milliseconds: {line}"
     );
-    assert!(
-        object["session"]
-            .as_str()
-            .is_some_and(|session| !session.is_empty()),
-        "the session GUID the run was recorded under: {line}"
+    let session = object["session"]
+        .as_str()
+        .filter(|session| !session.is_empty())
+        .expect("the session GUID the run was recorded under");
+    let duration = object["duration_ms"]
+        .as_u64()
+        .expect("the run's duration in milliseconds");
+
+    assert_eq!(
+        line,
+        format!(
+            concat!(
+                r#"{{"answer":"Two files changed.","session":"{}","turns":1,"#,
+                r#""stopped":"final","model":"claude-mock","duration_ms":{},"#,
+                r#""tool_calls":0,"usage":{{"input_tokens":11,"output_tokens":7,"#,
+                r#""total_tokens":18}}}}"#
+            ),
+            session, duration
+        ),
+        "stdout is byte-exact: the whole object, in order, one line"
     );
     assert_eq!(
         stderr(&output),
@@ -114,7 +126,7 @@ fn a_run_that_called_tools_reports_how_many_and_what_they_cost() {
     let output = batch(&env, &mock, &["-b", "q", "--format", "json"], "");
 
     assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
-    let object = json(&output);
+    let (_, object) = ordered(&output);
     assert_eq!(object["turns"], 2, "one turn to call, one to answer");
     assert_eq!(object["tool_calls"], 1);
     assert_eq!(
@@ -139,7 +151,7 @@ fn verbose_stays_on_stderr_when_the_output_is_json() {
     let output = batch(&env, &mock, &["-b", "q", "--format", "json", "-v"], "");
 
     assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
-    let object = json(&output);
+    let (_, object) = ordered(&output);
     let verbose = stderr(&output);
     assert!(
         verbose.contains("sindri: bash (turn 1)"),
@@ -170,7 +182,7 @@ fn exit_codes_do_not_depend_on_the_output_format() {
         "",
     );
     assert_eq!(output.status.code(), Some(100), "the cap is exit 100");
-    let object = json(&output);
+    let (_, object) = ordered(&output);
     assert_eq!(object["stopped"], "max_turns", "the object says why");
 
     // A usage error still exits 2 with an empty stdout.
