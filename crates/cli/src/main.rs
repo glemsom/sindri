@@ -4,6 +4,7 @@
 mod batch;
 mod doctor;
 mod sandbox;
+mod signal;
 mod verbose;
 
 use std::io::IsTerminal;
