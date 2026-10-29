@@ -14,7 +14,7 @@ mod common;
 use std::fs::File;
 use std::io::{ErrorKind, Read, Write};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Stdio};
 use std::time::{Duration, Instant};
 
 use common::{Env, TEST_KEY, host_path, path_without, required_binaries};
@@ -139,7 +139,7 @@ impl Pty {
 
 /// `sindri` with its streams on the pty, and the pty's own settings.
 fn spawn(env: &Env, pty: &Pty, vars: &[(&str, &str)]) -> Child {
-    let mut command = Command::from(env.command());
+    let mut command = env.command();
     command
         .env("TERM", "xterm-256color")
         .env("SINDRI_API_KEY", TEST_KEY)
