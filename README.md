@@ -12,6 +12,22 @@ Every `bash` call the model makes runs inside bubblewrap with a read-only host
 root and a writable set you chose. See `capabilities-bullets.md` for the whole
 idea, `GLOSSARY.md` for the vocabulary, and `docs/adr/` for the decisions.
 
+## Install
+
+No Rust toolchain needed: a static binary, checksum-verified, into
+`~/.local/bin`.
+
+```console
+$ curl -fsSL https://raw.githubusercontent.com/glemsom/sindri/main/install.sh | sh
+```
+
+Releases carry `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl`
+binaries with a `SHA256SUMS` file and a changelog. The installer checks the
+checksum before writing anything and ends by telling you to run
+`sindri doctor` — the sandbox is the precondition for the agent, so prove it on
+your machine before trusting a run. Installer flags, the release contents and
+the maintainer's release runbook: [`docs/install.md`](docs/install.md).
+
 ## Batch mode
 
 ```console
@@ -168,4 +184,11 @@ Toolchain and gate through devbox:
 $ make check      # fmt, clippy, the 400-line audit, tests, evals, no-relink proof
 $ make eval       # just the evals, offline against recorded fixtures
 $ make run ARGS='-b "hello"'
+$ make scripts-check   # the installer and release scripts, offline
+$ make release TAG=v0.1.0   # the two static binaries, SHA256SUMS, changelog
 ```
+
+A tag is the only thing a release needs: `.github/workflows/release.yml` builds
+both static binaries in an image generated from `devbox.json`, verifies them and
+publishes them with their checksums and a changelog derived from the closed
+tickets. See [`docs/install.md`](docs/install.md).

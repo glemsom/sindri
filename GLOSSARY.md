@@ -61,3 +61,22 @@ stderr is silent unless `-v`; `--format json` switches the output shape
 
 **reasoning** — provider-side thinking tokens, off by default, shown on stderr
 with `-v`.
+
+## Release
+
+**release artefact** — one static musl binary, named
+`sindri-<version>-<target>`; the installer derives exactly that name from
+`uname`, so the build and the installer share one naming contract.
+
+**checksums** — `SHA256SUMS` in a release: every artefact, sorted, verified by
+the installer before it writes anything.
+
+**installer** — `install.sh`, run as `curl … | sh`: picks the target from the
+machine, verifies the checksum, installs into the user's local bin and ends by
+pointing at `doctor`.
+
+**changelog** — the release notes, derived from the tickets a release closes:
+the merge commits since the previous tag, which is what `TN: … (#issue)` is for.
+
+**release image** — the container generated from the committed `devbox.json`
+that builds the release, so dev, CI and release share one toolchain (ADR-0009).
