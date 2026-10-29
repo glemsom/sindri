@@ -1,0 +1,17 @@
+{
+  "id": "msg_eval",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "`src/greet.sh` defines one function, `say_hello`. It takes a name but does not use it: it always prints `Hello!`, so every caller that expects a name gets the wrong output. `src/lib.sh` holds the `fail` helper the tests use, and `tests/run.sh` runs both the front end and the function."
+    }
+  ],
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 120,
+    "output_tokens": 40
+  }
+}

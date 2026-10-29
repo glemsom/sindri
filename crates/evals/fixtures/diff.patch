@@ -1,0 +1,11 @@
+diff --git a/src/greet.sh b/src/greet.sh
+index 1111111..2222222 100644
+--- a/src/greet.sh
++++ b/src/greet.sh
+@@ -1,5 +1,5 @@
+ # greet.sh: the greeting itself.
+ 
+ say_hello() {
+-    echo "Hello!"
++    echo "Hello, $1!"
+ }

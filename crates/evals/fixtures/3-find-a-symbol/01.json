@@ -1,0 +1,21 @@
+{
+  "id": "msg_eval",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "tool_use",
+      "id": "toolu_grep",
+      "name": "bash",
+      "input": {
+        "command": "rg -n 'say_hello' ."
+      }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 120,
+    "output_tokens": 40
+  }
+}

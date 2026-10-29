@@ -10,7 +10,8 @@
     reason = "each test binary uses a different slice of the harness"
 )]
 
-pub mod provider;
+/// The mock provider, from the harness crate every process-seam test drives.
+pub use sindri_harness as provider;
 
 use std::path::{Path, PathBuf};
 
@@ -51,18 +52,7 @@ impl Env {
             .env("XDG_STATE_HOME", &self.state)
             .env("XDG_CONFIG_HOME", &self.config);
         // The host's own settings must not leak into a test's run.
-        for name in [
-            "SINDRI_PROVIDER",
-            "SINDRI_MODEL",
-            "SINDRI_API_KEY",
-            "SINDRI_BASE_URL",
-            "SINDRI_MAX_TURNS",
-            "SINDRI_TIMEOUT",
-            "ANTHROPIC_API_KEY",
-            "ANTHROPIC_BASE_URL",
-            "OPENAI_API_KEY",
-            "OPENAI_BASE_URL",
-        ] {
+        for name in provider::PROVIDER_ENV {
             cmd.env_remove(name);
         }
         cmd

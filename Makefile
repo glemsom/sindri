@@ -4,13 +4,13 @@
 DEVBOX ?= devbox
 CARGO  ?= $(DEVBOX) run -- cargo
 
-.PHONY: all check fmt clippy audit test relink build run install clean
+.PHONY: all check fmt clippy audit test relink eval eval-live build run install clean
 
 all: check
 
 ## check: the gate. fmt, clippy with warnings denied, the 400-line audit, tests,
-## and proof that an unchanged tree does not relink.
-check: fmt clippy audit test relink
+## the evals, and proof that an unchanged tree does not relink.
+check: fmt clippy audit test relink eval
 
 fmt:
 	$(CARGO) fmt --all --check
@@ -30,6 +30,19 @@ test:
 ## clock, so an unchanged tree must not relink.
 relink:
 	@$(DEVBOX) run -- scripts/check-relink.sh
+
+## eval: eight scripted runs against recorded fixtures — offline, no key, no
+## live provider. Prints one pass/fail line per eval and fails if any did.
+## `make eval-live` asks your own provider instead; see the README.
+eval:
+	$(CARGO) build --quiet --package sindri-cli --bin sindri
+	$(CARGO) run --quiet --package sindri-evals
+
+## eval-live: the same eight evals against a real provider, with your own
+## credential and at your own cost.
+eval-live:
+	$(CARGO) build --quiet --package sindri-cli --bin sindri
+	$(CARGO) run --quiet --package sindri-evals -- --live
 
 build:
 	$(CARGO) build --release

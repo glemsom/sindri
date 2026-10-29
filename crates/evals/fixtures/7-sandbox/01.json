@@ -1,0 +1,41 @@
+{
+  "id": "msg_eval",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "Trying the probes the task asks for."
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_etc",
+      "name": "bash",
+      "input": {
+        "command": "echo probe > /etc/sindri-eval-probe; echo \"etc=$?\""
+      }
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_usr",
+      "name": "bash",
+      "input": {
+        "command": "echo probe > /usr/lib/sindri-eval-probe; echo \"usr=$?\""
+      }
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_inside",
+      "name": "bash",
+      "input": {
+        "command": "echo inside > proof.txt; echo \"inside=$?\""
+      }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 120,
+    "output_tokens": 40
+  }
+}

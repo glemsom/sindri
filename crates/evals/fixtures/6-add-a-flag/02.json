@@ -1,0 +1,21 @@
+{
+  "id": "msg_eval",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "tool_use",
+      "id": "toolu_test",
+      "name": "bash",
+      "input": {
+        "command": "cat >> tests/run.sh <<'SH'\n\ngot=$(sh \"$here/../bin/greet\" --upper Ada)\n[ \"$got\" = \"HELLO, ADA!\" ] || fail \"greet --upper Ada printed $got\"\nSH\nsh tests/run.sh"
+      }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 120,
+    "output_tokens": 40
+  }
+}

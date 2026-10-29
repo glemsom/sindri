@@ -1,0 +1,15 @@
+[package]
+name = "sindri-harness"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "The mock provider the process seam is tested through, shared by the tests and the eval suite."
+
+[lints]
+workspace = true
+
+[dependencies]
+serde_json = "1"
