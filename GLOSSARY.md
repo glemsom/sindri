@@ -66,6 +66,28 @@ stderr is silent unless `-v`; `--format json` switches the output shape
 **reasoning** — provider-side thinking tokens, off by default, shown on stderr
 with `-v`.
 
+## Terminal UI
+
+**rail** — the right column of the TUI: cache hit percentage, turns against the
+cap, tokens, live context meter, session GUID, session temp path, git branch,
+sandbox posture, and the face, where Kitty graphics allows one (ADR-0011). At
+100 columns and above it is always visible; below, a one-line strip.
+
+**composer** — the input at the bottom: 2–8 rows, `Shift+Enter` for a newline,
+`@` for a path completion, `/` for a command.
+
+**delta** — one piece of streamed model text, as it arrives (`TextDelta`,
+`ReasoningDelta`). Batch accumulates deltas into the same answer it prints.
+
+**thread** — the growing conversation of one TUI session: every prompt, answer
+and tool result, in order. `/new` throws it away and starts a new session.
+
+**queued prompt** — a prompt typed while a run is in flight, sent when that run
+ends rather than interrupting it.
+
+**spill affordance** — the offer to open a tool result's spill file from the
+transcript, when the output was too large to display in full.
+
 ## Release
 
 **release artefact** — one static musl binary, named
