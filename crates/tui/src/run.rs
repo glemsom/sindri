@@ -23,15 +23,6 @@ const FRAME: Duration = Duration::from_millis(16);
 /// How often a card that is waiting to be dismissed looks for a key.
 const CARD_POLL: Duration = Duration::from_millis(200);
 
-/// What a launch knows before the first frame: the rail's facts, or the reason
-/// there is no frame to draw.
-pub enum Boot {
-    /// The checks passed and the sandbox is ready.
-    Ready(Launch),
-    /// A check failed: the whole screen is the card.
-    Failed(Card),
-}
-
 /// How the session ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Ending {
@@ -42,19 +33,35 @@ pub enum Ending {
 }
 
 /// Opens the frame on the alternate screen and runs it until the user leaves.
-pub fn run(boot: Boot, driver: Box<dyn Driver>) -> Ending {
-    // Nothing is drawn to a stream that is not a terminal: a card that cannot be
-    // seen is a card that cannot be dismissed.
-    if !std::io::stdout().is_terminal() {
-        return Ending::BootFailed;
+pub fn open(launch: Launch, driver: Box<dyn Driver>) -> Ending {
+    match alternate_screen() {
+        Some(mut terminal) => {
+            let ending = session(&mut terminal, launch, driver);
+            ratatui::restore();
+            ending
+        }
+        None => Ending::BootFailed,
     }
-    let mut terminal = ratatui::init();
-    let ending = match boot {
-        Boot::Failed(card) => show_card(&mut terminal, &card),
-        Boot::Ready(launch) => session(&mut terminal, launch, driver),
-    };
-    ratatui::restore();
-    ending
+}
+
+/// Draws the card a failed boot leaves behind, and holds it until the user has
+/// read it: nothing else is ever drawn.
+pub fn refuse(card: Card) -> Ending {
+    match alternate_screen() {
+        Some(mut terminal) => {
+            let ending = show_card(&mut terminal, &card);
+            ratatui::restore();
+            ending
+        }
+        None => Ending::BootFailed,
+    }
+}
+
+/// The alternate screen, or `None` where there is no terminal to open one on:
+/// nothing is drawn to a stream that is not one, because a card that cannot be
+/// seen is a card that cannot be dismissed.
+fn alternate_screen() -> Option<DefaultTerminal> {
+    std::io::stdout().is_terminal().then(ratatui::init)
 }
 
 /// The card a failed boot draws, held until the user has read it.
@@ -113,7 +120,6 @@ fn apply(app: &mut App, message: Msg) {
         Msg::Output(side, text) => app.output(side, &text),
         Msg::Over(over) => app.over(over),
         Msg::Finished(finished) => app.finished(finished),
-        Msg::Resize => {}
     }
 }
 
@@ -138,11 +144,9 @@ fn listen_for_keys(tx: Sender<Msg>) {
                         return;
                     }
                 }
-                Ok(TerminalEvent::Resize(..)) => {
-                    if tx.send(Msg::Resize).is_err() {
-                        return;
-                    }
-                }
+                // A resize redraws because the next frame asks the terminal
+                // its size; there is nothing for the frame to be told.
+                Ok(TerminalEvent::Resize(..)) => {}
                 Ok(_) => {}
                 Err(_) => return,
             }

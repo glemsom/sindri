@@ -10,14 +10,7 @@ use syntect::easy::HighlightLines;
 use syntect::highlighting::{Theme, ThemeSet};
 use syntect::parsing::SyntaxSet;
 
-/// The colour of an added line.
-const ADDED: Color = Color::Rgb(0x6a, 0xc9, 0x7a);
-/// The colour of a removed line.
-const REMOVED: Color = Color::Rgb(0xe0, 0x6c, 0x75);
-/// The colour of a hunk header.
-const HUNK: Color = Color::Rgb(0x61, 0xaf, 0xef);
-/// The colour of a diff's file headers.
-const FILE: Color = Color::Rgb(0x8b, 0x98, 0xa9);
+use crate::theme;
 
 fn syntaxes() -> &'static SyntaxSet {
     static SET: OnceLock<SyntaxSet> = OnceLock::new();
@@ -46,23 +39,28 @@ pub fn lines(body: &str, language: Option<&str>) -> Vec<Line<'static>> {
     match language {
         Some(language) if is_diff(language) => body.lines().map(diff_line).collect(),
         Some(language) => highlight(body, language),
-        None => body
-            .lines()
-            .map(|line| Line::from(Span::raw(line.to_string())))
-            .collect(),
+        None => plain(body),
     }
+}
+
+/// The text as it was written, with no colour at all: a wrong highlight is
+/// worse than no highlight.
+fn plain(body: &str) -> Vec<Line<'static>> {
+    body.lines()
+        .map(|line| Line::from(Span::raw(line.to_string())))
+        .collect()
 }
 
 /// One diff row, coloured by what it does rather than by what it says.
 fn diff_line(line: &str) -> Line<'static> {
     let style = if line.starts_with("+++") || line.starts_with("---") {
-        Style::new().fg(FILE)
+        Style::new().fg(theme::DIFF_FILE)
     } else if line.starts_with('+') {
-        Style::new().fg(ADDED)
+        Style::new().fg(theme::DIFF_ADDED)
     } else if line.starts_with('-') {
-        Style::new().fg(REMOVED)
+        Style::new().fg(theme::DIFF_REMOVED)
     } else if line.starts_with("@@") {
-        Style::new().fg(HUNK)
+        Style::new().fg(theme::DIFF_HUNK)
     } else {
         Style::new()
     };
@@ -73,10 +71,7 @@ fn diff_line(line: &str) -> Line<'static> {
 /// plainly: a wrong highlight is worse than no highlight.
 fn highlight(body: &str, language: &str) -> Vec<Line<'static>> {
     let Some(syntax) = syntaxes().find_syntax_by_token(language) else {
-        return body
-            .lines()
-            .map(|line| Line::from(Span::raw(line.to_string())))
-            .collect();
+        return plain(body);
     };
     let mut highlighter = HighlightLines::new(syntax, theme());
     let set = syntaxes();

@@ -3,7 +3,7 @@
 //! (ADR-0011 §10).
 
 /// The fewest rows the composer is drawn with, and the most.
-const MIN_ROWS: u16 = 1;
+const MIN_ROWS: u16 = 2;
 const MAX_ROWS: u16 = 6;
 
 /// The prompt as it is being typed.

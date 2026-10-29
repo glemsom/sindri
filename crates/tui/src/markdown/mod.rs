@@ -44,7 +44,7 @@ struct Writer {
     code: Option<(Option<String>, String)>,
     table: Option<Table>,
     row: usize,
-    head: bool,
+    in_table_head: bool,
 }
 
 impl Writer {
@@ -62,7 +62,7 @@ impl Writer {
             code: None,
             table: None,
             row: 0,
-            head: false,
+            in_table_head: false,
         }
     }
 
@@ -117,7 +117,7 @@ impl Writer {
             }
             Tag::Table(_) => self.table = Some(Table::default()),
             Tag::TableHead => {
-                self.head = true;
+                self.in_table_head = true;
                 self.row = 0;
             }
             Tag::TableRow => {
@@ -150,7 +150,7 @@ impl Writer {
             TagEnd::CodeBlock => self.code_block(),
             TagEnd::TableCell => self.cell(),
             TagEnd::TableRow => {}
-            TagEnd::TableHead => self.head = false,
+            TagEnd::TableHead => self.in_table_head = false,
             TagEnd::Table => self.table_block(),
             TagEnd::Emphasis => self.emphasis.remove(Modifier::ITALIC),
             TagEnd::Strong => self.emphasis.remove(Modifier::BOLD),
@@ -253,7 +253,7 @@ impl Writer {
         let row = self.row;
         if let Some(table) = self.table.as_mut() {
             table.cell(row, text.trim().to_string());
-            if self.head && table.head <= row {
+            if self.in_table_head && table.head <= row {
                 table.head = row + 1;
             }
         }

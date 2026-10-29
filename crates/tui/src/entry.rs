@@ -2,7 +2,7 @@
 
 use std::collections::VecDeque;
 
-use crate::driver::CallOver;
+use crate::driver::{CallOver, Side};
 
 /// How many lines of a running command's output the frame keeps.
 pub const TAIL_LINES: usize = 5;
@@ -42,8 +42,9 @@ pub struct Call {
     pub command: Option<String>,
     /// How it ended, or `None` while it runs.
     pub over: Option<CallOver>,
-    /// The last few lines of its output, oldest first.
-    pub tail: VecDeque<String>,
+    /// The last few lines of its output, oldest first, each with the stream it
+    /// came from.
+    pub tail: VecDeque<(Side, String)>,
 }
 
 impl Call {
@@ -58,11 +59,11 @@ impl Call {
     }
 
     /// One more line of output, keeping only the last few.
-    pub fn push(&mut self, line: String) {
+    pub fn push(&mut self, side: Side, line: String) {
         if line.trim().is_empty() {
             return;
         }
-        self.tail.push_back(line);
+        self.tail.push_back((side, line));
         while self.tail.len() > TAIL_LINES {
             self.tail.pop_front();
         }

@@ -7,7 +7,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 
 use crate::app::App;
-use crate::driver::CallOver;
+use crate::driver::{CallOver, Side};
 use crate::entry::{Entry, NoteKind};
 use crate::markdown;
 use crate::theme;
@@ -82,14 +82,15 @@ fn call_rows(call: &crate::entry::Call, width: u16) -> Vec<Line<'static>> {
                 Span::styled("bash ", theme::faint()),
                 Span::styled(command.to_string(), theme::faint()),
             ]));
-            for line in &call.tail {
-                let indented = format!("  {line}");
+            for (side, line) in &call.tail {
+                let style = match side {
+                    Side::Stdout => theme::faint(),
+                    // A command's complaint is not the same thing as its output.
+                    Side::Stderr => theme::bad(),
+                };
                 let keep = width.saturating_sub(4) as usize;
-                let shown: String = indented.chars().take(keep).collect();
-                rows.push(Line::from(Span::styled(
-                    format!("  │ {shown}"),
-                    theme::faint(),
-                )));
+                let shown: String = format!("  {line}").chars().take(keep).collect();
+                rows.push(Line::from(Span::styled(format!("  │ {shown}"), style)));
             }
         }
         Some(over) => {

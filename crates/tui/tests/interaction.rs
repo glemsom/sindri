@@ -61,9 +61,10 @@ fn any(rows: &[String], needle: &str) -> bool {
 #[test]
 fn ctrl_c_cancels_the_run_and_the_composer_keeps_its_draft() {
     let mut app = app();
-    let job = app.start();
-    assert!(job.is_none(), "nothing to run yet");
+    assert!(app.start().is_none(), "nothing to run yet");
     type_text(&mut app, "why does this test fail?");
+    assert!(app.start().is_none(), "typing alone starts nothing");
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     let job = app.start().expect("the draft becomes a run");
     assert_eq!(job.prompt, "why does this test fail?");
     assert!(app.is_running(), "the run is in flight");
@@ -90,6 +91,7 @@ fn ctrl_c_cancels_the_run_and_the_composer_keeps_its_draft() {
 fn a_cancelled_run_reports_cancelled_and_the_composer_stays_usable() {
     let mut app = app();
     type_text(&mut app, "count the files");
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     app.start().expect("a run starts");
     press(&mut app, KeyCode::Char('c'), KeyModifiers::CONTROL);
     app.finished(Finished {
@@ -116,6 +118,7 @@ fn a_cancelled_run_reports_cancelled_and_the_composer_stays_usable() {
 fn a_prompt_typed_during_a_run_queues_and_is_sent_when_the_run_ends() {
     let mut app = app();
     type_text(&mut app, "first question");
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     let job = app.start().expect("the first run starts");
 
     type_text(&mut app, "second question");
@@ -144,6 +147,22 @@ fn a_prompt_typed_during_a_run_queues_and_is_sent_when_the_run_ends() {
 }
 
 #[test]
+fn typing_does_not_send_and_enter_does() {
+    let mut app = app();
+    type_text(&mut app, "half a thought");
+    assert!(
+        app.start().is_none(),
+        "typing is not sending: a run begins on Enter, not on the first keystroke"
+    );
+    assert_eq!(app.composer().text(), "half a thought");
+
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+    let job = app.start().expect("Enter sends the draft");
+    assert_eq!(job.prompt, "half a thought");
+    assert_eq!(app.composer().text(), "", "the composer empties on send");
+}
+
+#[test]
 fn shift_enter_breaks_the_line_instead_of_sending() {
     let mut app = app();
     type_text(&mut app, "first line");
@@ -156,7 +175,9 @@ fn shift_enter_breaks_the_line_instead_of_sending() {
 #[test]
 fn a_killed_command_and_a_timeout_each_say_so_where_they_happened() {
     let mut app = app();
-    app.start();
+    type_text(&mut app, "wait for it");
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+    app.start().expect("a run starts");
     app.event(sindri_core::agent::Event::ToolCall {
         turn: 1,
         command: Some("sleep 600".to_string()),
@@ -169,7 +190,9 @@ fn a_killed_command_and_a_timeout_each_say_so_where_they_happened() {
     );
 
     let mut app = self::app();
-    app.start();
+    type_text(&mut app, "build it");
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+    app.start().expect("a run starts");
     app.event(sindri_core::agent::Event::ToolCall {
         turn: 1,
         command: Some("cargo build".to_string()),

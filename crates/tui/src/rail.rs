@@ -27,7 +27,11 @@ pub struct Launch {
 pub struct Rail {
     launch: Launch,
     turns: u32,
+    /// What the conversation has cost, summed over the turns of every run.
     tokens: Tokens,
+    /// The size of the conversation as the provider last counted it: the whole
+    /// history goes in every turn, so this is the last input count, not a sum.
+    context: u64,
     stop: Option<Stop>,
 }
 
@@ -38,6 +42,7 @@ impl Rail {
             launch,
             turns: 0,
             tokens: Tokens::default(),
+            context: 0,
             stop: None,
         }
     }
@@ -55,64 +60,76 @@ impl Rail {
             output: self.tokens.output.saturating_add(tokens.output),
             cached: self.tokens.cached.saturating_add(tokens.cached),
         };
+        self.context = tokens.input;
         self.stop = Some(stop);
     }
 
-    /// The context the conversation has used, as the provider counted it.
+    /// The context the conversation has used, as the provider last counted it.
     pub fn context_used(&self) -> u64 {
-        self.tokens.input
+        self.context
     }
 
-    /// The rail as rows: one fact each, the face's space already taken off.
-    pub fn rows(&self) -> Vec<String> {
-        let mut rows = vec![
-            format!("cache {}", self.cache()),
-            format!("turns {}/{}", self.turns, self.launch.max_turns),
-            format!(
-                "tokens {} in · {} out",
-                compact(self.tokens.input),
-                compact(self.tokens.output)
+    /// The rail's facts, in the order they matter, each as its name and its
+    /// value: the column and the strip are two renderings of this one list.
+    pub fn facts(&self) -> Vec<(String, String)> {
+        let mut facts = vec![
+            ("cache".to_string(), self.cache()),
+            (
+                "turns".to_string(),
+                format!("{}/{}", self.turns, self.launch.max_turns),
             ),
-            format!("context {}", self.meter()),
+            (
+                "tokens".to_string(),
+                format!(
+                    "{} in · {} out",
+                    compact(self.tokens.input),
+                    compact(self.tokens.output)
+                ),
+            ),
+            ("context".to_string(), self.meter()),
         ];
         if let Some(stop) = self.stop {
-            rows.push(format!("stop {}", stop.as_str()));
+            facts.push(("stop".to_string(), stop.as_str().to_string()));
         }
-        rows.push(String::new());
-        rows.push(format!("session {}", self.launch.session));
-        rows.push(format!("temp {}", self.launch.temp));
-        rows.push(format!(
-            "branch {}",
-            self.launch.branch.as_deref().unwrap_or("—")
+        facts.push(("session".to_string(), self.launch.session.clone()));
+        facts.push(("temp".to_string(), self.launch.temp.clone()));
+        facts.push((
+            "branch".to_string(),
+            self.launch
+                .branch
+                .clone()
+                .unwrap_or_else(|| "—".to_string()),
         ));
-        rows.push(format!("sandbox {}", self.launch.sandbox));
-        rows
+        facts.push(("sandbox".to_string(), self.launch.sandbox.clone()));
+        facts
     }
 
     /// The rail as one line, for a terminal too narrow to give it a column:
     /// facts are kept in the order they matter until the line is full, so the
     /// sandbox posture is never the fact that falls off the end.
     pub fn strip(&self, width: usize) -> String {
-        let mut facts = vec![
-            format!("cache {}", self.cache()),
-            format!("turns {}/{}", self.turns, self.launch.max_turns),
-            format!("ctx {}", self.meter()),
-            format!("sandbox {}", self.launch.sandbox),
-        ];
-        if let Some(stop) = self.stop {
-            facts.push(format!("stop {}", stop.as_str()));
-        }
-        facts.push(format!(
-            "branch {}",
-            self.launch.branch.as_deref().unwrap_or("—")
-        ));
-        facts.push(format!(
-            "tok {}",
-            compact(self.tokens.input.saturating_add(self.tokens.output))
-        ));
+        let facts = self.facts();
+        let pick = |name: &str, short: &str| {
+            facts
+                .iter()
+                .find(|(label, _)| label == name)
+                .map(|(_, value)| format!("{short} {value}"))
+        };
+        let order: Vec<String> = [
+            pick("cache", "cache"),
+            pick("turns", "turns"),
+            pick("context", "ctx"),
+            pick("sandbox", "sandbox"),
+            pick("stop", "stop"),
+            pick("branch", "branch"),
+            pick("tokens", "tok"),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
 
         let mut fitted = String::new();
-        for fact in facts {
+        for fact in order {
             let candidate = if fitted.is_empty() {
                 fact.clone()
             } else {

@@ -23,8 +23,11 @@ pub struct App {
     queue: VecDeque<String>,
     /// The flag of the run in flight, if there is one.
     running: Option<Cancel>,
+    /// Whether Enter has been pressed on the draft since it was last started:
+    /// typing alone never launches a run.
+    sent: bool,
     /// Output that arrived before the call it belongs to was announced.
-    early: Vec<String>,
+    early: Vec<(Side, String)>,
     quit: bool,
     face: Option<Face>,
 }
@@ -39,6 +42,7 @@ impl App {
             composer: Composer::new(),
             queue: VecDeque::new(),
             running: None,
+            sent: false,
             early: Vec::new(),
             quit: false,
             face,
@@ -106,31 +110,39 @@ impl App {
     fn cancel_or_clear(&mut self) {
         match &self.running {
             Some(cancel) => cancel.trigger(),
-            None => self.composer.clear(),
+            None => {
+                self.composer.clear();
+                self.sent = false;
+            }
         }
     }
 
-    /// Enter: send now, or queue when a run is in flight.
+    /// Enter: send now, or queue when a run is in flight. With nothing running
+    /// the draft stays where it is until the loop collects it, so a run always
+    /// begins with the prompt Enter was pressed on.
     fn submit(&mut self) {
         if self.composer.is_blank() {
             return;
         }
         if self.running.is_some() {
             self.queue.push_back(self.composer.take());
+        } else {
+            self.sent = true;
         }
     }
 
-    /// Starts the next prompt — the queue first, then the draft — when nothing
-    /// is running.
+    /// Starts the next prompt — the queue first, then a draft Enter sent —
+    /// when nothing is running.
     pub fn start(&mut self) -> Option<Job> {
         if self.running.is_some() {
             return None;
         }
         let prompt = match self.queue.pop_front() {
             Some(queued) => queued,
-            None if self.composer.is_blank() => return None,
+            None if !self.sent || self.composer.is_blank() => return None,
             None => self.composer.take(),
         };
+        self.sent = false;
         let cancel = Cancel::new();
         self.running = Some(cancel.clone());
         self.entries.push(Entry::Prompt(prompt.clone()));
@@ -142,42 +154,11 @@ impl App {
         match event {
             Event::TextDelta { turn, text } => {
                 self.rail.turn(turn);
-                if let Some(Entry::Answer {
-                    turn: open,
-                    text: answer,
-                    done: false,
-                }) = self.entries.last_mut()
-                {
-                    if *open == turn {
-                        answer.push_str(&text);
-                        return;
-                    }
-                }
-                self.close_answers();
-                self.entries.push(Entry::Answer {
-                    turn,
-                    text,
-                    done: false,
-                });
+                self.append(turn, text, false);
             }
             Event::ReasoningDelta { turn, text } => {
                 self.rail.turn(turn);
-                if let Some(Entry::Reasoning {
-                    turn: open,
-                    text: reasoning,
-                    done: false,
-                }) = self.entries.last_mut()
-                {
-                    if *open == turn {
-                        reasoning.push_str(&text);
-                        return;
-                    }
-                }
-                self.entries.push(Entry::Reasoning {
-                    turn,
-                    text,
-                    done: false,
-                });
+                self.append(turn, text, true);
             }
             Event::Reasoning { turn, text } => {
                 self.entries.retain(
@@ -193,21 +174,57 @@ impl App {
                 self.rail.turn(turn);
                 self.close_answers();
                 let mut call = Call::new(turn, command);
-                for line in self.early.drain(..) {
-                    call.push(line);
+                for (side, line) in self.early.drain(..) {
+                    call.push(side, line);
                 }
                 self.entries.push(Entry::Call(call));
             }
         }
     }
 
-    /// One line of a running command's output.
-    pub fn output(&mut self, _side: Side, text: &str) {
+    /// One fragment of a streamed turn, appended to the entry it belongs to or
+    /// opening a new one: text and reasoning differ only in which entry.
+    fn append(&mut self, turn: u32, text: String, reasoning: bool) {
+        let open = match self.entries.last_mut() {
+            Some(Entry::Reasoning {
+                turn: open,
+                text: streamed,
+                done: false,
+            }) if reasoning && *open == turn => Some(streamed),
+            Some(Entry::Answer {
+                turn: open,
+                text: streamed,
+                done: false,
+            }) if !reasoning && *open == turn => Some(streamed),
+            _ => None,
+        };
+        if let Some(streamed) = open {
+            streamed.push_str(&text);
+            return;
+        }
+        self.close_answers();
+        if reasoning {
+            self.entries.push(Entry::Reasoning {
+                turn,
+                text,
+                done: false,
+            });
+        } else {
+            self.entries.push(Entry::Answer {
+                turn,
+                text,
+                done: false,
+            });
+        }
+    }
+
+    /// One line of a running command's output, with the stream it came from.
+    pub fn output(&mut self, side: Side, text: &str) {
         match self.entries.last_mut() {
-            Some(Entry::Call(call)) if call.running() => call.push(text.to_string()),
+            Some(Entry::Call(call)) if call.running() => call.push(side, text.to_string()),
             // Output can arrive a moment before the call that produced it was
             // announced, because the two travel different threads.
-            _ => self.early.push(text.to_string()),
+            _ => self.early.push((side, text.to_string())),
         }
     }
 

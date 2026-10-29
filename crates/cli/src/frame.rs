@@ -8,24 +8,26 @@ use std::sync::mpsc;
 
 use sindri_core::agent::{Agent, BashTool, Event};
 use sindri_core::cancel::Cancel;
-use sindri_core::config::{Config, ConfigError, Overrides};
+use sindri_core::config::{Config, Overrides};
 use sindri_core::doctor::{self, DoctorError};
 use sindri_core::exec::{BashExecutor, Outcome, OutputSink, SandboxExecutor, Side, ToolResult};
 use sindri_core::paths::SessionDir;
-use sindri_core::provider::{Client, Error as ProviderError, Usage};
+use sindri_core::provider::{self, Client, Usage};
 use sindri_core::record::{Recorder, Redaction, Start};
 use sindri_core::sandbox::{Enforcement, SandboxPolicy};
 use sindri_core::session;
 use sindri_tui::driver::{CallOver, Driver, Finished, Stop, Tap, Tokens};
-use sindri_tui::run::{self, Boot, Ending};
+use sindri_tui::run::{self, Ending};
 use sindri_tui::{Card, Launch};
 use sindri_types::ExitCode;
+
+use crate::batch;
 
 /// Runs the frame for one launch, and says how the process should end.
 pub fn run(overrides: Overrides) -> i32 {
     let config = match Config::resolve(overrides) {
         Ok(config) => config,
-        Err(error) => return config_error(&error),
+        Err(error) => return batch::config_error(&error),
     };
     // The sandbox is the precondition for the agent, so it is proven before the
     // first frame: a broken sandbox is a card, never a half-drawn interface
@@ -36,7 +38,7 @@ pub fn run(overrides: Overrides) -> i32 {
             check: failing_check(&error),
             detail: error.to_string(),
         };
-        let _ = run::run(Boot::Failed(card), Box::new(Nowhere));
+        let _ = run::refuse(card);
         return ExitCode::EnvironmentFailure.code();
     }
 
@@ -70,10 +72,9 @@ pub fn run(overrides: Overrides) -> i32 {
         branch: git_branch(),
         sandbox: posture(&policy),
         max_turns: config.max_turns,
-        // The provider reports what a turn spent, not how much window it has
-        // left, so the meter counts up and says so rather than guessing a
-        // denominator for a trust fact.
-        context_limit: None,
+        // The meter's denominator is the family's advertised window, where the
+        // adapter knows it; where it does not, the rail counts up without one.
+        context_limit: provider::context_window(&config.model),
     };
     let driver = Front {
         config,
@@ -81,18 +82,9 @@ pub fn run(overrides: Overrides) -> i32 {
         session,
         recorder,
     };
-    match run::run(Boot::Ready(launch), Box::new(driver)) {
+    match run::open(launch, Box::new(driver)) {
         Ending::Left => ExitCode::Success.code(),
         Ending::BootFailed => ExitCode::EnvironmentFailure.code(),
-    }
-}
-
-/// A launch that never reaches a driver: the frame drew a card and left.
-struct Nowhere;
-
-impl Driver for Nowhere {
-    fn run(&mut self, _prompt: &str, _cancel: Cancel, _tap: Tap) -> Finished {
-        Finished::default()
     }
 }
 
@@ -157,7 +149,7 @@ impl Driver for Front {
                 }
             }
             Err(error) => {
-                let message = provider_message(&error);
+                let message = batch::provider_message(&error);
                 let _ = self.recorder.failed(&message);
                 Finished {
                     stopped: Stop::Error,
@@ -222,14 +214,6 @@ fn tokens(usage: &Usage) -> Tokens {
     }
 }
 
-/// The provider's complaint, as one line the transcript can hold.
-fn provider_message(error: &ProviderError) -> String {
-    match error.status() {
-        Some(status) => format!("provider error (HTTP {status}): {}", error.message()),
-        None => format!("provider error: {}", error.message()),
-    }
-}
-
 /// The sandbox posture, in the one line the rail gives it.
 fn posture(policy: &SandboxPolicy) -> String {
     match policy.enforcement() {
@@ -264,14 +248,4 @@ fn git_branch() -> Option<String> {
     }
     let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
     (!branch.is_empty()).then_some(branch)
-}
-
-/// A configuration value that is wrong is a usage error; one that is absent is
-/// a model error with a hint, exactly as batch says it.
-fn config_error(error: &ConfigError) -> i32 {
-    eprintln!("sindri: {}", error.message());
-    match error {
-        ConfigError::Usage(_) => ExitCode::UsageError.code(),
-        ConfigError::Missing(_) => ExitCode::ModelError.code(),
-    }
 }

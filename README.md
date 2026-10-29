@@ -92,11 +92,15 @@ degraded frame.
   everywhere else: there is no placeholder, and the rail simply closes up.
 
 Answers stream as they are written, so the frame is never frozen for the length
-of a model call. Not here yet, by design: scrolling and selection, `/settings`,
-mouse, `@` path completion, and `/new` — those are [ADR-0011](docs/adr/0011-the-tui-contract.md)'s
-next slices. Each prompt is recorded in the same session record as a batch run
-(ADR-0006), and this release keeps one session per launch with the transcript
-growing in place; a later turn does not yet see an earlier one's messages.
+of a model call. Each prompt is recorded in the same session record as a batch
+run (ADR-0006).
+
+Not here yet, by design: scrolling and selection, the spill-file affordance,
+`/settings`, mouse, `@` path completion, and `/new` — those are
+[ADR-0011](docs/adr/0011-the-tui-contract.md)'s next slices. This release also
+keeps the transcript growing per launch while the model-facing history starts
+afresh with each prompt: a later question does not yet see an earlier one's
+messages.
 
 ## Session records
 

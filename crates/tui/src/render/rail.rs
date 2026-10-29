@@ -30,9 +30,17 @@ pub fn column(app: &mut App, area: Rect, buf: &mut Buffer) {
     }
     let width = rows.width.saturating_sub(2) as usize;
     let mut lines: Vec<Line<'static>> = Vec::new();
-    for row in app.rail().rows() {
+    for (label, value) in app.rail().facts() {
+        // The session's facts are a group of their own: one blank row apart.
+        if label == "session" {
+            lines.push(Line::default());
+        }
         lines.extend(text::wrap(
-            text::glyphs(&spans(&row)),
+            text::glyphs(&[
+                Span::styled(label, theme::faint()),
+                Span::raw(" "),
+                Span::raw(value),
+            ]),
             "│ ",
             theme::faint(),
             width,
@@ -47,15 +55,4 @@ pub fn strip(app: &App, area: Rect, buf: &mut Buffer) {
     let shown: String = text.chars().take(area.width as usize).collect();
     let line = Line::from(Span::styled(shown, theme::faint()));
     Paragraph::new(line).render(area, buf);
-}
-
-/// One fact: its name quietly, its value plainly.
-fn spans(row: &str) -> Vec<Span<'static>> {
-    match row.split_once(' ') {
-        Some((label, value)) if !value.is_empty() => vec![
-            Span::styled(format!("{label} "), theme::faint()),
-            Span::styled(value.to_string(), ratatui::style::Style::default()),
-        ],
-        _ => vec![Span::styled(row.to_string(), theme::faint())],
-    }
 }
