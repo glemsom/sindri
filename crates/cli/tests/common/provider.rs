@@ -65,16 +65,24 @@ impl Reply {
     /// A finished Anthropic message asking for one `bash` call with `command`,
     /// after `text`.
     pub fn tool_call(id: &str, command: &str, text: &str) -> Self {
+        Reply::tool_calls(&[(id, command)], text)
+    }
+
+    /// A finished Anthropic message asking for several `bash` calls in one
+    /// turn, after `text`.
+    pub fn tool_calls(calls: &[(&str, &str)], text: &str) -> Self {
         let mut content = Vec::new();
         if !text.is_empty() {
             content.push(serde_json::json!({"type": "text", "text": text}));
         }
-        content.push(serde_json::json!({
-            "type": "tool_use",
-            "id": id,
-            "name": "bash",
-            "input": {"command": command},
-        }));
+        for (id, command) in calls {
+            content.push(serde_json::json!({
+                "type": "tool_use",
+                "id": id,
+                "name": "bash",
+                "input": {"command": command},
+            }));
+        }
         Reply {
             status: 200,
             body: json(serde_json::json!({

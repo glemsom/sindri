@@ -201,3 +201,35 @@ fn malformed_tool_arguments_are_answered_and_the_run_continues() {
         requests[1].body
     );
 }
+
+#[test]
+fn several_tool_calls_in_one_turn_all_run_before_the_next_request() {
+    let env = Env::new();
+    let mock = MockProvider::start(vec![
+        Reply::tool_calls(&[("toolu_1", "echo one"), ("toolu_2", "echo two")], ""),
+        Reply::answer("Both ran."),
+    ]);
+
+    let output = batch(&env, &mock, &["-b", "run two things"], "");
+
+    assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
+    assert_eq!(stdout(&output), "Both ran.\n");
+    let requests = mock.requests();
+    assert_eq!(
+        requests.len(),
+        2,
+        "one turn for both calls, one to answer: the model is asked again only \
+         once every call has run"
+    );
+    let results = &requests[1].body;
+    for expected in ["toolu_1", "toolu_2"] {
+        assert!(
+            results.contains(expected),
+            "the answer to `{expected}` is in the same turn: {results}"
+        );
+    }
+    assert!(
+        results.contains("one") && results.contains("two"),
+        "both commands' output reached the model: {results}"
+    );
+}
