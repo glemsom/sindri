@@ -116,8 +116,13 @@ pub fn copied(viewport: &Viewport, selection: &Selection) -> Option<String> {
             lines.push(taken);
         }
     }
-    let text = lines.join("\n").trim().to_string();
-    (!text.is_empty()).then_some(text)
+    // Only rows that are blank are dropped: the indentation of the first row
+    // taken is part of what the user selected.
+    while lines.last().is_some_and(|line| line.trim().is_empty()) {
+        lines.pop();
+    }
+    let text = lines.join("\n");
+    (!text.trim().is_empty()).then_some(text)
 }
 
 /// The character a screen column falls on. A cell is not a character: a wide
@@ -215,6 +220,16 @@ mod tests {
             copied(&rows, &drag((0, 2), (0, 40))).as_deref(),
             Some("alpha\nbravo"),
             "a drag past the last row stops at it"
+        );
+    }
+
+    #[test]
+    fn the_first_rows_indentation_is_part_of_what_was_selected() {
+        let rows = viewport(&["    indented", "plain"]);
+        assert_eq!(
+            copied(&rows, &drag((0, 2), (40, 3))).as_deref(),
+            Some("    indented\nplain"),
+            "a copy is the rows, leading space and all"
         );
     }
 

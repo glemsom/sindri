@@ -43,9 +43,18 @@ separate total is kept. Scrolling a thread whose rows all fit is a no-op, and
 every gesture has a key: the wheel is `PgUp`/`PgDn`, a click on a spill
 affordance is `Ctrl-O`, and a drag is `Shift+Up`/`Shift+Down` to select whole
 rows from the newest upwards and `Ctrl-Y` to copy them — or, with nothing
-selected, the last answer. A selection is resolved against the plain text of
-what the last frame drew and by display columns, so a wide glyph is taken whole
-rather than cut in half.
+selected, the last answer. The wheel nudges three rows where a page moves a
+screenful — a wheel read as a key, not a page turn. A selection is resolved
+against the plain text of what the last frame drew and by display columns, so a
+wide glyph is taken whole rather than cut in half, and a copy drops only blank
+rows: the indentation of the first row taken is part of what was selected.
+
+**An overlay has the keys, not just the middle of the screen.** While `?` or a
+spill is open, a character reaches nothing: `Esc` or `Enter` closes it, `PgUp`
+and `PgDn` page a spill, the wheel pages it rather than the transcript
+underneath, and `Ctrl-C`/`Ctrl-Q` still work, because a way out of the frame is
+never behind an overlay. Dismissing the overlay gives the composer back with its
+draft untouched.
 
 **The walk is capped, on a thread, one at a time, and ranked, not exhaustive.**
 `@` starts a scan of the workspace on its own thread. At most one walk runs at
@@ -58,15 +67,18 @@ the completion itself, because a list that is not everything should say so. It
 skips `.git` and nothing else, because a file the model can read is a file the
 user can point at. Ranking is proximity: whole-path prefix, then
 file-name prefix, then substring, then subsequence — eight rows at a time, and a
-dotfile only once a dot has been typed.
+dotfile only once a dot has been typed. Accepting an offer replaces the token
+the `@` began and nothing after it, so `look at @src/ma please` becomes
+`look at src/main.rs please`.
 
 **A spill file is read only when it is opened, and never re-copied.** The
 transcript offers the file (`… output too large · Ctrl-O opens …`) from what the
 executor already wrote (ADR-0007). Opening it — `Ctrl-O`, or a click on that
 row, which opens *that* row's file rather than the newest one — reads the file
-once, and each frame draws a slice of the lines it already holds, scrolled by
-whole screenfuls so that the last one is reachable. The render tree holds one
-screen of text, not the file.
+once — as bytes, with invalid UTF-8 replaced, because a command's stdout is not
+promised to be text — and each frame draws a slice of the lines it already
+holds, scrolled by whole screenfuls so that the last one is reachable. The
+render tree holds one screen of text, not the file.
 
 ## Consequences
 

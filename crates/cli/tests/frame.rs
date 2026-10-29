@@ -121,19 +121,34 @@ impl Pty {
 
     /// Asks the frame to leave, the way a user would: pressing the key again if
     /// the first press landed while the frame was still opening. Returns the
-    /// exit status, or `None` when the frame would not go.
-    fn quit(&self, child: &mut Child) -> Option<i32> {
+    /// exit status and everything the frame drew on its way out — the terminal
+    /// is handed back before the process goes — or `None` when it would not go.
+    fn quit(&self, child: &mut Child) -> (Option<i32>, String) {
         let deadline = Instant::now() + DEADLINE;
+        let mut leaving = String::new();
         while Instant::now() < deadline {
             if let Ok(Some(status)) = child.try_wait() {
-                return status.code();
+                return (status.code(), self.drain(&mut leaving));
             }
             self.type_key(QUIT);
+            self.drain(&mut leaving);
             std::thread::sleep(Duration::from_millis(100));
         }
         let _ = child.kill();
         let _ = child.wait();
-        None
+        (None, self.drain(&mut leaving))
+    }
+
+    /// Everything still waiting at the master end, appended to `seen`.
+    fn drain(&self, seen: &mut String) -> String {
+        let mut port = self.port();
+        let mut buffer = [0u8; 4096];
+        loop {
+            match port.read(&mut buffer) {
+                Ok(0) | Err(_) => return seen.clone(),
+                Ok(read) => seen.push_str(&String::from_utf8_lossy(&buffer[..read])),
+            }
+        }
     }
 }
 
@@ -167,7 +182,7 @@ fn bare_sindri_on_a_terminal_opens_the_frame() {
         panic!("bare `sindri` on a terminal must open the frame, drew: {drawn:?}");
     }
 
-    let code = pty.quit(&mut child);
+    let (code, _) = pty.quit(&mut child);
     assert_eq!(code, Some(0), "leaving the frame is not a failure");
 }
 
@@ -203,10 +218,12 @@ fn a_sandbox_that_cannot_exist_is_a_card_before_anything_else_draws() {
 
     // Any key dismisses it, and the run that could not start is an environment
     // failure — not a success.
-    let code = pty.quit(&mut child);
+    let (code, _) = pty.quit(&mut child);
     assert_eq!(code, Some(3), "a sandbox that cannot start exits 3");
 }
 
+/// The escape sequence that hands the mouse back when the frame closes.
+const MOUSE_OFF: &str = "\u{1b}[?1000l";
 /// The escape sequence that turns mouse reporting on: the frame draws its own
 /// selection, so the terminal's must be off (ADR-0011 §7).
 const MOUSE_ON: &str = "\u{1b}[?1000h";
@@ -225,8 +242,12 @@ fn the_mouse_is_the_frames_while_it_draws_and_the_terminals_again_after() {
         let _ = child.wait();
         panic!("the frame takes the mouse when it opens, drew: {drawn:?}");
     }
-    let code = pty.quit(&mut child);
-    assert_eq!(code, Some(0));
+    let (code, leaving) = pty.quit(&mut child);
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+    assert!(
+        leaving.contains(MOUSE_OFF),
+        "and the mouse is the terminal's again: {leaving:?}"
+    );
 }
 
 #[test]
@@ -248,6 +269,6 @@ fn the_frame_advertises_the_hands_and_leaves_when_asked() {
         );
     }
 
-    let code = pty.quit(&mut child);
+    let (code, _) = pty.quit(&mut child);
     assert_eq!(code, Some(0), "leaving the frame is not a failure");
 }

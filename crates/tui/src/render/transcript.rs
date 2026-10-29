@@ -22,11 +22,6 @@ pub struct View {
     pub rows: Vec<Line<'static>>,
     /// The same rows as plain text, ANSI stripped: what a copy takes.
     pub plain: Vec<String>,
-    /// The scroll offset actually used, clamped to the thread's own length.
-    pub scroll: usize,
-    /// Whether the window reaches the first row of the thread, so scrolling
-    /// further up would show nothing new.
-    pub at_top: bool,
     /// How many entries were laid out to build the window.
     pub laid_out: usize,
     /// Every screen row holding a spill affordance, with the file it offers.
@@ -95,8 +90,6 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
     View {
         rows: shown,
         plain,
-        scroll,
-        at_top: first == 0 && start == 0,
         laid_out,
         spill,
     }

@@ -9,19 +9,21 @@ use ratatui::widgets::{Block, Clear, Paragraph, Widget};
 
 use crate::app::App;
 use crate::markdown::text;
-use crate::overlay::Overlay;
+use crate::overlay::{Overlay, help_rows};
 use crate::theme;
 
 /// How wide the keys column of the help overlay is.
 const KEYS: usize = 20;
 
-/// Draws the overlay that has the screen, over everything else.
+/// Draws the overlay that has the screen, over everything else. The overlay is
+/// borrowed rather than cloned: a spill of a megabyte is a window per frame,
+/// never a copy of itself (ADR-0013).
 pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
-    let Some(overlay) = app.overlay().cloned() else {
+    let Some(overlay) = app.overlay_mut() else {
         return;
     };
-    let height = match overlay {
-        Overlay::Help => (overlay.rows().len() as u16 + 2).min(area.height),
+    let height = match &*overlay {
+        Overlay::Help => (help_rows().len() as u16 + 2).min(area.height),
         Overlay::Spill(_) => area.height,
     };
     let width = area.width.saturating_sub(8).clamp(20, 110);
@@ -31,37 +33,41 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
         width,
         height,
     };
-    Clear.render(boxed, buf);
     let block = Block::bordered().border_style(theme::faint());
     let inner = block.inner(boxed);
-    let (title, lines, held) = match &overlay {
-        Overlay::Help => (
-            "keys".to_string(),
-            overlay
-                .rows()
+    match overlay {
+        Overlay::Help => {
+            let lines = help_rows()
                 .into_iter()
                 .map(|(keys, what)| help_row(keys, &what))
-                .collect::<Vec<_>>(),
-            None,
-        ),
+                .collect::<Vec<_>>();
+            render(buf, boxed, inner, "keys", lines);
+        }
         Overlay::Spill(spill) => {
-            let mut spill = spill.clone();
             spill.settled(inner.height as usize);
+            let title = format!(
+                "output: {} · {} lines",
+                spill.path.display(),
+                spill.lines.len()
+            );
             let lines = spill
                 .window()
                 .iter()
-                .map(|line| Line::from(Span::styled(line.clone(), theme::faint())))
+                .map(|line| Line::from(Span::styled(line.as_str(), theme::faint())))
                 .collect::<Vec<_>>();
-            let title = format!("output: {}", spill.path.display());
-            (title, lines, Some(spill))
+            render(buf, boxed, inner, &title, lines);
         }
-    };
-    let block = block.title(Span::styled(format!(" {title} "), theme::faint()));
-    Paragraph::new(lines).render(inner, buf);
-    block.render(boxed, buf);
-    if let Some(spill) = held {
-        app.hold_spill(spill);
     }
+}
+
+/// One box, cleared and drawn over whatever was underneath.
+fn render(buf: &mut Buffer, boxed: Rect, inner: Rect, title: &str, lines: Vec<Line<'_>>) {
+    Clear.render(boxed, buf);
+    Paragraph::new(lines).render(inner, buf);
+    Block::bordered()
+        .border_style(theme::faint())
+        .title(Span::styled(format!(" {title} "), theme::faint()))
+        .render(boxed, buf);
 }
 
 /// One binding: the keys, and what it does with the gesture that also does it.

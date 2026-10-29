@@ -76,9 +76,8 @@ fn a_refused_copy_is_reported_as_a_refusal_and_never_as_success() {
         said.contains("copy refused"),
         "a refusal says it refused: {said:?}"
     );
-    screen(&mut app, 100, 24);
     assert!(
-        !shown(&screen(&mut app, 100, 24)).contains("copied"),
+        !shown(&screen(&mut app, 100, 24)).contains("copy sent"),
         "and nothing claims the copy worked"
     );
 }
@@ -96,6 +95,21 @@ fn ctrl_y_copies_the_last_answer_without_a_mouse() {
     assert!(
         notes(&app).contains("OSC 52"),
         "and it says how, without claiming a confirmation it cannot have: {:?}",
+        notes(&app)
+    );
+}
+
+#[test]
+fn a_copy_through_a_shell_tool_names_the_tool() {
+    let clipboard = Fake {
+        seen: Arc::new(Mutex::new(Vec::new())),
+        answer: Copied::Tool("wl-copy"),
+    };
+    let mut app = answered(clipboard);
+    press(&mut app, KeyCode::Char('y'), KeyModifiers::CONTROL);
+    assert!(
+        notes(&app).contains("via wl-copy"),
+        "the note names the channel that took it: {:?}",
         notes(&app)
     );
 }

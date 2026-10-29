@@ -165,10 +165,9 @@ impl App {
         self.overlay.as_ref()
     }
 
-    /// The spill overlay, as the frame last drew it: its scroll and the rows it
-    /// had room for belong to the frame, not to the file.
-    pub fn hold_spill(&mut self, spill: crate::overlay::Spill) {
-        self.overlay = Some(crate::overlay::Overlay::Spill(spill));
+    /// The same, to draw: a spill's scroll and its window belong to the frame.
+    pub fn overlay_mut(&mut self) -> Option<&mut Overlay> {
+        self.overlay.as_mut()
     }
 
     /// What the transcript column last drew.

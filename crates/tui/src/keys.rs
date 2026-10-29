@@ -21,6 +21,10 @@ impl App {
     /// cancels the run and keeps the draft, Ctrl-Q leaves (ADR-0011 §14).
     pub fn key(&mut self, key: KeyEvent) {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        if self.overlay.is_some() {
+            self.overlay_key(key, ctrl);
+            return;
+        }
         match key.code {
             KeyCode::Char('q') if ctrl => self.quit = true,
             KeyCode::Char('c') if ctrl => self.cancel_or_clear(),
@@ -68,6 +72,16 @@ impl App {
         if event.modifiers.contains(KeyModifiers::SHIFT) {
             return;
         }
+        if self.overlay.is_some() {
+            // An overlay has the screen: the wheel pages it, and nothing else
+            // reaches the transcript underneath.
+            match event.kind {
+                MouseEventKind::ScrollUp => self.scroll_page(true),
+                MouseEventKind::ScrollDown => self.scroll_page(false),
+                _ => {}
+            }
+            return;
+        }
         let at = Position::new(event.column, event.row);
         match event.kind {
             MouseEventKind::Down(MouseButton::Left) => self.press(at),
@@ -82,6 +96,19 @@ impl App {
             }
             MouseEventKind::ScrollUp => self.scroll_by(WHEEL_ROWS, true),
             MouseEventKind::ScrollDown => self.scroll_by(WHEEL_ROWS, false),
+            _ => {}
+        }
+    }
+
+    /// What a key does while an overlay has the screen: close it, page it, or
+    /// leave. Nothing types behind an overlay the user cannot see through.
+    fn overlay_key(&mut self, key: KeyEvent, ctrl: bool) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Enter => self.overlay = None,
+            KeyCode::PageUp => self.scroll_page(true),
+            KeyCode::PageDown => self.scroll_page(false),
+            KeyCode::Char('q') if ctrl => self.quit = true,
+            KeyCode::Char('c') if ctrl => self.cancel_or_clear(),
             _ => {}
         }
     }
@@ -117,10 +144,6 @@ impl App {
 
     /// Enter: close an overlay, take a completion, run a command, or send.
     fn enter(&mut self) {
-        if self.overlay.is_some() {
-            self.overlay = None;
-            return;
-        }
         if self
             .completion
             .as_ref()
@@ -176,11 +199,8 @@ impl App {
         self.renew = true;
     }
 
-    /// `Esc`: the overlay, then the completion, then the selection.
+    /// `Esc`: the completion, then the selection.
     fn dismiss(&mut self) {
-        if self.overlay.take().is_some() {
-            return;
-        }
         if self.completion.take().is_some() {
             self.walking = None;
             return;
@@ -252,8 +272,6 @@ impl App {
     fn copy_last_answer(&mut self) {
         if !self.selection.is_empty() {
             self.copy_selection();
-            self.selecting = 0;
-            self.selection = Selection::default();
             return;
         }
         let answer = self.entries.iter().rev().find_map(|entry| match entry {
@@ -312,10 +330,13 @@ impl App {
 
     /// The selection, as the rows it covers (ADR-0011 §7).
     fn copy_selection(&mut self) {
-        match selection::copied(&self.viewport, &self.selection) {
-            Some(text) => self.copy(&text),
-            None => self.selection = Selection::default(),
+        if let Some(text) = selection::copied(&self.viewport, &self.selection) {
+            self.copy(&text);
         }
+        // Copied or not, the selection is spent: a second Ctrl-Y copies the
+        // last answer rather than silently repeating the last drag.
+        self.selection = Selection::default();
+        self.selecting = 0;
     }
 
     /// A copy, and the truth about it: sent is not the same as copied, and a

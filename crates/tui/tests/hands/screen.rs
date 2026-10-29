@@ -164,3 +164,28 @@ fn a_click_on_an_older_affordance_opens_that_rows_file() {
         "a click opens the row it was on: {opened}"
     );
 }
+
+#[test]
+fn an_overlay_has_the_keys_so_nothing_types_behind_it() {
+    let mut app = app_with(Fake::taking());
+    type_text(&mut app, "half a question");
+    press(&mut app, KeyCode::Char('?'), KeyModifiers::NONE);
+    assert!(
+        app.overlay().is_none(),
+        "? is a `?` in the prompt, not help: the prompt is not empty"
+    );
+
+    let mut quiet = app_with(Fake::taking());
+    press(&mut quiet, KeyCode::Char('?'), KeyModifiers::NONE);
+    assert!(quiet.overlay().is_some());
+    type_text(&mut quiet, "typed at help");
+    assert_eq!(
+        quiet.composer().text(),
+        "",
+        "a key pressed at an overlay does not reach the composer behind it"
+    );
+    screen(&mut quiet, 100, 30);
+    press(&mut quiet, KeyCode::Esc, KeyModifiers::NONE);
+    type_text(&mut quiet, "now it types");
+    assert_eq!(quiet.composer().text(), "now it types");
+}

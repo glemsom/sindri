@@ -40,7 +40,7 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
 
     let (body, completions) = match app.completion() {
         Some(completion) if !completion.items.is_empty() => {
-            let rows = completion.items.len() as u16;
+            let rows = (completion.items.len() + usize::from(completion.capped)) as u16;
             let [above, below] =
                 Layout::vertical([Constraint::Min(1), Constraint::Length(rows)]).areas(body);
             (above, Some(below))

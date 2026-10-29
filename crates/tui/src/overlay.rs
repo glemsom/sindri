@@ -101,24 +101,19 @@ pub enum Overlay {
     Spill(Spill),
 }
 
-impl Overlay {
-    /// The rows this overlay draws, before the frame wraps them: the keys and
-    /// the gesture that reaches the same thing.
-    pub fn rows(&self) -> Vec<(&'static str, String)> {
-        match self {
-            Overlay::Help => BINDINGS
-                .iter()
-                .map(|binding| {
-                    let gesture = match binding.mouse {
-                        Some(mouse) => format!(" · {mouse}"),
-                        None => String::new(),
-                    };
-                    (binding.keys, format!("{}{gesture}", binding.what))
-                })
-                .collect(),
-            Overlay::Spill(spill) => spill.title(),
-        }
-    }
+/// The help overlay's rows: the keys, and what it does with the gesture that
+/// also does it.
+pub fn help_rows() -> Vec<(&'static str, String)> {
+    BINDINGS
+        .iter()
+        .map(|binding| {
+            let gesture = match binding.mouse {
+                Some(mouse) => format!(" · {mouse}"),
+                None => String::new(),
+            };
+            (binding.keys, format!("{}{gesture}", binding.what))
+        })
+        .collect()
 }
 
 /// A spill file, open in the frame. The file is read once, when it is opened,
@@ -140,8 +135,13 @@ impl Spill {
     /// frame says so instead.
     pub fn open(path: impl AsRef<Path>) -> std::io::Result<Spill> {
         let path = path.as_ref();
-        let text = std::fs::read_to_string(path)?;
-        let lines: Vec<String> = text.lines().map(|line| line.to_string()).collect();
+        // A command's output is bytes, not text: a stream that is not UTF-8 is
+        // still shown, with its invalid sequences replaced (ADR-0007).
+        let bytes = std::fs::read(path)?;
+        let lines: Vec<String> = String::from_utf8_lossy(&bytes)
+            .lines()
+            .map(|line| line.to_string())
+            .collect();
         Ok(Spill {
             path: path.to_path_buf(),
             lines: if lines.is_empty() {
@@ -154,18 +154,6 @@ impl Spill {
         })
     }
 
-    /// The overlay's title row: which file, how long, and that `Esc` closes it.
-    pub fn title(&self) -> Vec<(&'static str, String)> {
-        vec![(
-            "file",
-            format!(
-                "{} · {} lines · Esc closes",
-                self.path.display(),
-                self.lines.len()
-            ),
-        )]
-    }
-
     /// Records how tall the overlay is, so a scroll can stop where the file's
     /// last screenful is, rather than at its last line.
     pub fn settled(&mut self, visible: usize) {
@@ -173,7 +161,7 @@ impl Spill {
     }
 
     /// The lines a window of `visible` rows shows, from where the reader is.
-    /// Nothing is cloned: a megabyte of output is a slice per frame, not a copy.
+    /// A slice, not a copy: a megabyte of output is a window per frame.
     pub fn window(&mut self) -> &[String] {
         let height = self.visible.min(self.lines.len().max(1));
         let last = self.lines.len().saturating_sub(height);
@@ -196,7 +184,7 @@ impl Spill {
 
 #[cfg(test)]
 mod tests {
-    use super::{BINDINGS, Overlay, Spill};
+    use super::{BINDINGS, Spill, help_rows};
 
     /// The keys the contract names, written here from ADR-0011 §14 and
     /// ADR-0013 rather than read out of `BINDINGS`: a key the frame gained and
@@ -219,7 +207,7 @@ mod tests {
 
     #[test]
     fn the_help_lists_every_key_the_contract_names() {
-        let listed: Vec<&str> = Overlay::Help.rows().iter().map(|(keys, _)| *keys).collect();
+        let listed: Vec<&str> = help_rows().iter().map(|(keys, _)| *keys).collect();
         for wanted in REQUIRED {
             assert!(
                 listed.contains(wanted),

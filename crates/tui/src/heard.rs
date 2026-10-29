@@ -144,6 +144,9 @@ impl App {
         self.running = None;
         self.rail
             .settled(finished.turns, finished.tokens, finished.stopped);
+        // A line that never found the call it belonged to belongs to no later
+        // call either.
+        self.early.clear();
         self.close_answers();
         if let Some(error) = finished.error {
             self.entries.push(Entry::Note(Note::error(error)));
