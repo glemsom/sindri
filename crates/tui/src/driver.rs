@@ -88,16 +88,6 @@ pub struct Finished {
     pub error: Option<String>,
 }
 
-/// What a saved config did, in the frame's words: the rail's new limits, or
-/// why the next run cannot start with them (ADR-0014).
-#[derive(Debug, Clone, Default)]
-pub struct Reloaded {
-    /// What the rail should now show, when the settings could be taken up.
-    pub launch: Option<Launch>,
-    /// Why they could not, when they could not.
-    pub error: Option<String>,
-}
-
 /// What the frame asks a front end to do: one prompt, run to an answer.
 pub trait Driver: Send {
     /// Runs `prompt`, feeding `tap` as it goes, and says how it ended.
@@ -112,9 +102,10 @@ pub trait Driver: Send {
 
     /// Reads the config file again, so the next prompt runs on what was just
     /// saved — no restart, and no second source of truth. `/settings` is the
-    /// only caller; a front end that cannot apply a setting says why.
-    fn reload(&mut self) -> Reloaded {
-        Reloaded::default()
+    /// only caller. `Ok` is what the rail should now show; `Err` is why the
+    /// next run cannot start, said in the transcript where an error belongs.
+    fn reload(&mut self) -> Result<Launch, String> {
+        Err("this front end cannot read the config again".to_string())
     }
 }
 

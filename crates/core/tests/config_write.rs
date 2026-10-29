@@ -1,11 +1,11 @@
+//! The config file, written (ADR-0014). Every test points a document at a
+//! temporary directory: nothing here reads or writes a real user's config, and
+//! nothing here can.
+
 #![allow(
     clippy::expect_used,
     reason = "a panicking test is how a broken contract reports itself"
 )]
-
-//! The config file, written (ADR-0014). Every test points a document at a
-//! temporary directory: nothing here reads or writes a real user's config, and
-//! nothing here can.
 
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -225,4 +225,42 @@ fn every_key_the_form_offers_is_one_the_file_can_carry() {
         );
     }
     assert_eq!(KEYS.len(), 9, "the schema's keys, and no more");
+}
+
+#[test]
+fn every_key_can_be_set_shown_and_cleared() {
+    // One case per key, so a tenth key added to the schema without an arm in
+    // the document is a failure here rather than a field that does nothing.
+    let (_dir, path, mut document) = document(None);
+    let values = [
+        (Key::Provider, "anthropic"),
+        (Key::Model, "m"),
+        (Key::BaseUrl, "http://127.0.0.1:1"),
+        (Key::ApiKey, "sk-one"),
+        (Key::MaxTurns, "2"),
+        (Key::Timeout, "3"),
+        (Key::Thinking, "true"),
+        (Key::ExtraWritablePaths, "/usr/share"),
+        (Key::ExtraHeaders, "x-one: 1"),
+    ];
+    assert_eq!(values.len(), KEYS.len(), "one case per key");
+    for (key, value) in values {
+        assert!(!document.is_set(key), "{key:?} starts unset");
+        document.set(key, value).expect("accepted");
+        assert!(document.is_set(key), "{key:?} is set");
+        if !key.secret() {
+            assert_eq!(document.editable(key), value, "{key:?} reads back");
+        }
+        document.save().expect("written");
+        let reread = Document::load_at(&path).expect("parses");
+        assert!(reread.is_set(key), "{key:?} survives the file");
+        document.set(key, "").expect("cleared");
+        assert!(
+            !document.is_set(key),
+            "{key:?} is cleared by an empty value"
+        );
+        document.save().expect("written");
+        let reread = Document::load_at(&path).expect("parses");
+        assert!(!reread.is_set(key), "{key:?} is gone from the file");
+    }
 }

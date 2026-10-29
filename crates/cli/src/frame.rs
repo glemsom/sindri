@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use std::sync::mpsc;
 
-use sindri_core::agent::{Agent, BashTool, Event};
+use sindri_core::agent::{Agent, BashTool, Dials, Event};
 use sindri_core::cancel::Cancel;
 use sindri_core::config::{Config, Overrides};
 use sindri_core::doctor::{self, DoctorError};
@@ -16,7 +16,7 @@ use sindri_core::provider::{self, Client, Usage};
 use sindri_core::record::{Recorder, Redaction, Start};
 use sindri_core::sandbox::{Enforcement, SandboxPolicy};
 use sindri_core::session;
-use sindri_tui::driver::{CallOver, Driver, Finished, Reloaded, Spilled, Stop, Tap, Tokens};
+use sindri_tui::driver::{CallOver, Driver, Finished, Spilled, Stop, Tap, Tokens};
 use sindri_tui::run::{self, Ending};
 use sindri_tui::{Card, Launch};
 use sindri_types::ExitCode;
@@ -144,17 +144,23 @@ impl Driver for Front {
 
         // The thread is the conversation's, so a new model, tool, cap or
         // thinking toggle is a change of dials and not a change of subject.
+        let dials = Dials {
+            model,
+            tool,
+            max_turns,
+            thinking,
+        };
         let agent = match self.agent.as_mut() {
             Some(agent) => {
-                agent.set_model(model);
-                agent.set_tool(tool);
-                agent.set_max_turns(max_turns);
-                agent.set_thinking(thinking);
+                agent.set_dials(dials);
                 agent
             }
-            None => self
-                .agent
-                .insert(Agent::new(model, tool, max_turns, thinking)),
+            None => self.agent.insert(Agent::new(
+                dials.model,
+                dials.tool,
+                dials.max_turns,
+                dials.thinking,
+            )),
         };
         agent.set_cancel(cancel);
         agent.set_recorder(recorder);
@@ -197,51 +203,17 @@ impl Driver for Front {
         self.fresh_session()
     }
 
-    fn reload(&mut self) -> Reloaded {
-        let config = match Config::resolve(self.overrides.clone()) {
-            Ok(config) => config,
-            Err(error) => {
-                return Reloaded {
-                    launch: None,
-                    error: Some(error.message().to_string()),
-                };
-            }
-        };
+    fn reload(&mut self) -> Result<Launch, String> {
+        let config =
+            Config::resolve(self.overrides.clone()).map_err(|error| error.message().to_string())?;
         // The same session, bounded by the policy the new settings grant: a
         // saved extra path is in force for the very next command.
-        match policy_for(&self.session, &config.extra_writable) {
-            Ok(policy) => {
-                self.config = config;
-                self.policy = policy;
-                Reloaded {
-                    launch: Some(launch(&self.session, &self.policy, &self.config)),
-                    error: None,
-                }
-            }
-            Err(error) => Reloaded {
-                launch: None,
-                error: Some(error),
-            },
-        }
+        let policy = session::rebounded(&self.session, &config.extra_writable)
+            .map_err(|error| format!("extra_writable_paths: {error}"))?;
+        self.config = config;
+        self.policy = policy;
+        Ok(launch(&self.session, &self.policy, &self.config))
     }
-}
-
-/// The sandbox the settings grant, over the session that is already running.
-fn policy_for(
-    session: &SessionDir,
-    extras: &[std::path::PathBuf],
-) -> Result<SandboxPolicy, String> {
-    let workspace = std::env::current_dir()
-        .and_then(|dir| dir.canonicalize())
-        .map_err(|error| error.to_string())?;
-    sindri_core::session::policy_for(
-        &workspace,
-        extras,
-        session.temp(),
-        sindri_core::session::search_path(),
-        Enforcement::Bubblewrap,
-    )
-    .map_err(|error| format!("extra_writable_paths: {error}"))
 }
 
 impl Front {

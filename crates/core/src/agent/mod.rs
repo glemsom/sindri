@@ -21,6 +21,21 @@ use crate::cancel::Cancel;
 use crate::provider::{Delta, DeltaSink, Error, Message, Model};
 use crate::record::Recorder;
 
+/// What one conversation runs on: the model to ask, the tool to run it with,
+/// how many turns it may take, and whether it pays for reasoning. A front end
+/// replaces the whole set between prompts, because a saved setting can change
+/// any of them and none of them is the conversation (ADR-0014).
+pub struct Dials {
+    /// The model to ask.
+    pub model: Box<dyn Model>,
+    /// The tool, bounded by the sandbox the run has now.
+    pub tool: BashTool,
+    /// The turn cap.
+    pub max_turns: u32,
+    /// Whether the run pays for the model's reasoning.
+    pub thinking: bool,
+}
+
 /// Drives the model until it stops asking for tools, or the turn cap is hit.
 pub struct Agent {
     model: Box<dyn Model>,
@@ -54,37 +69,20 @@ impl Agent {
         }
     }
 
-    /// The model this conversation asks, which a front end may replace between
-    /// prompts: the thread is the conversation's, not the model's (T17).
-    pub fn set_model(&mut self, model: Box<dyn Model>) {
-        self.model = model;
-    }
-
-    /// The tool this conversation runs, replaced with the sandbox it is bounded
-    /// by whenever that changes.
-    pub fn set_tool(&mut self, tool: BashTool) {
-        self.tool = tool;
-    }
-
-    /// The turn cap, which a saved setting may change mid-conversation.
-    pub fn set_max_turns(&mut self, max_turns: u32) {
-        self.max_turns = max_turns;
-    }
-
-    /// Whether the run pays for reasoning, which a saved setting may change.
-    pub fn set_thinking(&mut self, thinking: bool) {
-        self.thinking = thinking;
+    /// The dials this conversation runs on, replaced between prompts: the
+    /// thread is the conversation's, not the model's, so a saved setting is a
+    /// change of dials and not a change of subject (ADR-0014).
+    pub fn set_dials(&mut self, dials: Dials) {
+        self.model = dials.model;
+        self.tool = dials.tool;
+        self.max_turns = dials.max_turns;
+        self.thinking = dials.thinking;
     }
 
     /// Forget the thread, so the next prompt is the first of a new
     /// conversation. The record on disk keeps everything it already has.
     pub fn forget(&mut self) {
         self.history.clear();
-    }
-
-    /// The conversation as the model has it, for a front end that has to know.
-    pub fn history(&self) -> &[Message] {
-        &self.history
     }
 
     /// Records the run as it happens, so a cancelled or crashed run still says

@@ -9,8 +9,10 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph, Widget};
 use sindri_core::config::Key;
 
+use sindri_core::config::toggle_shown;
+
 use crate::markdown::text::{self, clip};
-use crate::settings::Settings;
+use crate::settings::{Field, Settings};
 use crate::theme;
 
 /// How wide the key column is.
@@ -38,8 +40,8 @@ pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) {
         columns,
     ));
     lines.push(Line::default());
-    for index in 0..settings.fields().len() {
-        let line = row(settings, index, columns);
+    for (index, field) in settings.fields().iter().enumerate() {
+        let line = row(settings, field, columns);
         lines.push(if index == settings.chosen() {
             line.patch_style(Style::new().add_modifier(Modifier::REVERSED))
         } else {
@@ -94,12 +96,9 @@ pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) {
 }
 
 /// One field: its key, and what the field would write.
-fn row(settings: &Settings, index: usize, columns: usize) -> Line<'static> {
-    let Some(field) = settings.fields().get(index) else {
-        return Line::default();
-    };
+fn row(settings: &Settings, field: &Field, columns: usize) -> Line<'static> {
     let label = format!("{:<LABEL$}", clip(field.key.name(), LABEL));
-    let (shown, style) = value(settings, index);
+    let (shown, style) = value(settings, field);
     Line::from(vec![
         Span::styled(label, theme::faint()),
         Span::styled(clip(&shown, columns.saturating_sub(LABEL)), style),
@@ -108,29 +107,23 @@ fn row(settings: &Settings, index: usize, columns: usize) -> Line<'static> {
 
 /// One field's value, and how loud it is: a secret is the frame's quiet answer
 /// about where the value comes from, never the value.
-fn value(settings: &Settings, index: usize) -> (String, Style) {
-    let Some(field) = settings.fields().get(index) else {
-        return (String::new(), Style::new());
-    };
+fn value(settings: &Settings, field: &Field) -> (String, Style) {
     let typed = field.text.trim();
     match field.key {
-        Key::ApiKey if typed.is_empty() && settings.is_set(field.key) => {
+        Key::ApiKey if typed.is_empty() && settings.document().is_set(field.key) => {
             ("•••• set in the file (hidden)".to_string(), theme::faint())
         }
         Key::ApiKey if typed.is_empty() => ("from environment".to_string(), theme::faint()),
-        Key::ExtraHeaders if typed.is_empty() && settings.is_set(field.key) => (
+        Key::ExtraHeaders if typed.is_empty() && settings.document().is_set(field.key) => (
             "•••• set in the file (values hidden)".to_string(),
             theme::faint(),
         ),
-        Key::Thinking => {
-            let said = match typed {
-                "true" | "1" | "yes" | "on" => "on",
-                "false" | "0" | "no" | "off" => "off",
-                // Unset means the run's own default, which is off (ADR-0004).
-                _ => "off (default)",
-            };
-            (said.to_string(), Style::new())
+        // A toggle the file does not name is the run's own default, which is
+        // off (ADR-0004), and says so rather than pretending the file said it.
+        Key::Thinking if typed.is_empty() => {
+            (format!("{} (default)", toggle_shown(typed)), Style::new())
         }
+        Key::Thinking => (toggle_shown(typed).to_string(), Style::new()),
         _ if field.key.secret() && !typed.is_empty() => (
             "•••• (will be written to the file)".to_string(),
             theme::faint(),

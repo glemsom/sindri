@@ -225,13 +225,23 @@ where
 
 /// A toggle, the way the environment takes one: a typo is refused rather than
 /// silently reading as off.
-fn toggle(value: &str) -> Result<bool, ConfigError> {
+pub fn toggle(value: &str) -> Result<bool, ConfigError> {
     match value.trim() {
         "true" | "1" | "yes" | "on" => Ok(true),
         "false" | "0" | "no" | "off" => Ok(false),
         other => Err(ConfigError::Usage(format!(
             "is not a toggle: `{other}` (use true or false)"
         ))),
+    }
+}
+
+/// What a form should put on screen for a toggle: a value the file does not
+/// carry is the run's own default, which is off (ADR-0004). One spelling, so a
+/// field and a file cannot disagree about what on means.
+pub fn toggle_shown(value: &str) -> &'static str {
+    match toggle(value).unwrap_or(false) {
+        true => "on",
+        false => "off",
     }
 }
 

@@ -155,9 +155,10 @@ settings · /home/you/.config/sindri/config.toml
   the sandbox policy over the session already in flight, so a saved extra
   writable path is in force for the very next command. A model changed here
   answers the next turn **on the same thread**.
-- **`Esc` discards** everything you typed. Nothing is written until `Enter`: the
-  modal stages fields in memory, validates them against the schema, and writes
-  once, atomically.
+- **`Esc` discards** everything you typed. Nothing is written until `Enter`, and
+  then only the fields you touched: the modal stages them in memory, validates
+  them against the schema, and writes once, atomically. A key the file holds and
+  you never touched stays in the file.
 - **An unknown key or a bad value** is an error, exactly as it is for a run: the
   modal opens over a file the schema refuses only to say so in the transcript,
   and a value that fails on save keeps the modal open and the file untouched.
@@ -168,7 +169,12 @@ is the explicit act, and it turns on a warning that names the file the value
 will land in — in plaintext. The value is masked while you type, never echoed
 into the transcript, and never in the session record: the modal cannot print a
 key even by accident, because the config document does not hand one back.
-Emptying the field returns to the environment.
+Emptying the field is the explicit act that returns to the environment.
+
+One thing the modal cannot see: the environment is read **above** the file, so
+a run with `SINDRI_API_KEY` (or the provider's own variable) exported uses that
+credential whatever the file says. The modal reports what the file holds, which
+is all it can honestly report.
 
 ## Session records
 

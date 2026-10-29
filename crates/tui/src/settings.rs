@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use sindri_core::config::{Document, KEYS, Key};
+use sindri_core::config::{Document, KEYS, Key, toggle_shown};
 
 use crate::overlay::Overlay;
 
@@ -26,13 +26,18 @@ pub enum Outcome {
     CancelRun,
 }
 
-/// One editable field: the key it stages, and the text as typed.
+/// One editable field: the key it stages, the text as typed, and whether the
+/// user has touched it. A field nobody touched is not staged, so a save changes
+/// what it was asked to change and nothing else.
 #[derive(Debug, Clone)]
 pub struct Field {
     /// The file's own key.
     pub key: Key,
     /// What the user has typed, or what the file said before that.
     pub text: String,
+    /// Whether a keystroke has been in this field. A secret the file holds is
+    /// never handed back — so an untouched one must not be written as empty.
+    pub touched: bool,
 }
 
 /// The modal's state: the document it will write, and the fields over it.
@@ -68,6 +73,7 @@ impl Settings {
             .map(|key| Field {
                 key: *key,
                 text: document.editable(*key),
+                touched: false,
             })
             .collect();
         Settings {
@@ -97,12 +103,6 @@ impl Settings {
     /// Why the last save was refused, if it was.
     pub fn error(&self) -> Option<&str> {
         self.error.as_deref()
-    }
-
-    /// Whether the file already names this key — what a field says instead of a
-    /// secret's value.
-    pub fn is_set(&self, key: Key) -> bool {
-        self.document.is_set(key)
     }
 
     /// Whether a secret has been typed in this draft: the plaintext warning,
@@ -161,52 +161,54 @@ impl Settings {
 
     /// One character, appended to the field with the cursor.
     pub fn insert(&mut self, ch: char) {
-        if let Some(field) = self.fields.get_mut(self.chosen) {
-            field.text.push(ch);
-            self.error = None;
-        }
+        self.edit(|field| field.text.push(ch));
     }
 
     /// Backspace: the last character of the field with the cursor.
     pub fn backspace(&mut self) {
-        if let Some(field) = self.fields.get_mut(self.chosen) {
+        self.edit(|field| {
             field.text.pop();
-            self.error = None;
-        }
+        });
     }
 
     /// Ctrl-U: the field with the cursor, emptied. An empty value unsets the
     /// key, so the environment or the default speaks instead.
     pub fn clear(&mut self) {
+        self.edit(|field| field.text.clear());
+    }
+
+    /// One change to the field with the cursor: touched, and no longer an
+    /// error the user has already moved past.
+    fn edit(&mut self, change: impl FnOnce(&mut Field)) {
         if let Some(field) = self.fields.get_mut(self.chosen) {
-            field.text.clear();
+            change(field);
+            field.touched = true;
             self.error = None;
         }
     }
 
     /// Space on a toggle: the only field where a keystroke is not a character.
     pub fn flip(&mut self) -> bool {
-        let Some(field) = self.fields.get_mut(self.chosen) else {
-            return false;
+        let on = match self.fields.get(self.chosen) {
+            // An unset toggle is the run's own default, which is off, so the
+            // first space turns it on. The words are the schema's.
+            Some(field) if field.key == Key::Thinking => toggle_shown(&field.text) == "on",
+            _ => return false,
         };
-        if field.key != Key::Thinking {
-            return false;
-        }
-        // An unset toggle is the run's own default, which is off, so the first
-        // space turns it on.
-        let on = matches!(field.text.trim(), "true" | "1" | "yes" | "on");
-        field.text = if on { "false" } else { "true" }.to_string();
-        self.error = None;
+        let text = if on { "false" } else { "true" }.to_string();
+        self.edit(|field| field.text = text);
         true
     }
 
-    /// Stages every field through the schema and writes the file. A value the
-    /// schema refuses leaves the file exactly as it was, and the modal open.
+    /// Stages the fields the user touched through the schema and writes the
+    /// file. A value the schema refuses leaves the file exactly as it was, and
+    /// the modal open. A field nobody touched is not written at all, so a save
+    /// cannot erase what it never showed — a secret above all.
     pub fn save(&mut self) -> Result<(), String> {
         // Staged on a copy: a document that refuses one value must not be left
         // holding the ones before it.
         let mut staged = self.document.clone();
-        for field in &self.fields {
+        for field in self.fields.iter().filter(|field| field.touched) {
             staged
                 .set(field.key, &field.text)
                 .map_err(|error| format!("{}: {}", field.key.name(), error.message()))?;

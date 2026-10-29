@@ -34,7 +34,7 @@ mod file;
 mod headers;
 mod provider;
 
-pub use document::{Document, KEYS, Key};
+pub use document::{Document, KEYS, Key, toggle, toggle_shown};
 pub use provider::Provider;
 
 /// What the command line says, before anything else has a say.

@@ -39,6 +39,23 @@ pub fn search_path() -> String {
         .unwrap_or_else(|| FALLBACK_PATH.to_string())
 }
 
+/// The policy a session that is already running would be bounded by with these
+/// extras: the same workspace and the same temp, so a saved setting is in force
+/// for the very next command without a new session (ADR-0014).
+pub fn rebounded(session: &SessionDir, extras: &[PathBuf]) -> Result<SandboxPolicy, String> {
+    let workspace = std::env::current_dir()
+        .and_then(|dir| dir.canonicalize())
+        .map_err(|error| error.to_string())?;
+    policy_for(
+        &workspace,
+        extras,
+        session.temp(),
+        search_path(),
+        Enforcement::Bubblewrap,
+    )
+    .map_err(|error| error.to_string())
+}
+
 /// A fresh session directory with its temp and HOME created.
 pub fn begin() -> io::Result<SessionDir> {
     let session = SessionDir::create()?;

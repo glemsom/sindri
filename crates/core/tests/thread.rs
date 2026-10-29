@@ -1,11 +1,11 @@
+//! The conversation's thread (ADR-0012's known gap, closed in T17): a second
+//! prompt sees the first exchange, `/new` forgets it, and a prompt that was cut
+//! short leaves no half-exchange the next request would refuse.
+
 #![allow(
     clippy::expect_used,
     reason = "a panicking test is how a broken contract reports itself"
 )]
-
-//! The conversation's thread (ADR-0012's known gap, closed in T17): a second
-//! prompt sees the first exchange, `/new` forgets it, and a prompt that was cut
-//! short leaves no half-exchange the next request would refuse.
 
 mod support;
 

@@ -37,7 +37,7 @@ file, and a credential in it is never momentarily world-readable. The reader
 never meets a parse error's source snippet — the position and the message are
 kept, and the line itself, which may be the credential, is not.
 
-**A secret is never handed back.** `Document::editable` returns an empty string
+**A secret is never handed back, so it is replaced rather than edited.** `Document::editable` returns an empty string
 for `api_key` and `extra_headers` whatever the file holds, so no field, no
 frame and no error message can print one by accident: the modal can say *set in
 the file (hidden)* or *from environment*, and that is all it may know. Typing a
@@ -47,11 +47,19 @@ will land in. The value is masked while typed, never echoed, never in the
 transcript, and never in the session record — three claims a test asserts from
 outside: on the drawn buffer, on the transcript, and on every file the run left.
 
-**`Esc` writes nothing, `Enter` writes at once.** The modal stages fields in
-memory and touches the disk only on save. `Enter` stages every field through
-the schema onto a *copy* of the document, and only a document that took every
-value is written: a refusal keeps the modal open, says which key refused, and
-leaves the file byte-identical.
+**`Esc` writes nothing, `Enter` writes at once — and only what was touched.**
+The modal stages fields in memory and touches the disk only on save. `Enter`
+stages the fields a keystroke has been in, through the schema, onto a *copy* of
+the document, and only a document that took every value is written: a refusal
+keeps the modal open, says which key refused, and leaves the file
+byte-identical. A field nobody touched is not written at all — which is the
+same rule that keeps a secret alive, because a secret is the one value the
+document never hands back: staging an untouched key field would write an empty
+one and silently delete the credential the file held. Editing a key means
+typing one; emptying the field is the explicit act that returns the run to the
+environment, and `extra_headers` is replaced whole when it is typed at all —
+there is no way to be shown a value in order to edit it in place, and that is
+the price of never drawing one.
 
 **A saved setting applies because the front end reads the file again.** The
 frame raises a reload; `Driver::reload()` resolves the config once more from the
@@ -86,6 +94,11 @@ panel at 100 columns and at 160.
 
 - The TUI gained no parser and no schema: `/settings` writes through the same
   code a run reads, and `crates/core` still imports no front end.
+- A key in the file is not always the key a run uses: `SINDRI_API_KEY` or the
+  provider's own variable is read above the file (ADR-0005), so a run with one
+  exported ignores a key saved here. The modal says what the *file* holds, which
+  is what it can see; the precedence is the run's, and the README's table is
+  where it is stated.
 - A key typed mid-launch is not in the record's redaction set, which was built
   from the credential the launch started with. Nothing the record carries holds a
   key (the recorded text is prompts, answers and commands), and the modal never
