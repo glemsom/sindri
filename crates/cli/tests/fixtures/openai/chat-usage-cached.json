@@ -1,0 +1,20 @@
+{
+  "id": "chatcmpl-local-3",
+  "object": "chat.completion",
+  "created": 1730000002,
+  "model": "llama3.2",
+  "choices": [
+    {
+      "index": 0,
+      "message": {"role": "assistant", "content": "Two files changed."},
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 1024,
+    "completion_tokens": 33,
+    "total_tokens": 1057,
+    "prompt_tokens_details": {"cached_tokens": 896},
+    "completion_tokens_details": {"reasoning_tokens": 5}
+  }
+}
