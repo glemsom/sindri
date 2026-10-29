@@ -2,12 +2,14 @@
 //! back into the frame while it runs (ADR-0012). No provider type crosses it
 //! (ADR-0003): the frame is told how a run ended in its own words.
 
+use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 
 use sindri_core::agent::Event;
 use sindri_core::cancel::Cancel;
 
 use crate::msg::Msg;
+use crate::rail::Launch;
 
 /// Which stream a line of live output came from.
 pub use sindri_core::exec::Side;
@@ -23,6 +25,16 @@ pub enum CallOver {
     Cancelled,
     /// The sandbox never started, so no command ran.
     Refused(String),
+}
+
+/// What a command's output had to leave behind: the streams the model was given
+/// were cut down, and the untruncated bytes went to these files (ADR-0007).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Spilled {
+    /// Whether either stream was cut down.
+    pub truncated: bool,
+    /// The files the full streams were written to.
+    pub files: Vec<PathBuf>,
 }
 
 /// Why a run ended.
@@ -80,6 +92,22 @@ pub struct Finished {
 pub trait Driver: Send {
     /// Runs `prompt`, feeding `tap` as it goes, and says how it ended.
     fn run(&mut self, prompt: &str, cancel: Cancel, tap: Tap) -> Finished;
+
+    /// Starts a fresh session — a new GUID, a new record, the same frame — and
+    /// says what the rail should now show. `/new` is the only caller; a front
+    /// end that cannot start one leaves the transcript as it was.
+    fn renew(&mut self) -> Option<Launch> {
+        None
+    }
+}
+
+/// One thing the frame asks the front end's thread to do.
+#[derive(Debug)]
+pub enum Task {
+    /// Run one prompt.
+    Run(Job),
+    /// Start a fresh session.
+    Renew,
 }
 
 /// One prompt on its way to a driver, with the flag that stops it.
@@ -113,8 +141,8 @@ impl Tap {
         let _ = self.tx.send(Msg::Output(side, text.to_string()));
     }
 
-    /// How one command ended.
-    pub fn over(&self, over: CallOver) {
-        let _ = self.tx.send(Msg::Over(over));
+    /// How one command ended, and what its output had to leave behind.
+    pub fn over(&self, over: CallOver, spilled: Spilled) {
+        let _ = self.tx.send(Msg::Over(over, spilled));
     }
 }

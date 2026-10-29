@@ -78,6 +78,9 @@ degraded frame.
 - **Each `bash` call** appears the moment it starts — one line for the script
   and the last five lines of its output while it runs — then collapses to
   `✓ exit 0` or `✗ exit N`, `✗ timed out`, `✗ cancelled`, or `✗ sandbox: …`.
+  Output too large to show becomes an affordance: `Ctrl-O`, or a click on the
+  row, opens the untruncated text from the spill file the executor already
+  wrote.
 - **The rail** is 32 columns on the right and always visible: cache hit
   percentage, turns against the cap, tokens, a context meter, the session GUID,
   the session temp path, the git branch and the sandbox posture, plus the reason
@@ -86,6 +89,25 @@ degraded frame.
 - **The composer** is at the bottom: `Enter` sends, `Shift+Enter` breaks the
   line, `Ctrl-C` cancels the run and keeps the draft, `Ctrl-Q` leaves. A prompt
   typed while a run is in flight queues and is sent when the run ends.
+- **Scrolling and selection.** `PgUp`/`PgDn` and the wheel move the transcript,
+  and only the rows on screen are ever laid out, so an unbounded thread still
+  draws a bounded frame. Dragging over the transcript selects rendered rows;
+  releasing copies exactly those rows, styles stripped, through the terminal's
+  own OSC 52 — falling back to `wl-copy` or `xclip` when there is no terminal to
+  address. A terminal does not confirm a copy, so the frame says *sent*, not
+  *copied*; a copy nothing took is reported as a refusal, never as success.
+  `Ctrl-Y` copies the last answer for keyboards, and `Shift+drag` hands the
+  selection back to your terminal, so `tmux` and old habits still work.
+- **`@` completes workspace paths.** Typing `@` starts a background walk of the
+  workspace — `.git` skipped, `.gitignore` deliberately not honoured — ranked by
+  proximity to what you typed and capped at eight rows. `Tab` or `Enter` takes
+  one, `Esc` dismisses the offer, and a dotfile is offered only once you type a
+  dot.
+- **`/` runs commands.** `/new` starts a fresh session GUID with an empty
+  transcript, `/help` lists every binding, `/quit` leaves. `/settings` is not
+  here yet.
+- **`?` lists every binding**, on an empty prompt: the keys, the mouse gesture
+  beside each, and the key that does the same thing as every gesture.
 - **Boot runs `doctor`'s checks first.** A sandbox that cannot be created is a
   full-screen card naming the failing check, before anything else draws.
 - **The face** renders where the terminal speaks Kitty graphics and is silent
@@ -95,12 +117,12 @@ Answers stream as they are written, so the frame is never frozen for the length
 of a model call. Each prompt is recorded in the same session record as a batch
 run (ADR-0006).
 
-Not here yet, by design: scrolling and selection, the spill-file affordance,
-`/settings`, mouse, `@` path completion, and `/new` — those are
-[ADR-0011](docs/adr/0011-the-tui-contract.md)'s next slices. This release also
-keeps the transcript growing per launch while the model-facing history starts
-afresh with each prompt: a later question does not yet see an earlier one's
-messages.
+Not here yet, by design: `/settings`, the one slice that writes the user's
+config. This release also keeps the model-facing history starting afresh
+with each prompt while the frame's transcript grows: a later question does not
+yet see an earlier one's messages. Copying, scrolling, `@` completion, the `/`
+commands and the help overlay are
+[ADR-0013](docs/adr/0013-the-hands-copy-scroll-and-completion.md)'s decisions.
 
 ## Session records
 

@@ -14,15 +14,22 @@
 //!   optional ornament.
 
 pub mod app;
+pub mod command;
+pub mod completion;
 pub mod composer;
+pub mod copy;
 pub mod driver;
 pub mod entry;
 pub mod face;
+mod heard;
+mod keys;
 pub mod markdown;
 mod msg;
+pub mod overlay;
 pub mod rail;
 pub mod render;
 pub mod run;
+pub mod selection;
 pub mod theme;
 
 pub use app::App;

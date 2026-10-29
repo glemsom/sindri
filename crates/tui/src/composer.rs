@@ -30,6 +30,24 @@ impl Composer {
         (self.column as u16, self.row as u16)
     }
 
+    /// The row the cursor is on: what `@` completion reads.
+    pub fn row(&self) -> &str {
+        let row = self.row.min(self.rows.len().saturating_sub(1));
+        self.rows.get(row).map_or("", String::as_str)
+    }
+
+    /// Replaces everything from column `from` to the end of the row with
+    /// `text`, and leaves the cursor after it: how an accepted completion lands.
+    pub fn splice(&mut self, from: usize, text: &str) {
+        self.ensure_row();
+        if let Some(row) = self.rows.get_mut(self.row) {
+            let at = byte_index(row, from);
+            row.truncate(at);
+            row.push_str(text);
+            self.column = row.chars().count();
+        }
+    }
+
     /// The whole draft, its rows joined the way it will be sent.
     pub fn text(&self) -> String {
         self.rows.join("\n")

@@ -206,3 +206,48 @@ fn a_sandbox_that_cannot_exist_is_a_card_before_anything_else_draws() {
     let code = pty.quit(&mut child);
     assert_eq!(code, Some(3), "a sandbox that cannot start exits 3");
 }
+
+/// The escape sequence that turns mouse reporting on: the frame draws its own
+/// selection, so the terminal's must be off (ADR-0011 §7).
+const MOUSE_ON: &str = "\u{1b}[?1000h";
+#[test]
+fn the_mouse_is_the_frames_while_it_draws_and_the_terminals_again_after() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: mouse capture is not tested here");
+        return;
+    };
+    let env = Env::new();
+    let mut child = spawn(&env, &pty, &[]);
+
+    let drawn = pty.wait_for(&mut child, MOUSE_ON);
+    if !drawn.contains(MOUSE_ON) {
+        let _ = child.kill();
+        let _ = child.wait();
+        panic!("the frame takes the mouse when it opens, drew: {drawn:?}");
+    }
+    let code = pty.quit(&mut child);
+    assert_eq!(code, Some(0));
+}
+
+#[test]
+fn the_frame_advertises_the_hands_and_leaves_when_asked() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: the frame's keys are not tested here");
+        return;
+    };
+    let env = Env::new();
+    let mut child = spawn(&env, &pty, &[]);
+
+    // The footer carries the keys a user needs before they know them: scrolling,
+    // `@` paths, `/` commands and `?`. Everything else is behind `?`.
+    let drawn = pty.wait_for(&mut child, "@ paths");
+    for wanted in ["PgUp/PgDn scroll", "@ paths", "/ commands", "? keys"] {
+        assert!(
+            drawn.contains(wanted),
+            "the frame advertises {wanted:?} before anything is typed: {drawn:?}"
+        );
+    }
+
+    let code = pty.quit(&mut child);
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+}

@@ -64,6 +64,11 @@ impl Rail {
         self.stop = Some(stop);
     }
 
+    /// The GUID this launch is recorded under.
+    pub fn session(&self) -> String {
+        self.launch.session.clone()
+    }
+
     /// The context the conversation has used, as the provider last counted it.
     pub fn context_used(&self) -> u64 {
         self.context

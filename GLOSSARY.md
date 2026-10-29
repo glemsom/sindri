@@ -90,7 +90,28 @@ and tool result, in order. `/new` throws it away and starts a new session.
 ends rather than interrupting it.
 
 **spill affordance** — the offer to open a tool result's spill file from the
-transcript, when the output was too large to display in full.
+transcript, when the output was too large to display in full: the row says
+`output too large`, `Ctrl-O` or a click on it opens the untruncated text.
+
+**window** — the rows of the transcript that fit, built from the newest row
+backwards so an unbounded thread still lays out a bounded frame. Scrolling moves
+the window; it never re-lays out the thread (ADR-0013).
+
+**selection** — a drag over rendered rows, resolved against the plain text of
+what the last frame drew: columns, not styles, so a copy is the characters the
+user saw.
+
+**copy channel** — where a selection goes: OSC 52 to the terminal (reported as
+*sent*, because a terminal does not answer), `wl-copy` then `xclip` (reported by
+name), or a refusal, which is said as a refusal and never as success (ADR-0013).
+
+**completion** — the `@` offer of workspace paths: a background walk ranked by
+proximity, eight rows, `.git` skipped, `.gitignore` deliberately not honoured,
+dotfiles only once a dot is typed. `Tab` or `Enter` takes one, `Esc` dismisses
+(ADR-0013).
+
+**help overlay** — the `?` list of every binding, each mouse gesture beside the
+key that does the same thing.
 
 **live tail** — the last five lines of a running command's output, shown under
 its call line while it runs and folded away when it ends.

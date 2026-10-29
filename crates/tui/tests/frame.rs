@@ -12,7 +12,7 @@
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use sindri_core::agent::Event;
-use sindri_tui::driver::{CallOver, Finished, Side, Stop, Tokens};
+use sindri_tui::driver::{CallOver, Finished, Side, Spilled, Stop, Tokens};
 use sindri_tui::render;
 use sindri_tui::{App, Face, Launch};
 
@@ -96,7 +96,7 @@ fn a_collapsed_call_shows_its_exit_status_and_its_tail_is_gone() {
         command: Some("cargo test".to_string()),
     });
     app.output(Side::Stdout, "running 12 tests");
-    app.over(CallOver::Exited(0));
+    app.over(CallOver::Exited(0), Spilled::default());
     let rows = screen(&mut app, 100, 20);
     assert!(
         any(&rows, "✓ exit 0"),
@@ -112,7 +112,7 @@ fn a_collapsed_call_shows_its_exit_status_and_its_tail_is_gone() {
         turn: 1,
         command: Some("cargo test".to_string()),
     });
-    app.over(CallOver::Exited(3));
+    app.over(CallOver::Exited(3), Spilled::default());
     let rows = screen(&mut app, 100, 20);
     assert!(any(&rows, "✗ exit 3"), "a failed call says so: {rows:#?}");
 }

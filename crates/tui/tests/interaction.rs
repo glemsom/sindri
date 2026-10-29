@@ -10,7 +10,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
-use sindri_tui::driver::{CallOver, Finished, Stop, Tokens};
+use sindri_tui::driver::{CallOver, Finished, Spilled, Stop, Tokens};
 use sindri_tui::render;
 use sindri_tui::{App, Card, Launch};
 
@@ -182,7 +182,7 @@ fn a_killed_command_and_a_timeout_each_say_so_where_they_happened() {
         turn: 1,
         command: Some("sleep 600".to_string()),
     });
-    app.over(CallOver::Cancelled);
+    app.over(CallOver::Cancelled, Spilled::default());
     let rows = screen(&mut app, 100, 20);
     assert!(
         any(&rows, "✗ cancelled"),
@@ -197,7 +197,7 @@ fn a_killed_command_and_a_timeout_each_say_so_where_they_happened() {
         turn: 1,
         command: Some("cargo build".to_string()),
     });
-    app.over(CallOver::TimedOut);
+    app.over(CallOver::TimedOut, Spilled::default());
     let rows = screen(&mut app, 100, 20);
     assert!(
         any(&rows, "✗ timed out"),
