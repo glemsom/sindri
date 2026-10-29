@@ -113,11 +113,56 @@ that grants extra writable paths would turn every `git clone && sindri` into a
 privilege escalation, so the file is refused and the refusal is said once on
 stderr.
 
+## Evals
+
+Two promises cannot be checked by reading a run's output: that the sandbox
+blocks what it claims, and that the turn cap stops a loopy run. Eight scripted
+batch runs prove them, and `make eval` is the table:
+
+```console
+$ make eval
+1  summarise a diff                                        PASS
+2  explain a file                                          PASS
+3  find and explain a symbol                               PASS
+4  rename a symbol across files                            PASS
+5  run the tests and fix the failure                       PASS
+6  add a flag and a test                                   PASS
+7  sandbox refuses a write outside the writable set        PASS
+8  turn cap stops a loopy prompt                           PASS
+eval: 8 8 of 8 passed (recorded fixtures)
+```
+
+Each eval runs the real `sindri` binary in its own copy of a small fixture
+repository (`crates/evals/fixtures/repo`) and asserts on exit codes, JSON
+fields, what the model was shown and the files left on disk — never on the
+model's prose, which drifts. `make eval` exits non-zero when any eval fails.
+It is part of `make check`, so CI runs it.
+
+**Offline.** CI and `make eval` replay recorded provider responses through the
+mock provider; no credential, no network, no bill. Eval 7 deliberately writes
+to paths the read-only root protects, so the suite **refuses to run at all**
+when the sandbox is not enforcing: `doctor` must report bubblewrap and a canary
+write outside the writable set must be refused by the kernel.
+
+**Live.** `make eval-live` runs the same eight prompts against your own
+provider, using your own credential (`ANTHROPIC_API_KEY`, or whatever
+`sindri`'s config names) and at your own cost:
+
+```console
+$ ANTHROPIC_API_KEY=… make eval-live
+```
+
+A live run asserts the same structural properties and skips the two that need
+a recorded conversation: what the model was shown on an earlier turn, and how
+many requests it made. Nothing is recorded automatically; see
+[`crates/evals/fixtures/README.md`](crates/evals/fixtures/README.md).
+
 ## Working on Sindri
 
 Toolchain and gate through devbox:
 
 ```console
-$ make check      # fmt, clippy, the 400-line audit, tests, no-relink proof
+$ make check      # fmt, clippy, the 400-line audit, tests, evals, no-relink proof
+$ make eval       # just the evals, offline against recorded fixtures
 $ make run ARGS='-b "hello"'
 ```
