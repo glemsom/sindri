@@ -10,7 +10,8 @@
     reason = "each test binary uses a different slice of the harness"
 )]
 
-pub mod provider;
+/// The mock provider, from the harness crate every process-seam test drives.
+pub use sindri_harness as provider;
 
 use std::path::{Path, PathBuf};
 

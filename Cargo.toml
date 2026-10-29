@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/types", "crates/core", "crates/cli"]
+members = ["crates/types", "crates/core", "crates/harness", "crates/cli"]
 
 [workspace.package]
 version = "0.1.0"
@@ -12,6 +12,7 @@ repository = "https://github.com/glemsom/sindri"
 [workspace.dependencies]
 sindri-types = { path = "crates/types" }
 sindri-core = { path = "crates/core" }
+sindri-harness = { path = "crates/harness" }
 
 # A curated set, not blanket `pedantic` (ADR-0008): lints that catch mistakes an
 # agent would otherwise ship, and no noise about trivial functions.

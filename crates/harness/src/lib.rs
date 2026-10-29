@@ -14,6 +14,9 @@ use std::time::Duration;
 
 use serde_json::Value;
 
+/// Where the harness's own fixtures live, so a caller names only the file.
+pub const HARNESS_FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/openai");
+
 /// One request the binary made, as text: what a wire-level assertion needs.
 #[derive(Debug, Clone)]
 pub struct Request {
@@ -144,14 +147,17 @@ impl Reply {
     }
 
     /// A body recorded from an OpenAI-compatible server, served at `status`:
-    /// the fixture names a file under `tests/fixtures/openai`, so the wire
-    /// format the test proves is a document about that format, not a literal
-    /// buried in a test.
+    /// the fixture names a file under `fixtures/openai`, so the wire format the
+    /// test proves is a document about that format, not a literal buried in a
+    /// test.
     pub fn recorded(name: &str, status: u16) -> Self {
-        let path = format!(
-            "{}/tests/fixtures/openai/{name}.json",
-            env!("CARGO_MANIFEST_DIR")
-        );
+        Reply::from_file(HARNESS_FIXTURES, name, status)
+    }
+
+    /// A body read from a file in `dir`, served at `status`: how the eval suite
+    /// replays a recorded conversation instead of asking a live model.
+    pub fn from_file(dir: &str, name: &str, status: u16) -> Self {
+        let path = format!("{dir}/{name}.json");
         Reply {
             status,
             body: std::fs::read_to_string(&path)

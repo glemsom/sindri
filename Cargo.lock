@@ -1776,6 +1776,7 @@ dependencies = [
  "predicates",
  "serde_json",
  "sindri-core",
+ "sindri-harness",
  "sindri-types",
  "tempfile",
 ]
@@ -1794,6 +1795,13 @@ dependencies = [
  "tempfile",
  "tokio",
  "toml",
+]
+
+[[package]]
+name = "sindri-harness"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]
