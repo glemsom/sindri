@@ -9,6 +9,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use futures::StreamExt;
 use rig_core::completion::message::{
     AssistantContent, AssistantMessage, CallId, Message as WireMessage, ToolCall, ToolFunction,
     ToolName, ToolResult, ToolResultContent,
@@ -19,13 +20,14 @@ use rig_core::completion::{
 use rig_core::error::ProviderError;
 use rig_core::providers::anthropic::AnthropicConfig;
 use rig_core::providers::openai::{OpenAIConfig, Route, wire::Auth};
+use rig_core::streaming::{CompletionStream, Item, StreamEvent};
 use rig_reqwest::ReqwestClient;
 use rig_reqwest::reqwest;
 use rig_reqwest::reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
 use crate::config::Provider;
 
-use super::{Call, Client, Error, Message, ToolSpec, Turn, Usage};
+use super::{Call, Client, Delta, DeltaSink, Error, Message, ToolSpec, Turn, Usage};
 
 /// How long the provider may take to accept a connection.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -47,12 +49,16 @@ some. You have one tool, `bash`: run commands with it rather than guessing, and 
 the exit code it reports before believing the output. Reply with the answer itself: no \
 preamble, no closing offer of further help.";
 
-/// One turn, straight through: no retries, no redaction, no policy.
+/// One turn, straight through: no retries, no redaction, no policy. The
+/// provider's streaming entry point is the one called, so a front end sees the
+/// answer as it is written; the whole it folds to is the same reply a unary
+/// call would have returned.
 pub(super) fn turn(
     client: &Client,
     history: &[Message],
     tools: &[ToolSpec],
     thinking: bool,
+    deltas: &mut dyn DeltaSink,
 ) -> Result<Turn, Error> {
     let (api_key, base_url, model) = client.parts();
 
@@ -71,7 +77,8 @@ pub(super) fn turn(
                 config = config.with_base_url(base_url);
             }
             let model = config.connect(ReqwestClient::from(http)).completion(model);
-            runtime.block_on(model.call(request)).map_err(convert)?
+            let stream = model.stream(request).map_err(convert)?;
+            consume(&runtime, stream, deltas)?
         }
         // Every OpenAI-shaped server serves Chat Completions, and only some
         // serve `/responses`, so the wire is named rather than inferred.
@@ -83,14 +90,50 @@ pub(super) fn turn(
                 config = config.with_base_url(base_url);
             }
             let model = config.connect(ReqwestClient::from(http)).completion(model);
-            runtime
-                .block_on(model.call(request))
-                .map_err(convert)
-                .map_err(refused_tools)?
+            let stream = model.stream(request).map_err(convert)?;
+            consume(&runtime, stream, deltas).map_err(refused_tools)?
         }
     };
 
     Ok(finish(response))
+}
+
+/// Reads the reply to its end, handing every fragment to `deltas` as it
+/// arrives, and folds it into the whole response. A stream that stops before
+/// the provider ended it, or that carries the provider's own failure, is an
+/// error here: neither may pass for an answer.
+fn consume(
+    runtime: &tokio::runtime::Runtime,
+    stream: CompletionStream,
+    deltas: &mut dyn DeltaSink,
+) -> Result<CompletionResponse, Error> {
+    runtime.block_on(async {
+        let mut stream = stream;
+        while let Some(item) = stream.next().await {
+            match item.map_err(convert)? {
+                Item::Event(StreamEvent::Text { text, .. }) => {
+                    if !deltas.delta(Delta::Text(text)) {
+                        return Err(stopped());
+                    }
+                }
+                Item::Event(StreamEvent::Reasoning { text, .. }) => {
+                    if !deltas.delta(Delta::Reasoning(text)) {
+                        return Err(stopped());
+                    }
+                }
+                // A part opening or ending carries no fragment: the answer's
+                // text is what grew, not the envelope around it.
+                Item::Event(_) | Item::Unknown(_) => {}
+            }
+        }
+        stream.finish().await.map_err(convert)
+    })
+}
+
+/// The sink asked for the stream to stop, which is how a cancel reaches the
+/// adapter. The loop maps it to a cancellation because its flag is already up.
+fn stopped() -> Error {
+    Error::transport("the stream was stopped before it finished")
 }
 
 /// The HTTP client one run speaks through: the deadlines, and the headers the

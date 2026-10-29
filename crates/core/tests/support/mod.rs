@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 use sindri_core::agent::{Agent, Event, Report};
 use sindri_core::cancel::Cancel;
 use sindri_core::exec::{BashExecutor, Outcome, ToolResult};
-use sindri_core::provider::{Call, Error, Message, Model, ToolSpec, Turn, Usage};
+use sindri_core::provider::{Call, Delta, DeltaSink, Error, Message, Model, ToolSpec, Turn, Usage};
 use sindri_core::sandbox::{Enforcement, NetworkPosture, SandboxPolicy, WritableSet};
 use tempfile::TempDir;
 
@@ -125,6 +125,8 @@ pub struct ScriptedModel {
     /// Raised while the first request is in flight, which then fails: a request
     /// cut short by Ctrl-C looks exactly like this to the loop.
     interrupt: Option<Cancel>,
+    /// Whether each reply is streamed to the sink before it is returned.
+    stream: bool,
 }
 
 impl ScriptedModel {
@@ -140,6 +142,7 @@ impl ScriptedModel {
             seen,
             thinking,
             interrupt: None,
+            stream: false,
         }
     }
 
@@ -147,6 +150,19 @@ impl ScriptedModel {
         self.interrupt = interrupt;
         self
     }
+
+    /// A model whose replies are streamed in chunks before they are returned,
+    /// the way a streaming provider hands them over.
+    fn streaming(mut self, stream: bool) -> Self {
+        self.stream = stream;
+        self
+    }
+}
+
+/// `text` split into the fragments a streaming model would send: whole words,
+/// with the space that follows each one, so joining them restores the text.
+fn fragmented(text: &str) -> Vec<String> {
+    text.split_inclusive(' ').map(str::to_string).collect()
 }
 
 impl Model for ScriptedModel {
@@ -155,6 +171,7 @@ impl Model for ScriptedModel {
         history: &[Message],
         _tools: &[ToolSpec],
         thinking: bool,
+        deltas: &mut dyn DeltaSink,
     ) -> Result<Turn, Error> {
         self.seen.lock().expect("seen").push(history.to_vec());
         self.thinking.lock().expect("thinking").push(thinking);
@@ -167,7 +184,19 @@ impl Model for ScriptedModel {
             !replies.is_empty(),
             "the loop asked for more turns than the script holds"
         );
-        Ok(replies.remove(0))
+        let reply = replies.remove(0);
+        if self.stream {
+            let fragments = reply
+                .reasoning
+                .iter()
+                .flat_map(|reason| fragmented(reason))
+                .map(Delta::Reasoning)
+                .chain(fragmented(&reply.text).into_iter().map(Delta::Text));
+            for delta in fragments {
+                assert!(deltas.delta(delta), "the sink stayed open");
+            }
+        }
+        Ok(reply)
     }
 }
 
@@ -192,7 +221,32 @@ impl Harness {
         max_turns: u32,
         thinking: bool,
     ) -> Self {
-        Harness::build(replies, commands, max_turns, thinking, Interrupt::Never)
+        Harness::build(
+            replies,
+            commands,
+            max_turns,
+            thinking,
+            Interrupt::Never,
+            false,
+        )
+    }
+
+    /// A harness whose model streams each reply to the sink before returning
+    /// it, so the loop's delta events are the thing under test.
+    pub fn streaming(
+        replies: Vec<Turn>,
+        commands: Vec<ToolResult>,
+        max_turns: u32,
+        thinking: bool,
+    ) -> Self {
+        Harness::build(
+            replies,
+            commands,
+            max_turns,
+            thinking,
+            Interrupt::Never,
+            true,
+        )
     }
 
     /// A harness whose run is cancelled at `interrupt`, with a shared flag
@@ -202,7 +256,7 @@ impl Harness {
         commands: Vec<ToolResult>,
         interrupt: Interrupt,
     ) -> Self {
-        Harness::build(replies, commands, 8, false, interrupt)
+        Harness::build(replies, commands, 8, false, interrupt, false)
     }
 
     fn build(
@@ -211,6 +265,7 @@ impl Harness {
         max_turns: u32,
         thinking: bool,
         interrupt: Interrupt,
+        stream: bool,
     ) -> Self {
         let (workspace, _session_temp, policy) = fixtures();
         let seen_scripts = Arc::new(Mutex::new(Vec::new()));
@@ -228,7 +283,8 @@ impl Harness {
         let seen = Arc::new(Mutex::new(Vec::new()));
         let told = Arc::new(Mutex::new(Vec::new()));
         let model = ScriptedModel::new(replies, Arc::clone(&seen), Arc::clone(&told))
-            .interrupting((interrupt == Interrupt::DuringFirstTurn).then(|| cancel.clone()));
+            .interrupting((interrupt == Interrupt::DuringFirstTurn).then(|| cancel.clone()))
+            .streaming(stream);
         let (sender, events) = std::sync::mpsc::channel();
 
         let mut agent = Agent::new(Box::new(model), tool, max_turns, thinking);

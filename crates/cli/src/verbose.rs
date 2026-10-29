@@ -14,6 +14,9 @@ pub fn lines(events: Vec<Event>, session: &str) -> Vec<String> {
                     lines.push(format!("sindri: reasoning (turn {turn}): {line}"));
                 }
             }
+            // A delta is a fragment of what `Reasoning` and the tool calls say
+            // whole: a verbose run reports the turn, not every chunk.
+            Event::TextDelta { .. } | Event::ReasoningDelta { .. } => {}
             Event::ToolCall { turn, command, .. } => lines.push(match command {
                 Some(command) => format!(
                     "sindri: bash (turn {turn}): {}",
