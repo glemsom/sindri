@@ -1,6 +1,13 @@
 [workspace]
 resolver = "3"
-members = ["crates/types", "crates/core", "crates/harness", "crates/cli", "crates/evals"]
+members = [
+    "crates/types",
+    "crates/core",
+    "crates/harness",
+    "crates/tui",
+    "crates/cli",
+    "crates/evals",
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -13,6 +20,16 @@ repository = "https://github.com/glemsom/sindri"
 sindri-types = { path = "crates/types" }
 sindri-core = { path = "crates/core" }
 sindri-harness = { path = "crates/harness" }
+sindri-tui = { path = "crates/tui" }
+# The frame (ADR-0011): a renderer, not an invention. Pinned here like every
+# other dependency, so the crate and its dev-dependencies cannot drift apart.
+ratatui = { version = "0.29", default-features = false, features = ["crossterm"] }
+crossterm = { version = "0.28", default-features = false, features = ["events", "windows"] }
+ratatui-image = { version = "8", default-features = false, features = ["image-defaults", "crossterm"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
+pulldown-cmark = { version = "0.12", default-features = false }
+syntect = { version = "5", default-features = false, features = ["default-fancy"] }
+unicode-width = "0.2"
 
 # A curated set, not blanket `pedantic` (ADR-0008): lints that catch mistakes an
 # agent would otherwise ship, and no noise about trivial functions.

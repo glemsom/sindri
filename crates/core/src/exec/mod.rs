@@ -4,9 +4,11 @@
 mod result;
 mod sandboxed;
 mod status;
+mod tap;
 
 pub use result::{Cut, Outcome, OutputLimit, ToolResult, truncate};
 pub use sandboxed::{DEFAULT_TIMEOUT_SECS, MAX_TIMEOUT_SECS, SandboxExecutor};
+pub use tap::{OutputSink, Side};
 
 use std::time::Duration;
 

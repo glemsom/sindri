@@ -68,6 +68,10 @@ with `-v`.
 
 ## Terminal UI
 
+**frame** — bare `sindri` on a terminal: the alternate-screen interface as a
+whole, and the thing this repository calls the TUI when it is being precise
+(ADR-0011).
+
 **rail** — the right column of the TUI: cache hit percentage, turns against the
 cap, tokens, live context meter, session GUID, session temp path, git branch,
 sandbox posture, and the face, where Kitty graphics allows one (ADR-0011). At
@@ -87,6 +91,24 @@ ends rather than interrupting it.
 
 **spill affordance** — the offer to open a tool result's spill file from the
 transcript, when the output was too large to display in full.
+
+**live tail** — the last five lines of a running command's output, shown under
+its call line while it runs and folded away when it ends.
+
+**strip** — the rail as one line, on a terminal narrower than 100 columns: the
+same facts, never hidden behind a keystroke.
+
+**card** — the full-screen failure a launch draws instead of a frame, when a
+`doctor` check fails before the first frame. It names the check and says what to
+do about it.
+
+**driver** — the port a front end implements so the frame can ask for a run
+(`Driver::run`): one prompt in, a `Finished` out, and the run's events on the
+way. The frame holds no loop of its own (ADR-0012).
+
+**output tap** — `OutputSink`, the port a running command's output is handed to
+line by line, so a front end can show a live tail without the executor knowing
+what a terminal is (ADR-0012).
 
 ## Release
 

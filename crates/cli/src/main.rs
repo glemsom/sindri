@@ -3,6 +3,7 @@
 
 mod batch;
 mod doctor;
+mod frame;
 mod sandbox;
 mod sessions;
 mod signal;
@@ -10,7 +11,7 @@ mod verbose;
 
 use std::io::IsTerminal;
 
-use clap::{CommandFactory, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 use sindri_core::config::Overrides;
 
 #[derive(Parser)]
@@ -153,21 +154,34 @@ fn main() {
                     verbose: cli.verbose,
                 },
             ),
-            None => refuse_stdin(),
+            None => {
+                let overrides = Overrides {
+                    provider: cli.provider,
+                    model: cli.model,
+                    base_url: cli.base_url,
+                    max_turns: cli.max_turns,
+                    timeout: cli.timeout,
+                    thinking: match (cli.thinking, cli.no_thinking) {
+                        (true, _) => Some(true),
+                        (_, true) => Some(false),
+                        _ => None,
+                    },
+                    writable: (!cli.writable.is_empty()).then_some(cli.writable),
+                    extra_headers: (!cli.header.is_empty()).then_some(cli.header),
+                };
+                interactive(overrides)
+            }
         },
     };
     std::process::exit(code);
 }
 
-/// A non-batch launch with a pipe is refused rather than drained: data piped
-/// into a program that ignores it is data lost without a word (ADR-0004).
-fn refuse_stdin() -> i32 {
-    if std::io::stdin().is_terminal() {
-        // A bare invocation is a usage error, so its help goes where errors go:
-        // stdout stays empty for a script that ran the wrong thing.
-        let help = Cli::command().render_help();
-        eprint!("{help}");
-        return sindri_types::ExitCode::UsageError.code();
+/// A non-batch launch: the terminal UI on a terminal, and a refusal otherwise.
+/// A pipe without `-b` is refused rather than drained — data piped into a
+/// program that ignores it is data lost without a word (ADR-0004).
+fn interactive(overrides: Overrides) -> i32 {
+    if std::io::stdin().is_terminal() && std::io::stdout().is_terminal() {
+        return frame::run(overrides);
     }
     batch::usage_error(r#"piped stdin needs -b: `… | sindri -b "your prompt"`"#)
 }

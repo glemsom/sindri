@@ -59,6 +59,45 @@ provider that billed nothing — is left out rather than sent as `null`, so a
 script can tell "not available" from "empty". Exit codes do not depend on the
 format. See [ADR-0004](docs/adr/0004-output-contract-and-exit-codes.md).
 
+## The terminal UI
+
+Bare `sindri` on a terminal opens the frame: the alternate screen, a transcript
+column, a rail and a composer.
+
+```console
+$ sindri
+```
+
+Piped stdin is still refused with exit 2, and `-b` is untouched, so the filter
+is exactly where it was. Launching outside a terminal is the refusal, not a
+degraded frame.
+
+- **The transcript** is streamed markdown: headings, nested lists, tables,
+  blockquotes, inline code, and fenced code with truecolour syntax
+  highlighting. Diffs are colour-coded line by line.
+- **Each `bash` call** appears the moment it starts — one line for the script
+  and the last five lines of its output while it runs — then collapses to
+  `✓ exit 0` or `✗ exit N`, `✗ timed out`, `✗ cancelled`, or `✗ sandbox: …`.
+- **The rail** is 32 columns on the right and always visible: cache hit
+  percentage, turns against the cap, tokens, a context meter, the session GUID,
+  the session temp path, the git branch and the sandbox posture, plus the reason
+  the last run stopped. Below 100 columns it becomes the same facts as one strip
+  under the transcript — never hidden behind a keystroke.
+- **The composer** is at the bottom: `Enter` sends, `Shift+Enter` breaks the
+  line, `Ctrl-C` cancels the run and keeps the draft, `Ctrl-Q` leaves. A prompt
+  typed while a run is in flight queues and is sent when the run ends.
+- **Boot runs `doctor`'s checks first.** A sandbox that cannot be created is a
+  full-screen card naming the failing check, before anything else draws.
+- **The face** renders where the terminal speaks Kitty graphics and is silent
+  everywhere else: there is no placeholder, and the rail simply closes up.
+
+Answers stream as they are written, so the frame is never frozen for the length
+of a model call. Not here yet, by design: scrolling and selection, `/settings`,
+mouse, `@` path completion, and `/new` — those are [ADR-0011](docs/adr/0011-the-tui-contract.md)'s
+next slices. Each prompt is recorded in the same session record as a batch run
+(ADR-0006), and this release keeps one session per launch with the transcript
+growing in place; a later turn does not yet see an earlier one's messages.
+
 ## Session records
 
 Every run leaves a record under `$XDG_STATE_HOME/sindri/sessions/<guid>/`

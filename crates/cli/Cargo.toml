@@ -17,6 +17,7 @@ workspace = true
 [dependencies]
 sindri-types.workspace = true
 sindri-core.workspace = true
+sindri-tui.workspace = true
 clap = { version = "4", features = ["derive"] }
 serde_json = "1"
 libc = "0.2"
