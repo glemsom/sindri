@@ -1,4 +1,6 @@
-# Assertions for the release-script tests. A failed assertion is a non-zero
+# Both halves of a release-script test: the assertions, and the fixtures that
+# stand in for a release (a `file://` directory of assets and checksums) and for
+# the user (the installer run through `sh`). A failed assertion is a non-zero
 # exit status, which the runner reports and counts; there is no other channel.
 
 fail() {
@@ -14,12 +16,6 @@ assert_contains() { # haystack needle
     case "$1" in
         *"$2"*) ;;
         *) fail "output does not contain '$2': $1" ;;
-    esac
-}
-
-assert_not_contains() { # haystack needle
-    case "$1" in
-        *"$2"*) fail "output contains '$2': $1" ;;
     esac
 }
 
@@ -58,7 +54,7 @@ run_installer() { # args…
     ERR=$(cat "$PWD/stderr")
 }
 
-assert_contains_absent() { # haystack needle — named for the runner's grep
+assert_contains_absent() { # haystack needle
     case "$1" in
         *"$2"*) fail "output contains '$2': $1" ;;
         *) ;;

@@ -75,8 +75,9 @@ the installer before it writes anything.
 machine, verifies the checksum, installs into the user's local bin and ends by
 pointing at `doctor`.
 
-**changelog** — the release notes, derived from the tickets a release closes:
-the merge commits since the previous tag, which is what `TN: … (#issue)` is for.
+**changelog** — the notes a release page and its `CHANGELOG.md` carry, derived
+from the tickets a release closes: the merge commits since the previous tag,
+which is what `TN: … (#issue)` is for.
 
 **release image** — the container generated from the committed `devbox.json`
 that builds the release, so dev, CI and release share one toolchain (ADR-0009).

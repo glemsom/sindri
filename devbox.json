@@ -18,6 +18,7 @@
     "yq-go@latest",
     "xdg-utils@latest",
     "bubblewrap@latest",
+    "file@latest",
     "zig@latest",
     "cargo-zigbuild@latest"
   ]

@@ -391,6 +391,71 @@
         }
       }
     },
+    "file@latest": {
+      "last_modified": "2026-10-28T22:04:29Z",
+      "resolved": "github:NixOS/nixpkgs/e62746b0b472753ef019baceab6f1e2e52014980#file",
+      "source": "devbox-search",
+      "version": "5.48",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/my66hfzlnfn7w0l99jydlmfxxddjd6kx-file-5.48",
+              "default": true
+            },
+            {
+              "name": "man",
+              "path": "/nix/store/a4wpb1mmnc4flrn4s26ghj68k70579jk-file-5.48-man",
+              "default": true
+            },
+            {
+              "name": "dev",
+              "path": "/nix/store/x4zsv04xkp6xjsdg08r8w2bgg8nm79mk-file-5.48-dev"
+            }
+          ],
+          "store_path": "/nix/store/my66hfzlnfn7w0l99jydlmfxxddjd6kx-file-5.48"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/r09689yg5gjfsfvrzhrx5jjlar2jc1pl-file-5.48",
+              "default": true
+            },
+            {
+              "name": "man",
+              "path": "/nix/store/6mkzxafqhj2pgxq19dx68sz7dpfjq6qi-file-5.48-man",
+              "default": true
+            },
+            {
+              "name": "dev",
+              "path": "/nix/store/mr4ss4cjy0qxbvrfwd1kgmxmgpj2fdan-file-5.48-dev"
+            }
+          ],
+          "store_path": "/nix/store/r09689yg5gjfsfvrzhrx5jjlar2jc1pl-file-5.48"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/3dl20ncpnlxr3ls3235smsg5ln849a1d-file-5.48",
+              "default": true
+            },
+            {
+              "name": "man",
+              "path": "/nix/store/hbbr3fc7gm2s4i6lws1n316myzp11g49-file-5.48-man",
+              "default": true
+            },
+            {
+              "name": "dev",
+              "path": "/nix/store/vighs4x0sw8yhpbyqy1jszwzvlz6cabq-file-5.48-dev"
+            }
+          ],
+          "store_path": "/nix/store/3dl20ncpnlxr3ls3235smsg5ln849a1d-file-5.48"
+        }
+      }
+    },
     "git@latest": {
       "last_modified": "2026-10-28T22:04:29Z",
       "resolved": "github:NixOS/nixpkgs/e62746b0b472753ef019baceab6f1e2e52014980#git",

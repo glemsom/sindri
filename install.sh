@@ -6,9 +6,9 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/glemsom/sindri/main/install.sh | sh
 #
-# Flags: --version VERSION, --dir DIR. The same values come from
-# SINDRI_VERSION and SINDRI_INSTALL_DIR; the release location from
-# SINDRI_RELEASE_BASE_URL. Exit 2 is a usage error, 1 anything else.
+# Flags: --version VERSION, --dir DIR. Exit 2 is a usage error — including a
+# kernel or machine no release serves — and 1 anything else: a failed download,
+# a checksum mismatch, an unwritable directory.
 
 set -eu
 
@@ -25,7 +25,12 @@ usage: install.sh [--version VERSION] [--dir DIR]
   --version VERSION  the release to install (default: the latest one)
   --dir DIR          where to put the binary (default: ~/.local/bin)
 
-environment: SINDRI_VERSION, SINDRI_INSTALL_DIR, SINDRI_RELEASE_BASE_URL
+environment:
+  SINDRI_VERSION             same as --version
+  SINDRI_INSTALL_DIR         same as --dir
+  SINDRI_RELEASE_BASE_URL    where releases live (a mirror, or a file:// dir)
+  SINDRI_REPO                owner/name, default glemsom/sindri
+  SINDRI_LATEST_URL          where "the latest release" is announced
 EOF
 }
 
@@ -109,13 +114,21 @@ if [ "$expected" != "$actual" ]; then
     exit 1
 fi
 
-dir=${dir:-$HOME/.local/bin}
+dir=${dir:-${HOME:?HOME is not set; pass --dir}/.local/bin}
 mkdir -p "$dir" || die "could not create $dir"
+# Also remove the half-written copy, so a failed install leaves no surprise in
+# a directory the user has on their PATH.
+trap 'rm -f "$dir/.sindri.$$"; rm -rf "$tmp"' 0 1 2 15
 cp "$tmp/$asset" "$dir/.sindri.$$" || die "could not write to $dir"
 chmod 0755 "$dir/.sindri.$$"
 mv "$dir/.sindri.$$" "$dir/sindri" || die "could not install $dir/sindri"
 
-resolved=$("$dir/sindri" --version 2>/dev/null) || resolved="sindri $version"
+# The binary's own answer, not the release's claim: if it cannot run here, say
+# so rather than reporting a version nobody verified.
+if ! resolved=$("$dir/sindri" --version 2>/dev/null); then
+    printf 'note: %s did not run here; reporting the release version\n' "$dir/sindri" >&2
+    resolved="sindri $version"
+fi
 printf 'installed %s to %s\n' "$resolved" "$dir"
 
 case ":$PATH:" in

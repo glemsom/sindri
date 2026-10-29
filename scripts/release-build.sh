@@ -22,9 +22,17 @@ targets=(x86_64-unknown-linux-musl aarch64-unknown-linux-musl)
 # Unquoted on purpose: CARGO may carry a `+toolchain` argument.
 cargo_bin=${CARGO:-cargo}
 
-if [ "$dry_run" -eq 0 ] && ! $cargo_bin zigbuild --version >/dev/null 2>&1; then
-    echo "release-build: cargo-zigbuild is missing; build inside the release image (docs/install.md)" >&2
-    exit 1
+if [ "$dry_run" -eq 0 ]; then
+    if ! $cargo_bin zigbuild --version >/dev/null 2>&1; then
+        echo "release-build: cargo-zigbuild is missing; build inside the release image (docs/install.md)" >&2
+        exit 1
+    fi
+    # A release that is not static needs a libc on the user's machine; the
+    # guard is worthless if the tool that checks it is absent.
+    if ! command -v file >/dev/null 2>&1; then
+        echo "release-build: 'file' is missing, so the static-link guard cannot run" >&2
+        exit 1
+    fi
 fi
 
 mkdir -p "$outdir"
@@ -38,9 +46,9 @@ for target in "${targets[@]}"; do
     echo "release-build: $target"
     $cargo_bin zigbuild --release --locked --target "$target" --bin sindri
     install -m 0755 "target/$target/release/sindri" "$artefact"
-    # A release that is not static is a release that needs a libc on the
-    # user's machine; catch it here rather than in their shell.
-    if ! file "$artefact" | grep -q 'statically linked'; then
+    # musl with zig can emit a static PIE, which is still static; either
+    # spelling passes, "dynamically linked" does not.
+    if ! file "$artefact" | grep -Eq 'statically linked|static-pie linked'; then
         echo "release-build: $artefact is not statically linked: $(file "$artefact")" >&2
         exit 1
     fi

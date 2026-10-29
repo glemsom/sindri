@@ -49,6 +49,9 @@ jobs:
                 --target x86_64-unknown-linux-musl,aarch64-unknown-linux-musl
               CARGO="cargo +$version" scripts/release-build.sh "$TAG" dist
             '
+          # The container runs as root, so the artefacts it wrote are root's;
+          # everything after this step runs as the runner's user.
+          sudo chown -R "$(id -u):$(id -g)" dist
           scripts/release-checksums.sh dist
           scripts/release-changelog.sh "$TAG" > dist/CHANGELOG.md
 
@@ -60,7 +63,9 @@ jobs:
           cd dist
           sha256sum -c SHA256SUMS
           for binary in sindri-*; do
-            file "$binary" | grep -q 'statically linked'
+            # A static PIE is still static; a dynamically linked binary is not
+            # a release.
+            file "$binary" | grep -Eq 'statically linked|static-pie linked'
           done
 
       - name: Publish the release
@@ -72,4 +77,4 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --title "$TAG" \
             --notes-file dist/CHANGELOG.md \
-            dist/sindri-* dist/SHA256SUMS
+            dist/sindri-* dist/SHA256SUMS dist/CHANGELOG.md
