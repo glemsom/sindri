@@ -9,12 +9,15 @@
 //! front end can still say something.
 
 mod entry;
+mod export;
 mod redact;
 mod stored;
+mod summary;
 
 pub use entry::{Entry, Meta};
 pub use redact::Redaction;
 pub use stored::{ShowError, Stored};
+pub use summary::{Summary, summaries};
 
 use std::fs::File;
 use std::io::{self, Write};
