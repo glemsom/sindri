@@ -2,6 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-10-30
+- **Amended:** 2026-10-30 — §10, once #26–#30 had landed
 
 ## Context
 
@@ -96,3 +97,24 @@ where a run is started.
   without reopening this decision.
 - ADR-0012 is untouched: the frame still asks through `Driver`, and the front
   end answers with an agent the session built.
+
+## Amendment
+
+**§10** was added after the decisions above shipped, and amends none of them.
+
+10. **The words are the front end's.** Boot turns what it could not do into a
+    `Failure` — the environment, a config value, a session that did not start —
+    and `crates/cli/src/failure.rs` owns the one line and the one exit code for
+    it (ADR-0004). There is one wording per failure and every front end says it:
+    batch mode, the frame, `sandbox exec` and `doctor` call `report` and add
+    nothing to it, so a fifth front end costs no vocabulary. A check the
+    diagnostic itself fails is not a boot failure — it is the diagnostic's
+    verdict, said as `sindri: doctor: <why>` — and the frame's card is only ever
+    the sandbox it proved before boot could start; a boot that fails after that
+    is the same line on stderr, never a card about the wrong thing. The one note
+    boot does say on the way in, a repository config it refused, is said the same
+    way by every caller that resolves a config (ADR-0005); the frame's
+    mid-session save is deliberately not a caller, because a line on stderr while
+    the frame owns the screen is corruption (ADR-0011 §15).
+    `crates/cli/tests/failure.rs` is the proof: one broken run environment, three
+    front ends, one line and one code.

@@ -60,6 +60,15 @@ the tool and the agent are built in one order, once. A front end adds only what
 is not the session's own — the branch and the model's context window are the
 rail's facts, not the session's.
 
+**boot** — turning the flags and the process's own facts into a session ready to
+start, and the one line a front end says when it cannot. One module owns the
+turn: `boot` in `sindri-cli` reads the run environment once, resolves the one
+config, and opens the session in the one order (ADR-0015), through two doors —
+a run's (`open`, `prepare`) and a diagnostic's (`configure`) — with one note on
+the way in, a repository config refused. Not a synonym for **session**: a boot
+ends where a session begins, and a boot that cannot finish speaks the
+**failure**'s words rather than a vocabulary of its own.
+
 **run environment** — the three ambient facts a session is opened in: the
 workspace, the `PATH` the sandbox is given, and the state root the record lives
 under. Read from the process once, at `Session::open`, and passed as a value
