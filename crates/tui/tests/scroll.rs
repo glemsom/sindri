@@ -206,9 +206,194 @@ fn a_long_thread_lays_out_only_the_rows_it_shows() {
     );
 }
 
+/// What the reader's window is showing, and what it says arrived below them.
+fn reading(app: &mut App) -> Vec<String> {
+    app.viewport().rows.clone()
+}
+
+fn badge(rows: &[String]) -> Option<String> {
+    rows.iter()
+        .find_map(|row| row.find('↓').map(|at| row[at..].trim_end().to_string()))
+}
+
+#[test]
+fn a_run_that_streams_does_not_move_the_text_under_the_reader() {
+    let mut app = thread(40);
+    screen(&mut app, 100, 12);
+    press(&mut app, KeyCode::PageUp);
+    screen(&mut app, 100, 12);
+    let before = reading(&mut app);
+    assert!(!before.is_empty(), "the reader is looking at rows");
+
+    for turn in 41..=45 {
+        app.note_info(format!("question {turn}"));
+        app.event(Event::TextDelta {
+            turn,
+            text: format!("answer {turn}"),
+        });
+    }
+    screen(&mut app, 100, 12);
+    assert_eq!(
+        reading(&mut app),
+        before,
+        "rows arriving at the tail do not move the rows being read"
+    );
+}
+
+#[test]
+fn rows_that_arrive_off_screen_are_badged_and_end_clears_the_badge() {
+    let mut app = thread(40);
+    screen(&mut app, 100, 12);
+    press(&mut app, KeyCode::PageUp);
+    let rows = screen(&mut app, 100, 12);
+    assert_eq!(
+        badge(&rows),
+        None,
+        "scrolling back is not new output: {rows:#?}"
+    );
+
+    for row in 1..=4 {
+        app.note_info(format!("arrived {row}"));
+    }
+    let rows = screen(&mut app, 100, 12);
+    assert_eq!(
+        badge(&rows).as_deref(),
+        Some("↓ 4 new rows"),
+        "the badge counts the rows that arrived below the reader: {rows:#?}"
+    );
+
+    press(&mut app, KeyCode::End);
+    let rows = screen(&mut app, 100, 12);
+    assert_eq!(badge(&rows), None, "End clears the badge: {rows:#?}");
+    assert!(
+        joined(&rows).contains("arrived 4"),
+        "and the tail is what is shown: {rows:#?}"
+    );
+}
+
+#[test]
+fn coming_back_down_reads_the_rows_that_arrived() {
+    let mut app = thread(40);
+    screen(&mut app, 100, 12);
+    press(&mut app, KeyCode::PageUp);
+    screen(&mut app, 100, 12);
+    for row in 1..=3 {
+        app.note_info(format!("arrived {row}"));
+    }
+    let rows = screen(&mut app, 100, 12);
+    assert_eq!(badge(&rows).as_deref(), Some("↓ 3 new rows"));
+
+    // A page down is through rows the reader had already passed.
+    press(&mut app, KeyCode::PageDown);
+    let rows = screen(&mut app, 100, 12);
+    assert_eq!(
+        badge(&rows).as_deref(),
+        Some("↓ 3 new rows"),
+        "descending through old rows is not reading the new ones: {rows:#?}"
+    );
+
+    for _ in 0..10 {
+        press(&mut app, KeyCode::PageDown);
+    }
+    let rows = screen(&mut app, 100, 12);
+    assert_eq!(
+        badge(&rows),
+        None,
+        "the tail has nothing below it: {rows:#?}"
+    );
+}
+
+#[test]
+fn home_reaches_the_first_turn_and_end_returns_to_the_tail() {
+    let mut app = thread(40);
+    screen(&mut app, 100, 12);
+
+    press(&mut app, KeyCode::Home);
+    let rows = screen(&mut app, 100, 12);
+    assert!(
+        joined(&rows).contains("question 1"),
+        "Home is the first turn: {rows:#?}"
+    );
+    assert!(
+        !joined(&rows).contains("answer 40"),
+        "and never the newest one: {rows:#?}"
+    );
+
+    press(&mut app, KeyCode::End);
+    let rows = screen(&mut app, 100, 12);
+    assert!(
+        joined(&rows).contains("answer 40"),
+        "End is the tail: {rows:#?}"
+    );
+}
+
+#[test]
+fn end_follows_the_tail_again() {
+    let mut app = thread(40);
+    screen(&mut app, 100, 12);
+    press(&mut app, KeyCode::PageUp);
+    press(&mut app, KeyCode::End);
+    app.note_info("arrived after the reader came back");
+    let rows = screen(&mut app, 100, 12);
+    assert!(
+        joined(&rows).contains("arrived after the reader came back"),
+        "a reader on the tail follows what arrives: {rows:#?}"
+    );
+}
+
+#[test]
+fn a_five_hundred_entry_thread_costs_a_screenful_plus_the_offset() {
+    let mut app = thread(500);
+    let tail = transcript::window(&mut app, 80, 20);
+    assert_eq!(tail.rows.len(), 20, "a window is a screen tall");
+    assert!(
+        tail.laid_out <= 26,
+        "the tail costs a screenful: laid out {} entries",
+        tail.laid_out
+    );
+
+    press(&mut app, KeyCode::PageUp);
+    let offset = transcript::window(&mut app, 80, 20);
+    assert_eq!(offset.rows.len(), 20, "a page back is still a screen");
+    assert!(
+        offset.laid_out <= 46,
+        "a page back costs a screenful plus the offset, not the thread: laid out {} entries",
+        offset.laid_out
+    );
+}
+
 fn plain(line: &ratatui::text::Line<'_>) -> String {
     line.spans
         .iter()
         .map(|span| span.content.as_ref())
         .collect()
+}
+
+#[test]
+fn a_run_streaming_under_an_anchored_window_measures_a_screenful_not_the_thread() {
+    let mut app = thread(500);
+    transcript::window(&mut app, 80, 20);
+    press(&mut app, KeyCode::PageUp);
+    let page = transcript::window(&mut app, 80, 20);
+    assert_eq!(page.rows.len(), 20, "a window is a screen tall");
+    for turn in 501..=505 {
+        app.note_info(format!("question {turn}"));
+        app.event(Event::TextDelta {
+            turn,
+            text: format!("answer {turn}"),
+        });
+    }
+    let streamed = transcript::window(&mut app, 80, 20);
+    assert!(
+        page.measured <= 40,
+        "a page back costs a screenful plus the offset walked: {} entries",
+        page.measured
+    );
+    assert_eq!(streamed.rows.len(), 20, "a window is a screen tall");
+    assert!(
+        streamed.measured <= 32,
+        "a page back, then a run streaming below it, measures a screenful plus the offset: \
+         measured {} entries of 1000",
+        streamed.measured
+    );
 }

@@ -56,6 +56,16 @@ ends where a session begins (ADR-0015).
 **transcript** — the ordered record of messages, tool calls and tool results of a
 session.
 
+**window** — the rows of the **transcript** the frame shows at once. It has a place in
+the thread rather than an offset from its tail: a reader on the **tail** follows what
+arrives, and a reader scrolled back keeps the row they are reading while a run appends
+below them, told how much by a `↓ 4 new rows` badge. `End` takes the tail again, `Home`
+the first turn, and a thread longer than the window marks its position in the
+transcript's last column (ADR-0013).
+
+**tail** — the newest row of the **transcript**, and the place a **window** follows
+from unless a reader has scrolled back.
+
 **spill file** — where an over-long tool result's full text is written when the
 model-facing copy is truncated head+tail.
 

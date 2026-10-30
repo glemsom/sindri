@@ -5,9 +5,11 @@ mod call;
 mod card;
 mod completion;
 mod composer;
+pub(crate) mod layout;
 mod overlay;
 mod queue;
 mod rail;
+pub(crate) mod rows;
 mod sessions;
 mod settings;
 pub mod transcript;
@@ -17,6 +19,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
+use unicode_width::UnicodeWidthStr;
 
 use crate::app::App;
 use crate::theme;
@@ -107,4 +110,24 @@ fn footer_rows(app: &App, area: Rect, buf: &mut Buffer) {
     }
     hints.push_str(HINTS);
     Paragraph::new(Line::from(Span::styled(hints, theme::faint()))).render(area, buf);
+    // Rows that arrived below a reader who is not on the tail: the frame says
+    // so, and stops saying it the moment they come back to it (issue #45). It
+    // is drawn against the right edge, so a hint it cannot sit beside is the
+    // thing that gets cut and never the count.
+    let new = app.window.new_rows();
+    if new > 0 {
+        let rows = if new == 1 { "row" } else { "rows" };
+        let badge = format!("↓ {new} new {rows}");
+        let columns = badge.width() as u16;
+        if columns < area.width {
+            // Only the badge's own cells: a hint it sits beside is cut where
+            // the badge begins and never cleared across the whole row.
+            let at = Rect {
+                x: area.x + area.width - columns,
+                width: columns,
+                ..area
+            };
+            Paragraph::new(Span::styled(badge, theme::prompt())).render(at, buf);
+        }
+    }
 }

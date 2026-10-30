@@ -12,6 +12,7 @@ use crate::entry::Entry;
 use crate::overlay::{Help, Overlay};
 use crate::selection::Selection;
 use crate::spill::Spill;
+use crate::window::Ask;
 
 const WHEEL_ROWS: usize = 3;
 
@@ -38,6 +39,8 @@ impl App {
             KeyCode::Tab => self.accept_completion(),
             KeyCode::PageUp => self.scroll_page(true),
             KeyCode::PageDown => self.scroll_page(false),
+            KeyCode::Home => self.window.to_top(),
+            KeyCode::End => self.window.to_tail(),
             KeyCode::Enter if key.modifiers.contains(KeyModifiers::SHIFT) => {
                 self.composer.newline();
                 self.refresh_completion();
@@ -129,11 +132,11 @@ impl App {
     /// nothing covers it (issue #49).
     fn scroll_page(&mut self, up: bool) {
         match self.overlay.as_mut() {
-            Some(Overlay::Help(help)) => help.page(self.page, up),
-            Some(Overlay::Settings(settings)) => settings.page(self.page, up),
-            Some(Overlay::Sessions(sessions)) => sessions.page(self.page, up),
-            Some(Overlay::Spill(spill)) => spill.scroll_by(self.page, up),
-            None => self.scroll_by(self.page, up),
+            Some(Overlay::Help(help)) => help.page(self.window.page, up),
+            Some(Overlay::Settings(settings)) => settings.page(self.window.page, up),
+            Some(Overlay::Sessions(sessions)) => sessions.page(self.window.page, up),
+            Some(Overlay::Spill(spill)) => spill.scroll_by(self.window.page, up),
+            None => self.scroll_by(self.window.page, up),
         }
     }
 
@@ -268,12 +271,12 @@ impl App {
         self.overlay = Some(overlay);
     }
 
+    /// The keys know how many rows a page or a wheel is worth, and not where
+    /// those rows land: the window is asked and the next frame answers, so a
+    /// page back costs the rows it crosses and never the thread (issue #45).
     fn scroll_by(&mut self, rows: usize, up: bool) {
-        self.scroll = if up {
-            self.scroll.saturating_add(rows)
-        } else {
-            self.scroll.saturating_sub(rows)
-        };
+        let rows = rows as isize;
+        self.window.want(Ask::Rows(if up { rows } else { -rows }));
     }
 
     /// Recomputes what `@` is completing, and asks for a walk of the
