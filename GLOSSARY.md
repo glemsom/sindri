@@ -200,7 +200,15 @@ on is never the row that fell off (ADR-0013).
 
 **binding** — one row of the **help overlay**: the keys, and the mouse gesture that is
 their accelerator, that do one thing — and what that thing is. `BINDINGS` is the one
-list, and nothing on it is reachable only with a pointer (ADR-0013).
+list, and nothing on it is reachable only with a pointer (ADR-0013). The one row that is
+not a binding is the **command** catalogue's: the commands share a row, because one
+name there is six names.
+
+**command** — one of the `/` names the **composer** sends: the name, the one line the
+**help overlay** says of it, and what it opens. One catalogue (`COMMANDS`) holds them
+all, in the order the frame says them; the parser, the line an unknown name is refused
+with and the help's command row all read it, so a seventh command is added there and
+nowhere else (ADR-0011 §14, issue #53).
 
 **help overlay** — `?`'s list of every **binding** (ADR-0011 §14): the keys in their
 column, each description wrapped under them, the box sized from the wrapped rows. A

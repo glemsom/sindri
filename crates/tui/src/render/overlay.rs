@@ -161,16 +161,16 @@ fn block(title: &str) -> Block<'static> {
 /// Every binding as the box draws it: the keys in their column and the
 /// description wrapped under it, so a description is read rather than clipped
 /// at the border and the box is sized from the rows that wrapping made
-/// (issue #49). A name longer than the column — the six commands are one — is
+/// (issue #49). A name longer than the column — the command row is one — is
 /// not cut to fit it: it keeps a row of its own and the description wraps
 /// beneath it.
 fn help_lines(columns: usize) -> Vec<Line<'static>> {
     let rest = columns.saturating_sub(KEYS).max(1);
     let mut lines: Vec<Line<'static>> = Vec::new();
     for (keys, what) in help_rows() {
-        let over = text::clip(keys, KEYS) != keys;
+        let over = text::clip(&keys, KEYS) != keys;
         if over {
-            lines.push(Line::from(Span::styled(keys.to_string(), theme::prompt())));
+            lines.push(Line::from(Span::styled(keys.clone(), theme::prompt())));
         }
         let rows = text::wrap(
             text::glyphs(&[Span::styled(what, theme::faint())]),
