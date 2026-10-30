@@ -21,6 +21,7 @@ use crate::graphics::Graphics;
 use crate::overlay::Overlay;
 use crate::picture::Store;
 use crate::rail::{Launch, Rail, RailView};
+use crate::render::seam::Seam;
 use crate::selection::{Selection, Viewport};
 use crate::settings::Missing;
 use crate::window::Window;
@@ -52,6 +53,10 @@ pub struct App {
     pub(crate) early: Vec<(Side, String)>,
     pub(crate) quit: bool,
     face: Option<Face>,
+    /// The glow in the margin: the seam's light strip, built from the same
+    /// `graphics` the face and a picture read. A terminal that draws no
+    /// graphics has no seam to draw (#63).
+    pub(crate) seam: Option<Seam>,
     /// What the terminal said it can draw, asked once at launch: the face draws
     /// from it, and a picture draws from the same answer (ADR-0016 §1).
     graphics: Option<Graphics>,
@@ -123,6 +128,7 @@ impl App {
             early: Vec::new(),
             quit: false,
             face,
+            seam: None,
             graphics: None,
             pictures: None,
             window: Window::default(),
@@ -251,9 +257,10 @@ impl App {
         self.face.as_mut()
     }
 
-    /// The terminal's one answer, held by the frame so that both the face and a
-    /// picture borrow it rather than asking again (ADR-0016 §1).
+    /// The terminal's one answer, held by the frame so that the face, the seam
+    /// and a picture borrow it rather than asking again (ADR-0016 §1).
     pub fn with_graphics(mut self, graphics: Option<Graphics>) -> Self {
+        self.seam = graphics.as_ref().and_then(Seam::new);
         self.graphics = graphics;
         self.store()
     }

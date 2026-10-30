@@ -106,6 +106,9 @@ bottom rather than running the height of the frame. The sandbox posture is a chi
 hang off. The rail is chrome, not a surface: it draws no fill and lets the canvas
 through, so the one band of it with a colour behind it is the row the chip sits on. What
 a row copies is the fact — `context 38%` — never the seam or the leader that drew it.
+The margin between the words and the rail stays canvas, and on a terminal that speaks
+Kitty graphics it carries the seam's light strip (`seam.rs`): one cell wide and the height
+of the body, brightest against the rail and dissolving toward the words.
 32 columns from 100 up; below that, the same facts in the same order as one line under
 the transcript, which never loses the posture, the model or the workspace. One priority
 order (`rail::priority`) ends with the posture, and the column and the strip both read

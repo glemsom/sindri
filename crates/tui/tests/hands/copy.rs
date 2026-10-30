@@ -260,6 +260,31 @@ fn clicking_a_rail_row_copies_the_fact_and_none_of_its_typography() {
 }
 
 #[test]
+fn a_rail_row_copies_the_same_fact_with_a_glow_in_the_margin() {
+    // The seam is additive: what a row copies is the fact, and a terminal that
+    // draws the light strip changes nothing about the text (#63).
+    let mut copies = Vec::new();
+    for glowing in [false, true] {
+        let clipboard = Fake::taking();
+        let mut app = app_with(clipboard.clone());
+        if glowing {
+            app = app.with_graphics(Some(Graphics::kitty()));
+        }
+        let rows = screen(&mut app, 100, 20);
+        let row = rail_row(&rows, "cache");
+        mouse(
+            &mut app,
+            MouseEventKind::Down(MouseButton::Left),
+            100 - RAIL as u16 + 5,
+            row as u16,
+        );
+        copies.push(clipboard.saw());
+    }
+    assert_eq!(copies[0], copies[1], "the same fact, lit or not");
+    assert_eq!(copies[0], vec!["cache —".to_string()]);
+}
+
+#[test]
 fn ctrl_g_copies_the_session_id_alone() {
     let clipboard = Fake::taking();
     let mut app = app_with(clipboard.clone());

@@ -12,6 +12,7 @@ pub(crate) mod pictures;
 mod queue;
 mod rail;
 pub(crate) mod rows;
+pub(crate) mod seam;
 mod sessions;
 mod settings;
 pub mod transcript;
@@ -74,27 +75,34 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
         }
         _ => (body, None),
     };
-    let (transcript, rail_column, rail_strip) = if area.width >= RAIL_MIN_WIDTH {
+    let (transcript, margin, rail_column, rail_strip) = if area.width >= RAIL_MIN_WIDTH {
         // One column of the terminal's own canvas between the words and the
         // rail: the rail's rule is an edge, and an edge needs air on both
-        // sides of it (ADR-0011 §4).
-        let [left, _, right] = Layout::horizontal([
+        // sides of it (ADR-0011 §4). Where the terminal speaks Kitty graphics
+        // that column is the seam's light strip, for the whole height of the
+        // body (#63).
+        let [left, margin, right] = Layout::horizontal([
             Constraint::Min(1),
             Constraint::Length(GAP_COLUMNS),
             Constraint::Length(RAIL_COLUMNS),
         ])
         .areas(body);
-        (left, Some(right), None)
+        (left, Some(margin), Some(right), None)
     } else {
         let [above, below] =
             Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).areas(body);
-        (above, None, Some(below))
+        (above, None, None, Some(below))
     };
     if let Some(completions) = completions {
         completion::draw(app, completions, frame.buffer_mut());
     }
 
     transcript::draw(app, transcript, frame.buffer_mut());
+    // The glow is drawn beside the rail and never over it: the margin has its
+    // own rect, and `set_rail_view` is given the rail's (ADR-0011 §23, #63).
+    if let Some(margin) = margin {
+        seam::draw(app, margin, frame.buffer_mut());
+    }
     match (rail_column, rail_strip) {
         (Some(area), _) => rail::column(app, area, frame.buffer_mut()),
         (None, Some(area)) => rail::strip(app, area, frame.buffer_mut()),
