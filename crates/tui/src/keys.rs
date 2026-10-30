@@ -27,6 +27,7 @@ impl App {
             KeyCode::Char('c') if ctrl => self.cancel_or_clear(),
             KeyCode::Char('y') if ctrl => self.copy_last_answer(),
             KeyCode::Char('o') if ctrl => self.open_spill(),
+            KeyCode::Char('g') if ctrl => self.copy_session_id(),
             KeyCode::Char('?') if self.composer.is_blank() => self.show(Overlay::Help),
             KeyCode::Esc => self.dismiss(),
             KeyCode::Tab => self.accept_completion(),
@@ -98,6 +99,10 @@ impl App {
             self.settings_key(key);
             return;
         }
+        if matches!(self.overlay, Some(Overlay::Sessions(_))) {
+            self.sessions_key(key, ctrl);
+            return;
+        }
         match key.code {
             KeyCode::Esc | KeyCode::Enter => self.overlay = None,
             KeyCode::PageUp => self.scroll_page(true),
@@ -109,6 +114,21 @@ impl App {
     }
 
     fn press(&mut self, at: Position) {
+        // A row of the rail is a row like any other: the session id can be
+        // taken out of the frame and pasted into `sindri sessions show`
+        // (ADR-0006). The whole fact is copied, so a wrapped id is never half
+        // an id.
+        if let Some(row) = self.rail_view.row_at(at) {
+            let text = if self.rail_view.session.contains(&row) {
+                self.rail.session()
+            } else {
+                self.rail_view.rows.get(row).cloned().unwrap_or_default()
+            };
+            if !text.trim().is_empty() {
+                self.copy(&text);
+            }
+            return;
+        }
         let offered = self
             .viewport
             .row_of(at)
@@ -159,9 +179,13 @@ impl App {
             Command::Settings => self.open_settings(None),
             Command::Help => self.show(Overlay::Help),
             Command::Quit => self.quit = true,
+            Command::Sessions => self.open_sessions(),
+            Command::Export(path) => self.export(path.as_deref()),
             Command::Unknown(name) => {
                 let name = name.clone();
-                self.note_error(format!("{name}: no such command — /new, /help, /quit"));
+                self.note_error(format!(
+                    "{name}: no such command — /sessions, /export, /new, /settings, /help, /quit"
+                ));
             }
         }
     }
@@ -306,14 +330,31 @@ impl App {
     }
 
     fn copy(&mut self, text: &str) {
+        self.copy_named(text, None);
+    }
+
+    /// The session id alone, with no column of the rail around it: what a user
+    /// pastes into `sindri sessions show` (ADR-0006).
+    fn copy_session_id(&mut self) {
+        let id = self.rail.session();
+        self.copy_named(&id, Some("session id"));
+    }
+
+    fn copy_named(&mut self, text: &str, named: Option<&str>) {
         let rows = text.lines().count();
         let said = match self.clipboard.copy(text) {
             // A terminal does not answer, so this says the copy was sent and
             // says outright that nobody confirmed it.
-            Copied::Sent => {
-                format!("copy sent: {rows} rows as OSC 52, which the terminal does not confirm")
-            }
-            Copied::Tool(tool) => format!("copied {rows} rows via {tool}"),
+            Copied::Sent => match named {
+                Some(name) => format!("{name} sent as OSC 52, which the terminal does not confirm"),
+                None => {
+                    format!("copy sent: {rows} rows as OSC 52, which the terminal does not confirm")
+                }
+            },
+            Copied::Tool(tool) => match named {
+                Some(name) => format!("{name} copied via {tool}"),
+                None => format!("copied {rows} rows via {tool}"),
+            },
             Copied::Refused(why) => return self.note_error(format!("copy refused: {why}")),
         };
         self.note_info(said);

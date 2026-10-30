@@ -108,7 +108,7 @@ fn session(
     cancel: Cancel,
     missing: Option<Missing>,
 ) -> Ending {
-    let mut app = App::new(launch, Face::detect()).with_cancel(cancel);
+    let mut app = recorded(App::new(launch, Face::detect()).with_cancel(cancel));
     if let Some(missing) = missing {
         app = app.with_missing(missing);
     }
@@ -142,6 +142,20 @@ fn session(
         painted = paint(terminal, &mut app);
     }
     Ending::Left
+}
+
+/// Where the records live and where a default `/export` lands: the state
+/// directory is read and never written by the frame, and the workspace is the
+/// directory the frame was launched in (ADR-0006).
+fn recorded(app: App) -> App {
+    let app = match std::env::current_dir() {
+        Ok(workspace) => app.with_workspace(workspace),
+        Err(_) => app,
+    };
+    match sindri_core::paths::state_dir() {
+        Ok(state) => app.with_sessions(state.join("sessions")),
+        Err(_) => app,
+    }
 }
 
 /// The terminal's cursor is hidden while the frame is written and shown again

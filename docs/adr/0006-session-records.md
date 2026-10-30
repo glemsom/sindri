@@ -19,7 +19,10 @@ date: 2026-10-29
 
 - A record still saying `stopped: running` is a crashed or superseded run.
 - Credentials are redacted before the first byte is written.
-- Read back with `sindri sessions show <guid>`; the GUID is the JSON output's `session` field.
+- Read back with `sindri sessions show <guid>`, listed in the frame by `/sessions` and
+  copied out of the rail with `Ctrl-G`; the GUID is the JSON output's `session` field.
+  `/export [path]` writes the same entries as one markdown file. Both read; neither writes
+  a record.
 - v0.1 prunes nothing; `sessions prune` is a later issue.
 
 ## Consequences

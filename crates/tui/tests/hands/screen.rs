@@ -19,24 +19,30 @@ fn question_mark_lists_every_binding_and_esc_closes_it() {
         "Shift+Up, Shift+Down",
         "Ctrl-Y",
         "Ctrl-O",
+        "Ctrl-G",
         "Ctrl-C",
         "Ctrl-Q",
         "?",
         "@",
-        "/new, /settings, /help, /quit",
+        "/new, /sessions, /export, /settings, /help, /quit",
     ] {
         assert!(
             rows.lines().any(|row| row.contains(wanted)),
             "the overlay lists {wanted:?}: {rows}"
         );
     }
-    for gesture in ["wheel", "drag", "click the spill row"] {
+    for gesture in [
+        "wheel",
+        "drag",
+        "click the spill row",
+        "click the session row",
+    ] {
         assert!(
             rows.contains(gesture),
             "the overlay names {gesture}: {rows}"
         );
     }
-    assert_eq!(BINDINGS.len(), 14, "every binding is listed exactly once");
+    assert_eq!(BINDINGS.len(), 15, "every binding is listed exactly once");
     press(&mut app, KeyCode::Esc, KeyModifiers::NONE);
     assert!(app.overlay().is_none(), "Esc closes the overlay");
 }

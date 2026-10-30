@@ -32,6 +32,27 @@ pub enum Renew {
 
 const DEFAULT_PAGE: usize = 10;
 
+/// The rows the rail last drew, so a click on one copies what was drawn there.
+/// The session id is the fact a user takes out of the frame by hand — it is
+/// what `sindri sessions show` takes — and a wrapped id is copied whole, never
+/// half of it (ADR-0006, issue #51).
+#[derive(Debug, Clone, Default)]
+pub struct RailView {
+    pub area: Rect,
+    pub rows: Vec<String>,
+    /// Where the session fact sits in `rows`.
+    pub session: std::ops::Range<usize>,
+}
+
+impl RailView {
+    pub fn row_at(&self, at: ratatui::layout::Position) -> Option<usize> {
+        self.area
+            .contains(at)
+            .then(|| (at.y - self.area.y) as usize)
+            .filter(|row| *row < self.rows.len())
+    }
+}
+
 pub struct App {
     pub(crate) rail: Rail,
     pub(crate) entries: Vec<Entry>,
@@ -68,6 +89,15 @@ pub struct App {
     /// run it opened for cannot send a prompt until it is filled in, and the
     /// composer says so rather than pretending (ADR-0004).
     pub(crate) missing: Option<Missing>,
+    pub(crate) rail_view: RailView,
+    /// Where the records live: `/sessions` and `/export` read this directory
+    /// and write nothing into it (ADR-0006).
+    pub(crate) sessions: Option<PathBuf>,
+    /// The directory a default export lands in: the workspace the frame was
+    /// launched in.
+    pub(crate) workspace: Option<PathBuf>,
+    /// A path `/export` refused to overwrite, waiting for the second ask.
+    pub(crate) export_pending: Option<PathBuf>,
 }
 
 impl App {
@@ -107,12 +137,38 @@ impl App {
             config: None,
             reload: false,
             missing: None,
+            rail_view: RailView::default(),
+            sessions: None,
+            workspace: None,
+            export_pending: None,
         }
     }
 
     pub fn with_cancel(mut self, cancel: Cancel) -> Self {
         self.cancel = cancel;
         self
+    }
+
+    /// Where the records live (ADR-0006): `/sessions` lists it, `/export`
+    /// reads the frame's own record from it.
+    pub fn with_sessions(mut self, root: impl Into<PathBuf>) -> Self {
+        self.sessions = Some(root.into());
+        self
+    }
+
+    /// Where a default `/export` lands: the workspace the frame is in.
+    pub fn with_workspace(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.workspace = Some(dir.into());
+        self
+    }
+
+    /// The workspace, asked of the process only when the frame was never told
+    /// one: an export must land somewhere it can name.
+    pub(crate) fn workspace_dir(&self) -> PathBuf {
+        self.workspace
+            .clone()
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| PathBuf::from("."))
     }
 
     pub fn with_config(mut self, path: impl Into<PathBuf>) -> Self {
@@ -234,6 +290,9 @@ impl App {
                 self.walking = None;
                 self.scroll = 0;
                 self.rail = Rail::new(launch);
+                // A refused export was a refusal about the thread that asked:
+                // a new thread must ask again before it replaces that file.
+                self.export_pending = None;
                 self.dirty();
                 self.note_info(format!("new session {session}"));
             }
@@ -278,6 +337,19 @@ impl App {
     pub(crate) fn settled(&mut self, scroll: usize, page: usize) {
         self.scroll = scroll;
         self.page = page.max(1);
+    }
+
+    pub(crate) fn set_rail_view(
+        &mut self,
+        area: Rect,
+        rows: Vec<String>,
+        session: std::ops::Range<usize>,
+    ) {
+        self.rail_view = RailView {
+            area,
+            rows,
+            session,
+        };
     }
 
     pub(crate) fn set_viewport(

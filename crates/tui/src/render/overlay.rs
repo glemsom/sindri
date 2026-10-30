@@ -13,7 +13,7 @@ use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Widget};
 use crate::app::App;
 use crate::markdown::text;
 use crate::overlay::{Overlay, help_rows};
-use crate::render::settings;
+use crate::render::{sessions, settings};
 use crate::theme;
 
 const KEYS: usize = 20;
@@ -30,6 +30,16 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
     // (ADR-0016). The overlay's own rows are drawn after `Clear`, at full
     // strength, so this pass costs nothing to undo.
     dim(area, buf);
+    // The box's outside, then the columns its inside has: a picker's rows are
+    // clipped to what the box will hold, not to the terminal.
+    let width = area.width.saturating_sub(8).clamp(20, 110);
+    let inside = Rect {
+        x: area.x + (area.width.saturating_sub(width)) / 2,
+        y: area.y,
+        width,
+        height: area.height,
+    };
+    let content = Block::bordered().inner(inside);
     let (height, title, lines) = match &mut *overlay {
         Overlay::Settings(settings) => {
             settings::draw(settings, area, buf);
@@ -43,13 +53,10 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
                 .map(|(keys, what)| help_row(keys, &what))
                 .collect(),
         ),
+        Overlay::Sessions(sessions) => sessions::draw(sessions, content),
         Overlay::Spill(spill) => {
             spill.settled(spill_window(area).height as usize);
-            let title = format!(
-                "output: {} · {} lines",
-                spill.path.display(),
-                spill.lines.len()
-            );
+            let title = format!("{} · {} lines", spill.title, spill.lines.len());
             let lines = spill
                 .window()
                 .iter()
@@ -58,12 +65,10 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
             (area.height, title, lines)
         }
     };
-    let width = area.width.saturating_sub(8).clamp(20, 110);
     let boxed = Rect {
-        x: area.x + (area.width.saturating_sub(width)) / 2,
         y: area.y + (area.height.saturating_sub(height)) / 2,
-        width,
         height,
+        ..inside
     };
     let inner = Block::bordered().inner(boxed);
     render(buf, boxed, inner, &title, lines);

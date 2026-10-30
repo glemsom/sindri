@@ -6,6 +6,7 @@ mod completion;
 mod composer;
 mod overlay;
 mod rail;
+mod sessions;
 mod settings;
 pub mod transcript;
 

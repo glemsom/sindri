@@ -20,13 +20,22 @@ date: 2026-10-30
 11. **Reasoning.** Streams as a dim block, collapses to a one-line "reasoned" marker, expands on demand.
 12. **`/settings`.** Edits the one config file through the core's `Document`; a save applies to the next prompt with no restart (ADR-0014).
 13. **Compatibility.** 24-bit truecolour assumed, no 256-colour fallback; must work in `tmux` and over SSH; one dark theme.
-14. **Keys.** `Enter` sends, `Shift+Enter` newlines, `@` completes paths, `/` names commands, `Esc` closes, `Ctrl-C` cancels or clears, `Ctrl-Q` quits, `PgUp`/`PgDn` scroll, `?` opens help, `Tab` accepts a completion.
+14. **Keys.** `Enter` sends, `Shift+Enter` newlines, `@` completes paths, `/` names commands, `Esc` closes, `Ctrl-C` cancels or clears, `Ctrl-Q` quits, `PgUp`/`PgDn` scroll, `?` opens help, `Tab` accepts a completion, `Ctrl-O` opens a spill file, `Ctrl-Y` copies, `Ctrl-G` copies the session id.
 15. **Failure is content.** Boot runs the doctor's checks before the first frame; a failure is a full-screen card naming the check and printing the sandbox description, never a half-drawn frame. Mid-run failures land in the transcript where they happened, with the stop reason in the rail; toasts are for success only.
 16. **`@` completion.** A capped workspace walk on its own thread, inserted as a workspace-relative path; skips `.git` only. Cap, ranking and threading: ADR-0013.
 
 ## Amendment
 
 17. **A missing credential opens the modal, not a card.** §15's card is for a check that fails. A value the run has none of is the one failure the frame answers with a field: a bare `sindri` with no key opens with the settings modal staged on `api_key`, saying where the key comes from, where it is written, that the file is `0600` and that the value is never shown again (ADR-0004). `Esc` leaves a frame that still reads and browses, the missing key said once in the transcript, the composer stating what it cannot send; a prompt typed while it is missing is refused and the draft stays. Batch mode is untouched.
+
+18. **Reading the record.** `/sessions` lists what the state directory holds — time, model,
+    turns, stop reason and first prompt, newest first, read from `session.json` — and
+    `Enter` reads one back in the spill-style box, read-only and scrollable. `/export
+    [path]` writes the current thread as markdown, says the path before writing and where
+    it went after, and refuses to replace a file that is already there until the same
+    `/export` is asked twice. The rail's GUID is copied with `Ctrl-G` or a click on its
+    row, so `sindri sessions show` still takes it. §8 is untouched: reading is not
+    resuming, and no path from the picker writes a record (ADR-0006).
 
 ## Consequences
 

@@ -68,7 +68,8 @@ silent unless `-v`; `--format json` changes the output shape (ADR-0004).
 
 **rail** — the right column: cache hit percentage, turns against the cap, tokens, context
 meter, session GUID, session temp path, git branch and sandbox posture. 32 columns from
-100 up; below that, the same facts as one line under the transcript.
+100 up; below that, the same facts as one line under the transcript. The GUID is copied
+with `Ctrl-G`, or by clicking its row.
 
 **canvas** — the terminal's own black: the lowest of the three tiers, and the one
 the frame paints nothing on. Above it: **panel**, then **raised** (ADR-0016).
@@ -91,6 +92,15 @@ own band.
 
 **completion** — the `@` offer of workspace paths: a proximity-ranked background walk,
 eight rows, `.git` skipped, `.gitignore` deliberately not honoured.
+
+**record picker** — the `/sessions` overlay: one row per **session** under
+`$XDG_STATE_HOME/sindri/sessions/`, newest first — when it ran, its model, its turns, why
+it stopped, and the first prompt. `Enter` reads that **transcript** back read-only, `Esc`
+closes. Reading is not resuming (ADR-0011 §8).
+
+**export** — `/export [path]`: the **thread** as one markdown file, at the path named or
+`sindri-<guid>.md` in the workspace, read out of the record so it says what `sindri
+sessions show` prints. A file already there is not overwritten without a second ask.
 
 **settings modal** — the `/settings` overlay: one row per key of the config schema.
 `Enter` saves, `Esc` discards, `Ctrl-U` empties the field, `Space` flips a toggle
