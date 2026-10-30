@@ -1,7 +1,8 @@
-//! The process seam for the failure vocabulary: one line, one exit code, whoever
-//! the front end is. The words every front end prints for a run that cannot
-//! start are the module's, so `sandbox exec` and batch mode say the same thing
-//! about the same broken environment instead of each in its own dialect.
+//! The wording test: one failure, three front ends, one line. Batch mode,
+//! `sandbox exec` and the frame are three doors onto the same broken run
+//! environment, so the words and the exit code a shell reads are the same
+//! whichever door was used — the one regression that catches a front end
+//! learning to say a shared failure in its own dialect (ADR-0004, ADR-0015 §5).
 
 #![allow(
     clippy::expect_used,
@@ -10,22 +11,39 @@
 
 mod common;
 
+use std::path::{Path, PathBuf};
+
+use common::pty::{self, Pty, Said, exit, spawn_with_stderr};
 use common::{Env, TEST_KEY, stderr};
 
-/// A state root that is a file: no session directory can exist beneath it, so
-/// both front ends meet the same failure before they can differ.
-fn blocked_state() -> tempfile::TempDir {
+/// A state root that cannot be written: the directory the state root would be
+/// is a file, so no session directory can ever exist beneath it. The same
+/// failure meets every front end before any of them can differ.
+fn blocked_state() -> (tempfile::TempDir, PathBuf) {
     let root = tempfile::TempDir::new().expect("temp dir");
-    std::fs::write(root.path().join("state"), b"not a directory").expect("write the state file");
-    root
+    let state = root.path().join("state");
+    std::fs::write(&state, b"not a directory").expect("write the state file");
+    (root, state)
+}
+
+/// The one line the failure is: a session directory that cannot be created is
+/// the sandbox family (ADR-0004), it names the path it could not create, and the
+/// reason is the operating system's own.
+fn expected(state: &Path) -> String {
+    format!(
+        "sindri: sandbox: the session directory {}/sessions cannot be created: {}\n",
+        state.join("sindri").display(),
+        std::io::Error::from_raw_os_error(libc::ENOTDIR)
+    )
 }
 
 #[test]
-fn sandbox_exec_says_a_start_failure_the_way_batch_mode_does() {
+fn one_failure_is_one_line_and_one_code_whichever_front_end_met_it() {
     let env = Env::new();
-    let blocked = blocked_state();
-    let state = blocked.path().join("state");
+    let (_root, state) = blocked_state();
+    let want = expected(&state);
 
+    // Batch mode: the filter, asked for an answer it cannot record.
     let batch = env
         .cmd()
         .args(["-b", "summarise this"])
@@ -38,6 +56,7 @@ fn sandbox_exec_says_a_start_failure_the_way_batch_mode_does() {
         .get_output()
         .clone();
 
+    // `sandbox exec`: the diagnostic, which records the session it probes in.
     let exec = env
         .cmd()
         .args(["sandbox", "exec", "--", "echo", "never"])
@@ -47,17 +66,48 @@ fn sandbox_exec_says_a_start_failure_the_way_batch_mode_does() {
         .get_output()
         .clone();
 
-    let (batch, exec) = (stderr(&batch), stderr(&exec));
-    assert!(
-        batch.starts_with("sindri: sandbox: "),
-        "a session that cannot start is the sandbox family: {batch:?}"
+    // The frame: the real binary on a real terminal, its stderr kept beside the
+    // screen so the line can be read without the frame's escapes in the way.
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: the frame's line is not tested here");
+        return;
+    };
+    let said = Said::new();
+    let mut child = spawn_with_stderr(
+        &env,
+        &pty,
+        &[
+            (
+                "XDG_STATE_HOME",
+                state.to_str().expect("a utf-8 state root"),
+            ),
+            ("SINDRI_API_KEY", TEST_KEY),
+            ("SINDRI_MODEL", "claude-sonnet-4-6"),
+        ],
+        said.path(),
+    );
+    let code = exit(&mut child);
+    let frame = said.words();
+    let drawn = pty.drain(&mut String::new());
+
+    assert_eq!(
+        code,
+        Some(3),
+        "a run environment that cannot be written exits 3"
     );
     assert_eq!(
-        exec, batch,
-        "the same failure is the same line, whichever front end met it"
+        stderr(&exec),
+        want,
+        "`sandbox exec` says the shared line, and only that"
+    );
+    assert_eq!(stderr(&batch), want, "batch mode says the shared line too");
+    assert_eq!(
+        frame, want,
+        "and the frame says the same line, rather than drawing a card about a \
+         sandbox that is not what failed"
     );
     assert!(
-        !exec.contains("sandbox exec:"),
-        "a front end does not prefix the shared words with its own name: {exec:?}"
+        !drawn.contains(pty::ALTERNATE_SCREEN),
+        "the frame is never taken for a line it can say on the way in: {drawn:?}"
     );
 }

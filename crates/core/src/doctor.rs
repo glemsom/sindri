@@ -70,8 +70,13 @@ impl std::error::Error for DoctorError {}
 /// Proves the sandbox works and returns the description the user will see.
 ///
 /// The probe runs in a scratch directory of its own — not in the session
-/// namespace — and removes it afterwards, so `doctor` leaves no record behind
-/// and prunes nothing that a run wrote (ADR-0006).
+/// namespace, and not under the state root either — and removes it afterwards,
+/// so `doctor` leaves no record behind and prunes nothing that a run wrote
+/// (ADR-0006). Proving the sandbox must not depend on the record being
+/// writable: a probe whose scratch lived under the state root would report a
+/// state root that cannot be written as a broken sandbox, and every front end
+/// would then have to invent its own words for a failure the one module already
+/// has words for (ADR-0004, ADR-0015 §5).
 ///
 /// The environment is taken as a value, the one a run would be opened in
 /// (ADR-0015 §6), so the description is derived from the same workspace, `PATH`
@@ -83,8 +88,8 @@ pub fn probe(env: &Env, extras: &[PathBuf]) -> Result<Report, DoctorError> {
     })?;
 
     let state = env.state.clone();
-    let scratch = state
-        .join("doctor")
+    let scratch = std::env::temp_dir()
+        .join("sindri-doctor")
         .join(paths::new_session_id().map_err(DoctorError::Setup)?);
     let session_temp = scratch.join("tmp");
     std::fs::create_dir_all(session_temp.join("home")).map_err(DoctorError::Setup)?;
