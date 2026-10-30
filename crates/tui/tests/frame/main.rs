@@ -18,10 +18,11 @@ use sindri_tui::render;
 use sindri_tui::{App, Face, Launch};
 
 const RAIL: usize = 32;
-/// The margin's own column at 100 columns: the transcript, the one cell of
-/// canvas between the words and the rail, and then the rail's 32. A terminal
-/// that speaks Kitty graphics draws the seam's light strip there (#63).
-const MARGIN: usize = 100 - RAIL - 1;
+/// The margin's own first column at 100 columns: the transcript, the canvas
+/// between the words and the rail, and then the rail's 32. A terminal that
+/// speaks Kitty graphics draws the seam's light strip there (#63), and the
+/// margin is as wide as the frame says it is.
+const MARGIN: usize = 100 - RAIL - render::GAP_COLUMNS as usize;
 
 fn launch() -> Launch {
     Launch {

@@ -30,8 +30,8 @@ fn column(rows: &[String], x: usize) -> String {
 }
 
 /// The transcript's own last column, at 100 columns wide: the rail takes the
-/// last 32 and a column of canvas separates them (ADR-0011 §4).
-const MARK: usize = 100 - RAIL - 2;
+/// last 32 and the margin separates them (ADR-0011 §4).
+const MARK: usize = MARGIN - 1;
 
 #[test]
 fn a_thread_longer_than_the_window_carries_a_position_marker() {

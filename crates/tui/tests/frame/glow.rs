@@ -65,9 +65,12 @@ fn composer_at(rows: &[String]) -> usize {
 }
 
 #[test]
-fn the_glow_is_the_margins_column_at_the_height_of_the_body() {
-    // The strip has a rect and it is the gap column, whole: from the top of the
-    // body down to the row above the composer, and not one row further.
+fn the_glow_is_the_margins_cells_at_the_height_of_the_body() {
+    // The strip has a rect and it is the whole margin: from the top of the body
+    // down to the row above the composer, and not one row further. It is two
+    // cells wide, and the second is covered by the picture rather than painted
+    // — the cell `Buffer::diff` would otherwise leave unpainted, taken from the
+    // margin so the rail's first column keeps its `⁞` (`render::GAP_COLUMNS`).
     let drawn = cells(&mut lit(), 100, 30);
     let shown: Vec<String> = (0..drawn.area.height).map(|y| row(&drawn, y)).collect();
     let body = composer_at(&shown);
@@ -81,30 +84,34 @@ fn the_glow_is_the_margins_column_at_the_height_of_the_body() {
         column[body..].iter().all(|cell| *cell != '\u{25A9}'),
         "and nothing below it: the composer's own rows are untouched: {shown:#?}"
     );
+    let beside = MARGIN + 1;
+    for y in 0..body {
+        let cell = &drawn[(beside as u16, y as u16)];
+        assert!(cell.skip, "({beside}, {y}) is the strip's own second cell");
+        assert_eq!(cell.symbol(), " ", "covered, so it paints no glyph");
+    }
 }
 
 #[test]
 fn the_glow_touches_the_margin_and_nothing_else() {
     // What the strip may not change: the transcript, the rail's own area, the
     // composer and the footer. A frame with a glow is the frame without one
-    // everywhere but the one column the seam was given.
+    // everywhere but the cells the margin was given.
     let plain = cells(&mut app(), 100, 30);
     let shown: Vec<String> = (0..plain.area.height).map(|y| row(&plain, y)).collect();
     let body = composer_at(&shown);
     let glowing = cells(&mut lit(), 100, 30);
+    let gap = MARGIN..MARGIN + render::GAP_COLUMNS as usize;
     for y in 0..plain.area.height {
         for x in 0..plain.area.width {
+            if gap.contains(&(x as usize)) && (y as usize) < body {
+                continue;
+            }
             let (left, right) = (&plain[(x, y)], &glowing[(x, y)]);
-            let same = (left.symbol(), left.fg, left.bg) == (right.symbol(), right.fg, right.bg);
-            let margin = x as usize == MARGIN && (y as usize) < body;
             assert_eq!(
-                same,
-                !margin,
-                "({x}, {y}) is {} the body's margin, and {} differs: {:?} against {:?}",
-                if margin { "in" } else { "not in" },
-                if same { "nothing" } else { "it" },
-                left.symbol(),
-                right.symbol()
+                (left.symbol(), left.fg, left.bg),
+                (right.symbol(), right.fg, right.bg),
+                "({x}, {y}) is outside the body's margin, and it differs"
             );
         }
     }
@@ -157,6 +164,40 @@ fn the_facts_start_where_they_start_without_a_glow() {
             plain.chars().take(MARGIN).collect::<String>(),
             glowing.chars().take(MARGIN).collect::<String>(),
             "and the words are the same words"
+        );
+    }
+}
+
+#[test]
+fn the_face_and_the_seam_reach_a_terminal_that_draws_the_glow() {
+    // A picture's escape is written into one cell and read as wider than it, so
+    // ratatui leaves the cell after it unpainted — a cell, not a column of ink,
+    // and the terminal keeps whatever it last had there. The margin is two cells
+    // wide so that cell is the strip's own, and the rail's first column, the one
+    // the face's escape and its `⁞` both sit in, reaches the terminal. These rows
+    // are a backend's: the diff a terminal is sent (#63).
+    let face = Face::kitty().expect("the embedded face decodes");
+    let mut app = App::new(launch(), Some(face)).with_graphics(Some(Graphics::kitty()));
+    let rows = screen(&mut app, 100, 40);
+    assert!(
+        rail_of(&rows[0]).starts_with('\u{25A9}'),
+        "the face is drawn in the rail's top beside the glow: {:?}",
+        rail_of(&rows[0])
+    );
+    let said: Vec<String> = rows
+        .iter()
+        .take(composer_at(&rows))
+        .map(|row| rail_of(row))
+        .filter(|rail| !rail.trim().is_empty() && !rail.starts_with('\u{25A9}'))
+        .collect();
+    assert!(
+        !said.is_empty() && said.iter().all(|rail| rail.starts_with('⁞')),
+        "and every row of the rail's ledger keeps the seam beside it: {rows:#?}"
+    );
+    for label in ["cache", "model", "workspace", "branch"] {
+        assert!(
+            !fact(&rails(&rows, 100), label).trim().is_empty(),
+            "the rail still states {label:?} beside a glow: {rows:#?}"
         );
     }
 }

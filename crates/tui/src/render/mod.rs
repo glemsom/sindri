@@ -30,7 +30,12 @@ pub use crate::card::Card;
 
 pub const RAIL_COLUMNS: u16 = 32;
 pub const RAIL_MIN_WIDTH: u16 = 100;
-const GAP_COLUMNS: u16 = 1;
+/// The canvas between the words and the rail. Two cells, not one: a picture's
+/// escape is wider than the cell that carries it, so `Buffer::diff` leaves the
+/// cell after it unpainted, and the strip the margin draws is a picture. The
+/// strip takes both cells, so the one the diff costs it is its own and never
+/// the rail's first `⁞` or the face drawn above it (#63).
+pub const GAP_COLUMNS: u16 = 2;
 /// The footer's hints, in the one order they are worth saying: the keys that
 /// send, open the list and leave first, because a terminal too narrow for all
 /// of them is exactly where they are least discoverable (ADR-0011 §22).
@@ -76,11 +81,10 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
         _ => (body, None),
     };
     let (transcript, margin, rail_column, rail_strip) = if area.width >= RAIL_MIN_WIDTH {
-        // One column of the terminal's own canvas between the words and the
-        // rail: the rail's rule is an edge, and an edge needs air on both
-        // sides of it (ADR-0011 §4). Where the terminal speaks Kitty graphics
-        // that column is the seam's light strip, for the whole height of the
-        // body (#63).
+        // The terminal's own canvas between the words and the rail: the rail's
+        // seam is an edge, and an edge needs air on both sides of it
+        // (ADR-0011 §4). Where the terminal speaks Kitty graphics the strip of
+        // `seam.rs` fills the gap, for the whole height of the body (#63).
         let [left, margin, right] = Layout::horizontal([
             Constraint::Min(1),
             Constraint::Length(GAP_COLUMNS),

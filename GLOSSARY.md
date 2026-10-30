@@ -107,8 +107,10 @@ hang off. The rail is chrome, not a surface: it draws no fill and lets the canva
 through, so the one band of it with a colour behind it is the row the chip sits on. What
 a row copies is the fact — `context 38%` — never the seam or the leader that drew it.
 The margin between the words and the rail stays canvas, and on a terminal that speaks
-Kitty graphics it carries the seam's light strip (`seam.rs`): one cell wide and the height
-of the body, brightest against the rail and dissolving toward the words.
+Kitty graphics it carries the seam's light strip (`seam.rs`): the height of the body,
+brightest against the rail and dissolving toward the words, and two cells wide because
+a picture's escape costs the cell after it and that cell has to be the strip's own, never
+the rail's first (`render::GAP_COLUMNS`).
 32 columns from 100 up; below that, the same facts in the same order as one line under
 the transcript, which never loses the posture, the model or the workspace. One priority
 order (`rail::priority`) ends with the posture, and the column and the strip both read

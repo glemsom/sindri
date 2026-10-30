@@ -1,21 +1,20 @@
 //! The glow in the margin: the seam's light strip (`seam`, #62) drawn in the
-//! one column of canvas between the words and the rail, where the terminal
-//! speaks Kitty graphics (#63).
+//! canvas between the words and the rail, where the terminal speaks Kitty
+//! graphics (#63).
 //!
 //! The strip is generated once per body height and the terminal is told about
 //! it once: the protocol is held here across frames, so a ticking frame carries
 //! placeholders and transmits nothing, and a resize makes a new strip (ADR-0016
-//! §1, §6). Nothing is `set_skip`ed: at one cell wide a row's placeholder
-//! sequence fits the cell it was given, so the strip never covers a cell of the
-//! rail, and the rail is drawn where it always was.
+//! §1, §6).
 //!
-//! One limitation travels with the strip, and it is ratatui's rather than this
-//! module's: `Buffer::diff` reads a cell's symbol as the columns it covers and
-//! so skips the cell after a symbol wider than one, and a picture's escape
-//! sequence is far wider than the cell carrying it. The cell the diff leaves
-//! alone is the rail's first column, its `⁞`. The frame is unmoved — the rail
-//! draws exactly what it drew before — but the emitted frame can leave that one
-//! cell unpainted, which is the one part of #63 that ratatui has to change.
+//! The strip fills the whole gap, and the gap is two cells wide because it has
+//! to be. `Buffer::diff` reads a cell's symbol as the columns it covers and
+//! skips the cell after a symbol wider than one, and a picture's escape
+//! sequence is far wider than the cell carrying it. Whatever cell follows the
+//! strip's first is therefore left unpainted by the emitted frame — so it is
+//! the strip's own second cell, with its placeholder inherited from the first,
+//! and never the rail's first `⁞` or the escape of the face drawn above it
+//! (`render::GAP_COLUMNS`).
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -29,7 +28,7 @@ use crate::graphics::Graphics;
 use crate::seam;
 
 /// The strip fills the rect it is given rather than being fitted into it: an
-/// 8×256 strip in a one-cell-wide column has a natural height of a dozen rows,
+/// 8×256 strip in a two-cell-wide margin has a natural height of a dozen rows,
 /// and `Fit` would letterbox it, so the glow would stop short of the composer.
 /// `Scale` needs no filter: the strip is drawn at the rect's own pixels.
 const RESIZE: Resize = Resize::Scale(None);

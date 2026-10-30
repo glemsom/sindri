@@ -10,9 +10,9 @@ use ratatui::style::Color;
 use sindri_tui::render::transcript;
 use sindri_tui::theme;
 
-/// The transcript column of a 100-wide frame: the rail and its one-column gap
-/// take the rest.
-const COLUMN: u16 = 100 - RAIL as u16 - 1;
+/// The transcript column of a 100-wide frame: the rail and the margin between
+/// them take the rest.
+const COLUMN: u16 = MARGIN as u16;
 
 fn cells(app: &mut App, width: u16, height: u16) -> Buffer {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");

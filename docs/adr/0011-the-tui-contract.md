@@ -135,11 +135,16 @@ date: 2026-10-30
     the page (issue #61). The margin between the words and the rail stays canvas
     too, and it is the one place the seam spends paint of its own: where the
     terminal speaks Kitty graphics, the light strip of `seam.rs` is drawn there
-    — one cell wide and the height of the body, brightest against the rail and
-    dissolving toward the words — so the light is in the margin and the rail is
-    not painted with it (issue #63). So the composer is the one panel that takes the
-    keyboard and the one panel shaped like an input, and nothing competes with it
-    for that weight.
+    — the height of the body, brightest against the rail and dissolving toward
+    the words — so the light is in the margin and the rail is not painted with
+    it (issue #63). The margin is two cells wide because a picture's escape is
+    read as wider than the cell that carries it, and `Buffer::diff` leaves the
+    cell after one unpainted; the strip fills both, so what the diff costs is
+    the strip's own second cell and never the rail's first `⁞` or the face
+    drawn above it. A cell of margin is cheaper than a cell of the rail's ledger
+    or of the words, and that is the price this pays. So the composer is the one
+    panel that takes the keyboard and the one panel shaped like an input, and
+    nothing competes with it for that weight.
     `theme::surface()` and `theme::raised()` are the constructors; a renderer
     asks for a tier, never for a background. The composer is a `PANEL` with a
     `BorderType::Rounded` border that takes `PROMPT` while it holds the focus
