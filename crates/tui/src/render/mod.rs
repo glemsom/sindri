@@ -20,7 +20,6 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
-use unicode_width::UnicodeWidthStr;
 
 use crate::app::App;
 use crate::theme;
@@ -30,7 +29,21 @@ pub use crate::card::Card;
 pub const RAIL_COLUMNS: u16 = 32;
 pub const RAIL_MIN_WIDTH: u16 = 100;
 const GAP_COLUMNS: u16 = 1;
-const HINTS: &str = "Enter send · Shift+Enter newline · PgUp/PgDn scroll · @ paths · / commands · ? keys · Ctrl-Q quit";
+/// The footer's hints, in the one order they are worth saying: the keys that
+/// send, open the list and leave first, because a terminal too narrow for all
+/// of them is exactly where they are least discoverable (ADR-0011 §22).
+const HINTS: [&str; 7] = [
+    "Enter send",
+    "? keys",
+    "Ctrl-Q quit",
+    "@ paths",
+    "/ commands",
+    "Shift+Enter newline",
+    "PgUp/PgDn scroll",
+];
+
+/// What separates one hint from the next.
+const HINT_GAP: &str = " · ";
 
 pub fn draw(app: &mut App, frame: &mut Frame) {
     let area = frame.area();
@@ -100,35 +113,58 @@ pub fn draw_card(card: &Card, view: &mut crate::card::View, frame: &mut Frame) {
 }
 
 fn footer_rows(app: &App, area: Rect, buf: &mut Buffer) {
-    let mut hints = String::new();
+    let mut prefix = String::new();
     // A cancel is answered where the "working" was: the request in flight is
     // not interrupted, so the frame says what it is waiting for instead of
     // going quiet until it lands (ADR-0004). The queue states its own size.
     if app.is_cancelling() {
-        hints.push_str("cancelling… · ");
+        prefix.push_str("cancelling… · ");
     } else if app.is_running() {
-        hints.push_str("working · ");
+        prefix.push_str("working · ");
     }
-    hints.push_str(HINTS);
-    Paragraph::new(Line::from(Span::styled(hints, theme::faint()))).render(area, buf);
     // Rows that arrived below a reader who is not on the tail: the frame says
     // so, and stops saying it the moment they come back to it (issue #45). It
-    // is drawn against the right edge, so a hint it cannot sit beside is the
-    // thing that gets cut and never the count.
+    // is drawn against the right edge, so the hints are given only what is
+    // left of the row: a hint is never the thing that gets cut.
     let new = app.window.new_rows();
-    if new > 0 {
-        let rows = if new == 1 { "row" } else { "rows" };
-        let badge = format!("↓ {new} new {rows}");
-        let columns = badge.width() as u16;
-        if columns < area.width {
-            // Only the badge's own cells: a hint it sits beside is cut where
-            // the badge begins and never cleared across the whole row.
-            let at = Rect {
-                x: area.x + area.width - columns,
-                width: columns,
-                ..area
-            };
-            Paragraph::new(Span::styled(badge, theme::prompt())).render(at, buf);
+    let rows = if new == 1 { "row" } else { "rows" };
+    let badge = (new > 0).then(|| format!("↓ {new} new {rows}"));
+    let badge = badge.filter(|badge| badge.chars().count() < area.width as usize);
+    let room = (area.width as usize)
+        .saturating_sub(prefix.chars().count())
+        .saturating_sub(badge.as_ref().map_or(0, |badge| badge.chars().count() + 1));
+    let line = format!("{prefix}{}", hints(area.width as usize, room));
+    Paragraph::new(Line::from(Span::styled(line, theme::faint()))).render(area, buf);
+    if let Some(badge) = badge {
+        let columns = badge.chars().count() as u16;
+        // Only the badge's own cells: a hint it sits beside is never drawn
+        // under it, because it was given the room first.
+        let at = Rect {
+            x: area.x + area.width - columns,
+            width: columns,
+            ..area
+        };
+        Paragraph::new(Span::styled(badge, theme::prompt())).render(at, buf);
+    }
+}
+
+/// The hint line for a terminal `width` columns wide with `room` cells to
+/// spare: all seven hints from 120 columns up, five from 100, three from 60
+/// and never fewer than the two that send and open the list. A hint is a
+/// whole thing or it is not there at all — the set shrinks rather than the
+/// word being cut (ADR-0011 §22).
+fn hints(width: usize, room: usize) -> String {
+    let mut count = match width {
+        w if w >= 120 => HINTS.len(),
+        w if w >= 100 => 5,
+        w if w >= 60 => 3,
+        _ => 2,
+    };
+    loop {
+        let line = HINTS[..count].join(HINT_GAP);
+        if line.chars().count() <= room || count == 1 {
+            return line;
         }
+        count -= 1;
     }
 }

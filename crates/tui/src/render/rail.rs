@@ -11,7 +11,7 @@ use ratatui::widgets::{Paragraph, Widget};
 use crate::app::App;
 use crate::face;
 use crate::markdown::text;
-use crate::rail::{Block, Fact, Fit};
+use crate::rail::{Block, Fact, Fit, priority};
 use crate::theme;
 
 const FACE_FLOOR: u16 = face::ROWS;
@@ -24,7 +24,7 @@ pub fn column(app: &mut App, area: Rect, buf: &mut Buffer) {
     // canvas the transcript is written on (ADR-0016).
     buf.set_style(area, theme::surface());
     let width = area.width.saturating_sub(2) as usize;
-    let (lines, session) = facts(app, width);
+    let (lines, session) = facts(app, width, area.height as usize);
     let spare = area.height.saturating_sub(lines.len() as u16);
     let mut rows = area;
     if spare >= FACE_FLOOR
@@ -66,14 +66,19 @@ pub fn column(app: &mut App, area: Rect, buf: &mut Buffer) {
 }
 
 /// The rail's rows, and where the session fact sits among them.
-fn facts(app: &App, width: usize) -> (Vec<Line<'static>>, std::ops::Range<usize>) {
+fn facts(app: &App, width: usize, height: usize) -> (Vec<Line<'static>>, std::ops::Range<usize>) {
+    let all = app.rail().facts(app.now());
+    // A column shorter than the facts it has to state gives them up from the
+    // bottom of the one priority order, keeps a row back for saying so, and
+    // never loses the posture (ADR-0011 §22).
+    let (facts, hidden) = keep(&all, height);
     let mut lines: Vec<Line<'static>> = Vec::new();
     let mut session = 0..0;
     let mut ruled = false;
     // A value is never wrapped: it is shortened to the column beside its
     // label, so a fact is one row however long it is.
     let room = width.saturating_sub(LABEL + 1);
-    for fact in app.rail().facts(app.now()) {
+    for fact in &facts {
         if fact.block() != Block::Spend && !ruled {
             // The rule opens the identity block: the numbers above it, what
             // the run *is* below it.
@@ -83,9 +88,51 @@ fn facts(app: &App, width: usize) -> (Vec<Line<'static>>, std::ops::Range<usize>
         if fact.copies_whole() {
             session = lines.len()..lines.len() + 1;
         }
-        lines.push(row(&fact, room));
+        lines.push(row(fact, room));
+    }
+    if hidden > 0 {
+        lines.push(more(hidden));
     }
     (lines, session)
+}
+
+/// The facts a column `height` rows tall can state, in the order it reads
+/// them, and how many it had to leave out. A fact that has just gone needs a
+/// row to say so, so the row is counted against the rail from the first loss
+/// and not a row before it.
+fn keep(facts: &[Fact], height: usize) -> (Vec<Fact>, usize) {
+    let mut kept = facts.to_vec();
+    let mut hidden = 0;
+    while kept.len() > 1 && rows(&kept) + usize::from(hidden > 0) > height {
+        let loser = kept
+            .iter()
+            .enumerate()
+            .min_by_key(|(at, fact)| (priority(fact), *at))
+            .map(|(at, _)| at);
+        match loser {
+            Some(at) => {
+                kept.remove(at);
+                hidden += 1;
+            }
+            None => break,
+        }
+    }
+    (kept, hidden)
+}
+
+/// The rows a set of facts draws in: one each, and the rule between the
+/// numbers and what the run is.
+fn rows(facts: &[Fact]) -> usize {
+    let spend = facts.iter().any(|fact| fact.block() == Block::Spend);
+    let after = facts.iter().any(|fact| fact.block() != Block::Spend);
+    facts.len() + usize::from(spend && after)
+}
+
+/// The one row that says the rail had room for only some of its facts, and
+/// which way there is more: a short terminal loses facts one priority order at
+/// a time, never in silence (ADR-0011 §22).
+fn more(hidden: usize) -> Line<'static> {
+    Line::from(Span::styled(format!("│ +{hidden} more"), theme::faint()))
 }
 
 fn row(fact: &Fact, room: usize) -> Line<'static> {
@@ -132,8 +179,10 @@ pub(crate) fn chip() -> ratatui::style::Style {
 }
 
 pub fn strip(app: &App, area: Rect, buf: &mut Buffer) {
+    // The strip is one row, and what it says already fits it: what was said is
+    // shortened or dropped where it was chosen rather than cut here
+    // (ADR-0011 §22).
     let text = app.rail().strip(area.width as usize, app.now());
-    let shown: String = text.chars().take(area.width as usize).collect();
-    let line = Line::from(Span::styled(shown, theme::faint()));
+    let line = Line::from(Span::styled(text, theme::faint()));
     Paragraph::new(line).render(area, buf);
 }

@@ -5,6 +5,7 @@
 //! two can never disagree.
 
 mod fact;
+mod strip;
 
 use std::time::Duration;
 
@@ -12,6 +13,7 @@ use crate::driver::{Stop, Tokens};
 use crate::pulse;
 
 pub use self::fact::{Block, Fact, Fit};
+pub use self::strip::priority;
 
 #[derive(Debug, Clone)]
 pub struct Launch {
@@ -56,6 +58,10 @@ pub struct Rail {
 /// The characters one token is worth, as the frame counts them: a guess, and
 /// only ever a guess until the provider's own report lands.
 const CHARS_PER_TOKEN: u64 = 4;
+
+/// What separates one fact from the next on the one-line strip, and what
+/// ends a posture's head — `bwrap` before `· 1 writable`.
+pub(crate) const SEPARATOR: &str = " · ";
 
 impl Rail {
     pub fn new(launch: Launch) -> Self {
@@ -218,60 +224,9 @@ impl Rail {
 
     /// The rail as one line, for a terminal too narrow to give it a column:
     /// the same facts in the same order, in as much of them as the line can
-    /// hold. The posture, the model and the workspace are kept their room, so
-    /// a narrower terminal loses the meter before it loses the run.
+    /// hold (ADR-0011 §22).
     pub fn strip(&self, width: usize, now: Duration) -> String {
-        let facts = self.facts(now);
-        let kept: Vec<&Fact> = facts.iter().filter(|fact| fact.keeps()).collect();
-        let reserved: usize = kept
-            .iter()
-            .map(|fact| fact.brief().chars().count() + SEPARATOR.chars().count())
-            .sum();
-        if reserved > width {
-            // Even the facts the line may not lose do not fit: the posture
-            // leads, because trust is the one fact never dropped.
-            let mut line = String::new();
-            let mut kept = kept;
-            kept.sort_by_key(|fact| fact.block() != Block::Posture);
-            for fact in kept {
-                let brief = fact.brief();
-                let room = width.saturating_sub(line.chars().count() + SEPARATOR.chars().count());
-                if brief.chars().count() <= room {
-                    if !line.is_empty() {
-                        line.push_str(SEPARATOR);
-                    }
-                    line.push_str(&brief);
-                }
-            }
-            return line.chars().take(width).collect();
-        }
-
-        let mut shown: Vec<String> = Vec::new();
-        let mut used = 0usize;
-        for (index, fact) in facts.iter().enumerate() {
-            let rest: usize = facts[index + 1..]
-                .iter()
-                .filter(|fact| fact.keeps())
-                .map(|fact| fact.brief().chars().count() + SEPARATOR.chars().count())
-                .sum();
-            let separator = if shown.is_empty() {
-                0
-            } else {
-                SEPARATOR.chars().count()
-            };
-            let room = width.saturating_sub(used + separator + rest);
-            // Shortened before skipped: the column's label where it fits, the
-            // brief one where it does not.
-            let Some(line) = [fact.line(), fact.brief()]
-                .into_iter()
-                .find(|line| line.chars().count() <= room)
-            else {
-                continue;
-            };
-            used += separator + line.chars().count();
-            shown.push(line);
-        }
-        shown.join(SEPARATOR).chars().take(width).collect()
+        strip::strip(&self.facts(now), width)
     }
 
     fn cache(&self) -> String {
@@ -300,10 +255,6 @@ impl Rail {
         }
     }
 }
-
-/// What separates one fact from the next on the one-line strip, and what
-/// ends a posture's head — `bwrap` before `· 1 writable`.
-pub(crate) const SEPARATOR: &str = " · ";
 
 pub fn compact(count: u64) -> String {
     if count < 1_000 {

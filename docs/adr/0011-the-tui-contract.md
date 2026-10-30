@@ -78,6 +78,25 @@ date: 2026-10-30
     of blank ones. Nothing in the empty frame claims a fact the launch did not establish
     (issue #46).
 
+22. **The chrome has a budget.** A narrow terminal shortens what the frame says; it never
+    cuts a key or a fact in half. The footer states the hints in the one order they are
+    worth saying — `Enter send`, `? keys`, `Ctrl-Q quit`, `@ paths`, `/ commands`,
+    `Shift+Enter newline`, `PgUp/PgDn scroll` — showing all seven from 120 columns up,
+    five from 100, three from 60, and never fewer than the two that send and open the
+    list: the set shrinks rather than a word being clipped, and the room a live run's
+    `working · ` or a `↓ 4 new rows` badge needs is taken before the hints are chosen.
+    The rail is read by one priority order, `rail::priority`, which both the column and
+    the strip ask and neither sorts facts of its own; it ends with the posture and puts
+    the numbers the run is spending above what the run *is*, so a column too short for
+    its facts gives them up from the bottom of that order — the session temp, the branch,
+    the record, then the model and the workspace the transcript's first line already
+    names — and keeps a row to say how many it lost (`│ +7 more`) rather than losing them
+    in silence. On the strip the facts it may never lose (the posture, the model, the
+    workspace) are given their room first; where even those three do not fit, the order
+    decides what each gets, the posture first, shortened to its head (`⬢ bwrap`). A fact
+    too long for its room is shortened, and dropped only when nothing of it can be said
+    (issue #48).
+
 ## Consequences
 
 - The core changed twice for the TUI: an `Event` variant pair and a streaming path in the pinned adapter. Streaming assembly through the mock provider server is the regression net.
