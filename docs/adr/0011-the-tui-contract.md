@@ -24,6 +24,10 @@ date: 2026-10-30
 15. **Failure is content.** Boot runs the doctor's checks before the first frame; a failure is a full-screen card naming the check and printing the sandbox description, never a half-drawn frame. Mid-run failures land in the transcript where they happened, with the stop reason in the rail; toasts are for success only.
 16. **`@` completion.** A capped workspace walk on its own thread, inserted as a workspace-relative path; skips `.git` only. Cap, ranking and threading: ADR-0013.
 
+## Amendment
+
+17. **A missing credential opens the modal, not a card.** §15's card is for a check that fails. A value the run has none of is the one failure the frame answers with a field: a bare `sindri` with no key opens with the settings modal staged on `api_key`, saying where the key comes from, where it is written, that the file is `0600` and that the value is never shown again (ADR-0004). `Esc` leaves a frame that still reads and browses, the missing key said once in the transcript, the composer stating what it cannot send; a prompt typed while it is missing is refused and the draft stays. Batch mode is untouched.
+
 ## Consequences
 
 - The core changed twice for the TUI: an `Event` variant pair and a streaming path in the pinned adapter. Streaming assembly through the mock provider server is the regression net.

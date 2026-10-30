@@ -24,12 +24,22 @@ pub fn draw(app: &App, area: Rect, buf: &mut Buffer) -> Position {
         .border_style(border)
         .title(ratatui::text::Span::styled(" prompt ", border));
     let inner = block.inner(area);
-    let lines: Vec<Line<'static>> = app
-        .composer()
-        .rows()
-        .iter()
-        .map(|row| Line::from(row.clone()))
-        .collect();
+    let lines: Vec<Line<'static>> = match app.missing {
+        // What this composer cannot do, where the prompt would be: a run with
+        // no key cannot send one, and saying so is the frame's (ADR-0004).
+        Some(missing) if app.composer().is_blank() => {
+            vec![Line::from(ratatui::text::Span::styled(
+                missing.composer(),
+                theme::faint(),
+            ))]
+        }
+        _ => app
+            .composer()
+            .rows()
+            .iter()
+            .map(|row| Line::from(row.clone()))
+            .collect(),
+    };
     Paragraph::new(lines)
         .style(theme::surface())
         .render(inner, buf);

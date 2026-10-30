@@ -43,8 +43,12 @@ pub fn prepare(overrides: Overrides) -> Result<Configured, Failure> {
     read(overrides, Config::resolve)
 }
 
+/// The read for a front end that needs no run of its own yet: `doctor`,
+/// `sandbox exec`, and the frame's first screen — the one door that opens on a
+/// value the run has none of, because a settings modal is where it goes
+/// (ADR-0004). Every failure that is not an absent value is still one.
 pub fn configure(overrides: Overrides) -> Result<Configured, Failure> {
-    read(overrides, Config::for_command)
+    read(overrides, Config::for_front_end)
 }
 
 /// The read both doors do: the process's own facts once, and the settings one

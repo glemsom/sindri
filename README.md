@@ -119,6 +119,12 @@ written, once, atomically.
 where typing warns and names the plaintext file it will land in. It is masked and never
 reaches the transcript or the record. The environment is read **above** the file, so an
 exported `SINDRI_API_KEY` wins over it.
+- **A first run needs no file.** Bare `sindri` with no key opens the frame with this
+modal on `api_key` — the row says where a key comes from (`SINDRI_API_KEY` or the
+provider's own variable), where it is written, that the file is `0600`, and that the
+value is never shown again. `Esc` leaves a frame that still reads, saying the missing
+key once and what the composer cannot send. `sindri -b` with no key is still exit 1, one
+line on stderr.
 
 ## Configuration
 

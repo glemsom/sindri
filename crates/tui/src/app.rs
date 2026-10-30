@@ -17,6 +17,7 @@ use crate::face::Face;
 use crate::overlay::Overlay;
 use crate::rail::{Launch, Rail};
 use crate::selection::{Selection, Viewport};
+use crate::settings::Missing;
 
 /// Where `/new` has got to. Two states would not do: the frame marks the
 /// request, the loop hands it to the front end once, and nothing may run
@@ -63,6 +64,10 @@ pub struct App {
     pub(crate) generation: u64,
     pub(crate) config: Option<PathBuf>,
     pub(crate) reload: bool,
+    /// What the front door found absent when it opened the frame itself: the
+    /// run it opened for cannot send a prompt until it is filled in, and the
+    /// composer says so rather than pretending (ADR-0004).
+    pub(crate) missing: Option<Missing>,
 }
 
 impl App {
@@ -101,6 +106,7 @@ impl App {
             generation: 0,
             config: None,
             reload: false,
+            missing: None,
         }
     }
 
@@ -111,6 +117,18 @@ impl App {
 
     pub fn with_config(mut self, path: impl Into<PathBuf>) -> Self {
         self.config = Some(path.into());
+        self
+    }
+
+    /// The frame the front door opens when the run has no key (ADR-0004): the
+    /// settings modal is staged on the row it has nothing for, the transcript
+    /// says what is absent once, and the composer says what it cannot do until
+    /// the modal is saved. A run that stops for a missing key never reaches a
+    /// card or a line on stderr — a card has no field to type in.
+    pub fn with_missing(mut self, missing: Missing) -> Self {
+        self.missing = Some(missing);
+        self.note_error(missing.said());
+        self.open_settings(Some(missing));
         self
     }
 

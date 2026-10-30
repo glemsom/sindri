@@ -156,7 +156,7 @@ impl App {
     fn run(&mut self, named: Command) {
         match named {
             Command::New => self.new_session(),
-            Command::Settings => self.open_settings(),
+            Command::Settings => self.open_settings(None),
             Command::Help => self.show(Overlay::Help),
             Command::Quit => self.quit = true,
             Command::Unknown(name) => {

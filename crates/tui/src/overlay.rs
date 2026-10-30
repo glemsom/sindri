@@ -91,7 +91,9 @@ pub const BINDINGS: &[Binding] = &[
 pub enum Overlay {
     Help,
     Spill(Spill),
-    Settings(Settings),
+    /// Boxed: the modal is the largest thing the frame can overlay, and the
+    /// enum is carried in every match on an overlay.
+    Settings(Box<Settings>),
 }
 
 pub fn help_rows() -> Vec<(&'static str, String)> {

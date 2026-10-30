@@ -34,6 +34,32 @@ pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) {
         columns,
     ));
     lines.push(Line::default());
+    if let Some(missing) = settings.missing() {
+        // The door's modal: why it opened, and the four facts a person needs
+        // before typing a credential into it (ADR-0014).
+        for (said, style) in [
+            ("no credential: this run has none".to_string(), theme::bad()),
+            (
+                format!("type it here, or set {}", missing.key_vars()),
+                theme::faint(),
+            ),
+            (
+                format!(
+                    "written to {} · 0600 · the value is never shown again",
+                    settings.path().display()
+                ),
+                theme::faint(),
+            ),
+        ] {
+            lines.extend(text::wrap(
+                text::glyphs(&[Span::styled(said, style)]),
+                "",
+                style,
+                columns,
+            ));
+        }
+        lines.push(Line::default());
+    }
     for (index, field) in settings.fields().iter().enumerate() {
         let line = row(settings, field, columns);
         lines.push(if index == settings.chosen() {
@@ -104,6 +130,19 @@ fn value(settings: &Settings, field: &Field) -> (String, Style) {
     match field.key {
         Key::ApiKey if typed.is_empty() && settings.document().is_set(field.key) => {
             ("•••• set in the file (hidden)".to_string(), theme::faint())
+        }
+        // The door's modal: the environment was read and had nothing in it,
+        // so the row says where the value would come from and that it did not.
+        Key::ApiKey
+            if typed.is_empty()
+                && settings
+                    .missing()
+                    .is_some_and(|missing| missing.wants_key()) =>
+        {
+            (
+                "from environment (not set — type it here)".to_string(),
+                theme::bad(),
+            )
         }
         Key::ApiKey if typed.is_empty() => ("from environment".to_string(), theme::faint()),
         Key::ExtraHeaders if typed.is_empty() && settings.document().is_set(field.key) => (
