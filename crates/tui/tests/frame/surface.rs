@@ -167,7 +167,7 @@ fn a_spill_overlay_dims_the_transcript_it_covers() {
 }
 
 #[test]
-fn the_rail_is_a_panel_one_column_away_from_the_transcript() {
+fn the_rail_is_chrome_on_the_canvas_one_column_away_from_the_transcript() {
     let mut app = app();
     let buf = buffer(&mut app, 100, 24);
     let width = buf.area.width as usize;
@@ -176,16 +176,17 @@ fn the_rail_is_a_panel_one_column_away_from_the_transcript() {
     for y in 0..composer {
         for x in (width - RAIL)..width {
             let tier = buf[(x as u16, y)].bg;
-            // The posture is a chip, a tier nearer than the panel it sits on;
-            // every other cell of the rail is the panel (ADR-0011 §23).
+            // The posture is a chip, the one thing on the rail with a surface
+            // behind it; every other cell of the rail is the canvas the
+            // transcript is written on (ADR-0011 §23).
             if tier == theme::RAISED {
                 chips += 1;
                 continue;
             }
             assert_eq!(
                 tier,
-                theme::PANEL,
-                "the rail is a surface of its own: ({x},{y})"
+                Color::Reset,
+                "the rail draws no fill, so the canvas shows through: ({x},{y})"
             );
         }
         assert_eq!(

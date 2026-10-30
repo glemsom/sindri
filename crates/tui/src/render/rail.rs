@@ -1,6 +1,10 @@
 //! The rail as a column, and as one strip when the terminal is too narrow for
 //! one. The face's space is taken first, so its absence closes the rail up
 //! rather than leaving a hole (ADR-0011).
+//!
+//! The rail is chrome, not a surface: it sits on the canvas beside the words
+//! and draws no fill, so the frame holds one panel the user owns — the
+//! composer — and the rail says its facts in rules and a chip (ADR-0011 §23).
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -20,9 +24,9 @@ const FACE_FLOOR: u16 = face::ROWS;
 const LABEL: usize = 9;
 
 pub fn column(app: &mut App, area: Rect, buf: &mut Buffer) {
-    // The rail is a panel: the facts sit on a surface, one tier above the
-    // canvas the transcript is written on (ADR-0011 §23).
-    buf.set_style(area, theme::surface());
+    // The rail is transparent, like the transcript it sits beside: only its
+    // rule and its chip are painted, so the rail never competes with the
+    // composer for the one panel on screen (ADR-0011 §23).
     let width = area.width.saturating_sub(2) as usize;
     let (lines, session) = facts(app, width, area.height as usize);
     let spare = area.height.saturating_sub(lines.len() as u16);
@@ -172,8 +176,9 @@ fn rule() -> Line<'static> {
 }
 
 /// A posture is a chip: stated on the raised tier, so it reads as the one
-/// thing on the rail that is not a label and a value. The first frame's
-/// posture line borrows the same one (ADR-0011 §21).
+/// thing on the rail that is not a label and a value — and the only cell of
+/// the rail that carries a colour behind it. The first frame's posture line
+/// borrows the same one (ADR-0011 §21).
 pub(crate) fn chip() -> ratatui::style::Style {
     theme::good().patch(theme::raised())
 }

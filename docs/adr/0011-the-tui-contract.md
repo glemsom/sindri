@@ -108,9 +108,13 @@ date: 2026-10-30
     a `Color::Rgb` built from a theme's own bytes. Inside the one dark theme
     there are three tiers of nearness. The **canvas** is the terminal's own
     black, painted by nothing. `PANEL` (`#171a21`) is a surface the frame draws:
-    the composer, a fenced code block, the queue panel, the rail, the band a
-    turn's prompt sits on. `RAISED` (`#232733`) is a step above a panel: an
-    overlay, and the chip the rail states its sandbox posture in.
+    the composer, a fenced code block, the queue panel, the band a turn's
+    prompt sits on. `RAISED` (`#232733`) is a step above a panel: an overlay,
+    and the chip the rail states its sandbox posture in. The rail draws no
+    surface at all: it is chrome on the canvas beside the words, and its rule
+    and its chip are the only paint it spends. So the composer is the one panel
+    that takes the keyboard and the one panel shaped like an input, and nothing
+    competes with it for that weight.
     `theme::surface()` and `theme::raised()` are the constructors; a renderer
     asks for a tier, never for a background. The composer is a `PANEL` with a
     `BorderType::Rounded` border that takes `PROMPT` while it holds the focus
@@ -153,5 +157,5 @@ date: 2026-10-30
 - `ratatui` buffer snapshots are the net for the frame; the process seam (exit codes, refusals) stays the net for launch.
 - Colour is the theme's, not a renderer's: a new surface or colour is a change to
   `theme.rs` and its `PALETTE`, or `tests/theme.rs` refuses it. The golden frames move
-  with the surfaces — the composer's border, the fence's panel and the rail's gap all
+  with the surfaces — the composer's border, the fence's panel and the rail's gutter all
   change the cells those tests read.

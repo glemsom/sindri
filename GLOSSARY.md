@@ -93,7 +93,9 @@ cache hit percentage, turns against the cap, tokens, context meter. Below it, wh
 *is*: its model, workspace, git branch, session GUID and session temp path. Labels sit in
 a faint nine-column field so every value starts at the same column, a value too long for
 its column is ellipsised in the middle (`4f1c8f2e…5c1a77`) rather than wrapped, and the
-sandbox posture is a chip (`⬢ bwrap · 1 writable`) rather than another pair. 32 columns
+sandbox posture is a chip (`⬢ bwrap · 1 writable`) rather than another pair. The rail
+is chrome, not a surface: it draws no fill and lets the canvas through, so its chip is
+the one cell of it with a colour behind it. 32 columns
 from 100 up; below that, the same facts in the same order as one line under the
 transcript, which never loses the posture, the model or the workspace. One priority
 order (`rail::priority`) ends with the posture, and the column and the strip both read
@@ -124,12 +126,12 @@ theme is out of scope and there is no 256-colour fallback (ADR-0011 §13).
 paints nothing on. Above it: **panel**, then **raised**.
 
 **panel** — the **surface** the frame draws on, one tier above the canvas: the
-composer, a fenced code block, the **queue panel**, the rail, the band a turn's
-**prompt** sits on.
+composer, a fenced code block, the **queue panel**, the band a turn's **prompt**
+sits on. The rail is not one: it is chrome, drawn on the canvas.
 
 **raised** — the **surface** an overlay is drawn on, one tier above a panel; the frame
 is dimmed beneath it. The rail's sandbox **chip** sits on it too, a tier above the
-panel the rest of the rail is drawn on.
+canvas the rest of the rail is drawn on.
 
 **chip** — the rail's statement of the sandbox posture, `⬢ bwrap · 1 writable`: a
 **raised** box rather than another label and value, shortened to `⬢ bwrap` when its
