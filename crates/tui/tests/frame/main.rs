@@ -18,6 +18,10 @@ use sindri_tui::render;
 use sindri_tui::{App, Face, Launch};
 
 const RAIL: usize = 32;
+/// The margin's own column at 100 columns: the transcript, the one cell of
+/// canvas between the words and the rail, and then the rail's 32. A terminal
+/// that speaks Kitty graphics draws the seam's light strip there (#63).
+const MARGIN: usize = 100 - RAIL - 1;
 
 fn launch() -> Launch {
     Launch {
@@ -360,6 +364,7 @@ mod card;
 mod chrome;
 mod expand;
 mod first;
+mod glow;
 mod ledger;
 mod pictures;
 mod prose;

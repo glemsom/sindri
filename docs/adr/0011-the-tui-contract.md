@@ -132,7 +132,12 @@ date: 2026-10-30
     `FAINT` because a dot at an eighth of a cell loses apparent luminance. The
     identity block is opened by a `─` hairline across the rail's whole width in
     `FAINT`, so the rule groups the blocks instead of dividing the column from
-    the page (issue #61). So the composer is the one panel that takes the
+    the page (issue #61). The margin between the words and the rail stays canvas
+    too, and it is the one place the seam spends paint of its own: where the
+    terminal speaks Kitty graphics, the light strip of `seam.rs` is drawn there
+    — one cell wide and the height of the body, brightest against the rail and
+    dissolving toward the words — so the light is in the margin and the rail is
+    not painted with it (issue #63). So the composer is the one panel that takes the
     keyboard and the one panel shaped like an input, and nothing competes with it
     for that weight.
     `theme::surface()` and `theme::raised()` are the constructors; a renderer
