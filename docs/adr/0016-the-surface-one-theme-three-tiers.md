@@ -15,7 +15,7 @@ date: 2026-10-31
    is syntect's to own: it arrives as a `Color::Rgb` built from a theme's own bytes.
 2. **Three tiers of nearness.** The canvas is the terminal's own black, painted by
    nothing. `PANEL` (`#171a21`) is a surface the frame draws: the composer, a fenced
-   code block, the rail. `RAISED` (`#232733`) is a step above a panel: an overlay.
+   code block, the rail, the band a turn's prompt sits on. `RAISED` (`#232733`) is a step above a panel: an overlay.
    `theme::surface()` and `theme::raised()` are the constructors; a renderer asks for a
    tier, never for a background.
 3. **The composer floats.** It is a `PANEL` with a `BorderType::Rounded` border that

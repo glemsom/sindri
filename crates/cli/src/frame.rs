@@ -66,6 +66,7 @@ fn launch(boot: &Boot) -> Launch {
         temp: boot.session.dir().temp().display().to_string(),
         branch: git_branch(),
         sandbox: posture(boot.session.policy()),
+        workspace: workspace(),
         max_turns: boot.config.max_turns,
         // The meter's denominator is the family's advertised window, where the
         // adapter knows it; where it does not, the rail counts up without one.
@@ -261,6 +262,23 @@ fn failing_check(error: &DoctorError) -> String {
         }
         DoctorError::Setup(_) => "the probe could not be set up".to_string(),
         DoctorError::Policy(_) => "the sandbox policy was refused".to_string(),
+    }
+}
+
+/// The directory a turn header names: the launch's own, with the home
+/// shortened to `~` because a home path is the one part a reader already
+/// knows.
+fn workspace() -> String {
+    let Ok(dir) = std::env::current_dir() else {
+        return ".".to_string();
+    };
+    match std::env::var_os("HOME").map(std::path::PathBuf::from) {
+        Some(home) => match dir.strip_prefix(&home) {
+            Ok(rest) if rest.as_os_str().is_empty() => "~".to_string(),
+            Ok(rest) => format!("~/{}", rest.display()),
+            Err(_) => dir.display().to_string(),
+        },
+        None => dir.display().to_string(),
     }
 }
 

@@ -34,8 +34,10 @@ fn a_drag_copies_the_rendered_rows_and_nothing_else() {
 
     let copied = clipboard.saw();
     assert_eq!(copied.len(), 1, "one drag is one copy: {copied:?}");
+    // The answer hangs two columns off its turn's gutter, and a copy keeps the
+    // first row's indentation (ADR-0013).
     assert_eq!(
-        copied[0], "the answer, in full",
+        copied[0], "  the answer, in full",
         "the copy is exactly the rows the drag covered"
     );
     assert!(
