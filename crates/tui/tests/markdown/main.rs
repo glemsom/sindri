@@ -21,6 +21,12 @@ fn text(line: &Line<'_>) -> String {
         .to_string()
 }
 
+/// The rows of an answer with no picture in it: the same writer a frame uses,
+/// handed no store, because these are assertions about prose (ADR-0016).
+fn lines(source: &str, width: u16) -> Vec<Line<'static>> {
+    markdown::lines(source, width, None).rows
+}
+
 fn texts(lines: &[Line<'_>]) -> Vec<String> {
     lines.iter().map(text).collect()
 }
@@ -43,7 +49,7 @@ fn colours(line: &Line<'_>) -> Vec<Color> {
 fn headings_lists_quotes_and_inline_code_render_as_themselves() {
     let source =
         "# Title\n\nSome *emphasis* and `inline`.\n\n- one\n  - nested\n- two\n\n> quoted\n";
-    let lines = markdown::lines(source, 60);
+    let lines = lines(source, 60);
     let shown = texts(&lines);
     assert!(shown.contains(&"Title".to_string()), "{shown:?}");
     let title = lines
@@ -83,7 +89,7 @@ fn headings_lists_quotes_and_inline_code_render_as_themselves() {
 #[test]
 fn a_table_renders_its_cells_in_aligned_columns() {
     let source = "| file | change |\n| --- | ---: |\n| src/lib.rs | +12 |\n| Cargo.toml | -3 |\n";
-    let lines = markdown::lines(source, 60);
+    let lines = lines(source, 60);
     let shown = texts(&lines);
     let header = shown
         .iter()
@@ -117,7 +123,7 @@ fn a_table_renders_its_cells_in_aligned_columns() {
 #[test]
 fn fenced_code_is_highlighted_in_truecolour() {
     let source = "```rust\nfn main() { let x = 1; }\n```\n";
-    let lines = markdown::lines(source, 60);
+    let lines = lines(source, 60);
     let code = lines
         .iter()
         .find(|line| text(line).contains("fn main"))
@@ -143,7 +149,7 @@ fn fenced_code_is_highlighted_in_truecolour() {
 fn a_diff_is_coloured_by_line() {
     let source =
         "```diff\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1,2 +1,2 @@\n-old\n+new\n same\n```\n";
-    let lines = markdown::lines(source, 60);
+    let lines = lines(source, 60);
     // The fence is a panel now, so each row carries its gutter as well as its
     // line: the line's own colour is the one the gutter does not have.
     let added = lines
@@ -175,7 +181,7 @@ fn a_diff_is_coloured_by_line() {
 #[test]
 fn long_lines_wrap_at_the_column_width_and_lose_nothing() {
     let source = "the quick brown fox jumps over the lazy dog and keeps running well past the edge";
-    let lines = markdown::lines(source, 30);
+    let lines = lines(source, 30);
     assert!(lines.len() > 1, "a long paragraph takes more than one row");
     assert!(
         lines.iter().all(|line| text(line).chars().count() <= 30),
@@ -192,7 +198,7 @@ fn long_lines_wrap_at_the_column_width_and_lose_nothing() {
 #[test]
 fn a_fence_is_a_panel_with_a_gutter_and_a_border_that_says_where_it_ends() {
     let source = "```diff\n--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new\n```\n";
-    let lines = markdown::lines(source, 40);
+    let lines = lines(source, 40);
     let shown: Vec<String> = lines.iter().map(raw).collect();
 
     assert!(
@@ -234,7 +240,7 @@ fn a_fence_is_a_panel_with_a_gutter_and_a_border_that_says_where_it_ends() {
 #[test]
 fn a_fenced_line_wider_than_the_panel_is_cut_and_says_so() {
     let source = "```\nthe-quick-brown-fox-jumps-over-the-lazy-dog-again-and-again\nshort\n```\n";
-    let lines = markdown::lines(source, 24);
+    let lines = lines(source, 24);
     let shown: Vec<String> = lines.iter().map(raw).collect();
     let long = shown
         .iter()
@@ -255,4 +261,5 @@ fn a_fenced_line_wider_than_the_panel_is_cut_and_says_so() {
     );
 }
 
+mod pictures;
 mod prose;

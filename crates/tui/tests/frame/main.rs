@@ -301,6 +301,7 @@ mod card;
 mod chrome;
 mod expand;
 mod first;
+mod pictures;
 mod prose;
 mod pulse;
 mod queue;

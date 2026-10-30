@@ -6,6 +6,7 @@
 
 mod fact;
 mod strip;
+mod view;
 
 use std::time::Duration;
 
@@ -14,6 +15,7 @@ use crate::pulse;
 
 pub use self::fact::{Block, Fact, Fit};
 pub use self::strip::priority;
+pub use self::view::RailView;
 
 #[derive(Debug, Clone)]
 pub struct Launch {

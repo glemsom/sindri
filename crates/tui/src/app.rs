@@ -9,6 +9,8 @@ use std::time::Duration;
 use ratatui::layout::Rect;
 use sindri_core::cancel::Cancel;
 
+mod pictures;
+
 use crate::completion::Completion;
 use crate::composer::Composer;
 use crate::copy::{Clipboard, System};
@@ -17,7 +19,8 @@ use crate::entry::{Entry, Note};
 use crate::face::Face;
 use crate::graphics::Graphics;
 use crate::overlay::Overlay;
-use crate::rail::{Launch, Rail};
+use crate::picture::Store;
+use crate::rail::{Launch, Rail, RailView};
 use crate::selection::{Selection, Viewport};
 use crate::settings::Missing;
 use crate::window::Window;
@@ -34,27 +37,6 @@ pub enum Renew {
 }
 
 pub(crate) const DEFAULT_PAGE: usize = 10;
-
-/// The rows the rail last drew, so a click on one copies what was drawn there.
-/// The session id is the fact a user takes out of the frame by hand — it is
-/// what `sindri sessions show` takes — and a wrapped id is copied whole, never
-/// half of it (ADR-0006, issue #51).
-#[derive(Debug, Clone, Default)]
-pub struct RailView {
-    pub area: Rect,
-    pub rows: Vec<String>,
-    /// Where the session fact sits in `rows`.
-    pub session: std::ops::Range<usize>,
-}
-
-impl RailView {
-    pub fn row_at(&self, at: ratatui::layout::Position) -> Option<usize> {
-        self.area
-            .contains(at)
-            .then(|| (at.y - self.area.y) as usize)
-            .filter(|row| *row < self.rows.len())
-    }
-}
 
 pub struct App {
     pub(crate) rail: Rail,
@@ -73,6 +55,10 @@ pub struct App {
     /// What the terminal said it can draw, asked once at launch: the face draws
     /// from it, and a picture draws from the same answer (ADR-0016 §1).
     graphics: Option<Graphics>,
+    /// What a picture's `src` is worth, and what it costs: the one thing that
+    /// measures a source and reads its file, so a layout asks a store and never
+    /// the disk (ADR-0016 §5).
+    pictures: Option<Store>,
     /// Where the reader is in the thread, and what arrived below them: the
     /// window is the one thing that outlives a frame (ADR-0013, issue #45).
     pub(crate) window: Window,
@@ -85,7 +71,7 @@ pub struct App {
     /// One row count per entry at the width it was measured at, dropped
     /// whenever an entry changes, so the window never lays out a row it does
     /// not show (ADR-0011).
-    pub(crate) heights: Vec<Option<usize>>,
+    pub(crate) heights: Vec<Option<(u16, usize)>>,
     pub(crate) width: Option<u16>,
     pub(crate) selection: Selection,
     pub(crate) clipboard: Box<dyn Clipboard>,
@@ -138,6 +124,7 @@ impl App {
             quit: false,
             face,
             graphics: None,
+            pictures: None,
             window: Window::default(),
             viewport: Viewport::default(),
             chosen: None,
@@ -177,7 +164,7 @@ impl App {
     /// Where a default `/export` lands: the workspace the frame is in.
     pub fn with_workspace(mut self, dir: impl Into<PathBuf>) -> Self {
         self.workspace = Some(dir.into());
-        self
+        self.store()
     }
 
     /// The workspace, asked of the process only when the frame was never told
@@ -268,7 +255,7 @@ impl App {
     /// picture borrow it rather than asking again (ADR-0016 §1).
     pub fn with_graphics(mut self, graphics: Option<Graphics>) -> Self {
         self.graphics = graphics;
-        self
+        self.store()
     }
 
     pub fn graphics(&self) -> Option<&Graphics> {
@@ -352,16 +339,28 @@ impl App {
         }
     }
 
-    pub(crate) fn measure(&mut self, index: usize, width: u16) -> usize {
+    /// How many rows entry `index` takes at `width`: the store's answer, kept
+    /// per entry at the width it was measured at, so the same question is asked
+    /// once and never costs a file read, while a resize is measured again from
+    /// the store (ADR-0016 §5, §9).
+    pub fn measure(&mut self, index: usize, width: u16) -> usize {
         if self.heights.len() < self.entries.len() {
             self.heights.resize(self.entries.len(), None);
         }
-        if let Some(Some(rows)) = self.heights.get(index) {
-            return *rows;
+        if let Some(&Some((measured, rows))) = self.heights.get(index)
+            && measured == width
+        {
+            return rows;
         }
-        let rows = crate::render::rows::entry_rows(&self.entries[index], width, self.now).len();
+        let rows = crate::render::rows::entry_rows(
+            &self.entries[index],
+            width,
+            self.now,
+            self.pictures.as_ref(),
+        )
+        .len();
         if let Some(slot) = self.heights.get_mut(index) {
-            *slot = Some(rows);
+            *slot = Some((width, rows));
         }
         rows
     }

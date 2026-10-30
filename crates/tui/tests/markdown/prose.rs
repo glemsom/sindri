@@ -9,7 +9,7 @@ use ratatui::style::Modifier;
 #[test]
 fn a_link_keeps_its_text_and_the_target_it_points_at() {
     let source = "see [the docs](https://example.com/x) for more";
-    let lines = markdown::lines(source, 60);
+    let lines = lines(source, 60);
     let shown = texts(&lines);
     let row = lines
         .iter()
@@ -41,7 +41,7 @@ fn a_link_keeps_its_text_and_the_target_it_points_at() {
 #[test]
 fn a_link_with_no_target_is_its_text_and_no_bracket_at_all() {
     let source = "a [plain words]() here";
-    let lines = markdown::lines(source, 60);
+    let lines = lines(source, 60);
     let shown = texts(&lines).join(" ");
 
     assert!(shown.contains("plain words"), "{shown:?}");
@@ -80,7 +80,7 @@ fn rank(lines: &[Line<'_>], needle: &str) -> (bool, usize) {
 #[test]
 fn headings_are_ranked_by_their_level() {
     let source = "# One\n\n## Two\n\n### Three\n\n#### Four\n";
-    let lines = markdown::lines(source, 40);
+    let lines = lines(source, 40);
 
     for id in ["One", "Two", "Three", "Four"] {
         let line = lines
@@ -111,7 +111,7 @@ fn headings_are_ranked_by_their_level() {
 
 #[test]
 fn a_heading_in_a_quote_rules_inside_the_quote() {
-    let lines = markdown::lines("> ## Quoted\n", 40);
+    let lines = lines("> ## Quoted\n", 40);
     let shown = texts(&lines);
     let head = lines
         .iter()
@@ -131,7 +131,7 @@ fn a_heading_in_a_quote_rules_inside_the_quote() {
 #[test]
 fn a_fence_that_names_no_language_carries_no_title() {
     let source = "```\nplain words\n```\n";
-    let lines = markdown::lines(source, 30);
+    let lines = lines(source, 30);
     let shown: Vec<String> = lines.iter().map(raw).collect();
     let top = &shown[0];
 
@@ -145,7 +145,7 @@ fn a_fence_that_names_no_language_carries_no_title() {
 #[test]
 fn a_diff_row_is_tinted_as_well_as_coloured() {
     let source = "```diff\n--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new\n same\n```\n";
-    let lines = markdown::lines(source, 40);
+    let lines = lines(source, 40);
     let row = |needle: &str| {
         lines
             .iter()

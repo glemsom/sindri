@@ -256,6 +256,10 @@ pub enum Refusal {
     Unsupported(String),
     Damaged,
     Unreadable(String),
+    /// The terminal was never asked for graphics, or answered that it speaks
+    /// none: the one refusal no source is guilty of, because nothing was
+    /// measured at all (ADR-0016 §1, §8).
+    NoGraphics,
 }
 
 impl Refusal {
@@ -280,6 +284,7 @@ impl Refusal {
             Refusal::Unsupported(format) => format!("{format}: a format not drawn"),
             Refusal::Damaged => "its header is not whole".to_string(),
             Refusal::Unreadable(why) => why.clone(),
+            Refusal::NoGraphics => "this terminal draws no picture".to_string(),
         }
     }
 
