@@ -32,6 +32,18 @@ date: 2026-10-30
 
 **Spill** — read once when opened, as bytes with invalid UTF-8 replaced; one screen of lines held, paged by screenfuls. `Ctrl-O`, or a click on that row, opens *that* row's file.
 
+## Amendment
+
+**The overlays own their scroll.** A page is a screenful of the box that has the
+screen, never of the transcript it covers: the frame reports what its box showed, and
+`PgUp`/`PgDn` and the wheel page it by that. The help overlay wraps each description
+under its keys column and sizes its box from the wrapped rows, so a binding is reached
+by scrolling rather than being the row that fell off; when the list is longer than the
+box it states its position (`3 of 12`). The settings modal scrolls its rows with the
+cursor and keeps the `file` line, the warning, a refused save's message and the hints
+pinned outside the scroll, so a save never fails silently on a row that is not drawn.
+Both mark the edge they run past (`↑ more`, `↓ more`). `Esc` and `Enter` are unchanged.
+
 ## Consequences
 
 - No clipboard claim that cannot be verified; over SSH and in `tmux` the wording is the same as locally.

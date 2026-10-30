@@ -119,7 +119,18 @@ sessions show` prints. A file already there is not overwritten without a second 
 
 **settings modal** — the `/settings` overlay: one row per key of the config schema.
 `Enter` saves, `Esc` discards, `Ctrl-U` empties the field, `Space` flips a toggle
-(ADR-0014).
+(ADR-0014). The rows scroll with the cursor; the `file` line, the warning, a refused
+save's message and the hints are pinned outside the scroll, so the row a save failed
+on is never the row that fell off (ADR-0013).
+
+**binding** — one row of the **help overlay**: the keys, and the mouse gesture that is
+their accelerator, that do one thing — and what that thing is. `BINDINGS` is the one
+list, and nothing on it is reachable only with a pointer (ADR-0013).
+
+**help overlay** — `?`'s list of every **binding** (ADR-0011 §14): the keys in their
+column, each description wrapped under them, the box sized from the wrapped rows. A
+list longer than the box scrolls by a screenful and says where it is (`3 of 12`) and
+which way there is more; `Esc` and `Enter` close it as they always did (ADR-0013).
 
 **from environment** — the API key field's default, and where emptying it returns: the
 credential comes from `SINDRI_API_KEY`, the provider's variable, and nothing is written.

@@ -68,6 +68,10 @@ pub struct App {
     pub(crate) quit: bool,
     face: Option<Face>,
     pub(crate) scroll: usize,
+    /// The rows one page is worth to whatever has the screen. The transcript
+    /// reports its own every frame; an open overlay reports what its box
+    /// showed instead, so `PgUp`/`PgDn` move the box that covers the frame and
+    /// never the frame beneath it (ADR-0013, issue #49).
     pub(crate) page: usize,
     pub(crate) viewport: Viewport,
     /// One row count per entry at the width it was measured at, dropped
@@ -226,10 +230,6 @@ impl App {
 
     pub fn overlay(&self) -> Option<&Overlay> {
         self.overlay.as_ref()
-    }
-
-    pub fn overlay_mut(&mut self) -> Option<&mut Overlay> {
-        self.overlay.as_mut()
     }
 
     pub fn viewport(&self) -> &Viewport {

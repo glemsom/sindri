@@ -25,6 +25,7 @@ pub mod run;
 pub mod selection;
 pub mod sessions;
 pub mod settings;
+pub mod spill;
 pub mod theme;
 
 pub use app::App;

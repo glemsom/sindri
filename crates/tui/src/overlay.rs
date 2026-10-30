@@ -1,12 +1,12 @@
 //! The overlays that take the screen while they are open: `?`'s list of every
 //! binding, the untruncated output a spill affordance offers, and the records a
 //! run left behind (ADR-0011). All close with `Esc`, and none is the only way
-//! to do what it does.
-
-use std::path::Path;
+//! to do what it does. An open overlay owns its own space: the page keys and
+//! the wheel move it, never the frame beneath it (ADR-0013).
 
 use crate::sessions::Sessions;
 use crate::settings::Settings;
+use crate::spill::Spill;
 
 pub struct Binding {
     pub keys: &'static str,
@@ -104,9 +104,82 @@ pub const BINDINGS: &[Binding] = &[
     },
 ];
 
+/// `?`'s list of every binding, and where the reader is in it. The list wraps
+/// and scrolls, so the key the overlay was opened to find is a row that can be
+/// reached and not the one that fell off the bottom (issue #49).
+#[derive(Debug, Clone, Default)]
+pub struct Help {
+    scroll: usize,
+    /// What the box last drew: the rows there are, and the rows it had for
+    /// them. The renderer measures; the keys clamp against the same numbers.
+    total: usize,
+    visible: usize,
+}
+
+impl Help {
+    /// The rows the box drew, so a list short enough to fit does not scroll at
+    /// all and a scrolled one stops where its last screenful is full.
+    pub fn settled(&mut self, total: usize, visible: usize) {
+        self.total = total;
+        self.visible = visible.max(1);
+        self.scroll = self.scroll.min(self.last());
+    }
+
+    fn last(&self) -> usize {
+        self.total.saturating_sub(self.visible)
+    }
+
+    /// The rows the box shows, from where the reader is.
+    pub fn window(&self) -> std::ops::Range<usize> {
+        let start = self.scroll.min(self.last());
+        start..(start + self.visible).min(self.total)
+    }
+
+    /// `PgUp`/`PgDn` and the wheel: one screenful of this box at a time — the
+    /// transcript's page is the transcript's, and a list that covers it pages
+    /// by what it covers — from the first row to the last and no further.
+    pub fn page(&mut self, rows: usize, up: bool) {
+        self.scroll = if up {
+            self.scroll.saturating_sub(rows)
+        } else {
+            self.scroll.saturating_add(rows).min(self.last())
+        };
+    }
+
+    /// Whether the list runs past the box above or below: what the box marks
+    /// so a reader knows there is more without scrolling for it.
+    pub fn above(&self) -> bool {
+        self.window().start > 0
+    }
+
+    pub fn below(&self) -> bool {
+        self.window().end < self.total
+    }
+
+    /// `keys · 3 of 12`: where the reader is, counted from one, said only when
+    /// the list is longer than the box that holds it.
+    pub fn title(&self) -> String {
+        if self.total <= self.visible {
+            return "keys".to_string();
+        }
+        format!("keys · {} of {}", self.window().start + 1, self.total)
+    }
+}
+
+/// Where a cursor lands after one step of a list that keeps a chosen row: one
+/// answer for the settings modal and the record picker, so neither drifts from
+/// the other (issue #49).
+pub(crate) fn step(chosen: usize, rows: usize, len: usize, up: bool) -> usize {
+    if up {
+        chosen.saturating_sub(rows)
+    } else {
+        chosen.saturating_add(rows).min(len.saturating_sub(1))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Overlay {
-    Help,
+    Help(Help),
     Spill(Spill),
     /// Boxed: the modal is the largest thing the frame can overlay, and the
     /// enum is carried in every match on an overlay.
@@ -128,83 +201,9 @@ pub fn help_rows() -> Vec<(&'static str, String)> {
         .collect()
 }
 
-/// A spilled file, or a record, open in the frame. It is read once, when it is
-/// opened, and only the rows on screen are ever copied out of it (ADR-0011).
-#[derive(Debug, Clone)]
-pub struct Spill {
-    /// What the box is called: the file it came from, or the session it is.
-    pub title: String,
-    pub lines: Vec<String>,
-    pub scroll: usize,
-    pub visible: usize,
-}
-
-impl Spill {
-    pub fn open(path: impl AsRef<Path>) -> std::io::Result<Spill> {
-        let path = path.as_ref();
-        // A command's output is bytes, not text: a stream that is not UTF-8
-        // is still shown, with its invalid sequences replaced (ADR-0007).
-        let bytes = std::fs::read(path)?;
-        let lines: Vec<String> = String::from_utf8_lossy(&bytes)
-            .lines()
-            .map(|line| line.to_string())
-            .collect();
-        Ok(Spill {
-            title: format!("output: {}", path.display()),
-            lines: if lines.is_empty() {
-                vec![String::new()]
-            } else {
-                lines
-            },
-            scroll: 0,
-            visible: 1,
-        })
-    }
-
-    /// A reader over text the frame already has: the rendered record of a past
-    /// session, read-only in the same box a spill opens in (issue #51).
-    pub fn text(title: impl Into<String>, text: &str) -> Spill {
-        let lines: Vec<String> = text.lines().map(|line| line.to_string()).collect();
-        Spill {
-            title: title.into(),
-            lines: if lines.is_empty() {
-                vec![String::new()]
-            } else {
-                lines
-            },
-            scroll: 0,
-            visible: 1,
-        }
-    }
-
-    pub fn settled(&mut self, visible: usize) {
-        self.visible = visible.max(1);
-    }
-
-    /// The lines a window of `visible` rows shows, from where the reader is.
-    /// A slice, not a copy: a megabyte of output is a window per frame.
-    pub fn window(&mut self) -> &[String] {
-        let height = self.visible.min(self.lines.len().max(1));
-        let last = self.lines.len().saturating_sub(height);
-        self.scroll = self.scroll.min(last);
-        let start = self.scroll;
-        let end = (start + height).min(self.lines.len());
-        &self.lines[start..end]
-    }
-
-    pub fn scroll_by(&mut self, rows: usize, up: bool) {
-        let last = self.lines.len().saturating_sub(self.visible.max(1));
-        self.scroll = if up {
-            self.scroll.saturating_add(rows).min(last)
-        } else {
-            self.scroll.saturating_sub(rows)
-        };
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{BINDINGS, Spill, help_rows};
+    use super::{BINDINGS, help_rows};
 
     /// The keys the contract names, written here from ADR-0011 rather than
     /// read out of `BINDINGS`: a key the frame gained and the help forgot is
@@ -266,29 +265,5 @@ mod tests {
             gestures, 4,
             "the wheel, a drag, a click on the spill row and a click on a rail row are the gestures"
         );
-    }
-
-    #[test]
-    fn a_spill_file_opens_untruncated_and_scrolls_by_the_screen() {
-        let file = tempfile::tempdir().expect("a temp directory");
-        let path = file.path().join("spill");
-        let text: String = (0..50).map(|line| format!("line {line}\n")).collect();
-        std::fs::write(&path, text).expect("write the spill");
-
-        let mut spill = Spill::open(&path).expect("the spill opens");
-        assert_eq!(spill.lines.len(), 50, "nothing is cut down");
-        spill.settled(10);
-        assert_eq!(spill.window().first().map(String::as_str), Some("line 0"));
-        spill.scroll_by(5, true);
-        assert_eq!(spill.scroll, 5);
-        assert_eq!(spill.window().first().map(String::as_str), Some("line 5"));
-        spill.scroll_by(1000, true);
-        assert_eq!(
-            spill.scroll, 40,
-            "scrolling stops where the last screenful is full, not at the last line"
-        );
-        assert_eq!(spill.window().last().map(String::as_str), Some("line 49"));
-        spill.scroll_by(1000, false);
-        assert_eq!(spill.scroll, 0, "and at the first");
     }
 }

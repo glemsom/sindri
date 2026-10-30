@@ -8,10 +8,10 @@ use ratatui::layout::Position;
 use crate::app::{App, Renew};
 use crate::command::{self, Command};
 use crate::completion::{self, Completion};
-use crate::copy::Copied;
 use crate::entry::Entry;
-use crate::overlay::{Overlay, Spill};
-use crate::selection::{self, Selection};
+use crate::overlay::{Help, Overlay};
+use crate::selection::Selection;
+use crate::spill::Spill;
 
 const WHEEL_ROWS: usize = 3;
 
@@ -31,7 +31,9 @@ impl App {
                 self.drop_queued();
             }
             KeyCode::Char('g') if ctrl => self.copy_session_id(),
-            KeyCode::Char('?') if self.composer.is_blank() => self.show(Overlay::Help),
+            KeyCode::Char('?') if self.composer.is_blank() => {
+                self.show(Overlay::Help(Help::default()))
+            }
             KeyCode::Esc => self.dismiss(),
             KeyCode::Tab => self.accept_completion(),
             KeyCode::PageUp => self.scroll_page(true),
@@ -97,7 +99,15 @@ impl App {
         }
     }
 
+    /// The keys an open overlay takes. It owns them: nothing behind it moves
+    /// while it has the screen, and the page keys move it by the screenful its
+    /// own box shows rather than the transcript's (ADR-0013, issue #49).
     fn overlay_key(&mut self, key: KeyEvent, ctrl: bool) {
+        match key.code {
+            KeyCode::PageUp => return self.scroll_page(true),
+            KeyCode::PageDown => return self.scroll_page(false),
+            _ => {}
+        }
         if matches!(self.overlay, Some(Overlay::Settings(_))) {
             self.settings_key(key);
             return;
@@ -108,11 +118,22 @@ impl App {
         }
         match key.code {
             KeyCode::Esc | KeyCode::Enter => self.overlay = None,
-            KeyCode::PageUp => self.scroll_page(true),
-            KeyCode::PageDown => self.scroll_page(false),
             KeyCode::Char('q') if ctrl => self.quit = true,
             KeyCode::Char('c') if ctrl => self.cancel_or_clear(),
             _ => {}
+        }
+    }
+
+    /// A page, for whatever has the screen: the box that covers the frame
+    /// sets the step it is paged by, and the transcript sets its own only when
+    /// nothing covers it (issue #49).
+    fn scroll_page(&mut self, up: bool) {
+        match self.overlay.as_mut() {
+            Some(Overlay::Help(help)) => help.page(self.page, up),
+            Some(Overlay::Settings(settings)) => settings.page(self.page, up),
+            Some(Overlay::Sessions(sessions)) => sessions.page(self.page, up),
+            Some(Overlay::Spill(spill)) => spill.scroll_by(self.page, up),
+            None => self.scroll_by(self.page, up),
         }
     }
 
@@ -189,7 +210,7 @@ impl App {
         match named {
             Command::New => self.new_session(),
             Command::Settings => self.open_settings(None),
-            Command::Help => self.show(Overlay::Help),
+            Command::Help => self.show(Overlay::Help(Help::default())),
             Command::Quit => self.quit = true,
             Command::Sessions => self.open_sessions(),
             Command::Export(path) => self.export(path.as_deref()),
@@ -227,14 +248,6 @@ impl App {
 
     fn show(&mut self, overlay: Overlay) {
         self.overlay = Some(overlay);
-    }
-
-    fn scroll_page(&mut self, up: bool) {
-        if let Some(Overlay::Spill(spill)) = self.overlay.as_mut() {
-            spill.scroll_by(self.page, up);
-            return;
-        }
-        self.scroll_by(self.page, up);
     }
 
     fn scroll_by(&mut self, rows: usize, up: bool) {
@@ -331,45 +344,6 @@ impl App {
             completion.chosen.saturating_sub(1)
         };
         true
-    }
-
-    fn copy_selection(&mut self) {
-        if let Some(text) = selection::copied(&self.viewport, &self.selection) {
-            self.copy(&text);
-        }
-        self.selection = Selection::default();
-        self.selecting = 0;
-    }
-
-    fn copy(&mut self, text: &str) {
-        self.copy_named(text, None);
-    }
-
-    /// The session id alone, with no column of the rail around it: what a user
-    /// pastes into `sindri sessions show` (ADR-0006).
-    fn copy_session_id(&mut self) {
-        let id = self.rail.session();
-        self.copy_named(&id, Some("session id"));
-    }
-
-    fn copy_named(&mut self, text: &str, named: Option<&str>) {
-        let rows = text.lines().count();
-        let said = match self.clipboard.copy(text) {
-            // A terminal does not answer, so this says the copy was sent and
-            // says outright that nobody confirmed it.
-            Copied::Sent => match named {
-                Some(name) => format!("{name} sent as OSC 52, which the terminal does not confirm"),
-                None => {
-                    format!("copy sent: {rows} rows as OSC 52, which the terminal does not confirm")
-                }
-            },
-            Copied::Tool(tool) => match named {
-                Some(name) => format!("{name} copied via {tool}"),
-                None => format!("copied {rows} rows via {tool}"),
-            },
-            Copied::Refused(why) => return self.note_error(format!("copy refused: {why}")),
-        };
-        self.note_info(said);
     }
 
     fn open_spill(&mut self) {

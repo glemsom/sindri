@@ -18,13 +18,19 @@ use crate::theme;
 const LABEL: usize = 20;
 const MARGIN: u16 = 4;
 
-const HINTS: &str = "↑↓/Tab move · Ctrl-U clear · Enter save · Esc discard";
+const HINTS: &str = "↑↓/Tab move · PgUp/PgDn page · Ctrl-U clear · Enter save · Esc discard";
 
-pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) {
+/// Draws the modal and answers with the field rows its box showed, which is
+/// what a page moves the cursor by (issue #49).
+pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) -> usize {
     let width = area.width.saturating_sub(MARGIN * 2).clamp(30, 110);
     let columns = width.saturating_sub(2) as usize;
-    let mut lines: Vec<Line<'static>> = Vec::new();
-    lines.extend(text::wrap(
+
+    // Above the list: the file saving writes to, and — when the door opened
+    // the modal — what is absent. Pinned, because a row a user needs is never
+    // the row that fell off (issue #49).
+    let mut head: Vec<Line<'static>> = Vec::new();
+    head.extend(text::wrap(
         text::glyphs(&[
             Span::styled("file ", theme::faint()),
             Span::raw(settings.path().display().to_string()),
@@ -33,7 +39,7 @@ pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) {
         theme::faint(),
         columns,
     ));
-    lines.push(Line::default());
+    head.push(Line::default());
     if let Some(missing) = settings.missing() {
         // The door's modal: why it opened, and the four facts a person needs
         // before typing a credential into it (ADR-0014).
@@ -51,26 +57,22 @@ pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) {
                 theme::faint(),
             ),
         ] {
-            lines.extend(text::wrap(
+            head.extend(text::wrap(
                 text::glyphs(&[Span::styled(said, style)]),
                 "",
                 style,
                 columns,
             ));
         }
-        lines.push(Line::default());
+        head.push(Line::default());
     }
-    for (index, field) in settings.fields().iter().enumerate() {
-        let line = row(settings, field, columns);
-        lines.push(if index == settings.chosen() {
-            line.patch_style(Style::new().add_modifier(Modifier::REVERSED))
-        } else {
-            line
-        });
-    }
-    lines.push(Line::default());
+
+    // Below it: the warning a staged secret earns, the refusal a failed save
+    // earns — the one row that must never be the row that disappears — and
+    // the keys. Pinned too.
+    let mut foot: Vec<Line<'static>> = vec![Line::default()];
     if settings.staged_secret() {
-        lines.extend(text::wrap(
+        foot.extend(text::wrap(
             text::glyphs(&[Span::styled(
                 format!(
                     "plaintext: saving writes this secret, unencrypted, to {}",
@@ -82,25 +84,51 @@ pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) {
             theme::bad(),
             columns,
         ));
-        lines.push(Line::default());
+        foot.push(Line::default());
     }
     if let Some(error) = settings.error() {
-        lines.extend(text::wrap(
+        foot.extend(text::wrap(
             text::glyphs(&[Span::styled(format!("not saved · {error}"), theme::bad())]),
             "",
             theme::bad(),
             columns,
         ));
     }
-    lines.push(Line::from(Span::styled(
+    foot.push(Line::from(Span::styled(
         clip(HINTS, columns),
         theme::faint(),
     )));
 
-    // The box is sized to what it has to say, not to a guess: a long
-    // path wraps and the modal grows, so nothing a user needs is the
-    // row that fell off.
-    let height = (lines.len() as u16 + 2).min(area.height);
+    // The box is sized to what it has to say, not to a guess: a long path
+    // wraps and the modal grows, and when it still does not fit, it grows no
+    // further than the terminal and the list scrolls instead.
+    let rows = settings.fields().len();
+    let wanted = head.len() + rows + foot.len() + 2;
+    let height = (wanted as u16).min(area.height);
+    // The refusal and the keys are never the rows that fall off: when the
+    // pinned rows need more room than the box has, the head is what gives way
+    // and the list gets whatever is left — even nothing (ADR-0013, issue #49).
+    let room = (height as usize).saturating_sub(2);
+    if head.len() + foot.len() > room {
+        head.truncate(room.saturating_sub(foot.len()));
+    }
+    // The list shows a window around the row the cursor is on, so the chosen
+    // row is on screen however far past the fold it is.
+    let body = room.saturating_sub(head.len() + foot.len());
+    let first = settings.chosen().saturating_add(1).saturating_sub(body);
+    let last = rows.min(first + body);
+
+    let mut lines = head;
+    for (offset, field) in settings.fields()[first..last].iter().enumerate() {
+        let line = row(settings, field, columns);
+        lines.push(if first + offset == settings.chosen() {
+            line.patch_style(Style::new().add_modifier(Modifier::REVERSED))
+        } else {
+            line
+        });
+    }
+    lines.extend(foot);
+
     let boxed = Rect {
         x: area.x + (area.width.saturating_sub(width)) / 2,
         y: area.y + (area.height.saturating_sub(height)) / 2,
@@ -108,12 +136,19 @@ pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) {
         height,
     };
     Clear.render(boxed, buf);
-    let block = super::overlay::block("settings");
+    let block = super::overlay::paged(
+        "settings",
+        super::overlay::More {
+            above: first > 0,
+            below: last < rows,
+        },
+    );
     let inner = block.inner(boxed);
     Paragraph::new(lines)
         .style(theme::raised())
         .render(inner, buf);
     block.render(boxed, buf);
+    last - first
 }
 
 fn row(settings: &Settings, field: &Field, columns: usize) -> Line<'static> {

@@ -140,6 +140,49 @@ impl Clipboard for System {
     }
 }
 
+impl crate::app::App {
+    /// What `Ctrl-Y` copies: the rendered rows the selection covers, or — with
+    /// no selection — the whole of what the frame was told to copy.
+    pub(crate) fn copy_selection(&mut self) {
+        if let Some(text) = crate::selection::copied(&self.viewport, &self.selection) {
+            self.copy(&text);
+        }
+        self.selection = crate::selection::Selection::default();
+        self.selecting = 0;
+    }
+
+    pub(crate) fn copy(&mut self, text: &str) {
+        self.copy_named(text, None);
+    }
+
+    /// The session id alone, with no column of the rail around it: what a user
+    /// pastes into `sindri sessions show` (ADR-0006).
+    pub(crate) fn copy_session_id(&mut self) {
+        let id = self.rail.session();
+        self.copy_named(&id, Some("session id"));
+    }
+
+    fn copy_named(&mut self, text: &str, named: Option<&str>) {
+        let rows = text.lines().count();
+        let said = match self.clipboard.copy(text) {
+            // A terminal does not answer, so this says the copy was sent and
+            // says outright that nobody confirmed it.
+            Copied::Sent => match named {
+                Some(name) => format!("{name} sent as OSC 52, which the terminal does not confirm"),
+                None => {
+                    format!("copy sent: {rows} rows as OSC 52, which the terminal does not confirm")
+                }
+            },
+            Copied::Tool(tool) => match named {
+                Some(name) => format!("{name} copied via {tool}"),
+                None => format!("copied {rows} rows via {tool}"),
+            },
+            Copied::Refused(why) => return self.note_error(format!("copy refused: {why}")),
+        };
+        self.note_info(said);
+    }
+}
+
 /// Base64, because an OSC 52 payload is base64 and one alphabet is not
 /// worth a dependency.
 pub fn base64(bytes: &[u8]) -> String {
