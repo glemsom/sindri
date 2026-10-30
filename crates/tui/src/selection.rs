@@ -15,6 +15,9 @@ pub struct Viewport {
     pub area: Rect,
     pub rows: Vec<String>,
     pub spill: Vec<(usize, PathBuf)>,
+    /// The transcript rows that are an expandable entry's own row, and which
+    /// entry that is: a click there opens it (ADR-0011 §9, issue #44).
+    pub expand: Vec<(usize, usize)>,
 }
 
 impl Viewport {
@@ -30,6 +33,13 @@ impl Viewport {
             .iter()
             .find(|(at, _)| *at == row)
             .map(|(_, path)| path)
+    }
+
+    pub fn expandable(&self, row: usize) -> Option<usize> {
+        self.expand
+            .iter()
+            .find(|(at, _)| *at == row)
+            .map(|(_, entry)| *entry)
     }
 
     pub fn row_of(&self, at: Position) -> Option<usize> {
@@ -158,6 +168,7 @@ mod tests {
             area: Rect::new(0, 2, 60, rows.len() as u16),
             rows: rows.iter().map(|row| row.to_string()).collect(),
             spill: Vec::new(),
+            expand: Vec::new(),
         }
     }
 

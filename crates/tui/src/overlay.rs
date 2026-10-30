@@ -19,8 +19,8 @@ pub struct Binding {
 pub const BINDINGS: &[Binding] = &[
     Binding {
         keys: "Enter",
-        mouse: None,
-        what: "send the prompt, or accept a completion",
+        mouse: Some("click a call row"),
+        what: "send the prompt, accept a completion, or open a call and fold it again",
     },
     Binding {
         keys: "Shift+Enter",
@@ -262,8 +262,8 @@ mod tests {
             );
         }
         assert_eq!(
-            gestures, 4,
-            "the wheel, a drag, a click on the spill row and a click on a rail row are the gestures"
+            gestures, 5,
+            "the wheel, a drag, a click on a spill row, a rail row or a call row are the gestures"
         );
     }
 }

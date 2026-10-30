@@ -12,6 +12,7 @@ pub mod composer;
 pub mod copy;
 pub mod driver;
 pub mod entry;
+mod expand;
 pub mod export;
 pub mod face;
 mod heard;

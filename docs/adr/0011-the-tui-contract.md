@@ -15,7 +15,7 @@ date: 2026-10-30
 6. **Markdown.** Headings, nested lists, tables, blockquotes, inline code, bold/emphasis, links, rules, fenced code in truecolour, diffs line-coloured. No images, no raw HTML.
 7. **Mouse, selection, clipboard.** Mouse is captured; a selection copies the rendered rows via OSC 52, then `wl-copy`/`xclip`; `Shift+drag` passes through to the terminal. Copy semantics: ADR-0013.
 8. **One conversation per launch.** Turns accumulate; `/new` opens a new GUID with an empty transcript; resume is not in v1.
-9. **Tool calls.** One line per call plus a live tail of its last five dim lines, collapsing to the exit status; the spill file opens with `Ctrl-O` or a click (ADR-0013).
+9. **Tool calls.** One line per call plus a live tail of its last five dim lines, collapsing to its status, its duration and the count of what is behind it (`✓ exit 0 · 1.4s · 400 lines`). Any call opens in place on `Enter` with an empty composer — the call the reader last touched, or the newest — or on a click on the call's own row, and the same gesture folds it again. The entry keeps a bounded tail of its whole output (`FULL_LINES` = 400, capped the way the spill file is), so a call that never spilled is still openable: the spill is an optimisation, not the feature. The spill file still opens with `Ctrl-O` or a click on its own row (ADR-0013, issue #44).
 10. **Cancel and queue.** Ctrl-C is batch semantics: shared flag, process-group kill, nothing on stdout. The draft survives; a prompt typed mid-run is queued (steering is not in v1).
     The queue is drawn: a panel above the composer holds the queued prompts whole, titled
     `N queued` when there is more than one and cut at six rows with that count standing for
@@ -25,10 +25,10 @@ date: 2026-10-30
     `cancelling…` with the draft still in the composer, and the state clears when the run has
     actually stopped. An in-flight request is not interrupted (ADR-0004), so the frame's
     only honest answer to the key is to say what it is waiting for.
-11. **Reasoning.** Streams as a dim block, collapses to a one-line "reasoned" marker, expands on demand.
+11. **Reasoning.** Streams as a dim block, collapses to a one-line "reasoned" marker, expands on demand — the key and the click of §9, opening the text it held.
 12. **`/settings`.** Edits the one config file through the core's `Document`; a save applies to the next prompt with no restart (ADR-0014).
 13. **Compatibility.** 24-bit truecolour assumed, no 256-colour fallback; must work in `tmux` and over SSH; one dark theme.
-14. **Keys.** `Enter` sends, `Shift+Enter` newlines, `@` completes paths, `/` names commands, `Esc` closes, `Ctrl-C` cancels or clears, `↑` takes back a queued prompt, `Ctrl-X` drops one, `Ctrl-Q` quits, `PgUp`/`PgDn` scroll, `?` opens help, `Tab` accepts a completion, `Ctrl-O` opens a spill file, `Ctrl-Y` copies, `Ctrl-G` copies the session id.
+14. **Keys.** `Enter` sends, `Shift+Enter` newlines, `@` completes paths, `/` names commands, `Esc` closes, `Ctrl-C` cancels or clears, `↑` takes back a queued prompt, `Ctrl-X` drops one, `Ctrl-Q` quits, `PgUp`/`PgDn` scroll, `?` opens help, `Tab` accepts a completion, `Ctrl-O` opens a spill file, `Ctrl-Y` copies, `Ctrl-G` copies the session id, and `Enter` on an empty composer opens the call it last showed (§9).
 15. **Failure is content.** Boot runs the doctor's checks before the first frame; a failure is a card naming the check and printing the doctor's report, never a half-drawn frame. The card holds that report whole: each line of it on a row of its own, the block sized from the rows the words wrapped into and centred on the screen. A report taller than the screen is paged with `PgUp`/`PgDn` and marked on the border, the last row saying both the key that leaves and `sindri doctor` as the command that checks again, and only a key leaves it — a resize lays it out again, so a `tmux` client attaching cannot dismiss a report before it has been read (issue #50). Mid-run failures land in the transcript where they happened, with the stop reason in the rail; toasts are for success only.
 16. **`@` completion.** A capped workspace walk on its own thread, inserted as a workspace-relative path; skips `.git` only. Cap, ranking and threading: ADR-0013.
 

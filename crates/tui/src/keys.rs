@@ -162,6 +162,18 @@ impl App {
             self.show_spill(&path);
             return;
         }
+        // A click on an expandable entry's own row opens that entry, and is
+        // never a selection: the row a reader points at is the one they mean
+        // (ADR-0011 §9, issue #44).
+        if let Some(index) = self
+            .viewport
+            .row_of(at)
+            .and_then(|row| self.viewport.expandable(row))
+        {
+            self.chosen = Some(index);
+            self.toggle(index);
+            return;
+        }
         if self.viewport.holds(at) {
             self.selection = Selection::start(at);
         }
@@ -193,6 +205,12 @@ impl App {
             .is_some_and(|open| !open.items.is_empty())
         {
             self.accept_completion();
+            return;
+        }
+        // An empty composer has nothing to send: `Enter` there opens the call
+        // the reader last touched, or the newest one, and folds it again
+        // (ADR-0011 §9, issue #44).
+        if self.composer.is_blank() && self.reveal() {
             return;
         }
         let draft = self.composer.text();
