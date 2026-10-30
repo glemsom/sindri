@@ -12,7 +12,7 @@
 use std::fs::File;
 use std::io::{ErrorKind, Read, Write};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Stdio};
 use std::time::{Duration, Instant};
 
@@ -244,6 +244,54 @@ impl Pty {
             }
         }
     }
+}
+
+/// What a frame said without drawing it: the stderr beside the screen. A
+/// failure said before the frame takes the terminal has nowhere else to go, so
+/// a test that reads it must keep it out of the frame's escape sequences.
+pub struct Said {
+    /// The directory the file lives in, kept alive for the test's length.
+    _root: tempfile::TempDir,
+    path: PathBuf,
+}
+
+impl Said {
+    pub fn new() -> Said {
+        let root = tempfile::TempDir::new().expect("a directory for the frame's stderr");
+        let path = root.path().join("stderr");
+        Said { _root: root, path }
+    }
+
+    /// The file to hand `spawn_with_stderr`.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// Everything the frame said on stderr, read once it has said it.
+    pub fn words(&self) -> String {
+        std::fs::read_to_string(&self.path).unwrap_or_default()
+    }
+}
+
+impl Default for Said {
+    fn default() -> Said {
+        Said::new()
+    }
+}
+
+/// Waits for the process to be gone, and gives the code a shell would read —
+/// `None` when it would not go, so a stuck front end fails rather than hangs.
+pub fn exit(child: &mut Child) -> Option<i32> {
+    let deadline = Instant::now() + DEADLINE;
+    while Instant::now() < deadline {
+        if let Ok(Some(status)) = child.try_wait() {
+            return status.code();
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    None
 }
 
 /// A pty test's own environment: the mock provider's base URL, and nothing of
