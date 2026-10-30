@@ -49,9 +49,24 @@ fn the_composer_is_a_panel_whose_border_says_who_has_the_focus() {
         theme::PANEL,
         "the composer floats on a panel, not on the terminal's black"
     );
+    let right = (x..100)
+        .find(|column| idle[(*column, y)].symbol() == "╮")
+        .expect("a rounded border closes on its right corner, not a square one");
+    assert_eq!(
+        idle[(right, y)].fg,
+        theme::SEAM,
+        "the border is a walk lit from the rail's side: its far corner is the seam's ink"
+    );
+    assert_ne!(
+        idle[(right, y)].fg,
+        idle[(x, y)].fg,
+        "a walk that arrives where it started says nothing"
+    );
+    let half = (x + right) / 2;
     assert!(
-        (x..100).any(|column| idle[(column, y)].symbol() == "╮"),
-        "a rounded border closes on its right corner, not a square one: {idle:?}"
+        idle[(half, y)].symbol() == "─" && theme::owns(idle[(half, y)].fg),
+        "the rule between the corners is walked, and never off the theme's segments: {:?}",
+        idle[(half, y)].fg
     );
     assert!(
         (0..24).any(|row| idle[(x, row)].symbol() == "╰"),

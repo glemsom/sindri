@@ -100,3 +100,71 @@ pub fn surface() -> Style {
 pub fn raised() -> Style {
     Style::new().bg(RAISED)
 }
+
+/// A walk between two named stops, `t` of the way across: what a rule lit from
+/// one end spends, one cell at a time. The stops are the theme's, so a renderer
+/// that walks still names no colour of its own — it interpolates two it was
+/// given, and `RAMPS` says which pairs it may interpolate (ADR-0011 §23).
+pub fn ramp(from: Color, to: Color, t: f32) -> Color {
+    let (start, end) = (channels(from), channels(to));
+    let t = t.clamp(0.0, 1.0);
+    let [r, g, b] = [0, 1, 2].map(|channel| {
+        let (begin, close) = (f32::from(start[channel]), f32::from(end[channel]));
+        (begin + (close - begin) * t).round() as u8
+    });
+    Color::Rgb(r, g, b)
+}
+
+/// The segments a renderer may walk, and the only ones. The composer's border
+/// is lit from the rail's side: it leaves the ink the panel has when it is
+/// quiet, or the ink it has when it holds the keyboard, and arrives at the
+/// seam's — the colour of the spine it is being lit by.
+pub const RAMPS: &[(Color, Color)] = &[(FAINT, SEAM), (PROMPT, SEAM)];
+
+/// Whether the frame may paint a colour: one `PALETTE` names, one a walk of
+/// `RAMPS` arrives at, or nothing at all. `tests/theme.rs` asks this of every
+/// cell — a renderer that invents a hue still fails, and the law it fails
+/// against is now stated where the walk lives rather than in the test.
+pub fn owns(colour: Color) -> bool {
+    colour == Color::Reset
+        || PALETTE.contains(&colour)
+        || RAMPS.iter().any(|(from, to)| on_ramp(colour, *from, *to))
+}
+
+/// Whether `colour` sits on the segment `from`–`to`, within the step a float
+/// walk rounded to: the cell carries bytes and the walk computes in floats, so
+/// a step either way is the same step. The law is that no renderer invents a
+/// hue, never that it rounds the way this one does.
+fn on_ramp(colour: Color, from: Color, to: Color) -> bool {
+    let Color::Rgb(r, g, b) = colour else {
+        return false;
+    };
+    let point = [r, g, b].map(f32::from);
+    let (start, end) = (channels(from), channels(to));
+    let walk: [f32; 3] =
+        [0, 1, 2].map(|channel| f32::from(end[channel]) - f32::from(start[channel]));
+    // The widest channel says how far along the walk a point sits; the other
+    // two follow it, because one step of the walk moves all three together.
+    let widest = (0..3)
+        .max_by(|a, b| walk[*a].abs().total_cmp(&walk[*b].abs()))
+        .unwrap_or(0);
+    let t = if walk[widest].abs() < f32::EPSILON {
+        0.0
+    } else {
+        (point[widest] - f32::from(start[widest])) / walk[widest]
+    };
+    (-0.01..=1.01).contains(&t)
+        && (0..3).all(|channel| {
+            let along = f32::from(start[channel]) + walk[channel] * t;
+            (point[channel] - along).abs() <= 1.0
+        })
+}
+
+/// A stop's truecolour bytes: a walk between two colours that are not
+/// truecolour is a module that panics rather than a gradient nobody can see.
+const fn channels(colour: Color) -> [u8; 3] {
+    match colour {
+        Color::Rgb(r, g, b) => [r, g, b],
+        _ => panic!("a ramp is walked between two truecolour stops"),
+    }
+}

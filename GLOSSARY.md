@@ -66,8 +66,8 @@ session.
 the thread rather than an offset from its tail: a reader on the **tail** follows what
 arrives, and a reader scrolled back keeps the row they are reading while a run appends
 below them, told how much by the **new-rows badge**. `End` takes the tail again, `Home`
-the first turn, and a thread longer than the window marks its position in the
-transcript's last column (ADR-0013).
+the first turn, and nothing in the last column claims to say where the window sits: the
+**new-rows badge** is the frame's only word on it (ADR-0013).
 
 **new-rows badge** — `↓ 4 new rows`, against the footer's right edge: how many rows
 arrived below a **window** that is off the **tail**. It says `1 new row` for one, clears
@@ -131,6 +131,14 @@ those is moving: **never repaint for nothing** (ADR-0011 §4, §19). While it ru
 footer says `working · ` before its hints, and `cancelling… · ` once a cancel has been
 answered (§10).
 
+**walk** — a rule lit from one end: the theme's `ramp` interpolates two named stops and
+`RAMPS` lists the pairs a renderer may interpolate, one step per cell. It is how a
+border gets a gradient without a picture and without a colour a renderer wrote down: a
+cell is enough room for a step across a hundred columns, and `tests/theme.rs` holds a
+walked cell to the segments exactly as it holds a flat one to `PALETTE`. On terminals
+that speak no Kitty graphics it is the only light the frame has, the seam's strip
+being absent there (ADR-0011 §23).
+
 **surface** — one of the three tiers of nearness the frame paints on:
 **canvas**, **panel**, **raised**, in that order. A renderer asks
 `theme::surface()` or `theme::raised()` and never asks for a background, because
@@ -155,7 +163,9 @@ column runs out.
 **composer** — the input at the bottom: 2–6 rows, `Shift+Enter` for a newline, `@` for a
 path completion, `/` for a command. With no text in it at all it carries the placeholder
 `Ask, or drop a log here · @ path · / command`, which a draft — a space is a draft —
-never sits behind.
+never sits behind. Its border is a **walk**: `PROMPT` while it holds the keyboard and
+`FAINT` while a run has it, walked toward `SEAM` across the top and bottom rules so the
+panel is lit from the rail's side and its right-hand corners take the rail's own ink.
 
 **first frame** — the frame before the first prompt: an empty **thread** is not a blank
 page, but the line naming the wire, the model, the workspace and the sandbox, one dim

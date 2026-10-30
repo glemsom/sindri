@@ -71,7 +71,9 @@ fn painted() -> Buffer {
 #[test]
 fn every_colour_the_frame_paints_comes_from_the_theme() {
     let buf = painted();
-    let named = |colour: Color| colour == Color::Reset || theme::PALETTE.contains(&colour);
+    // The theme answers for both kinds of ink it allows: a colour `PALETTE`
+    // names, and a step of a walk between two of them (`theme::RAMPS`).
+    let named = theme::owns;
     for y in 0..buf.area.height {
         for x in 0..buf.area.width {
             let cell = &buf[(x, y)];
@@ -100,6 +102,35 @@ fn every_colour_the_frame_paints_comes_from_the_theme() {
         2,
         "the frame paints all three tiers: the canvas, a panel and raised"
     );
+}
+
+/// A walk names no hue of its own: every step of the composer's border is on
+/// the segment between two colours the theme names, and anything off it is a
+/// renderer's invention.
+#[test]
+fn a_walk_between_named_stops_arrives_at_colours_the_theme_owns() {
+    for step in 0..=100 {
+        let t = step as f32 / 100.0;
+        let walked = theme::ramp(theme::PROMPT, theme::SEAM, t);
+        assert!(
+            theme::owns(walked),
+            "step {t} of the walk landed on {walked:?}, which the theme does not own"
+        );
+        let walked = theme::ramp(theme::FAINT, theme::SEAM, t);
+        assert!(
+            theme::owns(walked),
+            "step {t} of the quiet walk landed on {walked:?}"
+        );
+    }
+    assert!(theme::owns(theme::SEAM), "a walk's far end is a stop");
+    assert!(
+        !theme::owns(Color::Rgb(0xff, 0x00, 0x80)),
+        "a hue a renderer invented is refused"
+    );
+    // Walked off the end, the ramp is still its own stop: a step of nought and
+    // a step of one are the two colours it was given.
+    assert_eq!(theme::ramp(theme::PROMPT, theme::SEAM, 0.0), theme::PROMPT);
+    assert_eq!(theme::ramp(theme::PROMPT, theme::SEAM, 1.0), theme::SEAM);
 }
 
 /// The theme is the only file that may name a colour: a renderer that writes

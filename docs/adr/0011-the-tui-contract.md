@@ -63,8 +63,8 @@ date: 2026-10-30
     scrolled back does not move the text under them, `End` returns to the tail and
     follows it again, and `Home` reaches the first turn. Rows that arrive below a
     reader who is off the tail are counted in the footer (`↓ 4 new rows`) and the
-    count clears when they return; a thread longer than the window marks its position
-    in the transcript's last column. `PgUp`/`PgDn` and the wheel are unchanged
+    count clears when they return. The transcript's last column carries no position
+    marker. `PgUp`/`PgDn` and the wheel are unchanged
     (ADR-0013, issue #45).
 
 21. **The first frame is not a blank page.** A thread with nothing in it yet draws
@@ -149,7 +149,19 @@ date: 2026-10-30
     asks for a tier, never for a background. The composer is a `PANEL` with a
     `BorderType::Rounded` border that takes `PROMPT` while it holds the focus
     and `FAINT` while a run has it: both are readable, so the border says where
-    a keystroke lands, and says it while the user is typing into a run. An overlay draws one `Modifier::DIM` pass
+    a keystroke lands, and says it while the user is typing into a run. Its top
+    and bottom rules are a walk from that ink to `SEAM`, one step per cell, so
+    the panel is lit from the rail's side and its right-hand corners — the
+    silhouette's far end — take the rail's own ink; the two vertical rules and
+    the ` prompt ` title keep one ink, because a walk across one cell says
+    nothing. `theme::ramp` walks and `RAMPS` names the segments a walk may use:
+    a border cannot be a picture, because a picture's escape costs the cell
+    after it and a border is one cell thick (`render::GAP_COLUMNS`), and it does
+    not need to be, because a hundred columns of rule is a hundred steps and no
+    banding. It is also the only light the frame has on a terminal that speaks
+    no Kitty graphics. `theme::owns` answers for both kinds of ink, and
+    `tests/theme.rs` holds a walked cell to its segments as it holds a flat one
+    to `PALETTE`. An overlay draws one `Modifier::DIM` pass
     over the frame before its own `Clear`, so what it covers recedes instead of
     reading as a hole, and is itself a `RAISED` panel drawn at full strength. No
     meaning is carried by hue alone: a running call's stdout is marked `│` and
