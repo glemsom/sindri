@@ -55,6 +55,17 @@ impl Composer {
         self.text().trim().is_empty()
     }
 
+    /// What is typed becomes `text`, the cursor at its end: a queued prompt
+    /// taken back arrives above the draft it was typed before (issue #43).
+    pub fn replace(&mut self, text: &str) {
+        self.rows = text.split('\n').map(str::to_string).collect();
+        if self.rows.is_empty() {
+            self.rows.push(String::new());
+        }
+        self.row = self.rows.len() - 1;
+        self.column = self.rows[self.row].chars().count();
+    }
+
     pub fn take(&mut self) -> String {
         let text = self.text();
         self.clear();

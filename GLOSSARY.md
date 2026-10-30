@@ -17,7 +17,10 @@ result** returned. One call may run a whole pipeline or script.
 **stopped** — why the loop ended: `final`, `max_turns`, `cancelled` or `error`.
 
 **cancel** — Ctrl-C (SIGINT): one flag the loop and the executor share. The loop stops
-between turns, the command's process group is killed, stdout stays empty, exit is 130.
+between turns, the command's process group is killed, stdout stays empty, exit is 130. In the **frame** a cancel is answered the moment the key
+lands — the footer reads `cancelling…` and the draft stays in the **composer** — and the
+state clears when the run has actually stopped, because a request in flight is not
+interrupted.
 
 ## Sandbox
 
@@ -88,6 +91,12 @@ panel the rest of the rail is drawn on.
 
 **composer** — the input at the bottom: 2–6 rows, `Shift+Enter` for a newline, `@` for a
 path completion, `/` for a command.
+
+**queued prompt** — a prompt sent while a run has the frame: it waits in one queue and runs
+when the run stops, in the order it was typed. The queue is a panel above the **composer**
+holding each prompt whole, titled with its size (`3 queued`) when there is more than one and
+cut at six rows with that count standing for the rest; `↑` takes the newest back into the
+composer above any draft typed since, `Ctrl-X` drops it. The footer carries no count.
 
 **thread** — the growing conversation of one TUI session; `/new` starts over. Laid
 out as a document: two blank rows between turns and none inside one, a two-column

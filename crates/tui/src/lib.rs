@@ -18,6 +18,7 @@ mod keys;
 pub mod markdown;
 mod msg;
 pub mod overlay;
+mod queue;
 pub mod rail;
 pub mod render;
 pub mod run;

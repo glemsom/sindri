@@ -204,10 +204,6 @@ impl App {
         &self.composer
     }
 
-    pub fn queued(&self) -> usize {
-        self.queue.len()
-    }
-
     pub fn is_running(&self) -> bool {
         self.running.is_some()
     }
