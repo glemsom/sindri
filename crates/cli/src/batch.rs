@@ -10,13 +10,13 @@ use std::sync::mpsc;
 use clap::ValueEnum;
 use sindri_core::agent::{BashTool, Dials, Event, Stopped};
 use sindri_core::cancel::Cancel;
-use sindri_core::config::{Config, ConfigError, Overrides};
+use sindri_core::config::{Config, Overrides};
 use sindri_core::output;
 use sindri_core::provider::{Client, Error};
-use sindri_core::session::{Env, Session, StartError};
+use sindri_core::session::{Env, Session};
 use sindri_types::ExitCode;
 
-use crate::{signal, verbose};
+use crate::{failure, signal, verbose};
 
 /// How a finished run reaches stdout (ADR-0004): the answer plus one newline,
 /// which is what a shell pipeline wants, or one compact object, which is what a
@@ -71,7 +71,7 @@ impl From<Flags> for Overrides {
 pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     let prompt = match composed_prompt(prompt) {
         Ok(prompt) => prompt,
-        Err(message) => return usage_error(&message),
+        Err(message) => return failure::usage_error(&message),
     };
 
     let (format, verbose) = (flags.format, flags.verbose);
@@ -79,14 +79,11 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     // state root below this line are values (ADR-0015).
     let env = match Env::ambient() {
         Ok(env) => env,
-        Err(error) => {
-            eprintln!("sindri: the run environment cannot be read: {error}");
-            return ExitCode::EnvironmentFailure.code();
-        }
+        Err(error) => return failure::Failure::Environment(error).report(),
     };
     let config = match Config::resolve(flags.into()) {
         Ok(config) => config,
-        Err(error) => return config_error(&error),
+        Err(error) => return failure::config_error(error),
     };
     // Nothing written by a clone may configure the agent, and staying silent
     // about it would leave a user editing a file that is read by nobody.
@@ -102,19 +99,7 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     // session is the one module that starts one, in the one order (ADR-0015).
     let session = match Session::open(&env, &config) {
         Ok(session) => session,
-        // The record's own directory is named because a record that cannot be
-        // written is not a run (ADR-0006).
-        Err(StartError::Record { path, source }) => {
-            eprintln!("sindri: session {}: {source}", path.display());
-            return ExitCode::EnvironmentFailure.code();
-        }
-        // The sandbox and the session directory are the environment's failures,
-        // and the shell reads both as one: `sindri: sandbox:` is the line the
-        // batch contract has always printed for either.
-        Err(error) => {
-            eprintln!("sindri: sandbox: {error}");
-            return ExitCode::EnvironmentFailure.code();
-        }
+        Err(error) => return failure::Failure::Start(error).report(),
     };
 
     // One flag for the whole run: Ctrl-C raises it, the loop stops on it between
@@ -213,34 +198,8 @@ fn read_stdin() -> Result<Option<String>, String> {
     Ok(Some(text))
 }
 
-/// A wrong command line or a wrong value: exit 2.
-pub fn usage_error(message: &str) -> i32 {
-    eprintln!("sindri: {message}");
-    ExitCode::UsageError.code()
-}
-
-/// A configuration value that is wrong is a usage error; one that is absent is
-/// a model error with a hint, as the batch contract promises. One wording for
-/// both front ends.
-pub fn config_error(error: &ConfigError) -> i32 {
-    eprintln!("sindri: {}", error.message());
-    match error {
-        ConfigError::Usage(_) => ExitCode::UsageError.code(),
-        ConfigError::Missing(_) => ExitCode::ModelError.code(),
-    }
-}
-
 /// A provider or transport failure: the provider's message, one line, exit 1.
 fn model_error(error: &Error) -> i32 {
-    eprintln!("sindri: {}", provider_message(error));
+    eprintln!("sindri: {}", failure::provider_message(error));
     ExitCode::ModelError.code()
-}
-
-/// The provider's complaint as one line, so a shell and a transcript read the
-/// same words.
-pub fn provider_message(error: &Error) -> String {
-    match error.status() {
-        Some(status) => format!("provider error (HTTP {status}): {}", error.message()),
-        None => format!("provider error: {}", error.message()),
-    }
 }
