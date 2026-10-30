@@ -117,8 +117,16 @@ fn the_frame_advertises_the_hands_and_leaves_when_asked() {
     let env = Env::new();
     let mut child = spawn(&env, &pty, &defaults());
 
+    // A hundred columns is five hints, and the pty is exactly that wide: the
+    // ones a small terminal keeps are the ones it says (ADR-0011 §22).
     let drawn = pty.wait_for(&mut child, "@ paths");
-    for wanted in ["PgUp/PgDn scroll", "@ paths", "/ commands", "? keys"] {
+    for wanted in [
+        "Enter send",
+        "@ paths",
+        "/ commands",
+        "? keys",
+        "Ctrl-Q quit",
+    ] {
         assert!(
             drawn.contains(wanted),
             "the frame advertises {wanted:?} before anything is typed: {drawn:?}"

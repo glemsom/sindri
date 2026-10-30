@@ -86,8 +86,13 @@ a faint nine-column field so every value starts at the same column, a value too 
 its column is ellipsised in the middle (`4f1c8f2e…5c1a77`) rather than wrapped, and the
 sandbox posture is a chip (`⬢ bwrap · 1 writable`) rather than another pair. 32 columns
 from 100 up; below that, the same facts in the same order as one line under the
-transcript, which never loses the posture, the model or the workspace. The GUID is copied
-with `Ctrl-G`, or by clicking its row.
+transcript, which never loses the posture, the model or the workspace. One priority
+order (`rail::priority`) ends with the posture, and the column and the strip both read
+it: a column too short for its facts gives them up from the bottom of that order — the
+identity block first, since the first frame already names it — and keeps one row to say
+how many went (`│ +7 more`), and a fact too long for its room is shortened rather than
+skipped — a posture to `⬢ bwrap` — and dropped only when nothing of it can be said. The
+GUID is copied with `Ctrl-G`, or by clicking its row.
 
 **pulse** — the frame's own clock, and the only thing drawn without being asked:
 a ~120 ms tick while a run is live or a completion is walking, nothing at all
