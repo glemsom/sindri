@@ -247,9 +247,17 @@ fn a_record_that_could_not_be_closed_is_said_in_the_transcript() {
         any(&rows, "the record could not be finished"),
         "a record the run could not close is said out loud, never dropped: {rows:#?}"
     );
+    // The note wraps where its column ends, so its reason is read across the
+    // wrap as well — row by row, in order, and each row keeps its marker.
+    let reason: Vec<&String> = rows.iter().filter(|row| row.starts_with('!')).collect();
+    let reason = reason
+        .iter()
+        .map(|row| row.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
     assert!(
-        any(&rows, "no space left"),
-        "and the reason is the record's own: {rows:#?}"
+        reason.contains("no space") && reason.contains("left on device"),
+        "and the reason is the record's own, wrapped and all: {reason:#?}"
     );
 }
 
@@ -282,3 +290,4 @@ fn with_kitty_graphics_the_face_draws_in_the_top_of_the_rail() {
 }
 
 mod rail;
+mod surface;

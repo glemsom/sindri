@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+use ratatui::style::Modifier;
 use sindri_tui::entry::Entry;
 use sindri_tui::render;
 use sindri_tui::{App, Launch};

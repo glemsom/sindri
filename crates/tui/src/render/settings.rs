@@ -6,7 +6,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Clear, Paragraph, Widget};
+use ratatui::widgets::{Clear, Paragraph, Widget};
 use sindri_core::config::Key;
 
 use sindri_core::config::toggle_shown;
@@ -82,12 +82,12 @@ pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) {
         height,
     };
     Clear.render(boxed, buf);
-    let inner = Block::bordered().border_style(theme::faint()).inner(boxed);
-    Paragraph::new(lines).render(inner, buf);
-    Block::bordered()
-        .border_style(theme::faint())
-        .title(Span::styled(" settings ", theme::faint()))
-        .render(boxed, buf);
+    let block = super::overlay::block("settings");
+    let inner = block.inner(boxed);
+    Paragraph::new(lines)
+        .style(theme::raised())
+        .render(inner, buf);
+    block.render(boxed, buf);
 }
 
 fn row(settings: &Settings, field: &Field, columns: usize) -> Line<'static> {

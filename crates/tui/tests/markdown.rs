@@ -25,6 +25,13 @@ fn texts(lines: &[Line<'_>]) -> Vec<String> {
     lines.iter().map(text).collect()
 }
 
+fn raw(line: &Line<'_>) -> String {
+    line.spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect()
+}
+
 fn colours(line: &Line<'_>) -> Vec<Color> {
     line.spans
         .iter()
@@ -137,32 +144,31 @@ fn a_diff_is_coloured_by_line() {
     let source =
         "```diff\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1,2 +1,2 @@\n-old\n+new\n same\n```\n";
     let lines = markdown::lines(source, 60);
+    // The fence is a panel now, so each row carries its gutter as well as its
+    // line: the line's own colour is the one the gutter does not have.
     let added = lines
         .iter()
-        .find(|line| text(line) == "+new")
+        .find(|line| text(line).contains("+new"))
         .expect("the added line");
-    assert_eq!(
-        colours(added)[0],
-        Color::Rgb(0x6a, 0xc9, 0x7a),
-        "additions are green"
+    assert!(
+        colours(added).contains(&Color::Rgb(0x6a, 0xc9, 0x7a)),
+        "additions are green: {added:?}"
     );
     let removed = lines
         .iter()
-        .find(|line| text(line) == "-old")
+        .find(|line| text(line).contains("-old"))
         .expect("the removed line");
-    assert_eq!(
-        colours(removed)[0],
-        Color::Rgb(0xe0, 0x6c, 0x75),
-        "removals are red"
+    assert!(
+        colours(removed).contains(&Color::Rgb(0xe0, 0x6c, 0x75)),
+        "removals are red: {removed:?}"
     );
     let hunk = lines
         .iter()
-        .find(|line| text(line).starts_with("@@"))
+        .find(|line| text(line).contains("@@"))
         .expect("the hunk header");
-    assert_eq!(
-        colours(hunk)[0],
-        Color::Rgb(0x61, 0xaf, 0xef),
-        "hunks are blue"
+    assert!(
+        colours(hunk).contains(&Color::Rgb(0x61, 0xaf, 0xef)),
+        "hunks are blue: {hunk:?}"
     );
 }
 
@@ -180,5 +186,64 @@ fn long_lines_wrap_at_the_column_width_and_lose_nothing() {
     assert_eq!(
         joined, source,
         "wrapping is a display decision, not an edit"
+    );
+}
+
+#[test]
+fn a_fence_is_a_panel_with_a_gutter_and_a_border_that_says_where_it_ends() {
+    let source = "```diff\n--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new\n```\n";
+    let lines = markdown::lines(source, 40);
+    let shown: Vec<String> = lines.iter().map(raw).collect();
+
+    assert!(
+        shown[0].starts_with('╭') && shown[0].ends_with('╮'),
+        "the panel's top edge is rounded and names the language: {shown:?}"
+    );
+    assert!(shown[0].contains(" diff "), "{shown:?}");
+    let last = shown.last().expect("the panel's bottom edge");
+    assert!(
+        last.starts_with('╰') && last.ends_with('╯'),
+        "the panel closes: {shown:?}"
+    );
+    for row in &shown[1..shown.len() - 1] {
+        assert!(
+            row.starts_with("│ ") && row.ends_with(" │"),
+            "every row of code sits in the gutter, flush against both edges: {row:?}"
+        );
+    }
+    assert!(
+        shown.iter().all(|row| row.chars().count() == 40),
+        "the panel is one rectangle at the column's width: {shown:?}"
+    );
+    assert!(
+        lines.iter().flatten().all(|span| span
+            .style
+            .bg
+            .is_some_and(|bg| bg == sindri_tui::theme::PANEL)),
+        "the panel is filled, so the text sits on a surface and not on the terminal: {lines:?}"
+    );
+}
+
+#[test]
+fn a_fenced_line_wider_than_the_panel_is_cut_and_says_so() {
+    let source = "```\nthe-quick-brown-fox-jumps-over-the-lazy-dog-again-and-again\nshort\n```\n";
+    let lines = markdown::lines(source, 24);
+    let shown: Vec<String> = lines.iter().map(raw).collect();
+    let long = shown
+        .iter()
+        .find(|row| row.contains("the-quick"))
+        .expect("the long line");
+
+    assert!(
+        long.contains('…'),
+        "a line that did not fit says so rather than ending mid-word: {shown:?}"
+    );
+    assert!(
+        !shown.iter().any(|row| row.contains("again")),
+        "the rest of it is not on the next row: it was cut, not wrapped: {shown:?}"
+    );
+    assert!(
+        shown.iter().all(|row| row.chars().count() == 24),
+        "and the panel is still a rectangle: {shown:?}"
     );
 }

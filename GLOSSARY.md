@@ -70,6 +70,15 @@ silent unless `-v`; `--format json` changes the output shape (ADR-0004).
 meter, session GUID, session temp path, git branch and sandbox posture. 32 columns from
 100 up; below that, the same facts as one line under the transcript.
 
+**canvas** — the terminal's own black: the lowest of the three tiers, and the one
+the frame paints nothing on. Above it: **panel**, then **raised** (ADR-0016).
+
+**panel** — a surface the frame draws on, one tier above the canvas: the composer,
+a fenced code block, the rail.
+
+**raised** — the surface an overlay is drawn on, one tier above a panel; the frame
+is dimmed beneath it.
+
 **composer** — the input at the bottom: 2–6 rows, `Shift+Enter` for a newline, `@` for a
 path completion, `/` for a command.
 

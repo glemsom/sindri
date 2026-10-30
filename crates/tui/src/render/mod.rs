@@ -22,6 +22,7 @@ pub use card::Card;
 
 pub const RAIL_COLUMNS: u16 = 32;
 pub const RAIL_MIN_WIDTH: u16 = 100;
+const GAP_COLUMNS: u16 = 1;
 const HINTS: &str = "Enter send · Shift+Enter newline · PgUp/PgDn scroll · @ paths · / commands · ? keys · Ctrl-Q quit";
 
 pub fn draw(app: &mut App, frame: &mut Frame) {
@@ -43,8 +44,14 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
         _ => (body, None),
     };
     let (transcript, rail_column, rail_strip) = if area.width >= RAIL_MIN_WIDTH {
-        let [left, right] =
-            Layout::horizontal([Constraint::Min(1), Constraint::Length(RAIL_COLUMNS)]).areas(body);
+        // One column of the terminal's own canvas between the words and the
+        // rail: the rail is a surface, and a surface needs an edge (ADR-0016).
+        let [left, _, right] = Layout::horizontal([
+            Constraint::Min(1),
+            Constraint::Length(GAP_COLUMNS),
+            Constraint::Length(RAIL_COLUMNS),
+        ])
+        .areas(body);
         (left, Some(right), None)
     } else {
         let [above, below] =

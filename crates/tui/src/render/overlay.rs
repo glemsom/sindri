@@ -1,12 +1,14 @@
 //! What covers the transcript when something has to: the list of every
 //! binding `?` opens, a command's untruncated output, and the settings modal
-//! (ADR-0011). Each is a box in the middle of the frame, closed with `Esc`;
-//! the modal sizes itself to what it has to say.
+//! (ADR-0011). Each is a box in the middle of the frame on the raised tier,
+//! over a frame dimmed so what it covers recedes (ADR-0016); it closes with
+//! `Esc`, and the modal sizes itself to what it has to say.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Clear, Paragraph, Widget};
+use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Widget};
 
 use crate::app::App;
 use crate::markdown::text;
@@ -23,6 +25,11 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
     let Some(overlay) = app.overlay_mut() else {
         return;
     };
+    // A modal is a modal: everything it leaves uncovered recedes, so what
+    // covers and what is covered read as one frame and not a hole in it
+    // (ADR-0016). The overlay's own rows are drawn after `Clear`, at full
+    // strength, so this pass costs nothing to undo.
+    dim(area, buf);
     let (height, title, lines) = match &mut *overlay {
         Overlay::Settings(settings) => {
             settings::draw(settings, area, buf);
@@ -62,6 +69,16 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
     render(buf, boxed, inner, &title, lines);
 }
 
+/// One pass of `DIM` over every cell of the frame, glyphs and surfaces
+/// alike: a modifier and not a colour, so it applies to whatever was drawn.
+fn dim(area: Rect, buf: &mut Buffer) {
+    for y in area.top()..area.bottom() {
+        for x in area.left()..area.right() {
+            buf[(x, y)].modifier.insert(Modifier::DIM);
+        }
+    }
+}
+
 fn spill_window(area: Rect) -> Rect {
     Rect {
         height: area.height.saturating_sub(2),
@@ -71,11 +88,20 @@ fn spill_window(area: Rect) -> Rect {
 
 fn render(buf: &mut Buffer, boxed: Rect, inner: Rect, title: &str, lines: Vec<Line<'_>>) {
     Clear.render(boxed, buf);
-    Paragraph::new(lines).render(inner, buf);
+    Paragraph::new(lines)
+        .style(theme::raised())
+        .render(inner, buf);
+    block(title).render(boxed, buf);
+}
+
+/// The box an overlay is drawn in: a step above a panel, because it is drawn
+/// over one, and rounded because the frame's boxes are (ADR-0016).
+pub(super) fn block(title: &str) -> Block<'static> {
     Block::bordered()
+        .border_type(BorderType::Rounded)
+        .style(theme::raised())
         .border_style(theme::faint())
         .title(Span::styled(format!(" {title} "), theme::faint()))
-        .render(boxed, buf);
 }
 
 fn help_row(keys: &str, what: &str) -> Line<'static> {
