@@ -226,9 +226,10 @@ impl Writer {
             self.lines.push(Line::default());
         }
         self.apart = false;
-        self.lines.extend(code::lines(
+        self.lines.extend(code::panel(
             body.trim_end_matches('\n'),
             language.as_deref(),
+            self.width,
         ));
         self.apart = true;
     }

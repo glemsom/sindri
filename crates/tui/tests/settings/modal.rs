@@ -97,3 +97,41 @@ fn the_modal_fits_a_hundred_columns_and_a_hundred_and_sixty() {
         );
     }
 }
+
+#[test]
+fn the_modal_dims_the_frame_it_covers_and_reads_at_full_strength_itself() {
+    let mut f = fixture(Some("model = \"m\"\n"));
+    open(&mut f.app);
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("a test terminal");
+    terminal
+        .draw(|frame| render::draw(&mut f.app, frame))
+        .expect("the frame draws");
+    let buf = terminal.backend().buffer().clone();
+
+    assert!(
+        buf[(0, 0)].modifier.contains(Modifier::DIM),
+        "what the modal leaves uncovered recedes instead of reading as a hole"
+    );
+    let title = (0..30)
+        .find(|y| {
+            (0..100)
+                .map(|x| buf[(x, *y)].symbol())
+                .collect::<String>()
+                .contains(" settings ")
+        })
+        .expect("the modal's title row");
+    // The rail keeps showing to the right of the modal, dimmed: the modal's
+    // own columns are the ones between its two corners.
+    let left = (0..100)
+        .find(|x| buf[(*x, title)].symbol() == "╭")
+        .expect("the modal's left corner");
+    let right = (left..100)
+        .find(|x| buf[(*x, title)].symbol() == "╮")
+        .expect("the modal's right corner");
+    assert!(
+        (left..right)
+            .filter(|x| buf[(*x, title)].symbol() != " ")
+            .all(|x| !buf[(x, title)].modifier.contains(Modifier::DIM)),
+        "and the modal itself is drawn at full strength: {title}"
+    );
+}

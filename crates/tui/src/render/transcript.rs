@@ -119,11 +119,13 @@ pub fn entry_rows(entry: &Entry, width: u16) -> Vec<Line<'static>> {
                 NoteKind::Error => ("! ", theme::bad()),
                 NoteKind::Info => ("· ", theme::faint()),
             };
+            // The marker takes its columns out of the row before the words
+            // do, or the last word of a wrapped note is cut in half.
             markdown::text::wrap(
                 markdown::text::glyphs(&[Span::styled(note.text.clone(), style)]),
                 marker,
                 style,
-                width as usize,
+                (width as usize).saturating_sub(marker.chars().count()),
             )
         }
     }
@@ -142,14 +144,20 @@ fn call_rows(call: &Call, width: u16) -> Vec<Line<'static>> {
                 Span::styled("bash ", theme::faint()),
                 Span::styled(command.to_string(), theme::faint()),
             ]));
+            // stdout and stderr differ by a glyph as well as by hue: a tail
+            // read on a terminal that lost its colour still tells a warning
+            // from a result (ADR-0016).
             for (side, line) in &call.tail {
-                let style = match side {
-                    Side::Stdout => theme::faint(),
-                    Side::Stderr => theme::bad(),
+                let (marker, style) = match side {
+                    Side::Stdout => ("│", theme::faint()),
+                    Side::Stderr => ("⚠", theme::bad()),
                 };
                 let keep = width.saturating_sub(4) as usize;
                 let shown = markdown::text::clip(line, keep);
-                rows.push(Line::from(Span::styled(format!("  │ {shown}"), style)));
+                rows.push(Line::from(vec![
+                    Span::styled(format!("  {marker} "), style),
+                    Span::styled(shown, style),
+                ]));
             }
         }
         Some(over) => {

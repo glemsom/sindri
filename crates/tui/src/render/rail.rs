@@ -15,6 +15,9 @@ use crate::theme;
 const FACE_FLOOR: u16 = face::ROWS;
 
 pub fn column(app: &mut App, area: Rect, buf: &mut Buffer) {
+    // The rail is a panel: the facts sit on a surface, one tier above the
+    // canvas the transcript is written on (ADR-0016).
+    buf.set_style(area, theme::surface());
     let width = area.width.saturating_sub(2) as usize;
     let lines = facts(app, width);
     let spare = area.height.saturating_sub(lines.len() as u16);
