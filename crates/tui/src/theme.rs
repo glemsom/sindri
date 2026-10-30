@@ -31,6 +31,16 @@ pub const RAISED: Color = Color::Rgb(0x23, 0x27, 0x33);
 /// Inline code's tint, light enough to sit on a panel as well as the canvas.
 pub const CODE_BG: Color = Color::Rgb(0x2b, 0x30, 0x3b);
 
+/// A dot leader's dots: the dimmest ink the frame spends, because a run of
+/// dots reads heavier than the label it bridges to and only has to be seen,
+/// not read. Dimmer than FAINT, and still over the 3:1 a graphic needs on the
+/// canvas, so the gap is visible rather than guessed at.
+pub const LEADER: Color = Color::Rgb(0x55, 0x5e, 0x70);
+/// The rail's seam: a step above FAINT, because a dot at one-eighth of a cell
+/// loses apparent luminance and the spine has to hold the same edge the rule
+/// and the facts hold.
+pub const SEAM: Color = Color::Rgb(0xa8, 0xb3, 0xc6);
+
 /// Every colour the frame may paint. A renderer names one of these or nothing;
 /// `tests/theme.rs` holds the frame to it.
 pub const PALETTE: &[Color] = &[
@@ -43,6 +53,8 @@ pub const PALETTE: &[Color] = &[
     PANEL,
     RAISED,
     CODE_BG,
+    LEADER,
+    SEAM,
     DIFF_ADDED,
     DIFF_REMOVED,
     DIFF_HUNK,
@@ -65,6 +77,14 @@ pub fn good() -> Style {
 
 pub fn code() -> Style {
     Style::new().fg(CODE).bg(CODE_BG)
+}
+
+pub fn leader() -> Style {
+    Style::new().fg(LEADER)
+}
+
+pub fn seam() -> Style {
+    Style::new().fg(SEAM)
 }
 
 pub fn prompt() -> Style {

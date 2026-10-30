@@ -90,20 +90,28 @@ silent unless `-v`; `--format json` changes the output shape (ADR-0004).
 **frame** — bare `sindri` on a terminal: the alternate-screen interface as a whole
 (ADR-0011).
 
-**rail** — the right column: a two-column grid. Above the rule, what a run is spending —
-cache hit percentage, turns against the cap, tokens, context meter. Below it, what the run
-*is*: its model, workspace, git branch, session GUID and session temp path. Labels sit in
-a faint nine-column field so every value starts at the same column, a value too long for
-its column is ellipsised in the middle (`4f1c8f2e…5c1a77`) rather than wrapped, and the
-sandbox posture is a chip (`⬢ bwrap · 1 writable`) rather than another pair. The rail
-is chrome, not a surface: it draws no fill and lets the canvas through, so its chip is
-the one cell of it with a colour behind it. 32 columns
-from 100 up; below that, the same facts in the same order as one line under the
-transcript, which never loses the posture, the model or the workspace. One priority
+**rail** — the right column: a ledger in two blocks, split by a hairline. Above the rule,
+what a run is spending — cache hit percentage, turns against the cap, tokens, context
+meter. Below it, what the run *is*: its model, workspace, git branch, session GUID and
+session temp path. Labels sit in a faint nine-column field and the value hangs off the
+rail's last column, so every figure ends on one edge and is compared down it; a dot
+leader in `LEADER` bridges the field to a value that leaves three cells of gap or more,
+where a value that leaves fewer — or none, because it fills its room — is shortened by
+`Fit` (`4f1c8f2e…5c1a77`) and draws no leader, and nothing wraps. The rule is a `─`
+hairline across the rail's whole width, and the rail's first column is a dotted seam
+(`⁞` in `SEAM`, a step above `FAINT` because dots lose apparent luminance at an eighth of
+a cell) that begins on the first fact and stops on the last, so the seam has a top and a
+bottom rather than running the height of the frame. The sandbox posture is a chip
+(`⬢ bwrap · 1 writable`) rather than another pair, right-aligned on the edge the values
+hang off. The rail is chrome, not a surface: it draws no fill and lets the canvas
+through, so the one band of it with a colour behind it is the row the chip sits on. What
+a row copies is the fact — `context 38%` — never the seam or the leader that drew it.
+32 columns from 100 up; below that, the same facts in the same order as one line under
+the transcript, which never loses the posture, the model or the workspace. One priority
 order (`rail::priority`) ends with the posture, and the column and the strip both read
 it: a column too short for its facts gives them up from the bottom of that order — the
 identity block first, since the first frame already names it — and keeps one row to say
-how many went (`│ +7 more`), and a fact too long for its room is shortened rather than
+how many went (`⁞ +7 more`), and a fact too long for its room is shortened rather than
 skipped — a posture to `⬢ bwrap` — and dropped only when nothing of it can be said. The
 GUID is copied with `Ctrl-G`, or by clicking its row.
 

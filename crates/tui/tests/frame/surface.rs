@@ -173,14 +173,17 @@ fn the_rail_is_chrome_on_the_canvas_one_column_away_from_the_transcript() {
     let width = buf.area.width as usize;
     let composer = find(&buf, '╭').map(|(_, y)| y).expect("the composer");
     let mut chips = 0;
+    let mut banded = 0;
     for y in 0..composer {
+        let mut crossable = false;
         for x in (width - RAIL)..width {
             let tier = buf[(x as u16, y)].bg;
-            // The posture is a chip, the one thing on the rail with a surface
+            // The posture's chip is the one row of the rail with a surface
             // behind it; every other cell of the rail is the canvas the
             // transcript is written on (ADR-0011 §23).
             if tier == theme::RAISED {
                 chips += 1;
+                crossable = true;
                 continue;
             }
             assert_eq!(
@@ -194,8 +197,13 @@ fn the_rail_is_chrome_on_the_canvas_one_column_away_from_the_transcript() {
             Color::Reset,
             "and it leaves the terminal's own canvas between it and the words: ({y})"
         );
+        banded += usize::from(crossable);
     }
     assert!(chips > 0, "the posture is the one raised thing on the rail");
+    assert_eq!(
+        banded, 1,
+        "the rail spends its ink on one row, the chip's, and not on a fill"
+    );
 }
 
 #[test]

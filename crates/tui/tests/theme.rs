@@ -191,3 +191,34 @@ fn faint_clears_four_and_a_half_to_one_on_the_panel_and_on_the_canvas() {
         );
     }
 }
+
+#[test]
+fn the_rails_leader_and_seam_are_named_stops_a_step_apart() {
+    // The rail's two new inks are the theme's, not a renderer's.
+    assert!(
+        theme::PALETTE.contains(&theme::LEADER),
+        "a dot leader is painted in a colour the theme names"
+    );
+    assert!(
+        theme::PALETTE.contains(&theme::SEAM),
+        "the seam is painted in a colour the theme names"
+    );
+    // The leader only has to be seen, so it is dimmer than the label it
+    // bridges from; the seam is dots at an eighth of a cell, which read darker
+    // than they are, so it is a step above faint.
+    assert!(
+        luminance(theme::LEADER) < luminance(theme::FAINT),
+        "a leader is dimmer than a label"
+    );
+    assert!(
+        luminance(theme::SEAM) > luminance(theme::FAINT),
+        "the seam is a step above faint"
+    );
+    // A leader is a graphic, not a word, so 3:1 is the bar it clears on the
+    // canvas — the gap it bridges is seen, never guessed at.
+    let cleared = ratio(theme::LEADER, Color::Rgb(0, 0, 0));
+    assert!(
+        cleared >= 3.0,
+        "a leader on the canvas is {cleared:.2}:1, under the 3:1 a graphic needs"
+    );
+}

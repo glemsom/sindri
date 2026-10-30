@@ -1,16 +1,13 @@
 //! The rail: every fact a user must never lose, at the widths the frame is
-//! judged at, with and without the face (ADR-0011). The rail is a grid — a
-//! rule, a nine-column label field in FAINT, and the value at full strength
-//! beside it — and a fact is one row however long its value is.
+//! judged at, with and without the face (ADR-0011). The rail is a ledger — a
+//! dotted seam, a nine-column label field in FAINT, dot leaders across the gap
+//! and the value hanging off the last column — and a fact is one row however
+//! long its value is.
 
 use super::*;
 
 use ratatui::buffer::Buffer;
 use sindri_tui::theme;
-
-/// Where a value starts inside the rail: the rail's edge, the nine-column
-/// label field, and the space after it.
-const VALUE: usize = 12;
 
 /// The labels the rail states, in the order it states them.
 const LABELS: &[&str] = &[
@@ -53,24 +50,6 @@ fn buffer(app: &mut App, width: u16, height: u16) -> Buffer {
     terminal.backend().buffer().clone()
 }
 
-/// The rail's own columns, one string per row: what is left of it is not a
-/// fact.
-fn rails(rows: &[String], width: u16) -> Vec<String> {
-    rows.iter()
-        .map(|row| row.chars().skip(width as usize - RAIL).collect())
-        .collect()
-}
-
-/// The row that states `label`, found by the label's own column rather than by
-/// a substring: `sessions` in a temp path is not the session fact.
-fn fact<'a>(rails: &'a [String], label: &str) -> &'a String {
-    let field = |rail: &String| -> String { rail.chars().skip(2).take(9).collect() };
-    rails
-        .iter()
-        .find(|rail| field(rail).trim_end() == label)
-        .unwrap_or_else(|| panic!("the rail states {label}: {rails:#?}"))
-}
-
 /// The rail as one line under the transcript, where the terminal gives it no
 /// column of its own.
 fn strip_of(app: &mut App, width: u16) -> String {
@@ -78,41 +57,6 @@ fn strip_of(app: &mut App, width: u16) -> String {
         .into_iter()
         .find(|row| row.contains("cache"))
         .expect("the strip is one line")
-}
-
-/// What the rail says beside `label`: the value column, to the row's end.
-fn value(rows: &[String], label: &str) -> String {
-    fact(rows, label)
-        .chars()
-        .skip(VALUE)
-        .collect::<String>()
-        .trim_end()
-        .to_string()
-}
-
-#[test]
-fn every_value_starts_in_the_same_column_at_a_hundred_and_at_a_hundred_and_sixty() {
-    // Column 12 is where a value starts, whichever fact it belongs to and
-    // however wide the terminal is: six numbers, read in one pass.
-    for width in [100u16, 160] {
-        let mut app = spent();
-        let rows = rails(&screen(&mut app, width, 26), width);
-        for label in LABELS {
-            let rail = fact(&rows, label);
-            let cells: Vec<char> = rail.chars().collect();
-            let field: String = cells[2..11].iter().collect();
-            assert_eq!(
-                field,
-                format!("{label:<9}"),
-                "{width} columns: {label:?} fills the label field: {rail:?}"
-            );
-            assert_eq!(cells[11], ' ', "{width} columns: {rail:?}");
-            assert_ne!(
-                cells[12], ' ',
-                "{width} columns: {label:?}'s value starts the value column: {rail:?}"
-            );
-        }
-    }
 }
 
 #[test]
@@ -274,9 +218,9 @@ fn the_sandbox_posture_is_a_chip_and_not_another_label_value_pair() {
         "a label is faint"
     );
     assert_ne!(
-        buf[(left as u16 + VALUE as u16, cache)].fg,
+        buf[(left as u16 + RAIL as u16 - 1, cache)].fg,
         theme::FAINT,
-        "a value is at full strength"
+        "the value that hangs off the last column is at full strength"
     );
 }
 
@@ -297,15 +241,15 @@ fn the_rule_separates_the_numbers_from_what_the_run_is() {
         "the identity block is one rule away from the numbers: {rows:#?}"
     );
     assert_eq!(
-        rail_of(&rows[stop + 1]).trim_end(),
-        "│",
-        "and the rule runs through the blank row between them: {rows:#?}"
+        rail_of(&rows[stop + 1]),
+        format!("⁞{}", "─".repeat(RAIL - 1)),
+        "and the rule spans the row between them: {rows:#?}"
     );
     for row in rows.iter().take(20) {
         let rail = rail_of(row);
         assert!(
-            rail.trim().is_empty() || rail.starts_with('│'),
-            "every row of the rail carries its rule: {row:?}"
+            rail.trim().is_empty() || rail.starts_with('⁞'),
+            "every row of the rail carries its seam: {row:?}"
         );
     }
 }

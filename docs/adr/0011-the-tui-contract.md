@@ -92,9 +92,20 @@ date: 2026-10-30
     the numbers the run is spending above what the run *is*, so a column too short for
     its facts gives them up from the bottom of that order — the session temp, the branch,
     the record, then the model and the workspace the transcript's first line already
-    names — and keeps a row to say how many it lost (`│ +7 more`) rather than losing them
-    in silence. On the strip the facts it may never lose (the posture, the model, the
-    workspace) are given their room first; where even those three do not fit, the order
+    names — and keeps a row to say how many it lost (`⁞ +7 more`) rather than losing them
+    in silence. The rows it does state are a ledger rather than a list: the label in its
+    nine-column field and the value hanging off the rail's last column, so every figure
+    ends on one edge and is compared down it, and a dot leader bridges the field to the
+    value wherever there are at least three cells of gap (`LEADER_FLOOR`) to cross. A
+    value that leaves fewer — or none, because it fills its room — is shortened by `Fit`
+    and draws no leader, and nothing wraps onto a second row. The rail's first column is
+    a dotted seam (`⁞`) that begins on its first drawn row, below the face when one is
+    drawn, and stops on its last, so the seam has a top and a bottom instead of running
+    the height of the frame; above the first fact and below the last the rail paints
+    nothing. A row copied out of the rail is the fact — `context 38%` — and never the
+    seam or the leader that drew it (issue #61). On the strip the facts it may never
+    lose (the posture, the model, the workspace) are given their room first; where even
+    those three do not fit, the order
     decides what each gets, the posture first, shortened to its head (`⬢ bwrap`). A fact
     too long for its room is shortened, and dropped only when nothing of it can be said
     (issue #48).
@@ -110,11 +121,20 @@ date: 2026-10-30
     black, painted by nothing. `PANEL` (`#171a21`) is a surface the frame draws:
     the composer, a fenced code block, the queue panel, the band a turn's
     prompt sits on. `RAISED` (`#232733`) is a step above a panel: an overlay,
-    and the chip the rail states its sandbox posture in. The rail draws no
-    surface at all: it is chrome on the canvas beside the words, and its rule
-    and its chip are the only paint it spends. So the composer is the one panel
-    that takes the keyboard and the one panel shaped like an input, and nothing
-    competes with it for that weight.
+    and the chip the rail states its sandbox posture in. The rail is chrome
+    rather than a surface: it lets the canvas through beside the words, and the
+    one band of it with a colour behind it is the row its sandbox posture's chip
+    sits on, a `RAISED` run from the seam to the rail's last column, so the chip
+    is right-aligned on the edge the values hang off and flush to the rail's
+    edge. The ink it spends is two stops of its own: `LEADER` for the dots that
+    bridge a label's field to its value, dimmer than `FAINT` because it only has
+    to be seen, and `SEAM` for the `⁞` down its first column, a step *above*
+    `FAINT` because a dot at an eighth of a cell loses apparent luminance. The
+    identity block is opened by a `─` hairline across the rail's whole width in
+    `FAINT`, so the rule groups the blocks instead of dividing the column from
+    the page (issue #61). So the composer is the one panel that takes the
+    keyboard and the one panel shaped like an input, and nothing competes with it
+    for that weight.
     `theme::surface()` and `theme::raised()` are the constructors; a renderer
     asks for a tier, never for a background. The composer is a `PANEL` with a
     `BorderType::Rounded` border that takes `PROMPT` while it holds the focus

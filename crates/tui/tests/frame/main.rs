@@ -78,6 +78,35 @@ fn rail_of(row: &str) -> String {
     rail_of_width(row, 100)
 }
 
+/// The rail's own columns of every row.
+fn rails(rows: &[String], width: u16) -> Vec<String> {
+    rows.iter()
+        .map(|row| rail_of_width(row, width as usize))
+        .collect()
+}
+
+/// The rail's row that states `label`, found by the label's own column rather
+/// than by a substring: `sessions` in a temp path is not the session fact.
+fn fact<'a>(rails: &'a [String], label: &str) -> &'a String {
+    let field = |rail: &String| -> String { rail.chars().skip(2).take(9).collect::<String>() };
+    rails
+        .iter()
+        .find(|rail| field(rail).trim_end() == label)
+        .unwrap_or_else(|| panic!("the rail states {label}: {rails:#?}"))
+}
+
+/// What the rail says beside `label`: the value that hangs off the row's last
+/// column, with the dot leader that bridges the field to it taken away.
+fn value(rails: &[String], label: &str) -> String {
+    fact(rails, label)
+        .chars()
+        .skip(12)
+        .collect::<String>()
+        .trim_start_matches(['·', ' '])
+        .trim_end()
+        .to_string()
+}
+
 fn any(rows: &[String], needle: &str) -> bool {
     rows.iter().any(|row| row.contains(needle))
 }
@@ -158,29 +187,41 @@ fn the_rail_is_a_column_at_a_hundred_columns() {
         note: None,
     });
     let rows = screen(&mut app, 100, 26);
-    let rail: String = rows.iter().map(|row| rail_of(row)).collect();
+    let rails = rails(&rows, 100);
 
-    for fact in [
-        // A grid: the label in its nine-column field, the value beside it.
-        "cache     82%",
-        "turns     1/250",
-        "tokens    12.4k in · 2.1k out",
-        "context   ░░░░░░░░ 12.4k/200k",
+    for (label, said) in [
+        // A ledger: the label in its nine-column field, the value hanging off
+        // the rail's last column.
+        ("cache", "82%"),
+        ("turns", "1/250"),
+        ("tokens", "12.4k in · 2.1k out"),
+        ("context", "░░░░░░░░ 12.4k/200k"),
         // The two facts the rail used to lack, and what the run is.
-        "model     claude-sonnet-4-6",
-        "workspace ~/git/sindri",
-        "branch    t15-the-frame",
-        // A GUID and a temp path longer than the rail keep both their ends
-        // on one row: the record is always findable, never half an id.
-        "4f1c8f2e-8…",
-        "f0e5c1a77",
-        "/state/sin…",
-        "c8f2e/tmp",
-        // And the posture is a chip of its own, not another pair.
-        "⬢ bwrap · 1 writable",
+        ("model", "claude-sonnet-4-6"),
+        ("workspace", "~/git/sindri"),
+        ("branch", "t15-the-frame"),
     ] {
-        assert!(rail.contains(fact), "the rail says {fact:?}: {rail:#?}");
+        assert_eq!(
+            value(&rails, label),
+            said,
+            "the rail says {label:?}: {rows:#?}"
+        );
     }
+    // A GUID and a temp path longer than the rail keep both their ends on one
+    // row: the record is always findable, never half an id.
+    for fragment in ["4f1c8f2e-8…", "f0e5c1a77", "/state/sin…", "c8f2e/tmp"] {
+        assert!(
+            rails.iter().any(|rail| rail.contains(fragment)),
+            "the rail says {fragment:?}: {rows:#?}"
+        );
+    }
+    // And the posture is a chip of its own, not another pair.
+    assert!(
+        rails
+            .iter()
+            .any(|rail| rail.contains("⬢ bwrap · 1 writable")),
+        "the rail states the posture: {rows:#?}"
+    );
     assert!(
         rows.iter().any(|row| row.contains("Two files changed.")),
         "the answer has the transcript column to itself: {rows:#?}"
@@ -319,6 +360,7 @@ mod card;
 mod chrome;
 mod expand;
 mod first;
+mod ledger;
 mod pictures;
 mod prose;
 mod pulse;

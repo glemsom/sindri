@@ -188,3 +188,86 @@ fn ctrl_y_on_an_answer_holding_a_picture_copies_its_caption_once_and_no_blank_ro
          drawn on: {copied:?}"
     );
 }
+
+/// The rail's own columns of a 100-column frame.
+const RAIL: usize = 32;
+
+/// The rail's text of one row, at 100 columns.
+fn rail_of(row: &str) -> String {
+    row.chars().skip(row.chars().count() - RAIL).collect()
+}
+
+/// The row of the rail that states `label`, found by the label's own column.
+fn rail_row(rows: &[String], label: &str) -> usize {
+    rows.iter()
+        .position(|row| {
+            rail_of(row)
+                .chars()
+                .skip(2)
+                .take(9)
+                .collect::<String>()
+                .trim_end()
+                == label
+        })
+        .unwrap_or_else(|| panic!("the rail states {label}: {rows:#?}"))
+}
+
+#[test]
+fn clicking_a_rail_row_copies_the_fact_and_none_of_its_typography() {
+    let clipboard = Fake::taking();
+    let mut app = app_with(clipboard.clone());
+    let rows = screen(&mut app, 100, 20);
+
+    // The rows are drawn as a ledger — a seam down the edge, a leader across
+    // the gap — and neither of them is something a copy should carry.
+    let cache = rail_row(&rows, "cache");
+    assert!(
+        rail_of(&rows[cache]).starts_with('⁞'),
+        "the seam opens every row: {:?}",
+        rows[cache]
+    );
+    assert!(
+        rail_of(&rows[cache]).contains('·'),
+        "the leader bridges the field to the value: {:?}",
+        rows[cache]
+    );
+
+    for (label, said) in [("cache", "cache —"), ("context", "context ░░░░░░░░ 0/200k")]
+    {
+        let row = rail_row(&rows, label);
+        mouse(
+            &mut app,
+            MouseEventKind::Down(MouseButton::Left),
+            100 - RAIL as u16 + 5,
+            row as u16,
+        );
+        let copied = clipboard.saw();
+        assert_eq!(
+            copied.last(),
+            Some(&said.to_string()),
+            "a click copies the fact, label and value, and nothing drawn around \
+             them: {copied:?}"
+        );
+    }
+    assert!(
+        clipboard
+            .saw()
+            .iter()
+            .all(|copy| !copy.contains('⁞') && !copy.contains('·')),
+        "no seam and no leader reaches the clipboard: {:?}",
+        clipboard.saw()
+    );
+}
+
+#[test]
+fn ctrl_g_copies_the_session_id_alone() {
+    let clipboard = Fake::taking();
+    let mut app = app_with(clipboard.clone());
+    screen(&mut app, 100, 20);
+    press(&mut app, KeyCode::Char('g'), KeyModifiers::CONTROL);
+    assert_eq!(
+        clipboard.saw(),
+        vec!["4f1c8f2e-8a24-4b93-9c0e-0d3f0e5c1a77".to_string()],
+        "Ctrl-G is the id alone, pasted into `sindri sessions show`"
+    );
+}
