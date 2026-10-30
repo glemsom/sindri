@@ -261,12 +261,13 @@ impl Settings {
     }
 
     pub fn focus(&mut self, down: bool) {
-        let last = self.fields.len().saturating_sub(1);
-        self.chosen = if down {
-            (self.chosen + 1).min(last)
-        } else {
-            self.chosen.saturating_sub(1)
-        };
+        self.chosen = crate::overlay::step(self.chosen, 1, self.fields.len(), !down);
+    }
+
+    /// A screenful at a time: what `PgUp`/`PgDn` and the wheel move the cursor
+    /// by in a modal whose rows do not all fit (issue #49).
+    pub fn page(&mut self, rows: usize, up: bool) {
+        self.chosen = crate::overlay::step(self.chosen, rows, self.fields.len(), up);
     }
 
     pub fn insert(&mut self, ch: char) {

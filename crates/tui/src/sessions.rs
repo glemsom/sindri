@@ -9,7 +9,8 @@ use sindri_core::paths::SessionDir;
 use sindri_core::record::{Stored, Summary, summaries};
 
 use crate::app::App;
-use crate::overlay::{Overlay, Spill};
+use crate::overlay::Overlay;
+use crate::spill::Spill;
 
 /// One listing of the records, and where the reader is in it. The rows are read
 /// once, when `/sessions` opens: a picker is a list of what existed at that
@@ -48,12 +49,13 @@ impl Sessions {
     }
 
     pub fn choose(&mut self, down: bool) {
-        let last = self.rows.len().saturating_sub(1);
-        self.chosen = if down {
-            (self.chosen + 1).min(last)
-        } else {
-            self.chosen.saturating_sub(1)
-        };
+        self.chosen = crate::overlay::step(self.chosen, 1, self.rows.len(), !down);
+    }
+
+    /// A screenful at a time: `PgUp`/`PgDn` and the wheel move the picker, and
+    /// the transcript beneath it stays where it was (issue #49).
+    pub fn page(&mut self, rows: usize, up: bool) {
+        self.chosen = crate::overlay::step(self.chosen, rows, self.rows.len(), up);
     }
 
     pub fn current(&self) -> Option<&Summary> {

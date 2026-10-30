@@ -18,11 +18,19 @@ use crate::theme;
 
 const KEYS: usize = 20;
 
+/// Which edges of a box run past what it shows: what it marks so a reader
+/// knows there is more without scrolling to find out (issue #49).
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct More {
+    pub above: bool,
+    pub below: bool,
+}
+
 /// Draws the overlay that has the screen, over everything else. The overlay
 /// is borrowed rather than cloned: a spill of a megabyte is a window per
 /// frame, never a copy of itself (ADR-0013).
 pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
-    let Some(overlay) = app.overlay_mut() else {
+    let Some(overlay) = app.overlay.as_mut() else {
         return;
     };
     // A modal is a modal: everything it leaves uncovered recedes, so what
@@ -40,29 +48,48 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
         height: area.height,
     };
     let content = Block::bordered().inner(inside);
-    let (height, title, lines) = match &mut *overlay {
+    let (height, title, marks, lines) = match &mut *overlay {
         Overlay::Settings(settings) => {
-            settings::draw(settings, area, buf);
+            // A page moves the modal by what its box shows, not by what the
+            // transcript it covers happens to be showing (issue #49).
+            app.page = settings::draw(settings, area, buf).max(1);
             return;
         }
-        Overlay::Help => (
-            (help_rows().len() as u16 + 2).min(area.height),
-            "keys".to_string(),
-            help_rows()
-                .into_iter()
-                .map(|(keys, what)| help_row(keys, &what))
-                .collect(),
-        ),
-        Overlay::Sessions(sessions) => sessions::draw(sessions, content),
+        Overlay::Help(help) => {
+            // The box is as tall as the rows the list wrapped into, and no
+            // taller than the terminal: what does not fit is reached with the
+            // page keys, and the box says where the reader is (issue #49).
+            let lines = help_lines(content.width as usize);
+            let height = (lines.len() as u16).saturating_add(2).min(area.height);
+            let visible = height.saturating_sub(2) as usize;
+            help.settled(lines.len(), visible);
+            app.page = visible.max(1);
+            let window = help.window();
+            (
+                height,
+                help.title(),
+                More {
+                    above: help.above(),
+                    below: help.below(),
+                },
+                lines[window].to_vec(),
+            )
+        }
+        Overlay::Sessions(sessions) => {
+            let (height, title, lines) = sessions::draw(sessions, content);
+            app.page = lines.len().max(1);
+            (height, title, More::default(), lines)
+        }
         Overlay::Spill(spill) => {
             spill.settled(spill_window(area).height as usize);
+            app.page = spill_window(area).height.max(1) as usize;
             let title = format!("{} · {} lines", spill.title, spill.lines.len());
             let lines = spill
                 .window()
                 .iter()
                 .map(|line| Line::from(Span::styled(line.as_str(), theme::faint())))
                 .collect();
-            (area.height, title, lines)
+            (area.height, title, More::default(), lines)
         }
     };
     let boxed = Rect {
@@ -71,7 +98,7 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
         ..inside
     };
     let inner = Block::bordered().inner(boxed);
-    render(buf, boxed, inner, &title, lines);
+    render(buf, boxed, inner, &title, marks, lines);
 }
 
 /// One pass of `DIM` over every cell of the frame, glyphs and surfaces
@@ -91,17 +118,39 @@ fn spill_window(area: Rect) -> Rect {
     }
 }
 
-fn render(buf: &mut Buffer, boxed: Rect, inner: Rect, title: &str, lines: Vec<Line<'_>>) {
+fn render(
+    buf: &mut Buffer,
+    boxed: Rect,
+    inner: Rect,
+    title: &str,
+    marks: More,
+    lines: Vec<Line<'_>>,
+) {
     Clear.render(boxed, buf);
     Paragraph::new(lines)
         .style(theme::raised())
         .render(inner, buf);
-    block(title).render(boxed, buf);
+    paged(title, marks).render(boxed, buf);
+}
+
+/// The same box, saying which way it can move: a marker on the edge the list
+/// runs past, on the right of the border it shares with the title, so a reader
+/// knows there is more without scrolling to find out (issue #49).
+pub(super) fn paged(title: &str, More { above, below }: More) -> Block<'static> {
+    let mark = |mark: &'static str| Line::from(Span::styled(mark, theme::faint())).right_aligned();
+    let mut block = block(title);
+    if above {
+        block = block.title_top(mark(" ↑ more "));
+    }
+    if below {
+        block = block.title_bottom(mark(" ↓ more "));
+    }
+    block
 }
 
 /// The box an overlay is drawn in: a step above a panel, because it is drawn
 /// over one, and rounded because the frame's boxes are (ADR-0016).
-pub(super) fn block(title: &str) -> Block<'static> {
+fn block(title: &str) -> Block<'static> {
     Block::bordered()
         .border_type(BorderType::Rounded)
         .style(theme::raised())
@@ -109,9 +158,35 @@ pub(super) fn block(title: &str) -> Block<'static> {
         .title(Span::styled(format!(" {title} "), theme::faint()))
 }
 
-fn help_row(keys: &str, what: &str) -> Line<'static> {
-    Line::from(vec![
-        Span::styled(format!("{keys:<KEYS$}"), theme::prompt()),
-        Span::styled(text::clip(what, 200), theme::faint()),
-    ])
+/// Every binding as the box draws it: the keys in their column and the
+/// description wrapped under it, so a description is read rather than clipped
+/// at the border and the box is sized from the rows that wrapping made
+/// (issue #49). A name longer than the column — the six commands are one — is
+/// not cut to fit it: it keeps a row of its own and the description wraps
+/// beneath it.
+fn help_lines(columns: usize) -> Vec<Line<'static>> {
+    let rest = columns.saturating_sub(KEYS).max(1);
+    let mut lines: Vec<Line<'static>> = Vec::new();
+    for (keys, what) in help_rows() {
+        let over = text::clip(keys, KEYS) != keys;
+        if over {
+            lines.push(Line::from(Span::styled(keys.to_string(), theme::prompt())));
+        }
+        let rows = text::wrap(
+            text::glyphs(&[Span::styled(what, theme::faint())]),
+            "",
+            theme::faint(),
+            rest,
+        );
+        for (index, row) in rows.into_iter().enumerate() {
+            let head = match (over, index) {
+                (false, 0) => Span::styled(format!("{keys:<KEYS$}"), theme::prompt()),
+                _ => Span::styled(" ".repeat(KEYS), theme::faint()),
+            };
+            let mut spans = vec![head];
+            spans.extend(row.spans);
+            lines.push(Line::from(spans));
+        }
+    }
+    lines
 }
