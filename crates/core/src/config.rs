@@ -131,11 +131,11 @@ impl Config {
         Config::read(overrides, Model::Required)
     }
 
-    /// The settings a command needs and a model does not: `sindri sandbox exec`
-    /// probes the sandbox a run would get, so it reads the same file and grants
-    /// the same extras, and needs neither a model nor a credential to find out
-    /// (ADR-0002, ADR-0015 §7). The model it records is the one that was
-    /// configured, which is to say none.
+    /// The settings a diagnostic needs and a model does not: `sindri sandbox
+    /// exec` probes, and `sindri doctor` describes, the sandbox a run would get,
+    /// so both read the same file and grant the same extras, and neither needs a
+    /// model nor a credential to find out (ADR-0002, ADR-0015 §7). The model it
+    /// records is the one that was configured, which is to say none.
     pub fn for_command(overrides: Overrides) -> Result<Config, ConfigError> {
         Config::read(overrides, Model::Optional)
     }

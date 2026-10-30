@@ -8,6 +8,7 @@ use std::process::Command;
 
 use crate::paths;
 use crate::sandbox::{Enforcement, PolicyError, SandboxPolicy};
+use crate::session::Env;
 
 /// The binaries the system prompt may claim exist; `doctor` resolves each one
 /// through the same `PATH` the sandbox will use. `bwrap` itself is checked
@@ -71,45 +72,46 @@ impl std::error::Error for DoctorError {}
 /// The probe runs in a scratch directory of its own — not in the session
 /// namespace — and removes it afterwards, so `doctor` leaves no record behind
 /// and prunes nothing that a run wrote (ADR-0006).
-pub fn probe(extras: &[PathBuf]) -> Result<Report, DoctorError> {
+///
+/// The environment is taken as a value, the one a run would be opened in
+/// (ADR-0015 §6), so the description is derived from the same workspace, `PATH`
+/// and state root the run gets rather than from a second reading of the process.
+pub fn probe(env: &Env, extras: &[PathBuf]) -> Result<Report, DoctorError> {
     let bwrap = which("bwrap").ok_or(DoctorError::BwrapMissing)?;
     let bash = which("bash").ok_or_else(|| DoctorError::BinariesMissing {
         missing: vec!["bash".to_string()],
     })?;
 
-    let workspace = std::env::current_dir()
-        .and_then(|dir| dir.canonicalize())
-        .map_err(DoctorError::Setup)?;
-    let state = paths::state_dir().map_err(DoctorError::Setup)?;
+    let state = env.state.clone();
     let scratch = state
         .join("doctor")
         .join(paths::new_session_id().map_err(DoctorError::Setup)?);
     let session_temp = scratch.join("tmp");
     std::fs::create_dir_all(session_temp.join("home")).map_err(DoctorError::Setup)?;
 
-    let probed = run_probe(&bwrap, &bash, &workspace, extras, &session_temp);
+    let probed = run_probe(&bwrap, &bash, env, extras, &session_temp);
     let _ = std::fs::remove_dir_all(&scratch);
 
     probed?;
 
     // The description states the shape a run gets, named by its session GUID.
     let shown_temp = state.join("sessions").join("<session>").join("tmp");
-    let policy = build_policy(&workspace, extras, shown_temp)?;
+    let policy = build_policy(env, extras, shown_temp)?;
     Ok(Report {
         description: policy.describe(),
     })
 }
 
 fn build_policy(
-    workspace: &Path,
+    env: &Env,
     extras: &[PathBuf],
     session_temp: PathBuf,
 ) -> Result<SandboxPolicy, DoctorError> {
     crate::session::policy_for(
-        workspace,
+        &env.workspace,
         extras,
         session_temp,
-        crate::session::search_path(),
+        env.search_path.clone(),
         Enforcement::Bubblewrap,
     )
     .map_err(DoctorError::Policy)
@@ -118,11 +120,11 @@ fn build_policy(
 fn run_probe(
     bwrap: &Path,
     bash: &Path,
-    workspace: &Path,
+    env: &Env,
     extras: &[PathBuf],
     session_temp: &Path,
 ) -> Result<(), DoctorError> {
-    let policy = build_policy(workspace, extras, session_temp.to_path_buf())?;
+    let policy = build_policy(env, extras, session_temp.to_path_buf())?;
     let script = format!(
         "echo {MARKER}; for b in {}; do command -v \"$b\" >/dev/null 2>&1 || echo \"missing:$b\"; done",
         REQUIRED_BINARIES.join(" ")
