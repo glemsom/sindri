@@ -100,9 +100,9 @@ transcript, rail, composer; off a terminal it is a refusal at exit 2.
   the run stops when the request in flight does.
 - **Rail:** 32 columns, always visible — cache hits, turns against the cap, tokens, a
   context meter, session GUID, temp path, branch, sandbox posture, why the last run
-  stopped — read as a ledger: labels in a nine-column field at the rail's first column,
-  dot leaders across the gap, every value hanging off one edge and a `─` hairline between
-  the blocks. Below 100 columns it becomes one strip; the face takes the rows left over.
+  stopped — read as a ledger: labels in a nine-column field, dot leaders across the gap, every value hanging off one
+  edge, a `─` hairline between the blocks and a `⁞` seam that begins and ends with the
+  facts. Below 100 columns it becomes one strip; the face takes the rows left over.
 - **Composer,** two to six rows: `Enter` sends, `Shift+Enter` breaks the line, `Ctrl-Q`
   leaves, `Ctrl-C` cancels a run and keeps the draft — or clears it when nothing is
   running.
@@ -122,7 +122,7 @@ transcript, rail, composer; off a terminal it is a refusal at exit 2.
 - **Chrome:** a narrow terminal shortens what the frame says and never cuts a key or a
   fact in half. The footer states its seven hints from 120 columns up, five from 100 and
   never fewer than `Enter send` and `? keys`; the rail gives facts up in one priority
-  order and keeps a row saying how many went (`+7 more`); the slim rail strip never
+  order and keeps a row saying how many went (`⁞ +7 more`); the slim rail strip never
   loses the posture, the model or the workspace.
 - **One thread:** a second prompt builds on the first, `/new` starts over, and a model
   changed in `/settings` answers the next turn on the same thread. **Boot runs `doctor`

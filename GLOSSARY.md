@@ -97,13 +97,14 @@ rail's last column, so every figure ends on one edge and is compared down it; a 
 leader in `LEADER` bridges the field to a value that leaves three cells of gap or more,
 where a value that leaves fewer — or none, because it fills its room — is shortened by
 `Fit` (`4f1c8f2e…5c1a77`) and draws no leader, and nothing wraps. The rule is a `─`
-hairline across the rail's whole width, and the labels begin at the rail's first column:
-the rail carries no spine of its own, so its facts start where the column starts and stop
-where they stop. The sandbox posture is a chip
+hairline across the rail's whole width, and the rail's first column is a dotted seam
+(`⁞` in `SEAM`, a step above `FAINT` because dots lose apparent luminance at an eighth of
+a cell) that begins on the first fact and stops on the last, so the seam has a top and a
+bottom rather than running the height of the frame. The sandbox posture is a chip
 (`⬢ bwrap · 1 writable`) rather than another pair, right-aligned on the edge the values
 hang off. The rail is chrome, not a surface: it draws no fill and lets the canvas
 through, so the one band of it with a colour behind it is the row the chip sits on. What
-a row copies is the fact — `context 38%` — never the leader that drew it.
+a row copies is the fact — `context 38%` — never the seam or the leader that drew it.
 The margin between the words and the rail stays canvas, and on a terminal that speaks
 Kitty graphics it carries the seam's light strip (`seam.rs`): the height of the body,
 brightest against the rail and dissolving toward the words, and two cells wide because
@@ -114,7 +115,7 @@ the transcript, which never loses the posture, the model or the workspace. One p
 order (`rail::priority`) ends with the posture, and the column and the strip both read
 it: a column too short for its facts gives them up from the bottom of that order — the
 identity block first, since the first frame already names it — and keeps one row to say
-how many went (`+7 more`), and a fact too long for its room is shortened rather than
+how many went (`⁞ +7 more`), and a fact too long for its room is shortened rather than
 skipped — a posture to `⬢ bwrap` — and dropped only when nothing of it can be said. The
 GUID is copied with `Ctrl-G`, or by clicking its row.
 
