@@ -11,6 +11,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use sindri_core::cancel::Cancel;
+use sindri_tui::card::View;
 use sindri_tui::driver::{CallOver, Finished, Spilled, Stop, Tokens};
 use sindri_tui::render;
 use sindri_tui::{App, Card, Launch};
@@ -252,7 +253,7 @@ fn a_broken_sandbox_draws_a_card_naming_the_failing_check() {
     };
     let mut terminal = Terminal::new(TestBackend::new(100, 24)).expect("a test terminal");
     terminal
-        .draw(|frame| render::draw_card(&card, frame))
+        .draw(|frame| render::draw_card(&card, &mut View::default(), frame))
         .expect("the card draws");
     let buffer = terminal.backend().buffer().clone();
     let shown: String = (0..24)

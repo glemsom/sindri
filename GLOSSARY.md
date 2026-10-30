@@ -139,4 +139,7 @@ credential comes from `SINDRI_API_KEY`, the provider's variable, and nothing is 
 no credential opens the interface instead of exiting, with the **settings modal** staged
 on the `api_key` row (ADR-0004).
 
-**card** — the full-screen failure drawn instead of a frame when a `doctor` check fails.
+**card** — the failure drawn instead of a frame when a `doctor` check fails, holding the
+check and the doctor's report whole: sized from the rows that report wrapped into, paged
+with `PgUp`/`PgDn` when the screen is shorter, and left only by a key — a resize lays it
+out again rather than dismissing it.

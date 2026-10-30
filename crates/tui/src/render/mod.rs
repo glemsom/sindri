@@ -20,7 +20,7 @@ use ratatui::widgets::{Paragraph, Widget};
 use crate::app::App;
 use crate::theme;
 
-pub use card::Card;
+pub use crate::card::Card;
 
 pub const RAIL_COLUMNS: u16 = 32;
 pub const RAIL_MIN_WIDTH: u16 = 100;
@@ -89,9 +89,9 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
     overlay::draw(app, area, frame.buffer_mut());
 }
 
-pub fn draw_card(card: &Card, frame: &mut Frame) {
+pub fn draw_card(card: &Card, view: &mut crate::card::View, frame: &mut Frame) {
     let area = frame.area();
-    card::draw(card, area, frame.buffer_mut());
+    card::draw(card, view, area, frame.buffer_mut());
 }
 
 fn footer_rows(app: &App, area: Rect, buf: &mut Buffer) {
