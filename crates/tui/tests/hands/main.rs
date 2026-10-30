@@ -18,7 +18,7 @@ use sindri_core::agent::Event;
 use sindri_tui::copy::{Clipboard, Copied};
 use sindri_tui::driver::{CallOver, Finished, Spilled, Stop};
 use sindri_tui::entry::Entry;
-use sindri_tui::overlay::BINDINGS;
+use sindri_tui::overlay::help_rows;
 use sindri_tui::render;
 use sindri_tui::{App, Launch};
 

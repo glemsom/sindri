@@ -4,6 +4,7 @@
 //! to do what it does. An open overlay owns its own space: the page keys and
 //! the wheel move it, never the frame beneath it (ADR-0013).
 
+use crate::command;
 use crate::sessions::Sessions;
 use crate::settings::Settings;
 use crate::spill::Spill;
@@ -14,8 +15,14 @@ pub struct Binding {
     pub what: &'static str,
 }
 
+/// The key `?` draws the command row after: `@`, the frame's other completer.
+/// Anchored to a neighbour rather than to a position, so a binding added above
+/// moves the row with the keys it belongs with (issue #53).
+const COMMANDS_AFTER: &str = "@";
+
 /// Every binding the frame has. The mouse is an accelerator: nothing here is
-/// reachable only with a pointer.
+/// reachable only with a pointer, and the commands are not here at all: their
+/// row is the catalogue's, because one name there is five names on a row.
 pub const BINDINGS: &[Binding] = &[
     Binding {
         keys: "Enter",
@@ -36,11 +43,6 @@ pub const BINDINGS: &[Binding] = &[
         keys: "@",
         mouse: None,
         what: "complete a workspace path",
-    },
-    Binding {
-        keys: "/new, /sessions, /export, /settings, /help, /quit",
-        mouse: None,
-        what: "start a session, read an old one, export this one, edit the config, show this, leave",
     },
     Binding {
         keys: "Esc",
@@ -193,17 +195,29 @@ pub enum Overlay {
     Sessions(Sessions),
 }
 
-pub fn help_rows() -> Vec<(&'static str, String)> {
-    BINDINGS
-        .iter()
-        .map(|binding| {
-            let gesture = match binding.mouse {
-                Some(mouse) => format!(" · {mouse}"),
-                None => String::new(),
-            };
-            (binding.keys, format!("{}{gesture}", binding.what))
-        })
-        .collect()
+/// The rows `?` lists: the keys in their column and what they do. The one row
+/// that is not a `Binding` is the commands', read out of their one catalogue,
+/// so a command added there is a command the help shows (issue #53).
+pub fn help_rows() -> Vec<(String, String)> {
+    let mut rows: Vec<(String, String)> = Vec::with_capacity(BINDINGS.len() + 1);
+    for binding in BINDINGS {
+        rows.push(row(binding));
+        if binding.keys == COMMANDS_AFTER {
+            rows.push(command::row());
+        }
+    }
+    rows
+}
+
+fn row(binding: &Binding) -> (String, String) {
+    let gesture = match binding.mouse {
+        Some(mouse) => format!(" · {mouse}"),
+        None => String::new(),
+    };
+    (
+        binding.keys.to_string(),
+        format!("{}{gesture}", binding.what),
+    )
 }
 
 #[cfg(test)]
@@ -233,12 +247,46 @@ mod tests {
         "Ctrl-G",
     ];
 
+    /// `?`'s command row as the frame said it before the catalogue: written
+    /// here from the frame rather than read back out of the catalogue, so a
+    /// seventh command that the row does not say is a failure (issue #53).
+    const COMMANDS_ROW: (&str, &str) = (
+        "/new, /sessions, /export, /settings, /help, /quit",
+        "start a session, read an old one, export this one, edit the config, show this, leave",
+    );
+
+    /// The one row that names commands rather than keys.
+    fn command_row(rows: &[(String, String)]) -> (String, String) {
+        rows.iter()
+            .find(|(keys, _)| keys.contains("/new"))
+            .cloned()
+            .expect("the help lists the commands")
+    }
+
+    #[test]
+    fn the_command_row_is_the_catalogue_and_a_seventh_command_cannot_miss_it() {
+        let (keys, what) = command_row(&help_rows());
+        assert_eq!(keys, COMMANDS_ROW.0, "the row names every command");
+        assert_eq!(what, COMMANDS_ROW.1, "and says what each of them does");
+    }
+
+    #[test]
+    fn the_command_row_sits_among_the_keys_where_it_always_did() {
+        let rows = help_rows();
+        let at = rows
+            .iter()
+            .position(|(keys, _)| keys == COMMANDS_ROW.0)
+            .expect("the command row is one row of the list");
+        assert_eq!(rows[at - 1].0, "@", "after `@`, the other completer");
+        assert_eq!(rows[at + 1].0, "Esc", "and before `Esc`");
+    }
+
     #[test]
     fn the_help_lists_every_key_the_contract_names() {
-        let listed: Vec<&str> = help_rows().iter().map(|(keys, _)| *keys).collect();
+        let listed: Vec<String> = help_rows().iter().map(|(keys, _)| keys.clone()).collect();
         for wanted in REQUIRED {
             assert!(
-                listed.contains(wanted),
+                listed.iter().any(|keys| keys == wanted),
                 "the help lists {wanted:?}: {listed:?}"
             );
         }

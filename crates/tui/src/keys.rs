@@ -235,12 +235,7 @@ impl App {
             Command::Quit => self.quit = true,
             Command::Sessions => self.open_sessions(),
             Command::Export(path) => self.export(path.as_deref()),
-            Command::Unknown(name) => {
-                let name = name.clone();
-                self.note_error(format!(
-                    "{name}: no such command — /sessions, /export, /new, /settings, /help, /quit"
-                ));
-            }
+            Command::Unknown(name) => self.note_error(command::refusal(&name)),
         }
     }
 

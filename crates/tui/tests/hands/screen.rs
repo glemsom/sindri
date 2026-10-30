@@ -9,7 +9,8 @@ fn question_mark_lists_every_binding_and_esc_closes_it() {
     assert!(app.overlay().is_some(), "? opens the help overlay");
     let rows = shown(&screen(&mut app, 120, 34));
     // The keys the contract names, written here rather than read out of
-    // BINDINGS: a binding the frame gained and `?` forgot is a failure.
+    // the rows `?` builds: a binding the frame gained and the help forgot is
+    // a failure.
     for wanted in [
         "Enter",
         "Shift+Enter",
@@ -45,7 +46,11 @@ fn question_mark_lists_every_binding_and_esc_closes_it() {
             "the overlay names {gesture}: {rows}"
         );
     }
-    assert_eq!(BINDINGS.len(), 18, "every binding is listed exactly once");
+    assert_eq!(
+        help_rows().len(),
+        18,
+        "every binding is listed exactly once, and the commands are one row"
+    );
     press(&mut app, KeyCode::Esc, KeyModifiers::NONE);
     assert!(app.overlay().is_none(), "Esc closes the overlay");
 }

@@ -138,10 +138,14 @@ fn every_binding_is_reachable_at_a_hundred_by_twenty_four_and_at_seventy_by_twen
                 break;
             }
         }
-        assert_eq!(help_rows().len(), BINDINGS.len(), "one row per binding");
+        assert_eq!(
+            help_rows().len(),
+            BINDINGS.len() + 1,
+            "one row per binding, and one row for the commands"
+        );
         for (keys, what) in help_rows() {
             assert!(
-                seen.contains(keys),
+                seen.contains(keys.as_str()),
                 "{width}×{height} can reach {keys:?} by scrolling: {seen}"
             );
             // And the end of what it says: a row cut at the border is not a
