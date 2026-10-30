@@ -55,8 +55,8 @@ pub fn prepare(overrides: Overrides) -> Result<Configured, Failure> {
 }
 
 /// The diagnostic door: the same read, without a model or a credential, so
-/// `sandbox exec` probes the sandbox a run would get without being configured
-/// as one (ADR-0015 §7).
+/// `sandbox exec` and `doctor` probe and describe the sandbox a run would get
+/// without being configured as one (ADR-0015 §7).
 pub fn configure(overrides: Overrides) -> Result<Configured, Failure> {
     read(overrides, Config::for_command)
 }

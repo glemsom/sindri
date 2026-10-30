@@ -151,6 +151,54 @@ fn doctor_exits_three_with_one_line_when_bwrap_cannot_create_a_sandbox() {
 }
 
 #[test]
+fn a_refused_repository_config_is_announced_by_doctor_once() {
+    let env = Env::new();
+    std::fs::write(
+        env.workspace.join(".sindri.toml"),
+        "extra_writable_paths = [\"/\"]\n",
+    )
+    .expect("a committed config");
+
+    // The diagnostic reads the config through the same door a run does, so the
+    // note a refused repository config earns is said here too — once, on the
+    // channel every front end says it on, and never as part of the description.
+    let assert = env.cmd().arg("doctor").assert().success();
+    let output = assert.get_output();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    assert_eq!(
+        stderr.matches(".sindri.toml").count(),
+        1,
+        "the refusal is said exactly once: {stderr}"
+    );
+    assert!(stderr.contains("ignor"), "and says what it did: {stderr}");
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("writable set"),
+        "the description is still printed: {:?}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn a_config_a_run_would_refuse_is_refused_by_doctor_too() {
+    let env = Env::new();
+    common::write_config(&env, "max_turns = 0\n");
+
+    // `doctor` describes the sandbox a run would really get, so it reads the
+    // config the way a run does: a value a run would refuse is refused here, in
+    // one line, rather than described as if it could be honoured.
+    env.cmd()
+        .arg("doctor")
+        .assert()
+        .code(2)
+        .stdout(predicate::str::is_empty())
+        .stderr(
+            predicate::str::contains("max_turns").and(predicate::function(|stderr: &str| {
+                stderr.lines().count() == 1
+            })),
+        );
+}
+
+#[test]
 fn doctor_describes_the_configured_extras_the_model_is_told_about() {
     let env = Env::new();
     let extra = env.workspace.parent().expect("root").join("extra");

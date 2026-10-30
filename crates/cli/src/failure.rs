@@ -75,13 +75,6 @@ pub(crate) fn usage_error(message: &str) -> i32 {
     Failure::Config(ConfigError::Usage(message.to_string())).report()
 }
 
-/// A configuration value that is wrong is a usage error; one that is absent is
-/// a model error with a hint, as the batch contract promises. One wording for
-/// every front end.
-pub(crate) fn config_error(error: ConfigError) -> i32 {
-    Failure::Config(error).report()
-}
-
 /// The provider's complaint as one line, so a shell and a transcript read the
 /// same words.
 pub(crate) fn provider_message(error: &Error) -> String {

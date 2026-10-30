@@ -14,6 +14,11 @@
 //! a provider's own `ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL` or
 //! `OPENAI_API_KEY`/`OPENAI_BASE_URL` are read below those, so a user with one
 //! already exported needs no configuration at all.
+//!
+//! Two reads leave this module and no more: `Config::resolve`, the settings a
+//! run uses, and `Config::for_command`, the ones a diagnostic can do without a
+//! model for. They are one body, so a diagnostic never sees a config a run
+//! would not.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -126,11 +131,11 @@ impl Config {
         Config::read(overrides, Model::Required)
     }
 
-    /// The settings a command needs and a model does not: `sindri sandbox exec`
-    /// probes the sandbox a run would get, so it reads the same file and grants
-    /// the same extras, and needs neither a model nor a credential to find out
-    /// (ADR-0002, ADR-0015 §7). The model it records is the one that was
-    /// configured, which is to say none.
+    /// The settings a diagnostic needs and a model does not: `sindri sandbox
+    /// exec` probes, and `sindri doctor` describes, the sandbox a run would get,
+    /// so both read the same file and grant the same extras, and neither needs a
+    /// model nor a credential to find out (ADR-0002, ADR-0015 §7). The model it
+    /// records is the one that was configured, which is to say none.
     pub fn for_command(overrides: Overrides) -> Result<Config, ConfigError> {
         Config::read(overrides, Model::Optional)
     }
@@ -236,16 +241,6 @@ impl Config {
             extra_writable,
             extra_headers,
         })
-    }
-}
-
-impl Config {
-    /// The extras a run would be granted, from the file and the environment
-    /// alone: `sindri doctor` needs them to describe the sandbox a run really
-    /// gets, and must not need a model or a credential to find out (ADR-0002).
-    pub fn configured_extras(overrides: Overrides) -> Result<Vec<PathBuf>, ConfigError> {
-        let file = file::read()?;
-        extras(overrides.writable, file.extra_writable_paths)
     }
 }
 
