@@ -25,4 +25,5 @@ Environment: `SINDRI_PROVIDER`, `SINDRI_MODEL`, `SINDRI_API_KEY`, `SINDRI_BASE_U
 ## Consequences
 
 - `/settings` edits this same file through one schema and one writer (ADR-0014).
+- A run with no credential opens the frame's settings modal on `api_key` rather than exiting, so the first run needs no hand-edited file (ADR-0004); the write it saves is the same explicit one `/settings` always makes.
 - The sandbox `HOME` starts empty, so real dotfiles never arrive as `HOME` and are never copied in — they remain readable at their host paths (ADR-0010).

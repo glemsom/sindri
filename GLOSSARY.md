@@ -99,4 +99,8 @@ eight rows, `.git` skipped, `.gitignore` deliberately not honoured.
 **from environment** — the API key field's default, and where emptying it returns: the
 credential comes from `SINDRI_API_KEY`, the provider's variable, and nothing is written.
 
+**door** — the frame's front door (`crates/cli/src/frame.rs`): the one place a run with
+no credential opens the interface instead of exiting, with the **settings modal** staged
+on the `api_key` row (ADR-0004).
+
 **card** — the full-screen failure drawn instead of a frame when a `doctor` check fails.

@@ -77,7 +77,13 @@ impl ConfigError {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Model {
+    /// A run cannot start without one: exit 1, with a hint naming every way to
+    /// set it (ADR-0004).
     Required,
+    /// The front end is a door before it is a run: `doctor`, `sandbox exec`
+    /// and the frame's first screen all resolve a config that an absent model
+    /// or credential cannot stop, because none of them sends a prompt yet
+    /// (ADR-0004).
     Optional,
 }
 
@@ -86,7 +92,12 @@ impl Config {
         Config::read(overrides, Model::Required)
     }
 
-    pub fn for_command(overrides: Overrides) -> Result<Config, ConfigError> {
+    /// The read for a front end that is a door before it is a run: `doctor`,
+    /// `sandbox exec`, and the frame's first screen. Neither the model nor the
+    /// credential is demanded — the frame's settings modal is where a missing
+    /// one goes (ADR-0004) — and every value that *is* present is checked
+    /// exactly as `resolve` checks it.
+    pub fn for_front_end(overrides: Overrides) -> Result<Config, ConfigError> {
         Config::read(overrides, Model::Optional)
     }
 

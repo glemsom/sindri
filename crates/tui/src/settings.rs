@@ -2,11 +2,16 @@
 //! (ADR-0005). The frame stages fields in memory and writes nothing until the
 //! user saves; `Esc` throws the whole draft away. A secret the file holds is
 //! never handed back, so no field can show one and no frame can leak one.
+//!
+//! It is also the modal the frame's front door opens by itself when the run has
+//! no key (ADR-0004), which is why `Missing` — what is absent, in the words the
+//! transcript and the composer use — lives here rather than in a second module
+//! both would have to know.
 
 use std::path::Path;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use sindri_core::config::{Document, KEYS, Key, toggle_shown};
+use sindri_core::config::{Document, KEYS, Key, Provider, toggle_shown};
 
 use crate::overlay::Overlay;
 
@@ -28,12 +33,127 @@ pub struct Field {
     pub touched: bool,
 }
 
+/// Which rows a run has nothing for. One absent row is a run that cannot send
+/// a prompt; both is the machine that has never been configured at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Absent {
+    Key,
+    Model,
+    Both,
+}
+
+/// What the front door found absent when it opened the frame itself: the run
+/// has no credential, or no model, or neither (ADR-0004). It holds no value —
+/// the modal says where a key comes from, never what one is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Missing {
+    /// The wire the run speaks: its variable is where the credential comes
+    /// from, and a local server needs none.
+    provider: Provider,
+    absent: Absent,
+}
+
+impl Missing {
+    /// What a resolved config could not find, when it found all of it: `None`
+    /// is a run that can send a prompt, and there is nothing to say.
+    pub fn of(provider: Provider, key: bool, model: bool) -> Option<Missing> {
+        let absent = match (key, model) {
+            (true, false) => Absent::Key,
+            (false, true) => Absent::Model,
+            (true, true) => Absent::Both,
+            (false, false) => return None,
+        };
+        Some(Missing { provider, absent })
+    }
+
+    /// The credential's two variables, in the wire's own terms: the one fact
+    /// every sentence about a missing key has to say, spelled once.
+    pub fn key_vars(self) -> String {
+        format!("SINDRI_API_KEY or {}", self.provider.api_key_env())
+    }
+
+    /// Whether the credential is one of the absent rows: what the modal's key
+    /// row says, and what the composer cannot do.
+    pub fn wants_key(self) -> bool {
+        matches!(self.absent, Absent::Key | Absent::Both)
+    }
+
+    /// The row the modal opens on: the key when there is none, because a run
+    /// with no credential is the failure a frame answers with a field.
+    pub fn row(self) -> Key {
+        match self.absent {
+            Absent::Model => Key::Model,
+            Absent::Key | Absent::Both => Key::ApiKey,
+        }
+    }
+
+    /// The transcript's one line: what is absent and every way to set it —
+    /// said once, when the frame opens, and never on a frame (ADR-0004).
+    pub fn said(self) -> String {
+        match self.absent {
+            Absent::Key => {
+                format!(
+                    "no key: type one in the settings modal, or set {}",
+                    self.key_vars()
+                )
+            }
+            Absent::Model => {
+                "no model: type one in the settings modal, or set SINDRI_MODEL".to_string()
+            }
+            Absent::Both => format!(
+                "no key and no model: type them in the settings modal, or set {} and SINDRI_MODEL",
+                self.key_vars()
+            ),
+        }
+    }
+
+    /// What the composer says where the prompt would be: a run with no key
+    /// cannot send one, and the frame says why rather than pretending.
+    pub fn composer(self) -> String {
+        match self.absent {
+            Absent::Key => format!(
+                "no key · a prompt cannot be sent · /settings, or set {}",
+                self.key_vars()
+            ),
+            Absent::Model => {
+                "no model · a prompt cannot be sent · /settings, or set SINDRI_MODEL".to_string()
+            }
+            Absent::Both => format!(
+                "no key and no model · a prompt cannot be sent · /settings, or set {}",
+                self.key_vars()
+            ),
+        }
+    }
+
+    /// A prompt sent anyway: the draft stays where it was, and this is the one
+    /// line the transcript gets for the keystroke.
+    pub fn refused(self) -> String {
+        match self.absent {
+            Absent::Key => "not sent: this run has no key — /settings saves one".to_string(),
+            Absent::Model => "not sent: this run has no model — /settings names one".to_string(),
+            Absent::Both => {
+                "not sent: this run has no key and no model — /settings sets both".to_string()
+            }
+        }
+    }
+
+    /// What is still absent once a save has landed: a row the file now carries
+    /// is filled in, and the rest is not. A key in the environment is not this
+    /// frame's to see, so the file is what a save can answer for (ADR-0014).
+    pub fn satisfied(self, document: &Document) -> Option<Missing> {
+        let key = self.absent != Absent::Model && !document.is_set(Key::ApiKey);
+        let model = self.absent != Absent::Key && !document.is_set(Key::Model);
+        Missing::of(self.provider, key, model)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Settings {
     document: Document,
     fields: Vec<Field>,
     chosen: usize,
     error: Option<String>,
+    missing: Option<Missing>,
 }
 
 impl Settings {
@@ -64,7 +184,21 @@ impl Settings {
             fields,
             chosen: 0,
             error: None,
+            missing: None,
         }
+    }
+
+    /// The modal a first run opens by itself: its cursor on the row the run
+    /// has nothing for, and, above the rows, the four facts that row needs —
+    /// where a value comes from, where it is written, that the file is `0600`,
+    /// and that a credential is never shown again (ADR-0014).
+    pub fn staged(mut self, missing: Missing) -> Settings {
+        self.chosen = KEYS
+            .iter()
+            .position(|key| *key == missing.row())
+            .unwrap_or_default();
+        self.missing = Some(missing);
+        self
     }
 
     pub fn path(&self) -> &Path {
@@ -81,6 +215,11 @@ impl Settings {
 
     pub fn error(&self) -> Option<&str> {
         self.error.as_deref()
+    }
+
+    /// Why the modal opened without being asked, when it did.
+    pub fn missing(&self) -> Option<Missing> {
+        self.missing
     }
 
     pub fn staged_secret(&self) -> bool {
@@ -209,7 +348,14 @@ impl crate::app::App {
         match settings.save() {
             Ok(()) => {
                 let path = settings.path().display().to_string();
+                // The file is read back as what a run would read it as, so a
+                // row that was absent and now is not stops being said — and a
+                // row that is still absent keeps being said (ADR-0005).
+                let still = settings
+                    .missing()
+                    .and_then(|missing| missing.satisfied(settings.document()));
                 self.overlay = None;
+                self.missing = still;
                 self.note_info(format!(
                     "settings saved to {path}; the next prompt uses them"
                 ));
@@ -219,13 +365,22 @@ impl crate::app::App {
         }
     }
 
-    pub(crate) fn open_settings(&mut self) {
+    /// `/settings`, or — with what the front door found absent — the modal it
+    /// opens by itself: the same modal, on the row the run has nothing for, and
+    /// saying why it is there (ADR-0004).
+    pub(crate) fn open_settings(&mut self, missing: Option<Missing>) {
         let opened = match &self.config {
             Some(path) => Settings::at_path(path),
             None => Settings::open(),
         };
         match opened {
-            Ok(settings) => self.overlay = Some(Overlay::Settings(settings)),
+            Ok(settings) => {
+                let settings = match missing {
+                    Some(missing) => settings.staged(missing),
+                    None => settings,
+                };
+                self.overlay = Some(Overlay::Settings(Box::new(settings)));
+            }
             Err(message) => self.note_error(format!("settings: {message}")),
         }
     }

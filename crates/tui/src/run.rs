@@ -16,6 +16,7 @@ use crate::face::Face;
 use crate::msg::Msg;
 use crate::rail::Launch;
 use crate::render;
+use crate::settings::Missing;
 
 pub use crate::render::Card;
 
@@ -30,11 +31,18 @@ pub enum Ending {
 /// Opens the frame on the alternate screen and runs it until the user leaves.
 /// `cancel` is the launch's one flag: the front end has already pointed the
 /// process's signals at it, so a `kill -INT` ends the run in flight exactly
-/// as `Ctrl-C` does (ADR-0015).
-pub fn open(launch: Launch, driver: Box<dyn Driver>, cancel: Cancel) -> Ending {
+/// as `Ctrl-C` does (ADR-0015). `missing` is what the front door found absent
+/// and could not fail on: a run with no key opens the frame with the settings
+/// modal staged on it (ADR-0004).
+pub fn open(
+    launch: Launch,
+    driver: Box<dyn Driver>,
+    cancel: Cancel,
+    missing: Option<Missing>,
+) -> Ending {
     match alternate_screen() {
         Some(mut terminal) => {
-            let ending = session(&mut terminal, launch, driver, cancel);
+            let ending = session(&mut terminal, launch, driver, cancel, missing);
             release_mouse();
             ratatui::restore();
             ending
@@ -98,8 +106,12 @@ fn session(
     launch: Launch,
     driver: Box<dyn Driver>,
     cancel: Cancel,
+    missing: Option<Missing>,
 ) -> Ending {
     let mut app = App::new(launch, Face::detect()).with_cancel(cancel);
+    if let Some(missing) = missing {
+        app = app.with_missing(missing);
+    }
     let (tx, rx) = mpsc::channel::<Msg>();
     listen_for_keys(tx.clone());
     let jobs = drive(driver, tx.clone());

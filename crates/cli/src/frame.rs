@@ -8,7 +8,7 @@ use std::sync::mpsc;
 
 use sindri_core::agent::{Agent, BashTool, Dials, Event, Report, Stopped};
 use sindri_core::cancel::Cancel;
-use sindri_core::config::{Config, Overrides};
+use sindri_core::config::{Config, ConfigError, Overrides};
 use sindri_core::doctor::{self, DoctorError};
 use sindri_core::exec::{BashExecutor, Outcome, OutputSink, SandboxExecutor, Side, ToolResult};
 use sindri_core::provider::{self, Client, Usage};
@@ -16,6 +16,7 @@ use sindri_core::sandbox::{Enforcement, SandboxPolicy};
 use sindri_core::session::{LoopError, Session};
 use sindri_tui::driver::{CallOver, Driver, Finished, Spilled, Stop, Tap, Tokens};
 use sindri_tui::run::{self, Ending};
+use sindri_tui::settings::Missing;
 use sindri_tui::{Card, Launch};
 use sindri_types::ExitCode;
 
@@ -23,8 +24,27 @@ use crate::boot::{self, Boot};
 use crate::{failure, signal};
 
 pub fn run(overrides: Overrides) -> i32 {
-    let configured = match boot::prepare(overrides.clone()) {
-        Ok(configured) => configured,
+    let (configured, missing) = match boot::prepare(overrides.clone()) {
+        Ok(configured) => (configured, None),
+        // A value the run cannot do without is a line and an exit everywhere
+        // else; the frame is the one door that opens on it, because a card has
+        // no field to type a key into (ADR-0004). What is absent is read from
+        // the config that was resolved anyway, so the modal knows which row it
+        // is for. Every other failure still leaves by `report`.
+        Err(failure::Failure::Config(ConfigError::Missing(_))) => {
+            match boot::configure(overrides.clone()) {
+                Ok(configured) => {
+                    let missing = Missing::of(
+                        configured.config.provider,
+                        configured.config.provider.needs_credential()
+                            && configured.config.api_key.trim().is_empty(),
+                        configured.config.model.trim().is_empty(),
+                    );
+                    (configured, missing)
+                }
+                Err(failure) => return failure.report(),
+            }
+        }
         Err(failure) => return failure.report(),
     };
     // The sandbox is the precondition for the agent, so it is proven before the
@@ -54,7 +74,7 @@ pub fn run(overrides: Overrides) -> i32 {
         overrides,
         agent: None,
     };
-    match run::open(launch, Box::new(driver), cancel) {
+    match run::open(launch, Box::new(driver), cancel, missing) {
         Ending::Left => ExitCode::Success.code(),
         Ending::BootFailed => ExitCode::EnvironmentFailure.code(),
     }
