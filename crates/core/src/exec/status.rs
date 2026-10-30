@@ -3,7 +3,6 @@
 //! of the exit-code document means the sandbox never started — never that the
 //! command failed (ADR-0007).
 
-/// The exit code bwrap reported, when the mounts succeeded and the command ran.
 pub fn exit_code(docs: &[u8]) -> Option<i32> {
     let text = String::from_utf8_lossy(docs);
     text.lines()

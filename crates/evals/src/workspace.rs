@@ -7,30 +7,22 @@ use std::path::{Path, PathBuf};
 
 use tempfile::TempDir;
 
-/// Where the fixture repository and the recorded conversations live.
 pub const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures");
 
 /// A file every eval's copy starts with, so an escape that rewrote the run's own
 /// files is visible afterwards.
 pub const SENTINEL: &str = "sentinel.txt";
 
-/// The sentinel's content, which nothing may change.
 pub const SENTINEL_TEXT: &str = "the run's own file\n";
 
-/// An isolated host for one eval.
 pub struct Workspace {
     root: TempDir,
-    /// The fixture repository copy: the run's working directory.
     pub repo: PathBuf,
-    /// `XDG_STATE_HOME`, where the run records itself.
     pub state: PathBuf,
-    /// `XDG_CONFIG_HOME`, so no host config is read.
     pub config: PathBuf,
 }
 
 impl Workspace {
-    /// A fresh host: a copy of the fixture repository, its state and config
-    /// directories, and nothing of the developer's.
     pub fn new() -> Result<Self, String> {
         let root = TempDir::new().map_err(|error| format!("eval temp dir: {error}"))?;
         let repo = root.path().join("repo");
@@ -50,18 +42,15 @@ impl Workspace {
         })
     }
 
-    /// The eval's private root, above the workspace.
     pub fn root(&self) -> &Path {
         self.root.path()
     }
 
-    /// A path inside the run's workspace.
     pub fn path(&self, relative: &str) -> PathBuf {
         self.repo.join(relative)
     }
 }
 
-/// Copies a directory tree, keeping the executable bits the fixture needs.
 pub fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
     fs::create_dir_all(to).map_err(|error| format!("{}: {error}", to.display()))?;
     let entries = fs::read_dir(from).map_err(|error| format!("{}: {error}", from.display()))?;
@@ -78,8 +67,6 @@ pub fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Every file under `dir`, relative to it, that contains `needle` — what a
-/// structural assertion about a rename reads instead of a model's prose.
 pub fn files_containing(dir: &Path, needle: &str) -> Vec<String> {
     let mut found = Vec::new();
     let mut pending = vec![dir.to_path_buf()];

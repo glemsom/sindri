@@ -14,15 +14,12 @@ use std::process::Output;
 use common::provider::{MockProvider, Reply};
 use common::{Env, TEST_KEY, stderr, stdout};
 
-/// Writes `$XDG_CONFIG_HOME/sindri/config.toml`.
 fn write_config(env: &Env, toml: &str) {
     let dir = env.config.join("sindri");
     std::fs::create_dir_all(&dir).expect("config dir");
     std::fs::write(dir.join("config.toml"), toml).expect("write config");
 }
 
-/// Runs batch mode with exactly the settings the test supplies, so each test
-/// states its own precedence rather than inheriting the harness's defaults.
 fn run(env: &Env, mock: &MockProvider, args: &[&str], vars: &[(&str, &str)]) -> Output {
     let mut cmd = env.cmd();
     cmd.args(args)
@@ -34,7 +31,6 @@ fn run(env: &Env, mock: &MockProvider, args: &[&str], vars: &[(&str, &str)]) -> 
         .clone()
 }
 
-/// The one request the mock served.
 fn only_request(mock: &MockProvider) -> common::provider::Request {
     let requests = mock.requests();
     assert_eq!(requests.len(), 1, "one run makes one request");

@@ -10,7 +10,6 @@ use std::sync::{Arc, Mutex};
 
 use sindri_core::exec::{BashExecutor, Outcome, ToolResult, timeout_from_secs};
 
-/// Stands in for the sandbox: answers from a script and records what it saw.
 struct Scripted {
     replies: Mutex<Vec<ToolResult>>,
     seen: Arc<Mutex<Vec<String>>>,
@@ -32,8 +31,6 @@ impl BashExecutor for Scripted {
     }
 }
 
-/// The stdout of a result the run produced, or a loud failure when the run was
-/// cancelled instead: these scripts never cancel.
 fn name(result: Option<ToolResult>) -> String {
     result.expect("the run was not cancelled").stdout
 }

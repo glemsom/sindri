@@ -10,29 +10,21 @@ use sindri_core::session::{Env, Session};
 
 use crate::failure::Failure;
 
-/// A run ready to start: the environment it was opened in, the config it is
-/// bounded by, and the session recording it.
 pub struct Boot {
     /// The environment the session was opened in. It comes back out so `/new`
     /// opens the next session in the same workspace, `PATH` and state root
-    /// without reading the process a second time (ADR-0015 §6).
+    /// without reading the process a second time (ADR-0015).
     pub env: Env,
     pub config: Config,
     pub session: Session,
 }
 
-/// What boot has read before anything exists on disk: the environment and the
-/// config. A front end with something to prove first — the frame proves the
-/// sandbox before it starts anything (ADR-0011 §15) — starts the session itself
-/// from here.
 pub struct Configured {
     pub env: Env,
     pub config: Config,
 }
 
 impl Configured {
-    /// Opens the session: the one place a run is started, in the one order
-    /// (ADR-0015 §1). Nothing is read from the process here.
     pub fn start(self) -> Result<Boot, Failure> {
         let session = Session::open(&self.env, &self.config).map_err(Failure::Start)?;
         Ok(Boot {
@@ -43,20 +35,14 @@ impl Configured {
     }
 }
 
-/// Starts a run that asks a model: the read a run needs, and its session.
 pub fn open(overrides: Overrides) -> Result<Boot, Failure> {
     prepare(overrides)?.start()
 }
 
-/// The read a run that asks a model needs — a model and a credential. The frame
-/// proves the sandbox on this before anything is created on disk.
 pub fn prepare(overrides: Overrides) -> Result<Configured, Failure> {
     read(overrides, Config::resolve)
 }
 
-/// The diagnostic door: the same read, without a model or a credential, so
-/// `sandbox exec` and `doctor` probe and describe the sandbox a run would get
-/// without being configured as one (ADR-0015 §7).
 pub fn configure(overrides: Overrides) -> Result<Configured, Failure> {
     read(overrides, Config::for_command)
 }
@@ -76,14 +62,6 @@ fn read(
     Ok(Configured { env, config })
 }
 
-/// The one note a refused repository config earns, said the same way by every
-/// front end that resolves a config before it starts: a directory that silently
-/// ignores the file it was given would leave a user editing a config nobody
-/// reads (ADR-0005). The frame's mid-session save is deliberately not a caller —
-/// it runs while the frame owns the screen, where a line on stderr is corruption
-/// (ADR-0011 §15). It keeps a config failure as a value and says that in the
-/// transcript, and the refusal it re-reads is not said again: the launch said it
-/// once, and a save changes nothing about a file nobody reads.
 fn announce(config: &Config) {
     if let Some(path) = &config.refused_repo_config {
         eprintln!(
@@ -94,7 +72,7 @@ fn announce(config: &Config) {
 }
 
 /// `/new`: the next session in the same run environment, from the values the
-/// launch already holds — the process is not read again (ADR-0015 §6).
+/// launch already holds — the process is not read again (ADR-0015).
 pub fn renew(boot: &Boot) -> Result<Session, Failure> {
     Session::open(&boot.env, &boot.config).map_err(Failure::Start)
 }
@@ -113,8 +91,6 @@ mod tests {
 
     use super::*;
 
-    /// A config with every value written out: no file and no variable of the
-    /// host may reach a test's session.
     fn config() -> Config {
         Config {
             provider: Provider::Anthropic,
@@ -130,8 +106,6 @@ mod tests {
         }
     }
 
-    /// A run environment under temporary directories: a workspace to work in,
-    /// and a state root that is emphatically not the process's own.
     fn env(root: &TempDir) -> Env {
         let workspace = root.path().join("workspace");
         let state = root.path().join("state");

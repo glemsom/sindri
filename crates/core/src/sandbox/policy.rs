@@ -5,15 +5,12 @@ use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
 
-/// How the sandbox treats the network.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NetworkPosture {
-    /// Outbound network works; the sandbox bounds the filesystem, not the network.
     Shared,
 }
 
 impl NetworkPosture {
-    /// The published form of the posture.
     pub fn describe(self) -> &'static str {
         match self {
             NetworkPosture::Shared => {
@@ -23,17 +20,12 @@ impl NetworkPosture {
     }
 }
 
-/// Whether `bash` runs inside bubblewrap or with the user's own privileges.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Enforcement {
-    /// Every command is wrapped in bwrap.
     Bubblewrap,
-    /// `--yolo-unsafe`: no isolation at all, and the description says so.
     YoloUnsafe,
 }
 
-/// The paths mounted read-write in addition to the session temp: the workspace
-/// plus configured extras.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WritableSet(Vec<PathBuf>);
 
@@ -65,7 +57,6 @@ impl WritableSet {
         Ok(WritableSet(accepted))
     }
 
-    /// The paths, in the order they will be mounted.
     pub fn paths(&self) -> &[PathBuf] {
         &self.0
     }
@@ -97,22 +88,14 @@ fn canonical_writable(given: &Path) -> Result<PathBuf, PolicyError> {
     Ok(canonical)
 }
 
-/// Why a sandbox policy cannot exist.
 #[derive(Debug)]
 pub enum PolicyError {
-    /// `/` cannot be part of a writable set.
     Root,
-    /// Writable paths must be absolute.
     NotAbsolute { path: PathBuf },
-    /// Writable paths must be canonical: no symlinks, no `..`, no trailing slash.
     NotCanonical { given: PathBuf, canonical: PathBuf },
-    /// The path cannot be read, so whether it is writable cannot be decided.
     Unreadable { path: PathBuf, source: io::Error },
-    /// The same path was granted twice.
     Duplicate { path: PathBuf },
-    /// One writable path contains another.
     Nested { parent: PathBuf, child: PathBuf },
-    /// The session temp must be an absolute path that is not `/`.
     InvalidSessionTemp { path: PathBuf },
 }
 
@@ -167,7 +150,6 @@ pub struct SandboxPolicy {
 }
 
 impl SandboxPolicy {
-    /// Builds the policy, rejecting a session temp that could not be mounted.
     pub fn new(
         writable: WritableSet,
         session_temp: PathBuf,
@@ -187,36 +169,29 @@ impl SandboxPolicy {
         })
     }
 
-    /// The writable set, in mount order.
     pub fn writable(&self) -> &WritableSet {
         &self.writable
     }
 
-    /// The per-run scratch directory, mapped to the temp variables and to HOME.
     pub fn session_temp(&self) -> &Path {
         &self.session_temp
     }
 
-    /// The explicit `PATH` inside the sandbox.
     pub fn search_path(&self) -> &str {
         &self.search_path
     }
 
-    /// The network posture.
     pub fn network(&self) -> NetworkPosture {
         self.network
     }
 
-    /// Whether bwrap wraps the command or `--yolo-unsafe` bypasses it.
     pub fn enforcement(&self) -> Enforcement {
         self.enforcement
     }
 
-    /// Whether the run holds no isolation at all.
     pub fn is_unsafe(&self) -> bool {
         self.enforcement == Enforcement::YoloUnsafe
     }
 }
 
-/// The `PATH` used when the host supplies none.
 pub const FALLBACK_PATH: &str = "/usr/local/bin:/usr/bin:/bin";

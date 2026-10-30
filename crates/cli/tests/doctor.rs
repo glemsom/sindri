@@ -183,9 +183,6 @@ fn a_config_a_run_would_refuse_is_refused_by_doctor_too() {
     let env = Env::new();
     common::write_config(&env, "max_turns = 0\n");
 
-    // `doctor` describes the sandbox a run would really get, so it reads the
-    // config the way a run does: a value a run would refuse is refused here, in
-    // one line, rather than described as if it could be honoured.
     env.cmd()
         .arg("doctor")
         .assert()

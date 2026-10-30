@@ -1,7 +1,7 @@
-//! The transcript column — the hero. Only the rows that fit are laid out, so an
-//! unbounded conversation still has a bounded render tree (ADR-0011 §4): the
-//! window is built from the newest row backwards and stops as soon as it has a
-//! screenful, so scrolling costs what was scrolled and nothing more.
+//! The transcript column — the hero. Only the rows that fit are laid out, so
+//! an unbounded conversation still has a bounded render tree (ADR-0011): the
+//! window is built from the newest row backwards and stops as soon as it has
+//! a screenful, so scrolling costs what was scrolled and nothing more.
 
 use std::path::{Path, PathBuf};
 
@@ -16,36 +16,25 @@ use crate::entry::{Call, Entry, NoteKind};
 use crate::markdown;
 use crate::theme;
 
-/// What the transcript column shows, and what it cost to show it.
 pub struct View {
-    /// The visible rows, oldest first.
     pub rows: Vec<Line<'static>>,
-    /// The same rows as plain text, ANSI stripped: what a copy takes.
     pub plain: Vec<String>,
-    /// How many entries were laid out to build the window.
     pub laid_out: usize,
-    /// Every screen row holding a spill affordance, with the file it offers.
     pub spill: Vec<(usize, PathBuf)>,
 }
 
-/// Draws the transcript window, and tells the frame what the mouse and the
-/// clipboard can see of it.
 pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
     let view = window(app, area.width, area.height as usize);
     app.set_viewport(area, view.plain, view.spill.clone());
     Paragraph::new(view.rows).render(area, buf);
 }
 
-/// The rows of the thread that fit `height` rows at `width` columns, from the
-/// scroll offset up to the newest row.
 pub fn window(app: &mut App, width: u16, height: usize) -> View {
     let height = height.max(1);
     let width = width.max(1);
     let count = app.entries().len();
     app.note_width(width);
 
-    // Walk back from the newest entry until the window and everything scrolled
-    // past it are accounted for. Only these entries are ever laid out.
     let need = height.saturating_add(app.scroll());
     let mut acc = 0usize;
     let mut first = count;
@@ -67,7 +56,6 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
         rows.extend(rows_here);
     }
 
-    // The window is the bottom of what was laid out, moved up by the scroll.
     let visible = height.min(rows.len());
     let scroll = app.scroll().min(rows.len().saturating_sub(visible));
     let end = rows.len() - scroll;
@@ -78,7 +66,6 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
     let plain: Vec<String> = shown.iter().map(plain).collect();
     let laid_out = count.saturating_sub(first);
     app.settled(scroll, plain.len());
-    // A row above the window is not on screen, and a row below it is not either.
     let spill = spill
         .into_iter()
         .filter_map(|(row, path)| {
@@ -95,7 +82,6 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
     }
 }
 
-/// One row of styled text as the characters a reader would copy.
 pub fn plain(line: &Line<'_>) -> String {
     line.spans
         .iter()
@@ -105,7 +91,6 @@ pub fn plain(line: &Line<'_>) -> String {
         .to_string()
 }
 
-/// The spill file an entry offers to open, when it offers one.
 fn spill_of(entry: &Entry) -> Option<PathBuf> {
     match entry {
         Entry::Call(call) => call.spill_file().map(Path::to_path_buf),
@@ -113,7 +98,6 @@ fn spill_of(entry: &Entry) -> Option<PathBuf> {
     }
 }
 
-/// One entry, as the rows it takes.
 pub fn entry_rows(entry: &Entry, width: u16) -> Vec<Line<'static>> {
     match entry {
         Entry::Prompt(text) => vec![Line::from(vec![
@@ -145,9 +129,6 @@ pub fn entry_rows(entry: &Entry, width: u16) -> Vec<Line<'static>> {
     }
 }
 
-/// One call: a line while it runs with the tail of its output, then its exit
-/// status, and the spill affordance when the output was too large to show
-/// (ADR-0011 §9).
 fn call_rows(call: &Call, width: u16) -> Vec<Line<'static>> {
     let command = call
         .command
@@ -164,7 +145,6 @@ fn call_rows(call: &Call, width: u16) -> Vec<Line<'static>> {
             for (side, line) in &call.tail {
                 let style = match side {
                     Side::Stdout => theme::faint(),
-                    // A command's complaint is not the same thing as its output.
                     Side::Stderr => theme::bad(),
                 };
                 let keep = width.saturating_sub(4) as usize;

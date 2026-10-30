@@ -1,6 +1,6 @@
-//! The hands: what one key, or one gesture, does to the frame (ADR-0011 §7,
-//! §14). Everything the mouse can do is here as a key as well, because a
-//! pointer is an accelerator and never the only way in.
+//! The hands: what one key, or one gesture, does to the frame (ADR-0011).
+//! Everything the mouse can do is here as a key as well, because a pointer is
+//! an accelerator and never the only way in.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Position;
@@ -13,12 +13,9 @@ use crate::entry::Entry;
 use crate::overlay::{Overlay, Spill};
 use crate::selection::{self, Selection};
 
-/// How many rows one turn of the wheel moves: a nudge, not a page.
 const WHEEL_ROWS: usize = 3;
 
 impl App {
-    /// One key. Enter sends or queues, Shift+Enter breaks the line, Ctrl-C
-    /// cancels the run and keeps the draft, Ctrl-Q leaves (ADR-0011 §14).
     pub fn key(&mut self, key: KeyEvent) {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         if self.overlay.is_some() {
@@ -52,8 +49,6 @@ impl App {
             KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => {
                 self.select_by_keyboard(false)
             }
-            // Up and Down walk the completion while one is open, and the
-            // composer's own rows otherwise.
             KeyCode::Up if self.choose_completion(false) => {}
             KeyCode::Down if self.choose_completion(true) => {}
             KeyCode::Up => self.composer.up(),
@@ -67,14 +62,12 @@ impl App {
     }
 
     /// One mouse event. `Shift` hands the gesture back to the terminal: the
-    /// frame never sees a drag it must not take (ADR-0011 §7).
+    /// frame never sees a drag it must not take (ADR-0011).
     pub fn mouse(&mut self, event: MouseEvent) {
         if event.modifiers.contains(KeyModifiers::SHIFT) {
             return;
         }
         if self.overlay.is_some() {
-            // An overlay has the screen: the wheel pages it, and nothing else
-            // reaches the transcript underneath.
             match event.kind {
                 MouseEventKind::ScrollUp => self.scroll_page(true),
                 MouseEventKind::ScrollDown => self.scroll_page(false),
@@ -100,8 +93,6 @@ impl App {
         }
     }
 
-    /// What a key does while an overlay has the screen: close it, page it, or
-    /// leave. Nothing types behind an overlay the user cannot see through.
     fn overlay_key(&mut self, key: KeyEvent, ctrl: bool) {
         if matches!(self.overlay, Some(Overlay::Settings(_))) {
             self.settings_key(key);
@@ -117,8 +108,6 @@ impl App {
         }
     }
 
-    /// A click: the spill affordance opens its file, and anywhere else in the
-    /// transcript begins a selection.
     fn press(&mut self, at: Position) {
         let offered = self
             .viewport
@@ -134,8 +123,6 @@ impl App {
         }
     }
 
-    /// Ctrl-C: the run stops and the draft stays; with nothing running, the
-    /// draft is cleared.
     pub(crate) fn cancel_or_clear(&mut self) {
         match &self.running {
             Some(cancel) => cancel.trigger(),
@@ -146,7 +133,6 @@ impl App {
         }
     }
 
-    /// Enter: close an overlay, take a completion, run a command, or send.
     fn enter(&mut self) {
         if self
             .completion
@@ -157,8 +143,6 @@ impl App {
             return;
         }
         let draft = self.composer.text();
-        // A command is one row: a prompt whose first line happens to start with
-        // a slash is still a prompt.
         let single = !draft.trim_end().contains('\n');
         if single && let Some(named) = command::parse(&draft) {
             self.composer.take();
@@ -169,7 +153,6 @@ impl App {
         self.submit();
     }
 
-    /// One `/` command (ADR-0011 §8, §14).
     fn run(&mut self, named: Command) {
         match named {
             Command::New => self.new_session(),
@@ -184,10 +167,10 @@ impl App {
     }
 
     /// `/new`: the front end is asked for a fresh session GUID, and the
-    /// transcript is emptied only once it answers with one (ADR-0015 §2): a
-    /// session that cannot start leaves the conversation where it was. A run in
-    /// flight is cancelled first, and the renew is queued behind it, because the
-    /// driver's thread is one thread.
+    /// transcript is emptied only once it answers with one (ADR-0015): a
+    /// session that cannot start leaves the conversation where it was. A run
+    /// in flight is cancelled first, and the renew is queued behind it,
+    /// because the driver's thread is one thread.
     fn new_session(&mut self) {
         if let Some(cancel) = &self.running {
             cancel.trigger();
@@ -198,7 +181,6 @@ impl App {
         self.renew = Renew::Asked;
     }
 
-    /// `Esc`: the completion, then the selection.
     fn dismiss(&mut self) {
         if self.completion.take().is_some() {
             self.walking = None;
@@ -207,12 +189,10 @@ impl App {
         self.selection = Selection::default();
     }
 
-    /// Something that has the screen until `Esc`.
     fn show(&mut self, overlay: Overlay) {
         self.overlay = Some(overlay);
     }
 
-    /// PgUp and PgDn, or one screenful of a spill file.
     fn scroll_page(&mut self, up: bool) {
         if let Some(Overlay::Spill(spill)) = self.overlay.as_mut() {
             spill.scroll_by(self.page, up);
@@ -221,8 +201,6 @@ impl App {
         self.scroll_by(self.page, up);
     }
 
-    /// One scroll, clamped at the newest row. The window clamps the other end:
-    /// a thread has a top, and scrolling past it shows nothing new.
     fn scroll_by(&mut self, rows: usize, up: bool) {
         self.scroll = if up {
             self.scroll.saturating_add(rows)
@@ -231,8 +209,8 @@ impl App {
         };
     }
 
-    /// Recomputes what `@` is completing, and asks for a walk of the workspace
-    /// only when the answer could have changed (ADR-0011 §16).
+    /// Recomputes what `@` is completing, and asks for a walk of the
+    /// workspace only when the answer could have changed (ADR-0011).
     fn refresh_completion(&mut self) {
         let Some(query) = completion::query(self.composer.row()) else {
             self.completion = None;
@@ -251,8 +229,6 @@ impl App {
         self.completion = Some(Completion::new(query, self.generation));
     }
 
-    /// `Tab` or `Enter`: the offered path replaces what was typed after the
-    /// `@`, and the completion closes.
     fn accept_completion(&mut self) {
         let Some(open) = self.completion.as_ref() else {
             return;
@@ -266,8 +242,6 @@ impl App {
         self.composer.splice(at, &path);
     }
 
-    /// Ctrl-Y, the keyboard twin of a drag: the rows a keyboard selection
-    /// covers, or the newest answer when nothing is selected.
     fn copy_last_answer(&mut self) {
         if !self.selection.is_empty() {
             self.copy_selection();
@@ -283,8 +257,6 @@ impl App {
         }
     }
 
-    /// Shift+Up and Shift+Down: a selection made without a pointer, over whole
-    /// rows from the newest one upwards (ADR-0011 §7).
     fn select_by_keyboard(&mut self, grow: bool) {
         let area = self.viewport.area;
         let rows = self.viewport.rows.len();
@@ -309,8 +281,6 @@ impl App {
         };
     }
 
-    /// Moves the mark down or up the offered paths, and says whether there was
-    /// an offer to move in.
     fn choose_completion(&mut self, down: bool) -> bool {
         let Some(completion) = self.completion.as_mut() else {
             return false;
@@ -327,19 +297,14 @@ impl App {
         true
     }
 
-    /// The selection, as the rows it covers (ADR-0011 §7).
     fn copy_selection(&mut self) {
         if let Some(text) = selection::copied(&self.viewport, &self.selection) {
             self.copy(&text);
         }
-        // Copied or not, the selection is spent: a second Ctrl-Y copies the
-        // last answer rather than silently repeating the last drag.
         self.selection = Selection::default();
         self.selecting = 0;
     }
 
-    /// A copy, and the truth about it: sent is not the same as copied, and a
-    /// refusal is a refusal (ADR-0013).
     fn copy(&mut self, text: &str) {
         let rows = text.lines().count();
         let said = match self.clipboard.copy(text) {
@@ -354,8 +319,6 @@ impl App {
         self.note_info(said);
     }
 
-    /// Ctrl-O, and a click on the affordance row: the untruncated output of the
-    /// newest command whose output did not fit (ADR-0011 §9).
     fn open_spill(&mut self) {
         let path = self.entries.iter().rev().find_map(|entry| match entry {
             Entry::Call(call) => call.spill_file().map(std::path::Path::to_path_buf),
@@ -367,7 +330,6 @@ impl App {
         }
     }
 
-    /// The spill file one row of the transcript offers, opened.
     fn show_spill(&mut self, path: &std::path::Path) {
         match Spill::open(path) {
             Ok(spill) => self.overlay = Some(Overlay::Spill(spill)),

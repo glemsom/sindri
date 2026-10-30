@@ -9,7 +9,6 @@ use sindri_core::agent::{Report, Stopped};
 use sindri_core::output::to_json;
 use sindri_core::provider::Usage;
 
-/// A session GUID, shaped like the kernel's own but belonging to nothing.
 const SESSION: &str = "0f4a2f2e-6a3b-4b4d-9a2c-9d1f2a3b4c5d";
 
 #[test]

@@ -13,8 +13,6 @@ use std::path::{Path, PathBuf};
 use sindri_core::config::{Document, KEYS, Key};
 use tempfile::TempDir;
 
-/// A document at a temporary path, with `config.toml` already holding `text`
-/// when `text` is given.
 fn document(text: Option<&str>) -> (TempDir, PathBuf, Document) {
     let dir = TempDir::new().expect("a temp directory");
     let path = dir.path().join("sindri/config.toml");
@@ -26,7 +24,6 @@ fn document(text: Option<&str>) -> (TempDir, PathBuf, Document) {
     (dir, path, document)
 }
 
-/// The file's own text.
 fn text(path: &Path) -> String {
     std::fs::read_to_string(path).unwrap_or_default()
 }
@@ -163,7 +160,6 @@ fn a_secret_is_never_handed_back_but_the_file_keeps_it() {
     assert_eq!(reread.editable(Key::ApiKey), "");
     assert!(reread.is_set(Key::ApiKey));
 
-    // An empty value unsets the key: the default is the environment again.
     reread.set(Key::ApiKey, "").expect("unset");
     assert!(!reread.is_set(Key::ApiKey));
     reread.save().expect("written");
@@ -216,7 +212,6 @@ fn every_key_the_form_offers_is_one_the_file_can_carry() {
     let written = text(&path);
     let reread = Document::load_at(&path).expect("parses");
     for key in KEYS {
-        // Every key the form offers loads without the schema calling it unknown.
         let _ = reread.is_set(key);
         assert!(
             written.contains(key.name()) || !reread.is_set(key),

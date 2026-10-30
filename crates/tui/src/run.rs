@@ -1,6 +1,6 @@
 //! The one place this crate owns a terminal: raw mode, the alternate screen,
 //! the input thread and the render loop. Everything the loop draws comes from
-//! [`App`]; everything it runs comes from a [`Driver`] (ADR-0011 §1).
+//! [`App`]; everything it runs comes from a [`Driver`] (ADR-0011).
 
 use std::io::IsTerminal;
 use std::sync::mpsc::{self, Sender};
@@ -19,22 +19,18 @@ use crate::render;
 
 pub use crate::render::Card;
 
-/// How often a card that is waiting to be dismissed looks for a key.
 const CARD_POLL: Duration = Duration::from_millis(200);
 
-/// How the session ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Ending {
-    /// The user quit.
     Left,
-    /// Nothing could run, so nothing did.
     BootFailed,
 }
 
 /// Opens the frame on the alternate screen and runs it until the user leaves.
 /// `cancel` is the launch's one flag: the front end has already pointed the
-/// process's signals at it, so a `kill -INT` ends the run in flight exactly as
-/// `Ctrl-C` does (ADR-0015 §8).
+/// process's signals at it, so a `kill -INT` ends the run in flight exactly
+/// as `Ctrl-C` does (ADR-0015).
 pub fn open(launch: Launch, driver: Box<dyn Driver>, cancel: Cancel) -> Ending {
     match alternate_screen() {
         Some(mut terminal) => {
@@ -47,8 +43,6 @@ pub fn open(launch: Launch, driver: Box<dyn Driver>, cancel: Cancel) -> Ending {
     }
 }
 
-/// Draws the card a failed boot leaves behind, and holds it until the user has
-/// read it: nothing else is ever drawn.
 pub fn refuse(card: Card) -> Ending {
     match alternate_screen() {
         Some(mut terminal) => {
@@ -62,25 +56,23 @@ pub fn refuse(card: Card) -> Ending {
 }
 
 /// The alternate screen, or `None` where there is no terminal to open one on:
-/// nothing is drawn to a stream that is not one, because a card that cannot be
-/// seen is a card that cannot be dismissed.
+/// nothing is drawn to a stream that is not one, because a card that cannot
+/// be seen is a card that cannot be dismissed.
 fn alternate_screen() -> Option<DefaultTerminal> {
     if !std::io::stdout().is_terminal() {
         return None;
     }
     let terminal = ratatui::init();
     // The frame takes the mouse because it draws its own selection: a drag
-    // copies rendered rows, and Shift hands the gesture back (ADR-0011 §7).
+    // copies rendered rows, and Shift hands the gesture back (ADR-0011).
     let _ = crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture,);
     Some(terminal)
 }
 
-/// Hands the mouse back to the terminal, whatever happens next.
 fn release_mouse() {
     let _ = crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture,);
 }
 
-/// The card a failed boot draws, held until the user has read it.
 fn show_card(terminal: &mut DefaultTerminal, card: &Card) -> Ending {
     let mut dismissed = false;
     while !dismissed {
@@ -101,7 +93,6 @@ fn show_card(terminal: &mut DefaultTerminal, card: &Card) -> Ending {
     Ending::BootFailed
 }
 
-/// The session itself: keys in, events in, one frame out.
 fn session(
     terminal: &mut DefaultTerminal,
     launch: Launch,
@@ -113,12 +104,12 @@ fn session(
     listen_for_keys(tx.clone());
     let jobs = drive(driver, tx.clone());
     // At most one walk of the workspace at a time: a keystroke during a walk
-    // asks for the newest answer, and the frame asks again when that one lands
-    // (ADR-0013). Typing never queues ten walks.
+    // asks for the newest answer, and the frame asks again when that one
+    // lands (ADR-0013). Typing never queues ten walks.
     let mut walking = false;
 
-    // The frame is not on a clock: it is drawn when there is something to say,
-    // and nothing has been said yet — so the first frame is drawn here.
+    // The frame is not on a clock: it is drawn when there is something to
+    // say, and nothing has been said yet — so the first frame is drawn here.
     let mut painted = paint(terminal, &mut app);
     while painted {
         match rx.recv() {
@@ -141,31 +132,26 @@ fn session(
     Ending::Left
 }
 
-/// Draws one frame and says whether the terminal will take another.
-///
 /// The terminal's cursor is hidden while the frame is written and shown again
 /// where the composer puts it. A frame that leaves it showing carries it
-/// wherever the diff writes next, and a streamed answer repaints the transcript
-/// every frame: a reader then watches the cursor leave the composer and come
-/// back. `draw` shows it at the position the frame set and never hides it, so
-/// the hiding is the loop's (ADR-0011 §4, §11).
+/// wherever the diff writes next, and a streamed answer repaints the
+/// transcript every frame: a reader then watches the cursor leave the
+/// composer and come back. `draw` shows it at the position the frame set and
+/// never hides it, so the hiding is the loop's (ADR-0011).
 ///
 /// Which is also why a frame is drawn only because something happened: every
 /// frame ends by showing the cursor and moving it to the composer, and a
 /// terminal restarts its blink on every move. A loop that redrew an unchanged
-/// frame would leave an idle composer blinking at the frame rate (ADR-0011 §4).
+/// frame would leave an idle composer blinking at the frame rate (ADR-0011).
 fn paint(terminal: &mut DefaultTerminal, app: &mut App) -> bool {
     let _ = terminal.hide_cursor();
     terminal.draw(|frame| render::draw(app, frame)).is_ok()
 }
 
-/// One message from anywhere, applied to the frame.
 fn apply(app: &mut App, message: Msg) {
     match message {
         Msg::Key(key) => app.key(key),
         Msg::Mouse(mouse) => app.mouse(mouse),
-        // Nothing in the frame changes, and the frame is being drawn anyway:
-        // the draw asks the terminal its size (ADR-0011 §4).
         Msg::Resize => {}
         Msg::Event(event) => app.event(event),
         Msg::Output(side, text) => app.output(side, &text),
@@ -177,8 +163,6 @@ fn apply(app: &mut App, message: Msg) {
     }
 }
 
-/// Starts the next prompt when the frame is idle: the queue first, then the
-/// draft. A prompt typed mid-run waits here, not in the model's way.
 fn begin(app: &mut App, jobs: &Sender<Task>) {
     if app.take_renew() && jobs.send(Task::Renew).is_err() {
         return;
@@ -194,7 +178,7 @@ fn begin(app: &mut App, jobs: &Sender<Task>) {
 }
 
 /// Walks the workspace on a thread of its own for the completion that just
-/// asked for it: the composer never waits for a filesystem (ADR-0011 §16).
+/// asked for it: the composer never waits for a filesystem (ADR-0011).
 fn walk(app: &mut App, tx: &Sender<Msg>, walking: &mut bool, root: &std::path::Path) {
     if *walking {
         return;
@@ -216,8 +200,6 @@ fn walk(app: &mut App, tx: &Sender<Msg>, walking: &mut bool, root: &std::path::P
     });
 }
 
-/// Reads keys on their own thread, so the frame never blocks on a terminal that
-/// says nothing.
 fn listen_for_keys(tx: Sender<Msg>) {
     std::thread::spawn(move || {
         loop {
@@ -233,8 +215,8 @@ fn listen_for_keys(tx: Sender<Msg>) {
                     }
                 }
                 // A resize has nothing to change in the frame, but it is the
-                // one thing that asks for a frame: the draw reads the terminal's
-                // new size (ADR-0011 §4).
+                // one thing that asks for a frame: the draw reads the
+                // terminal's new size (ADR-0011).
                 Ok(TerminalEvent::Resize(..)) => {
                     if tx.send(Msg::Resize).is_err() {
                         return;
@@ -247,8 +229,6 @@ fn listen_for_keys(tx: Sender<Msg>) {
     });
 }
 
-/// Runs prompts, one at a time, on their own thread: the frame keeps drawing
-/// while the model is thinking.
 fn drive(mut driver: Box<dyn Driver>, tx: Sender<Msg>) -> Sender<Task> {
     let (tasks, queue) = mpsc::channel::<Task>();
     std::thread::spawn(move || {
@@ -258,9 +238,7 @@ fn drive(mut driver: Box<dyn Driver>, tx: Sender<Msg>) -> Sender<Task> {
                     let finished = driver.run(&job.prompt, job.cancel, Tap::new(tx.clone()));
                     tx.send(Msg::Finished(finished))
                 }
-                // `/new`: a fresh GUID and a fresh record, in the same frame.
                 Task::Renew => tx.send(Msg::Renewed(driver.renew())),
-                // `/settings`: the config file again, before the next prompt.
                 Task::Reload => tx.send(Msg::Reloaded(driver.reload())),
             };
             if sent.is_err() {

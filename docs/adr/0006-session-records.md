@@ -1,35 +1,28 @@
-# 0006 — Session records
+---
+status: accepted
+date: 2026-10-29
+---
 
-- **Status:** accepted
-- **Date:** 2025-10-29
+# 0006 — Every run leaves a record
 
 ## Decision
 
-Every run creates `$XDG_STATE_HOME/sindri/sessions/<guid>/`:
+`$XDG_STATE_HOME/sindri/sessions/<guid>/` holds:
 
-- `session.json` — metadata: provider, model, whether the run was sandboxed or
-  unsafe, start/end, turns, usage, stop reason — and the failure, when one ended
-  it. Rewritten in one atomic rename when the run ends, so a reader never sees
-  half a document. Nothing else is touched until then.
-- `transcript.jsonl` — one JSON object per line: the prompt, each assistant
-  turn, each tool call, each tool result. Written and flushed as the run goes,
-  because the end is exactly what a crash takes away.
-- `tmp/` — the writable session temp, plus `home/` mounted as `HOME`
-- `status.json` — bwrap's `--json-status-fd` documents, one per line, annotated
-  with the call they belong to and written the moment each arrives. A killed run
-  therefore keeps the `child-pid` document, which is how a post-mortem tells "the
-  sandbox never started" from "the command never finished".
+| entry | contents |
+| --- | --- |
+| `session.json` | provider, model, enforcement, start/end, turns, tool_calls, duration_ms, usage, `stopped`, `error`. Written at start (`stopped: running`), rewritten by atomic rename at the end |
+| `transcript.jsonl` | one JSON object per line: the prompt, each assistant turn, each tool call, each tool result. Flushed as the run goes |
+| `status.json` | bwrap `--json-status-fd` documents, one JSON line each, annotated with the call they belong to |
+| `tmp/` | the writable session temp |
+| `tmp/home/` | the sandbox `HOME`, empty and writable |
 
-A record that still says `stopped: running` is a run that crashed. Credentials
-are redacted before a single byte is written. Everything the run was asked or
-answered, and every command it ran, is read back with
-`sindri sessions show <guid>`.
-
-v0.1 deletes nothing and prunes nothing; a manual `sessions prune` command is a
-later issue. The `session` field in the JSON output is this directory's GUID.
+- A record still saying `stopped: running` is a crashed or superseded run.
+- Credentials are redacted before the first byte is written.
+- Read back with `sindri sessions show <guid>`; the GUID is the JSON output's `session` field.
+- v0.1 prunes nothing; `sessions prune` is a later issue.
 
 ## Consequences
 
-- After a failure, the whole run is inspectable without re-running it.
-- TUI session restore needs no new storage design.
-- Disk grows; accepted for now, revisit before 1.0.
+- A failure is inspectable without a re-run; session restore needs no new storage design.
+- Disk grows; revisit before 1.0.

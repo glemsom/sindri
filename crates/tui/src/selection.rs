@@ -1,29 +1,23 @@
-//! Selecting rendered rows with the mouse, and the text that leaves with them:
-//! exactly the rows the frame drew, with every style dropped (ADR-0011 §7).
-//!
-//! The selection is a pair of screen cells, resolved against the rows the last
-//! frame drew, so a copy is always of what the user saw — not of the model's
-//! markdown source, and not of a style run a terminal would have to interpret.
+//! Selecting rendered rows with the mouse, and the text that leaves with
+//! them: exactly the rows the frame drew, with every style dropped
+//! (ADR-0011). The selection is a pair of screen cells, resolved against the
+//! rows the last frame drew, so a copy is always of what the user saw — not
+//! of the model's markdown source, and not of a style run a terminal would
+//! have to interpret.
 
 use std::path::PathBuf;
 
 use ratatui::layout::{Position, Rect};
 use unicode_width::UnicodeWidthChar;
 
-/// What the transcript column last drew: its rectangle, the plain text of each
-/// visible row, and the row that offers a spill file.
 #[derive(Debug, Clone, Default)]
 pub struct Viewport {
-    /// Where the column was on screen.
     pub area: Rect,
-    /// One entry per visible row, ANSI stripped.
     pub rows: Vec<String>,
-    /// Every row holding a spill affordance, with the file it offers.
     pub spill: Vec<(usize, PathBuf)>,
 }
 
 impl Viewport {
-    /// Whether a screen cell is inside the column.
     pub fn holds(&self, at: Position) -> bool {
         at.x >= self.area.x
             && at.x < self.area.x + self.area.width
@@ -31,7 +25,6 @@ impl Viewport {
             && at.y < self.area.y + self.area.height
     }
 
-    /// The spill file a row offers, when it offers one.
     pub fn spilled(&self, row: usize) -> Option<&PathBuf> {
         self.spill
             .iter()
@@ -39,26 +32,19 @@ impl Viewport {
             .map(|(_, path)| path)
     }
 
-    /// Which row of the column a screen row is, when it is one.
     pub fn row_of(&self, at: Position) -> Option<usize> {
         self.holds(at).then(|| (at.y - self.area.y) as usize)
     }
 }
 
-/// A selection being dragged: where the drag began and where it is now, in
-/// screen cells.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Selection {
-    /// The cell the drag started on.
     pub anchor: Position,
-    /// The cell the pointer is on now.
     pub head: Position,
-    /// Whether the button is still down.
     pub dragging: bool,
 }
 
 impl Selection {
-    /// A selection that begins where the button went down.
     pub fn start(at: Position) -> Self {
         Selection {
             anchor: at,
@@ -67,12 +53,10 @@ impl Selection {
         }
     }
 
-    /// The button came up: the selection is what it is.
     pub fn finish(&mut self) {
         self.dragging = false;
     }
 
-    /// Whether anything is selected: a click is not a drag.
     pub fn is_empty(&self) -> bool {
         self.anchor == self.head
     }
@@ -80,8 +64,8 @@ impl Selection {
 
 /// The text a selection takes: the rows it covers, the first from the column
 /// the drag started on, the last up to the column it ended on, and every row
-/// between in full. Rows are joined with one newline each, and nothing else is
-/// added — a copy is not a paraphrase.
+/// between in full. Rows are joined with one newline each, and nothing else
+/// is added — a copy is not a paraphrase.
 pub fn copied(viewport: &Viewport, selection: &Selection) -> Option<String> {
     if selection.is_empty() || viewport.rows.is_empty() {
         return None;
@@ -90,7 +74,6 @@ pub fn copied(viewport: &Viewport, selection: &Selection) -> Option<String> {
     let area = viewport.area;
     let first = row_in(viewport, start)?;
     let last = row_in(viewport, end)?;
-    // A drag that runs off the bottom of the column takes its last row whole.
     let below = end.y >= area.y + viewport.rows.len() as u16;
     let mut lines = Vec::new();
     for index in first..=last {
@@ -138,8 +121,8 @@ fn char_at(row: &str, column: usize) -> usize {
     row.chars().count()
 }
 
-/// The character just past the one covering `column`, so a selection that ends
-/// on a wide glyph includes all of it.
+/// The character just past the one covering `column`, so a selection that
+/// ends on a wide glyph includes all of it.
 fn char_after(row: &str, column: usize) -> usize {
     let mut used = 0;
     for (index, ch) in row.chars().enumerate() {
@@ -151,7 +134,6 @@ fn char_after(row: &str, column: usize) -> usize {
     row.chars().count()
 }
 
-/// Two cells, in reading order.
 fn ordered(one: Position, other: Position) -> (Position, Position) {
     if (one.y, one.x) <= (other.y, other.x) {
         (one, other)
@@ -160,9 +142,6 @@ fn ordered(one: Position, other: Position) -> (Position, Position) {
     }
 }
 
-/// The row a cell is on, clamped to the rows that were drawn: a drag that runs
-/// off the bottom of the column stops at its last row rather than selecting
-/// nothing.
 fn row_in(viewport: &Viewport, at: Position) -> Option<usize> {
     let row = at.y.checked_sub(viewport.area.y)? as usize;
     let last = viewport.rows.len().checked_sub(1)?;

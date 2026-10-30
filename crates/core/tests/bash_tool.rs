@@ -121,7 +121,6 @@ fn a_call_the_sandbox_never_started_is_reported_as_a_tool_error() {
     );
 }
 
-/// A well-formed call to `bash`.
 pub fn command_call(id: &str, command: &str) -> Call {
     Call::new(
         id,

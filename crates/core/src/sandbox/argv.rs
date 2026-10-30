@@ -1,9 +1,5 @@
 //! The enforced argv, derived from the policy. No hand-written bwrap invocation
 //! exists anywhere else in the tree (ADR-0002).
-//!
-//! `to_argv` is a pure function of the policy: it reads nothing from the
-//! ambient environment, so enforcement cannot change behind the description's
-//! back.
 
 use std::os::fd::RawFd;
 
@@ -14,18 +10,13 @@ use super::SandboxPolicy;
 /// the host.
 pub const LOCALE: &str = "C.UTF-8";
 
-/// What actually runs: bubblewrap wrapping the command, or the command alone
-/// under `--yolo-unsafe`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Invocation {
-    /// The command inside bwrap.
     Sandboxed(Vec<String>),
-    /// The command with the user's own privileges.
     Unsandboxed(Vec<String>),
 }
 
 impl Invocation {
-    /// The exact argv to execute.
     pub fn argv(&self) -> &[String] {
         match self {
             Invocation::Sandboxed(argv) | Invocation::Unsandboxed(argv) => argv,

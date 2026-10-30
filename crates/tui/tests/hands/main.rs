@@ -1,9 +1,8 @@
-//! The hands, driven the way a user drives them: a drag that copies, a refusal
-//! that says it refused, `@` completion, the `/` commands, `?`'s list of
-//! bindings, and the spill file of an output too large to show (issue #17).
-//!
-//! Every copy goes to a clipboard the test owns: nothing here touches the
-//! user's real clipboard (ADR-0013).
+//! The hands, driven the way a user drives them: a drag that copies, a
+//! refusal that says it refused, `@` completion, the `/` commands, `?`'s list
+//! of bindings, and the spill file of an output too large to show (issue
+//! #17). Every copy goes to a clipboard the test owns: nothing here touches
+//! the user's real clipboard (ADR-0013).
 
 #![allow(
     clippy::expect_used,
@@ -23,7 +22,6 @@ use sindri_tui::overlay::BINDINGS;
 use sindri_tui::render;
 use sindri_tui::{App, Launch};
 
-/// A clipboard that records what it was handed, and answers as told.
 #[derive(Clone)]
 struct Fake {
     seen: Arc<Mutex<Vec<String>>>,
@@ -81,7 +79,6 @@ fn app_with(clipboard: Fake) -> App {
     )
 }
 
-/// A frame with one question and one answer, drawn at 100×20.
 fn answered(clipboard: Fake) -> App {
     let mut app = app_with(clipboard);
     app.note_info("a question");
@@ -135,7 +132,6 @@ fn mouse(app: &mut App, kind: MouseEventKind, column: u16, row: u16) {
     });
 }
 
-/// The notes the frame has written, as one string.
 fn notes(app: &App) -> String {
     app.entries()
         .iter()

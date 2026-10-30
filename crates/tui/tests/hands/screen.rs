@@ -30,7 +30,6 @@ fn question_mark_lists_every_binding_and_esc_closes_it() {
             "the overlay lists {wanted:?}: {rows}"
         );
     }
-    // Every gesture is beside the key that does the same thing.
     for gesture in ["wheel", "drag", "click the spill row"] {
         assert!(
             rows.contains(gesture),

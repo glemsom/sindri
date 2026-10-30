@@ -8,17 +8,23 @@ use std::path::{Path, PathBuf};
 use super::entry::{Entry, Meta};
 use crate::paths::{SessionDir, state_dir};
 
-/// A record that cannot be shown, said in a way a shell can act on.
 #[derive(Debug)]
 pub enum ShowError {
     /// The id is not a session GUID: never a path, so a lookup cannot escape.
-    BadId { id: String },
-    /// No session is recorded under that id.
-    Missing { path: PathBuf },
-    /// The record is there and cannot be read.
-    Unreadable { path: PathBuf, source: io::Error },
-    /// The record is there and is not a record.
-    Corrupt { path: PathBuf, detail: String },
+    BadId {
+        id: String,
+    },
+    Missing {
+        path: PathBuf,
+    },
+    Unreadable {
+        path: PathBuf,
+        source: io::Error,
+    },
+    Corrupt {
+        path: PathBuf,
+        detail: String,
+    },
 }
 
 impl fmt::Display for ShowError {
@@ -38,16 +44,12 @@ impl fmt::Display for ShowError {
 
 impl std::error::Error for ShowError {}
 
-/// One run as it was written down: its metadata and its transcript in order.
 pub struct Stored {
-    /// What `session.json` says.
     pub meta: Meta,
-    /// What `transcript.jsonl` says, line for line.
     pub entries: Vec<Entry>,
 }
 
 impl Stored {
-    /// The record a session GUID names, read from the state directory.
     pub fn load(id: &str) -> Result<Self, ShowError> {
         if !is_session_id(id) {
             return Err(ShowError::BadId { id: id.to_string() });
@@ -61,7 +63,6 @@ impl Stored {
         Stored::load_in(&session)
     }
 
-    /// The record in one session directory.
     pub fn load_in(session: &SessionDir) -> Result<Self, ShowError> {
         let root = session.root();
         let meta = read(&root.join("session.json"))?;
@@ -88,8 +89,6 @@ impl Stored {
         Ok(Stored { meta, entries })
     }
 
-    /// The record as a human reads it: who ran, what they were asked, what the
-    /// model said, what it ran and what came back.
     pub fn render(&self) -> String {
         let mut out = format!(
             "session {} ({}/{}); recorded by sindri {}\n",
@@ -179,7 +178,6 @@ impl Stored {
     }
 }
 
-/// One file of the record, read as text.
 fn read(path: &Path) -> Result<String, ShowError> {
     std::fs::read_to_string(path).map_err(|source| {
         if source.kind() == io::ErrorKind::NotFound {
@@ -195,15 +193,12 @@ fn read(path: &Path) -> Result<String, ShowError> {
     })
 }
 
-/// A transcript block always ends on its own line, so the next heading starts
-/// one rather than running on.
 fn end_line(out: &mut String, text: &str) {
     if !text.ends_with('\n') {
         out.push('\n');
     }
 }
 
-/// The counters the provider reported, or that it reported nothing.
 fn usage(usage: Option<&crate::provider::Usage>) -> String {
     let Some(usage) = usage else {
         return "none reported".to_string();

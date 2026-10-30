@@ -13,12 +13,10 @@ use sindri_core::agent::Stopped;
 use sindri_core::provider::Message;
 use support::{Harness, answer, call, calls, exited};
 
-/// A prompt, as the model is shown it.
 fn asked(text: &str) -> Message {
     Message::User(text.to_string())
 }
 
-/// An answer, as the model is shown it.
 fn said(text: &str) -> Message {
     Message::Assistant {
         text: text.to_string(),
@@ -120,8 +118,6 @@ fn a_prompt_cut_short_leaves_no_half_exchange_behind() {
 
 #[test]
 fn the_thread_does_not_outlive_the_statements_it_grows_by() {
-    // A hundred prompts in one conversation: every turn is bounded by what the
-    // run was given, and none of them loses an answer.
     let mut h = Harness::new(
         (0..100).map(|n| answer(&format!("answer {n}"))).collect(),
         Vec::new(),

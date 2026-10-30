@@ -1,23 +1,17 @@
 //! Live output: a port that sees each command's output as it arrives, so a
 //! front end can show the tail of a running command without the executor
-//! knowing that a front end exists (ADR-0011 §9).
+//! knowing that a front end exists (ADR-0011).
 
 use std::io::{self, BufRead, BufReader, Read};
 use std::sync::Arc;
 
-/// Which stream a line came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Side {
-    /// The command's standard output.
     Stdout,
-    /// The command's standard error.
     Stderr,
 }
 
-/// Where a running command's output goes while it runs. One line at a time, in
-/// the order the command wrote them.
 pub trait OutputSink: Send + Sync {
-    /// One complete line, without its trailing newline.
     fn output(&self, side: Side, text: &str);
 }
 

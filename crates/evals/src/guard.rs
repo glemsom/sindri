@@ -1,21 +1,14 @@
 //! The suite refuses to run when the sandbox is not actually enforcing (issue
-//! #10). Eval 7 deliberately writes outside the writable set; on a machine with
-//! no sandbox that write would land, so the pre-flight comes first and stops
-//! everything.
-//!
-//! Two proofs, because either alone could be a comfortable lie: `doctor` must
-//! say bubblewrap is what runs, and a canary write outside the writable set must
-//! be refused by the kernel.
+//! #10): eval 7 deliberately writes outside the writable set, so a pre-flight
+//! proves bubblewrap runs and the kernel refuses the canary write.
 
 use std::path::Path;
 use std::process::Command;
 
 use crate::workspace::Workspace;
 
-/// The canary's name, inside the eval root but outside the workspace.
 const CANARY: &str = "guard-canary";
 
-/// Proves the sandbox enforces before any eval is allowed to try to escape it.
 pub fn sandbox_is_safe(bin: &Path, ws: &Workspace) -> Result<(), String> {
     let doctor = Command::new(bin)
         .current_dir(&ws.repo)

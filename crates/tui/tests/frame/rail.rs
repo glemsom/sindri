@@ -1,9 +1,8 @@
 //! The rail: every fact a user must never lose, at the widths the frame is
-//! judged at, with and without the face (ADR-0011 §4, ADR-0014).
+//! judged at, with and without the face (ADR-0011).
 
 use super::*;
 
-/// Every fact the rail must never lose, as the text a user reads.
 const FACTS: &[&str] = &[
     "cache",
     "turns 1/250",
@@ -18,7 +17,6 @@ const FACTS: &[&str] = &[
     "bwrap · 1 writable",
 ];
 
-/// A frame with one finished run on it: what a rail has to say after a prompt.
 fn spent() -> App {
     let mut app = app();
     app.event(Event::TextDelta {
@@ -55,8 +53,6 @@ fn the_rail_is_complete_without_the_face_at_a_hundred_and_at_a_hundred_and_sixty
                 "{width} columns shows {fact:?}: {rail}"
             );
         }
-        // The meter is a percentage of the window, and the cache a share of the
-        // input: both are numbers, not placeholders.
         assert!(rail.contains("cache 82%"), "{width} columns: {rail}");
         assert!(
             rail.contains("░░░░░░░░ 12.4k/200k"),
@@ -67,8 +63,6 @@ fn the_rail_is_complete_without_the_face_at_a_hundred_and_at_a_hundred_and_sixty
 
 #[test]
 fn the_rail_never_drops_a_fact_to_keep_the_face() {
-    // A short terminal: the picture fits only by pushing the sandbox posture
-    // off the screen, so it does not draw at all.
     let face = Face::kitty().expect("the embedded face decodes");
     let mut app = App::new(launch(), Some(face));
     app.finished(Finished {
@@ -98,12 +92,11 @@ fn the_rail_never_drops_a_fact_to_keep_the_face() {
 
 #[test]
 fn the_facts_start_the_row_after_the_face_and_not_one_row_lower() {
-    // A tall terminal, so the face draws. The picture keeps its shape: in cells
-    // twice as tall as they are wide a square crop takes fewer rows than the
-    // rail allows it, and reserving the difference would leave a hole between
-    // Sindri's face and his facts.
+    // A tall terminal, so the face draws. The picture keeps its shape: in
+    // cells twice as tall as they are wide a square crop takes fewer rows
+    // than the rail allows it, and reserving the difference would leave a
+    // hole between Sindri's face and his facts.
     let face = Face::kitty().expect("the embedded face decodes");
-    // Any roomy rail answers the same: the picture is bound by the width.
     let drawn = face.rows(Rect::new(0, 0, RAIL as u16, 30));
     assert!(
         drawn < sindri_tui::face::ROWS,
@@ -139,8 +132,6 @@ fn the_rule_down_the_rail_runs_unbroken_between_the_facts() {
         "│",
         "and the rule runs through the blank row between them: {rows:#?}"
     );
-    // No row of the rail is a gap in the line: a break reads as a broken
-    // panel, not as a grouping.
     for row in rows.iter().take(20) {
         let rail = rail_of(row);
         assert!(
@@ -152,8 +143,6 @@ fn the_rule_down_the_rail_runs_unbroken_between_the_facts() {
 
 #[test]
 fn the_context_meter_fills_as_the_conversation_takes_the_window() {
-    // Half of a 200k window: four of eight cells, at both widths the rail is
-    // judged at. A meter that never fills is a meter nobody can read.
     for width in [100u16, 160] {
         let mut app = app();
         app.finished(Finished {

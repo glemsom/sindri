@@ -14,9 +14,6 @@ use std::time::Duration;
 use common::provider::{MockProvider, Reply};
 use common::{Env, signal, spawn, stderr, stdout, wait_until};
 
-/// The script the mock asks for: it says where it got to, sleeps `seconds`, then
-/// says where it got to late. The marker that must never appear is written
-/// after a sleep short enough for the test to outwait it.
 fn slow_marker_script(env: &Env, seconds: u32) -> (std::path::PathBuf, std::path::PathBuf, String) {
     let started = env.workspace.join("started");
     let late = env.workspace.join("late");
@@ -66,7 +63,6 @@ fn no_command_survives_a_kill_of_sindri() {
     signal(child.id(), libc::SIGKILL);
     let _ = child.wait();
 
-    // Long enough that the command would have written the marker had it lived.
     std::thread::sleep(Duration::from_secs(5));
     assert!(
         !late.exists(),

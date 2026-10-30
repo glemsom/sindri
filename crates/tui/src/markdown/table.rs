@@ -1,5 +1,5 @@
-//! Tables: columns sized to their contents and aligned under their headers, so
-//! a table of files reads as a table rather than as pipe-separated noise.
+//! Tables: columns sized to their contents and aligned under their headers,
+//! so a table of files reads as a table rather than as pipe-separated noise.
 
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -7,17 +7,13 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::theme;
 
-/// A table as it was written: rows of cells, the header row first.
 #[derive(Debug, Default)]
 pub struct Table {
-    /// Every row's cells, in order.
     pub rows: Vec<Vec<String>>,
-    /// How many leading rows are the header.
     pub head: usize,
 }
 
 impl Table {
-    /// One cell, filled in as the parser walks the table.
     pub fn cell(&mut self, row: usize, text: String) {
         if self.rows.len() <= row {
             self.rows.push(Vec::new());
@@ -28,7 +24,6 @@ impl Table {
     }
 }
 
-/// The table as rows, one line per row, with a rule under the header.
 pub fn lines(table: &Table, width: usize) -> Vec<Line<'static>> {
     let columns = table.rows.iter().map(Vec::len).max().unwrap_or(0);
     if columns == 0 {
@@ -42,8 +37,8 @@ pub fn lines(table: &Table, width: usize) -> Vec<Line<'static>> {
             }
         }
     }
-    // A table wider than the column is cut at the last column that fits, so the
-    // rows stay aligned instead of folding into porridge.
+    // A table wider than the column is cut at the last column that fits, so
+    // the rows stay aligned instead of folding into porridge.
     let mut used = 0;
     let mut keep = 0;
     for width_found in &widths {

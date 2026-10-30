@@ -1,41 +1,34 @@
-//! Copying text out of the frame: OSC 52 to the terminal, a shell tool when the
-//! terminal cannot carry it, and a refusal said as a refusal (ADR-0011 §7,
-//! ADR-0013). Nothing here assumes a local clipboard: the frame runs over SSH
-//! and inside `tmux` (ADR-0011 §13).
+//! Copying text out of the frame: OSC 52 to the terminal, a shell tool when
+//! the terminal cannot carry it, and a refusal said as a refusal
+//! (ADR-0011). Nothing here assumes a local clipboard: the frame runs over
+//! SSH and inside `tmux`.
 
 use std::io::{IsTerminal, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 
-/// The tools tried, in order, when there is no terminal to address.
 pub const TOOLS: &[(&str, &[&str])] = &[("wl-copy", &[]), ("xclip", &["-selection", "clipboard"])];
 
 /// The most a terminal is asked to carry through one OSC 52 sequence. Past
-/// this, a copy goes through a shell tool instead: an escape of a megabyte is a
-/// hang, not a clipboard.
+/// this, a copy goes through a shell tool instead: an escape of a megabyte is
+/// a hang, not a clipboard.
 pub const OSC52_LIMIT: usize = 100_000;
 
-/// How a copy went.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Copied {
-    /// Written to the terminal as OSC 52. A terminal does not answer, so this
-    /// says the text was *sent*; saying "copied" would claim what nobody can
-    /// check.
+    /// Written to the terminal as OSC 52. A terminal does not answer, so
+    /// this says the text was *sent*; saying "copied" would claim what
+    /// nobody can check.
     Sent,
-    /// A shell tool took the text and exited cleanly.
     Tool(&'static str),
-    /// Nothing took the text, and this is why.
     Refused(String),
 }
 
-/// Where a copy goes.
 pub trait Clipboard: Send {
-    /// Copies `text`, and says how it went.
     fn copy(&self, text: &str) -> Copied;
 }
 
-/// The real clipboard: the terminal's own OSC 52, then the shell's tools.
 pub struct System {
     terminal: bool,
     path: String,
@@ -43,8 +36,6 @@ pub struct System {
 }
 
 impl System {
-    /// The clipboard this terminal offers: OSC 52 where stdout is a terminal,
-    /// the tools on the real `PATH` otherwise.
     pub fn detect() -> System {
         System {
             terminal: std::io::stdout().is_terminal(),
@@ -53,8 +44,6 @@ impl System {
         }
     }
 
-    /// A clipboard that writes `out` and looks for tools on `path`, so a test
-    /// can read the escape and a fake tool can read the text.
     pub fn new(terminal: bool, path: impl Into<String>, out: Box<dyn Write + Send>) -> System {
         System {
             terminal,
@@ -63,7 +52,8 @@ impl System {
         }
     }
 
-    /// OSC 52: `ESC ] 52 ; c ; base64 BEL`, the selection being the clipboard.
+    /// OSC 52: `ESC ] 52 ; c ; base64 BEL`, the selection being the
+    /// clipboard.
     fn oscill52(&self, text: &str) -> std::io::Result<()> {
         let Ok(mut out) = self.out.lock() else {
             return Err(std::io::Error::other("the clipboard is busy"));
@@ -74,7 +64,6 @@ impl System {
         out.flush()
     }
 
-    /// A shell tool that takes the text on stdin: `wl-copy`, then `xclip`.
     fn through_tools(&self, text: &str) -> Copied {
         let mut tried: Vec<String> = Vec::new();
         for (name, args) in TOOLS {
@@ -118,7 +107,6 @@ impl System {
         }
     }
 
-    /// The first `name` on this clipboard's `PATH`, the way a shell finds it.
     fn locate(&self, name: &str) -> Option<PathBuf> {
         self.path
             .split(':')
@@ -152,8 +140,8 @@ impl Clipboard for System {
     }
 }
 
-/// Base64, because an OSC 52 payload is base64 and one alphabet is not worth a
-/// dependency.
+/// Base64, because an OSC 52 payload is base64 and one alphabet is not
+/// worth a dependency.
 pub fn base64(bytes: &[u8]) -> String {
     const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
@@ -182,7 +170,6 @@ mod tests {
     use std::io::Write;
     use std::sync::{Arc, Mutex};
 
-    /// A writer a test can read back: what a terminal would have received.
     #[derive(Clone, Default)]
     struct Seen(Arc<Mutex<Vec<u8>>>);
 
@@ -224,7 +211,6 @@ mod tests {
 
     #[test]
     fn without_a_terminal_a_tool_takes_the_text_and_is_named() {
-        // A `wl-copy` that writes what it was given where the test can read it.
         let dir = tempfile::tempdir().expect("a temp directory");
         let out = dir.path().join("clipboard");
         let tool = dir.path().join("wl-copy");

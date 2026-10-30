@@ -1,30 +1,20 @@
-# 0003 — rig-core for providers, our own turn loop on top
+---
+status: accepted
+date: 2026-10-29
+---
 
-- **Status:** accepted
-- **Date:** 2025-10-29
-
-## Context
-
-rig-core supplies provider wires, message types, streaming and usage/cache
-accounting for many providers. It also supplies its own agent loop
-(`AgentRunner`). rig-core 0.45 was a breaking rewrite; the project moves weekly.
-
-Sindri's guarantees — turn cap semantics, cancel to exit 130, partial answer on
-cap, HTTP timeouts, the exact JSON shape — all live in loop territory.
+# 0003 — rig-core for provider wires, our own turn loop on top
 
 ## Decision
 
-- Dependency is pinned to an **exact version** (`rig-core = "=0.45.x"`), never a
-  caret range.
-- Every rig type is confined to one adapter module. A rig rewrite must touch that
-  module and nothing else.
-- We drive the loop ourselves via rig's completion API (`Model::call` /
-  `Model::stream`), not `AgentRunner`.
-- We implement the `bash` tool ourselves rather than adopting `rig-tools::Shell`,
-  because the tool's description must derive from `SandboxPolicy` (ADR-0002).
-- We build our own HTTP client with explicit timeouts; rig ships none.
+- `rig-core = "=0.45.0"` exact pin, never a caret range (`crates/core/Cargo.toml`).
+- Every rig type is confined to `crates/core/src/provider/rig_wire.rs`; a rig rewrite touches that file and nothing else.
+- The loop is ours, driven via `Model::call` / `Model::stream`, never `AgentRunner`.
+- The `bash` tool is ours, not `rig-tools::Shell`: its description derives from `SandboxPolicy` (ADR-0002).
+- Our own HTTP client with explicit timeouts; rig ships none.
 
 ## Consequences
 
-- Upgrading rig is a scheduled task in one file, not a refactor.
-- We give up rig's built-in retries and turn bookkeeping; our tests own them.
+- Turn cap, exit 130, partial answer on cap, timeouts and the JSON shape (ADR-0004) live in loop code we own and test.
+- Upgrading rig is one file, not a refactor.
+- rig's retries and turn bookkeeping are given up; our tests own them.

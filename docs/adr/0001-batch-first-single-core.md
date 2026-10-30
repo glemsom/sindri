@@ -1,22 +1,19 @@
-# 0001 — Batch mode first, TUI later, one core behind both
+---
+status: accepted
+date: 2026-10-29
+---
 
-- **Status:** accepted
-- **Date:** 2025-10-29
-
-## Context
-
-Sindri has two intended front ends: a full-screen TUI for humans and a Unix
-filter (`git diff | sindri -b "summarise"`) for scripts. The TUI is the
-attractive part; the filter is the part that defines the product's contract.
+# 0001 — Batch mode first, one core behind every front end
 
 ## Decision
 
-Build batch mode to completion before any TUI code. The agent core knows
-nothing about a terminal: it emits events on a channel and returns a result.
-`batch` and (later) `tui` are thin front ends over that core.
+- Batch mode is finished before any TUI code; its contract is fixed first.
+- The core knows no terminal: it emits `Event` on a channel and returns a `Report`.
+- `crates/cli/src/batch.rs`, `crates/cli/src/frame.rs` and `crates/tui` are front ends; `crates/core` imports none of them.
+- A front end costs one `Driver` impl (ADR-0012) and no change in the core.
 
 ## Consequences
 
-- The stdout/stderr/JSON/exit-code contract is fixed early, when it is cheap.
-- The TUI becomes a rendering exercise, not a rewrite.
-- No front end may be imported by the core; a CI check would catch it.
+- The stdout/stderr/JSON/exit-code contract (ADR-0004) is fixed while it is cheap.
+- The TUI is a rendering exercise, not a rewrite.
+- No CI check enforces the import rule; review does.

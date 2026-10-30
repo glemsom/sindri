@@ -1,8 +1,8 @@
 //! `/settings`: the modal over the one config file, through the one schema
-//! (issue #18, ADR-0014). Every test points the frame at a temporary config
-//! path, so nothing here can read or write a real user's config — and every
-//! test that claims "nothing is written yet" says it about a file that does not
-//! exist.
+//! (issue #18, ADR-0014). Every test points the frame at a temporary
+//! config path, so nothing here can read or write a real user's config —
+//! and every test that claims "nothing is written yet" says it about a
+//! file that does not exist.
 
 #![allow(
     clippy::expect_used,
@@ -19,7 +19,6 @@ use sindri_tui::render;
 use sindri_tui::{App, Launch};
 use tempfile::TempDir;
 
-/// A frame pointed at a temporary config file, which holds `file` when given.
 struct Fixture {
     _dir: TempDir,
     path: PathBuf,
@@ -52,7 +51,6 @@ fn fixture(file: Option<&str>) -> Fixture {
     }
 }
 
-/// What is in the config file now.
 fn written(path: &Path) -> String {
     std::fs::read_to_string(path).unwrap_or_default()
 }
@@ -61,7 +59,6 @@ fn press(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
     app.key(KeyEvent::new(code, modifiers));
 }
 
-/// Types a run of characters, as a keyboard would.
 fn type_text(app: &mut App, text: &str) {
     for ch in text.chars() {
         press(app, KeyCode::Char(ch), KeyModifiers::NONE);
@@ -72,13 +69,11 @@ fn down(app: &mut App) {
     press(app, KeyCode::Down, KeyModifiers::NONE);
 }
 
-/// Opens `/settings` from the composer, the way a user does.
 fn open(app: &mut App) {
     type_text(app, "/settings");
     press(app, KeyCode::Enter, KeyModifiers::NONE);
 }
 
-/// The rows of the frame, as a terminal would show them.
 fn screen(app: &mut App, width: u16, height: u16) -> Vec<String> {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
     terminal
@@ -98,7 +93,6 @@ fn shown(rows: &[String]) -> String {
     rows.join("\n")
 }
 
-/// The notes the frame has written, as one string.
 fn notes(app: &App) -> String {
     app.entries()
         .iter()
@@ -110,7 +104,6 @@ fn notes(app: &App) -> String {
         .join("\n")
 }
 
-/// The row on screen that names one key of the schema.
 fn row(rows: &[String], key: &str) -> String {
     rows.iter()
         .find(|row| row.contains(key))
@@ -156,7 +149,6 @@ fn settings_opens_a_modal_over_every_key_the_file_carries() {
 fn esc_discards_every_edit_and_the_file_is_never_touched() {
     let mut f = fixture(None);
     open(&mut f.app);
-    // A model, a turn cap and a secret: everything a real edit would touch.
     down(&mut f.app);
     type_text(&mut f.app, "qwen3-32b");
     down(&mut f.app);
@@ -173,7 +165,6 @@ fn esc_discards_every_edit_and_the_file_is_never_touched() {
     assert!(!f.path.exists(), "and the config file is untouched");
     assert!(!f.app.take_reload(), "and nothing asks the run to change");
 
-    // The draft is gone: what the modal shows now is what the file says.
     open(&mut f.app);
     let rows = shown(&screen(&mut f.app, 100, 30));
     assert!(
@@ -213,7 +204,6 @@ fn enter_writes_the_file_at_once_and_the_next_prompt_is_told_to_read_it() {
 fn a_value_the_schema_refuses_keeps_the_modal_open_and_writes_nothing() {
     let mut f = fixture(Some("model = \"from-file\"\n"));
     open(&mut f.app);
-    // provider, model, base_url, api_key, then max_turns.
     for _ in 0..4 {
         down(&mut f.app);
     }

@@ -12,8 +12,6 @@ mod common;
 use common::provider::{MockProvider, Reply};
 use common::{Env, stderr, write_config};
 
-/// Batch mode against the mock as an OpenAI-compatible server. Only the
-/// settings a test names are added to the three the wire needs.
 fn run(
     env: &Env,
     mock: &MockProvider,
@@ -36,7 +34,6 @@ fn run(
         .clone()
 }
 
-/// Batch mode asking for nothing but the headers.
 fn headers(
     env: &Env,
     mock: &MockProvider,

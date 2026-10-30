@@ -14,8 +14,6 @@ use sindri_core::agent::{Event, Stopped};
 use sindri_core::provider::{Call, Message, ToolOutcome, Turn, Usage};
 use support::{Harness, Interrupt, answer, call, calls, exited, usage};
 
-/// The outcome of the first tool result in the conversation shown on turn
-/// `index`.
 fn first_result(conversations: &[Vec<Message>], index: usize) -> ToolOutcome {
     match &conversations[index][2] {
         Message::ToolResults(outcomes) => outcomes[0].clone(),

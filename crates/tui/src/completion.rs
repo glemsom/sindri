@@ -1,46 +1,29 @@
-//! `@` completion: a background walk of the workspace, ranked by how close each
-//! path is to what was typed, capped so a build directory cannot make the walk
-//! the frame's problem (ADR-0011 §16).
+//! `@` completion: a background walk of the workspace, ranked by how close
+//! each path is to what was typed, capped so a build directory cannot make
+//! the walk the frame's problem (ADR-0011).
 
 use std::path::Path;
 
-/// How many paths the completion offers at once: about a column's worth, never
-/// the tree.
 pub const ROWS: usize = 8;
-/// How many paths the walk collects before it stops and says it stopped.
 pub const CAP: usize = 20_000;
 
-/// What is being completed: where the `@` is on the row, and the path typed
-/// after it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Query {
-    /// The `@`'s column, so an accepted path replaces the whole token.
     pub at: usize,
-    /// What has been typed since the `@`.
     pub typed: String,
 }
 
-/// The completion the frame is offering: what was typed where, and the paths a
-/// walk answered with.
 #[derive(Debug, Clone)]
 pub struct Completion {
-    /// The `@`'s column, so an accepted path replaces the whole token it begins.
     pub at: usize,
-    /// What was typed after the `@`.
     pub typed: String,
-    /// The paths on offer, best first.
     pub items: Vec<String>,
-    /// Which one `Tab` or `Enter` would take.
     pub chosen: usize,
-    /// The walk this belonged to; a later walk's answer must not fill it in.
     pub generation: u64,
-    /// Whether the walk stopped at the cap with the workspace unfinished: a
-    /// completion that is not showing everything says so (ADR-0013).
     pub capped: bool,
 }
 
 impl Completion {
-    /// A completion that is waiting for its walk.
     pub fn new(query: Query, generation: u64) -> Self {
         Completion {
             at: query.at,
@@ -67,8 +50,6 @@ pub fn query(row: &str) -> Option<Query> {
     })
 }
 
-/// Whether a path is offered for a typed fragment: a dotfile only when a dot
-/// was typed, and never a fragment that cannot lead to it.
 pub fn visible(path: &str, typed: &str) -> bool {
     let typed = typed.to_lowercase();
     let dots_welcome = typed.starts_with('.') || typed.split('/').any(|part| part.starts_with('.'));
@@ -76,7 +57,6 @@ pub fn visible(path: &str, typed: &str) -> bool {
         .all(|part| dots_welcome || !part.starts_with('.'))
 }
 
-/// The paths a typed fragment offers, the closest first, at most [`ROWS`].
 pub fn offered(paths: &[String], typed: &str) -> Vec<String> {
     let mut scored: Vec<(usize, usize, usize, &String)> = paths
         .iter()
@@ -91,8 +71,6 @@ pub fn offered(paths: &[String], typed: &str) -> Vec<String> {
         .collect()
 }
 
-/// How close a path is to what was typed: 0 is the whole path, 4 is a
-/// subsequence of it. `None` is not a match at all.
 fn proximity(path: &str, typed: &str) -> Option<usize> {
     let typed = typed.strip_prefix("./").unwrap_or(typed).to_lowercase();
     let path_lower = path.to_lowercase();
@@ -116,7 +94,6 @@ fn proximity(path: &str, typed: &str) -> Option<usize> {
     subsequence(&path_lower, &typed).then_some(4)
 }
 
-/// Whether every character of `needle` appears in `hay` in order.
 fn subsequence(hay: &str, needle: &str) -> bool {
     let mut wanted = needle.chars();
     let mut next = wanted.next();
@@ -130,24 +107,19 @@ fn subsequence(hay: &str, needle: &str) -> bool {
     next.is_none()
 }
 
-/// How many directories deep a path is: the shallower path is the nearer one
-/// when two paths match equally well.
 fn depth(path: &str) -> usize {
     path.matches('/').count()
 }
 
-/// What one walk found, and whether it hit the cap before the tree ended.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Scan {
-    /// Workspace-relative paths, directories with a trailing `/`.
     pub paths: Vec<String>,
-    /// Whether the walk stopped at the cap with the tree unfinished.
     pub capped: bool,
 }
 
-/// Walks `root` for the paths `@` can offer. `.git` is skipped; `.gitignore` is
-/// deliberately not honoured, because a file the model can read is a file the
-/// user can point at (ADR-0011 §16).
+/// Walks `root` for the paths `@` can offer. `.git` is skipped; `.gitignore`
+/// is deliberately not honoured, because a file the model can read is a file
+/// the user can point at (ADR-0011).
 pub fn scan(root: &Path, cap: usize) -> Scan {
     let mut found = Scan::default();
     let mut pending = vec![String::new()];

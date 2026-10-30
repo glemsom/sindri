@@ -21,25 +21,17 @@ pub const REQUIRED_BINARIES: &[&str] = &[
 /// never started.
 const MARKER: &str = "sindri-doctor-sandbox-ok";
 
-/// What a successful probe learned.
 #[derive(Debug)]
 pub struct Report {
-    /// Exactly the text the model will be given, and what doctor prints.
     pub description: String,
 }
 
-/// Why the sandbox cannot exist on this machine.
 #[derive(Debug)]
 pub enum DoctorError {
-    /// bwrap is not installed where the sandbox would look for it.
     BwrapMissing,
-    /// bwrap is present but cannot build a namespace here.
     SandboxNotStarting { detail: String },
-    /// Binaries the system prompt promises are missing from the sandbox path.
     BinariesMissing { missing: Vec<String> },
-    /// The probe could not be set up at all.
     Setup(io::Error),
-    /// The policy refused the paths this machine offers.
     Policy(PolicyError),
 }
 
@@ -67,20 +59,11 @@ impl fmt::Display for DoctorError {
 
 impl std::error::Error for DoctorError {}
 
-/// Proves the sandbox works and returns the description the user will see.
-///
-/// The probe runs in a scratch directory of its own — not in the session
-/// namespace, and not under the state root either — and removes it afterwards,
-/// so `doctor` leaves no record behind and prunes nothing that a run wrote
-/// (ADR-0006). Proving the sandbox must not depend on the record being
-/// writable: a probe whose scratch lived under the state root would report a
-/// state root that cannot be written as a broken sandbox, and every front end
-/// would then have to invent its own words for a failure the one module already
-/// has words for (ADR-0004, ADR-0015 §5).
-///
-/// The environment is taken as a value, the one a run would be opened in
-/// (ADR-0015 §6), so the description is derived from the same workspace, `PATH`
-/// and state root the run gets rather than from a second reading of the process.
+/// Proving the sandbox must not depend on the record being writable: a probe
+/// whose scratch lived under the state root would report a state root that
+/// cannot be written as a broken sandbox, and every front end would then have to
+/// invent its own words for a failure the one module already has words for
+/// (ADR-0004).
 pub fn probe(env: &Env, extras: &[PathBuf]) -> Result<Report, DoctorError> {
     let bwrap = which("bwrap").ok_or(DoctorError::BwrapMissing)?;
     let bash = which("bash").ok_or_else(|| DoctorError::BinariesMissing {
@@ -99,7 +82,6 @@ pub fn probe(env: &Env, extras: &[PathBuf]) -> Result<Report, DoctorError> {
 
     probed?;
 
-    // The description states the shape a run gets, named by its session GUID.
     let shown_temp = state.join("sessions").join("<session>").join("tmp");
     let policy = build_policy(env, extras, shown_temp)?;
     Ok(Report {
@@ -173,7 +155,6 @@ fn run_probe(
     Ok(())
 }
 
-/// Resolves a binary the way the shell would.
 fn which(name: &str) -> Option<PathBuf> {
     use std::os::unix::fs::PermissionsExt;
 

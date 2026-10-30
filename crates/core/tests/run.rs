@@ -23,9 +23,6 @@ use tempfile::TempDir;
 /// A credential shaped like a real one but belonging to nothing.
 const KEY: &str = "sk-ant-test-not-a-real-key";
 
-/// A host to open a session on: a temporary workspace and state root, and the
-/// run environment that names them. The process is never read, which is the
-/// whole point of `Env`.
 fn host() -> (TempDir, Env) {
     let root = TempDir::new().expect("host");
     let workspace = root.path().join("workspace");
@@ -38,7 +35,6 @@ fn host() -> (TempDir, Env) {
     (root, env)
 }
 
-/// A resolved config for a run that grants `extras` beside the workspace.
 fn config(extras: &[&Path]) -> Config {
     Config {
         provider: Provider::Anthropic,
@@ -54,7 +50,6 @@ fn config(extras: &[&Path]) -> Config {
     }
 }
 
-/// A report as the loop hands it to `finish`: one turn, one answer, one ending.
 fn report(stopped: Stopped) -> Report {
     Report {
         answer: "Twelve files.".to_string(),
@@ -67,7 +62,6 @@ fn report(stopped: Stopped) -> Report {
     }
 }
 
-/// The directory a session was recorded in, under this host's state root.
 fn recorded(env: &Env, session: &Session) -> PathBuf {
     env.state.join("sessions").join(session.dir().id())
 }
@@ -165,7 +159,6 @@ fn a_record_that_cannot_be_written_is_reported_to_the_caller() {
     let (_root, env) = host();
     let session = Session::open(&env, &config(&[])).expect("a session opens");
 
-    // The directory the record lives in is gone: the end has nowhere to go.
     std::fs::remove_dir_all(session.dir().root()).expect("remove the session directory");
 
     assert!(
@@ -279,7 +272,6 @@ fn a_workspace_the_policy_refuses_starts_no_record() {
     );
 }
 
-/// Every `session.json` under the host's state root: a record a session left.
 fn records(env: &Env) -> Vec<PathBuf> {
     fn walk(dir: &Path, found: &mut Vec<PathBuf>) {
         let Ok(entries) = std::fs::read_dir(dir) else {

@@ -8,13 +8,10 @@
 /// file it read from the wrong directory.
 const GLOSSARY: &str = include_str!("../../../GLOSSARY.md");
 
-/// ADR-0015, the decision this ticket amends.
 const ADR_0015: &str = include_str!("../../../docs/adr/0015-one-module-starts-a-run.md");
 
 #[test]
 fn the_glossary_defines_boot_as_the_turn_from_flags_and_process_into_a_session() {
-    // The whole entry, wrapped lines joined: a glossary definition is a
-    // paragraph, and the word it opens with is the term.
     let entry = GLOSSARY
         .split("\n\n")
         .find(|entry| entry.starts_with("**boot**"))

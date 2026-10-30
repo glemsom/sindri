@@ -4,14 +4,12 @@
 
 use crate::provider::REDACTED;
 
-/// The secrets a run must never write down.
 #[derive(Debug, Clone, Default)]
 pub struct Redaction {
     secrets: Vec<String>,
 }
 
 impl Redaction {
-    /// The redaction for one run: every secret it knows, empties ignored.
     pub fn new(secrets: impl IntoIterator<Item = String>) -> Self {
         Redaction {
             secrets: secrets
@@ -21,7 +19,6 @@ impl Redaction {
         }
     }
 
-    /// `text` with every known secret replaced, ready to be written.
     pub fn apply(&self, text: &str) -> String {
         let mut redacted = text.to_string();
         for secret in &self.secrets {

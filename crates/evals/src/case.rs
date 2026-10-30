@@ -4,23 +4,15 @@
 use crate::checks;
 use crate::run::Run;
 
-/// One eval.
 pub struct Case {
-    /// Its number and promise, as the table prints them.
     pub name: &'static str,
-    /// The question put to the model.
     pub prompt: &'static str,
-    /// A file piped in as context, when the eval is about stdin.
     pub stdin_file: Option<&'static str>,
-    /// Flags that belong to this eval.
     pub args: &'static [&'static str],
-    /// The recorded conversation under `fixtures/`, replayed offline.
     pub recorded: &'static str,
-    /// What the run must have done, and what it must not have.
     pub check: fn(&Run) -> Vec<String>,
 }
 
-/// The whole suite, in the order the table prints it.
 pub fn all() -> Vec<Case> {
     vec![
         Case {

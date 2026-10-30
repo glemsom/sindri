@@ -1,6 +1,6 @@
 //! The answer as a reader sees it: headings, lists, quotes, tables, inline
-//! code, and fenced code with truecolour highlighting. No images, no raw HTML,
-//! no maths (ADR-0011 §6).
+//! code, and fenced code with truecolour highlighting. No images, no raw
+//! HTML, no maths (ADR-0011).
 
 mod code;
 mod table;
@@ -13,7 +13,6 @@ use ratatui::text::{Line, Span};
 use crate::theme;
 use table::Table;
 
-/// Renders markdown to rows that fit `width` columns.
 pub fn lines(source: &str, width: u16) -> Vec<Line<'static>> {
     let mut writer = Writer::new(width.max(1) as usize);
     let options = Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH;
@@ -23,13 +22,10 @@ pub fn lines(source: &str, width: u16) -> Vec<Line<'static>> {
     writer.finish()
 }
 
-/// One list being walked, and the number the next item gets.
 struct List {
     next: Option<u64>,
 }
 
-/// Everything the walker needs between two events: the line it is building and
-/// the context that decides how that line is marked.
 struct Writer {
     width: usize,
     lines: Vec<Line<'static>>,
@@ -39,7 +35,6 @@ struct Writer {
     lists: Vec<List>,
     emphasis: Modifier,
     heading: bool,
-    /// A block just ended, so the next one starts after a blank row.
     apart: bool,
     code: Option<(Option<String>, String)>,
     table: Option<Table>,
@@ -158,9 +153,6 @@ impl Writer {
         }
     }
 
-    /// A list item's marker, indented by how deep the list is nested. The
-    /// previous item is said first: a nested list arrives before its parent's
-    /// item has ended.
     fn item(&mut self) {
         self.flush();
         let Some(list) = self.lists.last_mut() else {
@@ -177,7 +169,6 @@ impl Writer {
         self.indent = " ".repeat(self.lists.len().saturating_sub(1) * 2) + &marker;
     }
 
-    /// The style the text of this moment carries.
     fn style(&self) -> Style {
         if self.heading {
             return Style::new().fg(theme::HEADING).add_modifier(Modifier::BOLD);
@@ -192,7 +183,6 @@ impl Writer {
         style
     }
 
-    /// One block ended: say it, and keep the next one apart.
     fn block_end(&mut self) {
         self.flush();
         self.apart = true;
@@ -200,7 +190,6 @@ impl Writer {
         self.pending.clear();
     }
 
-    /// The logical line built so far, wrapped to the column.
     fn flush(&mut self) {
         if self.pending.is_empty() {
             return;

@@ -12,7 +12,6 @@ pub use tap::{OutputSink, Side};
 
 use std::time::Duration;
 
-/// The single seam between the turn loop and the sandbox.
 pub trait BashExecutor: Send + Sync {
     /// Runs one `bash` script and reports a structured outcome, or `None` when
     /// the run was cancelled before the command finished: a cancelled command
@@ -24,11 +23,9 @@ pub trait BashExecutor: Send + Sync {
 /// A run killed mid-command never reaches its own end, so the documents must be
 /// handed over one at a time rather than collected and written afterwards.
 pub trait StatusSink: Send + Sync {
-    /// One document, exactly as bubblewrap wrote it.
     fn document(&self, call: u64, document: &str);
 }
 
-/// Reads the configured command timeout, refusing anything outside the contract.
 pub fn timeout_from_secs(secs: u64) -> Result<Duration, String> {
     if secs == 0 || secs > MAX_TIMEOUT_SECS {
         return Err(format!(

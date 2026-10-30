@@ -2,9 +2,6 @@
 //! Anthropic Messages wire, the OpenAI-compatible Chat Completions wire, our
 //! own HTTP client with explicit timeouts, and the translation of the
 //! library's vocabulary into ours.
-//!
-//! Nothing rig-shaped leaves this file: callers see [`Message`], [`ToolSpec`],
-//! [`Turn`] and [`Error`].
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -29,9 +26,7 @@ use crate::config::Provider;
 
 use super::{Call, Client, Delta, DeltaSink, Error, Message, ToolSpec, Turn, Usage};
 
-/// How long the provider may take to accept a connection.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
-/// How long one request may take, streaming a long answer included.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(180);
 /// The most tokens one answer may use. A model the provider library does not
 /// know has no default, and an unbounded answer is an unbounded bill.
@@ -49,10 +44,6 @@ some. You have one tool, `bash`: run commands with it rather than guessing, and 
 the exit code it reports before believing the output. Reply with the answer itself: no \
 preamble, no closing offer of further help.";
 
-/// One turn, straight through: no retries, no redaction, no policy. The
-/// provider's streaming entry point is the one called, so a front end sees the
-/// answer as it is written; the whole it folds to is the same reply a unary
-/// call would have returned.
 pub(super) fn turn(
     client: &Client,
     history: &[Message],
@@ -158,7 +149,6 @@ fn http(client: &Client) -> Result<reqwest::Client, Error> {
         .map_err(|error| Error::transport(format!("could not build the HTTP client: {error}")))
 }
 
-/// A finished reply, in our vocabulary: what it said, asked for, and cost.
 fn finish(response: CompletionResponse) -> Turn {
     let reasoning = response.reasoning();
     Turn {
@@ -185,8 +175,6 @@ fn finish(response: CompletionResponse) -> Turn {
     }
 }
 
-/// The request one turn sends: the conversation so far, the one tool, and
-/// whether reasoning is paid for.
 fn request(
     history: &[Message],
     tools: &[ToolSpec],
@@ -212,8 +200,6 @@ fn request(
             Provider::Anthropic => Reasoning::Budget {
                 tokens: THINKING_BUDGET,
             },
-            // Chat Completions takes an effort level, not a budget: asking for
-            // a budget there is a request the wire refuses outright.
             Provider::Openai => Reasoning::Effort(THINKING_EFFORT),
         };
         request.options = GenerationOptions::default().reasoning(reasoning);
@@ -221,7 +207,6 @@ fn request(
     Ok(request)
 }
 
-/// One tool, as the wire sends it.
 fn tool_definition(spec: &ToolSpec) -> Result<ToolDefinition, Error> {
     Ok(ToolDefinition::new(
         tool_name(&spec.name)?,
@@ -230,7 +215,6 @@ fn tool_definition(spec: &ToolSpec) -> Result<ToolDefinition, Error> {
     ))
 }
 
-/// One conversation item, as the wire replays it.
 fn wire_message(message: &Message) -> Result<WireMessage, Error> {
     Ok(match message {
         Message::User(text) => WireMessage::user(text.clone()),
@@ -263,8 +247,6 @@ fn wire_message(message: &Message) -> Result<WireMessage, Error> {
     })
 }
 
-/// One call's function, replayed as the model wrote it: its object of
-/// arguments, or the text it sent instead of one.
 fn tool_function(call: &Call) -> Result<ToolFunction, Error> {
     let name = tool_name(&call.name)?;
     Ok(match call.sent() {
@@ -273,14 +255,10 @@ fn tool_function(call: &Call) -> Result<ToolFunction, Error> {
     })
 }
 
-/// A tool name the wire accepts. A model that names an empty tool is answered
-/// as unusable rather than crashing the run.
 fn tool_name(name: &str) -> Result<ToolName, Error> {
     ToolName::new(name).map_err(|_| Error::transport("the model sent a call to no tool"))
 }
 
-/// A call's arguments as the wire replays them. Unusable arguments are replayed
-/// as an empty object: the result already tells the model they were rejected.
 fn arguments(
     function: &ToolFunction,
 ) -> Result<serde_json::Map<String, serde_json::Value>, String> {
@@ -290,8 +268,6 @@ fn arguments(
     }
 }
 
-/// The library's failure, as ours: the provider's own message, and the status
-/// that decides whether a retry could help.
 fn convert(error: ProviderError) -> Error {
     let report = error.report();
     Error::answered(report.http_status, report.message)

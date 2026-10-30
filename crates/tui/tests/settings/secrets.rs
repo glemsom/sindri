@@ -1,6 +1,6 @@
-//! Secrets in the modal: the key defaults to the environment, typing one warns
-//! in plaintext and is masked, a save writes only what was touched, and nothing
-//! ever echoes a value (ADR-0014).
+//! Secrets in the modal: the key defaults to the environment, typing one
+//! warns in plaintext and is masked, a save writes only what was touched, and
+//! nothing ever echoes a value (ADR-0014).
 
 use super::*;
 
@@ -10,7 +10,6 @@ fn a_save_writes_only_what_was_touched_and_never_erases_a_key_it_did_not_show() 
         "model = \"from-file\"\napi_key = \"sk-the-file-already-holds\"\nmax_turns = 40\n",
     ));
     open(&mut f.app);
-    // One edit, to a field that is not a secret: the toggle.
     for _ in 0..6 {
         down(&mut f.app);
     }
@@ -64,7 +63,6 @@ fn the_api_key_defaults_to_the_environment_and_a_typed_one_warns_in_plaintext() 
         "the field starts at the environment, not at a secret: {rows}"
     );
 
-    // base_url, then api_key.
     down(&mut f.app);
     down(&mut f.app);
     down(&mut f.app);

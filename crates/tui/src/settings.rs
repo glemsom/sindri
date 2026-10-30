@@ -1,5 +1,5 @@
-//! `/settings`: the one config file, edited through the one schema (ADR-0005,
-//! ADR-0014). The frame stages fields in memory and writes nothing until the
+//! `/settings`: the one config file, edited through the one schema
+//! (ADR-0005). The frame stages fields in memory and writes nothing until the
 //! user saves; `Esc` throws the whole draft away. A secret the file holds is
 //! never handed back, so no field can show one and no frame can leak one.
 
@@ -10,37 +10,24 @@ use sindri_core::config::{Document, KEYS, Key, toggle_shown};
 
 use crate::overlay::Overlay;
 
-/// What one keystroke in the modal left the frame to do, if anything: the modal
-/// knows its own keys, and the frame knows what saving or leaving means.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Outcome {
-    /// The keystroke was a field's, and the modal stays.
     Staying,
-    /// `Esc`: throw the draft away.
     Discard,
-    /// `Enter`: write the file.
     Save,
-    /// `Ctrl-Q`: leave the frame, draft and all.
     Quit,
-    /// `Ctrl-C`: cancel the run behind the modal, which stays open.
     CancelRun,
 }
 
-/// One editable field: the key it stages, the text as typed, and whether the
-/// user has touched it. A field nobody touched is not staged, so a save changes
-/// what it was asked to change and nothing else.
 #[derive(Debug, Clone)]
 pub struct Field {
-    /// The file's own key.
     pub key: Key,
-    /// What the user has typed, or what the file said before that.
     pub text: String,
     /// Whether a keystroke has been in this field. A secret the file holds is
     /// never handed back — so an untouched one must not be written as empty.
     pub touched: bool,
 }
 
-/// The modal's state: the document it will write, and the fields over it.
 #[derive(Debug, Clone)]
 pub struct Settings {
     document: Document,
@@ -50,7 +37,6 @@ pub struct Settings {
 }
 
 impl Settings {
-    /// The config file a run would read.
     pub fn open() -> Result<Settings, String> {
         match Document::load() {
             Ok(document) => Ok(Settings::at(document)),
@@ -58,15 +44,12 @@ impl Settings {
         }
     }
 
-    /// The config file at `path`, for a frame that was pointed at one.
     pub fn at_path(path: &Path) -> Result<Settings, String> {
         Document::load_at(path)
             .map(Settings::at)
             .map_err(|error| error.message().to_string())
     }
 
-    /// The modal over one document, already loaded: a test points one at a
-    /// temporary directory rather than a real user's config.
     pub fn at(document: Document) -> Settings {
         let fields = KEYS
             .iter()
@@ -84,38 +67,28 @@ impl Settings {
         }
     }
 
-    /// Where saving will write, said in full: a user agreeing to write a secret
-    /// is told the path, not a placeholder.
     pub fn path(&self) -> &Path {
         self.document.path()
     }
 
-    /// The fields, in the order they are shown.
     pub fn fields(&self) -> &[Field] {
         &self.fields
     }
 
-    /// Which field has the cursor.
     pub fn chosen(&self) -> usize {
         self.chosen
     }
 
-    /// Why the last save was refused, if it was.
     pub fn error(&self) -> Option<&str> {
         self.error.as_deref()
     }
 
-    /// Whether a secret has been typed in this draft: the plaintext warning,
-    /// and the only thing that turns writing a key to disk into an act.
     pub fn staged_secret(&self) -> bool {
         self.fields
             .iter()
             .any(|field| field.key.secret() && !field.text.is_empty())
     }
 
-    /// One key. Every character is a character of the field with the cursor;
-    /// `Enter` saves, `Esc` discards, and the two ways out of the frame stay
-    /// true behind a modal (ADR-0013, ADR-0014).
     pub fn key(&mut self, key: KeyEvent) -> Outcome {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         match key.code {
@@ -139,7 +112,6 @@ impl Settings {
                 self.backspace();
                 Outcome::Staying
             }
-            // Space is the toggle's keystroke, and a space everywhere else.
             KeyCode::Char(' ') if self.flip() => Outcome::Staying,
             KeyCode::Char(ch) if !ctrl => {
                 self.insert(ch);
@@ -149,7 +121,6 @@ impl Settings {
         }
     }
 
-    /// Up and Down, or Tab and Shift-Tab: the field with the cursor.
     pub fn focus(&mut self, down: bool) {
         let last = self.fields.len().saturating_sub(1);
         self.chosen = if down {
@@ -159,12 +130,10 @@ impl Settings {
         };
     }
 
-    /// One character, appended to the field with the cursor.
     pub fn insert(&mut self, ch: char) {
         self.edit(|field| field.text.push(ch));
     }
 
-    /// Backspace: the last character of the field with the cursor.
     pub fn backspace(&mut self) {
         self.edit(|field| {
             field.text.pop();
@@ -177,8 +146,6 @@ impl Settings {
         self.edit(|field| field.text.clear());
     }
 
-    /// One change to the field with the cursor: touched, and no longer an
-    /// error the user has already moved past.
     fn edit(&mut self, change: impl FnOnce(&mut Field)) {
         if let Some(field) = self.fields.get_mut(self.chosen) {
             change(field);
@@ -187,11 +154,8 @@ impl Settings {
         }
     }
 
-    /// Space on a toggle: the only field where a keystroke is not a character.
     pub fn flip(&mut self) -> bool {
         let on = match self.fields.get(self.chosen) {
-            // An unset toggle is the run's own default, which is off, so the
-            // first space turns it on. The words are the schema's.
             Some(field) if field.key == Key::Thinking => toggle_shown(&field.text) == "on",
             _ => return false,
         };
@@ -200,13 +164,9 @@ impl Settings {
         true
     }
 
-    /// Stages the fields the user touched through the schema and writes the
-    /// file. A value the schema refuses leaves the file exactly as it was, and
-    /// the modal open. A field nobody touched is not written at all, so a save
-    /// cannot erase what it never showed — a secret above all.
     pub fn save(&mut self) -> Result<(), String> {
-        // Staged on a copy: a document that refuses one value must not be left
-        // holding the ones before it.
+        // Staged on a copy: a document that refuses one value must not be
+        // left holding the ones before it.
         let mut staged = self.document.clone();
         for field in self.fields.iter().filter(|field| field.touched) {
             staged
@@ -219,23 +179,16 @@ impl Settings {
         Ok(())
     }
 
-    /// Says why nothing was written, in the modal, without closing it.
     pub fn failed(&mut self, message: String) {
         self.error = Some(message);
     }
 
-    /// The document as it stands: what a saved config would say.
     pub fn document(&self) -> &Document {
         &self.document
     }
 }
 
-/// The modal's hands: what `/settings` opens, what a key does while it is open,
-/// and what saving means to the frame. They live beside the fields they edit.
 impl crate::app::App {
-    /// What a key does while the settings modal has the screen (ADR-0014). The
-    /// modal knows its own keys and says what they meant; writing the file,
-    /// leaving, and cancelling the run are the frame's.
     pub(crate) fn settings_key(&mut self, key: KeyEvent) {
         let Some(Overlay::Settings(settings)) = self.overlay.as_mut() else {
             return;
@@ -249,9 +202,6 @@ impl crate::app::App {
         }
     }
 
-    /// `Enter` in the settings modal: the file is written now, and the front end
-    /// is asked to read it again, so the next prompt runs on it (ADR-0014). A
-    /// value the schema refuses keeps the modal open and writes nothing.
     pub(crate) fn save_settings(&mut self) {
         let Some(Overlay::Settings(settings)) = self.overlay.as_mut() else {
             return;
@@ -269,9 +219,6 @@ impl crate::app::App {
         }
     }
 
-    /// `/settings`: the modal over the one config file and the one schema. A
-    /// file the schema refuses — an unknown key, a value that is not one — is
-    /// said in the transcript, and no modal opens over it (ADR-0005).
     pub(crate) fn open_settings(&mut self) {
         let opened = match &self.config {
             Some(path) => Settings::at_path(path),

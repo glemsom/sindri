@@ -18,37 +18,24 @@ use sindri_types::ExitCode;
 use crate::boot::{self, Boot};
 use crate::{failure, signal, verbose};
 
-/// How a finished run reaches stdout (ADR-0004): the answer plus one newline,
-/// which is what a shell pipeline wants, or one compact object, which is what a
-/// parser wants.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
 pub enum OutputFormat {
-    /// The answer, then exactly one newline.
     #[default]
     Text,
-    /// One compact object with a fixed field order.
     Json,
 }
 
-/// The flag overrides `sindri -b` accepts, taken from the command line as
-/// written.
 #[derive(Debug, Default)]
 pub struct Flags {
-    /// The shape stdout takes.
     pub format: OutputFormat,
     pub provider: Option<String>,
     pub model: Option<String>,
     pub base_url: Option<String>,
     pub max_turns: Option<u32>,
     pub timeout: Option<u64>,
-    /// Pay for the model's reasoning, or refuse to: both override the file
-    /// and the environment (ADR-0005).
     pub thinking: Option<bool>,
-    /// `--writable`, as written.
     pub writable: Option<Vec<String>>,
-    /// `--header`, as written: `Name: value` lines.
     pub extra_headers: Option<Vec<String>>,
-    /// Report the run on stderr when it is over.
     pub verbose: bool,
 }
 
@@ -67,7 +54,6 @@ impl From<Flags> for Overrides {
     }
 }
 
-/// One batch run. Returns the exit code the shell sees.
 pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     let prompt = match composed_prompt(prompt) {
         Ok(prompt) => prompt,
@@ -101,8 +87,6 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
         },
         cancel.clone(),
     );
-    // Events are buffered only for `-v`: a silent run should not carry a
-    // transcript nobody asked for.
     let (sender, events) = mpsc::channel::<Event>();
     if verbose {
         agent.set_events(sender);
@@ -126,10 +110,7 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
             // point of recording the run that went wrong.
             if report.stopped != Stopped::Cancelled {
                 match format {
-                    // The answer and exactly one newline, so `| wc -l` counts
-                    // answers.
                     OutputFormat::Text => println!("{}", report.answer.trim_end()),
-                    // One compact object on one line, so `| jq` reads fields.
                     OutputFormat::Json => {
                         println!("{}", output::to_json(&report, session.dir().id()))
                     }
@@ -151,8 +132,6 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     }
 }
 
-/// The question actually asked: the prompt argument, with piped stdin appended
-/// after it as context, or stdin itself when there is no argument (ADR-0004).
 fn composed_prompt(prompt: Option<String>) -> Result<String, String> {
     let piped = read_stdin()?;
     let prompt = prompt.filter(|prompt| !prompt.trim().is_empty());
@@ -168,8 +147,6 @@ fn composed_prompt(prompt: Option<String>) -> Result<String, String> {
     }
 }
 
-/// Piped stdin, read only when there is a pipe to read: a terminal is not
-/// drained, and neither is stdin when the run never reaches batch mode.
 fn read_stdin() -> Result<Option<String>, String> {
     if std::io::stdin().is_terminal() {
         return Ok(None);

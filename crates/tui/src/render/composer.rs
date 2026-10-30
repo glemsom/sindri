@@ -9,7 +9,6 @@ use ratatui::widgets::{Block, Paragraph, Widget};
 use crate::app::App;
 use crate::theme;
 
-/// Draws the composer and returns where the cursor goes.
 pub fn draw(app: &App, area: Rect, buf: &mut Buffer) -> Position {
     let block = Block::bordered()
         .border_style(theme::faint())

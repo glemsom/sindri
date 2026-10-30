@@ -11,18 +11,10 @@ use sindri_core::provider::Error;
 use sindri_core::session::StartError;
 use sindri_types::ExitCode;
 
-/// A run that could not start, in the two families the batch contract has
-/// always printed: `sandbox: <why a session could not start>` and
-/// `session <path>: <why the record could not>` (ADR-0004, ADR-0015 §5).
 #[derive(Debug)]
 pub(crate) enum Failure {
-    /// The three ambient facts a session is opened in could not be read from
-    /// the process (ADR-0015 §6).
     Environment(io::Error),
-    /// A configuration value is wrong, or absent (ADR-0005).
     Config(ConfigError),
-    /// The session could not be started: the environment's failure, whichever
-    /// of its parts refused (ADR-0006, ADR-0015 §5).
     Start(StartError),
 }
 
@@ -37,8 +29,6 @@ impl Failure {
         }
     }
 
-    /// Prints the one line and hands the code back: the whole of what a front
-    /// end does with a failure.
     pub(crate) fn report(&self) -> i32 {
         eprintln!("sindri: {self}");
         self.code()
@@ -51,11 +41,7 @@ impl fmt::Display for Failure {
             Failure::Environment(error) => {
                 write!(f, "the run environment cannot be read: {error}")
             }
-            // The config's own words: it is the module that knows what is wrong
-            // with a value, and its message carries the hint.
             Failure::Config(error) => f.write_str(error.message()),
-            // A record is named by its own path, because a record that cannot be
-            // written is not a run (ADR-0006).
             Failure::Start(StartError::Record { path, source }) => {
                 write!(f, "session {}: {source}", path.display())
             }
@@ -75,8 +61,6 @@ pub(crate) fn usage_error(message: &str) -> i32 {
     Failure::Config(ConfigError::Usage(message.to_string())).report()
 }
 
-/// The provider's complaint as one line, so a shell and a transcript read the
-/// same words.
 pub(crate) fn provider_message(error: &Error) -> String {
     match error.status() {
         Some(status) => format!("provider error (HTTP {status}): {}", error.message()),
@@ -94,7 +78,6 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    /// The words and the code for one failure, as a shell would see them.
     fn said(failure: &Failure) -> (String, i32) {
         (failure.to_string(), failure.code())
     }

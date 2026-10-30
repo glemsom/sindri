@@ -1,6 +1,6 @@
-//! The `@` completion, as a column of paths just above the composer: the eight
-//! nearest matches, the chosen one marked, and a word when the walk stopped at
-//! its cap (ADR-0011 §16, ADR-0013).
+//! The `@` completion, as a column of paths just above the composer: the
+//! eight nearest matches, the chosen one marked, and a word when the walk
+//! stopped at its cap (ADR-0011).
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -11,7 +11,6 @@ use crate::app::App;
 use crate::markdown::text;
 use crate::theme;
 
-/// Draws the offers that are open, chosen row marked.
 pub fn draw(app: &App, area: Rect, buf: &mut Buffer) {
     let Some(completion) = app.completion() else {
         return;

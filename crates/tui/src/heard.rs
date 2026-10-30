@@ -1,5 +1,5 @@
 //! What the run says to the frame: a prompt started, a fragment streamed, a
-//! command's line, a run ended. The frame is told; it never asks (ADR-0011 §1).
+//! command's line, a run ended. The frame is told; it never asks (ADR-0011).
 
 use sindri_core::agent::Event;
 
@@ -8,7 +8,6 @@ use crate::driver::{CallOver, Finished, Job, Side, Spilled, Stop};
 use crate::entry::{Call, Entry, Note};
 
 impl App {
-    /// Enter: send now, or queue when a run is in flight.
     pub(crate) fn submit(&mut self) {
         if self.composer.is_blank() {
             return;
@@ -20,8 +19,6 @@ impl App {
         }
     }
 
-    /// Starts the next prompt — the queue first, then a draft Enter sent —
-    /// when nothing is running.
     pub fn start(&mut self) -> Option<Job> {
         if self.running.is_some() || self.renew != Renew::Idle {
             return None;
@@ -32,8 +29,8 @@ impl App {
             None => self.composer.take(),
         };
         self.sent = false;
-        // One flag per launch, put down before every run: a cancel ends the run
-        // it was raised for and never the next (ADR-0015 §8).
+        // One flag per launch, put down before every run: a cancel ends the
+        // run it was raised for and never the next (ADR-0015).
         self.cancel.clear();
         let cancel = self.cancel.clone();
         self.running = Some(cancel.clone());
@@ -42,7 +39,6 @@ impl App {
         Some(Job { prompt, cancel })
     }
 
-    /// One fragment of the run.
     pub fn event(&mut self, event: Event) {
         match event {
             Event::TextDelta { turn, text } => {
@@ -77,8 +73,6 @@ impl App {
         }
     }
 
-    /// One fragment of a streamed turn, appended to the entry it belongs to or
-    /// opening a new one: text and reasoning differ only in which entry.
     fn append(&mut self, turn: u32, text: String, reasoning: bool) {
         let open = match self.entries.last_mut() {
             Some(Entry::Reasoning {
@@ -115,7 +109,6 @@ impl App {
         self.dirty();
     }
 
-    /// One line of a running command's output, with the stream it came from.
     pub fn output(&mut self, side: Side, text: &str) {
         match self.entries.last_mut() {
             Some(Entry::Call(call)) if call.running() => call.push(side, text.to_string()),
@@ -126,7 +119,6 @@ impl App {
         self.dirty();
     }
 
-    /// How one command ended, and where the rest of its output went.
     pub fn over(&mut self, over: CallOver, spilled: Spilled) {
         let last = self.entries.iter_mut().rev().find_map(|entry| match entry {
             Entry::Call(call) if call.running() => Some(call),
@@ -140,21 +132,17 @@ impl App {
         self.dirty();
     }
 
-    /// The run is over: the rail settles and a failure is said where it
-    /// happened (ADR-0011 §15).
     pub fn finished(&mut self, finished: Finished) {
         self.running = None;
         self.rail
             .settled(finished.turns, finished.tokens, finished.stopped);
-        // A line that never found the call it belonged to belongs to no later
-        // call either.
+        // A line that never found the call it belonged to belongs to no
+        // later call either.
         self.early.clear();
         self.close_answers();
         if let Some(error) = finished.error {
             self.entries.push(Entry::Note(Note::error(error)));
         }
-        // A record the run could not close is said where the user is looking,
-        // which is the difference between evidence lost and evidence dropped.
         if let Some(note) = finished.note {
             self.entries.push(Entry::Note(Note::error(note)));
         }
@@ -166,7 +154,6 @@ impl App {
         self.dirty();
     }
 
-    /// An answer whose turn has ended is folded away.
     fn close_answers(&mut self) {
         for entry in &mut self.entries {
             match entry {

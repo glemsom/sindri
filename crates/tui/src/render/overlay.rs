@@ -1,7 +1,7 @@
-//! What covers the transcript when something has to: the list of every binding
-//! `?` opens, a command's untruncated output, and the settings modal
-//! (ADR-0011 §9, §14, ADR-0014). Each is a box in the middle of the frame,
-//! closed with `Esc`; the modal sizes itself to what it has to say.
+//! What covers the transcript when something has to: the list of every
+//! binding `?` opens, a command's untruncated output, and the settings modal
+//! (ADR-0011). Each is a box in the middle of the frame, closed with `Esc`;
+//! the modal sizes itself to what it has to say.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -14,18 +14,15 @@ use crate::overlay::{Overlay, help_rows};
 use crate::render::settings;
 use crate::theme;
 
-/// How wide the keys column of the help overlay is.
 const KEYS: usize = 20;
 
-/// Draws the overlay that has the screen, over everything else. The overlay is
-/// borrowed rather than cloned: a spill of a megabyte is a window per frame,
-/// never a copy of itself (ADR-0013).
+/// Draws the overlay that has the screen, over everything else. The overlay
+/// is borrowed rather than cloned: a spill of a megabyte is a window per
+/// frame, never a copy of itself (ADR-0013).
 pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
     let Some(overlay) = app.overlay_mut() else {
         return;
     };
-    // Settings measures its own box against what it has to say, so it draws
-    // itself; the two that are lists are one box each, drawn below.
     let (height, title, lines) = match &mut *overlay {
         Overlay::Settings(settings) => {
             settings::draw(settings, area, buf);
@@ -65,7 +62,6 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
     render(buf, boxed, inner, &title, lines);
 }
 
-/// How much room a spill's text has inside its box: the box is the screen.
 fn spill_window(area: Rect) -> Rect {
     Rect {
         height: area.height.saturating_sub(2),
@@ -73,7 +69,6 @@ fn spill_window(area: Rect) -> Rect {
     }
 }
 
-/// One box, cleared and drawn over whatever was underneath.
 fn render(buf: &mut Buffer, boxed: Rect, inner: Rect, title: &str, lines: Vec<Line<'_>>) {
     Clear.render(boxed, buf);
     Paragraph::new(lines).render(inner, buf);
@@ -83,7 +78,6 @@ fn render(buf: &mut Buffer, boxed: Rect, inner: Rect, title: &str, lines: Vec<Li
         .render(boxed, buf);
 }
 
-/// One binding: the keys, and what it does with the gesture that also does it.
 fn help_row(keys: &str, what: &str) -> Line<'static> {
     Line::from(vec![
         Span::styled(format!("{keys:<KEYS$}"), theme::prompt()),

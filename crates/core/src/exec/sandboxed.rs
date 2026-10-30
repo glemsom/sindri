@@ -1,6 +1,5 @@
 //! The real executor: bwrap exactly as the policy derives it, our own deadline,
-//! and an outcome classified from bwrap's status channel rather than guessed at
-//! (ADR-0007).
+//! and an outcome classified from bwrap's status channel rather than guessed at.
 
 use std::fs::File;
 use std::io::{self, BufRead, Read};
@@ -19,48 +18,32 @@ use super::{BashExecutor, StatusSink};
 use crate::cancel::Cancel;
 use crate::sandbox::SandboxPolicy;
 
-/// The deadline one command gets when nobody configured one.
 pub const DEFAULT_TIMEOUT_SECS: u64 = 120;
-/// The longest deadline a user may ask for.
 pub const MAX_TIMEOUT_SECS: u64 = 3600;
 
 /// The fd bwrap writes its status documents to, inside the child.
 const STATUS_FD: RawFd = 3;
-/// How long a signalled process group gets before it is killed outright.
 const KILL_GRACE: Duration = Duration::from_secs(2);
-/// How often the deadline is re-checked.
 const POLL: Duration = Duration::from_millis(10);
 
-/// Why a command stopped, before it becomes a result the model reads.
 enum Done {
-    /// The command finished; this is what the model is told.
     Result(ToolResult),
-    /// The run was cancelled: the group is dead and there is nothing to report.
     Cancelled,
-    /// The sandbox itself could not run the command.
     Broken(String),
 }
 
-/// Runs `bash` scripts inside the sandbox described by one policy.
 pub struct SandboxExecutor {
     policy: SandboxPolicy,
     timeout: Duration,
     spill_dir: PathBuf,
     cancel: Cancel,
     limit: OutputLimit,
-    /// Where bubblewrap's own account of each command is handed over as it
-    /// arrives, so a run that never finished still leaves the record.
     status: Option<Arc<dyn StatusSink>>,
-    /// Where each command's output is handed over as it arrives, for a front
-    /// end showing the tail of a running command.
     output: Option<Arc<dyn OutputSink>>,
-    /// Names each command's spill files, so turn n's path is still turn n's.
     calls: AtomicU64,
 }
 
 impl SandboxExecutor {
-    /// Builds an executor for one session: its policy, its deadline, where
-    /// over-long output is spilled, and the flag that stops it mid-command.
     pub fn new(
         policy: SandboxPolicy,
         timeout: Duration,
@@ -79,15 +62,12 @@ impl SandboxExecutor {
         }
     }
 
-    /// Records bubblewrap's status documents as they arrive (ADR-0006).
     #[must_use]
     pub fn with_status_sink(mut self, status: Arc<dyn StatusSink>) -> Self {
         self.status = Some(status);
         self
     }
 
-    /// Hands each line of a running command's output over as it arrives, so a
-    /// human can tell a slow build from a hung one (ADR-0011 §9).
     #[must_use]
     pub fn with_output_sink(mut self, output: Arc<dyn OutputSink>) -> Self {
         self.output = Some(output);
@@ -249,8 +229,6 @@ impl SandboxExecutor {
             };
         }
         match exit_code(docs) {
-            // The exit-code document only appears once the mounts succeeded, so
-            // its absence means the sandbox never started (ADR-0007).
             Some(code) => Outcome::Exited { exit_code: code },
             None => Outcome::SandboxError {
                 detail: first_line(stderr),
@@ -259,8 +237,6 @@ impl SandboxExecutor {
     }
 }
 
-/// Why the wait ended: the command finished, our deadline fired, or the run was
-/// cancelled. In the last two cases the process group has been signalled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Stop {
     Finished,
@@ -268,8 +244,6 @@ enum Stop {
     Cancelled,
 }
 
-/// Waits for the command, killing its whole group the moment the deadline fires
-/// or the run is cancelled, so nothing outlives the reason it was stopped.
 fn wait_until_done(child: &mut Child, timeout: Duration, cancel: &Cancel) -> Stop {
     let started = Instant::now();
     loop {
@@ -290,7 +264,6 @@ fn wait_until_done(child: &mut Child, timeout: Duration, cancel: &Cancel) -> Sto
     }
 }
 
-/// Signs the whole group politely, then kills it, so no orphan keeps working.
 fn terminate(child: &mut Child) {
     let group = child.id() as i32;
     signal_group(group, libc::SIGTERM);
@@ -351,7 +324,6 @@ fn drain_documents<R: Read + Send + 'static>(
     })
 }
 
-/// Joins one reader, keeping whatever it read and what went wrong, if anything.
 fn collect(
     handle: Option<std::thread::JoinHandle<io::Result<Vec<u8>>>>,
 ) -> (Vec<u8>, Option<String>) {

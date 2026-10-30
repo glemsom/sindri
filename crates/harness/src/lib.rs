@@ -1,9 +1,6 @@
 //! A mock provider on loopback: canned replies in order, and every request
 //! recorded, so a process test can prove what the binary actually sent. No
 //! network, no credential, no live model.
-//!
-//! A reply is served whole when the request asks for a whole answer, and as a
-//! `text/event-stream` when the client asks the provider to stream (`Reply`).
 
 #![allow(
     clippy::expect_used,
@@ -40,10 +37,8 @@ pub const PROVIDER_ENV: &[&str] = &[
     "OPENAI_BASE_URL",
 ];
 
-/// Where the harness's own fixtures live, so a caller names only the file.
 pub const HARNESS_FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/openai");
 
-/// One request the binary made, as text: what a wire-level assertion needs.
 #[derive(Debug, Clone)]
 pub struct Request {
     pub method: String,
@@ -53,7 +48,6 @@ pub struct Request {
 }
 
 impl Request {
-    /// A request built by hand, for a test that needs a body without a server.
     pub fn literal(method: &str, path: &str, body: &str) -> Self {
         Request {
             method: method.to_string(),
@@ -63,7 +57,6 @@ impl Request {
         }
     }
 
-    /// A request header, case-insensitively.
     pub fn header(&self, name: &str) -> Option<&str> {
         self.headers
             .iter()
@@ -71,13 +64,11 @@ impl Request {
             .map(|(_, value)| value.as_str())
     }
 
-    /// The request body as JSON.
     pub fn json(&self) -> Value {
         serde_json::from_str(&self.body).expect("request body is JSON")
     }
 }
 
-/// A running mock provider.
 pub struct MockProvider {
     url: String,
     requests: Arc<Mutex<Vec<Request>>>,
@@ -85,8 +76,6 @@ pub struct MockProvider {
 }
 
 impl MockProvider {
-    /// Starts a server that answers the `replies` in order; the last one
-    /// repeats, so a test that retries needs only the endpoints it cares about.
     pub fn start(replies: Vec<Reply>) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock provider");
         let port = listener.local_addr().expect("local addr").port();
@@ -129,12 +118,10 @@ impl MockProvider {
         }
     }
 
-    /// The base URL the binary should be pointed at.
     pub fn base_url(&self) -> String {
         self.url.clone()
     }
 
-    /// Every request served so far, in order.
     pub fn requests(&self) -> Vec<Request> {
         self.requests.lock().expect("requests").clone()
     }
@@ -205,9 +192,6 @@ fn serve(mut stream: TcpStream, reply: &Reply, recorded: &Arc<Mutex<Vec<Request>
     }
 }
 
-/// Whether this reply and request call for an event stream: a reply with
-/// explicit chunks always does, and a successful whole reply does when the
-/// client asked the provider to stream.
 fn streams(reply: &Reply, body: &str) -> bool {
     if !reply.chunks.is_empty() {
         return true;
@@ -219,7 +203,6 @@ fn streams(reply: &Reply, body: &str) -> bool {
             .unwrap_or(false)
 }
 
-/// One whole body, the way a non-streaming provider answers.
 fn write_whole(stream: &mut TcpStream, reply: &Reply) {
     let response = format!(
         "HTTP/1.1 {} {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
@@ -232,9 +215,6 @@ fn write_whole(stream: &mut TcpStream, reply: &Reply) {
     let _ = stream.flush();
 }
 
-/// An event stream: each chunk written as its own transfer, flushed, and
-/// optionally paused so the client sees the reply arrive rather than finish.
-/// A whole reply the client asked to stream is one SSE frame carrying it.
 fn write_stream(stream: &mut TcpStream, reply: &Reply) {
     let explicit = !reply.chunks.is_empty();
     let chunks = if explicit {

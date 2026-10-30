@@ -1,5 +1,5 @@
-//! Where the pieces go: the transcript column, the rail or its strip, the
-//! composer and one line of hints (ADR-0011 §4).
+//! The narrowest terminal that can hold the rail as a column; below this it
+//! is a strip (ADR-0011).
 
 mod card;
 mod completion;
@@ -20,16 +20,10 @@ use crate::theme;
 
 pub use card::Card;
 
-/// The rail's width when it is a column.
 pub const RAIL_COLUMNS: u16 = 32;
-/// The narrowest terminal that can hold the rail as a column; below this it is
-/// a strip (ADR-0011 §4).
 pub const RAIL_MIN_WIDTH: u16 = 100;
-/// The one line of hints under the composer: the keys a user needs before
-/// they know them, and `?` for the rest.
 const HINTS: &str = "Enter send · Shift+Enter newline · PgUp/PgDn scroll · @ paths · / commands · ? keys · Ctrl-Q quit";
 
-/// Draws the whole frame.
 pub fn draw(app: &mut App, frame: &mut Frame) {
     let area = frame.area();
     let [body, input, footer] = Layout::vertical([
@@ -73,13 +67,11 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
     overlay::draw(app, area, frame.buffer_mut());
 }
 
-/// The card a broken boot draws, across the whole screen.
 pub fn draw_card(card: &Card, frame: &mut Frame) {
     let area = frame.area();
     card::draw(card, area, frame.buffer_mut());
 }
 
-/// The one line under the composer: the keys, and what is waiting.
 fn footer_rows(app: &App, area: Rect, buf: &mut Buffer) {
     let mut hints = String::new();
     if app.is_running() {

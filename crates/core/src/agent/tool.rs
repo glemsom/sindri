@@ -8,15 +8,12 @@ use crate::exec::{BashExecutor, Outcome, ToolResult};
 use crate::provider::{Call, ToolOutcome, ToolSpec};
 use crate::sandbox::SandboxPolicy;
 
-/// The `bash` tool: the policy-derived description the model reads, and the
-/// executor that runs what it asks for.
 pub struct BashTool {
     spec: ToolSpec,
     executor: Arc<dyn BashExecutor>,
 }
 
 impl BashTool {
-    /// The tool for one run: described by `policy`, executed by `executor`.
     pub fn new(policy: &SandboxPolicy, executor: Arc<dyn BashExecutor>) -> Self {
         BashTool {
             spec: describe(policy),
@@ -24,13 +21,10 @@ impl BashTool {
         }
     }
 
-    /// What the model is told about the tool.
     pub fn spec(&self) -> &ToolSpec {
         &self.spec
     }
 
-    /// Runs one call and renders its result for the model, or `None` when the
-    /// run was cancelled before the command finished.
     pub fn call(&self, call: &Call) -> Option<ToolOutcome> {
         let script = match call.command() {
             Ok(script) => script,

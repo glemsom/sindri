@@ -14,7 +14,9 @@ $ curl -fsSL https://raw.githubusercontent.com/glemsom/sindri/main/install.sh | 
 The installer:
 
 1. refuses a kernel that is not Linux and a machine it has no binary for;
-2. resolves the latest release, or the one you name;
+2. resolves the release you name, or asks `SINDRI_LATEST_URL` (GitHub's
+   `releases/latest`) for the newest one and takes the first `tag_name` it finds —
+   if that document names no tag, it stops and asks you to pass `--version`;
 3. downloads the binary **and** `SHA256SUMS`, and installs nothing unless the
    checksum matches;
 4. installs to `~/.local/bin/sindri`, replacing any earlier copy atomically;
@@ -22,20 +24,25 @@ The installer:
    `sindri doctor`.
 
 ```console
-$ curl -fsSL …/install.sh | sh -s -- --version 0.1.0 --dir /usr/local/bin
+$ curl -fsSL …/install.sh | sh -s -- --version 0.1.0 --dir "$HOME/bin"
 ```
 
 | Flag | Environment | Default |
 | --- | --- | --- |
 | `--version VERSION` | `SINDRI_VERSION` | the latest release |
 | `--dir DIR` | `SINDRI_INSTALL_DIR` | `~/.local/bin` |
+| `-h`, `--help` | — | prints the usage and exits `0` |
 
-`SINDRI_RELEASE_BASE_URL` points the installer at a mirror (or a `file://`
-directory); the tests use it so no test touches the network. Exit `2` is a
-usage error — including a kernel or a machine no release serves — and `1`
-anything else: a failed download, a checksum mismatch, an unwritable directory.
-`SINDRI_UNAME_S` and `SINDRI_UNAME_M` override `uname`, which is how the tests
-exercise the aarch64 and unsupported-machine paths on one host.
+The target directory must already be writable by you: the installer runs
+`mkdir -p` and then a plain copy, with no elevation, so `--dir /usr/local/bin`
+only works where you can write there. `SINDRI_RELEASE_BASE_URL` points it at a
+mirror (or a `file://` directory) and `SINDRI_REPO` (`owner/name`) and
+`SINDRI_LATEST_URL` move the release lookup and the "latest" document
+elsewhere; the tests use them so no test touches the network. `SINDRI_UNAME_S`
+and `SINDRI_UNAME_M` override `uname`, which is how the tests exercise the
+aarch64 and unsupported-machine paths on one host. Exit `2` is a usage error —
+including a kernel or a machine no release serves — and `1` anything else: a
+failed download, a checksum mismatch, an unwritable directory.
 
 The last line is not decoration: **run `sindri doctor` on a fresh install.** It
 proves bubblewrap, the binary set and the mount plan on *your* machine, and
@@ -52,16 +59,20 @@ one bad first impression a static binary must not deliver.
 | `SHA256SUMS` | the two lines above, sorted, verified by the installer |
 | `CHANGELOG.md` | the changelog: the tickets closed since the previous tag |
 
-The version reported by `--version` is `git describe` and the commit date,
-injected at build time by `crates/types/build.rs` — never the wall clock, so an
-unchanged tree does not relink (ADR-0009).
+The version reported by `--version` is `git describe --tags --always` (a leading
+`v` stripped) and the commit date, injected at build time by
+`crates/types/build.rs` — never the wall clock, so an unchanged tree does not
+relink (ADR-0009). The release binaries are built from the tagged checkout, so
+they report the tag. A build from a tree without tags reports the short commit
+hash instead, and a tree without `git` at all falls back to the `Cargo.toml`
+version with a commit date of `unknown`.
 
 ## Cutting a release (maintainer)
 
 The whole of it is one tag; the workflow does the rest.
 
-The tag must point at a commit CI has already checked — a tag does not run the
-`make check` gate, only the release job.
+The tag must point at a commit `.github/workflows/ci.yml` has already checked —
+a tag runs only the release job, never the `make check` gate.
 
 ```console
 $ git checkout main && git pull --ff-only

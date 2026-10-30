@@ -9,31 +9,19 @@ use std::path::{Path, PathBuf};
 use super::file::{self, FileConfig};
 use super::{ConfigError, MAX_TIMEOUT_SECS, Provider, extra_paths};
 
-/// One key of the config file, named the way the file names it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Key {
-    /// The wire to speak.
     Provider,
-    /// The model to ask.
     Model,
-    /// Another API root.
     BaseUrl,
-    /// The provider credential: a secret, never handed back.
     ApiKey,
-    /// The turn cap.
     MaxTurns,
-    /// How long one command may run.
     Timeout,
-    /// Whether the run pays for reasoning.
     Thinking,
-    /// Extra paths granted read-write inside the sandbox.
     ExtraWritablePaths,
-    /// Headers every provider request carries: secret values, never shown.
     ExtraHeaders,
 }
 
-/// Every key, in the order a form shows them: what a run is changed for first,
-/// and what is rarely touched last.
 pub const KEYS: [Key; 9] = [
     Key::Provider,
     Key::Model,
@@ -47,7 +35,6 @@ pub const KEYS: [Key; 9] = [
 ];
 
 impl Key {
-    /// The key's own name in the file, which is also what an error calls it.
     pub const fn name(self) -> &'static str {
         match self {
             Key::Provider => "provider",
@@ -69,8 +56,6 @@ impl Key {
     }
 }
 
-/// One config file, staged for editing. Reading it writes nothing; only
-/// [`Document::save`] touches the disk.
 #[derive(Debug, Clone)]
 pub struct Document {
     path: PathBuf,
@@ -78,20 +63,16 @@ pub struct Document {
 }
 
 impl Document {
-    /// The config file a run reads.
     pub fn load() -> Result<Document, ConfigError> {
         Document::load_at(super::file_path())
     }
 
-    /// The config file at `path`: a test points one at a temporary directory,
-    /// because no test writes a real user's config.
     pub fn load_at(path: impl Into<PathBuf>) -> Result<Document, ConfigError> {
         let path = path.into();
         let values = file::read_at(&path)?;
         Ok(Document { path, values })
     }
 
-    /// Where saving would write.
     pub fn path(&self) -> &Path {
         &self.path
     }
@@ -131,8 +112,6 @@ impl Document {
         }
     }
 
-    /// Whether the file names this key at all: what a form says instead of a
-    /// secret's value.
     pub fn is_set(&self, key: Key) -> bool {
         match key {
             Key::Provider => self.values.provider.is_some(),
@@ -151,9 +130,6 @@ impl Document {
         }
     }
 
-    /// One key, checked and staged. An empty value unsets the key, so the
-    /// environment, a flag or the default speaks instead. A value the schema
-    /// refuses is an error and changes nothing.
     pub fn set(&mut self, key: Key, value: &str) -> Result<(), ConfigError> {
         let value = value.trim();
         if value.is_empty() {
@@ -207,7 +183,6 @@ impl Document {
     }
 }
 
-/// A count the schema accepts, said the way the run says it.
 fn count<T>(value: &str, low: T, high: T) -> Result<T, ConfigError>
 where
     T: std::str::FromStr + PartialOrd + std::fmt::Display + Copy,
@@ -223,8 +198,6 @@ where
     Ok(parsed)
 }
 
-/// A toggle, the way the environment takes one: a typo is refused rather than
-/// silently reading as off.
 pub fn toggle(value: &str) -> Result<bool, ConfigError> {
     match value.trim() {
         "true" | "1" | "yes" | "on" => Ok(true),
@@ -245,9 +218,6 @@ pub fn toggle_shown(value: &str) -> &'static str {
     }
 }
 
-/// The extras, `:`-separated the way the environment writes them, checked by
-/// the writable set's own rules so a path the sandbox would refuse is refused
-/// here first.
 fn paths(value: &str) -> Result<Vec<PathBuf>, ConfigError> {
     let items: Vec<String> = value
         .split(':')

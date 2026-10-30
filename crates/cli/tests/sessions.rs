@@ -15,7 +15,6 @@ use std::path::{Path, PathBuf};
 use common::provider::{MockProvider, Reply};
 use common::{Env, TEST_KEY, batch, signal, spawn, stderr, stdout, wait_until};
 
-/// Every session directory the run left in this environment's state directory.
 fn sessions(env: &Env) -> Vec<PathBuf> {
     let root = env.state.join("sindri/sessions");
     let mut found: Vec<PathBuf> = std::fs::read_dir(&root)
@@ -30,16 +29,12 @@ fn sessions(env: &Env) -> Vec<PathBuf> {
     found
 }
 
-/// The one session directory a single run left, named by the id its output
-/// carried.
 fn the_session(env: &Env) -> PathBuf {
     let found = sessions(env);
     assert_eq!(found.len(), 1, "one run, one record: {found:?}");
     found.into_iter().next().expect("the session directory")
 }
 
-/// Everything written under `dir`, as text: a credential must appear in none of
-/// it.
 fn everything_written(dir: &Path) -> String {
     let mut all = String::new();
     let mut pending = vec![dir.to_path_buf()];
@@ -56,8 +51,6 @@ fn everything_written(dir: &Path) -> String {
     all
 }
 
-/// Waits until the sandbox's own document naming the child has been written, so
-/// the kill lands after the sandbox really started rather than in a race with it.
 fn wait_for_the_sandbox_account(env: &Env) {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
     while std::time::Instant::now() < deadline {
@@ -73,13 +66,11 @@ fn wait_for_the_sandbox_account(env: &Env) {
     panic!("the sandbox's child-pid document never appeared");
 }
 
-/// The metadata a run wrote, parsed.
 fn metadata(session: &Path) -> serde_json::Value {
     let text = std::fs::read_to_string(session.join("session.json")).expect("session.json");
     serde_json::from_str(&text).expect("session.json is one JSON object")
 }
 
-/// The transcript a run wrote, one entry per line.
 fn transcript(session: &Path) -> Vec<serde_json::Value> {
     let text = std::fs::read_to_string(session.join("transcript.jsonl")).expect("transcript.jsonl");
     text.lines()
@@ -281,7 +272,6 @@ fn a_cancelled_run_says_on_stderr_where_its_record_is() {
     assert_eq!(output.status.code(), Some(130), "a cancelled run says so");
     assert_eq!(stdout(&output), "", "and still writes nothing to stdout");
 
-    // The run that went wrong is the one a user most needs to find afterwards.
     let malformed = stderr(&output);
     let id = metadata(&the_session(&env))["id"]
         .as_str()

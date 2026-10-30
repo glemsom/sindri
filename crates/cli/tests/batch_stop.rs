@@ -1,7 +1,7 @@
 //! The process seam for the ways a run stops that are not an answer: a command
 //! that outlives its deadline, a sandbox that never starts, and the turn cap
 //! ending a model that will not stop asking. Each is reported to the model or
-//! to the shell, never as a mysterious command failure (ADR-0004, ADR-0007).
+//! to the shell, never as a mysterious command failure (ADR-0007).
 
 #![allow(
     clippy::expect_used,
@@ -13,8 +13,6 @@ mod common;
 use common::provider::{MockProvider, Reply};
 use common::{Env, batch, stderr, stdout};
 
-/// A `PATH` whose `bwrap` refuses to start, with every other binary the sandbox
-/// needs still resolvable. The temporary directory must outlive the run.
 fn broken_sandbox_path() -> (tempfile::TempDir, String) {
     let dir = common::path_without(
         &common::required_binaries(),
@@ -137,8 +135,6 @@ fn the_turn_cap_nobody_configured_is_the_contracts_250() {
 #[test]
 fn an_unrecoverable_setup_failure_exits_three_and_writes_nothing_to_stdout() {
     let env = Env::new();
-    // A state directory that cannot exist, because a plain file stands where a
-    // directory would have to be: the run has nowhere to record itself.
     let blocked = env.state.join("not-a-directory");
     std::fs::write(&blocked, "").expect("write the blocker");
     let mock = MockProvider::start(vec![Reply::answer("never sent")]);

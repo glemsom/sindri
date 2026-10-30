@@ -26,17 +26,12 @@ use crate::record::Recorder;
 /// replaces the whole set between prompts, because a saved setting can change
 /// any of them and none of them is the conversation (ADR-0014).
 pub struct Dials {
-    /// The model to ask.
     pub model: Box<dyn Model>,
-    /// The tool, bounded by the sandbox the run has now.
     pub tool: BashTool,
-    /// The turn cap.
     pub max_turns: u32,
-    /// Whether the run pays for the model's reasoning.
     pub thinking: bool,
 }
 
-/// Drives the model until it stops asking for tools, or the turn cap is hit.
 pub struct Agent {
     model: Box<dyn Model>,
     tool: BashTool,
@@ -44,18 +39,11 @@ pub struct Agent {
     thinking: bool,
     events: Option<Sender<Event>>,
     cancel: Cancel,
-    /// Where the run is written down, when a front end asked for a record.
     recorder: Option<Arc<Recorder>>,
-    /// Everything the model has been shown in this conversation, oldest first:
-    /// the thread that makes a second prompt a follow-up rather than a
-    /// one-shot. It grows by one exchange per answered prompt.
     history: Vec<Message>,
 }
 
 impl Agent {
-    /// A loop that asks `model`, runs what it asks through `tool`, and stops
-    /// after `max_turns` round trips. Reasoning is paid for only when
-    /// `thinking` asks (ADR-0004).
     pub fn new(model: Box<dyn Model>, tool: BashTool, max_turns: u32, thinking: bool) -> Self {
         Agent {
             model,
@@ -79,20 +67,14 @@ impl Agent {
         self.thinking = dials.thinking;
     }
 
-    /// Forget the thread, so the next prompt is the first of a new
-    /// conversation. The record on disk keeps everything it already has.
     pub fn forget(&mut self) {
         self.history.clear();
     }
 
-    /// Records the run as it happens, so a cancelled or crashed run still says
-    /// what it did (ADR-0006).
     pub fn set_recorder(&mut self, recorder: Arc<Recorder>) {
         self.recorder = Some(recorder);
     }
 
-    /// Where events go. Without a receiver the loop still runs; it simply says
-    /// nothing, because nothing is listening.
     pub fn set_events(&mut self, events: Sender<Event>) {
         self.events = Some(events);
     }
@@ -109,7 +91,6 @@ impl Agent {
         self.cancel = cancel;
     }
 
-    /// Runs one prompt to an answer, or reports why the model failed.
     pub fn run(&mut self, prompt: &str) -> Result<Report, Error> {
         let started = Instant::now();
         if let Some(recorder) = &self.recorder {
@@ -226,7 +207,6 @@ impl Agent {
         self.history.truncate(answered);
     }
 
-    /// Says one turn's reasoning, when there is any to say.
     fn reasoning(&self, turn: u32, reasoning: &Option<String>) {
         let Some(text) = reasoning.as_ref().filter(|text| !text.trim().is_empty()) else {
             return;
@@ -237,8 +217,6 @@ impl Agent {
         });
     }
 
-    /// Says one call before it runs, so a human watching sees the script even
-    /// when it fails.
     fn announce(&self, turn: u32, call: &crate::provider::Call) {
         self.emit(Event::ToolCall {
             turn,
@@ -246,7 +224,6 @@ impl Agent {
         });
     }
 
-    /// Best effort: a front end that stopped listening is not a failed run.
     fn emit(&self, event: Event) {
         if let Some(events) = &self.events {
             let _ = events.send(event);

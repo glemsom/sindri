@@ -5,10 +5,8 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthChar;
 
-/// One character and the style it carries.
 pub type Glyph = (char, Style);
 
-/// Flattens spans into glyphs, keeping every character and its style.
 pub fn glyphs(spans: &[Span<'static>]) -> Vec<Glyph> {
     spans
         .iter()
@@ -19,9 +17,6 @@ pub fn glyphs(spans: &[Span<'static>]) -> Vec<Glyph> {
         .collect()
 }
 
-/// Wraps glyphs to `width` columns, breaking at the last space of a row and
-/// mid-word only when a word cannot fit. Every row carries `prefix` in
-/// `prefix_style`, which does not count against the width of the row.
 pub fn wrap(
     glyphs: Vec<Glyph>,
     prefix: &str,
@@ -68,9 +63,9 @@ pub fn wrap(
     rows
 }
 
-/// The first `width` display columns of `text`, cut rather than wrapped: for a
-/// row that shows an excerpt of something longer. A character is never split,
-/// so a wide glyph is either wholly in or wholly out.
+/// The first `width` display columns of `text`, cut rather than wrapped: for
+/// a row that shows an excerpt of something longer. A character is never
+/// split, so a wide glyph is either wholly in or wholly out.
 pub fn clip(text: &str, width: usize) -> String {
     let mut used = 0;
     let mut shown = String::new();
@@ -85,7 +80,6 @@ pub fn clip(text: &str, width: usize) -> String {
     shown
 }
 
-/// One row of glyphs as a line, trailing spaces dropped and equal styles joined.
 fn line(mut glyphs: Vec<Glyph>, prefix: &str, prefix_style: Style) -> Line<'static> {
     while glyphs.last().is_some_and(|(ch, _)| *ch == ' ') {
         glyphs.pop();

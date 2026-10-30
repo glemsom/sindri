@@ -1,39 +1,28 @@
-# 0005 — Config surface and its precedence
+---
+status: accepted
+date: 2026-10-29
+---
 
-- **Status:** accepted
-- **Date:** 2025-10-29
+# 0005 — Config surface and its precedence
 
 ## Decision
 
-Precedence, lowest to highest: `$XDG_CONFIG_HOME/sindri/config.toml` →
-`SINDRI_*` environment variables → CLI flags.
+Precedence, lowest to highest: `$XDG_CONFIG_HOME/sindri/config.toml` → `SINDRI_*` → CLI flags.
 
-Config holds: provider, model, base URL, whether thinking/reasoning is enabled,
-extra writable paths, extra request headers, turn cap, tool timeout.
+Keys, all optional, one `#[serde(deny_unknown_fields)]` struct (`crates/core/src/config/file.rs`); an unknown key is an error naming key and file:
 
-Extra request headers exist because a gateway may route on a header of its own
-(a session id, a referer) and cannot be reached without one. Their values are
-never printed and never recorded: a gateway's header is as likely to be a
-secret as the credential is.
+```text
+provider, model, api_key, base_url, max_turns, timeout, thinking,
+extra_writable_paths, extra_headers
+```
 
-Credentials come from the provider's environment variable
-(`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) or an `api_key` field in the config.
-A wire that needs none is not asked for one: the OpenAI-compatible wire serves
-local servers, which have no credential to give, so an absent one leaves the
-request unauthenticated rather than blocking the run. A hosted server that wants
-one answers 401, and that refusal is reported as itself.
+Environment: `SINDRI_PROVIDER`, `SINDRI_MODEL`, `SINDRI_API_KEY`, `SINDRI_BASE_URL`, `SINDRI_MAX_TURNS`, `SINDRI_TIMEOUT`, `SINDRI_THINKING`, `SINDRI_EXTRA_WRITABLE_PATHS` (`:`-separated), `SINDRI_EXTRA_HEADERS` (`Name: value` lines). Defaults: `max_turns` 250, `timeout` 120 s.
 
-**No repository-local config file.** A checked-in config that grants extra
-writable paths turns every `git clone && sindri` into a privilege escalation.
-The name such a file would have, `.sindri.toml` in the working directory, is
-looked for only so the refusal can be said once on stderr; the file is never
-opened.
+- Credential: `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `SINDRI_API_KEY`, or `api_key`. The OpenAI-compatible wire runs unauthenticated when there is none (local servers); a hosted 401 is reported as itself.
+- Header values are never printed and never recorded.
+- **No repository-local config.** `.sindri.toml` is probed only so the refusal can be said once on stderr; it is never opened.
 
 ## Consequences
 
-- The future `/settings` TUI modal edits this same file — one writer, one schema.
-- The sandbox `HOME` starts empty, so the user's real dotfiles and git config
-  do not reach the sandbox *as `HOME`*, and are never copied in. They are not
-  hidden, though: the read-only host root leaves them readable at their host
-  paths, credentials included — writes are blocked, reads are not (ADR-0010).
-  Opting in to a populated `HOME` is a later, explicit feature.
+- `/settings` edits this same file through one schema and one writer (ADR-0014).
+- The sandbox `HOME` starts empty, so real dotfiles never arrive as `HOME` and are never copied in — they remain readable at their host paths (ADR-0010).

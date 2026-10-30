@@ -1,8 +1,8 @@
 //! The frame seam: `ratatui`'s test backend renders the frame to a character
-//! buffer, and every assertion is about *what the user sees* — a call while it
-//! runs, a call once it has collapsed, the rail at 100 columns and as a strip at
-//! 90, a markdown table, an error where it happened, and the card a broken
-//! sandbox draws (ADR-0011).
+//! buffer, and every assertion is about *what the user sees* — a call while
+//! it runs, a call once it has collapsed, the rail at 100 columns and as a
+//! strip at 90, a markdown table, an error where it happened, and the card a
+//! broken sandbox draws (ADR-0011).
 
 #![allow(
     clippy::expect_used,
@@ -17,8 +17,6 @@ use sindri_tui::driver::{CallOver, Finished, Side, Spilled, Stop, Tokens};
 use sindri_tui::render;
 use sindri_tui::{App, Face, Launch};
 
-/// The rail's width, and the width the frame gives it up: below 100 columns it
-/// is a strip (ADR-0011 §4).
 const RAIL: usize = 32;
 
 fn launch() -> Launch {
@@ -36,7 +34,6 @@ fn app() -> App {
     App::new(launch(), None)
 }
 
-/// Every row of the frame, as the characters a terminal would show.
 fn screen(app: &mut App, width: u16, height: u16) -> Vec<String> {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
     terminal
@@ -52,12 +49,10 @@ fn screen(app: &mut App, width: u16, height: u16) -> Vec<String> {
         .collect()
 }
 
-/// The rail's own columns of a row, at a frame of `width` columns.
 fn rail_of_width(row: &str, width: usize) -> String {
     row.chars().skip(width - RAIL).collect()
 }
 
-/// The rail's own columns of a row of a 100-column frame.
 fn rail_of(row: &str) -> String {
     rail_of_width(row, 100)
 }
@@ -273,8 +268,6 @@ fn without_kitty_graphics_the_rail_closes_up_and_starts_at_the_cache_meter() {
 fn with_kitty_graphics_the_face_draws_in_the_top_of_the_rail() {
     let face = Face::kitty().expect("the embedded face decodes");
     let mut app = App::new(launch(), Some(face));
-    // Tall enough for the face and every fact: the picture is the ornament, and
-    // a frame that cannot hold both gives its room to the facts.
     let rows = screen(&mut app, 100, 40);
     let top = rail_of(&rows[0]);
     assert!(

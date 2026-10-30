@@ -12,34 +12,22 @@ use sindri_harness::{MockProvider, PROVIDER_ENV, Reply, Request};
 use crate::case::Case;
 use crate::workspace::Workspace;
 
-/// The result of one scripted run.
 #[derive(Debug)]
 pub struct Run {
-    /// What the shell saw.
     pub exit_code: i32,
-    /// The answer, or the JSON object, on stdout.
     pub stdout: String,
-    /// Whatever went to stderr, which a clean run leaves empty.
     pub stderr: String,
-    /// Every request the binary made to the mock provider, in order. Empty in a
-    /// live run, where there is no mock to ask.
     pub requests: Vec<Request>,
-    /// The fixture repository this run worked in.
     pub workspace: PathBuf,
-    /// The run's state directory, where its session record was written.
     pub state: PathBuf,
-    /// Whether the run asked a real provider: a live run cannot assert on the
-    /// bodies a recorded one replays.
     pub live: bool,
 }
 
 impl Run {
-    /// The run's own JSON object, when it printed one.
     pub fn json(&self) -> Option<Value> {
         serde_json::from_str(self.stdout.trim()).ok()
     }
 
-    /// A field of the JSON object, as text.
     pub fn field(&self, name: &str) -> Option<String> {
         let value = self.json()?;
         match value.get(name)? {
@@ -48,15 +36,12 @@ impl Run {
         }
     }
 
-    /// The whole request body the model was sent on turn `n`, counted from 1.
     pub fn request(&self, n: usize) -> Option<&str> {
         self.requests
             .get(n - 1)
             .map(|request| request.body.as_str())
     }
 
-    /// Every session directory under this eval's state, which a single run
-    /// leaves exactly one of.
     pub fn session_dirs(&self) -> Vec<PathBuf> {
         let mut found: Vec<PathBuf> = std::fs::read_dir(self.state.join("sindri/sessions"))
             .into_iter()
@@ -68,7 +53,6 @@ impl Run {
         found
     }
 
-    /// The one session directory the run recorded itself in.
     pub fn session_dir(&self) -> Option<PathBuf> {
         let found = self.session_dirs();
         (found.len() == 1)
@@ -76,13 +60,11 @@ impl Run {
             .flatten()
     }
 
-    /// `session.json`, as the record wrote it.
     pub fn session_meta(&self) -> Option<Value> {
         let text = std::fs::read_to_string(self.session_dir()?.join("session.json")).ok()?;
         serde_json::from_str(&text).ok()
     }
 
-    /// The transcript, one JSON line per entry.
     pub fn transcript(&self) -> Vec<Value> {
         let Some(dir) = self.session_dir() else {
             return Vec::new();
@@ -106,7 +88,6 @@ pub fn exists(path: &Path) -> bool {
 /// never reaches a provider, so it must never need a real key.
 pub const RECORDED_KEY: &str = "sk-ant-eval-not-a-real-key";
 
-/// The first line of a stream, for a finding that has to fit on one line.
 pub fn first_line(text: &str) -> String {
     let line = text.lines().next().unwrap_or_default().trim();
     if line.is_empty() {
@@ -127,8 +108,6 @@ const HOST_LIMITS: &[&str] = &[
     "SINDRI_EXTRA_HEADERS",
 ];
 
-/// Runs one eval's script: the real binary, in its own workspace, with the
-/// recorded conversation replayed or a live provider asked.
 pub fn execute(bin: &Path, ws: &Workspace, case: &Case, live: bool) -> Result<Run, String> {
     let mock = if live {
         None
@@ -193,8 +172,6 @@ pub fn execute(bin: &Path, ws: &Workspace, case: &Case, live: bool) -> Result<Ru
     })
 }
 
-/// The recorded conversation for `case`, in the order the provider answered:
-/// the wire bodies, so a replay proves our client and our loop together.
 fn replies(case: &Case) -> Result<Vec<Reply>, String> {
     let dir = Path::new(crate::workspace::FIXTURES).join(case.recorded);
     let mut names: Vec<String> = std::fs::read_dir(&dir)

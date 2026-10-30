@@ -73,7 +73,6 @@ fn piped_stdin_without_batch_is_refused_and_never_drained() {
     assert!(lines[0].contains("-b"), "the refusal names -b: {stderr:?}");
 }
 
-/// A credential shaped like a real one but belonging to nothing.
 const TEST_KEY: &str = common::TEST_KEY;
 
 #[test]

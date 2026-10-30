@@ -12,7 +12,6 @@ use std::path::PathBuf;
 use sindri_evals::run::Run;
 use sindri_harness::Request;
 
-/// A run as the eval saw it, with the evidence a check reads.
 fn run(exit_code: i32, stdout: &str, bodies: &[&str]) -> Run {
     let root = tempfile::TempDir::new().expect("temp dir");
     Run {
@@ -29,7 +28,6 @@ fn run(exit_code: i32, stdout: &str, bodies: &[&str]) -> Run {
     }
 }
 
-/// The JSON a finished run prints, as the batch contract fixes it.
 fn answered(stopped: &str, turns: u32) -> String {
     format!(
         "{{\"answer\":\"a summary\",\"session\":\"s\",\"turns\":{turns},\"stopped\":\"{stopped}\",\"model\":\"m\",\"duration_ms\":1,\"tool_calls\":0}}\n"

@@ -163,7 +163,6 @@ fn the_argv_redirects_the_temp_variables_and_a_writable_home_into_the_session_te
     );
 }
 
-/// Every destination mounted with `--bind`, in mount order.
 fn binds(argv: &[String]) -> Vec<&String> {
     argv.iter()
         .enumerate()

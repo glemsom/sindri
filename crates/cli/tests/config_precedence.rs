@@ -12,8 +12,6 @@ mod common;
 use common::provider::{MockProvider, Reply};
 use common::{Env, stderr, stdout, write_config};
 
-/// The run, through the shared harness: exactly the settings the test supplies,
-/// so a test owns every level of the precedence.
 fn run(env: &Env, args: &[&str], vars: &[(&str, &str)]) -> std::process::Output {
     common::run_with(env, args, vars)
 }
@@ -119,7 +117,6 @@ fn the_command_timeout_comes_from_the_file_then_the_environment_then_a_flag() {
     let env = Env::new();
     write_config(&env, "model = \"claude-from-file\"\ntimeout = 1\n");
 
-    // The file's one-second deadline really is enforced.
     let mock = MockProvider::start(vec![
         Reply::tool_call("t1", "sleep 30", ""),
         Reply::answer("gave up"),
@@ -137,7 +134,6 @@ fn the_command_timeout_comes_from_the_file_then_the_environment_then_a_flag() {
         "the command timed out under the file's deadline"
     );
 
-    // A flag raises it above the file's, so the same command finishes.
     let mock = MockProvider::start(vec![
         Reply::tool_call("t1", "sleep 2; echo done", ""),
         Reply::answer("finished"),
@@ -158,7 +154,6 @@ fn the_command_timeout_comes_from_the_file_then_the_environment_then_a_flag() {
 #[test]
 fn the_provider_comes_from_the_file_and_a_flag_overrides_it() {
     let env = Env::new();
-    // A provider no wire claims: the file's value is read, and refused.
     write_config(
         &env,
         "model = \"claude-from-file\"\nprovider = \"gemini\"\n",

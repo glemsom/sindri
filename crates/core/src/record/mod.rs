@@ -29,19 +29,13 @@ use crate::provider::{Call, ToolOutcome};
 use crate::sandbox::Enforcement;
 use entry::Entry as Line;
 
-/// Who is running, and where: everything the metadata needs before a turn is
-/// asked (ADR-0006).
 #[derive(Debug, Clone)]
 pub struct Start {
-    /// The provider that will be asked.
     pub provider: String,
-    /// The model that was configured, whether or not it answers.
     pub model: String,
-    /// Whether commands are sandboxed or run with the user's own privileges.
     pub enforcement: Enforcement,
 }
 
-/// How a run's enforcement is written down.
 fn enforcement(enforcement: Enforcement) -> &'static str {
     match enforcement {
         Enforcement::Bubblewrap => "bubblewrap",
@@ -49,15 +43,12 @@ fn enforcement(enforcement: Enforcement) -> &'static str {
     }
 }
 
-/// One run's record, held open for as long as the run lasts.
 pub struct Recorder {
     root: PathBuf,
     redaction: Redaction,
     inner: Mutex<Inner>,
 }
 
-/// The files and the metadata a recorder owns, behind one lock so the status
-/// thread and the turn loop can write without a sequence number of their own.
 struct Inner {
     meta: Meta,
     transcript: File,
@@ -65,8 +56,6 @@ struct Inner {
 }
 
 impl Recorder {
-    /// Opens the record: metadata written once, transcript and status created
-    /// empty. A session whose record cannot be written cannot be a run.
     pub fn start(session: &SessionDir, start: Start, redaction: Redaction) -> io::Result<Self> {
         let root = session.root().to_path_buf();
         std::fs::create_dir_all(&root)?;
@@ -102,19 +91,16 @@ impl Recorder {
         Ok(recorder)
     }
 
-    /// The directory this record lives in.
     pub fn root(&self) -> &Path {
         &self.root
     }
 
-    /// The question the run was asked.
     pub fn user(&self, text: &str) {
         self.note(Line::User {
             text: self.redaction.apply(text),
         });
     }
 
-    /// One turn's reply from the model.
     pub fn assistant(&self, turn: u32, text: &str, reasoning: Option<&str>) {
         self.note(Line::Assistant {
             turn,
@@ -139,7 +125,6 @@ impl Recorder {
         });
     }
 
-    /// What the tool answered the model.
     pub fn tool_result(&self, turn: u32, outcome: &ToolOutcome) {
         self.note(Line::ToolResult {
             turn,
@@ -149,7 +134,6 @@ impl Recorder {
         });
     }
 
-    /// The run ended, for the reason the report gives.
     pub fn finish(&self, report: &Report) -> io::Result<()> {
         self.settle(|meta| {
             meta.stopped = report.stopped.as_str().to_string();
@@ -161,7 +145,6 @@ impl Recorder {
         })
     }
 
-    /// The run failed, with the message the shell was told.
     pub fn failed(&self, message: &str) -> io::Result<()> {
         let message = self.redaction.apply(message);
         self.settle(move |meta| {
@@ -225,7 +208,6 @@ fn write_meta(root: &Path, meta: &Meta) -> io::Result<()> {
     std::fs::rename(&staging, root.join("session.json"))
 }
 
-/// Now, in milliseconds since the Unix epoch: the record's only clock.
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

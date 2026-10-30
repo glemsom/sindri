@@ -14,7 +14,6 @@ use sindri_core::agent::Event;
 use sindri_core::provider::Turn;
 use support::{Harness, answer, call, calls};
 
-/// Every text delta's payload, joined in the order they arrived.
 fn text(events: &[Event]) -> String {
     events
         .iter()
@@ -25,7 +24,6 @@ fn text(events: &[Event]) -> String {
         .collect()
 }
 
-/// Every reasoning delta's payload, joined in the order they arrived.
 fn reasoning(events: &[Event]) -> String {
     events
         .iter()

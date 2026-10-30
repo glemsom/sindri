@@ -1,32 +1,28 @@
-# 0002 — One tool (`bash`), and the sandbox policy is the single source of truth
+---
+status: accepted
+date: 2026-10-29
+---
 
-- **Status:** accepted
-- **Date:** 2025-10-29
-
-## Context
-
-Cross-platform agents need native tools per capability. Sindri targets Linux
-only, so it can follow the Unix philosophy: one `bash` tool, composed by the
-model into pipelines and small scripts.
-
-A sandbox that is enforced differently from how it is described will lie to the
-model sooner or later — the model then plans against a fiction.
+# 0002 — One tool (`bash`), and `SandboxPolicy` is the only source of truth
 
 ## Decision
 
-1. The model gets exactly one tool: `bash`.
-2. One `SandboxPolicy` value holds the writable set, network posture and temp
-   mapping. Two pure functions derive from it: `to_argv()` (the bwrap
-   invocation) and `describe()` (the model-facing text and the `sindri doctor`
-   output). Neither may be written by hand anywhere else.
-3. `--yolo-unsafe` bypasses bwrap and is reflected in `describe()` and in the
-   session record.
+1. The model gets exactly one tool: `bash`, composed into pipelines and scripts.
+2. `SandboxPolicy` (`crates/core/src/sandbox/policy.rs`) holds the writable set, the network posture and the temp mapping.
+3. Two pure derivations, and no hand-written third:
+   - `to_argv()` — `crates/core/src/sandbox/argv.rs`
+   - `describe()` — `crates/core/src/sandbox/describe.rs`; the model-facing text and `sindri doctor`
+4. `--yolo-unsafe` skips bwrap; `describe()` says so and the record says `unsafe` (ADR-0006).
 
 ## Consequences
 
-- Drift between enforcement and description becomes a type-level impossibility,
-  backed by a round-trip test over the generated argv.
-- Verified against bwrap 0.13.1: `--ro-bind / /` must come first or writable
-  binds are shadowed; `--dev /dev` is mandatory or `/dev/null` is unusable;
-  `HOME` must be writable or `git` fails outright; `--die-with-parent` and
-  `--new-session` are both load-bearing.
+- Enforcement and description cannot drift; a round-trip test covers the generated argv.
+- bwrap argv order is contract (verified against bwrap 0.13.1):
+
+| position | flag | why |
+| --- | --- | --- |
+| first | `--ro-bind / /` | writable binds are shadowed if it comes later |
+| after | `--bind <path> <path>` per writable path, then the session temp | the only write targets |
+| mandatory | `--dev /dev` | otherwise `/dev/null` is unusable |
+| mandatory | writable `HOME` (session temp `home/`) | otherwise `git` fails outright |
+| always | `--die-with-parent`, `--new-session` | neither is optional |

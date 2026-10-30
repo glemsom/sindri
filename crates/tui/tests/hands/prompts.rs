@@ -52,7 +52,6 @@ fn a_new_session_that_cannot_start_keeps_the_conversation_and_says_why() {
     press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     assert!(app.take_renew(), "the front end is asked for a new session");
 
-    // The session directory cannot be created where the launch records it.
     app.renewed(Err(
         "the new session could not start: the session directory \
          /state/sindri/sessions cannot be created: Permission denied (os error 13)"

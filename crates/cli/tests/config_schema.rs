@@ -15,8 +15,6 @@ use std::process::Output;
 use common::provider::{MockProvider, Reply};
 use common::{Env, TEST_KEY, stderr, stdout, write_config};
 
-/// Runs batch mode with the mock's base URL and the test's own settings, so no
-/// request can leave the machine and each test states its own precedence.
 fn run(env: &Env, mock: &MockProvider, args: &[&str], vars: &[(&str, &str)]) -> Output {
     let base_url = mock.base_url();
     let mut all: Vec<(&str, &str)> = vec![("SINDRI_BASE_URL", base_url.as_str())];
@@ -24,7 +22,6 @@ fn run(env: &Env, mock: &MockProvider, args: &[&str], vars: &[(&str, &str)]) -> 
     common::run_with(env, args, &all)
 }
 
-/// The one request the mock served.
 fn only_request(mock: &MockProvider) -> common::provider::Request {
     let requests = mock.requests();
     assert_eq!(requests.len(), 1, "one run makes one request");
@@ -73,7 +70,6 @@ max_turn = 5
     );
 }
 
-/// Whether the request paid for reasoning.
 fn reasoning(request: &common::provider::Request) -> bool {
     request.json().get("thinking").is_some()
 }
@@ -170,8 +166,6 @@ fn a_wrong_reasoning_toggle_is_a_usage_error() {
     );
 }
 
-/// A directory the run may be granted writable, existing and canonical so the
-/// sandbox accepts it.
 fn extra_dir(env: &Env, name: &str) -> std::path::PathBuf {
     let dir = env.workspace.parent().expect("root").join(name);
     std::fs::create_dir_all(&dir).expect("extra dir");
@@ -323,7 +317,6 @@ fn a_credential_from_the_file_is_redacted_from_errors() {
         "authentication_error",
         &format!("invalid x-api-key `{FROM_FILE}`"),
     )]);
-    // No credential in the environment: the file's is the one that must not leak.
     let output = env
         .cmd()
         .args(["-b", "summarise this"])

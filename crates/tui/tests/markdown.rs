@@ -1,7 +1,7 @@
-//! The markdown seam: what an answer *looks like* once rendered — a table with
-//! aligned columns, code with truecolour spans, a diff coloured by line. These
-//! are assertions about what the user sees, never about how it was composed
-//! (ADR-0011 §6).
+//! The markdown seam: what an answer *looks like* once rendered — a table
+//! with aligned columns, code with truecolour spans, a diff coloured by line.
+//! These are assertions about what the user sees, never about how it was
+//! composed (ADR-0011).
 
 #![allow(
     clippy::expect_used,
@@ -12,7 +12,6 @@ use ratatui::style::{Color, Modifier};
 use ratatui::text::Line;
 use sindri_tui::markdown;
 
-/// The visible text of a line, styles dropped.
 fn text(line: &Line<'_>) -> String {
     line.spans
         .iter()
@@ -26,7 +25,6 @@ fn texts(lines: &[Line<'_>]) -> Vec<String> {
     lines.iter().map(text).collect()
 }
 
-/// Every distinct foreground colour on the line.
 fn colours(line: &Line<'_>) -> Vec<Color> {
     line.spans
         .iter()

@@ -1,42 +1,33 @@
 //! The rail: the facts a user must never lose sight of — what a run has cost,
 //! how close it is to the context limit, which sandbox is on, and where the
-//! record lives (ADR-0011 §4). At 100 columns it is a column; below that it is
+//! record lives (ADR-0011). At 100 columns it is a column; below that it is
 //! one strip, never nothing.
 
 use crate::driver::{Stop, Tokens};
 
-/// What a launch knows before the first frame is drawn.
 #[derive(Debug, Clone)]
 pub struct Launch {
-    /// The session GUID this launch is recorded under.
     pub session: String,
-    /// The session temp path, as the sandbox mounts it.
     pub temp: String,
-    /// The git branch of the workspace, when it is a repository.
     pub branch: Option<String>,
-    /// The sandbox posture, in one line.
     pub sandbox: String,
-    /// The turn cap.
     pub max_turns: u32,
-    /// The model's context window, where it is known.
     pub context_limit: Option<u64>,
 }
 
-/// The rail's own state: what the launch said, and what the run has spent.
 #[derive(Debug, Clone)]
 pub struct Rail {
     launch: Launch,
     turns: u32,
-    /// What the conversation has cost, summed over the turns of every run.
     tokens: Tokens,
-    /// The size of the conversation as the provider last counted it: the whole
-    /// history goes in every turn, so this is the last input count, not a sum.
+    /// The size of the conversation as the provider last counted it: the
+    /// whole history goes in every turn, so this is the last input
+    /// count, not a sum.
     context: u64,
     stop: Option<Stop>,
 }
 
 impl Rail {
-    /// A rail that has run nothing yet.
     pub fn new(launch: Launch) -> Self {
         Rail {
             launch,
@@ -47,19 +38,14 @@ impl Rail {
         }
     }
 
-    /// One more turn.
     pub fn turn(&mut self, turn: u32) {
         self.turns = self.turns.max(turn);
     }
 
-    /// The limits a saved setting changed: a new turn cap, a new context
-    /// window, a new posture — with everything this conversation has already
-    /// spent still on screen (ADR-0014).
     pub fn reconfigured(&mut self, launch: Launch) {
         self.launch = launch;
     }
 
-    /// What the run that just ended spent, and why it ended.
     pub fn settled(&mut self, turns: u32, tokens: Tokens, stop: Stop) {
         self.turns = self.turns.max(turns);
         self.tokens = Tokens {
@@ -71,18 +57,14 @@ impl Rail {
         self.stop = Some(stop);
     }
 
-    /// The GUID this launch is recorded under.
     pub fn session(&self) -> String {
         self.launch.session.clone()
     }
 
-    /// The context the conversation has used, as the provider last counted it.
     pub fn context_used(&self) -> u64 {
         self.context
     }
 
-    /// The rail's facts, in the order they matter, each as its name and its
-    /// value: the column and the strip are two renderings of this one list.
     pub fn facts(&self) -> Vec<(String, String)> {
         let mut facts = vec![
             ("cache".to_string(), self.cache()),
@@ -154,7 +136,6 @@ impl Rail {
         fitted.chars().take(width).collect()
     }
 
-    /// The share of input tokens the provider served from its cache.
     fn cache(&self) -> String {
         if self.tokens.input == 0 {
             return "—".to_string();
@@ -163,7 +144,6 @@ impl Rail {
         format!("{share}%")
     }
 
-    /// The context meter: eight cells, filled by how much of the window is gone.
     fn meter(&self) -> String {
         let used = self.context_used();
         let cells = 8usize;
@@ -183,7 +163,6 @@ impl Rail {
     }
 }
 
-/// A count the way a rail says it: exact below a thousand, one decimal above.
 pub fn compact(count: u64) -> String {
     if count < 1_000 {
         return count.to_string();

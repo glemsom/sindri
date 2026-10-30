@@ -25,8 +25,6 @@ const FIELD_ORDER: [&str; 8] = [
     "usage",
 ];
 
-/// The run's stdout as the contract wrote it: the line itself, and the same
-/// line parsed, so every assertion below reads one admitted object.
 fn ordered(output: &std::process::Output) -> (String, serde_json::Value) {
     let stdout = stdout(output);
     assert_eq!(
@@ -169,7 +167,6 @@ fn verbose_stays_on_stderr_when_the_output_is_json() {
 
 #[test]
 fn exit_codes_do_not_depend_on_the_output_format() {
-    // The turn cap still exits 100, and says why in the object.
     let env = Env::new();
     let mock = MockProvider::start(vec![
         Reply::tool_call("t1", "true", ""),
@@ -185,14 +182,12 @@ fn exit_codes_do_not_depend_on_the_output_format() {
     let (_, object) = ordered(&output);
     assert_eq!(object["stopped"], "max_turns", "the object says why");
 
-    // A usage error still exits 2 with an empty stdout.
     let env = Env::new();
     let mock = MockProvider::start(vec![Reply::answer("never sent")]);
     let output = batch(&env, &mock, &["-b", "--format", "json"], " \n");
     assert_eq!(output.status.code(), Some(2), "no prompt is a usage error");
     assert_eq!(stdout(&output), "", "a refusal prints no object");
 
-    // An unknown format is a usage error, not a fallback.
     let env = Env::new();
     let mock = MockProvider::start(vec![Reply::answer("never sent")]);
     let output = batch(&env, &mock, &["-b", "q", "--format", "yaml"], "");
@@ -204,7 +199,6 @@ fn exit_codes_do_not_depend_on_the_output_format() {
     );
     assert_eq!(mock.requests().len(), 0, "nothing is asked");
 
-    // A provider failure still exits 1 with an empty stdout.
     let env = Env::new();
     let mock = MockProvider::start(vec![Reply::error(400, "invalid_request_error", "nope")]);
     let output = batch(&env, &mock, &["-b", "q", "--format", "json"], "");

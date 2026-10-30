@@ -4,7 +4,6 @@
 
 use serde_json::{Value, json};
 
-/// One SSE frame carrying `value`, ready to be one chunk of a streamed reply.
 pub fn frame(value: Value) -> String {
     format!(
         "data: {}\n\n",
@@ -12,7 +11,6 @@ pub fn frame(value: Value) -> String {
     )
 }
 
-/// A complete streamed answer, one text delta per fragment.
 pub fn text(fragments: &[&str]) -> Vec<String> {
     let mut frames = start();
     block(
@@ -25,8 +23,6 @@ pub fn text(fragments: &[&str]) -> Vec<String> {
     frames
 }
 
-/// A streamed answer that stops before the provider's end: the content arrives,
-/// the stop reason never does. The reply ends truncated.
 pub fn truncated_text(fragments: &[&str]) -> Vec<String> {
     let mut frames = start();
     block(
@@ -38,8 +34,6 @@ pub fn truncated_text(fragments: &[&str]) -> Vec<String> {
     frames
 }
 
-/// A streamed answer that fails after its text: the provider's own error
-/// envelope arrives mid-stream.
 pub fn text_then_error(fragments: &[&str], kind: &str, message: &str) -> Vec<String> {
     let mut frames = truncated_text(fragments);
     frames.push(frame(json!({
@@ -49,7 +43,6 @@ pub fn text_then_error(fragments: &[&str], kind: &str, message: &str) -> Vec<Str
     frames
 }
 
-/// A streamed answer whose reasoning arrives before its text.
 pub fn reasoning_then_text(reasoning: &[&str], text: &[&str]) -> Vec<String> {
     let mut frames = start();
     block(
@@ -71,8 +64,6 @@ pub fn reasoning_then_text(reasoning: &[&str], text: &[&str]) -> Vec<String> {
     frames
 }
 
-/// A streamed turn asking for one `bash` call, whose argument JSON arrives in
-/// `arguments` fragments: a call split across chunk boundaries.
 pub fn tool_call(id: &str, arguments: &[&str]) -> Vec<String> {
     let mut frames = start();
     block(
@@ -88,7 +79,6 @@ pub fn tool_call(id: &str, arguments: &[&str]) -> Vec<String> {
     frames
 }
 
-/// The reply's opening frame: the message metadata and its input counters.
 fn start() -> Vec<String> {
     vec![frame(json!({
         "type": "message_start",
@@ -105,7 +95,6 @@ fn start() -> Vec<String> {
     }))]
 }
 
-/// One content block: its start, its deltas, and its stop.
 fn block(frames: &mut Vec<String>, index: usize, start: Value, deltas: &[Value]) {
     frames.push(frame(json!({
         "type": "content_block_start",
@@ -125,8 +114,6 @@ fn block(frames: &mut Vec<String>, index: usize, start: Value, deltas: &[Value])
     })));
 }
 
-/// The provider's end: its stop reason, the terminal output count, and the
-/// message's close.
 fn close(frames: &mut Vec<String>, stop_reason: &str) {
     frames.push(frame(json!({
         "type": "message_delta",
@@ -136,7 +123,6 @@ fn close(frames: &mut Vec<String>, stop_reason: &str) {
     frames.push(frame(json!({"type": "message_stop"})));
 }
 
-/// One `text_delta` per fragment.
 fn text_deltas(fragments: &[&str]) -> Vec<Value> {
     fragments
         .iter()

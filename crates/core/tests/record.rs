@@ -17,10 +17,8 @@ use sindri_core::record::{Entry, Recorder, Redaction, Start, Stored};
 use sindri_core::sandbox::Enforcement;
 use tempfile::TempDir;
 
-/// A credential shaped like a real one but belonging to nothing.
 const KEY: &str = "sk-ant-test-not-a-real-key";
 
-/// A record in a temporary state directory, and the session it is written to.
 fn recording(enforcement: Enforcement) -> (TempDir, SessionDir, Recorder) {
     let root = TempDir::new().expect("state dir");
     let session = SessionDir::at(root.path().join("sessions/session-1"));
@@ -66,7 +64,6 @@ fn report() -> Report {
     }
 }
 
-/// Every file under `dir`, as text, so a test can assert what is *not* anywhere.
 fn everything_written(dir: &std::path::Path) -> String {
     let mut all = String::new();
     let mut pending = vec![dir.to_path_buf()];

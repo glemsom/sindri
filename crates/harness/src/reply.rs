@@ -8,7 +8,6 @@ use serde_json::Value;
 
 use crate::HARNESS_FIXTURES;
 
-/// One canned reply.
 #[derive(Debug, Clone)]
 pub struct Reply {
     pub status: u16,
@@ -22,7 +21,6 @@ pub struct Reply {
 }
 
 impl Reply {
-    /// A whole body, served in one write.
     fn whole(status: u16, body: String) -> Self {
         Reply {
             status,
@@ -32,7 +30,6 @@ impl Reply {
         }
     }
 
-    /// A finished Anthropic message answering `text`.
     pub fn answer(text: &str) -> Self {
         Reply::whole(
             200,
@@ -48,14 +45,10 @@ impl Reply {
         )
     }
 
-    /// A finished Anthropic message asking for one `bash` call with `command`,
-    /// after `text`.
     pub fn tool_call(id: &str, command: &str, text: &str) -> Self {
         Reply::tool_calls(&[(id, command)], text)
     }
 
-    /// A finished Anthropic message asking for several `bash` calls in one
-    /// turn, after `text`.
     pub fn tool_calls(calls: &[(&str, &str)], text: &str) -> Self {
         let mut content = Vec::new();
         if !text.is_empty() {
@@ -83,8 +76,6 @@ impl Reply {
         )
     }
 
-    /// A finished Anthropic message that shows `reasoning` before answering
-    /// `text`.
     pub fn thinking_answer(reasoning: &str, text: &str) -> Self {
         Reply::whole(
             200,
@@ -108,7 +99,6 @@ impl Reply {
         )
     }
 
-    /// A tool call whose arguments are not a JSON object.
     pub fn malformed_tool_call(id: &str) -> Self {
         Reply::whole(
             200,
@@ -129,16 +119,10 @@ impl Reply {
         )
     }
 
-    /// A body recorded from an OpenAI-compatible server, served at `status`:
-    /// the fixture names a file under `fixtures/openai`, so the wire format the
-    /// test proves is a document about that format, not a literal buried in a
-    /// test.
     pub fn recorded(name: &str, status: u16) -> Self {
         Reply::from_file(HARNESS_FIXTURES, name, status)
     }
 
-    /// A body read from a file in `dir`, served at `status`: how the eval suite
-    /// replays a recorded conversation instead of asking a live model.
     pub fn from_file(dir: &str, name: &str, status: u16) -> Self {
         let path = format!("{dir}/{name}.json");
         Reply::whole(
@@ -150,8 +134,6 @@ impl Reply {
         )
     }
 
-    /// A provider failure with `status` and `message`, in the provider's own
-    /// error envelope.
     pub fn error(status: u16, kind: &str, message: &str) -> Self {
         Reply::whole(
             status,
@@ -162,8 +144,6 @@ impl Reply {
         )
     }
 
-    /// A streamed reply: `chunks` already framed as `text/event-stream`, written
-    /// one at a time.
     pub fn streamed(chunks: Vec<String>) -> Self {
         Reply {
             status: 200,
@@ -173,8 +153,6 @@ impl Reply {
         }
     }
 
-    /// [`Self::streamed`], waiting `pause` after each chunk so the test can act
-    /// while the stream is still open.
     pub fn streamed_paced(chunks: Vec<String>, pause: Duration) -> Self {
         Reply {
             pause,
@@ -183,7 +161,6 @@ impl Reply {
     }
 }
 
-/// A body as the wire sends it: one line, escaped by serde.
 pub(crate) fn json(value: Value) -> String {
     serde_json::to_string(&value).expect("serialize canned reply")
 }

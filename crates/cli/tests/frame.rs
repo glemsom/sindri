@@ -4,9 +4,6 @@
 //! Driven through a pseudo-terminal, because "is it a terminal" is exactly the
 //! question the front door answers — and every wait has a deadline, so a frame
 //! that never draws fails instead of hanging (ADR-0011).
-//!
-//! What a run *inside* the frame does — `/new`, a signal, a record that cannot be
-//! finished — is `frame_runs.rs`'s.
 
 #![allow(
     clippy::expect_used,
@@ -73,13 +70,9 @@ fn a_sandbox_that_cannot_exist_is_a_card_before_anything_else_draws() {
         "the card names the check that failed: {drawn:?}"
     );
 
-    // Any key dismisses it, and the run that could not start is an environment
-    // failure — not a success.
     let (code, _) = pty.quit(&mut child);
     assert_eq!(code, Some(3), "a sandbox that cannot start exits 3");
 }
-/// The settings a frame needs to open at all: a credential the run will not
-/// spend, and a model name, since no request is made before a prompt is typed.
 fn defaults() -> Vec<(&'static str, &'static str)> {
     vec![
         ("SINDRI_API_KEY", TEST_KEY),
@@ -90,7 +83,7 @@ fn defaults() -> Vec<(&'static str, &'static str)> {
 /// The escape sequence that hands the mouse back when the frame closes.
 const MOUSE_OFF: &str = "\u{1b}[?1000l";
 /// The escape sequence that turns mouse reporting on: the frame draws its own
-/// selection, so the terminal's must be off (ADR-0011 §7).
+/// selection, so the terminal's must be off (ADR-0011).
 const MOUSE_ON: &str = "\u{1b}[?1000h";
 #[test]
 fn the_mouse_is_the_frames_while_it_draws_and_the_terminals_again_after() {
@@ -124,8 +117,6 @@ fn the_frame_advertises_the_hands_and_leaves_when_asked() {
     let env = Env::new();
     let mut child = spawn(&env, &pty, &defaults());
 
-    // The footer carries the keys a user needs before they know them: scrolling,
-    // `@` paths, `/` commands and `?`. Everything else is behind `?`.
     let drawn = pty.wait_for(&mut child, "@ paths");
     for wanted in ["PgUp/PgDn scroll", "@ paths", "/ commands", "? keys"] {
         assert!(
@@ -137,8 +128,6 @@ fn the_frame_advertises_the_hands_and_leaves_when_asked() {
     let (code, _) = pty.quit(&mut child);
     assert_eq!(code, Some(0), "leaving the frame is not a failure");
 }
-/// How long an idle frame is watched for: long enough that a 60 fps loop would
-/// draw thirty frames in it, short enough that a test spends no time waiting.
 const IDLE: Duration = Duration::from_millis(500);
 
 #[test]
@@ -203,9 +192,6 @@ fn a_resized_terminal_draws_the_frame_at_its_new_size() {
     let mut child = spawn(&env, &pty, &defaults());
 
     expect(&pty, &mut child, "@ paths");
-    // A frame is drawn only when something happened, so a resize is now the one
-    // thing outside the frame that must ask for one: a terminal shrunk to half
-    // its rows must draw the composer inside the rows that are left.
     let _ = pty.listening(&mut child, Duration::from_millis(150));
     pty.resize(&child, 12, 60);
     let redrawn = pty.listening(&mut child, IDLE);
@@ -224,8 +210,6 @@ fn a_resized_terminal_draws_the_frame_at_its_new_size() {
     );
 }
 
-/// The streamed answer a cursor test watches: reasoning first, then markdown
-/// with enough body to be repainted row by row while it arrives.
 fn streamed_answer() -> Reply {
     let reasoning: Vec<String> = (0..20)
         .map(|step| format!("thinking about step {step} and what follows from it\n"))

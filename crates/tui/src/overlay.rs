@@ -1,21 +1,14 @@
 //! The overlays that take the screen while they are open: `?`'s list of every
-//! binding, and the untruncated output a spill affordance offers (ADR-0011
-//! §9, §14). Both close with `Esc`, and neither is the only way to do what it
-//! does.
+//! binding, and the untruncated output a spill affordance offers (ADR-0011).
+//! Both close with `Esc`, and neither is the only way to do what it does.
 
 use std::path::{Path, PathBuf};
 
 use crate::settings::Settings;
 
-/// One way into the frame: the keys that reach it, the gesture that also
-/// reaches it, and what it does.
 pub struct Binding {
-    /// The keys, as the help overlay spells them.
     pub keys: &'static str,
-    /// The mouse gesture with the same effect, where there is one. Every
-    /// gesture named here has keys beside it (ADR-0011 §7).
     pub mouse: Option<&'static str>,
-    /// What it does.
     pub what: &'static str,
 }
 
@@ -94,19 +87,13 @@ pub const BINDINGS: &[Binding] = &[
     },
 ];
 
-/// What has the screen, when something does.
 #[derive(Debug, Clone)]
 pub enum Overlay {
-    /// Every binding, from `?` or `/help`.
     Help,
-    /// A command's output, untruncated.
     Spill(Spill),
-    /// The config file, edited through its own schema (ADR-0014).
     Settings(Settings),
 }
 
-/// The help overlay's rows: the keys, and what it does with the gesture that
-/// also does it.
 pub fn help_rows() -> Vec<(&'static str, String)> {
     BINDINGS
         .iter()
@@ -121,26 +108,20 @@ pub fn help_rows() -> Vec<(&'static str, String)> {
 }
 
 /// A spill file, open in the frame. The file is read once, when it is opened,
-/// and only the rows on screen are ever copied out of it (ADR-0011 §9).
+/// and only the rows on screen are ever copied out of it (ADR-0011).
 #[derive(Debug, Clone)]
 pub struct Spill {
-    /// The file the untruncated stream is in (ADR-0007).
     pub path: PathBuf,
-    /// Its lines, as it holds them.
     pub lines: Vec<String>,
-    /// How far down the file the reader has scrolled.
     pub scroll: usize,
-    /// How many rows the overlay last had room for.
     pub visible: usize,
 }
 
 impl Spill {
-    /// Opens a spill file. A file that cannot be read is not an overlay: the
-    /// frame says so instead.
     pub fn open(path: impl AsRef<Path>) -> std::io::Result<Spill> {
         let path = path.as_ref();
-        // A command's output is bytes, not text: a stream that is not UTF-8 is
-        // still shown, with its invalid sequences replaced (ADR-0007).
+        // A command's output is bytes, not text: a stream that is not UTF-8
+        // is still shown, with its invalid sequences replaced (ADR-0007).
         let bytes = std::fs::read(path)?;
         let lines: Vec<String> = String::from_utf8_lossy(&bytes)
             .lines()
@@ -158,8 +139,6 @@ impl Spill {
         })
     }
 
-    /// Records how tall the overlay is, so a scroll can stop where the file's
-    /// last screenful is, rather than at its last line.
     pub fn settled(&mut self, visible: usize) {
         self.visible = visible.max(1);
     }
@@ -175,7 +154,6 @@ impl Spill {
         &self.lines[start..end]
     }
 
-    /// One screenful up or down, stopping at the ends of the file.
     pub fn scroll_by(&mut self, rows: usize, up: bool) {
         let last = self.lines.len().saturating_sub(self.visible.max(1));
         self.scroll = if up {
@@ -190,9 +168,9 @@ impl Spill {
 mod tests {
     use super::{BINDINGS, Spill, help_rows};
 
-    /// The keys the contract names, written here from ADR-0011 §14 and
-    /// ADR-0013 rather than read out of `BINDINGS`: a key the frame gained and
-    /// the help forgot is a failure, not a tautology.
+    /// The keys the contract names, written here from ADR-0011 rather than
+    /// read out of `BINDINGS`: a key the frame gained and the help forgot is
+    /// a failure, not a tautology.
     const REQUIRED: &[&str] = &[
         "Enter",
         "Shift+Enter",

@@ -7,18 +7,6 @@
 //! a value that is present but wrong is a usage error (exit 2), while a value
 //! the run cannot do without is a model error (exit 1) with a hint naming
 //! every way to set it.
-//!
-//! The environment's keys mirror the file's: `SINDRI_PROVIDER`, `SINDRI_MODEL`,
-//! `SINDRI_API_KEY`, `SINDRI_BASE_URL`, `SINDRI_MAX_TURNS`, `SINDRI_TIMEOUT`,
-//! `SINDRI_THINKING`, `SINDRI_EXTRA_WRITABLE_PATHS`;
-//! a provider's own `ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL` or
-//! `OPENAI_API_KEY`/`OPENAI_BASE_URL` are read below those, so a user with one
-//! already exported needs no configuration at all.
-//!
-//! Two reads leave this module and no more: `Config::resolve`, the settings a
-//! run uses, and `Config::for_command`, the ones a diagnostic can do without a
-//! model for. They are one body, so a diagnostic never sees a config a run
-//! would not.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -26,12 +14,9 @@ use std::time::Duration;
 use crate::paths;
 use crate::sandbox::WritableSet;
 
-/// How many turns the run may take before it stops (the turn cap).
 pub const DEFAULT_MAX_TURNS: u32 = 250;
-/// The default per-command timeout the sandbox enforces.
 pub const DEFAULT_TIMEOUT_SECS: u64 = 120;
 
-/// The longest a single command may be allowed to run.
 pub const MAX_TIMEOUT_SECS: u64 = 3600;
 
 mod document;
@@ -42,63 +27,38 @@ mod provider;
 pub use document::{Document, KEYS, Key, toggle, toggle_shown};
 pub use provider::Provider;
 
-/// What the command line says, before anything else has a say.
 #[derive(Debug, Default, Clone)]
 pub struct Overrides {
-    /// `--provider`.
     pub provider: Option<String>,
-    /// `--model`.
     pub model: Option<String>,
-    /// `--base-url`.
     pub base_url: Option<String>,
-    /// `--max-turns`.
     pub max_turns: Option<u32>,
-    /// `--timeout`, in seconds.
     pub timeout: Option<u64>,
-    /// `--thinking` (`Some(true)`) or `--no-thinking` (`Some(false)`).
     pub thinking: Option<bool>,
-    /// `--writable`, as written.
     pub writable: Option<Vec<String>>,
-    /// `--header`, as written: `Name: value` lines.
     pub extra_headers: Option<Vec<String>>,
 }
 
-/// A run's settings, resolved and validated: nothing optional that the run
-/// cannot do without.
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// The wire to speak.
     pub provider: Provider,
-    /// The model to ask.
     pub model: String,
-    /// The provider credential, never printed or recorded unredacted.
     pub api_key: String,
-    /// Another API root: a gateway, a proxy, or a local server.
     pub base_url: Option<String>,
-    /// The turn cap.
     pub max_turns: u32,
-    /// How long one command may run inside the sandbox.
     pub timeout: Duration,
-    /// Whether the run pays for the model's reasoning.
     pub thinking: bool,
-    /// Extra paths granted read-write besides the workspace, checked to be
-    /// mountable.
     pub extra_writable: Vec<PathBuf>,
-    /// Headers every provider request carries, for a gateway that asks for its
-    /// own: lowercased names and their values, in name order. Never printed,
-    /// never recorded — a gateway's header is as likely to be a secret as the
-    /// credential is.
+    /// Never printed or recorded: a gateway's header may be as secret as the
+    /// credential.
     pub extra_headers: Vec<(String, String)>,
     /// A repository-local config that was found and refused, for the front end
     /// to note once. It is never read (ADR-0005).
     pub refused_repo_config: Option<PathBuf>,
 }
 
-/// The name a config committed in a repository would have. It is looked for so
-/// the refusal can be said out loud, and never opened.
 pub const REPO_CONFIG_NAME: &str = ".sindri.toml";
 
-/// Why a run could not be configured.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConfigError {
     /// A value is present but wrong: exit 2.
@@ -108,7 +68,6 @@ pub enum ConfigError {
 }
 
 impl ConfigError {
-    /// The one line the front end prints for this error.
     pub fn message(&self) -> &str {
         match self {
             ConfigError::Usage(message) | ConfigError::Missing(message) => message,
@@ -116,8 +75,6 @@ impl ConfigError {
     }
 }
 
-/// Whether the two settings only a model needs are required: a run asks a
-/// model, so it needs a name and a credential; a diagnostic asks nothing.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Model {
     Required,
@@ -125,23 +82,14 @@ enum Model {
 }
 
 impl Config {
-    /// The settings this run uses: file, then environment, then flags, with
-    /// every value checked.
     pub fn resolve(overrides: Overrides) -> Result<Config, ConfigError> {
         Config::read(overrides, Model::Required)
     }
 
-    /// The settings a diagnostic needs and a model does not: `sindri sandbox
-    /// exec` probes, and `sindri doctor` describes, the sandbox a run would get,
-    /// so both read the same file and grant the same extras, and neither needs a
-    /// model nor a credential to find out (ADR-0002, ADR-0015 §7). The model it
-    /// records is the one that was configured, which is to say none.
     pub fn for_command(overrides: Overrides) -> Result<Config, ConfigError> {
         Config::read(overrides, Model::Optional)
     }
 
-    /// The one body of both: the same sources, the same checks, and the two
-    /// settings a diagnostic does without.
     fn read(overrides: Overrides, asked: Model) -> Result<Config, ConfigError> {
         let file = file::read()?;
 
@@ -205,8 +153,6 @@ impl Config {
             .or_else(|| env(provider.api_key_env()))
             .or(file.api_key)
             .filter(|key| !key.trim().is_empty());
-        // A wire that needs no credential runs without one; a wire that does
-        // says so, naming every way to set it.
         let api_key = match api_key {
             Some(key) => key,
             None if !provider.needs_credential() || asked == Model::Optional => String::new(),
@@ -267,7 +213,6 @@ fn repo_config() -> Option<PathBuf> {
     candidate.is_file().then(|| candidate.to_path_buf())
 }
 
-/// Where the config file would be, for hints.
 fn file_path() -> String {
     paths::config_file()
         .map(|path| path.display().to_string())
@@ -280,8 +225,6 @@ pub(super) fn env(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|value| !value.is_empty())
 }
 
-/// A list from the environment, `:`-separated the way `PATH` is. Present but
-/// empty is an unset variable: an exported but empty list grants nothing.
 fn list(name: &str) -> Option<Vec<String>> {
     env(name).map(|value| {
         value
@@ -302,8 +245,6 @@ fn extra_paths(given: &[String]) -> Result<Vec<PathBuf>, ConfigError> {
         .map_err(|error| ConfigError::Usage(format!("extra_writable_paths: {error}")))
 }
 
-/// A toggle from the environment. Present but neither `true` nor `false` is a
-/// usage error, so a typo cannot silently mean "off".
 fn boolean(name: &str) -> Result<Option<bool>, ConfigError> {
     let Some(value) = env(name) else {
         return Ok(None);
@@ -317,8 +258,6 @@ fn boolean(name: &str) -> Result<Option<bool>, ConfigError> {
     }
 }
 
-/// A count from the environment. Present but unparsable is a usage error: a
-/// typo must not silently fall back to the default.
 fn number(name: &str) -> Result<Option<u32>, ConfigError> {
     let Some(value) = env(name) else {
         return Ok(None);

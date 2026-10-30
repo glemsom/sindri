@@ -13,8 +13,6 @@ use crate::workspace::{SENTINEL, SENTINEL_TEXT};
 /// sandbox at all (issue #1, eval honesty).
 const PROTECTED: &[&str] = &["/etc/sindri-eval-probe", "/usr/lib/sindri-eval-probe"];
 
-/// The promises every eval shares: an answer, the contract's shape, a silent
-/// stderr, and a session record that says the run was sandboxed.
 pub fn answered(run: &Run) -> Vec<String> {
     let mut problems = Vec::new();
     if run.exit_code != 0 {
@@ -60,8 +58,6 @@ pub fn answered(run: &Run) -> Vec<String> {
     problems
 }
 
-/// The run's record: it exists, it says the run was sandboxed, and the sandbox
-/// really started (ADR-0002, ADR-0006).
 fn record(run: &Run) -> Vec<String> {
     let mut problems = Vec::new();
     let sessions = run.session_dirs().len();
@@ -84,7 +80,6 @@ fn record(run: &Run) -> Vec<String> {
     problems
 }
 
-/// What the model was shown on turn `n`, in a recorded run.
 fn saw(run: &Run, turn: usize, needle: &str, what: &str) -> Vec<String> {
     if run.live {
         return Vec::new();
@@ -100,7 +95,6 @@ fn saw(run: &Run, turn: usize, needle: &str, what: &str) -> Vec<String> {
     }
 }
 
-/// The fixture project's own test suite, run on the host after the eval.
 fn tests_pass(run: &Run) -> Vec<String> {
     match shell(run, "sh tests/run.sh") {
         Ok(output) if output.status.success() => Vec::new(),
@@ -234,7 +228,6 @@ pub fn sandbox_refuses_an_outside_write(run: &Run) -> Vec<String> {
         Ok(text) => problems.push(format!("the in-sandbox write landed as {text:?}")),
         Err(error) => problems.push(format!("the in-sandbox write did not land: {error}")),
     }
-    // The run's own files are the ones an escape would have rewritten.
     match std::fs::read_to_string(run.workspace.join(SENTINEL)) {
         Ok(text) if text == SENTINEL_TEXT => {}
         Ok(_) => problems.push(format!("the run's own {SENTINEL} was changed")),
@@ -249,8 +242,6 @@ pub fn sandbox_refuses_an_outside_write(run: &Run) -> Vec<String> {
     problems
 }
 
-/// The cap must stop the run where it says it does, and say so in the shell's
-/// own language: exit 100, `stopped` naming the cap, and no turn beyond it.
 pub fn turn_cap_stops_a_loop(run: &Run, cap: u32) -> Vec<String> {
     let mut problems = Vec::new();
     if run.exit_code != 100 {

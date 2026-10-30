@@ -68,7 +68,6 @@ fn an_unknown_key_in_the_file_refuses_the_modal_and_says_why() {
 fn the_modal_fits_a_hundred_columns_and_a_hundred_and_sixty() {
     let mut f = fixture(Some("model = \"qwen3-32b\"\napi_key = \"sk-hidden\"\n"));
     open(&mut f.app);
-    // provider, model, base_url, then the key itself.
     for _ in 0..3 {
         down(&mut f.app);
     }

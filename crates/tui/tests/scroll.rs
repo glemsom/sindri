@@ -1,7 +1,8 @@
-//! Scrolling the transcript: `PgUp`/`PgDn`, the wheel and the keyboard's own
-//! escape hatch, over a thread whose length is bounded only by the session
-//! (ADR-0011 §4, §9). The frame lays out only the rows it shows, so these tests
-//! count what a window of a long thread had to lay out, not only what it drew.
+//! Scrolling the transcript: `PgUp`/`PgDn`, the wheel and the keyboard's
+//! own escape hatch, over a thread whose length is bounded only by the
+//! session (ADR-0011). The frame lays out only the rows it shows, so
+//! these tests count what a window of a long thread had to lay out, not
+//! only what it drew.
 
 #![allow(
     clippy::expect_used,
@@ -18,7 +19,6 @@ use sindri_tui::render::transcript;
 use sindri_tui::selection::Selection;
 use sindri_tui::{App, Launch};
 
-/// A clipboard that refuses everything: a test never reaches the user's.
 struct Nowhere;
 
 impl Clipboard for Nowhere {
@@ -42,8 +42,6 @@ fn app() -> App {
     )
 }
 
-/// A thread of `turns` questions with one line of answer each, so the rows it
-/// needs are known and every row says which turn it came from.
 fn thread(turns: u32) -> App {
     let mut app = app();
     for turn in 1..=turns {

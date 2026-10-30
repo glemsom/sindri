@@ -4,7 +4,6 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-/// `$XDG_STATE_HOME/sindri`, falling back to `$HOME/.local/state/sindri`.
 pub fn state_dir() -> io::Result<PathBuf> {
     match std::env::var_os("XDG_STATE_HOME").filter(|v| !v.is_empty()) {
         Some(dir) => Ok(PathBuf::from(dir).join("sindri")),
@@ -17,7 +16,6 @@ pub fn state_dir() -> io::Result<PathBuf> {
     }
 }
 
-/// `$XDG_CONFIG_HOME/sindri`, falling back to `$HOME/.config/sindri`.
 pub fn config_dir() -> io::Result<PathBuf> {
     match std::env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty()) {
         Some(dir) => Ok(PathBuf::from(dir).join("sindri")),
@@ -58,23 +56,18 @@ impl SessionDir {
         self.root.join("tmp")
     }
 
-    /// Where over-long command output is written, one file per stream.
     pub fn spill(&self) -> PathBuf {
         self.temp().join("spill")
     }
 
-    /// One session directory as it already exists on disk: what a reader opens,
-    /// and what a test points at a temporary state directory.
     pub fn at(root: PathBuf) -> Self {
         SessionDir { root }
     }
 
-    /// The directory itself, where the record's documents live (ADR-0006).
     pub fn root(&self) -> &Path {
         &self.root
     }
 
-    /// The GUID this run is recorded under (ADR-0006).
     pub fn id(&self) -> &str {
         self.root
             .file_name()

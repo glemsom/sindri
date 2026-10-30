@@ -1,5 +1,5 @@
-//! The card: what a broken boot draws instead of a half-drawn interface
-//! (ADR-0011 §15).
+//! The card: what a broken boot draws instead of a half-drawn
+//! interface (ADR-0011).
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
@@ -8,18 +8,13 @@ use ratatui::widgets::{Block, Paragraph, Widget, Wrap};
 
 use crate::theme;
 
-/// Why the frame never opened.
 #[derive(Debug, Clone)]
 pub struct Card {
-    /// One line saying what cannot happen.
     pub title: String,
-    /// The check that failed.
     pub check: String,
-    /// What it found, in the failing check's own words.
     pub detail: String,
 }
 
-/// Draws the card across the whole screen, before anything else.
 pub fn draw(card: &Card, area: Rect, buf: &mut Buffer) {
     let block = Block::bordered()
         .border_style(theme::bad())

@@ -1,7 +1,6 @@
 //! `sindri sandbox exec`: run one command through the real sandbox and print the
 //! structured outcome. A diagnostic, not a front end: no model is involved, so
 //! a broken sandbox is visible before an agent can be confused by it.
-//!
 //! Its exit status reports whether the *sandbox* worked: 0 whenever an outcome
 //! was produced, 3 when the sandbox itself failed. The command's own status is
 //! in the JSON, and only there — that is the whole point of the outcome.
@@ -21,21 +20,14 @@ use crate::signal;
 
 /// Runs the command and prints one JSON object describing what happened. A
 /// session is opened the one way a run opens one, so a diagnostic cannot probe a
-/// different sandbox than the run it is diagnosing (ADR-0015 §7).
+/// different sandbox than the run it is diagnosing (ADR-0015).
 pub fn exec(timeout: Duration, overrides: Overrides, command: &[String]) -> i32 {
-    // The diagnostic door, and the session it probes in: a diagnostic asks no
-    // model, so it needs none of a model's settings — the extras a run would be
-    // granted, and nothing a run would spend. A diagnostic that cannot read the
-    // run environment, or cannot start the session it probes, fails in the same
-    // words as the run it is diagnosing (ADR-0004, ADR-0015 §7).
     let session = match boot::configure(overrides).and_then(Configured::start) {
         Ok(boot) => boot.session,
         Err(failure) => return failure.report(),
     };
 
     let script = shell_join(command);
-    // Ctrl-C here kills the command's group too, so a diagnostic cannot leave a
-    // process behind either.
     let cancel = Cancel::new();
     signal::install(cancel.clone());
     let executor = session.executor(timeout, cancel);
@@ -68,11 +60,8 @@ pub fn exec(timeout: Duration, overrides: Overrides, command: &[String]) -> i32 
     }
 }
 
-/// One command's result as the session's end: no model was asked, so there were
-/// no turns, and a sandbox that never started is the failure it was.
 fn command_over(result: Option<&ToolResult>, took: Duration) -> Result<Report, LoopError> {
     let (stopped, tool_calls) = match result.map(|result| &result.outcome) {
-        // Cancelled before anything ran.
         None => (Stopped::Cancelled, 0),
         Some(Outcome::SandboxError { detail }) => return Err(Error::transport(detail)),
         Some(_) => (Stopped::Final, 1),
@@ -88,8 +77,6 @@ fn command_over(result: Option<&ToolResult>, took: Duration) -> Result<Report, L
     })
 }
 
-/// Writes the session's end, and says a write that failed: a record nobody is
-/// told about is a record dropped (ADR-0006).
 fn end(session: &Session, outcome: &Result<Report, LoopError>) {
     if let Err(error) = session.finish(outcome) {
         eprintln!(

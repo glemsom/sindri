@@ -14,7 +14,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 pub struct Cancel(Arc<AtomicBool>);
 
 impl Cancel {
-    /// A flag nobody has raised.
     pub fn new() -> Self {
         Cancel::default()
     }
@@ -27,12 +26,11 @@ impl Cancel {
 
     /// Puts the flag down, for a front end that runs more than one prompt in a
     /// launch: one flag per process, cleared between prompts, so a cancel ends
-    /// one run and never the next (ADR-0015 §8).
+    /// one run and never the next (ADR-0015).
     pub fn clear(&self) {
         self.0.store(false, Ordering::SeqCst);
     }
 
-    /// Whether the run has been asked to stop.
     pub fn is_triggered(&self) -> bool {
         self.0.load(Ordering::SeqCst)
     }

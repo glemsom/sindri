@@ -11,10 +11,6 @@ use sindri_core::cancel::Cancel;
 /// the handler never runs while it is still empty.
 static RAISED: OnceLock<Cancel> = OnceLock::new();
 
-/// Makes the next SIGINT stop `cancel`. One process runs one thing, so only the
-/// first call has any effect. A failure to install is reported and survivable:
-/// the default disposition then kills the process, which a shell still reads as
-/// a cancellation.
 pub fn install(cancel: Cancel) {
     if RAISED.set(cancel).is_err() {
         return;
@@ -36,8 +32,6 @@ pub fn install(cancel: Cancel) {
     }
 }
 
-/// Raises the flag and returns. Anything more belongs to the loop, not to a
-/// signal handler.
 extern "C" fn on_sigint(_signal: libc::c_int) {
     if let Some(cancel) = RAISED.get() {
         cancel.trigger();

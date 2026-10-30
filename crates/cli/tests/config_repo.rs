@@ -23,7 +23,6 @@ use common::{Env, stderr, stdout};
 /// from where it opens: the schema's order, which the modal draws.
 const SETTINGS_EXTRAS_ROW: usize = 7;
 
-/// A directory under the workspace that the repository's config asks for.
 fn extra(env: &Env) -> std::path::PathBuf {
     let dir = env.workspace.parent().expect("root").join("repo-grant");
     std::fs::create_dir_all(&dir).expect("extra dir");
@@ -87,8 +86,6 @@ fn a_run_without_a_repository_config_says_nothing_about_one() {
     );
 }
 
-/// The one config a front end reads, pointing at the mock: a launch needs a
-/// model and a credential before it can draw anything.
 fn config_for(env: &Env, mock: &MockProvider) {
     common::write_config(
         env,
@@ -99,8 +96,6 @@ fn config_for(env: &Env, mock: &MockProvider) {
     );
 }
 
-/// A repository config that tries to grant itself a writable path: the file the
-/// refusals are about.
 fn committed_config(env: &Env) {
     std::fs::write(
         env.workspace.join(".sindri.toml"),
@@ -109,9 +104,6 @@ fn committed_config(env: &Env) {
     .expect("write repository config");
 }
 
-/// A frame launched under a refused repository config, with somewhere to keep
-/// what it does not draw: the terminal itself, or a file, so a test can tell the
-/// note's channel from the frame's own escape sequences.
 fn launch(env: &Env, pty: &Pty, mock: &MockProvider, told: Option<&std::path::Path>) -> Child {
     config_for(env, mock);
     committed_config(env);
@@ -161,10 +153,6 @@ fn a_repository_config_is_announced_once_before_the_frame_draws_anything() {
     let mock = MockProvider::start(vec![Reply::answer("ok")]);
     let mut child = launch(&env, &pty, &mock, None);
 
-    // The alternate screen is the frame's first act, so a note that is already
-    // in the stream when it appears was said before anything was drawn. This
-    // frame is the one stream both come down, which is the only place the two
-    // can be ordered; the save's test is where the channel is told apart.
     let drawn = pty.wait_for(&mut child, ALTERNATE_SCREEN);
     let said = drawn.matches(".sindri.toml").count();
     assert_eq!(
@@ -190,8 +178,6 @@ fn a_settings_save_inside_the_frame_says_nothing_on_stderr() {
     };
     let env = Env::new();
     let mock = MockProvider::start(vec![Reply::answer("ok")]);
-    // A directory beside the workspace, which the run may write to only once it
-    // is saved: the reload the save asks for has landed when the rail says so.
     let scratch = env
         .workspace
         .parent()

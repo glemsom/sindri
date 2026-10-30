@@ -2,7 +2,6 @@
 //! answers the next prompt on the thread the last one built, a key typed into
 //! the modal lands in the config file and nowhere else, and a run recorded from
 //! the frame reads back exactly as a batch run does.
-//!
 //! Every wait has a deadline and a machine without a pty skips cleanly: CI is
 //! headless, and a frame that never draws must fail rather than hang (ADR-0011).
 
@@ -19,11 +18,8 @@ use std::io::Write;
 use common::pty::{CLEAR_FIELD, DOWN, ENTER, Pty, expect, spawn, type_line};
 use common::{Env, TEST_KEY, stderr, stdout, write_config};
 
-/// The fake credential a user types into the modal: shaped like a real one so a
-/// leak is unmistakable, and belonging to nothing.
 const TYPED_KEY: &str = "sk-typed-in-the-settings-modal-0f2c";
 
-/// The config a TUI run starts from: the mock's wire, and the first model.
 fn config_for(mock: &MockProvider, model: &str, key: Option<&str>) -> String {
     let mut toml = format!(
         "provider = \"anthropic\"\nmodel = \"{model}\"\nbase_url = \"{}\"\n",
@@ -35,8 +31,6 @@ fn config_for(mock: &MockProvider, model: &str, key: Option<&str>) -> String {
     toml
 }
 
-/// The environment a TUI run starts in. Only the base URL and a credential are
-/// stated: the model is the file's, which is the thing under test.
 fn spawn_with(env: &Env, pty: &Pty, mock: &MockProvider) -> std::process::Child {
     let base_url = mock.base_url();
     spawn(
@@ -49,7 +43,6 @@ fn spawn_with(env: &Env, pty: &Pty, mock: &MockProvider) -> std::process::Child 
     )
 }
 
-/// Types into the settings modal: down to the field, clear it, and fill it.
 fn set_field(pty: &Pty, downs: usize, value: &str) {
     // One write per cursor move: a `DOWN` split across reads is an `Esc` and
     // then two typed characters, and the modal is gone.
@@ -64,8 +57,6 @@ fn set_field(pty: &Pty, downs: usize, value: &str) {
     }
 }
 
-/// The same, read off the screen: a fact the rail changes one character of is
-/// written once as a character, and only the screen puts the row back together.
 fn expect_on_screen(pty: &Pty, child: &mut std::process::Child, want: &str) -> String {
     let drawn = pty.wait_for_screen(child, want);
     if !drawn.contains(want) {
@@ -90,19 +81,16 @@ fn a_model_changed_in_settings_answers_the_next_prompt_on_the_same_thread() {
     write_config(&env, &config_for(&mock, "model-one", None));
     let mut child = spawn_with(&env, &pty, &mock);
 
-    // One prompt, answered by the model the file names.
     expect(&pty, &mut child, "cache");
     type_line(&pty, "what changed?");
     expect(&pty, &mut child, "the first answer");
 
-    // The dial: `/settings` → the model field → a new name → save.
     type_line(&pty, "/settings");
     expect(&pty, &mut child, "extra_writable_paths");
     set_field(&pty, 1, "model-two");
     pty.type_key(ENTER);
     expect(&pty, &mut child, "settings saved");
 
-    // A second prompt, which must be a follow-up rather than a one-shot.
     type_line(&pty, "and then?");
     expect(&pty, &mut child, "the second answer");
 
@@ -136,8 +124,6 @@ fn a_saved_extra_path_is_in_force_for_the_very_next_command() {
         return;
     };
     let env = Env::new();
-    // A directory beside the workspace, which no run may write until it is
-    // saved as an extra.
     let scratch = env
         .workspace
         .parent()
@@ -149,7 +135,6 @@ fn a_saved_extra_path_is_in_force_for_the_very_next_command() {
     write_config(&env, &config_for(&mock, "model-one", None));
     let mut child = spawn_with(&env, &pty, &mock);
 
-    // The rail states the posture a run is bounded by: the workspace alone.
     let opened = expect_on_screen(&pty, &mut child, "bwrap · 1 writable");
     assert!(!opened.is_empty(), "the frame is drawing");
     type_line(&pty, "/settings");
@@ -159,7 +144,7 @@ fn a_saved_extra_path_is_in_force_for_the_very_next_command() {
     expect(&pty, &mut child, "settings saved");
 
     // The session was rebased, not rebuilt: the posture the next command runs
-    // under is the one just saved (ADR-0015 §4).
+    // under is the one just saved (ADR-0015).
     let screen = expect_on_screen(&pty, &mut child, "bwrap · 2 writable");
     // A rebase is the same session bounded by the settings just saved, not a
     // second one: the rail's GUID and the record on disk are still the launch's.
@@ -222,7 +207,6 @@ fn a_key_typed_in_the_modal_is_written_to_the_file_and_nowhere_else() {
     pty.type_key(ENTER);
     expect(&pty, &mut child, "settings saved");
 
-    // A run on the saved key, so the record has everything a run writes.
     type_line(&pty, "a question");
     expect(&pty, &mut child, "answered");
     let (code, leaving) = pty.quit(&mut child);
@@ -250,7 +234,6 @@ fn a_key_typed_in_the_modal_is_written_to_the_file_and_nowhere_else() {
     );
 }
 
-/// Everything under `dir`, as text.
 fn everything_written(dir: &std::path::Path) -> String {
     let mut all = String::new();
     let mut pending = vec![dir.to_path_buf()];
@@ -270,7 +253,6 @@ fn everything_written(dir: &std::path::Path) -> String {
     all
 }
 
-/// The id of the one session directory a single run left behind.
 fn only_session(env: &Env) -> String {
     let root = env.state.join("sindri/sessions");
     let mut found: Vec<String> = std::fs::read_dir(&root)
@@ -304,8 +286,6 @@ fn a_run_recorded_from_the_frame_reads_back_as_a_batch_run_does() {
     assert_eq!(code, Some(0), "leaving the frame is not a failure");
 
     let from_tui = shown(&env, &only_session(&env));
-    // The same question, asked by batch mode against the same mock, so the two
-    // records are two recordings of the same thing.
     let batch = common::run_with(
         &env,
         &["-b", "how many files changed?"],
@@ -329,7 +309,6 @@ fn a_run_recorded_from_the_frame_reads_back_as_a_batch_run_does() {
     );
 }
 
-/// Every session id in this environment, oldest first.
 fn session_ids(env: &Env) -> Vec<String> {
     let root = env.state.join("sindri/sessions");
     let mut found: Vec<std::path::PathBuf> = std::fs::read_dir(&root)
@@ -346,7 +325,6 @@ fn session_ids(env: &Env) -> Vec<String> {
         .collect()
 }
 
-/// What `sindri sessions show <id>` printed.
 fn shown(env: &Env, id: &str) -> String {
     let output = env.cmd().args(["sessions", "show", id]).assert();
     let output = output.get_output();
@@ -354,9 +332,6 @@ fn shown(env: &Env, id: &str) -> String {
     stdout(output)
 }
 
-/// The transcript part of a `sessions show`: everything after the metadata.
-/// Those are the lines that say what was asked and what was answered, and they
-/// must not depend on which front end ran it.
 fn entries(shown: &str) -> String {
     match shown.find("\n--- ") {
         Some(at) => shown[at..].to_string(),

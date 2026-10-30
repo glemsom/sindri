@@ -1,6 +1,6 @@
 //! Fenced code: the language's own colours where the language is known, and a
 //! diff coloured line by line — an agent emits code and diffs more than
-//! anything else (ADR-0011 §6).
+//! anything else (ADR-0011).
 
 use std::sync::OnceLock;
 
@@ -28,13 +28,10 @@ fn theme() -> &'static Theme {
     })
 }
 
-/// Whether the fence names a diff rather than a language.
 fn is_diff(language: &str) -> bool {
     matches!(language, "diff" | "patch" | "udiff")
 }
 
-/// One fenced block, as rows. A fence with no language keeps its own text and
-/// no colour rather than guessing.
 pub fn lines(body: &str, language: Option<&str>) -> Vec<Line<'static>> {
     match language {
         Some(language) if is_diff(language) => body.lines().map(diff_line).collect(),
@@ -51,7 +48,6 @@ fn plain(body: &str) -> Vec<Line<'static>> {
         .collect()
 }
 
-/// One diff row, coloured by what it does rather than by what it says.
 fn diff_line(line: &str) -> Line<'static> {
     let style = if line.starts_with("+++") || line.starts_with("---") {
         Style::new().fg(theme::DIFF_FILE)
@@ -67,8 +63,6 @@ fn diff_line(line: &str) -> Line<'static> {
     Line::from(Span::styled(line.to_string(), style))
 }
 
-/// A known language's own tokens, at truecolour. An unknown language is shown
-/// plainly: a wrong highlight is worse than no highlight.
 fn highlight(body: &str, language: &str) -> Vec<Line<'static>> {
     let Some(syntax) = syntaxes().find_syntax_by_token(language) else {
         return plain(body);

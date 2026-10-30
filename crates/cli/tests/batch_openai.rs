@@ -16,8 +16,6 @@ use common::{Env, TEST_KEY, stderr, stdout, write_config};
 /// The request an OpenAI-compatible server is asked: `POST {base}/chat/completions`.
 const CHAT_PATH: &str = "/v1/chat/completions";
 
-/// Batch mode against `base_url`, with only the settings the test names: a
-/// local server has no credential to give, so none is invented here.
 fn run(env: &Env, args: &[(&str, &str)]) -> std::process::Output {
     let mut cmd = env.cmd();
     cmd.envs(args.iter().copied())
@@ -28,7 +26,6 @@ fn run(env: &Env, args: &[(&str, &str)]) -> std::process::Output {
         .clone()
 }
 
-/// The same run, printing the contract's JSON object rather than the answer.
 fn run_json(env: &Env, args: &[(&str, &str)]) -> std::process::Output {
     let mut cmd = env.cmd();
     cmd.envs(args.iter().copied())

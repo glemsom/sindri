@@ -15,8 +15,6 @@ use std::time::{Duration, Instant};
 use common::provider::{MockProvider, Reply, frames};
 use common::{Env, batch, signal, spawn, stderr, stdout};
 
-/// Waits until the mock has recorded a request, so a signalled test acts on a
-/// run that is already talking to its provider.
 fn wait_for_request(mock: &MockProvider) {
     let deadline = Instant::now() + Duration::from_secs(30);
     while Instant::now() < deadline {
@@ -148,7 +146,6 @@ fn a_tool_call_split_across_chunks_runs_and_comes_back() {
 #[test]
 fn cancelling_mid_stream_stops_the_run_with_130_and_no_output() {
     let env = Env::new();
-    // Plenty of paced frames: the signal lands while the reply is still open.
     let fragments: Vec<String> = (0..200).map(|index| format!("word{index} ")).collect();
     let fragments: Vec<&str> = fragments.iter().map(String::as_str).collect();
     let mock = MockProvider::start(vec![Reply::streamed_paced(

@@ -20,7 +20,6 @@ use crate::common::Env;
 /// failure said before the frame takes the terminal has nowhere else to go, so
 /// a test that reads it must keep it out of the frame's escape sequences.
 pub struct Said {
-    /// The directory the file lives in, kept alive for the test's length.
     _root: tempfile::TempDir,
     path: PathBuf,
 }
@@ -32,12 +31,10 @@ impl Said {
         Said { _root: root, path }
     }
 
-    /// The file to hand `spawn_with_stderr`.
     pub fn path(&self) -> &Path {
         &self.path
     }
 
-    /// Everything the frame said on stderr, read once it has said it.
     pub fn words(&self) -> String {
         std::fs::read_to_string(&self.path).unwrap_or_default()
     }
@@ -49,8 +46,6 @@ impl Default for Said {
     }
 }
 
-/// Waits for the process to be gone, and gives the code a shell would read —
-/// `None` when it would not go, so a stuck front end fails rather than hangs.
 pub fn exit(child: &mut Child) -> Option<i32> {
     let deadline = Instant::now() + DEADLINE;
     while Instant::now() < deadline {
@@ -77,8 +72,6 @@ pub fn spawn_with_stderr(env: &Env, pty: &Pty, vars: &[(&str, &str)], file: &Pat
     opened(env, pty, vars, Some(file))
 }
 
-/// The one spawn both doors do: a terminal for the frame, and a place for what
-/// the frame does not draw.
 fn opened(env: &Env, pty: &Pty, vars: &[(&str, &str)], stderr: Option<&Path>) -> Child {
     let mut command = env.command();
     let said = match stderr {
@@ -108,8 +101,6 @@ fn opened(env: &Env, pty: &Pty, vars: &[(&str, &str)], stderr: Option<&Path>) ->
     command.spawn().expect("spawn sindri on a terminal")
 }
 
-/// A drawn frame that does not say `want` is a failure, not a hang: kills the
-/// run and reports what it did draw.
 pub fn expect(pty: &Pty, child: &mut Child, want: &str) {
     let drawn = pty.wait_for_text(child, want);
     if !drawn.contains(want) {
@@ -119,7 +110,6 @@ pub fn expect(pty: &Pty, child: &mut Child, want: &str) {
     }
 }
 
-/// Types a whole prompt: the characters, then Enter.
 pub fn type_line(pty: &Pty, text: &str) {
     for byte in text.bytes() {
         pty.type_key(byte);

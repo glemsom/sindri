@@ -15,21 +15,15 @@ use crate::markdown::text::{self, clip};
 use crate::settings::{Field, Settings};
 use crate::theme;
 
-/// How wide the key column is.
 const LABEL: usize = 20;
-/// How much of the frame the modal leaves to itself.
 const MARGIN: u16 = 4;
 
-/// The hint line under the fields.
 const HINTS: &str = "↑↓/Tab move · Ctrl-U clear · Enter save · Esc discard";
 
-/// Draws the modal over whatever is underneath it.
 pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) {
     let width = area.width.saturating_sub(MARGIN * 2).clamp(30, 110);
     let columns = width.saturating_sub(2) as usize;
     let mut lines: Vec<Line<'static>> = Vec::new();
-    // The path is the point of the modal: it says which file a save lands in,
-    // and it is what the warning about a secret names. It is never elided.
     lines.extend(text::wrap(
         text::glyphs(&[
             Span::styled("file ", theme::faint()),
@@ -77,8 +71,9 @@ pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) {
         theme::faint(),
     )));
 
-    // The box is sized to what it has to say, not to a guess: a long path wraps
-    // and the modal grows, so nothing a user needs is the row that fell off.
+    // The box is sized to what it has to say, not to a guess: a long
+    // path wraps and the modal grows, so nothing a user needs is the
+    // row that fell off.
     let height = (lines.len() as u16 + 2).min(area.height);
     let boxed = Rect {
         x: area.x + (area.width.saturating_sub(width)) / 2,
@@ -95,7 +90,6 @@ pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) {
         .render(boxed, buf);
 }
 
-/// One field: its key, and what the field would write.
 fn row(settings: &Settings, field: &Field, columns: usize) -> Line<'static> {
     let label = format!("{:<LABEL$}", clip(field.key.name(), LABEL));
     let (shown, style) = value(settings, field);
@@ -105,8 +99,6 @@ fn row(settings: &Settings, field: &Field, columns: usize) -> Line<'static> {
     ])
 }
 
-/// One field's value, and how loud it is: a secret is the frame's quiet answer
-/// about where the value comes from, never the value.
 fn value(settings: &Settings, field: &Field) -> (String, Style) {
     let typed = field.text.trim();
     match field.key {
@@ -118,8 +110,9 @@ fn value(settings: &Settings, field: &Field) -> (String, Style) {
             "•••• set in the file (values hidden)".to_string(),
             theme::faint(),
         ),
-        // A toggle the file does not name is the run's own default, which is
-        // off (ADR-0004), and says so rather than pretending the file said it.
+        // A toggle the file does not name is the run's own default,
+        // which is off (ADR-0004), and says so rather than pretending
+        // the file said it.
         Key::Thinking if typed.is_empty() => {
             (format!("{} (default)", toggle_shown(typed)), Style::new())
         }

@@ -3,8 +3,6 @@
 
 use sindri_core::agent::Event;
 
-/// The lines `-v` prints: one per reasoning block, one per tool call, then the
-/// footer naming the session the run was recorded in.
 pub fn lines(events: Vec<Event>, session: &str) -> Vec<String> {
     let mut lines = Vec::new();
     for event in events {

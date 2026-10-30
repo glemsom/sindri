@@ -1,5 +1,5 @@
-//! `@` completion: what the walk offers, how many rows, which dotfiles, and the
-//! keys that take or dismiss an offer.
+//! `@` completion: what the walk offers, how many rows, which dotfiles, and
+//! the keys that take or dismiss an offer.
 
 use super::*;
 
@@ -12,7 +12,6 @@ fn at_completes_workspace_paths_in_the_background() {
         .expect("typing an @ path asks for a background walk");
     assert_eq!(typed, "src/ma", "the walk ranks against what was typed");
 
-    // The walk answers on its own thread; the frame is told what it found.
     let found: Vec<String> = (0..20).map(|index| format!("src/main{index}.rs")).collect();
     app.paths(generation, found, false);
     assert_eq!(

@@ -1,61 +1,35 @@
-//! One row of the transcript, and the state a tool call carries while it runs.
+//! One row of the transcript, and the state a tool call carries while it
+//! runs.
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 
 use crate::driver::{CallOver, Side};
 
-/// How many lines of a running command's output the frame keeps.
 pub const TAIL_LINES: usize = 5;
 
-/// One entry in the transcript, in the order it happened.
 #[derive(Debug)]
 pub enum Entry {
-    /// What the user asked.
     Prompt(String),
-    /// The model's answer, as it streams in.
-    Answer {
-        turn: u32,
-        text: String,
-        /// Whether the turn that produced it has ended.
-        done: bool,
-    },
-    /// The model's reasoning, dim and collapsed once the turn ends.
-    Reasoning {
-        turn: u32,
-        text: String,
-        /// Whether the turn that produced it has ended.
-        done: bool,
-    },
-    /// One `bash` call, running or over.
+    Answer { turn: u32, text: String, done: bool },
+    Reasoning { turn: u32, text: String, done: bool },
     Call(Call),
-    /// Something the frame has to say: a failure, a cancellation.
     Note(Note),
 }
 
-/// One `bash` call: what was asked, how it ended, and the tail of its output
-/// while it runs (ADR-0011 §9).
 #[derive(Debug)]
 pub struct Call {
-    /// The turn it belongs to.
     pub turn: u32,
-    /// The script, when the call's arguments could be read.
     pub command: Option<String>,
-    /// How it ended, or `None` while it runs.
     pub over: Option<CallOver>,
-    /// The last few lines of its output, oldest first, each with the stream it
-    /// came from.
     pub tail: VecDeque<(Side, String)>,
     /// Where the untruncated streams were written, when they did not fit
     /// (ADR-0007). The frame offers them rather than holding them.
     pub spill: Vec<PathBuf>,
-    /// Whether the model-facing output was cut down, so there is more to show
-    /// than the tail.
     pub truncated: bool,
 }
 
 impl Call {
-    /// A call that has not finished and has no output yet.
     pub fn new(turn: u32, command: Option<String>) -> Self {
         Call {
             turn,
@@ -67,8 +41,6 @@ impl Call {
         }
     }
 
-    /// The spill file this call offers to open, when its output was too large
-    /// to display in full.
     pub fn spill_file(&self) -> Option<&Path> {
         if !self.truncated {
             return None;
@@ -76,7 +48,6 @@ impl Call {
         self.spill.first().map(PathBuf::as_path)
     }
 
-    /// One more line of output, keeping only the last few.
     pub fn push(&mut self, side: Side, line: String) {
         if line.trim().is_empty() {
             return;
@@ -87,23 +58,18 @@ impl Call {
         }
     }
 
-    /// Whether the call is still running.
     pub fn running(&self) -> bool {
         self.over.is_none()
     }
 }
 
-/// Something the frame says that is not the model's: a failure, a cancellation.
 #[derive(Debug)]
 pub struct Note {
-    /// Which kind of thing it is.
     pub kind: NoteKind,
-    /// The words themselves.
     pub text: String,
 }
 
 impl Note {
-    /// A failure, said where it happened.
     pub fn error(text: impl Into<String>) -> Self {
         Note {
             kind: NoteKind::Error,
@@ -111,7 +77,6 @@ impl Note {
         }
     }
 
-    /// Something the user should know but need not act on.
     pub fn info(text: impl Into<String>) -> Self {
         Note {
             kind: NoteKind::Info,
@@ -120,11 +85,8 @@ impl Note {
     }
 }
 
-/// The two kinds of note the frame writes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NoteKind {
-    /// Something went wrong.
     Error,
-    /// Something happened.
     Info,
 }

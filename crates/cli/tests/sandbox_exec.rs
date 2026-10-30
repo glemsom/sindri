@@ -1,6 +1,5 @@
 //! The process seam for the sandbox debug subcommand: every acceptance
 //! criterion of the executor, proven without a model in the loop.
-//!
 //! Fields are asserted one by one rather than snapshotted: the batch contract's
 //! JSON shape (ADR-0004) is fixed in T6 with `insta`, and this subcommand's
 //! shape is not that contract.
@@ -10,12 +9,10 @@ mod common;
 use common::Env;
 use serde_json::Value;
 
-/// The structured outcome the subcommand prints for one command.
 fn exec(env: &Env, command: &[&str]) -> Value {
     exec_with(env, &[], command)
 }
 
-/// The same, with flags that belong to `sindri sandbox exec` itself.
 fn exec_with(env: &Env, flags: &[&str], command: &[&str]) -> Value {
     let assert = env
         .cmd()
@@ -45,8 +42,6 @@ fn a_command_runs_inside_the_sandbox_and_reports_its_streams() {
 #[test]
 fn the_command_cannot_see_processes_outside_its_namespace() {
     let env = Env::new();
-    // A process we own, on the outside: inside a fresh pid namespace it must not
-    // exist at all, which is what `--unshare-pid` buys.
     let mut outsider = std::process::Command::new("sleep")
         .arg("30")
         .spawn()

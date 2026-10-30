@@ -36,7 +36,6 @@ pub(super) struct FileConfig {
     pub(super) extra_headers: Option<BTreeMap<String, String>>,
 }
 
-/// The one file a run reads.
 pub(super) fn read() -> Result<FileConfig, ConfigError> {
     read_at(Path::new(&super::file_path()))
 }

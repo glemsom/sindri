@@ -4,10 +4,8 @@
 
 use super::ConfigError;
 
-/// The wire a run speaks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Provider {
-    /// Anthropic's Messages API.
     Anthropic,
     /// The OpenAI-compatible Chat Completions wire: OpenAI itself, and every
     /// server that speaks its shape — Ollama, vLLM, LM Studio, OpenRouter,
@@ -16,7 +14,6 @@ pub enum Provider {
 }
 
 impl Provider {
-    /// The provider a name selects.
     pub fn parse(name: &str) -> Result<Self, ConfigError> {
         match name {
             "anthropic" => Ok(Provider::Anthropic),
@@ -27,7 +24,6 @@ impl Provider {
         }
     }
 
-    /// The name this provider is configured and recorded as.
     pub const fn as_str(self) -> &'static str {
         match self {
             Provider::Anthropic => "anthropic",
@@ -35,7 +31,6 @@ impl Provider {
         }
     }
 
-    /// The variable this provider's credential normally lives in.
     pub const fn api_key_env(self) -> &'static str {
         match self {
             Provider::Anthropic => "ANTHROPIC_API_KEY",
@@ -43,7 +38,6 @@ impl Provider {
         }
     }
 
-    /// The variable this provider's own client would read its base URL from.
     pub const fn base_url_env(self) -> &'static str {
         match self {
             Provider::Anthropic => "ANTHROPIC_BASE_URL",

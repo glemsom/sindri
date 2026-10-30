@@ -1,6 +1,6 @@
-//! The frame's behaviour, driven the way a keyboard drives it: Ctrl-C cancels a
-//! run and keeps the draft, a prompt typed mid-run queues, and a failure is
-//! content rather than a toast (ADR-0011 §10, §15).
+//! The frame's behaviour, driven the way a keyboard drives it: Ctrl-C cancels
+//! a run and keeps the draft, a prompt typed mid-run queues, and a failure is
+//! content rather than a toast (ADR-0011).
 
 #![allow(
     clippy::expect_used,
@@ -29,7 +29,6 @@ fn app() -> App {
     )
 }
 
-/// Types text one key at a time, as a keyboard would.
 fn type_text(app: &mut App, text: &str) {
     for ch in text.chars() {
         app.key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE));
@@ -124,8 +123,8 @@ fn a_cancel_between_prompts_ends_that_run_and_not_the_next() {
     press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     let job = app.start().expect("a run starts");
 
-    // A signal and a key raise the same flag, so raising it anywhere raises it
-    // for the run in flight (ADR-0015 §8).
+    // A signal and a key raise the same flag, so raising it anywhere raises
+    // it for the run in flight (ADR-0015).
     cancel.trigger();
     assert!(
         job.cancel.is_triggered(),
@@ -163,7 +162,6 @@ fn a_prompt_typed_during_a_run_queues_and_is_sent_when_the_run_ends() {
         "nothing new starts while the first run is in flight"
     );
 
-    // The first run ends; the queued prompt is what runs next.
     app.finished(Finished {
         stopped: Stop::Final,
         turns: 1,

@@ -40,7 +40,6 @@ pub const DOWN: &[u8] = b"\x1b[B";
 /// The sequence that shows the terminal's cursor: a frame ends with it, so one
 /// of these is one frame drawn.
 pub const SHOW_CURSOR: &str = "\u{1b}[?25h";
-/// How long anything is given before it counts as a failure.
 pub const DEADLINE: Duration = Duration::from_secs(20);
 
 /// A pseudo-terminal. `None` where the machine has none to offer: a container
@@ -55,7 +54,6 @@ pub struct Pty {
 }
 
 impl Pty {
-    /// The master end, as a file to read and write.
     pub fn port(&self) -> File {
         File::from(self.master.try_clone().expect("the pty's master"))
     }
@@ -112,8 +110,6 @@ impl Pty {
         })
     }
 
-    /// Everything the frame has drawn so far, read until `want` appears or the
-    /// deadline passes.
     pub fn wait_for(&self, child: &mut Child, want: &str) -> String {
         let mut port = self.port();
         let mut seen = String::new();
@@ -129,7 +125,6 @@ impl Pty {
                 }
                 Err(error) if error.kind() == ErrorKind::WouldBlock => {}
                 Err(error) if error.kind() == ErrorKind::Interrupted => {}
-                // The child is gone: what it drew is all there is.
                 Err(_) => break,
             }
             if seen.contains(want) {
@@ -143,9 +138,6 @@ impl Pty {
         seen
     }
 
-    /// Everything the frame has drawn, read until the *visible* text says
-    /// `want` — escapes taken out first, because a streamed answer arrives one
-    /// cell per frame and its letters are interleaved with cursor moves.
     pub fn wait_for_text(&self, child: &mut Child, want: &str) -> String {
         let mut raw = String::new();
         let deadline = Instant::now() + DEADLINE;
@@ -174,9 +166,6 @@ impl Pty {
         visible(&raw)
     }
 
-    /// Everything the frame draws over the next `window` with nothing typed:
-    /// the bytes of a frame that has nothing to say, which is what an idle
-    /// frame says. Every byte read lands on the screen as usual.
     pub fn listening(&self, child: &mut Child, window: Duration) -> String {
         let mut port = self.port();
         let mut drawn = String::new();
@@ -203,8 +192,6 @@ impl Pty {
         drawn
     }
 
-    /// Changes the terminal's size the way dragging its corner does: the kernel
-    /// records it and the frame is told, so the next frame asks for the new one.
     pub fn resize(&self, child: &Child, rows: u16, cols: u16) {
         let size = libc::winsize {
             ws_row: rows,
@@ -216,21 +203,16 @@ impl Pty {
         // `TIOCSWINSZ` reads a `winsize` this frame owns.
         let sized = unsafe { libc::ioctl(self.master.as_raw_fd(), libc::TIOCSWINSZ, &size) };
         assert_eq!(sized, 0, "the terminal takes the new size");
-        // SAFETY: `kill` with a signal number and a pid this test owns; a child
-        // already gone is a test that has another failure to report.
+        // SAFETY: `kill` on a pid this test owns; a child already gone is harmless.
         unsafe { libc::kill(child.id() as libc::pid_t, libc::SIGWINCH) };
     }
 
-    /// Feeds one read into the screen the frame is drawing on.
     fn look(&self, text: &str) {
         if let Ok(mut screen) = self.screen.lock() {
             screen.feed(text);
         }
     }
 
-    /// Every cell the frame wrote while the terminal was showing its cursor.
-    /// The one place a reader may see the cursor is where the composer left
-    /// it, so anything here is a cursor that left the composer.
     pub fn written_while_visible(&self) -> Vec<(u16, u16)> {
         self.screen
             .lock()
@@ -238,7 +220,6 @@ impl Pty {
             .unwrap_or_default()
     }
 
-    /// What is on the screen now, as a reader would see it.
     pub fn screen(&self) -> String {
         self.screen
             .lock()
@@ -246,22 +227,14 @@ impl Pty {
             .unwrap_or_default()
     }
 
-    /// Reads until what is *on the screen* says `want`, and gives the screen
-    /// back: unlike `wait_for_text`, a row redrawn after the first write is read
-    /// as the frame last drew it.
     pub fn wait_for_screen(&self, child: &mut Child, want: &str) -> String {
         self.wait_until(child, &|screen: &str| screen.contains(want))
     }
 
-    /// Reads until the screen *says* `want` as words: a note is a sentence the
-    /// frame wraps and marks on every row, so it is never contiguous in the
-    /// stream, and how often the frame repaints it must not decide a test.
     pub fn wait_for_words(&self, child: &mut Child, want: &str) -> String {
         self.wait_until(child, &|screen: &str| says(screen, want))
     }
 
-    /// Reads until the screen the frame is drawing on satisfies `reached`, and
-    /// gives that screen back: the last state drawn, not the stream.
     fn wait_until(&self, child: &mut Child, reached: &dyn Fn(&str) -> bool) -> String {
         let deadline = Instant::now() + DEADLINE;
         let mut port = self.port();
@@ -286,15 +259,10 @@ impl Pty {
         self.screen()
     }
 
-    /// Types one byte at the terminal, as a keyboard would.
     pub fn type_key(&self, byte: u8) {
         let _ = self.port().write_all(&[byte]);
     }
 
-    /// Asks the frame to leave, the way a user would: pressing the key again if
-    /// the first press landed while the frame was still opening. Returns the
-    /// exit status and everything the frame drew on its way out — the terminal
-    /// is handed back before the process goes — or `None` when it would not go.
     pub fn quit(&self, child: &mut Child) -> (Option<i32>, String) {
         let deadline = Instant::now() + DEADLINE;
         let mut leaving = String::new();
@@ -311,7 +279,6 @@ impl Pty {
         (None, self.drain(&mut leaving))
     }
 
-    /// Everything still waiting at the master end, appended to `seen`.
     pub fn drain(&self, seen: &mut String) -> String {
         let mut port = self.port();
         let mut buffer = [0u8; 4096];
@@ -328,8 +295,6 @@ impl Pty {
     }
 }
 
-/// What a user would read: every escape sequence taken out, so text a frame
-/// drew one cell at a time reads as words again.
 pub fn visible(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
     let mut chars = raw.chars();

@@ -27,7 +27,6 @@ struct Args {
     /// own credential and costs money; see the README.
     #[arg(long)]
     live: bool,
-    /// Run only the evals whose number or name contains this text.
     #[arg(long, value_name = "TEXT")]
     only: Option<String>,
 }
@@ -53,7 +52,6 @@ fn main() -> ExitCode {
     }
 }
 
-/// The evals `--only` selected, in table order.
 fn select(args: &Args) -> Vec<Case> {
     all()
         .into_iter()
@@ -64,7 +62,6 @@ fn select(args: &Args) -> Vec<Case> {
         .collect()
 }
 
-/// Runs the selected evals and returns the status the shell sees.
 fn suite(args: &Args, selected: &[Case]) -> Result<u8, String> {
     let bin = binary()?;
     guard::sandbox_is_safe(&bin, &Workspace::new()?)?;
@@ -95,8 +92,6 @@ fn suite(args: &Args, selected: &[Case]) -> Result<u8, String> {
     Ok(u8::try_from(exit_code(&verdicts)).unwrap_or(1))
 }
 
-/// The binary under test: the one built beside this suite, or one named by
-/// `SINDRI_BIN`, so a release build can be evaluated without rebuilding.
 fn binary() -> Result<PathBuf, String> {
     if let Ok(path) = std::env::var("SINDRI_BIN") {
         return Ok(PathBuf::from(path));

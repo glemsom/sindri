@@ -1,33 +1,28 @@
+---
+status: accepted
+date: 2026-10-29
+---
+
 # 0007 — What the `bash` tool returns to the model
-
-- **Status:** accepted
-- **Date:** 2025-10-29
-
-## Context
-
-A bare exit code is ambiguous. In a pipeline, the status may come from a
-downstream command (probe: `rm … | head -1` reported **141**, SIGPIPE, not the
-sandbox's 1). bwrap itself can fail before the command ever runs.
 
 ## Decision
 
-The tool returns a structured outcome, rendered to the model as text:
+One structured result, rendered as text (`crates/core/src/exec/result.rs`):
 
-- **outcome**: `exited` | `timed_out` | `sandbox_error`
-- **exit_code**: only when `outcome == exited`
-- **stdout / stderr**: head+tail truncated to a cap, full text spilled to a file
-  in the session temp, whose path the model is told
-- **duration_ms**, **truncated**
+```text
+outcome: exited{exit_code} | timed_out | sandbox_error{detail}
+stdout, stderr        head+tail truncated (8192 + 8192 bytes)
+spill                 full text, in the session temp; the path is given to the model
+duration_ms, truncated
+```
 
-Classification uses bwrap's `--json-status-fd`: the `exit-code` document only
-appears if mounts succeeded, so its absence means `sandbox_error` — never a
-command failure. Timeouts are our own signal, never inferred from 137.
-
-The system prompt tells the model how bash reports status (last command of the
-script, `set -e`/`pipefail` available) and to check exit codes explicitly.
+- `exit_code` exists only under `exited`; a signal reports 128 + its number, as a shell would.
+- Classification uses `--json-status-fd`: the `exit-code` document appears only if mounts succeeded, so its absence is `sandbox_error`, never a command failure.
+- Timeouts are our own signal, never inferred from 137.
+- Probe: `rm … | head -1` reports 141 (SIGPIPE) — a command status, not a sandbox fault.
+- The system prompt states that bash reports the last command's status and offers `set -e` / `pipefail`.
 
 ## Consequences
 
-- The model can tell "the sandbox blocked me" from "my command failed", which is
-  the difference between re-planning and retrying blindly.
+- The model can tell "the sandbox blocked me" from "my command failed": re-plan versus retry.
 - Timeout and sandbox faults are eval-able without parsing prose.
