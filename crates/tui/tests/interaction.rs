@@ -83,9 +83,12 @@ fn ctrl_c_cancels_the_run_and_the_composer_keeps_its_draft() {
         "second thoughts",
         "the draft survives the cancel"
     );
+    // The footer no longer says "working" once the key lands: it says what it
+    // is waiting for, which is the whole point of catching the cancel at once
+    // (ADR-0011 §10).
     assert!(
-        any(&screen(&mut app, 100, 20), "working"),
-        "the rail says a run is in flight"
+        any(&screen(&mut app, 100, 20), "cancelling…"),
+        "the frame answers the key before the request does"
     );
 }
 

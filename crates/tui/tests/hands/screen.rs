@@ -21,6 +21,8 @@ fn question_mark_lists_every_binding_and_esc_closes_it() {
         "Ctrl-O",
         "Ctrl-G",
         "Ctrl-C",
+        "↑",
+        "Ctrl-X",
         "Ctrl-Q",
         "?",
         "@",
@@ -42,7 +44,7 @@ fn question_mark_lists_every_binding_and_esc_closes_it() {
             "the overlay names {gesture}: {rows}"
         );
     }
-    assert_eq!(BINDINGS.len(), 15, "every binding is listed exactly once");
+    assert_eq!(BINDINGS.len(), 17, "every binding is listed exactly once");
     press(&mut app, KeyCode::Esc, KeyModifiers::NONE);
     assert!(app.overlay().is_none(), "Esc closes the overlay");
 }

@@ -73,6 +73,16 @@ pub const BINDINGS: &[Binding] = &[
         what: "copy the session id, the one `sindri sessions show` takes",
     },
     Binding {
+        keys: "↑",
+        mouse: None,
+        what: "the row above in the draft, or the newest queued prompt taken back",
+    },
+    Binding {
+        keys: "Ctrl-X",
+        mouse: None,
+        what: "drop the newest queued prompt",
+    },
+    Binding {
         keys: "Ctrl-C",
         mouse: None,
         what: "cancel the run and keep the draft",
@@ -209,6 +219,8 @@ mod tests {
         "Ctrl-Y",
         "Ctrl-O",
         "Ctrl-C",
+        "↑",
+        "Ctrl-X",
         "Ctrl-Q",
         "?",
         "@",

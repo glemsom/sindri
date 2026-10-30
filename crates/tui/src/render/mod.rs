@@ -5,6 +5,7 @@ mod card;
 mod completion;
 mod composer;
 mod overlay;
+mod queue;
 mod rail;
 mod sessions;
 mod settings;
@@ -28,12 +29,22 @@ const HINTS: &str = "Enter send · Shift+Enter newline · PgUp/PgDn scroll · @ 
 
 pub fn draw(app: &mut App, frame: &mut Frame) {
     let area = frame.area();
-    let [body, input, footer] = Layout::vertical([
-        Constraint::Min(1),
-        Constraint::Length(app.composer().height()),
-        Constraint::Length(1),
-    ])
-    .areas(area);
+    // The queue is a row the layout gives up only when something is waiting
+    // in it: an empty panel would be a row stolen from the transcript. It
+    // never takes the room the composer and the footer need, because a queue
+    // drawn over what is being typed answers the wrong question.
+    let queued =
+        queue::height(app, area.width).min(area.height.saturating_sub(app.composer().height() + 2));
+    let mut rows = vec![Constraint::Min(1)];
+    if queued > 0 {
+        rows.push(Constraint::Length(queued));
+    }
+    rows.push(Constraint::Length(app.composer().height()));
+    rows.push(Constraint::Length(1));
+    let regions = Layout::vertical(rows).split(area);
+    let body = regions[0];
+    let footer = regions[regions.len() - 1];
+    let input = regions[regions.len() - 2];
 
     let (body, completions) = match app.completion() {
         Some(completion) if !completion.items.is_empty() => {
@@ -69,6 +80,9 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
         (None, Some(area)) => rail::strip(app, area, frame.buffer_mut()),
         (None, None) => {}
     }
+    if queued > 0 {
+        queue::draw(app, regions[1], frame.buffer_mut());
+    }
     let cursor = composer::draw(app, input, frame.buffer_mut());
     frame.set_cursor_position(cursor);
     footer_rows(app, footer, frame.buffer_mut());
@@ -82,12 +96,14 @@ pub fn draw_card(card: &Card, frame: &mut Frame) {
 
 fn footer_rows(app: &App, area: Rect, buf: &mut Buffer) {
     let mut hints = String::new();
-    if app.is_running() {
+    // A cancel is answered where the "working" was: the request in flight is
+    // not interrupted, so the frame says what it is waiting for instead of
+    // going quiet until it lands (ADR-0004). The queue states its own size.
+    if app.is_cancelling() {
+        hints.push_str("cancelling… · ");
+    } else if app.is_running() {
         hints.push_str("working · ");
     }
     hints.push_str(HINTS);
-    if app.queued() > 0 {
-        hints.push_str(&format!(" · {} queued", app.queued()));
-    }
     Paragraph::new(Line::from(Span::styled(hints, theme::faint()))).render(area, buf);
 }

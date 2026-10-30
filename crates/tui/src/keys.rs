@@ -27,6 +27,9 @@ impl App {
             KeyCode::Char('c') if ctrl => self.cancel_or_clear(),
             KeyCode::Char('y') if ctrl => self.copy_last_answer(),
             KeyCode::Char('o') if ctrl => self.open_spill(),
+            KeyCode::Char('x') if ctrl => {
+                self.drop_queued();
+            }
             KeyCode::Char('g') if ctrl => self.copy_session_id(),
             KeyCode::Char('?') if self.composer.is_blank() => self.show(Overlay::Help),
             KeyCode::Esc => self.dismiss(),
@@ -52,7 +55,7 @@ impl App {
             }
             KeyCode::Up if self.choose_completion(false) => {}
             KeyCode::Down if self.choose_completion(true) => {}
-            KeyCode::Up => self.composer.up(),
+            KeyCode::Up => self.up(),
             KeyCode::Down => self.composer.down(),
             KeyCode::Char(ch) if !ctrl => {
                 self.composer.insert(ch);
@@ -140,6 +143,15 @@ impl App {
         }
         if self.viewport.holds(at) {
             self.selection = Selection::start(at);
+        }
+    }
+
+    /// `↑` is the row above in the draft, and the newest queued prompt when
+    /// the draft has no row above: the queue is reached from the top of the
+    /// composer, never instead of it (issue #43).
+    fn up(&mut self) {
+        if self.composer.cursor().1 > 0 || !self.take_back() {
+            self.composer.up();
         }
     }
 
