@@ -119,6 +119,59 @@ fn frame_on(env: &Env, pty: &Pty, mock: &MockProvider) -> std::process::Child {
 }
 
 #[test]
+fn a_new_session_is_opened_in_the_same_run_environment() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: `/new`'s next session is not tested here");
+        return;
+    };
+    let env = Env::new();
+    let mock = MockProvider::start(vec![
+        Reply::answer("the first answer"),
+        Reply::answer("the second answer"),
+    ]);
+    let mut child = frame_on(&env, &pty, &mock);
+
+    expect(&pty, &mut child, "cache");
+    type_line(&pty, "what changed?");
+    expect(&pty, &mut child, "the first answer");
+    let before = recorded(&env);
+    assert_eq!(before.len(), 1, "one launch, one record: {before:?}");
+
+    // `/new` opens the next session from the environment the launch was booted
+    // in, and the prompt after it is recorded there: the state root is the one
+    // this launch read, not one read again (ADR-0015 §6). That the process is
+    // not read a second time is `boot`'s own unit test — a launch's environment
+    // is a value, so a second read would answer a different root and there is
+    // none to name here.
+    type_line(&pty, "/new");
+    type_line(&pty, "and now?");
+    expect(&pty, &mut child, "the second answer");
+    let (code, _) = pty.quit(&mut child);
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+
+    let after = recorded(&env);
+    assert_eq!(
+        after.len(),
+        2,
+        "`/new` opens its session in the same state root: {after:?}"
+    );
+    assert!(
+        after.contains(&before[0]),
+        "and leaves the superseded session where it was: {after:?}"
+    );
+    // Both were opened in this launch's workspace, so both were granted it: a
+    // session opened in the process's own place would not have been.
+    for id in &after {
+        let home = sessions(&env).join(id).join("tmp/home");
+        assert!(
+            home.is_dir(),
+            "the session {id} has the sandbox HOME its environment names: {}",
+            home.display()
+        );
+    }
+}
+
+#[test]
 fn a_new_session_that_cannot_start_keeps_the_answer_and_says_why() {
     let Some(pty) = Pty::new() else {
         eprintln!("no pty on this machine: `/new`'s failure is not tested here");

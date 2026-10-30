@@ -14,6 +14,7 @@ use sindri_types::ExitCode;
 /// A run that could not start, in the two families the batch contract has
 /// always printed: `sandbox: <why a session could not start>` and
 /// `session <path>: <why the record could not>` (ADR-0004, ADR-0015 §5).
+#[derive(Debug)]
 pub(crate) enum Failure {
     /// The three ambient facts a session is opened in could not be read from
     /// the process (ADR-0015 §6).

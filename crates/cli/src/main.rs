@@ -2,6 +2,7 @@
 //! every decision lives in `sindri-core`.
 
 mod batch;
+mod boot;
 mod doctor;
 mod failure;
 mod frame;

@@ -10,35 +10,29 @@ use std::time::{Duration, Instant};
 
 use sindri_core::agent::{Report, Stopped};
 use sindri_core::cancel::Cancel;
-use sindri_core::config::{Config, Overrides};
+use sindri_core::config::Overrides;
 use sindri_core::exec::{BashExecutor, Outcome, ToolResult};
 use sindri_core::provider::{Error, Usage};
-use sindri_core::session::{Env, LoopError, Session};
+use sindri_core::session::{LoopError, Session};
 use sindri_types::ExitCode;
 
-use crate::{failure, signal};
+use crate::boot::{self, Configured};
+use crate::signal;
 
 /// Runs the command and prints one JSON object describing what happened. A
 /// session is opened the one way a run opens one, so a diagnostic cannot probe a
 /// different sandbox than the run it is diagnosing (ADR-0015 §7).
 pub fn exec(timeout: Duration, overrides: Overrides, command: &[String]) -> i32 {
-    // A diagnostic asks no model, so it needs none of a model's settings: the
-    // extras a run would be granted, and nothing a run would spend.
-    let config = match Config::for_command(overrides) {
-        Ok(config) => config,
-        Err(error) => return failure::config_error(error),
+    // The diagnostic door, and the session it probes in: a diagnostic asks no
+    // model, so it needs none of a model's settings — the extras a run would be
+    // granted, and nothing a run would spend. A diagnostic that cannot read the
+    // run environment, or cannot start the session it probes, fails in the same
+    // words as the run it is diagnosing (ADR-0004, ADR-0015 §7).
+    let boot = match boot::configure(overrides).and_then(Configured::start) {
+        Ok(boot) => boot,
+        Err(failure) => return failure.report(),
     };
-    // A diagnostic that cannot read the run environment, or cannot start the
-    // session it probes, fails in the same words as the run it is diagnosing:
-    // one failure vocabulary, whoever met it (ADR-0004).
-    let env = match Env::ambient() {
-        Ok(env) => env,
-        Err(error) => return failure::Failure::Environment(error).report(),
-    };
-    let session = match Session::open(&env, &config) {
-        Ok(session) => session,
-        Err(error) => return failure::Failure::Start(error).report(),
-    };
+    let session = &boot.session;
 
     let script = shell_join(command);
     // Ctrl-C here kills the command's group too, so a diagnostic cannot leave a
@@ -50,7 +44,7 @@ pub fn exec(timeout: Duration, overrides: Overrides, command: &[String]) -> i32 
     let result = executor.execute(&script);
     // The session ends whatever the command did: a record left saying `running`
     // could not be told from a diagnostic that is still going (ADR-0006).
-    end(&session, &command_over(result.as_ref(), started.elapsed()));
+    end(session, &command_over(result.as_ref(), started.elapsed()));
 
     let Some(result) = result else {
         return ExitCode::Cancelled.code();
