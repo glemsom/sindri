@@ -6,6 +6,7 @@ use super::*;
 
 use std::path::Path;
 
+use crossterm::event::{KeyCode, KeyModifiers, MouseEvent, MouseEventKind};
 use sindri_tui::graphics::Graphics;
 use sindri_tui::theme;
 
@@ -35,12 +36,204 @@ const COLUMN: usize = 100 - RAIL;
 fn column(rows: &[String]) -> Vec<String> {
     rows.iter()
         .take_while(|row| !row.starts_with('╭'))
-        .map(|row| row[..COLUMN.min(row.len())].trim_end().to_string())
+        .map(|row| {
+            row.chars()
+                .take(COLUMN)
+                .collect::<String>()
+                .trim_end()
+                .to_string()
+        })
         .collect()
 }
 
+/// The mark the test backend reads a drawn graphic as (tests/frame/main.rs).
+const DRAWN: &str = "\u{25A9}";
+
+fn marker_row() -> String {
+    format!("  {DRAWN}")
+}
+
 #[test]
-fn a_picture_that_opens_an_answer_is_blank_rows_and_then_its_caption() {
+fn a_picture_is_drawn_where_its_rows_are_and_the_caption_under_its_last() {
+    let mut app = pictured(Path::new(FIXTURES));
+    answered(&mut app, "![a chart](narrow.png)\n\nthe next block\n");
+    let shown = column(&screen(&mut app, 100, 30));
+    let caption = shown
+        .iter()
+        .position(|row| row.contains("a chart ‹narrow.png›"))
+        .unwrap_or_else(|| panic!("the caption is in the transcript: {shown:#?}"));
+
+    let placed = app.viewport().pictures.clone();
+    assert_eq!(placed.len(), 1, "one picture on screen, one placement");
+    let area = placed[0].area;
+    // 100 pixels across is thirteen columns of eight and three rows of
+    // eighteen: the block the store measured, at the answer's own edge.
+    assert_eq!(
+        (area.x, area.y, area.width, area.height),
+        (2, caption as u16 - 3, 13, 3),
+        "the cells the graphic was given are the rows the markdown reserved: {shown:#?}"
+    );
+    assert_eq!(
+        usize::from(app.viewport().area.y) + placed[0].at + placed[0].rows,
+        caption + 1,
+        "the block is the graphic's rows and its caption's, which is the row \
+         under the graphic's last: {shown:#?}"
+    );
+    assert_eq!(
+        shown[caption - 3..caption].to_vec(),
+        vec![marker_row(); 3],
+        "the graphic is drawn on every row of its block, and only there: {shown:#?}"
+    );
+    assert_eq!(
+        shown[caption - 4],
+        "  ⠋ 0.0s",
+        "the block starts right under the answer's marker: {shown:#?}"
+    );
+}
+
+/// The drawn rows that carry a graphic: the position marker in the column's last
+/// cell is not one of them.
+fn drawn(rows: &[String]) -> usize {
+    rows.iter().filter(|row| row.contains(DRAWN)).count()
+}
+
+/// The keys a reader scrolls with: the wheel is three rows a notch and the page
+/// keys a screenful (ADR-0013).
+fn wheel(app: &mut App, down: bool) {
+    let kind = if down {
+        MouseEventKind::ScrollDown
+    } else {
+        MouseEventKind::ScrollUp
+    };
+    app.mouse(MouseEvent {
+        kind,
+        column: 1,
+        row: 1,
+        modifiers: KeyModifiers::NONE,
+    });
+}
+
+#[test]
+fn a_picture_inside_a_quote_is_drawn_where_its_own_edge_is() {
+    let mut app = pictured(Path::new(FIXTURES));
+    answered(&mut app, "> ![a chart](narrow.png)\n");
+    let shown = column(&screen(&mut app, 100, 30));
+    let caption = shown
+        .iter()
+        .position(|row| row.contains("│ a chart ‹narrow.png›"))
+        .unwrap_or_else(|| panic!("the quoted caption is in the transcript: {shown:#?}"));
+
+    let area = app.viewport().pictures[0].area;
+    assert_eq!(
+        area.x, 4,
+        "the graphic hangs off the quote's edge, under its caption, and not two \
+         columns to its left: {shown:#?}"
+    );
+    assert_eq!(
+        area.y,
+        caption as u16 - 3,
+        "and the rows it was measured are the block's: {shown:#?}"
+    );
+}
+
+#[test]
+fn an_open_overlay_stops_the_picture_and_closing_it_draws_it_again() {
+    let mut app = pictured(Path::new(FIXTURES));
+    answered(&mut app, "![a chart](narrow.png)\n");
+    let shown = column(&screen(&mut app, 100, 30));
+    assert!(
+        drawn(&shown) > 0,
+        "the picture is drawn while the frame is bare: {shown:#?}"
+    );
+
+    // An overlay dims cells, and a graphic is not a cell: nothing may be drawn
+    // behind it (ADR-0016 §7).
+    press(&mut app, KeyCode::Char('?'));
+    assert!(app.overlay().is_some(), "? opens the help overlay");
+    let shown = column(&screen(&mut app, 100, 30));
+    assert_eq!(
+        drawn(&shown),
+        0,
+        "no picture is drawn behind an open overlay: {shown:#?}"
+    );
+    assert_eq!(
+        app.viewport().pictures.len(),
+        1,
+        "the block is still placed where it is; only the painting stopped: {shown:#?}"
+    );
+
+    press(&mut app, KeyCode::Esc);
+    assert!(app.overlay().is_none(), "Esc closes it");
+    let shown = column(&screen(&mut app, 100, 30));
+    assert!(
+        drawn(&shown) > 0,
+        "and the picture is drawn again once it is closed: {shown:#?}"
+    );
+}
+
+#[test]
+fn a_picture_partly_scrolled_out_is_drawn_nowhere_and_whole_once_it_is_in() {
+    let mut app = pictured(Path::new(FIXTURES));
+    answered(&mut app, "![a chart](square.png)\n\n");
+    for note in 1..=20 {
+        app.note_info(format!("a note {note}"));
+    }
+    // The first turn, where the picture is: twelve rows of it and its caption,
+    // whole in a window of a screenful.
+    press(&mut app, KeyCode::Home);
+    let shown = column(&screen(&mut app, 100, 30));
+    let whole = app.viewport().pictures.clone();
+    assert_eq!(whole.len(), 1, "the whole picture is placed: {shown:#?}");
+    assert_eq!(
+        whole[0].area.height, 12,
+        "with the rows the store measured, not a cropped part of them: {shown:#?}"
+    );
+    assert!(drawn(&shown) > 0, "and it is drawn on them: {shown:#?}");
+
+    // Three rows into its block: part of it is above the window, so no row of
+    // it is drawn at an edge (ADR-0016 §6).
+    wheel(&mut app, true);
+    let shown = column(&screen(&mut app, 100, 30));
+    assert_eq!(
+        drawn(&shown),
+        0,
+        "a block partly scrolled out is drawn nowhere: {shown:#?}"
+    );
+    assert!(
+        app.viewport().pictures.iter().all(|picture| !picture.drawn),
+        "and none of it is drawn: {shown:#?}"
+    );
+    assert!(
+        shown.iter().any(|row| row.contains("a chart ‹square.png›")),
+        "its caption still says where it is: {shown:#?}"
+    );
+    let plain = &app.viewport().rows;
+    assert_eq!(
+        plain[0], "a chart ‹square.png›",
+        "and a copy of the window is its caption once, on the block's first \
+         row: {plain:?}"
+    );
+    assert!(
+        plain[1..=10].iter().all(String::is_empty),
+        "with no filler on the rest of its rows: {plain:?}"
+    );
+
+    // And back: whole again, not cropped into place.
+    wheel(&mut app, false);
+    let shown = column(&screen(&mut app, 100, 30));
+    assert_eq!(
+        app.viewport().pictures.len(),
+        1,
+        "scrolled back in, the picture is placed whole: {shown:#?}"
+    );
+    assert!(
+        drawn(&shown) > 0,
+        "and drawn on the rows it was placed in: {shown:#?}"
+    );
+}
+
+#[test]
+fn a_picture_that_opens_an_answer_takes_its_rows_and_then_its_caption() {
     let mut app = pictured(Path::new(FIXTURES));
     answered(&mut app, "![a chart](narrow.png)\n\nthe next block\n");
     let shown = column(&screen(&mut app, 100, 30));
@@ -50,12 +243,15 @@ fn a_picture_that_opens_an_answer_is_blank_rows_and_then_its_caption() {
         .position(|row| row.contains("a chart ‹narrow.png›"))
         .unwrap_or_else(|| panic!("the caption is in the transcript: {shown:#?}"));
     assert!(
-        shown[caption - 3..caption].iter().all(|row| row.is_empty()),
-        "the three rows the store measured are blank above it: {shown:#?}"
+        shown[caption - 3..caption]
+            .iter()
+            .all(|row| row.trim_end().ends_with(DRAWN)),
+        "the three rows the store measured carry the picture: {shown:#?}"
     );
-    assert!(
-        !shown[caption - 4].is_empty(),
-        "and the block starts where they do, under the answer's marker: {shown:#?}"
+    assert_eq!(
+        shown[caption - 4],
+        "  \u{280B} 0.0s",
+        "and the block starts under the answer's marker: {shown:#?}"
     );
     assert_eq!(
         shown[caption + 1],

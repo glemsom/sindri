@@ -37,6 +37,13 @@ fn app() -> App {
     App::new(launch(), None)
 }
 
+fn press(app: &mut App, code: crossterm::event::KeyCode) {
+    app.key(crossterm::event::KeyEvent::new(
+        code,
+        crossterm::event::KeyModifiers::NONE,
+    ));
+}
+
 fn screen(app: &mut App, width: u16, height: u16) -> Vec<String> {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
     terminal
@@ -46,10 +53,21 @@ fn screen(app: &mut App, width: u16, height: u16) -> Vec<String> {
     (0..height)
         .map(|y| {
             (0..width)
-                .map(|x| buffer[(x, y)].symbol())
+                .map(|x| glyph(&buffer[(x, y)]))
                 .collect::<String>()
         })
         .collect()
+}
+
+/// A cell as a row reads. A picture is drawn as an escape sequence in the first
+/// cell of each of its rows, which a test backend cannot paint, so it reads as
+/// the one mark that says a graphic is there (ADR-0016 §6).
+fn glyph(cell: &ratatui::buffer::Cell) -> &str {
+    if cell.symbol().contains('\u{1b}') {
+        "\u{25A9}"
+    } else {
+        cell.symbol()
+    }
 }
 
 fn rail_of_width(row: &str, width: usize) -> String {

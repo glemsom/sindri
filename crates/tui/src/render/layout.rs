@@ -8,6 +8,7 @@ use ratatui::text::Line;
 
 use crate::app::App;
 use crate::entry::Entry;
+use crate::render::pictures::Laid;
 use crate::render::rows::entry_rows;
 use crate::window::{Ask, Below};
 
@@ -22,6 +23,10 @@ pub(crate) struct Frame<'a> {
     pub(crate) measured: usize,
     pub(crate) spill: Vec<(usize, PathBuf)>,
     pub(crate) expand: Vec<(usize, usize)>,
+    /// The pictures this frame laid out: a row map like `spill` and `expand`,
+    /// because a picture is drawn where its rows are and is nothing else
+    /// (ADR-0016 §6, §9).
+    pub(crate) pictures: Vec<Laid>,
 }
 
 impl<'a> Frame<'a> {
@@ -33,6 +38,7 @@ impl<'a> Frame<'a> {
             marks: Vec::new(),
             spill: Vec::new(),
             expand: Vec::new(),
+            pictures: Vec::new(),
             measured: 0,
         }
     }
@@ -121,16 +127,33 @@ impl<'a> Frame<'a> {
         let entry = &self.app.entries()[index];
         let gap = gap(entry);
         let store = self.app.pictures();
-        let rows_here = entry_rows(entry, self.width, self.app.now(), store);
+        let done = entry_rows(entry, self.width, self.app.now(), store);
         if let Some(path) = spill_of(entry) {
             self.spill
-                .push((at + gap + rows_here.len().saturating_sub(1), path));
+                .push((at + gap + done.rows.len().saturating_sub(1), path));
         }
         if entry.expandable() {
             self.expand.push((at + gap, index));
         }
+        // A picture is drawn at the row its block starts at. A block the window
+        // skipped into is cut at the window's top row and kept: its rows are the
+        // frame's from there, and whether any of it is drawn is the window's
+        // answer and not this one's (ADR-0016 §6).
+        for picture in done.pictures {
+            let offset = gap + picture.row;
+            let above = skip.saturating_sub(offset).min(picture.block);
+            if above == picture.block {
+                continue;
+            }
+            self.pictures.push(Laid {
+                row: at + offset.saturating_sub(skip),
+                cut: above,
+                block: picture.block - above,
+                ..picture
+            });
+        }
         let mut block: Vec<Line<'static>> = (0..gap).map(|_| Line::default()).collect();
-        block.extend(rows_here);
+        block.extend(done.rows);
         block.drain(..skip.min(block.len()));
         self.rows.extend(block);
     }

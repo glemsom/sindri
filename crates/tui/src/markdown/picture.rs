@@ -36,6 +36,14 @@ pub struct Picture {
     /// puts rows of its own above these — a turn's marker, a gutter — adds them
     /// to it before it knows where on the screen the picture goes.
     pub at: usize,
+    /// How many rows of [`Written::rows`] the block is: the graphic's rows and
+    /// the caption's under them, which is what a copy takes as one row of words
+    /// (ADR-0016 §9).
+    pub rows: usize,
+    /// The columns the block is indented by, inside the width it was measured
+    /// at: a quote's `│ ` sits over the picture as it sits over its caption, so
+    /// the graphic is drawn where the block's own edge is (ADR-0016 §9).
+    pub inset: u16,
     pub src: String,
     pub caption: String,
     /// What the source is worth: the rows it takes, or the reason it takes
@@ -111,14 +119,13 @@ impl Writer<'_> {
         let at = self.lines.len();
         self.lines.extend((0..taken).map(|_| Line::default()));
         let words = [Span::styled(caption.clone(), theme::faint())];
-        self.lines.extend(text::wrap(
-            text::glyphs(&words),
-            &prefix,
-            theme::faint(),
-            columns,
-        ));
+        let rows_of_caption = text::wrap(text::glyphs(&words), &prefix, theme::faint(), columns);
+        let rows = taken + rows_of_caption.len();
+        self.lines.extend(rows_of_caption);
         self.pictures.push(Picture {
             at,
+            rows,
+            inset: prefix.chars().count() as u16,
             src: image.src,
             caption,
             worth,

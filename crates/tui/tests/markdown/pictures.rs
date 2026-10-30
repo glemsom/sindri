@@ -227,6 +227,36 @@ fn the_writer_says_where_a_pictures_block_starts_and_what_it_is_called() {
 }
 
 #[test]
+fn a_picture_block_is_its_graphic_rows_and_its_caption_rows() {
+    let block = markdown::lines(
+        "![a chart of the thing that happened in the long run](wide.png)\n\nthe next block\n",
+        30,
+        Some(&store()),
+    );
+    let shown = texts(&block.rows);
+    let picture = block
+        .pictures
+        .first()
+        .unwrap_or_else(|| panic!("the writer placed the picture"));
+    let end = picture.at + picture.rows;
+
+    assert_eq!(
+        picture.rows, 8,
+        "five rows of picture and the three the caption wrapped into, and not \
+         one of the next block's: {shown:?}"
+    );
+    assert!(
+        shown[picture.at + 5].starts_with("a chart") && shown[end - 1].ends_with('›'),
+        "the caption's rows are the block's last: {shown:?}"
+    );
+    assert_eq!(
+        shown[end], "",
+        "the block ends with its caption, before the gap: {shown:?}"
+    );
+    assert_eq!(shown[end + 1], "the next block", "{shown:?}");
+}
+
+#[test]
 fn a_caption_wider_than_the_column_wraps_like_prose() {
     let block = markdown::lines(
         "![a chart of the thing that happened in the long run](wide.png)\n",

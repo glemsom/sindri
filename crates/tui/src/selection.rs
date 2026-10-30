@@ -10,6 +10,8 @@ use std::path::PathBuf;
 use ratatui::layout::{Position, Rect};
 use unicode_width::UnicodeWidthChar;
 
+use crate::picture::Worth;
+
 #[derive(Debug, Clone, Default)]
 pub struct Viewport {
     pub area: Rect,
@@ -18,6 +20,34 @@ pub struct Viewport {
     /// The transcript rows that are an expandable entry's own row, and which
     /// entry that is: a click there opens it (ADR-0011 §9, issue #44).
     pub expand: Vec<(usize, usize)>,
+    /// The pictures the frame drew: where each block of rows is, and the words
+    /// it stands for. A picture is the third of these maps — a row to something
+    /// that is not a character — and it is what a repaint and a copy both read
+    /// (ADR-0016 §6, §9).
+    pub pictures: Vec<Placed>,
+}
+
+/// A picture the frame drew: the drawn row its block starts at, how many rows
+/// the block covers (the graphic's and its caption's), the cells the graphic
+/// was given, and the caption it copies as (ADR-0016 §6, §9). Nothing but the
+/// placements is kept: what the buffer can hold is where a picture went, not
+/// the pixels that went there.
+#[derive(Debug, Clone)]
+pub struct Placed {
+    /// The drawn row the block starts at.
+    pub at: usize,
+    /// How many drawn rows the block covers.
+    pub rows: usize,
+    /// The cells the graphic is drawn into, in the frame's own coordinates.
+    pub area: Rect,
+    /// The words the block copies as.
+    pub caption: String,
+    /// What the store measured it as: what a repaint is built from.
+    pub worth: Worth,
+    /// Whether the whole graphic is in the window. A block partly scrolled out
+    /// is placed all the same — its rows are here, and its caption — but it is
+    /// drawn nowhere (ADR-0016 §6).
+    pub drawn: bool,
 }
 
 impl Viewport {
@@ -40,6 +70,16 @@ impl Viewport {
             .iter()
             .find(|(at, _)| *at == row)
             .map(|(_, entry)| *entry)
+    }
+
+    /// The picture a row is filler for: one of its block's rows past the first,
+    /// which carries no words because the graphic is drawn there or the caption
+    /// is above it. A copy takes the caption once and none of these
+    /// (ADR-0016 §9).
+    pub fn filler(&self, row: usize) -> Option<&Placed> {
+        self.pictures
+            .iter()
+            .find(|picture| row > picture.at && row < picture.at + picture.rows)
     }
 
     pub fn row_of(&self, at: Position) -> Option<usize> {
@@ -87,7 +127,20 @@ pub fn copied(viewport: &Viewport, selection: &Selection) -> Option<String> {
     let below = end.y >= area.y + viewport.rows.len() as u16;
     let mut lines = Vec::new();
     for index in first..=last {
-        let row = &viewport.rows[index];
+        // A picture's block copies as its caption once: the rows past its first
+        // are a graphic's — or a caption's, already carried whole on that first
+        // row — so a copy of them would be a run of blank lines (ADR-0016 §9).
+        // A drag that starts below the block's first row still takes the words.
+        let inside = viewport.filler(index);
+        let words;
+        let row: &str = match inside {
+            Some(_) if index != first => continue,
+            Some(picture) => {
+                words = picture.caption.clone();
+                &words
+            }
+            None => &viewport.rows[index],
+        };
         let from = if index == first {
             char_at(row, (start.x.saturating_sub(area.x)) as usize)
         } else {
@@ -169,6 +222,7 @@ mod tests {
             rows: rows.iter().map(|row| row.to_string()).collect(),
             spill: Vec::new(),
             expand: Vec::new(),
+            pictures: Vec::new(),
         }
     }
 
@@ -177,6 +231,52 @@ mod tests {
         selection.head = Position::new(to.0, to.1);
         selection.finish();
         selection
+    }
+
+    /// A frame with a picture in it: the three rows it is drawn on, its caption
+    /// under them, and the words of the block on its first row — which is what
+    /// the frame puts there, so that a copy is the caption once (ADR-0016 §9).
+    fn pictured() -> Viewport {
+        let mut viewport = viewport(&[
+            "  ✓ 1.2s",
+            "a chart ‹plot.png›",
+            "",
+            "",
+            "",
+            "",
+            "the next block",
+        ]);
+        viewport.pictures.push(super::Placed {
+            at: 1,
+            rows: 4,
+            area: Rect::new(2, 3, 13, 3),
+            caption: "a chart ‹plot.png›".to_string(),
+            worth: crate::picture::Worth::Refused(crate::picture::Refusal::Missing),
+            drawn: true,
+        });
+        viewport
+    }
+
+    #[test]
+    fn a_pictures_block_copies_as_its_caption_once_and_never_its_blank_rows() {
+        let viewport = pictured();
+        let taken = copied(&viewport, &drag((0, 2), (60, 8)));
+        assert_eq!(
+            taken.as_deref(),
+            Some("  ✓ 1.2s\na chart ‹plot.png›\n\nthe next block"),
+            "the caption is the block's words, and its rows are not blank lines"
+        );
+    }
+
+    #[test]
+    fn a_drag_that_starts_on_a_pictures_rows_still_takes_its_words() {
+        let viewport = pictured();
+        let taken = copied(&viewport, &drag((0, 5), (60, 5)));
+        assert_eq!(
+            taken.as_deref(),
+            Some("a chart ‹plot.png›"),
+            "a selection inside the block is the block's words, once"
+        );
     }
 
     #[test]
