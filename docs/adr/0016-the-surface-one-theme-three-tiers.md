@@ -15,7 +15,8 @@ date: 2026-10-31
    is syntect's to own: it arrives as a `Color::Rgb` built from a theme's own bytes.
 2. **Three tiers of nearness.** The canvas is the terminal's own black, painted by
    nothing. `PANEL` (`#171a21`) is a surface the frame draws: the composer, a fenced
-   code block, the rail, the band a turn's prompt sits on. `RAISED` (`#232733`) is a step above a panel: an overlay.
+   code block, the rail, the band a turn's prompt sits on. `RAISED` (`#232733`) is a step above a panel: an overlay,
+   and the chip the rail states its sandbox posture in.
    `theme::surface()` and `theme::raised()` are the constructors; a renderer asks for a
    tier, never for a background.
 3. **The composer floats.** It is a `PANEL` with a `BorderType::Rounded` border that
@@ -31,7 +32,9 @@ date: 2026-10-31
    before its own `Clear`, so what it covers recedes instead of reading as a hole. The
    overlay itself is a `RAISED` panel, drawn at full strength.
 6. **The rail is a panel with an edge.** It is filled with `PANEL` and set one column
-   off the transcript, so the frame has an edge between the words and the facts.
+   off the transcript, so the frame has an edge between the words and the facts. Its
+   sandbox posture is a `RAISED` chip: the one thing on the rail drawn a tier above it,
+   because posture is not another label and value.
 7. **No meaning by hue alone.** A running call's stdout is marked `│` and its stderr
    `⚠`: the two sides differ in a terminal that has lost its colour.
 8. **`FAINT` is body text and clears 4.5:1** against both the canvas and the panel

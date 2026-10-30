@@ -26,6 +26,7 @@ fn launch() -> Launch {
         branch: Some("t15-the-frame".to_string()),
         sandbox: "bwrap · 1 writable".to_string(),
         workspace: "~/git/sindri".to_string(),
+        model: "claude-sonnet-4-6".to_string(),
         max_turns: 250,
         context_limit: Some(200_000),
     }
@@ -141,18 +142,23 @@ fn the_rail_is_a_column_at_a_hundred_columns() {
     let rail: String = rows.iter().map(|row| rail_of(row)).collect();
 
     for fact in [
-        "cache 82%",
-        "turns 1/250",
-        "12.4k",
-        "context",
-        "200k",
-        // A 36-character GUID takes two rows of a 32-column rail, head and
-        // tail both on screen: the record is always findable.
-        "4f1c8f2e-8a24",
-        "5c1a77",
-        "/state/sindri/sessions/4f1c8f2",
-        "t15-the-frame",
-        "bwrap · 1 writable",
+        // A grid: the label in its nine-column field, the value beside it.
+        "cache     82%",
+        "turns     1/250",
+        "tokens    12.4k in · 2.1k out",
+        "context   ░░░░░░░░ 12.4k/200k",
+        // The two facts the rail used to lack, and what the run is.
+        "model     claude-sonnet-4-6",
+        "workspace ~/git/sindri",
+        "branch    t15-the-frame",
+        // A GUID and a temp path longer than the rail keep both their ends
+        // on one row: the record is always findable, never half an id.
+        "4f1c8f2e-8…",
+        "f0e5c1a77",
+        "/state/sin…",
+        "c8f2e/tmp",
+        // And the posture is a chip of its own, not another pair.
+        "⬢ bwrap · 1 writable",
     ] {
         assert!(rail.contains(fact), "the rail says {fact:?}: {rail:#?}");
     }
