@@ -75,7 +75,7 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
     };
     let (transcript, rail_column, rail_strip) = if area.width >= RAIL_MIN_WIDTH {
         // One column of the terminal's own canvas between the words and the
-        // rail: the rail is a surface, and a surface needs an edge (ADR-0016).
+        // rail: the rail is a surface, and a surface needs an edge (ADR-0011 §4).
         let [left, _, right] = Layout::horizontal([
             Constraint::Min(1),
             Constraint::Length(GAP_COLUMNS),

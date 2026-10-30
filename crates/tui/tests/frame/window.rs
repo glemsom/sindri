@@ -30,7 +30,7 @@ fn column(rows: &[String], x: usize) -> String {
 }
 
 /// The transcript's own last column, at 100 columns wide: the rail takes the
-/// last 32 and a column of canvas separates them (ADR-0016).
+/// last 32 and a column of canvas separates them (ADR-0011 §4).
 const MARK: usize = 100 - RAIL - 2;
 
 #[test]

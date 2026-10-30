@@ -2,7 +2,7 @@
 //! fallback to maintain (ADR-0011). The theme owns every colour the frame
 //! paints, and the three surfaces that make nearness legible: the terminal's
 //! own canvas, the panel a composer or a code fence sits on, and the raised
-//! tier above it (ADR-0016).
+//! tier above it (ADR-0011 §13).
 
 use ratatui::style::{Color, Modifier, Style};
 
@@ -19,7 +19,7 @@ pub const DIFF_HUNK: Color = Color::Rgb(0x61, 0xaf, 0xef);
 pub const DIFF_FILE: Color = Color::Rgb(0x8b, 0x98, 0xa9);
 /// A diff row's wash: the green and the red again, at panel weight, so an
 /// added row and a removed one still differ in a terminal that cannot tell the
-/// two hues apart (ADR-0016).
+/// two hues apart (ADR-0011 §24).
 pub const DIFF_ADDED_BG: Color = Color::Rgb(0x1c, 0x2b, 0x22);
 pub const DIFF_REMOVED_BG: Color = Color::Rgb(0x2f, 0x20, 0x23);
 

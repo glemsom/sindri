@@ -53,15 +53,24 @@ ends where a session begins (ADR-0015).
 **session** — one run, identified by a GUID, recorded under
 `$XDG_STATE_HOME/sindri/sessions/<guid>/` (ADR-0006).
 
-**transcript** — the ordered record of messages, tool calls and tool results of a
+**record** — the files one **session** leaves in that directory: what `sindri sessions
+show`, the **record picker** and `/export` read, and what the frame never writes
+directly. A record is a session read back, not a second thing.
+
+**transcript** — the ordered history of messages, tool calls and tool results of a
 session.
 
 **window** — the rows of the **transcript** the frame shows at once. It has a place in
 the thread rather than an offset from its tail: a reader on the **tail** follows what
 arrives, and a reader scrolled back keeps the row they are reading while a run appends
-below them, told how much by a `↓ 4 new rows` badge. `End` takes the tail again, `Home`
+below them, told how much by the **new-rows badge**. `End` takes the tail again, `Home`
 the first turn, and a thread longer than the window marks its position in the
 transcript's last column (ADR-0013).
+
+**new-rows badge** — `↓ 4 new rows`, against the footer's right edge: how many rows
+arrived below a **window** that is off the **tail**. It says `1 new row` for one, clears
+the moment the window reaches the tail again, and its room is taken before the footer's
+hints are chosen (ADR-0011 §22).
 
 **tail** — the newest row of the **transcript**, and the place a **window** follows
 from unless a reader has scrolled back.
@@ -95,22 +104,36 @@ skipped — a posture to `⬢ bwrap` — and dropped only when nothing of it can
 GUID is copied with `Ctrl-G`, or by clicking its row.
 
 **pulse** — the frame's own clock, and the only thing drawn without being asked:
-a ~120 ms tick while a run is live or a completion is walking, nothing at all
-while the frame is still. It shows a braille marker at the head of the newest
+a `pulse::TICK` of ~120 ms while a run is live or a completion is walking, nothing at
+all while the frame is still. It shows a braille marker at the head of the newest
 answer with the run's elapsed time (`⠸ 0.8s`), settling on `✓` or `✗` and the
 duration it stopped at; the duration of every call, frozen when the call ends;
 and the rail's output and context figures moving on what streams, accented as
-they grow and trued up when the run's report lands (ADR-0011 §4).
+they grow and trued up when the run's report lands. The tick lasts only while one of
+those is moving: **never repaint for nothing** (ADR-0011 §4, §19). While it runs the
+footer says `working · ` before its hints, and `cancelling… · ` once a cancel has been
+answered (§10).
 
-**canvas** — the terminal's own black: the lowest of the three tiers, and the one
-the frame paints nothing on. Above it: **panel**, then **raised** (ADR-0016).
+**surface** — one of the three tiers of nearness the frame paints on:
+**canvas**, **panel**, **raised**, in that order. A renderer asks
+`theme::surface()` or `theme::raised()` and never asks for a background, because
+`theme.rs` names every colour the frame paints. One dark theme, three tiers; a light
+theme is out of scope and there is no 256-colour fallback (ADR-0011 §13).
 
-**panel** — a surface the frame draws on, one tier above the canvas: the composer,
-a fenced code block, the rail, the band a turn's **prompt** sits on.
+**canvas** — the terminal's own black: the lowest **surface**, and the one the frame
+paints nothing on. Above it: **panel**, then **raised**.
 
-**raised** — the surface an overlay is drawn on, one tier above a panel; the frame
+**panel** — the **surface** the frame draws on, one tier above the canvas: the
+composer, a fenced code block, the **queue panel**, the rail, the band a turn's
+**prompt** sits on.
+
+**raised** — the **surface** an overlay is drawn on, one tier above a panel; the frame
 is dimmed beneath it. The rail's sandbox **chip** sits on it too, a tier above the
 panel the rest of the rail is drawn on.
+
+**chip** — the rail's statement of the sandbox posture, `⬢ bwrap · 1 writable`: a
+**raised** box rather than another label and value, shortened to `⬢ bwrap` when its
+column runs out.
 
 **composer** — the input at the bottom: 2–6 rows, `Shift+Enter` for a newline, `@` for a
 path completion, `/` for a command. With no text in it at all it carries the placeholder
@@ -123,18 +146,25 @@ sentence of the contract, and three things that can be typed as they read beside
 Every fact on it comes from `Launch`; nothing it says is a figure, because no run has
 spent any (ADR-0011 §21).
 
-**queued prompt** — a prompt sent while a run has the frame: it waits in one queue and runs
-when the run stops, in the order it was typed. The queue is a panel above the **composer**
-holding each prompt whole, titled with its size (`3 queued`) when there is more than one and
-cut at six rows with that count standing for the rest; `↑` takes the newest back into the
-composer above any draft typed since, `Ctrl-X` drops it. The footer carries no count.
+**queued prompt** — a prompt sent while a run has the frame: it waits in the queue and
+runs when the run stops, in the order it was typed. `↑` takes the newest back into the
+**composer** above any draft typed since, `Ctrl-X` drops it. The footer carries no count
+it cannot fit; the **queue panel** states the size.
+
+**queue panel** — the **panel** above the **composer** that holds the **queued prompts**
+whole: titled `queued` when one waits and `3 queued` when more, cut at six rows with that
+count standing for the rest, and drawn only when the queue is not empty (ADR-0011 §4,
+§10).
 
 **thread** — the growing conversation of one TUI session; `/new` starts over. Laid
-out as a document: two blank rows between turns and none inside one, a two-column
-gutter a turn's answer and calls hang off, and the prompt at full strength on its
-own band. A thread shorter than the column is written on its floor, so the newest row
-is the one just above the **composer** rather than the top row of a screenful of blank
-ones.
+out as a document: two blank rows between turns and none inside one, the **gutter** a
+turn's answer and calls hang off, and the prompt at full strength on its own band. A
+thread shorter than the column is written on its floor, so the newest row is the one
+just above the **composer** rather than the top row of a screenful of blank ones.
+
+**gutter** — a left edge the frame draws beside a thing that hangs off it: in the
+**thread**, the two columns a turn's answer and its calls hang off; in a fenced code
+block, the `│` down its left, which carries a tinted row's wash (ADR-0011 §4, §24).
 
 **turn header** — the row that opens a turn: `YOU  <hh:mm>  <workspace>`.
 
@@ -144,7 +174,7 @@ newest one it can open if the reader has touched none), and a click toggles the 
 whose row it landed on. The entry keeps a bounded tail of its whole output — 400 lines,
 the cap a **spill file** exists to lift — so a call that never spilled still opens, and
 the collapsed row says what is behind it (`✓ exit 0 · 1.4s · 400 lines`). The body is
-read through the transcript's own window, so a 400-line expansion is scrolled like any
+read through the transcript's own **window**, so a 400-line expansion is scrolled like any
 other rows. **reasoning** opens on the same key; collapsed, it stays one row
 (`⌁ reasoned`).
 

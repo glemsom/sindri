@@ -1,7 +1,7 @@
 //! The transcript column — the hero. A conversation is laid out as the
 //! document it is: two rows between turns and none inside one, a turn's body
 //! hanging two columns off its own edge, and the prompt at full strength on a
-//! band of its own (ADR-0016).
+//! band of its own (ADR-0011 §4).
 //!
 //! Only the rows that fit are laid out, so an unbounded conversation still has
 //! a bounded render tree (ADR-0011). The window has a place in the thread and

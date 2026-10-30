@@ -31,7 +31,7 @@ pub fn rows(call: &Call, width: u16, now: Duration) -> Vec<Line<'static>> {
     // A marker column, then a status column of fixed width: a call that is
     // still running and the same call collapsed leave the command where it
     // was, and the glyph says GOOD or BAD without a word of hue alone
-    // (ADR-0016). A refused call's reason is longer than the column and
+    // (ADR-0011 §23). A refused call's reason is longer than the column and
     // pushes its own command right; a call that never ran has no earlier row
     // for that to disagree with.
     let (glyph, status, accent) = match &call.over {
@@ -97,7 +97,7 @@ pub fn rows(call: &Call, width: u16, now: Duration) -> Vec<Line<'static>> {
 
 /// One line of a call's output. stdout and stderr differ by a glyph as well as
 /// by hue: a line read on a terminal that lost its colour still tells a
-/// warning from a result (ADR-0016).
+/// warning from a result (ADR-0011 §23).
 fn output(side: &Side, line: &str, width: u16) -> Line<'static> {
     let (marker, style) = match side {
         Side::Stdout => ("│", theme::faint()),

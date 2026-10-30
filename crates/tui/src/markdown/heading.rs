@@ -1,7 +1,7 @@
 //! The heading scale: the shallower the level, the heavier the heading. H1 and
 //! H2 are `HEADING` in bold over a rule beneath them, and the rule spans the
 //! column divided by the level, so a heading's rank is a function of its level
-//! and not a case somebody remembered to add (ADR-0016).
+//! and not a case somebody remembered to add (ADR-0011 §24).
 
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
