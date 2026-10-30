@@ -11,6 +11,7 @@ pub mod composer;
 pub mod copy;
 pub mod driver;
 pub mod entry;
+pub mod export;
 pub mod face;
 mod heard;
 mod keys;
@@ -21,6 +22,7 @@ pub mod rail;
 pub mod render;
 pub mod run;
 pub mod selection;
+pub mod sessions;
 pub mod settings;
 pub mod theme;
 

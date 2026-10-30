@@ -19,7 +19,7 @@ pub fn column(app: &mut App, area: Rect, buf: &mut Buffer) {
     // canvas the transcript is written on (ADR-0016).
     buf.set_style(area, theme::surface());
     let width = area.width.saturating_sub(2) as usize;
-    let lines = facts(app, width);
+    let (lines, session) = facts(app, width);
     let spare = area.height.saturating_sub(lines.len() as u16);
     let mut rows = area;
     if spare >= FACE_FLOOR
@@ -42,15 +42,34 @@ pub fn column(app: &mut App, area: Rect, buf: &mut Buffer) {
     if rows.height == 0 || rows.width == 0 {
         return;
     }
+    let drawn = rows.y.saturating_sub(area.y) as usize;
+    let plain = lines
+        .iter()
+        .map(|line| {
+            let row = crate::render::transcript::plain(line);
+            // The column's own edge is not part of what a row says: a copy of
+            // the session id is the id, not the box it was drawn in.
+            row.strip_prefix("│ ").unwrap_or(&row).to_string()
+        })
+        .collect();
+    app.set_rail_view(
+        rows,
+        plain,
+        session.start.saturating_sub(drawn)..session.end.saturating_sub(drawn),
+    );
     Paragraph::new(lines).render(rows, buf);
 }
 
-fn facts(app: &App, width: usize) -> Vec<Line<'static>> {
+/// The rail's rows, and where the session fact sits among them.
+fn facts(app: &App, width: usize) -> (Vec<Line<'static>>, std::ops::Range<usize>) {
     let rule = || Line::from(Span::styled("│", theme::faint()));
     let mut lines: Vec<Line<'static>> = Vec::new();
+    let mut session = 0..0;
     for (label, value) in app.rail().facts() {
-        if label == "session" {
+        let is_session = label == "session";
+        if is_session {
             lines.push(rule());
+            session.start = lines.len();
         }
         lines.extend(text::wrap(
             text::glyphs(&[
@@ -62,8 +81,11 @@ fn facts(app: &App, width: usize) -> Vec<Line<'static>> {
             theme::faint(),
             width,
         ));
+        if is_session {
+            session.end = lines.len();
+        }
     }
-    lines
+    (lines, session)
 }
 
 pub fn strip(app: &App, area: Rect, buf: &mut Buffer) {

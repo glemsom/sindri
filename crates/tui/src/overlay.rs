@@ -1,9 +1,11 @@
 //! The overlays that take the screen while they are open: `?`'s list of every
-//! binding, and the untruncated output a spill affordance offers (ADR-0011).
-//! Both close with `Esc`, and neither is the only way to do what it does.
+//! binding, the untruncated output a spill affordance offers, and the records a
+//! run left behind (ADR-0011). All close with `Esc`, and none is the only way
+//! to do what it does.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
+use crate::sessions::Sessions;
 use crate::settings::Settings;
 
 pub struct Binding {
@@ -36,9 +38,9 @@ pub const BINDINGS: &[Binding] = &[
         what: "complete a workspace path",
     },
     Binding {
-        keys: "/new, /settings, /help, /quit",
+        keys: "/new, /sessions, /export, /settings, /help, /quit",
         mouse: None,
-        what: "start a fresh session, edit the config, show this, leave",
+        what: "start a session, read an old one, export this one, edit the config, show this, leave",
     },
     Binding {
         keys: "Esc",
@@ -64,6 +66,11 @@ pub const BINDINGS: &[Binding] = &[
         keys: "Ctrl-O",
         mouse: Some("click the spill row"),
         what: "open a command's untruncated output",
+    },
+    Binding {
+        keys: "Ctrl-G",
+        mouse: Some("click the session row"),
+        what: "copy the session id, the one `sindri sessions show` takes",
     },
     Binding {
         keys: "Ctrl-C",
@@ -94,6 +101,8 @@ pub enum Overlay {
     /// Boxed: the modal is the largest thing the frame can overlay, and the
     /// enum is carried in every match on an overlay.
     Settings(Box<Settings>),
+    /// The record picker: what the state directory holds, newest first.
+    Sessions(Sessions),
 }
 
 pub fn help_rows() -> Vec<(&'static str, String)> {
@@ -109,11 +118,12 @@ pub fn help_rows() -> Vec<(&'static str, String)> {
         .collect()
 }
 
-/// A spill file, open in the frame. The file is read once, when it is opened,
-/// and only the rows on screen are ever copied out of it (ADR-0011).
+/// A spilled file, or a record, open in the frame. It is read once, when it is
+/// opened, and only the rows on screen are ever copied out of it (ADR-0011).
 #[derive(Debug, Clone)]
 pub struct Spill {
-    pub path: PathBuf,
+    /// What the box is called: the file it came from, or the session it is.
+    pub title: String,
     pub lines: Vec<String>,
     pub scroll: usize,
     pub visible: usize,
@@ -130,7 +140,7 @@ impl Spill {
             .map(|line| line.to_string())
             .collect();
         Ok(Spill {
-            path: path.to_path_buf(),
+            title: format!("output: {}", path.display()),
             lines: if lines.is_empty() {
                 vec![String::new()]
             } else {
@@ -139,6 +149,22 @@ impl Spill {
             scroll: 0,
             visible: 1,
         })
+    }
+
+    /// A reader over text the frame already has: the rendered record of a past
+    /// session, read-only in the same box a spill opens in (issue #51).
+    pub fn text(title: impl Into<String>, text: &str) -> Spill {
+        let lines: Vec<String> = text.lines().map(|line| line.to_string()).collect();
+        Spill {
+            title: title.into(),
+            lines: if lines.is_empty() {
+                vec![String::new()]
+            } else {
+                lines
+            },
+            scroll: 0,
+            visible: 1,
+        }
     }
 
     pub fn settled(&mut self, visible: usize) {
@@ -186,7 +212,8 @@ mod tests {
         "Ctrl-Q",
         "?",
         "@",
-        "/new, /settings, /help, /quit",
+        "/new, /sessions, /export, /settings, /help, /quit",
+        "Ctrl-G",
     ];
 
     #[test]
@@ -224,8 +251,8 @@ mod tests {
             );
         }
         assert_eq!(
-            gestures, 3,
-            "the wheel, a drag and a click on the spill row are the gestures"
+            gestures, 4,
+            "the wheel, a drag, a click on the spill row and a click on a rail row are the gestures"
         );
     }
 
