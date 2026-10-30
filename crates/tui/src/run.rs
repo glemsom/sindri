@@ -3,7 +3,7 @@
 //! [`App`]; everything it runs comes from a [`Driver`] (ADR-0011 §1).
 
 use std::io::IsTerminal;
-use std::sync::mpsc::{self, RecvTimeoutError, Sender};
+use std::sync::mpsc::{self, Sender};
 use std::time::Duration;
 
 use crossterm::event::{self, Event as TerminalEvent};
@@ -19,8 +19,6 @@ use crate::render;
 
 pub use crate::render::Card;
 
-/// How long the frame waits for something to happen before it looks again.
-const FRAME: Duration = Duration::from_millis(16);
 /// How often a card that is waiting to be dismissed looks for a key.
 const CARD_POLL: Duration = Duration::from_millis(200);
 
@@ -119,16 +117,18 @@ fn session(
     // (ADR-0013). Typing never queues ten walks.
     let mut walking = false;
 
-    loop {
-        match rx.recv_timeout(FRAME) {
+    // The frame is not on a clock: it is drawn when there is something to say,
+    // and nothing has been said yet — so the first frame is drawn here.
+    let mut painted = paint(terminal, &mut app);
+    while painted {
+        match rx.recv() {
             Ok(message) => {
                 if matches!(message, Msg::Paths(..)) {
                     walking = false;
                 }
                 apply(&mut app, message);
             }
-            Err(RecvTimeoutError::Timeout) => {}
-            Err(RecvTimeoutError::Disconnected) => break,
+            Err(_) => break,
         }
         if app.wants_quit() {
             break;
@@ -136,22 +136,27 @@ fn session(
         begin(&mut app, &jobs);
         let root = std::env::current_dir().unwrap_or_default();
         walk(&mut app, &tx, &mut walking, &root);
-        // The terminal's cursor is hidden while the frame is written and shown
-        // again where the composer puts it. A frame that leaves it showing
-        // carries it wherever the diff writes next, and a streamed answer
-        // repaints the transcript every frame: a reader then watches the cursor
-        // leave the composer and come back. `draw` shows it at the position the
-        // frame set and never hides it, so the hiding is the loop's (ADR-0011
-        // §4, §11).
-        let _ = terminal.hide_cursor();
-        if terminal
-            .draw(|frame| render::draw(&mut app, frame))
-            .is_err()
-        {
-            break;
-        }
+        painted = paint(terminal, &mut app);
     }
     Ending::Left
+}
+
+/// Draws one frame and says whether the terminal will take another.
+///
+/// The terminal's cursor is hidden while the frame is written and shown again
+/// where the composer puts it. A frame that leaves it showing carries it
+/// wherever the diff writes next, and a streamed answer repaints the transcript
+/// every frame: a reader then watches the cursor leave the composer and come
+/// back. `draw` shows it at the position the frame set and never hides it, so
+/// the hiding is the loop's (ADR-0011 §4, §11).
+///
+/// Which is also why a frame is drawn only because something happened: every
+/// frame ends by showing the cursor and moving it to the composer, and a
+/// terminal restarts its blink on every move. A loop that redrew an unchanged
+/// frame would leave an idle composer blinking at the frame rate (ADR-0011 §4).
+fn paint(terminal: &mut DefaultTerminal, app: &mut App) -> bool {
+    let _ = terminal.hide_cursor();
+    terminal.draw(|frame| render::draw(app, frame)).is_ok()
 }
 
 /// One message from anywhere, applied to the frame.
@@ -159,6 +164,9 @@ fn apply(app: &mut App, message: Msg) {
     match message {
         Msg::Key(key) => app.key(key),
         Msg::Mouse(mouse) => app.mouse(mouse),
+        // Nothing in the frame changes, and the frame is being drawn anyway:
+        // the draw asks the terminal its size (ADR-0011 §4).
+        Msg::Resize => {}
         Msg::Event(event) => app.event(event),
         Msg::Output(side, text) => app.output(side, &text),
         Msg::Over(over, spilled) => app.over(over, spilled),
@@ -224,9 +232,14 @@ fn listen_for_keys(tx: Sender<Msg>) {
                         return;
                     }
                 }
-                // A resize redraws because the next frame asks the terminal
-                // its size; there is nothing for the frame to be told.
-                Ok(TerminalEvent::Resize(..)) => {}
+                // A resize has nothing to change in the frame, but it is the
+                // one thing that asks for a frame: the draw reads the terminal's
+                // new size (ADR-0011 §4).
+                Ok(TerminalEvent::Resize(..)) => {
+                    if tx.send(Msg::Resize).is_err() {
+                        return;
+                    }
+                }
                 Ok(_) => {}
                 Err(_) => return,
             }

@@ -37,6 +37,9 @@ pub const CLEAR_FIELD: u8 = 0x15;
 pub const ENTER: u8 = 0x0d;
 /// Down, as a terminal sends it.
 pub const DOWN: &[u8] = b"\x1b[B";
+/// The sequence that shows the terminal's cursor: a frame ends with it, so one
+/// of these is one frame drawn.
+pub const SHOW_CURSOR: &str = "\u{1b}[?25h";
 /// How long anything is given before it counts as a failure.
 pub const DEADLINE: Duration = Duration::from_secs(20);
 
@@ -169,6 +172,53 @@ impl Pty {
             std::thread::sleep(Duration::from_millis(20));
         }
         visible(&raw)
+    }
+
+    /// Everything the frame draws over the next `window` with nothing typed:
+    /// the bytes of a frame that has nothing to say, which is what an idle
+    /// frame says. Every byte read lands on the screen as usual.
+    pub fn listening(&self, child: &mut Child, window: Duration) -> String {
+        let mut port = self.port();
+        let mut drawn = String::new();
+        let mut buffer = [0u8; 4096];
+        let deadline = Instant::now() + window;
+        while Instant::now() < deadline {
+            match port.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(read) => {
+                    let text = String::from_utf8_lossy(&buffer[..read]).to_string();
+                    self.look(&text);
+                    drawn.push_str(&text);
+                }
+                Err(error) if error.kind() == ErrorKind::WouldBlock => {
+                    if child.try_wait().is_ok_and(|status| status.is_some()) {
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Err(error) if error.kind() == ErrorKind::Interrupted => {}
+                Err(_) => break,
+            }
+        }
+        drawn
+    }
+
+    /// Changes the terminal's size the way dragging its corner does: the kernel
+    /// records it and the frame is told, so the next frame asks for the new one.
+    pub fn resize(&self, child: &Child, rows: u16, cols: u16) {
+        let size = libc::winsize {
+            ws_row: rows,
+            ws_col: cols,
+            ws_xpixel: 0,
+            ws_ypixel: 0,
+        };
+        // SAFETY: the master descriptor is valid and owned here, and
+        // `TIOCSWINSZ` reads a `winsize` this frame owns.
+        let sized = unsafe { libc::ioctl(self.master.as_raw_fd(), libc::TIOCSWINSZ, &size) };
+        assert_eq!(sized, 0, "the terminal takes the new size");
+        // SAFETY: `kill` with a signal number and a pid this test owns; a child
+        // already gone is a test that has another failure to report.
+        unsafe { libc::kill(child.id() as libc::pid_t, libc::SIGWINCH) };
     }
 
     /// Feeds one read into the screen the frame is drawing on.

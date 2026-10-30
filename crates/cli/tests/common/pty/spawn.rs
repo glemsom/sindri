@@ -8,6 +8,7 @@
 )]
 
 use std::fs::File;
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Stdio};
 use std::time::{Duration, Instant};
@@ -84,6 +85,20 @@ fn opened(env: &Env, pty: &Pty, vars: &[(&str, &str)], stderr: Option<&Path>) ->
         Some(file) => Stdio::from(File::create(file).expect("a file for the frame's stderr")),
         None => Stdio::from(pty.slave.try_clone().expect("a pty slave")),
     };
+    // The frame asks the terminal it is attached to how big it is, and a process
+    // without a controlling terminal is told about whatever terminal the test
+    // runner happens to have. A terminal emulator attaches its child to the pty
+    // it opened, so this does too: the pty's size is the frame's size.
+    // SAFETY: `setsid` and `TIOCSCTTY` touch nothing but the child's own
+    // session, and fd 0 is the pty's slave by the time they run.
+    unsafe {
+        command.pre_exec(|| {
+            if libc::setsid() == -1 || libc::ioctl(0, libc::TIOCSCTTY, 0) == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
     command
         .env("TERM", "xterm-256color")
         .envs(vars.iter().copied())

@@ -15,6 +15,10 @@ pub enum Msg {
     Key(KeyEvent),
     /// A mouse event, when capture is on and the gesture is not Shift'd.
     Mouse(MouseEvent),
+    /// The terminal changed size. Nothing in the frame changes: the next frame
+    /// asks the terminal the new one, and this message is what asks for that
+    /// frame.
+    Resize,
     /// A fragment of the run's event stream, forwarded from the core.
     Event(Event),
     /// One line of a running command's output.

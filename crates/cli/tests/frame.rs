@@ -18,7 +18,7 @@ mod common;
 use std::time::Duration;
 
 use common::provider::{MockProvider, Reply, frames};
-use common::pty::{ALTERNATE_SCREEN, Pty, expect, spawn, type_line};
+use common::pty::{ALTERNATE_SCREEN, Pty, SHOW_CURSOR, expect, spawn, type_line};
 use common::{Env, TEST_KEY, host_path, path_without, required_binaries, write_config};
 
 #[test]
@@ -137,6 +137,93 @@ fn the_frame_advertises_the_hands_and_leaves_when_asked() {
     let (code, _) = pty.quit(&mut child);
     assert_eq!(code, Some(0), "leaving the frame is not a failure");
 }
+/// How long an idle frame is watched for: long enough that a 60 fps loop would
+/// draw thirty frames in it, short enough that a test spends no time waiting.
+const IDLE: Duration = Duration::from_millis(500);
+
+#[test]
+fn an_idle_frame_draws_nothing() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: an idle frame is not tested here");
+        return;
+    };
+    let env = Env::new();
+    let mut child = spawn(&env, &pty, &defaults());
+
+    expect(&pty, &mut child, "@ paths");
+    // A frame may still be in flight when its text appears: give it the window
+    // it needs to land, then watch a frame with nothing left to draw. Every
+    // frame ends by showing the terminal's cursor and moving it to the
+    // composer, and a terminal restarts its blink on that move — so a frame
+    // drawn with nothing to say is a cursor that blinks at the frame rate.
+    let _ = pty.listening(&mut child, Duration::from_millis(150));
+    let idle = pty.listening(&mut child, IDLE);
+    let (code, _) = pty.quit(&mut child);
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+
+    let redraws = idle.matches(SHOW_CURSOR).count();
+    assert_eq!(
+        redraws,
+        0,
+        "nothing was typed, yet the frame drew {redraws} times in {}ms: an idle \
+         frame must draw nothing, or the composer's cursor blinks at that rate. \
+         It drew: {:?}",
+        IDLE.as_millis(),
+        idle
+    );
+}
+
+/// Every row a frame moved the terminal's cursor to, in the order it moved
+/// there: a cursor move is `ESC [ row ; col H`, and any other sequence that
+/// starts the same way is not one.
+fn cursor_rows(drawn: &str) -> Vec<u16> {
+    let mut rows = Vec::new();
+    for (at, _) in drawn.match_indices("\u{1b}[") {
+        let rest = &drawn[at + 2..];
+        let Some((row, tail)) = rest.split_once(';') else {
+            continue;
+        };
+        let Some((column, _)) = tail.split_once('H') else {
+            continue;
+        };
+        if let (Ok(row), Ok(_)) = (row.parse::<u16>(), column.parse::<u16>()) {
+            rows.push(row);
+        }
+    }
+    rows
+}
+
+#[test]
+fn a_resized_terminal_draws_the_frame_at_its_new_size() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: a resize is not tested here");
+        return;
+    };
+    let env = Env::new();
+    let mut child = spawn(&env, &pty, &defaults());
+
+    expect(&pty, &mut child, "@ paths");
+    // A frame is drawn only when something happened, so a resize is now the one
+    // thing outside the frame that must ask for one: a terminal shrunk to half
+    // its rows must draw the composer inside the rows that are left.
+    let _ = pty.listening(&mut child, Duration::from_millis(150));
+    pty.resize(&child, 12, 60);
+    let redrawn = pty.listening(&mut child, IDLE);
+    let (code, _) = pty.quit(&mut child);
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+
+    let rows = cursor_rows(&redrawn);
+    assert!(
+        !rows.is_empty(),
+        "a resize must draw the frame again, drew: {redrawn:?}"
+    );
+    let outside = rows.iter().copied().filter(|row| *row > 12).count();
+    assert_eq!(
+        outside, 0,
+        "the frame drew a cursor below the twelfth row of a twelve-row terminal: {rows:?}"
+    );
+}
+
 /// The streamed answer a cursor test watches: reasoning first, then markdown
 /// with enough body to be repainted row by row while it arrives.
 fn streamed_answer() -> Reply {
