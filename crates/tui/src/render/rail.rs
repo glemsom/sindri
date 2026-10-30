@@ -12,10 +12,10 @@ use crate::face;
 use crate::markdown::text;
 use crate::theme;
 
-/// What the face needs to draw at all: its own rows, and no cutting. A
-/// terminal too short for the face and the facts together gets the facts, and
-/// the picture is simply absent — no placeholder, no gap (ADR-0011 §5, and
-/// nothing in the layout depends on the face).
+/// What the face needs before it is drawn at all: room for its rows, and no
+/// cutting. A terminal too short for the face and the facts together gets the
+/// facts, and the picture is simply absent — no placeholder, no gap (ADR-0011
+/// §5, and nothing in the layout depends on the face).
 const FACE_FLOOR: u16 = face::ROWS;
 
 /// The rail as a 32-column column.
@@ -28,7 +28,13 @@ pub fn column(app: &mut App, area: Rect, buf: &mut Buffer) {
     let mut rows = area;
     if spare >= FACE_FLOOR {
         if let Some(face) = app.face_mut() {
-            let height = face::ROWS.min(spare);
+            // The rows the picture takes, not the rows the rail would allow:
+            // a square crop in a rail of tall cells is shorter than it is wide,
+            // and reserving the rest would leave a hole under the face.
+            let height = face.rows(Rect {
+                height: spare,
+                ..area
+            });
             face.render(Rect { height, ..area }, buf);
             rows = Rect {
                 y: area.y + height,

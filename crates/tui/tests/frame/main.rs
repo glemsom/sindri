@@ -11,6 +11,7 @@
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+use ratatui::layout::Rect;
 use sindri_core::agent::Event;
 use sindri_tui::driver::{CallOver, Finished, Side, Spilled, Stop, Tokens};
 use sindri_tui::render;

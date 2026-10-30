@@ -95,6 +95,32 @@ fn the_rail_never_drops_a_fact_to_keep_the_face() {
 }
 
 #[test]
+fn the_facts_start_the_row_after_the_face_and_not_one_row_lower() {
+    // A tall terminal, so the face draws. The picture keeps its shape: in cells
+    // twice as tall as they are wide a square crop takes fewer rows than the
+    // rail allows it, and reserving the difference would leave a hole between
+    // Sindri's face and his facts.
+    let face = Face::kitty().expect("the embedded face decodes");
+    // Any roomy rail answers the same: the picture is bound by the width.
+    let drawn = face.rows(Rect::new(0, 0, RAIL as u16, 30));
+    assert!(
+        drawn < sindri_tui::face::ROWS,
+        "a square picture in tall cells takes fewer rows than the rail allows: {drawn}"
+    );
+
+    let mut app = App::new(launch(), Some(face));
+    let rows = screen(&mut app, 100, 40);
+    let first_fact = rows
+        .iter()
+        .position(|row| rail_of(row).contains("cache"))
+        .expect("the rail says what the run has spent");
+    assert_eq!(
+        first_fact as u16, drawn,
+        "the first fact follows the picture directly: {rows:#?}"
+    );
+}
+
+#[test]
 fn the_rule_down_the_rail_runs_unbroken_between_the_facts() {
     let mut app = spent();
     let rows = screen(&mut app, 100, 26);
