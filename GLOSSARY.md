@@ -113,6 +113,16 @@ own band.
 
 **turn header** — the row that opens a turn: `YOU  <hh:mm>  <workspace>`.
 
+**expanded call** — a **tool call** shown whole in place of the five-line tail it
+collapses to: `Enter` on an empty composer toggles the call the frame last showed (the
+newest one it can open if the reader has touched none), and a click toggles the call
+whose row it landed on. The entry keeps a bounded tail of its whole output — 400 lines,
+the cap a **spill file** exists to lift — so a call that never spilled still opens, and
+the collapsed row says what is behind it (`✓ exit 0 · 1.4s · 400 lines`). The body is
+read through the transcript's own window, so a 400-line expansion is scrolled like any
+other rows. **reasoning** opens on the same key; collapsed, it stays one row
+(`⌁ reasoned`).
+
 **completion** — the `@` offer of workspace paths: a proximity-ranked background walk,
 eight rows, `.git` skipped, `.gitignore` deliberately not honoured.
 

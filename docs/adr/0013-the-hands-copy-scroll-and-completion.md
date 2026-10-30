@@ -32,6 +32,8 @@ date: 2026-10-30
 
 **Spill** — read once when opened, as bytes with invalid UTF-8 replaced; one screen of lines held, paged by screenfuls. `Ctrl-O`, or a click on that row, opens *that* row's file.
 
+**Expansion** — a click on a call's own row opens or folds that call, exactly as `Enter` does on the newest one (ADR-0011 §9); a click on its spill row still opens the file, because that row is a different row. A gesture an entry has is never the only way to it.
+
 ## Amendment
 
 **The overlays own their scroll.** A page is a screenful of the box that has the

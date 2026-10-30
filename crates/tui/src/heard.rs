@@ -74,6 +74,7 @@ impl App {
                     turn,
                     text,
                     done: true,
+                    open: false,
                 });
                 self.dirty();
             }
@@ -100,6 +101,7 @@ impl App {
                 turn: open,
                 text: streamed,
                 done: false,
+                ..
             }) if reasoning && *open == turn => Some(streamed),
             Some(Entry::Answer {
                 turn: open,
@@ -120,6 +122,7 @@ impl App {
                 turn,
                 text,
                 done: false,
+                open: false,
             });
         } else {
             self.entries.push(Entry::Answer {

@@ -1,6 +1,7 @@
 //! The narrowest terminal that can hold the rail as a column; below this it
 //! is a strip (ADR-0011).
 
+mod call;
 mod card;
 mod completion;
 mod composer;

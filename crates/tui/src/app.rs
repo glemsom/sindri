@@ -75,6 +75,11 @@ pub struct App {
     /// never the frame beneath it (ADR-0013, issue #49).
     pub(crate) page: usize,
     pub(crate) viewport: Viewport,
+    /// The entry the reader last opened or clicked, which is what `Enter` on
+    /// an empty composer toggles: a frame with no cursor of its own has one
+    /// honest answer to "which call?", and it is the one just touched
+    /// (ADR-0011 §9, issue #44).
+    pub(crate) chosen: Option<usize>,
     /// One row count per entry at the width it was measured at, dropped
     /// whenever an entry changes, so the window never lays out a row it does
     /// not show (ADR-0011).
@@ -133,6 +138,7 @@ impl App {
             scroll: 0,
             page: DEFAULT_PAGE,
             viewport: Viewport::default(),
+            chosen: None,
             heights: Vec::new(),
             width: None,
             selection: Selection::default(),
@@ -303,6 +309,7 @@ impl App {
                 self.queue.clear();
                 self.early.clear();
                 self.heights.clear();
+                self.chosen = None;
                 self.walking = None;
                 self.scroll = 0;
                 self.rail = Rail::new(launch);
@@ -374,8 +381,14 @@ impl App {
         area: Rect,
         rows: Vec<String>,
         spill: Vec<(usize, std::path::PathBuf)>,
+        expand: Vec<(usize, usize)>,
     ) {
-        self.viewport = Viewport { area, rows, spill };
+        self.viewport = Viewport {
+            area,
+            rows,
+            spill,
+            expand,
+        };
     }
 
     pub(crate) fn dirty(&mut self) {

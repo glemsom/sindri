@@ -19,10 +19,10 @@ use ratatui::widgets::{Paragraph, Widget};
 use unicode_width::UnicodeWidthStr;
 
 use crate::app::App;
-use crate::driver::{CallOver, Side};
-use crate::entry::{Call, Entry, NoteKind, Prompt};
+use crate::entry::{Entry, NoteKind, Prompt};
 use crate::markdown;
 use crate::pulse;
+use crate::render::call;
 use crate::theme;
 
 /// The columns a turn's body hangs off the turn's own edge: the answer and the
@@ -30,24 +30,20 @@ use crate::theme;
 const GUTTER: u16 = 2;
 /// Two blank rows between turns, none inside one.
 const TURN_GAP: usize = 2;
-/// The columns a call's status takes before its command, so a running call and
-/// the same call collapsed put the command in the same place.
-const STATUS: usize = 8;
-/// The columns a call's duration takes after its status: a finished call and a
-/// running one put the command in the same place, and the duration counts up
-/// or stands still in a field that does not move (ADR-0011 §4).
-const DURATION: usize = 6;
 
 pub struct View {
     pub rows: Vec<Line<'static>>,
     pub plain: Vec<String>,
     pub laid_out: usize,
     pub spill: Vec<(usize, PathBuf)>,
+    /// The drawn rows that are an expandable entry's own row, and the entry
+    /// behind each: a click there opens it (ADR-0011 §9, issue #44).
+    pub expand: Vec<(usize, usize)>,
 }
 
 pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
     let view = window(app, area.width, area.height as usize);
-    app.set_viewport(area, view.plain, view.spill.clone());
+    app.set_viewport(area, view.plain, view.spill.clone(), view.expand.clone());
     Paragraph::new(view.rows).render(area, buf);
 }
 
@@ -67,11 +63,15 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
 
     let mut rows: Vec<Line<'static>> = Vec::new();
     let mut spill: Vec<(usize, PathBuf)> = Vec::new();
+    let mut expand: Vec<(usize, usize)> = Vec::new();
     for index in first..count {
         rows.extend((0..gap(&app.entries()[index])).map(|_| Line::default()));
         let rows_here = entry_rows(&app.entries()[index], width, app.now());
         if let Some(path) = spill_of(&app.entries()[index]) {
             spill.push((rows.len() + rows_here.len().saturating_sub(1), path));
+        }
+        if app.entries()[index].expandable() {
+            expand.push((rows.len(), index));
         }
         rows.extend(rows_here);
     }
@@ -94,11 +94,20 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
                 .map(|row| (row, path))
         })
         .collect();
+    let expand = expand
+        .into_iter()
+        .filter_map(|(row, entry)| {
+            row.checked_sub(start)
+                .filter(|row| *row < shown.len())
+                .map(|row| (row, entry))
+        })
+        .collect();
     View {
         rows: shown,
         plain,
         laid_out,
         spill,
+        expand,
     }
 }
 
@@ -141,15 +150,22 @@ pub fn entry_rows(entry: &Entry, width: u16, now: Duration) -> Vec<Line<'static>
             took,
             ..
         } => answer_rows(text, *done, *failed, *took, body, now),
-        Entry::Reasoning { text, done, .. } => {
-            if *done {
+        Entry::Reasoning {
+            text, done, open, ..
+        } => {
+            // A thought that is over is one row until the reader opens it,
+            // and then it is the text it held (ADR-0011 §11, issue #44).
+            if *done && !*open {
                 return gutter(vec![Line::from(Span::styled("⌁ reasoned", theme::faint()))]);
             }
             let mut rows = markdown::lines(text, body);
-            let keep = rows.len().saturating_sub(3);
-            gutter(rows.split_off(keep))
+            if !*done && !*open {
+                let keep = rows.len().saturating_sub(3);
+                rows = rows.split_off(keep);
+            }
+            gutter(rows)
         }
-        Entry::Call(call) => gutter(call_rows(call, body, now)),
+        Entry::Call(call) => gutter(call::rows(call, body, now)),
         Entry::Note(note) => {
             let (marker, style) = match note.kind {
                 NoteKind::Error => ("! ", theme::bad()),
@@ -249,62 +265,6 @@ fn banded(row: Line<'static>, width: u16) -> Line<'static> {
         theme::surface(),
     ));
     Line::from(spans)
-}
-
-fn call_rows(call: &Call, width: u16, now: Duration) -> Vec<Line<'static>> {
-    let command = call
-        .command
-        .as_deref()
-        .unwrap_or("(the call could not be read)");
-    // A marker column, then a status column of fixed width: a call that is
-    // still running and the same call collapsed leave the command where it
-    // was, and the glyph says GOOD or BAD without a word of hue alone
-    // (ADR-0016). A refused call's reason is longer than the column and
-    // pushes its own command right; a call that never ran has no earlier row
-    // for that to disagree with.
-    let (glyph, status, accent) = match &call.over {
-        None => ("⏺", "running".to_string(), theme::faint()),
-        Some(CallOver::Exited(0)) => ("✓", "exit 0".to_string(), theme::good()),
-        Some(CallOver::Exited(code)) => ("✗", format!("exit {code}"), theme::bad()),
-        Some(CallOver::TimedOut) => ("✗", "timed out".to_string(), theme::bad()),
-        Some(CallOver::Cancelled) => ("✗", "cancelled".to_string(), theme::bad()),
-        Some(CallOver::Refused(detail)) => ("✗", format!("sandbox: {detail}"), theme::bad()),
-    };
-    // How long the call has been running, or how long it took: frozen at the
-    // duration it ended on, so a finished call is not still counting.
-    let took = pulse::said(call.elapsed(now));
-    let mut rows = vec![Line::from(vec![
-        Span::styled("⎿ ", theme::faint()),
-        Span::styled(format!("{glyph} {status:<STATUS$} "), accent),
-        Span::styled(format!("{took:<DURATION$} "), theme::faint()),
-        Span::styled(command.to_string(), Style::new()),
-    ])];
-    if call.running() {
-        // stdout and stderr differ by a glyph as well as by hue: a tail read
-        // on a terminal that lost its colour still tells a warning from a
-        // result (ADR-0016).
-        for (side, line) in &call.tail {
-            let (marker, style) = match side {
-                Side::Stdout => ("│", theme::faint()),
-                Side::Stderr => ("⚠", theme::bad()),
-            };
-            let keep = width.saturating_sub(4) as usize;
-            let shown = markdown::text::clip(line, keep);
-            rows.push(Line::from(vec![
-                Span::styled(format!("  {marker} "), style),
-                Span::styled(shown, style),
-            ]));
-        }
-    }
-    if let Some(path) = call.spill_file() {
-        let keep = width.saturating_sub(2) as usize;
-        let offer = format!("… output too large · Ctrl-O opens {}", path.display());
-        rows.push(Line::from(Span::styled(
-            markdown::text::clip(&offer, keep),
-            theme::faint(),
-        )));
-    }
-    rows
 }
 
 #[cfg(test)]
