@@ -4,7 +4,8 @@
 mod call;
 mod card;
 mod completion;
-mod composer;
+pub mod composer;
+pub mod hello;
 pub(crate) mod layout;
 mod overlay;
 mod queue;
