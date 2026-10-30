@@ -4,7 +4,14 @@
 //! ordered list of facts feeds both the column and the one-line strip, so the
 //! two can never disagree.
 
+mod fact;
+
+use std::time::Duration;
+
 use crate::driver::{Stop, Tokens};
+use crate::pulse;
+
+pub use self::fact::{Block, Fact, Fit};
 
 #[derive(Debug, Clone)]
 pub struct Launch {
@@ -33,7 +40,19 @@ pub struct Rail {
     /// count, not a sum.
     context: u64,
     stop: Option<Stop>,
+    /// The characters that have streamed since this run began: the only
+    /// usage the frame is handed while the run it describes is still running,
+    /// turned into tokens at the one rate it can honestly guess and trued up
+    /// by the report (ADR-0011 §4).
+    streamed: u64,
+    /// When each spend figure last grew, so the rail can accent what just
+    /// moved for a moment.
+    fresh: Vec<(&'static str, Duration)>,
 }
+
+/// The characters one token is worth, as the frame counts them: a guess, and
+/// only ever a guess until the provider's own report lands.
+const CHARS_PER_TOKEN: u64 = 4;
 
 impl Rail {
     pub fn new(launch: Launch) -> Self {
@@ -43,18 +62,49 @@ impl Rail {
             tokens: Tokens::default(),
             context: 0,
             stop: None,
+            streamed: 0,
+            fresh: Vec::new(),
         }
     }
 
-    pub fn turn(&mut self, turn: u32) {
+    pub fn turn(&mut self, turn: u32, now: Duration) {
+        if turn > self.turns {
+            self.moved("turns", now);
+        }
         self.turns = self.turns.max(turn);
+    }
+
+    /// A run has begun: what streams from here is the live figure, and the
+    /// last report's is the confirmed one. The accents go with it — a figure
+    /// that was fresh for the last run is not fresh for this one.
+    pub fn begun(&mut self) {
+        self.streamed = 0;
+        self.fresh.clear();
+    }
+
+    /// `chars` more characters of the answer have arrived: the output figure
+    /// and the context meter both move on it, now rather than at the end of
+    /// the run they describe.
+    pub fn streamed(&mut self, chars: usize, now: Duration) {
+        let chars = chars as u64;
+        if chars == 0 {
+            return;
+        }
+        self.streamed = self.streamed.saturating_add(chars);
+        self.moved("tokens", now);
+        self.moved("context", now);
     }
 
     pub fn reconfigured(&mut self, launch: Launch) {
         self.launch = launch;
     }
 
-    pub fn settled(&mut self, turns: u32, tokens: Tokens, stop: Stop) {
+    pub fn settled(&mut self, turns: u32, tokens: Tokens, stop: Stop, now: Duration) {
+        // The report replaces the estimate: what streamed was only ever a
+        // stand-in for what the provider says it spent.
+        self.streamed = 0;
+        self.moved("tokens", now);
+        self.moved("context", now);
         self.turns = self.turns.max(turns);
         self.tokens = Tokens {
             input: self.tokens.input.saturating_add(tokens.input),
@@ -74,13 +124,32 @@ impl Rail {
     }
 
     pub fn context_used(&self) -> u64 {
-        self.context
+        self.context + self.estimate()
+    }
+
+    /// The live guess at what has been spent since the run began: nothing at
+    /// all once the run has settled and the estimate is put away.
+    fn estimate(&self) -> u64 {
+        self.streamed / CHARS_PER_TOKEN
+    }
+
+    /// Records that a figure just grew, and when.
+    fn moved(&mut self, label: &'static str, now: Duration) {
+        self.fresh.retain(|(known, _)| *known != label);
+        self.fresh.push((label, now));
+    }
+
+    /// Whether a figure grew recently enough for the frame to point at it.
+    fn just_moved(&self, label: &str, now: Duration) -> bool {
+        self.fresh
+            .iter()
+            .any(|(known, at)| *known == label && now.saturating_sub(*at) < pulse::FRESH)
     }
 
     /// The rail's rows, in the one order the column and the strip read them:
     /// the numbers the run is spending, then the identity block under the
     /// rule, and the posture as a chip of its own.
-    pub fn facts(&self) -> Vec<Fact> {
+    pub fn facts(&self, now: Duration) -> Vec<Fact> {
         let mut facts = vec![
             Fact::spend("cache", self.cache()),
             Fact::spend("turns", format!("{}/{}", self.turns, self.launch.max_turns)),
@@ -89,7 +158,7 @@ impl Rail {
                 format!(
                     "{} in · {} out",
                     compact(self.tokens.input),
-                    compact(self.tokens.output)
+                    compact(self.tokens.output + self.estimate())
                 ),
             ),
             Fact::spend("context", self.meter()),
@@ -129,14 +198,20 @@ impl Rail {
         ));
         facts.push(Fact::kept(Fact::posture(self.launch.sandbox.clone())));
         facts
+            .into_iter()
+            .map(|fact| {
+                let fresh = self.just_moved(fact.label(), now);
+                Fact::moved(fact, fresh)
+            })
+            .collect()
     }
 
     /// The rail as one line, for a terminal too narrow to give it a column:
     /// the same facts in the same order, in as much of them as the line can
     /// hold. The posture, the model and the workspace are kept their room, so
     /// a narrower terminal loses the meter before it loses the run.
-    pub fn strip(&self, width: usize) -> String {
-        let facts = self.facts();
+    pub fn strip(&self, width: usize, now: Duration) -> String {
+        let facts = self.facts(now);
         let kept: Vec<&Fact> = facts.iter().filter(|fact| fact.keeps()).collect();
         let reserved: usize = kept
             .iter()
@@ -218,127 +293,6 @@ impl Rail {
 
 /// What separates one fact from the next on the one-line strip.
 const SEPARATOR: &str = " · ";
-
-/// One row of the rail: a label in a fixed field and its value beside it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Fact {
-    label: &'static str,
-    value: String,
-    block: Block,
-    fit: Fit,
-    keep: bool,
-}
-
-/// Which block of the rail a fact belongs to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Block {
-    /// A number the run is spending, above the rule.
-    Spend,
-    /// What the run is: the identity block under the rule.
-    Identity,
-    /// The sandbox posture, which draws as a chip rather than as another
-    /// label/value pair.
-    Posture,
-}
-
-/// How a value longer than its column is shortened. A value is never wrapped
-/// onto a second row.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Fit {
-    /// Cut at the end.
-    End,
-    /// An id or a path, whose two ends both say something: the head names it
-    /// and the tail says where it ends.
-    Middle,
-}
-
-impl Fact {
-    pub fn label(&self) -> &'static str {
-        self.label
-    }
-
-    pub fn value(&self) -> &str {
-        &self.value
-    }
-
-    pub fn block(&self) -> Block {
-        self.block
-    }
-
-    pub fn fit(&self) -> Fit {
-        self.fit
-    }
-
-    /// Whether the one-line strip may never drop this fact.
-    pub fn keeps(&self) -> bool {
-        self.keep
-    }
-
-    /// Whether clicking this row copies what the fact says rather than the row
-    /// it was drawn on: the GUID is pasted into `sindri sessions show`, and an
-    /// ellipsised one is no use there.
-    pub fn copies_whole(&self) -> bool {
-        self.label == "session"
-    }
-
-    /// The fact as one strip entry, with the column's label.
-    pub fn line(&self) -> String {
-        match self.block {
-            Block::Posture => format!("⬢ {}", self.value),
-            _ => format!("{} {}", self.label, self.value),
-        }
-    }
-
-    /// The same fact where the strip has no room for the column's label.
-    pub fn brief(&self) -> String {
-        match self.block {
-            Block::Posture => format!("⬢ {}", self.value),
-            _ => format!("{} {}", self.short_label(), self.value),
-        }
-    }
-
-    fn short_label(&self) -> &'static str {
-        match self.label {
-            "workspace" => "ws",
-            other => other,
-        }
-    }
-
-    fn spend(label: &'static str, value: String) -> Fact {
-        Fact {
-            label,
-            value,
-            block: Block::Spend,
-            fit: Fit::End,
-            keep: false,
-        }
-    }
-
-    fn identity(label: &'static str, value: String, fit: Fit) -> Fact {
-        Fact {
-            label,
-            value,
-            block: Block::Identity,
-            fit,
-            keep: false,
-        }
-    }
-
-    fn posture(value: String) -> Fact {
-        Fact {
-            label: "sandbox",
-            value,
-            block: Block::Posture,
-            fit: Fit::End,
-            keep: false,
-        }
-    }
-
-    fn kept(mut fact: Fact) -> Fact {
-        fact.keep = true;
-        fact
-    }
-}
 
 pub fn compact(count: u64) -> String {
     if count < 1_000 {

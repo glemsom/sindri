@@ -3,8 +3,9 @@
 //! [`App`]; everything it runs comes from a [`Driver`] (ADR-0011).
 
 use std::io::IsTerminal;
-use std::sync::mpsc::{self, Sender};
-use std::time::Duration;
+use std::path::Path;
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::time::{Duration, Instant};
 
 use crossterm::event::{self, Event as TerminalEvent};
 use ratatui::DefaultTerminal;
@@ -14,6 +15,7 @@ use crate::app::App;
 use crate::driver::{Driver, Tap, Task};
 use crate::face::Face;
 use crate::msg::Msg;
+use crate::pulse;
 use crate::rail::Launch;
 use crate::render;
 use crate::settings::Missing;
@@ -21,6 +23,9 @@ use crate::settings::Missing;
 pub use crate::render::Card;
 
 const CARD_POLL: Duration = Duration::from_millis(200);
+/// How often the loop looks at the clock while there is something to look at:
+/// a live run or a completion being walked (ADR-0011 §4).
+const PULSE: Duration = pulse::TICK;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Ending {
@@ -128,28 +133,71 @@ fn session(
     // lands (ADR-0013). Typing never queues ten walks.
     let mut walking = false;
 
-    // The frame is not on a clock: it is drawn when there is something to
-    // say, and nothing has been said yet — so the first frame is drawn here.
-    let mut painted = paint(terminal, &mut app);
+    // Nothing has been said yet, so the first frame is drawn here.
+    let root = std::env::current_dir().unwrap_or_default();
+    let mut draw = |app: &mut App| paint(terminal, app);
+    let mut painted = draw(&mut app);
     while painted {
-        match rx.recv() {
-            Ok(message) => {
-                if matches!(message, Msg::Paths(..)) {
-                    walking = false;
-                }
-                apply(&mut app, message);
-            }
-            Err(_) => break,
-        }
-        if app.wants_quit() {
-            break;
-        }
-        begin(&mut app, &jobs);
-        let root = std::env::current_dir().unwrap_or_default();
-        walk(&mut app, &tx, &mut walking, &root);
-        painted = paint(terminal, &mut app);
+        painted = turn_of_the_loop(&mut app, &rx, &jobs, &tx, &mut walking, &root, &mut draw);
     }
     Ending::Left
+}
+
+/// What woke the loop: something said, the clock, or nothing more to hear.
+enum Wake {
+    Said(Msg),
+    Pulse(Duration),
+    Gone,
+}
+
+/// Waits for the next thing to happen. A frame with something happening in it
+/// is on the clock, so it is woken by it; a still frame waits for a message and
+/// pays nothing for the wait (ADR-0011 §4).
+fn wait(rx: &Receiver<Msg>, live: bool) -> Wake {
+    if !live {
+        return match rx.recv() {
+            Ok(message) => Wake::Said(message),
+            Err(_) => Wake::Gone,
+        };
+    }
+    let asked = Instant::now();
+    match rx.recv_timeout(PULSE) {
+        Ok(message) => Wake::Said(message),
+        // How long it actually waited, not how long it meant to: work
+        // between two frames must not be missing from the run's clock.
+        Err(RecvTimeoutError::Timeout) => Wake::Pulse(asked.elapsed()),
+        Err(RecvTimeoutError::Disconnected) => Wake::Gone,
+    }
+}
+
+/// One turn of the loop: wait, tell the frame what it heard, start whatever it
+/// asked for, and draw. Returns whether the terminal is still there.
+fn turn_of_the_loop(
+    app: &mut App,
+    rx: &Receiver<Msg>,
+    jobs: &Sender<Task>,
+    tx: &Sender<Msg>,
+    walking: &mut bool,
+    root: &Path,
+    draw: &mut impl FnMut(&mut App) -> bool,
+) -> bool {
+    let live = app.is_running() || *walking;
+    match wait(rx, live) {
+        Wake::Said(message) => {
+            if matches!(message, Msg::Paths(..)) {
+                *walking = false;
+            }
+            apply(app, message);
+        }
+        Wake::Pulse(delta) => app.pulse(delta),
+        Wake::Gone => return false,
+    }
+    if app.wants_quit() {
+        return false;
+    }
+    begin(app, jobs);
+    walk(app, tx, walking, root);
+    draw(app)
 }
 
 /// Where the records live and where a default `/export` lands: the state
@@ -173,10 +221,12 @@ fn recorded(app: App) -> App {
 /// composer and come back. `draw` shows it at the position the frame set and
 /// never hides it, so the hiding is the loop's (ADR-0011).
 ///
-/// Which is also why a frame is drawn only because something happened: every
-/// frame ends by showing the cursor and moving it to the composer, and a
-/// terminal restarts its blink on every move. A loop that redrew an unchanged
-/// frame would leave an idle composer blinking at the frame rate (ADR-0011).
+/// Which is also why an idle frame is drawn only because something happened:
+/// every frame ends by showing the cursor and moving it to the composer, and a
+/// terminal restarts its blink on every move, so a loop that redrew an
+/// unchanged frame would leave an idle composer blinking at the frame rate.
+/// While a run is live the frame is drawn on the pulse, and pays that blink
+/// eight times a second for a marker that moves (ADR-0011 §4).
 fn paint(terminal: &mut DefaultTerminal, app: &mut App) -> bool {
     let _ = terminal.hide_cursor();
     terminal.draw(|frame| render::draw(app, frame)).is_ok()
@@ -284,68 +334,4 @@ fn drive(mut driver: Box<dyn Driver>, tx: Sender<Msg>) -> Sender<Task> {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::sync::mpsc;
-
-    use super::walk;
-    use crate::app::App;
-    use crate::msg::Msg;
-    use crate::rail::Launch;
-
-    fn app() -> App {
-        App::with_clipboard(
-            Launch {
-                session: "4f1c8f2e".to_string(),
-                temp: "/tmp".to_string(),
-                branch: None,
-                sandbox: "bwrap".to_string(),
-                workspace: "~/git/sindri".to_string(),
-                model: "claude-sonnet-4-6".to_string(),
-                max_turns: 1,
-                context_limit: None,
-            },
-            None,
-            Box::new(crate::copy::System::new(
-                false,
-                String::new(),
-                Box::new(std::io::sink()),
-            )),
-        )
-    }
-
-    #[test]
-    fn a_keystroke_starts_one_walk_and_its_answer_names_the_completion() {
-        let root = tempfile::tempdir().expect("a workspace");
-        std::fs::create_dir_all(root.path().join(".git")).expect("a git directory");
-        std::fs::write(root.path().join("main.rs"), "").expect("a file");
-        std::fs::write(root.path().join(".hidden"), "").expect("a dotfile");
-
-        let mut app = app();
-        for ch in "@ma".chars() {
-            app.key(crossterm::event::KeyEvent::new(
-                crossterm::event::KeyCode::Char(ch),
-                crossterm::event::KeyModifiers::NONE,
-            ));
-        }
-        let (tx, rx) = mpsc::channel();
-        let mut walking = false;
-        walk(&mut app, &tx, &mut walking, root.path());
-        assert!(walking, "a walk is in flight");
-        walk(&mut app, &tx, &mut walking, root.path());
-        assert!(
-            rx.try_recv().is_err(),
-            "a second keystroke does not start a second walk"
-        );
-
-        let Ok(Msg::Paths(generation, paths, capped)) = rx.recv() else {
-            panic!("the walk answered with paths");
-        };
-        assert_eq!(Some(generation), app.completion().map(|c| c.generation));
-        assert!(paths.contains(&"main.rs".to_string()), "found: {paths:?}");
-        assert!(
-            !paths.iter().any(|path| path.starts_with('.')),
-            "dotfiles need a dot: {paths:?}"
-        );
-        assert!(!capped, "a small tree is walked whole");
-    }
-}
+mod tests;

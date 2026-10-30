@@ -9,8 +9,8 @@ date: 2026-10-30
 
 1. **A front end, not a second loop.** `crates/tui` renders `Event` values and returns a `Report`: no loop, no retry policy, no sandbox code. Core imports no front end (ADR-0001). Bare `sindri` on a TTY is the frame (`crates/cli/src/frame.rs`); piped stdin is refused, exit 2 (ADR-0004).
 2. **The core streams; batch does not notice.** `provider/rig_wire.rs` streams; `Event` gains `TextDelta` and `ReasoningDelta` beside `ToolCall`. Batch accumulates deltas, so its stdout stays byte-identical. No rig type reaches the TUI (ADR-0003).
-3. **Libraries.** `ratatui` + `crossterm`, `ratatui-image`, `pulldown-cmark` + `syntect`; a render loop fed by a channel, drawing when there is something to say, never on a clock.
-4. **Layout.** Transcript column left; rail 32 columns (`RAIL_COLUMNS`), visible at ≥100 columns (`RAIL_MIN_WIDTH`), a one-line strip below that, never behind a keystroke; composer 2–6 text rows (`MIN_ROWS`/`MAX_ROWS`), a queued-prompt panel of 2–8 rows between the transcript and the composer when the queue is not empty, and one footer hint line. The idle frame is not drawn: every frame ends by placing the terminal cursor in the composer, since a repaint restarts its blink. A resize is a message, and nothing else is drawn unaided.
+3. **Libraries.** `ratatui` + `crossterm`, `ratatui-image`, `pulldown-cmark` + `syntect`; a render loop fed by a channel, drawing when there is something to say and, while a run is live, on the clock (§4, amendment 19).
+4. **Layout.** Transcript column left; rail 32 columns (`RAIL_COLUMNS`), visible at ≥100 columns (`RAIL_MIN_WIDTH`), a one-line strip below that, never behind a keystroke; composer 2–6 text rows (`MIN_ROWS`/`MAX_ROWS`), a queued-prompt panel of 2–8 rows between the transcript and the composer when the queue is not empty, and one footer hint line. The idle frame is not drawn: every frame ends by placing the terminal cursor in the composer, since a repaint restarts its blink. A resize is a message. Nothing else is drawn unaided, except the pulse: while a run is live or a completion is walking, the loop's wait carries a ~120 ms timeout and the frame is redrawn on it; while nothing is happening the loop waits on the channel and costs the clock nothing (amendment 19). The rule is **never repaint for nothing**; "never on a clock" was its earlier, stricter form.
 5. **The face.** `face.png` (795×989, square crop, 20×20 cells, `ROWS = 20`) draws only under Kitty, with no placeholder; nothing in the layout depends on it.
 6. **Markdown.** Headings, nested lists, tables, blockquotes, inline code, bold/emphasis, links, rules, fenced code in truecolour, diffs line-coloured. No images, no raw HTML.
 7. **Mouse, selection, clipboard.** Mouse is captured; a selection copies the rendered rows via OSC 52, then `wl-copy`/`xclip`; `Shift+drag` passes through to the terminal. Copy semantics: ADR-0013.
@@ -44,6 +44,17 @@ date: 2026-10-30
     `/export` is asked twice. The rail's GUID is copied with `Ctrl-G` or a click on its
     row, so `sindri sessions show` still takes it. §8 is untouched: reading is not
     resuming, and no path from the picker writes a record (ADR-0006).
+
+19. **The pulse.** A run has a clock, and the frame is drawn on it while the run
+    is live. Three things move, and all three settle rather than continue: the
+    newest answer carries a braille frame at its head in `PROMPT` with the
+    run's elapsed time beside it, and stops on `✓` — or `✗` where the turn
+    failed — beside the duration it stopped at; every call carries its own
+    duration, counting up while it runs and frozen at the one it ended on; the
+    rail's output and context figures move on what has streamed, at the only
+    rate the frame can honestly guess (four characters a token), each accented
+    for a moment as it grows and both trued up by the provider's report when
+    the run ends. The guess never outlives the run that made it.
 
 ## Consequences
 

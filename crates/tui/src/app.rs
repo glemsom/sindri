@@ -4,6 +4,7 @@
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use ratatui::layout::Rect;
 use sindri_core::cancel::Cancel;
@@ -102,6 +103,10 @@ pub struct App {
     pub(crate) workspace: Option<PathBuf>,
     /// A path `/export` refused to overwrite, waiting for the second ask.
     pub(crate) export_pending: Option<PathBuf>,
+    /// How long the run in flight has been going: the one thing the frame is
+    /// told by the clock rather than by the run (ADR-0011 §4). It starts at
+    /// zero with every prompt and stops when the run does.
+    pub(crate) now: Duration,
 }
 
 impl App {
@@ -145,6 +150,7 @@ impl App {
             sessions: None,
             workspace: None,
             export_pending: None,
+            now: Duration::ZERO,
         }
     }
 
@@ -210,6 +216,20 @@ impl App {
 
     pub fn is_running(&self) -> bool {
         self.running.is_some()
+    }
+
+    /// The run's clock: how long it has been going, or how long it went.
+    pub fn now(&self) -> Duration {
+        self.now
+    }
+
+    /// Lets the clock on by `delta`. Only a live run is told the time: an
+    /// idle frame owes the clock nothing, so the loop is not woken for it
+    /// (ADR-0011 §4).
+    pub fn pulse(&mut self, delta: Duration) {
+        if self.is_running() {
+            self.now += delta;
+        }
     }
 
     pub fn wants_quit(&self) -> bool {
@@ -323,7 +343,8 @@ impl App {
         if let Some(Some(rows)) = self.heights.get(index) {
             return *rows;
         }
-        let rows = crate::render::transcript::entry_rows(&self.entries[index], width).len();
+        let rows =
+            crate::render::transcript::entry_rows(&self.entries[index], width, self.now).len();
         if let Some(slot) = self.heights.get_mut(index) {
             *slot = Some(rows);
         }

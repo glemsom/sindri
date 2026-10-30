@@ -79,6 +79,14 @@ from 100 up; below that, the same facts in the same order as one line under the
 transcript, which never loses the posture, the model or the workspace. The GUID is copied
 with `Ctrl-G`, or by clicking its row.
 
+**pulse** — the frame's own clock, and the only thing drawn without being asked:
+a ~120 ms tick while a run is live or a completion is walking, nothing at all
+while the frame is still. It shows a braille marker at the head of the newest
+answer with the run's elapsed time (`⠸ 0.8s`), settling on `✓` or `✗` and the
+duration it stopped at; the duration of every call, frozen when the call ends;
+and the rail's output and context figures moving on what streams, accented as
+they grow and trued up when the run's report lands (ADR-0011 §4).
+
 **canvas** — the terminal's own black: the lowest of the three tiers, and the one
 the frame paints nothing on. Above it: **panel**, then **raised** (ADR-0016).
 
