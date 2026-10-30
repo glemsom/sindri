@@ -28,7 +28,7 @@ date: 2026-10-30
 11. **Reasoning.** Streams as a dim block, collapses to a one-line "reasoned" marker, expands on demand — the key and the click of §9, opening the text it held.
 12. **`/settings`.** Edits the one config file through the core's `Document`; a save applies to the next prompt with no restart (ADR-0014).
 13. **Compatibility.** 24-bit truecolour assumed, no 256-colour fallback; must work in `tmux` and over SSH; one dark theme.
-14. **Keys.** `Enter` sends, `Shift+Enter` newlines, `@` completes paths, `/` names commands, `Esc` closes, `Ctrl-C` cancels or clears, `↑` takes back a queued prompt, `Ctrl-X` drops one, `Ctrl-Q` quits, `PgUp`/`PgDn` scroll, `?` opens help, `Tab` accepts a completion, `Ctrl-O` opens a spill file, `Ctrl-Y` copies, `Ctrl-G` copies the session id, and `Enter` on an empty composer opens the call it last showed (§9).
+14. **Keys.** `Enter` sends, `Shift+Enter` newlines, `@` completes paths, `/` names commands, `Esc` closes, `Ctrl-C` cancels or clears, `↑` takes back a queued prompt, `Ctrl-X` drops one, `Ctrl-Q` quits, `PgUp`/`PgDn` scroll, `Home`/`End` go to the first turn and back to the tail, `?` opens help, `Tab` accepts a completion, `Ctrl-O` opens a spill file, `Ctrl-Y` copies, `Ctrl-G` copies the session id, and `Enter` on an empty composer opens the call it last showed (§9).
 15. **Failure is content.** Boot runs the doctor's checks before the first frame; a failure is a card naming the check and printing the doctor's report, never a half-drawn frame. The card holds that report whole: each line of it on a row of its own, the block sized from the rows the words wrapped into and centred on the screen. A report taller than the screen is paged with `PgUp`/`PgDn` and marked on the border, the last row saying both the key that leaves and `sindri doctor` as the command that checks again, and only a key leaves it — a resize lays it out again, so a `tmux` client attaching cannot dismiss a report before it has been read (issue #50). Mid-run failures land in the transcript where they happened, with the stop reason in the rail; toasts are for success only.
 16. **`@` completion.** A capped workspace walk on its own thread, inserted as a workspace-relative path; skips `.git` only. Cap, ranking and threading: ADR-0013.
 
@@ -55,6 +55,15 @@ date: 2026-10-30
     rate the frame can honestly guess (four characters a token), each accented
     for a moment as it grows and both trued up by the provider's report when
     the run ends. The guess never outlives the run that made it.
+
+20. **The window has a position.** The transcript window is anchored to the entry
+    being read, not to an offset from the tail: a run that streams while the reader is
+    scrolled back does not move the text under them, `End` returns to the tail and
+    follows it again, and `Home` reaches the first turn. Rows that arrive below a
+    reader who is off the tail are counted in the footer (`↓ 4 new rows`) and the
+    count clears when they return; a thread longer than the window marks its position
+    in the transcript's last column. `PgUp`/`PgDn` and the wheel are unchanged
+    (ADR-0013, issue #45).
 
 ## Consequences
 

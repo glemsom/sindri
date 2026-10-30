@@ -30,6 +30,7 @@ pub mod sessions;
 pub mod settings;
 pub mod spill;
 pub mod theme;
+pub mod window;
 
 pub use app::App;
 pub use face::Face;

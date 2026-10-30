@@ -16,6 +16,7 @@ fn question_mark_lists_every_binding_and_esc_closes_it() {
         "Tab",
         "Esc",
         "PgUp, PgDn",
+        "Home, End",
         "Shift+Up, Shift+Down",
         "Ctrl-Y",
         "Ctrl-O",
@@ -44,7 +45,7 @@ fn question_mark_lists_every_binding_and_esc_closes_it() {
             "the overlay names {gesture}: {rows}"
         );
     }
-    assert_eq!(BINDINGS.len(), 17, "every binding is listed exactly once");
+    assert_eq!(BINDINGS.len(), 18, "every binding is listed exactly once");
     press(&mut app, KeyCode::Esc, KeyModifiers::NONE);
     assert!(app.overlay().is_none(), "Esc closes the overlay");
 }

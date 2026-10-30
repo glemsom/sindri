@@ -53,6 +53,11 @@ pub const BINDINGS: &[Binding] = &[
         what: "scroll the transcript",
     },
     Binding {
+        keys: "Home, End",
+        mouse: None,
+        what: "the first turn, and the tail, which is followed again",
+    },
+    Binding {
         keys: "Shift+Up, Shift+Down",
         mouse: None,
         what: "select rendered rows from the newest row upwards",
@@ -214,6 +219,7 @@ mod tests {
         "Tab",
         "Esc",
         "PgUp, PgDn",
+        "Home, End",
         "Shift+Up, Shift+Down",
         "Ctrl-Y",
         "Ctrl-O",

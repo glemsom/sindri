@@ -30,6 +30,9 @@ impl App {
     pub(crate) fn toggle(&mut self, index: usize) {
         if self.entries.get_mut(index).is_some_and(Entry::toggle) {
             self.dirty();
+            // An entry that opens or folds moves every row below it, and not
+            // at the tail: what the window counted there is stale (issue #45).
+            self.window.forget();
         }
     }
 }

@@ -91,8 +91,10 @@ stopped. Below 100 columns it becomes one strip; the face takes the rows left ov
 - **Composer,** two to six rows: `Enter` sends, `Shift+Enter` breaks the line, `Ctrl-Q`
 leaves, `Ctrl-C` cancels a run and keeps the draft — or clears it when nothing is
 running. A prompt typed during a run is sent when it ends.
-- **Scroll and copy:** `PgUp`/`PgDn` and the wheel move the transcript; only on-screen
-rows are laid out. Dragging selects rendered rows; releasing copies them, styles
+- **Scroll and copy:** `PgUp`/`PgDn` and the wheel move the transcript, `Home` goes to
+the first turn and `End` back to the tail, which is followed again; a reader who is
+scrolled back is told what arrived below them (`↓ 4 new rows`) and a thread longer than
+the window marks its position in the last column. Only on-screen rows are laid out. Dragging selects rendered rows; releasing copies them, styles
 stripped, through OSC 52, falling back to `wl-copy` or `xclip` — *sent*, since a
 terminal never confirms.
 - **`@`** walks the workspace (`.git` skipped, `.gitignore` ignored), proximity-ranked,

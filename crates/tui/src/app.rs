@@ -19,6 +19,7 @@ use crate::overlay::Overlay;
 use crate::rail::{Launch, Rail};
 use crate::selection::{Selection, Viewport};
 use crate::settings::Missing;
+use crate::window::Window;
 
 /// Where `/new` has got to. Two states would not do: the frame marks the
 /// request, the loop hands it to the front end once, and nothing may run
@@ -31,7 +32,7 @@ pub enum Renew {
     Pending,
 }
 
-const DEFAULT_PAGE: usize = 10;
+pub(crate) const DEFAULT_PAGE: usize = 10;
 
 /// The rows the rail last drew, so a click on one copies what was drawn there.
 /// The session id is the fact a user takes out of the frame by hand — it is
@@ -68,12 +69,9 @@ pub struct App {
     pub(crate) early: Vec<(Side, String)>,
     pub(crate) quit: bool,
     face: Option<Face>,
-    pub(crate) scroll: usize,
-    /// The rows one page is worth to whatever has the screen. The transcript
-    /// reports its own every frame; an open overlay reports what its box
-    /// showed instead, so `PgUp`/`PgDn` move the box that covers the frame and
-    /// never the frame beneath it (ADR-0013, issue #49).
-    pub(crate) page: usize,
+    /// Where the reader is in the thread, and what arrived below them: the
+    /// window is the one thing that outlives a frame (ADR-0013, issue #45).
+    pub(crate) window: Window,
     pub(crate) viewport: Viewport,
     /// The entry the reader last opened or clicked, which is what `Enter` on
     /// an empty composer toggles: a frame with no cursor of its own has one
@@ -135,8 +133,7 @@ impl App {
             early: Vec::new(),
             quit: false,
             face,
-            scroll: 0,
-            page: DEFAULT_PAGE,
+            window: Window::default(),
             viewport: Viewport::default(),
             chosen: None,
             heights: Vec::new(),
@@ -242,10 +239,6 @@ impl App {
         self.quit
     }
 
-    pub fn scroll(&self) -> usize {
-        self.scroll
-    }
-
     pub fn selection(&self) -> Selection {
         self.selection
     }
@@ -311,7 +304,7 @@ impl App {
                 self.heights.clear();
                 self.chosen = None;
                 self.walking = None;
-                self.scroll = 0;
+                self.window = Window::default();
                 self.rail = Rail::new(launch);
                 // A refused export was a refusal about the thread that asked:
                 // a new thread must ask again before it replaces that file.
@@ -350,17 +343,11 @@ impl App {
         if let Some(Some(rows)) = self.heights.get(index) {
             return *rows;
         }
-        let rows =
-            crate::render::transcript::entry_rows(&self.entries[index], width, self.now).len();
+        let rows = crate::render::rows::entry_rows(&self.entries[index], width, self.now).len();
         if let Some(slot) = self.heights.get_mut(index) {
             *slot = Some(rows);
         }
         rows
-    }
-
-    pub(crate) fn settled(&mut self, scroll: usize, page: usize) {
-        self.scroll = scroll;
-        self.page = page.max(1);
     }
 
     pub(crate) fn set_rail_view(

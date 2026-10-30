@@ -52,7 +52,7 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
         Overlay::Settings(settings) => {
             // A page moves the modal by what its box shows, not by what the
             // transcript it covers happens to be showing (issue #49).
-            app.page = settings::draw(settings, area, buf).max(1);
+            app.window.page = settings::draw(settings, area, buf).max(1);
             return;
         }
         Overlay::Help(help) => {
@@ -63,7 +63,7 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
             let height = (lines.len() as u16).saturating_add(2).min(area.height);
             let visible = height.saturating_sub(2) as usize;
             help.settled(lines.len(), visible);
-            app.page = visible.max(1);
+            app.window.page = visible.max(1);
             let window = help.window();
             (
                 height,
@@ -77,12 +77,12 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
         }
         Overlay::Sessions(sessions) => {
             let (height, title, lines) = sessions::draw(sessions, content);
-            app.page = lines.len().max(1);
+            app.window.page = lines.len().max(1);
             (height, title, More::default(), lines)
         }
         Overlay::Spill(spill) => {
             spill.settled(spill_window(area).height as usize);
-            app.page = spill_window(area).height.max(1) as usize;
+            app.window.page = spill_window(area).height.max(1) as usize;
             let title = format!("{} · {} lines", spill.title, spill.lines.len());
             let lines = spill
                 .window()
