@@ -21,6 +21,7 @@ mod keys;
 pub mod markdown;
 mod msg;
 pub mod overlay;
+pub mod picture;
 pub mod pulse;
 mod queue;
 pub mod rail;
