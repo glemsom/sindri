@@ -175,6 +175,7 @@ fn every_reason_is_a_sentence_the_caption_can_print() {
     assert_eq!(Refusal::Directory.said(), "a directory");
     assert_eq!(Refusal::NotAnImage.said(), "not an image");
     assert_eq!(Refusal::Damaged.said(), "its header is not whole");
+    assert_eq!(Refusal::NoGraphics.said(), "this terminal draws no picture");
     assert_eq!(
         Refusal::Scheme("https".to_string()).said(),
         "https: is not fetched"

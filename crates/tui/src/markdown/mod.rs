@@ -1,21 +1,30 @@
 //! The answer as a reader sees it: a heading scale, links that keep their
 //! target, lists, quotes, tables, inline code, and fenced code with truecolour
-//! highlighting. No images, no raw HTML, no maths (ADR-0011).
+//! highlighting, and a picture as a block of its own (ADR-0011, ADR-0016). No
+//! raw HTML, no maths.
 
 mod code;
 mod heading;
+mod picture;
 mod table;
 pub(crate) mod text;
+
+pub use picture::{Picture, Written};
 
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
+use crate::picture::Store;
 use crate::theme;
+use picture::Image;
 use table::Table;
 
-pub fn lines(source: &str, width: u16) -> Vec<Line<'static>> {
-    let mut writer = Writer::new(width.max(1) as usize);
+/// An answer as rows, and the pictures among them: `store` is what measures a
+/// source, and `None` where the terminal draws none, which makes every picture
+/// its caption and the reason (ADR-0016 §1, §8).
+pub fn lines(source: &str, width: u16, store: Option<&Store>) -> Written {
+    let mut writer = Writer::new(width.max(1) as usize, store);
     let options = Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH;
     for event in Parser::new_ext(source, options) {
         writer.event(event);
@@ -27,9 +36,13 @@ struct List {
     next: Option<u64>,
 }
 
-struct Writer {
+struct Writer<'a> {
     width: usize,
     lines: Vec<Line<'static>>,
+    /// The pictures the writer placed, and the row each block starts at: what
+    /// the frame draws where, once it knows what the terminal can draw
+    /// (ADR-0016 §9).
+    pictures: Vec<Picture>,
     pending: Vec<Span<'static>>,
     indent: String,
     quote: usize,
@@ -44,13 +57,19 @@ struct Writer {
     table: Option<Table>,
     row: usize,
     in_table_head: bool,
+    /// What measures a picture, or nothing where the terminal draws none: the
+    /// writer asks it and never reads a file itself (ADR-0016 §5).
+    store: Option<&'a Store>,
+    /// The image being written: its source, and the alt text it carried.
+    image: Option<Image>,
 }
 
-impl Writer {
-    fn new(width: usize) -> Self {
+impl<'a> Writer<'a> {
+    fn new(width: usize, store: Option<&'a Store>) -> Self {
         Writer {
             width,
             lines: Vec::new(),
+            pictures: Vec::new(),
             pending: Vec::new(),
             indent: String::new(),
             quote: 0,
@@ -63,29 +82,47 @@ impl Writer {
             table: None,
             row: 0,
             in_table_head: false,
+            store,
+            image: None,
         }
     }
 
-    fn finish(mut self) -> Vec<Line<'static>> {
+    fn finish(mut self) -> Written {
         self.flush();
-        self.lines
+        Written {
+            rows: self.lines,
+            pictures: self.pictures,
+        }
     }
 
     fn event(&mut self, event: Event<'_>) {
         match event {
             Event::Start(tag) => self.start(tag),
             Event::End(tag) => self.end(tag),
-            Event::Text(text) => match (&mut self.code, &mut self.table) {
-                (Some((_, body)), _) => body.push_str(&text),
-                (None, Some(_)) => self.pending.push(Span::raw(text.to_string())),
-                (None, None) => {
-                    let style = self.style();
-                    self.pending.push(Span::styled(text.to_string(), style));
+            // Inside an image, the text *is* the picture's words: they are the
+            // caption, never prose of their own (ADR-0016 §2).
+            Event::Text(text) => {
+                if let Some(alt) = self.alt() {
+                    alt.push_str(&text);
+                    return;
                 }
-            },
-            Event::Code(text) => self
-                .pending
-                .push(Span::styled(text.to_string(), theme::code())),
+                match (&mut self.code, &mut self.table) {
+                    (Some((_, body)), _) => body.push_str(&text),
+                    (None, Some(_)) => self.pending.push(Span::raw(text.to_string())),
+                    (None, None) => {
+                        let style = self.style();
+                        self.pending.push(Span::styled(text.to_string(), style));
+                    }
+                }
+            }
+            Event::Code(text) => {
+                if let Some(alt) = self.alt() {
+                    alt.push_str(&text);
+                    return;
+                }
+                self.pending
+                    .push(Span::styled(text.to_string(), theme::code()));
+            }
             Event::SoftBreak => self.pending.push(Span::raw(" ")),
             Event::HardBreak => self.flush(),
             Event::Rule => {
@@ -124,6 +161,12 @@ impl Writer {
                 self.row = self.table.as_ref().map_or(0, |table| table.rows.len());
             }
             Tag::Link { dest_url, .. } => self.link = Some(dest_url.to_string()),
+            Tag::Image { dest_url, .. } => {
+                self.image = Some(Image {
+                    src: dest_url.to_string(),
+                    alt: String::new(),
+                });
+            }
             Tag::Emphasis => self.emphasis.insert(Modifier::ITALIC),
             Tag::Strong => self.emphasis.insert(Modifier::BOLD),
             _ => {}
@@ -155,6 +198,7 @@ impl Writer {
             TagEnd::TableHead => self.in_table_head = false,
             TagEnd::Table => self.table_block(),
             TagEnd::Link => self.link_end(),
+            TagEnd::Image => self.image_end(),
             TagEnd::Emphasis => self.emphasis.remove(Modifier::ITALIC),
             TagEnd::Strong => self.emphasis.remove(Modifier::BOLD),
             _ => {}
@@ -244,12 +288,14 @@ impl Writer {
         prefix.push_str(&self.indent);
         self.indent.clear();
         let cells = self.width.saturating_sub(prefix.chars().count());
-        self.lines.extend(text::wrap(
-            text::glyphs(&spans),
-            &prefix,
-            theme::faint(),
-            cells,
-        ));
+        let mut glyphs = text::glyphs(&spans);
+        // A row never opens with a space the block did not ask for: the indent
+        // is the writer's, and text that resumes below a picture's caption
+        // starts its row with its first word.
+        let lead = glyphs.iter().take_while(|(ch, _)| *ch == ' ').count();
+        glyphs.drain(..lead);
+        self.lines
+            .extend(text::wrap(glyphs, &prefix, theme::faint(), cells));
     }
 
     fn code_block(&mut self) {

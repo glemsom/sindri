@@ -120,7 +120,8 @@ impl<'a> Frame<'a> {
         self.marks.push((index, at));
         let entry = &self.app.entries()[index];
         let gap = gap(entry);
-        let rows_here = entry_rows(entry, self.width, self.app.now());
+        let store = self.app.pictures();
+        let rows_here = entry_rows(entry, self.width, self.app.now(), store);
         if let Some(path) = spill_of(entry) {
             self.spill
                 .push((at + gap + rows_here.len().saturating_sub(1), path));

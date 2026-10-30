@@ -11,6 +11,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::entry::{Entry, NoteKind, Prompt};
 use crate::markdown;
+use crate::picture::Store;
 use crate::pulse;
 use crate::render::call;
 use crate::theme;
@@ -19,7 +20,15 @@ use crate::theme;
 /// calls it made start here, so a call reads as belonging to its turn.
 pub const GUTTER: u16 = 2;
 
-pub fn entry_rows(entry: &Entry, width: u16, now: Duration) -> Vec<Line<'static>> {
+/// The rows one entry takes at `width`. `store` is what measures a picture, and
+/// it is handed down rather than built here: the row count a frame lays out is
+/// the store's answer, never a file the renderer read (ADR-0016 §5).
+pub fn entry_rows(
+    entry: &Entry,
+    width: u16,
+    now: Duration,
+    store: Option<&Store>,
+) -> Vec<Line<'static>> {
     let width = width.max(1);
     // The gutter's columns are not the body's: a call and its output wrap
     // where the column ends, not where the terminal does.
@@ -32,7 +41,7 @@ pub fn entry_rows(entry: &Entry, width: u16, now: Duration) -> Vec<Line<'static>
             failed,
             took,
             ..
-        } => answer_rows(text, *done, *failed, *took, body, now),
+        } => answer_rows(text, *done, *failed, *took, body, now, store),
         Entry::Reasoning {
             text, done, open, ..
         } => {
@@ -41,7 +50,7 @@ pub fn entry_rows(entry: &Entry, width: u16, now: Duration) -> Vec<Line<'static>
             if *done && !*open {
                 return gutter(vec![Line::from(Span::styled("⌁ reasoned", theme::faint()))]);
             }
-            let mut rows = markdown::lines(text, body);
+            let mut rows = markdown::lines(text, body, store).rows;
             if !*done && !*open {
                 let keep = rows.len().saturating_sub(3);
                 rows = rows.split_off(keep);
@@ -79,6 +88,7 @@ fn answer_rows(
     took: Option<Duration>,
     body: u16,
     now: Duration,
+    store: Option<&Store>,
 ) -> Vec<Line<'static>> {
     let (glyph, style, elapsed) = match (done, failed) {
         (false, _) => (pulse::frame(now), theme::prompt(), now),
@@ -89,7 +99,7 @@ fn answer_rows(
         Span::styled(format!("{glyph} "), style),
         Span::styled(pulse::said(elapsed), theme::faint()),
     ])];
-    rows.extend(markdown::lines(text, body));
+    rows.extend(markdown::lines(text, body, store).rows);
     gutter(rows)
 }
 
