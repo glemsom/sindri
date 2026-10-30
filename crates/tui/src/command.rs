@@ -1,4 +1,4 @@
-//! The `/` commands and the one catalogue of them (ADR-0011 §14): a name, the
+//! The `/` commands and the one catalogue of them: a name, the
 //! one line it is said in, and the command it opens. The parser, the line an
 //! unknown name is refused with and `?`'s command row all read it, so a
 //! seventh command is added in one place (issue #53). `/settings` is one of
@@ -11,7 +11,7 @@ pub enum Command {
     Settings,
     Help,
     Quit,
-    /// The record picker: what every run left, read-only (ADR-0006).
+    /// The record picker: what every run left, read-only.
     Sessions,
     /// The thread as markdown, at the path named or the workspace's default.
     Export(Option<String>),

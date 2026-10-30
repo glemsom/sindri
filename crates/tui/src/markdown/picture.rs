@@ -1,8 +1,8 @@
 //! A picture in an answer: the block of rows it takes, the caption it keeps, and
-//! how the writer handles an image tag (ADR-0016 §2). The store answers what a
+//! how the writer handles an image tag. The store answers what a
 //! source is worth; this module says what the writer does with that answer and
 //! what the caption reads. The graphic itself is drawn later, by the renderer,
-//! over the rows reserved here (ADR-0016 §6, issue #59).
+//! over the rows reserved here.
 
 use ratatui::text::{Line, Span};
 
@@ -28,8 +28,8 @@ pub struct Written {
 /// A picture the writer placed: the row its block starts at, the source as the
 /// model wrote it, and the caption under it. The block is the rows the store
 /// measured followed by the caption; a source that cannot be drawn is the
-/// caption alone, so `at` is the caption's own row and `worth` says why
-/// (ADR-0016 §8). The renderer draws `worth` over those rows where the
+/// caption alone, so `at` is the caption's own row and `worth` says why.
+/// The renderer draws `worth` over those rows where the
 /// terminal can.
 pub struct Picture {
     /// Where the block starts, as an index into [`Written::rows`]: a caller that
@@ -37,24 +37,22 @@ pub struct Picture {
     /// to it before it knows where on the screen the picture goes.
     pub at: usize,
     /// How many rows of [`Written::rows`] the block is: the graphic's rows and
-    /// the caption's under them, which is what a copy takes as one row of words
-    /// (ADR-0016 §9).
+    /// the caption's under them, which is what a copy takes as one row of words.
     pub rows: usize,
     /// The columns the block is indented by, inside the width it was measured
     /// at: a quote's `│ ` sits over the picture as it sits over its caption, so
-    /// the graphic is drawn where the block's own edge is (ADR-0016 §9).
+    /// the graphic is drawn where the block's own edge is.
     pub inset: u16,
     pub src: String,
     pub caption: String,
     /// What the source is worth: the rows it takes, or the reason it takes
-    /// none. A frame with no store at all is refused by the terminal itself
-    /// (ADR-0016 §1, §8).
+    /// none. A frame with no store at all is refused by the terminal itself.
     pub worth: Worth,
 }
 
 /// The words a picture is captioned with: the alt text's words and the target
 /// in `‹›` as a link keeps its own, or the source and the reason it takes no
-/// rows where nothing is drawn (ADR-0016 §2, §8). A picture whose words are
+/// rows where nothing is drawn. A picture whose words are
 /// absent is its target alone.
 fn caption(src: &str, alt: &str, worth: &Worth) -> String {
     let target = match worth {
@@ -78,12 +76,12 @@ impl Writer<'_> {
 
     /// An image is a block: it ends the row it sits in, reserves the rows the
     /// store measured and captions them, and the paragraph it interrupted goes
-    /// on below the caption (ADR-0016 §2).
+    /// on below the caption.
     ///
     /// Inside a table cell, a list item or a heading it is not a block and is
     /// not drawn — none of the three is a place a graphic goes — so it stays the
     /// words it was given, and that cell, item or title says what it said
-    /// before (ADR-0016 §2).
+    /// before.
     pub(super) fn image_end(&mut self) {
         let Some(image) = self.image.take() else {
             return;
@@ -110,7 +108,7 @@ impl Writer<'_> {
         };
         let caption = caption(&image.src, &image.alt, &worth);
         // A picture that cannot be drawn reserves no rows: it is its caption and
-        // the reason, never a hole where a box would have been (ADR-0016 §8).
+        // the reason, never a hole where a box would have been.
         let taken = usize::from(worth.rows());
         if self.apart && !self.lines.is_empty() {
             self.lines.push(Line::default());

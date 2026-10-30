@@ -1,6 +1,6 @@
 //! The process seam for cancelling a run: Ctrl-C must stop it dead, write
 //! nothing to stdout, and leave nothing behind. Signalled from a real process,
-//! because a signal handler that is not installed is exactly the bug (ADR-0004).
+//! because a signal handler that is not installed is exactly the bug.
 
 #![allow(
     clippy::expect_used,

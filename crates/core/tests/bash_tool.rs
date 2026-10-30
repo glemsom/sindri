@@ -4,8 +4,8 @@
 )]
 
 //! The `bash` tool's contract with the model: one tool, a description derived
-//! from the sandbox policy rather than written by hand (ADR-0002), and a
-//! structured result rendered with every field ADR-0007 promises.
+//! from the sandbox policy rather than written by hand, and a
+//! structured result rendered with every field promised.
 
 mod support;
 

@@ -1,4 +1,4 @@
-//! The process seam for `--format json` (ADR-0004): one compact object on one
+//! The process seam for `--format json`: one compact object on one
 //! line, a field order that never changes, absent data absent rather than
 //! null, and exit codes that do not care how the run was printed.
 

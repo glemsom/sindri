@@ -52,7 +52,7 @@ impl Env {
         // The host's own settings must not leak into a test's run, and that
         // includes what it says about its terminal: a frame that hears a
         // Kitty-capable terminal asks it a question, and the answer it gets is
-        // not the pty's (ADR-0012).
+        // not the pty's.
         for name in provider::PROVIDER_ENV {
             cmd.env_remove(name);
         }

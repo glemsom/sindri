@@ -1,5 +1,5 @@
 //! The enforced argv, derived from the policy. No hand-written bwrap invocation
-//! exists anywhere else in the tree (ADR-0002).
+//! exists anywhere else in the tree.
 
 use std::os::fd::RawFd;
 

@@ -9,7 +9,7 @@ pub enum Provider {
     Anthropic,
     /// The OpenAI-compatible Chat Completions wire: OpenAI itself, and every
     /// server that speaks its shape — Ollama, vLLM, LM Studio, OpenRouter,
-    /// Groq. Which one is the base URL's business, not ours (ADR-0003).
+    /// Groq. Which one is the base URL's business, not ours.
     Openai,
 }
 

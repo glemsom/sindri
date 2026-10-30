@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 /// A request to stop, raised by a key or a signal and put down between runs.
 /// Cheap to clone, so every part of a run shares the same flag: raise it once
-/// and the model call, the command and the loop all see it (ADR-0004).
+/// and the model call, the command and the loop all see it.
 #[derive(Debug, Clone, Default)]
 pub struct Cancel(Arc<AtomicBool>);
 
@@ -26,7 +26,7 @@ impl Cancel {
 
     /// Puts the flag down, for a front end that runs more than one prompt in a
     /// launch: one flag per process, cleared between prompts, so a cancel ends
-    /// one run and never the next (ADR-0015).
+    /// one run and never the next.
     pub fn clear(&self) {
         self.0.store(false, Ordering::SeqCst);
     }

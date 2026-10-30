@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "The terminal UI: a renderer of the core's event stream, holding no loop of its own (ADR-0011)."
+description = "The terminal UI: a renderer of the core's event stream, holding no loop of its own."
 
 [lints]
 workspace = true

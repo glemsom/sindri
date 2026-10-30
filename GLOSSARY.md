@@ -14,20 +14,20 @@ result** returned. One call may run a whole pipeline or script.
 
 **answer** — the final assistant text of the last turn. The product. Markdown read into
 the frame: prose, fences drawn as panels, links that keep their targets, and **pictures**
-with their **captions** (ADR-0011 §24, ADR-0016).
+with their **captions**.
 
 **stopped** — why the loop ended: `final`, `max_turns`, `cancelled` or `error`.
 
 **cancel** — Ctrl-C (SIGINT): one flag the loop and the executor share. The loop stops
-between turns, the command's process group is killed, stdout stays empty, exit is 130. In the **frame** a cancel is answered the moment the key
-lands — the footer reads `cancelling…` and the draft stays in the **composer** — and the
-state clears when the run has actually stopped, because a request in flight is not
-interrupted.
+between turns, the command's process group is killed, stdout stays empty, exit is 130.
+In the **frame** a cancel is answered the moment the key lands — the footer reads
+`cancelling…` and the draft stays in the **composer** — and the state clears when the
+run has actually stopped, because a request in flight is not interrupted.
 
 ## Sandbox
 
 **sandbox policy** — the value holding writable set, network posture and temp mapping:
-the only source of both enforcement and description (ADR-0002).
+the only source of both enforcement and description.
 
 **writable set** — the paths mounted read-write besides the session temp: the workspace
 plus **extras**.
@@ -38,7 +38,7 @@ plus **extras**.
 sandbox, and mounted as `HOME` beneath it.
 
 **read-only root** — `--ro-bind / /`: the host filesystem inside the sandbox read-only.
-A boundary on writes, not on reads (ADR-0010).
+A boundary on writes, not on reads.
 
 **description** — the model-facing text derived from the sandbox policy, also printed by
 `sindri doctor`.
@@ -50,10 +50,10 @@ prints the description.
 
 **boot** — turning the flags and the process's own facts into a session ready to start,
 and the one line a front end says when it cannot. Not a synonym for **session**: a boot
-ends where a session begins (ADR-0015).
+ends where a session begins.
 
 **session** — one run, identified by a GUID, recorded under
-`$XDG_STATE_HOME/sindri/sessions/<guid>/` (ADR-0006).
+`$XDG_STATE_HOME/sindri/sessions/<guid>/`.
 
 **record** — the files one **session** leaves in that directory: what `sindri sessions
 show`, the **record picker** and `/export` read, and what the frame never writes
@@ -67,12 +67,12 @@ the thread rather than an offset from its tail: a reader on the **tail** follows
 arrives, and a reader scrolled back keeps the row they are reading while a run appends
 below them, told how much by the **new-rows badge**. `End` takes the tail again, `Home`
 the first turn, and nothing in the last column claims to say where the window sits: the
-**new-rows badge** is the frame's only word on it (ADR-0013).
+**new-rows badge** is the frame's only word on it.
 
 **new-rows badge** — `↓ 4 new rows`, against the footer's right edge: how many rows
 arrived below a **window** that is off the **tail**. It says `1 new row` for one, clears
 the moment the window reaches the tail again, and its room is taken before the footer's
-hints are chosen (ADR-0011 §22).
+hints are chosen.
 
 **tail** — the newest row of the **transcript**, and the place a **window** follows
 from unless a reader has scrolled back.
@@ -81,14 +81,13 @@ from unless a reader has scrolled back.
 model-facing copy is truncated head+tail.
 
 **batch mode** — `-b`: the Unix-filter front end. stdout is the answer only; stderr is
-silent unless `-v`; `--format json` changes the output shape (ADR-0004).
+silent unless `-v`; `--format json` changes the output shape.
 
 **reasoning** — provider-side thinking tokens, off by default, shown on stderr with `-v`.
 
 ## Terminal UI
 
-**frame** — bare `sindri` on a terminal: the alternate-screen interface as a whole
-(ADR-0011).
+**frame** — bare `sindri` on a terminal: the alternate-screen interface as a whole.
 
 **rail** — the right column: a ledger in two blocks, split by a hairline. Above the rule,
 what a run is spending — cache hit percentage, turns against the cap, tokens, context
@@ -98,14 +97,13 @@ rail's last column, so every figure ends on one edge and is compared down it; a 
 leader in `LEADER` bridges the field to a value that leaves three cells of gap or more,
 where a value that leaves fewer — or none, because it fills its room — is shortened by
 `Fit` (`4f1c8f2e…5c1a77`) and draws no leader, and nothing wraps. The rule is a `─`
-hairline across the rail's whole width, and the rail's first column is a dotted seam
-(`⁞` in `SEAM`, a step above `FAINT` because dots lose apparent luminance at an eighth of
-a cell) that begins on the first fact and stops on the last, so the seam has a top and a
-bottom rather than running the height of the frame. The sandbox posture is a chip
+hairline across the rail's whole width, and the labels begin at the rail's first column:
+the rail carries no spine of its own, so its facts start where the column starts and stop
+where they stop. The sandbox posture is a chip
 (`⬢ bwrap · 1 writable`) rather than another pair, right-aligned on the edge the values
 hang off. The rail is chrome, not a surface: it draws no fill and lets the canvas
 through, so the one band of it with a colour behind it is the row the chip sits on. What
-a row copies is the fact — `context 38%` — never the seam or the leader that drew it.
+a row copies is the fact — `context 38%` — never the leader that drew it.
 The margin between the words and the rail stays canvas, and on a terminal that speaks
 Kitty graphics it carries the seam's light strip (`seam.rs`): the height of the body,
 brightest against the rail and dissolving toward the words, and two cells wide because
@@ -116,7 +114,7 @@ the transcript, which never loses the posture, the model or the workspace. One p
 order (`rail::priority`) ends with the posture, and the column and the strip both read
 it: a column too short for its facts gives them up from the bottom of that order — the
 identity block first, since the first frame already names it — and keeps one row to say
-how many went (`⁞ +7 more`), and a fact too long for its room is shortened rather than
+how many went (`+7 more`), and a fact too long for its room is shortened rather than
 skipped — a posture to `⬢ bwrap` — and dropped only when nothing of it can be said. The
 GUID is copied with `Ctrl-G`, or by clicking its row.
 
@@ -127,9 +125,9 @@ answer with the run's elapsed time (`⠸ 0.8s`), settling on `✓` or `✗` and 
 duration it stopped at; the duration of every call, frozen when the call ends;
 and the rail's output and context figures moving on what streams, accented as
 they grow and trued up when the run's report lands. The tick lasts only while one of
-those is moving: **never repaint for nothing** (ADR-0011 §4, §19). While it runs the
+those is moving: **never repaint for nothing**. While it runs the
 footer says `working · ` before its hints, and `cancelling… · ` once a cancel has been
-answered (§10).
+answered.
 
 **walk** — a rule lit from one end: the theme's `ramp` interpolates two named stops and
 `RAMPS` lists the pairs a renderer may interpolate, one step per cell. It is how a
@@ -137,13 +135,13 @@ border gets a gradient without a picture and without a colour a renderer wrote d
 cell is enough room for a step across a hundred columns, and `tests/theme.rs` holds a
 walked cell to the segments exactly as it holds a flat one to `PALETTE`. On terminals
 that speak no Kitty graphics it is the only light the frame has, the seam's strip
-being absent there (ADR-0011 §23).
+being absent there.
 
 **surface** — one of the three tiers of nearness the frame paints on:
 **canvas**, **panel**, **raised**, in that order. A renderer asks
 `theme::surface()` or `theme::raised()` and never asks for a background, because
 `theme.rs` names every colour the frame paints. One dark theme, three tiers; a light
-theme is out of scope and there is no 256-colour fallback (ADR-0011 §13).
+theme is out of scope and there is no 256-colour fallback.
 
 **canvas** — the terminal's own black: the lowest **surface**, and the one the frame
 paints nothing on. Above it: **panel**, then **raised**.
@@ -171,7 +169,7 @@ panel is lit from the rail's side and its right-hand corners take the rail's own
 page, but the line naming the wire, the model, the workspace and the sandbox, one dim
 sentence of the contract, and three things that can be typed as they read beside `/help`.
 Every fact on it comes from `Launch`; nothing it says is a figure, because no run has
-spent any (ADR-0011 §21).
+spent any.
 
 **queued prompt** — a prompt sent while a run has the frame: it waits in the queue and
 runs when the run stops, in the order it was typed. `↑` takes the newest back into the
@@ -180,8 +178,7 @@ it cannot fit; the **queue panel** states the size.
 
 **queue panel** — the **panel** above the **composer** that holds the **queued prompts**
 whole: titled `queued` when one waits and `3 queued` when more, cut at six rows with that
-count standing for the rest, and drawn only when the queue is not empty (ADR-0011 §4,
-§10).
+count standing for the rest, and drawn only when the queue is not empty.
 
 **thread** — the growing conversation of one TUI session; `/new` starts over. Laid
 out as a document: two blank rows between turns and none inside one, the **gutter** a
@@ -191,9 +188,9 @@ just above the **composer** rather than the top row of a screenful of blank ones
 
 **gutter** — a left edge the frame draws beside a thing that hangs off it: in the
 **thread**, the two columns a turn's answer and its calls hang off; in a fenced code
-block, the `│` down its left, which carries a tinted row's wash (ADR-0011 §4, §24).
+block, the `│` down its left, which carries a tinted row's wash.
 
-**turn header** — the row that opens a turn: `YOU  <hh:mm>  <workspace>`.
+**turn header** — the row that opens a turn: `YOU <hh:mm> <workspace>`.
 
 **expanded call** — a **tool call** shown whole in place of the five-line tail it
 collapses to: `Enter` on an empty composer toggles the call the frame last showed (the
@@ -212,38 +209,37 @@ eight rows, `.git` skipped, `.gitignore` deliberately not honoured. `/` offers t
 starts with the slash, the name not yet ended by whitespace — ranked by the name being
 typed with the names it starts first, and needing no walk because the catalogue is in
 hand. `Tab` and `Enter` take the marked offer, `↑`/`↓` walk it, `Esc` dismisses it and
-leaves the draft as typed; taking one closes the box and never sends (ADR-0013, issue
-#54).
+leaves the draft as typed; taking one closes the box and never sends.
 
 **picture** — a markdown image the frame draws: a block of its own in the answer, drawn
 only where the terminal speaks Kitty graphics, from a file in the workspace and never from
 a URL, at most twenty rows — the face's own allowance — whole in the **window**
 or not at all. A picture that
-cannot be drawn is its **caption** with the reason in the `‹›` (ADR-0016).
+cannot be drawn is its **caption** with the reason in the `‹›`.
 
 **caption** — the words and `‹src›` a **picture** is drawn under, `a chart ‹plot.png›`: the
 alt text's words, the target in `‹›` as a link keeps its own, the reason in their place
 when there is no picture. It is what the rows cost when nothing is drawn, and what a copy
-of the block yields (ADR-0011 §24, ADR-0016).
+of the block yields.
 
 **record picker** — the `/sessions` overlay: one row per **session** under
 `$XDG_STATE_HOME/sindri/sessions/`, newest first — when it ran, its model, its turns, why
 it stopped, and the first prompt. `Enter` reads that **transcript** back read-only, `Esc`
-closes. Reading is not resuming (ADR-0011 §8).
+closes. Reading is not resuming.
 
 **export** — `/export [path]`: the **thread** as one markdown file, at the path named or
 `sindri-<guid>.md` in the workspace, read out of the record so it says what `sindri
 sessions show` prints. A file already there is not overwritten without a second ask.
 
 **settings modal** — the `/settings` overlay: one row per key of the config schema.
-`Enter` saves, `Esc` discards, `Ctrl-U` empties the field, `Space` flips a toggle
-(ADR-0014). The rows scroll with the cursor; the `file` line, the warning, a refused
-save's message and the hints are pinned outside the scroll, so the row a save failed
-on is never the row that fell off (ADR-0013).
+`Enter` saves, `Esc` discards, `Ctrl-U` empties the field, `Space` flips a toggle. The
+rows scroll with the cursor; the `file` line, the warning, a refused save's message and
+the hints are pinned outside the scroll, so the row a save failed on is never the row
+that fell off.
 
 **binding** — one row of the **help overlay**: the keys, and the mouse gesture that is
 their accelerator, that do one thing — and what that thing is. `BINDINGS` is the one
-list, and nothing on it is reachable only with a pointer (ADR-0013). The one row that is
+list, and nothing on it is reachable only with a pointer. The one row that is
 not a binding is the **command** catalogue's: the commands share a row, because one
 name there is six names.
 
@@ -251,19 +247,19 @@ name there is six names.
 **help overlay** says of it, and what it opens. One catalogue (`COMMANDS`) holds them
 all, in the order the frame says them; the parser, the line an unknown name is refused
 with and the help's command row all read it, so a seventh command is added there and
-nowhere else (ADR-0011 §14, issue #53).
+nowhere else(issue #53).
 
-**help overlay** — `?`'s list of every **binding** (ADR-0011 §14): the keys in their
+**help overlay** — `?`'s list of every **binding**: the keys in their
 column, each description wrapped under them, the box sized from the wrapped rows. A
 list longer than the box scrolls by a screenful and says where it is (`3 of 12`) and
-which way there is more; `Esc` and `Enter` close it as they always did (ADR-0013).
+which way there is more; `Esc` and `Enter` close it as they always did.
 
 **from environment** — the API key field's default, and where emptying it returns: the
 credential comes from `SINDRI_API_KEY`, the provider's variable, and nothing is written.
 
 **door** — the frame's front door (`crates/cli/src/frame.rs`): the one place a run with
 no credential opens the interface instead of exiting, with the **settings modal** staged
-on the `api_key` row (ADR-0004).
+on the `api_key` row.
 
 **card** — the failure drawn instead of a frame when a `doctor` check fails, holding the
 check and the doctor's report whole: sized from the rows that report wrapped into, paged

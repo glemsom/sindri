@@ -1,7 +1,7 @@
 //! The record in the frame (issue #51): `/sessions` lists what every run left,
 //! `Enter` reads one back without touching it, `/export` writes the current
 //! thread as markdown, and the rail's session id can be copied out to the
-//! `sindri sessions show` that already exists (ADR-0006, ADR-0011).
+//! `sindri sessions show` that already exists.
 //!
 //! Every fixture is a record under a temporary state directory, written by the
 //! same `Recorder` a run writes with, so nothing here reads or writes a real

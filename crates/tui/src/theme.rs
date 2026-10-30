@@ -1,8 +1,8 @@
 //! One dark theme, in truecolour. There is no light mode and no 256-colour
-//! fallback to maintain (ADR-0011). The theme owns every colour the frame
+//! fallback to maintain. The theme owns every colour the frame
 //! paints, and the three surfaces that make nearness legible: the terminal's
 //! own canvas, the panel a composer or a code fence sits on, and the raised
-//! tier above it (ADR-0011 §13).
+//! tier above it.
 
 use ratatui::style::{Color, Modifier, Style};
 
@@ -19,7 +19,7 @@ pub const DIFF_HUNK: Color = Color::Rgb(0x61, 0xaf, 0xef);
 pub const DIFF_FILE: Color = Color::Rgb(0x8b, 0x98, 0xa9);
 /// A diff row's wash: the green and the red again, at panel weight, so an
 /// added row and a removed one still differ in a terminal that cannot tell the
-/// two hues apart (ADR-0011 §24).
+/// two hues apart.
 pub const DIFF_ADDED_BG: Color = Color::Rgb(0x1c, 0x2b, 0x22);
 pub const DIFF_REMOVED_BG: Color = Color::Rgb(0x2f, 0x20, 0x23);
 
@@ -104,7 +104,7 @@ pub fn raised() -> Style {
 /// A walk between two named stops, `t` of the way across: what a rule lit from
 /// one end spends, one cell at a time. The stops are the theme's, so a renderer
 /// that walks still names no colour of its own — it interpolates two it was
-/// given, and `RAMPS` says which pairs it may interpolate (ADR-0011 §23).
+/// given, and `RAMPS` says which pairs it may interpolate.
 pub fn ramp(from: Color, to: Color, t: f32) -> Color {
     let (start, end) = (channels(from), channels(to));
     let t = t.clamp(0.0, 1.0);

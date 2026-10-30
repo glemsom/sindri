@@ -1,6 +1,6 @@
 //! The model, behind one seam: ask, and get an answer or a failure that is
 //! safe to print. Retries and redaction live here; the provider library lives
-//! only in [`rig_wire`], so a library rewrite is one file's problem (ADR-0003).
+//! only in [`rig_wire`], so a library rewrite is one file's problem.
 
 mod rig_wire;
 mod window;
@@ -113,7 +113,7 @@ impl ToolOutcome {
 
 /// The token counters a provider reports. Absent means unreported, never zero.
 ///
-/// The field order is the JSON output contract's own (ADR-0004), and a counter
+/// The field order is the JSON output contract's own, and a counter
 /// nobody reported is left out of the object rather than sent as null.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Usage {
@@ -134,7 +134,7 @@ impl Usage {
         *self == Usage::default()
     }
     /// Adds one turn's counters to the run's: a counter nobody reported stays
-    /// unreported, and one reported once stays reported (ADR-0004).
+    /// unreported, and one reported once stays reported.
     pub fn accumulate(&mut self, turn: &Usage) {
         self.input_tokens = add(self.input_tokens, turn.input_tokens);
         self.output_tokens = add(self.output_tokens, turn.output_tokens);
@@ -170,7 +170,7 @@ impl Error {
     }
 
     /// Whether another attempt could succeed. Only rate limits and server
-    /// faults qualify: a client error repeats identically forever (ADR-0003).
+    /// faults qualify: a client error repeats identically forever.
     fn retryable(&self) -> bool {
         matches!(self.status, Some(429) | Some(500..=599))
     }
@@ -221,7 +221,7 @@ pub trait DeltaSink {
 }
 
 /// `Send`, because the agent that holds one outlives a single prompt: a front
-/// end keeps its conversation on the thread that runs prompts (ADR-0014).
+/// end keeps its conversation on the thread that runs prompts.
 pub trait Model: Send {
     fn turn(
         &self,

@@ -50,7 +50,7 @@ struct Cli {
     #[arg(long = "no-thinking")]
     no_thinking: bool,
     /// Shape of the run's output: `text` is the answer plus one newline,
-    /// `json` is one compact object for a script (ADR-0004).
+    /// `json` is one compact object for a script.
     #[arg(long, value_name = "FORMAT", default_value = "text")]
     format: batch::OutputFormat,
     #[arg(short = 'v', long = "verbose")]
@@ -66,7 +66,7 @@ enum Command {
         #[command(subcommand)]
         command: SandboxCommand,
     },
-    /// The record a run left behind (ADR-0006).
+    /// The record a run left behind.
     Sessions {
         #[command(subcommand)]
         command: SessionsCommand,
@@ -160,7 +160,7 @@ fn main() {
 
 /// A non-batch launch: the terminal UI on a terminal, and a refusal otherwise.
 /// A pipe without `-b` is refused rather than drained — data piped into a
-/// program that ignores it is data lost without a word (ADR-0004).
+/// program that ignores it is data lost without a word.
 fn interactive(overrides: Overrides) -> i32 {
     if std::io::stdin().is_terminal() && std::io::stdout().is_terminal() {
         return frame::run(overrides);

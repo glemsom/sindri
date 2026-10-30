@@ -3,7 +3,7 @@
 //! cursor are the frame's while it draws, and the footer says what the keys are.
 //! Driven through a pseudo-terminal, because "is it a terminal" is exactly the
 //! question the front door answers — and every wait has a deadline, so a frame
-//! that never draws fails instead of hanging (ADR-0011).
+//! that never draws fails instead of hanging.
 
 #![allow(
     clippy::expect_used,
@@ -83,7 +83,7 @@ fn defaults() -> Vec<(&'static str, &'static str)> {
 /// The escape sequence that hands the mouse back when the frame closes.
 const MOUSE_OFF: &str = "\u{1b}[?1000l";
 /// The escape sequence that turns mouse reporting on: the frame draws its own
-/// selection, so the terminal's must be off (ADR-0011).
+/// selection, so the terminal's must be off.
 const MOUSE_ON: &str = "\u{1b}[?1000h";
 #[test]
 fn the_mouse_is_the_frames_while_it_draws_and_the_terminals_again_after() {
@@ -118,7 +118,7 @@ fn the_frame_advertises_the_hands_and_leaves_when_asked() {
     let mut child = spawn(&env, &pty, &defaults());
 
     // A hundred columns is five hints, and the pty is exactly that wide: the
-    // ones a small terminal keeps are the ones it says (ADR-0011 §22).
+    // ones a small terminal keeps are the ones it says.
     let drawn = pty.wait_for(&mut child, "@ paths");
     for wanted in [
         "Enter send",

@@ -1,6 +1,6 @@
 //! Live output: a port that sees each command's output as it arrives, so a
 //! front end can show the tail of a running command without the executor
-//! knowing that a front end exists (ADR-0011).
+//! knowing that a front end exists.
 
 use std::io::{self, BufRead, BufReader, Read};
 use std::sync::Arc;

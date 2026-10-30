@@ -1,5 +1,5 @@
-//! The process seam for configuration: file, then environment, then flags
-//! (ADR-0005), proven by what the provider is actually sent, and the two doors
+//! The process seam for configuration: file, then environment, then flags,
+//! proven by what the provider is actually sent, and the two doors
 //! a bad setting leaves by — exit 2 when it is wrong, exit 1 when it is absent.
 
 #![allow(

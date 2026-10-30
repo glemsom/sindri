@@ -1,5 +1,5 @@
 //! The settings modal: one row per key of the config file, the path saving
-//! writes to, and the warning a secret earns (ADR-0014). A secret's value is
+//! writes to, and the warning a secret earns. A secret's value is
 //! never drawn; the row says where the value comes from and nothing more.
 
 use ratatui::buffer::Buffer;
@@ -42,7 +42,7 @@ pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) -> usize {
     head.push(Line::default());
     if let Some(missing) = settings.missing() {
         // The door's modal: why it opened, and the four facts a person needs
-        // before typing a credential into it (ADR-0014).
+        // before typing a credential into it.
         for (said, style) in [
             ("no credential: this run has none".to_string(), theme::bad()),
             (
@@ -107,7 +107,7 @@ pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) -> usize {
     let height = (wanted as u16).min(area.height);
     // The refusal and the keys are never the rows that fall off: when the
     // pinned rows need more room than the box has, the head is what gives way
-    // and the list gets whatever is left — even nothing (ADR-0013, issue #49).
+    // and the list gets whatever is left — even nothing.
     let room = (height as usize).saturating_sub(2);
     if head.len() + foot.len() > room {
         head.truncate(room.saturating_sub(foot.len()));
@@ -185,7 +185,7 @@ fn value(settings: &Settings, field: &Field) -> (String, Style) {
             theme::faint(),
         ),
         // A toggle the file does not name is the run's own default,
-        // which is off (ADR-0004), and says so rather than pretending
+        // which is off, and says so rather than pretending
         // the file said it.
         Key::Thinking if typed.is_empty() => {
             (format!("{} (default)", toggle_shown(typed)), Style::new())

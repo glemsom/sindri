@@ -1,6 +1,6 @@
 //! The `@` side's own machinery: a capped walk of the workspace, and the rule
 //! for which of the paths it found may be offered. A catalogue needs none of
-//! it, because the commands are in hand (ADR-0013).
+//! it, because the commands are in hand.
 
 use std::path::Path;
 
@@ -21,7 +21,7 @@ pub struct Scan {
 
 /// Walks `root` for the paths `@` can offer. `.git` is skipped; `.gitignore`
 /// is deliberately not honoured, because a file the model can read is a file
-/// the user can point at (ADR-0011).
+/// the user can point at.
 pub fn scan(root: &Path, cap: usize) -> Scan {
     let mut found = Scan::default();
     let mut pending = vec![String::new()];

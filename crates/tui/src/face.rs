@@ -1,9 +1,9 @@
 //! The face of Sindri, drawn where the terminal speaks the Kitty graphics
 //! protocol. Where it does not, there is no placeholder and no gap: the rail
-//! simply begins at its first fact (ADR-0011).
+//! simply begins at its first fact.
 //!
 //! Which protocol that is and how big its cells are is not the face's question
-//! to ask: it borrows the frame's one answer (ADR-0016 §1, `graphics`).
+//! to ask: it borrows the frame's one answer (`graphics`).
 
 use image::DynamicImage;
 use ratatui::buffer::Buffer;

@@ -1,5 +1,5 @@
 //! The sandbox policy value: private fields, a validating constructor, and the
-//! accessors the two derivations read (ADR-0002).
+//! accessors the two derivations read.
 
 use std::fmt;
 use std::io;

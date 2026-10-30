@@ -1,4 +1,4 @@
-//! The record every run leaves (ADR-0006): `session.json` for metadata,
+//! The record every run leaves: `session.json` for metadata,
 //! `transcript.jsonl` for what happened in order, and `status.json` for
 //! bubblewrap's own documents as they arrive. Written as the run goes, so a
 //! cancelled or crashed run still leaves readable evidence — nothing is buffered

@@ -1,6 +1,6 @@
 //! The chrome's budget: the footer never cuts a hint in half, the rail never
 //! loses the posture, and a fact too long for its room is shortened rather
-//! than skipped (ADR-0011 §22).
+//! than skipped.
 
 use super::*;
 

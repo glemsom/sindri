@@ -1,6 +1,6 @@
 //! The composer: the prompt being typed, as rows and a cursor. Enter
 //! sends, Shift+Enter breaks the line, and a cancel leaves the draft where
-//! it was (ADR-0011).
+//! it was.
 
 const MIN_ROWS: u16 = 2;
 const MAX_ROWS: u16 = 6;

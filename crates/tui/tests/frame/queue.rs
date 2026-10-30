@@ -1,7 +1,7 @@
 //! The queue, made visible: a prompt typed during a run is drawn in a panel
 //! above the composer, `↑` takes the newest one back and `Ctrl-X` drops it,
 //! and `Ctrl-C` answers at once with `cancelling…` instead of waiting for the
-//! run to land (ADR-0011 §10).
+//! run to land.
 
 use super::*;
 

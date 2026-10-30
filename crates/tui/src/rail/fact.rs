@@ -3,7 +3,7 @@
 use crate::markdown::text;
 
 /// The fewest cells of a value worth saying: below this a fact is dropped
-/// rather than mangled, because half a word is not a fact (ADR-0011 §22).
+/// rather than mangled, because half a word is not a fact.
 const CUT_FLOOR: usize = 6;
 
 /// One row of the rail: a label in a fixed field and its value beside it.
@@ -16,8 +16,7 @@ pub struct Fact {
     fit: Fit,
     keep: bool,
     /// Whether the figure just grew: the frame accents it for the moment it
-    /// takes to be seen, so motion reads as motion and not as a second colour
-    /// (ADR-0011 §4).
+    /// takes to be seen, so motion reads as motion and not as a second colour.
     fresh: bool,
 }
 
@@ -67,7 +66,7 @@ impl Fact {
     }
 
     /// Whether the figure has just grown: the rail accents it for the moment
-    /// it takes to be seen (ADR-0011 §4).
+    /// it takes to be seen.
     pub fn fresh(&self) -> bool {
         self.fresh
     }

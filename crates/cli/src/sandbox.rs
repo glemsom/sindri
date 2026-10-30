@@ -20,7 +20,7 @@ use crate::signal;
 
 /// Runs the command and prints one JSON object describing what happened. A
 /// session is opened the one way a run opens one, so a diagnostic cannot probe a
-/// different sandbox than the run it is diagnosing (ADR-0015).
+/// different sandbox than the run it is diagnosing.
 pub fn exec(timeout: Duration, overrides: Overrides, command: &[String]) -> i32 {
     let session = match boot::configure(overrides).and_then(Configured::start) {
         Ok(boot) => boot.session,
@@ -34,7 +34,7 @@ pub fn exec(timeout: Duration, overrides: Overrides, command: &[String]) -> i32 
     let started = Instant::now();
     let result = executor.execute(&script);
     // The session ends whatever the command did: a record left saying `running`
-    // could not be told from a diagnostic that is still going (ADR-0006).
+    // could not be told from a diagnostic that is still going.
     end(&session, &command_over(result.as_ref(), started.elapsed()));
 
     let Some(result) = result else {

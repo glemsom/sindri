@@ -2,7 +2,7 @@
 //! refusal that says it refused, `@` completion, the `/` offer, the `/`
 //! commands, `?`'s list of bindings, and the spill file of an output too large
 //! to show (issue #17, issue #54). Every copy goes to a clipboard the test owns: nothing here touches
-//! the user's real clipboard (ADR-0013).
+//! the user's real clipboard.
 
 #![allow(
     clippy::expect_used,

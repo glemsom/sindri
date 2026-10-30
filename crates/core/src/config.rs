@@ -1,5 +1,5 @@
 //! A run's settings, and which source wins: the config file, then `SINDRI_*`
-//! environment variables, then flags (ADR-0005). One file, read from
+//! environment variables, then flags. One file, read from
 //! `$XDG_CONFIG_HOME/sindri/config.toml` and nowhere else, so a cloned
 //! repository can never configure the agent.
 //!
@@ -53,7 +53,7 @@ pub struct Config {
     /// credential.
     pub extra_headers: Vec<(String, String)>,
     /// A repository-local config that was found and refused, for the front end
-    /// to note once. It is never read (ADR-0005).
+    /// to note once. It is never read.
     pub refused_repo_config: Option<PathBuf>,
 }
 
@@ -78,12 +78,11 @@ impl ConfigError {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Model {
     /// A run cannot start without one: exit 1, with a hint naming every way to
-    /// set it (ADR-0004).
+    /// set it.
     Required,
     /// The front end is a door before it is a run: `doctor`, `sandbox exec`
     /// and the frame's first screen all resolve a config that an absent model
     /// or credential cannot stop, because none of them sends a prompt yet
-    /// (ADR-0004).
     Optional,
 }
 
@@ -95,7 +94,7 @@ impl Config {
     /// The read for a front end that is a door before it is a run: `doctor`,
     /// `sandbox exec`, and the frame's first screen. Neither the model nor the
     /// credential is demanded — the frame's settings modal is where a missing
-    /// one goes (ADR-0004) — and every value that *is* present is checked
+    /// one goes — and every value that *is* present is checked
     /// exactly as `resolve` checks it.
     pub fn for_front_end(overrides: Overrides) -> Result<Config, ConfigError> {
         Config::read(overrides, Model::Optional)

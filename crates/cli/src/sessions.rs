@@ -1,5 +1,5 @@
-//! `sindri sessions show <id>`: the record one run left behind, read back
-//! (ADR-0006). Reading only — nothing here writes, deletes or prunes.
+//! `sindri sessions show <id>`: the record one run left behind, read back.
+//! Reading only — nothing here writes, deletes or prunes.
 
 use sindri_core::record::{ShowError, Stored};
 use sindri_types::ExitCode;

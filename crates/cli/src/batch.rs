@@ -1,7 +1,7 @@
 //! Batch mode: the Unix filter front end. It reads the prompt and the stdin
 //! context, runs the agent to an answer and prints it plus exactly one newline;
 //! everything else is a decision made in `sindri-core`. Exit codes, not prose,
-//! tell a script what happened (ADR-0004).
+//! tell a script what happened.
 
 use std::io::{IsTerminal, Read};
 use std::sync::Arc;
@@ -62,7 +62,7 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
 
     let (format, verbose) = (flags.format, flags.verbose);
     // One door starts the run: the process is read once, the config resolved
-    // once and the session opened once, in the one order (ADR-0015). Boot has
+    // once and the session opened once, in the one order. Boot has
     // already said a refused repository config, the way every cold path does,
     // and a run that cannot be evidenced is not a run.
     let Boot {
@@ -105,7 +105,7 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     match outcome {
         Ok(report) => {
             // A cancelled run writes nothing: stdout must never let a
-            // half-finished run be mistaken for an answer (ADR-0004). `-v` still
+            // half-finished run be mistaken for an answer. `-v` still
             // says what happened and where the record is, which is the whole
             // point of recording the run that went wrong.
             if report.stopped != Stopped::Cancelled {

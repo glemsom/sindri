@@ -1,8 +1,8 @@
 //! The overlays that take the screen while they are open: `?`'s list of every
 //! binding, the untruncated output a spill affordance offers, and the records a
-//! run left behind (ADR-0011). All close with `Esc`, and none is the only way
+//! run left behind. All close with `Esc`, and none is the only way
 //! to do what it does. An open overlay owns its own space: the page keys and
-//! the wheel move it, never the frame beneath it (ADR-0013).
+//! the wheel move it, never the frame beneath it.
 
 use crate::command;
 use crate::sessions::Sessions;
@@ -224,7 +224,7 @@ fn row(binding: &Binding) -> (String, String) {
 mod tests {
     use super::{BINDINGS, help_rows};
 
-    /// The keys the contract names, written here from ADR-0011 rather than
+    /// The keys the contract names, written here rather than
     /// read out of `BINDINGS`: a key the frame gained and the help forgot is
     /// a failure, not a tautology.
     const REQUIRED: &[&str] = &[

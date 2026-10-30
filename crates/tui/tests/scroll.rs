@@ -1,6 +1,6 @@
 //! Scrolling the transcript: `PgUp`/`PgDn`, the wheel and the keyboard's
 //! own escape hatch, over a thread whose length is bounded only by the
-//! session (ADR-0011). The frame lays out only the rows it shows, so
+//! session. The frame lays out only the rows it shows, so
 //! these tests count what a window of a long thread had to lay out, not
 //! only what it drew.
 

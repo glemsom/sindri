@@ -1,6 +1,5 @@
 //! The frame's pictures: a repaint, a scroll, a resize and `/new` lay a picture
-//! out again from the store's cache and never read it from disk a second time
-//! (ADR-0016 §5, §6, §9).
+//! out again from the store's cache and never read it from disk a second time.
 
 use super::*;
 
@@ -32,8 +31,7 @@ fn launch() -> Launch {
 }
 
 /// The frame a test draws, as the loop does: a terminal's size and a buffer, and
-/// no terminal at all — the Kitty answer is the made-up one a layout test builds
-/// (ADR-0016 §1).
+/// no terminal at all — the Kitty answer is the made-up one a layout test builds.
 fn frame(app: &mut App, width: u16, height: u16) -> Buffer {
     let area = Rect::new(0, 0, width, height);
     let mut buf = Buffer::empty(area);

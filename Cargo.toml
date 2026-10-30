@@ -13,7 +13,7 @@ members = [
 version = "0.1.0"
 edition = "2024"
 # The floor the graph demands (`rig-core` 0.45 needs 1.97.1), not the toolchain:
-# devbox.lock pins that (ADR-0009). Declaring higher buys nothing and rots.
+# devbox.lock pins that. Declaring higher buys nothing and rots.
 rust-version = "1.97.1"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/glemsom/sindri"
@@ -23,7 +23,7 @@ sindri-types = { path = "crates/types" }
 sindri-core = { path = "crates/core" }
 sindri-harness = { path = "crates/harness" }
 sindri-tui = { path = "crates/tui" }
-# The frame (ADR-0011): a renderer, not an invention. Pinned here like every
+# The frame: a renderer, not an invention. Pinned here like every
 # other dependency, so the crate and its dev-dependencies cannot drift apart.
 ratatui = { version = "0.29", default-features = false, features = ["crossterm"] }
 crossterm = { version = "0.28", default-features = false, features = ["events", "windows"] }
@@ -33,7 +33,7 @@ pulldown-cmark = { version = "0.12", default-features = false }
 syntect = { version = "5", default-features = false, features = ["default-fancy"] }
 unicode-width = "0.2"
 
-# A curated set, not blanket `pedantic` (ADR-0008): lints that catch mistakes an
+# A curated set, not blanket `pedantic`: lints that catch mistakes an
 # agent would otherwise ship, and no noise about trivial functions.
 [workspace.lints.clippy]
 unwrap_used = "deny"

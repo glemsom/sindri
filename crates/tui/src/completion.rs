@@ -2,7 +2,7 @@
 //! workspace (`walk`), or a `/` name ranked against the catalogue of commands. Both
 //! are drawn in the one column above the composer and taken by the same keys;
 //! only the path side walks, because only the filesystem is not already in
-//! hand (ADR-0011 §14, ADR-0013).
+//! hand.
 
 use crate::command::COMMANDS;
 use crate::completion::walk::visible;
@@ -13,7 +13,7 @@ pub(crate) mod walk;
 
 /// What asked for the offer: an `@` path token, or a `/` command named at the
 /// start of the draft. The drawn column, the keys and the accept path are
-/// shared; what is ranked behind them is not (ADR-0013).
+/// shared; what is ranked behind them is not.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Trigger {
     At,
@@ -63,7 +63,7 @@ impl Completion {
     }
 
     /// The walk this offer still needs: one for an `@` path, none for a
-    /// catalogue that needs no thread (ADR-0013).
+    /// catalogue that needs no thread.
     pub fn walk(&self) -> Option<(u64, String)> {
         matches!(self.trigger, Trigger::At).then(|| (self.generation, self.typed.clone()))
     }
@@ -79,7 +79,7 @@ pub fn ask(draft: &str, row: &str) -> Option<Query> {
 /// a command can be sent: the draft starts with the slash and no whitespace has
 /// followed it yet. A row ends at a newline, which is whitespace, so a draft of
 /// more than one row never opens the offer — nor does a name whose argument has
-/// begun, nor a `/` further in (ADR-0011 §14).
+/// begun, nor a `/` further in.
 pub fn command(draft: &str) -> Option<Query> {
     let rest = draft.strip_prefix('/')?;
     if rest.chars().any(char::is_whitespace) {

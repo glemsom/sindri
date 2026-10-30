@@ -1,5 +1,5 @@
 //! A picture is a block and it keeps its words: the rows the store measured,
-//! and the caption the alt text and the target make (ADR-0016 §2, §8).
+//! and the caption the alt text and the target make.
 
 use super::*;
 
@@ -12,7 +12,7 @@ use sindri_tui::picture::Store;
 const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/pictures");
 
 /// The store a test measures with: the made-up Kitty answer the layout tests
-/// use, over the fixtures as the workspace (ADR-0016 §1).
+/// use, over the fixtures as the workspace.
 fn store() -> Store {
     Store::new(Some(&Graphics::kitty()), FIXTURES).expect("a Kitty answer is a store")
 }
@@ -120,7 +120,7 @@ fn every_refusal_is_its_own_reason_in_the_caption() {
 #[test]
 fn a_terminal_that_draws_no_picture_says_so_in_the_caption() {
     // No store at all: the terminal was never asked, or answered that it speaks
-    // no graphics, and the frame says that rather than pretending (ADR-0016 §1).
+    // no graphics, and the frame says that rather than pretending.
     let block = markdown::lines("![a chart](wide.png)\n", 60, None);
     let shown = texts(&block.rows);
 
@@ -139,7 +139,7 @@ fn a_terminal_that_draws_no_picture_says_so_in_the_caption() {
 fn a_picture_takes_the_rows_the_store_measured_and_not_one_of_its_own() {
     // tall.png is 10×5000: the store caps the block at MAX_ROWS while it keeps
     // its full column span, so the writer must take the store's row count and
-    // never narrow the block itself (ADR-0016 §4).
+    // never narrow the block itself.
     let block = markdown::lines("![a chart](tall.png)\n", 60, Some(&store()));
     let shown = texts(&block.rows);
 
@@ -169,7 +169,7 @@ fn a_picture_in_a_table_cell_or_a_list_item_is_the_words_it_was_given() {
     );
     assert!(
         table.pictures.is_empty(),
-        "a cell is not a place a graphic goes (ADR-0016 §2)"
+        "a cell is not a place a graphic goes"
     );
 
     let item = markdown::lines("- ![a chart](wide.png)\n", 60, Some(&store()));

@@ -1,8 +1,8 @@
 //! Fenced code: the language's own colours where the language is known, and a
 //! diff coloured line by line — an agent emits code and diffs more than
-//! anything else (ADR-0011). A fence is drawn as the panel it is, with a
+//! anything else. A fence is drawn as the panel it is, with a
 //! gutter down its left edge and a line too long for it cut and marked
-//! rather than silently swallowed (ADR-0011 §24).
+//! rather than silently swallowed.
 
 use std::sync::OnceLock;
 
@@ -78,8 +78,7 @@ fn plain(body: &str) -> Vec<Line<'static>> {
 }
 
 /// A diff's rows: the `+` or the `-` is the fact, the hue says it faster, and
-/// the wash under the row says it again where the hue cannot be seen
-/// (ADR-0011 §24).
+/// the wash under the row says it again where the hue cannot be seen.
 fn diff_line(line: &str) -> Line<'static> {
     let style = if line.starts_with("+++") || line.starts_with("---") {
         Style::new().fg(theme::DIFF_FILE)

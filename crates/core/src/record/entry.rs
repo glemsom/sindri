@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 
 /// The metadata document: one run, from the moment it started to the reason it
-/// stopped (ADR-0006). A record still saying `running` is a run that crashed.
+/// stopped. A record still saying `running` is a run that crashed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Meta {
     pub id: String,

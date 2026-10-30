@@ -12,7 +12,7 @@ pub const TAIL_LINES: usize = 5;
 /// The lines a call keeps of its whole output: an expansion reads this, never
 /// the stream, so the entry is bounded the way the spill file is and a thread
 /// of five hundred calls is still a transcript and not a session log
-/// (ADR-0011, issue #44).
+/// (issue #44).
 pub const FULL_LINES: usize = 400;
 
 #[derive(Debug)]
@@ -33,8 +33,7 @@ pub enum Entry {
         text: String,
         done: bool,
         /// Whether the reader has it open: a streamed thought shows its tail,
-        /// a finished one collapses to one row, and the key opens either
-        /// (ADR-0011 §11).
+        /// a finished one collapses to one row, and the key opens either.
         open: bool,
     },
     Call(Call),
@@ -58,17 +57,17 @@ pub struct Call {
     pub tail: VecDeque<(Side, String)>,
     /// The whole output, and how much of it was ever given: a bounded tail of
     /// the stream that `Enter` opens in place, whatever the spill did
-    /// (ADR-0011 §9, issue #44).
+    /// (issue #44).
     out: VecDeque<(Side, String)>,
     lines: usize,
     open: bool,
-    /// Where the untruncated streams were written, when they did not fit
-    /// (ADR-0007). The frame offers them rather than holding them.
+    /// Where the untruncated streams were written, when they did not fit.
+    /// The frame offers them rather than holding them.
     pub spill: Vec<PathBuf>,
     pub truncated: bool,
     /// The clock when the call was announced, and the duration it ended on:
     /// a running call counts up from the first, a finished one is frozen at
-    /// the second (ADR-0011 §4).
+    /// the second.
     pub started: Duration,
     pub took: Option<Duration>,
 }

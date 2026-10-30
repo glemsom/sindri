@@ -1,5 +1,5 @@
-//! The card: what a broken boot has to say, and what an event does to it
-//! (ADR-0011 §15). The doctor's words are the content, so the card is measured
+//! The card: what a broken boot has to say, and what an event does to it.
+//! The doctor's words are the content, so the card is measured
 //! from them and paged when the screen is shorter than they are; only a key
 //! leaves it, never a resize (issue #50). The drawing is `render::card`.
 
@@ -17,7 +17,7 @@ pub struct Card {
 /// Where the reader is in a card taller than the screen. The renderer measures
 /// the rows the words wrapped into and the rows it has for them; the keys clamp
 /// against the same numbers, so the card stops where its last screenful is
-/// full (ADR-0013's rule for anything that scrolls).
+/// full (the rule for anything that scrolls).
 #[derive(Debug, Clone, Default)]
 pub struct View {
     scroll: usize,

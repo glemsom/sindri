@@ -1,6 +1,6 @@
 //! The one tool the model gets: `bash`. Its description is derived from the
 //! sandbox policy, never written by hand, so the model is told exactly the
-//! boundary that is enforced (ADR-0002).
+//! boundary that is enforced.
 
 use std::sync::Arc;
 
@@ -66,7 +66,7 @@ fn describe(policy: &SandboxPolicy) -> ToolSpec {
     }
 }
 
-/// The structured result as text, every field ADR-0007 promises named so the
+/// The structured result as text, every field named so the
 /// model can act on it rather than guess. A field with nothing to say is said
 /// absent rather than left out, so the shape never depends on the outcome.
 fn render(result: &ToolResult) -> String {

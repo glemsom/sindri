@@ -1,5 +1,5 @@
 //! A config committed in a repository is never honoured, and the refusal is
-//! said once on stderr wherever a config is resolved (ADR-0005): cloning an
+//! said once on stderr wherever a config is resolved: cloning an
 //! untrusted repo must not grant the agent extra writable paths, and no front
 //! end may hide the refusal — batch mode, the frame, `sandbox exec` and `doctor`
 //! all say it, and a settings save inside the frame says nothing at all.

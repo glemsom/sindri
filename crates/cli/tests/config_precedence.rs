@@ -1,5 +1,5 @@
 //! Precedence across the whole schema: file, then environment, then flags
-//! (ADR-0005). Each setting is proven by what the run observably does — which
+//! Each setting is proven by what the run observably does — which
 //! endpoint it calls, how many turns it takes, how long a command may run.
 
 #![allow(

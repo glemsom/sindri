@@ -1,4 +1,4 @@
-//! One run's session: the value a front end holds to have a run (ADR-0015).
+//! One run's session: the value a front end holds to have a run.
 //!
 //! `Session::open` is the only place in the core where the order a run is
 //! started in exists — the session directory with its `HOME`, the record, the
@@ -49,7 +49,7 @@ impl Env {
 
 /// Why a run could not be started: one error, naming what failed and carrying
 /// the path where there is one. The core prints nothing and maps no exit code —
-/// a front end owns those words (ADR-0015).
+/// a front end owns those words.
 #[derive(Debug)]
 pub enum StartError {
     Sandbox(PolicyError),
@@ -106,7 +106,7 @@ impl Session {
         let dir = directory(env)?;
         // The policy is derived before the record is started: a path the
         // sandbox refuses must not leave a record saying `running`, which no
-        // reader could tell from a run that is still going (ADR-0006).
+        // reader could tell from a run that is still going.
         let policy = derive(env, &dir, &config.extra_writable, RUN_ENFORCEMENT)?;
         let recorder = Recorder::start(
             &dir,
@@ -147,7 +147,7 @@ impl Session {
 
     /// One prompt's loop, wired to the session: the dials the front end decided
     /// on, the cancel flag it owns, and this record. The caller keeps the agent,
-    /// because the frame's thread outlives a prompt (ADR-0012).
+    /// because the frame's thread outlives a prompt.
     pub fn agent(&self, dials: Dials, cancel: Cancel) -> Agent {
         let mut agent = Agent::new(dials.model, dials.tool, dials.max_turns, dials.thinking);
         agent.set_cancel(cancel);

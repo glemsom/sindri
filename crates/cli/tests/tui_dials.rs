@@ -3,7 +3,7 @@
 //! the modal lands in the config file and nowhere else, and a run recorded from
 //! the frame reads back exactly as a batch run does.
 //! Every wait has a deadline and a machine without a pty skips cleanly: CI is
-//! headless, and a frame that never draws must fail rather than hang (ADR-0011).
+//! headless, and a frame that never draws must fail rather than hang.
 
 #![allow(
     clippy::expect_used,
@@ -144,7 +144,7 @@ fn a_saved_extra_path_is_in_force_for_the_very_next_command() {
     expect(&pty, &mut child, "settings saved");
 
     // The session was rebased, not rebuilt: the posture the next command runs
-    // under is the one just saved (ADR-0015).
+    // under is the one just saved.
     let screen = expect_on_screen(&pty, &mut child, "bwrap · 2 writable");
     // A rebase is the same session bounded by the settings just saved, not a
     // second one: the rail's GUID and the record on disk are still the launch's.

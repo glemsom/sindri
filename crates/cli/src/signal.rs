@@ -1,7 +1,7 @@
 //! Ctrl-C. The handler raises the run's cancel flag — one atomic store, the one
 //! async-signal-safe thing to do — and every part of the run checks it: the
 //! loop stops between turns, and an executor kills the command's process group
-//! mid-flight, so a cancelled run stops dead and leaves no orphan (ADR-0004).
+//! mid-flight, so a cancelled run stops dead and leaves no orphan.
 
 use std::sync::OnceLock;
 

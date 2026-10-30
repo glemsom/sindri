@@ -1,5 +1,5 @@
 //! A record as markdown: `/export` writes the current thread, and `sindri
-//! sessions show` prints the same entries (ADR-0006). Both walk the record's
+//! sessions show` prints the same entries. Both walk the record's
 //! own [`Entry`] values, so the two cannot disagree about what a session said —
 //! only about how they say it.
 

@@ -4,8 +4,7 @@
 //!
 //! The strip is generated once per body height and the terminal is told about
 //! it once: the protocol is held here across frames, so a ticking frame carries
-//! placeholders and transmits nothing, and a resize makes a new strip (ADR-0016
-//! §1, §6).
+//! placeholders and transmits nothing, and a resize makes a new strip.
 //!
 //! The strip fills the whole gap, and the gap is two cells wide because it has
 //! to be. `Buffer::diff` reads a cell's symbol as the columns it covers and
@@ -13,7 +12,7 @@
 //! sequence is far wider than the cell carrying it. Whatever cell follows the
 //! strip's first is therefore left unpainted by the emitted frame — so it is
 //! the strip's own second cell, with its placeholder inherited from the first,
-//! and never the rail's first `⁞` or the escape of the face drawn above it
+//! and never the rail's first column or the escape of the face drawn above it
 //! (`render::GAP_COLUMNS`).
 
 use ratatui::buffer::Buffer;
@@ -53,7 +52,7 @@ struct Strip {
 impl Seam {
     /// The seam the terminal's answer allows, or `None` where that answer is not
     /// Kitty graphics: the question was asked once, by [`Graphics`], and this
-    /// only reads it (ADR-0016 §1).
+    /// only reads it.
     pub fn new(graphics: &Graphics) -> Option<Seam> {
         let picker = graphics.picker();
         if picker.protocol_type() != ProtocolType::Kitty {
@@ -100,7 +99,7 @@ impl Seam {
 }
 
 /// Draws the glow beside the rail. A frame with no seam to draw leaves the
-/// margin as the canvas it always was (ADR-0011 §23).
+/// margin as the canvas it always was.
 pub(crate) fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
     if let Some(seam) = app.seam.as_mut() {
         seam.render(area, buf);

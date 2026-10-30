@@ -13,7 +13,7 @@ pub fn run(overrides: Overrides) -> i32 {
     // with the same checks — only the model and the credential are not required
     // of a diagnostic. The extras described here are then, by construction, the
     // extras a run would be granted, and a value a run would refuse is refused
-    // here too, out loud (ADR-0005).
+    // here too, out loud.
     let configured = match boot::configure(overrides) {
         Ok(configured) => configured,
         Err(error) => return error.report(),

@@ -1,10 +1,10 @@
-//! `/settings`: the one config file, edited through the one schema
-//! (ADR-0005). The frame stages fields in memory and writes nothing until the
+//! `/settings`: the one config file, edited through the one schema.
+//! The frame stages fields in memory and writes nothing until the
 //! user saves; `Esc` throws the whole draft away. A secret the file holds is
 //! never handed back, so no field can show one and no frame can leak one.
 //!
 //! It is also the modal the frame's front door opens by itself when the run has
-//! no key (ADR-0004), which is why `Missing` — what is absent, in the words the
+//! no key, which is why `Missing` — what is absent, in the words the
 //! transcript and the composer use — lives here rather than in a second module
 //! both would have to know.
 
@@ -43,7 +43,7 @@ enum Absent {
 }
 
 /// What the front door found absent when it opened the frame itself: the run
-/// has no credential, or no model, or neither (ADR-0004). It holds no value —
+/// has no credential, or no model, or neither. It holds no value —
 /// the modal says where a key comes from, never what one is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Missing {
@@ -88,7 +88,7 @@ impl Missing {
     }
 
     /// The transcript's one line: what is absent and every way to set it —
-    /// said once, when the frame opens, and never on a frame (ADR-0004).
+    /// said once, when the frame opens, and never on a frame.
     pub fn said(self) -> String {
         match self.absent {
             Absent::Key => {
@@ -139,7 +139,7 @@ impl Missing {
 
     /// What is still absent once a save has landed: a row the file now carries
     /// is filled in, and the rest is not. A key in the environment is not this
-    /// frame's to see, so the file is what a save can answer for (ADR-0014).
+    /// frame's to see, so the file is what a save can answer for.
     pub fn satisfied(self, document: &Document) -> Option<Missing> {
         let key = self.absent != Absent::Model && !document.is_set(Key::ApiKey);
         let model = self.absent != Absent::Key && !document.is_set(Key::Model);
@@ -191,7 +191,7 @@ impl Settings {
     /// The modal a first run opens by itself: its cursor on the row the run
     /// has nothing for, and, above the rows, the four facts that row needs —
     /// where a value comes from, where it is written, that the file is `0600`,
-    /// and that a credential is never shown again (ADR-0014).
+    /// and that a credential is never shown again.
     pub fn staged(mut self, missing: Missing) -> Settings {
         self.chosen = KEYS
             .iter()
@@ -351,7 +351,7 @@ impl crate::app::App {
                 let path = settings.path().display().to_string();
                 // The file is read back as what a run would read it as, so a
                 // row that was absent and now is not stops being said — and a
-                // row that is still absent keeps being said (ADR-0005).
+                // row that is still absent keeps being said.
                 let still = settings
                     .missing()
                     .and_then(|missing| missing.satisfied(settings.document()));
@@ -368,7 +368,7 @@ impl crate::app::App {
 
     /// `/settings`, or — with what the front door found absent — the modal it
     /// opens by itself: the same modal, on the row the run has nothing for, and
-    /// saying why it is there (ADR-0004).
+    /// saying why it is there.
     pub(crate) fn open_settings(&mut self, missing: Option<Missing>) {
         let opened = match &self.config {
             Some(path) => Settings::at_path(path),

@@ -1,6 +1,6 @@
 //! The loop's own behaviour, driven through it rather than around it: a frame
 //! with a run in it is drawn on the clock, and a still frame is not drawn at
-//! all (ADR-0011 §4).
+//! all.
 
 #![allow(
     clippy::expect_used,

@@ -1,6 +1,6 @@
 //! The answer as a reader sees it: a heading scale, links that keep their
 //! target, lists, quotes, tables, inline code, and fenced code with truecolour
-//! highlighting, and a picture as a block of its own (ADR-0011, ADR-0016). No
+//! highlighting, and a picture as a block of its own. No
 //! raw HTML, no maths.
 
 mod code;
@@ -22,7 +22,7 @@ use table::Table;
 
 /// An answer as rows, and the pictures among them: `store` is what measures a
 /// source, and `None` where the terminal draws none, which makes every picture
-/// its caption and the reason (ADR-0016 §1, §8).
+/// its caption and the reason.
 pub fn lines(source: &str, width: u16, store: Option<&Store>) -> Written {
     let mut writer = Writer::new(width.max(1) as usize, store);
     let options = Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH;
@@ -40,8 +40,7 @@ struct Writer<'a> {
     width: usize,
     lines: Vec<Line<'static>>,
     /// The pictures the writer placed, and the row each block starts at: what
-    /// the frame draws where, once it knows what the terminal can draw
-    /// (ADR-0016 §9).
+    /// the frame draws where, once it knows what the terminal can draw.
     pictures: Vec<Picture>,
     pending: Vec<Span<'static>>,
     indent: String,
@@ -58,7 +57,7 @@ struct Writer<'a> {
     row: usize,
     in_table_head: bool,
     /// What measures a picture, or nothing where the terminal draws none: the
-    /// writer asks it and never reads a file itself (ADR-0016 §5).
+    /// writer asks it and never reads a file itself.
     store: Option<&'a Store>,
     /// The image being written: its source, and the alt text it carried.
     image: Option<Image>,
@@ -100,7 +99,7 @@ impl<'a> Writer<'a> {
             Event::Start(tag) => self.start(tag),
             Event::End(tag) => self.end(tag),
             // Inside an image, the text *is* the picture's words: they are the
-            // caption, never prose of their own (ADR-0016 §2).
+            // caption, never prose of their own.
             Event::Text(text) => {
                 if let Some(alt) = self.alt() {
                     alt.push_str(&text);

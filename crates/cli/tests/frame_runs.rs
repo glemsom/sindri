@@ -2,7 +2,7 @@
 //! launch was booted in, a signal ending the run in flight, and a record whose end
 //! cannot be written said in the transcript. Driven through a pseudo-terminal,
 //! because these are the frame's own behaviour — and every wait has a deadline,
-//! so a run that never says anything fails instead of hanging (ADR-0011).
+//! so a run that never says anything fails instead of hanging.
 
 #![allow(
     clippy::expect_used,
@@ -77,7 +77,7 @@ fn a_new_session_is_opened_in_the_same_run_environment() {
 
     // `/new` opens the next session from the environment the launch was booted
     // in, and the prompt after it is recorded there: the state root is the one
-    // this launch read, not one read again (ADR-0015). That the process is
+    // this launch read, not one read again. That the process is
     // not read a second time is `boot`'s own unit test — a launch's environment
     // is a value, so a second read would answer a different root and there is
     // none to name here.

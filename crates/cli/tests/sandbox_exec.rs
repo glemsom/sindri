@@ -1,7 +1,7 @@
 //! The process seam for the sandbox debug subcommand: every acceptance
 //! criterion of the executor, proven without a model in the loop.
 //! Fields are asserted one by one rather than snapshotted: the batch contract's
-//! JSON shape (ADR-0004) is fixed in T6 with `insta`, and this subcommand's
+//! JSON shape is fixed in T6 with `insta`, and this subcommand's
 //! shape is not that contract.
 
 mod common;
@@ -93,7 +93,7 @@ fn the_script_status_is_the_status_of_its_last_command_and_pipefail_is_available
 fn a_pipeline_hides_a_failing_stage_so_pipestatus_is_available() {
     let env = Env::new();
     // The refusal belongs to the first stage; the pipeline still exits 0, which
-    // is exactly why a bare exit code is not an answer (ADR-0007).
+    // is exactly why a bare exit code is not an answer.
     let out = exec(
         &env,
         &[

@@ -1,5 +1,5 @@
 # The developer entry point. Every Rust step goes through devbox, which pins the
-# toolchain (ADR-0009); `make check` is the single definition of done.
+# toolchain; `make check` is the single definition of done.
 
 DEVBOX ?= devbox
 CARGO  ?= $(DEVBOX) run -- cargo
@@ -19,7 +19,7 @@ fmt:
 clippy:
 	$(CARGO) clippy --workspace --all-targets -- -D warnings
 
-## audit: source files stay at or under 400 lines (ADR-0008).
+## audit: source files stay at or under 400 lines.
 audit:
 	@scripts/audit-line-length.sh
 

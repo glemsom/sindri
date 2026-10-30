@@ -1,6 +1,6 @@
 //! The transcript as a document: two rows between turns and none inside one,
 //! a two-column gutter a call hangs off, a header that names the human, and
-//! the prompt at full strength on its own band (ADR-0011 §4).
+//! the prompt at full strength on its own band.
 
 use super::*;
 

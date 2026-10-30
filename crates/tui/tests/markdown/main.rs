@@ -1,7 +1,7 @@
 //! The markdown seam: what an answer *looks like* once rendered — a table
 //! with aligned columns, code with truecolour spans, a diff coloured by line.
 //! These are assertions about what the user sees, never about how it was
-//! composed (ADR-0011).
+//! composed.
 
 #![allow(
     clippy::expect_used,
@@ -22,7 +22,7 @@ fn text(line: &Line<'_>) -> String {
 }
 
 /// The rows of an answer with no picture in it: the same writer a frame uses,
-/// handed no store, because these are assertions about prose (ADR-0016).
+/// handed no store, because these are assertions about prose.
 fn lines(source: &str, width: u16) -> Vec<Line<'static>> {
     markdown::lines(source, width, None).rows
 }

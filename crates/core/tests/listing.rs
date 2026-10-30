@@ -4,7 +4,7 @@
 )]
 
 //! The record as a list, and as markdown: `/sessions` and `/export` read what a
-//! run left, from the same files `sindri sessions show` reads (ADR-0006, issue
+//! run left, from the same files `sindri sessions show` reads (issue
 //! #51). Nothing here writes a record: every fixture is a directory a run could
 //! have left, and the listing is only ever a read of it.
 
@@ -35,7 +35,7 @@ fn meta(id: &str, started_ms: u64, stopped: &str, turns: Option<u32>) -> Meta {
 }
 
 /// One record exactly as a run leaves it: `session.json` and one JSON object
-/// per line of `transcript.jsonl` (ADR-0006).
+/// per line of `transcript.jsonl`.
 fn record(sessions: &Path, meta: Meta, entries: &[Entry]) -> SessionDir {
     let dir = SessionDir::at(sessions.join(&meta.id));
     std::fs::create_dir_all(dir.root()).expect("a session directory");

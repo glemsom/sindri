@@ -1,6 +1,6 @@
 //! Selecting rendered rows with the mouse, and the text that leaves with
-//! them: exactly the rows the frame drew, with every style dropped
-//! (ADR-0011). The selection is a pair of screen cells, resolved against the
+//! them: exactly the rows the frame drew, with every style dropped.
+//! The selection is a pair of screen cells, resolved against the
 //! rows the last frame drew, so a copy is always of what the user saw — not
 //! of the model's markdown source, and not of a style run a terminal would
 //! have to interpret.
@@ -18,18 +18,17 @@ pub struct Viewport {
     pub rows: Vec<String>,
     pub spill: Vec<(usize, PathBuf)>,
     /// The transcript rows that are an expandable entry's own row, and which
-    /// entry that is: a click there opens it (ADR-0011 §9, issue #44).
+    /// entry that is: a click there opens it (issue #44).
     pub expand: Vec<(usize, usize)>,
     /// The pictures the frame drew: where each block of rows is, and the words
     /// it stands for. A picture is the third of these maps — a row to something
-    /// that is not a character — and it is what a repaint and a copy both read
-    /// (ADR-0016 §6, §9).
+    /// that is not a character — and it is what a repaint and a copy both read.
     pub pictures: Vec<Placed>,
 }
 
 /// A picture the frame drew: the drawn row its block starts at, how many rows
 /// the block covers (the graphic's and its caption's), the cells the graphic
-/// was given, and the caption it copies as (ADR-0016 §6, §9). Nothing but the
+/// was given, and the caption it copies as. Nothing but the
 /// placements is kept: what the buffer can hold is where a picture went, not
 /// the pixels that went there.
 #[derive(Debug, Clone)]
@@ -46,7 +45,7 @@ pub struct Placed {
     pub worth: Worth,
     /// Whether the whole graphic is in the window. A block partly scrolled out
     /// is placed all the same — its rows are here, and its caption — but it is
-    /// drawn nowhere (ADR-0016 §6).
+    /// drawn nowhere.
     pub drawn: bool,
 }
 
@@ -74,8 +73,7 @@ impl Viewport {
 
     /// The picture a row is filler for: one of its block's rows past the first,
     /// which carries no words because the graphic is drawn there or the caption
-    /// is above it. A copy takes the caption once and none of these
-    /// (ADR-0016 §9).
+    /// is above it. A copy takes the caption once and none of these.
     pub fn filler(&self, row: usize) -> Option<&Placed> {
         self.pictures
             .iter()
@@ -129,7 +127,7 @@ pub fn copied(viewport: &Viewport, selection: &Selection) -> Option<String> {
     for index in first..=last {
         // A picture's block copies as its caption once: the rows past its first
         // are a graphic's — or a caption's, already carried whole on that first
-        // row — so a copy of them would be a run of blank lines (ADR-0016 §9).
+        // row — so a copy of them would be a run of blank lines.
         // A drag that starts below the block's first row still takes the words.
         let inside = viewport.filler(index);
         let words;
@@ -235,7 +233,7 @@ mod tests {
 
     /// A frame with a picture in it: the three rows it is drawn on, its caption
     /// under them, and the words of the block on its first row — which is what
-    /// the frame puts there, so that a copy is the caption once (ADR-0016 §9).
+    /// the frame puts there, so that a copy is the caption once.
     fn pictured() -> Viewport {
         let mut viewport = viewport(&[
             "  ✓ 1.2s",

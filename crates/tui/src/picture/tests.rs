@@ -1,5 +1,5 @@
 //! The store's own tests: every one of them asks a made-up Kitty answer and a
-//! file on disk, so none of them reaches a terminal (ADR-0016 §1).
+//! file on disk, so none of them reaches a terminal.
 
 use super::*;
 

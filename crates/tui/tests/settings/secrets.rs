@@ -1,6 +1,6 @@
 //! Secrets in the modal: the key defaults to the environment, typing one
 //! warns in plaintext and is masked, a save writes only what was touched, and
-//! nothing ever echoes a value (ADR-0014).
+//! nothing ever echoes a value.
 
 use super::*;
 

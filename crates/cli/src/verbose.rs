@@ -1,5 +1,5 @@
 //! `-v`: what the run did, on stderr, after it ran. stdout is left untouched,
-//! so a verbose run pipes exactly like a silent one (ADR-0004).
+//! so a verbose run pipes exactly like a silent one.
 
 use sindri_core::agent::Event;
 

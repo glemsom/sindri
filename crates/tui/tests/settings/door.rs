@@ -1,5 +1,5 @@
 //! The door: a run with no credential opens the frame instead of exiting, with
-//! the settings modal staged on the key's row (ADR-0004). The modal says where
+//! the settings modal staged on the key's row. The modal says where
 //! a key comes from, where it is written, that the file is `0600` and that the
 //! value is never shown again; `Esc` leaves a frame that still reads, with the
 //! missing key said once.

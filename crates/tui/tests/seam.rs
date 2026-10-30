@@ -213,7 +213,7 @@ fn the_same_size_gives_the_same_bytes_twice() {
 #[test]
 fn nothing_here_asks_a_terminal_anything() {
     // The strip is a picture, not a drawing: it borrows no `Picker` and knows
-    // no protocol. The frame asks once and hands it a size (#63, ADR-0016 §1).
+    // no protocol. The frame asks once and hands it a size (#63).
     let source = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/seam.rs"))
         .expect("the seam's own source");
     let renderer = source.split("#[cfg(test)]").next().unwrap_or_default();

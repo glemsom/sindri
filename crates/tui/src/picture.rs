@@ -1,5 +1,5 @@
 //! The store that knows what a markdown `src` is worth, and holds what it
-//! costs (ADR-0016): it locates a picture in the workspace, measures it from
+//! costs: it locates a picture in the workspace, measures it from
 //! its header alone, refuses what cannot be drawn with a reason the caption can
 //! print, and keeps a handful of decoded protocols alive so the same answer
 //! redraws for nothing.
@@ -19,28 +19,27 @@ use ratatui_image::protocol::StatefulProtocol;
 
 use crate::graphics::Graphics;
 
-/// The most rows a picture may take: the face's own allowance (ADR-0016 §4).
+/// The most rows a picture may take: the face's own allowance.
 pub const MAX_ROWS: u16 = 20;
 
 /// The most bytes a source may be. A picture past this is not the picture the
-/// model meant, and reading it costs a frame's budget (ADR-0016 §4).
+/// model meant, and reading it costs a frame's budget.
 const BYTES: u64 = 16 * 1024 * 1024;
 
 /// The most pixels a decode may have, refused before the decode happens: a
 /// decompression bomb is one small file, and forty megapixels is more than any
-/// screenshot or photograph the frame would draw (ADR-0016 §4).
+/// screenshot or photograph the frame would draw.
 const PIXELS: u64 = 40_000_000;
 
 /// A mebibyte, which is only ever used to say the cap in the caption.
 const MIB: f64 = (1024 * 1024) as f64;
 
 /// How many decoded protocols stay live: each holds its pixels, so the store
-/// keeps what a screenful of pictures needs and lets the oldest go
-/// (ADR-0016 §5).
+/// keeps what a screenful of pictures needs and lets the oldest go.
 const LIVE: usize = 8;
 
 /// The formats the store draws: the four the decoders behind `ratatui-image`
-/// link, and nothing else (ADR-0016, consequences).
+/// link, and nothing else.
 const DRAWS: [ImageFormat; 4] = [
     ImageFormat::Png,
     ImageFormat::Jpeg,
@@ -52,7 +51,7 @@ pub struct Store {
     /// Where a relative `src` resolves: the workspace the frame was launched in.
     workspace: PathBuf,
     /// The answer a protocol is built from. It speaks Kitty, or there is no
-    /// store: no sixel, no half-blocks, no fallback (ADR-0016 §1).
+    /// store: no sixel, no half-blocks, no fallback.
     picker: Picker,
     /// What has been decoded, oldest first: the last is the most recent, and
     /// the first is what makes room for a ninth.
@@ -71,8 +70,7 @@ struct Live {
 
 /// The whole of what a protocol is made from: which file, which version of it,
 /// and the block it is drawn into. A redraw asks again with the same six facts
-/// and is handed the same pixels; a file rewritten under a new answer is not
-/// (ADR-0016 §5).
+/// and is handed the same pixels; a file rewritten under a new answer is not.
 #[derive(Debug, PartialEq, Eq)]
 struct Key {
     path: PathBuf,
@@ -98,7 +96,7 @@ impl Key {
 
 impl Store {
     /// The store, or nothing where the terminal cannot draw: a frame without a
-    /// Kitty-capable answer has no pictures to hold (ADR-0016 §1).
+    /// Kitty-capable answer has no pictures to hold.
     pub fn new(graphics: Option<&Graphics>, workspace: impl Into<PathBuf>) -> Option<Store> {
         let picker = graphics?.picker().clone();
         if picker.protocol_type() != ProtocolType::Kitty {
@@ -139,7 +137,7 @@ impl Store {
 
     /// The protocol that draws a measured picture. A lookup stats the file and
     /// nothing else, so a redraw of the same answer costs nothing and an agent
-    /// that rewrote `plot.png` under a new answer pays once (ADR-0016 §5).
+    /// that rewrote `plot.png` under a new answer pays once.
     /// `None` where nothing was measured, or where the file has gone since.
     pub fn protocol(&mut self, worth: &Worth) -> Option<&mut StatefulProtocol> {
         let Worth::Drawn {
@@ -167,7 +165,7 @@ impl Store {
     }
 
     /// How many sources have been decoded: the cost this store exists to avoid,
-    /// read where a repaint has to prove it spent none (ADR-0016 §5, §6).
+    /// read where a repaint has to prove it spent none.
     #[cfg(test)]
     pub(crate) fn decodes(&self) -> u64 {
         self.decodes
@@ -175,7 +173,7 @@ impl Store {
 
     /// Where a `src` points: an absolute path as it is, anything else against
     /// the workspace. `~` is a name like any other here — the frame expands
-    /// nothing, and a shell is not in the loop (ADR-0016 §3).
+    /// nothing, and a shell is not in the loop.
     fn locate(&self, src: &str) -> Result<PathBuf, Refusal> {
         if let Some(scheme) = scheme(src) {
             return Err(Refusal::Scheme(scheme.to_owned()));
@@ -189,7 +187,7 @@ impl Store {
     }
 
     /// What the source is, before any decoder sees it: a file, of a size the
-    /// frame can afford to read (ADR-0016 §4). A directory, a missing file and
+    /// frame can afford to read. A directory, a missing file and
     /// a file past the byte cap are all answered here, without opening one.
     fn guard(&self, path: &Path) -> Result<(), Refusal> {
         let meta = std::fs::metadata(path).map_err(|error| unreadable(path, &error))?;
@@ -204,7 +202,7 @@ impl Store {
 
     /// The block a picture of `pixels` takes in `columns`: it fits the column,
     /// never upscales past it, keeps its aspect from the cell size, and is
-    /// capped at [`MAX_ROWS`] (ADR-0016 §4).
+    /// capped at [`MAX_ROWS`].
     fn block(&self, pixels: (u32, u32), columns: u16) -> (u16, u16) {
         let (cell_w, cell_h) = self.picker.font_size();
         let (cell_w, cell_h) = (u64::from(cell_w.max(1)), u64::from(cell_h.max(1)));
@@ -221,7 +219,7 @@ impl Store {
 
 /// What one `src` is worth at a column width: the rows it takes and the columns
 /// it spans, or the reason it takes none. The reason is what the caption puts
-/// in its `‹›`, after the `src` (ADR-0016 §8).
+/// in its `‹›`, after the `src`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Worth {
     Drawn {
@@ -237,7 +235,7 @@ pub enum Worth {
 
 impl Worth {
     /// The rows the block takes: none when nothing is drawn, so a caller that
-    /// lays out either costs the same (ADR-0016 §9).
+    /// lays out either costs the same.
     pub fn rows(&self) -> u16 {
         match self {
             Worth::Drawn { rows, .. } => *rows,
@@ -246,7 +244,7 @@ impl Worth {
     }
 
     /// The columns the block spans: none when nothing is drawn, so the cells a
-    /// graphic is given are the ones it was measured for (ADR-0016 §4).
+    /// graphic is given are the ones it was measured for.
     pub fn columns(&self) -> u16 {
         match self {
             Worth::Drawn { columns, .. } => *columns,
@@ -256,10 +254,10 @@ impl Worth {
 }
 
 /// Why a `src` takes no rows. Every refusal is a sentence the caption can
-/// print, never a panic and never a placeholder box (ADR-0016 §8).
+/// print, never a panic and never a placeholder box.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Refusal {
-    /// The source names a scheme: v1 draws no remote picture (ADR-0016 §3).
+    /// The source names a scheme: v1 draws no remote picture.
     Scheme(String),
     Missing,
     Directory,
@@ -274,13 +272,13 @@ pub enum Refusal {
     Unreadable(String),
     /// The terminal was never asked for graphics, or answered that it speaks
     /// none: the one refusal no source is guilty of, because nothing was
-    /// measured at all (ADR-0016 §1, §8).
+    /// measured at all.
     NoGraphics,
 }
 
 impl Refusal {
     /// The reason as the caption prints it, after the `src` and a colon:
-    /// `a chart ‹plot.png: no such file›` (ADR-0016 §8).
+    /// `a chart ‹plot.png: no such file›`.
     pub fn said(&self) -> String {
         match self {
             Refusal::Scheme(scheme) => format!("{scheme}: is not fetched"),
@@ -324,7 +322,7 @@ fn scheme(src: &str) -> Option<&str> {
 }
 
 /// The size in the file's header, and no pixel of it: a header read is what a
-/// frame that measures every entry it lays out can afford (ADR-0016 §5).
+/// frame that measures every entry it lays out can afford.
 fn dimensions(path: &Path) -> Result<(u32, u32), Refusal> {
     let file = File::open(path).map_err(|error| unreadable(path, &error))?;
     let reader = ImageReader::new(BufReader::new(file))
@@ -339,7 +337,7 @@ fn dimensions(path: &Path) -> Result<(u32, u32), Refusal> {
 
 /// The pixels a measured picture holds, decoded under the cap its header was
 /// already held to: a file rewritten between the measure and the decode cannot
-/// outgrow it either (ADR-0016 §4).
+/// outgrow it either.
 fn decode(path: &Path) -> Option<DynamicImage> {
     let file = File::open(path).ok()?;
     let mut reader = ImageReader::new(BufReader::new(file))

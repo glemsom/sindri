@@ -62,7 +62,7 @@ one bad first impression a static binary must not deliver.
 The version reported by `--version` is `git describe --tags --always` (a leading
 `v` stripped) and the commit date, injected at build time by
 `crates/types/build.rs` — never the wall clock, so an unchanged tree does not
-relink (ADR-0009). The release binaries are built from the tagged checkout, so
+relink. The release binaries are built from the tagged checkout, so
 they report the tag. A build from a tree without tags reports the short commit
 hash instead, and a tree without `git` at all falls back to the `Cargo.toml`
 version with a commit date of `unknown`.
@@ -84,7 +84,7 @@ $ git push origin v0.1.0
 
 1. generates a release image from the committed `devbox.json`
    (`devbox generate dockerfile`), so dev, CI and release share one toolchain
-   definition (ADR-0009);
+   definition;
 2. builds both targets inside that image with `cargo-zigbuild`
    (`scripts/release-build.sh`);
 3. writes `SHA256SUMS` (`scripts/release-checksums.sh`) and the changelog
@@ -116,7 +116,7 @@ proven to be the names the installer looks for.
 devbox's `rustc` includes only the host's standard library, and it refuses the
 upstream `rust-std` tarball of the same version (the metadata hashes differ:
 `E0514`). There is also no rustup, deliberately — its shims shadow `cargo` and
-break the pinned toolchain (ADR-0009).
+break the pinned toolchain.
 
 So the release image installs a rustup toolchain **of devbox's own rustc
 version**, with the two musl targets, and builds with `CARGO="cargo +<that

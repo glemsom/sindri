@@ -1,4 +1,4 @@
-//! The machine-readable output contract (ADR-0004): one run as exactly one
+//! The machine-readable output contract: one run as exactly one
 //! compact JSON object on one line. The field order below *is* the contract —
 //! later fields append and this order never changes, so a parser written
 //! against today's shape keeps working tomorrow. A field nobody reported is

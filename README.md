@@ -11,8 +11,7 @@ stays empty when a run fails or is cancelled.
 
 **One tool.** The model gets `bash` and nothing else: search, fetch, patch and HTTP all
 go through the shell, and pipelines or a short script do in one turn what a
-tool-per-task agent needs several
-([ADR-0002](docs/adr/0002-one-bash-tool-sandbox-single-source-of-truth.md)).
+tool-per-task agent needs several.
 
 **Sandboxed by default.** Every `bash` call runs in unprivileged bubblewrap, host root
 read-only (a boundary on writes, not reads) plus a writable set you chose.
@@ -49,8 +48,7 @@ prompt, and a pipe without `-b` is refused. `-v` puts the run on stderr.
 | `2` | usage error | `130` | cancelled, nothing on stdout |
 
 `sindri sandbox exec` reports the *sandbox* instead: `0` for any outcome, `3` when the
-sandbox failed, the command's own status only in the JSON
-([ADR-0004](docs/adr/0004-output-contract-and-exit-codes.md)).
+sandbox failed, the command's own status only in the JSON.
 
 ## JSON for scripts
 
@@ -102,10 +100,9 @@ transcript, rail, composer; off a terminal it is a refusal at exit 2.
   the run stops when the request in flight does.
 - **Rail:** 32 columns, always visible — cache hits, turns against the cap, tokens, a
   context meter, session GUID, temp path, branch, sandbox posture, why the last run
-  stopped — read as a ledger: labels in a nine-column field, dot leaders across the gap,
-  every value hanging off one edge, a `─` hairline between the blocks and a `⁞` seam that
-  begins and ends with the facts. Below 100 columns it becomes one strip; the face takes
-  the rows left over.
+  stopped — read as a ledger: labels in a nine-column field at the rail's first column,
+  dot leaders across the gap, every value hanging off one edge and a `─` hairline between
+  the blocks. Below 100 columns it becomes one strip; the face takes the rows left over.
 - **Composer,** two to six rows: `Enter` sends, `Shift+Enter` breaks the line, `Ctrl-Q`
   leaves, `Ctrl-C` cancels a run and keeps the draft — or clears it when nothing is
   running.
@@ -125,16 +122,15 @@ transcript, rail, composer; off a terminal it is a refusal at exit 2.
 - **Chrome:** a narrow terminal shortens what the frame says and never cuts a key or a
   fact in half. The footer states its seven hints from 120 columns up, five from 100 and
   never fewer than `Enter send` and `? keys`; the rail gives facts up in one priority
-  order and keeps a row saying how many went (`⁞ +7 more`); the slim rail strip never
+  order and keeps a row saying how many went (`+7 more`); the slim rail strip never
   loses the posture, the model or the workspace.
 - **One thread:** a second prompt builds on the first, `/new` starts over, and a model
   changed in `/settings` answers the next turn on the same thread. **Boot runs `doctor`
   first**: a sandbox that cannot be created is a card naming the failing check. A first
   run with no API key opens the modal below instead of failing.
 
-Each prompt is written to the session's record ([ADR-0006](docs/adr/0006-session-records.md));
-the frame is [ADR-0011](docs/adr/0011-the-tui-contract.md)'s, the hands
-[ADR-0013](docs/adr/0013-the-hands-copy-scroll-and-completion.md)'s.
+Each prompt is written to the session's record; the frame and the hands are this
+README's own description of the screen.
 
 ### Settings
 
@@ -176,8 +172,7 @@ One file, `$XDG_CONFIG_HOME/sindri/config.toml` (example:
 `--writable` and `--header` are repeatable but **replace** the configured values rather
 than adding to them. An unknown key is an error naming key and file; a wrong value is
 exit 2. The credential also comes from `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or a
-matching `*_BASE_URL`, and is redacted everywhere; a file carrying one is `0600`
-([ADR-0005](docs/adr/0005-config-surface.md)).
+matching `*_BASE_URL`, and is redacted everywhere; a file carrying one is `0600`.
 
 `.sindri.toml` in the working directory is **never** read: a checked-in config granting
 writable paths would turn every `git clone && sindri` into a privilege escalation.
@@ -230,6 +225,7 @@ Everything goes through devbox, and `make check` is the definition of done.
 | `make release TAG=v0.1.0` | both static binaries, `SHA256SUMS`, changelog |
 
 A tag is the only thing a release needs; the workflow builds, verifies and publishes it
-([ADR-0009](docs/adr/0009-reproducible-builds.md),
-[`docs/install.md`](docs/install.md)). [`GLOSSARY.md`](GLOSSARY.md) has the vocabulary,
-[`docs/adr/`](docs/adr/) the decisions.
+(see [`docs/install.md`](docs/install.md)). [`GLOSSARY.md`](GLOSSARY.md) has the
+vocabulary, [`docs/adr/0001-code-an-agent-can-maintain.md`](docs/adr/0001-code-an-agent-can-maintain.md)
+the rules the code is held to.
+canary-1793386843

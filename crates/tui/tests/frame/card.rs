@@ -1,8 +1,7 @@
 //! The card: the doctor's lines each on their own row, a block sized from the
 //! rows they wrapped into and paged when the screen is shorter than they are,
 //! the key that leaves and the command that checks again said in the card, and
-//! a resize that lays it out again rather than dismissing it unread (ADR-0011
-//! §15, issue #50).
+//! a resize that lays it out again rather than dismissing it unread (issue #50).
 
 use super::*;
 

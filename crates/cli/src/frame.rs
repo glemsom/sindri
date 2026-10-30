@@ -1,7 +1,7 @@
 //! The terminal UI's launch: what a bare `sindri` on a terminal does. Boot
 //! proves the sandbox and opens a session before the first frame, the rail
 //! carries the facts the filter used to keep to stderr, and the driver runs one
-//! prompt at a time through the same session batch mode uses (ADR-0011).
+//! prompt at a time through the same session batch mode uses.
 
 use std::sync::Arc;
 use std::sync::mpsc;
@@ -28,7 +28,7 @@ pub fn run(overrides: Overrides) -> i32 {
         Ok(configured) => (configured, None),
         // A value the run cannot do without is a line and an exit everywhere
         // else; the frame is the one door that opens on it, because a card has
-        // no field to type a key into (ADR-0004). What is absent is read from
+        // no field to type a key into. What is absent is read from
         // the config that was resolved anyway, so the modal knows which row it
         // is for. Every other failure still leaves by `report`.
         Err(failure::Failure::Config(ConfigError::Missing(_))) => {
@@ -64,7 +64,7 @@ pub fn run(overrides: Overrides) -> i32 {
     };
 
     // One flag for the launch, raised by Ctrl-C and by a signal alike, and put
-    // down between prompts by the frame (ADR-0015).
+    // down between prompts by the frame.
     let cancel = Cancel::new();
     signal::install(cancel.clone());
 
@@ -148,7 +148,7 @@ impl Driver for Front {
         let _ = forward.join();
 
         // The record's end is written here, and a failure to write it is said in
-        // the transcript rather than dropped (ADR-0015).
+        // the transcript rather than dropped.
         let note = closing_note(&self.boot.session, &outcome);
         match outcome {
             Ok(report) => Finished {
@@ -170,7 +170,7 @@ impl Driver for Front {
 
     fn renew(&mut self) -> Result<Launch, String> {
         // `/new` is boot's read again, in the environment this launch was booted
-        // in — no second read of the process (ADR-0015) — and adopted only once
+        // in — no second read of the process — and adopted only once
         // it has answered `Ok`. The session it replaces is superseded: left, not
         // stopped, so it gets no end written.
         let session = boot::renew(&self.boot)
@@ -185,7 +185,7 @@ impl Driver for Front {
     fn reload(&mut self) -> Result<Launch, String> {
         // A save lands while the frame owns the screen, so it does not go through
         // boot: the failure is a value the transcript says, never a line on
-        // stderr (ADR-0005).
+        // stderr.
         let config =
             Config::resolve(self.overrides.clone()).map_err(|error| error.message().to_string())?;
         self.boot

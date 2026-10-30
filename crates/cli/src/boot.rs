@@ -1,9 +1,9 @@
 //! Boot: the one module that turns the flags and the process's own facts into a
-//! run ready to start (ADR-0015). A front end calls one door and keeps only what
+//! run ready to start. A front end calls one door and keeps only what
 //! is its own — the frame proves the sandbox and draws the card, batch mode
 //! prints the answer, `sandbox exec` prints the outcome. Boot probes nothing,
 //! owns no cancel flag, and says exactly one thing on the way in: a repository
-//! config it refused (ADR-0005).
+//! config it refused.
 
 use sindri_core::config::{Config, ConfigError, Overrides};
 use sindri_core::session::{Env, Session};
@@ -13,7 +13,7 @@ use crate::failure::Failure;
 pub struct Boot {
     /// The environment the session was opened in. It comes back out so `/new`
     /// opens the next session in the same workspace, `PATH` and state root
-    /// without reading the process a second time (ADR-0015).
+    /// without reading the process a second time.
     pub env: Env,
     pub config: Config,
     pub session: Session,
@@ -46,7 +46,7 @@ pub fn prepare(overrides: Overrides) -> Result<Configured, Failure> {
 /// The read for a front end that needs no run of its own yet: `doctor`,
 /// `sandbox exec`, and the frame's first screen — the one door that opens on a
 /// value the run has none of, because a settings modal is where it goes
-/// (ADR-0004). Every failure that is not an absent value is still one.
+/// Every failure that is not an absent value is still one.
 pub fn configure(overrides: Overrides) -> Result<Configured, Failure> {
     read(overrides, Config::for_front_end)
 }
@@ -69,14 +69,14 @@ fn read(
 fn announce(config: &Config) {
     if let Some(path) = &config.refused_repo_config {
         eprintln!(
-            "sindri: ignoring {}: a config committed in a repository is never honoured (ADR-0005)",
+            "sindri: ignoring {}: a config committed in a repository is never honoured",
             path.display()
         );
     }
 }
 
 /// `/new`: the next session in the same run environment, from the values the
-/// launch already holds — the process is not read again (ADR-0015).
+/// launch already holds — the process is not read again.
 pub fn renew(boot: &Boot) -> Result<Session, Failure> {
     Session::open(&boot.env, &boot.config).map_err(Failure::Start)
 }

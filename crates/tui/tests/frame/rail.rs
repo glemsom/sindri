@@ -1,5 +1,5 @@
 //! The rail: every fact a user must never lose, at the widths the frame is
-//! judged at, with and without the face (ADR-0011). The rail is a ledger — a
+//! judged at, with and without the face. The rail is a ledger — a
 //! dotted seam, a nine-column label field in FAINT, dot leaders across the gap
 //! and the value hanging off the last column — and a fact is one row however
 //! long its value is.

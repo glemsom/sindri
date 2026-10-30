@@ -1,7 +1,6 @@
 //! The record picker on the raised tier: one row per record, newest first, and
 //! on each row the four facts a record is chosen by — when it ran, what model,
-//! how far it got, why it stopped — then the first thing it was asked
-//! (ADR-0006, issue #51).
+//! how far it got, why it stopped — then the first thing it was asked.
 
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};

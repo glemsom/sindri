@@ -1,5 +1,5 @@
 //! `/settings`: the modal over the one config file, through the one schema
-//! (issue #18, ADR-0014). Every test points the frame at a temporary
+//! (issue #18). Every test points the frame at a temporary
 //! config path, so nothing here can read or write a real user's config —
 //! and every test that claims "nothing is written yet" says it about a
 //! file that does not exist.

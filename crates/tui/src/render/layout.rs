@@ -1,6 +1,6 @@
 //! The rows one frame of the transcript lays out, and what the reader's place
 //! in the thread costs: the entries it measures, the entries it never touches,
-//! and the ends it clamps at (ADR-0013, issue #45).
+//! and the ends it clamps at.
 
 use std::path::{Path, PathBuf};
 
@@ -24,8 +24,7 @@ pub(crate) struct Frame<'a> {
     pub(crate) spill: Vec<(usize, PathBuf)>,
     pub(crate) expand: Vec<(usize, usize)>,
     /// The pictures this frame laid out: a row map like `spill` and `expand`,
-    /// because a picture is drawn where its rows are and is nothing else
-    /// (ADR-0016 §6, §9).
+    /// because a picture is drawn where its rows are and is nothing else.
     pub(crate) pictures: Vec<Laid>,
 }
 
@@ -138,7 +137,7 @@ impl<'a> Frame<'a> {
         // A picture is drawn at the row its block starts at. A block the window
         // skipped into is cut at the window's top row and kept: its rows are the
         // frame's from there, and whether any of it is drawn is the window's
-        // answer and not this one's (ADR-0016 §6).
+        // answer and not this one's.
         for picture in done.pictures {
             let offset = gap + picture.row;
             let above = skip.saturating_sub(offset).min(picture.block);

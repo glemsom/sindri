@@ -1,13 +1,13 @@
 //! The box a file too large to show, or a record read back, is opened in: read
-//! once, windowed while it is up, and closed with `Esc` (ADR-0011, ADR-0013).
+//! once, windowed while it is up, and closed with `Esc`.
 //! A reader, not an overlay: the overlay is what opens it.
 
 use std::path::Path;
 
 /// A file too large to show, or a record read back, open in the frame. It is
 /// read once, when it is opened, and only the rows on screen are ever copied
-/// out of it (ADR-0011), so a megabyte of output is a window per frame and
-/// never a copy of itself (ADR-0013).
+/// out of it, so a megabyte of output is a window per frame and
+/// never a copy of itself.
 #[derive(Debug, Clone)]
 pub struct Spill {
     /// What the box is called: the file it came from, or the session it is.
@@ -21,7 +21,7 @@ impl Spill {
     pub fn open(path: impl AsRef<Path>) -> std::io::Result<Spill> {
         let path = path.as_ref();
         // A command's output is bytes, not text: a stream that is not UTF-8
-        // is still shown, with its invalid sequences replaced (ADR-0007).
+        // is still shown, with its invalid sequences replaced.
         let bytes = std::fs::read(path)?;
         let lines: Vec<String> = String::from_utf8_lossy(&bytes)
             .lines()

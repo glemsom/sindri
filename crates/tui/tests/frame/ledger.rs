@@ -1,7 +1,7 @@
 //! The rail reads as a ledger: values hanging off one edge, a dot leader
 //! bridging the label's field to the figure where there is a gap to bridge, a
 //! hairline between the blocks, and a dotted seam that begins and ends with
-//! the facts (ADR-0011 §22, §23).
+//! the facts.
 
 use super::*;
 

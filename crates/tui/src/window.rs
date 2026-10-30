@@ -2,8 +2,7 @@
 //! moves it, and how much of the thread arrived below them while they were
 //! reading. The place is a row of an entry and not an offset from the tail, so
 //! a run that appends never moves the text under a reader who has scrolled
-//! back; the tail is a place the window takes again on `End` (ADR-0013,
-//! issue #45).
+//! back; the tail is a place the window takes again on `End` (issue #45).
 
 /// What the reader asked of the window, for the next frame to carry out. The
 /// keys know the rows a page is worth and neither the entry they land on nor
@@ -53,7 +52,7 @@ pub struct Window {
     /// The rows one page is worth to whatever has the screen. The transcript
     /// reports its own every frame; an open overlay reports what its box
     /// showed instead, so `PgUp`/`PgDn` move the box that covers the frame and
-    /// never the frame beneath it (ADR-0013, issue #49).
+    /// never the frame beneath it (issue #49).
     pub(crate) page: usize,
 }
 

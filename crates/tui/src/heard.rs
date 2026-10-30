@@ -1,5 +1,5 @@
 //! What the run says to the frame: a prompt started, a fragment streamed, a
-//! command's line, a run ended. The frame is told; it never asks (ADR-0011).
+//! command's line, a run ended. The frame is told; it never asks.
 
 use std::time::Duration;
 
@@ -16,7 +16,7 @@ impl App {
         }
         // A run with no key cannot answer: sending the prompt would spend a
         // round trip to be told 401, so the draft stays and the frame says what
-        // is missing instead (ADR-0004).
+        // is missing instead.
         if let Some(missing) = self.missing {
             self.note_error(missing.refused());
             return;
@@ -39,11 +39,11 @@ impl App {
         };
         self.sent = false;
         // The clock starts with the run: a marker says how long *this* run has
-        // been going, and a fresh prompt starts it again (ADR-0011 §4).
+        // been going, and a fresh prompt starts it again.
         self.now = Duration::ZERO;
         self.rail.begun();
         // One flag per launch, put down before every run: a cancel ends the
-        // run it was raised for and never the next (ADR-0015).
+        // run it was raised for and never the next.
         self.cancel.clear();
         let cancel = self.cancel.clone();
         self.running = Some(cancel.clone());
@@ -93,8 +93,7 @@ impl App {
 
     fn append(&mut self, turn: u32, text: String, reasoning: bool) {
         // What has streamed is what the run has spent so far: the meters move
-        // on it now, and the report overrules them when the run ends
-        // (ADR-0011 §4).
+        // on it now, and the report overrules them when the run ends.
         self.rail.streamed(text.chars().count(), self.now);
         let open = match self.entries.last_mut() {
             Some(Entry::Reasoning {
@@ -153,7 +152,7 @@ impl App {
         });
         if let Some(call) = last {
             // The duration freezes where the call ended: a finished call is
-            // not still counting (ADR-0011 §4).
+            // not still counting.
             call.took = Some(self.now.saturating_sub(call.started));
             call.over = Some(over);
             call.truncated = spilled.truncated;

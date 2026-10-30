@@ -1,6 +1,6 @@
 //! A picture in the frame: the block of rows it takes in the transcript, the
 //! caption under it, and the row count the frame keeps rather than measuring
-//! again (ADR-0016 §2, §5, §9).
+//! again.
 
 use super::*;
 
@@ -100,7 +100,7 @@ fn drawn(rows: &[String]) -> usize {
 }
 
 /// The keys a reader scrolls with: the wheel is three rows a notch and the page
-/// keys a screenful (ADR-0013).
+/// keys a screenful.
 fn wheel(app: &mut App, down: bool) {
     let kind = if down {
         MouseEventKind::ScrollDown
@@ -149,7 +149,7 @@ fn an_open_overlay_stops_the_picture_and_closing_it_draws_it_again() {
     );
 
     // An overlay dims cells, and a graphic is not a cell: nothing may be drawn
-    // behind it (ADR-0016 §7).
+    // behind it.
     press(&mut app, KeyCode::Char('?'));
     assert!(app.overlay().is_some(), "? opens the help overlay");
     let shown = column(&screen(&mut app, 100, 30));
@@ -193,7 +193,7 @@ fn a_picture_partly_scrolled_out_is_drawn_nowhere_and_whole_once_it_is_in() {
     assert!(drawn(&shown) > 0, "and it is drawn on them: {shown:#?}");
 
     // Three rows into its block: part of it is above the window, so no row of
-    // it is drawn at an edge (ADR-0016 §6).
+    // it is drawn at an edge.
     wheel(&mut app, true);
     let shown = column(&screen(&mut app, 100, 30));
     assert_eq!(
@@ -266,7 +266,7 @@ fn a_picture_that_opens_an_answer_takes_its_rows_and_then_its_caption() {
 #[test]
 fn a_picture_the_terminal_cannot_draw_is_its_caption_and_the_reason() {
     // No graphics answer, so no store: the frame says what it could not do and
-    // draws no placeholder box (ADR-0016 §1, §8).
+    // draws no placeholder box.
     let mut app = app();
     answered(&mut app, "![a chart](narrow.png)\n\nthe next block\n");
     let shown = column(&screen(&mut app, 100, 30));

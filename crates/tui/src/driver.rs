@@ -1,5 +1,5 @@
 //! The seam a front end implements: how to run one prompt, and the live line
-//! back into the frame while it runs (ADR-0012). No provider type crosses it:
+//! back into the frame while it runs. No provider type crosses it:
 //! the frame is told how a run ended in its own words.
 
 use std::path::PathBuf;
@@ -23,7 +23,7 @@ pub enum CallOver {
 
 /// What a command's output had to leave behind: the streams the model
 /// was given were cut down, and the untruncated bytes went to these
-/// files (ADR-0007).
+/// files.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Spilled {
     pub truncated: bool,
@@ -65,7 +65,7 @@ pub struct Finished {
     pub error: Option<String>,
     /// Something the run could not do after it ended, in the frame's words: a
     /// record that could not be closed is evidence lost, and evidence nobody
-    /// is told about is evidence dropped (ADR-0006).
+    /// is told about is evidence dropped.
     pub note: Option<String>,
 }
 
@@ -76,7 +76,7 @@ pub trait Driver: Send {
     /// and says what the rail should now show. `/new` is the only caller. A
     /// session is proved before it is adopted, so `Err` is why this one did
     /// not exist: the thread, the transcript and the record being written all
-    /// stay, and the reason is said where an error belongs (ADR-0015).
+    /// stay, and the reason is said where an error belongs.
     fn renew(&mut self) -> Result<Launch, String> {
         Err("this front end cannot start a new session".to_string())
     }

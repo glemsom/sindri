@@ -1,4 +1,4 @@
-//! The hands: what one key, or one gesture, does to the frame (ADR-0011).
+//! The hands: what one key, or one gesture, does to the frame.
 //! Everything the mouse can do is here as a key as well, because a pointer is
 //! an accelerator and never the only way in.
 
@@ -71,7 +71,7 @@ impl App {
     }
 
     /// One mouse event. `Shift` hands the gesture back to the terminal: the
-    /// frame never sees a drag it must not take (ADR-0011).
+    /// frame never sees a drag it must not take.
     pub fn mouse(&mut self, event: MouseEvent) {
         if event.modifiers.contains(KeyModifiers::SHIFT) {
             return;
@@ -104,7 +104,7 @@ impl App {
 
     /// The keys an open overlay takes. It owns them: nothing behind it moves
     /// while it has the screen, and the page keys move it by the screenful its
-    /// own box shows rather than the transcript's (ADR-0013, issue #49).
+    /// own box shows rather than the transcript's (issue #49).
     fn overlay_key(&mut self, key: KeyEvent, ctrl: bool) {
         match key.code {
             KeyCode::PageUp => return self.scroll_page(true),
@@ -142,8 +142,8 @@ impl App {
 
     fn press(&mut self, at: Position) {
         // A row of the rail is a row like any other: the session id can be
-        // taken out of the frame and pasted into `sindri sessions show`
-        // (ADR-0006). The whole fact is copied, so a wrapped id is never half
+        // taken out of the frame and pasted into `sindri sessions show`.
+        // The whole fact is copied, so a wrapped id is never half
         // an id.
         if let Some(row) = self.rail_view.row_at(at) {
             let text = if self.rail_view.session.contains(&row) {
@@ -167,7 +167,7 @@ impl App {
         }
         // A click on an expandable entry's own row opens that entry, and is
         // never a selection: the row a reader points at is the one they mean
-        // (ADR-0011 §9, issue #44).
+        // (issue #44).
         if let Some(index) = self
             .viewport
             .row_of(at)
@@ -212,7 +212,7 @@ impl App {
         }
         // An empty composer has nothing to send: `Enter` there opens the call
         // the reader last touched, or the newest one, and folds it again
-        // (ADR-0011 §9, issue #44).
+        // (issue #44).
         if self.composer.is_blank() && self.reveal() {
             return;
         }
@@ -240,7 +240,7 @@ impl App {
     }
 
     /// `/new`: the front end is asked for a fresh session GUID, and the
-    /// transcript is emptied only once it answers with one (ADR-0015): a
+    /// transcript is emptied only once it answers with one: a
     /// session that cannot start leaves the conversation where it was. A run
     /// in flight is cancelled first, and the renew is queued behind it,
     /// because the driver's thread is one thread.
@@ -276,8 +276,7 @@ impl App {
 
     /// Recomputes what the draft is completing — an `@` path, or a `/` command
     /// named at its start — and asks for a walk of the workspace only when the
-    /// answer could have changed and only a path needs one (ADR-0011,
-    /// ADR-0013).
+    /// answer could have changed and only a path needs one.
     fn refresh_completion(&mut self) {
         let Some(query) = completion::ask(&self.composer.text(), self.composer.row()) else {
             self.completion = None;

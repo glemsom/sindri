@@ -1,13 +1,13 @@
 //! The transcript column — the hero. A conversation is laid out as the
 //! document it is: two rows between turns and none inside one, a turn's body
 //! hanging two columns off its own edge, and the prompt at full strength on a
-//! band of its own (ADR-0011 §4).
+//! band of its own.
 //!
 //! Only the rows that fit are laid out, so an unbounded conversation still has
-//! a bounded render tree (ADR-0011). The window has a place in the thread and
+//! a bounded render tree. The window has a place in the thread and
 //! not an offset from its tail: a reader on the tail is shown the newest rows
 //! and follows them, and a reader who scrolls back is held to the row they are
-//! reading while the run appends below them (ADR-0013, issue #45).
+//! reading while the run appends below them.
 
 use std::path::PathBuf;
 
@@ -27,15 +27,15 @@ pub struct View {
     pub plain: Vec<String>,
     pub laid_out: usize,
     /// How many entries the frame had to measure or lay out: the cost a long
-    /// thread must not pay for a page (ADR-0013).
+    /// thread must not pay for a page.
     pub measured: usize,
     pub spill: Vec<(usize, PathBuf)>,
     /// The drawn rows that are an expandable entry's own row, and the entry
-    /// behind each: a click there opens it (ADR-0011 §9, issue #44).
+    /// behind each: a click there opens it.
     pub expand: Vec<(usize, usize)>,
     /// The pictures the window shows, re-based to its rows, each with whether
     /// its graphic is whole in them: the third of the frame's row maps, and what
-    /// is drawn over the rows the markdown reserved (ADR-0016 §6, §9).
+    /// is drawn over the rows the markdown reserved.
     pub(crate) pictures: Vec<Shown>,
 }
 
@@ -68,8 +68,7 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
     });
     Paragraph::new(rows).render(at, buf);
     // A picture is drawn where its rows are, after the paragraph that reserved
-    // them — and never behind an overlay, which is cells and not a graphic
-    // (ADR-0016 §7, §9).
+    // them — and never behind an overlay, which is cells and not a graphic.
     if app.overlay().is_none() {
         for picture in placed.iter().filter(|picture| picture.drawn) {
             pictures::paint(app, picture, buf);
@@ -153,7 +152,7 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
     // A picture's rows are drawn on, so they carry no words of their own: a copy
     // of the block is its caption once, on the block's first row, and nothing on
     // the rest — drawn or not, because the blank rows are the window's either
-    // way (ADR-0016 §9).
+    // way.
     for picture in &pictures {
         let laid = &picture.laid;
         let end = laid.end().min(plain.len());

@@ -2,7 +2,7 @@
 //! `sandbox exec` and the frame are three doors onto the same broken run
 //! environment, so the words and the exit code a shell reads are the same
 //! whichever door was used — the one regression that catches a front end
-//! learning to say a shared failure in its own dialect (ADR-0004).
+//! learning to say a shared failure in its own dialect.
 
 #![allow(
     clippy::expect_used,
@@ -24,7 +24,7 @@ fn blocked_state() -> (tempfile::TempDir, PathBuf) {
 }
 
 /// The one line the failure is: a session directory that cannot be created is
-/// the sandbox family (ADR-0004), it names the path it could not create, and the
+/// the sandbox family, it names the path it could not create, and the
 /// reason is the operating system's own.
 fn expected(state: &Path) -> String {
     format!(

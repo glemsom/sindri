@@ -1,7 +1,7 @@
 //! The pulse: the clock a live run keeps. The frame is drawn when there is
 //! something to say, and while something is happening the clock is something
 //! to say — a braille frame that moves, a duration that counts up, a figure
-//! that has just grown (ADR-0011 §4). While the frame is idle the clock says
+//! that has just grown. While the frame is idle the clock says
 //! nothing, so nothing is drawn for it.
 
 use std::time::Duration;

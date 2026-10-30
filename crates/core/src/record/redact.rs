@@ -1,4 +1,4 @@
-//! Credentials never reach the disk (ADR-0006). One value holds the secrets a
+//! Credentials never reach the disk. One value holds the secrets a
 //! run knows, and every string the record writes passes through it first, so a
 //! new field cannot forget.
 

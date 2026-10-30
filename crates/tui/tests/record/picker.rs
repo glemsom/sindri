@@ -1,5 +1,5 @@
 //! `/sessions`: the picker over the records, newest first, and the reader it
-//! opens. Reading is not resuming — nothing in this path writes (ADR-0011 §8).
+//! opens. Reading is not resuming — nothing in this path writes.
 
 use super::*;
 

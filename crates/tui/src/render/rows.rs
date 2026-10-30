@@ -1,7 +1,7 @@
 //! One entry as rows: the shapes a turn takes in the transcript column — a
 //! prompt on its band, an answer under its marker, a call under its line, a
 //! note at the turn's own edge — and the gutter that says what belongs to
-//! what (ADR-0011 §4, §23).
+//! what.
 
 use std::time::Duration;
 
@@ -23,7 +23,7 @@ pub const GUTTER: u16 = 2;
 
 /// One entry as the frame lays it out: the rows, and the pictures among them —
 /// the row each block starts at, the column of the entry's body it hangs off,
-/// and what the store measured (ADR-0016 §6, §9).
+/// and what the store measured.
 pub struct Rows {
     pub rows: Vec<Line<'static>>,
     pub pictures: Vec<Laid>,
@@ -42,7 +42,7 @@ impl Rows {
 
 /// The rows one entry takes at `width`. `store` is what measures a picture, and
 /// it is handed down rather than built here: the row count a frame lays out is
-/// the store's answer, never a file the renderer read (ADR-0016 §5).
+/// the store's answer, never a file the renderer read.
 pub fn entry_rows(entry: &Entry, width: u16, now: Duration, store: Option<&Store>) -> Rows {
     let width = width.max(1);
     // The gutter's columns are not the body's: a call and its output wrap
@@ -61,7 +61,7 @@ pub fn entry_rows(entry: &Entry, width: u16, now: Duration, store: Option<&Store
             text, done, open, ..
         } => {
             // A thought that is over is one row until the reader opens it,
-            // and then it is the text it held (ADR-0011 §11, issue #44).
+            // and then it is the text it held.
             if *done && !*open {
                 return Rows::plain(gutter(vec![Line::from(Span::styled(
                     "⌁ reasoned",
@@ -106,7 +106,7 @@ pub fn entry_rows(entry: &Entry, width: u16, now: Duration, store: Option<&Store
 /// body's column: `above` is the rows of the entry before the body — the
 /// answer's marker and nothing for a thought — `dropped` the body's rows the
 /// frame did not keep, the gutter is the body's first two columns, and the
-/// writer's own inset is the quote the block sits in (ADR-0016 §9).
+/// writer's own inset is the quote the block sits in.
 fn laid(written: Vec<markdown::Picture>, above: usize, dropped: usize) -> Vec<Laid> {
     written
         .into_iter()
@@ -124,13 +124,13 @@ fn laid(written: Vec<markdown::Picture>, above: usize, dropped: usize) -> Vec<La
 }
 
 /// The rows a markdown body hangs below: the answer's own marker row, which is
-/// a row of the entry like any other (ADR-0016 §9).
+/// a row of the entry like any other.
 const MARKER_ROWS: usize = 1;
 
 /// A turn's answer: the marker at its head, and the prose beneath it. The
 /// marker is the run's own clock — a braille frame and a duration that counts
 /// up while the answer streams, and then the outcome and the duration it
-/// stopped at, which never move again (ADR-0011 §4).
+/// stopped at, which never move again.
 fn answer_rows(
     text: &str,
     done: bool,

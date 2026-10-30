@@ -11,9 +11,6 @@ use ratatui::buffer::Buffer;
 use ratatui::style::Color;
 use sindri_tui::graphics::Graphics;
 
-/// ADR-0011, as committed: the section the seam amends.
-const ADR_0011: &str = include_str!("../../../../docs/adr/0011-the-tui-contract.md");
-
 /// A frame whose terminal speaks Kitty graphics, and so draws the glow.
 fn lit() -> App {
     App::new(launch(), None).with_graphics(Some(Graphics::kitty()))
@@ -242,7 +239,7 @@ fn sources(dir: &Path, found: &mut Vec<PathBuf>) {
 fn the_terminal_is_asked_once_and_the_face_and_the_seam_both_borrow_it() {
     // `Picker::from_query_stdio` spends up to a second and reads stdin, so it
     // is asked in exactly one place and both users of a picture read that one
-    // answer (ADR-0016 §1, #56, #63).
+    // answer(#56, #63).
     let mut found = Vec::new();
     sources(
         &Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
@@ -280,22 +277,5 @@ fn the_terminal_is_asked_once_and_the_face_and_the_seam_both_borrow_it() {
     assert!(
         margins(&cells(&mut both, 100, 40))[0] == '\u{25A9}',
         "and the margin is lit beside it, from the same answer: {shown:#?}"
-    );
-}
-
-#[test]
-fn adr_0011_says_the_margins_paint_and_no_other_section_moves() {
-    let margin = ADR_0011
-        .split("\n\n")
-        .find(|section| section.starts_with("23. **The surface"))
-        .expect("ADR-0011 §23 is the surface")
-        .replace('\n', " ");
-    assert!(
-        margin.contains("margin"),
-        "§23 names the margin the seam paints in: {margin:?}"
-    );
-    assert!(
-        margin.contains("light strip") && margin.contains("#63"),
-        "§23 says what the margin carries, and where it comes from: {margin:?}"
     );
 }

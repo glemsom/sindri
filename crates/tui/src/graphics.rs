@@ -1,6 +1,6 @@
 //! What this terminal can draw, and how big a cell it draws it in: the one
 //! question the frame asks it. A picture needs the same answer the face does
-//! (ADR-0016 §1), and asking twice would double the cost — the query spends up
+//! and asking twice would double the cost — the query spends up
 //! to a second and reads stdin, and a second read could eat a keystroke.
 
 use std::io::IsTerminal;
@@ -15,7 +15,7 @@ pub struct Graphics {
 impl Graphics {
     /// Ask the terminal what it can draw. It is asked once per launch, so both
     /// the face and a picture borrow this answer rather than spending their own
-    /// query (ADR-0016 §1): nothing else may call `Picker::from_query_stdio`.
+    /// query: nothing else may call `Picker::from_query_stdio`.
     pub fn detect() -> Option<Graphics> {
         if !asks(std::io::stdout().is_terminal(), |name| {
             std::env::var(name).ok()

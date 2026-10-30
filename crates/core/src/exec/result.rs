@@ -1,6 +1,5 @@
 //! What the `bash` tool returns to the model: a structured outcome and the two
-//! streams, head-and-tail truncated with the full text spilled to a file
-//! (ADR-0007).
+//! streams, head-and-tail truncated with the full text spilled to a file.
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -8,7 +7,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 /// Why the command stopped — never a bare exit code, which in a pipeline can
-/// belong to the wrong command (ADR-0007).
+/// belong to the wrong command.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "outcome", rename_all = "snake_case")]
 pub enum Outcome {

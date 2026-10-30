@@ -5,7 +5,7 @@
 //! so what the strip looks like is a test's business rather than a
 //! screenshot's. Nothing here owns a layout, an `App` or a terminal, and
 //! nothing here is drawn. It is generated once per body height and replaced
-//! when the body is resized (ADR-0011 §23, issue #63); that is the drawing
+//! when the body is resized (issue #63); that is the drawing
 //! side's business, not this module's.
 
 use image::RgbaImage;
@@ -32,7 +32,7 @@ pub const FALLOFF: i32 = 4;
 
 /// The two stops the light is made of, read off the theme's names once: a
 /// renderer names a colour or nothing, so the strip blends `HEADING` and
-/// `PROMPT` and names no third hue of its own (ADR-0011 §23).
+/// `PROMPT` and names no third hue of its own.
 const STOPS: [[u8; 3]; 2] = [channels(HEADING), channels(PROMPT)];
 
 /// The strip as a picture: `px_w` pixels across and `px_h` pixels down, the

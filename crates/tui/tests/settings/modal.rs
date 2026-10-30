@@ -1,5 +1,5 @@
 //! The modal itself: every key of the schema on screen, a save that applies,
-//! a refusal that writes nothing, and a draft `Esc` throws away (ADR-0014).
+//! a refusal that writes nothing, and a draft `Esc` throws away.
 
 use super::*;
 

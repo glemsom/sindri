@@ -1,4 +1,4 @@
-//! The terminal UI: the core's event stream, rendered (ADR-0011). The crate
+//! The terminal UI: the core's event stream, rendered. The crate
 //! is a renderer and nothing else. It holds no turn loop, no retry policy and
 //! no sandbox code: a front end implements [`driver::Driver`] to run one
 //! prompt, and this crate draws what the run did while it does.

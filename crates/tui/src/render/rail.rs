@@ -1,13 +1,13 @@
 //! The rail as a column, and as one strip when the terminal is too narrow for
 //! one. The face's space is taken first, so its absence closes the rail up
-//! rather than leaving a hole (ADR-0011).
+//! rather than leaving a hole.
 //!
 //! The rail is chrome, not a surface: it lets the canvas through beside the
 //! words and draws no fill, so the frame holds one panel the user owns — the
 //! composer — and the rail says its facts as a ledger: labels in a fixed field,
 //! dot leaders across the gap, values hanging off one edge, a hairline between
 //! the blocks and a dotted seam that begins and ends with the facts
-//! (ADR-0011 §22, §23, issue #61).
+//!(issue #61).
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -30,7 +30,7 @@ const LABEL: usize = 9;
 const LEDGER: usize = 2 + LABEL + 1;
 /// The seam: one dotted spine down the rail's first column, instead of a rule
 /// that ran the height of the frame. Dots at an eighth of a cell read darker
-/// than they are, so it is painted a step above FAINT (ADR-0011 §23). A cell,
+/// than they are, so it is painted a step above FAINT. A cell,
 /// not a string: every room beside it counts in cells.
 const SEAM: char = '⁞';
 /// The fewest cells of gap worth bridging with dots: a leader with nothing to
@@ -41,7 +41,7 @@ pub fn column(app: &mut App, area: Rect, buf: &mut Buffer) {
     // The rail is transparent, like the transcript it sits beside: only its
     // seam, its hairline and the row its chip sits on are painted, so the rail
     // never competes with the composer for the one panel on screen
-    // (ADR-0011 §23).
+    //.
     let width = area.width as usize;
     let drawn = facts(app, width, area.height as usize);
     let spare = area.height.saturating_sub(drawn.lines.len() as u16);
@@ -79,7 +79,7 @@ pub fn column(app: &mut App, area: Rect, buf: &mut Buffer) {
 }
 
 /// One drawn row and the fact it states. The seam, the leader and the rule are
-/// the frame's typography; only the fact is a copy's business (ADR-0011 §22).
+/// the frame's typography; only the fact is a copy's business.
 struct Row {
     line: Line<'static>,
     copies: String,
@@ -114,7 +114,7 @@ fn facts(app: &App, width: usize, height: usize) -> Drawn {
     let all = app.rail().facts(app.now());
     // A column shorter than the facts it has to state gives them up from the
     // bottom of the one priority order, keeps a row back for saying so, and
-    // never loses the posture (ADR-0011 §22).
+    // never loses the posture.
     let (facts, hidden) = keep(&all, height);
     let mut drawn = Drawn {
         lines: Vec::new(),
@@ -183,7 +183,7 @@ fn rows(facts: &[Fact]) -> usize {
 
 /// The one row that says the rail had room for only some of its facts, and
 /// which way there is more: a short terminal loses facts one priority order at
-/// a time, never in silence (ADR-0011 §22).
+/// a time, never in silence.
 fn more(hidden: usize) -> Row {
     let said = format!("+{hidden} more");
     Row::said(
@@ -201,7 +201,7 @@ fn row(fact: &Fact, width: usize) -> Row {
             // The chip's row is one raised run: it begins at the seam and
             // runs to the rail's last column, so the chip is right-aligned on
             // the edge the values hang off and flush to the rail's edge
-            // (ADR-0011 §23).
+            //.
             let said = format!(" ⬢ {} ", fact.value());
             let pad = width.saturating_sub(1 + said.chars().count());
             Row::said(
@@ -220,7 +220,7 @@ fn row(fact: &Fact, width: usize) -> Row {
             let gap = width.saturating_sub(LEDGER + said.chars().count());
             let leader = leader(gap);
             // A figure that has just grown is pointed at for a moment, so the
-            // motion is visible rather than inferred (ADR-0011 §4).
+            // motion is visible rather than inferred.
             let style = if fact.fresh() {
                 theme::prompt()
             } else {
@@ -274,7 +274,7 @@ fn rule(width: usize) -> Row {
 /// A posture is a chip: stated on the raised tier, so it reads as the one
 /// thing on the rail that is not a label and a value — and the only row of the
 /// rail that carries a colour behind it. The first frame's posture line
-/// borrows the same one (ADR-0011 §21).
+/// borrows the same one.
 pub(crate) fn chip() -> ratatui::style::Style {
     theme::good().patch(theme::raised())
 }
@@ -282,7 +282,7 @@ pub(crate) fn chip() -> ratatui::style::Style {
 pub fn strip(app: &App, area: Rect, buf: &mut Buffer) {
     // The strip is one row, and what it says already fits it: what was said is
     // shortened or dropped where it was chosen rather than cut here
-    // (ADR-0011 §22).
+    //.
     let text = app.rail().strip(area.width as usize, app.now());
     let line = Line::from(Span::styled(text, theme::faint()));
     Paragraph::new(line).render(area, buf);

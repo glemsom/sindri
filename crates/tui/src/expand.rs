@@ -1,4 +1,4 @@
-//! Opening a call, and the reasoning beside it, in place (ADR-0011 §9, §11).
+//! Opening a call, and the reasoning beside it, in place.
 //! The frame has no cursor of its own: `Enter` on an empty composer means the
 //! entry the reader last touched — or, if they have touched none, the newest
 //! one they can open — and a click means the entry whose row it landed on.

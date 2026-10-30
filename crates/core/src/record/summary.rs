@@ -1,4 +1,4 @@
-//! Every record a run left, as one list a front end can draw (ADR-0006):
+//! Every record a run left, as one list a front end can draw:
 //! `/sessions` reads `session.json` for what a run was and the first thing the
 //! human wrote for what it was asked. Reading is not resuming — nothing here
 //! writes, and nothing starts a run.

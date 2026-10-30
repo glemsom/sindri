@@ -1,4 +1,4 @@
-//! The config file, written (ADR-0014). Every test points a document at a
+//! The config file, written. Every test points a document at a
 //! temporary directory: nothing here reads or writes a real user's config, and
 //! nothing here can.
 

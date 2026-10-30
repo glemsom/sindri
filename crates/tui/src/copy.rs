@@ -1,6 +1,6 @@
 //! Copying text out of the frame: OSC 52 to the terminal, a shell tool when
-//! the terminal cannot carry it, and a refusal said as a refusal
-//! (ADR-0011). Nothing here assumes a local clipboard: the frame runs over
+//! the terminal cannot carry it, and a refusal said as a refusal.
+//! Nothing here assumes a local clipboard: the frame runs over
 //! SSH and inside `tmux`.
 
 use std::io::{IsTerminal, Write};
@@ -156,7 +156,7 @@ impl crate::app::App {
     }
 
     /// The session id alone, with no column of the rail around it: what a user
-    /// pastes into `sindri sessions show` (ADR-0006).
+    /// pastes into `sindri sessions show`.
     pub(crate) fn copy_session_id(&mut self) {
         let id = self.rail.session();
         self.copy_named(&id, Some("session id"));

@@ -1,5 +1,5 @@
 //! Reading a record back: `sindri sessions show <id>` and, later, a TUI's
-//! session restore, from the same files the run wrote (ADR-0006).
+//! session restore, from the same files the run wrote.
 
 use std::fmt;
 use std::io;

@@ -1,4 +1,4 @@
-//! The only module that knows the provider library exists (ADR-0003): the
+//! The only module that knows the provider library exists: the
 //! Anthropic Messages wire, the OpenAI-compatible Chat Completions wire, our
 //! own HTTP client with explicit timeouts, and the translation of the
 //! library's vocabulary into ours.
@@ -37,7 +37,7 @@ const THINKING_BUDGET: u32 = 4096;
 /// reasoning: that wire names a level, not a budget.
 const THINKING_EFFORT: Effort = Effort::Medium;
 /// The instructions every batch turn carries. The sandbox's own description
-/// arrives with the `bash` tool's definition (ADR-0002).
+/// arrives with the `bash` tool's definition.
 const PREAMBLE: &str = "You are Sindri, an assistant answering a developer at a Unix \
 terminal. Answer the question you were given, using the context after it when there is \
 some. You have one tool, `bash`: run commands with it rather than guessing, and check \

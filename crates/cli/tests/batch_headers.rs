@@ -1,6 +1,6 @@
 //! The headers a run sends besides the ones the wire writes: a gateway that
 //! routes on a header of its own cannot be reached without one, and the value
-//! it wants is as likely to be a secret as the credential is (ADR-0005).
+//! it wants is as likely to be a secret as the credential is.
 
 #![allow(
     clippy::expect_used,

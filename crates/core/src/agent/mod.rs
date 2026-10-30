@@ -2,8 +2,8 @@
 //! channel and returns a report, so it holds no terminal concerns.
 //!
 //! The agent also owns the conversation: the messages the model was shown, kept
-//! across prompts, so a second question builds on the first answer (ADR-0012,
-//! ADR-0014). One launch is one thread; `/new` forgets it.
+//! across prompts, so a second question builds on the first answer.
+//! One launch is one thread; `/new` forgets it.
 
 mod event;
 mod report;
@@ -24,7 +24,7 @@ use crate::record::Recorder;
 /// What one conversation runs on: the model to ask, the tool to run it with,
 /// how many turns it may take, and whether it pays for reasoning. A front end
 /// replaces the whole set between prompts, because a saved setting can change
-/// any of them and none of them is the conversation (ADR-0014).
+/// any of them and none of them is the conversation.
 pub struct Dials {
     pub model: Box<dyn Model>,
     pub tool: BashTool,
@@ -59,7 +59,7 @@ impl Agent {
 
     /// The dials this conversation runs on, replaced between prompts: the
     /// thread is the conversation's, not the model's, so a saved setting is a
-    /// change of dials and not a change of subject (ADR-0014).
+    /// change of dials and not a change of subject.
     pub fn set_dials(&mut self, dials: Dials) {
         self.model = dials.model;
         self.tool = dials.tool;

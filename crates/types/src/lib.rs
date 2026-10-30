@@ -1,7 +1,7 @@
 //! Shared values with no dependency on the rest of Sindri: the exit-code
 //! taxonomy that the batch contract promises, and the build version.
 
-/// The build version, derived from `git describe` at build time (ADR-0009).
+/// The build version, derived from `git describe` at build time.
 pub const VERSION: &str = env!("SINDRI_VERSION");
 /// The commit date of the build, `YYYY-MM-DD`, never the wall clock.
 pub const COMMIT_DATE: &str = env!("SINDRI_COMMIT_DATE");

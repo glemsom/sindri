@@ -1,5 +1,5 @@
 //! The pulse: a running thing counts up, a finished one freezes, and the
-//! meters move while the run they describe is still running (ADR-0011 §4).
+//! meters move while the run they describe is still running.
 //! Nothing here depends on which braille frame the animation is on: a marker
 //! is asserted by asking the frame set, not by naming one frame of it.
 

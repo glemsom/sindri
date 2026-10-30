@@ -16,7 +16,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 libc = "0.2"
 toml = "1"
-# Pinned to an exact version on purpose (ADR-0003): a rig rewrite must touch
+# Pinned to an exact version on purpose: a rig rewrite must touch
 # `provider/rig_wire.rs` and nothing else.
 rig-core = { version = "=0.45.0", default-features = false, features = ["rustls", "reqwest"] }
 rig-reqwest = "=0.45.0"

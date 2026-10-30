@@ -1,5 +1,5 @@
 //! The narrowest terminal that can hold the rail as a column; below this it
-//! is a strip (ADR-0011).
+//! is a strip.
 
 mod call;
 mod card;
@@ -34,11 +34,11 @@ pub const RAIL_MIN_WIDTH: u16 = 100;
 /// escape is wider than the cell that carries it, so `Buffer::diff` leaves the
 /// cell after it unpainted, and the strip the margin draws is a picture. The
 /// strip takes both cells, so the one the diff costs it is its own and never
-/// the rail's first `⁞` or the face drawn above it (#63).
+/// the rail's first column or the face drawn above it (#63).
 pub const GAP_COLUMNS: u16 = 2;
 /// The footer's hints, in the one order they are worth saying: the keys that
 /// send, open the list and leave first, because a terminal too narrow for all
-/// of them is exactly where they are least discoverable (ADR-0011 §22).
+/// of them is exactly where they are least discoverable.
 const HINTS: [&str; 7] = [
     "Enter send",
     "? keys",
@@ -82,8 +82,8 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
     };
     let (transcript, margin, rail_column, rail_strip) = if area.width >= RAIL_MIN_WIDTH {
         // The terminal's own canvas between the words and the rail: the rail's
-        // seam is an edge, and an edge needs air on both sides of it
-        // (ADR-0011 §4). Where the terminal speaks Kitty graphics the strip of
+        // seam is an edge, and an edge needs air on both sides of it.
+        // Where the terminal speaks Kitty graphics the strip of
         // `seam.rs` fills the gap, for the whole height of the body (#63).
         let [left, margin, right] = Layout::horizontal([
             Constraint::Min(1),
@@ -103,7 +103,7 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
 
     transcript::draw(app, transcript, frame.buffer_mut());
     // The glow is drawn beside the rail and never over it: the margin has its
-    // own rect, and `set_rail_view` is given the rail's (ADR-0011 §23, #63).
+    // own rect, and `set_rail_view` is given the rail's.
     if let Some(margin) = margin {
         seam::draw(app, margin, frame.buffer_mut());
     }
@@ -130,7 +130,7 @@ fn footer_rows(app: &App, area: Rect, buf: &mut Buffer) {
     let mut prefix = String::new();
     // A cancel is answered where the "working" was: the request in flight is
     // not interrupted, so the frame says what it is waiting for instead of
-    // going quiet until it lands (ADR-0004). The queue states its own size.
+    // going quiet until it lands. The queue states its own size.
     if app.is_cancelling() {
         prefix.push_str("cancelling… · ");
     } else if app.is_running() {
@@ -166,7 +166,7 @@ fn footer_rows(app: &App, area: Rect, buf: &mut Buffer) {
 /// spare: all seven hints from 120 columns up, five from 100, three from 60
 /// and never fewer than the two that send and open the list. A hint is a
 /// whole thing or it is not there at all — the set shrinks rather than the
-/// word being cut (ADR-0011 §22).
+/// word being cut.
 fn hints(width: usize, room: usize) -> String {
     let mut count = match width {
         w if w >= 120 => HINTS.len(),

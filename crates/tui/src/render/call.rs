@@ -1,5 +1,5 @@
 //! One tool call's rows: its status, its line count, and whatever the reader
-//! has opened of it (ADR-0011 §9, §4). A call is expandable whether or not it
+//! has opened of it. A call is expandable whether or not it
 //! spilled — the spill file is an optimisation on top of that, never the only
 //! way back to the output — and an expansion reads the entry's bounded tail,
 //! so it costs the cap rather than the stream (issue #44).
@@ -20,7 +20,7 @@ use crate::theme;
 const STATUS: usize = 8;
 /// The columns a call's duration takes after its status: a finished call and a
 /// running one put the command in the same place, and the duration counts up
-/// or stands still in a field that does not move (ADR-0011 §4).
+/// or stands still in a field that does not move.
 const DURATION: usize = 6;
 
 pub fn rows(call: &Call, width: u16, now: Duration) -> Vec<Line<'static>> {
@@ -30,8 +30,8 @@ pub fn rows(call: &Call, width: u16, now: Duration) -> Vec<Line<'static>> {
         .unwrap_or("(the call could not be read)");
     // A marker column, then a status column of fixed width: a call that is
     // still running and the same call collapsed leave the command where it
-    // was, and the glyph says GOOD or BAD without a word of hue alone
-    // (ADR-0011 §23). A refused call's reason is longer than the column and
+    // was, and the glyph says GOOD or BAD without a word of hue alone.
+    // A refused call's reason is longer than the column and
     // pushes its own command right; a call that never ran has no earlier row
     // for that to disagree with.
     let (glyph, status, accent) = match &call.over {
@@ -97,7 +97,7 @@ pub fn rows(call: &Call, width: u16, now: Duration) -> Vec<Line<'static>> {
 
 /// One line of a call's output. stdout and stderr differ by a glyph as well as
 /// by hue: a line read on a terminal that lost its colour still tells a
-/// warning from a result (ADR-0011 §23).
+/// warning from a result.
 fn output(side: &Side, line: &str, width: u16) -> Line<'static> {
     let (marker, style) = match side {
         Side::Stdout => ("│", theme::faint()),

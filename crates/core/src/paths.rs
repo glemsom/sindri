@@ -1,5 +1,5 @@
 //! Where Sindri keeps its state: the state directory and the session
-//! identifiers that name a record (ADR-0006).
+//! identifiers that name a record.
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -28,14 +28,14 @@ pub fn config_dir() -> io::Result<PathBuf> {
     }
 }
 
-/// The one config file a run reads (ADR-0005). Never a repository-local one: a
+/// The one config file a run reads. Never a repository-local one: a
 /// checked-in file that grants writable paths turns cloning into privilege
 /// escalation.
 pub fn config_file() -> io::Result<PathBuf> {
     Ok(config_dir()?.join("config.toml"))
 }
 
-/// One run's directory: `<state>/sindri/sessions/<guid>` (ADR-0006).
+/// One run's directory: `<state>/sindri/sessions/<guid>`.
 #[derive(Debug, Clone)]
 pub struct SessionDir {
     root: PathBuf,
@@ -44,7 +44,7 @@ pub struct SessionDir {
 impl SessionDir {
     /// Creates the directory for a fresh session under `state`, the root the
     /// run environment names: the session's caller decides where state lives,
-    /// so nothing below `Session::open` reads the process (ADR-0015).
+    /// so nothing below `Session::open` reads the process.
     pub fn create_in(state: &Path) -> io::Result<Self> {
         let root = state.join("sessions").join(new_session_id()?);
         std::fs::create_dir_all(&root)?;

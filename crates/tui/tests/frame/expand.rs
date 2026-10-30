@@ -1,4 +1,4 @@
-//! Every call is openable, reasoning included (ADR-0011 §9, §11): a call keeps
+//! Every call is openable, reasoning included: a call keeps
 //! a bounded tail of its whole output, `Enter` on a blank composer — or a click
 //! on its row — expands it in place, and the spill file is an optimisation on
 //! top of that rather than the way back in (issue #44).

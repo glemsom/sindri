@@ -1,7 +1,7 @@
 //! The process seam for the ways a run stops that are not an answer: a command
 //! that outlives its deadline, a sandbox that never starts, and the turn cap
 //! ending a model that will not stop asking. Each is reported to the model or
-//! to the shell, never as a mysterious command failure (ADR-0007).
+//! to the shell, never as a mysterious command failure.
 
 #![allow(
     clippy::expect_used,

@@ -1,8 +1,8 @@
 //! The door: a run with no credential opens the frame instead of exiting, with
-//! the settings modal staged on the key's row (ADR-0004). Driven through a
+//! the settings modal staged on the key's row. Driven through a
 //! pseudo-terminal, because a frame is only a frame on a terminal — and the
 //! key typed there is asserted absent from the screen, the transcript and the
-//! record, as on every other path (ADR-0014).
+//! record, as on every other path.
 
 #![allow(
     clippy::expect_used,

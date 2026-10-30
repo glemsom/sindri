@@ -1,14 +1,10 @@
-//! The vocabulary, kept true by the two documents that define it: `GLOSSARY.md`
-//! names *boot*, and ADR-0015 says the failure's words are the front end's. The
-//! front ends in this crate cite both, so a document that drifts from the code
-//! makes every comment that cites it a lie (ADR-0008: an agent reads the
-//! glossary before it edits code).
+//! The vocabulary, kept true by `GLOSSARY.md`: it names *boot*, and the front
+//! ends in this crate use that word. Documents drift, so the entry an agent
+//! reads first is asserted here rather than trusted.
 
 /// The glossary, as committed: `include_str!` so the test cannot pass against a
 /// file it read from the wrong directory.
 const GLOSSARY: &str = include_str!("../../../GLOSSARY.md");
-
-const ADR_0015: &str = include_str!("../../../docs/adr/0015-one-module-starts-a-run.md");
 
 #[test]
 fn the_glossary_defines_boot_as_the_turn_from_flags_and_process_into_a_session() {
@@ -34,17 +30,18 @@ fn the_glossary_defines_boot_as_the_turn_from_flags_and_process_into_a_session()
 }
 
 #[test]
-fn adr_0015_says_the_words_are_the_front_ends_and_claims_no_third_config_door() {
+fn the_one_adr_is_a_rulebook_an_agent_can_check() {
+    let adr = include_str!("../../../docs/adr/0001-code-an-agent-can-maintain.md");
     assert!(
-        ADR_0015.contains("10. **The words are the front end's.**"),
-        "ADR-0015 carries §10: the one wording per failure, said by every front end"
+        adr.contains("## Decision"),
+        "the ADR states its rules under one heading"
     );
     assert!(
-        ADR_0015.contains("crates/cli/src/failure.rs"),
-        "§10 names the module that owns the words, so no front end decides them"
+        adr.contains("`make check` is the definition of done"),
+        "it names the gate, so an agent knows what done means"
     );
     assert!(
-        !ADR_0015.contains("configured_extras"),
-        "no third config door: `configured_extras` is deleted, the module has two reads"
+        adr.contains("New decisions are not new ADRs"),
+        "a new decision goes in code, a test or the glossary, not in a new record"
     );
 }

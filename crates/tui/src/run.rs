@@ -1,6 +1,6 @@
 //! The one place this crate owns a terminal: raw mode, the alternate screen,
 //! the input thread and the render loop. Everything the loop draws comes from
-//! [`App`]; everything it runs comes from a [`Driver`] (ADR-0011).
+//! [`App`]; everything it runs comes from a [`Driver`].
 
 use std::io::IsTerminal;
 use std::path::Path;
@@ -25,7 +25,7 @@ pub use crate::render::Card;
 
 const CARD_POLL: Duration = Duration::from_millis(200);
 /// How often the loop looks at the clock while there is something to look at:
-/// a live run or a completion being walked (ADR-0011 §4).
+/// a live run or a completion being walked.
 const PULSE: Duration = pulse::TICK;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,9 +37,9 @@ pub enum Ending {
 /// Opens the frame on the alternate screen and runs it until the user leaves.
 /// `cancel` is the launch's one flag: the front end has already pointed the
 /// process's signals at it, so a `kill -INT` ends the run in flight exactly
-/// as `Ctrl-C` does (ADR-0015). `missing` is what the front door found absent
+/// as `Ctrl-C` does. `missing` is what the front door found absent
 /// and could not fail on: a run with no key opens the frame with the settings
-/// modal staged on it (ADR-0004).
+/// modal staged on it.
 pub fn open(
     launch: Launch,
     driver: Box<dyn Driver>,
@@ -78,7 +78,7 @@ fn alternate_screen() -> Option<DefaultTerminal> {
     }
     let terminal = ratatui::init();
     // The frame takes the mouse because it draws its own selection: a drag
-    // copies rendered rows, and Shift hands the gesture back (ADR-0011).
+    // copies rendered rows, and Shift hands the gesture back.
     let _ = crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture,);
     Some(terminal)
 }
@@ -89,8 +89,7 @@ fn release_mouse() {
 
 /// The card stays until it is read: a key leaves it, the page keys move a
 /// report taller than the screen, and a resize only lays it out again — a
-/// `tmux` client attaching is not the reader saying they have seen it
-/// (ADR-0011 §15).
+/// `tmux` client attaching is not the reader saying they have seen it.
 fn show_card(terminal: &mut DefaultTerminal, card: &Card) -> Ending {
     let mut view = crate::card::View::default();
     loop {
@@ -123,7 +122,7 @@ fn session(
     missing: Option<Missing>,
 ) -> Ending {
     // One terminal, one question, asked once: the face is drawn from this answer,
-    // and the picture draws from the same one (ADR-0016 §1).
+    // and the picture draws from the same one.
     let graphics = Graphics::detect();
     let face = graphics.as_ref().and_then(Face::new);
     let mut app = recorded(
@@ -139,7 +138,7 @@ fn session(
     let jobs = drive(driver, tx.clone());
     // At most one walk of the workspace at a time: a keystroke during a walk
     // asks for the newest answer, and the frame asks again when that one
-    // lands (ADR-0013). Typing never queues ten walks.
+    // lands. Typing never queues ten walks.
     let mut walking = false;
 
     // Nothing has been said yet, so the first frame is drawn here.
@@ -161,7 +160,7 @@ enum Wake {
 
 /// Waits for the next thing to happen. A frame with something happening in it
 /// is on the clock, so it is woken by it; a still frame waits for a message and
-/// pays nothing for the wait (ADR-0011 §4).
+/// pays nothing for the wait.
 fn wait(rx: &Receiver<Msg>, live: bool) -> Wake {
     if !live {
         return match rx.recv() {
@@ -211,7 +210,7 @@ fn turn_of_the_loop(
 
 /// Where the records live and where a default `/export` lands: the state
 /// directory is read and never written by the frame, and the workspace is the
-/// directory the frame was launched in (ADR-0006).
+/// directory the frame was launched in.
 fn recorded(app: App) -> App {
     let app = match std::env::current_dir() {
         Ok(workspace) => app.with_workspace(workspace),
@@ -228,14 +227,14 @@ fn recorded(app: App) -> App {
 /// wherever the diff writes next, and a streamed answer repaints the
 /// transcript every frame: a reader then watches the cursor leave the
 /// composer and come back. `draw` shows it at the position the frame set and
-/// never hides it, so the hiding is the loop's (ADR-0011).
+/// never hides it, so the hiding is the loop's.
 ///
 /// Which is also why an idle frame is drawn only because something happened:
 /// every frame ends by showing the cursor and moving it to the composer, and a
 /// terminal restarts its blink on every move, so a loop that redrew an
 /// unchanged frame would leave an idle composer blinking at the frame rate.
 /// While a run is live the frame is drawn on the pulse, and pays that blink
-/// eight times a second for a marker that moves (ADR-0011 §4).
+/// eight times a second for a marker that moves.
 fn paint(terminal: &mut DefaultTerminal, app: &mut App) -> bool {
     let _ = terminal.hide_cursor();
     terminal.draw(|frame| render::draw(app, frame)).is_ok()
@@ -271,7 +270,7 @@ fn begin(app: &mut App, jobs: &Sender<Task>) {
 }
 
 /// Walks the workspace on a thread of its own for the completion that just
-/// asked for it: the composer never waits for a filesystem (ADR-0011).
+/// asked for it: the composer never waits for a filesystem.
 fn walk(app: &mut App, tx: &Sender<Msg>, walking: &mut bool, root: &std::path::Path) {
     if *walking {
         return;
@@ -309,7 +308,7 @@ fn listen_for_keys(tx: Sender<Msg>) {
                 }
                 // A resize has nothing to change in the frame, but it is the
                 // one thing that asks for a frame: the draw reads the
-                // terminal's new size (ADR-0011).
+                // terminal's new size.
                 Ok(TerminalEvent::Resize(..)) => {
                     if tx.send(Msg::Resize).is_err() {
                         return;

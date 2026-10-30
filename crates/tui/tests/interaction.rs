@@ -1,6 +1,6 @@
 //! The frame's behaviour, driven the way a keyboard drives it: Ctrl-C cancels
 //! a run and keeps the draft, a prompt typed mid-run queues, and a failure is
-//! content rather than a toast (ADR-0011).
+//! content rather than a toast.
 
 #![allow(
     clippy::expect_used,
@@ -86,8 +86,7 @@ fn ctrl_c_cancels_the_run_and_the_composer_keeps_its_draft() {
         "the draft survives the cancel"
     );
     // The footer no longer says "working" once the key lands: it says what it
-    // is waiting for, which is the whole point of catching the cancel at once
-    // (ADR-0011 §10).
+    // is waiting for, which is the whole point of catching the cancel at once.
     assert!(
         any(&screen(&mut app, 100, 20), "cancelling…"),
         "the frame answers the key before the request does"
@@ -131,7 +130,7 @@ fn a_cancel_between_prompts_ends_that_run_and_not_the_next() {
     let job = app.start().expect("a run starts");
 
     // A signal and a key raise the same flag, so raising it anywhere raises
-    // it for the run in flight (ADR-0015).
+    // it for the run in flight.
     cancel.trigger();
     assert!(
         job.cancel.is_triggered(),

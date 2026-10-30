@@ -1,7 +1,7 @@
 //! Reading bwrap's status channel. bwrap writes a child-pid document before the
 //! mounts and an exit-code document once the command finished, so the *absence*
 //! of the exit-code document means the sandbox never started — never that the
-//! command failed (ADR-0007).
+//! command failed.
 
 pub fn exit_code(docs: &[u8]) -> Option<i32> {
     let text = String::from_utf8_lossy(docs);

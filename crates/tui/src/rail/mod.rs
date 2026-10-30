@@ -1,6 +1,6 @@
 //! The rail: the facts a user must never lose sight of — what a run has cost,
 //! how close it is to the context limit, which model and workspace are in
-//! play, which sandbox is on, and where the record lives (ADR-0011). One
+//! play, which sandbox is on, and where the record lives. One
 //! ordered list of facts feeds both the column and the one-line strip, so the
 //! two can never disagree.
 
@@ -50,7 +50,7 @@ pub struct Rail {
     /// The characters that have streamed since this run began: the only
     /// usage the frame is handed while the run it describes is still running,
     /// turned into tokens at the one rate it can honestly guess and trued up
-    /// by the report (ADR-0011 §4).
+    /// by the report.
     streamed: u64,
     /// When each spend figure last grew, so the rail can accent what just
     /// moved for a moment.
@@ -135,8 +135,7 @@ impl Rail {
     }
 
     /// What the launch established: the facts the rail states and the first
-    /// frame names — the wire, the model, the directory and the sandbox
-    /// (ADR-0011 §21).
+    /// frame names — the wire, the model, the directory and the sandbox.
     pub fn launch(&self) -> &Launch {
         &self.launch
     }
@@ -226,7 +225,7 @@ impl Rail {
 
     /// The rail as one line, for a terminal too narrow to give it a column:
     /// the same facts in the same order, in as much of them as the line can
-    /// hold (ADR-0011 §22).
+    /// hold.
     pub fn strip(&self, width: usize, now: Duration) -> String {
         strip::strip(&self.facts(now), width)
     }

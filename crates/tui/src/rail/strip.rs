@@ -1,7 +1,6 @@
 //! The rail's one priority order, and the one-line strip that reads it: the
 //! facts a short terminal gives up first, and the same facts in the same order
-//! in as much of them as a line can hold, with never a fact cut in half
-//! (ADR-0011 §22).
+//! in as much of them as a line can hold, with never a fact cut in half.
 
 use super::{Block, Fact, SEPARATOR};
 
@@ -40,7 +39,7 @@ pub(super) fn strip(facts: &[Fact], width: usize) -> String {
 /// run that does not say what sandbox it is in is the one fact nothing else on
 /// the screen stands in for — and puts the numbers the run is spending above
 /// what the run *is*, because the identity block is the one part of the rail
-/// the transcript's first line already names (ADR-0011 §21, §22).
+/// the transcript's first line already names.
 pub fn priority(fact: &Fact) -> u8 {
     if fact.block() == Block::Posture {
         return 10;
@@ -173,7 +172,7 @@ mod tests {
         let facts = facts();
         // The one order both the column and the strip read, least important
         // first: the posture is the fact nothing else on the screen stands in
-        // for, and it ends the list (ADR-0011 §22).
+        // for, and it ends the list.
         let posture = ranked(&facts, "sandbox");
         let mut order: Vec<u8> = facts.iter().map(priority).collect();
         order.sort_unstable();

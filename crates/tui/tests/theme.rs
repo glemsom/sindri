@@ -1,7 +1,6 @@
 //! The theme's promises, held by something other than the renderers: every
 //! colour the frame paints is one the theme names, no renderer carries a
-//! literal of its own, and the faint grey is legible on every surface
-//! (ADR-0011 §23).
+//! literal of its own, and the faint grey is legible on every surface.
 
 #![allow(
     clippy::expect_used,

@@ -1,6 +1,6 @@
 //! The rows the rail last drew, kept so a click on one copies what was drawn
 //! there: the rail's facts as a reader sees them, and where the session's own
-//! row sits among them (ADR-0006, issue #51).
+//! row sits among them.
 
 use ratatui::layout::Rect;
 

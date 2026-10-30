@@ -1,4 +1,4 @@
-//! The overlays own their space (issue #49, ADR-0011, ADR-0013): the help list
+//! The overlays own their space (issue #49): the help list
 //! wraps a description, sizes its box from the wrapped rows and scrolls
 //! itself, and the settings modal keeps its refusal and its keys on screen
 //! when the list of rows does not fit. Every fixture points the frame at a

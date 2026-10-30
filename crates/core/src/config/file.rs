@@ -1,5 +1,5 @@
 //! The config file's own shape, its bytes, and where it lands: the TOML the
-//! schema names, read and written in one place (ADR-0005, ADR-0014).
+//! schema names, read and written in one place.
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -54,7 +54,7 @@ pub(super) fn read_at(path: &Path) -> Result<FileConfig, ConfigError> {
 /// The same document, written back. The bytes land in a temporary file beside
 /// the real one and are renamed over it, so a reader never sees half a file;
 /// the temporary is created readable only by its owner, because this file may
-/// carry a credential (ADR-0014).
+/// carry a credential.
 pub(super) fn write(path: &Path, values: &FileConfig) -> Result<(), ConfigError> {
     let text = toml::to_string(values).map_err(|error| {
         ConfigError::Usage(format!("{}: cannot be written: {error}", path.display()))

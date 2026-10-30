@@ -15,7 +15,7 @@ use crate::theme;
 /// it has when it is quiet, or when it holds the keyboard. Only the rules are
 /// walked, and the corners take the walk's own ends, so the silhouette is
 /// brightest where the light lands and the panel reads as part of the rail's
-/// column rather than a box beside it (ADR-0011 §23).
+/// column rather than a box beside it.
 ///
 /// The ` prompt ` title and the two vertical rules keep one ink: a walk across
 /// one cell says nothing, and the title's letters are a word, not a rule.
@@ -47,7 +47,7 @@ pub const PLACEHOLDER: &str = "Ask, or drop a log here · @ path · / command";
 pub fn draw(app: &App, area: Rect, buf: &mut Buffer) -> Position {
     // The composer is the one thing on screen that is always the user's, so
     // it floats on its own panel: the border is the prompt's colour while it
-    // holds the focus, and steps back to faint while a run has it (ADR-0011 §23).
+    // holds the focus, and steps back to faint while a run has it.
     let (border, ink) = if app.is_running() {
         (theme::faint(), theme::FAINT)
     } else {
@@ -61,7 +61,7 @@ pub fn draw(app: &App, area: Rect, buf: &mut Buffer) -> Position {
     let inner = block.inner(area);
     let lines: Vec<Line<'static>> = match app.missing {
         // What this composer cannot do, where the prompt would be: a run with
-        // no key cannot send one, and saying so is the frame's (ADR-0004).
+        // no key cannot send one, and saying so is the frame's.
         Some(missing) if app.composer().is_blank() => {
             vec![Line::from(ratatui::text::Span::styled(
                 missing.composer(),

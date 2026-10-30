@@ -1,5 +1,5 @@
 //! The queue: the prompts typed while a run had the frame, oldest first, and
-//! the two keys that take one back or drop it (ADR-0011 §10). It is state, not
+//! the two keys that take one back or drop it. It is state, not
 //! drawing: the panel is `render::queue`'s.
 
 use std::collections::VecDeque;
@@ -19,7 +19,7 @@ impl App {
 
     /// A cancel has been asked for and the run has not stopped yet. The frame
     /// says so the moment the key lands, because an in-flight request is not
-    /// interrupted and its answer can be tens of seconds away (ADR-0004).
+    /// interrupted and its answer can be tens of seconds away.
     pub fn is_cancelling(&self) -> bool {
         self.is_running() && self.cancel.is_triggered()
     }

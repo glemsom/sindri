@@ -1,5 +1,5 @@
 //! The card's drawing: what a broken boot paints instead of a half-drawn
-//! interface (ADR-0011 §15). The words are wrapped and the block is sized from
+//! interface. The words are wrapped and the block is sized from
 //! the rows they made, so nothing is cut mid-sentence; what does not fit is
 //! reached with the page keys and marked on the border (issue #50).
 

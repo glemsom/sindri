@@ -1,4 +1,4 @@
-//! `Session`: the one module that starts a run (ADR-0015). Proven at the
+//! `Session`: the one module that starts a run. Proven at the
 //! module's own seam — a run environment pointing at a temporary workspace and
 //! state root, and a resolved config — so no process, no model and no bubblewrap
 //! is involved in any of it.

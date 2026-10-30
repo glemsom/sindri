@@ -1,7 +1,6 @@
 //! The config file's schema, proven at the process seam: an unknown key is an
 //! error naming the key and the file, and every setting the schema promises is
-//! set from the file and overridden by the environment and then by flags
-//! (ADR-0005).
+//! set from the file and overridden by the environment and then by flags.
 
 #![allow(
     clippy::expect_used,

@@ -2,7 +2,7 @@
 # The two static binaries a release carries, named so the installer can find
 # them: sindri-<version>-<target>. Cross-compilation goes through cargo-zigbuild
 # because nixpkgs' rustc has no rustup and therefore no `rustup target add`
-# (ADR-0009). `--dry-run` prints the plan and writes nothing, so the naming
+# `--dry-run` prints the plan and writes nothing, so the naming
 # contract is testable without a cross toolchain.
 set -euo pipefail
 

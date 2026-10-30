@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Source files stay at or under 400 lines, with an explicit allowlist (ADR-0008).
+# Source files stay at or under 400 lines, with an explicit allowlist.
 # Localising a change should not mean reading the world.
 set -euo pipefail
 
@@ -18,7 +18,7 @@ while IFS= read -r file; do
     if [ -f "$allowlist" ] && grep -qxF "$file" "$allowlist"; then
         continue
     fi
-    echo "audit: $file has $lines lines, over the $limit-line limit (ADR-0008)" >&2
+    echo "audit: $file has $lines lines, over the $limit-line limit" >&2
     failed=1
 done < <(git ls-files '*.rs')
 

@@ -1,7 +1,7 @@
 # $XDG_CONFIG_HOME/sindri/config.toml — the one file Sindri reads.
 #
 # Every key is optional, and every key can be overridden without editing this
-# file: environment variables win over it, and flags win over them (ADR-0005).
+# file: environment variables win over it, and flags win over them.
 # An unknown key is an error naming both the key and this file, so a typo never
 # runs silently on defaults.
 

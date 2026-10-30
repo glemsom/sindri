@@ -1,6 +1,6 @@
 //! The config file as something a form can edit: one key at a time, checked
-//! against the schema the run itself reads (ADR-0005), and written only when
-//! the user asks for it (ADR-0014). Nothing here is a second schema: a value
+//! against the schema the run itself reads, and written only when
+//! the user asks for it. Nothing here is a second schema: a value
 //! this refuses is a value the run would refuse.
 
 use std::collections::BTreeMap;
@@ -50,7 +50,7 @@ impl Key {
     }
 
     /// Whether the value is a secret. A secret is never handed back to the
-    /// reader, so no front end can print one by accident (ADR-0005, ADR-0014).
+    /// reader, so no front end can print one by accident.
     pub const fn secret(self) -> bool {
         matches!(self, Key::ApiKey | Key::ExtraHeaders)
     }
@@ -209,7 +209,7 @@ pub fn toggle(value: &str) -> Result<bool, ConfigError> {
 }
 
 /// What a form should put on screen for a toggle: a value the file does not
-/// carry is the run's own default, which is off (ADR-0004). One spelling, so a
+/// carry is the run's own default, which is off. One spelling, so a
 /// field and a file cannot disagree about what on means.
 pub fn toggle_shown(value: &str) -> &'static str {
     match toggle(value).unwrap_or(false) {

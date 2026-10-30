@@ -1,6 +1,6 @@
 //! Derives the build version from `git describe` and the commit date, so a
 //! binary identifies its own source. Never the wall clock: a timestamp would
-//! relink every crate on every build (ADR-0009).
+//! relink every crate on every build.
 
 use std::path::PathBuf;
 use std::process::Command;

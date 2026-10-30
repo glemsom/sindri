@@ -5,7 +5,7 @@ use super::SandboxPolicy;
 use super::argv::LOCALE;
 
 impl SandboxPolicy {
-    /// The human-and-model-facing description (ADR-0002). One derivation, so it
+    /// The human-and-model-facing description. One derivation, so it
     /// cannot drift from what `to_argv` enforces.
     pub fn describe(&self) -> String {
         let mut out = String::from("sandbox policy\n");

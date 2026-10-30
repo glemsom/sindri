@@ -10,7 +10,7 @@ use crate::provider::Usage;
 pub enum Stopped {
     Final,
     MaxTurns,
-    /// The run was cancelled with SIGINT; stdout stays empty (ADR-0004).
+    /// The run was cancelled with SIGINT; stdout stays empty.
     Cancelled,
     Error,
 }

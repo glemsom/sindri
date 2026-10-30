@@ -1,5 +1,5 @@
 //! The vocabulary of a failure: the words that follow `sindri: ` and the exit
-//! code the shell reads (ADR-0004), in one module, so a front end never learns
+//! code the shell reads, in one module, so a front end never learns
 //! its failure words from another front end. `batch`, `frame`, `doctor` and
 //! `sandbox` all print failures; none of them owns what a failure says.
 

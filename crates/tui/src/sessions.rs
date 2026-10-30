@@ -1,6 +1,6 @@
 //! The record picker: what every run left under the state directory, read from
-//! `session.json`, newest first (ADR-0006, issue #51). Reading is not resuming —
-//! nothing here writes a record, and nothing opens a run (ADR-0011 §8).
+//! `session.json`, newest first (issue #51). Reading is not resuming —
+//! nothing here writes a record, and nothing opens a run.
 
 use std::path::{Path, PathBuf};
 
@@ -111,7 +111,7 @@ impl App {
     }
 
     /// `Enter` on a record: its transcript, in the box a spill opens in, read
-    /// only (ADR-0011 §8 — reading is not resuming).
+    /// only (reading is not resuming).
     fn read_session(&mut self) {
         let Some(Overlay::Sessions(sessions)) = self.overlay.as_ref() else {
             return;

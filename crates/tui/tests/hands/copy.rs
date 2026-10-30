@@ -37,7 +37,7 @@ fn a_drag_copies_the_rendered_rows_and_nothing_else() {
     let copied = clipboard.saw();
     assert_eq!(copied.len(), 1, "one drag is one copy: {copied:?}");
     // The answer hangs two columns off its turn's gutter, and a copy keeps the
-    // first row's indentation (ADR-0013).
+    // first row's indentation.
     assert_eq!(
         copied[0], "  the answer, in full",
         "the copy is exactly the rows the drag covered"
@@ -141,7 +141,7 @@ fn shift_up_selects_rendered_rows_and_ctrl_y_copies_them() {
 }
 
 /// One answer whose whole body is a picture: the rows it is drawn on, and the
-/// caption under them (ADR-0016 §2, §9).
+/// caption under them.
 fn pictured(clipboard: Fake) -> App {
     let mut app = App::with_clipboard(
         launch("4f1c8f2e-8a24-4b93-9c0e-0d3f0e5c1a77"),

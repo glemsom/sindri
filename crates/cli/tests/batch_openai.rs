@@ -1,4 +1,4 @@
-//! The process seam for the OpenAI-compatible wire (ADR-0003): one binary, one
+//! The process seam for the OpenAI-compatible wire: one binary, one
 //! agent, whether the models run on the user's own machine or behind an
 //! aggregator. The wire is a base URL, so the same code serves
 //! `http://localhost:11434/v1` and `https://openrouter.ai/api/v1`.

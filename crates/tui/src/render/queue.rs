@@ -1,6 +1,6 @@
 //! The queue: what was typed while a run had the composer, drawn whole on a
-//! panel of its own above it, with the count the footer could not fit
-//! (ADR-0011 §10). `↑` takes the newest one back, `Ctrl-X` drops it.
+//! panel of its own above it, with the count the footer could not fit.
+//! `↑` takes the newest one back, `Ctrl-X` drops it.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -16,7 +16,7 @@ use crate::theme;
 /// how many are waiting, because the count is the thing that cannot be shown.
 const MAX_ROWS: usize = 6;
 /// What a queued row is marked with: a quote mark, not a key, because the
-/// keys are the frame's (ADR-0011 §14).
+/// keys are the frame's.
 const MARKER: &str = "› ";
 
 /// How tall the panel is at this width, border and all. `0` when nothing is

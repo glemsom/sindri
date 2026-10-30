@@ -1,4 +1,4 @@
-//! The shape of the JSON output (ADR-0004), pinned byte for byte: the field
+//! The shape of the JSON output, pinned byte for byte: the field
 //! order, what absent data does, and every word `stopped` can take. A parser
 //! written against this shape must keep working when later fields append, so
 //! the shape is asserted as an exact literal rather than by inspection.

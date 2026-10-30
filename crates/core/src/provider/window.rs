@@ -1,5 +1,5 @@
 //! How much conversation a model family can hold: the rail's meter needs a
-//! denominator, and only the adapter knows the family names (ADR-0003).
+//! denominator, and only the adapter knows the family names.
 
 /// The context window a model family is advertised with, where we know it. A
 /// family we do not know gets `None`, and the rail counts up without a bar

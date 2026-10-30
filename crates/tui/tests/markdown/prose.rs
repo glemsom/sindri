@@ -1,6 +1,6 @@
 //! The prose this ticket is about: a link that keeps its target, a heading
 //! scale ranked by level, a fence's language title, and a diff washed as well
-//! as coloured (ADR-0011 §24).
+//! as coloured.
 
 use super::*;
 

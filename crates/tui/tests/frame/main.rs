@@ -2,7 +2,7 @@
 //! buffer, and every assertion is about *what the user sees* — a call while
 //! it runs, a call once it has collapsed, the rail at 100 columns and as a
 //! strip at 90, a markdown table, an error where it happened, and the card a
-//! broken sandbox draws (ADR-0011).
+//! broken sandbox draws.
 
 #![allow(
     clippy::expect_used,
@@ -66,7 +66,7 @@ fn screen(app: &mut App, width: u16, height: u16) -> Vec<String> {
 
 /// A cell as a row reads. A picture is drawn as an escape sequence in the first
 /// cell of each of its rows, which a test backend cannot paint, so it reads as
-/// the one mark that says a graphic is there (ADR-0016 §6).
+/// the one mark that says a graphic is there.
 fn glyph(cell: &ratatui::buffer::Cell) -> &str {
     if cell.symbol().contains('\u{1b}') {
         "\u{25A9}"

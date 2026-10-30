@@ -1,6 +1,6 @@
 //! The frame's state: the transcript, the composer, the queue and the rail.
 //! It knows nothing of the model, the sandbox or the terminal: it is told
-//! what happened and it knows how to show it (ADR-0011).
+//! what happened and it knows how to show it.
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
@@ -28,7 +28,7 @@ use crate::window::Window;
 
 /// Where `/new` has got to. Two states would not do: the frame marks the
 /// request, the loop hands it to the front end once, and nothing may run
-/// until an answer arrives either way (ADR-0015).
+/// until an answer arrives either way.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Renew {
     #[default]
@@ -47,7 +47,7 @@ pub struct App {
     pub(crate) running: Option<Cancel>,
     /// The one flag of the launch: a key or a signal raises it, the
     /// frame puts it down between prompts, and every run is given a
-    /// clone (ADR-0015).
+    /// clone.
     pub(crate) cancel: Cancel,
     pub(crate) sent: bool,
     pub(crate) early: Vec<(Side, String)>,
@@ -58,24 +58,24 @@ pub struct App {
     /// graphics has no seam to draw (#63).
     pub(crate) seam: Option<Seam>,
     /// What the terminal said it can draw, asked once at launch: the face draws
-    /// from it, and a picture draws from the same answer (ADR-0016 §1).
+    /// from it, and a picture draws from the same answer.
     graphics: Option<Graphics>,
     /// What a picture's `src` is worth, and what it costs: the one thing that
     /// measures a source and reads its file, so a layout asks a store and never
-    /// the disk (ADR-0016 §5).
+    /// the disk.
     pictures: Option<Store>,
     /// Where the reader is in the thread, and what arrived below them: the
-    /// window is the one thing that outlives a frame (ADR-0013, issue #45).
+    /// window is the one thing that outlives a frame (issue #45).
     pub(crate) window: Window,
     pub(crate) viewport: Viewport,
     /// The entry the reader last opened or clicked, which is what `Enter` on
     /// an empty composer toggles: a frame with no cursor of its own has one
     /// honest answer to "which call?", and it is the one just touched
-    /// (ADR-0011 §9, issue #44).
+    /// (issue #44).
     pub(crate) chosen: Option<usize>,
     /// One row count per entry at the width it was measured at, dropped
     /// whenever an entry changes, so the window never lays out a row it does
-    /// not show (ADR-0011).
+    /// not show.
     pub(crate) heights: Vec<Option<(u16, usize)>>,
     pub(crate) width: Option<u16>,
     pub(crate) selection: Selection,
@@ -90,11 +90,11 @@ pub struct App {
     pub(crate) reload: bool,
     /// What the front door found absent when it opened the frame itself: the
     /// run it opened for cannot send a prompt until it is filled in, and the
-    /// composer says so rather than pretending (ADR-0004).
+    /// composer says so rather than pretending.
     pub(crate) missing: Option<Missing>,
     pub(crate) rail_view: RailView,
     /// Where the records live: `/sessions` and `/export` read this directory
-    /// and write nothing into it (ADR-0006).
+    /// and write nothing into it.
     pub(crate) sessions: Option<PathBuf>,
     /// The directory a default export lands in: the workspace the frame was
     /// launched in.
@@ -102,7 +102,7 @@ pub struct App {
     /// A path `/export` refused to overwrite, waiting for the second ask.
     pub(crate) export_pending: Option<PathBuf>,
     /// How long the run in flight has been going: the one thing the frame is
-    /// told by the clock rather than by the run (ADR-0011 §4). It starts at
+    /// told by the clock rather than by the run. It starts at
     /// zero with every prompt and stops when the run does.
     pub(crate) now: Duration,
 }
@@ -160,7 +160,7 @@ impl App {
         self
     }
 
-    /// Where the records live (ADR-0006): `/sessions` lists it, `/export`
+    /// Where the records live: `/sessions` lists it, `/export`
     /// reads the frame's own record from it.
     pub fn with_sessions(mut self, root: impl Into<PathBuf>) -> Self {
         self.sessions = Some(root.into());
@@ -187,7 +187,7 @@ impl App {
         self
     }
 
-    /// The frame the front door opens when the run has no key (ADR-0004): the
+    /// The frame the front door opens when the run has no key: the
     /// settings modal is staged on the row it has nothing for, the transcript
     /// says what is absent once, and the composer says what it cannot do until
     /// the modal is saved. A run that stops for a missing key never reaches a
@@ -225,8 +225,7 @@ impl App {
     }
 
     /// Lets the clock on by `delta`. Only a live run is told the time: an
-    /// idle frame owes the clock nothing, so the loop is not woken for it
-    /// (ADR-0011 §4).
+    /// idle frame owes the clock nothing, so the loop is not woken for it.
     pub fn pulse(&mut self, delta: Duration) {
         if self.is_running() {
             self.now += delta;
@@ -258,7 +257,7 @@ impl App {
     }
 
     /// The terminal's one answer, held by the frame so that the face, the seam
-    /// and a picture borrow it rather than asking again (ADR-0016 §1).
+    /// and a picture borrow it rather than asking again.
     pub fn with_graphics(mut self, graphics: Option<Graphics>) -> Self {
         self.seam = graphics.as_ref().and_then(Seam::new);
         self.graphics = graphics;
@@ -349,7 +348,7 @@ impl App {
     /// How many rows entry `index` takes at `width`: the store's answer, kept
     /// per entry at the width it was measured at, so the same question is asked
     /// once and never costs a file read, while a resize is measured again from
-    /// the store (ADR-0016 §5, §9).
+    /// the store.
     pub fn measure(&mut self, index: usize, width: u16) -> usize {
         if self.heights.len() < self.entries.len() {
             self.heights.resize(self.entries.len(), None);
