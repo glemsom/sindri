@@ -21,18 +21,11 @@ use crate::render::hello;
 use crate::render::layout::{Frame, drawn, offset_of, place, resolve};
 use crate::render::pictures::{self, Shown};
 use crate::selection::Viewport;
-use crate::theme;
 
 pub struct View {
     pub rows: Vec<Line<'static>>,
     pub plain: Vec<String>,
     pub laid_out: usize,
-    /// Where the window starts in the thread, as an entry, and how many
-    /// entries it shows: what the position marker is drawn from.
-    pub top: usize,
-    pub cover: usize,
-    /// Whether the thread runs past the window at either end.
-    pub taller: bool,
     /// How many entries the frame had to measure or lay out: the cost a long
     /// thread must not pay for a page (ADR-0013).
     pub measured: usize,
@@ -65,7 +58,6 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
     // screenful of blank ones (issue #46).
     let at = floor(area, view.rows.len());
     let placed = pictures::placed(&view.pictures, at);
-    let (top, cover, taller) = (view.top, view.cover, view.taller);
     let (rows, plain) = (view.rows, view.plain);
     app.set_viewport(Viewport {
         area: at,
@@ -75,9 +67,6 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
         pictures: placed.clone(),
     });
     Paragraph::new(rows).render(at, buf);
-    if taller {
-        mark(top, cover, app.entries().len(), area, buf);
-    }
     // A picture is drawn where its rows are, after the paragraph that reserved
     // them — and never behind an overlay, which is cells and not a graphic
     // (ADR-0016 §7, §9).
@@ -96,37 +85,6 @@ fn floor(area: Rect, rows: usize) -> Rect {
         y: area.y + area.height - height,
         height,
         ..area
-    }
-}
-
-/// The thread is longer than the window: the column's last cell carries a thin
-/// bar over the part of the thread the window shows, so a reader knows both
-/// that there is more and where they are in it (issue #45). It is placed by
-/// entry and not by row, because the thread's rows are never counted: what the
-/// window can afford to know is which entries it is showing (ADR-0013).
-fn mark(top: usize, cover: usize, of: usize, area: Rect, buf: &mut Buffer) {
-    let of = of.max(1);
-    let height = area.height as usize;
-    if height == 0 || area.width == 0 {
-        return;
-    }
-    let cover = cover.clamp(1, of);
-    let len = (height * cover / of).max(1).min(height);
-    // The ends are pinned: a window on the first turn marks the top of the
-    // column and a window on the tail marks the bottom of it, whatever the
-    // entries between them happen to be worth.
-    let at = if top == 0 {
-        0
-    } else if top + cover >= of {
-        height - len
-    } else {
-        (height * top / of).min(height - len)
-    };
-    let column = area.x + area.width - 1;
-    for row in at..at + len {
-        let cell = &mut buf[(column, area.y + row as u16)];
-        cell.set_symbol("┃");
-        cell.set_style(theme::faint());
     }
 }
 
@@ -168,7 +126,7 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
     } else {
         0
     };
-    let (top, cover) = place(&frame.marks, frame.rows.len(), start, visible);
+    let top = place(&frame.marks, start);
     // A held window keeps its place, rows into its entry included: that is what
     // stops the text moving when rows arrive below it. A window on the tail
     // names its place again every frame, because the tail is not a row.
@@ -177,7 +135,6 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
     } else {
         held
     };
-    let taller = below > 0 || at.0 > 0 || at.1 > 0;
     let laid_out = count.saturating_sub(first);
     let measured = frame.measured;
 
@@ -214,9 +171,6 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
         rows,
         plain,
         laid_out,
-        top,
-        cover,
-        taller,
         measured,
         spill,
         expand,

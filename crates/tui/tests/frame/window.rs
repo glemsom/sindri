@@ -1,6 +1,5 @@
 //! The window's position in a long thread: the badge that says what arrived
-//! below a reader who is not on the tail, and the thin marker in the
-//! transcript's last column that says where the window sits (issue #45).
+//! below a reader who is not on the tail (issue #45).
 
 use super::*;
 
@@ -21,50 +20,14 @@ fn long(app: &mut App, turns: u32) {
     }
 }
 
-/// The transcript's own rows: everything above the composer's box.
-fn column(rows: &[String], x: usize) -> String {
-    rows.iter()
-        .take_while(|row| !row.starts_with('╭'))
-        .map(|row| row.chars().nth(x).unwrap_or(' '))
-        .collect()
-}
-
-/// The transcript's own last column, at 100 columns wide: the rail takes the
-/// last 32 and the margin separates them (ADR-0011 §4).
-const MARK: usize = MARGIN - 1;
-
 #[test]
-fn a_thread_longer_than_the_window_carries_a_position_marker() {
+fn the_transcript_columns_beyond_its_text_stay_empty() {
     let mut app = app();
     long(&mut app, 40);
     let rows = screen(&mut app, 100, 20);
-    let marks = column(&rows, MARK);
     assert!(
-        marks.contains('┃'),
-        "the window marks where it sits: {marks:?} in {rows:#?}"
-    );
-    assert!(
-        marks.trim_end().ends_with('┃'),
-        "at the tail the marker is at the bottom of the column: {marks:?}"
-    );
-
-    press(&mut app, KeyCode::Home);
-    let rows = screen(&mut app, 100, 20);
-    let marks = column(&rows, MARK);
-    assert!(
-        marks.starts_with('┃'),
-        "at the first turn it is at the top of the column: {marks:?}"
-    );
-}
-
-#[test]
-fn a_thread_that_fits_the_window_carries_no_marker() {
-    let mut app = app();
-    long(&mut app, 2);
-    let rows = screen(&mut app, 100, 20);
-    assert!(
-        !column(&rows, MARK).contains('┃'),
-        "nothing is off-screen, so there is no position to mark: {rows:#?}"
+        !rows.iter().any(|row| row.contains('┃')),
+        "the window draws no position marker in its last column: {rows:#?}"
     );
 }
 

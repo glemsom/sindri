@@ -28,13 +28,12 @@ every frame, and anything that changes the thread elsewhere (an entry opened or 
 forgets the count. `View::measured` is that cost, and the tests assert it on a
 five-hundred-turn thread. Wheel = 3 rows, page = a screenful.
 
-The frame says where the reader is and what they are missing. Rows that arrive below a
-window off the tail are counted — `↓ 4 new rows` in the footer, against the right edge,
-cleared when the window reaches the tail again — and a thread longer than the window
-carries a thin marker (`┃`) in the transcript's last column, over the entries the window
-shows, pinned to the top at the first turn and to the bottom on the tail. It is placed by
-entry and not by row because the thread's rows are never counted: what the window can
-afford to know is which entries it shows (issue #45).
+The frame says what the reader is missing. Rows that arrive below a window off the tail
+are counted — `↓ 4 new rows` in the footer, against the right edge, cleared when the
+window reaches the tail again. The transcript's last column stays empty: a thread longer
+than the window is marked nowhere, since a marker placed by entry would lie about a
+thread whose rows are never counted, and the badge already says the window is off the
+tail (issue #45).
 
 **Keys** — `PgUp`/`PgDn` and the wheel scroll, `Home` is the first turn and `End` the tail (which is followed again), spill is `Ctrl-O`, drag is `Shift+Up`/`Shift+Down` from the newest row up, `Ctrl-Y` copies the selection or, with none, the last answer.
 

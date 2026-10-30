@@ -234,28 +234,14 @@ pub(crate) fn forward(
     (entry < count).then_some((entry, row))
 }
 
-/// The entry the window's first row belongs to, and how many entries' blocks
-/// the window shows.
-pub(crate) fn place(
-    marks: &[(usize, usize)],
-    len: usize,
-    start: usize,
-    visible: usize,
-) -> (usize, usize) {
-    let top = marks
+/// The entry the window's first row belongs to.
+pub(crate) fn place(marks: &[(usize, usize)], start: usize) -> usize {
+    marks
         .iter()
         .rev()
         .find(|(_, offset)| *offset <= start)
         .map(|(entry, _)| *entry)
-        .unwrap_or_default();
-    let cover = (0..marks.len())
-        .filter(|at| {
-            let offset = marks[*at].1;
-            let end = marks.get(at + 1).map(|(_, next)| *next).unwrap_or(len);
-            offset < start + visible && end > start
-        })
-        .count();
-    (top, cover.max(1))
+        .unwrap_or_default()
 }
 
 pub(crate) fn offset_of(marks: &[(usize, usize)], entry: usize) -> usize {
