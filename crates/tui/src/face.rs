@@ -1,16 +1,19 @@
 //! The face of Sindri, drawn where the terminal speaks the Kitty graphics
 //! protocol. Where it does not, there is no placeholder and no gap: the rail
 //! simply begins at its first fact (ADR-0011).
-
-use std::io::IsTerminal;
+//!
+//! Which protocol that is and how big its cells are is not the face's question
+//! to ask: it borrows the frame's one answer (ADR-0016 §1, `graphics`).
 
 use image::DynamicImage;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::widgets::StatefulWidget;
-use ratatui_image::picker::{Picker, ProtocolType};
+use ratatui_image::picker::ProtocolType;
 use ratatui_image::protocol::StatefulProtocol;
 use ratatui_image::{FilterType, Resize, StatefulImage};
+
+use crate::graphics::Graphics;
 
 /// The most rows the face may take. A square crop in a 32-column rail takes
 /// fewer — the rail asks [`Face::rows`] rather than assuming this.
@@ -38,30 +41,24 @@ pub struct Face {
 }
 
 impl Face {
-    pub fn detect() -> Option<Face> {
-        if !std::io::stdout().is_terminal() || !announces_kitty() {
-            return None;
-        }
-        let picker = Picker::from_query_stdio().ok()?;
+    /// The face the terminal's answer allows, or `None` where that answer is not
+    /// Kitty graphics: the question was asked once, by [`Graphics`], and this
+    /// only reads it.
+    pub fn new(graphics: &Graphics) -> Option<Face> {
+        let picker = graphics.picker();
         if picker.protocol_type() != ProtocolType::Kitty {
             return None;
         }
-        Face::from(picker)
-    }
-
-    pub fn kitty() -> Option<Face> {
-        // A cell twice as tall as it is wide, as a terminal's is: the layout
-        // tests then see the picture in the shape it really takes.
-        let mut picker = Picker::from_fontsize((8, 18));
-        picker.set_protocol_type(ProtocolType::Kitty);
-        Face::from(picker)
-    }
-
-    fn from(picker: Picker) -> Option<Face> {
         let image = image::load_from_memory(PNG).ok()?;
         Some(Face {
             protocol: picker.new_resize_protocol(grounded(image)),
         })
+    }
+
+    /// The face a test draws, built from the made-up answer a test can afford:
+    /// nothing is asked of a terminal, and the picture keeps its real shape.
+    pub fn kitty() -> Option<Face> {
+        Face::new(&Graphics::kitty())
     }
 
     pub fn rows(&self, area: Rect) -> u16 {
@@ -73,21 +70,6 @@ impl Face {
             .resize(RESIZE)
             .render(area, buf, &mut self.protocol);
     }
-}
-
-/// Whether this terminal can plausibly speak Kitty graphics. Asking costs a
-/// second of startup on every terminal that cannot answer, so a terminal that
-/// says nothing about itself is never asked: silence is the fallback anyway.
-fn announces_kitty() -> bool {
-    const TELLS: [&str; 3] = ["TERM", "TERM_PROGRAM", "LC_TERMINAL"];
-    const SPEAKERS: [&str; 4] = ["kitty", "ghostty", "wezterm", "foot"];
-    std::env::var("KITTY_WINDOW_ID").is_ok()
-        || TELLS.iter().any(|name| {
-            std::env::var(name).is_ok_and(|value| {
-                let value = value.to_ascii_lowercase();
-                SPEAKERS.iter().any(|speaker| value.contains(speaker))
-            })
-        })
 }
 
 /// The picture with its ground taken out: the whole frame, uncropped so that
@@ -111,6 +93,8 @@ fn grounded(image: DynamicImage) -> DynamicImage {
 
 #[cfg(test)]
 mod tests {
+    use ratatui_image::picker::Picker;
+
     use super::*;
 
     fn picture() -> DynamicImage {
@@ -145,6 +129,36 @@ mod tests {
             grounded.get_pixel(2, 1)[3] < 4,
             "a pixel on the floor is all but gone: {}",
             grounded.get_pixel(2, 1)[3]
+        );
+    }
+
+    /// An answer with Kitty set and a cell of the given size.
+    fn answer(cell: (u16, u16)) -> Graphics {
+        let mut picker = Picker::from_fontsize(cell);
+        picker.set_protocol_type(ProtocolType::Kitty);
+        Graphics::from_picker(picker)
+    }
+
+    #[test]
+    fn the_face_is_the_shape_the_answer_it_is_given_gives_it() {
+        let area = Rect::new(0, 0, 32, 40);
+        let tall = Face::new(&answer((8, 18))).expect("a Kitty answer draws the embedded face");
+        let taller = Face::new(&answer((8, 36))).expect("and so does another cell size");
+        assert!(
+            tall.rows(area) > taller.rows(area),
+            "the rows are the shared answer's, not a cell size the face makes up: \
+             {} against {}",
+            tall.rows(area),
+            taller.rows(area)
+        );
+    }
+
+    #[test]
+    fn a_terminal_that_does_not_speak_kitty_gets_no_face() {
+        let graphics = Graphics::from_picker(Picker::from_fontsize((8, 18)));
+        assert!(
+            Face::new(&graphics).is_none(),
+            "a picture is drawn where the terminal speaks Kitty, and nowhere else: no placeholder"
         );
     }
 
