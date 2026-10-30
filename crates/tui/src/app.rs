@@ -227,11 +227,11 @@ impl App {
     /// What one background walk found, for the completion it was started for.
     /// A walk whose completion has already moved on is not applied.
     pub fn paths(&mut self, generation: u64, paths: Vec<String>, capped: bool) {
-        if let Some(completion) = self.completion.as_mut() {
-            if completion.generation == generation {
-                completion.items = crate::completion::offered(&paths, &completion.typed);
-                completion.capped = capped;
-            }
+        if let Some(completion) = self.completion.as_mut()
+            && completion.generation == generation
+        {
+            completion.items = crate::completion::offered(&paths, &completion.typed);
+            completion.capped = capped;
         }
     }
 

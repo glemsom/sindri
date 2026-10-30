@@ -160,13 +160,11 @@ impl App {
         // A command is one row: a prompt whose first line happens to start with
         // a slash is still a prompt.
         let single = !draft.trim_end().contains('\n');
-        if single {
-            if let Some(named) = command::parse(&draft) {
-                self.composer.take();
-                self.completion = None;
-                self.run(named);
-                return;
-            }
+        if single && let Some(named) = command::parse(&draft) {
+            self.composer.take();
+            self.completion = None;
+            self.run(named);
+            return;
         }
         self.submit();
     }

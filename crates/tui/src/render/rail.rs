@@ -26,22 +26,22 @@ pub fn column(app: &mut App, area: Rect, buf: &mut Buffer) {
     // rail and no more: the rail is complete with or without the face.
     let spare = area.height.saturating_sub(lines.len() as u16);
     let mut rows = area;
-    if spare >= FACE_FLOOR {
-        if let Some(face) = app.face_mut() {
-            // The rows the picture takes, not the rows the rail would allow:
-            // a square crop in a rail of tall cells is shorter than it is wide,
-            // and reserving the rest would leave a hole under the face.
-            let height = face.rows(Rect {
-                height: spare,
-                ..area
-            });
-            face.render(Rect { height, ..area }, buf);
-            rows = Rect {
-                y: area.y + height,
-                height: area.height - height,
-                ..area
-            };
-        }
+    if spare >= FACE_FLOOR
+        && let Some(face) = app.face_mut()
+    {
+        // The rows the picture takes, not the rows the rail would allow:
+        // a square crop in a rail of tall cells is shorter than it is wide,
+        // and reserving the rest would leave a hole under the face.
+        let height = face.rows(Rect {
+            height: spare,
+            ..area
+        });
+        face.render(Rect { height, ..area }, buf);
+        rows = Rect {
+            y: area.y + height,
+            height: area.height - height,
+            ..area
+        };
     }
     if rows.height == 0 || rows.width == 0 {
         return;

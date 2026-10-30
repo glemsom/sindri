@@ -12,7 +12,9 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+# The floor the graph demands (`rig-core` 0.45 needs 1.97.1), not the toolchain:
+# devbox.lock pins that (ADR-0009). Declaring higher buys nothing and rots.
+rust-version = "1.97.1"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/glemsom/sindri"
 
