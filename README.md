@@ -82,30 +82,54 @@ Field order is fixed and later fields only append; `stopped` is `final`, `max_tu
 Bare `sindri` on a terminal opens the frame — alternate screen, streaming markdown
 transcript, rail, composer; off a terminal it is a refusal at exit 2.
 
+- **First frame:** an empty thread is not a blank page — the wire, the model, the
+  workspace and the sandbox, one dim sentence of the contract, and three things that can
+  be typed as they read (with `/sessions` and `/help` beside them). The composer holds
+  the placeholder `Ask, or drop a log here · @ path · / command` until there is a draft.
+- **Pulse:** while a run is live, a braille marker at the head of the newest answer
+  carries the elapsed time (`⠸ 0.8s`) and settles on `✓` or `✗` with the duration it
+  stopped at; each call's duration counts up and freezes with the call; the rail's output
+  and context figures move on what streams and are trued up by the provider's report. The
+  tick exists only while something is moving — an idle frame is never drawn.
 - **Tool calls:** each call appears as it starts with the last five output lines, then
-collapses to `✓ exit 0`, `✗ exit N`, `✗ timed out`, `✗ cancelled` or `✗ sandbox: …`. Too
-much output offers `Ctrl-O`, or a click on the row, to open its spill file.
+  collapses to `✓ exit 0`, `✗ exit N`, `✗ timed out`, `✗ cancelled` or `✗ sandbox: …` and
+  the count of what is behind it (`· 400 lines`). `Enter` on an empty composer, or a
+  click on the row, opens the call whole in place — a call that never spilled included;
+  `Ctrl-O`, or a click, opens a spill file.
+- **Queue:** a prompt typed during a run waits on a panel above the composer, whole and
+  in order, titled `3 queued` (`queued` for one); `↑` takes the newest back into the
+  composer, `Ctrl-X` drops it. `Ctrl-C` is answered at once — `cancelling…` in the footer, draft kept — and
+  the run stops when the request in flight does.
 - **Rail:** 32 columns, always visible — cache hits, turns against the cap, tokens, a
-context meter, session GUID, temp path, branch, sandbox posture, why the last run
-stopped. Below 100 columns it becomes one strip; the face takes the rows left over.
+  context meter, session GUID, temp path, branch, sandbox posture, why the last run
+  stopped. Below 100 columns it becomes one strip; the face takes the rows left over.
 - **Composer,** two to six rows: `Enter` sends, `Shift+Enter` breaks the line, `Ctrl-Q`
-leaves, `Ctrl-C` cancels a run and keeps the draft — or clears it when nothing is
-running. A prompt typed during a run is sent when it ends.
+  leaves, `Ctrl-C` cancels a run and keeps the draft — or clears it when nothing is
+  running.
 - **Scroll and copy:** `PgUp`/`PgDn` and the wheel move the transcript, `Home` goes to
-the first turn and `End` back to the tail, which is followed again; a reader who is
-scrolled back is told what arrived below them (`↓ 4 new rows`) and a thread longer than
-the window marks its position in the last column. Only on-screen rows are laid out. Dragging selects rendered rows; releasing copies them, styles
-stripped, through OSC 52, falling back to `wl-copy` or `xclip` — *sent*, since a
-terminal never confirms.
+  the first turn and `End` back to the tail, which is followed again; a reader who is
+  scrolled back is told what arrived below them (`↓ 4 new rows`) and a thread longer than
+  the window marks its position in the last column. Only on-screen rows are laid out. Dragging selects rendered rows; releasing copies them, styles
+  stripped, through OSC 52, falling back to `wl-copy` or `xclip` — *sent*, since a
+  terminal never confirms.
 - **`@`** walks the workspace (`.git` skipped, `.gitignore` ignored), proximity-ranked,
-capped at eight rows. `Tab`/`Enter` takes one; `Esc` dismisses, both while one is open.
+  capped at eight rows. `Tab`/`Enter` takes one; `Esc` dismisses, both while one is open.
 - **`/`** runs `/new` (fresh session GUID, empty transcript), `/settings`, `/help`,
-`/quit`. **`?` and `/help` list the same bindings**, each gesture beside its key.
+  `/sessions`, `/export` and `/quit`. `/sessions` reads a record back read-only — reading
+  is not resuming; `/export [path]` writes the thread as one markdown file, asking twice
+  before replacing a file. **`?` and `/help` list the same bindings**, each gesture beside
+  its key.
+- **Chrome:** a narrow terminal shortens what the frame says and never cuts a key or a
+  fact in half. The footer states its seven hints from 120 columns up, five from 100 and
+  never fewer than `Enter send` and `? keys`; the rail gives facts up in one priority
+  order and keeps a row saying how many went (`│ +7 more`); the slim rail strip never
+  loses the posture, the model or the workspace.
 - **One thread:** a second prompt builds on the first, `/new` starts over, and a model
-changed in `/settings` answers the next turn on the same thread. **Boot runs `doctor`
-first**: a sandbox that cannot be created is a card naming the failing check.
+  changed in `/settings` answers the next turn on the same thread. **Boot runs `doctor`
+  first**: a sandbox that cannot be created is a card naming the failing check. A first
+  run with no API key opens the modal below instead of failing.
 
-Each prompt lands in a session record ([ADR-0006](docs/adr/0006-session-records.md));
+Each prompt is written to the session's record ([ADR-0006](docs/adr/0006-session-records.md));
 the frame is [ADR-0011](docs/adr/0011-the-tui-contract.md)'s, the hands
 [ADR-0013](docs/adr/0013-the-hands-copy-scroll-and-completion.md)'s.
 

@@ -1,6 +1,6 @@
 //! The prose this ticket is about: a link that keeps its target, a heading
-//! scale ranked by level, a fence's badge, and a diff washed as well as
-//! coloured (ADR-0016).
+//! scale ranked by level, a fence's language title, and a diff washed as well
+//! as coloured (ADR-0011 §24).
 
 use super::*;
 
@@ -129,7 +129,7 @@ fn a_heading_in_a_quote_rules_inside_the_quote() {
 }
 
 #[test]
-fn a_fence_that_names_no_language_carries_no_badge() {
+fn a_fence_that_names_no_language_carries_no_title() {
     let source = "```\nplain words\n```\n";
     let lines = markdown::lines(source, 30);
     let shown: Vec<String> = lines.iter().map(raw).collect();

@@ -1,7 +1,7 @@
 //! One entry as rows: the shapes a turn takes in the transcript column — a
 //! prompt on its band, an answer under its marker, a call under its line, a
 //! note at the turn's own edge — and the gutter that says what belongs to
-//! what (ADR-0011, ADR-0016).
+//! what (ADR-0011 §4, §23).
 
 use std::time::Duration;
 

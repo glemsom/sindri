@@ -21,7 +21,7 @@ const LABEL: usize = 9;
 
 pub fn column(app: &mut App, area: Rect, buf: &mut Buffer) {
     // The rail is a panel: the facts sit on a surface, one tier above the
-    // canvas the transcript is written on (ADR-0016).
+    // canvas the transcript is written on (ADR-0011 §23).
     buf.set_style(area, theme::surface());
     let width = area.width.saturating_sub(2) as usize;
     let (lines, session) = facts(app, width, area.height as usize);

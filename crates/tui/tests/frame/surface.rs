@@ -1,6 +1,6 @@
 //! The surface: the frame's tiers of nearness — a composer that floats on its
 //! own panel, a code fence that is a panel, a rail on a panel, and an overlay
-//! that dims what it covers rather than punching a hole in it (ADR-0016).
+//! that dims what it covers rather than punching a hole in it (ADR-0011 §23).
 
 use super::*;
 
@@ -177,7 +177,7 @@ fn the_rail_is_a_panel_one_column_away_from_the_transcript() {
         for x in (width - RAIL)..width {
             let tier = buf[(x as u16, y)].bg;
             // The posture is a chip, a tier nearer than the panel it sits on;
-            // every other cell of the rail is the panel (ADR-0016).
+            // every other cell of the rail is the panel (ADR-0011 §23).
             if tier == theme::RAISED {
                 chips += 1;
                 continue;

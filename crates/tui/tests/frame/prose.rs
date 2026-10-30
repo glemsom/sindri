@@ -1,6 +1,6 @@
 //! The prose seam, read off the cells the frame painted: a heading scale, a
 //! link that keeps its target, a fence whose edge names its language, and a
-//! code line too long for the column saying so (ADR-0016).
+//! code line too long for the column saying so (ADR-0011 §24).
 
 use super::*;
 
@@ -62,7 +62,7 @@ the-quick-brown-fox-jumps-over-the-lazy-dog-and-keeps-on-running-past-the-end
 ";
 
 #[test]
-fn a_heading_scale_a_link_a_badge_and_a_cut_line_all_reach_the_cells() {
+fn a_heading_scale_a_link_a_fences_title_and_a_cut_line_all_reach_the_cells() {
     let buf = answered(PROSE);
     let shown = rows(&buf);
 
@@ -96,8 +96,8 @@ fn a_heading_scale_a_link_a_badge_and_a_cut_line_all_reach_the_cells() {
     );
 
     // A fence's top edge carries the language the fence named.
-    assert!(seen(&shown, "╭─ rust "), "the rust badge: {shown:#?}");
-    assert!(seen(&shown, "╭─ text "), "the text badge: {shown:#?}");
+    assert!(seen(&shown, "╭─ rust "), "the rust title: {shown:#?}");
+    assert!(seen(&shown, "╭─ text "), "the text title: {shown:#?}");
 
     // A line wider than the panel is cut and says so, in the panel's edge.
     let long = row_of(&shown, "the-quick");

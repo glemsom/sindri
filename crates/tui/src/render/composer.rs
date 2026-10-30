@@ -18,7 +18,7 @@ pub const PLACEHOLDER: &str = "Ask, or drop a log here · @ path · / command";
 pub fn draw(app: &App, area: Rect, buf: &mut Buffer) -> Position {
     // The composer is the one thing on screen that is always the user's, so
     // it floats on its own panel: the border is the prompt's colour while it
-    // holds the focus, and steps back to faint while a run has it (ADR-0016).
+    // holds the focus, and steps back to faint while a run has it (ADR-0011 §23).
     let border = if app.is_running() {
         theme::faint()
     } else {
