@@ -12,7 +12,9 @@ result** returned. One call may run a whole pipeline or script.
 
 **bash tool** — the only tool. Runs a command string inside the sandbox.
 
-**answer** — the final assistant text of the last turn. The product.
+**answer** — the final assistant text of the last turn. The product. Markdown read into
+the frame: prose, fences drawn as panels, links that keep their targets, and **pictures**
+with their **captions** (ADR-0011 §24, ADR-0016).
 
 **stopped** — why the loop ended: `final`, `max_turns`, `cancelled` or `error`.
 
@@ -182,6 +184,17 @@ other rows. **reasoning** opens on the same key; collapsed, it stays one row
 
 **completion** — the `@` offer of workspace paths: a proximity-ranked background walk,
 eight rows, `.git` skipped, `.gitignore` deliberately not honoured.
+
+**picture** — a markdown image the frame draws: a block of its own in the answer, drawn
+only where the terminal speaks Kitty graphics, from a file in the workspace and never from
+a URL, at most twenty rows — the face's own allowance — whole in the **window**
+or not at all. A picture that
+cannot be drawn is its **caption** with the reason in the `‹›` (ADR-0016).
+
+**caption** — the words and `‹src›` a **picture** is drawn under, `a chart ‹plot.png›`: the
+alt text's words, the target in `‹›` as a link keeps its own, the reason in their place
+when there is no picture. It is what the rows cost when nothing is drawn, and what a copy
+of the block yields (ADR-0011 §24, ADR-0016).
 
 **record picker** — the `/sessions` overlay: one row per **session** under
 `$XDG_STATE_HOME/sindri/sessions/`, newest first — when it ran, its model, its turns, why
