@@ -4,6 +4,7 @@
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 
@@ -72,7 +73,7 @@ fn facts(app: &App, width: usize) -> (Vec<Line<'static>>, std::ops::Range<usize>
     // A value is never wrapped: it is shortened to the column beside its
     // label, so a fact is one row however long it is.
     let room = width.saturating_sub(LABEL + 1);
-    for fact in app.rail().facts() {
+    for fact in app.rail().facts(app.now()) {
         if fact.block() != Block::Spend && !ruled {
             // The rule opens the identity block: the numbers above it, what
             // the run *is* below it.
@@ -96,7 +97,16 @@ fn row(fact: &Fact, room: usize) -> Line<'static> {
         _ => Line::from(vec![
             Span::styled("│ ", theme::faint()),
             Span::styled(format!("{:<LABEL$} ", fact.label()), theme::faint()),
-            Span::raw(value(fact, room)),
+            // A figure that has just grown is pointed at for a moment, so the
+            // motion is visible rather than inferred (ADR-0011 §4).
+            Span::styled(
+                value(fact, room),
+                if fact.fresh() {
+                    theme::prompt()
+                } else {
+                    Style::new()
+                },
+            ),
         ]),
     }
 }
@@ -121,7 +131,7 @@ fn chip() -> ratatui::style::Style {
 }
 
 pub fn strip(app: &App, area: Rect, buf: &mut Buffer) {
-    let text = app.rail().strip(area.width as usize);
+    let text = app.rail().strip(area.width as usize, app.now());
     let shown: String = text.chars().take(area.width as usize).collect();
     let line = Line::from(Span::styled(shown, theme::faint()));
     Paragraph::new(line).render(area, buf);

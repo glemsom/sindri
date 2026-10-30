@@ -9,6 +9,7 @@
 //! was scrolled and nothing more.
 
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -21,6 +22,7 @@ use crate::app::App;
 use crate::driver::{CallOver, Side};
 use crate::entry::{Call, Entry, NoteKind, Prompt};
 use crate::markdown;
+use crate::pulse;
 use crate::theme;
 
 /// The columns a turn's body hangs off the turn's own edge: the answer and the
@@ -31,6 +33,10 @@ const TURN_GAP: usize = 2;
 /// The columns a call's status takes before its command, so a running call and
 /// the same call collapsed put the command in the same place.
 const STATUS: usize = 8;
+/// The columns a call's duration takes after its status: a finished call and a
+/// running one put the command in the same place, and the duration counts up
+/// or stands still in a field that does not move (ADR-0011 §4).
+const DURATION: usize = 6;
 
 pub struct View {
     pub rows: Vec<Line<'static>>,
@@ -63,7 +69,7 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
     let mut spill: Vec<(usize, PathBuf)> = Vec::new();
     for index in first..count {
         rows.extend((0..gap(&app.entries()[index])).map(|_| Line::default()));
-        let rows_here = entry_rows(&app.entries()[index], width);
+        let rows_here = entry_rows(&app.entries()[index], width, app.now());
         if let Some(path) = spill_of(&app.entries()[index]) {
             spill.push((rows.len() + rows_here.len().saturating_sub(1), path));
         }
@@ -121,14 +127,20 @@ fn spill_of(entry: &Entry) -> Option<PathBuf> {
     }
 }
 
-pub fn entry_rows(entry: &Entry, width: u16) -> Vec<Line<'static>> {
+pub fn entry_rows(entry: &Entry, width: u16, now: Duration) -> Vec<Line<'static>> {
     let width = width.max(1);
     // The gutter's columns are not the body's: a call and its output wrap
     // where the column ends, not where the terminal does.
     let body = width.saturating_sub(GUTTER);
     match entry {
         Entry::Prompt(prompt) => prompt_rows(prompt, width),
-        Entry::Answer { text, .. } => gutter(markdown::lines(text, body)),
+        Entry::Answer {
+            text,
+            done,
+            failed,
+            took,
+            ..
+        } => answer_rows(text, *done, *failed, *took, body, now),
         Entry::Reasoning { text, done, .. } => {
             if *done {
                 return gutter(vec![Line::from(Span::styled("⌁ reasoned", theme::faint()))]);
@@ -137,7 +149,7 @@ pub fn entry_rows(entry: &Entry, width: u16) -> Vec<Line<'static>> {
             let keep = rows.len().saturating_sub(3);
             gutter(rows.split_off(keep))
         }
-        Entry::Call(call) => gutter(call_rows(call, body)),
+        Entry::Call(call) => gutter(call_rows(call, body, now)),
         Entry::Note(note) => {
             let (marker, style) = match note.kind {
                 NoteKind::Error => ("! ", theme::bad()),
@@ -155,6 +167,31 @@ pub fn entry_rows(entry: &Entry, width: u16) -> Vec<Line<'static>> {
             )
         }
     }
+}
+
+/// A turn's answer: the marker at its head, and the prose beneath it. The
+/// marker is the run's own clock — a braille frame and a duration that counts
+/// up while the answer streams, and then the outcome and the duration it
+/// stopped at, which never move again (ADR-0011 §4).
+fn answer_rows(
+    text: &str,
+    done: bool,
+    failed: bool,
+    took: Option<Duration>,
+    body: u16,
+    now: Duration,
+) -> Vec<Line<'static>> {
+    let (glyph, style, elapsed) = match (done, failed) {
+        (false, _) => (pulse::frame(now), theme::prompt(), now),
+        (true, true) => ("✗", theme::bad(), took.unwrap_or_default()),
+        (true, false) => ("✓", theme::good(), took.unwrap_or_default()),
+    };
+    let mut rows = vec![Line::from(vec![
+        Span::styled(format!("{glyph} "), style),
+        Span::styled(pulse::said(elapsed), theme::faint()),
+    ])];
+    rows.extend(markdown::lines(text, body));
+    gutter(rows)
 }
 
 /// A turn's opening: the header that names the human, and the prompt itself at
@@ -214,7 +251,7 @@ fn banded(row: Line<'static>, width: u16) -> Line<'static> {
     Line::from(spans)
 }
 
-fn call_rows(call: &Call, width: u16) -> Vec<Line<'static>> {
+fn call_rows(call: &Call, width: u16, now: Duration) -> Vec<Line<'static>> {
     let command = call
         .command
         .as_deref()
@@ -233,9 +270,13 @@ fn call_rows(call: &Call, width: u16) -> Vec<Line<'static>> {
         Some(CallOver::Cancelled) => ("✗", "cancelled".to_string(), theme::bad()),
         Some(CallOver::Refused(detail)) => ("✗", format!("sandbox: {detail}"), theme::bad()),
     };
+    // How long the call has been running, or how long it took: frozen at the
+    // duration it ended on, so a finished call is not still counting.
+    let took = pulse::said(call.elapsed(now));
     let mut rows = vec![Line::from(vec![
         Span::styled("⎿ ", theme::faint()),
         Span::styled(format!("{glyph} {status:<STATUS$} "), accent),
+        Span::styled(format!("{took:<DURATION$} "), theme::faint()),
         Span::styled(command.to_string(), Style::new()),
     ])];
     if call.running() {

@@ -3,6 +3,7 @@
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use crate::driver::{CallOver, Side};
 
@@ -11,8 +12,21 @@ pub const TAIL_LINES: usize = 5;
 #[derive(Debug)]
 pub enum Entry {
     Prompt(Prompt),
-    Answer { turn: u32, text: String, done: bool },
-    Reasoning { turn: u32, text: String, done: bool },
+    /// The answer, and whether it is still arriving: `done` is what the
+    /// marker settles on, `failed` is which glyph it settles with, and `took`
+    /// is the run's clock frozen at the moment it stopped streaming.
+    Answer {
+        turn: u32,
+        text: String,
+        done: bool,
+        failed: bool,
+        took: Option<Duration>,
+    },
+    Reasoning {
+        turn: u32,
+        text: String,
+        done: bool,
+    },
     Call(Call),
     Note(Note),
 }
@@ -36,10 +50,15 @@ pub struct Call {
     /// (ADR-0007). The frame offers them rather than holding them.
     pub spill: Vec<PathBuf>,
     pub truncated: bool,
+    /// The clock when the call was announced, and the duration it ended on:
+    /// a running call counts up from the first, a finished one is frozen at
+    /// the second (ADR-0011 §4).
+    pub started: Duration,
+    pub took: Option<Duration>,
 }
 
 impl Call {
-    pub fn new(turn: u32, command: Option<String>) -> Self {
+    pub fn new(turn: u32, command: Option<String>, started: Duration) -> Self {
         Call {
             turn,
             command,
@@ -47,7 +66,16 @@ impl Call {
             tail: VecDeque::with_capacity(TAIL_LINES),
             spill: Vec::new(),
             truncated: false,
+            started,
+            took: None,
         }
+    }
+
+    /// How long the call has been running, or how long it took when it is
+    /// over and that is the answer that does not move.
+    pub fn elapsed(&self, now: Duration) -> Duration {
+        self.took
+            .unwrap_or_else(|| now.saturating_sub(self.started))
     }
 
     pub fn spill_file(&self) -> Option<&Path> {

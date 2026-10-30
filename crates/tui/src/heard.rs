@@ -1,6 +1,8 @@
 //! What the run says to the frame: a prompt started, a fragment streamed, a
 //! command's line, a run ended. The frame is told; it never asks (ADR-0011).
 
+use std::time::Duration;
+
 use sindri_core::agent::Event;
 
 use crate::app::{App, Renew};
@@ -36,6 +38,10 @@ impl App {
             None => self.composer.take(),
         };
         self.sent = false;
+        // The clock starts with the run: a marker says how long *this* run has
+        // been going, and a fresh prompt starts it again (ADR-0011 §4).
+        self.now = Duration::ZERO;
+        self.rail.begun();
         // One flag per launch, put down before every run: a cancel ends the
         // run it was raised for and never the next (ADR-0015).
         self.cancel.clear();
@@ -53,11 +59,11 @@ impl App {
     pub fn event(&mut self, event: Event) {
         match event {
             Event::TextDelta { turn, text } => {
-                self.rail.turn(turn);
+                self.rail.turn(turn, self.now);
                 self.append(turn, text, false);
             }
             Event::ReasoningDelta { turn, text } => {
-                self.rail.turn(turn);
+                self.rail.turn(turn, self.now);
                 self.append(turn, text, true);
             }
             Event::Reasoning { turn, text } => {
@@ -72,9 +78,9 @@ impl App {
                 self.dirty();
             }
             Event::ToolCall { turn, command } => {
-                self.rail.turn(turn);
-                self.close_answers();
-                let mut call = Call::new(turn, command);
+                self.rail.turn(turn, self.now);
+                self.close_answers(false);
+                let mut call = Call::new(turn, command, self.now);
                 for (side, line) in self.early.drain(..) {
                     call.push(side, line);
                 }
@@ -85,6 +91,10 @@ impl App {
     }
 
     fn append(&mut self, turn: u32, text: String, reasoning: bool) {
+        // What has streamed is what the run has spent so far: the meters move
+        // on it now, and the report overrules them when the run ends
+        // (ADR-0011 §4).
+        self.rail.streamed(text.chars().count(), self.now);
         let open = match self.entries.last_mut() {
             Some(Entry::Reasoning {
                 turn: open,
@@ -95,6 +105,7 @@ impl App {
                 turn: open,
                 text: streamed,
                 done: false,
+                ..
             }) if !reasoning && *open == turn => Some(streamed),
             _ => None,
         };
@@ -103,7 +114,7 @@ impl App {
             self.dirty();
             return;
         }
-        self.close_answers();
+        self.close_answers(false);
         if reasoning {
             self.entries.push(Entry::Reasoning {
                 turn,
@@ -115,6 +126,8 @@ impl App {
                 turn,
                 text,
                 done: false,
+                failed: false,
+                took: None,
             });
         }
         self.dirty();
@@ -136,6 +149,9 @@ impl App {
             _ => None,
         });
         if let Some(call) = last {
+            // The duration freezes where the call ended: a finished call is
+            // not still counting (ADR-0011 §4).
+            call.took = Some(self.now.saturating_sub(call.started));
             call.over = Some(over);
             call.truncated = spilled.truncated;
             call.spill = spilled.files;
@@ -146,11 +162,11 @@ impl App {
     pub fn finished(&mut self, finished: Finished) {
         self.running = None;
         self.rail
-            .settled(finished.turns, finished.tokens, finished.stopped);
+            .settled(finished.turns, finished.tokens, finished.stopped, self.now);
         // A line that never found the call it belonged to belongs to no
         // later call either.
         self.early.clear();
-        self.close_answers();
+        self.close_answers(finished.stopped == Stop::Error);
         if let Some(error) = finished.error {
             self.entries.push(Entry::Note(Note::error(error)));
         }
@@ -165,10 +181,24 @@ impl App {
         self.dirty();
     }
 
-    fn close_answers(&mut self) {
+    /// The newest answer is over — because a call followed it, or because the
+    /// run did. Its duration freezes here, and it learns whether the run it
+    /// belonged to failed.
+    fn close_answers(&mut self, failed: bool) {
+        let now = self.now;
         for entry in &mut self.entries {
             match entry {
-                Entry::Answer { done, .. } | Entry::Reasoning { done, .. } => *done = true,
+                Entry::Answer {
+                    done,
+                    failed: bad,
+                    took,
+                    ..
+                } if !*done => {
+                    *done = true;
+                    *bad = failed;
+                    *took = Some(now);
+                }
+                Entry::Reasoning { done, .. } => *done = true,
                 _ => {}
             }
         }
