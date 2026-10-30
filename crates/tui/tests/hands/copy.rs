@@ -3,6 +3,8 @@
 
 use super::*;
 
+use sindri_tui::graphics::Graphics;
+
 #[test]
 fn a_drag_copies_the_rendered_rows_and_nothing_else() {
     let clipboard = Fake::taking();
@@ -136,4 +138,53 @@ fn shift_up_selects_rendered_rows_and_ctrl_y_copies_them() {
         "the keyboard copies what it selected: {copied:?}"
     );
     assert!(app.selection().is_empty(), "and the selection is spent");
+}
+
+/// One answer whose whole body is a picture: the rows it is drawn on, and the
+/// caption under them (ADR-0016 §2, §9).
+fn pictured(clipboard: Fake) -> App {
+    let mut app = App::with_clipboard(
+        launch("4f1c8f2e-8a24-4b93-9c0e-0d3f0e5c1a77"),
+        None,
+        Box::new(clipboard),
+    )
+    .with_graphics(Some(Graphics::kitty()))
+    .with_workspace(PICTURES);
+    app.note_info("a question");
+    app.event(Event::TextDelta {
+        turn: 1,
+        text: "![a chart](narrow.png)\n".to_string(),
+    });
+    app
+}
+
+/// The pictures a test draws from: committed beside the crate, so a test reads a
+/// file and never builds one.
+const PICTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/pictures");
+
+#[test]
+fn ctrl_y_on_an_answer_holding_a_picture_copies_its_caption_once_and_no_blank_rows() {
+    let clipboard = Fake::taking();
+    let mut app = pictured(clipboard.clone());
+    assert!(
+        screen(&mut app, 100, 20)
+            .iter()
+            .any(|row| row.contains("a chart \u{2039}narrow.png\u{203A}")),
+        "the picture's caption is in the frame"
+    );
+
+    // The whole answer, selected from the keyboard: its marker, the three rows
+    // of picture and the caption under them.
+    for _ in 0..5 {
+        press(&mut app, KeyCode::Up, KeyModifiers::SHIFT);
+    }
+    press(&mut app, KeyCode::Char('y'), KeyModifiers::CONTROL);
+
+    let copied = clipboard.saw();
+    assert_eq!(copied.len(), 1, "one copy: {copied:?}");
+    assert_eq!(
+        copied[0], "  \u{280B} 0.0s\na chart \u{2039}narrow.png\u{203A}",
+        "the block is its caption once, and not the run of blank rows it is \
+         drawn on: {copied:?}"
+    );
 }

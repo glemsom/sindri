@@ -358,6 +358,7 @@ impl App {
             self.now,
             self.pictures.as_ref(),
         )
+        .rows
         .len();
         if let Some(slot) = self.heights.get_mut(index) {
             *slot = Some((width, rows));
@@ -378,19 +379,8 @@ impl App {
         };
     }
 
-    pub(crate) fn set_viewport(
-        &mut self,
-        area: Rect,
-        rows: Vec<String>,
-        spill: Vec<(usize, std::path::PathBuf)>,
-        expand: Vec<(usize, usize)>,
-    ) {
-        self.viewport = Viewport {
-            area,
-            rows,
-            spill,
-            expand,
-        };
+    pub(crate) fn set_viewport(&mut self, viewport: Viewport) {
+        self.viewport = viewport;
     }
 
     pub(crate) fn dirty(&mut self) {

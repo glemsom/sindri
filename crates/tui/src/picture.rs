@@ -166,6 +166,13 @@ impl Store {
         Some(&mut self.live[at].protocol)
     }
 
+    /// How many sources have been decoded: the cost this store exists to avoid,
+    /// read where a repaint has to prove it spent none (ADR-0016 §5, §6).
+    #[cfg(test)]
+    pub(crate) fn decodes(&self) -> u64 {
+        self.decodes
+    }
+
     /// Where a `src` points: an absolute path as it is, anything else against
     /// the workspace. `~` is a name like any other here — the frame expands
     /// nothing, and a shell is not in the loop (ADR-0016 §3).
@@ -234,6 +241,15 @@ impl Worth {
     pub fn rows(&self) -> u16 {
         match self {
             Worth::Drawn { rows, .. } => *rows,
+            Worth::Refused(_) => 0,
+        }
+    }
+
+    /// The columns the block spans: none when nothing is drawn, so the cells a
+    /// graphic is given are the ones it was measured for (ADR-0016 §4).
+    pub fn columns(&self) -> u16 {
+        match self {
+            Worth::Drawn { columns, .. } => *columns,
             Worth::Refused(_) => 0,
         }
     }

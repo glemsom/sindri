@@ -21,4 +21,11 @@ impl App {
     pub(crate) fn pictures(&self) -> Option<&Store> {
         self.pictures.as_ref()
     }
+
+    /// The store a frame draws from: mutable because a protocol is decoded once
+    /// and then held, which is what makes a repaint pixels and not a reload
+    /// (ADR-0016 §5, §6).
+    pub(crate) fn pictures_mut(&mut self) -> Option<&mut Store> {
+        self.pictures.as_mut()
+    }
 }

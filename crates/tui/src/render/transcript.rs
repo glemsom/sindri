@@ -19,6 +19,8 @@ use ratatui::widgets::{Paragraph, Widget};
 use crate::app::App;
 use crate::render::hello;
 use crate::render::layout::{Frame, drawn, offset_of, place, resolve};
+use crate::render::pictures::{self, Shown};
+use crate::selection::Viewport;
 use crate::theme;
 
 pub struct View {
@@ -38,6 +40,10 @@ pub struct View {
     /// The drawn rows that are an expandable entry's own row, and the entry
     /// behind each: a click there opens it (ADR-0011 §9, issue #44).
     pub expand: Vec<(usize, usize)>,
+    /// The pictures the window shows, re-based to its rows, each with whether
+    /// its graphic is whole in them: the third of the frame's row maps, and what
+    /// is drawn over the rows the markdown reserved (ADR-0016 §6, §9).
+    pub(crate) pictures: Vec<Shown>,
 }
 
 pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
@@ -45,7 +51,11 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
     // say what the run is and what can be typed (issue #46).
     if app.entries().is_empty() {
         let rows = hello::rows(app, area.width);
-        app.set_viewport(area, hello::plain_rows(&rows), Vec::new(), Vec::new());
+        app.set_viewport(Viewport {
+            area,
+            rows: hello::plain_rows(&rows),
+            ..Viewport::default()
+        });
         Paragraph::new(rows).render(area, buf);
         return;
     }
@@ -54,11 +64,27 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
     // newest row is the one above the composer rather than the top row of a
     // screenful of blank ones (issue #46).
     let at = floor(area, view.rows.len());
-    app.set_viewport(at, view.plain, view.spill.clone(), view.expand.clone());
+    let placed = pictures::placed(&view.pictures, at);
     let (top, cover, taller) = (view.top, view.cover, view.taller);
-    Paragraph::new(view.rows).render(at, buf);
+    let (rows, plain) = (view.rows, view.plain);
+    app.set_viewport(Viewport {
+        area: at,
+        rows: plain,
+        spill: view.spill,
+        expand: view.expand,
+        pictures: placed.clone(),
+    });
+    Paragraph::new(rows).render(at, buf);
     if taller {
         mark(top, cover, app.entries().len(), area, buf);
+    }
+    // A picture is drawn where its rows are, after the paragraph that reserved
+    // them — and never behind an overlay, which is cells and not a graphic
+    // (ADR-0016 §7, §9).
+    if app.overlay().is_none() {
+        for picture in placed.iter().filter(|picture| picture.drawn) {
+            pictures::paint(app, picture, buf);
+        }
     }
 }
 
@@ -160,11 +186,27 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
         mut rows,
         spill,
         expand,
+        pictures,
         ..
     } = frame;
     rows.drain(..start);
     rows.truncate(visible);
-    let plain: Vec<String> = rows.iter().map(plain).collect();
+    let mut plain: Vec<String> = rows.iter().map(plain).collect();
+    let pictures = pictures::on_screen(pictures, start, visible);
+    // A picture's rows are drawn on, so they carry no words of their own: a copy
+    // of the block is its caption once, on the block's first row, and nothing on
+    // the rest — drawn or not, because the blank rows are the window's either
+    // way (ADR-0016 §9).
+    for picture in &pictures {
+        let laid = &picture.laid;
+        let end = laid.end().min(plain.len());
+        for row in plain.iter_mut().take(end).skip(laid.row) {
+            row.clear();
+        }
+        if let Some(first) = plain.get_mut(laid.row) {
+            *first = laid.caption.clone();
+        }
+    }
     app.window.settled(ask, at, follow, below, plain.len());
     let spill = drawn(spill, start, plain.len());
     let expand = drawn(expand, start, plain.len());
@@ -178,6 +220,7 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
         measured,
         spill,
         expand,
+        pictures,
     }
 }
 

@@ -8,6 +8,7 @@ pub mod composer;
 pub mod hello;
 pub(crate) mod layout;
 mod overlay;
+pub(crate) mod pictures;
 mod queue;
 mod rail;
 pub(crate) mod rows;
