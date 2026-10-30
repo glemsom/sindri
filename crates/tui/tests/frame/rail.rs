@@ -242,14 +242,17 @@ fn the_rule_separates_the_numbers_from_what_the_run_is() {
     );
     assert_eq!(
         rail_of(&rows[stop + 1]),
-        format!("⁞{}", "─".repeat(RAIL - 1)),
+        "─".repeat(RAIL),
         "and the rule spans the row between them: {rows:#?}"
     );
     for row in rows.iter().take(20) {
         let rail = rail_of(row);
         assert!(
-            rail.trim().is_empty() || rail.starts_with('⁞'),
-            "every row of the rail carries its seam: {row:?}"
+            rail.trim().is_empty()
+                || rail.starts_with(|cell: char| cell.is_alphabetic())
+                || rail.trim_start().starts_with('⬢')
+                || rail.starts_with('─'),
+            "every fact of the rail starts at its first column: {row:?}"
         );
     }
 }

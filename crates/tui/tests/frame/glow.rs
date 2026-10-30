@@ -67,7 +67,7 @@ fn the_glow_is_the_margins_cells_at_the_height_of_the_body() {
     // down to the row above the composer, and not one row further. It is two
     // cells wide, and the second is covered by the picture rather than painted
     // — the cell `Buffer::diff` would otherwise leave unpainted, taken from the
-    // margin so the rail's first column keeps its `⁞` (`render::GAP_COLUMNS`).
+    // margin so the rail's first column keeps its own ink (`render::GAP_COLUMNS`).
     let drawn = cells(&mut lit(), 100, 30);
     let shown: Vec<String> = (0..drawn.area.height).map(|y| row(&drawn, y)).collect();
     let body = composer_at(&shown);
@@ -171,7 +171,7 @@ fn the_face_and_the_seam_reach_a_terminal_that_draws_the_glow() {
     // ratatui leaves the cell after it unpainted — a cell, not a column of ink,
     // and the terminal keeps whatever it last had there. The margin is two cells
     // wide so that cell is the strip's own, and the rail's first column, the one
-    // the face's escape and its `⁞` both sit in, reaches the terminal. These rows
+    // the face's escape and its first fact both sit in, reaches the terminal. These rows
     // are a backend's: the diff a terminal is sent (#63).
     let face = Face::kitty().expect("the embedded face decodes");
     let mut app = App::new(launch(), Some(face)).with_graphics(Some(Graphics::kitty()));
@@ -181,20 +181,11 @@ fn the_face_and_the_seam_reach_a_terminal_that_draws_the_glow() {
         "the face is drawn in the rail's top beside the glow: {:?}",
         rail_of(&rows[0])
     );
-    let said: Vec<String> = rows
-        .iter()
-        .take(composer_at(&rows))
-        .map(|row| rail_of(row))
-        .filter(|rail| !rail.trim().is_empty() && !rail.starts_with('\u{25A9}'))
-        .collect();
-    assert!(
-        !said.is_empty() && said.iter().all(|rail| rail.starts_with('⁞')),
-        "and every row of the rail's ledger keeps the seam beside it: {rows:#?}"
-    );
+    let ledger = rails(&rows, 100);
     for label in ["cache", "model", "workspace", "branch"] {
         assert!(
-            !fact(&rails(&rows, 100), label).trim().is_empty(),
-            "the rail still states {label:?} beside a glow: {rows:#?}"
+            fact(&ledger, label).starts_with(label),
+            "the rail still states {label:?} at its first column beside a glow: {rows:#?}"
         );
     }
 }

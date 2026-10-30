@@ -203,7 +203,6 @@ fn rail_row(rows: &[String], label: &str) -> usize {
         .position(|row| {
             rail_of(row)
                 .chars()
-                .skip(2)
                 .take(9)
                 .collect::<String>()
                 .trim_end()
@@ -218,12 +217,12 @@ fn clicking_a_rail_row_copies_the_fact_and_none_of_its_typography() {
     let mut app = app_with(clipboard.clone());
     let rows = screen(&mut app, 100, 20);
 
-    // The rows are drawn as a ledger — a seam down the edge, a leader across
-    // the gap — and neither of them is something a copy should carry.
+    // The rows are drawn as a ledger — a label at the edge, a leader across
+    // the gap — and neither typography is something a copy should carry.
     let cache = rail_row(&rows, "cache");
     assert!(
-        rail_of(&rows[cache]).starts_with('⁞'),
-        "the seam opens every row: {:?}",
+        rail_of(&rows[cache]).starts_with("cache"),
+        "the label opens every row: {:?}",
         rows[cache]
     );
     assert!(
@@ -253,8 +252,8 @@ fn clicking_a_rail_row_copies_the_fact_and_none_of_its_typography() {
         clipboard
             .saw()
             .iter()
-            .all(|copy| !copy.contains('⁞') && !copy.contains('·')),
-        "no seam and no leader reaches the clipboard: {:?}",
+            .all(|copy| !copy.contains('·')),
+        "no leader reaches the clipboard: {:?}",
         clipboard.saw()
     );
 }

@@ -177,7 +177,7 @@ fn a_rail_ten_rows_tall_keeps_the_posture_and_the_context_meter() {
         .unwrap_or_else(|| panic!("the short rail says what it left out: {rail:#?}"));
     let count: usize = said
         .trim()
-        .trim_start_matches(['⁞', ' ', '+'])
+        .trim_start_matches([' ', '+'])
         .split(' ')
         .next()
         .and_then(|count| count.parse().ok())

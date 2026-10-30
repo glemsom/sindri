@@ -93,7 +93,7 @@ fn rails(rows: &[String], width: u16) -> Vec<String> {
 /// The rail's row that states `label`, found by the label's own column rather
 /// than by a substring: `sessions` in a temp path is not the session fact.
 fn fact<'a>(rails: &'a [String], label: &str) -> &'a String {
-    let field = |rail: &String| -> String { rail.chars().skip(2).take(9).collect::<String>() };
+    let field = |rail: &String| -> String { rail.chars().take(9).collect::<String>() };
     rails
         .iter()
         .find(|rail| field(rail).trim_end() == label)
@@ -105,7 +105,7 @@ fn fact<'a>(rails: &'a [String], label: &str) -> &'a String {
 fn value(rails: &[String], label: &str) -> String {
     fact(rails, label)
         .chars()
-        .skip(12)
+        .skip(10)
         .collect::<String>()
         .trim_start_matches(['·', ' '])
         .trim_end()
@@ -214,7 +214,7 @@ fn the_rail_is_a_column_at_a_hundred_columns() {
     }
     // A GUID and a temp path longer than the rail keep both their ends on one
     // row: the record is always findable, never half an id.
-    for fragment in ["4f1c8f2e-8…", "f0e5c1a77", "/state/sin…", "c8f2e/tmp"] {
+    for fragment in ["4f1c8f2e-8a…", "3f0e5c1a77", "/state/sind…", "1c8f2e/tmp"] {
         assert!(
             rails.iter().any(|rail| rail.contains(fragment)),
             "the rail says {fragment:?}: {rows:#?}"

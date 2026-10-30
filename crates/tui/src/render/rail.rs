@@ -5,8 +5,8 @@
 //! The rail is chrome, not a surface: it lets the canvas through beside the
 //! words and draws no fill, so the frame holds one panel the user owns — the
 //! composer — and the rail says its facts as a ledger: labels in a fixed field,
-//! dot leaders across the gap, values hanging off one edge, a hairline between
-//! the blocks and a dotted seam that begins and ends with the facts
+//! dot leaders across the gap, values hanging off one edge and a hairline
+//! between the blocks
 //!(issue #61).
 
 use ratatui::buffer::Buffer;
@@ -25,21 +25,16 @@ const FACE_FLOOR: u16 = face::ROWS;
 /// The label field: nine columns, so `workspace` fits whole and the dot leader
 /// begins beside it at the same column.
 const LABEL: usize = 9;
-/// The seam and its space, the label's field and the space after it: where the
-/// room for a leader and a value begins.
-const LEDGER: usize = 2 + LABEL + 1;
-/// The seam: one dotted spine down the rail's first column, instead of a rule
-/// that ran the height of the frame. Dots at an eighth of a cell read darker
-/// than they are, so it is painted a step above FAINT. A cell,
-/// not a string: every room beside it counts in cells.
-const SEAM: char = '⁞';
+/// The label's field and the space after it: where the room for a leader and
+/// a value begins.
+const LEDGER: usize = LABEL + 1;
 /// The fewest cells of gap worth bridging with dots: a leader with nothing to
 /// bridge is noise, so a value that fills its room draws none.
 const LEADER_FLOOR: usize = 3;
 
 pub fn column(app: &mut App, area: Rect, buf: &mut Buffer) {
     // The rail is transparent, like the transcript it sits beside: only its
-    // seam, its hairline and the row its chip sits on are painted, so the rail
+    // hairline and the row its chip sits on are painted, so the rail
     // never competes with the composer for the one panel on screen
     //.
     let width = area.width as usize;
@@ -67,8 +62,8 @@ pub fn column(app: &mut App, area: Rect, buf: &mut Buffer) {
         return;
     }
     let below = rows.y.saturating_sub(area.y) as usize;
-    // What a row copies is the fact it states, never the seam or the dots that
-    // drew it: the typography is the frame's, and the fact is the user's.
+    // What a row copies is the fact it states, never the dots that drew it:
+    // the typography is the frame's, and the fact is the user's.
     let session = drawn.session;
     app.set_rail_view(
         rows,
@@ -78,8 +73,8 @@ pub fn column(app: &mut App, area: Rect, buf: &mut Buffer) {
     Paragraph::new(drawn.lines).render(rows, buf);
 }
 
-/// One drawn row and the fact it states. The seam, the leader and the rule are
-/// the frame's typography; only the fact is a copy's business.
+/// One drawn row and the fact it states. The leader and the rule are the
+/// frame's typography; only the fact is a copy's business.
 struct Row {
     line: Line<'static>,
     copies: String,
@@ -187,10 +182,7 @@ fn rows(facts: &[Fact]) -> usize {
 fn more(hidden: usize) -> Row {
     let said = format!("+{hidden} more");
     Row::said(
-        Line::from(vec![
-            Span::styled(SEAM.to_string(), theme::seam()),
-            Span::styled(format!(" {said}"), theme::faint()),
-        ]),
+        Line::from(Span::styled(format!(" {said}"), theme::faint())),
         said,
     )
 }
@@ -198,15 +190,14 @@ fn more(hidden: usize) -> Row {
 fn row(fact: &Fact, width: usize) -> Row {
     match fact.block() {
         Block::Posture => {
-            // The chip's row is one raised run: it begins at the seam and
-            // runs to the rail's last column, so the chip is right-aligned on
+            // The chip's row is one raised run: it begins at the rail's first
+            // column and runs to its last, so the chip is right-aligned on
             // the edge the values hang off and flush to the rail's edge
             //.
             let said = format!(" ⬢ {} ", fact.value());
-            let pad = width.saturating_sub(1 + said.chars().count());
+            let pad = width.saturating_sub(said.chars().count());
             Row::said(
                 Line::from(vec![
-                    Span::styled(SEAM.to_string(), theme::seam().patch(theme::raised())),
                     Span::styled(" ".repeat(pad), theme::raised()),
                     Span::styled(said, chip()),
                 ]),
@@ -228,13 +219,12 @@ fn row(fact: &Fact, width: usize) -> Row {
             };
             Row::said(
                 Line::from(vec![
-                    Span::styled(SEAM.to_string(), theme::seam()),
-                    Span::styled(format!(" {:<LABEL$} ", fact.label()), theme::faint()),
+                    Span::styled(format!("{:<LABEL$} ", fact.label()), theme::faint()),
                     leader,
                     Span::styled(said.clone(), style),
                 ]),
                 // The label and the value: the row a reader copies is the fact
-                // `context 38%`, and never `⁞ context ···· 38%`.
+                // `context 38%`, and never `context ···· 38%`.
                 format!("{} {}", fact.label(), said),
             )
         }
@@ -263,12 +253,12 @@ fn value(fact: &Fact, room: usize) -> String {
 
 /// The rule that opens the identity block: a hairline across the rail's whole
 /// width, so it groups the blocks instead of dividing the column from the
-/// page. The seam keeps its own column, and the hairline starts beside it.
+/// page.
 fn rule(width: usize) -> Row {
-    Row::bare(Line::from(vec![
-        Span::styled(SEAM.to_string(), theme::seam()),
-        Span::styled("─".repeat(width.saturating_sub(1)), theme::faint()),
-    ]))
+    Row::bare(Line::from(Span::styled(
+        "─".repeat(width),
+        theme::faint(),
+    )))
 }
 
 /// A posture is a chip: stated on the raised tier, so it reads as the one

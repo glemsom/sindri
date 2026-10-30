@@ -8,11 +8,11 @@ use super::*;
 use ratatui::buffer::Buffer;
 use sindri_tui::theme;
 
-/// The nine columns a label sits in, once the seam and its space are past.
-const FIELD: std::ops::Range<usize> = 2..11;
-/// Where the room for a gap and a value starts: the rail's edge, the seam, the
-/// label's field, and the space after it.
-const LEDGER: usize = 12;
+/// The nine columns a label sits in, at the rail's first column.
+const FIELD: std::ops::Range<usize> = 0..9;
+/// Where the room for a gap and a value starts: the label's field and the
+/// space after it.
+const LEDGER: usize = 10;
 
 fn spent() -> App {
     let mut app = app();
@@ -67,7 +67,7 @@ fn every_value_hangs_off_the_rails_last_column() {
                 format!("{label:<9}"),
                 "{width} columns: {label:?} keeps the nine-column field: {row:?}"
             );
-            assert_eq!(cells[11], ' ', "{width} columns: {label:?}: {row:?}");
+            assert_eq!(cells[9], ' ', "{width} columns: {label:?}: {row:?}");
             assert!(
                 row.ends_with(said),
                 "{width} columns: {label:?}'s value ends on the rail's last column: {row:?}"
@@ -80,32 +80,32 @@ fn every_value_hangs_off_the_rails_last_column() {
 fn dot_leaders_bridge_the_label_field_to_the_value() {
     let mut app = spent();
     let rows = rails(&screen(&mut app, 100, 26), 100);
-    // `cache` is three cells of value in a twenty-cell ledger: seventeen cells
-    // of gap, and every one of them a dot.
+    // `cache` is three cells of value in a twenty-two-cell ledger: nineteen
+    // cells of gap, and every one of them a dot.
     let row = fact(&rows, "cache");
-    let gap: String = row.chars().skip(LEDGER).take(17).collect();
+    let gap: String = row.chars().skip(LEDGER).take(19).collect();
     assert_eq!(
         gap,
-        "·".repeat(17),
+        "·".repeat(19),
         "the gap between the field and the figure is dots: {row:?}"
     );
     assert_eq!(
         row.chars().count(),
-        LEDGER + 17 + 3,
+        LEDGER + 19 + 3,
         "and nothing else is on the row: {row:?}"
     );
-    // A value that leaves a cell or two of gap has nothing worth bridging:
-    // `context`'s meter fills nineteen of the twenty cells, so it sits one
-    // space off the field and carries no dots at all.
-    let meter = fact(&rows, "context");
+    // A value that fills its room has no gap left to bridge: `session`'s
+    // shortened GUID is the ledger's twenty-two cells whole, so it draws no
+    // dots at all.
+    let guid = fact(&rows, "session");
     assert_eq!(
-        meter.chars().nth(LEDGER),
-        Some(' '),
-        "a gap under the floor is left blank: {meter:?}"
+        guid.chars().count(),
+        RAIL,
+        "the id hangs off the rail's last column: {guid:?}"
     );
     assert!(
-        !meter.contains('·'),
-        "and no leader is drawn on it: {meter:?}"
+        !guid.contains('·'),
+        "a leader with nothing to bridge is noise: {guid:?}"
     );
 
     // The leader is the dimmer of the two: a run of dots reads heavier than a
@@ -164,17 +164,17 @@ fn the_block_rule_spans_the_rails_width_as_a_hairline() {
     let buf = buffer(&mut app, 100, 26);
     let left = (100 - RAIL) as u16;
     let hairline = (0..buf.area.height)
-        .find(|y| buf[(left + 1, *y)].symbol() == "─")
+        .find(|y| buf[(left, *y)].symbol() == "─")
         .expect("the identity block opens with a rule");
     let rule: String = (left..100)
         .map(|x| buf[(x, hairline)].symbol().to_string())
         .collect();
     assert_eq!(
         rule,
-        format!("⁞{}", "─".repeat(RAIL - 1)),
-        "the rule spans the rail's width, under the seam: {rule:?}"
+        "─".repeat(RAIL),
+        "the rule spans the rail's whole width: {rule:?}"
     );
-    for x in left + 1..100 {
+    for x in left..100 {
         assert_eq!(
             buf[(x, hairline)].fg,
             theme::FAINT,
@@ -183,85 +183,16 @@ fn the_block_rule_spans_the_rails_width_as_a_hairline() {
     }
     // It groups the blocks rather than dividing the column from the page: the
     // numbers above it, what the run is below it.
-    assert_eq!(
-        buf[(left, hairline - 1)].symbol(),
-        "⁞",
-        "the rule is between two facts, not above the first"
-    );
-}
-
-#[test]
-fn the_seam_is_a_dotted_spine_that_begins_and_ends_with_the_facts() {
-    let mut app = spent();
-    let buf = buffer(&mut app, 100, 40);
-    let left = (100 - RAIL) as u16;
-    let full = screen(&mut app, 100, 40);
-    let rows = rails(&full, 100);
-    // The rail's own rows: the composer below them draws a border the whole
-    // width of the frame, and that border is not the rail.
-    let body = full
-        .iter()
-        .position(|row| row.contains('╭'))
-        .expect("the composer draws");
-    let seam: Vec<u16> = (0..body as u16)
-        .filter(|y| buf[(left, *y)].symbol() == "⁞")
-        .collect();
-    let first = *seam.first().expect("the rail has a top");
-    let last = *seam.last().expect("the rail has a bottom");
-    assert_eq!(
-        seam.len() as u16,
-        last - first + 1,
-        "the seam is unbroken from its top to its bottom: {seam:?}"
-    );
-    assert_eq!(first, 0, "no face: the seam starts on the rail's first row");
+    let rows = rails(&screen(&mut app, 100, 26), 100);
     assert!(
-        rows[last as usize].contains("⬢ bwrap"),
-        "and stops on the last fact, the chip: {:?}",
-        rows[last as usize]
+        rows[hairline as usize - 1].starts_with("stop"),
+        "the rule closes the numbers: {:?}",
+        rows[hairline as usize - 1]
     );
     assert!(
-        rows[first as usize].contains("cache"),
-        "the seam begins with the first fact: {:?}",
-        rows[first as usize]
-    );
-    for y in first..=last {
-        assert_eq!(
-            buf[(left, y)].fg,
-            theme::SEAM,
-            "the seam is a step above faint: ({left},{y})"
-        );
-    }
-    // Above the first fact and below the last the rail paints nothing at all.
-    for y in (0..body as u16).filter(|y| *y < first || *y > last) {
-        let cell = &buf[(left, y)];
-        assert_eq!(cell.symbol(), " ", "nothing is painted at ({left},{y})");
-        assert_eq!(
-            (cell.fg, cell.bg),
-            (ratatui::style::Color::Reset, ratatui::style::Color::Reset)
-        );
-    }
-}
-
-#[test]
-fn the_seam_begins_below_the_face_that_is_drawn_above_it() {
-    // The face takes the top of the rail, and the seam does not start in it:
-    // the spine begins on the first fact, whatever is drawn above.
-    let face = Face::kitty().expect("the embedded face decodes");
-    let mut app = App::new(launch(), Some(face));
-    let buf = buffer(&mut app, 100, 40);
-    let rows = rails(&screen(&mut app, 100, 40), 100);
-    let left = (100 - RAIL) as u16;
-    let cache = rows
-        .iter()
-        .position(|row| row.contains("cache"))
-        .expect("the rail says what the run spent");
-    let first = (0..buf.area.height)
-        .find(|y| buf[(left, *y)].symbol() == "⁞")
-        .expect("the seam has a top");
-    assert!(first > 0, "the face has the rows above it: {rows:#?}");
-    assert_eq!(
-        first as usize, cache,
-        "the seam starts on the first fact, not on the face: {rows:#?}"
+        rows[hairline as usize + 1].starts_with("model"),
+        "and opens what the run is: {:?}",
+        rows[hairline as usize + 1]
     );
 }
 
@@ -279,18 +210,15 @@ fn the_chip_hangs_off_the_values_edge_and_runs_to_the_rails_edge() {
     assert_eq!(
         (raised.first(), raised.last()),
         (Some(&left), Some(&99)),
-        "the chip's raised run begins at the seam and runs unbroken to the \
-         rail's last column, the edge every value hangs off"
+        "the chip's raised run begins at the rail's first column and runs \
+         unbroken to its last, the edge every value hangs off"
     );
     let chip: String = raised
         .iter()
         .map(|x| buf[(*x, posture)].symbol().to_string())
         .collect();
     assert_eq!(
-        chip.chars()
-            .filter(|cell| *cell != '⁞')
-            .collect::<String>()
-            .trim(),
+        chip.trim(),
         "⬢ bwrap · 1 writable",
         "the chip states the posture whole, right-aligned: {chip:?}"
     );

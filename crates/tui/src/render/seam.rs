@@ -12,7 +12,7 @@
 //! sequence is far wider than the cell carrying it. Whatever cell follows the
 //! strip's first is therefore left unpainted by the emitted frame — so it is
 //! the strip's own second cell, with its placeholder inherited from the first,
-//! and never the rail's first `⁞` or the escape of the face drawn above it
+//! and never the rail's first column or the escape of the face drawn above it
 //! (`render::GAP_COLUMNS`).
 
 use ratatui::buffer::Buffer;

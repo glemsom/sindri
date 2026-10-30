@@ -34,7 +34,7 @@ pub const RAIL_MIN_WIDTH: u16 = 100;
 /// escape is wider than the cell that carries it, so `Buffer::diff` leaves the
 /// cell after it unpainted, and the strip the margin draws is a picture. The
 /// strip takes both cells, so the one the diff costs it is its own and never
-/// the rail's first `⁞` or the face drawn above it (#63).
+/// the rail's first column or the face drawn above it (#63).
 pub const GAP_COLUMNS: u16 = 2;
 /// The footer's hints, in the one order they are worth saying: the keys that
 /// send, open the list and leave first, because a terminal too narrow for all
