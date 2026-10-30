@@ -212,11 +212,12 @@ fn the_first_frame_claims_nothing_the_launch_did_not_say() {
     // The rest of the empty frame is the rail, and it says only what a launch
     // and no run establish: nothing spent, no cache to be a share of, and the
     // branch as the dash of one that is not there.
-    let all = rows.join(" ");
-    for fact in ["tokens    0 in · 0 out", "cache     —", "branch    —"] {
-        assert!(
-            all.contains(fact),
-            "the empty frame's figures are its own zeros, never invented: {fact:?} in {rows:#?}"
+    let rails = rails(&rows, 100);
+    for (label, said) in [("tokens", "0 in · 0 out"), ("cache", "—"), ("branch", "—")] {
+        assert_eq!(
+            value(&rails, label),
+            said,
+            "the empty frame's figures are its own zeros, never invented: {label:?} in {rows:#?}"
         );
     }
 }
