@@ -74,7 +74,7 @@ meter, session GUID, session temp path, git branch and sandbox posture. 32 colum
 the frame paints nothing on. Above it: **panel**, then **raised** (ADR-0016).
 
 **panel** — a surface the frame draws on, one tier above the canvas: the composer,
-a fenced code block, the rail.
+a fenced code block, the rail, the band a turn's **prompt** sits on.
 
 **raised** — the surface an overlay is drawn on, one tier above a panel; the frame
 is dimmed beneath it.
@@ -82,7 +82,12 @@ is dimmed beneath it.
 **composer** — the input at the bottom: 2–6 rows, `Shift+Enter` for a newline, `@` for a
 path completion, `/` for a command.
 
-**thread** — the growing conversation of one TUI session; `/new` starts over.
+**thread** — the growing conversation of one TUI session; `/new` starts over. Laid
+out as a document: two blank rows between turns and none inside one, a two-column
+gutter a turn's answer and calls hang off, and the prompt at full strength on its
+own band.
+
+**turn header** — the row that opens a turn: `YOU  <hh:mm>  <workspace>`.
 
 **completion** — the `@` offer of workspace paths: a proximity-ranked background walk,
 eight rows, `.git` skipped, `.gitignore` deliberately not honoured.

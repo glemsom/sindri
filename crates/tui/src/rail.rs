@@ -11,6 +11,9 @@ pub struct Launch {
     pub temp: String,
     pub branch: Option<String>,
     pub sandbox: String,
+    /// The directory the frame was launched in, shortened to `~` under the
+    /// home: the header of every turn names it.
+    pub workspace: String,
     pub max_turns: u32,
     pub context_limit: Option<u64>,
 }
@@ -59,6 +62,10 @@ impl Rail {
 
     pub fn session(&self) -> String {
         self.launch.session.clone()
+    }
+
+    pub fn workspace(&self) -> String {
+        self.launch.workspace.clone()
     }
 
     pub fn context_used(&self) -> u64 {

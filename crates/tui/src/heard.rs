@@ -5,7 +5,7 @@ use sindri_core::agent::Event;
 
 use crate::app::{App, Renew};
 use crate::driver::{CallOver, Finished, Job, Side, Spilled, Stop};
-use crate::entry::{Call, Entry, Note};
+use crate::entry::{Call, Entry, Note, Prompt};
 
 impl App {
     pub(crate) fn submit(&mut self) {
@@ -34,7 +34,11 @@ impl App {
         self.cancel.clear();
         let cancel = self.cancel.clone();
         self.running = Some(cancel.clone());
-        self.entries.push(Entry::Prompt(prompt.clone()));
+        self.entries.push(Entry::Prompt(Prompt {
+            text: prompt.clone(),
+            at: crate::clock::now(),
+            cwd: self.rail.workspace(),
+        }));
         self.dirty();
         Some(Job { prompt, cancel })
     }

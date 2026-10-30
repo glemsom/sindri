@@ -34,6 +34,7 @@ fn app() -> App {
             temp: "/state/sindri/sessions/4f1c8f2e/tmp".to_string(),
             branch: Some("main".to_string()),
             sandbox: "bwrap · 1 writable".to_string(),
+            workspace: "~/git/sindri".to_string(),
             max_turns: 250,
             context_limit: Some(200_000),
         },

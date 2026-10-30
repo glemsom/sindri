@@ -265,6 +265,7 @@ mod tests {
                 temp: "/tmp".to_string(),
                 branch: None,
                 sandbox: "bwrap".to_string(),
+                workspace: "~/git/sindri".to_string(),
                 max_turns: 1,
                 context_limit: None,
             },

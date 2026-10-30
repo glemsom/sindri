@@ -10,11 +10,20 @@ pub const TAIL_LINES: usize = 5;
 
 #[derive(Debug)]
 pub enum Entry {
-    Prompt(String),
+    Prompt(Prompt),
     Answer { turn: u32, text: String, done: bool },
     Reasoning { turn: u32, text: String, done: bool },
     Call(Call),
     Note(Note),
+}
+
+/// A turn's opening: what the human typed, and the header that names them —
+/// when they asked, and from where.
+#[derive(Debug)]
+pub struct Prompt {
+    pub text: String,
+    pub at: String,
+    pub cwd: String,
 }
 
 #[derive(Debug)]

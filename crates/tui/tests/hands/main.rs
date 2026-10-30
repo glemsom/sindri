@@ -66,6 +66,7 @@ fn launch(session: &str) -> Launch {
         temp: format!("/state/sindri/sessions/{session}/tmp"),
         branch: Some("main".to_string()),
         sandbox: "bwrap · 1 writable".to_string(),
+        workspace: "~/git/sindri".to_string(),
         max_turns: 250,
         context_limit: Some(200_000),
     }

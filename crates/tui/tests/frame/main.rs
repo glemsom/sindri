@@ -25,6 +25,7 @@ fn launch() -> Launch {
         temp: "/state/sindri/sessions/4f1c8f2e/tmp".to_string(),
         branch: Some("t15-the-frame".to_string()),
         sandbox: "bwrap · 1 writable".to_string(),
+        workspace: "~/git/sindri".to_string(),
         max_turns: 250,
         context_limit: Some(200_000),
     }
@@ -291,3 +292,4 @@ fn with_kitty_graphics_the_face_draws_in_the_top_of_the_rail() {
 
 mod rail;
 mod surface;
+mod transcript;
