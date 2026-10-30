@@ -15,7 +15,7 @@ mod common;
 use common::provider::{MockProvider, Reply};
 use std::io::Write;
 
-use common::pty::{CLEAR_FIELD, DOWN, ENTER, Pty, expect, spawn, type_line};
+use common::pty::{CLEAR_FIELD, DOWN, ENTER, Pty, expect, spawn, type_command, type_line};
 use common::{Env, TEST_KEY, stderr, stdout, write_config};
 
 const TYPED_KEY: &str = "sk-typed-in-the-settings-modal-0f2c";
@@ -85,7 +85,7 @@ fn a_model_changed_in_settings_answers_the_next_prompt_on_the_same_thread() {
     type_line(&pty, "what changed?");
     expect(&pty, &mut child, "the first answer");
 
-    type_line(&pty, "/settings");
+    type_command(&pty, "/settings");
     expect(&pty, &mut child, "extra_writable_paths");
     set_field(&pty, 1, "model-two");
     pty.type_key(ENTER);
@@ -137,7 +137,7 @@ fn a_saved_extra_path_is_in_force_for_the_very_next_command() {
 
     let opened = expect_on_screen(&pty, &mut child, "bwrap · 1 writable");
     assert!(!opened.is_empty(), "the frame is drawing");
-    type_line(&pty, "/settings");
+    type_command(&pty, "/settings");
     expect(&pty, &mut child, "extra_writable_paths");
     set_field(&pty, 7, &scratch.display().to_string());
     pty.type_key(ENTER);
@@ -186,7 +186,7 @@ fn a_key_typed_in_the_modal_is_written_to_the_file_and_nowhere_else() {
     let mut child = spawn_with(&env, &pty, &mock);
 
     expect(&pty, &mut child, "cache");
-    type_line(&pty, "/settings");
+    type_command(&pty, "/settings");
     // The key field is the fourth of the schema's nine, and it starts where
     // the run does: at the environment, never at a secret.
     let drawn = pty.wait_for_text(&mut child, "from environment");

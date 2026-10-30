@@ -77,6 +77,14 @@ fn type_text(app: &mut App, text: &str) {
     }
 }
 
+/// `/settings`, typed and sent: the name opens the offer the catalogue makes,
+/// the first `Enter` takes it and the second sends it (issue #54).
+fn open_settings(app: &mut App) {
+    type_text(app, "/settings");
+    press(app, KeyCode::Enter);
+    press(app, KeyCode::Enter);
+}
+
 fn wheel(app: &mut App, kind: MouseEventKind) {
     app.mouse(MouseEvent {
         kind,
@@ -281,8 +289,7 @@ fn a_description_wraps_under_its_keys_instead_of_being_cut_at_the_edge() {
 #[test]
 fn a_failed_save_says_why_at_a_hundred_by_twelve() {
     let mut f = fixture("model = \"m\"\n");
-    type_text(&mut f.app, "/settings");
-    press(&mut f.app, KeyCode::Enter);
+    open_settings(&mut f.app);
     for _ in 0..4 {
         press(&mut f.app, KeyCode::Down);
     }
@@ -319,8 +326,7 @@ fn a_failed_save_says_why_at_a_hundred_by_twelve() {
 #[test]
 fn the_modal_scrolls_to_a_chosen_row_past_the_fold_and_keeps_it_on_screen() {
     let mut f = fixture("model = \"m\"\n");
-    type_text(&mut f.app, "/settings");
-    press(&mut f.app, KeyCode::Enter);
+    open_settings(&mut f.app);
 
     // Nine rows in a box of twelve: the last of them is past the fold.
     for _ in 0..8 {

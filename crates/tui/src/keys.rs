@@ -274,10 +274,12 @@ impl App {
         self.window.want(Ask::Rows(if up { rows } else { -rows }));
     }
 
-    /// Recomputes what `@` is completing, and asks for a walk of the
-    /// workspace only when the answer could have changed (ADR-0011).
+    /// Recomputes what the draft is completing — an `@` path, or a `/` command
+    /// named at its start — and asks for a walk of the workspace only when the
+    /// answer could have changed and only a path needs one (ADR-0011,
+    /// ADR-0013).
     fn refresh_completion(&mut self) {
-        let Some(query) = completion::query(self.composer.row()) else {
+        let Some(query) = completion::ask(&self.composer.text(), self.composer.row()) else {
             self.completion = None;
             self.walking = None;
             return;
@@ -285,13 +287,14 @@ impl App {
         if self
             .completion
             .as_ref()
-            .is_some_and(|open| open.typed == query.typed && open.at == query.at)
+            .is_some_and(|open| open.answers(&query))
         {
             return;
         }
         self.generation = self.generation.wrapping_add(1);
-        self.walking = Some((self.generation, query.typed.clone()));
-        self.completion = Some(Completion::new(query, self.generation));
+        let open = Completion::new(query, self.generation);
+        self.walking = open.walk();
+        self.completion = Some(open);
     }
 
     fn accept_completion(&mut self) {

@@ -1,6 +1,6 @@
-//! The `@` completion, as a column of paths just above the composer: the
-//! eight nearest matches, the chosen one marked, and a word when the walk
-//! stopped at its cap (ADR-0011).
+//! The completion, as a column just above the composer: the eight nearest
+//! matches — `@` paths or `/` commands, whichever was asked for — the chosen
+//! one marked, and a word when a walk stopped at its cap (ADR-0011, ADR-0013).
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;

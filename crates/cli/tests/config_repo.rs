@@ -15,7 +15,7 @@ use common::provider::{MockProvider, Reply};
 use std::process::Child;
 
 use common::pty::{
-    ALTERNATE_SCREEN, CLEAR_FIELD, DOWN, ENTER, Pty, expect, spawn, spawn_with_stderr, type_line,
+    ALTERNATE_SCREEN, CLEAR_FIELD, DOWN, ENTER, Pty, expect, spawn, spawn_with_stderr, type_command,
 };
 use common::{Env, stderr, stdout};
 
@@ -199,7 +199,7 @@ fn a_settings_save_inside_the_frame_says_nothing_on_stderr() {
 
     // A save happens while the frame owns the screen: it takes the failure as a
     // value, and a line on stderr there would corrupt the frame.
-    type_line(&pty, "/settings");
+    type_command(&pty, "/settings");
     expect(&pty, &mut child, "extra_writable_paths");
     let mut port = pty.port();
     for _ in 0..SETTINGS_EXTRAS_ROW {
