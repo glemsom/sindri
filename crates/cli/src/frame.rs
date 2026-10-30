@@ -14,19 +14,19 @@ use sindri_core::doctor::{self, DoctorError};
 use sindri_core::exec::{BashExecutor, Outcome, OutputSink, SandboxExecutor, Side, ToolResult};
 use sindri_core::provider::{self, Client, Usage};
 use sindri_core::sandbox::{Enforcement, SandboxPolicy};
-use sindri_core::session::{Env, LoopError, Session, StartError};
+use sindri_core::session::{Env, LoopError, Session};
 use sindri_tui::driver::{CallOver, Driver, Finished, Spilled, Stop, Tap, Tokens};
 use sindri_tui::run::{self, Ending};
 use sindri_tui::{Card, Launch};
 use sindri_types::ExitCode;
 
-use crate::{batch, signal};
+use crate::{failure, signal};
 
 /// Runs the frame for one launch, and says how the process should end.
 pub fn run(overrides: Overrides) -> i32 {
     let config = match Config::resolve(overrides.clone()) {
         Ok(config) => config,
-        Err(error) => return batch::config_error(&error),
+        Err(error) => return failure::config_error(error),
     };
     // The sandbox is the precondition for the agent, so it is proven before the
     // first frame: a broken sandbox is a card, never a half-drawn interface
@@ -45,10 +45,7 @@ pub fn run(overrides: Overrides) -> i32 {
     // sandbox PATH and the state root below this line are values (ADR-0015 §6).
     let env = match Env::ambient() {
         Ok(env) => env,
-        Err(error) => {
-            eprintln!("sindri: the run environment cannot be read: {error}");
-            return ExitCode::EnvironmentFailure.code();
-        }
+        Err(error) => return failure::Failure::Environment(error).report(),
     };
     // The frame holds one session, and `/new` opens another: it builds no
     // directory, no record and no policy by hand (ADR-0015 §1-2). A run that
@@ -56,14 +53,7 @@ pub fn run(overrides: Overrides) -> i32 {
     // batch mode says them (ADR-0006).
     let session = match Session::open(&env, &config) {
         Ok(session) => session,
-        Err(StartError::Record { path, source }) => {
-            eprintln!("sindri: session {}: {source}", path.display());
-            return ExitCode::EnvironmentFailure.code();
-        }
-        Err(error) => {
-            eprintln!("sindri: sandbox: {error}");
-            return ExitCode::EnvironmentFailure.code();
-        }
+        Err(error) => return failure::Failure::Start(error).report(),
     };
 
     // One flag for the launch, raised by Ctrl-C and by a signal alike, and put
@@ -186,7 +176,7 @@ impl Driver for Front {
                 stopped: Stop::Error,
                 turns: 0,
                 tokens: Tokens::default(),
-                error: Some(batch::provider_message(&error)),
+                error: Some(failure::provider_message(&error)),
                 note,
             },
         }

@@ -1,9 +1,11 @@
 //! `sindri doctor`: run the probe, print the description, and turn a failure
 //! into one actionable line on stderr.
 
-use sindri_core::config::{Config, ConfigError, Overrides};
+use sindri_core::config::{Config, Overrides};
 use sindri_core::doctor;
 use sindri_types::ExitCode;
+
+use crate::failure;
 
 pub fn run(overrides: Overrides) -> i32 {
     // The description must be the one a run really gives the model, so the
@@ -11,13 +13,7 @@ pub fn run(overrides: Overrides) -> i32 {
     // said out loud rather than quietly ignored.
     let extras = match Config::configured_extras(overrides) {
         Ok(extras) => extras,
-        Err(error) => {
-            eprintln!("sindri: {}", error.message());
-            return match error {
-                ConfigError::Usage(_) => ExitCode::UsageError.code(),
-                ConfigError::Missing(_) => ExitCode::ModelError.code(),
-            };
-        }
+        Err(error) => return failure::config_error(error),
     };
     match doctor::probe(extras.as_slice()) {
         Ok(report) => {

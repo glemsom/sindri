@@ -3,6 +3,7 @@
 
 mod batch;
 mod doctor;
+mod failure;
 mod frame;
 mod sandbox;
 mod sessions;
@@ -109,7 +110,7 @@ enum SandboxCommand {
 fn main() {
     let cli = Cli::parse();
     if cli.batch.is_some() && cli.command.is_some() {
-        std::process::exit(batch::usage_error(
+        std::process::exit(failure::usage_error(
             "batch mode takes no subcommand: `sindri -b \"your prompt\"`",
         ));
     }
@@ -132,7 +133,7 @@ fn main() {
                 },
                 &command,
             ),
-            Err(message) => batch::usage_error(&message),
+            Err(message) => failure::usage_error(&message),
         },
         None => match cli.batch {
             Some(prompt) => batch::run(
@@ -183,5 +184,5 @@ fn interactive(overrides: Overrides) -> i32 {
     if std::io::stdin().is_terminal() && std::io::stdout().is_terminal() {
         return frame::run(overrides);
     }
-    batch::usage_error(r#"piped stdin needs -b: `… | sindri -b "your prompt"`"#)
+    failure::usage_error(r#"piped stdin needs -b: `… | sindri -b "your prompt"`"#)
 }

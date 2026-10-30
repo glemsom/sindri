@@ -66,6 +66,12 @@ under. Read from the process once, at `Session::open`, and passed as a value
 everywhere below it, so a test can open a session in a temporary workspace
 without touching the process.
 
+**failure** — a run that cannot start, said as one line after `sindri: ` and one
+exit code, from the one module that owns the words: `sandbox: <why a session
+could not start>` and `session <path>: <why the record could not>`, or `the run
+environment cannot be read: <why>` when the process itself cannot be. Every front
+end prints the same line for the same failure (ADR-0004).
+
 **superseded session** — a session replaced by `/new`. Its record ends where it
 ended: it gets no end written on its way out, because a superseded session did
 not stop, it was left.

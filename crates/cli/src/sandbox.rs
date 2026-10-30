@@ -13,10 +13,10 @@ use sindri_core::cancel::Cancel;
 use sindri_core::config::{Config, Overrides};
 use sindri_core::exec::{BashExecutor, Outcome, ToolResult};
 use sindri_core::provider::{Error, Usage};
-use sindri_core::session::{Env, LoopError, Session, StartError};
+use sindri_core::session::{Env, LoopError, Session};
 use sindri_types::ExitCode;
 
-use crate::signal;
+use crate::{failure, signal};
 
 /// Runs the command and prints one JSON object describing what happened. A
 /// session is opened the one way a run opens one, so a diagnostic cannot probe a
@@ -26,28 +26,18 @@ pub fn exec(timeout: Duration, overrides: Overrides, command: &[String]) -> i32 
     // extras a run would be granted, and nothing a run would spend.
     let config = match Config::for_command(overrides) {
         Ok(config) => config,
-        Err(error) => {
-            eprintln!("sindri: {}", error.message());
-            return ExitCode::UsageError.code();
-        }
+        Err(error) => return failure::config_error(error),
     };
+    // A diagnostic that cannot read the run environment, or cannot start the
+    // session it probes, fails in the same words as the run it is diagnosing:
+    // one failure vocabulary, whoever met it (ADR-0004).
     let env = match Env::ambient() {
         Ok(env) => env,
-        Err(error) => {
-            eprintln!("sindri: sandbox exec: the run environment cannot be read: {error}");
-            return ExitCode::EnvironmentFailure.code();
-        }
+        Err(error) => return failure::Failure::Environment(error).report(),
     };
     let session = match Session::open(&env, &config) {
         Ok(session) => session,
-        Err(StartError::Record { path, source }) => {
-            eprintln!("sindri: session {}: {source}", path.display());
-            return ExitCode::EnvironmentFailure.code();
-        }
-        Err(error) => {
-            eprintln!("sindri: sandbox exec: {error}");
-            return ExitCode::EnvironmentFailure.code();
-        }
+        Err(error) => return failure::Failure::Start(error).report(),
     };
 
     let script = shell_join(command);
