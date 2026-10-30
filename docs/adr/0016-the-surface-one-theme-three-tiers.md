@@ -40,6 +40,22 @@ date: 2026-10-31
 8. **`FAINT` is body text and clears 4.5:1** against both the canvas and the panel
    (`#8f98a8`). A test computes the WCAG ratio rather than trusting the number.
 
+## Amendment
+
+9. **The heading scale is a function of the level.** `markdown::heading` ranks a
+   heading from its level alone: H1 and H2 are `HEADING` in bold over a rule beneath
+   them, and the rule spans the column divided by the level, so H1's is twice H2's.
+   H3 and deeper are `HEADING` with nothing added — past H2 there is nothing left to
+   take away. A level added tomorrow is ranked without an arm being written.
+10. **A link keeps its target.** Its words are `PROMPT` and the URL follows them
+    dimmed in `‹›`, so a reader sees where a link would take them without following
+    it. A link that names nowhere is its words as plain text: no bracket, no colour.
+11. **A diff row is washed.** An added row is `DIFF_ADDED` over `DIFF_ADDED_BG` and a
+    removed one `DIFF_REMOVED` over `DIFF_REMOVED_BG`; the `+`/`-` says which it is
+    first, the hue second and the wash third, so the row survives a terminal that
+    cannot tell green from red (§7). The gutter and the fill of a tinted row carry
+    its wash, so the row is a row and not a coloured word on a panel.
+
 ## Consequences
 
 - The golden frames re-record: the composer's border, the fence's panel and the rail's
