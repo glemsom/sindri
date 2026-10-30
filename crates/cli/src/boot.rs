@@ -4,7 +4,7 @@
 //! prints the answer, `sandbox exec` prints the outcome. Boot probes nothing,
 //! owns no cancel flag, and prints nothing on the way in.
 
-use sindri_core::config::{Config, Overrides};
+use sindri_core::config::{Config, ConfigError, Overrides};
 use sindri_core::session::{Env, Session};
 
 use crate::failure::Failure;
@@ -44,30 +44,33 @@ impl Configured {
 
 /// Starts a run that asks a model: the read a run needs, and its session.
 pub fn open(overrides: Overrides) -> Result<Boot, Failure> {
-    expect(overrides)?.start()
+    prepare(overrides)?.start()
 }
 
 /// The read a run that asks a model needs — a model and a credential. The frame
 /// proves the sandbox on this before anything is created on disk.
-pub fn expect(overrides: Overrides) -> Result<Configured, Failure> {
-    Ok(Configured {
-        env: Env::ambient().map_err(Failure::Environment)?,
-        // The hint a run without a model or a credential has always been given,
-        // word for word: boot adds a door, not a dialect (ADR-0004).
-        config: Config::resolve(overrides).map_err(Failure::Config)?,
-    })
+pub fn prepare(overrides: Overrides) -> Result<Configured, Failure> {
+    read(overrides, Config::resolve)
 }
 
 /// The diagnostic door: the same read, without a model or a credential, so
 /// `sandbox exec` probes the sandbox a run would get without being configured
 /// as one (ADR-0015 §7).
 pub fn configure(overrides: Overrides) -> Result<Configured, Failure> {
+    read(overrides, Config::for_command)
+}
+
+/// The read both doors do: the process's own facts once, and the settings one
+/// of the two resolutions answers. The environment is read first, so a machine
+/// whose state root cannot be found is the environment's failure before a config
+/// value is blamed for it.
+fn read(
+    overrides: Overrides,
+    resolve: fn(Overrides) -> Result<Config, ConfigError>,
+) -> Result<Configured, Failure> {
     Ok(Configured {
         env: Env::ambient().map_err(Failure::Environment)?,
-        // The same file, the same extras, and neither of the two settings only
-        // a model needs: a diagnostic that cannot start a session says so in the
-        // environment's own words, not in a missing credential's.
-        config: Config::for_command(overrides).map_err(Failure::Config)?,
+        config: resolve(overrides).map_err(Failure::Config)?,
     })
 }
 

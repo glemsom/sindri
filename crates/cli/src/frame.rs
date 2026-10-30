@@ -29,7 +29,7 @@ pub fn run(overrides: Overrides) -> i32 {
     // and the config resolved once (ADR-0015 §6). The sandbox is proven on it
     // before the session is opened, so a machine that cannot have a sandbox is a
     // card and never a record left saying `running`.
-    let configured = match boot::expect(overrides.clone()) {
+    let configured = match boot::prepare(overrides.clone()) {
         Ok(configured) => configured,
         Err(failure) => return failure.report(),
     };

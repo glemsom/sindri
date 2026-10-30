@@ -28,11 +28,10 @@ pub fn exec(timeout: Duration, overrides: Overrides, command: &[String]) -> i32 
     // granted, and nothing a run would spend. A diagnostic that cannot read the
     // run environment, or cannot start the session it probes, fails in the same
     // words as the run it is diagnosing (ADR-0004, ADR-0015 §7).
-    let boot = match boot::configure(overrides).and_then(Configured::start) {
-        Ok(boot) => boot,
+    let session = match boot::configure(overrides).and_then(Configured::start) {
+        Ok(boot) => boot.session,
         Err(failure) => return failure.report(),
     };
-    let session = &boot.session;
 
     let script = shell_join(command);
     // Ctrl-C here kills the command's group too, so a diagnostic cannot leave a
@@ -44,7 +43,7 @@ pub fn exec(timeout: Duration, overrides: Overrides, command: &[String]) -> i32 
     let result = executor.execute(&script);
     // The session ends whatever the command did: a record left saying `running`
     // could not be told from a diagnostic that is still going (ADR-0006).
-    end(session, &command_over(result.as_ref(), started.elapsed()));
+    end(&session, &command_over(result.as_ref(), started.elapsed()));
 
     let Some(result) = result else {
         return ExitCode::Cancelled.code();
