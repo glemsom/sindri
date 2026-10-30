@@ -12,12 +12,20 @@
 use std::fs::File;
 use std::io::{ErrorKind, Read, Write};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
-use std::path::{Path, PathBuf};
-use std::process::{Child, Stdio};
+use std::process::Child;
 use std::time::{Duration, Instant};
 
-use super::Env;
 use super::screen::{Screen, says};
+
+mod spawn;
+
+// Each test binary uses a different slice of the harness, so a door a binary
+// does not open is not an unused import; it is a door that binary has no key to.
+#[allow(
+    unused_imports,
+    reason = "each test binary uses a different slice of the harness"
+)]
+pub use spawn::{Said, exit, expect, spawn, spawn_with_stderr, type_line};
 
 /// The escape sequence that enters the alternate screen: the frame's first act.
 pub const ALTERNATE_SCREEN: &str = "\u{1b}[?1049h";
@@ -268,103 +276,6 @@ impl Pty {
             }
         }
     }
-}
-
-/// What a frame said without drawing it: the stderr beside the screen. A
-/// failure said before the frame takes the terminal has nowhere else to go, so
-/// a test that reads it must keep it out of the frame's escape sequences.
-pub struct Said {
-    /// The directory the file lives in, kept alive for the test's length.
-    _root: tempfile::TempDir,
-    path: PathBuf,
-}
-
-impl Said {
-    pub fn new() -> Said {
-        let root = tempfile::TempDir::new().expect("a directory for the frame's stderr");
-        let path = root.path().join("stderr");
-        Said { _root: root, path }
-    }
-
-    /// The file to hand `spawn_with_stderr`.
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
-    /// Everything the frame said on stderr, read once it has said it.
-    pub fn words(&self) -> String {
-        std::fs::read_to_string(&self.path).unwrap_or_default()
-    }
-}
-
-impl Default for Said {
-    fn default() -> Said {
-        Said::new()
-    }
-}
-
-/// Waits for the process to be gone, and gives the code a shell would read —
-/// `None` when it would not go, so a stuck front end fails rather than hangs.
-pub fn exit(child: &mut Child) -> Option<i32> {
-    let deadline = Instant::now() + DEADLINE;
-    while Instant::now() < deadline {
-        if let Ok(Some(status)) = child.try_wait() {
-            return status.code();
-        }
-        std::thread::sleep(Duration::from_millis(20));
-    }
-    let _ = child.kill();
-    let _ = child.wait();
-    None
-}
-
-/// A pty test's own environment: the mock provider's base URL, and nothing of
-/// the host's own settings.
-pub fn spawn(env: &Env, pty: &Pty, vars: &[(&str, &str)]) -> Child {
-    opened(env, pty, vars, None)
-}
-
-/// The same, with the process's stderr kept in a file rather than drawn on the
-/// terminal: the cold path's one note is a line on stderr, and a test that reads
-/// it must not have the frame's own escape sequences in the way.
-pub fn spawn_with_stderr(env: &Env, pty: &Pty, vars: &[(&str, &str)], file: &Path) -> Child {
-    opened(env, pty, vars, Some(file))
-}
-
-/// The one spawn both doors do: a terminal for the frame, and a place for what
-/// the frame does not draw.
-fn opened(env: &Env, pty: &Pty, vars: &[(&str, &str)], stderr: Option<&Path>) -> Child {
-    let mut command = env.command();
-    let said = match stderr {
-        Some(file) => Stdio::from(File::create(file).expect("a file for the frame's stderr")),
-        None => Stdio::from(pty.slave.try_clone().expect("a pty slave")),
-    };
-    command
-        .env("TERM", "xterm-256color")
-        .envs(vars.iter().copied())
-        .stdin(Stdio::from(pty.slave.try_clone().expect("a pty slave")))
-        .stdout(Stdio::from(pty.slave.try_clone().expect("a pty slave")))
-        .stderr(said);
-    command.spawn().expect("spawn sindri on a terminal")
-}
-
-/// A drawn frame that does not say `want` is a failure, not a hang: kills the
-/// run and reports what it did draw.
-pub fn expect(pty: &Pty, child: &mut Child, want: &str) {
-    let drawn = pty.wait_for_text(child, want);
-    if !drawn.contains(want) {
-        let _ = child.kill();
-        let _ = child.wait();
-        panic!("the frame never said {want:?}, drew: {drawn:?}");
-    }
-}
-
-/// Types a whole prompt: the characters, then Enter.
-pub fn type_line(pty: &Pty, text: &str) {
-    for byte in text.bytes() {
-        pty.type_key(byte);
-    }
-    pty.type_key(ENTER);
 }
 
 /// What a user would read: every escape sequence taken out, so text a frame
