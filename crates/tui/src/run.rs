@@ -136,6 +136,14 @@ fn session(
         begin(&mut app, &jobs);
         let root = std::env::current_dir().unwrap_or_default();
         walk(&mut app, &tx, &mut walking, &root);
+        // The terminal's cursor is hidden while the frame is written and shown
+        // again where the composer puts it. A frame that leaves it showing
+        // carries it wherever the diff writes next, and a streamed answer
+        // repaints the transcript every frame: a reader then watches the cursor
+        // leave the composer and come back. `draw` shows it at the position the
+        // frame set and never hides it, so the hiding is the loop's (ADR-0011
+        // §4, §11).
+        let _ = terminal.hide_cursor();
         if terminal
             .draw(|frame| render::draw(&mut app, frame))
             .is_err()

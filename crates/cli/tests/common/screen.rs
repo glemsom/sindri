@@ -8,11 +8,32 @@
 /// A terminal's own memory: the cells a frame put somewhere, and the cursor it
 /// put them from. Enough of a terminal to say what a reader is looking at, and
 /// nothing more.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Screen {
     cells: std::collections::BTreeMap<(u16, u16), char>,
     row: u16,
     col: u16,
+    /// Whether the terminal is showing its cursor: a reader sees it wherever
+    /// the frame's next character lands, not where the frame means to leave it.
+    visible: bool,
+    /// Every cell written while the cursor was shown. A frame hides the cursor
+    /// while it writes and shows it where the composer put it, so this is
+    /// empty; a cursor a reader watches walk the screen is here.
+    seen_while_visible: Vec<(u16, u16)>,
+}
+
+impl Default for Screen {
+    fn default() -> Self {
+        Screen {
+            cells: std::collections::BTreeMap::new(),
+            row: 0,
+            col: 0,
+            // Nothing has hidden it yet: a terminal starts with the cursor in
+            // sight, which is why the first frame has to hide it.
+            visible: true,
+            seen_while_visible: Vec::new(),
+        }
+    }
 }
 
 impl Screen {
@@ -38,6 +59,9 @@ impl Screen {
                 '\r' => self.col = 0,
                 '\n' => self.row = self.row.saturating_add(1),
                 ch if !ch.is_control() => {
+                    if self.visible {
+                        self.seen_while_visible.push((self.row, self.col));
+                    }
                     self.cells.insert((self.row, self.col), ch);
                     self.col = self.col.saturating_add(1);
                 }
@@ -83,8 +107,17 @@ impl Screen {
             Some('K') => self
                 .cells
                 .retain(|(row, col), _| *row != self.row || *col < self.col),
+            // The cursor's own visibility: `?25h` shows it and `?25l` hides it.
+            Some('h') | Some('l') if params.starts_with('?') && first == 25 => {
+                self.visible = action == Some('h');
+            }
             _ => {}
         }
+    }
+
+    /// Every cell the frame wrote while the terminal was showing its cursor.
+    pub fn seen_while_visible(&self) -> &[(u16, u16)] {
+        &self.seen_while_visible
     }
 
     /// The rows that have anything on them, oldest first.

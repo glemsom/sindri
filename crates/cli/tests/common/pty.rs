@@ -170,6 +170,16 @@ impl Pty {
         }
     }
 
+    /// Every cell the frame wrote while the terminal was showing its cursor.
+    /// The one place a reader may see the cursor is where the composer left
+    /// it, so anything here is a cursor that left the composer.
+    pub fn written_while_visible(&self) -> Vec<(u16, u16)> {
+        self.screen
+            .lock()
+            .map(|screen| screen.seen_while_visible().to_vec())
+            .unwrap_or_default()
+    }
+
     /// What is on the screen now, as a reader would see it.
     pub fn screen(&self) -> String {
         self.screen

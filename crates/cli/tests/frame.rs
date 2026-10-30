@@ -392,3 +392,68 @@ fn the_frame_advertises_the_hands_and_leaves_when_asked() {
     let (code, _) = pty.quit(&mut child);
     assert_eq!(code, Some(0), "leaving the frame is not a failure");
 }
+
+/// The streamed answer a cursor test watches: reasoning first, then markdown
+/// with enough body to be repainted row by row while it arrives.
+fn streamed_answer() -> Reply {
+    let reasoning: Vec<String> = (0..20)
+        .map(|step| format!("thinking about step {step} and what follows from it\n"))
+        .collect();
+    let text: Vec<String> = (0..12)
+        .map(|line| format!("line {line} of an answer long enough to be repainted\n"))
+        .collect();
+    Reply::streamed_paced(
+        frames::reasoning_then_text(
+            &reasoning.iter().map(String::as_str).collect::<Vec<_>>(),
+            &text.iter().map(String::as_str).collect::<Vec<_>>(),
+        ),
+        Duration::from_millis(15),
+    )
+}
+
+#[test]
+fn the_cursor_is_in_the_composer_for_every_frame_the_answer_repaints() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: the cursor is not tested here");
+        return;
+    };
+    let env = Env::new();
+    let mock = MockProvider::start(vec![streamed_answer()]);
+    write_config(
+        &env,
+        &format!(
+            "provider = \"anthropic\"\nmodel = \"model-one\"\nbase_url = \"{}\"\nthinking = true\n",
+            mock.base_url()
+        ),
+    );
+    let base_url = mock.base_url();
+    let mut child = spawn(
+        &env,
+        &pty,
+        &[
+            ("SINDRI_API_KEY", TEST_KEY),
+            ("SINDRI_BASE_URL", base_url.as_str()),
+            ("SINDRI_THINKING", "true"),
+        ],
+    );
+
+    expect(&pty, &mut child, "cache");
+    type_line(&pty, "what changed?");
+    pty.wait_for_screen(&mut child, "line 11 of an answer");
+
+    // A frame writes with the terminal's cursor hidden and shows it where the
+    // composer put it. A frame that leaves it shown while it writes carries the
+    // cursor into whatever it repaints — a streamed answer repaints the
+    // transcript every frame, so the cursor is seen walking out of the composer
+    // and back to it, which is the flicker this proves absent.
+    let stray = pty.written_while_visible();
+    let (code, _) = pty.quit(&mut child);
+    assert!(
+        stray.is_empty(),
+        "the terminal's cursor was visible while the frame wrote {} cells, first at {:?}: \
+         the cursor must be in the composer and nowhere else",
+        stray.len(),
+        stray.first()
+    );
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+}
