@@ -258,7 +258,9 @@ The `sindri` binary never writes that file except when you ask it to — from
 `.sindri.toml` in the working directory is **never** read. A checked-in config
 that grants extra writable paths would turn every `git clone && sindri` into a
 privilege escalation, so the file is refused and the refusal is said once on
-stderr.
+stderr, before anything runs — in batch mode, at the top of a TUI launch, and in
+`sindri sandbox exec` alike. A settings save inside the frame is the one place
+that says nothing on stderr, because there stderr is the frame itself.
 
 ## Evals
 

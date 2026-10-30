@@ -76,23 +76,15 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
 
     let (format, verbose) = (flags.format, flags.verbose);
     // One door starts the run: the process is read once, the config resolved
-    // once and the session opened once, in the one order (ADR-0015). Boot prints
-    // nothing on the way in, and a run that cannot be evidenced is not a run.
+    // once and the session opened once, in the one order (ADR-0015). Boot has
+    // already said a refused repository config, the way every cold path does,
+    // and a run that cannot be evidenced is not a run.
     let Boot {
         config, session, ..
     } = match boot::open(flags.into()) {
         Ok(boot) => boot,
         Err(failure) => return failure.report(),
     };
-    // Nothing written by a clone may configure the agent, and staying silent
-    // about it would leave a user editing a file that is read by nobody.
-    if let Some(path) = &config.refused_repo_config {
-        eprintln!(
-            "sindri: ignoring {}: a config committed in a repository is never honoured (ADR-0005)",
-            path.display()
-        );
-    }
-
     // One flag for the whole run: Ctrl-C raises it, the loop stops on it between
     // turns, and the executor kills a running command's group on it.
     let cancel = Cancel::new();
