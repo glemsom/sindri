@@ -51,7 +51,22 @@ and prints the sandbox description.
 ## Run
 
 **session** — one run, identified by a GUID, recorded under
-`$XDG_STATE_HOME/sindri/sessions/<guid>/` (ADR-0006).
+`$XDG_STATE_HOME/sindri/sessions/<guid>/` (ADR-0006). Also the value a front end
+holds to have one: `session::Session` in `sindri-core` is the only place a run is
+started, so the session directory, the sandbox policy, the record, the executor,
+the tool and the agent are built in one order, once. A front end adds only what
+is not the session's own — the branch and the model's context window are the
+rail's facts, not the session's.
+
+**run environment** — the three ambient facts a session is opened in: the
+workspace, the `PATH` the sandbox is given, and the state root the record lives
+under. Read from the process once, at `Session::open`, and passed as a value
+everywhere below it, so a test can open a session in a temporary workspace
+without touching the process.
+
+**superseded session** — a session replaced by `/new`. Its record ends where it
+ended: it gets no end written on its way out, because a superseded session did
+not stop, it was left.
 
 **transcript** — the ordered record of messages, tool calls and tool results of
 a session.
