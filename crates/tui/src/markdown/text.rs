@@ -63,6 +63,49 @@ pub fn wrap(
     rows
 }
 
+/// `text` where it fits, and otherwise its two ends around a `…`: an id or a
+/// path says what it is at one end and where it ends at the other, and a value
+/// is never split across two rows to say it.
+pub fn middle(text: &str, width: usize) -> String {
+    let cells = |text: &str| -> usize {
+        text.chars()
+            .map(|ch| UnicodeWidthChar::width(ch).unwrap_or(0))
+            .sum()
+    };
+    if cells(text) <= width {
+        return text.to_string();
+    }
+    if width == 0 {
+        return String::new();
+    }
+    // The `…` takes a cell of its own, and what is left is halved: a character
+    // is never split, so a wide glyph is either wholly in or wholly out.
+    let keep = width - 1;
+    let mut head = String::new();
+    let mut used = 0;
+    for ch in text.chars() {
+        let cells = UnicodeWidthChar::width(ch).unwrap_or(0);
+        if used + cells > keep.div_ceil(2) {
+            break;
+        }
+        used += cells;
+        head.push(ch);
+    }
+    let room = keep - cells(&head);
+    let mut tail: Vec<char> = Vec::new();
+    let mut used = 0;
+    for ch in text.chars().rev() {
+        let cells = UnicodeWidthChar::width(ch).unwrap_or(0);
+        if used + cells > room {
+            break;
+        }
+        used += cells;
+        tail.push(ch);
+    }
+    tail.reverse();
+    format!("{head}…{}", tail.into_iter().collect::<String>())
+}
+
 /// The first `width` display columns of `text`, cut rather than wrapped: for
 /// a row that shows an excerpt of something longer. A character is never
 /// split, so a wide glyph is either wholly in or wholly out.

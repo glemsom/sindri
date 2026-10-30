@@ -292,6 +292,7 @@ mod tests {
                 branch: None,
                 sandbox: "bwrap".to_string(),
                 workspace: "~/git/sindri".to_string(),
+                model: "claude-sonnet-4-6".to_string(),
                 max_turns: 1,
                 context_limit: None,
             },

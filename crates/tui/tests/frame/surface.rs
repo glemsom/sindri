@@ -172,10 +172,18 @@ fn the_rail_is_a_panel_one_column_away_from_the_transcript() {
     let buf = buffer(&mut app, 100, 24);
     let width = buf.area.width as usize;
     let composer = find(&buf, '╭').map(|(_, y)| y).expect("the composer");
+    let mut chips = 0;
     for y in 0..composer {
         for x in (width - RAIL)..width {
+            let tier = buf[(x as u16, y)].bg;
+            // The posture is a chip, a tier nearer than the panel it sits on;
+            // every other cell of the rail is the panel (ADR-0016).
+            if tier == theme::RAISED {
+                chips += 1;
+                continue;
+            }
             assert_eq!(
-                buf[(x as u16, y)].bg,
+                tier,
                 theme::PANEL,
                 "the rail is a surface of its own: ({x},{y})"
             );
@@ -186,6 +194,7 @@ fn the_rail_is_a_panel_one_column_away_from_the_transcript() {
             "and it leaves the terminal's own canvas between it and the words: ({y})"
         );
     }
+    assert!(chips > 0, "the posture is the one raised thing on the rail");
 }
 
 #[test]
