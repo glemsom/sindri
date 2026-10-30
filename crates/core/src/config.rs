@@ -111,10 +111,33 @@ impl ConfigError {
     }
 }
 
+/// Whether the two settings only a model needs are required: a run asks a
+/// model, so it needs a name and a credential; a diagnostic asks nothing.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Model {
+    Required,
+    Optional,
+}
+
 impl Config {
     /// The settings this run uses: file, then environment, then flags, with
     /// every value checked.
     pub fn resolve(overrides: Overrides) -> Result<Config, ConfigError> {
+        Config::read(overrides, Model::Required)
+    }
+
+    /// The settings a command needs and a model does not: `sindri sandbox exec`
+    /// probes the sandbox a run would get, so it reads the same file and grants
+    /// the same extras, and needs neither a model nor a credential to find out
+    /// (ADR-0002, ADR-0015 §7). The model it records is the one that was
+    /// configured, which is to say none.
+    pub fn for_command(overrides: Overrides) -> Result<Config, ConfigError> {
+        Config::read(overrides, Model::Optional)
+    }
+
+    /// The one body of both: the same sources, the same checks, and the two
+    /// settings a diagnostic does without.
+    fn read(overrides: Overrides, asked: Model) -> Result<Config, ConfigError> {
         let file = file::read()?;
 
         let provider = match overrides
@@ -155,19 +178,23 @@ impl Config {
             )));
         }
 
-        let model = overrides
+        let named = overrides
             .model
             .or_else(|| env("SINDRI_MODEL"))
             .or(file.model)
-            .filter(|model| !model.trim().is_empty())
-            .ok_or_else(|| {
-                ConfigError::Missing(format!(
+            .filter(|model| !model.trim().is_empty());
+        let model = match named {
+            Some(model) => model,
+            None if asked == Model::Optional => String::new(),
+            None => {
+                return Err(ConfigError::Missing(format!(
                     "no model configured for the {} wire: pass --model, set SINDRI_MODEL, or set `model` in {}{}",
                     provider.as_str(),
                     file_path(),
                     provider.model_hint().unwrap_or_default()
-                ))
-            })?;
+                )));
+            }
+        };
 
         let api_key = env("SINDRI_API_KEY")
             .or_else(|| env(provider.api_key_env()))
@@ -177,7 +204,7 @@ impl Config {
         // says so, naming every way to set it.
         let api_key = match api_key {
             Some(key) => key,
-            None if !provider.needs_credential() => String::new(),
+            None if !provider.needs_credential() || asked == Model::Optional => String::new(),
             None => {
                 return Err(ConfigError::Missing(format!(
                     "no credential for {}: set {} or SINDRI_API_KEY, or set `api_key` in {}",

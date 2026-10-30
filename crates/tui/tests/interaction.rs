@@ -10,6 +10,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+use sindri_core::cancel::Cancel;
 use sindri_tui::driver::{CallOver, Finished, Spilled, Stop, Tokens};
 use sindri_tui::render;
 use sindri_tui::{App, Card, Launch};
@@ -99,6 +100,7 @@ fn a_cancelled_run_reports_cancelled_and_the_composer_stays_usable() {
         turns: 1,
         tokens: Tokens::default(),
         error: None,
+        note: None,
     });
 
     let rows = screen(&mut app, 100, 22);
@@ -111,6 +113,38 @@ fn a_cancelled_run_reports_cancelled_and_the_composer_stays_usable() {
         app.composer().text(),
         "try again",
         "the composer still takes text"
+    );
+}
+
+#[test]
+fn a_cancel_between_prompts_ends_that_run_and_not_the_next() {
+    let cancel = Cancel::new();
+    let mut app = app().with_cancel(cancel.clone());
+    type_text(&mut app, "the last question");
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+    let job = app.start().expect("a run starts");
+
+    // A signal and a key raise the same flag, so raising it anywhere raises it
+    // for the run in flight (ADR-0015 §8).
+    cancel.trigger();
+    assert!(
+        job.cancel.is_triggered(),
+        "the frame's flag is the run's flag"
+    );
+    app.finished(Finished {
+        stopped: Stop::Cancelled,
+        turns: 1,
+        ..Finished::default()
+    });
+
+    type_text(&mut app, "the next question");
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+    let next = app
+        .start()
+        .expect("the next prompt runs in the same launch");
+    assert!(
+        !next.cancel.is_triggered(),
+        "the flag is put down between prompts, so a cancel ends one run and never the next"
     );
 }
 
@@ -139,6 +173,7 @@ fn a_prompt_typed_during_a_run_queues_and_is_sent_when_the_run_ends() {
             cached: 0,
         },
         error: None,
+        note: None,
     });
     let next = app.start().expect("the queue is drained, in order");
     assert_eq!(next.prompt, "second question");

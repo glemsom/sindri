@@ -34,6 +34,7 @@ fn spent() -> App {
             cached: 10_168,
         },
         error: None,
+        note: None,
     });
     app
 }
@@ -79,6 +80,7 @@ fn the_rail_never_drops_a_fact_to_keep_the_face() {
             cached: 10_168,
         },
         error: None,
+        note: None,
     });
     let rows = screen(&mut app, 100, 26);
     let rail: String = rows
@@ -163,6 +165,7 @@ fn the_context_meter_fills_as_the_conversation_takes_the_window() {
                 cached: 30_000,
             },
             error: None,
+            note: None,
         });
         let rows = screen(&mut app, width, 26);
         let rail: String = rows

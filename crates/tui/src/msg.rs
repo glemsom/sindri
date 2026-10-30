@@ -26,8 +26,8 @@ pub enum Msg {
     /// What one background walk of the workspace found — and whether it hit the
     /// cap before the tree ended — for the completion it was started for.
     Paths(u64, Vec<String>, bool),
-    /// A fresh session, when a front end could start one.
-    Renewed(Option<Launch>),
+    /// A fresh session, or the reason there is none.
+    Renewed(Result<Launch, String>),
     /// A saved config, taken up — or refused, with the reason.
     Reloaded(Result<Launch, String>),
 }

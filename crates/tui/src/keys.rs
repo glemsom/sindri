@@ -5,7 +5,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Position;
 
-use crate::app::App;
+use crate::app::{App, Renew};
 use crate::command::{self, Command};
 use crate::completion::{self, Completion};
 use crate::copy::Copied;
@@ -183,23 +183,19 @@ impl App {
         }
     }
 
-    /// `/new`: the transcript is emptied and the front end is asked for a fresh
-    /// session GUID (ADR-0011 §8). A run in flight is cancelled first, and the
-    /// renew is queued behind it, because the driver's thread is one thread.
+    /// `/new`: the front end is asked for a fresh session GUID, and the
+    /// transcript is emptied only once it answers with one (ADR-0015 §2): a
+    /// session that cannot start leaves the conversation where it was. A run in
+    /// flight is cancelled first, and the renew is queued behind it, because the
+    /// driver's thread is one thread.
     fn new_session(&mut self) {
         if let Some(cancel) = &self.running {
             cancel.trigger();
         }
-        self.entries.clear();
-        self.queue.clear();
-        self.early.clear();
-        self.heights.clear();
-        self.scroll = 0;
         self.selection = Selection::default();
         self.overlay = None;
         self.completion = None;
-        self.dirty();
-        self.renew = true;
+        self.renew = Renew::Asked;
     }
 
     /// `Esc`: the completion, then the selection.

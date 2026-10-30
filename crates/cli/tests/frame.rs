@@ -11,8 +11,12 @@
 
 mod common;
 
-use common::pty::{ALTERNATE_SCREEN, Pty, spawn};
-use common::{Env, TEST_KEY, host_path, path_without, required_binaries};
+use std::os::unix::fs::PermissionsExt;
+use std::time::Duration;
+
+use common::provider::{MockProvider, Reply, frames};
+use common::pty::{ALTERNATE_SCREEN, Pty, expect, spawn, type_line};
+use common::{Env, TEST_KEY, host_path, path_without, required_binaries, write_config};
 
 #[test]
 fn bare_sindri_on_a_terminal_opens_the_frame() {
@@ -70,6 +74,169 @@ fn a_sandbox_that_cannot_exist_is_a_card_before_anything_else_draws() {
     // failure — not a success.
     let (code, _) = pty.quit(&mut child);
     assert_eq!(code, Some(3), "a sandbox that cannot start exits 3");
+}
+
+/// The state root a launch records under, with the sessions it holds.
+fn sessions(env: &Env) -> std::path::PathBuf {
+    env.state.join("sindri/sessions")
+}
+
+/// Every session GUID the state root holds, oldest order unasked.
+fn recorded(env: &Env) -> Vec<String> {
+    let mut found: Vec<String> = std::fs::read_dir(sessions(env))
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter_map(|entry| Some(entry.file_name().to_str()?.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+    found.sort();
+    found
+}
+
+/// The config a frame test runs against: the mock's wire, named in the file the
+/// run reads.
+fn config_for(mock: &MockProvider) -> String {
+    format!(
+        "provider = \"anthropic\"\nmodel = \"model-one\"\nbase_url = \"{}\"\n",
+        mock.base_url()
+    )
+}
+
+/// A frame on the mock's wire, with a credential the run will not spend.
+fn frame_on(env: &Env, pty: &Pty, mock: &MockProvider) -> std::process::Child {
+    write_config(env, &config_for(mock));
+    let base_url = mock.base_url();
+    spawn(
+        env,
+        pty,
+        &[
+            ("SINDRI_API_KEY", TEST_KEY),
+            ("SINDRI_BASE_URL", base_url.as_str()),
+        ],
+    )
+}
+
+#[test]
+fn a_new_session_that_cannot_start_keeps_the_answer_and_says_why() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: `/new`'s failure is not tested here");
+        return;
+    };
+    let env = Env::new();
+    let mock = MockProvider::start(vec![Reply::answer("the first answer")]);
+    let mut child = frame_on(&env, &pty, &mock);
+
+    expect(&pty, &mut child, "cache");
+    type_line(&pty, "what changed?");
+    expect(&pty, &mut child, "the first answer");
+    let before = recorded(&env);
+    assert_eq!(before.len(), 1, "one launch, one record: {before:?}");
+
+    // The state root the next session would be created in cannot be written any
+    // more, so `/new` has nowhere to put a session.
+    let root = sessions(&env);
+    let locked = std::fs::metadata(&root)
+        .expect("the sessions root")
+        .permissions();
+    std::fs::set_permissions(&root, PermissionsExt::from_mode(0o555)).expect("lock the sessions");
+    type_line(&pty, "/new");
+    let drawn = pty.wait_for_screen(&mut child, "could not start");
+    std::fs::set_permissions(&root, locked).expect("unlock the sessions");
+
+    // What is on the screen when the failure is drawn, not what was written to
+    // it once: the earlier answer is still there to be read.
+    let repainted = pty.wait_for_screen(&mut child, "the first answer");
+    let (code, _) = pty.quit(&mut child);
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+    assert!(
+        drawn.contains("could not start"),
+        "the transcript names the failure: {drawn:?}"
+    );
+    assert!(
+        drawn.contains("Permission denied") || drawn.contains("cannot be created"),
+        "and the reason is the session directory's own: {drawn:?}"
+    );
+    assert!(
+        !drawn.contains("this front end cannot start a new session"),
+        "not a blanket reason: {drawn:?}"
+    );
+    assert!(
+        repainted.contains("the first answer"),
+        "the earlier answer is still on screen: {repainted:?}"
+    );
+    assert_eq!(
+        recorded(&env),
+        before,
+        "a `/new` that could not start leaves the record being written where it was"
+    );
+}
+
+#[test]
+fn a_signal_ends_the_run_in_flight_and_the_next_prompt_still_runs() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: the frame's SIGINT is not tested here");
+        return;
+    };
+    let env = Env::new();
+    // Plenty of paced frames, so the signal lands while the reply is still open,
+    // and a second answer for the prompt that follows it.
+    let fragments: Vec<String> = (0..200).map(|index| format!("word{index} ")).collect();
+    let fragments: Vec<&str> = fragments.iter().map(String::as_str).collect();
+    let mock = MockProvider::start(vec![
+        Reply::streamed_paced(frames::text(&fragments), Duration::from_millis(25)),
+        Reply::answer("the second answer"),
+    ]);
+    let mut child = frame_on(&env, &pty, &mock);
+
+    expect(&pty, &mut child, "cache");
+    type_line(&pty, "answer slowly");
+    expect(&pty, &mut child, "word0");
+    // A signal from outside the frame, the way a shell sends one.
+    common::signal(child.id(), libc::SIGINT);
+    expect(&pty, &mut child, "cancelled");
+
+    // One launch, one flag, put down between prompts: the next prompt runs.
+    type_line(&pty, "and then?");
+    expect(&pty, &mut child, "the second answer");
+    let (code, _) = pty.quit(&mut child);
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+}
+
+#[test]
+fn a_record_that_cannot_be_finished_is_said_in_the_transcript() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: the record's end is not tested here");
+        return;
+    };
+    let env = Env::new();
+    // A paced reply, so the run is still in flight when the record goes.
+    let fragments: Vec<String> = (0..200).map(|index| format!("word{index} ")).collect();
+    let fragments: Vec<&str> = fragments.iter().map(String::as_str).collect();
+    let mock = MockProvider::start(vec![Reply::streamed_paced(
+        frames::text(&fragments),
+        Duration::from_millis(25),
+    )]);
+    let mut child = frame_on(&env, &pty, &mock);
+
+    expect(&pty, &mut child, "cache");
+    type_line(&pty, "answer slowly");
+    expect(&pty, &mut child, "word0");
+
+    // The session directory goes while its run is still going: the end of the
+    // record has nowhere to be written.
+    let running = recorded(&env);
+    assert_eq!(running.len(), 1, "one run, one record: {running:?}");
+    std::fs::remove_dir_all(sessions(&env).join(&running[0])).expect("remove the record");
+
+    let drawn = pty.wait_for_text(&mut child, "could not be finished");
+    let (code, _) = pty.quit(&mut child);
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+    assert!(
+        drawn.contains("the record could not be finished"),
+        "a record the run could not close is said where the user is looking: {drawn:?}"
+    );
 }
 
 /// The settings a frame needs to open at all: a credential the run will not

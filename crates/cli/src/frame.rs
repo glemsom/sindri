@@ -1,27 +1,26 @@
 //! The terminal UI's launch: what a bare `sindri` on a terminal does. Boot
-//! proves the sandbox before the first frame, the rail carries the facts the
-//! filter used to keep to stderr, and the driver runs one prompt at a time
-//! through the same core batch mode uses (ADR-0011, ADR-0012).
+//! proves the sandbox and opens a session before the first frame, the rail
+//! carries the facts the filter used to keep to stderr, and the driver runs one
+//! prompt at a time through the same session batch mode uses (ADR-0011,
+//! ADR-0012, ADR-0015).
 
 use std::sync::Arc;
 use std::sync::mpsc;
 
-use sindri_core::agent::{Agent, BashTool, Dials, Event};
+use sindri_core::agent::{Agent, BashTool, Dials, Event, Report, Stopped};
 use sindri_core::cancel::Cancel;
 use sindri_core::config::{Config, Overrides};
 use sindri_core::doctor::{self, DoctorError};
 use sindri_core::exec::{BashExecutor, Outcome, OutputSink, SandboxExecutor, Side, ToolResult};
-use sindri_core::paths::SessionDir;
 use sindri_core::provider::{self, Client, Usage};
-use sindri_core::record::{Recorder, Redaction, Start};
 use sindri_core::sandbox::{Enforcement, SandboxPolicy};
-use sindri_core::session;
+use sindri_core::session::{Env, LoopError, Session, StartError};
 use sindri_tui::driver::{CallOver, Driver, Finished, Spilled, Stop, Tap, Tokens};
 use sindri_tui::run::{self, Ending};
 use sindri_tui::{Card, Launch};
 use sindri_types::ExitCode;
 
-use crate::batch;
+use crate::{batch, signal};
 
 /// Runs the frame for one launch, and says how the process should end.
 pub fn run(overrides: Overrides) -> i32 {
@@ -42,52 +41,58 @@ pub fn run(overrides: Overrides) -> i32 {
         return ExitCode::EnvironmentFailure.code();
     }
 
-    let (session, policy) = match session::prepare(&config.extra_writable, Enforcement::Bubblewrap)
-    {
-        Ok(prepared) => prepared,
-        Err(message) => {
-            eprintln!("sindri: sandbox: {message}");
+    // The process is read once, before the first frame: the workspace, the
+    // sandbox PATH and the state root below this line are values (ADR-0015 §6).
+    let env = match Env::ambient() {
+        Ok(env) => env,
+        Err(error) => {
+            eprintln!("sindri: the run environment cannot be read: {error}");
             return ExitCode::EnvironmentFailure.code();
         }
     };
-    let recorder = match Recorder::start(
-        &session,
-        Start {
-            provider: config.provider.as_str().to_string(),
-            model: config.model.clone(),
-            enforcement: Enforcement::Bubblewrap,
-        },
-        Redaction::new([config.api_key.clone()]),
-    ) {
-        Ok(recorder) => Arc::new(recorder),
+    // The frame holds one session, and `/new` opens another: it builds no
+    // directory, no record and no policy by hand (ADR-0015 §1-2). A run that
+    // cannot be evidenced is not a run, and the two failures are said the way
+    // batch mode says them (ADR-0006).
+    let session = match Session::open(&env, &config) {
+        Ok(session) => session,
+        Err(StartError::Record { path, source }) => {
+            eprintln!("sindri: session {}: {source}", path.display());
+            return ExitCode::EnvironmentFailure.code();
+        }
         Err(error) => {
-            eprintln!("sindri: session {}: {error}", session.root().display());
+            eprintln!("sindri: sandbox: {error}");
             return ExitCode::EnvironmentFailure.code();
         }
     };
 
-    let launch = launch(&session, &policy, &config);
+    // One flag for the launch, raised by Ctrl-C and by a signal alike, and put
+    // down between prompts by the frame (ADR-0015 §8).
+    let cancel = Cancel::new();
+    signal::install(cancel.clone());
+
+    let launch = launch(&session, &config);
     let driver = Front {
+        env,
         config,
         overrides,
-        policy,
         session,
-        recorder,
         agent: None,
     };
-    match run::open(launch, Box::new(driver)) {
+    match run::open(launch, Box::new(driver), cancel) {
         Ending::Left => ExitCode::Success.code(),
         Ending::BootFailed => ExitCode::EnvironmentFailure.code(),
     }
 }
 
-/// What the rail is shown at the start of a launch, and again after `/new`.
-fn launch(session: &SessionDir, policy: &SandboxPolicy, config: &Config) -> Launch {
+/// What the rail is shown at the start of a launch, and again after `/new`: the
+/// session's own facts, and the two that are the rail's (ADR-0015 §9).
+fn launch(session: &Session, config: &Config) -> Launch {
     Launch {
-        session: session.id().to_string(),
-        temp: session.temp().display().to_string(),
+        session: session.dir().id().to_string(),
+        temp: session.dir().temp().display().to_string(),
         branch: git_branch(),
-        sandbox: posture(policy),
+        sandbox: posture(session.policy()),
         max_turns: config.max_turns,
         // The meter's denominator is the family's advertised window, where the
         // adapter knows it; where it does not, the rail counts up without one.
@@ -95,16 +100,20 @@ fn launch(session: &SessionDir, policy: &SandboxPolicy, config: &Config) -> Laun
     }
 }
 
-/// One launch's runs: the executor, the tool and the agent batch mode builds,
-/// wired to the frame instead of to stdout.
+/// One launch's runs: the session the launch holds, and the thread it keeps
+/// across prompts.
 struct Front {
+    /// The run environment the session was opened in, so `/new` opens the next
+    /// one in the same place without reading the process again (ADR-0015 §6).
+    env: Env,
     config: Config,
     /// The flags the launch was asked with. A reload resolves the config again
     /// from these, so a flag still wins over the file after a save (ADR-0005).
     overrides: Overrides,
-    policy: SandboxPolicy,
-    session: SessionDir,
-    recorder: Arc<Recorder>,
+    /// The one session this launch is recording. `/new` replaces it, and the
+    /// session it replaces is superseded: it was left, not stopped, so it gets
+    /// no end written (ADR-0015 §2).
+    session: Session,
     /// The conversation, kept across prompts: a second question is a follow-up,
     /// and a model changed in `/settings` answers it (ADR-0014).
     agent: Option<Agent>,
@@ -112,24 +121,20 @@ struct Front {
 
 impl Driver for Front {
     fn run(&mut self, prompt: &str, cancel: Cancel, tap: Tap) -> Finished {
+        // The per-prompt parts come from the session, so the sandbox, the record
+        // and the flag are wired the one way (ADR-0015 §3).
         let executor = Arc::new(
-            SandboxExecutor::new(
-                self.policy.clone(),
-                self.config.timeout,
-                self.session.spill(),
-                cancel.clone(),
-            )
-            .with_status_sink(self.recorder.clone())
-            .with_output_sink(Arc::new(Told(tap.clone()))),
+            self.session
+                .executor(self.config.timeout, cancel.clone())
+                .with_output_sink(Arc::new(Told(tap.clone()))),
         );
         let tool = BashTool::new(
-            &self.policy,
+            self.session.policy(),
             Arc::new(Watched {
                 inner: executor,
                 tap: tap.clone(),
             }),
         );
-        let recorder = self.recorder.clone();
         let (max_turns, thinking) = (self.config.max_turns, self.config.thinking);
         let model = Box::new(Client::new(&self.config));
 
@@ -155,15 +160,10 @@ impl Driver for Front {
                 agent.set_dials(dials);
                 agent
             }
-            None => self.agent.insert(Agent::new(
-                dials.model,
-                dials.tool,
-                dials.max_turns,
-                dials.thinking,
-            )),
+            // The session builds the loop, wired to its own record and the
+            // launch's flag.
+            None => self.agent.insert(self.session.agent(dials, cancel)),
         };
-        agent.set_cancel(cancel);
-        agent.set_recorder(recorder);
         agent.set_events(events);
         // The agent stays: the thread it holds is the conversation's. Only its
         // channel is dropped, so the forwarding thread sees the stream end.
@@ -171,72 +171,65 @@ impl Driver for Front {
         agent.close_events();
         let _ = forward.join();
 
+        // The record's end is written here, and a failure to write it is said in
+        // the transcript rather than dropped (ADR-0015 §3).
+        let note = closing_note(&self.session, &outcome);
         match outcome {
-            Ok(report) => {
-                let _ = self.recorder.finish(&report);
-                Finished {
-                    stopped: stop(report.stopped),
-                    turns: report.turns,
-                    tokens: tokens(&report.usage),
-                    error: None,
-                }
-            }
-            Err(error) => {
-                let message = batch::provider_message(&error);
-                let _ = self.recorder.failed(&message);
-                Finished {
-                    stopped: Stop::Error,
-                    turns: 0,
-                    tokens: Tokens::default(),
-                    error: Some(message),
-                }
-            }
+            Ok(report) => Finished {
+                stopped: stop(report.stopped),
+                turns: report.turns,
+                tokens: tokens(&report.usage),
+                error: None,
+                note,
+            },
+            Err(error) => Finished {
+                stopped: Stop::Error,
+                turns: 0,
+                tokens: Tokens::default(),
+                error: Some(batch::provider_message(&error)),
+                note,
+            },
         }
     }
 
-    fn renew(&mut self) -> Option<Launch> {
-        // A new session is a new conversation: `/new` forgets the thread, so
-        // the fresh GUID and the fresh record agree.
+    fn renew(&mut self) -> Result<Launch, String> {
+        // `/new` is `open` again, adopted only once it has answered `Ok`: the
+        // thread and the record being written stay until a session exists to
+        // replace them, so a `/new` that cannot start loses nothing (ADR-0015
+        // §2).
+        let session = Session::open(&self.env, &self.config)
+            .map_err(|error| format!("the new session could not start: {error}"))?;
+        self.session = session;
+        // A new session is a new conversation: the thread is forgotten only now.
         if let Some(agent) = self.agent.as_mut() {
             agent.forget();
         }
-        self.fresh_session()
+        Ok(launch(&self.session, &self.config))
     }
 
     fn reload(&mut self) -> Result<Launch, String> {
         let config =
             Config::resolve(self.overrides.clone()).map_err(|error| error.message().to_string())?;
         // The same session, bounded by the policy the new settings grant: a
-        // saved extra path is in force for the very next command.
-        let policy = session::rebounded(&self.session, &config.extra_writable)
-            .map_err(|error| format!("extra_writable_paths: {error}"))?;
+        // saved extra path is in force for the very next command (ADR-0015 §4).
+        self.session
+            .rebase(&config)
+            .map_err(|error| error.to_string())?;
         self.config = config;
-        self.policy = policy;
-        Ok(launch(&self.session, &self.policy, &self.config))
+        Ok(launch(&self.session, &self.config))
     }
 }
 
-impl Front {
-    /// `/new`: a fresh session directory, a fresh record, the same frame. The
-    /// old session keeps everything it already wrote (ADR-0006).
-    fn fresh_session(&mut self) -> Option<Launch> {
-        let (session, policy) =
-            session::prepare(&self.config.extra_writable, Enforcement::Bubblewrap).ok()?;
-        let recorder = Recorder::start(
-            &session,
-            Start {
-                provider: self.config.provider.as_str().to_string(),
-                model: self.config.model.clone(),
-                enforcement: Enforcement::Bubblewrap,
-            },
-            Redaction::new([self.config.api_key.clone()]),
+/// The session's end, and what to say when it cannot be written: a record the
+/// frame could not close is evidence lost, so it is said in the frame's own
+/// words instead of dropped (ADR-0015 §3), the way batch mode says it.
+fn closing_note(session: &Session, outcome: &Result<Report, LoopError>) -> Option<String> {
+    session.finish(outcome).err().map(|error| {
+        format!(
+            "session {}: the record could not be finished: {error}",
+            session.dir().id()
         )
-        .ok()?;
-        self.policy = policy;
-        self.session = session;
-        self.recorder = Arc::new(recorder);
-        Some(launch(&self.session, &self.policy, &self.config))
-    }
+    })
 }
 
 /// Hands each line of a running command's output to the frame as it arrives.
@@ -288,12 +281,12 @@ fn over(outcome: Option<&Outcome>) -> CallOver {
     }
 }
 
-fn stop(stopped: sindri_core::agent::Stopped) -> Stop {
+fn stop(stopped: Stopped) -> Stop {
     match stopped {
-        sindri_core::agent::Stopped::Final => Stop::Final,
-        sindri_core::agent::Stopped::MaxTurns => Stop::MaxTurns,
-        sindri_core::agent::Stopped::Cancelled => Stop::Cancelled,
-        sindri_core::agent::Stopped::Error => Stop::Error,
+        Stopped::Final => Stop::Final,
+        Stopped::MaxTurns => Stop::MaxTurns,
+        Stopped::Cancelled => Stop::Cancelled,
+        Stopped::Error => Stop::Error,
     }
 }
 
