@@ -13,13 +13,18 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Git names the first branch itself otherwise, and checkout prints the
+      # hint on every run.
+      - name: Name the initial branch main
+        run: git config --global init.defaultBranch main
+
+      - uses: actions/checkout@v5
         with:
           # `git describe` needs the tags, and the changelog needs the merge
           # commits since the previous one.
           fetch-depth: 0
 
-      - uses: jetify-com/devbox-install-action@v0.12.0
+      - uses: jetify-com/devbox-install-action@v0.15.0
         with:
           enable-cache: true
 

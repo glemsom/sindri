@@ -9,12 +9,17 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Git names the first branch itself otherwise, and checkout prints the
+      # hint on every run.
+      - name: Name the initial branch main
+        run: git config --global init.defaultBranch main
+
+      - uses: actions/checkout@v5
         with:
           # `git describe` and the commit date need history and tags.
           fetch-depth: 0
 
-      - uses: jetify-com/devbox-install-action@v0.12.0
+      - uses: jetify-com/devbox-install-action@v0.15.0
         with:
           enable-cache: true
 
