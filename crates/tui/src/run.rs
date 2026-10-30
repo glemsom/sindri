@@ -81,21 +81,29 @@ fn release_mouse() {
     let _ = crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture,);
 }
 
+/// The card stays until it is read: a key leaves it, the page keys move a
+/// report taller than the screen, and a resize only lays it out again — a
+/// `tmux` client attaching is not the reader saying they have seen it
+/// (ADR-0011 §15).
 fn show_card(terminal: &mut DefaultTerminal, card: &Card) -> Ending {
-    let mut dismissed = false;
-    while !dismissed {
+    let mut view = crate::card::View::default();
+    loop {
         if terminal
-            .draw(|frame| render::draw_card(card, frame))
+            .draw(|frame| render::draw_card(card, &mut view, frame))
             .is_err()
         {
             break;
         }
-        if event::poll(CARD_POLL).unwrap_or(false) {
-            match event::read() {
-                Ok(TerminalEvent::Key(_)) | Ok(TerminalEvent::Resize(..)) => dismissed = true,
-                Ok(_) => {}
-                Err(_) => break,
-            }
+        if !event::poll(CARD_POLL).unwrap_or(false) {
+            continue;
+        }
+        match event::read() {
+            Ok(event) => match crate::card::answer(&event, view.more()) {
+                crate::card::Answer::Page { up } => view.page(up),
+                crate::card::Answer::Leave => break,
+                crate::card::Answer::Redraw => {}
+            },
+            Err(_) => break,
         }
     }
     Ending::BootFailed
