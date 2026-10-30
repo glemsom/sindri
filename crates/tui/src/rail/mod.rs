@@ -19,6 +19,9 @@ pub struct Launch {
     pub temp: String,
     pub branch: Option<String>,
     pub sandbox: String,
+    /// The wire this run speaks, in the provider's own name: the first frame
+    /// names it beside the model (issue #46).
+    pub provider: String,
     /// The model this run asks: the one fact that says what the user is
     /// talking to.
     pub model: String,
@@ -121,6 +124,13 @@ impl Rail {
 
     pub fn workspace(&self) -> String {
         self.launch.workspace.clone()
+    }
+
+    /// What the launch established: the facts the rail states and the first
+    /// frame names — the wire, the model, the directory and the sandbox
+    /// (ADR-0011 §21).
+    pub fn launch(&self) -> &Launch {
+        &self.launch
     }
 
     pub fn context_used(&self) -> u64 {
@@ -291,8 +301,9 @@ impl Rail {
     }
 }
 
-/// What separates one fact from the next on the one-line strip.
-const SEPARATOR: &str = " · ";
+/// What separates one fact from the next on the one-line strip, and what
+/// ends a posture's head — `bwrap` before `· 1 writable`.
+pub(crate) const SEPARATOR: &str = " · ";
 
 pub fn compact(count: u64) -> String {
     if count < 1_000 {

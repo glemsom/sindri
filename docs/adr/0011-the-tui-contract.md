@@ -65,6 +65,19 @@ date: 2026-10-30
     in the transcript's last column. `PgUp`/`PgDn` and the wheel are unchanged
     (ADR-0013, issue #45).
 
+21. **The first frame is not a blank page.** A thread with nothing in it yet draws
+    three facts and an invitation instead of an empty column: one line naming the wire,
+    the model, the workspace and the sandbox — all read from `Launch`, which carries the
+    provider beside the model — one dim sentence of the contract (one tool, `bash`,
+    sandboxed: the host readable, only the chosen paths writable — ADR-0002, ADR-0010),
+    and three things that can be typed exactly as they read, two prompts and a command,
+    with `/help` beside them. The composer carries a placeholder
+    (`Ask, or drop a log here · @ path · / command`) while it holds no text at all, so a
+    draft is never shadowed. A thread shorter than the column is drawn on its floor, so
+    the newest row is the one above the composer rather than the top row of a screenful
+    of blank ones. Nothing in the empty frame claims a fact the launch did not establish
+    (issue #46).
+
 ## Consequences
 
 - The core changed twice for the TUI: an `Event` variant pair and a streaming path in the pinned adapter. Streaming assembly through the mock provider server is the regression net.

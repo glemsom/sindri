@@ -17,6 +17,7 @@ use ratatui::text::Line;
 use ratatui::widgets::{Paragraph, Widget};
 
 use crate::app::App;
+use crate::render::hello;
 use crate::render::layout::{Frame, drawn, offset_of, place, resolve};
 use crate::theme;
 
@@ -40,12 +41,35 @@ pub struct View {
 }
 
 pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
+    // A thread with nothing in it is the first frame: the one screen that can
+    // say what the run is and what can be typed (issue #46).
+    if app.entries().is_empty() {
+        let rows = hello::rows(app, area.width);
+        app.set_viewport(area, hello::plain_rows(&rows), Vec::new(), Vec::new());
+        Paragraph::new(rows).render(area, buf);
+        return;
+    }
     let view = window(app, area.width, area.height as usize);
-    app.set_viewport(area, view.plain, view.spill.clone(), view.expand.clone());
+    // A thread shorter than the column is written on the floor of it, so the
+    // newest row is the one above the composer rather than the top row of a
+    // screenful of blank ones (issue #46).
+    let at = floor(area, view.rows.len());
+    app.set_viewport(at, view.plain, view.spill.clone(), view.expand.clone());
     let (top, cover, taller) = (view.top, view.cover, view.taller);
-    Paragraph::new(view.rows).render(area, buf);
+    Paragraph::new(view.rows).render(at, buf);
     if taller {
         mark(top, cover, app.entries().len(), area, buf);
+    }
+}
+
+/// The rows a short thread is drawn on: the bottom of the column, so the
+/// newest row sits where the next one will arrive from.
+fn floor(area: Rect, rows: usize) -> Rect {
+    let height = (rows as u16).min(area.height);
+    Rect {
+        y: area.y + area.height - height,
+        height,
+        ..area
     }
 }
 

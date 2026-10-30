@@ -26,6 +26,7 @@ fn launch() -> Launch {
         branch: Some("t15-the-frame".to_string()),
         sandbox: "bwrap · 1 writable".to_string(),
         workspace: "~/git/sindri".to_string(),
+        provider: "anthropic".to_string(),
         model: "claude-sonnet-4-6".to_string(),
         max_turns: 250,
         context_limit: Some(200_000),
@@ -298,6 +299,7 @@ fn with_kitty_graphics_the_face_draws_in_the_top_of_the_rail() {
 
 mod card;
 mod expand;
+mod first;
 mod prose;
 mod pulse;
 mod queue;

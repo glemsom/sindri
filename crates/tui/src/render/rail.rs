@@ -125,8 +125,9 @@ fn rule() -> Line<'static> {
 }
 
 /// A posture is a chip: stated on the raised tier, so it reads as the one
-/// thing on the rail that is not a label and a value.
-fn chip() -> ratatui::style::Style {
+/// thing on the rail that is not a label and a value. The first frame's
+/// posture line borrows the same one (ADR-0011 §21).
+pub(crate) fn chip() -> ratatui::style::Style {
     theme::good().patch(theme::raised())
 }
 

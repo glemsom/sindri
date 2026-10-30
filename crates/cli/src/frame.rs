@@ -86,6 +86,7 @@ fn launch(boot: &Boot) -> Launch {
         temp: boot.session.dir().temp().display().to_string(),
         branch: git_branch(),
         sandbox: posture(boot.session.policy()),
+        provider: boot.config.provider.as_str().to_string(),
         model: boot.config.model.clone(),
         workspace: workspace(&boot.env.workspace),
         max_turns: boot.config.max_turns,

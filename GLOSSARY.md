@@ -108,7 +108,15 @@ is dimmed beneath it. The rail's sandbox **chip** sits on it too, a tier above t
 panel the rest of the rail is drawn on.
 
 **composer** — the input at the bottom: 2–6 rows, `Shift+Enter` for a newline, `@` for a
-path completion, `/` for a command.
+path completion, `/` for a command. With no text in it at all it carries the placeholder
+`Ask, or drop a log here · @ path · / command`, which a draft — a space is a draft —
+never sits behind.
+
+**first frame** — the frame before the first prompt: an empty **thread** is not a blank
+page, but the line naming the wire, the model, the workspace and the sandbox, one dim
+sentence of the contract, and three things that can be typed as they read beside `/help`.
+Every fact on it comes from `Launch`; nothing it says is a figure, because no run has
+spent any (ADR-0011 §21).
 
 **queued prompt** — a prompt sent while a run has the frame: it waits in one queue and runs
 when the run stops, in the order it was typed. The queue is a panel above the **composer**
@@ -119,7 +127,9 @@ composer above any draft typed since, `Ctrl-X` drops it. The footer carries no c
 **thread** — the growing conversation of one TUI session; `/new` starts over. Laid
 out as a document: two blank rows between turns and none inside one, a two-column
 gutter a turn's answer and calls hang off, and the prompt at full strength on its
-own band.
+own band. A thread shorter than the column is written on its floor, so the newest row
+is the one just above the **composer** rather than the top row of a screenful of blank
+ones.
 
 **turn header** — the row that opens a turn: `YOU  <hh:mm>  <workspace>`.
 

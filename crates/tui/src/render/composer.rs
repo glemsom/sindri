@@ -9,6 +9,12 @@ use ratatui::widgets::{Block, BorderType, Paragraph, Widget};
 use crate::app::App;
 use crate::theme;
 
+/// What the composer says while it holds nothing: the three ways a prompt can
+/// begin — asked, a path, or a command — so the first thing typed is not a
+/// guess (issue #46). It is drawn only over a composer with no text in it at
+/// all, so it never sits in front of a draft.
+pub const PLACEHOLDER: &str = "Ask, or drop a log here · @ path · / command";
+
 pub fn draw(app: &App, area: Rect, buf: &mut Buffer) -> Position {
     // The composer is the one thing on screen that is always the user's, so
     // it floats on its own panel: the border is the prompt's colour while it
@@ -33,6 +39,12 @@ pub fn draw(app: &App, area: Rect, buf: &mut Buffer) -> Position {
                 theme::faint(),
             ))]
         }
+        // An empty composer invites the first keystroke; a blank one is not
+        // the same thing — a space is a draft, and a draft is never shadowed.
+        None if app.composer().text().is_empty() => vec![Line::from(ratatui::text::Span::styled(
+            PLACEHOLDER,
+            theme::faint(),
+        ))],
         _ => app
             .composer()
             .rows()
