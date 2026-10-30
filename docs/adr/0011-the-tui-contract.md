@@ -31,8 +31,9 @@ one failure no styling can hide, which is why this is not deferred.
 ### 3. Libraries, so we render rather than invent
 
 `ratatui` + `crossterm` for the frame, `ratatui-image` for the Kitty face,
-`pulldown-cmark` + `syntect` for markdown and code, one 60 fps render loop fed
-by a channel. Provider types stay confined to their adapter (ADR-0003); the TUI
+`pulldown-cmark` + `syntect` for markdown and code, a render loop fed by a
+channel that draws a frame when there is something to say and never on a
+clock. Provider types stay confined to their adapter (ADR-0003); the TUI
 consumes `Event`, never `rig`.
 
 ### 4. Layout
@@ -41,6 +42,13 @@ Transcript column on the left — the hero. A 32-column rail on the right, alway
 visible at 100 columns or more, collapsing to a one-line strip below that and
 never hidden behind a keystroke: trust you must summon is not trust. A composer
 of 2–8 rows pinned at the bottom, one footer line of hints under it.
+
+An idle frame is not drawn. Every frame ends by showing the terminal's cursor and
+moving it to the composer, and a terminal restarts its cursor blink on that move
+— so a loop that redrew an unchanged frame would leave the composer's cursor
+blinking at the frame rate. The loop waits for a message; the only frame it draws
+without one is the first. A resize is a message, so the frame still repaints
+when the terminal changes size.
 
 ### 5. The face, and terminals that cannot show it
 

@@ -1,0 +1,277 @@
+//! A run inside the frame: `/new` opening the next session in the environment the
+//! launch was booted in, a signal ending the run in flight, and a record whose end
+//! cannot be written said in the transcript. Driven through a pseudo-terminal,
+//! because these are the frame's own behaviour — and every wait has a deadline,
+//! so a run that never says anything fails instead of hanging (ADR-0011).
+//!
+//! Opening the frame itself — the mouse, the cursor, the footer — is `frame.rs`'s.
+
+#![allow(
+    clippy::expect_used,
+    reason = "a panicking harness is how a process test reports a setup failure"
+)]
+
+mod common;
+
+use std::os::unix::fs::PermissionsExt;
+use std::time::Duration;
+
+use common::provider::{MockProvider, Reply, frames};
+use common::pty::{Pty, expect, spawn, type_line};
+use common::screen;
+use common::{Env, TEST_KEY, write_config};
+
+/// The state root a launch records under, with the sessions it holds.
+fn sessions(env: &Env) -> std::path::PathBuf {
+    env.state.join("sindri/sessions")
+}
+
+/// Every session GUID the state root holds, oldest order unasked.
+fn recorded(env: &Env) -> Vec<String> {
+    let mut found: Vec<String> = std::fs::read_dir(sessions(env))
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter_map(|entry| Some(entry.file_name().to_str()?.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+    found.sort();
+    found
+}
+
+/// The config a frame test runs against: the mock's wire, named in the file the
+/// run reads.
+fn config_for(mock: &MockProvider) -> String {
+    format!(
+        "provider = \"anthropic\"\nmodel = \"model-one\"\nbase_url = \"{}\"\n",
+        mock.base_url()
+    )
+}
+
+/// A frame on the mock's wire, with a credential the run will not spend.
+fn frame_on(env: &Env, pty: &Pty, mock: &MockProvider) -> std::process::Child {
+    write_config(env, &config_for(mock));
+    let base_url = mock.base_url();
+    spawn(
+        env,
+        pty,
+        &[
+            ("SINDRI_API_KEY", TEST_KEY),
+            ("SINDRI_BASE_URL", base_url.as_str()),
+        ],
+    )
+}
+
+#[test]
+fn a_new_session_is_opened_in_the_same_run_environment() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: `/new`'s next session is not tested here");
+        return;
+    };
+    let env = Env::new();
+    let mock = MockProvider::start(vec![
+        Reply::answer("the first answer"),
+        Reply::answer("the second answer"),
+    ]);
+    let mut child = frame_on(&env, &pty, &mock);
+
+    expect(&pty, &mut child, "cache");
+    type_line(&pty, "what changed?");
+    expect(&pty, &mut child, "the first answer");
+    let before = recorded(&env);
+    assert_eq!(before.len(), 1, "one launch, one record: {before:?}");
+
+    // `/new` opens the next session from the environment the launch was booted
+    // in, and the prompt after it is recorded there: the state root is the one
+    // this launch read, not one read again (ADR-0015 §6). That the process is
+    // not read a second time is `boot`'s own unit test — a launch's environment
+    // is a value, so a second read would answer a different root and there is
+    // none to name here.
+    type_line(&pty, "/new");
+    type_line(&pty, "and now?");
+    expect(&pty, &mut child, "the second answer");
+    let (code, _) = pty.quit(&mut child);
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+
+    let after = recorded(&env);
+    assert_eq!(
+        after.len(),
+        2,
+        "`/new` opens its session in the same state root: {after:?}"
+    );
+    assert!(
+        after.contains(&before[0]),
+        "and leaves the superseded session where it was: {after:?}"
+    );
+    // Both were opened in this launch's workspace, so both were granted it: a
+    // session opened in the process's own place would not have been.
+    for id in &after {
+        let home = sessions(&env).join(id).join("tmp/home");
+        assert!(
+            home.is_dir(),
+            "the session {id} has the sandbox HOME its environment names: {}",
+            home.display()
+        );
+    }
+}
+
+#[test]
+fn a_new_session_that_cannot_start_keeps_the_answer_and_says_why() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: `/new`'s failure is not tested here");
+        return;
+    };
+    let env = Env::new();
+    let mock = MockProvider::start(vec![Reply::answer("the first answer")]);
+    let mut child = frame_on(&env, &pty, &mock);
+
+    expect(&pty, &mut child, "cache");
+    type_line(&pty, "what changed?");
+    expect(&pty, &mut child, "the first answer");
+    let before = recorded(&env);
+    assert_eq!(before.len(), 1, "one launch, one record: {before:?}");
+
+    // The state root the next session would be created in cannot be written any
+    // more, so `/new` has nowhere to put a session.
+    let root = sessions(&env);
+    let locked = std::fs::metadata(&root)
+        .expect("the sessions root")
+        .permissions();
+    std::fs::set_permissions(&root, PermissionsExt::from_mode(0o555)).expect("lock the sessions");
+    type_line(&pty, "/new");
+    let drawn = pty.wait_for_screen(&mut child, "could not start");
+    std::fs::set_permissions(&root, locked).expect("unlock the sessions");
+
+    // What is on the screen when the failure is drawn, not what was written to
+    // it once: the earlier answer is still there to be read.
+    let repainted = pty.wait_for_screen(&mut child, "the first answer");
+    let (code, _) = pty.quit(&mut child);
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+    assert!(
+        drawn.contains("could not start"),
+        "the transcript names the failure: {drawn:?}"
+    );
+    assert!(
+        drawn.contains("Permission denied") || drawn.contains("cannot be created"),
+        "and the reason is the session directory's own: {drawn:?}"
+    );
+    assert!(
+        !drawn.contains("this front end cannot start a new session"),
+        "not a blanket reason: {drawn:?}"
+    );
+    assert!(
+        repainted.contains("the first answer"),
+        "the earlier answer is still on screen: {repainted:?}"
+    );
+    assert_eq!(
+        recorded(&env),
+        before,
+        "a `/new` that could not start leaves the record being written where it was"
+    );
+}
+
+#[test]
+fn a_signal_ends_the_run_in_flight_and_the_next_prompt_still_runs() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: the frame's SIGINT is not tested here");
+        return;
+    };
+    let env = Env::new();
+    // Plenty of paced frames, so the signal lands while the reply is still open,
+    // and a second answer for the prompt that follows it.
+    let fragments: Vec<String> = (0..200).map(|index| format!("word{index} ")).collect();
+    let fragments: Vec<&str> = fragments.iter().map(String::as_str).collect();
+    let mock = MockProvider::start(vec![
+        Reply::streamed_paced(frames::text(&fragments), Duration::from_millis(25)),
+        Reply::answer("the second answer"),
+    ]);
+    let mut child = frame_on(&env, &pty, &mock);
+
+    expect(&pty, &mut child, "cache");
+    type_line(&pty, "answer slowly");
+    expect(&pty, &mut child, "word0");
+    // A signal from outside the frame, the way a shell sends one.
+    common::signal(child.id(), libc::SIGINT);
+    expect(&pty, &mut child, "cancelled");
+
+    // One launch, one flag, put down between prompts: the next prompt runs.
+    type_line(&pty, "and then?");
+    expect(&pty, &mut child, "the second answer");
+    let (code, _) = pty.quit(&mut child);
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+}
+
+#[test]
+fn a_record_that_cannot_be_finished_is_said_in_the_transcript() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: the record's end is not tested here");
+        return;
+    };
+    let env = Env::new();
+    // A paced reply, so the run is still in flight when the record goes.
+    let fragments: Vec<String> = (0..200).map(|index| format!("word{index} ")).collect();
+    let fragments: Vec<&str> = fragments.iter().map(String::as_str).collect();
+    let mock = MockProvider::start(vec![Reply::streamed_paced(
+        frames::text(&fragments),
+        Duration::from_millis(25),
+    )]);
+    let mut child = frame_on(&env, &pty, &mock);
+
+    expect(&pty, &mut child, "cache");
+    type_line(&pty, "answer slowly");
+    expect(&pty, &mut child, "word0");
+
+    // The session directory goes while its run is still going: the end of the
+    // record has nowhere to be written.
+    let running = recorded(&env);
+    assert_eq!(running.len(), 1, "one run, one record: {running:?}");
+    std::fs::remove_dir_all(sessions(&env).join(&running[0])).expect("remove the record");
+
+    // The screen, not the stream: the note wraps, and a repaint that finishes
+    // the sentence on a later row must not decide whether this passes.
+    let drawn = pty.wait_for_words(&mut child, "the record could not be finished");
+    let (code, _) = pty.quit(&mut child);
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+    assert!(
+        screen::says(&drawn, "the record could not be finished"),
+        "a record the run could not close is said where the user is looking: {drawn:?}"
+    );
+    assert!(
+        screen::says(&drawn, "os error 2"),
+        "and the note keeps its cause, or it is only noise: {drawn:?}"
+    );
+}
+/// The screen the note test below draws, as CI drew it: the sentence wraps at
+/// the transcript's 68 columns (marker `! ` on both rows), and the rail's facts
+/// sit to the right of each. The first row fills its column exactly, so the
+/// rail starts with no gap at all.
+const NOTE_ROWS: &str = "\
+! session 49df10bb-3cd7-47f8-9d22-7b58b0fbbc10: the record could not│ sandbox bwrap · 1 writable   \n\
+! be finished: No such file or directory (os error 2)               │ turns 1/250          ";
+
+#[test]
+fn a_note_that_wrapped_is_found_by_its_words_not_by_a_rows_substring() {
+    // The red CI saw: a repaint finishes the sentence on a later row, with the
+    // marker in front of it, so no row ever holds the phrase.
+    assert!(
+        !NOTE_ROWS.contains("the record could not be finished"),
+        "the fixture is the wrapped screen, not a single row: {NOTE_ROWS:?}"
+    );
+    assert!(
+        screen::says(NOTE_ROWS, "the record could not be finished"),
+        "a sentence that wraps is still said: {NOTE_ROWS:?}"
+    );
+    assert!(
+        screen::says(NOTE_ROWS, "No such file or directory (os error 2)"),
+        "and its reason is read across the wrap too: {NOTE_ROWS:?}"
+    );
+
+    // The same screen with its second row saying something else, in as many
+    // columns: the wrap and the rail are untouched.
+    let another_note = NOTE_ROWS.replace("be finished:", "be dropped:");
+    assert!(
+        !screen::says(&another_note, "the record could not be finished"),
+        "a screen that says something else does not say this: {another_note:?}"
+    );
+}

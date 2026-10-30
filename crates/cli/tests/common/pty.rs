@@ -12,12 +12,20 @@
 use std::fs::File;
 use std::io::{ErrorKind, Read, Write};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
-use std::path::{Path, PathBuf};
-use std::process::{Child, Stdio};
+use std::process::Child;
 use std::time::{Duration, Instant};
 
-use super::Env;
 use super::screen::{Screen, says};
+
+mod spawn;
+
+// Each test binary uses a different slice of the harness, so a door a binary
+// does not open is not an unused import; it is a door that binary has no key to.
+#[allow(
+    unused_imports,
+    reason = "each test binary uses a different slice of the harness"
+)]
+pub use spawn::{Said, exit, expect, spawn, spawn_with_stderr, type_line};
 
 /// The escape sequence that enters the alternate screen: the frame's first act.
 pub const ALTERNATE_SCREEN: &str = "\u{1b}[?1049h";
@@ -29,6 +37,9 @@ pub const CLEAR_FIELD: u8 = 0x15;
 pub const ENTER: u8 = 0x0d;
 /// Down, as a terminal sends it.
 pub const DOWN: &[u8] = b"\x1b[B";
+/// The sequence that shows the terminal's cursor: a frame ends with it, so one
+/// of these is one frame drawn.
+pub const SHOW_CURSOR: &str = "\u{1b}[?25h";
 /// How long anything is given before it counts as a failure.
 pub const DEADLINE: Duration = Duration::from_secs(20);
 
@@ -163,11 +174,68 @@ impl Pty {
         visible(&raw)
     }
 
+    /// Everything the frame draws over the next `window` with nothing typed:
+    /// the bytes of a frame that has nothing to say, which is what an idle
+    /// frame says. Every byte read lands on the screen as usual.
+    pub fn listening(&self, child: &mut Child, window: Duration) -> String {
+        let mut port = self.port();
+        let mut drawn = String::new();
+        let mut buffer = [0u8; 4096];
+        let deadline = Instant::now() + window;
+        while Instant::now() < deadline {
+            match port.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(read) => {
+                    let text = String::from_utf8_lossy(&buffer[..read]).to_string();
+                    self.look(&text);
+                    drawn.push_str(&text);
+                }
+                Err(error) if error.kind() == ErrorKind::WouldBlock => {
+                    if child.try_wait().is_ok_and(|status| status.is_some()) {
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Err(error) if error.kind() == ErrorKind::Interrupted => {}
+                Err(_) => break,
+            }
+        }
+        drawn
+    }
+
+    /// Changes the terminal's size the way dragging its corner does: the kernel
+    /// records it and the frame is told, so the next frame asks for the new one.
+    pub fn resize(&self, child: &Child, rows: u16, cols: u16) {
+        let size = libc::winsize {
+            ws_row: rows,
+            ws_col: cols,
+            ws_xpixel: 0,
+            ws_ypixel: 0,
+        };
+        // SAFETY: the master descriptor is valid and owned here, and
+        // `TIOCSWINSZ` reads a `winsize` this frame owns.
+        let sized = unsafe { libc::ioctl(self.master.as_raw_fd(), libc::TIOCSWINSZ, &size) };
+        assert_eq!(sized, 0, "the terminal takes the new size");
+        // SAFETY: `kill` with a signal number and a pid this test owns; a child
+        // already gone is a test that has another failure to report.
+        unsafe { libc::kill(child.id() as libc::pid_t, libc::SIGWINCH) };
+    }
+
     /// Feeds one read into the screen the frame is drawing on.
     fn look(&self, text: &str) {
         if let Ok(mut screen) = self.screen.lock() {
             screen.feed(text);
         }
+    }
+
+    /// Every cell the frame wrote while the terminal was showing its cursor.
+    /// The one place a reader may see the cursor is where the composer left
+    /// it, so anything here is a cursor that left the composer.
+    pub fn written_while_visible(&self) -> Vec<(u16, u16)> {
+        self.screen
+            .lock()
+            .map(|screen| screen.seen_while_visible().to_vec())
+            .unwrap_or_default()
     }
 
     /// What is on the screen now, as a reader would see it.
@@ -258,103 +326,6 @@ impl Pty {
             }
         }
     }
-}
-
-/// What a frame said without drawing it: the stderr beside the screen. A
-/// failure said before the frame takes the terminal has nowhere else to go, so
-/// a test that reads it must keep it out of the frame's escape sequences.
-pub struct Said {
-    /// The directory the file lives in, kept alive for the test's length.
-    _root: tempfile::TempDir,
-    path: PathBuf,
-}
-
-impl Said {
-    pub fn new() -> Said {
-        let root = tempfile::TempDir::new().expect("a directory for the frame's stderr");
-        let path = root.path().join("stderr");
-        Said { _root: root, path }
-    }
-
-    /// The file to hand `spawn_with_stderr`.
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
-    /// Everything the frame said on stderr, read once it has said it.
-    pub fn words(&self) -> String {
-        std::fs::read_to_string(&self.path).unwrap_or_default()
-    }
-}
-
-impl Default for Said {
-    fn default() -> Said {
-        Said::new()
-    }
-}
-
-/// Waits for the process to be gone, and gives the code a shell would read —
-/// `None` when it would not go, so a stuck front end fails rather than hangs.
-pub fn exit(child: &mut Child) -> Option<i32> {
-    let deadline = Instant::now() + DEADLINE;
-    while Instant::now() < deadline {
-        if let Ok(Some(status)) = child.try_wait() {
-            return status.code();
-        }
-        std::thread::sleep(Duration::from_millis(20));
-    }
-    let _ = child.kill();
-    let _ = child.wait();
-    None
-}
-
-/// A pty test's own environment: the mock provider's base URL, and nothing of
-/// the host's own settings.
-pub fn spawn(env: &Env, pty: &Pty, vars: &[(&str, &str)]) -> Child {
-    opened(env, pty, vars, None)
-}
-
-/// The same, with the process's stderr kept in a file rather than drawn on the
-/// terminal: the cold path's one note is a line on stderr, and a test that reads
-/// it must not have the frame's own escape sequences in the way.
-pub fn spawn_with_stderr(env: &Env, pty: &Pty, vars: &[(&str, &str)], file: &Path) -> Child {
-    opened(env, pty, vars, Some(file))
-}
-
-/// The one spawn both doors do: a terminal for the frame, and a place for what
-/// the frame does not draw.
-fn opened(env: &Env, pty: &Pty, vars: &[(&str, &str)], stderr: Option<&Path>) -> Child {
-    let mut command = env.command();
-    let said = match stderr {
-        Some(file) => Stdio::from(File::create(file).expect("a file for the frame's stderr")),
-        None => Stdio::from(pty.slave.try_clone().expect("a pty slave")),
-    };
-    command
-        .env("TERM", "xterm-256color")
-        .envs(vars.iter().copied())
-        .stdin(Stdio::from(pty.slave.try_clone().expect("a pty slave")))
-        .stdout(Stdio::from(pty.slave.try_clone().expect("a pty slave")))
-        .stderr(said);
-    command.spawn().expect("spawn sindri on a terminal")
-}
-
-/// A drawn frame that does not say `want` is a failure, not a hang: kills the
-/// run and reports what it did draw.
-pub fn expect(pty: &Pty, child: &mut Child, want: &str) {
-    let drawn = pty.wait_for_text(child, want);
-    if !drawn.contains(want) {
-        let _ = child.kill();
-        let _ = child.wait();
-        panic!("the frame never said {want:?}, drew: {drawn:?}");
-    }
-}
-
-/// Types a whole prompt: the characters, then Enter.
-pub fn type_line(pty: &Pty, text: &str) {
-    for byte in text.bytes() {
-        pty.type_key(byte);
-    }
-    pty.type_key(ENTER);
 }
 
 /// What a user would read: every escape sequence taken out, so text a frame
