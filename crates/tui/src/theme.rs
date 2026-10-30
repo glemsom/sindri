@@ -17,6 +17,11 @@ pub const DIFF_ADDED: Color = Color::Rgb(0x6a, 0xc9, 0x7a);
 pub const DIFF_REMOVED: Color = Color::Rgb(0xe0, 0x6c, 0x75);
 pub const DIFF_HUNK: Color = Color::Rgb(0x61, 0xaf, 0xef);
 pub const DIFF_FILE: Color = Color::Rgb(0x8b, 0x98, 0xa9);
+/// A diff row's wash: the green and the red again, at panel weight, so an
+/// added row and a removed one still differ in a terminal that cannot tell the
+/// two hues apart (ADR-0016).
+pub const DIFF_ADDED_BG: Color = Color::Rgb(0x1c, 0x2b, 0x22);
+pub const DIFF_REMOVED_BG: Color = Color::Rgb(0x2f, 0x20, 0x23);
 
 /// The surfaces, in the order they read as nearer: the canvas is the
 /// terminal's own black and nothing paints it, a panel is a composer, a
@@ -42,6 +47,8 @@ pub const PALETTE: &[Color] = &[
     DIFF_REMOVED,
     DIFF_HUNK,
     DIFF_FILE,
+    DIFF_ADDED_BG,
+    DIFF_REMOVED_BG,
 ];
 
 pub fn faint() -> Style {

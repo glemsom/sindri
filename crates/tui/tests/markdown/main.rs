@@ -215,11 +215,18 @@ fn a_fence_is_a_panel_with_a_gutter_and_a_border_that_says_where_it_ends() {
         shown.iter().all(|row| row.chars().count() == 40),
         "the panel is one rectangle at the column's width: {shown:?}"
     );
+    // A changed row brings its own wash, a step off the panel; every other
+    // span is the panel itself. Nothing is left on the terminal's black.
+    let surfaces = [
+        sindri_tui::theme::PANEL,
+        sindri_tui::theme::DIFF_ADDED_BG,
+        sindri_tui::theme::DIFF_REMOVED_BG,
+    ];
     assert!(
-        lines.iter().flatten().all(|span| span
-            .style
-            .bg
-            .is_some_and(|bg| bg == sindri_tui::theme::PANEL)),
+        lines
+            .iter()
+            .flatten()
+            .all(|span| span.style.bg.is_some_and(|bg| surfaces.contains(&bg))),
         "the panel is filled, so the text sits on a surface and not on the terminal: {lines:?}"
     );
 }
@@ -247,3 +254,5 @@ fn a_fenced_line_wider_than_the_panel_is_cut_and_says_so() {
         "and the panel is still a rectangle: {shown:?}"
     );
 }
+
+mod prose;

@@ -77,13 +77,18 @@ fn plain(body: &str) -> Vec<Line<'static>> {
         .collect()
 }
 
+/// A diff's rows: the `+` or the `-` is the fact, the hue says it faster, and
+/// the wash under the row says it again where the hue cannot be seen
+/// (ADR-0016).
 fn diff_line(line: &str) -> Line<'static> {
     let style = if line.starts_with("+++") || line.starts_with("---") {
         Style::new().fg(theme::DIFF_FILE)
     } else if line.starts_with('+') {
-        Style::new().fg(theme::DIFF_ADDED)
+        Style::new().fg(theme::DIFF_ADDED).bg(theme::DIFF_ADDED_BG)
     } else if line.starts_with('-') {
-        Style::new().fg(theme::DIFF_REMOVED)
+        Style::new()
+            .fg(theme::DIFF_REMOVED)
+            .bg(theme::DIFF_REMOVED_BG)
     } else if line.starts_with("@@") {
         Style::new().fg(theme::DIFF_HUNK)
     } else {
@@ -119,7 +124,7 @@ fn highlight(body: &str, language: &str) -> Vec<Line<'static>> {
     lines
 }
 
-/// The panel's edge: the theme's faint, on the surface it is drawn over.
+/// The panel's edge: the theme's faint, on the panel it is drawn over.
 fn edge() -> Style {
     theme::faint().patch(theme::surface())
 }
@@ -146,29 +151,41 @@ fn bottom(width: usize) -> Line<'static> {
 /// One row of code between the panel's edges, padded so the right edge is a
 /// column and not a suggestion.
 fn body_row(row: &Line<'static>, width: usize) -> Line<'static> {
+    let surface = surface_of(row);
+    let edge = theme::faint().patch(surface);
     let content = width.saturating_sub(GUTTER.chars().count() + EDGE.chars().count());
-    let glyphs = cut(glyphsof(row), content);
+    let glyphs = cut(glyphsof(row, surface), content, surface);
     let used: usize = glyphs
         .iter()
         .map(|(ch, _)| UnicodeWidthChar::width(*ch).unwrap_or(0))
         .sum();
-    let mut spans = vec![Span::styled(GUTTER.to_string(), edge())];
+    let mut spans = vec![Span::styled(GUTTER.to_string(), edge)];
     spans.extend(runs(glyphs));
     if content > used {
-        spans.push(Span::styled(" ".repeat(content - used), theme::surface()));
+        spans.push(Span::styled(" ".repeat(content - used), surface));
     }
-    spans.push(Span::styled(EDGE.to_string(), edge()));
+    spans.push(Span::styled(EDGE.to_string(), edge));
     Line::from(spans)
 }
 
 /// A row with no panel to sit in: cut to the width, marked the same way.
 fn bare(row: &Line<'static>, width: usize) -> Line<'static> {
-    Line::from(runs(cut(glyphsof(row), width)))
+    let surface = surface_of(row);
+    Line::from(runs(cut(glyphsof(row, surface), width, surface)))
 }
 
-/// Every glyph of the row, on the panel's surface whatever its foreground.
-fn glyphsof(row: &Line<'static>) -> Vec<Glyph> {
-    let surface = theme::surface();
+/// The surface a row sits on: the panel it is drawn over, or the wash a diff
+/// row brought with it, so the gutter and the fill agree with the row.
+fn surface_of(row: &Line<'static>) -> Style {
+    Style::new().bg(row
+        .spans
+        .first()
+        .and_then(|span| span.style.bg)
+        .unwrap_or(theme::PANEL))
+}
+
+/// Every glyph of the row, on that surface whatever its foreground.
+fn glyphsof(row: &Line<'static>, surface: Style) -> Vec<Glyph> {
     row.spans
         .iter()
         .flat_map(|span| {
@@ -180,7 +197,7 @@ fn glyphsof(row: &Line<'static>) -> Vec<Glyph> {
 
 /// The first `width` columns, and an ellipsis instead of the rest: a line the
 /// panel could not hold says it was cut.
-fn cut(glyphs: Vec<Glyph>, width: usize) -> Vec<Glyph> {
+fn cut(glyphs: Vec<Glyph>, width: usize, surface: Style) -> Vec<Glyph> {
     let width = width.max(1);
     let total: usize = glyphs
         .iter()
@@ -199,7 +216,7 @@ fn cut(glyphs: Vec<Glyph>, width: usize) -> Vec<Glyph> {
         used += cells;
         kept.push((ch, style));
     }
-    kept.push(('…', theme::faint().patch(theme::surface())));
+    kept.push(('…', theme::faint().patch(surface)));
     kept
 }
 

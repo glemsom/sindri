@@ -296,6 +296,7 @@ fn with_kitty_graphics_the_face_draws_in_the_top_of_the_rail() {
     );
 }
 
+mod prose;
 mod rail;
 mod surface;
 mod transcript;

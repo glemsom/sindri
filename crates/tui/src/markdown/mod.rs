@@ -1,12 +1,13 @@
-//! The answer as a reader sees it: headings, lists, quotes, tables, inline
-//! code, and fenced code with truecolour highlighting. No images, no raw
-//! HTML, no maths (ADR-0011).
+//! The answer as a reader sees it: a heading scale, links that keep their
+//! target, lists, quotes, tables, inline code, and fenced code with truecolour
+//! highlighting. No images, no raw HTML, no maths (ADR-0011).
 
 mod code;
+mod heading;
 mod table;
 pub(crate) mod text;
 
-use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
@@ -34,7 +35,10 @@ struct Writer {
     quote: usize,
     lists: Vec<List>,
     emphasis: Modifier,
-    heading: bool,
+    heading: Option<u8>,
+    /// The target of the link being written, empty when it points nowhere: a
+    /// link with no URL is its words and nothing else.
+    link: Option<String>,
     apart: bool,
     code: Option<(Option<String>, String)>,
     table: Option<Table>,
@@ -52,7 +56,8 @@ impl Writer {
             quote: 0,
             lists: Vec::new(),
             emphasis: Modifier::empty(),
-            heading: false,
+            heading: None,
+            link: None,
             apart: false,
             code: None,
             table: None,
@@ -96,7 +101,7 @@ impl Writer {
 
     fn start(&mut self, tag: Tag<'_>) {
         match tag {
-            Tag::Heading { .. } => self.heading = true,
+            Tag::Heading { level, .. } => self.heading = Some(level as u8),
             Tag::BlockQuote(_) => self.quote += 1,
             Tag::List(start) => self.lists.push(List { next: start }),
             Tag::Item => self.item(),
@@ -118,6 +123,7 @@ impl Writer {
             Tag::TableRow => {
                 self.row = self.table.as_ref().map_or(0, |table| table.rows.len());
             }
+            Tag::Link { dest_url, .. } => self.link = Some(dest_url.to_string()),
             Tag::Emphasis => self.emphasis.insert(Modifier::ITALIC),
             Tag::Strong => self.emphasis.insert(Modifier::BOLD),
             _ => {}
@@ -126,9 +132,10 @@ impl Writer {
 
     fn end(&mut self, tag: TagEnd) {
         match tag {
-            TagEnd::Heading(_) => {
-                self.heading = false;
+            TagEnd::Heading(level) => {
+                self.heading = None;
                 self.block_end();
+                self.heading_rule(level);
             }
             TagEnd::BlockQuote(_) => {
                 self.quote = self.quote.saturating_sub(1);
@@ -147,6 +154,7 @@ impl Writer {
             TagEnd::TableRow => {}
             TagEnd::TableHead => self.in_table_head = false,
             TagEnd::Table => self.table_block(),
+            TagEnd::Link => self.link_end(),
             TagEnd::Emphasis => self.emphasis.remove(Modifier::ITALIC),
             TagEnd::Strong => self.emphasis.remove(Modifier::BOLD),
             _ => {}
@@ -170,10 +178,17 @@ impl Writer {
     }
 
     fn style(&self) -> Style {
-        if self.heading {
-            return Style::new().fg(theme::HEADING).add_modifier(Modifier::BOLD);
+        if let Some(level) = self.heading {
+            return heading::style(level);
         }
         let mut style = Style::new();
+        if self
+            .link
+            .as_deref()
+            .is_some_and(|target| !target.is_empty())
+        {
+            style = style.fg(theme::PROMPT);
+        }
         if self.emphasis.contains(Modifier::BOLD) {
             style = style.add_modifier(Modifier::BOLD);
         }
@@ -181,6 +196,25 @@ impl Writer {
             style = style.add_modifier(Modifier::ITALIC);
         }
         style
+    }
+
+    /// The row beneath a heading, as its level asks for: the words have just
+    /// been flushed, so the rule is the next row of the block.
+    fn heading_rule(&mut self, level: HeadingLevel) {
+        let prefix = "│ ".repeat(self.quote);
+        if let Some(rule) = heading::rule(level as u8, &prefix, self.width) {
+            self.lines.push(rule);
+        }
+    }
+
+    /// A link's target, dimmed beside its words. A link that names nowhere
+    /// adds nothing at all: the words were already drawn as plain text.
+    fn link_end(&mut self) {
+        let Some(target) = self.link.take().filter(|target| !target.is_empty()) else {
+            return;
+        };
+        self.pending
+            .push(Span::styled(format!(" ‹{target}›"), theme::faint()));
     }
 
     fn block_end(&mut self) {
