@@ -12,6 +12,7 @@
 use std::fs::File;
 use std::io::{ErrorKind, Read, Write};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::path::Path;
 use std::process::{Child, Stdio};
 use std::time::{Duration, Instant};
 
@@ -248,13 +249,30 @@ impl Pty {
 /// A pty test's own environment: the mock provider's base URL, and nothing of
 /// the host's own settings.
 pub fn spawn(env: &Env, pty: &Pty, vars: &[(&str, &str)]) -> Child {
+    opened(env, pty, vars, None)
+}
+
+/// The same, with the process's stderr kept in a file rather than drawn on the
+/// terminal: the cold path's one note is a line on stderr, and a test that reads
+/// it must not have the frame's own escape sequences in the way.
+pub fn spawn_with_stderr(env: &Env, pty: &Pty, vars: &[(&str, &str)], file: &Path) -> Child {
+    opened(env, pty, vars, Some(file))
+}
+
+/// The one spawn both doors do: a terminal for the frame, and a place for what
+/// the frame does not draw.
+fn opened(env: &Env, pty: &Pty, vars: &[(&str, &str)], stderr: Option<&Path>) -> Child {
     let mut command = env.command();
+    let said = match stderr {
+        Some(file) => Stdio::from(File::create(file).expect("a file for the frame's stderr")),
+        None => Stdio::from(pty.slave.try_clone().expect("a pty slave")),
+    };
     command
         .env("TERM", "xterm-256color")
         .envs(vars.iter().copied())
         .stdin(Stdio::from(pty.slave.try_clone().expect("a pty slave")))
         .stdout(Stdio::from(pty.slave.try_clone().expect("a pty slave")))
-        .stderr(Stdio::from(pty.slave.try_clone().expect("a pty slave")));
+        .stderr(said);
     command.spawn().expect("spawn sindri on a terminal")
 }
 

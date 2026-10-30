@@ -2,7 +2,8 @@
 //! run ready to start (ADR-0015). A front end calls one door and keeps only what
 //! is its own — the frame proves the sandbox and draws the card, batch mode
 //! prints the answer, `sandbox exec` prints the outcome. Boot probes nothing,
-//! owns no cancel flag, and prints nothing on the way in.
+//! owns no cancel flag, and says exactly one thing on the way in: a repository
+//! config it refused (ADR-0005).
 
 use sindri_core::config::{Config, ConfigError, Overrides};
 use sindri_core::session::{Env, Session};
@@ -63,15 +64,33 @@ pub fn configure(overrides: Overrides) -> Result<Configured, Failure> {
 /// The read both doors do: the process's own facts once, and the settings one
 /// of the two resolutions answers. The environment is read first, so a machine
 /// whose state root cannot be found is the environment's failure before a config
-/// value is blamed for it.
+/// value is blamed for it. A config that was refused is said here, once, because
+/// this is where every cold path resolves one.
 fn read(
     overrides: Overrides,
     resolve: fn(Overrides) -> Result<Config, ConfigError>,
 ) -> Result<Configured, Failure> {
-    Ok(Configured {
-        env: Env::ambient().map_err(Failure::Environment)?,
-        config: resolve(overrides).map_err(Failure::Config)?,
-    })
+    let env = Env::ambient().map_err(Failure::Environment)?;
+    let config = resolve(overrides).map_err(Failure::Config)?;
+    announce(&config);
+    Ok(Configured { env, config })
+}
+
+/// The one note a refused repository config earns, said the same way by every
+/// front end that resolves a config before it starts: a directory that silently
+/// ignores the file it was given would leave a user editing a config nobody
+/// reads (ADR-0005). The frame's mid-session save is deliberately not a caller —
+/// it runs while the frame owns the screen, where a line on stderr is corruption
+/// (ADR-0011 §15). It keeps a config failure as a value and says that in the
+/// transcript, and the refusal it re-reads is not said again: the launch said it
+/// once, and a save changes nothing about a file nobody reads.
+fn announce(config: &Config) {
+    if let Some(path) = &config.refused_repo_config {
+        eprintln!(
+            "sindri: ignoring {}: a config committed in a repository is never honoured (ADR-0005)",
+            path.display()
+        );
+    }
 }
 
 /// `/new`: the next session in the same run environment, from the values the
