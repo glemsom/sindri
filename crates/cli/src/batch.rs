@@ -8,15 +8,12 @@ use std::sync::Arc;
 use std::sync::mpsc;
 
 use clap::ValueEnum;
-use sindri_core::agent::{Agent, BashTool, Event, Stopped};
+use sindri_core::agent::{BashTool, Dials, Event, Stopped};
 use sindri_core::cancel::Cancel;
 use sindri_core::config::{Config, ConfigError, Overrides};
-use sindri_core::exec::SandboxExecutor;
 use sindri_core::output;
 use sindri_core::provider::{Client, Error};
-use sindri_core::record::{Recorder, Redaction, Start};
-use sindri_core::sandbox::Enforcement;
-use sindri_core::session;
+use sindri_core::session::{Env, Session, StartError};
 use sindri_types::ExitCode;
 
 use crate::{signal, verbose};
@@ -78,6 +75,15 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     };
 
     let (format, verbose) = (flags.format, flags.verbose);
+    // The process is read here, once: the workspace, the sandbox PATH and the
+    // state root below this line are values (ADR-0015).
+    let env = match Env::ambient() {
+        Ok(env) => env,
+        Err(error) => {
+            eprintln!("sindri: the run environment cannot be read: {error}");
+            return ExitCode::EnvironmentFailure.code();
+        }
+    };
     let config = match Config::resolve(flags.into()) {
         Ok(config) => config,
         Err(error) => return config_error(&error),
@@ -91,29 +97,22 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
         );
     }
 
-    let (session, policy) = match session::prepare(&config.extra_writable, Enforcement::Bubblewrap)
-    {
-        Ok(prepared) => prepared,
-        Err(error) => {
-            eprintln!("sindri: sandbox: {error}");
+    // Every run leaves a record (ADR-0006), and a run that cannot write one is
+    // not a run: the evidence is what makes the agent's actions reviewable. The
+    // session is the one module that starts one, in the one order (ADR-0015).
+    let session = match Session::open(&env, &config) {
+        Ok(session) => session,
+        // The record's own directory is named because a record that cannot be
+        // written is not a run (ADR-0006).
+        Err(StartError::Record { path, source }) => {
+            eprintln!("sindri: session {}: {source}", path.display());
             return ExitCode::EnvironmentFailure.code();
         }
-    };
-
-    // Every run leaves a record (ADR-0006), and a run that cannot write one is
-    // not a run: the evidence is what makes the agent's actions reviewable.
-    let recorder = match Recorder::start(
-        &session,
-        Start {
-            provider: config.provider.as_str().to_string(),
-            model: config.model.clone(),
-            enforcement: Enforcement::Bubblewrap,
-        },
-        Redaction::new([config.api_key.clone()]),
-    ) {
-        Ok(recorder) => Arc::new(recorder),
+        // The sandbox and the session directory are the environment's failures,
+        // and the shell reads both as one: `sindri: sandbox:` is the line the
+        // batch contract has always printed for either.
         Err(error) => {
-            eprintln!("sindri: session {}: {error}", session.root().display());
+            eprintln!("sindri: sandbox: {error}");
             return ExitCode::EnvironmentFailure.code();
         }
     };
@@ -123,23 +122,16 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     let cancel = Cancel::new();
     signal::install(cancel.clone());
 
-    let executor = Arc::new(
-        SandboxExecutor::new(
-            policy.clone(),
-            config.timeout,
-            session.spill(),
-            cancel.clone(),
-        )
-        // bubblewrap's own account of each command goes into the same record,
-        // document by document, so a killed run still says how far the sandbox got.
-        .with_status_sink(recorder.clone()),
-    );
-    let tool = BashTool::new(&policy, executor);
-    let mut agent = Agent::new(
-        Box::new(Client::new(&config)),
-        tool,
-        config.max_turns,
-        config.thinking,
+    let executor = Arc::new(session.executor(config.timeout, cancel.clone()));
+    let tool = BashTool::new(session.policy(), executor);
+    let mut agent = session.agent(
+        Dials {
+            model: Box::new(Client::new(&config)),
+            tool,
+            max_turns: config.max_turns,
+            thinking: config.thinking,
+        },
+        cancel.clone(),
     );
     // Events are buffered only for `-v`: a silent run should not carry a
     // transcript nobody asked for.
@@ -147,20 +139,14 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     if verbose {
         agent.set_events(sender);
     }
-    agent.set_cancel(cancel);
-    agent.set_recorder(Arc::clone(&recorder));
 
     let outcome = agent.run(&prompt);
     // The record's end is written before anything is printed, so the session the
     // output names is already on disk and complete.
-    let written = match &outcome {
-        Ok(report) => recorder.finish(report),
-        Err(error) => recorder.failed(error.message()),
-    };
-    if let Err(error) = written {
+    if let Err(error) = session.finish(&outcome) {
         eprintln!(
             "sindri: session {}: the record could not be finished: {error}",
-            recorder.root().display()
+            session.dir().root().display()
         );
     }
 
@@ -176,11 +162,13 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
                     // answers.
                     OutputFormat::Text => println!("{}", report.answer.trim_end()),
                     // One compact object on one line, so `| jq` reads fields.
-                    OutputFormat::Json => println!("{}", output::to_json(&report, session.id())),
+                    OutputFormat::Json => {
+                        println!("{}", output::to_json(&report, session.dir().id()))
+                    }
                 }
             }
             if verbose {
-                for line in verbose::lines(events.try_iter().collect(), session.id()) {
+                for line in verbose::lines(events.try_iter().collect(), session.dir().id()) {
                     eprintln!("{line}");
                 }
             }
