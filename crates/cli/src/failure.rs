@@ -66,7 +66,10 @@ impl fmt::Display for Failure {
     }
 }
 
-/// A wrong command line or a wrong value: exit 2.
+/// A wrong command line or a wrong value: exit 2. A misuse travels as a
+/// `ConfigError::Usage` because it is the same failure to the shell — a value
+/// as written cannot be honoured — and so earns the same one line and the same
+/// code through the same `report`.
 pub(crate) fn usage_error(message: &str) -> i32 {
     Failure::Config(ConfigError::Usage(message.to_string())).report()
 }
