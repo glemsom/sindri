@@ -40,8 +40,8 @@ $ cat notes.md | sindri -b
 Piped stdin is context appended after the prompt; with no prompt argument
 stdin is the prompt. A pipe without `-b` is refused, so no data is ever
 silently swallowed. Exit codes: `0` answer, `1` model or provider error, `2`
-usage error, `3` sandbox or setup failure, `100` turn cap — so a script can
-branch without parsing prose.
+usage error, `3` sandbox or setup failure, `100` turn cap, `130` cancelled
+with nothing on stdout — so a script can branch without parsing prose.
 
 ### For scripts
 
@@ -89,8 +89,10 @@ degraded frame.
   a keystroke. The face takes only the rows the facts leave, so a terminal too
   short for both keeps the posture and the record and loses the picture.
 - **The composer** is at the bottom: `Enter` sends, `Shift+Enter` breaks the
-  line, `Ctrl-C` cancels the run and keeps the draft, `Ctrl-Q` leaves. A prompt
-  typed while a run is in flight queues and is sent when the run ends.
+  line, `Ctrl-C` cancels the run and keeps the draft, `Ctrl-Q` leaves. One flag
+  serves the whole launch, raised by the key or by `SIGINT` and put down between
+  prompts, so a cancel ends the run it was raised for and never the next. A
+  prompt typed while a run is in flight queues and is sent when the run ends.
 - **Scrolling and selection.** `PgUp`/`PgDn` and the wheel move the transcript,
   and only the rows on screen are ever laid out, so an unbounded thread still
   draws a bounded frame. Dragging over the transcript selects rendered rows;
@@ -106,7 +108,8 @@ degraded frame.
   one, `Esc` dismisses the offer, and a dotfile is offered only once you type a
   dot.
 - **`/` runs commands.** `/new` starts a fresh session GUID with an empty
-  transcript, `/settings` opens the modal below, `/help` lists every binding,
+  transcript; a `/new` that cannot start says why and leaves the conversation
+  where it was. `/settings` opens the modal below, `/help` lists every binding,
   `/quit` leaves.
 - **The conversation is one thread.** A second prompt builds on the first: the
   transcript and the model's history grow together, tool calls included, and
@@ -179,7 +182,9 @@ is all it can honestly report.
 ## Session records
 
 Every run leaves a record under `$XDG_STATE_HOME/sindri/sessions/<guid>/`
-(ADR-0006), written as the run goes rather than at the end:
+(ADR-0006), written as the run goes rather than at the end. `sindri sandbox
+exec` opens a session the same way — no model, no turns — while `sindri doctor`
+writes no record at all:
 
 | file | what it holds |
 | --- | --- |
@@ -200,7 +205,9 @@ $ sindri sessions show 4f1c8f2e-8a24-4b93-9c0e-0d3f0e5c1a77
 Because it is written incrementally, a cancelled or `kill -9`ed run still reads:
 the transcript holds everything up to the crash, metadata says `running` (or
 `cancelled`), and the sandbox's `child-pid` document says whether the sandbox
-started at all. Credentials are redacted before anything is written.
+started at all. A session `/new` supersedes is left the same way: it did not
+stop, it was left, so its metadata keeps saying `running` and no end is written.
+Credentials are redacted before anything is written.
 
 **Known gap:** nothing is pruned, ever — every run keeps its transcript, its
 spill files and its session temp. That is deliberate for v0.1 (evidence is
@@ -305,7 +312,8 @@ your config file. Nothing is recorded automatically; see
 Toolchain and gate through devbox:
 
 ```console
-$ make check      # fmt, clippy, the 400-line audit, tests, evals, no-relink proof
+$ make check      # fmt, clippy, the 400-line audit, tests, evals, no-relink
+                  # proof, and the release scripts
 $ make eval       # just the evals, offline against recorded fixtures
 $ make run ARGS='-b "hello"'
 $ make scripts-check   # the installer and release scripts, offline
