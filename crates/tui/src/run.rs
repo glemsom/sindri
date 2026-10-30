@@ -14,6 +14,7 @@ use sindri_core::cancel::Cancel;
 use crate::app::App;
 use crate::driver::{Driver, Tap, Task};
 use crate::face::Face;
+use crate::graphics::Graphics;
 use crate::msg::Msg;
 use crate::pulse;
 use crate::rail::Launch;
@@ -121,7 +122,15 @@ fn session(
     cancel: Cancel,
     missing: Option<Missing>,
 ) -> Ending {
-    let mut app = recorded(App::new(launch, Face::detect()).with_cancel(cancel));
+    // One terminal, one question, asked once: the face is drawn from this answer,
+    // and the picture draws from the same one (ADR-0016 §1).
+    let graphics = Graphics::detect();
+    let face = graphics.as_ref().and_then(Face::new);
+    let mut app = recorded(
+        App::new(launch, face)
+            .with_graphics(graphics)
+            .with_cancel(cancel),
+    );
     if let Some(missing) = missing {
         app = app.with_missing(missing);
     }

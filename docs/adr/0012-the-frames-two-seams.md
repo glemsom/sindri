@@ -23,7 +23,7 @@ pub trait Driver: Send {
 
 - `SandboxExecutor::with_output_sink` hands each line to a sink as it arrives, mirroring `with_status_sink` and `drain_documents`; the bytes are the model's bytes.
 - The exit status needs no new port: the front end wraps the executor and reports `over` on the way back, being the only thing that sees both the call and its result.
-- The face is queried only when `KITTY_WINDOW_ID` is set, or `TERM` / `TERM_PROGRAM` / `LC_TERMINAL` names kitty, ghostty, wezterm or foot: `Picker::from_query_stdio` spends up to a second and reads stdin.
+- The terminal is asked what it can draw once per launch, by `crates/tui/src/graphics.rs` alone, and `Face::new` reads that one answer rather than asking its own (ADR-0016 §1, issue #56). It is asked only when `KITTY_WINDOW_ID` is set, or `TERM` / `TERM_PROGRAM` / `LC_TERMINAL` names kitty, ghostty, wezterm or foot: `Picker::from_query_stdio` spends up to a second and reads stdin.
 
 ## Consequences
 

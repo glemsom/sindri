@@ -15,6 +15,7 @@ use crate::copy::{Clipboard, System};
 use crate::driver::Side;
 use crate::entry::{Entry, Note};
 use crate::face::Face;
+use crate::graphics::Graphics;
 use crate::overlay::Overlay;
 use crate::rail::{Launch, Rail};
 use crate::selection::{Selection, Viewport};
@@ -69,6 +70,9 @@ pub struct App {
     pub(crate) early: Vec<(Side, String)>,
     pub(crate) quit: bool,
     face: Option<Face>,
+    /// What the terminal said it can draw, asked once at launch: the face draws
+    /// from it, and a picture draws from the same answer (ADR-0016 §1).
+    graphics: Option<Graphics>,
     /// Where the reader is in the thread, and what arrived below them: the
     /// window is the one thing that outlives a frame (ADR-0013, issue #45).
     pub(crate) window: Window,
@@ -133,6 +137,7 @@ impl App {
             early: Vec::new(),
             quit: false,
             face,
+            graphics: None,
             window: Window::default(),
             viewport: Viewport::default(),
             chosen: None,
@@ -257,6 +262,17 @@ impl App {
 
     pub fn face_mut(&mut self) -> Option<&mut Face> {
         self.face.as_mut()
+    }
+
+    /// The terminal's one answer, held by the frame so that both the face and a
+    /// picture borrow it rather than asking again (ADR-0016 §1).
+    pub fn with_graphics(mut self, graphics: Option<Graphics>) -> Self {
+        self.graphics = graphics;
+        self
+    }
+
+    pub fn graphics(&self) -> Option<&Graphics> {
+        self.graphics.as_ref()
     }
 
     pub fn take_walk(&mut self) -> Option<(u64, String)> {
