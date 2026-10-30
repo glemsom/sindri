@@ -44,9 +44,11 @@ pub struct SessionDir {
 }
 
 impl SessionDir {
-    /// Creates the directory for a fresh session.
-    pub fn create() -> io::Result<Self> {
-        let root = state_dir()?.join("sessions").join(new_session_id()?);
+    /// Creates the directory for a fresh session under `state`, the root the
+    /// run environment names: the session's caller decides where state lives,
+    /// so nothing below `Session::open` reads the process (ADR-0015).
+    pub fn create_in(state: &Path) -> io::Result<Self> {
+        let root = state.join("sessions").join(new_session_id()?);
         std::fs::create_dir_all(&root)?;
         Ok(SessionDir { root })
     }
@@ -79,11 +81,6 @@ impl SessionDir {
             .and_then(|name| name.to_str())
             .unwrap_or_default()
     }
-}
-
-/// A fresh session directory under the state directory.
-pub fn new_session_dir() -> io::Result<SessionDir> {
-    SessionDir::create()
 }
 
 /// A fresh session GUID, taken from the kernel rather than guessed at.
