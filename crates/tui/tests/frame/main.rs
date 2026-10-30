@@ -20,7 +20,7 @@ use sindri_tui::{App, Face, Launch};
 const RAIL: usize = 32;
 /// The margin's own first column at 100 columns: the transcript, the canvas
 /// between the words and the rail, and then the rail's 32. A terminal that
-/// speaks Kitty graphics draws the seam's light strip there (#63), and the
+/// speaks Kitty graphics draws the seam's light strip there, and the
 /// margin is as wide as the frame says it is.
 const MARGIN: usize = 100 - RAIL - render::GAP_COLUMNS as usize;
 

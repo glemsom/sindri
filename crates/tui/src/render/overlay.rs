@@ -19,7 +19,7 @@ use crate::theme;
 const KEYS: usize = 20;
 
 /// Which edges of a box run past what it shows: what it marks so a reader
-/// knows there is more without scrolling to find out (issue #49).
+/// knows there is more without scrolling to find out.
 #[derive(Debug, Clone, Copy, Default)]
 pub(super) struct More {
     pub above: bool,
@@ -51,14 +51,14 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
     let (height, title, marks, lines) = match &mut *overlay {
         Overlay::Settings(settings) => {
             // A page moves the modal by what its box shows, not by what the
-            // transcript it covers happens to be showing (issue #49).
+            // transcript it covers happens to be showing.
             app.window.page = settings::draw(settings, area, buf).max(1);
             return;
         }
         Overlay::Help(help) => {
             // The box is as tall as the rows the list wrapped into, and no
             // taller than the terminal: what does not fit is reached with the
-            // page keys, and the box says where the reader is (issue #49).
+            // page keys, and the box says where the reader is.
             let lines = help_lines(content.width as usize);
             let height = (lines.len() as u16).saturating_add(2).min(area.height);
             let visible = height.saturating_sub(2) as usize;
@@ -135,7 +135,7 @@ fn render(
 
 /// The same box, saying which way it can move: a marker on the edge the list
 /// runs past, on the right of the border it shares with the title, so a reader
-/// knows there is more without scrolling to find out (issue #49).
+/// knows there is more without scrolling to find out.
 pub(super) fn paged(title: &str, More { above, below }: More) -> Block<'static> {
     let mark = |mark: &'static str| Line::from(Span::styled(mark, theme::faint())).right_aligned();
     let mut block = block(title);
@@ -160,10 +160,9 @@ fn block(title: &str) -> Block<'static> {
 
 /// Every binding as the box draws it: the keys in their column and the
 /// description wrapped under it, so a description is read rather than clipped
-/// at the border and the box is sized from the rows that wrapping made
-/// (issue #49). A name longer than the column — the command row is one — is
-/// not cut to fit it: it keeps a row of its own and the description wraps
-/// beneath it.
+/// at the border and the box is sized from the rows that wrapping made. A name
+/// longer than the column — the command row is one — is not cut to fit it: it
+/// keeps a row of its own and the description wraps beneath it.
 fn help_lines(columns: usize) -> Vec<Line<'static>> {
     let rest = columns.saturating_sub(KEYS).max(1);
     let mut lines: Vec<Line<'static>> = Vec::new();

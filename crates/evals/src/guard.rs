@@ -1,6 +1,6 @@
-//! The suite refuses to run when the sandbox is not actually enforcing (issue
-//! #10): eval 7 deliberately writes outside the writable set, so a pre-flight
-//! proves bubblewrap runs and the kernel refuses the canary write.
+//! The suite refuses to run when the sandbox is not actually enforcing: eval 7
+//! deliberately writes outside the writable set, so a pre-flight proves
+//! bubblewrap runs and the kernel refuses the canary write.
 
 use std::path::Path;
 use std::process::Command;

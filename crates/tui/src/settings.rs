@@ -1,12 +1,10 @@
-//! `/settings`: the one config file, edited through the one schema.
-//! The frame stages fields in memory and writes nothing until the
-//! user saves; `Esc` throws the whole draft away. A secret the file holds is
-//! never handed back, so no field can show one and no frame can leak one.
-//!
-//! It is also the modal the frame's front door opens by itself when the run has
-//! no key, which is why `Missing` — what is absent, in the words the
-//! transcript and the composer use — lives here rather than in a second module
-//! both would have to know.
+//! `/settings`: the one config file, edited through the one schema. The frame
+//! stages fields in memory and writes nothing until the user saves, `Esc`
+//! throwing the whole draft away; a secret the file holds is never handed back,
+//! so no field can show one and no frame can leak one. It is also the modal the
+//! front door opens by itself when the run has no key, which is why `Missing` —
+//! what is absent, in the words the transcript and the composer use — lives
+//! here rather than in a second module both would have to know.
 
 use std::path::Path;
 
@@ -265,7 +263,7 @@ impl Settings {
     }
 
     /// A screenful at a time: what `PgUp`/`PgDn` and the wheel move the cursor
-    /// by in a modal whose rows do not all fit (issue #49).
+    /// by in a modal whose rows do not all fit.
     pub fn page(&mut self, rows: usize, up: bool) {
         self.chosen = crate::overlay::step(self.chosen, rows, self.fields.len(), up);
     }

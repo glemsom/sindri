@@ -1,5 +1,5 @@
 //! The window's position in a long thread: the badge that says what arrived
-//! below a reader who is not on the tail (issue #45).
+//! below a reader who is not on the tail.
 
 use super::*;
 

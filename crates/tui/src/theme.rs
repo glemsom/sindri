@@ -119,8 +119,8 @@ pub const RAMPS: &[(Color, Color)] = &[(FAINT, SEAM), (PROMPT, SEAM)];
 
 /// Whether the frame may paint a colour: one `PALETTE` names, one a walk of
 /// `RAMPS` arrives at, or nothing at all. `tests/theme.rs` asks this of every
-/// cell — a renderer that invents a hue still fails, and the law it fails
-/// against is now stated where the walk lives rather than in the test.
+/// cell, and a renderer that invents a hue fails the law stated where the walk
+/// lives.
 pub fn owns(colour: Color) -> bool {
     colour == Color::Reset
         || PALETTE.contains(&colour)

@@ -4,9 +4,9 @@
 )]
 
 //! The record as a list, and as markdown: `/sessions` and `/export` read what a
-//! run left, from the same files `sindri sessions show` reads (issue
-//! #51). Nothing here writes a record: every fixture is a directory a run could
-//! have left, and the listing is only ever a read of it.
+//! run left, from the same files `sindri sessions show` reads. Nothing here
+//! writes a record: every fixture is a directory a run could have left, and the
+//! listing is only ever a read of it.
 
 use std::path::Path;
 

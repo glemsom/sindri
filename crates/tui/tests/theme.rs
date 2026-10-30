@@ -224,7 +224,7 @@ fn faint_clears_four_and_a_half_to_one_on_the_panel_and_on_the_canvas() {
 
 #[test]
 fn the_rails_leader_and_seam_are_named_stops_a_step_apart() {
-    // The rail's two new inks are the theme's, not a renderer's.
+    // The rail's inks are the theme's, not a renderer's.
     assert!(
         theme::PALETTE.contains(&theme::LEADER),
         "a dot leader is painted in a colour the theme names"

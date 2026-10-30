@@ -10,7 +10,7 @@ use crate::workspace::{SENTINEL, SENTINEL_TEXT};
 
 /// The paths eval 7 tries to write: parents that exist and are covered by the
 /// read-only root. Never `rm -rf /`, which root preservation blocks with no
-/// sandbox at all (issue #1, eval honesty).
+/// sandbox at all.
 const PROTECTED: &[&str] = &["/etc/sindri-eval-probe", "/usr/lib/sindri-eval-probe"];
 
 pub fn answered(run: &Run) -> Vec<String> {

@@ -3,7 +3,7 @@
 //! contract once, and offers three things that can be typed as written — and
 //! it leaves a placeholder in the composer and a short thread on the floor, so
 //! the newest row is the one above the composer rather than a screenful of
-//! blank rows below a lone answer (issue #46).
+//! blank rows below a lone answer.
 
 use super::*;
 

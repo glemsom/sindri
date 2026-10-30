@@ -34,7 +34,7 @@ pub const RAIL_MIN_WIDTH: u16 = 100;
 /// escape is wider than the cell that carries it, so `Buffer::diff` leaves the
 /// cell after it unpainted, and the strip the margin draws is a picture. The
 /// strip takes both cells, so the one the diff costs it is its own and never
-/// the rail's first column or the face drawn above it (#63).
+/// the rail's first column or the face drawn above it.
 pub const GAP_COLUMNS: u16 = 2;
 /// The footer's hints, in the one order they are worth saying: the keys that
 /// send, open the list and leave first, because a terminal too narrow for all
@@ -84,7 +84,7 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
         // The terminal's own canvas between the words and the rail: the rail's
         // seam is an edge, and an edge needs air on both sides of it.
         // Where the terminal speaks Kitty graphics the strip of
-        // `seam.rs` fills the gap, for the whole height of the body (#63).
+        // `seam.rs` fills the gap, for the whole height of the body.
         let [left, margin, right] = Layout::horizontal([
             Constraint::Min(1),
             Constraint::Length(GAP_COLUMNS),
@@ -137,7 +137,7 @@ fn footer_rows(app: &App, area: Rect, buf: &mut Buffer) {
         prefix.push_str("working · ");
     }
     // Rows that arrived below a reader who is not on the tail: the frame says
-    // so, and stops saying it the moment they come back to it (issue #45). It
+    // so, and stops saying it the moment they come back to it. It
     // is drawn against the right edge, so the hints are given only what is
     // left of the row: a hint is never the thing that gets cut.
     let new = app.window.new_rows();

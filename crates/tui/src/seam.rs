@@ -1,12 +1,9 @@
 //! The seam's light strip: the picture the seam is made of where the terminal
-//! can draw one, and nothing else (#62).
-//!
-//! A function from a size and the theme's two stops to an `image::RgbaImage`,
-//! so what the strip looks like is a test's business rather than a
-//! screenshot's. Nothing here owns a layout, an `App` or a terminal, and
-//! nothing here is drawn. It is generated once per body height and replaced
-//! when the body is resized (issue #63); that is the drawing
-//! side's business, not this module's.
+//! can draw one, and nothing else. A function from a size and the theme's two
+//! stops to an `image::RgbaImage`, so what the strip looks like is a test's
+//! business rather than a screenshot's. Nothing here owns a layout, an `App` or
+//! a terminal, and nothing here draws: making the strip once per body height,
+//! and replacing it on a resize, is the drawing side's business.
 
 use image::RgbaImage;
 use ratatui::style::Color;

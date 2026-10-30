@@ -2,7 +2,7 @@
 //! has opened of it. A call is expandable whether or not it
 //! spilled — the spill file is an optimisation on top of that, never the only
 //! way back to the output — and an expansion reads the entry's bounded tail,
-//! so it costs the cap rather than the stream (issue #44).
+//! so it costs the cap rather than the stream.
 
 use std::time::Duration;
 
@@ -43,7 +43,7 @@ pub fn rows(call: &Call, width: u16, now: Duration) -> Vec<Line<'static>> {
         Some(CallOver::Refused(detail)) => ("✗", format!("sandbox: {detail}"), theme::bad()),
     };
     // An open call says so with its marker: the row a key opens is the row
-    // that shows it is open (issue #44).
+    // that shows it is open.
     let marker = if call.expanded() { "▾ " } else { "⎿ " };
     // How long the call has been running, or how long it took: frozen at the
     // duration it ended on, so a finished call is not still counting.
@@ -55,7 +55,7 @@ pub fn rows(call: &Call, width: u16, now: Duration) -> Vec<Line<'static>> {
     ];
     // What is behind the fold, so a collapsed call is not a dead end: the
     // count and the duration are the two facts that say whether opening it is
-    // worth a key (issue #44).
+    // worth a key.
     if call.lines() > 0 {
         spans.push(Span::styled(behind(call.lines()), theme::faint()));
         spans.push(Span::raw(" "));

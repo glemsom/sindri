@@ -119,7 +119,7 @@ pub fn type_line(pty: &Pty, text: &str) {
 
 /// A `/` command is sent the way a user sends one: its name opens the offer
 /// the catalogue makes, the first `Enter` takes what is offered and the second
-/// sends it (issue #54).
+/// sends it.
 pub fn type_command(pty: &Pty, text: &str) {
     type_line(pty, text);
     pty.type_key(ENTER);

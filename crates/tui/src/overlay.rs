@@ -17,7 +17,7 @@ pub struct Binding {
 
 /// The key `?` draws the command row after: `@`, the frame's other completer.
 /// Anchored to a neighbour rather than to a position, so a binding added above
-/// moves the row with the keys it belongs with (issue #53).
+/// moves the row with the keys it belongs with.
 const COMMANDS_AFTER: &str = "@";
 
 /// Every binding the frame has. The mouse is an accelerator: nothing here is
@@ -113,7 +113,7 @@ pub const BINDINGS: &[Binding] = &[
 
 /// `?`'s list of every binding, and where the reader is in it. The list wraps
 /// and scrolls, so the key the overlay was opened to find is a row that can be
-/// reached and not the one that fell off the bottom (issue #49).
+/// reached and not the one that fell off the bottom.
 #[derive(Debug, Clone, Default)]
 pub struct Help {
     scroll: usize,
@@ -175,7 +175,7 @@ impl Help {
 
 /// Where a cursor lands after one step of a list that keeps a chosen row: one
 /// answer for the settings modal and the record picker, so neither drifts from
-/// the other (issue #49).
+/// the other.
 pub(crate) fn step(chosen: usize, rows: usize, len: usize, up: bool) -> usize {
     if up {
         chosen.saturating_sub(rows)
@@ -197,7 +197,7 @@ pub enum Overlay {
 
 /// The rows `?` lists: the keys in their column and what they do. The one row
 /// that is not a `Binding` is the commands', read out of their one catalogue,
-/// so a command added there is a command the help shows (issue #53).
+/// so a command added there is a command the help shows.
 pub fn help_rows() -> Vec<(String, String)> {
     let mut rows: Vec<(String, String)> = Vec::with_capacity(BINDINGS.len() + 1);
     for binding in BINDINGS {
@@ -249,7 +249,7 @@ mod tests {
 
     /// `?`'s command row as the frame said it before the catalogue: written
     /// here from the frame rather than read back out of the catalogue, so a
-    /// seventh command that the row does not say is a failure (issue #53).
+    /// seventh command that the row does not say is a failure.
     const COMMANDS_ROW: (&str, &str) = (
         "/new, /sessions, /export, /settings, /help, /quit",
         "start a session, read an old one, export this one, edit the config, show this, leave",

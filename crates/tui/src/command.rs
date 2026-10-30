@@ -1,7 +1,7 @@
 //! The `/` commands and the one catalogue of them: a name, the
 //! one line it is said in, and the command it opens. The parser, the line an
 //! unknown name is refused with and `?`'s command row all read it, so a
-//! seventh command is added in one place (issue #53). `/settings` is one of
+//! seventh command is added in one place. `/settings` is one of
 //! the two that write the user's disk, and it writes through the schema the run
 //! reads; `/export` writes one markdown file, where it is told to.
 
@@ -29,7 +29,7 @@ pub struct Spec {
 }
 
 /// Every `/` command, in the order the frame says them. This is the one list
-/// of names: a seventh command is added here and nowhere else (issue #53).
+/// of names: a seventh command is added here and nowhere else.
 pub const COMMANDS: &[Spec] = &[
     Spec {
         name: "new",
@@ -101,7 +101,7 @@ pub fn row() -> (String, String) {
 /// no such command, and the ones there are. They are said in the catalogue's
 /// order, which is the order `?` says them in: the hand-written line this
 /// replaces had drifted to `/sessions, /export, /new, …`, so one order had to
-/// win and the frame's is the help row's (issue #53).
+/// win and the frame's is the help row's.
 pub fn refusal(name: &str) -> String {
     format!("{name}: no such command — {}", names())
 }
@@ -134,7 +134,7 @@ mod tests {
 
     /// The command each name opens, written here from the enum rather than
     /// read out of the catalogue: a name paired with the wrong command is a
-    /// failure, not a tautology (issue #53).
+    /// failure, not a tautology.
     const OPENS: &[(&str, Command)] = &[
         ("new", Command::New),
         ("sessions", Command::Sessions),

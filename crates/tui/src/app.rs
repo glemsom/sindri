@@ -55,7 +55,7 @@ pub struct App {
     face: Option<Face>,
     /// The glow in the margin: the seam's light strip, built from the same
     /// `graphics` the face and a picture read. A terminal that draws no
-    /// graphics has no seam to draw (#63).
+    /// graphics has no seam to draw.
     pub(crate) seam: Option<Seam>,
     /// What the terminal said it can draw, asked once at launch: the face draws
     /// from it, and a picture draws from the same answer.
@@ -65,13 +65,12 @@ pub struct App {
     /// the disk.
     pictures: Option<Store>,
     /// Where the reader is in the thread, and what arrived below them: the
-    /// window is the one thing that outlives a frame (issue #45).
+    /// window is the one thing that outlives a frame.
     pub(crate) window: Window,
     pub(crate) viewport: Viewport,
     /// The entry the reader last opened or clicked, which is what `Enter` on
     /// an empty composer toggles: a frame with no cursor of its own has one
-    /// honest answer to "which call?", and it is the one just touched
-    /// (issue #44).
+    /// honest answer to "which call?", and it is the one just touched.
     pub(crate) chosen: Option<usize>,
     /// One row count per entry at the width it was measured at, dropped
     /// whenever an entry changes, so the window never lays out a row it does

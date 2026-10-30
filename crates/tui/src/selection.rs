@@ -18,7 +18,7 @@ pub struct Viewport {
     pub rows: Vec<String>,
     pub spill: Vec<(usize, PathBuf)>,
     /// The transcript rows that are an expandable entry's own row, and which
-    /// entry that is: a click there opens it (issue #44).
+    /// entry that is: a click there opens it.
     pub expand: Vec<(usize, usize)>,
     /// The pictures the frame drew: where each block of rows is, and the words
     /// it stands for. A picture is the third of these maps — a row to something

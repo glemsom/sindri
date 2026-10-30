@@ -125,9 +125,8 @@ answer with the run's elapsed time (`⠸ 0.8s`), settling on `✓` or `✗` and 
 duration it stopped at; the duration of every call, frozen when the call ends;
 and the rail's output and context figures moving on what streams, accented as
 they grow and trued up when the run's report lands. The tick lasts only while one of
-those is moving: **never repaint for nothing**. While it runs the
-footer says `working · ` before its hints, and `cancelling… · ` once a cancel has been
-answered.
+those is moving. While it runs the footer says `working · ` before its hints, and
+`cancelling… · ` once a cancel has been answered.
 
 **walk** — a rule lit from one end: the theme's `ramp` interpolates two named stops and
 `RAMPS` lists the pairs a renderer may interpolate, one step per cell. It is how a
@@ -140,8 +139,7 @@ being absent there.
 **surface** — one of the three tiers of nearness the frame paints on:
 **canvas**, **panel**, **raised**, in that order. A renderer asks
 `theme::surface()` or `theme::raised()` and never asks for a background, because
-`theme.rs` names every colour the frame paints. One dark theme, three tiers; a light
-theme is out of scope and there is no 256-colour fallback.
+`theme.rs` names every colour the frame paints. One dark theme, three tiers.
 
 **canvas** — the terminal's own black: the lowest **surface**, and the one the frame
 paints nothing on. Above it: **panel**, then **raised**.
@@ -247,7 +245,7 @@ name there is six names.
 **help overlay** says of it, and what it opens. One catalogue (`COMMANDS`) holds them
 all, in the order the frame says them; the parser, the line an unknown name is refused
 with and the help's command row all read it, so a seventh command is added there and
-nowhere else(issue #53).
+nowhere else.
 
 **help overlay** — `?`'s list of every **binding**: the keys in their
 column, each description wrapped under them, the box sized from the wrapped rows. A

@@ -60,9 +60,8 @@ impl fmt::Display for DoctorError {
 impl std::error::Error for DoctorError {}
 
 /// Proving the sandbox must not depend on the record being writable: a probe
-/// whose scratch lived under the state root would report a state root that
-/// cannot be written as a broken sandbox, and every front end would then have to
-/// invent its own words for a failure the one module already has words for
+/// whose scratch lived under the state root would blame a broken sandbox for a
+/// state root that cannot be written.
 pub fn probe(env: &Env, extras: &[PathBuf]) -> Result<Report, DoctorError> {
     let bwrap = which("bwrap").ok_or(DoctorError::BwrapMissing)?;
     let bash = which("bash").ok_or_else(|| DoctorError::BinariesMissing {

@@ -1,7 +1,7 @@
-//! The glow in the margin: the seam's light strip (#62) drawn in the one column
-//! between the words and the rail, on a terminal that speaks Kitty graphics
-//! (#63). With no answer from the terminal there is no glow and the frame is
-//! the frame it is without this ticket.
+//! The glow in the margin: the seam's light strip drawn in the one column
+//! between the words and the rail, on a terminal that speaks Kitty graphics.
+//! With no answer from the terminal there is no glow, and the margin is the
+//! plain canvas beside the words.
 
 use super::*;
 
@@ -19,7 +19,7 @@ fn lit() -> App {
 /// The frame's own cells: what the widgets drew, which is what a golden frame
 /// is made of. A backend's buffer is the diff from the frame before it, and a
 /// picture's escape sequence is longer than the cell it fills, so the diff
-/// cannot answer for the cells beside one (#63).
+/// cannot answer for the cells beside one.
 fn cells(app: &mut App, width: u16, height: u16) -> Buffer {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
     let mut drawn = Buffer::empty(Rect::new(0, 0, width, height));
@@ -117,8 +117,8 @@ fn the_glow_touches_the_margin_and_nothing_else() {
 #[test]
 fn with_no_answer_from_the_terminal_the_margin_is_the_canvas_it_was() {
     // No graphics value, no glow: the margin is the terminal's own black from
-    // the top of the body down to the composer, and a frame without this
-    // ticket is the frame this one draws (#63).
+    // the top of the body down to the composer, and this frame draws what a
+    // frame that never asked for graphics draws.
     let plain = cells(&mut app(), 100, 30);
     let shown: Vec<String> = (0..plain.area.height).map(|y| row(&plain, y)).collect();
     for y in 0..composer_at(&shown) {
@@ -171,8 +171,8 @@ fn the_face_and_the_seam_reach_a_terminal_that_draws_the_glow() {
     // ratatui leaves the cell after it unpainted — a cell, not a column of ink,
     // and the terminal keeps whatever it last had there. The margin is two cells
     // wide so that cell is the strip's own, and the rail's first column, the one
-    // the face's escape and its first fact both sit in, reaches the terminal. These rows
-    // are a backend's: the diff a terminal is sent (#63).
+    // the face's escape and its first fact both sit in, reaches the terminal.
+    // These rows are a backend's: the diff a terminal is sent.
     let face = Face::kitty().expect("the embedded face decodes");
     let mut app = App::new(launch(), Some(face)).with_graphics(Some(Graphics::kitty()));
     let rows = screen(&mut app, 100, 40);
@@ -230,7 +230,7 @@ fn sources(dir: &Path, found: &mut Vec<PathBuf>) {
 fn the_terminal_is_asked_once_and_the_face_and_the_seam_both_borrow_it() {
     // `Picker::from_query_stdio` spends up to a second and reads stdin, so it
     // is asked in exactly one place and both users of a picture read that one
-    // answer(#56, #63).
+    // answer.
     let mut found = Vec::new();
     sources(
         &Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),

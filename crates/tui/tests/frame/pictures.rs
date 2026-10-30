@@ -32,7 +32,7 @@ fn answered(app: &mut App, text: &str) -> usize {
 /// The transcript column's own characters, above the composer: the rail keeps
 /// its 32 columns and a column of canvas separates them. That column is the
 /// margin, and a terminal that speaks graphics draws the seam's light strip
-/// there (#63), so the words are the columns before it.
+/// there, so the words are the columns before it.
 const COLUMN: usize = MARGIN;
 
 fn column(rows: &[String]) -> Vec<String> {

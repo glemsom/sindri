@@ -1,5 +1,5 @@
 //! The record picker: what every run left under the state directory, read from
-//! `session.json`, newest first (issue #51). Reading is not resuming —
+//! `session.json`, newest first. Reading is not resuming —
 //! nothing here writes a record, and nothing opens a run.
 
 use std::path::{Path, PathBuf};
@@ -53,7 +53,7 @@ impl Sessions {
     }
 
     /// A screenful at a time: `PgUp`/`PgDn` and the wheel move the picker, and
-    /// the transcript beneath it stays where it was (issue #49).
+    /// the transcript beneath it stays where it was.
     pub fn page(&mut self, rows: usize, up: bool) {
         self.chosen = crate::overlay::step(self.chosen, rows, self.rows.len(), up);
     }

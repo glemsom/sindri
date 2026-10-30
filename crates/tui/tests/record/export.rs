@@ -1,5 +1,5 @@
 //! `/export`: the current thread as markdown, where it was written said out
-//! loud, and a refusal to overwrite without a second ask (issue #51).
+//! loud, and a refusal to overwrite without a second ask.
 
 use super::*;
 

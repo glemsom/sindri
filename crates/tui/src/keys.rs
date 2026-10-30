@@ -104,7 +104,7 @@ impl App {
 
     /// The keys an open overlay takes. It owns them: nothing behind it moves
     /// while it has the screen, and the page keys move it by the screenful its
-    /// own box shows rather than the transcript's (issue #49).
+    /// own box shows rather than the transcript's.
     fn overlay_key(&mut self, key: KeyEvent, ctrl: bool) {
         match key.code {
             KeyCode::PageUp => return self.scroll_page(true),
@@ -129,7 +129,7 @@ impl App {
 
     /// A page, for whatever has the screen: the box that covers the frame
     /// sets the step it is paged by, and the transcript sets its own only when
-    /// nothing covers it (issue #49).
+    /// nothing covers it.
     fn scroll_page(&mut self, up: bool) {
         match self.overlay.as_mut() {
             Some(Overlay::Help(help)) => help.page(self.window.page, up),
@@ -166,8 +166,7 @@ impl App {
             return;
         }
         // A click on an expandable entry's own row opens that entry, and is
-        // never a selection: the row a reader points at is the one they mean
-        // (issue #44).
+        // never a selection: the row a reader points at is the one they mean.
         if let Some(index) = self
             .viewport
             .row_of(at)
@@ -184,7 +183,7 @@ impl App {
 
     /// `↑` is the row above in the draft, and the newest queued prompt when
     /// the draft has no row above: the queue is reached from the top of the
-    /// composer, never instead of it (issue #43).
+    /// composer, never instead of it.
     fn up(&mut self) {
         if self.composer.cursor().1 > 0 || !self.take_back() {
             self.composer.up();
@@ -211,8 +210,7 @@ impl App {
             return;
         }
         // An empty composer has nothing to send: `Enter` there opens the call
-        // the reader last touched, or the newest one, and folds it again
-        // (issue #44).
+        // the reader last touched, or the newest one, and folds it again.
         if self.composer.is_blank() && self.reveal() {
             return;
         }
@@ -268,7 +266,7 @@ impl App {
 
     /// The keys know how many rows a page or a wheel is worth, and not where
     /// those rows land: the window is asked and the next frame answers, so a
-    /// page back costs the rows it crosses and never the thread (issue #45).
+    /// page back costs the rows it crosses and never the thread.
     fn scroll_by(&mut self, rows: usize, up: bool) {
         let rows = rows as isize;
         self.window.want(Ask::Rows(if up { rows } else { -rows }));

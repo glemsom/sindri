@@ -3,7 +3,7 @@
 use super::*;
 
 /// Sends a command the way a user sends one now: the name opens its offer, the
-/// first `Enter` takes it, and the second sends what was taken (issue #54).
+/// first `Enter` takes it, and the second sends what was taken.
 fn command(app: &mut App, line: &str) {
     type_text(app, line);
     press(app, KeyCode::Enter, KeyModifiers::NONE);

@@ -40,7 +40,7 @@ impl Spill {
     }
 
     /// A reader over text the frame already has: the rendered record of a past
-    /// session, read-only in the same box a spill opens in (issue #51).
+    /// session, read-only in the same box a spill opens in.
     pub fn text(title: impl Into<String>, text: &str) -> Spill {
         let lines: Vec<String> = text.lines().map(|line| line.to_string()).collect();
         Spill {

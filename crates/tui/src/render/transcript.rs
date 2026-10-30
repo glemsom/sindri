@@ -1,13 +1,9 @@
 //! The transcript column — the hero. A conversation is laid out as the
 //! document it is: two rows between turns and none inside one, a turn's body
 //! hanging two columns off its own edge, and the prompt at full strength on a
-//! band of its own.
-//!
-//! Only the rows that fit are laid out, so an unbounded conversation still has
-//! a bounded render tree. The window has a place in the thread and
-//! not an offset from its tail: a reader on the tail is shown the newest rows
-//! and follows them, and a reader who scrolls back is held to the row they are
-//! reading while the run appends below them.
+//! band of its own. Only the rows that fit are laid out, so an unbounded
+//! conversation still has a bounded render tree, and a reader who scrolls back
+//! is held to the row they are reading while the run appends below them.
 
 use std::path::PathBuf;
 
@@ -41,7 +37,7 @@ pub struct View {
 
 pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
     // A thread with nothing in it is the first frame: the one screen that can
-    // say what the run is and what can be typed (issue #46).
+    // say what the run is and what can be typed.
     if app.entries().is_empty() {
         let rows = hello::rows(app, area.width);
         app.set_viewport(Viewport {
@@ -55,7 +51,7 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
     let view = window(app, area.width, area.height as usize);
     // A thread shorter than the column is written on the floor of it, so the
     // newest row is the one above the composer rather than the top row of a
-    // screenful of blank ones (issue #46).
+    // screenful of blank ones.
     let at = floor(area, view.rows.len());
     let placed = pictures::placed(&view.pictures, at);
     let (rows, plain) = (view.rows, view.plain);

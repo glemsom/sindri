@@ -28,20 +28,3 @@ fn the_glossary_defines_boot_as_the_turn_from_flags_and_process_into_a_session()
         "boot ends where a session begins, and the glossary must say so: {entry:?}"
     );
 }
-
-#[test]
-fn the_one_adr_is_a_rulebook_an_agent_can_check() {
-    let adr = include_str!("../../../docs/adr/0001-code-an-agent-can-maintain.md");
-    assert!(
-        adr.contains("## Decision"),
-        "the ADR states its rules under one heading"
-    );
-    assert!(
-        adr.contains("`make check` is the definition of done"),
-        "it names the gate, so an agent knows what done means"
-    );
-    assert!(
-        adr.contains("New decisions are not new ADRs"),
-        "a new decision goes in code, a test or the glossary, not in a new record"
-    );
-}

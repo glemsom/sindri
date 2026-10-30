@@ -8,12 +8,10 @@ use sindri_types::ExitCode;
 use crate::boot;
 
 pub fn run(overrides: Overrides) -> i32 {
-    // The description must be the one a run really gives the model, so it is
-    // read through the diagnostic door: the same config, from the same sources,
-    // with the same checks — only the model and the credential are not required
-    // of a diagnostic. The extras described here are then, by construction, the
-    // extras a run would be granted, and a value a run would refuse is refused
-    // here too, out loud.
+    // The description must be the one a run really gives the model, so the
+    // config comes through the diagnostic door: the same sources and the same
+    // checks, only the model and the credential not demanded. A value a run
+    // would refuse is refused here too, out loud.
     let configured = match boot::configure(overrides) {
         Ok(configured) => configured,
         Err(error) => return error.report(),

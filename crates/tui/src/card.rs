@@ -1,7 +1,7 @@
 //! The card: what a broken boot has to say, and what an event does to it.
 //! The doctor's words are the content, so the card is measured
 //! from them and paged when the screen is shorter than they are; only a key
-//! leaves it, never a resize (issue #50). The drawing is `render::card`.
+//! leaves it, never a resize. The drawing is `render::card`.
 
 use crossterm::event::{Event, KeyCode, KeyEventKind};
 

@@ -1,4 +1,4 @@
-//! The dials at the process seam (issue #18): a model changed in `/settings`
+//! The dials at the process seam: a model changed in `/settings`
 //! answers the next prompt on the thread the last one built, a key typed into
 //! the modal lands in the config file and nowhere else, and a run recorded from
 //! the frame reads back exactly as a batch run does.

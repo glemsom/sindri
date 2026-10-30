@@ -1,18 +1,10 @@
-//! The glow in the margin: the seam's light strip (`seam`, #62) drawn in the
-//! canvas between the words and the rail, where the terminal speaks Kitty
-//! graphics (#63).
-//!
-//! The strip is generated once per body height and the terminal is told about
-//! it once: the protocol is held here across frames, so a ticking frame carries
-//! placeholders and transmits nothing, and a resize makes a new strip.
-//!
-//! The strip fills the whole gap, and the gap is two cells wide because it has
-//! to be. `Buffer::diff` reads a cell's symbol as the columns it covers and
-//! skips the cell after a symbol wider than one, and a picture's escape
-//! sequence is far wider than the cell carrying it. Whatever cell follows the
-//! strip's first is therefore left unpainted by the emitted frame — so it is
-//! the strip's own second cell, with its placeholder inherited from the first,
-//! and never the rail's first column or the escape of the face drawn above it
+//! The glow in the margin: the seam's light strip, `seam`, drawn in the canvas
+//! between the words and the rail where the terminal speaks Kitty graphics. It
+//! is generated once per body height and transmitted once, its protocol held
+//! across frames, so a ticking frame carries placeholders and a resize makes a
+//! new strip. It fills a gap two cells wide, because `Buffer::diff` skips the
+//! cell after a picture's escape — so the cell the diff drops is the strip's
+//! own second, and never the rail's first column or the face drawn above it
 //! (`render::GAP_COLUMNS`).
 
 use ratatui::buffer::Buffer;
@@ -67,7 +59,7 @@ impl Seam {
     /// The seam a test draws, built from the made-up answer a test can afford:
     /// nothing is asked of a terminal. A frame's own tests get theirs from
     /// `App::with_graphics(Some(Graphics::kitty()))`, which is the one answer
-    /// the face and the pictures read too (#63).
+    /// the face and the pictures read too.
     #[cfg(test)]
     pub fn kitty() -> Option<Seam> {
         Seam::new(&Graphics::kitty())

@@ -1,12 +1,10 @@
 //! The store that knows what a markdown `src` is worth, and holds what it
-//! costs: it locates a picture in the workspace, measures it from
-//! its header alone, refuses what cannot be drawn with a reason the caption can
-//! print, and keeps a handful of decoded protocols alive so the same answer
-//! redraws for nothing.
-//!
-//! It decides nothing about rows or drawing. The layout asks it how many rows a
-//! `src` takes at a column width; the renderer asks it for the protocol that
-//! draws them.
+//! costs: it locates a picture in the workspace, measures it from its header
+//! alone, refuses what cannot be drawn with a reason the caption can print, and
+//! keeps a handful of decoded protocols alive so the same answer redraws for
+//! nothing. It decides nothing about rows or drawing: the layout asks it how
+//! many rows a `src` takes at a column width, and the renderer asks it for the
+//! protocol that draws them.
 
 use std::fs::File;
 use std::io::BufReader;

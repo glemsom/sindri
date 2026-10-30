@@ -2,11 +2,11 @@
 //! moves it, and how much of the thread arrived below them while they were
 //! reading. The place is a row of an entry and not an offset from the tail, so
 //! a run that appends never moves the text under a reader who has scrolled
-//! back; the tail is a place the window takes again on `End` (issue #45).
+//! back; the tail is a place the window takes again on `End`.
 
 /// What the reader asked of the window, for the next frame to carry out. The
 /// keys know the rows a page is worth and neither the entry they land on nor
-/// how far the thread runs, so they ask and the window answers (issue #45).
+/// how far the thread runs, so they ask and the window answers.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Ask {
     #[default]
@@ -23,7 +23,7 @@ pub enum Ask {
 /// entry that was not laid out, and the thread's newest entry with its rows. A
 /// run only ever appends at the tail, so what arrives is added to the count
 /// rather than walked for again, which is what keeps a page a page on a long
-/// thread (issue #45).
+/// thread.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Below {
     pub width: u16,
@@ -52,7 +52,7 @@ pub struct Window {
     /// The rows one page is worth to whatever has the screen. The transcript
     /// reports its own every frame; an open overlay reports what its box
     /// showed instead, so `PgUp`/`PgDn` move the box that covers the frame and
-    /// never the frame beneath it (issue #49).
+    /// never the frame beneath it.
     pub(crate) page: usize,
 }
 
@@ -79,7 +79,7 @@ impl Window {
 
     /// The rows that arrived below the reader since they last looked there:
     /// nothing while they are on the tail, which is why the badge goes when
-    /// they return to it (issue #45).
+    /// they return to it.
     pub fn new_rows(&self) -> usize {
         self.scroll.saturating_sub(self.new_below.min(self.scroll))
     }
@@ -94,7 +94,7 @@ impl Window {
 
     /// The thread changed somewhere other than its tail — an entry opened, an
     /// entry taken out — so the rows below the screen are no longer the rows
-    /// that were counted (issue #45).
+    /// that were counted.
     pub fn forget(&mut self) {
         self.below = None;
     }
@@ -109,7 +109,7 @@ impl Window {
     }
 
     /// Takes what was asked for, once: a frame carries it out and the next one
-    /// owes the reader nothing (issue #45).
+    /// owes the reader nothing.
     pub fn take_ask(&mut self) -> Ask {
         std::mem::take(&mut self.ask)
     }
@@ -117,7 +117,7 @@ impl Window {
     /// What the frame laid out: the window's top, whether it follows the tail,
     /// the rows below it, and the rows one page is worth. The badge is counted
     /// here rather than in the renderer, because what is new is a fact about
-    /// what arrived and not about where the window is (issue #45).
+    /// what arrived and not about where the window is.
     pub fn settled(
         &mut self,
         ask: Ask,
@@ -133,7 +133,7 @@ impl Window {
         // Going back into the thread takes the rows below the reader as read,
         // and reaching the top takes every row below it as read. Coming back
         // down reads them one for one, so the count falls with the window and
-        // what is left is what is still new (issue #45).
+        // what is left is what is still new.
         self.new_below = match ask {
             Ask::Home => scroll,
             Ask::Rows(rows) if rows > 0 => self.new_below.saturating_add(rows.unsigned_abs()),

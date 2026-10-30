@@ -1,8 +1,8 @@
 //! The process seam for the sandbox debug subcommand: every acceptance
 //! criterion of the executor, proven without a model in the loop.
 //! Fields are asserted one by one rather than snapshotted: the batch contract's
-//! JSON shape is fixed in T6 with `insta`, and this subcommand's
-//! shape is not that contract.
+//! JSON shape is a snapshot's business, and this subcommand's shape is not that
+//! contract.
 
 mod common;
 

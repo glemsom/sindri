@@ -1,11 +1,9 @@
 //! The pictures a frame draws: where a block's rows are, whether the block is
 //! whole in the window, and the painting that costs pixels rather than a
-//! reload.
-//!
-//! A picture is not a cell and not a row of its own: it is drawn over the rows
-//! the markdown reserved for it, after the paragraph that carries them, from
-//! the protocol the store already holds. Nothing here decides a row count or a
-//! rect — the store measured those, and the frame laid them out.
+//! reload. A picture is not a cell and not a row of its own: it is drawn over
+//! the rows the markdown reserved for it, after the paragraph that carries
+//! them, from the protocol the store already holds. Nothing here decides a row
+//! count or a rect — the store measured those, and the frame laid them out.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;

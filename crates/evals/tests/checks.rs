@@ -5,7 +5,7 @@
 
 //! The checks that must fail loudly: an eval whose assertions cannot fail is a
 //! green light that proves nothing, and these two are the ones the product's
-//! safety rests on (issue #10).
+//! safety rests on.
 
 use std::path::PathBuf;
 

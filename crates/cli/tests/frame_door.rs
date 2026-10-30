@@ -19,7 +19,7 @@ use common::{Env, TEST_KEY, screen};
 
 /// The words only the transcript's note says: the modal offers the key's
 /// variables, and the composer says what it cannot do, but neither says where
-/// the note sends you (#47's missing-key note).
+/// the note sends you.
 const NOTE: &str = "in the settings modal";
 
 /// The box the door opens, as the terminal draws its title: what Esc takes
@@ -148,8 +148,8 @@ fn esc_leaves_the_frame_open_for_reading_and_the_composer_says_what_it_cannot_do
     expect(&pty, &mut child, "no credential");
     // The door's own frame, drawn whole, then the one Esc draws. Reading the
     // screen the moment the composer's words appear is reading a frame from
-    // before the key: since #46 the composer says what it cannot do under the
-    // box, and a frame arrives as it is written.
+    // before the key: the composer says what it cannot do under the box, and a
+    // frame arrives as it is written.
     pty.wait_for_frame(&mut child);
     pty.type_key(0x1b);
     let left = pty.wait_for_frame(&mut child);

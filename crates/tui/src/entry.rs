@@ -11,8 +11,7 @@ use crate::driver::{CallOver, Side};
 pub const TAIL_LINES: usize = 5;
 /// The lines a call keeps of its whole output: an expansion reads this, never
 /// the stream, so the entry is bounded the way the spill file is and a thread
-/// of five hundred calls is still a transcript and not a session log
-/// (issue #44).
+/// of five hundred calls is still a transcript and not a session log.
 pub const FULL_LINES: usize = 400;
 
 #[derive(Debug)]
@@ -56,8 +55,7 @@ pub struct Call {
     pub over: Option<CallOver>,
     pub tail: VecDeque<(Side, String)>,
     /// The whole output, and how much of it was ever given: a bounded tail of
-    /// the stream that `Enter` opens in place, whatever the spill did
-    /// (issue #44).
+    /// the stream that `Enter` opens in place, whatever the spill did.
     out: VecDeque<(Side, String)>,
     lines: usize,
     open: bool,

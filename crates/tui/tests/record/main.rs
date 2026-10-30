@@ -1,11 +1,9 @@
-//! The record in the frame (issue #51): `/sessions` lists what every run left,
-//! `Enter` reads one back without touching it, `/export` writes the current
-//! thread as markdown, and the rail's session id can be copied out to the
-//! `sindri sessions show` that already exists.
-//!
-//! Every fixture is a record under a temporary state directory, written by the
-//! same `Recorder` a run writes with, so nothing here reads or writes a real
-//! user's state.
+//! The record in the frame: `/sessions` lists what every run left, `Enter`
+//! reads one back without touching it, `/export` writes the current thread as
+//! markdown, and the rail's session id can be copied out to the
+//! `sindri sessions show` that already exists. Every fixture is a record under
+//! a temporary state directory, written by the same `Recorder` a run writes
+//! with, so nothing here reads or writes a real user's state.
 
 #![allow(
     clippy::expect_used,
@@ -188,8 +186,7 @@ fn type_text(app: &mut App, text: &str) {
 /// Sends a command the way a user sends one now: a bare name opens the offer
 /// the catalogue makes, so the first `Enter` takes it and the second sends it.
 /// A line with an argument opens no offer and costs one `Enter` — a second one
-/// there would land on an empty draft, where `Enter` means something else
-/// (issue #54).
+/// there would land on an empty draft, where `Enter` means something else.
 fn command(app: &mut App, line: &str) {
     type_text(app, line);
     let offered = app.completion().is_some_and(|open| !open.items.is_empty());

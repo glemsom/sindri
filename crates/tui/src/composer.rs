@@ -56,7 +56,7 @@ impl Composer {
     }
 
     /// What is typed becomes `text`, the cursor at its end: a queued prompt
-    /// taken back arrives above the draft it was typed before (issue #43).
+    /// taken back arrives above the draft it was typed before.
     pub fn replace(&mut self, text: &str) {
         self.rows = text.split('\n').map(str::to_string).collect();
         if self.rows.is_empty() {

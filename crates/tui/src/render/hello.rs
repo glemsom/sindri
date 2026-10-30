@@ -1,11 +1,9 @@
 //! The first frame: a thread with nothing in it yet is not a blank page. It
 //! says what the run is — the wire, the model, the directory and the sandbox —
 //! the one sentence of the contract that matters, and three things that can be
-//! typed as they read, so the first keystroke is not a guess (issue #46).
-//!
-//! Every fact here comes from the launch, and nothing else does: an empty
-//! frame can say what it was launched with, and cannot say what a run it has
-//! not had has spent.
+//! typed as they read, so the first keystroke is not a guess. Every fact comes
+//! from the launch and nothing else does: an empty frame can say what it was
+//! launched with, and cannot say what a run it has not had has spent.
 
 use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthStr;

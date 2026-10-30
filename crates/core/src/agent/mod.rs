@@ -1,9 +1,8 @@
 //! The agent: the turn loop and the one tool it drives. It emits events on a
-//! channel and returns a report, so it holds no terminal concerns.
-//!
-//! The agent also owns the conversation: the messages the model was shown, kept
-//! across prompts, so a second question builds on the first answer.
-//! One launch is one thread; `/new` forgets it.
+//! channel and returns a report, so it holds no terminal concerns, and it owns
+//! the conversation itself: the messages the model was shown, kept across
+//! prompts so a second question builds on the first answer. One launch is one
+//! thread; `/new` forgets it.
 
 mod event;
 mod report;
@@ -195,7 +194,7 @@ impl Agent {
 
     /// Ends the thread where a model turn ended: a prompt cut short by a cap, a
     /// cancel or a failure would otherwise leave an exchange with no reply, and
-    /// the next request would carry a question nobody answered (T17).
+    /// the next request would carry a question nobody answered.
     fn settle(&mut self) {
         let answered = self
             .history

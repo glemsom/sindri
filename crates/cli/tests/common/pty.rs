@@ -236,8 +236,8 @@ impl Pty {
     }
 
     /// Waits for the next frame to be drawn whole. A frame ends by showing the
-    /// terminal's cursor, and an idle frame draws nothing (#42), so the next
-    /// end after a keystroke is the frame that keystroke drew. A test that
+    /// terminal's cursor, and an idle frame draws nothing, so the next end
+    /// after a keystroke is the frame that keystroke drew. A test that
     /// reads the screen after a key comes here first: a frame arrives as it is
     /// written, so a row it has not reached yet still says what was there
     /// before.

@@ -111,10 +111,9 @@ impl ToolOutcome {
     }
 }
 
-/// The token counters a provider reports. Absent means unreported, never zero.
-///
-/// The field order is the JSON output contract's own, and a counter
-/// nobody reported is left out of the object rather than sent as null.
+/// The token counters a provider reports. Absent means unreported, never zero:
+/// the field order is the JSON contract's own, and a counter nobody reported is
+/// left out rather than sent as null.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Usage {
     #[serde(skip_serializing_if = "Option::is_none")]

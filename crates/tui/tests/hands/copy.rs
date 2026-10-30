@@ -200,14 +200,7 @@ fn rail_of(row: &str) -> String {
 /// The row of the rail that states `label`, found by the label's own column.
 fn rail_row(rows: &[String], label: &str) -> usize {
     rows.iter()
-        .position(|row| {
-            rail_of(row)
-                .chars()
-                .take(9)
-                .collect::<String>()
-                .trim_end()
-                == label
-        })
+        .position(|row| rail_of(row).chars().take(9).collect::<String>().trim_end() == label)
         .unwrap_or_else(|| panic!("the rail states {label}: {rows:#?}"))
 }
 
@@ -249,10 +242,7 @@ fn clicking_a_rail_row_copies_the_fact_and_none_of_its_typography() {
         );
     }
     assert!(
-        clipboard
-            .saw()
-            .iter()
-            .all(|copy| !copy.contains('·')),
+        clipboard.saw().iter().all(|copy| !copy.contains('·')),
         "no leader reaches the clipboard: {:?}",
         clipboard.saw()
     );
@@ -261,7 +251,7 @@ fn clicking_a_rail_row_copies_the_fact_and_none_of_its_typography() {
 #[test]
 fn a_rail_row_copies_the_same_fact_with_a_glow_in_the_margin() {
     // The seam is additive: what a row copies is the fact, and a terminal that
-    // draws the light strip changes nothing about the text (#63).
+    // draws the light strip changes nothing about the text.
     let mut copies = Vec::new();
     for glowing in [false, true] {
         let clipboard = Fake::taking();

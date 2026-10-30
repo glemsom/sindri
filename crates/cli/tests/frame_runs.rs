@@ -77,10 +77,9 @@ fn a_new_session_is_opened_in_the_same_run_environment() {
 
     // `/new` opens the next session from the environment the launch was booted
     // in, and the prompt after it is recorded there: the state root is the one
-    // this launch read, not one read again. That the process is
-    // not read a second time is `boot`'s own unit test — a launch's environment
-    // is a value, so a second read would answer a different root and there is
-    // none to name here.
+    // this launch read, not one read again. That the process is not read twice
+    // is `boot`'s own unit test; a second read here would answer a different
+    // root, which this test has no name for.
     type_command(&pty, "/new");
     type_line(&pty, "and now?");
     expect(&pty, &mut child, "the second answer");

@@ -1,8 +1,7 @@
-//! `/settings`: the modal over the one config file, through the one schema
-//! (issue #18). Every test points the frame at a temporary
-//! config path, so nothing here can read or write a real user's config —
-//! and every test that claims "nothing is written yet" says it about a
-//! file that does not exist.
+//! `/settings`: the modal over the one config file, through the one schema.
+//! Every test points the frame at a temporary config path, so nothing here
+//! can read or write a real user's config — and every test that claims
+//! "nothing is written yet" says it about a file that does not exist.
 
 #![allow(
     clippy::expect_used,
@@ -74,7 +73,7 @@ fn down(app: &mut App) {
 }
 
 /// `/settings`, typed and sent: the name opens the offer the catalogue makes,
-/// the first `Enter` takes it and the second sends it (issue #54).
+/// the first `Enter` takes it and the second sends it.
 fn open(app: &mut App) {
     type_text(app, "/settings");
     press(app, KeyCode::Enter, KeyModifiers::NONE);

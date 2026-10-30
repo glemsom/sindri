@@ -1,8 +1,8 @@
 //! `/export`: the thread the frame is holding, written as markdown — where the
-//! user names, or into the workspace under a name derived from the session id
-//! (issue #51). The text comes from the record, so the file says what
-//! `sindri sessions show` prints; the path is said before a byte is
-//! written, and a file that is already there is never replaced on the first ask.
+//! user names, or into the workspace under a name derived from the session id.
+//! The text comes from the record, so the file says what `sindri sessions show`
+//! prints; the path is said before a byte is written, and a file that is
+//! already there is never replaced on the first ask.
 
 use std::path::PathBuf;
 

@@ -7,7 +7,6 @@ use crate::markdown::text;
 const CUT_FLOOR: usize = 6;
 
 /// One row of the rail: a label in a fixed field and its value beside it.
-/// One row of the rail: a label in a fixed field and its value beside it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Fact {
     label: &'static str,

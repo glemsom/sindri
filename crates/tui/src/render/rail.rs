@@ -1,13 +1,10 @@
 //! The rail as a column, and as one strip when the terminal is too narrow for
-//! one. The face's space is taken first, so its absence closes the rail up
-//! rather than leaving a hole.
-//!
-//! The rail is chrome, not a surface: it lets the canvas through beside the
-//! words and draws no fill, so the frame holds one panel the user owns — the
-//! composer — and the rail says its facts as a ledger: labels in a fixed field,
-//! dot leaders across the gap, values hanging off one edge and a hairline
-//! between the blocks
-//!(issue #61).
+//! one, with the face's space taken first so its absence closes the rail up
+//! rather than leaving a hole. The rail is chrome, not a surface: it lets the
+//! canvas through beside the words and draws no fill, so the frame holds one
+//! panel the user owns — the composer — and the rail says its facts as a
+//! ledger: labels in a fixed field, dot leaders across the gap, values hanging
+//! off one edge and a hairline between the blocks.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -34,9 +31,8 @@ const LEADER_FLOOR: usize = 3;
 
 pub fn column(app: &mut App, area: Rect, buf: &mut Buffer) {
     // The rail is transparent, like the transcript it sits beside: only its
-    // hairline and the row its chip sits on are painted, so the rail
-    // never competes with the composer for the one panel on screen
-    //.
+    // hairline and the row its chip sits on are painted, so the rail never
+    // competes with the composer for the one panel on screen.
     let width = area.width as usize;
     let drawn = facts(app, width, area.height as usize);
     let spare = area.height.saturating_sub(drawn.lines.len() as u16);
@@ -191,9 +187,8 @@ fn row(fact: &Fact, width: usize) -> Row {
     match fact.block() {
         Block::Posture => {
             // The chip's row is one raised run: it begins at the rail's first
-            // column and runs to its last, so the chip is right-aligned on
-            // the edge the values hang off and flush to the rail's edge
-            //.
+            // column and runs to its last, so the chip is right-aligned on the
+            // edge the values hang off and flush to the rail's edge.
             let said = format!(" ⬢ {} ", fact.value());
             let pad = width.saturating_sub(said.chars().count());
             Row::said(
@@ -255,10 +250,7 @@ fn value(fact: &Fact, room: usize) -> String {
 /// width, so it groups the blocks instead of dividing the column from the
 /// page.
 fn rule(width: usize) -> Row {
-    Row::bare(Line::from(Span::styled(
-        "─".repeat(width),
-        theme::faint(),
-    )))
+    Row::bare(Line::from(Span::styled("─".repeat(width), theme::faint())))
 }
 
 /// A posture is a chip: stated on the raised tier, so it reads as the one
@@ -271,8 +263,7 @@ pub(crate) fn chip() -> ratatui::style::Style {
 
 pub fn strip(app: &App, area: Rect, buf: &mut Buffer) {
     // The strip is one row, and what it says already fits it: what was said is
-    // shortened or dropped where it was chosen rather than cut here
-    //.
+    // shortened or dropped where it was chosen rather than cut here.
     let text = app.rail().strip(area.width as usize, app.now());
     let line = Line::from(Span::styled(text, theme::faint()));
     Paragraph::new(line).render(area, buf);

@@ -61,10 +61,9 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     };
 
     let (format, verbose) = (flags.format, flags.verbose);
-    // One door starts the run: the process is read once, the config resolved
-    // once and the session opened once, in the one order. Boot has
-    // already said a refused repository config, the way every cold path does,
-    // and a run that cannot be evidenced is not a run.
+    // One door starts the run: the process read once, the config resolved once,
+    // the session opened once, in the one order. Boot has already said a refused
+    // repository config, and a run that cannot be evidenced is not a run.
     let Boot {
         config, session, ..
     } = match boot::open(flags.into()) {

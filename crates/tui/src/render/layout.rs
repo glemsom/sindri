@@ -44,7 +44,7 @@ impl<'a> Frame<'a> {
 
     /// Lays out from `skip` rows into `entry`'s block until the column is full,
     /// and answers with the rows below the window: the ones built past it and
-    /// every entry after them, measured but never laid out (issue #45).
+    /// every entry after them, measured but never laid out.
     pub(crate) fn hold(&mut self, entry: usize, skip: usize, count: usize, height: usize) -> usize {
         let mut index = entry;
         while index < count && self.rows.len() < height {
@@ -57,7 +57,7 @@ impl<'a> Frame<'a> {
     /// The rows of `first..count`: measured as what an entry is worth, never
     /// laid out. A run appends at the tail, so a count is added to when the only
     /// change is at the newest entry, and walked again when it is not — a page
-    /// back on a long thread costs a page, not the thread (issue #45).
+    /// back on a long thread costs a page, not the thread.
     fn below(&mut self, first: usize, count: usize) -> usize {
         let newest = count.saturating_sub(1);
         let rows = match count.checked_sub(1) {
@@ -160,7 +160,7 @@ impl<'a> Frame<'a> {
 
 /// Carries out what the reader asked for: a page back or forward, the first
 /// turn, or the tail. Moving by rows measures only the entries it crosses, so a
-/// page costs a page (issue #45).
+/// page costs a page.
 pub(crate) fn resolve(app: &mut App, width: u16, count: usize, ask: Ask, follow: &mut bool) {
     match ask {
         Ask::Home => {
@@ -186,7 +186,7 @@ pub(crate) fn resolve(app: &mut App, width: u16, count: usize, ask: Ask, follow:
 }
 
 /// Moves the window's top `rows` rows back into the thread, across as few
-/// entries as it crosses: the first turn is the ceiling (issue #45).
+/// entries as it crosses: the first turn is the ceiling.
 pub(crate) fn back(app: &mut App, width: u16, at: (usize, usize), rows: usize) -> (usize, usize) {
     let (mut entry, mut row) = at;
     let mut left = rows;
@@ -207,7 +207,7 @@ pub(crate) fn back(app: &mut App, width: u16, at: (usize, usize), rows: usize) -
 
 /// Moves the window's top `rows` rows towards the tail, or `None` when it runs
 /// past the newest row: past the newest row is the tail, and the tail is
-/// followed (issue #45).
+/// followed.
 pub(crate) fn forward(
     app: &mut App,
     width: u16,

@@ -1,4 +1,4 @@
-//! The overlays own their space (issue #49): the help list
+//! The overlays own their space: the help list
 //! wraps a description, sizes its box from the wrapped rows and scrolls
 //! itself, and the settings modal keeps its refusal and its keys on screen
 //! when the list of rows does not fit. Every fixture points the frame at a
@@ -78,7 +78,7 @@ fn type_text(app: &mut App, text: &str) {
 }
 
 /// `/settings`, typed and sent: the name opens the offer the catalogue makes,
-/// the first `Enter` takes it and the second sends it (issue #54).
+/// the first `Enter` takes it and the second sends it.
 fn open_settings(app: &mut App) {
     type_text(app, "/settings");
     press(app, KeyCode::Enter);

@@ -22,8 +22,7 @@ pub struct Summary {
     pub model: String,
     pub turns: Option<u32>,
     /// `final`, `max_turns`, `cancelled`, `error` — or `running`, said exactly
-    /// as the record says it: a record still saying `running` is a run that
-    /// never finished, and a list that guessed otherwise would be lying.
+    /// as the record says it: a record still saying `running` never finished.
     pub stopped: String,
     pub prompt: Option<String>,
 }

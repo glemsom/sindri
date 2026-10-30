@@ -40,7 +40,7 @@ fn lit(area: Rect, buf: &mut Buffer, ink: Color) {
 
 /// What the composer says while it holds nothing: the three ways a prompt can
 /// begin — asked, a path, or a command — so the first thing typed is not a
-/// guess (issue #46). It is drawn only over a composer with no text in it at
+/// guess. It is drawn only over a composer with no text in it at
 /// all, so it never sits in front of a draft.
 pub const PLACEHOLDER: &str = "Ask, or drop a log here · @ path · / command";
 

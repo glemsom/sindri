@@ -21,14 +21,14 @@ const MARGIN: u16 = 4;
 const HINTS: &str = "↑↓/Tab move · PgUp/PgDn page · Ctrl-U clear · Enter save · Esc discard";
 
 /// Draws the modal and answers with the field rows its box showed, which is
-/// what a page moves the cursor by (issue #49).
+/// what a page moves the cursor by.
 pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) -> usize {
     let width = area.width.saturating_sub(MARGIN * 2).clamp(30, 110);
     let columns = width.saturating_sub(2) as usize;
 
     // Above the list: the file saving writes to, and — when the door opened
     // the modal — what is absent. Pinned, because a row a user needs is never
-    // the row that fell off (issue #49).
+    // the row that fell off.
     let mut head: Vec<Line<'static>> = Vec::new();
     head.extend(text::wrap(
         text::glyphs(&[

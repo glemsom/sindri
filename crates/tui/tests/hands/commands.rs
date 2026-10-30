@@ -1,6 +1,5 @@
 //! The `/` offer: the commands the frame knows, ranked by what was typed, in
-//! the column the `@` offer uses — and only where a command can be sent
-//! (issue #54).
+//! the column the `@` offer uses — and only where a command can be sent.
 
 use super::*;
 use sindri_tui::command::COMMANDS;

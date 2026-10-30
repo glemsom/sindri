@@ -24,7 +24,7 @@ pub struct Launch {
     pub branch: Option<String>,
     pub sandbox: String,
     /// The wire this run speaks, in the provider's own name: the first frame
-    /// names it beside the model (issue #46).
+    /// names it beside the model.
     pub provider: String,
     /// The model this run asks: the one fact that says what the user is
     /// talking to.
