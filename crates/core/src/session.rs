@@ -242,29 +242,6 @@ fn derive(
     )
 }
 
-/// A session directory and its policy, without a record: the half of `open` a
-/// caller that is not a run needs — `sandbox exec` probes the sandbox a run
-/// would get and writes no record, and the frame builds its own until it holds
-/// a `Session` (T19). Both derive from the same functions `open` does, so the
-/// sandbox cannot be built one way here and another way in a run.
-pub fn prepare(
-    extras: &[PathBuf],
-    enforcement: Enforcement,
-) -> Result<(SessionDir, SandboxPolicy), String> {
-    let env = Env::ambient().map_err(|error| error.to_string())?;
-    let dir = directory(&env).map_err(|error| error.to_string())?;
-    let policy = derive(&env, &dir, extras, enforcement).map_err(|error| error.to_string())?;
-    Ok((dir, policy))
-}
-
-/// The policy a session that is already running would be bounded by with these
-/// extras: the same workspace and the same temp, so a saved setting is in force
-/// for the very next command without a new session (ADR-0014).
-pub fn rebounded(session: &SessionDir, extras: &[PathBuf]) -> Result<SandboxPolicy, String> {
-    let env = Env::ambient().map_err(|error| error.to_string())?;
-    derive(&env, session, extras, RUN_ENFORCEMENT).map_err(|error| error.to_string())
-}
-
 /// The policy every run starts from: the workspace and the extras writable,
 /// everything else read-only, network shared, bubblewrap unless asked otherwise.
 /// `doctor` builds a policy of its own from this, and writes no record.

@@ -14,8 +14,9 @@
 pub use sindri_harness as provider;
 
 /// A pseudo-terminal, for the tests that have to be a terminal to test the
-/// front door (ADR-0011).
+/// front door (ADR-0011), and the screen it draws on.
 pub mod pty;
+pub mod screen;
 
 use std::path::{Path, PathBuf};
 

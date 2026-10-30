@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use crossterm::event::{self, Event as TerminalEvent};
 use ratatui::DefaultTerminal;
+use sindri_core::cancel::Cancel;
 
 use crate::app::App;
 use crate::driver::{Driver, Tap, Task};
@@ -33,10 +34,13 @@ pub enum Ending {
 }
 
 /// Opens the frame on the alternate screen and runs it until the user leaves.
-pub fn open(launch: Launch, driver: Box<dyn Driver>) -> Ending {
+/// `cancel` is the launch's one flag: the front end has already pointed the
+/// process's signals at it, so a `kill -INT` ends the run in flight exactly as
+/// `Ctrl-C` does (ADR-0015 §8).
+pub fn open(launch: Launch, driver: Box<dyn Driver>, cancel: Cancel) -> Ending {
     match alternate_screen() {
         Some(mut terminal) => {
-            let ending = session(&mut terminal, launch, driver);
+            let ending = session(&mut terminal, launch, driver, cancel);
             release_mouse();
             ratatui::restore();
             ending
@@ -100,8 +104,13 @@ fn show_card(terminal: &mut DefaultTerminal, card: &Card) -> Ending {
 }
 
 /// The session itself: keys in, events in, one frame out.
-fn session(terminal: &mut DefaultTerminal, launch: Launch, driver: Box<dyn Driver>) -> Ending {
-    let mut app = App::new(launch, Face::detect());
+fn session(
+    terminal: &mut DefaultTerminal,
+    launch: Launch,
+    driver: Box<dyn Driver>,
+    cancel: Cancel,
+) -> Ending {
+    let mut app = App::new(launch, Face::detect()).with_cancel(cancel);
     let (tx, rx) = mpsc::channel::<Msg>();
     listen_for_keys(tx.clone());
     let jobs = drive(driver, tx.clone());

@@ -86,6 +86,10 @@ pub struct Finished {
     pub tokens: Tokens,
     /// The provider's complaint, when it failed.
     pub error: Option<String>,
+    /// Something the run could not do after it ended, in the frame's words: a
+    /// record that could not be closed is evidence lost, and evidence nobody is
+    /// told about is evidence dropped (ADR-0006, ADR-0015 §3).
+    pub note: Option<String>,
 }
 
 /// What the frame asks a front end to do: one prompt, run to an answer.
@@ -94,10 +98,12 @@ pub trait Driver: Send {
     fn run(&mut self, prompt: &str, cancel: Cancel, tap: Tap) -> Finished;
 
     /// Starts a fresh session — a new GUID, a new record, the same frame — and
-    /// says what the rail should now show. `/new` is the only caller; a front
-    /// end that cannot start one leaves the transcript as it was.
-    fn renew(&mut self) -> Option<Launch> {
-        None
+    /// says what the rail should now show. `/new` is the only caller. A session
+    /// is proved before it is adopted, so `Err` is why this one did not exist:
+    /// the thread, the transcript and the record being written all stay, and
+    /// the reason is said where an error belongs (ADR-0015 §2).
+    fn renew(&mut self) -> Result<Launch, String> {
+        Err("this front end cannot start a new session".to_string())
     }
 
     /// Reads the config file again, so the next prompt runs on what was just

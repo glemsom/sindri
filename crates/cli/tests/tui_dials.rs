@@ -14,7 +14,9 @@
 mod common;
 
 use common::provider::{MockProvider, Reply};
-use common::pty::{CLEAR_FIELD, DOWN, ENTER, Pty, spawn, type_line};
+use std::io::Write;
+
+use common::pty::{CLEAR_FIELD, DOWN, ENTER, Pty, expect, spawn, type_line};
 use common::{Env, TEST_KEY, stderr, stdout, write_config};
 
 /// The fake credential a user types into the modal: shaped like a real one so a
@@ -49,25 +51,29 @@ fn spawn_with(env: &Env, pty: &Pty, mock: &MockProvider) -> std::process::Child 
 
 /// Types into the settings modal: down to the field, clear it, and fill it.
 fn set_field(pty: &Pty, downs: usize, value: &str) {
+    // One write per cursor move: a `DOWN` split across reads is an `Esc` and
+    // then two typed characters, and the modal is gone.
+    let mut port = pty.port();
     for _ in 0..downs {
-        for byte in DOWN {
-            pty.type_key(*byte);
-        }
+        port.write_all(DOWN).expect("a cursor move");
     }
+    drop(port);
     pty.type_key(CLEAR_FIELD);
     for byte in value.bytes() {
         pty.type_key(byte);
     }
 }
 
-/// A drawn frame that does not say `want` is a failure, not a hang.
-fn expect(pty: &Pty, child: &mut std::process::Child, want: &str) {
-    let drawn = pty.wait_for_text(child, want);
+/// The same, read off the screen: a fact the rail changes one character of is
+/// written once as a character, and only the screen puts the row back together.
+fn expect_on_screen(pty: &Pty, child: &mut std::process::Child, want: &str) -> String {
+    let drawn = pty.wait_for_screen(child, want);
     if !drawn.contains(want) {
         let _ = child.kill();
         let _ = child.wait();
-        panic!("the frame never said {want:?}, drew: {drawn:?}");
+        panic!("the screen never said {want:?}, drew: {drawn:?}");
     }
+    drawn
 }
 
 #[test]
@@ -120,6 +126,66 @@ fn a_model_changed_in_settings_answers_the_next_prompt_on_the_same_thread() {
     assert!(
         file.contains("model = \"model-two\""),
         "the saved value is in the one config file: {file}"
+    );
+}
+
+#[test]
+fn a_saved_extra_path_is_in_force_for_the_very_next_command() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: the saved path is not tested here");
+        return;
+    };
+    let env = Env::new();
+    // A directory beside the workspace, which no run may write until it is
+    // saved as an extra.
+    let scratch = env
+        .workspace
+        .parent()
+        .expect("a workspace's parent")
+        .join("scratch");
+    std::fs::create_dir_all(&scratch).expect("scratch");
+    let scratch = scratch.canonicalize().expect("canonical scratch");
+    let mock = MockProvider::start(vec![Reply::answer("answered")]);
+    write_config(&env, &config_for(&mock, "model-one", None));
+    let mut child = spawn_with(&env, &pty, &mock);
+
+    // The rail states the posture a run is bounded by: the workspace alone.
+    let opened = expect_on_screen(&pty, &mut child, "bwrap · 1 writable");
+    assert!(!opened.is_empty(), "the frame is drawing");
+    type_line(&pty, "/settings");
+    expect(&pty, &mut child, "extra_writable_paths");
+    set_field(&pty, 7, &scratch.display().to_string());
+    pty.type_key(ENTER);
+    expect(&pty, &mut child, "settings saved");
+
+    // The session was rebased, not rebuilt: the posture the next command runs
+    // under is the one just saved (ADR-0015 §4).
+    let screen = expect_on_screen(&pty, &mut child, "bwrap · 2 writable");
+    // A rebase is the same session bounded by the settings just saved, not a
+    // second one: the rail's GUID and the record on disk are still the launch's.
+    let opened = only_session(&env);
+    assert!(
+        screen.contains(&opened[..8]),
+        "the rail still shows the session the launch opened: {screen}"
+    );
+    let (code, _) = pty.quit(&mut child);
+    assert_eq!(
+        only_session(&env),
+        opened,
+        "saving settings opens no session"
+    );
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+
+    let file = std::fs::read_to_string(env.config.join("sindri/config.toml")).expect("the config");
+    assert!(
+        file.contains(&scratch.display().to_string()),
+        "the saved path is in the one config file: {file}"
+    );
+    let recorded = only_session(&env);
+    let shown = shown(&env, &recorded);
+    assert!(
+        shown.contains("bubblewrap"),
+        "and the record still says how the run was bounded: {shown}"
     );
 }
 

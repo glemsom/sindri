@@ -7,9 +7,9 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// A one-way request to stop. Cheap to clone, so every part of a run shares the
-/// same flag: raise it once and the model call, the command and the loop all
-/// see it (ADR-0004).
+/// A request to stop, raised by a key or a signal and put down between runs.
+/// Cheap to clone, so every part of a run shares the same flag: raise it once
+/// and the model call, the command and the loop all see it (ADR-0004).
 #[derive(Debug, Clone, Default)]
 pub struct Cancel(Arc<AtomicBool>);
 
@@ -25,6 +25,13 @@ impl Cancel {
         self.0.store(true, Ordering::SeqCst);
     }
 
+    /// Puts the flag down, for a front end that runs more than one prompt in a
+    /// launch: one flag per process, cleared between prompts, so a cancel ends
+    /// one run and never the next (ADR-0015 §8).
+    pub fn clear(&self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
+
     /// Whether the run has been asked to stop.
     pub fn is_triggered(&self) -> bool {
         self.0.load(Ordering::SeqCst)
@@ -34,6 +41,19 @@ impl Cancel {
 #[cfg(test)]
 mod tests {
     use super::Cancel;
+
+    #[test]
+    fn a_cleared_flag_is_down_for_the_next_run() {
+        let cancel = Cancel::new();
+        let shared = cancel.clone();
+        cancel.trigger();
+        assert!(shared.is_triggered(), "a raised flag stops the run");
+        shared.clear();
+        assert!(
+            !cancel.is_triggered(),
+            "the front end clears it between prompts, so the next run starts fresh"
+        );
+    }
 
     #[test]
     fn a_clone_raises_the_same_flag() {

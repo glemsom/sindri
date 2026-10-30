@@ -139,6 +139,7 @@ fn the_rail_is_a_column_at_a_hundred_columns() {
             cached: 10_168,
         },
         error: None,
+        note: None,
     });
     let rows = screen(&mut app, 100, 26);
     let rail: String = rows.iter().map(|row| rail_of(row)).collect();
@@ -220,6 +221,7 @@ fn a_provider_error_appears_in_the_transcript_where_it_happened() {
         turns: 1,
         tokens: Tokens::default(),
         error: Some("provider error (HTTP 529): overloaded".to_string()),
+        note: None,
     });
     let rows = screen(&mut app, 100, 24);
     assert!(
@@ -230,6 +232,29 @@ fn a_provider_error_appears_in_the_transcript_where_it_happened() {
     assert!(
         rail.contains("error"),
         "the rail names the stop reason: {rail:#?}"
+    );
+}
+
+#[test]
+fn a_record_that_could_not_be_closed_is_said_in_the_transcript() {
+    let mut app = app();
+    app.finished(Finished {
+        stopped: Stop::Final,
+        turns: 1,
+        note: Some(
+            "session 4f1c8f2e: the record could not be finished: no space left on device"
+                .to_string(),
+        ),
+        ..Finished::default()
+    });
+    let rows = screen(&mut app, 100, 24);
+    assert!(
+        any(&rows, "the record could not be finished"),
+        "a record the run could not close is said out loud, never dropped: {rows:#?}"
+    );
+    assert!(
+        any(&rows, "no space left"),
+        "and the reason is the record's own: {rows:#?}"
     );
 }
 

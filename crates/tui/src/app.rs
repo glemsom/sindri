@@ -21,6 +21,20 @@ use crate::overlay::Overlay;
 use crate::rail::{Launch, Rail};
 use crate::selection::{Selection, Viewport};
 
+/// Where `/new` has got to. Two states would not do: the frame marks the request,
+/// the loop hands it to the front end once, and nothing may run until an answer
+/// arrives either way (ADR-0015 §2).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Renew {
+    /// Nothing is being replaced.
+    #[default]
+    Idle,
+    /// `/new` was typed, and the loop has not handed it on yet.
+    Asked,
+    /// The front end has it, and has not said how it went.
+    Pending,
+}
+
 /// A screenful is the default page, before a frame has said how tall it is.
 const DEFAULT_PAGE: usize = 10;
 
@@ -33,6 +47,9 @@ pub struct App {
     pub(crate) queue: VecDeque<String>,
     /// The flag of the run in flight, if there is one.
     pub(crate) running: Option<Cancel>,
+    /// The one flag of the launch: a key or a signal raises it, the frame puts
+    /// it down between prompts, and every run is given a clone (ADR-0015 §8).
+    pub(crate) cancel: Cancel,
     /// Whether Enter has been pressed on the draft since it was last started:
     /// typing alone never launches a run.
     pub(crate) sent: bool,
@@ -62,8 +79,10 @@ pub struct App {
     pub(crate) overlay: Option<Overlay>,
     /// The completion whose walk is still running, if any.
     pub(crate) walking: Option<(u64, String)>,
-    /// Whether `/new` has asked the front end for a fresh session.
-    pub(crate) renew: bool,
+    /// Where `/new` has got to: the frame asks the front end for a fresh session
+    /// and waits for the answer before anything runs in one that is about to be
+    /// replaced (ADR-0015 §2).
+    pub(crate) renew: Renew,
     /// How many rows a keyboard selection spans, from the newest row upwards.
     pub(crate) selecting: usize,
     /// A counter for the walks that answer a completion: a stale answer is
@@ -97,6 +116,7 @@ impl App {
             composer: Composer::new(),
             queue: VecDeque::new(),
             running: None,
+            cancel: Cancel::new(),
             sent: false,
             early: Vec::new(),
             quit: false,
@@ -111,12 +131,20 @@ impl App {
             completion: None,
             overlay: None,
             walking: None,
-            renew: false,
+            renew: Renew::Idle,
             selecting: 0,
             generation: 0,
             config: None,
             reload: false,
         }
+    }
+
+    /// The same frame, with the flag its keys and the process's signals raise:
+    /// one flag per launch, so a `kill -INT` ends the run in flight exactly as
+    /// `Ctrl-C` does. A test gets a flag of its own.
+    pub fn with_cancel(mut self, cancel: Cancel) -> Self {
+        self.cancel = cancel;
+        self
     }
 
     /// The same frame, editing the config file at `path`: the seam a test uses
@@ -202,9 +230,14 @@ impl App {
         self.walking.take()
     }
 
-    /// Whether `/new` is waiting for a fresh session from the front end.
+    /// Whether the frame still has to ask the front end for a fresh session:
+    /// asking once is the whole of it, and the answer comes back as `renewed`.
     pub fn take_renew(&mut self) -> bool {
-        std::mem::take(&mut self.renew)
+        if self.renew == Renew::Asked {
+            self.renew = Renew::Pending;
+            return true;
+        }
+        false
     }
 
     /// Whether a saved setting is waiting for the front end to read it again.
@@ -235,16 +268,29 @@ impl App {
         }
     }
 
-    /// A fresh session from the front end: the rail is replaced, the transcript
-    /// is already empty, and the new GUID is said where it happened.
-    pub fn renewed(&mut self, launch: Option<Launch>) {
-        match launch {
-            Some(launch) => {
+    /// A fresh session from the front end, or the reason there is none. A
+    /// session is proved before it is adopted, so the transcript, the queue and
+    /// the record the launch is writing all survive a `/new` that failed, and
+    /// the reason is said where it happened (ADR-0015 §2).
+    pub fn renewed(&mut self, renewed: Result<Launch, String>) {
+        match renewed {
+            Ok(launch) => {
+                self.renew = Renew::Idle;
                 let session = launch.session.clone();
+                self.entries.clear();
+                self.queue.clear();
+                self.early.clear();
+                self.heights.clear();
+                self.walking = None;
+                self.scroll = 0;
                 self.rail = Rail::new(launch);
+                self.dirty();
                 self.note_info(format!("new session {session}"));
             }
-            None => self.note_error("this front end cannot start a new session".to_string()),
+            Err(error) => {
+                self.renew = Renew::Idle;
+                self.note_error(error);
+            }
         }
     }
 

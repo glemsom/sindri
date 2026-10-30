@@ -16,6 +16,7 @@ use std::process::{Child, Stdio};
 use std::time::{Duration, Instant};
 
 use super::Env;
+use super::screen::Screen;
 
 /// The escape sequence that enters the alternate screen: the frame's first act.
 pub const ALTERNATE_SCREEN: &str = "\u{1b}[?1049h";
@@ -35,6 +36,10 @@ pub const DEADLINE: Duration = Duration::from_secs(20);
 pub struct Pty {
     master: OwnedFd,
     slave: OwnedFd,
+    /// What the frame has drawn, as a terminal would remember it: the escapes
+    /// applied rather than stripped, so a row a later frame overwrote says only
+    /// what was drawn there last.
+    screen: std::sync::Mutex<Screen>,
 }
 
 impl Pty {
@@ -88,7 +93,11 @@ impl Pty {
                 return None;
             }
         }
-        Some(Pty { master, slave })
+        Some(Pty {
+            master,
+            slave,
+            screen: std::sync::Mutex::default(),
+        })
     }
 
     /// Everything the frame has drawn so far, read until `want` appears or the
@@ -101,7 +110,11 @@ impl Pty {
         while Instant::now() < deadline {
             match port.read(&mut buffer) {
                 Ok(0) => break,
-                Ok(read) => seen.push_str(&String::from_utf8_lossy(&buffer[..read])),
+                Ok(read) => {
+                    let text = String::from_utf8_lossy(&buffer[..read]).to_string();
+                    self.look(&text);
+                    seen.push_str(&text);
+                }
                 Err(error) if error.kind() == ErrorKind::WouldBlock => {}
                 Err(error) if error.kind() == ErrorKind::Interrupted => {}
                 // The child is gone: what it drew is all there is.
@@ -129,7 +142,11 @@ impl Pty {
         while Instant::now() < deadline {
             match port.read(&mut buffer) {
                 Ok(0) => break,
-                Ok(read) => raw.push_str(&String::from_utf8_lossy(&buffer[..read])),
+                Ok(read) => {
+                    let text = String::from_utf8_lossy(&buffer[..read]).to_string();
+                    self.look(&text);
+                    raw.push_str(&text);
+                }
                 Err(error) if error.kind() == ErrorKind::WouldBlock => {}
                 Err(error) if error.kind() == ErrorKind::Interrupted => {}
                 Err(_) => break,
@@ -143,6 +160,47 @@ impl Pty {
             std::thread::sleep(Duration::from_millis(20));
         }
         visible(&raw)
+    }
+
+    /// Feeds one read into the screen the frame is drawing on.
+    fn look(&self, text: &str) {
+        if let Ok(mut screen) = self.screen.lock() {
+            screen.feed(text);
+        }
+    }
+
+    /// What is on the screen now, as a reader would see it.
+    pub fn screen(&self) -> String {
+        self.screen
+            .lock()
+            .map(|screen| screen.text())
+            .unwrap_or_default()
+    }
+
+    /// Reads until what is *on the screen* says `want`, and gives the screen
+    /// back: unlike `wait_for_text`, a row redrawn after the first write is read
+    /// as the frame last drew it.
+    pub fn wait_for_screen(&self, child: &mut Child, want: &str) -> String {
+        let deadline = Instant::now() + DEADLINE;
+        let mut port = self.port();
+        let mut buffer = [0u8; 4096];
+        while Instant::now() < deadline {
+            match port.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(read) => self.look(&String::from_utf8_lossy(&buffer[..read])),
+                Err(error) if error.kind() == ErrorKind::WouldBlock => {}
+                Err(error) if error.kind() == ErrorKind::Interrupted => {}
+                Err(_) => break,
+            }
+            if self.screen().contains(want) {
+                return self.screen();
+            }
+            if child.try_wait().is_ok_and(|status| status.is_some()) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        self.screen()
     }
 
     /// Types one byte at the terminal, as a keyboard would.
@@ -177,7 +235,11 @@ impl Pty {
         loop {
             match port.read(&mut buffer) {
                 Ok(0) | Err(_) => return seen.clone(),
-                Ok(read) => seen.push_str(&String::from_utf8_lossy(&buffer[..read])),
+                Ok(read) => {
+                    let text = String::from_utf8_lossy(&buffer[..read]).to_string();
+                    self.look(&text);
+                    seen.push_str(&text);
+                }
             }
         }
     }
@@ -194,6 +256,17 @@ pub fn spawn(env: &Env, pty: &Pty, vars: &[(&str, &str)]) -> Child {
         .stdout(Stdio::from(pty.slave.try_clone().expect("a pty slave")))
         .stderr(Stdio::from(pty.slave.try_clone().expect("a pty slave")));
     command.spawn().expect("spawn sindri on a terminal")
+}
+
+/// A drawn frame that does not say `want` is a failure, not a hang: kills the
+/// run and reports what it did draw.
+pub fn expect(pty: &Pty, child: &mut Child, want: &str) {
+    let drawn = pty.wait_for_text(child, want);
+    if !drawn.contains(want) {
+        let _ = child.kill();
+        let _ = child.wait();
+        panic!("the frame never said {want:?}, drew: {drawn:?}");
+    }
 }
 
 /// Types a whole prompt: the characters, then Enter.

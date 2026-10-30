@@ -20,7 +20,9 @@ cap** (`max_turns`, default 250).
 
 **cancel** — Ctrl-C (SIGINT): one flag the loop and the bash executor share. The
 loop stops between turns; a running command's process group is killed; nothing
-reaches stdout; exit 130.
+reaches stdout; exit 130. The frame holds one flag for the whole launch, raised
+by a key or a signal and put down between prompts, so a cancel ends the run it
+was raised for and never the next (ADR-0015).
 
 ## Sandbox
 
