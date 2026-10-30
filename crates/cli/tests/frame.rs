@@ -16,6 +16,7 @@ use std::time::Duration;
 
 use common::provider::{MockProvider, Reply, frames};
 use common::pty::{ALTERNATE_SCREEN, Pty, expect, spawn, type_line};
+use common::screen;
 use common::{Env, TEST_KEY, host_path, path_without, required_binaries, write_config};
 
 #[test]
@@ -283,12 +284,52 @@ fn a_record_that_cannot_be_finished_is_said_in_the_transcript() {
     assert_eq!(running.len(), 1, "one run, one record: {running:?}");
     std::fs::remove_dir_all(sessions(&env).join(&running[0])).expect("remove the record");
 
-    let drawn = pty.wait_for_text(&mut child, "could not be finished");
+    // The screen, not the stream: the note wraps, and a repaint that finishes
+    // the sentence on a later row must not decide whether this passes.
+    let drawn = pty.wait_for_words(&mut child, "the record could not be finished");
     let (code, _) = pty.quit(&mut child);
     assert_eq!(code, Some(0), "leaving the frame is not a failure");
     assert!(
-        drawn.contains("the record could not be finished"),
+        screen::says(&drawn, "the record could not be finished"),
         "a record the run could not close is said where the user is looking: {drawn:?}"
+    );
+    assert!(
+        screen::says(&drawn, "os error 2"),
+        "and the note keeps its cause, or it is only noise: {drawn:?}"
+    );
+}
+
+/// The screen the note test below draws, as CI drew it: the sentence wraps at
+/// the transcript's 68 columns (marker `! ` on both rows), and the rail's facts
+/// sit to the right of each. The first row fills its column exactly, so the
+/// rail starts with no gap at all.
+const NOTE_ROWS: &str = "\
+! session 49df10bb-3cd7-47f8-9d22-7b58b0fbbc10: the record could not│ sandbox bwrap · 1 writable   \n\
+! be finished: No such file or directory (os error 2)               │ turns 1/250          ";
+
+#[test]
+fn a_note_that_wrapped_is_found_by_its_words_not_by_a_rows_substring() {
+    // The red CI saw: a repaint finishes the sentence on a later row, with the
+    // marker in front of it, so no row ever holds the phrase.
+    assert!(
+        !NOTE_ROWS.contains("the record could not be finished"),
+        "the fixture is the wrapped screen, not a single row: {NOTE_ROWS:?}"
+    );
+    assert!(
+        screen::says(NOTE_ROWS, "the record could not be finished"),
+        "a sentence that wraps is still said: {NOTE_ROWS:?}"
+    );
+    assert!(
+        screen::says(NOTE_ROWS, "No such file or directory (os error 2)"),
+        "and its reason is read across the wrap too: {NOTE_ROWS:?}"
+    );
+
+    // The same screen with its second row saying something else, in as many
+    // columns: the wrap and the rail are untouched.
+    let another_note = NOTE_ROWS.replace("be finished:", "be dropped:");
+    assert!(
+        !screen::says(&another_note, "the record could not be finished"),
+        "a screen that says something else does not say this: {another_note:?}"
     );
 }
 
