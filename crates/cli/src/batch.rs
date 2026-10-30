@@ -10,12 +10,12 @@ use std::sync::mpsc;
 use clap::ValueEnum;
 use sindri_core::agent::{BashTool, Dials, Event, Stopped};
 use sindri_core::cancel::Cancel;
-use sindri_core::config::{Config, Overrides};
+use sindri_core::config::Overrides;
 use sindri_core::output;
 use sindri_core::provider::{Client, Error};
-use sindri_core::session::{Env, Session};
 use sindri_types::ExitCode;
 
+use crate::boot::{self, Boot};
 use crate::{failure, signal, verbose};
 
 /// How a finished run reaches stdout (ADR-0004): the answer plus one newline,
@@ -75,15 +75,14 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     };
 
     let (format, verbose) = (flags.format, flags.verbose);
-    // The process is read here, once: the workspace, the sandbox PATH and the
-    // state root below this line are values (ADR-0015).
-    let env = match Env::ambient() {
-        Ok(env) => env,
-        Err(error) => return failure::Failure::Environment(error).report(),
-    };
-    let config = match Config::resolve(flags.into()) {
-        Ok(config) => config,
-        Err(error) => return failure::config_error(error),
+    // One door starts the run: the process is read once, the config resolved
+    // once and the session opened once, in the one order (ADR-0015). Boot prints
+    // nothing on the way in, and a run that cannot be evidenced is not a run.
+    let Boot {
+        config, session, ..
+    } = match boot::open(flags.into()) {
+        Ok(boot) => boot,
+        Err(failure) => return failure.report(),
     };
     // Nothing written by a clone may configure the agent, and staying silent
     // about it would leave a user editing a file that is read by nobody.
@@ -93,14 +92,6 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
             path.display()
         );
     }
-
-    // Every run leaves a record (ADR-0006), and a run that cannot write one is
-    // not a run: the evidence is what makes the agent's actions reviewable. The
-    // session is the one module that starts one, in the one order (ADR-0015).
-    let session = match Session::open(&env, &config) {
-        Ok(session) => session,
-        Err(error) => return failure::Failure::Start(error).report(),
-    };
 
     // One flag for the whole run: Ctrl-C raises it, the loop stops on it between
     // turns, and the executor kills a running command's group on it.
