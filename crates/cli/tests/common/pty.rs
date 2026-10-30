@@ -235,6 +235,43 @@ impl Pty {
         self.wait_until(child, &|screen: &str| says(screen, want))
     }
 
+    /// Waits for the next frame to be drawn whole. A frame ends by showing the
+    /// terminal's cursor, and an idle frame draws nothing (#42), so the next
+    /// end after a keystroke is the frame that keystroke drew. A test that
+    /// reads the screen after a key comes here first: a frame arrives as it is
+    /// written, so a row it has not reached yet still says what was there
+    /// before.
+    pub fn wait_for_frame(&self, child: &mut Child) -> String {
+        let deadline = Instant::now() + DEADLINE;
+        let mut port = self.port();
+        let mut drawn = String::new();
+        let mut buffer = [0u8; 4096];
+        while Instant::now() < deadline {
+            match port.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(read) => {
+                    let text = String::from_utf8_lossy(&buffer[..read]).to_string();
+                    self.look(&text);
+                    drawn.push_str(&text);
+                }
+                Err(error) if error.kind() == ErrorKind::WouldBlock => {}
+                Err(error) if error.kind() == ErrorKind::Interrupted => {}
+                Err(_) => break,
+            }
+            if drawn.matches(SHOW_CURSOR).count() >= 1 {
+                // The cursor's own move trails the sequence that shows it: the
+                // frame is done, and what is left is not a row.
+                self.drain(&mut drawn);
+                return self.screen();
+            }
+            if child.try_wait().is_ok_and(|status| status.is_some()) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        self.screen()
+    }
+
     fn wait_until(&self, child: &mut Child, reached: &dyn Fn(&str) -> bool) -> String {
         let deadline = Instant::now() + DEADLINE;
         let mut port = self.port();

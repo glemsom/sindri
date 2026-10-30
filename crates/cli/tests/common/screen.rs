@@ -132,29 +132,40 @@ impl Screen {
 /// its first word, which is where a wrap lands.
 pub fn says(text: &str, phrase: &str) -> bool {
     let want = words(phrase);
+    if want.is_empty() {
+        return true;
+    }
     let mut from = 0;
     for row in text.lines() {
         let row = words(row);
         // The rest of a phrase is only ever at the start of the next row: what
         // follows a row's own words is the rail, and the rail is not speech.
-        let starts = if from == 0 { 0..row.len() } else { 0..1 };
-        let mut carried = from;
-        for start in starts {
-            let mut taken = from;
-            while taken < want.len()
-                && start + taken - from < row.len()
-                && row[start + taken - from] == want[taken]
-            {
-                taken += 1;
-            }
-            if taken == want.len() {
-                return true;
-            }
-            carried = carried.max(taken);
+        let mut carried = 0;
+        if from > 0 {
+            carried = from + matched(&row, 0, &want[from..]);
+        }
+        // Every row starts the phrase afresh as well: a row that carries
+        // nothing on must not leave the reader looking for a phrase that began
+        // somewhere it did not — a rail's `tokens 0 in` is not a phrase's `in`.
+        for start in 0..row.len() {
+            carried = carried.max(matched(&row, start, &want));
+        }
+        if carried == want.len() {
+            return true;
         }
         from = carried;
     }
     false
+}
+
+/// How many of `want`'s words `row` says from `start`, in order.
+fn matched(row: &[String], start: usize, want: &[String]) -> usize {
+    row.get(start..)
+        .unwrap_or_default()
+        .iter()
+        .zip(want)
+        .take_while(|(said, wanted)| said == wanted)
+        .count()
 }
 
 fn words(text: &str) -> Vec<String> {

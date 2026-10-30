@@ -17,6 +17,16 @@ use common::provider::{MockProvider, Reply};
 use common::pty::{ALTERNATE_SCREEN, Pty, expect, spawn, type_line};
 use common::{Env, TEST_KEY, screen};
 
+/// The words only the transcript's note says: the modal offers the key's
+/// variables, and the composer says what it cannot do, but neither says where
+/// the note sends you (#47's missing-key note).
+const NOTE: &str = "in the settings modal";
+
+/// The box the door opens, as the terminal draws its title: what Esc takes
+/// back, and the one thing the frame before the key draws that the frame after
+/// it does not.
+const MODAL: &str = "╭ settings ";
+
 /// A first run: no config file, no credential, and everything else a run needs.
 fn no_key(mock: &MockProvider) -> Vec<(&'static str, String)> {
     vec![
@@ -136,8 +146,17 @@ fn esc_leaves_the_frame_open_for_reading_and_the_composer_says_what_it_cannot_do
     let mut child = spawned(&env, &pty, &vars);
 
     expect(&pty, &mut child, "no credential");
+    // The door's own frame, drawn whole, then the one Esc draws. Reading the
+    // screen the moment the composer's words appear is reading a frame from
+    // before the key: since #46 the composer says what it cannot do under the
+    // box, and a frame arrives as it is written.
+    pty.wait_for_frame(&mut child);
     pty.type_key(0x1b);
-    let left = pty.wait_for_words(&mut child, "a prompt cannot be sent");
+    let left = pty.wait_for_frame(&mut child);
+    assert!(
+        !left.contains(MODAL),
+        "Esc takes the settings box off the frame: {left:?}"
+    );
     assert!(
         screen::says(&left, "a prompt cannot be sent"),
         "the composer says what it cannot do after Esc: {left:?}"
@@ -145,6 +164,10 @@ fn esc_leaves_the_frame_open_for_reading_and_the_composer_says_what_it_cannot_do
     assert!(
         screen::says(&left, "no key"),
         "and the transcript says the key is missing: {left:?}"
+    );
+    assert!(
+        screen::says(&left, NOTE),
+        "and says it once, in the transcript's own words: {left:?}"
     );
 
     // Usable: the bindings open over it and close again, then the frame leaves
