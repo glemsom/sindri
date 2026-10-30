@@ -18,6 +18,8 @@ use sindri_tui::render;
 use sindri_tui::{App, Face, Launch};
 
 const RAIL: usize = 32;
+/// The label field the rail draws: nine columns, `workspace` whole.
+const LABEL: usize = 9;
 /// The margin's own first column at 100 columns: the transcript, the canvas
 /// between the words and the rail, and then the rail's 32. A terminal that
 /// speaks Kitty graphics draws the seam's light strip there, and the
@@ -93,7 +95,12 @@ fn rails(rows: &[String], width: u16) -> Vec<String> {
 /// The rail's row that states `label`, found by the label's own column rather
 /// than by a substring: `sessions` in a temp path is not the session fact.
 fn fact<'a>(rails: &'a [String], label: &str) -> &'a String {
-    let field = |rail: &String| -> String { rail.chars().take(9).collect::<String>() };
+    let field = |rail: &String| -> String {
+        rail.chars()
+            .skip(render::RAIL_INSET)
+            .take(LABEL)
+            .collect::<String>()
+    };
     rails
         .iter()
         .find(|rail| field(rail).trim_end() == label)
@@ -105,7 +112,7 @@ fn fact<'a>(rails: &'a [String], label: &str) -> &'a String {
 fn value(rails: &[String], label: &str) -> String {
     fact(rails, label)
         .chars()
-        .skip(10)
+        .skip(render::RAIL_INSET + LABEL + 1)
         .collect::<String>()
         .trim_start_matches(['·', ' '])
         .trim_end()
@@ -214,7 +221,7 @@ fn the_rail_is_a_column_at_a_hundred_columns() {
     }
     // A GUID and a temp path longer than the rail keep both their ends on one
     // row: the record is always findable, never half an id.
-    for fragment in ["4f1c8f2e-8a…", "3f0e5c1a77", "/state/sind…", "1c8f2e/tmp"] {
+    for fragment in ["4f1c8f2e-8…", "f0e5c1a77", "/state/sin…", "c8f2e/tmp"] {
         assert!(
             rails.iter().any(|rail| rail.contains(fragment)),
             "the rail says {fragment:?}: {rows:#?}"
@@ -250,8 +257,8 @@ fn the_rail_collapses_to_a_one_line_strip_below_a_hundred_columns() {
         "the posture never hides: {strip:?}"
     );
     assert!(
-        strip.starts_with("cache"),
-        "the strip starts at the left edge: {strip:?}"
+        strip.starts_with(&format!("{}cache", " ".repeat(render::RAIL_INSET))),
+        "the strip starts inside the rail's inset, as the column's facts do: {strip:?}"
     );
 }
 

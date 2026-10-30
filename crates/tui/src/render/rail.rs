@@ -3,9 +3,11 @@
 //! rather than leaving a hole. The rail is chrome, not a surface: it lets the
 //! canvas through beside the words and draws no fill, so the frame holds one
 //! panel the user owns — the composer — and the rail says its facts as a
-//! ledger: labels in a fixed field, dot leaders across the gap, values hanging
-//! off one edge and a hairline between the blocks.
+//! ledger: labels in a fixed field inset by `RAIL_INSET` from the seam, dot
+//! leaders across the gap, values hanging off one edge and a hairline between
+//! the blocks.
 
+use super::RAIL_INSET;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -177,10 +179,10 @@ fn rows(facts: &[Fact]) -> usize {
 /// a time, never in silence.
 fn more(hidden: usize) -> Row {
     let said = format!("+{hidden} more");
-    Row::said(
-        Line::from(Span::styled(format!(" {said}"), theme::faint())),
-        said,
-    )
+    // Inside the inset, like a fact's label: the row is the column's, not a
+    // fact's, but it starts where they start.
+    let line = format!("{}{said}", " ".repeat(RAIL_INSET));
+    Row::said(Line::from(Span::styled(line, theme::faint())), said)
 }
 
 fn row(fact: &Fact, width: usize) -> Row {
@@ -202,8 +204,8 @@ fn row(fact: &Fact, width: usize) -> Row {
         _ => {
             // The figure hangs off the rail's last column, so every value in
             // the ledger ends on one edge and can be read down it.
-            let said = value(fact, width.saturating_sub(LEDGER));
-            let gap = width.saturating_sub(LEDGER + said.chars().count());
+            let said = value(fact, width.saturating_sub(RAIL_INSET + LEDGER));
+            let gap = width.saturating_sub(RAIL_INSET + LEDGER + said.chars().count());
             let leader = leader(gap);
             // A figure that has just grown is pointed at for a moment, so the
             // motion is visible rather than inferred.
@@ -214,6 +216,7 @@ fn row(fact: &Fact, width: usize) -> Row {
             };
             Row::said(
                 Line::from(vec![
+                    Span::raw(" ".repeat(RAIL_INSET)),
                     Span::styled(format!("{:<LABEL$} ", fact.label()), theme::faint()),
                     leader,
                     Span::styled(said.clone(), style),
@@ -263,8 +266,14 @@ pub(crate) fn chip() -> ratatui::style::Style {
 
 pub fn strip(app: &App, area: Rect, buf: &mut Buffer) {
     // The strip is one row, and what it says already fits it: what was said is
-    // shortened or dropped where it was chosen rather than cut here.
-    let text = app.rail().strip(area.width as usize, app.now());
-    let line = Line::from(Span::styled(text, theme::faint()));
-    Paragraph::new(line).render(area, buf);
+    // shortened or dropped where it was chosen rather than cut here. It carries
+    // the ledger's inset too, so the line's first word is off the seam as every
+    // fact's is, and the room is asked for without it.
+    let room = (area.width as usize).saturating_sub(RAIL_INSET);
+    let line = format!(
+        "{}{}",
+        " ".repeat(RAIL_INSET),
+        app.rail().strip(room, app.now())
+    );
+    Paragraph::new(Line::from(Span::styled(line, theme::faint()))).render(area, buf);
 }

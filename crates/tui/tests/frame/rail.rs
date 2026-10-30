@@ -247,13 +247,30 @@ fn the_rule_separates_the_numbers_from_what_the_run_is() {
     );
     for row in rows.iter().take(20) {
         let rail = rail_of(row);
-        assert!(
-            rail.trim().is_empty()
-                || rail.starts_with(|cell: char| cell.is_alphabetic())
-                || rail.trim_start().starts_with('⬢')
-                || rail.starts_with('─'),
-            "every fact of the rail starts at its first column: {row:?}"
-        );
+        if rail.trim().is_empty() {
+            continue;
+        }
+        // A row of the rail is one of four things, and each has one column it
+        // may start at: blank canvas, the rule — the column's, so it spans the
+        // width — the chip's raised run, right-aligned on the values' edge, and
+        // everything else, which is a fact or the row that counts the lost ones
+        // and starts inside the inset so no word sits against the seam.
+        let text = rail.trim_start();
+        let inset = rail.chars().count() - text.chars().count();
+        if text.starts_with('─') {
+            assert_eq!(inset, 0, "the rule spans the rail's width: {row:?}");
+        } else if text.starts_with('⬢') {
+            assert!(
+                rail.ends_with(text),
+                "the chip ends on the rail's last column: {row:?}"
+            );
+        } else {
+            assert_eq!(
+                inset,
+                render::RAIL_INSET,
+                "every fact starts inside the rail's inset: {row:?}"
+            );
+        }
     }
 }
 

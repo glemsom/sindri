@@ -191,6 +191,8 @@ fn ctrl_y_on_an_answer_holding_a_picture_copies_its_caption_once_and_no_blank_ro
 
 /// The rail's own columns of a 100-column frame.
 const RAIL: usize = 32;
+/// The label field the rail draws: nine columns, `workspace` whole.
+const LABEL: usize = 9;
 
 /// The rail's text of one row, at 100 columns.
 fn rail_of(row: &str) -> String {
@@ -200,7 +202,15 @@ fn rail_of(row: &str) -> String {
 /// The row of the rail that states `label`, found by the label's own column.
 fn rail_row(rows: &[String], label: &str) -> usize {
     rows.iter()
-        .position(|row| rail_of(row).chars().take(9).collect::<String>().trim_end() == label)
+        .position(|row| {
+            rail_of(row)
+                .chars()
+                .skip(render::RAIL_INSET)
+                .take(LABEL)
+                .collect::<String>()
+                .trim_end()
+                == label
+        })
         .unwrap_or_else(|| panic!("the rail states {label}: {rows:#?}"))
 }
 
@@ -213,9 +223,11 @@ fn clicking_a_rail_row_copies_the_fact_and_none_of_its_typography() {
     // The rows are drawn as a ledger — a label at the edge, a leader across
     // the gap — and neither typography is something a copy should carry.
     let cache = rail_row(&rows, "cache");
-    assert!(
-        rail_of(&rows[cache]).starts_with("cache"),
-        "the label opens every row: {:?}",
+    let opened: String = rail_of(&rows[cache]).chars().take(LABEL).collect();
+    assert_eq!(
+        opened.trim_end(),
+        format!("{}{}", " ".repeat(render::RAIL_INSET), "cache"),
+        "the label opens the row inside the rail's inset: {:?}",
         rows[cache]
     );
     assert!(

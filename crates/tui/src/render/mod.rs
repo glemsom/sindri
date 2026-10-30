@@ -30,6 +30,11 @@ pub use crate::card::Card;
 
 pub const RAIL_COLUMNS: u16 = 32;
 pub const RAIL_MIN_WIDTH: u16 = 100;
+/// The rail's left inset: the cells between the seam and the label's field. One
+/// clears the seam's light strip, which is drawn in the gap beside the rail's
+/// first column; one more holds the first word of a fact off it, so no word sits
+/// against the line — whether the terminal draws the strip there or plain canvas.
+pub const RAIL_INSET: usize = 2;
 /// The canvas between the words and the rail. Two cells, not one: a picture's
 /// escape is wider than the cell that carries it, so `Buffer::diff` leaves the
 /// cell after it unpainted, and the strip the margin draws is a picture. The

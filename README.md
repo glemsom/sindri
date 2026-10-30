@@ -100,9 +100,10 @@ transcript, rail, composer; off a terminal it is a refusal at exit 2.
   the run stops when the request in flight does.
 - **Rail:** 32 columns, always visible — cache hits, turns against the cap, tokens, a
   context meter, session GUID, temp path, branch, sandbox posture, why the last run
-  stopped — read as a ledger: labels in a nine-column field at the rail's first column,
-  dot leaders across the gap, every value hanging off one edge and a `─` hairline between
-  the blocks. Below 100 columns it becomes one strip; the face takes the rows left over.
+  stopped — read as a ledger: labels in a nine-column field two cells in from the rail's
+  first column, so no word sits against the seam, dot leaders across the gap, every value
+  hanging off one edge and a `─` hairline between the blocks. Below 100 columns it becomes
+  one strip, inset the same two cells; the face takes the rows left over.
 - **Composer,** two to six rows: `Enter` sends, `Shift+Enter` breaks the line, `Ctrl-Q`
   leaves, `Ctrl-C` cancels a run and keeps the draft — or clears it when nothing is
   running.

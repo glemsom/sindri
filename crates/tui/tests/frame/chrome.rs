@@ -175,6 +175,12 @@ fn a_rail_ten_rows_tall_keeps_the_posture_and_the_context_meter() {
         .iter()
         .find(|row| row.contains("more"))
         .unwrap_or_else(|| panic!("the short rail says what it left out: {rail:#?}"));
+    let head: usize = said.chars().count() - said.trim_start().chars().count();
+    assert_eq!(
+        head,
+        render::RAIL_INSET,
+        "the row that counts the lost facts starts inside the rail's inset: {said:?}"
+    );
     let count: usize = said
         .trim()
         .trim_start_matches([' ', '+'])

@@ -183,9 +183,12 @@ fn the_face_and_the_seam_reach_a_terminal_that_draws_the_glow() {
     );
     let ledger = rails(&rows, 100);
     for label in ["cache", "model", "workspace", "branch"] {
+        let row = fact(&ledger, label);
+        let head: String = row.chars().take(render::RAIL_INSET).collect();
+        let field: String = row.chars().skip(render::RAIL_INSET).take(LABEL).collect();
         assert!(
-            fact(&ledger, label).starts_with(label),
-            "the rail still states {label:?} at its first column beside a glow: {rows:#?}"
+            head.trim().is_empty() && field.trim_end() == label,
+            "the rail still states {label:?} inside its inset beside a glow: {rows:#?}"
         );
     }
 }

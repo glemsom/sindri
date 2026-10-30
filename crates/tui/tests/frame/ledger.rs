@@ -8,11 +8,11 @@ use super::*;
 use ratatui::buffer::Buffer;
 use sindri_tui::theme;
 
-/// The nine columns a label sits in, at the rail's first column.
-const FIELD: std::ops::Range<usize> = 0..9;
+/// The nine columns a label sits in, after the rail's inset.
+const FIELD: std::ops::Range<usize> = render::RAIL_INSET..render::RAIL_INSET + LABEL;
 /// Where the room for a gap and a value starts: the label's field and the
 /// space after it.
-const LEDGER: usize = 10;
+const LEDGER: usize = render::RAIL_INSET + LABEL + 1;
 
 fn spent() -> App {
     let mut app = app();
@@ -64,10 +64,14 @@ fn every_value_hangs_off_the_rails_last_column() {
             assert_eq!(cells.len(), RAIL, "{width} columns: {label:?}: {row:?}");
             assert_eq!(
                 cells[FIELD.clone()].iter().collect::<String>(),
-                format!("{label:<9}"),
+                format!("{label:<LABEL$}"),
                 "{width} columns: {label:?} keeps the nine-column field: {row:?}"
             );
-            assert_eq!(cells[9], ' ', "{width} columns: {label:?}: {row:?}");
+            assert_eq!(
+                cells[render::RAIL_INSET + LABEL],
+                ' ',
+                "{width} columns: {label:?}: {row:?}"
+            );
             assert!(
                 row.ends_with(said),
                 "{width} columns: {label:?}'s value ends on the rail's last column: {row:?}"
@@ -80,23 +84,23 @@ fn every_value_hangs_off_the_rails_last_column() {
 fn dot_leaders_bridge_the_label_field_to_the_value() {
     let mut app = spent();
     let rows = rails(&screen(&mut app, 100, 26), 100);
-    // `cache` is three cells of value in a twenty-two-cell ledger: nineteen
-    // cells of gap, and every one of them a dot.
+    // `cache` is three cells of value in a twenty-cell ledger: seventeen cells
+    // of gap, and every one of them a dot.
     let row = fact(&rows, "cache");
-    let gap: String = row.chars().skip(LEDGER).take(19).collect();
+    let gap: String = row.chars().skip(LEDGER).take(17).collect();
     assert_eq!(
         gap,
-        "·".repeat(19),
+        "·".repeat(17),
         "the gap between the field and the figure is dots: {row:?}"
     );
     assert_eq!(
         row.chars().count(),
-        LEDGER + 19 + 3,
+        LEDGER + 17 + 3,
         "and nothing else is on the row: {row:?}"
     );
     // A value that fills its room has no gap left to bridge: `session`'s
-    // shortened GUID is the ledger's twenty-two cells whole, so it draws no
-    // dots at all.
+    // shortened GUID is the ledger's twenty cells whole, so it draws no dots at
+    // all.
     let guid = fact(&rows, "session");
     assert_eq!(
         guid.chars().count(),
@@ -184,13 +188,22 @@ fn the_block_rule_spans_the_rails_width_as_a_hairline() {
     // It groups the blocks rather than dividing the column from the page: the
     // numbers above it, what the run is below it.
     let rows = rails(&screen(&mut app, 100, 26), 100);
+    // The rows either side of the rule are facts like any other, so they start
+    // where every fact starts: inside the rail's inset.
+    let opens = |at: usize| -> String {
+        rows[at]
+            .chars()
+            .skip(render::RAIL_INSET)
+            .take(5)
+            .collect::<String>()
+    };
     assert!(
-        rows[hairline as usize - 1].starts_with("stop"),
+        opens(hairline as usize - 1).starts_with("stop"),
         "the rule closes the numbers: {:?}",
         rows[hairline as usize - 1]
     );
     assert!(
-        rows[hairline as usize + 1].starts_with("model"),
+        opens(hairline as usize + 1).starts_with("model"),
         "and opens what the run is: {:?}",
         rows[hairline as usize + 1]
     );

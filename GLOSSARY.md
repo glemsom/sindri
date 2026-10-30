@@ -97,9 +97,9 @@ rail's last column, so every figure ends on one edge and is compared down it; a 
 leader in `LEADER` bridges the field to a value that leaves three cells of gap or more,
 where a value that leaves fewer — or none, because it fills its room — is shortened by
 `Fit` (`4f1c8f2e…5c1a77`) and draws no leader, and nothing wraps. The rule is a `─`
-hairline across the rail's whole width, and the labels begin at the rail's first column:
-the rail carries no spine of its own, so its facts start where the column starts and stop
-where they stop. The sandbox posture is a chip
+hairline across the rail's whole width, and the labels begin two cells in: the rail
+carries no spine of its own, and the inset holds the first word of a fact off the seam's
+light strip, which sits against the rail's first column. The sandbox posture is a chip
 (`⬢ bwrap · 1 writable`) rather than another pair, right-aligned on the edge the values
 hang off. The rail is chrome, not a surface: it draws no fill and lets the canvas
 through, so the one band of it with a colour behind it is the row the chip sits on. What
@@ -110,13 +110,13 @@ brightest against the rail and dissolving toward the words, and two cells wide b
 a picture's escape costs the cell after it and that cell has to be the strip's own, never
 the rail's first (`render::GAP_COLUMNS`).
 32 columns from 100 up; below that, the same facts in the same order as one line under
-the transcript, which never loses the posture, the model or the workspace. One priority
-order (`rail::priority`) ends with the posture, and the column and the strip both read
-it: a column too short for its facts gives them up from the bottom of that order — the
-identity block first, since the first frame already names it — and keeps one row to say
-how many went (`+7 more`), and a fact too long for its room is shortened rather than
-skipped — a posture to `⬢ bwrap` — and dropped only when nothing of it can be said. The
-GUID is copied with `Ctrl-G`, or by clicking its row.
+the transcript, inset the same two cells, which never loses the posture, the model or the
+workspace. One priority order (`rail::priority`) ends with the posture, and the column
+and the strip both read it: a column too short for its facts gives them up from the bottom
+of that order — the identity block first, since the first frame already names it — and
+keeps one row to say how many went (`+7 more`), and a fact too long for its room is
+shortened rather than skipped — a posture to `⬢ bwrap` — and dropped only when nothing of
+it can be said. The GUID is copied with `Ctrl-G`, or by clicking its row.
 
 **pulse** — the frame's own clock, and the only thing drawn without being asked:
 a `pulse::TICK` of ~120 ms while a run is live or a completion is walking, nothing at
