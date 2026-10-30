@@ -17,7 +17,7 @@ use std::process::{Child, Stdio};
 use std::time::{Duration, Instant};
 
 use super::Env;
-use super::screen::Screen;
+use super::screen::{Screen, says};
 
 /// The escape sequence that enters the alternate screen: the frame's first act.
 pub const ALTERNATE_SCREEN: &str = "\u{1b}[?1049h";
@@ -182,6 +182,19 @@ impl Pty {
     /// back: unlike `wait_for_text`, a row redrawn after the first write is read
     /// as the frame last drew it.
     pub fn wait_for_screen(&self, child: &mut Child, want: &str) -> String {
+        self.wait_until(child, &|screen: &str| screen.contains(want))
+    }
+
+    /// Reads until the screen *says* `want` as words: a note is a sentence the
+    /// frame wraps and marks on every row, so it is never contiguous in the
+    /// stream, and how often the frame repaints it must not decide a test.
+    pub fn wait_for_words(&self, child: &mut Child, want: &str) -> String {
+        self.wait_until(child, &|screen: &str| says(screen, want))
+    }
+
+    /// Reads until the screen the frame is drawing on satisfies `reached`, and
+    /// gives that screen back: the last state drawn, not the stream.
+    fn wait_until(&self, child: &mut Child, reached: &dyn Fn(&str) -> bool) -> String {
         let deadline = Instant::now() + DEADLINE;
         let mut port = self.port();
         let mut buffer = [0u8; 4096];
@@ -193,8 +206,9 @@ impl Pty {
                 Err(error) if error.kind() == ErrorKind::Interrupted => {}
                 Err(_) => break,
             }
-            if self.screen().contains(want) {
-                return self.screen();
+            let screen = self.screen();
+            if reached(&screen) {
+                return screen;
             }
             if child.try_wait().is_ok_and(|status| status.is_some()) {
                 break;

@@ -1,7 +1,9 @@
 //! A terminal's own memory, for the tests that have to read a screen rather than
 //! a stream: a frame writes cells where a cursor points and erases what it
 //! overwrites, so `visible`-style stripping cannot say what a reader is looking
-//! at. This is the few sequences ratatui uses, and nothing more.
+//! at. This is the few sequences ratatui uses, and nothing more — plus the one
+//! reading that memory cannot do on its own, `says`, which finds a phrase a
+//! frame wrapped across rows.
 
 /// A terminal's own memory: the cells a frame put somewhere, and the cursor it
 /// put them from. Enough of a terminal to say what a reader is looking at, and
@@ -101,4 +103,51 @@ impl Screen {
             .collect::<Vec<_>>()
             .join("\n")
     }
+}
+
+/// Whether the screen says `phrase`, as words rather than as a row's
+/// substring: the frame wraps a sentence, repeats a note's marker on every row
+/// it takes, hangs the sentence's punctuation off its last word, and fills the
+/// row's right-hand columns with the rail. So a phrase is matched word by word
+/// — a row may start it anywhere, and the row below must carry on with it from
+/// its first word, which is where a wrap lands.
+pub fn says(text: &str, phrase: &str) -> bool {
+    let want = words(phrase);
+    let mut from = 0;
+    for row in text.lines() {
+        let row = words(row);
+        // The rest of a phrase is only ever at the start of the next row: what
+        // follows a row's own words is the rail, and the rail is not speech.
+        let starts = if from == 0 { 0..row.len() } else { 0..1 };
+        let mut carried = from;
+        for start in starts {
+            let mut taken = from;
+            while taken < want.len()
+                && start + taken - from < row.len()
+                && row[start + taken - from] == want[taken]
+            {
+                taken += 1;
+            }
+            if taken == want.len() {
+                return true;
+            }
+            carried = carried.max(taken);
+        }
+        from = carried;
+    }
+    false
+}
+
+/// A row, or a phrase, as the words a reader would read: a marker stands on a
+/// row of its own as far as matching is concerned, and it is dropped, and a
+/// word is compared without the punctuation that hangs off it — `finished:`
+/// is the word `finished`.
+fn words(text: &str) -> Vec<String> {
+    text.split_whitespace()
+        .map(|word| {
+            word.trim_matches(|ch: char| !ch.is_alphanumeric())
+                .to_string()
+        })
+        .filter(|word| !word.is_empty())
+        .collect()
 }
