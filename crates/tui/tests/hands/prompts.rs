@@ -2,14 +2,21 @@
 
 use super::*;
 
+/// Sends a command the way a user sends one now: the name opens its offer, the
+/// first `Enter` takes it, and the second sends what was taken (issue #54).
+fn command(app: &mut App, line: &str) {
+    type_text(app, line);
+    press(app, KeyCode::Enter, KeyModifiers::NONE);
+    press(app, KeyCode::Enter, KeyModifiers::NONE);
+}
+
 #[test]
 fn new_command_empties_the_transcript_and_asks_for_a_fresh_session() {
     let mut app = answered(Fake::taking());
     assert!(!app.entries().is_empty());
     let old = app.rail_guid();
 
-    type_text(&mut app, "/new");
-    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+    command(&mut app, "/new");
 
     assert_eq!(app.composer().text(), "", "the command is not a prompt");
     assert!(app.take_renew(), "the front end is asked for a new session");
@@ -48,8 +55,7 @@ fn a_new_session_that_cannot_start_keeps_the_conversation_and_says_why() {
     let mut app = answered(Fake::taking());
     let old = app.rail_guid();
 
-    type_text(&mut app, "/new");
-    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+    command(&mut app, "/new");
     assert!(app.take_renew(), "the front end is asked for a new session");
 
     app.renewed(Err(
@@ -82,8 +88,7 @@ fn a_new_session_that_cannot_start_keeps_the_conversation_and_says_why() {
 #[test]
 fn a_prompt_typed_while_a_new_session_is_pending_waits_for_it() {
     let mut app = answered(Fake::taking());
-    type_text(&mut app, "/new");
-    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+    command(&mut app, "/new");
     assert!(app.take_renew(), "the front end is asked for a new session");
 
     // A prompt typed while the answer is on its way runs in the session that
@@ -105,13 +110,11 @@ fn a_prompt_typed_while_a_new_session_is_pending_waits_for_it() {
 #[test]
 fn help_and_quit_are_commands_too() {
     let mut app = app_with(Fake::taking());
-    type_text(&mut app, "/help");
-    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+    command(&mut app, "/help");
     assert!(app.overlay().is_some(), "/help opens the list of bindings");
     press(&mut app, KeyCode::Esc, KeyModifiers::NONE);
 
-    type_text(&mut app, "/quit");
-    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+    command(&mut app, "/quit");
     assert!(app.wants_quit(), "/quit leaves the frame");
 
     let mut unknown = app_with(Fake::taking());

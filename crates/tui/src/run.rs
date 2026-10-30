@@ -274,11 +274,11 @@ fn walk(app: &mut App, tx: &Sender<Msg>, walking: &mut bool, root: &std::path::P
     let root = root.to_path_buf();
     let tx = tx.clone();
     std::thread::spawn(move || {
-        let found = crate::completion::scan(&root, crate::completion::CAP);
+        let found = crate::completion::walk::scan(&root, crate::completion::walk::CAP);
         let paths: Vec<String> = found
             .paths
             .into_iter()
-            .filter(|path| crate::completion::visible(path, &typed))
+            .filter(|path| crate::completion::walk::visible(path, &typed))
             .collect();
         let _ = tx.send(Msg::Paths(generation, paths, found.capped));
     });

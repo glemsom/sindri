@@ -15,7 +15,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::time::Duration;
 
 use common::provider::{MockProvider, Reply, frames};
-use common::pty::{Pty, expect, spawn, type_line};
+use common::pty::{Pty, expect, spawn, type_command, type_line};
 use common::screen;
 use common::{Env, TEST_KEY, write_config};
 
@@ -81,7 +81,7 @@ fn a_new_session_is_opened_in_the_same_run_environment() {
     // not read a second time is `boot`'s own unit test — a launch's environment
     // is a value, so a second read would answer a different root and there is
     // none to name here.
-    type_line(&pty, "/new");
+    type_command(&pty, "/new");
     type_line(&pty, "and now?");
     expect(&pty, &mut child, "the second answer");
     let (code, _) = pty.quit(&mut child);
@@ -128,7 +128,7 @@ fn a_new_session_that_cannot_start_keeps_the_answer_and_says_why() {
         .expect("the sessions root")
         .permissions();
     std::fs::set_permissions(&root, PermissionsExt::from_mode(0o555)).expect("lock the sessions");
-    type_line(&pty, "/new");
+    type_command(&pty, "/new");
     let drawn = pty.wait_for_screen(&mut child, "could not start");
     std::fs::set_permissions(&root, locked).expect("unlock the sessions");
 

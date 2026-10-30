@@ -14,7 +14,7 @@ mod common;
 use std::os::unix::fs::PermissionsExt;
 
 use common::provider::{MockProvider, Reply};
-use common::pty::{ALTERNATE_SCREEN, Pty, expect, spawn, type_line};
+use common::pty::{ALTERNATE_SCREEN, Pty, expect, spawn, type_command, type_line};
 use common::{Env, TEST_KEY, screen};
 
 /// The words only the transcript's note says: the modal offers the key's
@@ -172,7 +172,7 @@ fn esc_leaves_the_frame_open_for_reading_and_the_composer_says_what_it_cannot_do
 
     // Usable: the bindings open over it and close again, then the frame leaves
     // as any other does.
-    type_line(&pty, "/help");
+    type_command(&pty, "/help");
     pty.wait_for_words(&mut child, "dismiss a completion or an overlay");
     pty.type_key(0x1b);
     let (code, _) = pty.quit(&mut child);

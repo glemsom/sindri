@@ -65,6 +65,20 @@ cursor and keeps the `file` line, the warning, a refused save's message and the 
 pinned outside the scroll, so a save never fails silently on a row that is not drawn.
 Both mark the edge they run past (`↑ more`, `↓ more`). `Esc` and `Enter` are unchanged.
 
+**Two triggers, one box.** The completion grew a trigger rather than being forked: `@`
+ranks a workspace walk and `/` ranks the catalogue of commands (#53), and the drawn
+column, the keys and the accept path are shared. The `/` offer opens only where a command
+can be sent — the whole draft is the one row the slash starts, and no whitespace has
+followed the name yet — so `src/main.rs`, a date, `/export notes/ga` and a `/` further
+into the draft open nothing, and a fragment that names no command offers nothing rather
+than a wrong one. The catalogue is in hand, so it is offered synchronously on the
+keystroke: the walk, its cap and its generation rule stay on the `@` side, and a frame
+holding a command offer is still (ADR-0011 §4). Ranking is prefix, then substring, then
+subsequence, each tier in the catalogue's order, eight rows like a path's — and the offer
+is built from `COMMANDS` itself, so a seventh command is completable with no other
+change. Taking an offer closes the box and does not send: `Enter` on `/new` is taken by
+the offer, and the command runs on the next `Enter` (issue #54).
+
 ## Consequences
 
 - No clipboard claim that cannot be verified; over SSH and in `tmux` the wording is the same as locally.

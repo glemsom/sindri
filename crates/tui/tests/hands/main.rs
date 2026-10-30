@@ -1,7 +1,7 @@
 //! The hands, driven the way a user drives them: a drag that copies, a
-//! refusal that says it refused, `@` completion, the `/` commands, `?`'s list
-//! of bindings, and the spill file of an output too large to show (issue
-//! #17). Every copy goes to a clipboard the test owns: nothing here touches
+//! refusal that says it refused, `@` completion, the `/` offer, the `/`
+//! commands, `?`'s list of bindings, and the spill file of an output too large
+//! to show (issue #17, issue #54). Every copy goes to a clipboard the test owns: nothing here touches
 //! the user's real clipboard (ADR-0013).
 
 #![allow(
@@ -146,6 +146,7 @@ fn notes(app: &App) -> String {
         .join("\n")
 }
 
+mod commands;
 mod completion;
 mod copy;
 mod prompts;

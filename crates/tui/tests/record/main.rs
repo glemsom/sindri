@@ -185,9 +185,18 @@ fn type_text(app: &mut App, text: &str) {
     }
 }
 
+/// Sends a command the way a user sends one now: a bare name opens the offer
+/// the catalogue makes, so the first `Enter` takes it and the second sends it.
+/// A line with an argument opens no offer and costs one `Enter` — a second one
+/// there would land on an empty draft, where `Enter` means something else
+/// (issue #54).
 fn command(app: &mut App, line: &str) {
     type_text(app, line);
+    let offered = app.completion().is_some_and(|open| !open.items.is_empty());
     press(app, KeyCode::Enter, KeyModifiers::NONE);
+    if offered {
+        press(app, KeyCode::Enter, KeyModifiers::NONE);
+    }
 }
 
 fn click(app: &mut App, column: u16, row: u16) {

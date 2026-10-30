@@ -73,8 +73,11 @@ fn down(app: &mut App) {
     press(app, KeyCode::Down, KeyModifiers::NONE);
 }
 
+/// `/settings`, typed and sent: the name opens the offer the catalogue makes,
+/// the first `Enter` takes it and the second sends it (issue #54).
 fn open(app: &mut App) {
     type_text(app, "/settings");
+    press(app, KeyCode::Enter, KeyModifiers::NONE);
     press(app, KeyCode::Enter, KeyModifiers::NONE);
 }
 

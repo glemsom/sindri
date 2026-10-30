@@ -182,8 +182,15 @@ read through the transcript's own **window**, so a 400-line expansion is scrolle
 other rows. **reasoning** opens on the same key; collapsed, it stays one row
 (`⌁ reasoned`).
 
-**completion** — the `@` offer of workspace paths: a proximity-ranked background walk,
-eight rows, `.git` skipped, `.gitignore` deliberately not honoured.
+**completion** — the offer the **composer** makes above itself, one column and one set of
+keys for two triggers. `@` offers workspace paths: a proximity-ranked background walk,
+eight rows, `.git` skipped, `.gitignore` deliberately not honoured. `/` offers the
+**command** catalogue, in the one place a command can be sent — a one-row draft that
+starts with the slash, the name not yet ended by whitespace — ranked by the name being
+typed with the names it starts first, and needing no walk because the catalogue is in
+hand. `Tab` and `Enter` take the marked offer, `↑`/`↓` walk it, `Esc` dismisses it and
+leaves the draft as typed; taking one closes the box and never sends (ADR-0013, issue
+#54).
 
 **picture** — a markdown image the frame draws: a block of its own in the answer, drawn
 only where the terminal speaks Kitty graphics, from a file in the workspace and never from
