@@ -4,6 +4,13 @@
 //! the rows the markdown reserved for it, after the paragraph that carries
 //! them, from the protocol the store already holds. Nothing here decides a row
 //! count or a rect — the store measured those, and the frame laid them out.
+//!
+//! A block no window can hold whole — a diagram tall enough that its rows are
+//! more than the column has — is the one thing a blank block must never be: it
+//! says so on its first visible row, in the ink a caption keeps, and names the
+//! rows it asked for against the window's. A block merely scrolled past is
+//! drawn nowhere and says nothing, because the reader who scrolled it is the
+//! one who moved it.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -14,6 +21,7 @@ use ratatui_image::{FilterType, Resize, StatefulImage};
 use crate::app::App;
 use crate::picture::Worth;
 use crate::selection::Placed;
+use crate::theme;
 
 /// How a picture is fitted to the cells its rows are: the whole of it, resampled
 /// rather than gritted, exactly as the face is.
@@ -32,6 +40,9 @@ pub(crate) struct Laid {
     pub(crate) cut: usize,
     pub(crate) block: usize,
     pub(crate) caption: String,
+    /// The source as the model wrote it: what the reason a block gives for
+    /// standing empty names, where the caption may have scrolled away.
+    pub(crate) src: String,
     pub(crate) worth: Worth,
 }
 
@@ -40,6 +51,9 @@ pub(crate) struct Laid {
 pub(crate) struct Shown {
     pub(crate) laid: Laid,
     pub(crate) whole: bool,
+    /// What the block says in place of a graphic no scroll can make whole: the
+    /// rows it asks for against the window's.
+    pub(crate) reason: Option<String>,
 }
 
 impl Laid {
@@ -64,14 +78,22 @@ pub(crate) fn on_screen(pictures: Vec<Laid>, start: usize, visible: usize) -> Ve
     pictures
         .into_iter()
         .filter_map(|laid| {
-            let whole = laid.cut == 0
-                && laid.row >= start
-                && laid.row + usize::from(laid.worth.rows()) <= start + visible;
+            let rows = usize::from(laid.worth.rows());
+            let whole = laid.cut == 0 && laid.row >= start && laid.row + rows <= start + visible;
+            // A graphic with more rows than the window has is drawn nowhere at
+            // any scroll — the frame never crops — so the block says why it is
+            // blank rather than leaving the reader a caption over nothing. It is
+            // the graphic's rows against the window's, whatever the source: a
+            // photograph of twenty rows on a body of fifteen has the same
+            // problem and deserves the same sentence.
+            let reason = (rows > visible)
+                .then(|| format!("‹{}: {rows} rows, over the window's {visible}›", laid.src));
             let at = laid.row.saturating_sub(start);
             let end = laid.end().saturating_sub(start);
             (at < visible && end > 0).then_some(Shown {
                 laid: Laid { row: at, ..laid },
                 whole,
+                reason,
             })
         })
         .collect()
@@ -97,6 +119,7 @@ pub(crate) fn placed(pictures: &[Shown], at: Rect) -> Vec<Placed> {
                 },
                 worth: laid.worth.clone(),
                 drawn: shown.whole,
+                reason: shown.reason.clone(),
             }
         })
         .collect()
@@ -116,6 +139,28 @@ pub(crate) fn paint(app: &mut App, picture: &Placed, buf: &mut Buffer) {
     StatefulImage::<StatefulProtocol>::default()
         .resize(RESIZE)
         .render(picture.area, buf, protocol);
+}
+
+/// Says why a block is drawn nowhere, on the first row of it the window holds:
+/// the reason `on_screen` kept, in the ink a caption keeps, so a block taller
+/// than the window is a sentence rather than blank cells under a caption.
+pub(crate) fn explain(picture: &Placed, buf: &mut Buffer) {
+    let Some(reason) = &picture.reason else {
+        return;
+    };
+    // The block's first row the window holds: the graphic's own where it starts
+    // inside the window, and the window's top where the block began above it.
+    let row = picture.area.y.max(buf.area.y);
+    let left = picture.area.x.max(buf.area.x);
+    let room = picture
+        .area
+        .right()
+        .min(buf.area.right())
+        .saturating_sub(left);
+    if row >= buf.area.bottom() || room == 0 {
+        return;
+    }
+    buf.set_stringn(left, row, reason, usize::from(room), theme::faint());
 }
 
 #[cfg(test)]
