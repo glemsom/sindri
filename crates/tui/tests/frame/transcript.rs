@@ -6,7 +6,6 @@ use super::*;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::buffer::Buffer;
-use ratatui::style::Color;
 use sindri_tui::render::transcript;
 use sindri_tui::theme;
 
@@ -210,8 +209,9 @@ fn the_prompt_is_full_strength_on_a_panel_band_under_a_header() {
     let middle = COLUMN / 2;
     assert_eq!(
         buf[(middle, band)].fg,
-        Color::Reset,
-        "the prompt is the brightest prose in the frame, not chrome"
+        theme::PLAIN,
+        "the prompt is prose and not chrome, and prose has an ink: the theme's, \
+         never the terminal's default foreground"
     );
     assert_eq!(
         buf[(0, band)].fg,

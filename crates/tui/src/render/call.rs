@@ -6,7 +6,6 @@
 
 use std::time::Duration;
 
-use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
 use crate::driver::{CallOver, Side};
@@ -60,7 +59,7 @@ pub fn rows(call: &Call, width: u16, now: Duration) -> Vec<Line<'static>> {
         spans.push(Span::styled(behind(call.lines()), theme::faint()));
         spans.push(Span::raw(" "));
     }
-    spans.push(Span::styled(command.to_string(), Style::new()));
+    spans.push(Span::styled(command.to_string(), theme::plain()));
     let mut rows = vec![Line::from(spans)];
 
     let shown = if call.expanded() {

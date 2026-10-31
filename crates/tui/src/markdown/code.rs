@@ -62,7 +62,7 @@ fn lines(body: &str, language: Option<&str>) -> Vec<Line<'static>> {
 /// worse than no highlight.
 fn plain(body: &str) -> Vec<Line<'static>> {
     body.lines()
-        .map(|line| Line::from(Span::raw(line.to_string())))
+        .map(|line| Line::from(Span::styled(line.to_string(), theme::plain())))
         .collect()
 }
 
@@ -80,7 +80,8 @@ fn diff_line(line: &str) -> Line<'static> {
     } else if line.starts_with("@@") {
         Style::new().fg(theme::DIFF_HUNK)
     } else {
-        Style::new()
+        // A context row is body ink on the wash: the hue is the row's own.
+        theme::plain()
     };
     Line::from(Span::styled(line.to_string(), style))
 }
@@ -130,9 +131,11 @@ fn highlight(body: &str, language: &str) -> Vec<Line<'static>> {
     lines
 }
 
-/// The panel's edge: the theme's faint, on the panel it is drawn over.
+/// The panel's edge: the theme's faint, on the panel it is drawn over. The
+/// surface is laid down first because it names the ink a cell on it asks for,
+/// and the edge's own is what this says.
 fn edge() -> Style {
-    theme::faint().patch(theme::surface())
+    theme::surface().patch(theme::faint())
 }
 
 fn top(language: Option<&str>, width: usize) -> Line<'static> {

@@ -18,8 +18,11 @@ pub const GOOD: Color = Color::Rgb(0x6a, 0xc9, 0x7a);
 pub const PROMPT: Color = Color::Rgb(0x61, 0xaf, 0xef);
 /// A code word in prose: inline code's ink, and no fence's.
 pub const CODE: Color = Color::Rgb(0xe5, 0xc0, 0x7b);
-/// A fence's seven roles, beside `PALETTE`'s others: each measured on `PANEL`
-/// and clearing 4.5:1 there, because code is read as body text.
+/// Body ink: every word that is neither chrome nor a role of its own — prose,
+/// a prompt, a call's command, a table's cells. A fence's seven roles are
+/// measured on `PANEL` and clear 4.5:1 there, because code is read as body
+/// text; `PLAIN` itself clears 10.81:1 on the panel and 9.25:1 on `RAISED`, so
+/// it is the ink on every tier.
 pub const PLAIN: Color = Color::Rgb(0xc8, 0xcc, 0xd4);
 pub const COMMENT: Color = Color::Rgb(0x8b, 0x95, 0xa5);
 pub const KEYWORD: Color = Color::Rgb(0xc3, 0x9b, 0xea);
@@ -120,19 +123,33 @@ pub fn prompt() -> Style {
 
 /// The canvas: the surface the frame fills with before the first region is
 /// drawn, and the ground a renderer paints under a picture it only places — a
-/// pixel such a picture left transparent shows the cell behind it.
+/// pixel such a picture left transparent shows the cell behind it. It is the
+/// ink too, because a cell that names no foreground is drawn in the terminal's
+/// default one, and a theme that owns every colour it paints cannot leave the
+/// blank cells to a reader's own idea of a foreground.
 pub fn canvas() -> Style {
-    Style::new().bg(CANVAS)
+    plain().bg(CANVAS)
 }
 
-/// A panel: the surface a composer, a fence or the rail sits on.
+/// The theme's body ink: what a word that is not chrome is written in, and the
+/// ink a cell that paints nothing carries so the terminal's default never
+/// shows.
+pub fn plain() -> Style {
+    Style::new().fg(PLAIN)
+}
+
+/// A panel: the surface a composer, a fence or the rail sits on, and the ink
+/// a word on it asks for. The ink is part of the surface rather than the
+/// span's business because a cell emptied by `Clear` has no span to ask, and
+/// the terminal's default foreground would show inside the box.
 pub fn surface() -> Style {
-    Style::new().bg(PANEL)
+    plain().bg(PANEL)
 }
 
-/// The step above a panel, for a thing drawn on top of one.
+/// The step above a panel, for a thing drawn on top of one: the same surface,
+/// a step higher, with the same ink.
 pub fn raised() -> Style {
-    Style::new().bg(RAISED)
+    plain().bg(RAISED)
 }
 
 /// A walk between two named stops, `t` of the way across: what a rule lit from
@@ -159,14 +176,14 @@ pub fn ramp(from: Color, to: Color, t: f32) -> Color {
 /// [`owns_pixel`] refuses it.
 pub const RAMPS: &[(Color, Color)] = &[(FAINT, SEAM), (PROMPT, SEAM), (HEADING, PROMPT)];
 
-/// Whether the frame may paint a colour: one `PALETTE` names, one a walk of
-/// `RAMPS` arrives at, or nothing at all. `tests/theme.rs` asks this of every
-/// cell and [`owns_pixel`] of every pixel, and a renderer that invents a hue
-/// fails the law stated where the walk lives.
+/// Whether the frame may paint a colour: one `PALETTE` names, or one a walk of
+/// `RAMPS` arrives at. There is no third answer: a cell that gives `Reset` is a
+/// cell leaving its colour to the terminal, which is a bug now that the theme
+/// owns the canvas as well as the inks. `tests/theme/cells.rs` asks this of
+/// every cell and [`owns_pixel`] of every pixel, and a renderer that invents a
+/// hue fails the law stated where the walk lives.
 pub fn owns(colour: Color) -> bool {
-    colour == Color::Reset
-        || PALETTE.contains(&colour)
-        || RAMPS.iter().any(|(from, to)| on_ramp(colour, *from, *to))
+    PALETTE.contains(&colour) || RAMPS.iter().any(|(from, to)| on_ramp(colour, *from, *to))
 }
 
 /// The law for pixels, as [`owns`] is the law for cells: whether a picture may

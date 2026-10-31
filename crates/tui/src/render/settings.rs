@@ -188,13 +188,13 @@ fn value(settings: &Settings, field: &Field) -> (String, Style) {
         // which is off, and says so rather than pretending
         // the file said it.
         Key::Thinking if typed.is_empty() => {
-            (format!("{} (default)", toggle_shown(typed)), Style::new())
+            (format!("{} (default)", toggle_shown(typed)), theme::plain())
         }
-        Key::Thinking => (toggle_shown(typed).to_string(), Style::new()),
+        Key::Thinking => (toggle_shown(typed).to_string(), theme::plain()),
         _ if field.key.secret() && !typed.is_empty() => (
             "•••• (will be written to the file)".to_string(),
             theme::faint(),
         ),
-        _ => (field.text.clone(), Style::new()),
+        _ => (field.text.clone(), theme::plain()),
     }
 }

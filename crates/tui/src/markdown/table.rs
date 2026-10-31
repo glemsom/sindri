@@ -1,7 +1,7 @@
 //! Tables: columns sized to their contents and aligned under their headers,
 //! so a table of files reads as a table rather than as pipe-separated noise.
 
-use ratatui::style::{Modifier, Style};
+use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthStr;
 
@@ -66,9 +66,9 @@ pub fn lines(table: &Table, width: usize) -> Vec<Line<'static>> {
                 spans.push(Span::styled(" │ ", theme::faint()));
             }
             spans.push(if is_head {
-                Span::styled(padded, Style::new().add_modifier(Modifier::BOLD))
+                Span::styled(padded, theme::plain().add_modifier(Modifier::BOLD))
             } else {
-                Span::styled(padded, Style::default())
+                Span::styled(padded, theme::plain())
             });
         }
         out.push(Line::from(spans));

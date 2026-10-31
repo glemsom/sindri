@@ -5,7 +5,6 @@
 
 use std::time::Duration;
 
-use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthStr;
 
@@ -166,9 +165,9 @@ fn prompt_rows(prompt: &Prompt, width: u16) -> Rows {
         Span::styled(format!("  {}  {}", prompt.at, prompt.cwd), theme::faint()),
     ])];
     let mut words = markdown::text::wrap(
-        markdown::text::glyphs(&[Span::styled(prompt.text.clone(), Style::new())]),
+        markdown::text::glyphs(&[Span::styled(prompt.text.clone(), theme::plain())]),
         "",
-        Style::new(),
+        theme::plain(),
         band as usize,
     );
     for (index, row) in words.iter_mut().enumerate() {

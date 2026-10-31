@@ -38,11 +38,32 @@ fn raw(line: &Line<'_>) -> String {
         .collect()
 }
 
+/// The inks a row's spans name. A span that names none is drawn in whatever
+/// the cell under it already holds — the surface's ink and not a terminal's —
+/// and is the one thing this helper cannot read.
 fn colours(line: &Line<'_>) -> Vec<Color> {
-    line.spans
-        .iter()
-        .map(|span| span.style.fg.unwrap_or(Color::Reset))
-        .collect()
+    line.spans.iter().filter_map(|span| span.style.fg).collect()
+}
+
+/// Prose names its ink, every span of it: a reader may set their terminal's
+/// default foreground to red, and none of it may come out red.
+#[test]
+fn every_span_of_prose_is_written_in_an_ink_the_theme_names() {
+    let source = "# Title\n\nA paragraph with *emphasis*, **bold**, `code` and a\
+                  \n[link](https://example.com).\n\n> a quote\n\n- one\n- two\n\n\
+                  a soft\nbreak\n";
+    let lines = lines(source, 60);
+    assert!(lines.len() > 4, "the source rendered: {:?}", texts(&lines));
+    for line in &lines {
+        for span in &line.spans {
+            let fg = span.style.fg;
+            assert!(
+                fg.is_some_and(sindri_tui::theme::owns),
+                "{:?} is written in {fg:?}, which the theme does not name: {span:?}",
+                span.content
+            );
+        }
+    }
 }
 
 #[test]

@@ -175,6 +175,14 @@ picture — the seam's strip, the face — paints the canvas under it first, bec
 pixel the picture left transparent shows the cell behind it rather than the
 terminal's. One dark theme, three tiers.
 
+**ink** — the foreground a word is drawn in, and the theme's as surely as a **surface**
+is: `theme::plain()` is body ink — prose, a prompt, a call's command, a **table**'s
+cells — and every other ink is a named colour or a **walk**. A surface names the ink it
+asks for, because a cell emptied by `Clear` has no span to bring one. Nothing in the
+frame is left at `Color::Reset`: that is the terminal's default foreground, a reader may
+set it to red, and `theme::owns` refuses it. `tests/theme/cells.rs` holds every cell of a
+painted frame to an ink and a surface the theme names.
+
 **canvas** — the lowest **surface**, and the theme's own: the frame fills `frame.area()`
 with it before the first region is drawn, so a resize, a scrolled region, a card or a
 gap a picture's escape leaves behind is still the theme's and never the terminal's — a

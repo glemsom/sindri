@@ -8,7 +8,6 @@ use super::*;
 use std::path::{Path, PathBuf};
 
 use ratatui::buffer::Buffer;
-use ratatui::style::Color;
 use sindri_tui::graphics::Graphics;
 use sindri_tui::theme;
 
@@ -182,7 +181,11 @@ fn with_no_answer_from_the_terminal_the_margin_is_the_canvas_it_was() {
     for y in 0..composer_at(&shown) {
         let cell = &plain[(MARGIN as u16, y as u16)];
         assert_eq!(cell.symbol(), " ", "({MARGIN}, {y}) is canvas");
-        assert_eq!(cell.fg, Color::Reset, "with no ink of its own");
+        assert_eq!(
+            cell.fg,
+            theme::PLAIN,
+            "with the canvas's ink, which is the theme's and not the terminal's"
+        );
         assert_eq!(
             cell.bg,
             theme::CANVAS,
@@ -193,10 +196,10 @@ fn with_no_answer_from_the_terminal_the_margin_is_the_canvas_it_was() {
 
 #[test]
 fn the_margin_keeps_the_canvas_and_spends_no_colour_of_its_own() {
-    // The strip is a picture, not paint: its cell carries no ink of its own, so
-    // what it is drawn over is the canvas the theme names — the colour its
-    // edges antialias against is the theme's and not the terminal's, and
-    // `tests/theme` has nothing to refuse. Its last row is the composer's last
+    // The strip is a picture, not paint: its cell carries the canvas's ink and
+    // none of its own, and what it is drawn over is the canvas the theme names —
+    // the colour its edges antialias against is the theme's and not the
+    // terminal's, and `tests/theme` has nothing to refuse. Its last row is the composer's last
     // row, so the margin is canvas beside the panel's every row as well as the
     // body's: the rect is sized from the panel and not from the terminal.
     let glowing = cells(&mut lit(), 100, 30);
@@ -204,7 +207,11 @@ fn the_margin_keeps_the_canvas_and_spends_no_colour_of_its_own() {
     let footer = shown.len() - 1;
     for y in 0..footer {
         let cell = &glowing[(MARGIN as u16, y as u16)];
-        assert_eq!(cell.fg, Color::Reset, "({MARGIN}, {y}) paints no ink");
+        assert_eq!(
+            cell.fg,
+            theme::PLAIN,
+            "({MARGIN}, {y}) carries the canvas's ink, not the picture's"
+        );
         assert_eq!(
             cell.bg,
             theme::CANVAS,

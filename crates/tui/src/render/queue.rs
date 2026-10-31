@@ -4,7 +4,6 @@
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget};
 
@@ -45,7 +44,7 @@ fn rows(app: &App, width: u16) -> Vec<Line<'static>> {
     let mut rows = Vec::new();
     for prompt in app.queue() {
         rows.extend(text::wrap(
-            text::glyphs(&[Span::styled(prompt.clone(), Style::new())]),
+            text::glyphs(&[Span::styled(prompt.clone(), theme::plain())]),
             MARKER,
             theme::faint(),
             inner,
