@@ -1,5 +1,5 @@
 .scratch/
-/target/
+/target
 /.devbox/
 /.venv/
 /Dockerfile
