@@ -18,7 +18,39 @@ pub use source::Source;
 pub use store::Store;
 
 /// The most rows a picture may take: the face's own allowance.
+///
+/// A diagram takes [`DIAGRAM_ROWS`] instead, and the difference is the shape of
+/// the thing. A photograph is landscape: fitted to a column it loses height it
+/// never used and reads as well as it did. A diagram is drawn top to bottom, so
+/// its height *is* the dimension that carries its words and a cap on rows is a
+/// cap on legibility. Measured on the ten-node `flowchart TD` of #117 — 585×984
+/// pixels of its own, `crates/tui/fixtures/diagrams/ten-nodes.mmd`:
+///
+/// | body | twenty rows | forty rows |
+/// |:--|:--|:--|
+/// | 40 columns | 320×360, 5.1 px of text | 320×540, 7.7 px |
+/// | 60 columns | 480×360, 5.1 px | 480×720, 10.2 px |
+/// | 80 columns | 592×360, 5.1 px | 592×720, 10.2 px |
+///
+/// At twenty rows every column draws it at 5.1 pixels of text, 28% of a cell,
+/// and its letters come out one and two pixels tall: the smear of #117. At
+/// forty the ceiling binds only from sixty columns up, where the text lands at
+/// 57% of a cell and its letters at nine pixels; at forty columns the width
+/// binds first and the diagram takes thirty rows at 43%, its letters five
+/// pixels tall. A narrow body is not something a row allowance can fix — what
+/// the allowance buys is every body wide enough to hold the block.
+///
+/// So the allowance is a ceiling and never a target: a diagram takes the rows
+/// its own aspect asks of the column, up to forty, and one that asks for more
+/// was written too big and is fitted like any picture. Asking for more rows
+/// than a picture only became safe once a block the window cannot hold whole
+/// said so on its first row instead of sitting blank under its caption
+/// (`render::pictures::explain`).
 pub const MAX_ROWS: u16 = 20;
+
+/// The most rows a diagram may take: twice a picture's twenty, because a
+/// diagram is drawn top to bottom. [`MAX_ROWS`] carries the arithmetic.
+pub const DIAGRAM_ROWS: u16 = 40;
 
 /// The most bytes a source may be. A picture past this is not the picture the
 /// model meant, and reading it costs a frame's budget.
@@ -42,7 +74,8 @@ pub enum Worth {
         source: Source,
         /// The columns the block spans, inside the column it was asked about.
         columns: u16,
-        /// The rows it takes; never more than [`MAX_ROWS`].
+        /// The rows it takes; never more than the allowance it earns —
+        /// [`MAX_ROWS`] for an image, [`DIAGRAM_ROWS`] for a diagram.
         rows: u16,
     },
     Refused(Refusal),

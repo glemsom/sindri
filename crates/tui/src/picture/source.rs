@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use image::{DynamicImage, ImageFormat, ImageReader, Limits};
 
 use crate::picture::svgs::Svgs;
-use crate::picture::{BYTES, PIXELS, Refusal};
+use crate::picture::{BYTES, DIAGRAM_ROWS, MAX_ROWS, PIXELS, Refusal};
 
 /// The formats the store draws: the four the decoders behind `ratatui-image`
 /// link, and nothing else.
@@ -51,6 +51,15 @@ impl Source {
         };
         guard(&path)?;
         Ok(Source::File(path))
+    }
+
+    /// The most rows this source may take: a picture's allowance for a file,
+    /// a diagram's taller one for a fence — see [`MAX_ROWS`](crate::picture::MAX_ROWS).
+    pub(super) fn allowance(&self) -> u16 {
+        match self {
+            Source::File(_) => MAX_ROWS,
+            Source::Fence(_) => DIAGRAM_ROWS,
+        }
     }
 
     /// The natural size of what this source draws, in pixels: a file's header

@@ -13,7 +13,7 @@ use ratatui_image::protocol::StatefulProtocol;
 use crate::graphics::Graphics;
 use crate::picture::source::Source;
 use crate::picture::svgs::Svgs;
-use crate::picture::{MAX_ROWS, PIXELS, Refusal, Worth};
+use crate::picture::{PIXELS, Refusal, Worth};
 
 /// How many rendered protocols stay live: each holds its pixels, so the store
 /// keeps what a screenful of pictures needs and lets the oldest go.
@@ -127,7 +127,7 @@ impl Store {
             .measured(&self.svgs)
             .and_then(|pixels| self.guarded(pixels))
             .map(|pixels| {
-                let (span, rows) = self.block(pixels, columns);
+                let (span, rows) = self.block(pixels, columns, source.allowance());
                 Worth::Drawn {
                     source,
                     columns: span,
@@ -205,10 +205,11 @@ impl Store {
         self.live.len()
     }
 
-    /// The block a picture of `pixels` takes in `columns`: it fits the column,
+    /// The block a source of `pixels` takes in `columns`: it fits the column,
     /// never upscales past it, keeps its aspect from the cell size, and is
-    /// capped at [`MAX_ROWS`].
-    fn block(&self, pixels: (u32, u32), columns: u16) -> (u16, u16) {
+    /// capped at the allowance its source names — a `cap` that is a ceiling,
+    /// never a target, so under it the rows are the column's.
+    fn block(&self, pixels: (u32, u32), columns: u16, cap: u16) -> (u16, u16) {
         let (cell_w, cell_h) = self.picker.font_size();
         let (cell_w, cell_h) = (u64::from(cell_w.max(1)), u64::from(cell_h.max(1)));
         let column = u64::from(columns.max(1));
@@ -217,7 +218,7 @@ impl Store {
         let pixels_wide = picture_w.min(column * cell_w);
         let pixels_tall = (picture_h * pixels_wide).div_ceil(picture_w);
         let span = pixels_wide.div_ceil(cell_w).clamp(1, column);
-        let rows = pixels_tall.div_ceil(cell_h).clamp(1, u64::from(MAX_ROWS));
+        let rows = pixels_tall.div_ceil(cell_h).clamp(1, u64::from(cap));
         (span as u16, rows as u16)
     }
 }

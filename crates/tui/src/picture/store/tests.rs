@@ -5,6 +5,7 @@
 use super::*;
 
 use crate::picture::svgs::SVGS;
+use crate::picture::{DIAGRAM_ROWS, MAX_ROWS};
 
 /// The store a test asks: the made-up Kitty answer a layout test uses. A fence
 /// needs no workspace, so none is offered.
@@ -17,6 +18,14 @@ const DIAGRAM: &str = "stateDiagram-v2\n    [*] --> Resting\n    Resting --> [*]
 
 /// Another diagram, of another shape, in a block of its own.
 const OTHER: &str = "flowchart LR\n    A[fence] --> B[diagram]\n    B --> C[cells]\n";
+
+/// A diagram drawn top to bottom and long with it: ten nodes, one under the
+/// next, whose height is the dimension that carries its words. Committed beside
+/// the crate so the store, the writer and the frame all measure one diagram.
+const PORTRAIT: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/fixtures/diagrams/ten-nodes.mmd"
+));
 
 /// A diagram no parser can read: an edge with nothing on the far side.
 const BROKEN: &str = "flowchart TD\n    A --> \n";
@@ -196,5 +205,49 @@ fn the_svg_cache_lets_go_the_least_recently_used_and_not_the_oldest() {
         store.renders(),
         SVGS as u64 + 2,
         "while the one above it, least recently used, was let go"
+    );
+}
+
+#[test]
+fn a_portrait_diagram_takes_the_rows_a_diagram_may_and_a_photograph_does_not() {
+    // The same question asked of the two: a photograph is landscape and shrinks
+    // gracefully, a flowchart drawn top to bottom does not. At sixty columns
+    // the ten-node diagram is 585×984 pixels of its own, so 480 pixels wide is
+    // 808 tall: forty-five rows of eighteen. It takes the diagram's allowance
+    // and stops there, where tall.png — ten pixels by five thousand — takes a
+    // picture's twenty.
+    let worth = store().fence(PORTRAIT.trim_end_matches('\n'), 60);
+    assert_eq!(
+        worth.rows(),
+        DIAGRAM_ROWS,
+        "a portrait diagram takes the taller allowance: {worth:?}"
+    );
+    assert!(
+        worth.rows() > MAX_ROWS,
+        "and the allowance is what a picture may not take"
+    );
+    assert_eq!(
+        Source::File("a chart".into()).allowance(),
+        MAX_ROWS,
+        "and a file's allowance did not move"
+    );
+}
+
+#[test]
+fn a_portrait_diagram_in_a_narrow_body_takes_the_rows_the_column_gives_it() {
+    // The acceptance of #120 is a forty-column body. There the column binds and
+    // the allowance does not: 320 pixels wide is 0.55 of the diagram's own
+    // width, so 538 pixels tall — thirty rows of eighteen, at 7.7 pixels of
+    // text where the twenty the old cap allowed drew 5.1. The allowance is a
+    // ceiling and never a target.
+    let worth = store().fence(PORTRAIT.trim_end_matches('\n'), 40);
+    assert_eq!(
+        worth.rows(),
+        30,
+        "the column, not the allowance, is what drew this one: {worth:?}"
+    );
+    assert!(
+        worth.rows() < DIAGRAM_ROWS,
+        "so it never reached the ceiling"
     );
 }
