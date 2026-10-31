@@ -12,6 +12,7 @@
 
 mod common;
 
+use std::io::Write;
 use std::time::Duration;
 
 use common::provider::{MockProvider, Reply, frames};
@@ -105,6 +106,71 @@ fn the_mouse_is_the_frames_while_it_draws_and_the_terminals_again_after() {
     assert!(
         leaving.contains(MOUSE_OFF),
         "and the mouse is the terminal's again: {leaving:?}"
+    );
+}
+
+/// The sequence that asks the terminal to tell `Shift+Enter` from `Enter`, and
+/// the one that gives the request back.
+const KEYS_ON: &str = "\u{1b}[>1u";
+const KEYS_OFF: &str = "\u{1b}[<1u";
+/// Shift+Enter as a terminal holding that request sends it: the code point a
+/// terminal sends for bared `Enter`, then shift.
+const SHIFT_ENTER: &str = "\u{1b}[13;2u";
+
+#[test]
+fn shift_enter_breaks_the_line_because_the_frame_asks_for_unambiguous_keys() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: Shift+Enter is not tested here");
+        return;
+    };
+    let env = Env::new();
+    // A reply nobody should ever be sent: a draft that goes out is a request the
+    // mock answers, and no request is the assertion.
+    let mock = MockProvider::start(vec![Reply::answer("this draft was sent")]);
+    let base_url = mock.base_url();
+    let mut child = spawn(
+        &env,
+        &pty,
+        &[
+            ("SINDRI_API_KEY", TEST_KEY),
+            ("SINDRI_MODEL", "claude-sonnet-4-6"),
+            ("SINDRI_BASE_URL", base_url.as_str()),
+        ],
+    );
+
+    // Without this, a terminal sends `0x0d` for both keys and the frame cannot
+    // tell them apart: the sequence going out is the whole of the fix.
+    let drawn = pty.wait_for(&mut child, KEYS_ON);
+    if !drawn.contains(KEYS_ON) {
+        let _ = child.kill();
+        let _ = child.wait();
+        panic!("the frame must ask for keys it can tell apart, drew: {drawn:?}");
+    }
+
+    expect(&pty, &mut child, "@ paths");
+    for byte in b"first line".iter().copied() {
+        pty.type_key(byte);
+    }
+    let _ = pty.port().write_all(SHIFT_ENTER.as_bytes());
+    for byte in b"second line".iter().copied() {
+        pty.type_key(byte);
+    }
+    let screen = pty.wait_for_screen(&mut child, "second line");
+    assert!(
+        screen.contains("first line"),
+        "both lines are the draft's: {screen:?}"
+    );
+    assert!(
+        mock.requests().is_empty(),
+        "Shift+Enter breaks the line instead of sending it, and {} request(s) went out",
+        mock.requests().len()
+    );
+
+    let (code, leaving) = pty.quit(&mut child);
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+    assert!(
+        leaving.contains(KEYS_OFF),
+        "a shell opened underneath must not inherit the request: {leaving:?}"
     );
 }
 
