@@ -22,8 +22,13 @@ pub(super) struct Image {
 /// One markdown source as the frame draws it: the rows, and the pictures among
 /// them. A picture is a block, so where its block starts is a row of these.
 pub struct Written {
+    /// The rows asked for: every row of the answer, or the range of them a
+    /// window holds, re-based to the first.
     pub rows: Vec<Line<'static>>,
     pub pictures: Vec<Picture>,
+    /// How many rows the whole answer is, whatever part of it `rows` holds: the
+    /// count a frame places a window against.
+    pub total: usize,
 }
 
 /// A picture the writer placed: the row its block starts at, the source as the
@@ -104,16 +109,16 @@ impl Writer<'_> {
         self.flush();
         let (prefix, columns) = self.block_margin();
         let taken = usize::from(worth.rows());
-        if self.apart && !self.lines.is_empty() {
-            self.lines.push(Line::default());
+        if self.apart && self.counted > 0 {
+            self.keep(vec![Line::default()]);
         }
         self.apart = false;
-        let at = self.lines.len();
-        self.lines.extend((0..taken).map(|_| Line::default()));
+        let at = self.counted;
+        self.keep(vec![Line::default(); taken]);
         let words = [Span::styled(caption.clone(), theme::faint())];
         let rows_of_caption = text::wrap(text::glyphs(&words), &prefix, theme::faint(), columns);
         let rows = taken + rows_of_caption.len();
-        self.lines.extend(rows_of_caption);
+        self.keep(rows_of_caption);
         self.pictures.push(Picture {
             at,
             rows,

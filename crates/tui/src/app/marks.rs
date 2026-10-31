@@ -31,7 +31,7 @@ impl App {
         let moved = if from == at {
             0
         } else {
-            crate::render::layout::rows_between(self, viewport.area.width, from, at)
+            crate::render::step::rows_between(self, viewport.area.width, from, at)
         };
         let top = i32::from(viewport.area.y) - i32::from(self.viewport.area.y);
         let shift = i32::try_from(moved).map_or(i32::MIN, |moved| top - moved);

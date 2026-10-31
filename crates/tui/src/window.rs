@@ -115,7 +115,7 @@ impl Window {
     /// Moves the place by `delta` rows, in `Ask::Rows`' sign: positive is back
     /// into the thread and negative is forward, across as few entries as it
     /// crosses. The window holds no entries and cannot say what a row is worth,
-    /// so the move is `layout::back`'s and `layout::forward`'s, and the frame
+    /// so the move is `step::back`'s and `step::forward`'s, and the frame
     /// takes it on its way to the next layout.
     ///
     /// A second shift before that layout replaces the first rather than adding

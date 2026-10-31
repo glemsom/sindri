@@ -52,6 +52,19 @@ pub fn panel(body: &str, language: Option<&str>, width: usize) -> Vec<Line<'stat
     panel
 }
 
+/// How many rows the fence takes at `width`, counted and not painted: the rows
+/// of a fence are its code's lines between its two edges, so a fence a window
+/// does not hold is a count — and `height` is the law `panel` is held to, so a
+/// row nobody sees costs a frame nothing and lands where it would have.
+pub fn height(body: &str, width: usize) -> usize {
+    let rows = body.lines().count();
+    if width.max(1) < MIN_PANEL {
+        rows
+    } else {
+        rows + 2
+    }
+}
+
 fn lines(body: &str, language: Option<&str>) -> Vec<Line<'static>> {
     match language {
         Some(language) if is_diff(language) => body.lines().map(diff_line).collect(),
@@ -229,4 +242,24 @@ fn cut(glyphs: Vec<Glyph>, width: usize, surface: Style) -> Vec<Glyph> {
     }
     kept.push(('…', theme::faint().patch(surface)));
     kept
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{height, panel};
+
+    #[test]
+    fn a_fence_is_as_tall_counted_as_it_is_painted() {
+        for body in ["", "one line", "a\nb\nc", "a\n\nb\n", "  indented\n"] {
+            for language in [None, Some("rust"), Some("diff"), Some("nonsense")] {
+                for width in [4, 11, 12, 40, 118] {
+                    assert_eq!(
+                        height(body, width),
+                        panel(body, language, width).len(),
+                        "{body:?} as {language:?} at {width} columns"
+                    );
+                }
+            }
+        }
+    }
 }

@@ -3,6 +3,7 @@
 //! highlighting, and a picture as a block of its own. No
 //! raw HTML, no maths.
 
+mod blocks;
 mod code;
 mod heading;
 mod mermaid;
@@ -15,7 +16,7 @@ pub use picture::{Picture, Written};
 
 use std::ops::Range;
 
-use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
@@ -28,12 +29,28 @@ use table::Table;
 /// source, and `None` where the terminal draws none, which makes every picture
 /// its caption and the reason.
 pub fn lines(source: &str, width: u16, store: Option<&Store>) -> Written {
+    lines_in(source, width, store, 0..usize::MAX)
+}
+
+/// The rows of `rows` out of the answer, and the count it is worth whole: a
+/// frame asks for the rows its window holds, and the answer above and below them
+/// is counted rather than laid out. A caller that wants every row asks for
+/// `lines`.
+pub fn lines_in(source: &str, width: u16, store: Option<&Store>, rows: Range<usize>) -> Written {
     let mut writer = Writer::new(width.max(1) as usize, store, source);
+    writer.keep = rows;
     let options = Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH;
     for (event, range) in Parser::new_ext(source, options).into_offset_iter() {
         writer.event(event, range);
     }
     writer.finish()
+}
+
+/// How many rows the answer is worth at `width`, counted and not built: what a
+/// frame places a window against, and the number a scroll-back, `End`, `Home`
+/// and the new-rows badge all land on.
+pub fn height(source: &str, width: u16, store: Option<&Store>) -> usize {
+    lines_in(source, width, store, 0..0).total
 }
 
 struct List {
@@ -72,6 +89,13 @@ struct Writer<'a> {
     /// How far into the source the code block being written has been read: the
     /// end of the last of its text, and nothing else.
     code_read: usize,
+    /// The rows of the answer the caller wants, in the answer's own rows: what
+    /// the window holds. Every row outside it is counted and never built.
+    keep: Range<usize>,
+    /// How many rows the answer has said so far, and so where the next one
+    /// goes: the count is kept in the answer's coordinates even where the rows
+    /// themselves are not.
+    counted: usize,
 }
 
 impl<'a> Writer<'a> {
@@ -96,6 +120,8 @@ impl<'a> Writer<'a> {
             store,
             image: None,
             code_read: 0,
+            keep: 0..usize::MAX,
+            counted: 0,
         }
     }
 
@@ -104,6 +130,7 @@ impl<'a> Writer<'a> {
         Written {
             rows: self.lines,
             pictures: self.pictures,
+            total: self.counted,
         }
     }
 
@@ -147,10 +174,10 @@ impl<'a> Writer<'a> {
             Event::HardBreak => self.flush(),
             Event::Rule => {
                 self.block_end();
-                self.lines.push(Line::from(Span::styled(
+                self.keep(vec![Line::from(Span::styled(
                     "─".repeat(self.width),
                     theme::faint(),
-                )));
+                ))]);
             }
             _ => {}
         }
@@ -226,22 +253,6 @@ impl<'a> Writer<'a> {
         }
     }
 
-    fn item(&mut self) {
-        self.flush();
-        let Some(list) = self.lists.last_mut() else {
-            return;
-        };
-        let marker = match list.next.as_mut() {
-            Some(next) => {
-                let marker = format!("{next}. ");
-                *next += 1;
-                marker
-            }
-            None => "• ".to_string(),
-        };
-        self.indent = " ".repeat(self.lists.len().saturating_sub(1) * 2) + &marker;
-    }
-
     fn style(&self) -> Style {
         if let Some(level) = self.heading {
             return heading::style(level);
@@ -263,15 +274,6 @@ impl<'a> Writer<'a> {
         style
     }
 
-    /// The row beneath a heading, as its level asks for: the words have just
-    /// been flushed, so the rule is the next row of the block.
-    fn heading_rule(&mut self, level: HeadingLevel) {
-        let prefix = "│ ".repeat(self.quote);
-        if let Some(rule) = heading::rule(level as u8, &prefix, self.width) {
-            self.lines.push(rule);
-        }
-    }
-
     /// A link's target, dimmed beside its words. A link that names nowhere
     /// adds nothing at all: the words were already drawn as plain text.
     fn link_end(&mut self) {
@@ -280,112 +282,5 @@ impl<'a> Writer<'a> {
         };
         self.pending
             .push(Span::styled(format!(" ‹{target}›"), theme::faint()));
-    }
-
-    fn block_end(&mut self) {
-        self.flush();
-        self.apart = true;
-        self.indent.clear();
-        self.pending.clear();
-    }
-
-    fn flush(&mut self) {
-        if self.pending.is_empty() {
-            return;
-        }
-        let visible = self
-            .pending
-            .iter()
-            .any(|span| !span.content.trim().is_empty());
-        let spans = std::mem::take(&mut self.pending);
-        if !visible {
-            return;
-        }
-        if self.apart && !self.lines.is_empty() {
-            self.lines.push(Line::default());
-        }
-        self.apart = false;
-        let mut prefix = "│ ".repeat(self.quote);
-        prefix.push_str(&self.indent);
-        self.indent.clear();
-        let cells = self.width.saturating_sub(prefix.chars().count());
-        let mut glyphs = text::glyphs(&spans);
-        // A row never opens with a space the block did not ask for: the indent
-        // is the writer's, and text that resumes below a picture's caption
-        // starts its row with its first word.
-        let lead = glyphs.iter().take_while(|(ch, _)| *ch == ' ').count();
-        glyphs.drain(..lead);
-        self.lines
-            .extend(text::wrap(glyphs, &prefix, theme::faint(), cells));
-    }
-
-    /// Whether the fence that has just ended is still arriving: its body runs
-    /// to the end of the answer, so its closing delimiter is a line the stream
-    /// has not sent yet and the body will be longer on the next delta. Read
-    /// from the bytes rather than from the parser, which ends an unterminated
-    /// block at the document's end and says nothing about why.
-    fn arriving(&self) -> bool {
-        self.source
-            .get(self.code_read..)
-            .is_some_and(|tail| tail.trim().is_empty())
-    }
-
-    fn code_block(&mut self) {
-        let Some((language, body)) = self.code.take() else {
-            return;
-        };
-        if self.apart && !self.lines.is_empty() {
-            self.lines.push(Line::default());
-        }
-        self.apart = false;
-        // A fence naming `mermaid` is a picture where a picture is a block. It
-        // branches here so that the panel below stays the one thing every other
-        // fence is drawn as.
-        let arriving = self.arriving();
-        let refused = match mermaid::fence(self, language.as_deref(), &body, arriving) {
-            mermaid::Fence::Drawn => return,
-            mermaid::Fence::Panel => None,
-            mermaid::Fence::Refused(reason) => Some(reason),
-        };
-        self.lines.extend(code::panel(
-            body.trim_end_matches('\n'),
-            language.as_deref(),
-            self.width,
-        ));
-        // A fence nothing would draw keeps its source, with the parser's words
-        // under it in the ink a caption keeps: no cell of it is swallowed.
-        if let Some(reason) = refused {
-            let words = [Span::styled(reason, theme::faint())];
-            let rows = text::wrap(text::glyphs(&words), "", theme::faint(), self.width);
-            self.lines.extend(rows);
-        }
-        self.apart = true;
-    }
-
-    fn cell(&mut self) {
-        let text: String = self
-            .pending
-            .drain(..)
-            .map(|span| span.content.to_string())
-            .collect();
-        let row = self.row;
-        if let Some(table) = self.table.as_mut() {
-            table.cell(row, text.trim().to_string());
-            if self.in_table_head && table.head <= row {
-                table.head = row + 1;
-            }
-        }
-        self.apart = false;
-    }
-
-    fn table_block(&mut self) {
-        let Some(table) = self.table.take() else {
-            return;
-        };
-        if self.apart && !self.lines.is_empty() {
-            self.lines.push(Line::default());
-        }
-        self.lines.extend(table::lines(&table, self.width));
-        self.apart = true;
     }
 }
