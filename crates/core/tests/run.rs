@@ -8,48 +8,18 @@
     reason = "a panicking test is how a session that cannot start reports itself"
 )]
 
+mod support;
+
 use std::io;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use sindri_core::agent::{Report, Stopped};
-use sindri_core::config::{Config, Provider};
 use sindri_core::provider::{Error, Usage};
 use sindri_core::record::Stored;
 use sindri_core::sandbox::{Enforcement, PolicyError};
 use sindri_core::session::{Env, Session, StartError};
-use tempfile::TempDir;
-
-/// A credential shaped like a real one but belonging to nothing.
-const KEY: &str = "sk-ant-test-not-a-real-key";
-
-fn host() -> (TempDir, Env) {
-    let root = TempDir::new().expect("host");
-    let workspace = root.path().join("workspace");
-    std::fs::create_dir_all(&workspace).expect("workspace");
-    let env = Env {
-        workspace: workspace.canonicalize().expect("canonical workspace"),
-        search_path: "/usr/bin:/bin".to_string(),
-        state: root.path().join("state"),
-    };
-    (root, env)
-}
-
-fn config(extras: &[&Path]) -> Config {
-    Config {
-        provider: Provider::Anthropic,
-        model: "claude-mock".to_string(),
-        api_key: KEY.to_string(),
-        base_url: None,
-        max_turns: 8,
-        timeout: Duration::from_secs(30),
-        thinking: false,
-        extra_writable: extras.iter().map(|path| path.to_path_buf()).collect(),
-        enforcement: Enforcement::Bubblewrap,
-        extra_headers: Vec::new(),
-        refused_repo_config: None,
-    }
-}
+use support::{config, host};
 
 fn report(stopped: Stopped) -> Report {
     Report {

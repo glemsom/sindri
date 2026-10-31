@@ -85,7 +85,9 @@ fn launch(boot: &Boot) -> Launch {
     Launch {
         session: boot.session.dir().id().to_string(),
         temp: boot.session.dir().temp().display().to_string(),
-        branch: git_branch(),
+        // The session's own probe, not a second one: the rail states the
+        // branch the record holds.
+        branch: boot.session.git().map(|git| git.branch.clone()),
         sandbox: posture(boot.session.policy()),
         provider: boot.config.provider.as_str().to_string(),
         model: boot.config.model.clone(),
@@ -300,18 +302,6 @@ fn workspace(dir: &std::path::Path) -> String {
         },
         None => dir.display().to_string(),
     }
-}
-
-fn git_branch() -> Option<String> {
-    let output = std::process::Command::new("git")
-        .args(["rev-parse", "--abbrev-ref", "HEAD"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    (!branch.is_empty()).then_some(branch)
 }
 
 #[cfg(test)]

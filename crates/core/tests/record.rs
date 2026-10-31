@@ -24,11 +24,11 @@ fn recording(enforcement: Enforcement) -> (TempDir, SessionDir, Recorder) {
     let session = SessionDir::at(root.path().join("sessions/session-1"));
     let recorder = Recorder::start(
         &session,
-        Start {
-            provider: "anthropic".to_string(),
-            model: "claude-mock".to_string(),
+        Start::of(
+            "anthropic".to_string(),
+            "claude-mock".to_string(),
             enforcement,
-        },
+        ),
         Redaction::new([KEY.to_string()]),
     )
     .expect("start the record");
@@ -252,11 +252,11 @@ fn a_record_that_could_not_be_started_says_why() {
 
     let refused = Recorder::start(
         &SessionDir::at(file),
-        Start {
-            provider: "anthropic".to_string(),
-            model: "claude-mock".to_string(),
-            enforcement: Enforcement::Bubblewrap,
-        },
+        Start::of(
+            "anthropic".to_string(),
+            "claude-mock".to_string(),
+            Enforcement::Bubblewrap,
+        ),
         Redaction::default(),
     );
     assert!(

@@ -31,6 +31,11 @@ fn meta(id: &str, started_ms: u64, stopped: &str, turns: Option<u32>) -> Meta {
         stopped: stopped.to_string(),
         usage: None,
         error: None,
+        policy: None,
+        workspace: String::new(),
+        git: None,
+        max_turns: 0,
+        thinking: false,
     }
 }
 

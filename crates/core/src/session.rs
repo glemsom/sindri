@@ -22,6 +22,7 @@ use crate::record::{Recorder, Redaction, Start};
 use crate::sandbox::{
     Enforcement, FALLBACK_PATH, NetworkPosture, PolicyError, SandboxPolicy, WritableSet,
 };
+use crate::workspace::{self, Git};
 
 pub type LoopError = Error;
 
@@ -93,6 +94,9 @@ pub struct Session {
     env: Env,
     dir: SessionDir,
     policy: SandboxPolicy,
+    /// The tree the run was opened in, probed once: the rail and the record
+    /// read this one value, so they cannot name different branches.
+    git: Option<Git>,
     recorder: Arc<Recorder>,
 }
 
@@ -103,12 +107,18 @@ impl Session {
         // sandbox refuses must not leave a record saying `running`, which no
         // reader could tell from a run that is still going.
         let policy = derive(env, &dir, &config.extra_writable, config.enforcement)?;
+        let git = workspace::git(&env.workspace);
         let recorder = Recorder::start(
             &dir,
             Start {
                 provider: config.provider.as_str().to_string(),
                 model: config.model.clone(),
                 enforcement: config.enforcement,
+                policy: Some(policy.describe()),
+                workspace: env.workspace.display().to_string(),
+                git: git.clone(),
+                max_turns: config.max_turns,
+                thinking: config.thinking,
             },
             Redaction::new([config.api_key.clone()]),
         )
@@ -121,10 +131,13 @@ impl Session {
             env: env.clone(),
             dir,
             policy,
+            git,
             recorder: Arc::new(recorder),
         })
     }
 
+    /// The next prompt's policy, and the record's if it moved: a writable set
+    /// that changed under a thread is announced where it changed.
     pub fn rebase(&mut self, config: &Config) -> Result<(), StartError> {
         self.policy = derive(
             &self.env,
@@ -132,6 +145,7 @@ impl Session {
             &config.extra_writable,
             config.enforcement,
         )?;
+        self.recorder.rebase(&self.policy.describe());
         Ok(())
     }
 
@@ -163,6 +177,12 @@ impl Session {
 
     pub fn policy(&self) -> &SandboxPolicy {
         &self.policy
+    }
+
+    /// The tree's git facts as the record holds them, so a front end states
+    /// what the run recorded rather than shelling git a second time.
+    pub fn git(&self) -> Option<&Git> {
+        self.git.as_ref()
     }
 
     pub fn recorder(&self) -> Arc<Recorder> {

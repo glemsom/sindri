@@ -30,6 +30,7 @@ use crate::exec::StatusSink;
 use crate::paths::SessionDir;
 use crate::provider::{Call, ToolOutcome, Usage};
 use crate::sandbox::Enforcement;
+use crate::workspace::Git;
 use entry::Entry as Line;
 
 /// What a turn cost, when the loop measured it: the turn's own counters and the
@@ -57,6 +58,37 @@ pub struct Start {
     pub provider: String,
     pub model: String,
     pub enforcement: Enforcement,
+    /// The description the model is handed, verbatim: the record keeps the one
+    /// text rather than a structured copy of it. Absent only for a caller with
+    /// no policy to hand over, which no run is.
+    pub policy: Option<String>,
+    /// The tree the run stands in, and its git facts where it is a repository.
+    pub workspace: String,
+    pub git: Option<Git>,
+    /// The dials the run obeys.
+    pub max_turns: u32,
+    pub thinking: bool,
+}
+
+impl Start {
+    /// A record started with nothing but the run's identity, for a caller that
+    /// is not a run: the fields only a live session can probe stay empty.
+    pub fn of(
+        provider: impl Into<String>,
+        model: impl Into<String>,
+        enforcement: Enforcement,
+    ) -> Start {
+        Start {
+            provider: provider.into(),
+            model: model.into(),
+            enforcement,
+            policy: None,
+            workspace: String::new(),
+            git: None,
+            max_turns: 0,
+            thinking: false,
+        }
+    }
 }
 
 pub struct Recorder {
@@ -91,6 +123,11 @@ impl Recorder {
             stopped: "running".to_string(),
             usage: None,
             error: None,
+            policy: start.policy,
+            workspace: start.workspace,
+            git: start.git,
+            max_turns: start.max_turns,
+            thinking: start.thinking,
         };
         write_meta(&root, &meta)?;
         let transcript = open(root.join("transcript.jsonl"))?;
@@ -165,6 +202,25 @@ impl Recorder {
                 .map(|path| self.redaction.apply(path))
                 .collect(),
         });
+    }
+
+    /// The boundary moved between prompts: the metadata settles on the new
+    /// description and the transcript says when it moved, so a run whose
+    /// writable set changed does not claim its first policy for all of it.
+    /// Text identical to the last one recorded is not a change.
+    pub fn rebase(&self, description: &str) {
+        let Ok(mut inner) = self.inner.lock() else {
+            return;
+        };
+        if inner.meta.policy.as_deref() == Some(description) {
+            return;
+        }
+        inner.meta.policy = Some(description.to_string());
+        let _ = write_meta(&self.root, &inner.meta);
+        let line = Line::Policy {
+            description: self.redaction.apply(description),
+        };
+        let _ = writeln!(inner.transcript, "{}", json(&line));
     }
 
     pub fn finish(&self, report: &Report) -> io::Result<()> {

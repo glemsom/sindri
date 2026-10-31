@@ -100,3 +100,52 @@ fn the_rail_names_the_workspace_the_sandbox_actually_mounts() {
     );
     assert_eq!(launch.model, "model-one", "the model the run asks");
 }
+
+/// One probe of one repository: the branch the rail states is the branch the
+/// record holds, because the frame reads the session's own value and never
+/// shells git a second time.
+#[test]
+fn the_rail_and_the_record_share_one_git_lookup() {
+    let root = TempDir::new().expect("temp root");
+    let mut env = env(&root);
+    let git = |args: &[&str]| {
+        let out = std::process::Command::new("git")
+            .args([
+                "-c",
+                "user.name=sindri",
+                "-c",
+                "user.email=sindri@example.invalid",
+            ])
+            .args(args)
+            .current_dir(&env.workspace)
+            .output()
+            .expect("git runs");
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    git(&["init", "-q", "--initial-branch=the-branch"]);
+    std::fs::write(env.workspace.join("readme"), "one line\n").expect("a file to commit");
+    git(&["add", "readme"]);
+    git(&["commit", "-q", "-m", "the first commit"]);
+    env.workspace = env.workspace.canonicalize().expect("canonical workspace");
+
+    let boot = boot::Configured {
+        env,
+        config: config(),
+    }
+    .start()
+    .expect("a session in the repository");
+
+    let launch = launch(&boot);
+    assert_eq!(
+        launch.branch.as_deref(),
+        Some("the-branch"),
+        "the rail states the branch the record probed"
+    );
+    let stored = sindri_core::record::Stored::load_in(boot.session.dir()).expect("the record");
+    assert_eq!(
+        launch.branch.as_deref(),
+        stored.meta.git.as_ref().map(|git| git.branch.as_str()),
+        "one lookup, so the two cannot disagree"
+    );
+}

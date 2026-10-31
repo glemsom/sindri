@@ -10,13 +10,16 @@
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use sindri_core::agent::{Agent, Event, Report};
 use sindri_core::cancel::Cancel;
+use sindri_core::config::{Config, Provider};
 use sindri_core::exec::{BashExecutor, Outcome, ToolResult};
 use sindri_core::provider::{Call, Delta, DeltaSink, Error, Message, Model, ToolSpec, Turn, Usage};
 use sindri_core::record::Recorder;
 use sindri_core::sandbox::{Enforcement, NetworkPosture, SandboxPolicy, WritableSet};
+use sindri_core::session::Env;
 use tempfile::TempDir;
 
 pub fn fixtures() -> (TempDir, PathBuf, SandboxPolicy) {
@@ -37,6 +40,62 @@ pub fn policy(workspace: &TempDir, session_temp: &Path) -> SandboxPolicy {
         Enforcement::Bubblewrap,
     )
     .expect("policy")
+}
+
+/// A credential shaped like a real one but belonging to nothing.
+pub const KEY: &str = "sk-ant-test-not-a-real-key";
+
+pub fn host() -> (TempDir, Env) {
+    let root = TempDir::new().expect("host");
+    let workspace = root.path().join("workspace");
+    std::fs::create_dir_all(&workspace).expect("workspace");
+    let env = Env {
+        workspace: workspace.canonicalize().expect("canonical workspace"),
+        search_path: "/usr/bin:/bin".to_string(),
+        state: root.path().join("state"),
+    };
+    (root, env)
+}
+
+pub fn config(extras: &[&Path]) -> Config {
+    Config {
+        provider: Provider::Anthropic,
+        model: "claude-mock".to_string(),
+        api_key: KEY.to_string(),
+        base_url: None,
+        max_turns: 8,
+        timeout: Duration::from_secs(30),
+        thinking: false,
+        extra_writable: extras.iter().map(|path| path.to_path_buf()).collect(),
+        enforcement: Enforcement::Bubblewrap,
+        extra_headers: Vec::new(),
+        refused_repo_config: None,
+    }
+}
+
+/// A tree with one commit, so the probe has a branch and a commit to name.
+pub fn commit(dir: &Path) -> String {
+    let author = [
+        "-c",
+        "user.name=sindri",
+        "-c",
+        "user.email=sindri@example.invalid",
+    ];
+    let git = |args: &[&str]| {
+        let out = std::process::Command::new("git")
+            .args(author)
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .expect("git runs");
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    git(&["init", "-q", "--initial-branch=main"]);
+    std::fs::write(dir.join("readme"), "one line\n").expect("a file to commit");
+    git(&["add", "readme"]);
+    git(&["commit", "-q", "-m", "the first commit"]);
+    git(&["rev-parse", "HEAD"])
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
