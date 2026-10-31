@@ -1,11 +1,11 @@
+//! The checks that must fail loudly: an eval whose assertions cannot fail is a
+//! green light that proves nothing, and these two are the ones the product's
+//! safety rests on.
+
 #![allow(
     clippy::expect_used,
     reason = "a test harness reports a setup failure by panicking"
 )]
-
-//! The checks that must fail loudly: an eval whose assertions cannot fail is a
-//! green light that proves nothing, and these two are the ones the product's
-//! safety rests on.
 
 use std::path::PathBuf;
 

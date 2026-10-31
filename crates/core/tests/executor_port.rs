@@ -1,10 +1,10 @@
+//! The bash-executor port: the turn loop must be testable without bubblewrap,
+//! so a scripted fake has to satisfy the same interface as the real executor.
+
 #![allow(
     clippy::expect_used,
     reason = "a panicking test is how a broken contract reports itself"
 )]
-
-//! The bash-executor port: the turn loop must be testable without bubblewrap,
-//! so a scripted fake has to satisfy the same interface as the real executor.
 
 use std::sync::{Arc, Mutex};
 

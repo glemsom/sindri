@@ -1,12 +1,12 @@
-#![allow(
-    clippy::expect_used,
-    reason = "a panicking test is how a broken list reports itself"
-)]
-
 //! The record as a list, and as markdown: `/sessions` and `/export` read what a
 //! run left, from the same files `sindri sessions show` reads. Nothing here
 //! writes a record: every fixture is a directory a run could have left, and the
 //! listing is only ever a read of it.
+
+#![allow(
+    clippy::expect_used,
+    reason = "a panicking test is how a broken list reports itself"
+)]
 
 use std::path::Path;
 

@@ -1,11 +1,11 @@
+//! `sindri sessions list`: the records a state directory holds, one row each,
+//! newest first. The fixtures are directories a run could have left, so the
+//! listing is proven without starting a run, and nothing here writes a record.
+
 #![allow(
     clippy::expect_used,
     reason = "a panicking harness is how a process test reports a setup failure"
 )]
-
-//! `sindri sessions list`: the records a state directory holds, one row each,
-//! newest first. The fixtures are directories a run could have left, so the
-//! listing is proven without starting a run, and nothing here writes a record.
 
 mod common;
 

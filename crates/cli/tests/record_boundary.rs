@@ -1,12 +1,12 @@
-#![allow(
-    clippy::expect_used,
-    reason = "a panicking harness is how a process test reports a setup failure"
-)]
-
 //! The record's boundary as a user finds it after the fact: the policy the model
 //! was handed, the tree the run stood in, and the dials it obeyed — asserted
 //! from outside the binary, on the `session.json` a run leaves, and against what
 //! `sindri doctor` prints for the same overrides.
+
+#![allow(
+    clippy::expect_used,
+    reason = "a panicking harness is how a process test reports a setup failure"
+)]
 
 mod common;
 

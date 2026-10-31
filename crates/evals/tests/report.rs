@@ -1,10 +1,10 @@
+//! The suite's own contract: one table line per eval, and a status a CI job can
+//! branch on.
+
 #![allow(
     clippy::expect_used,
     reason = "a test harness reports a setup failure by panicking"
 )]
-
-//! The suite's own contract: one table line per eval, and a status a CI job can
-//! branch on.
 
 use sindri_evals::report::{Verdict, exit_code, line};
 

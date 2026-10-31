@@ -1,11 +1,11 @@
+//! The `bash` tool's contract with the model: one tool, a description derived
+//! from the sandbox policy rather than written by hand, and a
+//! structured result rendered with every field promised.
+
 #![allow(
     clippy::expect_used,
     reason = "a panicking test is how a broken contract reports itself"
 )]
-
-//! The `bash` tool's contract with the model: one tool, a description derived
-//! from the sandbox policy rather than written by hand, and a
-//! structured result rendered with every field promised.
 
 mod support;
 

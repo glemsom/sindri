@@ -1,10 +1,10 @@
+//! A record's date: one format, in the local zone, and the same one `sessions
+//! list` prints.
+
 #![allow(
     clippy::expect_used,
     reason = "a panicking test is how a broken clock reports itself"
 )]
-
-//! A record's date: one format, in the local zone, and the same one `sessions
-//! list` prints.
 
 use std::process::Command;
 

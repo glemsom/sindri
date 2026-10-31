@@ -1,13 +1,13 @@
-#![allow(
-    clippy::expect_used,
-    reason = "a panicking test is how a broken record reports itself"
-)]
-
 //! What a turn and a call cost, kept as fields beside the text the model was
 //! shown: per-turn usage and duration on an `Assistant` entry, and a call's
 //! outcome, exit code, duration, truncation and spill paths on a `ToolResult`.
 //! `content` never changes — the fields are a second copy, not a replacement —
 //! and a record written before they existed still reads.
+
+#![allow(
+    clippy::expect_used,
+    reason = "a panicking test is how a broken record reports itself"
+)]
 
 mod support;
 

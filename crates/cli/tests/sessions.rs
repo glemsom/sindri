@@ -1,12 +1,12 @@
-#![allow(
-    clippy::expect_used,
-    reason = "a panicking harness is how a process test reports a setup failure"
-)]
-
 //! The process seam for session records: the directory a run leaves
 //! on disk, the id the output names, `sessions show` reading it back, and the
 //! record a cancelled or killed run still leaves. Everything here is asserted
 //! from outside the binary, on files and exit codes.
+
+#![allow(
+    clippy::expect_used,
+    reason = "a panicking harness is how a process test reports a setup failure"
+)]
 
 mod common;
 

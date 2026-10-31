@@ -1,10 +1,10 @@
+//! The suite's own shell contract: a selector that matches nothing is a usage
+//! error, so a typo cannot be mistaken for a green run.
+
 #![allow(
     clippy::expect_used,
     reason = "a test harness reports a setup failure by panicking"
 )]
-
-//! The suite's own shell contract: a selector that matches nothing is a usage
-//! error, so a typo cannot be mistaken for a green run.
 
 #[test]
 fn a_selector_that_matches_no_eval_is_a_usage_error() {
