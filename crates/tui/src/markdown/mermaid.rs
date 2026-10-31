@@ -7,9 +7,13 @@
 //! because the frame's expansion opens an entry and a diagram is a block inside
 //! an answer's (`crate::expand`). A fence that will not parse is the panel it
 //! was, with the parser's reason under it, because a reader may never lose a
-//! diagram's source to a renderer's opinion; a fence still arriving is an
-//! incomplete one, which fails to parse cheaply, so a streaming answer shows its
-//! source and then the diagram the instant the fence closes.
+//! diagram's source to a renderer's opinion. A fence the stream has not closed
+//! is the panel too: its body is a prefix the next delta lengthens, and a
+//! diagram is laid out in tens of milliseconds — ten for a handful of nodes, a
+//! hundred for forty — so a render per delta is a core burned on figures thrown
+//! away as they are made. The diagram appears the instant its fence closes, and
+//! its source is on screen until then, which is what a reader mid-answer wants
+//! to read anyway.
 
 use crate::picture::Worth;
 
@@ -18,7 +22,7 @@ use super::Writer;
 /// What a fence naming `mermaid` is at the place in the answer it sits.
 pub(super) enum Fence {
     /// The panel it always was: some other language, a terminal that draws no
-    /// picture, or a place where a block cannot go.
+    /// picture, a place where a block cannot go, or a fence still arriving.
     Panel,
     /// A mermaid fence nothing will draw, and what the parser said about it.
     Refused(String),
@@ -27,9 +31,16 @@ pub(super) enum Fence {
 }
 
 /// What the writer does with a fence: the diagram where a picture is a block,
-/// the panel everywhere else.
-pub(super) fn fence(w: &mut Writer<'_>, language: Option<&str>, body: &str) -> Fence {
-    if language != Some("mermaid") || w.inline() {
+/// the panel everywhere else — including for a fence whose closing delimiter
+/// has not arrived, which `arriving` names and which is drawn as its source
+/// because its body is not yet the one the diagram will be made of.
+pub(super) fn fence(
+    w: &mut Writer<'_>,
+    language: Option<&str>,
+    body: &str,
+    arriving: bool,
+) -> Fence {
+    if language != Some("mermaid") || w.inline() || arriving {
         return Fence::Panel;
     }
     let Some(store) = w.store else {

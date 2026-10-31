@@ -34,6 +34,12 @@ fn fence(language: &str, body: &str) -> String {
     format!("```{language}\n{body}```\n")
 }
 
+/// A fence as a stream has so far sent it: the opening delimiter and the body,
+/// and no line yet closing it.
+fn arriving(language: &str, body: &str) -> String {
+    format!("```{language}\n{body}")
+}
+
 #[test]
 fn a_mermaid_fence_reserves_the_rows_the_store_measured_and_captions_them() {
     let block = markdown::lines(&fence("mermaid", DIAGRAM), 60, Some(&store()));
@@ -102,6 +108,57 @@ fn a_mermaid_fence_that_will_not_parse_is_its_panel_and_the_parser_s_reason() {
     assert!(
         said.contains("expected"),
         "and it is what the parser said: {said:?}"
+    );
+}
+
+/// A fence whose closing delimiter the stream has not sent is the panel it is,
+/// and no diagram is made of it: its body is a prefix the next delta lengthens,
+/// and a layout is tens of milliseconds of a frame spent on a figure thrown
+/// away. Not asking the store at all is what the rows say: they are the ones a
+/// frame that draws no picture at all would write.
+#[test]
+fn a_fence_still_arriving_shows_its_source_and_asks_for_no_diagram() {
+    let block = markdown::lines(&arriving("mermaid", PORTRAIT), 60, Some(&store()));
+    let shown = texts(&block.rows);
+    let undrawn = texts(&markdown::lines(&arriving("mermaid", PORTRAIT), 60, None).rows);
+
+    assert!(
+        block.pictures.is_empty(),
+        "a fence still arriving is no block: {shown:?}"
+    );
+    assert_eq!(
+        shown, undrawn,
+        "and it is the panel every fence without a graphic is: {shown:?}"
+    );
+    assert!(
+        shown.iter().any(|row| row.contains("refuse the fence")),
+        "the source is on screen while it arrives: {shown:?}"
+    );
+    assert!(
+        !shown.iter().any(|row| row.contains('‹')),
+        "and nothing is said of a diagram that was never measured: {shown:?}"
+    );
+}
+
+/// The instant the closing delimiter lands the diagram is drawn, in an answer
+/// whose prose is still streaming: what arrives after a closed fence does not
+/// wait for the answer to end.
+#[test]
+fn a_fence_that_closed_is_drawn_while_the_answer_runs_on() {
+    let closed = format!("```mermaid\n{PORTRAIT}```\n\nand the prose after it\n");
+    let block = markdown::lines(&closed, 60, Some(&store()));
+    let shown = texts(&block.rows);
+
+    assert_eq!(
+        block.pictures.len(),
+        1,
+        "a closed fence is a diagram: {shown:?}"
+    );
+    assert!(
+        shown
+            .iter()
+            .any(|row| row.contains("and the prose after it")),
+        "with the prose under it still streaming: {shown:?}"
     );
 }
 
