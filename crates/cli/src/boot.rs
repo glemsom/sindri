@@ -89,7 +89,7 @@ mod tests {
 
     use std::time::Duration;
 
-    use sindri_core::config::Provider;
+    use sindri_core::config::{Provider, Theme};
     use sindri_core::sandbox::Enforcement;
     use tempfile::TempDir;
 
@@ -98,6 +98,7 @@ mod tests {
     fn config() -> Config {
         Config {
             provider: Provider::Anthropic,
+            theme: Theme::Anvil,
             model: "model-one".to_string(),
             api_key: String::new(),
             base_url: None,

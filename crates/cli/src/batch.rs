@@ -29,6 +29,7 @@ pub enum OutputFormat {
 pub struct Flags {
     pub format: OutputFormat,
     pub provider: Option<String>,
+    pub theme: Option<String>,
     pub model: Option<String>,
     pub base_url: Option<String>,
     pub max_turns: Option<u32>,
@@ -44,6 +45,7 @@ impl From<Flags> for Overrides {
     fn from(flags: Flags) -> Self {
         Overrides {
             provider: flags.provider,
+            theme: flags.theme,
             model: flags.model,
             base_url: flags.base_url,
             max_turns: flags.max_turns,

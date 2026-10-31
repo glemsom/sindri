@@ -166,6 +166,7 @@ One file, `$XDG_CONFIG_HOME/sindri/config.toml` (example:
 | Setting | File key | Environment | Flag |
 | --- | --- | --- | --- |
 | Provider | `provider` | `SINDRI_PROVIDER` | `--provider` |
+| Theme | `theme` | `SINDRI_THEME` | `--theme` |
 | Model | `model` | `SINDRI_MODEL` | `--model` |
 | Base URL | `base_url` | `SINDRI_BASE_URL` | `--base-url` |
 | Credential | `api_key` | `SINDRI_API_KEY` | — |

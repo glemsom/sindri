@@ -9,6 +9,14 @@
 # server that speaks its shape (Ollama, vLLM, LM Studio, OpenRouter).
 provider = "anthropic"
 
+# Which palette to draw with: "anvil", the one there is. A closed set of names
+# rather than a colour or a hex string, because a theme is held to a law — every
+# colour at a floor above the canvas — that only a finite set of colours can be
+# checked against. SINDRI_THEME and --theme name the same key, and the flag wins
+# over the environment, which wins over this file. An unknown name is an error,
+# not a fallback.
+theme = "anvil"
+
 # The model to ask. Required: there is no default, so a missing model is an
 # explicit error rather than a guess.
 model = "claude-sonnet-4-6"

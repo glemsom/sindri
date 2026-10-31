@@ -7,7 +7,9 @@
     reason = "a panicking harness is how a process test reports a setup failure"
 )]
 
+#[path = "../common/mod.rs"]
 mod common;
+mod theme;
 
 use std::process::Output;
 
