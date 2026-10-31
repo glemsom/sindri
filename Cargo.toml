@@ -33,6 +33,10 @@ pulldown-cmark = { version = "0.12", default-features = false }
 syntect = { version = "5", default-features = false, features = ["default-fancy"] }
 unicode-width = "0.2"
 base64 = "0.22"
+# A mermaid fence is a picture: the crate parses and lays the diagram out, resvg
+# rasterises the svg it returns. Nothing here draws a pixel of its own.
+mermaid-rs-renderer = { version = "0.3.1", default-features = false }
+resvg = { version = "0.47", default-features = false, features = ["text", "system-fonts"] }
 
 # A curated set, not blanket `pedantic`: lints that catch mistakes an
 # agent would otherwise ship, and no noise about trivial functions.
