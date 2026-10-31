@@ -7,6 +7,8 @@ use std::io::IsTerminal;
 
 use ratatui_image::picker::{Picker, ProtocolType};
 
+pub mod kitty;
+
 /// The terminal's answer: the protocol it speaks and the size of its cell.
 pub struct Graphics {
     picker: Picker,
