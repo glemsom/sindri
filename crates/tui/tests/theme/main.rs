@@ -140,6 +140,55 @@ fn the_diagrams_mapping_writes_no_hex_down() {
     );
 }
 
+/// The drag's wash is a surface a transcript row is read on, and it is the
+/// theme's like any other: every ink a row is drawn in keeps the body-text
+/// floor on it — the red of an error note is the one that binds — and it sits a
+/// step off both surfaces a row is drawn on, so a lit row reads as lit.
+#[test]
+fn the_drags_wash_keeps_every_ink_a_row_carries_at_the_body_text_floor() {
+    assert!(
+        theme::PALETTE.contains(&theme::MARK),
+        "the wash is a colour the theme names"
+    );
+    let inks = [
+        ("PLAIN", theme::PLAIN),
+        ("FAINT", theme::FAINT),
+        ("HEADING", theme::HEADING),
+        ("BAD", theme::BAD),
+        ("GOOD", theme::GOOD),
+        ("PROMPT", theme::PROMPT),
+        ("CODE", theme::CODE),
+        ("COMMENT", theme::COMMENT),
+        ("KEYWORD", theme::KEYWORD),
+        ("FUNCTION", theme::FUNCTION),
+        ("TYPE", theme::TYPE),
+        ("NUMBER", theme::NUMBER),
+        ("STRING", theme::STRING),
+        ("DIFF_FILE", theme::DIFF_FILE),
+        // A marked diff row loses its own wash to the mark's, so the inks that
+        // carry its `+`, `-` and `@@` are read on the mark alone.
+        ("DIFF_ADDED", theme::DIFF_ADDED),
+        ("DIFF_REMOVED", theme::DIFF_REMOVED),
+        ("DIFF_HUNK", theme::DIFF_HUNK),
+    ];
+    for (role, ink) in inks {
+        let cleared = ratio(ink, theme::MARK);
+        assert!(
+            cleared >= 4.5,
+            "the {role} ink on the drag's wash is {cleared:.2}:1, under the 4.5:1 \
+             a marked row is still read at"
+        );
+    }
+    for surface in [theme::CANVAS, theme::PANEL] {
+        let step = ratio(theme::MARK, surface);
+        assert!(
+            step >= 1.15,
+            "the wash is {step:.2}:1 from {surface:?} — under the step a diff row's \
+             tint already holds, so a marked row would not read as marked"
+        );
+    }
+}
+
 /// The `#rrggbb` runs in a piece of Rust: a `#` and the hex digits that follow
 /// it, three or six of them. Doc prose (`#rrggbb`), an attribute (`#[cfg]`) and
 /// a format string (`#{r:02x}`) are not colours and do not match.

@@ -8,7 +8,6 @@
 use std::path::PathBuf;
 
 use ratatui::layout::{Position, Rect};
-use unicode_width::UnicodeWidthChar;
 
 use crate::picture::Worth;
 
@@ -115,103 +114,48 @@ impl Selection {
     }
 }
 
+/// The words a drawn row copies as: what a picture's block stands for — its
+/// caption, or the fence body a diagram hides — when the row is one of the
+/// block's filler rows, which is where a drag that starts inside a block lands
+/// and why it still takes the words; the row itself everywhere else.
+pub fn words(viewport: &Viewport, row: usize) -> &str {
+    match viewport.filler(row) {
+        Some(picture) => &picture.copy,
+        None => viewport.rows.get(row).map_or("", String::as_str),
+    }
+}
+
 /// The text a selection takes: the rows it covers, the first from the column
 /// the drag started on, the last up to the column it ended on, and every row
 /// between in full. Rows are joined with one newline each, and nothing else
 /// is added — a copy is not a paraphrase.
 pub fn copied(viewport: &Viewport, selection: &Selection) -> Option<String> {
-    if selection.is_empty() || viewport.rows.is_empty() {
-        return None;
-    }
-    let (start, end) = ordered(selection.anchor, selection.head);
-    let area = viewport.area;
-    let first = row_in(viewport, start)?;
-    let last = row_in(viewport, end)?;
-    let below = end.y >= area.y + viewport.rows.len() as u16;
     let mut lines = Vec::new();
-    for index in first..=last {
-        // A picture's block copies as its words once: the rows past its first
-        // are a graphic's — or the words themselves, carried whole on that first
-        // row — so a copy of them would be a run of blank lines.
-        // A drag that starts below the block's first row still takes the words.
-        let inside = viewport.filler(index);
-        let words;
-        let row: &str = match inside {
-            Some(_) if index != first => continue,
-            Some(picture) => {
-                words = picture.copy.clone();
-                &words
-            }
-            None => &viewport.rows[index],
-        };
-        let from = if index == first {
-            char_at(row, (start.x.saturating_sub(area.x)) as usize)
-        } else {
-            0
-        };
-        let to = if index != last || below {
-            row.chars().count()
-        } else {
-            char_after(row, (end.x.saturating_sub(area.x)) as usize)
-        };
+    for (at, covered) in crate::mark::span(viewport, selection)
+        .into_iter()
+        .enumerate()
+    {
+        let row = words(viewport, covered.row);
+        // The text a row yields is the characters the span names, cut at their
+        // end: a selection of characters, never of cells.
         let taken: String = row
             .chars()
-            .skip(from)
-            .take(to.saturating_sub(from))
+            .skip(covered.chars.start)
+            .take(covered.chars.len())
             .collect::<String>()
             .trim_end()
             .to_string();
-        if !taken.is_empty() || index != first {
+        // Only rows that are blank are dropped: the indentation of the first row
+        // taken is part of what the user selected.
+        if !taken.is_empty() || at != 0 {
             lines.push(taken);
         }
     }
-    // Only rows that are blank are dropped: the indentation of the first row
-    // taken is part of what the user selected.
     while lines.last().is_some_and(|line| line.trim().is_empty()) {
         lines.pop();
     }
     let text = lines.join("\n");
     (!text.trim().is_empty()).then_some(text)
-}
-
-/// The character a screen column falls on. A cell is not a character: a wide
-/// glyph takes two, and a selection takes it whole rather than half of it.
-fn char_at(row: &str, column: usize) -> usize {
-    let mut used = 0;
-    for (index, ch) in row.chars().enumerate() {
-        if used >= column {
-            return index;
-        }
-        used += UnicodeWidthChar::width(ch).unwrap_or(0);
-    }
-    row.chars().count()
-}
-
-/// The character just past the one covering `column`, so a selection that
-/// ends on a wide glyph includes all of it.
-fn char_after(row: &str, column: usize) -> usize {
-    let mut used = 0;
-    for (index, ch) in row.chars().enumerate() {
-        used += UnicodeWidthChar::width(ch).unwrap_or(0);
-        if used > column {
-            return index + 1;
-        }
-    }
-    row.chars().count()
-}
-
-fn ordered(one: Position, other: Position) -> (Position, Position) {
-    if (one.y, one.x) <= (other.y, other.x) {
-        (one, other)
-    } else {
-        (other, one)
-    }
-}
-
-fn row_in(viewport: &Viewport, at: Position) -> Option<usize> {
-    let row = at.y.checked_sub(viewport.area.y)? as usize;
-    let last = viewport.rows.len().checked_sub(1)?;
-    Some(row.min(last))
 }
 
 #[cfg(test)]
@@ -357,6 +301,11 @@ mod tests {
             copied(&rows, &drag((2, 2), (3, 2))).as_deref(),
             Some("日"),
             "two cells of a wide glyph are the glyph"
+        );
+        assert_eq!(
+            copied(&rows, &drag((3, 2), (4, 2))).as_deref(),
+            Some("日本"),
+            "and a drag that starts on a wide glyph's second cell starts at it"
         );
     }
 

@@ -18,6 +18,7 @@ pub mod graphics;
 mod heard;
 mod heights;
 mod keys;
+mod mark;
 pub mod markdown;
 mod msg;
 pub mod overlay;

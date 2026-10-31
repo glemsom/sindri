@@ -55,6 +55,15 @@ pub const PANEL: Color = Color::Rgb(0x17, 0x1a, 0x21);
 /// A step above a panel, for a thing drawn on top of one.
 pub const RAISED: Color = Color::Rgb(0x23, 0x27, 0x33);
 
+/// The wash a drag leaves on the cells it covers: one tint over both surfaces a
+/// transcript row sits on, because the mark is one block and never a fourth
+/// tier. Dark enough that every ink a row carries still clears 4.5:1 on it —
+/// the red of an error note binds, at 4.6:1 — and a step off both surfaces, one
+/// and a fifth from the panel and one and a third from the canvas, so a lit row
+/// reads as lit while the syntax, a heading and a panel's border still read as
+/// themselves through it.
+pub const MARK: Color = Color::Rgb(0x1d, 0x27, 0x45);
+
 /// A dot leader's dots: the dimmest ink the frame spends, because a run of
 /// dots reads heavier than the label it bridges to and only has to be seen,
 /// not read. Dimmer than FAINT, and 3.34:1 on `CANVAS` — over the 3:1 a
@@ -88,6 +97,7 @@ pub const PALETTE: &[Color] = &[
     RAISED,
     LEADER,
     SEAM,
+    MARK,
     DIFF_ADDED,
     DIFF_REMOVED,
     DIFF_HUNK,
@@ -114,6 +124,12 @@ pub fn good() -> Style {
 /// renderer draws one, gets a wash above that panel instead.
 pub fn code() -> Style {
     Style::new().fg(CODE)
+}
+
+/// The wash a drag leaves: a surface and no ink, because the ink it is painted
+/// over is the row's own and must survive it.
+pub fn mark() -> Style {
+    Style::new().bg(MARK)
 }
 
 pub fn leader() -> Style {
