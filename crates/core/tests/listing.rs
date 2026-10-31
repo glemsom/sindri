@@ -1,7 +1,7 @@
-//! The record as a list, and as markdown: `/sessions` and `/export` read what a
-//! run left, from the same files `sindri sessions show` reads. Nothing here
-//! writes a record: every fixture is a directory a run could have left, and the
-//! listing is only ever a read of it.
+//! The record as a list, and as markdown: `sindri sessions list` and `/export`
+//! read what a run left, from the same files `sindri sessions show` reads.
+//! Nothing here writes a record: every fixture is a directory a run could have
+//! left, and the listing is only ever a read of it.
 
 #![allow(
     clippy::expect_used,
@@ -11,7 +11,7 @@
 use std::path::Path;
 
 use sindri_core::paths::SessionDir;
-use sindri_core::record::{Entry, Meta, Stored, summaries};
+use sindri_core::record::{Entry, Meta, Stored, listing};
 use tempfile::TempDir;
 
 fn meta(id: &str, started_ms: u64, stopped: &str, turns: Option<u32>) -> Meta {
@@ -115,7 +115,7 @@ fn the_records_are_listed_newest_first_with_what_each_one_did() {
     // A directory that is not a record: a listing must not fall over on one.
     std::fs::create_dir_all(sessions.join("not-a-record")).expect("a stray directory");
 
-    let listed = summaries(&sessions);
+    let listed = listing(&sessions).expect("a listing");
     let ids: Vec<&str> = listed.iter().map(|row| row.id.as_str()).collect();
     assert_eq!(
         ids,
@@ -161,7 +161,7 @@ fn the_row_carries_the_tokens_the_run_spent() {
         &[user("how many files?")],
     );
 
-    let listed = summaries(&sessions);
+    let listed = listing(&sessions).expect("a listing");
     assert_eq!(
         listed[0].id, "gggg",
         "newest first, and a row is still a row without a bill"
@@ -181,7 +181,7 @@ fn a_run_that_never_finished_says_running_and_still_reads_back() {
     let sessions = state.path().join("sessions");
     three(&sessions);
 
-    let listed = summaries(&sessions);
+    let listed = listing(&sessions).expect("a listing");
     let unfinished = listed
         .iter()
         .find(|row| row.id == "cccc")

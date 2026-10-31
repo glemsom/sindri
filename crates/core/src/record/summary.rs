@@ -1,7 +1,9 @@
-//! Every record a run left, as one list a front end can draw: `/sessions` and
-//! `sindri sessions list` read `session.json` for what a run was and what it
-//! spent, and the first thing the human wrote for what it was asked. Reading is
-//! not resuming — nothing here writes, and nothing starts a run.
+//! Every record a run left, as one list a front end can draw: `sindri sessions
+//! list` reads `session.json` for what a run was and what it spent, and the
+//! first thing the human wrote for what it was asked. The frame reads no
+//! listing: `sindri sessions show` and `/export` read one record whole, out of
+//! the same files. Reading is not resuming — nothing here writes, and nothing
+//! starts a run.
 //!
 //! A row's JSON is the struct's own field order, so the object a script reads
 //! and the row a person reads cannot disagree about which fact comes where.
@@ -37,12 +39,6 @@ pub struct Summary {
     pub usage: Option<Usage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prompt: Option<String>,
-}
-
-/// Every record under `sessions`, newest first, for a reader with no one to
-/// tell: a directory it cannot read is an empty list.
-pub fn summaries(sessions: &Path) -> Vec<Summary> {
-    listing(sessions).unwrap_or_default()
 }
 
 /// Every record under `sessions`, newest first, or why the directory could not

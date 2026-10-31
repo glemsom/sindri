@@ -19,7 +19,7 @@ mod summary;
 pub use entry::{Entry, Meta};
 pub use redact::Redaction;
 pub use stored::{ShowError, Stored};
-pub use summary::{Summary, listing, summaries};
+pub use summary::{Summary, listing};
 
 use std::fs::File;
 use std::io::{self, Write};
