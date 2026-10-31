@@ -359,14 +359,12 @@ impl App {
         if let Some(rows) = self.heights.at(index, width) {
             return rows;
         }
-        let rows = crate::render::rows::entry_rows(
+        let rows = crate::render::rows::entry_height(
             &self.entries[index],
             width,
             self.now,
             self.pictures.as_ref(),
-        )
-        .rows
-        .len();
+        );
         self.heights.keep(index, width, rows);
         rows
     }

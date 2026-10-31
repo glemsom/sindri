@@ -1,6 +1,7 @@
 //! The rows one frame of the transcript lays out, and what the reader's place
 //! in the thread costs: the entries it measures, the entries it never touches,
-//! and the ends it clamps at.
+//! the rows of an entry the window does not hold, which are counted and never
+//! built, and the ends it clamps at.
 
 use std::path::{Path, PathBuf};
 
@@ -9,8 +10,8 @@ use ratatui::text::Line;
 use crate::app::App;
 use crate::entry::Entry;
 use crate::render::pictures::Laid;
-use crate::render::rows::entry_rows;
-use crate::window::{Ask, Below};
+use crate::render::rows::{Want, entry_rows};
+use crate::window::Below;
 
 /// One frame's layout: the rows it built, where each entry's block of them
 /// starts, and the rows a click can land on. A block is the gap before an entry
@@ -22,6 +23,17 @@ pub(crate) struct Frame<'a> {
     pub(crate) marks: Vec<(usize, usize)>,
     /// How many entries this frame laid out or asked the height of.
     pub(crate) measured: usize,
+    /// How many rows this frame built: the window's own, and none of the answer
+    /// above or below it. A frame costs what the window holds.
+    pub(crate) built: usize,
+    /// How many rows of the first entry's block the window's top row skipped
+    /// over: the rows of the answer above the window, which the frame counted
+    /// and did not build, and which the reader's place is still measured by.
+    pub(crate) top_skip: usize,
+    /// The last entry built and how many rows of its block were built: the rows
+    /// of it that the window did not hold are below the window like the entries
+    /// after it, and no other row of the frame says so.
+    last: Option<(usize, usize)>,
     pub(crate) spill: Vec<(usize, PathBuf)>,
     pub(crate) expand: Vec<(usize, usize)>,
     /// The pictures this frame laid out: a row map like `spill` and `expand`,
@@ -40,19 +52,36 @@ impl<'a> Frame<'a> {
             expand: Vec::new(),
             pictures: Vec::new(),
             measured: 0,
+            built: 0,
+            top_skip: 0,
+            last: None,
         }
     }
 
     /// Lays out from `skip` rows into `entry`'s block until the column is full,
-    /// and answers with the rows below the window: the ones built past it and
-    /// every entry after them, measured but never laid out.
+    /// and answers with the rows below the window: the rows of the entry that
+    /// filled the column and were not built, and every entry after them, measured
+    /// but never built.
     pub(crate) fn hold(&mut self, entry: usize, skip: usize, count: usize, height: usize) -> usize {
         let mut index = entry;
         while index < count && self.rows.len() < height {
-            self.build(index, if index == entry { skip } else { 0 });
+            let want = height - self.rows.len();
+            self.build(index, if index == entry { skip } else { 0 }, want);
             index += 1;
         }
-        self.rows.len().saturating_sub(height) + self.below(index, count)
+        // What is below the window is the rows of the entry that filled the
+        // column and were not built, and every entry after it: counted whether
+        // or not the frame built a row of it, and counted from the height kept
+        // for that entry rather than walked for again.
+        let rest = match self.last {
+            Some((last, built)) => {
+                let space = gap(&self.app.entries()[last]);
+                let height = self.app.measure(last, self.width);
+                (space + height).saturating_sub(built)
+            }
+            None => 0,
+        };
+        rest + self.below(index, count)
     }
 
     /// The rows of `first..count`: measured as what an entry is worth, never
@@ -112,188 +141,87 @@ impl<'a> Frame<'a> {
             first -= 1;
             acc += gap(&self.app.entries()[first]) + self.app.measure(first, self.width);
         }
+        // The window's top row sits somewhere inside `first`'s block, so the
+        // rows above it are skipped there and nowhere else: the entries below it
+        // are built from their own first row.
+        let mut skip = acc.saturating_sub(height);
         for index in first..count {
-            self.build(index, 0);
+            if self.rows.len() >= height {
+                break;
+            }
+            let want = height - self.rows.len();
+            self.build(index, skip, want);
+            skip = 0;
         }
         first
     }
 
-    /// One entry's block, skipping `skip` of its rows. The rows a click can land
-    /// on are recorded where they were built, in the frame's own coordinates.
-    fn build(&mut self, index: usize, skip: usize) {
+    /// One entry's block, skipping `skip` of its rows and building `want` of
+    /// them: the rows a click can land on are recorded where they were built, in
+    /// the frame's own coordinates. The rows outside the ask are counted, not
+    /// built — the entry's block is what the window holds of it.
+    fn build(&mut self, index: usize, skip: usize, want: usize) {
         self.measured += 1;
         let at = self.rows.len();
+        if self.marks.is_empty() {
+            self.top_skip = skip;
+        }
         self.marks.push((index, at));
         let entry = &self.app.entries()[index];
         let gap = gap(entry);
+        // The gap is part of the entry's block, and blank rows cost nothing to
+        // build: what is skipped first is the gap.
+        let gap_rows = gap.saturating_sub(skip).min(want);
         let store = self.app.pictures();
-        let done = entry_rows(entry, self.width, self.app.now(), store);
-        if let Some(path) = spill_of(entry) {
-            self.spill
-                .push((at + gap + done.rows.len().saturating_sub(1), path));
+        let now = self.app.now();
+        let done = entry_rows(
+            entry,
+            self.width,
+            now,
+            store,
+            Want {
+                skip: skip.saturating_sub(gap),
+                want: want - gap_rows,
+            },
+        );
+        // Where the rows a click can land on are, measured in the entry's block
+        // and kept only where the window holds them: the entry's own first row,
+        // and the last row of its output.
+        let built = gap_rows + done.rows.len();
+        let row_of = |row: usize| (row < built).then(|| at + row);
+        let last = gap
+            .saturating_add(done.total)
+            .checked_sub(1)
+            .and_then(|last| last.checked_sub(skip))
+            .and_then(row_of);
+        if let (Some(path), Some(row)) = (spill_of(entry), last) {
+            self.spill.push((row, path));
         }
-        if entry.expandable() {
-            self.expand.push((at + gap, index));
+        let opening = entry
+            .expandable()
+            .then_some(gap)
+            .and_then(|at| at.checked_sub(skip));
+        if let Some(row) = opening.and_then(row_of) {
+            self.expand.push((row, index));
         }
-        // A picture is drawn at the row its block starts at. A block the window
-        // skipped into is cut at the window's top row and kept: its rows are the
-        // frame's from there, and whether any of it is drawn is the window's
-        // answer and not this one's.
+        // A picture is drawn at the row its block starts at, and `entry_rows`
+        // has already cut the blocks the window's top row sits inside: its rows
+        // are the frame's from there, and whether any of it is drawn is the
+        // window's answer and not this one's.
         for picture in done.pictures {
-            let offset = gap + picture.row;
-            let above = skip.saturating_sub(offset).min(picture.block);
-            if above == picture.block {
-                continue;
-            }
             self.pictures.push(Laid {
-                row: at + offset.saturating_sub(skip),
-                cut: above,
-                block: picture.block - above,
+                row: at + gap_rows + picture.row,
                 ..picture
             });
         }
-        let mut block: Vec<Line<'static>> = (0..gap).map(|_| Line::default()).collect();
-        block.extend(done.rows);
-        block.drain(..skip.min(block.len()));
+        let block: Vec<Line<'static>> = (0..gap_rows)
+            .map(|_| Line::default())
+            .chain(done.rows)
+            .collect();
+        self.built += block.len();
+        self.last = Some((index, block.len()));
         self.rows.extend(block);
     }
-}
-
-/// Carries out what the reader asked for: a page back or forward, the first
-/// turn, or the tail. Moving by rows measures only the entries it crosses, so a
-/// page costs a page.
-pub(crate) fn resolve(app: &mut App, width: u16, count: usize, ask: Ask, follow: &mut bool) {
-    // What a height change owes the place is paid before the reader's own
-    // request is answered: a following window has no place of its own to move,
-    // and an ask is the reader's and comes last.
-    let moved = app.window.take_shift();
-    if moved != 0 && !*follow {
-        app.window.at = step(app, width, app.window.at, moved);
-    }
-    match ask {
-        Ask::Home => {
-            *follow = false;
-            app.window.at = (0, 0);
-        }
-        Ask::End => *follow = true,
-        // The entry itself, and its own row first: the output an expansion
-        // opens grows below the row the reader pressed `Enter` on.
-        Ask::Hold(entry) => {
-            *follow = false;
-            app.window.at = (entry, 0);
-        }
-        Ask::Rows(rows) if rows > 0 => {
-            *follow = false;
-            app.window.at = back(app, width, app.window.at, rows.unsigned_abs());
-        }
-        Ask::Rows(rows) if rows < 0 && !*follow => {
-            match forward(app, width, app.window.at, rows.unsigned_abs()) {
-                Some(at) => app.window.at = at,
-                None => *follow = true,
-            }
-        }
-        _ => {}
-    }
-    if app.window.at.0 >= count {
-        *follow = true;
-    }
-}
-
-/// The place `delta` rows away: `back` into the thread and `forward` towards
-/// its tail. A shift that runs past the newest row leaves the place alone
-/// rather than following the tail, because the place is the reader's and the
-/// tail is `Ask::End`'s.
-fn step(app: &mut App, width: u16, at: (usize, usize), delta: isize) -> (usize, usize) {
-    let rows = delta.unsigned_abs();
-    if delta > 0 {
-        back(app, width, at, rows)
-    } else {
-        forward(app, width, at, rows).unwrap_or(at)
-    }
-}
-
-/// Moves the window's top `rows` rows back into the thread, across as few
-/// entries as it crosses: the first turn is the ceiling.
-pub(crate) fn back(app: &mut App, width: u16, at: (usize, usize), rows: usize) -> (usize, usize) {
-    let (mut entry, mut row) = at;
-    let mut left = rows;
-    loop {
-        let step = row.min(left);
-        row -= step;
-        left -= step;
-        if left == 0 {
-            return (entry, row);
-        }
-        if entry == 0 {
-            return (0, 0);
-        }
-        entry -= 1;
-        row = gap(&app.entries()[entry]) + app.measure(entry, width);
-    }
-}
-
-/// Moves the window's top `rows` rows towards the tail, or `None` when it runs
-/// past the newest row: past the newest row is the tail, and the tail is
-/// followed.
-pub(crate) fn forward(
-    app: &mut App,
-    width: u16,
-    at: (usize, usize),
-    rows: usize,
-) -> Option<(usize, usize)> {
-    let count = app.entries().len();
-    let (mut entry, mut row) = at;
-    let mut left = rows;
-    while left > 0 {
-        if entry >= count {
-            return None;
-        }
-        let rest = gap(&app.entries()[entry]) + app.measure(entry, width);
-        let rest = rest.saturating_sub(row);
-        if left < rest {
-            return Some((entry, row + left));
-        }
-        left -= rest;
-        entry += 1;
-        row = 0;
-    }
-    (entry < count).then_some((entry, row))
-}
-
-/// The rows from one place in the thread to another, positive towards the
-/// tail. A mark is drawn on the glass and covers a place in the thread, so this
-/// is what says how far that place moved when the window did — the note a copy
-/// leaves at the tail pushes every row above it up — and only the entries
-/// between the two places are measured for it.
-pub(crate) fn rows_between(
-    app: &mut App,
-    width: u16,
-    from: (usize, usize),
-    to: (usize, usize),
-) -> isize {
-    let forward = from <= to;
-    let (back, front) = if forward { (from, to) } else { (to, from) };
-    let rows = if back.0 == front.0 {
-        front.1.saturating_sub(back.1)
-    } else {
-        let mut rows = entry_height(app, width, back.0).saturating_sub(back.1);
-        for index in back.0 + 1..front.0 {
-            rows += entry_height(app, width, index);
-        }
-        rows + front.1
-    };
-    let rows = rows as isize;
-    if forward { rows } else { -rows }
-}
-
-/// The rows one entry is drawn on, gap and all: the measure the window moves
-/// by. An entry the thread no longer has — a `/new` between two frames — is
-/// worth nothing rather than a panic.
-fn entry_height(app: &mut App, width: u16, index: usize) -> usize {
-    if index >= app.entries().len() {
-        return 0;
-    }
-    gap(&app.entries()[index]) + app.measure(index, width)
 }
 
 /// The entry the window's first row belongs to.

@@ -14,9 +14,10 @@ use ratatui::widgets::{Paragraph, Widget};
 
 use crate::app::App;
 use crate::render::hello;
-use crate::render::layout::{Frame, drawn, offset_of, place, resolve};
+use crate::render::layout::{Frame, drawn, offset_of, place};
 use crate::render::mark;
 use crate::render::pictures::{self, Shown};
+use crate::render::step::resolve;
 use crate::selection::Viewport;
 
 pub struct View {
@@ -30,6 +31,9 @@ pub struct View {
     /// the height kept for them: the cost a streamed delta must not pay for an
     /// entry above the one it landed in.
     pub remeasured: usize,
+    /// How many rows the frame built: the window's own, and none of the answer
+    /// above or below it — the cost a long answer must not pay for a page.
+    pub built: usize,
     pub spill: Vec<(usize, PathBuf)>,
     /// The drawn rows that are an expandable entry's own row, and the entry
     /// behind each: a click there opens it.
@@ -141,16 +145,25 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
         0
     };
     let top = place(&frame.marks, start);
+    // The rows of the answer above the window are counted and never built, so
+    // the place the first entry is held at is what the frame skipped of it plus
+    // what it built past its first row. Without the first figure a reader coming
+    // back to the tail would be placed a row above the row they are reading.
+    let skipped = frame.top_skip;
     // A held window keeps its place, rows into its entry included: that is what
     // stops the text moving when rows arrive below it. A window on the tail
     // names its place again every frame, because the tail is not a row.
     let at = if follow {
-        (top, start.saturating_sub(offset_of(&frame.marks, top)))
+        (
+            top,
+            skipped.saturating_add(start.saturating_sub(offset_of(&frame.marks, top))),
+        )
     } else {
         held
     };
     let laid_out = count.saturating_sub(first);
     let measured = frame.measured;
+    let built = frame.built;
 
     let Frame {
         app,
@@ -189,6 +202,7 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
         laid_out,
         measured,
         remeasured,
+        built,
         spill,
         expand,
         pictures,
