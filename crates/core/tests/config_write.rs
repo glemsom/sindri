@@ -97,6 +97,25 @@ fn a_key_the_document_does_not_touch_survives_a_save() {
 }
 
 #[test]
+fn a_theme_the_form_never_shows_survives_a_save() {
+    // `theme` has no `/settings` field, so it is written by no arm of the
+    // document: it travels as the file's own text. This is what keeps that
+    // true when someone adds the key to a `match`.
+    let (_dir, path, mut document) = document(Some("model = \"from-file\"\ntheme = \"anvil\"\n"));
+
+    document.set(Key::Model, "changed").expect("accepted");
+    document.save().expect("written");
+
+    let reread = Document::load_at(&path).expect("the file parses");
+    assert_eq!(reread.editable(Key::Model), "changed");
+    assert!(
+        text(&path).contains("theme = \"anvil\""),
+        "a key the form never showed is not lost: {}",
+        text(&path)
+    );
+}
+
+#[test]
 fn an_unknown_key_stays_an_error_and_the_file_is_left_alone() {
     let dir = TempDir::new().expect("a temp directory");
     let path = dir.path().join("config.toml");

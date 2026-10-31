@@ -8,7 +8,7 @@
 
 use std::time::Duration;
 
-use sindri_core::config::Provider;
+use sindri_core::config::{Provider, Theme};
 use sindri_core::session::Env as RunEnv;
 use tempfile::TempDir;
 
@@ -17,6 +17,7 @@ use super::*;
 fn config() -> Config {
     Config {
         provider: Provider::Anthropic,
+        theme: Theme::Anvil,
         model: "model-one".to_string(),
         api_key: String::new(),
         base_url: None,

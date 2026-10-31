@@ -23,13 +23,16 @@ mod document;
 mod file;
 mod headers;
 mod provider;
+mod theme;
 
 pub use document::{Document, KEYS, Key, toggle, toggle_shown};
 pub use provider::Provider;
+pub use theme::Theme;
 
 #[derive(Debug, Default, Clone)]
 pub struct Overrides {
     pub provider: Option<String>,
+    pub theme: Option<String>,
     pub model: Option<String>,
     pub base_url: Option<String>,
     pub max_turns: Option<u32>,
@@ -45,6 +48,7 @@ pub struct Overrides {
 #[derive(Debug, Clone)]
 pub struct Config {
     pub provider: Provider,
+    pub theme: Theme,
     pub model: String,
     pub api_key: String,
     pub base_url: Option<String>,
@@ -115,6 +119,25 @@ impl Config {
         {
             Some(name) => Provider::parse(&name)?,
             None => Provider::Anthropic,
+        };
+
+        // A theme is a name from a closed set, so an unknown one is a usage
+        // error wherever it was named. The message lists the file beside the
+        // flag and the variable, the way a missing value's hint does, so one
+        // line fixes a typo made in any of the three.
+        let theme = match overrides
+            .theme
+            .or_else(|| env("SINDRI_THEME"))
+            .or(file.theme)
+        {
+            Some(name) => Theme::parse(&name).map_err(|error| {
+                ConfigError::Usage(format!(
+                    "{}, pass --theme, set SINDRI_THEME, or set `theme` in {}",
+                    error.message(),
+                    file_path()
+                ))
+            })?,
+            None => Theme::Anvil,
         };
 
         let base_url = overrides
@@ -199,6 +222,7 @@ impl Config {
         Ok(Config {
             refused_repo_config: repo_config(),
             provider,
+            theme,
             model,
             api_key,
             base_url,

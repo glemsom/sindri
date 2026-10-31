@@ -28,6 +28,8 @@ struct Cli {
     #[arg(long, value_name = "NAME")]
     provider: Option<String>,
     #[arg(long, value_name = "NAME")]
+    theme: Option<String>,
+    #[arg(long, value_name = "NAME")]
     model: Option<String>,
     #[arg(long, value_name = "URL")]
     base_url: Option<String>,
@@ -146,6 +148,7 @@ fn main() {
                 batch::Flags {
                     format: cli.format,
                     provider: cli.provider,
+                    theme: cli.theme,
                     model: cli.model,
                     base_url: cli.base_url,
                     max_turns: cli.max_turns,
@@ -164,6 +167,7 @@ fn main() {
             None => {
                 let overrides = Overrides {
                     provider: cli.provider,
+                    theme: cli.theme,
                     model: cli.model,
                     base_url: cli.base_url,
                     max_turns: cli.max_turns,

@@ -19,6 +19,8 @@ pub(super) struct FileConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) provider: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) theme: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) api_key: Option<String>,

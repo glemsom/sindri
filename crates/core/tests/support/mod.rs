@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use sindri_core::agent::{Agent, Event, Report};
 use sindri_core::cancel::Cancel;
-use sindri_core::config::{Config, Provider};
+use sindri_core::config::{Config, Provider, Theme};
 use sindri_core::exec::{BashExecutor, Outcome, ToolResult};
 use sindri_core::provider::{Call, Delta, DeltaSink, Error, Message, Model, ToolSpec, Turn, Usage};
 use sindri_core::record::Recorder;
@@ -60,6 +60,7 @@ pub fn host() -> (TempDir, Env) {
 pub fn config(extras: &[&Path]) -> Config {
     Config {
         provider: Provider::Anthropic,
+        theme: Theme::Anvil,
         model: "claude-mock".to_string(),
         api_key: KEY.to_string(),
         base_url: None,
