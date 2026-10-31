@@ -2,8 +2,9 @@
 //! can draw one, and nothing else. A function from a size and the theme's two
 //! stops to an `image::RgbaImage`, so what the strip looks like is a test's
 //! business rather than a screenshot's. Nothing here owns a layout, an `App` or
-//! a terminal, and nothing here draws: making the strip once per body height,
-//! and replacing it on a resize, is the drawing side's business.
+//! a terminal, and nothing here draws: making the strip once per reach — the
+//! body and the composer beside it — and replacing it on a resize, is the
+//! drawing side's business.
 
 use image::RgbaImage;
 use ratatui::style::Color;

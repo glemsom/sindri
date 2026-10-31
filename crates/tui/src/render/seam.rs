@@ -1,11 +1,14 @@
 //! The glow in the margin: the seam's light strip, `seam`, drawn in the canvas
 //! between the words and the rail where the terminal speaks Kitty graphics. It
-//! is generated once per body height and transmitted once, its protocol held
-//! across frames, so a ticking frame carries placeholders and a resize makes a
-//! new strip. It fills a gap two cells wide, because `Buffer::diff` skips the
-//! cell after a picture's escape — so the cell the diff drops is the strip's
-//! own second, and never the rail's first column or the face drawn above it
-//! (`render::GAP_COLUMNS`).
+//! runs from the top of the body down to the composer's last row, because the
+//! margin beside the panel is canvas for the panel's whole height, and it
+//! dissolves there at the footer rather than on the top rule that used to end
+//! the body. It is generated once per strip height and transmitted once, its
+//! protocol held across frames, so a ticking frame carries placeholders and a
+//! resize makes a new strip. It fills a gap two cells wide, because
+//! `Buffer::diff` skips the cell after a picture's escape — so the cell the
+//! diff drops is the strip's own second, and never the rail's first column or
+//! the face drawn above it (`render::GAP_COLUMNS`).
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -19,9 +22,9 @@ use crate::graphics::Graphics;
 use crate::seam;
 
 /// The strip fills the rect it is given rather than being fitted into it: an
-/// 8×256 strip in a two-cell-wide margin has a natural height of a dozen rows,
-/// and `Fit` would letterbox it, so the glow would stop short of the composer.
-/// `Scale` needs no filter: the strip is drawn at the rect's own pixels.
+/// 8×256 strip has a natural height of a dozen rows, and `Fit` would letterbox
+/// it, so the glow would stop short of the composer's last row. `Scale` needs no
+/// filter: the strip is drawn at the rect's own pixels.
 const RESIZE: Resize = Resize::Scale(None);
 
 /// The seam as a frame draws it: the terminal's one answer, and the strip that
@@ -65,7 +68,7 @@ impl Seam {
         Seam::new(&Graphics::kitty())
     }
 
-    /// Draws the strip into `area`, making it if the body is a size it has not
+    /// Draws the strip into `area`, making it if that rect is a size it has not
     /// been made for yet.
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
         if area.width == 0 || area.height == 0 {
@@ -87,6 +90,21 @@ impl Seam {
                 .resize(RESIZE)
                 .render(area, buf, &mut strip.protocol);
         }
+    }
+}
+
+/// The strip's rect: the margin's own columns, carried from the top of the body
+/// down to the composer's last row. Now that the panel ends at the seam the
+/// margin beside it is canvas for its whole height, so the light goes on beside
+/// the composer instead of dying on the row above its top rule; and because the
+/// panel's columns end where the margin's begin, the two rects are beside each
+/// other and never over. `seam::strip` fades across the pixels it is given, so
+/// the longer reach is a longer dissolve, arriving at nothing on the composer's
+/// last row — the row above the footer, which the strip does not reach.
+pub(crate) fn reach(margin: Rect, panel: Rect) -> Rect {
+    Rect {
+        height: panel.bottom().saturating_sub(margin.y),
+        ..margin
     }
 }
 
@@ -147,6 +165,68 @@ mod tests {
                 .iter()
                 .all(|row| row.contains('\u{10EEEE}')),
             "and every row of the strip still carries its placeholder"
+        );
+    }
+
+    /// The margin and the panel at the size the issue asks for: a body of twenty
+    /// rows, a composer of four beneath it, and two cells of canvas beside both.
+    fn beside_the_composer() -> (Rect, Rect) {
+        (Rect::new(66, 0, 2, 20), Rect::new(0, 20, 66, 4))
+    }
+
+    #[test]
+    fn the_strips_reach_is_the_body_and_the_composer_to_its_last_row() {
+        let (margin, panel) = beside_the_composer();
+        let strip = reach(margin, panel);
+        assert_eq!(
+            strip,
+            Rect::new(66, 0, 2, 24),
+            "twenty rows of body and four of composer, in the margin's columns"
+        );
+        assert_eq!(
+            strip.bottom(),
+            panel.bottom(),
+            "and its last row is the composer's last row"
+        );
+        assert!(
+            !strip.intersects(panel),
+            "beside the panel, never inside it: {strip:?} and {panel:?}"
+        );
+        assert_eq!(
+            strip.x,
+            panel.right(),
+            "one cell off the panel's right border, as the margin always was"
+        );
+    }
+
+    #[test]
+    fn a_strip_that_reaches_the_composer_is_transmitted_once_and_holds_after() {
+        let (margin, panel) = beside_the_composer();
+        let area = reach(margin, panel);
+        let mut seam = Seam::kitty().expect("a made-up Kitty answer draws the seam");
+        let mut first = Buffer::empty(area);
+        seam.render(area, &mut first);
+        assert_eq!(
+            column(area, &first)
+                .iter()
+                .filter(|row| transmits(row))
+                .count(),
+            1,
+            "a taller strip is a new picture, and it goes out once"
+        );
+        assert!(
+            column(area, &first)
+                .iter()
+                .all(|row| row.contains('\u{10EEEE}')),
+            "and every one of its twenty-four rows carries it"
+        );
+
+        let mut tick = Buffer::empty(area);
+        seam.render(area, &mut tick);
+        assert!(
+            column(area, &tick).iter().all(|row| !transmits(row)),
+            "the cache is keyed by the rect, so a frame at the same reach \
+             re-transmits nothing"
         );
     }
 

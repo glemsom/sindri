@@ -90,6 +90,44 @@ fn the_seam_ends_by_dissolving_rather_than_by_stopping() {
     );
 }
 
+#[test]
+fn the_dissolve_is_reckoned_across_the_reach_and_leaves_at_the_footer() {
+    // The strip now runs from the top of the body down to the composer's last
+    // row: a body of twenty rows and a composer of four make twenty-four, and
+    // the fade is spread across that whole length rather than dying where the
+    // panel's top rule used to be. The two strips below are the same width and
+    // the same cell, so a row they share is the same row of the same picture —
+    // and the taller one is still lit on it.
+    let short = seam::strip(WIDTH, 12 * 18);
+    let tall = seam::strip(WIDTH, 24 * 18);
+    let (short, tall) = (down(&short, WIDTH - 1), down(&tall, WIDTH - 1));
+    assert_eq!(
+        tall.len(),
+        24 * 18,
+        "twenty-four rows of eighteen pixels: the body and the composer"
+    );
+    assert_eq!(tall[0], peak(), "it is brightest under the face, as it was");
+    assert_eq!(
+        *tall.last().expect("a last row"),
+        0,
+        "and it is no light at all on the composer's last row: the seam dissolves \
+         at the footer instead of stopping at the panel's top rule"
+    );
+    assert!(
+        tall.windows(2).all(|pair| pair[0] >= pair[1]),
+        "it never brightens on the way down"
+    );
+    let last_of_short = short.len() - 1;
+    assert_eq!(short[last_of_short], 0, "the shorter strip ended there");
+    assert!(
+        tall[last_of_short] > peak() / 4,
+        "and the taller one carries that light on, because the fade was reckoned \
+         across twenty-four rows rather than twelve: {} at row {}",
+        tall[last_of_short],
+        last_of_short / 18
+    );
+}
+
 /// A theme stop's truecolour bytes, as the strip must paint them — read here
 /// rather than through the module, so the expectation comes from the theme and
 /// not from the code it is checking.
