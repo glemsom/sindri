@@ -3,8 +3,11 @@
 //! paints, and the three surfaces that make nearness legible: the canvas the
 //! frame fills before anything is drawn, the panel a composer or a code fence
 //! sits on, and the raised tier above it. It answers for pixels too
-//! (`owns_pixel`): a picture a renderer generates is held to the same law as a
-//! cell it paints.
+//! (`owns_pixel`): a picture a renderer generates out of the theme is held to
+//! the same law as a cell it paints. A picture the frame only places is not
+//! held, and a diagram is the one that is both — the ground and the inks handed
+//! to its renderer are ours, the pixels it draws with them are not
+//! (`picture::diagram`, and `tests/theme/pixels.rs` for the law).
 
 use image::Rgba;
 use ratatui::style::{Color, Modifier, Style};
@@ -187,10 +190,11 @@ pub fn owns(colour: Color) -> bool {
 }
 
 /// The law for pixels, as [`owns`] is the law for cells: whether a picture may
-/// paint this pixel, whatever its alpha. A picture's pixels are the frame's
-/// chrome — the seam's strip — so the hue of one is judged exactly as a cell's
-/// is: a `PALETTE` name or a step of a `RAMPS` walk, within the one step a float
-/// walk rounds to. Alpha is not a colour and is exempt, but it is not a hiding
+/// paint this pixel, whatever its alpha. A picture whose pixels the frame
+/// chooses — the seam's strip — is the frame's chrome, so the hue of one is
+/// judged exactly as a cell's is: a `PALETTE` name or a step of a `RAMPS` walk,
+/// within the one step a float walk rounds to. Alpha is not a colour and is
+/// exempt, but it is not a hiding
 /// place: the hue is read at every opacity, so a picture cannot smuggle one in
 /// by drawing it faintly. And a picture's edge antialiases in alpha alone —
 /// blending a hue toward the canvas would leave the ramp this refuses — so what

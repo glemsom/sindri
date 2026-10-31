@@ -3,6 +3,19 @@
 //! pixel is spent, and the same svg is rasterised onto the panel's ground when
 //! the frame asks for the pixels. No hex is written here — every colour is read
 //! out of `theme.rs` — so a diagram cannot drift from the frame it sits in.
+//!
+//! It is the first picture in the frame whose contents are not the frame's: the
+//! `Theme` below is what we choose, and what the renderer draws with it — every
+//! node, every antialiased edge — is the renderer's to settle. Ours is the
+//! ground, `PANEL` as `background` and under the pixmap both, so the block's is
+//! the panel the fence would have sat on and never mermaid's white; ours are the
+//! inks a diagram is read by. The contrast between a node's fill and the text in
+//! it is mermaid's: handing it `RAISED` and `PLAIN` is this mapping's whole job,
+//! and the palette's floor answers for the pair (`tests/theme`). Every field the
+//! renderer names is set below, so a second palette is a change to `theme.rs`
+//! alone; the hues the crate itself writes for diagram kinds that have no field
+//! — an ER diagram's key chips, a gantt's grid — are the renderer's, the way its
+//! antialiasing is, and no palette reaches them.
 
 use std::sync::{Arc, OnceLock};
 
@@ -14,6 +27,25 @@ use resvg::{tiny_skia, usvg};
 use crate::picture::Refusal;
 use crate::theme;
 
+/// The wheel a diagram spins a series on: twelve palette inks, ordered so that
+/// neighbours differ in hue and lightness both. A pie's slices, a git graph's
+/// branches and the commit a merge is highlighted with all take it, so a second
+/// colour in a diagram is never a colour the frame's palette does not name.
+const WHEEL: [Color; 12] = [
+    theme::PROMPT,
+    theme::NUMBER,
+    theme::STRING,
+    theme::HEADING,
+    theme::CODE,
+    theme::TYPE,
+    theme::BAD,
+    theme::FUNCTION,
+    theme::GOOD,
+    theme::KEYWORD,
+    theme::PLAIN,
+    theme::SEAM,
+];
+
 /// The renderer's theme: `modern()` with the frame's own inks in place of
 /// mermaid's, so a diagram reads as a card in the transcript and not as a light
 /// theme pasted onto it. Every field the renderer names as a colour is set
@@ -24,7 +56,9 @@ fn anvil() -> Theme {
     // The crate's own list opens with a font no Linux has, which falls back
     // silently and differently per box; the face's box has exactly one.
     theme.font_family = "DejaVu Sans".to_string();
-    // The canvas, and the ink on it.
+    // The ground, and the ink on it: the svg paints an opaque rectangle behind
+    // the whole diagram, so this is the block's background — the panel the
+    // fence would have sat on, and never the renderer's own white.
     theme.background = ink(theme::PANEL);
     theme.text_color = ink(theme::PLAIN);
     theme.primary_text_color = ink(theme::PLAIN);
@@ -53,23 +87,7 @@ fn anvil() -> Theme {
     // thing on the canvas that is neither a line nor a node.
     theme.sequence_note_fill = ink(theme::RAISED);
     theme.sequence_note_border = ink(theme::CODE);
-    // Twelve palette inks, ordered so that neighbours differ in hue and
-    // lightness both.
-    theme.pie_colors = [
-        theme::PROMPT,
-        theme::NUMBER,
-        theme::STRING,
-        theme::HEADING,
-        theme::CODE,
-        theme::TYPE,
-        theme::BAD,
-        theme::FUNCTION,
-        theme::GOOD,
-        theme::KEYWORD,
-        theme::PLAIN,
-        theme::SEAM,
-    ]
-    .map(ink);
+    theme.pie_colors = WHEEL.map(ink);
     // Every slice is a light ink, so the label inside it is the canvas; the
     // seam between two slices is the canvas they sit on and the rim is a line.
     theme.pie_section_text_color = ink(theme::CANVAS);
@@ -77,6 +95,19 @@ fn anvil() -> Theme {
     theme.pie_legend_text_color = ink(theme::PLAIN);
     theme.pie_stroke_color = ink(theme::PANEL);
     theme.pie_outer_stroke_color = ink(theme::PROMPT);
+    // A git graph spins the same wheel, and the square that marks a commit is
+    // the ink opposite its branch's, so a highlight is never the colour under
+    // it. A branch's label is read on a wheel ink, so it is the canvas, as a
+    // slice's label is; a commit's message is a label masking the line it sits
+    // on, and a tag is a raised box with the node's ink and a line's rim.
+    theme.git_colors = core::array::from_fn(|at| ink(WHEEL[at]));
+    theme.git_inv_colors = core::array::from_fn(|at| ink(WHEEL[(at + 6) % WHEEL.len()]));
+    theme.git_branch_label_colors = core::array::from_fn(|_| ink(theme::CANVAS));
+    theme.git_commit_label_color = ink(theme::PLAIN);
+    theme.git_commit_label_background = ink(theme::PANEL);
+    theme.git_tag_label_color = ink(theme::PLAIN);
+    theme.git_tag_label_background = ink(theme::RAISED);
+    theme.git_tag_label_border = ink(theme::PROMPT);
     // Opaque: a slice at seven tenths over the panel composites to a hue no
     // palette names.
     theme.pie_opacity = 1.0;

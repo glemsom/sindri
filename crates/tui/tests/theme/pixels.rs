@@ -10,8 +10,22 @@
 //!
 //! A picture whose pixels the frame *chooses* is held to it: the seam's strip,
 //! which is a constant walked into ink. A picture the frame only *places* — the
-//! face, an answer's image — is not: its hues are the artist's and the
-//! reader's, never a renderer's.
+//! face, an answer's image — is not: its hues are the artist's and the reader's,
+//! never a renderer's. A diagram is a third citizen and the first whose contents
+//! are not ours: the frame generates none of its pixels, it hands a mermaid
+//! renderer a `Theme` built out of `theme.rs` and the renderer draws what it
+//! likes with it. So the law splits where choice gives way to resolution. What
+//! the frame chooses is held: the ground, because the svg paints an opaque
+//! rectangle and the block's background is therefore a colour we picked and it is
+//! `PANEL`, never mermaid's white and never the terminal's; the ink the caption
+//! is set in, which was `FAINT` before a diagram existed; and the edge and label
+//! inks, the ones that make a diagram readable at all. What the renderer
+//! resolves is not: it settles the contrast between a node's fill and the text
+//! inside it, and a theme handing it `RAISED` and `PLAIN` has done its job — were
+//! that pair illegible the palette's floor would own it, not the diagram. A
+//! diagram therefore paints a thousand hues no ramp knows, and the pictures
+//! `pictures()` below holds are the ones the frame generates itself: a mapping's
+//! inks are held where the mapping lives, in `picture::diagram`'s own tests.
 
 use image::{Rgba, RgbaImage};
 use sindri_tui::{seam, theme};
