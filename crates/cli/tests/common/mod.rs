@@ -188,3 +188,40 @@ pub fn resolve(name: &str, path: &str) -> Option<PathBuf> {
 pub fn host_path() -> String {
     std::env::var("PATH").expect("PATH")
 }
+
+/// Every file under `dir`, as one string: a credential must not be in any of
+/// them, and a record is all of them together.
+pub fn everything_written(dir: &Path) -> String {
+    let mut all = String::new();
+    let mut pending = vec![dir.to_path_buf()];
+    while let Some(next) = pending.pop() {
+        for entry in std::fs::read_dir(&next).expect("read dir") {
+            let path = entry.expect("entry").path();
+            if path.is_dir() {
+                pending.push(path);
+            } else {
+                all.push_str(&std::fs::read_to_string(&path).unwrap_or_default());
+            }
+        }
+    }
+    all
+}
+
+/// The session directories a run left under this environment's state root,
+/// sorted: one directory per record, and the name is the session id.
+pub fn sessions(env: &Env) -> Vec<PathBuf> {
+    let root = env.state.join("sindri/sessions");
+    let mut found: Vec<PathBuf> = std::fs::read_dir(&root)
+        .map(|entries| entries.flatten().map(|entry| entry.path()).collect())
+        .unwrap_or_default();
+    found.sort();
+    found
+}
+
+/// The one session directory this environment holds: a test that expects a
+/// single run, and says so rather than picking from a list.
+pub fn the_session(env: &Env) -> PathBuf {
+    let found = sessions(env);
+    assert_eq!(found.len(), 1, "one run, one record: {found:?}");
+    found.into_iter().next().expect("the session directory")
+}

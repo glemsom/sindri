@@ -10,46 +10,13 @@
 
 mod common;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use common::provider::{MockProvider, Reply};
-use common::{Env, TEST_KEY, batch, signal, spawn, stderr, stdout, wait_until};
-
-fn sessions(env: &Env) -> Vec<PathBuf> {
-    let root = env.state.join("sindri/sessions");
-    let mut found: Vec<PathBuf> = std::fs::read_dir(&root)
-        .map(|entries| {
-            entries
-                .filter_map(|entry| entry.ok())
-                .map(|e| e.path())
-                .collect()
-        })
-        .unwrap_or_default();
-    found.sort();
-    found
-}
-
-fn the_session(env: &Env) -> PathBuf {
-    let found = sessions(env);
-    assert_eq!(found.len(), 1, "one run, one record: {found:?}");
-    found.into_iter().next().expect("the session directory")
-}
-
-fn everything_written(dir: &Path) -> String {
-    let mut all = String::new();
-    let mut pending = vec![dir.to_path_buf()];
-    while let Some(next) = pending.pop() {
-        for entry in std::fs::read_dir(&next).expect("read dir") {
-            let path = entry.expect("entry").path();
-            if path.is_dir() {
-                pending.push(path);
-            } else {
-                all.push_str(&std::fs::read_to_string(&path).unwrap_or_default());
-            }
-        }
-    }
-    all
-}
+use common::{
+    Env, TEST_KEY, batch, everything_written, sessions, signal, spawn, stderr, stdout, the_session,
+    wait_until,
+};
 
 fn wait_for_the_sandbox_account(env: &Env) {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
@@ -187,6 +154,8 @@ fn sessions_show_prints_the_transcript_of_that_run() {
         "--- result (turn 1) t1 ---",
         "outcome: exited",
         "Twelve files.",
+        "--- sandbox status ---",
+        "child-pid",
     ] {
         assert!(
             text.contains(expected),
@@ -288,7 +257,7 @@ fn a_cancelled_run_says_on_stderr_where_its_record_is() {
 }
 
 #[test]
-fn a_killed_run_leaves_its_transcript_and_the_sandbox_account() {
+fn a_killed_run_still_shows_what_it_wrote_before_the_cut() {
     let env = Env::new();
     let started = env.workspace.join("started");
     let script = format!("touch {}; sleep 30", started.display());
@@ -314,16 +283,52 @@ fn a_killed_run_leaves_its_transcript_and_the_sandbox_account() {
         "the sandbox's own document arrived before the kill: {status}"
     );
 
+    // A `kill -9` lands mid-`writeln!` often enough: the last line is cut where
+    // the crash took it, and the record still reads.
+    let path = session.join("transcript.jsonl");
+    let mut transcript = std::fs::read_to_string(&path).expect("transcript.jsonl");
+    transcript.push_str(r#"{"type":"tool_result","turn":1,"cont"#);
+    std::fs::write(&path, transcript).expect("the cut transcript");
+
     let id = meta["id"].as_str().expect("the id").to_string();
     let shown = env.cmd().args(["sessions", "show", &id]).assert();
     let shown = shown.get_output();
     assert_eq!(
         shown.status.code(),
         Some(0),
-        "a run that never finished still reads: {}",
+        "a cut line is not a refusal: {}",
         stderr(shown)
     );
-    assert!(stdout(shown).contains(&script), "{}", stdout(shown));
+    let text = stdout(shown);
+    assert!(
+        text.contains(&script),
+        "the command survived the cut: {text}"
+    );
+    assert!(
+        text.contains("1 line could not be read"),
+        "and the reader is told what the cut took: {text}"
+    );
+}
+
+/// Without the metadata there is no record at all: the one corruption that is
+/// still a refusal, and still the environment's failure.
+#[test]
+fn a_record_whose_metadata_does_not_parse_exits_three() {
+    let env = Env::new();
+    let id = "abcdef0123456789";
+    let session = env.state.join("sindri/sessions").join(id);
+    std::fs::create_dir_all(&session).expect("a session directory");
+    std::fs::write(session.join("session.json"), "{\"id\"").expect("broken metadata");
+
+    let shown = env.cmd().args(["sessions", "show", id]).assert();
+    let shown = shown.get_output();
+    assert_eq!(shown.status.code(), Some(3), "no metadata, no record");
+    assert_eq!(stdout(shown), "", "and nothing is printed for it");
+    assert!(
+        stderr(shown).contains("session.json"),
+        "the refusal names the file: {}",
+        stderr(shown)
+    );
 }
 
 #[test]
