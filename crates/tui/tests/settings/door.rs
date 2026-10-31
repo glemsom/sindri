@@ -58,9 +58,15 @@ fn mentions(app: &App, phrase: &str) -> usize {
 }
 
 /// The rows as one flowing line: a long path wraps, and a wrapper's break is
-/// a fact about the width, not about what the modal says.
+/// a fact about the width, not about what the modal says. The overlay's own
+/// border falls between two halves of a wrapped sentence, so it is cut out for
+/// the same reason: where the wrapper breaks is not what the modal says.
 fn flowing(rows: &[String]) -> String {
     rows.join("")
+        .replace('│', " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 #[test]

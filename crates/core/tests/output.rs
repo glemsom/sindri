@@ -8,6 +8,7 @@ use std::time::Duration;
 use sindri_core::agent::{Report, Stopped};
 use sindri_core::output::to_json;
 use sindri_core::provider::Usage;
+use sindri_core::sandbox::Enforcement;
 
 const SESSION: &str = "0f4a2f2e-6a3b-4b4d-9a2c-9d1f2a3b4c5d";
 
@@ -30,7 +31,7 @@ fn the_shape_is_pinned_byte_for_byte() {
     };
 
     assert_eq!(
-        to_json(&report, SESSION),
+        to_json(&report, SESSION, Enforcement::Bubblewrap),
         concat!(
             r#"{"answer":"A rename, in two files.","#,
             r#""session":"0f4a2f2e-6a3b-4b4d-9a2c-9d1f2a3b4c5d","#,
@@ -40,7 +41,8 @@ fn the_shape_is_pinned_byte_for_byte() {
             r#""duration_ms":4321,"#,
             r#""tool_calls":1,"#,
             r#""usage":{"input_tokens":1234,"output_tokens":56,"#,
-            r#""cached_input_tokens":1000,"total_tokens":1290}}"#
+            r#""cached_input_tokens":1000,"total_tokens":1290},"#,
+            r#""enforcement":"bubblewrap"}"#
         ),
         "the contract's order, and the counters nobody reported left out"
     );
@@ -58,7 +60,7 @@ fn a_field_nobody_reported_is_absent_and_never_null() {
         duration: Duration::from_millis(7),
     };
 
-    let json = to_json(&report, SESSION);
+    let json = to_json(&report, SESSION, Enforcement::Bubblewrap);
     assert_eq!(
         json,
         concat!(
@@ -67,7 +69,8 @@ fn a_field_nobody_reported_is_absent_and_never_null() {
             r#""turns":1,"#,
             r#""stopped":"final","#,
             r#""duration_ms":7,"#,
-            r#""tool_calls":0}"#
+            r#""tool_calls":0,"#,
+            r#""enforcement":"bubblewrap"}"#
         ),
         "no model and no usage means no fields, not null fields"
     );
@@ -91,7 +94,7 @@ fn every_stop_reason_has_its_own_word() {
             usage: Usage::default(),
             duration: Duration::ZERO,
         };
-        let json = to_json(&report, SESSION);
+        let json = to_json(&report, SESSION, Enforcement::Bubblewrap);
         assert!(
             json.contains(&format!(r#""stopped":"{word}""#)),
             "`{stopped:?}` is written as `{word}`: {json}"
@@ -112,7 +115,7 @@ fn an_answer_that_needs_escaping_stays_on_one_line() {
         duration: Duration::ZERO,
     };
 
-    let json = to_json(&report, SESSION);
+    let json = to_json(&report, SESSION, Enforcement::Bubblewrap);
     assert!(
         !json.contains('\n'),
         "a newline in the answer must not become a second line: {json}"
@@ -120,4 +123,28 @@ fn an_answer_that_needs_escaping_stays_on_one_line() {
     let parsed: serde_json::Value =
         serde_json::from_str(&json).expect("the object parses back as it was written");
     assert_eq!(parsed["answer"], answer, "escaping loses nothing: {json}");
+}
+
+#[test]
+fn the_enforcement_the_run_had_is_the_last_field_so_a_script_can_trust_what_it_read() {
+    let report = Report {
+        answer: "Done.".to_string(),
+        turns: 1,
+        stopped: Stopped::Final,
+        model: Some("claude-sonnet-4-6".to_string()),
+        tool_calls: 0,
+        usage: Usage::default(),
+        duration: Duration::from_millis(12),
+    };
+
+    for (enforcement, word) in [
+        (Enforcement::Bubblewrap, "bubblewrap"),
+        (Enforcement::YoloUnsafe, "unsafe"),
+    ] {
+        let json = to_json(&report, SESSION, enforcement);
+        assert!(
+            json.ends_with(&format!(r#","enforcement":"{word}"}}"#)),
+            "`{word}` is appended after every existing field: {json}"
+        );
+    }
 }

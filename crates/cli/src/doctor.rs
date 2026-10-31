@@ -16,7 +16,8 @@ pub fn run(overrides: Overrides) -> i32 {
         Ok(configured) => configured,
         Err(error) => return error.report(),
     };
-    match doctor::probe(&configured.env, &configured.config.extra_writable) {
+    let (env, config) = (&configured.env, &configured.config);
+    match doctor::probe(env, &config.extra_writable, config.enforcement) {
         Ok(report) => {
             print!("{}", report.description);
             ExitCode::Success.code()

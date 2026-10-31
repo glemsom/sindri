@@ -214,3 +214,99 @@ fn doctor_describes_the_configured_extras_the_model_is_told_about() {
         "doctor prints the description a run would really give the model: {output}"
     );
 }
+
+#[test]
+fn doctor_with_the_flag_proves_no_sandbox_and_says_the_run_has_none() {
+    let env = Env::new();
+    // A machine where bwrap cannot even be found: the run will not use it, so
+    // its absence is not this run's failure.
+    let path = hidden(&["bwrap"]);
+    let output = env
+        .cmd()
+        .args(["doctor", "--yolo-unsafe"])
+        .env("PATH", path.path())
+        .output()
+        .expect("run");
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr),
+        "",
+        "doctor is silent on success"
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    assert!(stdout.contains("enforcement: none"), "{stdout}");
+    assert!(stdout.contains("your own privileges"), "{stdout}");
+    assert!(
+        !stdout.contains("writable set"),
+        "nothing bounds the run, so nothing is claimed to: {stdout}"
+    );
+}
+
+#[test]
+fn doctor_with_the_flag_still_reports_a_missing_binary() {
+    let env = Env::new();
+    let path = hidden(&["yq"]);
+    env.cmd()
+        .args(["doctor", "--yolo-unsafe"])
+        .env("PATH", path.path())
+        .assert()
+        .code(3)
+        .stdout(predicate::str::is_empty())
+        .stderr(
+            predicate::str::contains("yq").and(predicate::function(|stderr: &str| {
+                stderr.lines().count() == 1
+            })),
+        );
+}
+
+#[test]
+fn the_flag_does_not_excuse_the_writable_set_it_no_longer_bounds() {
+    let env = Env::new();
+    // Beside the workspace, never inside it: an extra nested in a path already
+    // granted is refused, flag or no flag.
+    let extra = TempDir::new().expect("an extra path");
+    let extra = extra.path().to_path_buf();
+
+    // Granted and validated, though nothing about the run is bounded by it.
+    let output = env
+        .cmd()
+        // `--writable` is not global: it comes before the subcommand.
+        .args([
+            "--writable",
+            &extra.display().to_string(),
+            "doctor",
+            "--yolo-unsafe",
+        ])
+        .output()
+        .expect("run");
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    assert!(
+        !stdout.contains(&extra.display().to_string()),
+        "the unsafe description claims no bound it does not enforce: {stdout}"
+    );
+
+    // A path that could not be mounted is a usage error under either policy.
+    env.cmd()
+        .args([
+            "--writable",
+            "/nonexistent-sindri-extra",
+            "doctor",
+            "--yolo-unsafe",
+        ])
+        .assert()
+        .code(2)
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::contains("/nonexistent-sindri-extra"));
+}

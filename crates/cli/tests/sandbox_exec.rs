@@ -279,3 +279,59 @@ fn each_command_spills_to_its_own_file_so_an_earlier_path_keeps_its_text() {
         "the first call's full output is still there"
     );
 }
+
+#[test]
+fn the_flag_runs_with_your_own_privileges_and_says_so_once_on_stderr() {
+    let env = Env::new();
+    // The state root is a sibling of the workspace: real, and outside the
+    // writable set a sandboxed run would be given.
+    let outside = env.state.join("outside-the-workspace");
+    let script = format!("echo probe > {}", outside.display());
+
+    let assert = env
+        .cmd()
+        .args([
+            "sandbox",
+            "exec",
+            "--yolo-unsafe",
+            "--",
+            "bash",
+            "-c",
+            &script,
+        ])
+        .assert()
+        .success();
+    let output = assert.get_output().clone();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr),
+        "sindri: --yolo-unsafe: commands run with your own privileges, outside bubblewrap\n",
+        "one warning, and nothing else"
+    );
+    let out: Value = serde_json::from_slice(&output.stdout).expect("the outcome is JSON");
+    assert_eq!(out["outcome"], "exited", "{out}");
+    assert_eq!(out["exit_code"], 0, "{out}");
+    assert!(
+        outside.is_file(),
+        "the write outside the writable set really happened"
+    );
+}
+
+#[test]
+fn without_the_flag_the_same_write_is_refused_by_the_kernel() {
+    let env = Env::new();
+    let outside = env.state.join("outside-the-workspace");
+    let script = format!("echo probe > {}", outside.display());
+
+    let out = exec(&env, &["bash", "-c", &script]);
+
+    assert_eq!(out["outcome"], "exited", "{out}");
+    assert_ne!(out["exit_code"], 0, "the write must fail: {out}");
+    assert!(
+        out["stderr"]
+            .as_str()
+            .is_some_and(|stderr| stderr.contains("Read-only file system")),
+        "{out}"
+    );
+    assert!(!outside.exists(), "nothing escaped the sandbox");
+}

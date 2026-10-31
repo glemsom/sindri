@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::paths;
-use crate::sandbox::WritableSet;
+use crate::sandbox::{Enforcement, WritableSet};
 
 pub const DEFAULT_MAX_TURNS: u32 = 250;
 pub const DEFAULT_TIMEOUT_SECS: u64 = 120;
@@ -37,6 +37,9 @@ pub struct Overrides {
     pub thinking: Option<bool>,
     pub writable: Option<Vec<String>>,
     pub extra_headers: Option<Vec<String>>,
+    /// Asked for in the invocation that makes it, and only there: a persisted
+    /// unsafe setting is the one a user forgets they turned on.
+    pub yolo_unsafe: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -49,6 +52,8 @@ pub struct Config {
     pub timeout: Duration,
     pub thinking: bool,
     pub extra_writable: Vec<PathBuf>,
+    /// The policy the session starts with, and the one its record states.
+    pub enforcement: Enforcement,
     /// Never printed or recorded: a gateway's header may be as secret as the
     /// credential.
     pub extra_headers: Vec<(String, String)>,
@@ -185,6 +190,12 @@ impl Config {
         let extra_writable = extras(overrides.writable, file.extra_writable_paths)?;
         let extra_headers = headers::resolve(overrides.extra_headers, file.extra_headers)?;
 
+        let enforcement = if overrides.yolo_unsafe {
+            Enforcement::YoloUnsafe
+        } else {
+            Enforcement::Bubblewrap
+        };
+
         Ok(Config {
             refused_repo_config: repo_config(),
             provider,
@@ -195,6 +206,7 @@ impl Config {
             timeout: Duration::from_secs(timeout_secs),
             thinking,
             extra_writable,
+            enforcement,
             extra_headers,
         })
     }

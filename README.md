@@ -14,7 +14,10 @@ go through the shell, and pipelines or a short script do in one turn what a
 tool-per-task agent needs several.
 
 **Sandboxed by default.** Every `bash` call runs in unprivileged bubblewrap, host root
-read-only (a boundary on writes, not reads) plus a writable set you chose.
+read-only (a boundary on writes, not reads) plus a writable set you chose. The escape
+hatch is `--yolo-unsafe`: it runs one invocation's commands with your own privileges,
+outside bubblewrap, inheriting your environment and working directory — and it costs the
+boundary entirely, which is why the run's record, its JSON and its rail all say `unsafe`.
 
 **Linux only.** Static `x86_64` and `aarch64` releases; an unprivileged `bwrap` that can
 build a namespace is the precondition for running at all.
@@ -56,11 +59,12 @@ sandbox failed, the command's own status only in the JSON.
 
 ```console
 $ sindri -b "summarise this diff" --format json | jq -r .session
-{"answer":"…","session":"…","turns":2,"stopped":"final","model":"claude-sonnet-4-6","duration_ms":4312,"tool_calls":1,"usage":{…}}
+{"answer":"…","session":"…","turns":2,"stopped":"final","model":"claude-sonnet-4-6","duration_ms":4312,"tool_calls":1,"usage":{…},"enforcement":"bubblewrap"}
 ```
 
 Field order is fixed and later fields only append; `stopped` is `final`, `max_turns`,
-`cancelled` or `error`. A field the run knows nothing about is left out, never `null`.
+`cancelled` or `error`, and `enforcement` is `bubblewrap` or `unsafe`. A field the run
+knows nothing about is left out, never `null`.
 
 ## Commands
 
@@ -69,7 +73,7 @@ Field order is fixed and later fields only append; `stopped` is `final`, `max_tu
 | `sindri` | the terminal UI, on a terminal |
 | `sindri -b PROMPT` | batch: ask the model, print the answer |
 | `sindri doctor` | prove the sandbox, print the description the model sees |
-| `sindri sandbox exec [--timeout N] -- CMD` | one command through the sandbox, no model, outcome as JSON |
+| `sindri sandbox exec [--timeout N] [--yolo-unsafe] -- CMD` | one command through the sandbox, no model, outcome as JSON |
 | `sindri sessions show ID` | print one session's transcript |
 | `sindri --help`, `--version` | the surface; the build's `git describe` and commit date |
 
@@ -169,6 +173,13 @@ One file, `$XDG_CONFIG_HOME/sindri/config.toml` (example:
 | Extra request headers | `extra_headers` (table) | `SINDRI_EXTRA_HEADERS` (`Name: value` lines) | `--header` (repeatable) |
 | Turn cap | `max_turns` | `SINDRI_MAX_TURNS` | `--max-turns` |
 | Command timeout | `timeout` | `SINDRI_TIMEOUT` | `--timeout` |
+
+`--yolo-unsafe` is the one flag with no file key and no environment variable: a run
+that leaves the sandbox is asked for in the invocation that makes it and dies with that
+invocation, because a persisted unsafe setting is the one a user forgets they turned on.
+Batch mode and `sandbox exec` say it once on stderr; the frame's rail says `unsafe · your
+own privileges`. Under the flag `--writable` is still validated, it simply is not what
+bounds the run.
 
 `--writable` and `--header` are repeatable but **replace** the configured values rather
 than adding to them. An unknown key is an error naming key and file; a wrong value is

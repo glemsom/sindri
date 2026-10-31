@@ -16,7 +16,7 @@ use sindri_core::provider::{Client, Error};
 use sindri_types::ExitCode;
 
 use crate::boot::{self, Boot};
-use crate::{failure, signal, verbose};
+use crate::{failure, notice, signal, verbose};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
 pub enum OutputFormat {
@@ -36,6 +36,7 @@ pub struct Flags {
     pub thinking: Option<bool>,
     pub writable: Option<Vec<String>>,
     pub extra_headers: Option<Vec<String>>,
+    pub yolo_unsafe: bool,
     pub verbose: bool,
 }
 
@@ -50,6 +51,7 @@ impl From<Flags> for Overrides {
             thinking: flags.thinking,
             writable: flags.writable,
             extra_headers: flags.extra_headers,
+            yolo_unsafe: flags.yolo_unsafe,
         }
     }
 }
@@ -70,6 +72,8 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
         Ok(boot) => boot,
         Err(failure) => return failure.report(),
     };
+    // One line, on stderr, before anything runs: stdout is the answer.
+    notice::unsafe_run(config.enforcement);
     // One flag for the whole run: Ctrl-C raises it, the loop stops on it between
     // turns, and the executor kills a running command's group on it.
     let cancel = Cancel::new();
@@ -111,7 +115,10 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
                 match format {
                     OutputFormat::Text => println!("{}", report.answer.trim_end()),
                     OutputFormat::Json => {
-                        println!("{}", output::to_json(&report, session.dir().id()))
+                        println!(
+                            "{}",
+                            output::to_json(&report, session.dir().id(), config.enforcement)
+                        )
                     }
                 }
             }

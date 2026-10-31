@@ -188,3 +188,79 @@ fn a_cancelled_executor_kills_its_command_group_and_reports_no_result() {
         "the cancelled command's group was killed, grandchildren included"
     );
 }
+
+/// One executor, the enforcement chosen, and the script it runs: the seam every
+/// test below reads its result from.
+fn executor_for(
+    enforcement: sindri_core::sandbox::Enforcement,
+) -> (tempfile::TempDir, sindri_core::exec::SandboxExecutor) {
+    let scratch = tempfile::TempDir::new().expect("scratch");
+    let session_temp = scratch.path().join("tmp");
+    std::fs::create_dir_all(session_temp.join("home")).expect("session temp");
+    let workspace = scratch.path().canonicalize().expect("canonical");
+    let policy = sindri_core::session::policy_for(
+        &workspace,
+        &[],
+        session_temp,
+        sindri_core::session::search_path(),
+        enforcement,
+    )
+    .expect("policy");
+
+    let executor = sindri_core::exec::SandboxExecutor::new(
+        policy,
+        std::time::Duration::from_secs(120),
+        scratch.path().join("spill"),
+        sindri_core::cancel::Cancel::new(),
+    );
+    (scratch, executor)
+}
+
+const AMBIENT: &str = "printf '%s\\n%s\\n' \"$HOME\" \"$PWD\"";
+
+#[test]
+fn an_unsafe_child_inherits_the_ambient_home_and_working_directory() {
+    let (_scratch, executor) = executor_for(sindri_core::sandbox::Enforcement::YoloUnsafe);
+    let result = executor
+        .execute(AMBIENT)
+        .expect("the run was not cancelled");
+
+    let mut lines = result.stdout.lines();
+    assert_eq!(
+        lines.next(),
+        std::env::var("HOME").ok().as_deref(),
+        "the whole ambient environment is inherited: {}",
+        result.stdout
+    );
+    assert_eq!(
+        lines.next(),
+        std::env::current_dir()
+            .ok()
+            .and_then(|dir| dir.canonicalize().ok())
+            .map(|dir| dir.display().to_string())
+            .as_deref(),
+        "and so is the caller's working directory: {}",
+        result.stdout
+    );
+}
+
+#[test]
+fn a_sandboxed_child_still_sees_the_session_home_and_not_the_hosts() {
+    let (_scratch, executor) = executor_for(sindri_core::sandbox::Enforcement::Bubblewrap);
+    let result = executor
+        .execute(AMBIENT)
+        .expect("the run was not cancelled");
+
+    let home = result.stdout.lines().next().unwrap_or_default();
+    assert_ne!(
+        Some(home),
+        std::env::var("HOME").ok().as_deref(),
+        "the sandbox remaps HOME to its own: {}",
+        result.stdout
+    );
+    assert!(
+        home.ends_with("/tmp/home"),
+        "HOME is the session temp's home: {}",
+        result.stdout
+    );
+}

@@ -14,6 +14,10 @@ impl SandboxPolicy {
                 "  enforcement: none — --yolo-unsafe runs commands with your own privileges,\n\
                  \x20              outside bubblewrap; the whole host filesystem is writable\n",
             );
+            out.push_str(
+                "  environment: inherited from the caller, as is the working directory;\n\
+                 \x20              nothing is remapped and nothing is cleared\n",
+            );
             out.push_str(&format!("  network: {}\n", self.network().describe()));
             return out;
         }

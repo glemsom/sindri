@@ -39,13 +39,6 @@ pub struct Start {
     pub enforcement: Enforcement,
 }
 
-fn enforcement(enforcement: Enforcement) -> &'static str {
-    match enforcement {
-        Enforcement::Bubblewrap => "bubblewrap",
-        Enforcement::YoloUnsafe => "unsafe",
-    }
-}
-
 pub struct Recorder {
     root: PathBuf,
     redaction: Redaction,
@@ -67,7 +60,7 @@ impl Recorder {
             version: sindri_types::VERSION_LONG.to_string(),
             provider: start.provider,
             model: start.model,
-            enforcement: enforcement(start.enforcement).to_string(),
+            enforcement: start.enforcement.as_str().to_string(),
             pid: std::process::id(),
             started_ms: now_ms(),
             ended_ms: None,

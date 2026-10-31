@@ -14,7 +14,7 @@ use common::provider::{MockProvider, Reply};
 use common::{batch, stderr, stdout};
 
 /// The contract's field order. Later fields append; this order never changes.
-const FIELD_ORDER: [&str; 8] = [
+const FIELD_ORDER: [&str; 9] = [
     "answer",
     "session",
     "turns",
@@ -23,6 +23,7 @@ const FIELD_ORDER: [&str; 8] = [
     "duration_ms",
     "tool_calls",
     "usage",
+    "enforcement",
 ];
 
 fn ordered(output: &std::process::Output) -> (String, serde_json::Value) {
@@ -82,6 +83,10 @@ fn a_finished_run_is_one_compact_object_in_the_contract_order() {
         serde_json::json!({"input_tokens": 11, "output_tokens": 7, "total_tokens": 18}),
         "what the provider billed for: {line}"
     );
+    assert_eq!(
+        object["enforcement"], "bubblewrap",
+        "a sandboxed run says what the reader may trust: {line}"
+    );
     assert!(
         object["duration_ms"].as_u64().is_some(),
         "the run's duration is a number of milliseconds: {line}"
@@ -101,7 +106,8 @@ fn a_finished_run_is_one_compact_object_in_the_contract_order() {
                 r#"{{"answer":"Two files changed.","session":"{}","turns":1,"#,
                 r#""stopped":"final","model":"claude-mock","duration_ms":{},"#,
                 r#""tool_calls":0,"usage":{{"input_tokens":11,"output_tokens":7,"#,
-                r#""total_tokens":18}}}}"#
+                r#""total_tokens":18}},"#,
+                r#""enforcement":"bubblewrap"}}"#
             ),
             session, duration
         ),
@@ -213,4 +219,52 @@ fn text_is_the_default_format_and_says_so_when_asked() {
     let output = batch(&env, &mock, &["-b", "q", "--format", "text"], "");
     assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
     assert_eq!(stdout(&output), "Two files changed.\n");
+}
+
+#[test]
+fn an_unsafe_run_says_so_last_in_the_object_and_once_on_stderr() {
+    let env = Env::new();
+    let mock = MockProvider::start(vec![Reply::answer("Two files changed.")]);
+    let output = batch(
+        &env,
+        &mock,
+        &["-b", "summarise this", "--format", "json", "--yolo-unsafe"],
+        "",
+    );
+
+    assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
+    let (line, object) = ordered(&output);
+    assert_eq!(
+        object["enforcement"], "unsafe",
+        "the object states the policy the run really had: {line}"
+    );
+    assert!(
+        line.ends_with(r#","enforcement":"unsafe"}"#),
+        "the field appends after every existing one: {line}"
+    );
+    assert_eq!(
+        stderr(&output),
+        "sindri: --yolo-unsafe: commands run with your own privileges, outside bubblewrap\n",
+        "exactly one warning line, and nothing else"
+    );
+}
+
+#[test]
+fn text_output_is_the_answer_and_the_warning_is_still_only_on_stderr() {
+    let env = Env::new();
+    let mock = MockProvider::start(vec![Reply::answer("Two files changed.")]);
+    let output = batch(&env, &mock, &["-b", "q", "--yolo-unsafe"], "");
+
+    assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
+    assert_eq!(
+        stdout(&output),
+        "Two files changed.\n",
+        "stdout is the answer"
+    );
+    assert_eq!(
+        stderr(&output).lines().count(),
+        1,
+        "one warning, no more: {}",
+        stderr(&output)
+    );
 }

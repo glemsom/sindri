@@ -26,6 +26,16 @@ pub enum Enforcement {
     YoloUnsafe,
 }
 
+impl Enforcement {
+    /// The word the record and the JSON contract use for it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Enforcement::Bubblewrap => "bubblewrap",
+            Enforcement::YoloUnsafe => "unsafe",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WritableSet(Vec<PathBuf>);
 

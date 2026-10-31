@@ -15,14 +15,19 @@ use sindri_core::provider::{Error, Usage};
 use sindri_core::session::{LoopError, Session};
 use sindri_types::ExitCode;
 
-use crate::boot::{self, Configured};
-use crate::signal;
+use crate::boot;
+use crate::{notice, signal};
 
 /// Runs the command and prints one JSON object describing what happened. A
 /// session is opened the one way a run opens one, so a diagnostic cannot probe a
 /// different sandbox than the run it is diagnosing.
 pub fn exec(timeout: Duration, overrides: Overrides, command: &[String]) -> i32 {
-    let session = match boot::configure(overrides).and_then(Configured::start) {
+    let configured = match boot::configure(overrides) {
+        Ok(configured) => configured,
+        Err(failure) => return failure.report(),
+    };
+    notice::unsafe_run(configured.config.enforcement);
+    let session = match configured.start() {
         Ok(boot) => boot.session,
         Err(failure) => return failure.report(),
     };
