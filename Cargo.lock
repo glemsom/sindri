@@ -2961,6 +2961,7 @@ dependencies = [
 name = "sindri-tui"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "crossterm",
  "image",
  "pulldown-cmark",

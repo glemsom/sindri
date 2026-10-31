@@ -19,6 +19,7 @@ image.workspace = true
 pulldown-cmark.workspace = true
 syntect.workspace = true
 unicode-width.workspace = true
+base64.workspace = true
 
 [dev-dependencies]
 # The OSC 52 escape and the tool fallback are proven without a terminal and
