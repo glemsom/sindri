@@ -6,6 +6,7 @@ mod boot;
 mod doctor;
 mod failure;
 mod frame;
+mod notice;
 mod sandbox;
 mod sessions;
 mod signal;
@@ -49,6 +50,9 @@ struct Cli {
     /// environment says.
     #[arg(long = "no-thinking")]
     no_thinking: bool,
+    /// Leave the sandbox: commands run with your own privileges, outside bubblewrap.
+    #[arg(long = "yolo-unsafe", global = true)]
+    yolo_unsafe: bool,
     /// Shape of the run's output: `text` is the answer plus one newline,
     /// `json` is one compact object for a script.
     #[arg(long, value_name = "FORMAT", default_value = "text")]
@@ -98,6 +102,7 @@ fn main() {
     let code = match cli.command {
         Some(Command::Doctor) => doctor::run(Overrides {
             writable: (!cli.writable.is_empty()).then_some(cli.writable),
+            yolo_unsafe: cli.yolo_unsafe,
             ..Overrides::default()
         }),
         Some(Command::Sessions {
@@ -110,6 +115,7 @@ fn main() {
                 timeout,
                 Overrides {
                     writable: (!cli.writable.is_empty()).then_some(cli.writable),
+                    yolo_unsafe: cli.yolo_unsafe,
                     ..Overrides::default()
                 },
                 &command,
@@ -128,6 +134,7 @@ fn main() {
                     timeout: cli.timeout,
                     writable: (!cli.writable.is_empty()).then_some(cli.writable),
                     extra_headers: (!cli.header.is_empty()).then_some(cli.header),
+                    yolo_unsafe: cli.yolo_unsafe,
                     thinking: match (cli.thinking, cli.no_thinking) {
                         (true, _) => Some(true),
                         (_, true) => Some(false),
@@ -150,6 +157,7 @@ fn main() {
                     },
                     writable: (!cli.writable.is_empty()).then_some(cli.writable),
                     extra_headers: (!cli.header.is_empty()).then_some(cli.header),
+                    yolo_unsafe: cli.yolo_unsafe,
                 };
                 interactive(overrides)
             }

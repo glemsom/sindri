@@ -358,3 +358,37 @@ fn a_credential_never_reaches_the_record() {
     assert_eq!(shown.status.code(), Some(0), "stderr: {}", stderr(shown));
     assert!(!stdout(shown).contains(TEST_KEY), "{}", stdout(shown));
 }
+
+#[test]
+fn an_unsafe_run_records_the_enforcement_it_had_and_sessions_show_renders_it() {
+    let env = Env::new();
+    let mock = MockProvider::start(vec![Reply::answer("Done.")]);
+    let output = batch(
+        &env,
+        &mock,
+        &["-b", "q", "--format", "json", "--yolo-unsafe"],
+        "",
+    );
+    assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
+    let id = serde_json::from_str::<serde_json::Value>(stdout(&output).trim_end())
+        .expect("the object")["session"]
+        .as_str()
+        .expect("the id")
+        .to_string();
+
+    let session = the_session(&env);
+    assert_eq!(
+        metadata(&session)["enforcement"],
+        "unsafe",
+        "the record states the policy the run really had"
+    );
+
+    let shown = env.cmd().args(["sessions", "show", &id]).assert();
+    let shown = shown.get_output();
+    assert_eq!(shown.status.code(), Some(0), "stderr: {}", stderr(shown));
+    assert!(
+        stdout(shown).contains("sandbox: unsafe"),
+        "the render states the policy too: {}",
+        stdout(shown)
+    );
+}

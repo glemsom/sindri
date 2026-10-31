@@ -16,7 +16,7 @@ use sindri_core::agent::{Report, Stopped};
 use sindri_core::config::{Config, Provider};
 use sindri_core::provider::{Error, Usage};
 use sindri_core::record::Stored;
-use sindri_core::sandbox::PolicyError;
+use sindri_core::sandbox::{Enforcement, PolicyError};
 use sindri_core::session::{Env, Session, StartError};
 use tempfile::TempDir;
 
@@ -45,6 +45,7 @@ fn config(extras: &[&Path]) -> Config {
         timeout: Duration::from_secs(30),
         thinking: false,
         extra_writable: extras.iter().map(|path| path.to_path_buf()).collect(),
+        enforcement: Enforcement::Bubblewrap,
         extra_headers: Vec::new(),
         refused_repo_config: None,
     }
@@ -289,4 +290,24 @@ fn records(env: &Env) -> Vec<PathBuf> {
     let mut found = Vec::new();
     walk(&env.state, &mut found);
     found
+}
+
+#[test]
+fn a_session_states_the_enforcement_the_config_hands_it_and_never_one_of_its_own() {
+    let (_root, env) = host();
+    let mut unsafe_config = config(&[]);
+    unsafe_config.enforcement = Enforcement::YoloUnsafe;
+
+    let session = Session::open(&env, &unsafe_config).expect("a session opens");
+
+    assert_eq!(
+        session.policy().enforcement(),
+        Enforcement::YoloUnsafe,
+        "the policy the session runs is the one the config named"
+    );
+    let stored = Stored::load_in(session.dir()).expect("the record reads back");
+    assert_eq!(
+        stored.meta.enforcement, "unsafe",
+        "the record states the policy the run really had"
+    );
 }

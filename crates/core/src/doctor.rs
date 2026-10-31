@@ -1,6 +1,7 @@
 //! The environment probe behind `sindri doctor`: prove bubblewrap, the required
 //! binaries and the mount plan work before any model is in the loop.
 
+use std::ffi::OsStr;
 use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -48,7 +49,7 @@ impl fmt::Display for DoctorError {
             ),
             DoctorError::BinariesMissing { missing } => write!(
                 f,
-                "required binaries missing from the sandbox path: {} — install them and re-run `sindri doctor`",
+                "required binaries missing from the run's path: {} — install them and re-run `sindri doctor`",
                 missing.join(", ")
             ),
             DoctorError::Setup(source) => write!(f, "cannot set up the probe: {source}"),
@@ -62,13 +63,34 @@ impl std::error::Error for DoctorError {}
 /// Proving the sandbox must not depend on the record being writable: a probe
 /// whose scratch lived under the state root would blame a broken sandbox for a
 /// state root that cannot be written.
-pub fn probe(env: &Env, extras: &[PathBuf]) -> Result<Report, DoctorError> {
-    let bwrap = which("bwrap").ok_or(DoctorError::BwrapMissing)?;
+///
+/// The enforcement comes in from the run the caller is about to make: a run that
+/// will not use `bwrap` has no sandbox to prove, so the probe is skipped and the
+/// binary set is resolved on the host instead. An absent `bwrap` is not an error
+/// there; a missing binary still is.
+pub fn probe(
+    env: &Env,
+    extras: &[PathBuf],
+    enforcement: Enforcement,
+) -> Result<Report, DoctorError> {
+    let shown_temp = env.state.join("sessions").join("<session>").join("tmp");
+    let policy = build_policy(env, extras, shown_temp, enforcement)?;
+
+    if enforcement == Enforcement::YoloUnsafe {
+        let missing = missing_from(&env.search_path);
+        if !missing.is_empty() {
+            return Err(DoctorError::BinariesMissing { missing });
+        }
+        return Ok(Report {
+            description: policy.describe(),
+        });
+    }
+
     let bash = which("bash").ok_or_else(|| DoctorError::BinariesMissing {
         missing: vec!["bash".to_string()],
     })?;
+    let bwrap = which("bwrap").ok_or(DoctorError::BwrapMissing)?;
 
-    let state = env.state.clone();
     let scratch = std::env::temp_dir()
         .join("sindri-doctor")
         .join(paths::new_session_id().map_err(DoctorError::Setup)?);
@@ -79,25 +101,34 @@ pub fn probe(env: &Env, extras: &[PathBuf]) -> Result<Report, DoctorError> {
     let _ = std::fs::remove_dir_all(&scratch);
 
     probed?;
-
-    let shown_temp = state.join("sessions").join("<session>").join("tmp");
-    let policy = build_policy(env, extras, shown_temp)?;
     Ok(Report {
         description: policy.describe(),
     })
+}
+
+/// The binaries the run would find on the host it is not sandboxed from: the
+/// same lookup the probe makes inside the sandbox, against the same `PATH`, so
+/// one `PATH` decides both.
+fn missing_from(path: &str) -> Vec<String> {
+    REQUIRED_BINARIES
+        .iter()
+        .filter(|name| which_in(OsStr::new(path), name).is_none())
+        .map(|name| (*name).to_string())
+        .collect()
 }
 
 fn build_policy(
     env: &Env,
     extras: &[PathBuf],
     session_temp: PathBuf,
+    enforcement: Enforcement,
 ) -> Result<SandboxPolicy, DoctorError> {
     crate::session::policy_for(
         &env.workspace,
         extras,
         session_temp,
         env.search_path.clone(),
-        Enforcement::Bubblewrap,
+        enforcement,
     )
     .map_err(DoctorError::Policy)
 }
@@ -109,7 +140,12 @@ fn run_probe(
     extras: &[PathBuf],
     session_temp: &Path,
 ) -> Result<(), DoctorError> {
-    let policy = build_policy(env, extras, session_temp.to_path_buf())?;
+    let policy = build_policy(
+        env,
+        extras,
+        session_temp.to_path_buf(),
+        Enforcement::Bubblewrap,
+    )?;
     let script = format!(
         "echo {MARKER}; for b in {}; do command -v \"$b\" >/dev/null 2>&1 || echo \"missing:$b\"; done",
         REQUIRED_BINARIES.join(" ")
@@ -154,10 +190,13 @@ fn run_probe(
 }
 
 fn which(name: &str) -> Option<PathBuf> {
+    which_in(&std::env::var_os("PATH")?, name)
+}
+
+fn which_in(path: &OsStr, name: &str) -> Option<PathBuf> {
     use std::os::unix::fs::PermissionsExt;
 
-    let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path)
+    std::env::split_paths(path)
         .map(|dir| dir.join(name))
         .find(|candidate| {
             candidate.is_file()

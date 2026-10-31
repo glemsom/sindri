@@ -43,6 +43,10 @@ A boundary on writes, not on reads.
 **description** — the model-facing text derived from the sandbox policy, also printed by
 `sindri doctor`.
 
+**yolo-unsafe** — `--yolo-unsafe`: the policy whose enforcement is `none`, so commands run
+with the caller's own privileges, outside bubblewrap, inheriting its environment and
+working directory. Never persisted: asked for by the invocation that makes it.
+
 **doctor** — `sindri doctor`: verifies bwrap, the binary set and the mount plan, and
 prints the description.
 

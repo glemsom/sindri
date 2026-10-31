@@ -25,11 +25,6 @@ use crate::sandbox::{
 
 pub type LoopError = Error;
 
-/// How every run is enforced: bubblewrap, always. Running commands with the
-/// user's own privileges is not a setting a run may carry yet, so the session
-/// states the one answer rather than leaving its callers to choose it.
-const RUN_ENFORCEMENT: Enforcement = Enforcement::Bubblewrap;
-
 #[derive(Debug, Clone)]
 pub struct Env {
     pub workspace: PathBuf,
@@ -107,13 +102,13 @@ impl Session {
         // The policy is derived before the record is started: a path the
         // sandbox refuses must not leave a record saying `running`, which no
         // reader could tell from a run that is still going.
-        let policy = derive(env, &dir, &config.extra_writable, RUN_ENFORCEMENT)?;
+        let policy = derive(env, &dir, &config.extra_writable, config.enforcement)?;
         let recorder = Recorder::start(
             &dir,
             Start {
                 provider: config.provider.as_str().to_string(),
                 model: config.model.clone(),
-                enforcement: RUN_ENFORCEMENT,
+                enforcement: config.enforcement,
             },
             Redaction::new([config.api_key.clone()]),
         )
@@ -135,7 +130,7 @@ impl Session {
             &self.env,
             &self.dir,
             &config.extra_writable,
-            RUN_ENFORCEMENT,
+            config.enforcement,
         )?;
         Ok(())
     }

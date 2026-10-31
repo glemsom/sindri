@@ -90,6 +90,7 @@ mod tests {
     use std::time::Duration;
 
     use sindri_core::config::Provider;
+    use sindri_core::sandbox::Enforcement;
     use tempfile::TempDir;
 
     use super::*;
@@ -104,6 +105,7 @@ mod tests {
             timeout: Duration::from_secs(5),
             thinking: false,
             extra_writable: Vec::new(),
+            enforcement: Enforcement::Bubblewrap,
             extra_headers: Vec::new(),
             refused_repo_config: None,
         }
