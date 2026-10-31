@@ -260,6 +260,42 @@ pub(crate) fn forward(
     (entry < count).then_some((entry, row))
 }
 
+/// The rows from one place in the thread to another, positive towards the
+/// tail. A mark is drawn on the glass and covers a place in the thread, so this
+/// is what says how far that place moved when the window did — the note a copy
+/// leaves at the tail pushes every row above it up — and only the entries
+/// between the two places are measured for it.
+pub(crate) fn rows_between(
+    app: &mut App,
+    width: u16,
+    from: (usize, usize),
+    to: (usize, usize),
+) -> isize {
+    let forward = from <= to;
+    let (back, front) = if forward { (from, to) } else { (to, from) };
+    let rows = if back.0 == front.0 {
+        front.1.saturating_sub(back.1)
+    } else {
+        let mut rows = entry_height(app, width, back.0).saturating_sub(back.1);
+        for index in back.0 + 1..front.0 {
+            rows += entry_height(app, width, index);
+        }
+        rows + front.1
+    };
+    let rows = rows as isize;
+    if forward { rows } else { -rows }
+}
+
+/// The rows one entry is drawn on, gap and all: the measure the window moves
+/// by. An entry the thread no longer has — a `/new` between two frames — is
+/// worth nothing rather than a panic.
+fn entry_height(app: &mut App, width: u16, index: usize) -> usize {
+    if index >= app.entries().len() {
+        return 0;
+    }
+    gap(&app.entries()[index]) + app.measure(index, width)
+}
+
 /// The entry the window's first row belongs to.
 pub(crate) fn place(marks: &[(usize, usize)], start: usize) -> usize {
     marks

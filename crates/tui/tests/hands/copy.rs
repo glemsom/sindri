@@ -1,5 +1,6 @@
 //! Selecting rendered rows and getting them out: the drag, the refusal that
-//! says it refused, and the keyboard's own way to do both.
+//! says it refused, and the keyboard's own way to do both — the mark's
+//! lifetime is `marks.rs`'s.
 
 use super::*;
 
@@ -116,28 +117,6 @@ fn a_copy_through_a_shell_tool_names_the_tool() {
         "the note names the channel that took it: {:?}",
         notes(&app)
     );
-}
-
-#[test]
-fn shift_up_selects_rendered_rows_and_ctrl_y_copies_them() {
-    let clipboard = Fake::taking();
-    let mut app = answered(clipboard.clone());
-    screen(&mut app, 100, 20);
-    press(&mut app, KeyCode::Up, KeyModifiers::SHIFT);
-    press(&mut app, KeyCode::Up, KeyModifiers::SHIFT);
-    assert!(
-        !app.selection().is_empty(),
-        "Shift+Up selects without a mouse"
-    );
-    press(&mut app, KeyCode::Char('y'), KeyModifiers::CONTROL);
-
-    let copied = clipboard.saw();
-    assert_eq!(copied.len(), 1, "one copy: {copied:?}");
-    assert!(
-        copied[0].contains("the answer, in full"),
-        "the keyboard copies what it selected: {copied:?}"
-    );
-    assert!(app.selection().is_empty(), "and the selection is spent");
 }
 
 /// One answer whose whole body is a picture: the rows it is drawn on, and the

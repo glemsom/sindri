@@ -6,7 +6,7 @@ use super::*;
 
 use std::sync::{Arc, Mutex};
 
-use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use sindri_tui::copy::{Clipboard, Copied};
@@ -140,12 +140,53 @@ fn a_drag_lights_exactly_the_cells_its_copy_takes() {
         washed,
         "the mark lit exactly what the copy took, and nothing else: {copied:?}"
     );
-    let after = buffer(&mut app, 100, 20);
-    assert_eq!(
-        washes(&after),
-        0,
-        "the selection is spent with the copy, so the wash goes with it"
+}
+
+/// A drag of the two rows above, released: the mark it leaves, and the note's
+/// count against the rows it covers.
+fn released(clipboard: Taking) -> App {
+    let mut app = answered(clipboard, "alpha bravo charlie\n\ndelta echo foxtrot");
+    let rows = screen(&mut app, 100, 20);
+    let (first, last) = (
+        row_of(&rows, "alpha bravo") as u16,
+        row_of(&rows, "delta echo") as u16,
     );
+    mouse(&mut app, MouseEventKind::Down(MouseButton::Left), 4, first);
+    mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), 7, last);
+    mouse(&mut app, MouseEventKind::Up(MouseButton::Left), 7, last);
+    app
+}
+
+#[test]
+fn the_mark_stands_after_the_button_comes_up_and_the_note_counts_its_rows() {
+    let mut app = released(Taking::default());
+    let cells = frame_cells(&mut app, 100, 20);
+    assert_eq!(
+        lit(&cells, app.viewport().area),
+        vec!["pha bravo charlie".to_string(), "  delta".to_string()],
+        "the mark is still drawn, on the same rows and cells, after the button \
+         comes up"
+    );
+    assert!(
+        crate::common::notes(&app).contains("copy sent: 3 rows"),
+        "and the note names the rows the mark covers — the two with words, and \
+         the blank row between them: {:?}",
+        crate::common::notes(&app)
+    );
+}
+
+#[test]
+fn the_next_key_takes_the_mark_away_and_copies_nothing_further() {
+    let clipboard = Taking::default();
+    let mut app = released(clipboard.clone());
+    assert_eq!(clipboard.saw().len(), 1, "the release copied once");
+    press(&mut app, KeyCode::Char('x'), KeyModifiers::NONE);
+    assert_eq!(
+        washes(&buffer(&mut app, 100, 20)),
+        0,
+        "a key is the reader's next gesture, so the mark goes with it"
+    );
+    assert_eq!(clipboard.saw().len(), 1, "and it copies nothing further");
 }
 
 #[test]

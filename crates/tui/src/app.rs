@@ -9,6 +9,7 @@ use std::time::Duration;
 use ratatui::layout::Rect;
 use sindri_core::cancel::Cancel;
 
+mod marks;
 mod pictures;
 
 use crate::completion::Completion;
@@ -79,6 +80,10 @@ pub struct App {
     pub(crate) heights: Heights,
     pub(crate) width: Option<u16>,
     pub(crate) selection: Selection,
+    /// The window's place the mark's rows were last read against: the mark
+    /// covers a place in the thread, so the note a copy leaves at the tail
+    /// pushes the marked rows up and the mark has to go with them.
+    mark_at: Option<(usize, usize)>,
     pub(crate) clipboard: Box<dyn Clipboard>,
     pub(crate) completion: Option<Completion>,
     pub(crate) overlay: Option<Overlay>,
@@ -137,6 +142,7 @@ impl App {
             heights: Heights::default(),
             width: None,
             selection: Selection::default(),
+            mark_at: None,
             clipboard,
             completion: None,
             overlay: None,
@@ -240,16 +246,16 @@ impl App {
         self.selection
     }
 
+    pub fn viewport(&self) -> &Viewport {
+        &self.viewport
+    }
+
     pub fn completion(&self) -> Option<&Completion> {
         self.completion.as_ref()
     }
 
     pub fn overlay(&self) -> Option<&Overlay> {
         self.overlay.as_ref()
-    }
-
-    pub fn viewport(&self) -> &Viewport {
-        &self.viewport
     }
 
     pub fn face_mut(&mut self) -> Option<&mut Face> {
@@ -382,9 +388,5 @@ impl App {
             rows,
             session,
         };
-    }
-
-    pub(crate) fn set_viewport(&mut self, viewport: Viewport) {
-        self.viewport = viewport;
     }
 }
