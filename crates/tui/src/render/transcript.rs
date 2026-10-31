@@ -25,6 +25,10 @@ pub struct View {
     /// How many entries the frame had to measure or lay out: the cost a long
     /// thread must not pay for a page.
     pub measured: usize,
+    /// How many of those the frame measured from scratch rather than read back
+    /// the height kept for them: the cost a streamed delta must not pay for an
+    /// entry above the one it landed in.
+    pub remeasured: usize,
     pub spill: Vec<(usize, PathBuf)>,
     /// The drawn rows that are an expandable entry's own row, and the entry
     /// behind each: a click there opens it.
@@ -93,6 +97,9 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
     let width = width.max(1);
     let count = app.entries().len();
     app.note_width(width);
+    // Every measurement this frame asks the store for is counted from here, so
+    // what the view reports is this frame's work and not the session's.
+    let measured_from = app.measured();
 
     // What the reader asked for is answered against the thread as it is now,
     // and only then laid out.
@@ -169,6 +176,7 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
         }
     }
     app.window.settled(ask, at, follow, below, plain.len());
+    let remeasured = app.measured() - measured_from;
     let spill = drawn(spill, start, plain.len());
     let expand = drawn(expand, start, plain.len());
     View {
@@ -176,6 +184,7 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
         plain,
         laid_out,
         measured,
+        remeasured,
         spill,
         expand,
         pictures,

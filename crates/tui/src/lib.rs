@@ -16,6 +16,7 @@ pub mod export;
 pub mod face;
 pub mod graphics;
 mod heard;
+mod heights;
 mod keys;
 pub mod markdown;
 mod msg;

@@ -18,6 +18,7 @@ use crate::driver::Side;
 use crate::entry::{Entry, Note};
 use crate::face::Face;
 use crate::graphics::Graphics;
+use crate::heights::Heights;
 use crate::overlay::Overlay;
 use crate::picture::Store;
 use crate::rail::{Launch, Rail, RailView};
@@ -72,10 +73,10 @@ pub struct App {
     /// an empty composer toggles: a frame with no cursor of its own has one
     /// honest answer to "which call?", and it is the one just touched.
     pub(crate) chosen: Option<usize>,
-    /// One row count per entry at the width it was measured at, dropped
-    /// whenever an entry changes, so the window never lays out a row it does
-    /// not show.
-    pub(crate) heights: Vec<Option<(u16, usize)>>,
+    /// One row count per entry at the width it was measured at, dropped for the
+    /// entries that change, so the window never lays out a row it does not
+    /// show.
+    pub(crate) heights: Heights,
     pub(crate) width: Option<u16>,
     pub(crate) selection: Selection,
     pub(crate) clipboard: Box<dyn Clipboard>,
@@ -133,7 +134,7 @@ impl App {
             window: Window::default(),
             viewport: Viewport::default(),
             chosen: None,
-            heights: Vec::new(),
+            heights: Heights::default(),
             width: None,
             selection: Selection::default(),
             clipboard,
@@ -309,7 +310,7 @@ impl App {
                 self.entries.clear();
                 self.queue.clear();
                 self.early.clear();
-                self.heights.clear();
+                self.heights = Heights::default();
                 self.chosen = None;
                 self.walking = None;
                 self.window = Window::default();
@@ -349,12 +350,7 @@ impl App {
     /// once and never costs a file read, while a resize is measured again from
     /// the store.
     pub fn measure(&mut self, index: usize, width: u16) -> usize {
-        if self.heights.len() < self.entries.len() {
-            self.heights.resize(self.entries.len(), None);
-        }
-        if let Some(&Some((measured, rows))) = self.heights.get(index)
-            && measured == width
-        {
+        if let Some(rows) = self.heights.at(index, width) {
             return rows;
         }
         let rows = crate::render::rows::entry_rows(
@@ -365,10 +361,14 @@ impl App {
         )
         .rows
         .len();
-        if let Some(slot) = self.heights.get_mut(index) {
-            *slot = Some((width, rows));
-        }
+        self.heights.keep(index, width, rows);
         rows
+    }
+
+    /// How many heights have been measured from scratch over the frame's whole
+    /// life: a frame reports the difference as its own.
+    pub(crate) fn measured(&self) -> usize {
+        self.heights.measured()
     }
 
     pub(crate) fn set_rail_view(
@@ -386,9 +386,5 @@ impl App {
 
     pub(crate) fn set_viewport(&mut self, viewport: Viewport) {
         self.viewport = viewport;
-    }
-
-    pub(crate) fn dirty(&mut self) {
-        self.heights.fill(None);
     }
 }

@@ -20,6 +20,7 @@ pub(crate) struct Frame<'a> {
     pub(crate) width: u16,
     pub(crate) rows: Vec<Line<'static>>,
     pub(crate) marks: Vec<(usize, usize)>,
+    /// How many entries this frame laid out or asked the height of.
     pub(crate) measured: usize,
     pub(crate) spill: Vec<(usize, PathBuf)>,
     pub(crate) expand: Vec<(usize, usize)>,
