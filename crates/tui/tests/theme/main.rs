@@ -13,6 +13,9 @@
     reason = "a panicking test is how a broken contract reports itself"
 )]
 
+#[path = "../common/mod.rs"]
+mod common;
+
 /// The law for pixels, in the same spirit and the same place as the cell law
 /// below: a picture the frame generates is held to the ramps one pixel at a
 /// time.

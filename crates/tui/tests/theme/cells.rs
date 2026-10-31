@@ -16,17 +16,12 @@ use sindri_tui::render;
 use sindri_tui::theme;
 use sindri_tui::{App, Face, Launch};
 
+use crate::common;
+
 fn launch() -> Launch {
     Launch {
-        session: "4f1c8f2e-8a24-4b93-9c0e-0d3f0e5c1a77".to_string(),
-        temp: "/state/sindri/sessions/4f1c8f2e/tmp".to_string(),
         branch: Some("t20-the-surface".to_string()),
-        sandbox: "bwrap · 1 writable".to_string(),
-        workspace: "~/git/sindri".to_string(),
-        provider: "anthropic".to_string(),
-        model: "claude-sonnet-4-6".to_string(),
-        max_turns: 250,
-        context_limit: Some(200_000),
+        ..common::launch()
     }
 }
 
