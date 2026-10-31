@@ -127,10 +127,18 @@ fn line(mut glyphs: Vec<Glyph>, prefix: &str, prefix_style: Style) -> Line<'stat
     while glyphs.last().is_some_and(|(ch, _)| *ch == ' ') {
         glyphs.pop();
     }
-    let mut spans: Vec<Span<'static>> = Vec::new();
+    let mut out: Vec<Span<'static>> = Vec::new();
     if !prefix.is_empty() {
-        spans.push(Span::styled(prefix.to_string(), prefix_style));
+        out.push(Span::styled(prefix.to_string(), prefix_style));
     }
+    out.extend(spans(glyphs));
+    Line::from(out)
+}
+
+/// The glyphs back into spans, one per run of one style. A fence's cell and a
+/// prose row are held to the same law, so both split runs here and nowhere else.
+pub fn spans(glyphs: Vec<Glyph>) -> Vec<Span<'static>> {
+    let mut spans: Vec<Span<'static>> = Vec::new();
     let mut run = String::new();
     let mut run_style = Style::default();
     for (ch, style) in glyphs {
@@ -143,7 +151,7 @@ fn line(mut glyphs: Vec<Glyph>, prefix: &str, prefix_style: Style) -> Line<'stat
     if !run.is_empty() {
         spans.push(Span::styled(run, run_style));
     }
-    Line::from(spans)
+    spans
 }
 
 #[cfg(test)]
@@ -157,6 +165,18 @@ mod tests {
         let rows = wrap(Vec::new(), "│ ", Style::new().fg(Color::DarkGray), 10);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].spans.len(), 0, "a blank row carries no prefix");
+    }
+
+    #[test]
+    fn a_span_ends_where_the_style_changes() {
+        let ink = Style::new().fg(Color::Red);
+        let glyphs = vec![('a', ink), ('b', ink), ('c', Style::default())];
+        let spans = super::spans(glyphs);
+        let shown: Vec<(&str, Style)> = spans
+            .iter()
+            .map(|span| (span.content.as_ref(), span.style))
+            .collect();
+        assert_eq!(shown, vec![("ab", ink), ("c", Style::default())]);
     }
 
     #[test]

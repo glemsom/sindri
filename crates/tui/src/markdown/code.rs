@@ -2,8 +2,10 @@
 //! a diff coloured line by line — an agent emits code and diffs more than
 //! anything else. A fence is drawn as the panel it is, with a gutter down its
 //! left edge and a line too long for it cut and marked rather than silently
-//! swallowed. `ROLES` decides which scope is a comment; the hexes are the
-//! theme's, because a colour named here would be a second source of truth.
+//! swallowed; glyphs go back to spans through `text`, so a fence splits runs
+//! exactly as the prose beside it does. `ROLES` decides which scope is a
+//! comment; the hexes are the theme's, because a colour named here would be a
+//! second source of truth.
 
 use std::sync::OnceLock;
 
@@ -13,7 +15,7 @@ use syntect::parsing::{ParseState, ScopeStack, SyntaxSet};
 use unicode_width::UnicodeWidthChar;
 
 use crate::markdown::role;
-use crate::markdown::text::{Glyph, clip};
+use crate::markdown::text::{self, Glyph, clip};
 use crate::theme;
 
 /// The panel's left edge and the column of air that is its gutter.
@@ -169,7 +171,7 @@ fn body_row(row: &Line<'static>, width: usize) -> Line<'static> {
         .map(|(ch, _)| UnicodeWidthChar::width(*ch).unwrap_or(0))
         .sum();
     let mut spans = vec![Span::styled(GUTTER.to_string(), edge)];
-    spans.extend(runs(glyphs));
+    spans.extend(text::spans(glyphs));
     if content > used {
         spans.push(Span::styled(" ".repeat(content - used), surface));
     }
@@ -180,7 +182,7 @@ fn body_row(row: &Line<'static>, width: usize) -> Line<'static> {
 /// A row with no panel to sit in: cut to the width, marked the same way.
 fn bare(row: &Line<'static>, width: usize) -> Line<'static> {
     let surface = surface_of(row);
-    Line::from(runs(cut(glyphsof(row, surface), width, surface)))
+    Line::from(text::spans(cut(glyphsof(row, surface), width, surface)))
 }
 
 /// The surface a row sits on: the panel it is drawn over, or the wash a diff
@@ -227,22 +229,4 @@ fn cut(glyphs: Vec<Glyph>, width: usize, surface: Style) -> Vec<Glyph> {
     }
     kept.push(('…', theme::faint().patch(surface)));
     kept
-}
-
-/// Glyphs back into spans, one per run of one style.
-fn runs(glyphs: Vec<Glyph>) -> Vec<Span<'static>> {
-    let mut spans: Vec<Span<'static>> = Vec::new();
-    let mut run = String::new();
-    let mut run_style = Style::default();
-    for (ch, style) in glyphs {
-        if style != run_style && !run.is_empty() {
-            spans.push(Span::styled(std::mem::take(&mut run), run_style));
-        }
-        run_style = style;
-        run.push(ch);
-    }
-    if !run.is_empty() {
-        spans.push(Span::styled(run, run_style));
-    }
-    spans
 }
