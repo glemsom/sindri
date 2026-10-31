@@ -1,7 +1,15 @@
 //! The store's own tests: every one of them asks a made-up Kitty answer and a
 //! file on disk, so none of them reaches a terminal.
 
+use std::fs::File;
+use std::path::PathBuf;
+
+use image::ImageFormat;
+use ratatui_image::picker::{Picker, ProtocolType};
+
+use super::store::LIVE;
 use super::*;
+use crate::graphics::Graphics;
 
 /// The fixtures this module measures, committed beside the crate so a test
 /// reads a picture and never builds one.
@@ -253,15 +261,11 @@ fn the_ninth_picture_evicts_the_first() {
         store.protocol(worth);
     }
     assert_eq!(store.decodes, 9);
-    assert_eq!(
-        store.live.len(),
-        LIVE,
-        "eight are live, each holding pixels"
-    );
+    assert_eq!(store.held(), LIVE, "eight are live, each holding pixels");
 
     store.protocol(&plots[0]);
     assert_eq!(store.decodes, 10, "the oldest was let go to make room");
-    assert_eq!(store.live.len(), LIVE);
+    assert_eq!(store.held(), LIVE);
     store.protocol(&plots[8]);
     assert_eq!(store.decodes, 10, "and the newest is still held");
 }

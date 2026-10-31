@@ -364,5 +364,6 @@ fn a_fenced_line_wider_than_the_panel_is_cut_and_says_so() {
     );
 }
 
+mod mermaid;
 mod pictures;
 mod prose;

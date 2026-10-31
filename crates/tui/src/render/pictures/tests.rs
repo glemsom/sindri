@@ -154,3 +154,53 @@ fn new_lays_the_picture_out_again_without_reading_it_again() {
     );
     assert_eq!(decodes(&app), 1, "and nothing was decoded again");
 }
+
+/// A diagram a fence in an answer draws: flat and wide, so it is drawn at its
+/// own size inside the window.
+const DIAGRAM: &str = "stateDiagram-v2\n    [*] --> Resting\n    Resting --> [*]\n";
+
+/// A frame whose thread is a mermaid fence and twenty notes under it: the
+/// diagram's turn is the first, and the tail is a page away from it.
+fn diagrammed() -> App {
+    let mut app = App::new(launch(), None).with_graphics(Some(Graphics::kitty()));
+    app.event(Event::TextDelta {
+        turn: 1,
+        text: format!("```mermaid\n{DIAGRAM}```\n"),
+    });
+    for note in 1..=40 {
+        app.note_info(format!("a note {note}"));
+    }
+    app
+}
+
+#[test]
+fn a_repaint_of_a_mermaid_fence_paints_pixels_and_renders_it_once() {
+    let mut app = diagrammed();
+
+    // The tail first, where the diagram is scrolled out: nothing to render.
+    let tail = frame(&mut app, 100, 30);
+    assert!(!drawn(&tail), "the tail shows the notes, not the diagram");
+    assert_eq!(decodes(&app), 0, "nothing was drawn, nothing was rendered");
+
+    // The first turn: the diagram, rendered once.
+    press(&mut app, KeyCode::Home);
+    let top = frame(&mut app, 100, 30);
+    assert!(drawn(&top), "the diagram is drawn on the rows it reserved");
+    assert_eq!(decodes(&app), 1, "the first draw renders it once");
+
+    // A repaint of a live run: the same rows, the pixels the store holds.
+    let again = frame(&mut app, 100, 30);
+    assert!(drawn(&again), "a repaint still paints the diagram");
+    assert_eq!(decodes(&app), 1, "and costs no second render");
+
+    // Scrolled out and back: drawn nowhere, then drawn again from what is held.
+    press(&mut app, KeyCode::End);
+    assert!(!drawn(&frame(&mut app, 100, 30)), "scrolled out, nowhere");
+    assert_eq!(decodes(&app), 1, "and the scroll rendered nothing");
+    press(&mut app, KeyCode::Home);
+    assert!(
+        drawn(&frame(&mut app, 100, 30)),
+        "scrolled back, drawn again"
+    );
+    assert_eq!(decodes(&app), 1, "from the pixels the store still holds");
+}
