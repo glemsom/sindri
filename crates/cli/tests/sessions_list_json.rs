@@ -1,11 +1,11 @@
+//! `sindri sessions list --json`: one compact object per line, the text row's
+//! fields in the text row's order, so `jq` streams a list and a script reads
+//! what a person reads.
+
 #![allow(
     clippy::expect_used,
     reason = "a panicking harness is how a process test reports a setup failure"
 )]
-
-//! `sindri sessions list --json`: one compact object per line, the text row's
-//! fields in the text row's order, so `jq` streams a list and a script reads
-//! what a person reads.
 
 mod common;
 

@@ -1,10 +1,10 @@
+//! The sandbox policy's contract: what the writable set accepts, what the argv
+//! enforces, and that enforcement and description are the same value twice.
+
 #![allow(
     clippy::expect_used,
     reason = "a panicking test is how a broken contract reports itself"
 )]
-
-//! The sandbox policy's contract: what the writable set accepts, what the argv
-//! enforces, and that enforcement and description are the same value twice.
 
 use std::path::{Path, PathBuf};
 

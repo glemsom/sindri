@@ -1,12 +1,12 @@
-#![allow(
-    clippy::expect_used,
-    reason = "a panicking harness is how a process test reports a setup failure"
-)]
-
 //! `sindri sessions show`: one record read back — the newest when no id is
 //! named, the one a prefix names, and either as text or as the files' own JSON.
 //! The fixtures are directories a run could have left, so a reader is proven
 //! against the record rather than against the writer.
+
+#![allow(
+    clippy::expect_used,
+    reason = "a panicking harness is how a process test reports a setup failure"
+)]
 
 mod common;
 

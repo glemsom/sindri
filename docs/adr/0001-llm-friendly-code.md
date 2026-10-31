@@ -13,7 +13,8 @@ Each line below saves a reader a search; none of it is ceremony.
   `scripts/audit-line-length.sh` against an empty allowlist. Split the file, do not
   allowlist it.
 - **A module opens with `//!`**: one paragraph on what it is for, so it can be placed
-  without reading its body.
+  without reading its body. Inner attributes go below it — the first line is the one
+  that gets scanned — and `scripts/audit-module-docs.sh` holds every file to that.
 - **Comments say what the code cannot** — the rule behind it, the trap it avoids. A
   comment that repeats the line beneath it is noise.
 - **Tests hold the spec.** A behaviour worth a sentence is worth a test name, and the

@@ -19,9 +19,11 @@ fmt:
 clippy:
 	$(CARGO) clippy --workspace --all-targets -- -D warnings
 
-## audit: source files stay at or under 400 lines.
+## audit: source files stay at or under 400 lines, and every module opens
+## with its own `//!` paragraph.
 audit:
 	@scripts/audit-line-length.sh
+	@scripts/audit-module-docs.sh
 
 test:
 	$(CARGO) nextest run --workspace --no-fail-fast

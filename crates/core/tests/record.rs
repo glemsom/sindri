@@ -1,11 +1,11 @@
+//! The session record, proven where the record lives: a directory on
+//! disk a run writes as it goes. No process, no sandbox — what is under test is
+//! what a user finds after the fact.
+
 #![allow(
     clippy::expect_used,
     reason = "a panicking test is how a broken record reports itself"
 )]
-
-//! The session record, proven where the record lives: a directory on
-//! disk a run writes as it goes. No process, no sandbox — what is under test is
-//! what a user finds after the fact.
 
 use std::time::Duration;
 

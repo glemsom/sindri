@@ -1,12 +1,12 @@
-#![allow(
-    clippy::expect_used,
-    reason = "a panicking test is how a broken contract reports itself"
-)]
-
 //! The turn loop's contract, proven at the two seams the spec names: a scripted
 //! model and the bash-executor port. No bubblewrap, no network: what is under
 //! test here is the loop itself — when it stops, what it feeds back, and what it
 //! reports.
+
+#![allow(
+    clippy::expect_used,
+    reason = "a panicking test is how a broken contract reports itself"
+)]
 
 mod support;
 
