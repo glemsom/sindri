@@ -25,7 +25,7 @@ fn card() -> Card {
     }
 }
 
-fn screen(width: u16, height: u16) -> Screen {
+fn card_screen(width: u16, height: u16) -> Screen {
     Screen {
         terminal: Terminal::new(TestBackend::new(width, height)).expect("a test terminal"),
         view: View::default(),
@@ -108,7 +108,7 @@ fn key(code: KeyCode) -> TerminalEvent {
 #[test]
 fn the_doctors_three_lines_draw_as_three_lines() {
     let card = card();
-    let mut screen = screen(100, 24);
+    let mut screen = card_screen(100, 24);
     screen.draw(&card);
     let rows = screen.rows();
     let row_of = |needle: &str| rows.iter().position(|row| row.contains(needle));
@@ -125,7 +125,7 @@ fn the_doctors_three_lines_draw_as_three_lines() {
 #[test]
 fn at_a_hundred_by_twentyfour_the_card_is_whole_and_marked_by_nothing() {
     let card = card();
-    let mut screen = screen(100, 24);
+    let mut screen = card_screen(100, 24);
     screen.draw(&card);
     assert!(
         screen.view.below().eq(&false) && !screen.view.above(),
@@ -146,7 +146,7 @@ fn at_a_hundred_by_twentyfour_the_card_is_whole_and_marked_by_nothing() {
 #[test]
 fn at_seventy_by_sixteen_the_description_is_whole_and_scrollable() {
     let card = card();
-    let mut screen = screen(70, 16);
+    let mut screen = card_screen(70, 16);
     screen.draw(&card);
     let first = screen.shown();
     assert!(
@@ -187,7 +187,7 @@ fn at_seventy_by_sixteen_the_description_is_whole_and_scrollable() {
 fn the_card_names_the_key_that_leaves_and_the_command_that_checks_again() {
     let mut card = card();
     card.detail = "bwrap is not installed".to_string();
-    let mut screen = screen(100, 24);
+    let mut screen = card_screen(100, 24);
     screen.draw(&card);
     let shown = screen.shown();
     assert!(
@@ -203,7 +203,7 @@ fn the_card_names_the_key_that_leaves_and_the_command_that_checks_again() {
 #[test]
 fn a_resize_lays_the_card_out_again_and_a_key_leaves_it() {
     let card = card();
-    let mut screen = screen(100, 24);
+    let mut screen = card_screen(100, 24);
     screen.draw(&card);
     assert!(!screen.shown().contains("↓ more"), "the card fits at first");
     // The same card on a smaller screen, as a `tmux` attach hands it one: laid

@@ -5,17 +5,7 @@
 
 use super::*;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-
-fn type_text(app: &mut App, text: &str) {
-    for ch in text.chars() {
-        app.key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE));
-    }
-}
-
-fn press(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
-    app.key(KeyEvent::new(code, modifiers));
-}
+use crossterm::event::{KeyCode, KeyModifiers};
 
 fn send(app: &mut App, text: &str) {
     type_text(app, text);

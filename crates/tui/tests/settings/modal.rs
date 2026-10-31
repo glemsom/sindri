@@ -102,11 +102,7 @@ fn the_modal_fits_a_hundred_columns_and_a_hundred_and_sixty() {
 fn the_modal_dims_the_frame_it_covers_and_reads_at_full_strength_itself() {
     let mut f = fixture(Some("model = \"m\"\n"));
     open(&mut f.app);
-    let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("a test terminal");
-    terminal
-        .draw(|frame| render::draw(&mut f.app, frame))
-        .expect("the frame draws");
-    let buf = terminal.backend().buffer().clone();
+    let buf = buffer(&mut f.app, 100, 30);
 
     assert!(
         buf[(0, 0)].modifier.contains(Modifier::DIM),

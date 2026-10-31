@@ -13,11 +13,7 @@ fn answered(text: &str) -> Buffer {
         turn: 1,
         text: text.to_string(),
     });
-    let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("a test terminal");
-    terminal
-        .draw(|frame| render::draw(&mut app, frame))
-        .expect("the frame draws");
-    terminal.backend().buffer().clone()
+    buffer(&mut app, 100, 30)
 }
 
 fn rows(buf: &Buffer) -> Vec<String> {
@@ -28,13 +24,6 @@ fn rows(buf: &Buffer) -> Vec<String> {
                 .collect::<String>()
         })
         .collect()
-}
-
-fn row_of(shown: &[String], needle: &str) -> usize {
-    shown
-        .iter()
-        .position(|row| row.contains(needle))
-        .unwrap_or_else(|| panic!("no row says {needle:?}: {shown:#?}"))
 }
 
 /// The first cell of `needle` on its row, so a style is read where the words

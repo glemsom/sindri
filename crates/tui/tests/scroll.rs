@@ -9,9 +9,10 @@
     reason = "a panicking test is how a broken contract reports itself"
 )]
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
+mod common;
+
+pub use common::{any, badge, press, reading, screen, shown};
+use crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use sindri_core::agent::Event;
 use sindri_tui::copy::{Clipboard, Copied};
 use sindri_tui::driver::{Finished, Stop};
@@ -62,37 +63,14 @@ fn thread(turns: u32) -> App {
     app
 }
 
-fn press(app: &mut App, code: KeyCode) {
-    app.key(KeyEvent::new(code, KeyModifiers::NONE));
-}
-
-fn screen(app: &mut App, width: u16, height: u16) -> Vec<String> {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
-    terminal
-        .draw(|frame| sindri_tui::render::draw(app, frame))
-        .expect("the frame draws");
-    let buffer = terminal.backend().buffer().clone();
-    (0..height)
-        .map(|y| {
-            (0..width)
-                .map(|x| buffer[(x, y)].symbol())
-                .collect::<String>()
-        })
-        .collect()
-}
-
-fn joined(rows: &[String]) -> String {
-    rows.join("\n")
-}
-
 #[test]
 fn pgup_shows_earlier_rows_and_pgdn_comes_back() {
     let mut app = thread(40);
-    let newest = joined(&screen(&mut app, 100, 12));
+    let newest = shown(&screen(&mut app, 100, 12));
     assert!(newest.contains("answer 40"), "the newest row is in view");
 
-    press(&mut app, KeyCode::PageUp);
-    let earlier = joined(&screen(&mut app, 100, 12));
+    press(&mut app, KeyCode::PageUp, KeyModifiers::NONE);
+    let earlier = shown(&screen(&mut app, 100, 12));
     assert_ne!(earlier, newest, "PgUp moves the window: {earlier:#?}");
     assert!(
         !earlier.contains("answer 40"),
@@ -103,9 +81,9 @@ fn pgup_shows_earlier_rows_and_pgdn_comes_back() {
         "the rows a screen up are shown: {earlier:#?}"
     );
 
-    press(&mut app, KeyCode::PageDown);
+    press(&mut app, KeyCode::PageDown, KeyModifiers::NONE);
     assert_eq!(
-        joined(&screen(&mut app, 100, 12)),
+        shown(&screen(&mut app, 100, 12)),
         newest,
         "PgDn returns to the newest row"
     );
@@ -114,9 +92,9 @@ fn pgup_shows_earlier_rows_and_pgdn_comes_back() {
 #[test]
 fn the_wheel_scrolls_and_scrolls_back() {
     let mut app = thread(40);
-    let newest = joined(&screen(&mut app, 100, 12));
+    let newest = shown(&screen(&mut app, 100, 12));
     wheel(&mut app, MouseEventKind::ScrollUp);
-    let wheeled = joined(&screen(&mut app, 100, 12));
+    let wheeled = shown(&screen(&mut app, 100, 12));
     assert_ne!(wheeled, newest, "the wheel scrolls: {wheeled:#?}");
     assert!(
         !wheeled.contains("answer 40"),
@@ -125,7 +103,7 @@ fn the_wheel_scrolls_and_scrolls_back() {
 
     wheel(&mut app, MouseEventKind::ScrollDown);
     assert_eq!(
-        joined(&screen(&mut app, 100, 12)),
+        shown(&screen(&mut app, 100, 12)),
         newest,
         "the wheel comes back to the newest row"
     );
@@ -134,7 +112,7 @@ fn the_wheel_scrolls_and_scrolls_back() {
 #[test]
 fn a_shifted_gesture_is_the_terminal_s_own_and_the_frame_ignores_it() {
     let mut app = thread(40);
-    let newest = joined(&screen(&mut app, 100, 12));
+    let newest = shown(&screen(&mut app, 100, 12));
     app.mouse(MouseEvent {
         kind: MouseEventKind::Drag(MouseButton::Left),
         column: 2,
@@ -147,7 +125,7 @@ fn a_shifted_gesture_is_the_terminal_s_own_and_the_frame_ignores_it() {
         "Shift+drag falls through to the terminal, so no selection starts"
     );
     assert_eq!(
-        joined(&screen(&mut app, 100, 12)),
+        shown(&screen(&mut app, 100, 12)),
         newest,
         "and the frame did not move"
     );
@@ -166,11 +144,11 @@ fn wheel(app: &mut App, kind: MouseEventKind) {
 fn scrolling_stops_at_the_first_row_of_the_thread() {
     let mut app = thread(6);
     for _ in 0..50 {
-        press(&mut app, KeyCode::PageUp);
+        press(&mut app, KeyCode::PageUp, KeyModifiers::NONE);
     }
     let rows = screen(&mut app, 100, 40);
     assert!(
-        joined(&rows).contains("question 1"),
+        shown(&rows).contains("question 1"),
         "the top of the thread is the ceiling: {rows:#?}"
     );
     assert_eq!(
@@ -183,9 +161,9 @@ fn scrolling_stops_at_the_first_row_of_the_thread() {
 #[test]
 fn scroll_position_survives_a_frame_that_asks_twice() {
     let mut app = thread(40);
-    press(&mut app, KeyCode::PageUp);
-    let once = joined(&screen(&mut app, 100, 12));
-    let twice = joined(&screen(&mut app, 100, 12));
+    press(&mut app, KeyCode::PageUp, KeyModifiers::NONE);
+    let once = shown(&screen(&mut app, 100, 12));
+    let twice = shown(&screen(&mut app, 100, 12));
     assert_eq!(once, twice, "drawing is not scrolling");
 }
 
@@ -207,21 +185,11 @@ fn a_long_thread_lays_out_only_the_rows_it_shows() {
     );
 }
 
-/// What the reader's window is showing, and what it says arrived below them.
-fn reading(app: &mut App) -> Vec<String> {
-    app.viewport().rows.clone()
-}
-
-fn badge(rows: &[String]) -> Option<String> {
-    rows.iter()
-        .find_map(|row| row.find('↓').map(|at| row[at..].trim_end().to_string()))
-}
-
 #[test]
 fn a_run_that_streams_does_not_move_the_text_under_the_reader() {
     let mut app = thread(40);
     screen(&mut app, 100, 12);
-    press(&mut app, KeyCode::PageUp);
+    press(&mut app, KeyCode::PageUp, KeyModifiers::NONE);
     screen(&mut app, 100, 12);
     let before = reading(&mut app);
     assert!(!before.is_empty(), "the reader is looking at rows");
@@ -245,7 +213,7 @@ fn a_run_that_streams_does_not_move_the_text_under_the_reader() {
 fn rows_that_arrive_off_screen_are_badged_and_end_clears_the_badge() {
     let mut app = thread(40);
     screen(&mut app, 100, 12);
-    press(&mut app, KeyCode::PageUp);
+    press(&mut app, KeyCode::PageUp, KeyModifiers::NONE);
     let rows = screen(&mut app, 100, 12);
     assert_eq!(
         badge(&rows),
@@ -263,11 +231,11 @@ fn rows_that_arrive_off_screen_are_badged_and_end_clears_the_badge() {
         "the badge counts the rows that arrived below the reader: {rows:#?}"
     );
 
-    press(&mut app, KeyCode::End);
+    press(&mut app, KeyCode::End, KeyModifiers::NONE);
     let rows = screen(&mut app, 100, 12);
     assert_eq!(badge(&rows), None, "End clears the badge: {rows:#?}");
     assert!(
-        joined(&rows).contains("arrived 4"),
+        shown(&rows).contains("arrived 4"),
         "and the tail is what is shown: {rows:#?}"
     );
 }
@@ -276,7 +244,7 @@ fn rows_that_arrive_off_screen_are_badged_and_end_clears_the_badge() {
 fn coming_back_down_reads_the_rows_that_arrived() {
     let mut app = thread(40);
     screen(&mut app, 100, 12);
-    press(&mut app, KeyCode::PageUp);
+    press(&mut app, KeyCode::PageUp, KeyModifiers::NONE);
     screen(&mut app, 100, 12);
     for row in 1..=3 {
         app.note_info(format!("arrived {row}"));
@@ -285,7 +253,7 @@ fn coming_back_down_reads_the_rows_that_arrived() {
     assert_eq!(badge(&rows).as_deref(), Some("↓ 3 new rows"));
 
     // A page down is through rows the reader had already passed.
-    press(&mut app, KeyCode::PageDown);
+    press(&mut app, KeyCode::PageDown, KeyModifiers::NONE);
     let rows = screen(&mut app, 100, 12);
     assert_eq!(
         badge(&rows).as_deref(),
@@ -294,7 +262,7 @@ fn coming_back_down_reads_the_rows_that_arrived() {
     );
 
     for _ in 0..10 {
-        press(&mut app, KeyCode::PageDown);
+        press(&mut app, KeyCode::PageDown, KeyModifiers::NONE);
     }
     let rows = screen(&mut app, 100, 12);
     assert_eq!(
@@ -309,21 +277,21 @@ fn home_reaches_the_first_turn_and_end_returns_to_the_tail() {
     let mut app = thread(40);
     screen(&mut app, 100, 12);
 
-    press(&mut app, KeyCode::Home);
+    press(&mut app, KeyCode::Home, KeyModifiers::NONE);
     let rows = screen(&mut app, 100, 12);
     assert!(
-        joined(&rows).contains("question 1"),
+        shown(&rows).contains("question 1"),
         "Home is the first turn: {rows:#?}"
     );
     assert!(
-        !joined(&rows).contains("answer 40"),
+        !shown(&rows).contains("answer 40"),
         "and never the newest one: {rows:#?}"
     );
 
-    press(&mut app, KeyCode::End);
+    press(&mut app, KeyCode::End, KeyModifiers::NONE);
     let rows = screen(&mut app, 100, 12);
     assert!(
-        joined(&rows).contains("answer 40"),
+        shown(&rows).contains("answer 40"),
         "End is the tail: {rows:#?}"
     );
 }
@@ -332,12 +300,12 @@ fn home_reaches_the_first_turn_and_end_returns_to_the_tail() {
 fn end_follows_the_tail_again() {
     let mut app = thread(40);
     screen(&mut app, 100, 12);
-    press(&mut app, KeyCode::PageUp);
-    press(&mut app, KeyCode::End);
+    press(&mut app, KeyCode::PageUp, KeyModifiers::NONE);
+    press(&mut app, KeyCode::End, KeyModifiers::NONE);
     app.note_info("arrived after the reader came back");
     let rows = screen(&mut app, 100, 12);
     assert!(
-        joined(&rows).contains("arrived after the reader came back"),
+        shown(&rows).contains("arrived after the reader came back"),
         "a reader on the tail follows what arrives: {rows:#?}"
     );
 }
@@ -353,7 +321,7 @@ fn a_five_hundred_entry_thread_costs_a_screenful_plus_the_offset() {
         tail.laid_out
     );
 
-    press(&mut app, KeyCode::PageUp);
+    press(&mut app, KeyCode::PageUp, KeyModifiers::NONE);
     let offset = transcript::window(&mut app, 80, 20);
     assert_eq!(offset.rows.len(), 20, "a page back is still a screen");
     assert!(
@@ -374,7 +342,7 @@ fn plain(line: &ratatui::text::Line<'_>) -> String {
 fn a_run_streaming_under_an_anchored_window_measures_a_screenful_not_the_thread() {
     let mut app = thread(500);
     transcript::window(&mut app, 80, 20);
-    press(&mut app, KeyCode::PageUp);
+    press(&mut app, KeyCode::PageUp, KeyModifiers::NONE);
     let page = transcript::window(&mut app, 80, 20);
     assert_eq!(page.rows.len(), 20, "a window is a screen tall");
     for turn in 501..=505 {

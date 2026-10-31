@@ -3,11 +3,7 @@
 
 use super::*;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-
-fn press(app: &mut App, code: KeyCode) {
-    app.key(KeyEvent::new(code, KeyModifiers::NONE));
-}
+use crossterm::event::{KeyCode, KeyModifiers};
 
 /// A thread of `turns` notes, so a window has more rows than it can show.
 fn long(app: &mut App, turns: u32) {
@@ -36,7 +32,7 @@ fn a_reader_off_the_tail_is_told_what_arrived_below_them() {
     let mut app = app();
     long(&mut app, 40);
     screen(&mut app, 100, 20);
-    press(&mut app, KeyCode::PageUp);
+    press(&mut app, KeyCode::PageUp, KeyModifiers::NONE);
     let rows = screen(&mut app, 100, 20);
     assert!(
         !any(&rows, "new rows"),
@@ -52,7 +48,7 @@ fn a_reader_off_the_tail_is_told_what_arrived_below_them() {
         "the footer counts what arrived below the reader: {rows:#?}"
     );
 
-    press(&mut app, KeyCode::End);
+    press(&mut app, KeyCode::End, KeyModifiers::NONE);
     let rows = screen(&mut app, 100, 20);
     assert!(
         !any(&rows, "new rows"),

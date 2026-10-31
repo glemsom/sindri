@@ -5,7 +5,6 @@
 use super::*;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::buffer::Buffer;
 use sindri_tui::render::transcript;
 use sindri_tui::theme;
 
@@ -13,52 +12,10 @@ use sindri_tui::theme;
 /// them take the rest.
 const COLUMN: u16 = MARGIN as u16;
 
-fn cells(app: &mut App, width: u16, height: u16) -> Buffer {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
-    terminal
-        .draw(|frame| render::draw(app, frame))
-        .expect("the frame draws");
-    terminal.backend().buffer().clone()
-}
-
-fn typed(app: &mut App, text: &str) {
-    for ch in text.chars() {
-        app.key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE));
-    }
-}
-
-/// One turn as the loop runs it: the prompt is sent, an answer streams, a
-/// call is announced with a line of output, and the run ends.
-fn turn(app: &mut App, prompt: &str, turn: u32, command: &str) {
-    typed(app, prompt);
-    app.key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    app.start().expect("a prompt starts a run");
-    app.event(Event::TextDelta {
-        turn,
-        text: format!("answer {turn}"),
-    });
-    app.event(Event::ToolCall {
-        turn,
-        command: Some(command.to_string()),
-    });
-    app.output(Side::Stdout, "out 1");
-    app.finished(Finished {
-        stopped: Stop::Final,
-        turns: turn,
-        ..Finished::default()
-    });
-}
-
 /// A row of the transcript column with nothing on it. The rail keeps its own
 /// column on every row, so only the column the transcript has is read.
 fn blank(row: &str) -> bool {
     row.chars().take(COLUMN as usize).all(|ch| ch == ' ')
-}
-
-fn row_of(rows: &[String], needle: &str) -> usize {
-    rows.iter()
-        .position(|row| row.contains(needle))
-        .unwrap_or_else(|| panic!("no row says {needle:?}: {rows:#?}"))
 }
 
 fn column_of(rows: &[String], row: usize, needle: &str) -> usize {
@@ -138,7 +95,7 @@ fn a_call_hangs_off_the_gutter_its_answer_starts_at() {
 #[test]
 fn a_running_call_and_the_same_call_collapsed_agree_on_every_column() {
     let mut app = app();
-    typed(&mut app, "build it");
+    type_text(&mut app, "build it");
     app.key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.start().expect("a prompt starts a run");
     app.event(Event::ToolCall {
@@ -174,7 +131,7 @@ fn a_running_call_and_the_same_call_collapsed_agree_on_every_column() {
 fn the_prompt_is_full_strength_on_a_panel_band_under_a_header() {
     let mut app = app();
     turn(&mut app, "why is the build slow", 1, "make");
-    let buf = cells(&mut app, 100, 24);
+    let buf = buffer(&mut app, 100, 24);
     let rows = screen(&mut app, 100, 24);
 
     let header = row_of(&rows, "YOU");

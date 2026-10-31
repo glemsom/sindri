@@ -9,28 +9,22 @@
     reason = "a panicking test is how a broken contract reports itself"
 )]
 
+#[path = "../common/mod.rs"]
+mod common;
+
+pub use common::{any, launch, press, screen, shown, type_text};
 use std::path::PathBuf;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
+use crossterm::event::{KeyCode, KeyModifiers, MouseEvent, MouseEventKind};
 use sindri_tui::overlay::{BINDINGS, help_rows};
-use sindri_tui::render;
 use sindri_tui::{App, Launch};
 use tempfile::TempDir;
 
 fn app() -> App {
     App::new(
         Launch {
-            session: "4f1c8f2e-8a24-4b93-9c0e-0d3f0e5c1a77".to_string(),
-            temp: "/state/sindri/sessions/4f1c8f2e/tmp".to_string(),
             branch: Some("t31-the-overlays".to_string()),
-            sandbox: "bwrap · 1 writable".to_string(),
-            workspace: "~/git/sindri".to_string(),
-            provider: "anthropic".to_string(),
-            model: "claude-sonnet-4-6".to_string(),
-            max_turns: 250,
-            context_limit: Some(200_000),
+            ..common::launch()
         },
         None,
     )
@@ -67,22 +61,12 @@ fn thread(turns: usize) -> App {
     app
 }
 
-fn press(app: &mut App, code: KeyCode) {
-    app.key(KeyEvent::new(code, KeyModifiers::NONE));
-}
-
-fn type_text(app: &mut App, text: &str) {
-    for ch in text.chars() {
-        press(app, KeyCode::Char(ch));
-    }
-}
-
 /// `/settings`, typed and sent: the name opens the offer the catalogue makes,
 /// the first `Enter` takes it and the second sends it.
 fn open_settings(app: &mut App) {
     type_text(app, "/settings");
-    press(app, KeyCode::Enter);
-    press(app, KeyCode::Enter);
+    press(app, KeyCode::Enter, KeyModifiers::NONE);
+    press(app, KeyCode::Enter, KeyModifiers::NONE);
 }
 
 fn wheel(app: &mut App, kind: MouseEventKind) {
@@ -92,29 +76,6 @@ fn wheel(app: &mut App, kind: MouseEventKind) {
         row: 10,
         modifiers: KeyModifiers::NONE,
     });
-}
-
-fn screen(app: &mut App, width: u16, height: u16) -> Vec<String> {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
-    terminal
-        .draw(|frame| render::draw(app, frame))
-        .expect("the frame draws");
-    let buffer = terminal.backend().buffer().clone();
-    (0..height)
-        .map(|y| {
-            (0..width)
-                .map(|x| buffer[(x, y)].symbol())
-                .collect::<String>()
-        })
-        .collect()
-}
-
-fn shown(rows: &[String]) -> String {
-    rows.join("\n")
-}
-
-fn any(rows: &[String], needle: &str) -> bool {
-    rows.iter().any(|row| row.contains(needle))
 }
 
 /// The box's own edge row, where a scrolling box states its position.
@@ -127,7 +88,7 @@ fn title(rows: &[String]) -> String {
 
 /// The help overlay, opened with the one key that opens it.
 fn help(app: &mut App) {
-    press(app, KeyCode::Char('?'));
+    press(app, KeyCode::Char('?'), KeyModifiers::NONE);
     assert!(app.overlay().is_some(), "? opens the help overlay");
 }
 
@@ -141,7 +102,7 @@ fn every_binding_is_reachable_at_a_hundred_by_twenty_four_and_at_seventy_by_twen
             let rows = screen(&mut app, width, height);
             seen.push_str(&shown(&rows));
             seen.push('\n');
-            press(&mut app, KeyCode::PageDown);
+            press(&mut app, KeyCode::PageDown, KeyModifiers::NONE);
             if screen(&mut app, width, height) == rows {
                 break;
             }
@@ -176,7 +137,7 @@ fn the_page_keys_and_the_wheel_scroll_the_help_and_not_the_frame_beneath_it() {
     let top = screen(&mut app, 100, 20);
     assert!(any(&top, "send the prompt"), "the list starts at the top");
 
-    press(&mut app, KeyCode::PageDown);
+    press(&mut app, KeyCode::PageDown, KeyModifiers::NONE);
     wheel(&mut app, MouseEventKind::ScrollDown);
     let down = screen(&mut app, 100, 20);
     assert!(
@@ -190,7 +151,7 @@ fn the_page_keys_and_the_wheel_scroll_the_help_and_not_the_frame_beneath_it() {
         shown(&down)
     );
 
-    press(&mut app, KeyCode::PageUp);
+    press(&mut app, KeyCode::PageUp, KeyModifiers::NONE);
     wheel(&mut app, MouseEventKind::ScrollUp);
     let back = screen(&mut app, 100, 20);
     assert!(
@@ -201,7 +162,7 @@ fn the_page_keys_and_the_wheel_scroll_the_help_and_not_the_frame_beneath_it() {
 
     // And the transcript under the box never moved: closing the help still
     // shows the newest thing the thread said, not a screen further up.
-    press(&mut app, KeyCode::Esc);
+    press(&mut app, KeyCode::Esc, KeyModifiers::NONE);
     let frame = screen(&mut app, 100, 20);
     assert!(
         any(&frame, "question 40") && !any(&frame, "question 01"),
@@ -221,7 +182,7 @@ fn the_help_states_its_position_when_the_list_is_longer_than_the_box() {
         top.contains("1 of "),
         "a scrolled list states its position: {top}"
     );
-    press(&mut app, KeyCode::PageDown);
+    press(&mut app, KeyCode::PageDown, KeyModifiers::NONE);
     let down = title(&screen(&mut app, 70, 20));
     assert!(
         down.contains(" of ") && !down.contains("· 1 of "),
@@ -250,7 +211,7 @@ fn a_description_wraps_under_its_keys_instead_of_being_cut_at_the_edge() {
     // columns: they wrap and are read, rather than losing their tail at the
     // border. The list is longer than the box, so both screens are looked at.
     let mut rows = screen(&mut app, 70, 20);
-    press(&mut app, KeyCode::PageDown);
+    press(&mut app, KeyCode::PageDown, KeyModifiers::NONE);
     rows.extend(screen(&mut app, 70, 20));
     let seen = shown(&rows);
     for wanted in [
@@ -291,10 +252,10 @@ fn a_failed_save_says_why_at_a_hundred_by_twelve() {
     let mut f = fixture("model = \"m\"\n");
     open_settings(&mut f.app);
     for _ in 0..4 {
-        press(&mut f.app, KeyCode::Down);
+        press(&mut f.app, KeyCode::Down, KeyModifiers::NONE);
     }
     type_text(&mut f.app, "nope");
-    press(&mut f.app, KeyCode::Enter);
+    press(&mut f.app, KeyCode::Enter, KeyModifiers::NONE);
     assert!(
         f.app.overlay().is_some(),
         "a refused save keeps the modal open"
@@ -330,7 +291,7 @@ fn the_modal_scrolls_to_a_chosen_row_past_the_fold_and_keeps_it_on_screen() {
 
     // Nine rows in a box of twelve: the last of them is past the fold.
     for _ in 0..8 {
-        press(&mut f.app, KeyCode::Down);
+        press(&mut f.app, KeyCode::Down, KeyModifiers::NONE);
     }
     let rows = screen(&mut f.app, 100, 12);
     assert!(
@@ -352,7 +313,7 @@ fn the_modal_scrolls_to_a_chosen_row_past_the_fold_and_keeps_it_on_screen() {
 
     // Back up, and the first row is on screen again.
     for _ in 0..8 {
-        press(&mut f.app, KeyCode::Up);
+        press(&mut f.app, KeyCode::Up, KeyModifiers::NONE);
     }
     let up = screen(&mut f.app, 100, 12);
     assert!(

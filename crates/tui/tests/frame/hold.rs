@@ -6,19 +6,6 @@
 use super::*;
 
 use crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use sindri_tui::driver::{CallOver, Side, Spilled};
-
-/// A finished call that ran `lines` lines of output, collapsed to its own row.
-fn call(app: &mut App, turn: u32, lines: usize) {
-    app.event(Event::ToolCall {
-        turn,
-        command: Some("cargo test".to_string()),
-    });
-    for line in 1..=lines {
-        app.output(Side::Stdout, &format!("line {line}"));
-    }
-    app.over(CallOver::Exited(0), Spilled::default());
-}
 
 /// A click on the cell at `(column, row)` of the frame.
 fn click(app: &mut App, column: u16, row: u16) {
@@ -35,12 +22,6 @@ fn call_row(rows: &[String]) -> Option<usize> {
     rows.iter().position(|row| row.contains("cargo test"))
 }
 
-/// The badge, as the footer says it.
-fn badge(rows: &[String]) -> Option<String> {
-    rows.iter()
-        .find_map(|row| row.find('↓').map(|at| row[at..].trim_end().to_string()))
-}
-
 #[test]
 fn opening_a_call_while_following_puts_that_call_at_the_top_of_the_column() {
     let mut app = app();
@@ -54,7 +35,7 @@ fn opening_a_call_while_following_puts_that_call_at_the_top_of_the_column() {
         "the call's own row is well above a window that is on the tail: {tail:#?}"
     );
 
-    press(&mut app, KeyCode::Enter);
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     let opened = screen(&mut app, 100, 30);
     let top = call_row(&opened).expect("the call the reader opened is shown");
     let first = opened
@@ -84,7 +65,7 @@ fn rows_that_arrive_after_the_fold_are_counted_and_move_nothing() {
         app.note_info(format!("later {note}"));
     }
     screen(&mut app, 100, 30);
-    press(&mut app, KeyCode::Enter);
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     screen(&mut app, 100, 30);
     let reading = app.viewport().rows.clone();
     assert!(!reading.is_empty(), "the reader is looking at rows");
@@ -113,11 +94,11 @@ fn a_second_enter_folds_the_call_the_reader_opened_and_moves_nothing() {
         app.note_info(format!("later {note}"));
     }
     screen(&mut app, 100, 30);
-    press(&mut app, KeyCode::Enter);
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     let opened = screen(&mut app, 100, 30);
     let top = call_row(&opened).expect("the call is at the top of the column");
 
-    press(&mut app, KeyCode::Enter);
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     let folded = screen(&mut app, 100, 30);
     assert_eq!(
         call_row(&folded),
@@ -157,7 +138,7 @@ fn a_click_on_a_call_holds_the_window_as_enter_does() {
         let row =
             u16::try_from(call_row(&rows).expect("the call is on the column")).expect("a row");
         if keys {
-            press(&mut app, KeyCode::Enter);
+            press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
         } else {
             click(&mut app, 4, row);
         }
@@ -191,7 +172,7 @@ fn a_short_thread_is_not_dragged_to_the_tail_after_its_newest_call_is_opened() {
         "the thread is too short to fill the column: {whole:#?}"
     );
 
-    press(&mut app, KeyCode::Enter);
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     screen(&mut app, 100, 30);
     let opened = app.viewport().rows.clone();
     assert!(

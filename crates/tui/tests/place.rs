@@ -10,69 +10,12 @@
     reason = "a panicking test is how a broken contract reports itself"
 )]
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
+mod common;
+
+pub use common::{any, app, call, press, reading, screen};
+use crossterm::event::{KeyCode, KeyModifiers};
 use sindri_core::agent::Event;
 use sindri_tui::driver::{CallOver, Side, Spilled};
-use sindri_tui::{App, Launch};
-
-fn launch() -> Launch {
-    Launch {
-        session: "4f1c8f2e-8a24-4b93-9c0e-0d3f0e5c1a77".to_string(),
-        temp: "/state/sindri/sessions/4f1c8f2e/tmp".to_string(),
-        branch: Some("main".to_string()),
-        sandbox: "bwrap · 1 writable".to_string(),
-        workspace: "~/git/sindri".to_string(),
-        provider: "anthropic".to_string(),
-        model: "claude-sonnet-4-6".to_string(),
-        max_turns: 250,
-        context_limit: Some(200_000),
-    }
-}
-
-fn app() -> App {
-    App::new(launch(), None)
-}
-
-/// A finished call that ran `lines` lines of output, collapsed to its own row.
-fn call(app: &mut App, turn: u32, lines: usize) {
-    app.event(Event::ToolCall {
-        turn,
-        command: Some("cargo test".to_string()),
-    });
-    for line in 1..=lines {
-        app.output(Side::Stdout, &format!("line {line}"));
-    }
-    app.over(CallOver::Exited(0), Spilled::default());
-}
-
-fn press(app: &mut App, code: KeyCode) {
-    app.key(KeyEvent::new(code, KeyModifiers::NONE));
-}
-
-fn screen(app: &mut App, width: u16, height: u16) -> Vec<String> {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
-    terminal
-        .draw(|frame| sindri_tui::render::draw(app, frame))
-        .expect("the frame draws");
-    let buffer = terminal.backend().buffer().clone();
-    (0..height)
-        .map(|y| {
-            (0..width)
-                .map(|x| buffer[(x, y)].symbol())
-                .collect::<String>()
-        })
-        .collect()
-}
-
-fn any(rows: &[String], needle: &str) -> bool {
-    rows.iter().any(|row| row.contains(needle))
-}
-
-fn reading(app: &mut App) -> Vec<String> {
-    app.viewport().rows.clone()
-}
 
 /// The reader opens a call, pages deep into its output and folds it again: the
 /// window stays in that call, on a row that exists, and the column the fold
@@ -84,13 +27,13 @@ fn folding_the_call_the_reader_has_paged_into_keeps_them_in_it() {
     for note in 1..=40 {
         app.note_info(format!("later {note}"));
     }
-    press(&mut app, KeyCode::Enter);
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     // The frame the key was pressed on, so a page is a screen and not a row.
     // Opening holds the window on the call's own row, so its output is read
     // by paging forward into it.
     screen(&mut app, 100, 30);
     for _ in 0..12 {
-        press(&mut app, KeyCode::PageDown);
+        press(&mut app, KeyCode::PageDown, KeyModifiers::NONE);
     }
     let inside = screen(&mut app, 100, 30);
     assert!(
@@ -102,7 +45,7 @@ fn folding_the_call_the_reader_has_paged_into_keeps_them_in_it() {
         "and the call's own row is above the window's top row: {inside:#?}"
     );
 
-    press(&mut app, KeyCode::Enter);
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     let folded = screen(&mut app, 100, 30);
     assert!(
         any(&folded, "cargo test"),
@@ -138,7 +81,7 @@ fn opening_and_folding_a_call_above_the_window_leaves_every_visible_row() {
         app.note_info(format!("later {note}"));
     }
     screen(&mut app, 100, 30);
-    press(&mut app, KeyCode::PageUp);
+    press(&mut app, KeyCode::PageUp, KeyModifiers::NONE);
     let reading = screen(&mut app, 100, 30);
     assert!(
         !any(&reading, "cargo test"),
@@ -146,7 +89,7 @@ fn opening_and_folding_a_call_above_the_window_leaves_every_visible_row() {
     );
     let below = app.scroll();
 
-    press(&mut app, KeyCode::Enter);
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     let opened = screen(&mut app, 100, 30);
     assert_eq!(
         opened, reading,
@@ -154,7 +97,7 @@ fn opening_and_folding_a_call_above_the_window_leaves_every_visible_row() {
     );
     assert_eq!(app.scroll(), below, "and not rows below it");
 
-    press(&mut app, KeyCode::Enter);
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     let folded = screen(&mut app, 100, 30);
     assert_eq!(
         folded, reading,
@@ -174,14 +117,14 @@ fn an_entry_above_the_window_that_grows_or_shrinks_moves_no_row_the_reader_is_on
         app.note_info(format!("later {note}"));
     }
     screen(&mut app, 100, 12);
-    press(&mut app, KeyCode::PageUp);
+    press(&mut app, KeyCode::PageUp, KeyModifiers::NONE);
     let reading = self::reading(&mut app);
     let below = app.scroll();
     assert!(!reading.is_empty(), "the reader is looking at rows");
 
     // `Enter` toggles the only entry there is anything to open in, which is the
     // call above the window's top row.
-    press(&mut app, KeyCode::Enter);
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     assert_eq!(
         self::reading(&mut app),
         reading,
@@ -189,7 +132,7 @@ fn an_entry_above_the_window_that_grows_or_shrinks_moves_no_row_the_reader_is_on
     );
     assert_eq!(app.scroll(), below, "and no row below it was counted anew");
 
-    press(&mut app, KeyCode::Enter);
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     assert_eq!(
         self::reading(&mut app),
         reading,
@@ -206,14 +149,14 @@ fn end_after_an_engagement_follows_what_arrives_again() {
     call(&mut app, 1, 400);
     screen(&mut app, 100, 30);
 
-    press(&mut app, KeyCode::Enter);
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     screen(&mut app, 100, 30);
     assert!(
         app.scroll() > 0,
         "opening a call holds the window off the tail"
     );
 
-    press(&mut app, KeyCode::End);
+    press(&mut app, KeyCode::End, KeyModifiers::NONE);
     screen(&mut app, 100, 30);
     assert_eq!(app.scroll(), 0, "End is the tail, and the window is on it");
 
@@ -239,7 +182,7 @@ fn a_wider_terminal_leaves_the_same_rows_under_the_reader() {
         });
     }
     screen(&mut app, 100, 12);
-    press(&mut app, KeyCode::PageUp);
+    press(&mut app, KeyCode::PageUp, KeyModifiers::NONE);
     // The frame that answers the page, at the width it was asked at.
     screen(&mut app, 100, 12);
     let narrow = reading(&mut app);

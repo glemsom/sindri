@@ -9,11 +9,13 @@
     reason = "a panicking test is how a broken contract reports itself"
 )]
 
+#[path = "../common/mod.rs"]
+mod common;
+
+pub use common::{any, notes, press, screen, shown, type_text};
 use std::sync::{Arc, Mutex};
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
+use crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use sindri_core::agent::Event;
 use sindri_tui::copy::{Clipboard, Copied};
 use sindri_tui::driver::{CallOver, Finished, Spilled, Stop};
@@ -64,13 +66,7 @@ fn launch(session: &str) -> Launch {
     Launch {
         session: session.to_string(),
         temp: format!("/state/sindri/sessions/{session}/tmp"),
-        branch: Some("main".to_string()),
-        sandbox: "bwrap · 1 writable".to_string(),
-        workspace: "~/git/sindri".to_string(),
-        provider: "anthropic".to_string(),
-        model: "claude-sonnet-4-6".to_string(),
-        max_turns: 250,
-        context_limit: Some(200_000),
+        ..common::launch()
     }
 }
 
@@ -97,35 +93,6 @@ fn answered(clipboard: Fake) -> App {
     app
 }
 
-fn screen(app: &mut App, width: u16, height: u16) -> Vec<String> {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
-    terminal
-        .draw(|frame| render::draw(app, frame))
-        .expect("the frame draws");
-    let buffer = terminal.backend().buffer().clone();
-    (0..height)
-        .map(|y| {
-            (0..width)
-                .map(|x| buffer[(x, y)].symbol())
-                .collect::<String>()
-        })
-        .collect()
-}
-
-fn shown(rows: &[String]) -> String {
-    rows.join("\n")
-}
-
-fn press(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
-    app.key(KeyEvent::new(code, modifiers));
-}
-
-fn type_text(app: &mut App, text: &str) {
-    for ch in text.chars() {
-        press(app, KeyCode::Char(ch), KeyModifiers::NONE);
-    }
-}
-
 fn mouse(app: &mut App, kind: MouseEventKind, column: u16, row: u16) {
     app.mouse(MouseEvent {
         kind,
@@ -133,17 +100,6 @@ fn mouse(app: &mut App, kind: MouseEventKind, column: u16, row: u16) {
         row,
         modifiers: KeyModifiers::NONE,
     });
-}
-
-fn notes(app: &App) -> String {
-    app.entries()
-        .iter()
-        .filter_map(|entry| match entry {
-            Entry::Note(note) => Some(note.text.clone()),
-            _ => None,
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 mod commands;

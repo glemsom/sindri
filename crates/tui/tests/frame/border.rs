@@ -11,20 +11,6 @@ use ratatui::buffer::Buffer;
 use ratatui::style::Color;
 use sindri_tui::theme;
 
-fn buffer(app: &mut App, width: u16, height: u16) -> Buffer {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
-    terminal
-        .draw(|frame| render::draw(app, frame))
-        .expect("the frame draws");
-    terminal.backend().buffer().clone()
-}
-
-fn typed(app: &mut App, text: &str) {
-    for ch in text.chars() {
-        app.key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE));
-    }
-}
-
 /// The composer's frame, found by its rounded corners rather than by counting
 /// rows: a frame that lost a corner is a failure this says out loud.
 fn frame_of(buf: &Buffer) -> Rect {
@@ -132,7 +118,7 @@ fn the_composer_is_a_rounded_frame_walked_from_the_prompt_to_the_seam() {
 #[test]
 fn a_run_quiets_the_walk_without_taking_its_ends_away() {
     let mut app = app();
-    typed(&mut app, "why does this test fail?");
+    type_text(&mut app, "why does this test fail?");
     app.key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.start().expect("the draft becomes a run");
     walked(&buffer(&mut app, 100, 24), theme::FAINT);
