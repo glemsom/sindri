@@ -26,7 +26,14 @@ sindri-tui = { path = "crates/tui" }
 # The frame: a renderer, not an invention. Pinned here like every
 # other dependency, so the crate and its dev-dependencies cannot drift apart.
 ratatui = { version = "0.29", default-features = false, features = ["crossterm"] }
-crossterm = { version = "0.28", default-features = false, features = ["events", "windows"] }
+# crossterm's feature set is a Linux terminal's events — keys, mouse and resize,
+# which is all the frame reads — and every member is named rather than left to
+# the `default` set: that set carries `windows`, the Win32 bindings
+# (`crossterm_winapi`, `winapi`) which no crate here compiles. Naming it here
+# does not unpin them, because ratatui's own crossterm backend — the one
+# `ratatui::init` opens the frame with — asks for crossterm's defaults; it keeps
+# this line from being a second reason to fetch them.
+crossterm = { version = "0.28", default-features = false, features = ["events"] }
 ratatui-image = { version = "8", default-features = false, features = ["image-defaults", "crossterm"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
 pulldown-cmark = { version = "0.12", default-features = false }
