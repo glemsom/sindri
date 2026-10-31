@@ -50,18 +50,26 @@ fn unreadable(what: &str) -> i32 {
     ExitCode::EnvironmentFailure.code()
 }
 
-/// Prints one session's transcript. A wrong id is a usage error; a record that
-/// cannot be read is the environment's failure, not the user's.
-pub fn show(id: &str) -> i32 {
-    match Stored::load(id) {
+/// Prints one session's transcript — the newest record when no id is named, the
+/// one a whole id or a prefix names otherwise, as text or as the files' own
+/// JSON. A wrong or ambiguous id is a usage error; a record that cannot be read
+/// is the environment's failure, not the user's.
+pub fn show(id: Option<&str>, json: bool) -> i32 {
+    match Stored::resolve(id) {
         Ok(stored) => {
-            print!("{}", stored.render());
+            if json {
+                println!("{}", stored.json());
+            } else {
+                print!("{}", stored.render());
+            }
             ExitCode::Success.code()
         }
         Err(error) => {
             eprintln!("sindri: sessions: {error}");
             match error {
-                ShowError::BadId { .. } | ShowError::Missing { .. } => ExitCode::UsageError.code(),
+                ShowError::BadId { .. }
+                | ShowError::Ambiguous { .. }
+                | ShowError::Missing { .. } => ExitCode::UsageError.code(),
                 ShowError::Unreadable { .. } | ShowError::Corrupt { .. } => {
                     ExitCode::EnvironmentFailure.code()
                 }

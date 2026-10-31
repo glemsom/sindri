@@ -75,7 +75,7 @@ knows nothing about is left out, never `null`.
 | `sindri doctor` | prove the sandbox, print the description the model sees |
 | `sindri sandbox exec [--timeout N] [--yolo-unsafe] -- CMD` | one command through the sandbox, no model, outcome as JSON |
 | `sindri sessions list [--limit N] [--json]` | the records, newest first, one row each |
-| `sindri sessions show ID` | print one session's transcript |
+| `sindri sessions show [ID] [--json]` | one transcript: the newest record, or the one `ID` or a prefix names |
 | `sindri --help`, `--version` | the surface; the build's `git describe` and commit date |
 
 `--format` and `-v` are global, so a TUI launch accepts and ignores them.
@@ -204,7 +204,11 @@ the run goes. `sindri sandbox exec` opens one too; `sindri doctor` writes none.
 
 The GUID is the `session` field of `--format json` and the last line of `-v`;
 `sindri sessions list` prints every record newest first, whole GUIDs and all, and
-`sindri sessions show ID` reads one back.
+`sindri sessions show` reads one back — the newest when no id is named, or the one a
+whole id or a leading prefix of one names, with an ambiguous prefix a usage error that
+lists the candidates. `show --json` prints the same record as one object of
+`meta`, `entries` and `status`: the files on disk in their own shape, so `jq` is the
+debugger and `cat transcript.jsonl` cannot disagree with it.
 
 Written incrementally, so a cancelled or `kill -9`ed run still reads; a session `/new`
 supersedes keeps saying `running`, because it did not stop, it was left.
