@@ -128,10 +128,9 @@ fn a_new_session_that_cannot_start_keeps_the_answer_and_says_why() {
         .permissions();
     std::fs::set_permissions(&root, PermissionsExt::from_mode(0o555)).expect("lock the sessions");
     type_command(&pty, "/new");
-    let drawn = pty.wait_for_screen(&mut child, "could not start");
+    let drawn = pty.wait_for_whole_screen(&mut child, "could not start");
     std::fs::set_permissions(&root, locked).expect("unlock the sessions");
 
-    let repainted = pty.wait_for_screen(&mut child, "the first answer");
     let (code, _) = pty.quit(&mut child);
     assert_eq!(code, Some(0), "leaving the frame is not a failure");
     assert!(
@@ -147,8 +146,8 @@ fn a_new_session_that_cannot_start_keeps_the_answer_and_says_why() {
         "not a blanket reason: {drawn:?}"
     );
     assert!(
-        repainted.contains("the first answer"),
-        "the earlier answer is still on screen: {repainted:?}"
+        drawn.contains("the first answer"),
+        "the earlier answer is still on screen: {drawn:?}"
     );
     assert_eq!(
         recorded(&env),
@@ -207,7 +206,7 @@ fn a_record_that_cannot_be_finished_is_said_in_the_transcript() {
     assert_eq!(running.len(), 1, "one run, one record: {running:?}");
     std::fs::remove_dir_all(sessions(&env).join(&running[0])).expect("remove the record");
 
-    let drawn = pty.wait_for_words(&mut child, "the record could not be finished");
+    let drawn = pty.wait_for_whole_words(&mut child, "the record could not be finished");
     let (code, _) = pty.quit(&mut child);
     assert_eq!(code, Some(0), "leaving the frame is not a failure");
     assert!(
