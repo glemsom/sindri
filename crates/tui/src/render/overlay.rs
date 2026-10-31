@@ -62,15 +62,15 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
             let lines = help_lines(content.width as usize);
             let height = (lines.len() as u16).saturating_add(2).min(area.height);
             let visible = height.saturating_sub(2) as usize;
-            help.settled(lines.len(), visible);
+            help.scroll.settled(lines.len(), visible);
             app.window.page = visible.max(1);
-            let window = help.window();
+            let window = help.scroll.window();
             (
                 height,
                 help.title(),
                 More {
-                    above: help.above(),
-                    below: help.below(),
+                    above: help.scroll.above(),
+                    below: help.scroll.below(),
                 },
                 lines[window].to_vec(),
             )

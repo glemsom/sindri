@@ -27,6 +27,7 @@ mod queue;
 pub mod rail;
 pub mod render;
 pub mod run;
+pub mod scroll;
 pub mod seam;
 pub mod selection;
 pub mod settings;

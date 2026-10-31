@@ -5,6 +5,7 @@
 //! the wheel move it, never the frame beneath it.
 
 use crate::command;
+use crate::scroll::Scroll;
 use crate::settings::Settings;
 use crate::spill::Spill;
 
@@ -112,63 +113,32 @@ pub const BINDINGS: &[Binding] = &[
 
 /// `?`'s list of every binding, and where the reader is in it. The list wraps
 /// and scrolls, so the key the overlay was opened to find is a row that can be
-/// reached and not the one that fell off the bottom.
+/// reached and not the one that fell off the bottom. The clamping is
+/// [`Scroll`]'s, shared with the card; what is this list's own is the page it
+/// turns and the words that say where it is.
 #[derive(Debug, Clone, Default)]
 pub struct Help {
-    scroll: usize,
-    /// What the box last drew: the rows there are, and the rows it had for
-    /// them. The renderer measures; the keys clamp against the same numbers.
-    total: usize,
-    visible: usize,
+    /// The rows there are and the rows the box had for them. The renderer
+    /// measures; the keys clamp against the same numbers.
+    pub(crate) scroll: Scroll,
 }
 
 impl Help {
-    /// The rows the box drew, so a list short enough to fit does not scroll at
-    /// all and a scrolled one stops where its last screenful is full.
-    pub fn settled(&mut self, total: usize, visible: usize) {
-        self.total = total;
-        self.visible = visible.max(1);
-        self.scroll = self.scroll.min(self.last());
-    }
-
-    fn last(&self) -> usize {
-        self.total.saturating_sub(self.visible)
-    }
-
-    /// The rows the box shows, from where the reader is.
-    pub fn window(&self) -> std::ops::Range<usize> {
-        let start = self.scroll.min(self.last());
-        start..(start + self.visible).min(self.total)
-    }
-
     /// `PgUp`/`PgDn` and the wheel: one screenful of this box at a time — the
     /// transcript's page is the transcript's, and a list that covers it pages
     /// by what it covers — from the first row to the last and no further.
     pub fn page(&mut self, rows: usize, up: bool) {
-        self.scroll = if up {
-            self.scroll.saturating_sub(rows)
-        } else {
-            self.scroll.saturating_add(rows).min(self.last())
-        };
-    }
-
-    /// Whether the list runs past the box above or below: what the box marks
-    /// so a reader knows there is more without scrolling for it.
-    pub fn above(&self) -> bool {
-        self.window().start > 0
-    }
-
-    pub fn below(&self) -> bool {
-        self.window().end < self.total
+        self.scroll.page_by(rows, up);
     }
 
     /// `keys · 3 of 12`: where the reader is, counted from one, said only when
     /// the list is longer than the box that holds it.
     pub fn title(&self) -> String {
-        if self.total <= self.visible {
+        if !self.scroll.more() {
             return "keys".to_string();
         }
-        format!("keys · {} of {}", self.window().start + 1, self.total)
+        let start = self.scroll.window().start + 1;
+        format!("keys · {start} of {}", self.scroll.total())
     }
 }
 
