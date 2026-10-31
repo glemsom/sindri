@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use std::sync::mpsc;
 
-use sindri_core::agent::{Agent, BashTool, Dials, Event, Report, Stopped};
+use sindri_core::agent::{Agent, BashTool, Dials, Event, Report};
 use sindri_core::cancel::Cancel;
 use sindri_core::config::{Config, ConfigError, Overrides};
 use sindri_core::doctor::{self, DoctorError};
@@ -155,7 +155,7 @@ impl Driver for Front {
         let note = closing_note(&self.boot.session, &outcome);
         match outcome {
             Ok(report) => Finished {
-                stopped: stop(report.stopped),
+                stopped: report.stopped,
                 turns: report.turns,
                 tokens: tokens(&report.usage),
                 error: None,
@@ -249,15 +249,6 @@ fn over(outcome: Option<&Outcome>) -> CallOver {
         Some(Outcome::Exited { exit_code }) => CallOver::Exited(*exit_code),
         Some(Outcome::TimedOut) => CallOver::TimedOut,
         Some(Outcome::SandboxError { detail }) => CallOver::Refused(detail.clone()),
-    }
-}
-
-fn stop(stopped: Stopped) -> Stop {
-    match stopped {
-        Stopped::Final => Stop::Final,
-        Stopped::MaxTurns => Stop::MaxTurns,
-        Stopped::Cancelled => Stop::Cancelled,
-        Stopped::Error => Stop::Error,
     }
 }
 
