@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::style::Modifier;
+use sindri_core::config::{KEYS, Key};
 use sindri_tui::{App, Launch};
 use tempfile::TempDir;
 
@@ -46,6 +47,18 @@ fn written(path: &Path) -> String {
 
 fn down(app: &mut App) {
     press(app, KeyCode::Down, KeyModifiers::NONE);
+}
+
+/// The cursor walked to a key's row. Which row that is belongs to the schema,
+/// so a test about a field walks to the field by name and not by a count.
+fn down_to(app: &mut App, sought: Key) {
+    let at = KEYS
+        .iter()
+        .position(|key| *key == sought)
+        .expect("every key has a row");
+    for _ in 0..at {
+        down(app);
+    }
 }
 
 /// `/settings`, typed and sent: the name opens the offer the catalogue makes,
@@ -94,10 +107,9 @@ fn settings_opens_a_modal_over_every_key_the_file_carries() {
 fn esc_discards_every_edit_and_the_file_is_never_touched() {
     let mut f = fixture(None);
     open(&mut f.app);
-    down(&mut f.app);
+    down_to(&mut f.app, Key::Model);
     type_text(&mut f.app, "qwen3-32b");
-    down(&mut f.app);
-    down(&mut f.app);
+    down_to(&mut f.app, Key::ApiKey);
     type_text(&mut f.app, "sk-typed-and-thrown-away");
 
     assert!(
@@ -122,7 +134,7 @@ fn esc_discards_every_edit_and_the_file_is_never_touched() {
 fn enter_writes_the_file_at_once_and_the_next_prompt_is_told_to_read_it() {
     let mut f = fixture(Some("model = \"old-model\"\n"));
     open(&mut f.app);
-    down(&mut f.app);
+    down_to(&mut f.app, Key::Model);
     press(&mut f.app, KeyCode::Char('u'), KeyModifiers::CONTROL);
     type_text(&mut f.app, "qwen3-32b");
     press(&mut f.app, KeyCode::Enter, KeyModifiers::NONE);
@@ -149,9 +161,7 @@ fn enter_writes_the_file_at_once_and_the_next_prompt_is_told_to_read_it() {
 fn a_value_the_schema_refuses_keeps_the_modal_open_and_writes_nothing() {
     let mut f = fixture(Some("model = \"from-file\"\n"));
     open(&mut f.app);
-    for _ in 0..4 {
-        down(&mut f.app);
-    }
+    down_to(&mut f.app, Key::MaxTurns);
     type_text(&mut f.app, "0");
     press(&mut f.app, KeyCode::Enter, KeyModifiers::NONE);
 

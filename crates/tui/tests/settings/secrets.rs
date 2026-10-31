@@ -10,9 +10,7 @@ fn a_save_writes_only_what_was_touched_and_never_erases_a_key_it_did_not_show() 
         "model = \"from-file\"\napi_key = \"sk-the-file-already-holds\"\nmax_turns = 40\n",
     ));
     open(&mut f.app);
-    for _ in 0..6 {
-        down(&mut f.app);
-    }
+    down_to(&mut f.app, Key::Thinking);
     press(&mut f.app, KeyCode::Char(' '), KeyModifiers::NONE);
     press(&mut f.app, KeyCode::Enter, KeyModifiers::NONE);
 
@@ -35,9 +33,7 @@ fn a_save_writes_only_what_was_touched_and_never_erases_a_key_it_did_not_show() 
 fn emptying_a_key_field_is_how_a_key_leaves_the_file() {
     let mut f = fixture(Some("model = \"m\"\napi_key = \"sk-in-the-file\"\n"));
     open(&mut f.app);
-    for _ in 0..3 {
-        down(&mut f.app);
-    }
+    down_to(&mut f.app, Key::ApiKey);
     press(&mut f.app, KeyCode::Char('u'), KeyModifiers::CONTROL);
     press(&mut f.app, KeyCode::Enter, KeyModifiers::NONE);
 
@@ -63,9 +59,7 @@ fn the_api_key_defaults_to_the_environment_and_a_typed_one_warns_in_plaintext() 
         "the field starts at the environment, not at a secret: {rows}"
     );
 
-    down(&mut f.app);
-    down(&mut f.app);
-    down(&mut f.app);
+    down_to(&mut f.app, Key::ApiKey);
     assert!(
         !shown(&screen(&mut f.app, 100, 30)).contains("plaintext"),
         "no warning until a key is actually typed"

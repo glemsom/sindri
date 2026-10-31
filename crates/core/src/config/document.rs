@@ -7,12 +7,13 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use super::file::{self, FileConfig};
-use super::{ConfigError, Provider, extra_paths};
+use super::{ConfigError, Provider, Theme, extra_paths};
 use crate::exec::MAX_TIMEOUT_SECS;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Key {
     Provider,
+    Theme,
     Model,
     BaseUrl,
     ApiKey,
@@ -23,8 +24,9 @@ pub enum Key {
     ExtraHeaders,
 }
 
-pub const KEYS: [Key; 9] = [
+pub const KEYS: [Key; 10] = [
     Key::Provider,
+    Key::Theme,
     Key::Model,
     Key::BaseUrl,
     Key::ApiKey,
@@ -39,6 +41,7 @@ impl Key {
     pub const fn name(self) -> &'static str {
         match self {
             Key::Provider => "provider",
+            Key::Theme => "theme",
             Key::Model => "model",
             Key::BaseUrl => "base_url",
             Key::ApiKey => "api_key",
@@ -86,6 +89,11 @@ impl Document {
         }
         match key {
             Key::Provider => self.values.provider.clone().unwrap_or_default(),
+            Key::Theme => self
+                .values
+                .theme
+                .clone()
+                .unwrap_or_else(|| Theme::default().as_str().to_string()),
             Key::Model => self.values.model.clone().unwrap_or_default(),
             Key::BaseUrl => self.values.base_url.clone().unwrap_or_default(),
             Key::MaxTurns => self
@@ -116,6 +124,7 @@ impl Document {
     pub fn is_set(&self, key: Key) -> bool {
         match key {
             Key::Provider => self.values.provider.is_some(),
+            Key::Theme => self.values.theme.is_some(),
             Key::Model => self.values.model.is_some(),
             Key::BaseUrl => self.values.base_url.is_some(),
             Key::ApiKey => self.values.api_key.is_some(),
@@ -141,6 +150,7 @@ impl Document {
             Key::Provider => {
                 self.values.provider = Some(Provider::parse(value)?.as_str().to_string());
             }
+            Key::Theme => self.values.theme = Some(Theme::parse(value)?.as_str().to_string()),
             Key::Model => self.values.model = Some(value.to_string()),
             Key::BaseUrl => self.values.base_url = Some(value.to_string()),
             Key::ApiKey => self.values.api_key = Some(value.to_string()),
@@ -172,6 +182,7 @@ impl Document {
     fn unset(&mut self, key: Key) {
         match key {
             Key::Provider => self.values.provider = None,
+            Key::Theme => self.values.theme = None,
             Key::Model => self.values.model = None,
             Key::BaseUrl => self.values.base_url = None,
             Key::ApiKey => self.values.api_key = None,
