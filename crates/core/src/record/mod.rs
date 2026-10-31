@@ -152,7 +152,7 @@ impl Recorder {
 
     pub fn user(&self, text: &str) {
         self.note(Line::User {
-            text: self.redaction.apply(text),
+            text: self.redaction.apply(text).into_owned(),
         });
     }
 
@@ -162,8 +162,8 @@ impl Recorder {
     pub fn assistant(&self, turn: u32, text: &str, reasoning: Option<&str>, cost: Cost) {
         self.note(Line::Assistant {
             turn,
-            text: self.redaction.apply(text),
-            reasoning: reasoning.map(|text| self.redaction.apply(text)),
+            text: self.redaction.apply(text).into_owned(),
+            reasoning: reasoning.map(|text| self.redaction.apply(text).into_owned()),
             usage: (!cost.usage.is_empty()).then_some(cost.usage),
             duration_ms: cost.duration.map(millis),
         });
@@ -173,8 +173,8 @@ impl Recorder {
     /// on the record.
     pub fn tool_call(&self, turn: u32, call: &Call) {
         let (command, problem) = match call.command() {
-            Ok(command) => (Some(self.redaction.apply(&command)), None),
-            Err(reason) => (None, Some(self.redaction.apply(&reason))),
+            Ok(command) => (Some(self.redaction.apply(&command).into_owned()), None),
+            Err(reason) => (None, Some(self.redaction.apply(&reason).into_owned())),
         };
         self.note(Line::ToolCall {
             turn,
@@ -190,7 +190,7 @@ impl Recorder {
         self.note(Line::ToolResult {
             turn,
             call_id: outcome.call_id.clone(),
-            content: self.redaction.apply(&outcome.content),
+            content: self.redaction.apply(&outcome.content).into_owned(),
             is_error: outcome.is_error,
             outcome: facts.outcome.clone(),
             exit_code: facts.exit_code,
@@ -201,7 +201,7 @@ impl Recorder {
             spill: facts
                 .spill
                 .iter()
-                .map(|path| self.redaction.apply(path))
+                .map(|path| self.redaction.apply(path).into_owned())
                 .collect(),
         });
     }
@@ -220,7 +220,7 @@ impl Recorder {
         inner.meta.policy = Some(description.to_string());
         let _ = write_meta(&self.root, &inner.meta);
         let line = Line::Policy {
-            description: self.redaction.apply(description),
+            description: self.redaction.apply(description).into_owned(),
         };
         let _ = writeln!(inner.transcript, "{}", json(&line));
     }
@@ -237,7 +237,7 @@ impl Recorder {
     }
 
     pub fn failed(&self, message: &str) -> io::Result<()> {
-        let message = self.redaction.apply(message);
+        let message = self.redaction.apply(message).into_owned();
         self.settle(move |meta| {
             meta.stopped = "error".to_string();
             meta.error = Some(message);
