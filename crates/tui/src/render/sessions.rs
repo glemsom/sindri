@@ -5,7 +5,6 @@
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 
-use crate::clock;
 use crate::markdown::text;
 use crate::sessions::Sessions;
 use crate::theme;
@@ -31,7 +30,7 @@ pub fn draw(sessions: &Sessions, area: Rect) -> (u16, String, Vec<Line<'static>>
         let head = format!(
             "{} {}  {} · {} · {}",
             if chosen { "›" } else { " " },
-            clock::at(row.started_ms),
+            sindri_core::clock::at(row.started_ms),
             row.model,
             turns,
             row.stopped

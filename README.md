@@ -74,6 +74,7 @@ knows nothing about is left out, never `null`.
 | `sindri -b PROMPT` | batch: ask the model, print the answer |
 | `sindri doctor` | prove the sandbox, print the description the model sees |
 | `sindri sandbox exec [--timeout N] [--yolo-unsafe] -- CMD` | one command through the sandbox, no model, outcome as JSON |
+| `sindri sessions list [--limit N] [--json]` | the records, newest first, one row each |
 | `sindri sessions show ID` | print one session's transcript |
 | `sindri --help`, `--version` | the surface; the build's `git describe` and commit date |
 
@@ -201,8 +202,9 @@ the run goes. `sindri sandbox exec` opens one too; `sindri doctor` writes none.
 | `status.json` | bubblewrap's own status documents, one per line, as they arrived |
 | `tmp/`, `tmp/home/` | the session temp, and the empty `HOME` the sandbox mounts inside it |
 
-The GUID is the `session` field of `--format json` and the last line of `-v`; `sindri
-sessions show ID` reads a record back.
+The GUID is the `session` field of `--format json` and the last line of `-v`;
+`sindri sessions list` prints every record newest first, whole GUIDs and all, and
+`sindri sessions show ID` reads one back.
 
 Written incrementally, so a cancelled or `kill -9`ed run still reads; a session `/new`
 supersedes keeps saying `running`, because it did not stop, it was left.

@@ -5,7 +5,6 @@
 
 pub mod app;
 pub mod card;
-mod clock;
 pub mod command;
 pub mod completion;
 pub mod composer;

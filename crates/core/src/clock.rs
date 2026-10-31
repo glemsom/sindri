@@ -1,6 +1,7 @@
-//! The wall clock a turn header names: `14:02`, and the date a record was
-//! started on, in the terminal's own zone. Two functions, because the frame
-//! asks the clock nothing else.
+//! The wall clock a record is dated by: `14:02` for a turn header, and
+//! `YYYY-MM-DD HH:MM` for the day a run started, in the local zone. One
+//! conversion, so `sindri sessions list` and the frame cannot disagree about
+//! when a run happened.
 
 /// The local time of this moment, `HH:MM`. A clock the system will not
 /// convert is said as `--:--`, never as an hour that might be wrong.
@@ -18,8 +19,8 @@ pub fn now() -> String {
 }
 
 /// The local moment `ms` since the epoch names, `YYYY-MM-DD HH:MM`: how a
-/// record is dated in the picker. A clock the system will not convert is said
-/// as `---- --:--`, never as a date that might be wrong.
+/// record is dated. A clock the system will not convert is said as
+/// `---- --:--`, never as a date that might be wrong.
 pub fn at(ms: u64) -> String {
     let secs = libc::time_t::try_from(ms / 1_000).unwrap_or(libc::time_t::MAX);
     match local(secs) {
@@ -35,7 +36,7 @@ pub fn at(ms: u64) -> String {
     }
 }
 
-/// One `time_t` in the terminal's own zone.
+/// One `time_t` in the local zone.
 fn local(secs: libc::time_t) -> Option<libc::tm> {
     // SAFETY: `tm` is a plain C struct of integers, and all-zero is a valid
     // one for `localtime_r` to overwrite.
