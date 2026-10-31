@@ -64,30 +64,80 @@ fn composer_at(rows: &[String]) -> usize {
 }
 
 #[test]
-fn the_glow_is_the_margins_cells_at_the_height_of_the_body() {
-    // The strip has a rect and it is the whole margin: from the top of the body
-    // down to the row above the composer, and not one row further. It is two
-    // cells wide, and the second is covered by the picture rather than painted
-    // — the cell `Buffer::diff` would otherwise leave unpainted, taken from the
-    // margin so the rail's first column keeps its own ink (`render::GAP_COLUMNS`).
+fn the_glow_runs_down_beside_the_composer_and_dissolves_at_the_footer() {
+    // The strip has a rect from the top of the body down to the composer's last
+    // row: now that the panel ends at the seam, the margin beside it is canvas
+    // for its whole height, so the light goes on beside the composer instead of
+    // dying on the last row above its top rule. At thirty rows the body is
+    // twenty-five and the composer four, so the strip is twenty-nine rows and
+    // the footer is the one row it leaves.
     let drawn = cells(&mut lit(), 100, 30);
     let shown: Vec<String> = (0..drawn.area.height).map(|y| row(&drawn, y)).collect();
-    let body = composer_at(&shown);
+    let composer = composer_at(&shown);
+    let footer = shown.len() - 1;
+    assert_eq!(
+        footer - composer,
+        4,
+        "the empty composer is two rows between its two rules: {shown:#?}"
+    );
     let column = margins(&drawn);
     assert_eq!(
-        column[..body].iter().collect::<String>(),
-        "\u{25A9}".repeat(body),
-        "every row of the body's margin carries the strip: {shown:#?}"
+        column[..footer].iter().collect::<String>(),
+        "\u{25A9}".repeat(footer),
+        "every row from the top of the body to the composer's last carries the \
+         strip: {shown:#?}"
     );
-    assert!(
-        column[body..].iter().all(|cell| *cell != '\u{25A9}'),
-        "and nothing below it: the composer's own rows are untouched: {shown:#?}"
+    assert_ne!(
+        column[footer], '\u{25A9}',
+        "the footer is the row the light dissolves on, not the panel's top rule: {shown:#?}"
     );
     let beside = MARGIN + 1;
-    for y in 0..body {
+    for y in 0..footer {
         let cell = &drawn[(beside as u16, y as u16)];
         assert!(cell.skip, "({beside}, {y}) is the strip's own second cell");
         assert_eq!(cell.symbol(), " ", "covered, so it paints no glyph");
+    }
+}
+
+#[test]
+fn the_strip_draws_no_cell_inside_the_composers_rect() {
+    // The composer's own dwelling: its columns are 0..MARGIN, and the strip's
+    // begin at MARGIN. Not one cell of the panel carries the strip's mark, on
+    // any of its rows — the two rects are beside each other, never over.
+    let drawn = cells(&mut lit(), 100, 30);
+    let shown: Vec<String> = (0..drawn.area.height).map(|y| row(&drawn, y)).collect();
+    let open = composer_at(&shown);
+    let footer = shown.len() - 1;
+    for y in open..footer {
+        for x in 0..MARGIN {
+            let cell = &drawn[(x as u16, y as u16)];
+            assert!(
+                !cell.symbol().contains('\u{10EEEE}'),
+                "({x}, {y}) is the composer's and not the strip's"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_rail_keeps_its_own_ground_on_every_row_the_strip_lights() {
+    // The strip's brightest column is the one nearest the rail, so the rail's
+    // first column must stay the rail's: its ink sits on the background the
+    // theme's 4.5:1 is measured against, on the composer's rows as on the
+    // body's. Nothing of the strip reaches a column from the rail's first
+    // rightwards.
+    let plain = cells(&mut app(), 100, 30);
+    let glowing = cells(&mut lit(), 100, 30);
+    let rail = MARGIN + render::GAP_COLUMNS as usize;
+    for y in 0..plain.area.height {
+        for x in rail..plain.area.width as usize {
+            let (left, right) = (&plain[(x as u16, y)], &glowing[(x as u16, y)]);
+            assert_eq!(
+                (left.symbol(), left.fg, left.bg),
+                (right.symbol(), right.fg, right.bg),
+                "({x}, {y}) is the rail's, and a glow does not reach it"
+            );
+        }
     }
 }
 

@@ -89,7 +89,8 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
         // The terminal's own canvas between the words and the rail: the rail's
         // seam is an edge, and an edge needs air on both sides of it.
         // Where the terminal speaks Kitty graphics the strip of
-        // `seam.rs` fills the gap, for the whole height of the body.
+        // `seam.rs` fills the gap, from the top of the body down to the
+        // composer's last row.
         let [left, margin, right] = Layout::horizontal([
             Constraint::Min(1),
             Constraint::Length(GAP_COLUMNS),
@@ -119,9 +120,12 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
 
     transcript::draw(app, transcript, frame.buffer_mut());
     // The glow is drawn beside the rail and never over it: the margin has its
-    // own rect, and `set_rail_view` is given the rail's.
+    // own rect, and `set_rail_view` is given the rail's. It is carried down to
+    // the composer's last row, so the panel is lit for its whole height and the
+    // light leaves at the footer under it.
     if let Some(margin) = margin {
-        seam::draw(app, margin, frame.buffer_mut());
+        let strip = seam::reach(margin, panel);
+        seam::draw(app, strip, frame.buffer_mut());
     }
     match (rail_column, rail_strip) {
         (Some(area), _) => rail::column(app, area, frame.buffer_mut()),
