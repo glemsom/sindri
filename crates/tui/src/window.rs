@@ -1,8 +1,9 @@
 //! The window onto the transcript: where the reader is in the thread, what
 //! moves it, and how much of the thread arrived below them while they were
 //! reading. The place is a row of an entry and not an offset from the tail, so
-//! a run that appends never moves the text under a reader who has scrolled
-//! back; the tail is a place the window takes again on `End`.
+//! neither a run that appends nor a call that opens above them moves the text
+//! under a reader who has scrolled back; the tail is a place the window takes
+//! again on `End`.
 
 /// What the reader asked of the window, for the next frame to carry out. The
 /// keys know the rows a page is worth and neither the entry they land on nor
@@ -49,6 +50,11 @@ pub struct Window {
     pub(crate) below: Option<(Below, usize)>,
     /// What the reader asked of the window since the last frame.
     pub(crate) ask: Ask,
+    /// The rows the place has still to move, in `Ask::Rows`' sign: what a
+    /// toggle that changed a block's height owes a reader whose top row sat
+    /// inside it. Not an ask: an ask is the reader moving and is counted
+    /// against the badge, while a row that left is not a row that arrived.
+    moved: isize,
     /// The rows one page is worth to whatever has the screen. The transcript
     /// reports its own every frame; an open overlay reports what its box
     /// showed instead, so `PgUp`/`PgDn` move the box that covers the frame and
@@ -65,6 +71,7 @@ impl Default for Window {
             new_below: 0,
             below: None,
             ask: Ask::None,
+            moved: 0,
             page: crate::app::DEFAULT_PAGE,
         }
     }
@@ -90,6 +97,24 @@ impl Window {
             (Ask::Rows(asked), Ask::Rows(rows)) => Ask::Rows(asked.saturating_add(rows)),
             _ => ask,
         };
+    }
+
+    /// Moves the place by `delta` rows, in `Ask::Rows`' sign: positive is back
+    /// into the thread and negative is forward, across as few entries as it
+    /// crosses. The window holds no entries and cannot say what a row is worth,
+    /// so the move is `layout::back`'s and `layout::forward`'s, and the frame
+    /// takes it on its way to the next layout.
+    ///
+    /// A second shift before that layout replaces the first rather than adding
+    /// to it: both were worked out from the same place, so adding them would
+    /// count the same rows twice.
+    pub fn shift(&mut self, delta: isize) {
+        self.moved = delta;
+    }
+
+    /// The rows the place owes the last frame's change, taken once.
+    pub(crate) fn take_shift(&mut self) -> isize {
+        std::mem::take(&mut self.moved)
     }
 
     /// The thread changed somewhere other than its tail — an entry opened, an
@@ -151,5 +176,84 @@ impl crate::app::App {
     /// edge and its tail.
     pub fn scroll(&self) -> usize {
         self.window.scroll()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Ask;
+    use crate::Launch;
+    use crate::app::App;
+    use crate::render::transcript;
+
+    /// A thread of twenty notes, one row each at the width they are laid out
+    /// at, and a window short enough to be held somewhere in it.
+    fn thread() -> App {
+        let mut app = App::new(
+            Launch {
+                session: "4f1c8f2e-8a24-4b93-9c0e-0d3f0e5c1a77".to_string(),
+                temp: "/state/sindri/sessions/4f1c8f2e/tmp".to_string(),
+                branch: None,
+                sandbox: "bwrap · 1 writable".to_string(),
+                provider: "anthropic".to_string(),
+                model: "claude-sonnet-4-6".to_string(),
+                workspace: "~/git/sindri".to_string(),
+                max_turns: 250,
+                context_limit: None,
+            },
+            None,
+        );
+        for note in 1..=20 {
+            app.note_info(format!("note {note}"));
+        }
+        app
+    }
+
+    /// The tail, then a page back: a window that holds a place of its own.
+    fn a_page_back() -> App {
+        let mut app = thread();
+        transcript::window(&mut app, 40, 5);
+        app.window.want(Ask::Rows(6));
+        transcript::window(&mut app, 40, 5);
+        app
+    }
+
+    #[test]
+    fn a_shift_moves_the_place_by_rows_and_is_not_a_reader_who_moved() {
+        let mut app = a_page_back();
+        let (entry, row) = app.window.at;
+        let counted = app.window.new_below;
+        assert!(entry > 2, "the window is off the tail: it holds {entry}");
+
+        // Negative is forward, towards the tail: two one-row entries.
+        app.window.shift(-2);
+        transcript::window(&mut app, 40, 5);
+        assert_eq!(app.window.at, (entry + 2, row), "the place moved forward");
+        assert_eq!(
+            app.window.new_below, counted,
+            "and counted nothing: a shift is the thread moving, not the reader"
+        );
+
+        app.window.shift(2);
+        transcript::window(&mut app, 40, 5);
+        assert_eq!(
+            app.window.at,
+            (entry, row),
+            "positive is back into the thread, and the place is where it was"
+        );
+    }
+
+    #[test]
+    fn a_shift_past_the_newest_row_leaves_the_place_alone() {
+        let mut app = a_page_back();
+        let at = app.window.at;
+
+        app.window.shift(-400);
+        transcript::window(&mut app, 40, 5);
+        assert_eq!(
+            app.window.at, at,
+            "past the newest row is the tail, and the tail is `Ask::End`'s"
+        );
+        assert!(!app.window.follow, "so the window is not following");
     }
 }
