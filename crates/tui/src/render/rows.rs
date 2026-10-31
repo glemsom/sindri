@@ -116,6 +116,7 @@ fn laid(written: Vec<markdown::Picture>, above: usize, dropped: usize) -> Vec<La
                 cut: 0,
                 block: picture.rows,
                 caption: picture.caption,
+                src: picture.src,
                 worth: picture.worth,
             })
         })

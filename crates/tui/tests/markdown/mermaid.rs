@@ -19,6 +19,14 @@ fn store() -> Store {
 /// A diagram the crate draws: flat and wide, so it is drawn at its own size.
 const DIAGRAM: &str = "stateDiagram-v2\n    [*] --> Resting\n    Resting --> [*]\n";
 
+/// A diagram drawn top to bottom and long with it: ten nodes, one under the
+/// next, whose height is the dimension that carries its words. Committed beside
+/// the crate so the store, the writer and the frame all measure one diagram.
+const PORTRAIT: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/fixtures/diagrams/ten-nodes.mmd"
+));
+
 /// A diagram no parser can read: an edge with nothing on the far side.
 const BROKEN: &str = "flowchart TD\n    A --> \n";
 
@@ -152,4 +160,45 @@ fn a_mermaid_fence_that_will_not_parse_is_refused_in_the_stores_own_words() {
         }
         other => panic!("a broken fence is a typed reason: {other:?}"),
     }
+}
+
+#[test]
+fn a_portrait_mermaid_fence_takes_more_rows_than_a_photograph_may() {
+    // The mirror of `a_picture_takes_the_rows_the_store_measured_and_not_one_of
+    // _its_own`: a ten-node flowchart TD is 585×984 pixels, which at sixty
+    // columns is forty-five rows — over the twenty a photograph may take and
+    // inside the forty a diagram may, so the writer reserves the diagram's
+    // allowance whole rather than a picture's shrunken one.
+    let block = markdown::lines(&fence("mermaid", PORTRAIT), 60, Some(&store()));
+    let shown = texts(&block.rows);
+    let picture = block
+        .pictures
+        .first()
+        .unwrap_or_else(|| panic!("the fence is a block: {shown:?}"));
+
+    assert_eq!(
+        picture.worth.rows(),
+        sindri_tui::picture::DIAGRAM_ROWS,
+        "a diagram gets the diagram allowance: {shown:?}"
+    );
+    assert!(
+        picture.worth.rows() > sindri_tui::picture::MAX_ROWS,
+        "which is more than a picture may take, or this test proves nothing"
+    );
+    assert_eq!(
+        shown.len(),
+        usize::from(sindri_tui::picture::DIAGRAM_ROWS) + 1,
+        "the rows it was measured at, and the caption under them: {shown:?}"
+    );
+    assert!(
+        shown[..usize::from(sindri_tui::picture::DIAGRAM_ROWS)]
+            .iter()
+            .all(String::is_empty),
+        "and every one of them is the graphic's: {shown:?}"
+    );
+    assert_eq!(
+        shown[usize::from(sindri_tui::picture::DIAGRAM_ROWS)],
+        "‹mermaid›",
+        "the fence's name is still the caption: {shown:?}"
+    );
 }

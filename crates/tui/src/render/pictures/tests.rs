@@ -214,3 +214,110 @@ fn a_repaint_of_a_mermaid_fence_paints_pixels_and_renders_it_once() {
     assert_eq!(decodes(&app), 1, "from the pixels the store still holds");
     assert_eq!(renders(&app), 1, "and the svg the store still holds");
 }
+
+/// A diagram drawn top to bottom and long with it: ten nodes, one under the
+/// next, whose height is the dimension that carries its words. Committed beside
+/// the crate so the store, the writer and the frame all measure one diagram.
+const PORTRAIT: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/fixtures/diagrams/ten-nodes.mmd"
+));
+
+/// The words of every row of a drawn frame, so a test can read what the reader
+/// reads.
+fn words(buf: &Buffer) -> Vec<String> {
+    (buf.area.top()..buf.area.bottom())
+        .map(|y| {
+            (buf.area.left()..buf.area.right())
+                .map(|x| buf[(x, y)].symbol())
+                .collect::<String>()
+                .trim_end()
+                .to_string()
+        })
+        .collect()
+}
+
+/// A thread that is one mermaid fence and nothing else: the diagram's block is
+/// the whole answer, so the window is filled with it and its caption.
+fn portrait() -> App {
+    let mut app = App::new(launch(), None).with_graphics(Some(Graphics::kitty()));
+    app.event(Event::TextDelta {
+        turn: 1,
+        text: format!("```mermaid\n{PORTRAIT}```\n"),
+    });
+    app
+}
+
+#[test]
+fn a_diagram_taller_than_the_window_says_so_instead_of_a_blank_block() {
+    let mut app = portrait();
+    let short = frame(&mut app, 100, 30);
+    let shown = words(&short);
+
+    assert!(
+        !drawn(&short),
+        "the block is forty-one rows and the window thirty: no graphic is whole: {shown:?}"
+    );
+    assert_eq!(decodes(&app), 0, "and no pixel was spent to learn that");
+    assert!(
+        shown.iter().any(|row| row.contains("over the window's 30")),
+        "the block says why it is drawn nowhere rather than sitting blank: {shown:?}"
+    );
+    assert!(
+        shown.iter().any(|row| row.trim() == "‹mermaid›"),
+        "and the caption under it still names the source: {shown:?}"
+    );
+}
+
+#[test]
+fn a_diagram_whole_in_a_tall_window_is_drawn_and_says_nothing_about_it() {
+    let mut app = portrait();
+    let tall = frame(&mut app, 100, 60);
+    let shown = words(&tall);
+
+    assert!(
+        drawn(&tall),
+        "the block is whole here, so it is drawn: {shown:?}"
+    );
+    assert_eq!(
+        decodes(&app),
+        1,
+        "once, from the diagram the store rendered"
+    );
+    assert!(
+        !shown.iter().any(|row| row.contains("over the window's 30")),
+        "and a drawn diagram carries no apology: {shown:?}"
+    );
+}
+
+#[test]
+fn a_portrait_diagram_is_drawn_whole_in_a_forty_column_window_of_eighty_rows() {
+    // The acceptance of #120: a 40-column body on an 80-row terminal. The
+    // diagram takes the rows its own aspect asks of that column — the width,
+    // not the allowance, is what it is capped by here — and all of them are
+    // inside the window, so the reader is looking at the diagram.
+    let mut app = portrait();
+    let acceptance = frame(&mut app, 40, 80);
+    let worth = app.viewport().pictures[0].worth.clone();
+    let shown = words(&acceptance);
+
+    assert_eq!(
+        worth.rows(),
+        29,
+        "the body is thirty-eight columns inside the gutter, so the column — not \
+         the allowance — drew it: {worth:?}"
+    );
+    assert!(
+        worth.rows() > crate::picture::MAX_ROWS,
+        "and it is still more than a picture's twenty: {worth:?}"
+    );
+    assert!(
+        drawn(&acceptance),
+        "and the whole of it is drawn: {shown:?}"
+    );
+    assert_eq!(decodes(&app), 1, "from one render, once");
+    assert!(
+        !shown.iter().any(|row| row.contains("over the window's 30")),
+        "with nothing to apologise for: {shown:?}"
+    );
+}

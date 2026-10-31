@@ -47,6 +47,11 @@ pub struct Placed {
     /// is placed all the same — its rows are here, and its caption — but it is
     /// drawn nowhere.
     pub drawn: bool,
+    /// What the block says instead of a graphic it can never be drawn as: the
+    /// rows it asks for against the window's, for a block taller than any
+    /// scroll can make whole. `None` where the graphic is drawn, or where the
+    /// reader simply scrolled past it.
+    pub reason: Option<String>,
 }
 
 impl Viewport {
@@ -251,6 +256,7 @@ mod tests {
             caption: "a chart ‹plot.png›".to_string(),
             worth: crate::picture::Worth::Refused(crate::picture::Refusal::Missing),
             drawn: true,
+            reason: None,
         });
         viewport
     }

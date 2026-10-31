@@ -265,7 +265,10 @@ leaves the draft as typed; taking one closes the box and never sends.
 **picture** — a markdown image the frame draws: a block of its own in the answer, drawn
 only where the terminal speaks Kitty graphics, from a file in the workspace and never from
 a URL, at most twenty rows — the face's own allowance — whole in the **window**
-or not at all. A picture that
+or not at all, and a **diagram** — a picture whose source is a fence's body — twice that,
+forty, because it is drawn top to bottom and its height carries its words: a block whose
+graphic asks for more rows than the **window** holds is drawn nowhere and says so on its
+first row, and one the reader merely scrolled past says nothing. A picture that
 cannot be drawn is its **caption** with the reason in the `‹›`. A source is a file or, for
 a fence marked `mermaid`, the fence's own body: mermaid is a second kind of source for the
 same store and not a second pipeline, so a diagram is measured, laid out and

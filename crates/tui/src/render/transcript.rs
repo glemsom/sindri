@@ -69,6 +69,11 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
         for picture in placed.iter().filter(|picture| picture.drawn) {
             pictures::paint(app, picture, buf);
         }
+        // And a block that no window can hold whole says why on its first row,
+        // rather than leaving the reader blank cells and a caption.
+        for picture in &placed {
+            pictures::explain(picture, buf);
+        }
     }
 }
 
