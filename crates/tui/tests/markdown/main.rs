@@ -145,6 +145,60 @@ fn fenced_code_is_highlighted_in_truecolour() {
     );
 }
 
+/// A fence's code is painted in the theme's seven roles and nothing else, so
+/// a borrowed theme's grey cannot come back: which scope is which role is the
+/// language's business, and every hex is the theme's. `tests/theme.rs` holds
+/// the same fence to `theme::owns`, cell by cell.
+#[test]
+fn a_fence_is_painted_in_the_themes_own_roles() {
+    let source = "```rust\n// a note\nfn main() -> Result<(), Box<dyn Error>> {\n    \
+                  let answer: u32 = 42;\n    println!(\"answer {}\", answer);\n    Ok(())\n}\n```\n";
+    let lines = lines(source, 60);
+    let roles = [
+        sindri_tui::theme::PLAIN,
+        sindri_tui::theme::COMMENT,
+        sindri_tui::theme::KEYWORD,
+        sindri_tui::theme::FUNCTION,
+        sindri_tui::theme::TYPE,
+        sindri_tui::theme::NUMBER,
+        sindri_tui::theme::STRING,
+    ];
+    // A body row is the gutter, the code, the fill that squares it and the
+    // edge: the code is what is between the two, and it is a role.
+    let body = &lines[1..lines.len() - 1];
+    for row in body {
+        let code = &row.spans[1..row.spans.len() - 1];
+        for span in code.iter().filter(|span| span.style.fg.is_some()) {
+            let fg = span.style.fg;
+            assert!(
+                fg.is_some_and(|fg| roles.contains(&fg)),
+                "{:?} is painted in {fg:?}, which is not a role the theme names",
+                span.content
+            );
+        }
+    }
+    // The role a run of characters is painted in, by the words it spells.
+    let role = |needle: &str| {
+        let span = lines
+            .iter()
+            .flat_map(|line| line.spans.iter())
+            .find(|span| span.content.contains(needle))
+            .unwrap_or_else(|| panic!("no run spells {needle:?}: {:?}", lines));
+        span.style.fg
+    };
+    assert_eq!(role("// a note"), Some(sindri_tui::theme::COMMENT));
+    assert_eq!(role("fn"), Some(sindri_tui::theme::KEYWORD));
+    assert_eq!(role("42"), Some(sindri_tui::theme::NUMBER));
+    assert_eq!(role("\"answer {}\""), Some(sindri_tui::theme::STRING));
+    assert_eq!(role("main"), Some(sindri_tui::theme::FUNCTION));
+    assert_eq!(
+        role(", answer);"),
+        Some(sindri_tui::theme::PLAIN),
+        "a variable is plain ink: a role the theme names, and the one an \
+         unrecognised scope falls back to"
+    );
+}
+
 #[test]
 fn a_diff_is_coloured_by_line() {
     let source =
@@ -234,6 +288,34 @@ fn a_fence_is_a_panel_with_a_gutter_and_a_border_that_says_where_it_ends() {
             .flatten()
             .all(|span| span.style.bg.is_some_and(|bg| surfaces.contains(&bg))),
         "the panel is filled, so the text sits on a surface and not on the terminal: {lines:?}"
+    );
+}
+
+/// Below `MIN_PANEL` columns a panel would be all border and no code, so the
+/// fence gives up its frame rather than its lines: the ink changes with the
+/// theme, the rows it is drawn on do not.
+#[test]
+fn a_fence_too_narrow_for_a_panel_falls_back_to_bare_rows() {
+    let source = "```rust\nfn main() { let answer = 42; }\n```\n";
+    let lines = lines(source, 11);
+    let shown: Vec<String> = lines.iter().map(raw).collect();
+
+    assert!(
+        !shown
+            .iter()
+            .any(|row| row.contains('╭') || row.contains('│')),
+        "no frame, no gutter: {shown:?}"
+    );
+    assert!(
+        shown.iter().all(|row| row.chars().count() <= 11),
+        "every row is cut to the column: {shown:?}"
+    );
+    assert!(
+        lines
+            .iter()
+            .flatten()
+            .any(|span| span.style.fg == Some(sindri_tui::theme::KEYWORD)),
+        "and the language is still highlighted: {lines:?}"
     );
 }
 

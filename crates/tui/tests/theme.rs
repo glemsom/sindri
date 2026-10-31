@@ -34,14 +34,15 @@ fn app() -> App {
     )
 }
 
-/// A frame with one of everything that paints: prose and inline code, a diff
-/// fence, a call's two sides, an error note, the rail, the composer, and a
-/// modal on the raised tier above them.
+/// A frame with one of everything that paints: prose and inline code, a
+/// highlighted fence and a diff fence, a call's two sides, an error note, the
+/// rail, the composer, and a modal on the raised tier above them.
 fn painted() -> Buffer {
     let mut app = app();
     app.event(Event::TextDelta {
         turn: 1,
-        text: "A `code` word and a fence:\n\n```diff\n-old\n+new\n```\n".to_string(),
+        text: "A `code` word and two fences:\n\n```rust\n// a note\nfn main() -> u32 {\n    let answer: u32 = 42;\n    println!(\"answer {}\");\n    answer\n}\n```\n\n```diff\n-old\n+new\n```\n"
+            .to_string(),
     });
     app.event(Event::ToolCall {
         turn: 1,
@@ -60,7 +61,7 @@ fn painted() -> Buffer {
         crossterm::event::KeyCode::Char('?'),
         crossterm::event::KeyModifiers::NONE,
     ));
-    let mut terminal = Terminal::new(TestBackend::new(100, 40)).expect("a test terminal");
+    let mut terminal = Terminal::new(TestBackend::new(100, 70)).expect("a test terminal");
     terminal
         .draw(|frame| render::draw(&mut app, frame))
         .expect("the frame draws");
@@ -218,6 +219,54 @@ fn faint_clears_four_and_a_half_to_one_on_the_panel_and_on_the_canvas() {
         assert!(
             cleared >= 4.5,
             "faint on {surface:?} is {cleared:.2}:1, under the 4.5:1 a body needs"
+        );
+    }
+}
+
+/// The panel's inks hold the floor with margin rather than sitting just over
+/// it: `FAINT` is a fence's edge and a diff's file line, read as often as the
+/// code beside them.
+#[test]
+fn the_panels_faint_and_a_diffs_file_line_hold_the_floor_with_margin() {
+    let raised = ratio(theme::FAINT, theme::PANEL);
+    assert!(
+        raised >= 6.8,
+        "faint on the panel is {raised:.2}:1, under the 6.8:1 it was raised to"
+    );
+    let file = ratio(theme::DIFF_FILE, theme::PANEL);
+    assert!(
+        file >= 4.5,
+        "a diff's file line on the panel is {file:.2}:1"
+    );
+    assert!(
+        luminance(theme::DIFF_FILE) < luminance(theme::FAINT),
+        "and the file line follows faint as the step below it"
+    );
+}
+
+/// A fence's ink is the theme's, and every role in it is body text: a reader
+/// reads code the same way they read prose, so each role clears the same floor
+/// `FAINT` does, on the panel a fence is drawn on.
+#[test]
+fn every_syntax_role_clears_four_and_a_half_to_one_on_the_panel() {
+    let roles = [
+        ("PLAIN", theme::PLAIN),
+        ("COMMENT", theme::COMMENT),
+        ("KEYWORD", theme::KEYWORD),
+        ("FUNCTION", theme::FUNCTION),
+        ("TYPE", theme::TYPE),
+        ("NUMBER", theme::NUMBER),
+        ("STRING", theme::STRING),
+    ];
+    for (role, colour) in roles {
+        assert!(
+            theme::PALETTE.contains(&colour),
+            "the {role} role is a colour the theme names"
+        );
+        let cleared = ratio(colour, theme::PANEL);
+        assert!(
+            cleared >= 4.5,
+            "the {role} role on the panel is {cleared:.2}:1, under the 4.5:1 a fence's ink needs"
         );
     }
 }
