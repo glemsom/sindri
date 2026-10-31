@@ -10,7 +10,6 @@
 use super::RAIL_INSET;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 
@@ -213,12 +212,13 @@ fn row(fact: &Fact, width: usize) -> Row {
             let said = value(fact, width.saturating_sub(RAIL_INSET + LEDGER));
             let gap = width.saturating_sub(RAIL_INSET + LEDGER + said.chars().count());
             let leader = leader(gap);
-            // A figure that has just grown is pointed at for a moment, so the
-            // motion is visible rather than inferred.
+            // A figure that has just grown is the accent for a moment, so the
+            // motion is visible rather than inferred; a quiet one is prose like
+            // the rest of the frame.
             let style = if fact.fresh() {
                 theme::prompt()
             } else {
-                Style::new()
+                theme::plain()
             };
             Row::said(
                 Line::from(vec![
@@ -267,7 +267,7 @@ fn rule(width: usize) -> Row {
 /// rail that carries a colour behind it. The first frame's posture line
 /// borrows the same one.
 pub(crate) fn chip() -> ratatui::style::Style {
-    theme::good().patch(theme::raised())
+    theme::raised().patch(theme::good())
 }
 
 pub fn strip(app: &App, area: Rect, buf: &mut Buffer) {
@@ -288,7 +288,6 @@ pub fn strip(app: &App, area: Rect, buf: &mut Buffer) {
 mod tests {
     use super::*;
     use crate::Launch;
-    use ratatui::style::Color;
 
     fn launch() -> Launch {
         Launch {
@@ -327,8 +326,8 @@ mod tests {
                 );
                 assert_eq!(
                     cell.fg,
-                    Color::Reset,
-                    "({x}, {y}) carries no ink of the rail's own under the picture"
+                    theme::PLAIN,
+                    "({x}, {y}) carries the canvas's ink and none of the picture's"
                 );
             }
         }

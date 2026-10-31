@@ -123,7 +123,12 @@ impl<'a> Writer<'a> {
                 self.pending
                     .push(Span::styled(text.to_string(), theme::code()));
             }
-            Event::SoftBreak => self.pending.push(Span::raw(" ")),
+            // A soft break is a space of the prose around it, in the prose's
+            // ink: a raw span would leave the cell to the terminal.
+            Event::SoftBreak => {
+                let style = self.style();
+                self.pending.push(Span::styled(" ", style));
+            }
             Event::HardBreak => self.flush(),
             Event::Rule => {
                 self.block_end();
@@ -225,7 +230,7 @@ impl<'a> Writer<'a> {
         if let Some(level) = self.heading {
             return heading::style(level);
         }
-        let mut style = Style::new();
+        let mut style = theme::plain();
         if self
             .link
             .as_deref()

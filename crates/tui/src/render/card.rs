@@ -28,7 +28,7 @@ pub fn draw(card: &Card, view: &mut View, area: Rect, buf: &mut Buffer) {
     );
     content.push(Line::default());
     content.extend(text::wrap(
-        text::glyphs(&[Span::styled(card.check.clone(), Style::default())]),
+        text::glyphs(&[Span::styled(card.check.clone(), theme::plain())]),
         "check: ",
         theme::faint(),
         width,
