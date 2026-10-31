@@ -3,6 +3,7 @@
 //! in as much of them as a line can hold, with never a fact cut in half.
 
 use super::{Block, Fact, SEPARATOR};
+use unicode_width::UnicodeWidthStr;
 
 /// The separator's width, counted in cells once so every room is the same
 /// room.
@@ -16,7 +17,7 @@ pub(super) fn strip(facts: &[Fact], width: usize) -> String {
     let never_lost: usize = facts
         .iter()
         .filter(|fact| fact.keeps())
-        .map(|fact| fact.brief().chars().count() + GAP)
+        .map(|fact| fact.brief().width() + GAP)
         .sum();
     let mut shown = if never_lost > width {
         narrow(facts, width)
@@ -69,7 +70,7 @@ fn read(facts: &[Fact], width: usize) -> Vec<(usize, String)> {
         let after: usize = facts[at + 1..]
             .iter()
             .filter(|later| later.keeps())
-            .map(|later| later.brief().chars().count() + GAP)
+            .map(|later| later.brief().width() + GAP)
             .sum();
         match whole(fact, room(width, &shown, after)) {
             Some(entry) => shown.push((at, entry)),
@@ -123,7 +124,7 @@ fn narrow(facts: &[Fact], width: usize) -> Vec<(usize, String)> {
 /// width, less what is already on it, the separator before it, and whatever is
 /// held back for the facts that must follow.
 fn room(width: usize, shown: &[(usize, String)], reserved: usize) -> usize {
-    let used: usize = shown.iter().map(|(_, entry)| entry.chars().count()).sum();
+    let used: usize = shown.iter().map(|(_, entry)| entry.width()).sum();
     let separators = shown.len() * GAP;
     width.saturating_sub(used + separators + reserved)
 }
@@ -133,28 +134,45 @@ fn room(width: usize, shown: &[(usize, String)], reserved: usize) -> usize {
 fn whole(fact: &Fact, room: usize) -> Option<String> {
     [fact.line(), fact.brief()]
         .into_iter()
-        .find(|entry| entry.chars().count() <= room)
+        .find(|entry| entry.width() <= room)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Fact, priority};
+    use super::{Fact, priority, strip};
     use crate::rail::{Launch, Rail};
     use std::time::Duration;
+    use unicode_width::UnicodeWidthStr;
 
-    fn facts() -> Vec<Fact> {
+    /// The rail every strip test reads, with the values a reader's own run
+    /// supplies.
+    fn rail(workspace: &str, model: &str, temp: &str) -> Vec<Fact> {
         Rail::new(Launch {
             session: "4f1c8f2e-8a24-4b93-9c0e-0d3f0e5c1a77".to_string(),
-            temp: "/state/sindri/sessions/4f1c8f2e/tmp".to_string(),
+            temp: temp.to_string(),
             branch: Some("t30-the-chrome".to_string()),
             sandbox: "bwrap · 1 writable".to_string(),
             provider: "anthropic".to_string(),
-            model: "claude-sonnet-4-6".to_string(),
-            workspace: "~/git/sindri".to_string(),
+            model: model.to_string(),
+            workspace: workspace.to_string(),
             max_turns: 250,
             context_limit: Some(200_000),
         })
         .facts(Duration::ZERO)
+    }
+
+    fn facts() -> Vec<Fact> {
+        rail(
+            "~/git/sindri",
+            "claude-sonnet-4-6",
+            "/state/sindri/sessions/4f1c8f2e/tmp",
+        )
+    }
+
+    /// The same rail with values a reader wrote in their own script: a CJK
+    /// workspace and a model id whose glyphs are two cells wide.
+    fn wide() -> Vec<Fact> {
+        rail("東京都/レポ", "gpt-東", "/state/sindri/sessions/東京都/tmp")
     }
 
     /// A fact by the label the rail states it under.
@@ -165,6 +183,21 @@ mod tests {
                 .find(|fact| fact.label() == label)
                 .expect("the rail states every fact"),
         )
+    }
+
+    #[test]
+    fn a_strip_of_wide_glyphs_is_never_wider_than_the_line_it_was_given() {
+        // A strip that outgrows its line wraps, and the rail may not wrap: a
+        // wide glyph is two cells, so the cells are what the room is counted
+        // in.
+        for width in 8..=120 {
+            let line = strip(&wide(), width);
+            assert!(
+                line.width() <= width,
+                "{width} cells: {line:?} draws {}",
+                line.width()
+            );
+        }
     }
 
     #[test]

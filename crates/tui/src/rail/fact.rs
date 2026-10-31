@@ -1,6 +1,7 @@
 //! One row of the rail: a label in a fixed field and its value beside it.
 
 use crate::markdown::text;
+use unicode_width::UnicodeWidthStr;
 
 /// The fewest cells of a value worth saying: below this a fact is dropped
 /// rather than mangled, because half a word is not a fact.
@@ -154,23 +155,23 @@ impl Fact {
         match self.block {
             Block::Posture => {
                 let head = format!("⬢ {}", self.head());
-                (head.chars().count() <= room).then_some(head)
+                (head.width() <= room).then_some(head)
             }
             _ => {
                 let label = self.short_label();
-                let value = room.checked_sub(label.chars().count() + 2)?;
+                let value = room.checked_sub(label.width() + 2)?;
                 (value >= CUT_FLOOR)
                     .then(|| format!("{label} {}…", text::clip(&self.value, value - 1)))
             }
         }
     }
 
-    /// The fewest cells this fact can be said in: what a line too narrow for
-    /// everything holds back for it.
+    /// The fewest display cells this fact can be said in: what a line too
+    /// narrow for everything holds back for it.
     pub fn least(&self) -> usize {
         match self.block {
-            Block::Posture => 2 + self.head().chars().count(),
-            _ => self.short_label().chars().count() + 1 + CUT_FLOOR,
+            Block::Posture => 2 + self.head().width(),
+            _ => self.short_label().width() + 1 + CUT_FLOOR,
         }
     }
 
@@ -178,5 +179,48 @@ impl Fact {
     /// one word and not two.
     fn head(&self) -> &str {
         self.value.split(' ').next().unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Fact, Fit};
+    use unicode_width::UnicodeWidthStr;
+
+    /// Asserts every cut `fact` makes of itself over the rooms a column closing
+    /// in would give it stays inside its room: a room is display cells,
+    /// because the row it fills is cells, and half of one is not a fact.
+    fn assert_cuts_fit(fact: &Fact) {
+        for room in 0..=24 {
+            if let Some(cut) = fact.cut(room) {
+                assert!(
+                    cut.width() <= room,
+                    "{cut:?} is {} cells in a room of {room}",
+                    cut.width()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_fact_shortened_for_its_room_never_draws_wider_than_that_room() {
+        // 東京都/レポ is eleven cells and six chars, so a cut counted in chars
+        // hands back a value twice the room it was given.
+        assert_cuts_fit(&Fact::identity(
+            "workspace",
+            "東京都/レポ".to_string(),
+            Fit::End,
+        ));
+        // A posture keeps its head where it can say it whole, and says nothing
+        // of itself where the head alone would overrun the room.
+        assert_cuts_fit(&Fact::posture("東京都 · 1 writable".to_string()));
+    }
+
+    #[test]
+    fn the_least_a_wide_fact_can_be_said_in_is_counted_in_cells() {
+        // What a strip too narrow for everything holds back for a fact: a head
+        // counted in chars would hold back two cells of four.
+        assert_eq!(Fact::posture("東京都 · 1 writable".to_string()).least(), 8);
+        assert_eq!(Fact::posture("bwrap · 1 writable".to_string()).least(), 7);
     }
 }
