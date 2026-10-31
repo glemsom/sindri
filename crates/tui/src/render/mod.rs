@@ -14,6 +14,7 @@ mod rail;
 pub(crate) mod rows;
 pub(crate) mod seam;
 mod settings;
+pub(crate) mod stroke;
 pub mod transcript;
 
 use ratatui::Frame;
