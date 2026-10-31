@@ -25,37 +25,14 @@ pub enum OutputFormat {
     Json,
 }
 
+/// What batch mode adds to the overrides: how the answer is shaped and whether
+/// the run's events are said on stderr. The command line is translated into
+/// overrides once, in `main`, so no field here repeats one of them.
 #[derive(Debug, Default)]
 pub struct Flags {
     pub format: OutputFormat,
-    pub provider: Option<String>,
-    pub theme: Option<String>,
-    pub model: Option<String>,
-    pub base_url: Option<String>,
-    pub max_turns: Option<u32>,
-    pub timeout: Option<u64>,
-    pub thinking: Option<bool>,
-    pub writable: Option<Vec<String>>,
-    pub extra_headers: Option<Vec<String>>,
-    pub yolo_unsafe: bool,
     pub verbose: bool,
-}
-
-impl From<Flags> for Overrides {
-    fn from(flags: Flags) -> Self {
-        Overrides {
-            provider: flags.provider,
-            theme: flags.theme,
-            model: flags.model,
-            base_url: flags.base_url,
-            max_turns: flags.max_turns,
-            timeout: flags.timeout,
-            thinking: flags.thinking,
-            writable: flags.writable,
-            extra_headers: flags.extra_headers,
-            yolo_unsafe: flags.yolo_unsafe,
-        }
-    }
+    pub overrides: Overrides,
 }
 
 pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
@@ -70,7 +47,7 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     // repository config, and a run that cannot be evidenced is not a run.
     let Boot {
         config, session, ..
-    } = match boot::open(flags.into()) {
+    } = match boot::open(flags.overrides) {
         Ok(boot) => boot,
         Err(failure) => return failure.report(),
     };
