@@ -13,7 +13,7 @@ use sindri_core::agent::{Report, Stopped};
 use sindri_core::exec::StatusSink;
 use sindri_core::paths::SessionDir;
 use sindri_core::provider::{Call, ToolOutcome, Usage};
-use sindri_core::record::{Entry, Recorder, Redaction, Start, Stored};
+use sindri_core::record::{Entry, Recorder, Redaction, ShowError, Start, Stored};
 use sindri_core::sandbox::Enforcement;
 use tempfile::TempDir;
 
@@ -262,5 +262,130 @@ fn a_record_that_could_not_be_started_says_why() {
     assert!(
         refused.is_err(),
         "a record that cannot be written is not a run"
+    );
+}
+
+/// A record whose last line a crash cut short: `kill -9` lands mid-`writeln!`,
+/// and that record is exactly the one a debugger wants to open.
+#[test]
+fn a_transcript_cut_short_still_reads_and_counts_the_line_it_lost() {
+    let (_root, session, recorder) = recording(Enforcement::Bubblewrap);
+    recorder.user("how many files?");
+    recorder.tool_call(1, &call("call_1", "sleep 600"));
+    drop(recorder);
+
+    let path = session.root().join("transcript.jsonl");
+    let mut transcript = std::fs::read_to_string(&path).expect("the transcript");
+    transcript.push_str(r#"{"type":"tool_result","turn":1,"cont"#);
+    std::fs::write(&path, transcript).expect("the cut transcript");
+
+    let stored = Stored::load_in(&session).expect("a cut line is not a corrupt record");
+    assert_eq!(stored.unread, 1, "the one line the crash cut in two");
+    assert_eq!(stored.entries.len(), 2, "everything before the cut is kept");
+    let rendered = stored.render();
+    assert!(
+        rendered.contains("1 line could not be read"),
+        "the reader is told what the record lost: {rendered}"
+    );
+    assert!(
+        rendered.contains("sleep 600"),
+        "and still reads what it holds: {rendered}"
+    );
+}
+
+/// The other end of the same file: a run killed before it wrote a whole first
+/// line leaves a header, no entries, and the count — never a refusal.
+#[test]
+fn a_transcript_whose_first_line_is_broken_renders_a_header_and_the_count() {
+    let (_root, session, _recorder) = recording(Enforcement::Bubblewrap);
+    std::fs::write(
+        session.root().join("transcript.jsonl"),
+        r#"{"type":"user","tex"#,
+    )
+    .expect("a broken first line");
+
+    let stored = Stored::load_in(&session).expect("a broken first line is not a corrupt record");
+    assert!(stored.entries.is_empty(), "there was nothing before it");
+    assert_eq!(stored.unread, 1);
+    let rendered = stored.render();
+    assert!(
+        rendered.contains("1 line could not be read"),
+        "the count stands in for the entries: {rendered}"
+    );
+    assert!(
+        !rendered.contains("--- user ---"),
+        "and no entry is invented: {rendered}"
+    );
+}
+
+/// The metadata is the record: without it there is nothing to read, and that is
+/// the one corruption that is still a refusal.
+#[test]
+fn metadata_that_does_not_parse_is_still_corrupt() {
+    let (_root, session, recorder) = recording(Enforcement::Bubblewrap);
+    recorder.user("how many files?");
+    drop(recorder);
+    std::fs::write(session.root().join("session.json"), "{\"id\"").expect("broken metadata");
+
+    let refused = Stored::load_in(&session)
+        .err()
+        .expect("without the metadata there is no record");
+    assert!(
+        matches!(refused, ShowError::Corrupt { .. }),
+        "and the refusal says so: {refused:?}"
+    );
+}
+
+/// What bubblewrap said, verbatim, where a post-mortem can read it.
+#[test]
+fn the_sandbox_status_is_rendered_under_its_own_heading() {
+    let (_root, session, recorder) = recording(Enforcement::Bubblewrap);
+    recorder.user("how many files?");
+    recorder.document(1, r#"{"child-pid":4711}"#);
+    recorder.document(2, "not a document");
+    drop(recorder);
+
+    let stored = Stored::load_in(&session).expect("the record reads");
+    assert_eq!(
+        stored.status.len(),
+        2,
+        "one line per document, as they were written: {:?}",
+        stored.status
+    );
+    let rendered = stored.render();
+    assert!(
+        rendered.contains("--- sandbox status ---"),
+        "the status has a heading of its own: {rendered}"
+    );
+    assert!(
+        rendered.contains(r#"{"child-pid":4711}"#),
+        "and its lines are verbatim, not ours to type: {rendered}"
+    );
+    assert!(
+        rendered.find("--- sandbox status ---") > rendered.find("--- user ---"),
+        "the entries come first, the status after them: {rendered}"
+    );
+}
+
+/// A record with neither the transcript nor the status still reads: only the
+/// metadata is required.
+#[test]
+fn a_record_with_no_transcript_and_no_status_still_reads() {
+    let (_root, session, _recorder) = recording(Enforcement::Bubblewrap);
+    std::fs::remove_file(session.root().join("transcript.jsonl")).expect("no transcript");
+    std::fs::remove_file(session.root().join("status.json")).expect("no status");
+
+    let stored = Stored::load_in(&session).expect("a record is mostly metadata");
+    assert!(stored.entries.is_empty());
+    assert!(stored.status.is_empty());
+    assert_eq!(stored.unread, 0);
+    let rendered = stored.render();
+    assert!(
+        !rendered.contains("could not be read"),
+        "a short record is not a loss: {rendered}"
+    );
+    assert!(
+        !rendered.contains("--- sandbox status ---"),
+        "and a record without a status says nothing about it: {rendered}"
     );
 }
