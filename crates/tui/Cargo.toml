@@ -19,7 +19,6 @@ image.workspace = true
 pulldown-cmark.workspace = true
 syntect.workspace = true
 unicode-width.workspace = true
-base64.workspace = true
 mermaid-rs-renderer.workspace = true
 resvg.workspace = true
 
