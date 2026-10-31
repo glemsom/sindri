@@ -39,7 +39,8 @@ pub(crate) struct Laid {
     /// them is not whole in the window, whatever is left of it here.
     pub(crate) cut: usize,
     pub(crate) block: usize,
-    pub(crate) caption: String,
+    /// What a copy of the block takes: a caption, or a diagram's own source.
+    pub(crate) copy: String,
     /// The source as the model wrote it: what the reason a block gives for
     /// standing empty names, where the caption may have scrolled away.
     pub(crate) src: String,
@@ -110,7 +111,7 @@ pub(crate) fn placed(pictures: &[Shown], at: Rect) -> Vec<Placed> {
             Placed {
                 at: laid.row,
                 rows: laid.block,
-                caption: laid.caption.clone(),
+                copy: laid.copy.clone(),
                 area: Rect {
                     x: at.x + laid.column,
                     y: at.y + laid.row as u16,

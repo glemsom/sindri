@@ -5,6 +5,13 @@
 //! Both end in the same toggle, so no gesture is the only way in, and both are
 //! reading rather than watching: a toggle on a following window takes the
 //! reader's place at that entry, and `End` is the key that gives it back.
+//!
+//! An entry is what this opens, and a diagram is not one: it is a block inside
+//! an answer's entry, one of however many that answer holds. Opening it in place
+//! would need a click target and a place finer than an entry — a second
+//! expansion under the first one's name — so #122's caption is not a target, and
+//! what a reader who wants a diagram's source is given is its copy: the block
+//! copies as the fence body it was drawn from (`markdown::mermaid`).
 
 use crate::app::App;
 use crate::entry::Entry;

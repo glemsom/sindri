@@ -1,8 +1,12 @@
 //! A fence that names `mermaid`, where a picture is a block: the store measures
 //! the diagram the body draws, and the block reserves those rows and captions
 //! them `‹mermaid›` — the fence's own name, since there is no `src` and printing
-//! the source would be noise. A fence that will not parse is the panel it was,
-//! with the parser's reason under it, because a reader may never lose a
+//! the source would be noise. That name is not something a reader can use, so a
+//! diagram is the one block whose copy is its source: the fence body, which is
+//! what a reader pastes somewhere else. It does not open in place instead,
+//! because the frame's expansion opens an entry and a diagram is a block inside
+//! an answer's (`crate::expand`). A fence that will not parse is the panel it
+//! was, with the parser's reason under it, because a reader may never lose a
 //! diagram's source to a renderer's opinion; a fence still arriving is an
 //! incomplete one, which fails to parse cheaply, so a streaming answer shows its
 //! source and then the diagram the instant the fence closes.
@@ -34,10 +38,16 @@ pub(super) fn fence(w: &mut Writer<'_>, language: Option<&str>, body: &str) -> F
         return Fence::Panel;
     };
     let (_, columns) = w.block_margin();
-    let worth = store.fence(body.trim_end_matches('\n'), columns as u16);
+    let body = body.trim_end_matches('\n');
+    let worth = store.fence(body, columns as u16);
     match worth {
         Worth::Drawn { .. } => {
-            w.place("mermaid".to_string(), "‹mermaid›".to_string(), worth);
+            w.place(
+                "mermaid".to_string(),
+                "‹mermaid›".to_string(),
+                worth,
+                body.to_string(),
+            );
             // A fence is a block of its own, so what follows it starts after a
             // gap — as it does under a panel.
             w.apart = true;

@@ -202,3 +202,28 @@ fn a_portrait_mermaid_fence_takes_more_rows_than_a_photograph_may() {
         "the fence's name is still the caption: {shown:?}"
     );
 }
+
+#[test]
+fn a_diagram_copies_as_the_fence_body_it_was_drawn_from() {
+    // The ticket's bug: a block that copies as `‹mermaid›` is not a diagram and
+    // not a document. What a reader pastes out of the frame is the source.
+    let block = markdown::lines(&fence("mermaid", DIAGRAM), 60, Some(&store()));
+    let picture = block
+        .pictures
+        .first()
+        .unwrap_or_else(|| panic!("the fence is a block: {:?}", texts(&block.rows)));
+
+    assert_eq!(
+        picture.copy,
+        DIAGRAM.trim_end_matches('\n'),
+        "a copy of the block is the mermaid that drew it"
+    );
+    assert_ne!(
+        picture.copy, picture.caption,
+        "and not the caption a copy of an image yields"
+    );
+    assert_eq!(
+        picture.caption, "‹mermaid›",
+        "the caption it is drawn under is still the fence's own name"
+    );
+}
