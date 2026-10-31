@@ -86,9 +86,11 @@ fn folding_the_call_the_reader_has_paged_into_keeps_them_in_it() {
     }
     press(&mut app, KeyCode::Enter);
     // The frame the key was pressed on, so a page is a screen and not a row.
+    // Opening holds the window on the call's own row, so its output is read
+    // by paging forward into it.
     screen(&mut app, 100, 30);
     for _ in 0..12 {
-        press(&mut app, KeyCode::PageUp);
+        press(&mut app, KeyCode::PageDown);
     }
     let inside = screen(&mut app, 100, 30);
     assert!(
@@ -111,11 +113,17 @@ fn folding_the_call_the_reader_has_paged_into_keeps_them_in_it() {
         "a fold of rows the reader has read is not rows arriving: {folded:#?}"
     );
 
+    let before = self::reading(&mut app);
     app.note_info("arrived after the fold");
     let arrived = screen(&mut app, 100, 30);
     assert_eq!(
-        arrived, folded,
+        self::reading(&mut app),
+        before,
         "the next row arrives below a window that is still held: {arrived:#?}"
+    );
+    assert!(
+        any(&arrived, "↓ 1 new row"),
+        "and is counted rather than followed: {arrived:#?}"
     );
 }
 
@@ -190,29 +198,30 @@ fn an_entry_above_the_window_that_grows_or_shrinks_moves_no_row_the_reader_is_on
     assert_eq!(app.scroll(), below);
 }
 
-/// The newest call, opened while the window is on the tail: the output arrives
-/// below the call's own row and the tail is still the tail.
+/// The tail, after an engagement: `End` takes it and follows again, so an
+/// engagement is a place the reader leaves the way they leave a page back.
 #[test]
-fn a_key_on_the_newest_call_while_following_still_opens_it_in_place() {
+fn end_after_an_engagement_follows_what_arrives_again() {
     let mut app = app();
     call(&mut app, 1, 400);
+    screen(&mut app, 100, 30);
 
     press(&mut app, KeyCode::Enter);
-    let opened = screen(&mut app, 100, 30);
+    screen(&mut app, 100, 30);
     assert!(
-        any(&opened, "line 400"),
-        "the newest row of the expansion is the newest row of the thread: {opened:#?}"
-    );
-    assert!(
-        !any(&opened, "new rows"),
-        "nothing arrived below a window that is following: {opened:#?}"
+        app.scroll() > 0,
+        "opening a call holds the window off the tail"
     );
 
-    app.note_info("arrived after the run");
-    let arrived = screen(&mut app, 100, 30);
+    press(&mut app, KeyCode::End);
+    screen(&mut app, 100, 30);
+    assert_eq!(app.scroll(), 0, "End is the tail, and the window is on it");
+
+    app.note_info("arrived after the engagement");
+    let rows = screen(&mut app, 100, 30);
     assert!(
-        any(&arrived, "arrived after the run"),
-        "and the frame follows what arrives: {arrived:#?}"
+        any(&rows, "arrived after the engagement"),
+        "and the frame follows what arrives again: {rows:#?}"
     );
 }
 
@@ -241,5 +250,76 @@ fn a_wider_terminal_leaves_the_same_rows_under_the_reader() {
         reading(&mut app),
         narrow,
         "the same rows are under the reader at the wider column"
+    );
+}
+
+/// A call finishing on a turn above the window is a settle and not an arrival:
+/// the rows it gains or loses are above the place, and a following window's
+/// rows are the tail's, so neither moves.
+#[test]
+fn a_call_finishing_above_the_window_while_following_moves_nothing() {
+    let mut app = app();
+    app.event(Event::ToolCall {
+        turn: 1,
+        command: Some("cargo test".to_string()),
+    });
+    for line in 1..=3 {
+        app.output(Side::Stdout, &format!("line {line}"));
+    }
+    for turn in 2..=8 {
+        app.note_info(format!("question {turn}"));
+        app.event(Event::TextDelta {
+            turn,
+            text: format!("answer {turn}"),
+        });
+    }
+    screen(&mut app, 100, 12);
+    let reading = self::reading(&mut app);
+    assert!(!reading.is_empty(), "the reader is looking at rows");
+    assert!(
+        !any(&reading, "cargo test"),
+        "the call that is still running is above the window: {reading:#?}"
+    );
+
+    app.over(CallOver::Exited(0), Spilled::default());
+    let rows = screen(&mut app, 100, 12);
+    assert_eq!(
+        self::reading(&mut app),
+        reading,
+        "a call finishing above the window moves no row the reader sees: {rows:#?}"
+    );
+}
+
+/// The same settle at the tail: following is where a call finishing is meant to
+/// be seen, so its rows stay and its duration and exit are frozen into them.
+#[test]
+fn a_call_finishing_at_the_tail_still_shows_its_rows_and_settles_its_duration() {
+    let mut app = app();
+    app.event(Event::ToolCall {
+        turn: 1,
+        command: Some("cargo test".to_string()),
+    });
+    for line in 1..=3 {
+        app.output(Side::Stdout, &format!("line {line}"));
+    }
+    let running = screen(&mut app, 100, 20);
+    assert!(
+        any(&running, "line 3"),
+        "the call's own rows are on the tail while it runs: {running:#?}"
+    );
+
+    app.over(CallOver::Exited(0), Spilled::default());
+    let rows = screen(&mut app, 100, 20);
+    let row = rows
+        .iter()
+        .find(|row| row.contains("cargo test"))
+        .unwrap_or_else(|| panic!("the call's row left with the settle: {rows:#?}"));
+    for fact in ["✓ exit 0", "0.0s", "3 lines"] {
+        assert!(row.contains(fact), "the settled row says {fact:?}: {row:?}");
+    }
+    assert_eq!(
+        app.scroll(),
+        0,
+        "and the call that settled is on the tail the window follows: {rows:#?}"
     );
 }

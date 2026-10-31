@@ -175,6 +175,12 @@ pub(crate) fn resolve(app: &mut App, width: u16, count: usize, ask: Ask, follow:
             app.window.at = (0, 0);
         }
         Ask::End => *follow = true,
+        // The entry itself, and its own row first: the output an expansion
+        // opens grows below the row the reader pressed `Enter` on.
+        Ask::Hold(entry) => {
+            *follow = false;
+            app.window.at = (entry, 0);
+        }
         Ask::Rows(rows) if rows > 0 => {
             *follow = false;
             app.window.at = back(app, width, app.window.at, rows.unsigned_abs());

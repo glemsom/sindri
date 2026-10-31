@@ -75,17 +75,25 @@ rows into it, so a block that grows or folds above the window moves no row under
 reader, and one the top row sits in moves the place back to that entry's own row — the
 row `Enter` was pressed on, and the only row of a folded call that is there both before
 and after — where a fold would otherwise leave a place that no longer exists and hand
-the reader to the tail. `End` takes the tail again, `Home` the first turn, and nothing in
-the last column claims to say where the window sits: the **new-rows badge** is the
-frame's only word on it.
+the reader to the tail. Reading is not following: `Enter` on a call, or a click on its
+row, is a place too — the window stops following and that entry's own row becomes the top
+of the column, so the output the fold opens grows beneath it — and a hold is the reader's
+until a key takes the tail, so a column the thread is too short to fill does not hand them
+back to it. `End` takes the tail again, `Home` the first turn, and nothing in the last
+column claims to say where the window sits: the **new-rows badge** is the frame's only
+word on it.
 
 **new-rows badge** — `↓ 4 new rows`, against the footer's right edge: how many rows
-arrived below a **window** that is off the **tail**. It says `1 new row` for one, clears
-the moment the window reaches the tail again, and its room is taken before the footer's
-hints are chosen.
+arrived below a **window** that is off the **tail**. Only what arrived after the reader
+took their place counts: going back, reaching the first turn, opening a call and folding
+one all take the rows below the window as read, so the count starts again at what is below
+it then and never says that more arrived than is there. It says `1 new row` for one,
+clears the moment the window reaches the tail again, and its room is taken before the
+footer's hints are chosen.
 
 **tail** — the newest row of the **transcript**, and the place a **window** follows
-from unless a reader has scrolled back.
+from unless a reader has scrolled back or engaged with a call; `End` is the key that
+takes it again.
 
 **spill file** — where an over-long tool result's full text is written when the
 model-facing copy is truncated head+tail.

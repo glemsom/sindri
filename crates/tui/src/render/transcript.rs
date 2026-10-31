@@ -95,6 +95,9 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
     let mut follow = app.window.follow;
     resolve(app, width, count, ask, &mut follow);
     let held = app.window.at;
+    // A hold the reader asked for is theirs until a key takes the tail, so a
+    // column the thread is too short to fill does not hand them back to it.
+    let engaged = !follow && app.window.engaged(ask);
 
     let mut frame = Frame::new(app, width);
     let mut first = count;
@@ -103,10 +106,10 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
         first = held.0;
         below = frame.hold(held.0, held.1, count, height);
     }
-    if frame.rows.len() < height {
-        // Nothing is held, or the tail came into view with room to spare: the
-        // window fills from the newest rows rather than leaving the column half
-        // empty, and it follows them from then on.
+    if frame.rows.len() < height && !engaged {
+        // Nothing is held, or a scroll-back reached the tail with room to
+        // spare: the window fills from the newest rows rather than leaving the
+        // column half empty, and it follows them from then on.
         follow = true;
         below = 0;
         frame = Frame::new(app, width);

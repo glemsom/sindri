@@ -2,10 +2,13 @@
 //! The frame has no cursor of its own: `Enter` on an empty composer means the
 //! entry the reader last touched — or, if they have touched none, the newest
 //! one they can open — and a click means the entry whose row it landed on.
-//! Both end in the same toggle, so no gesture is the only way in.
+//! Both end in the same toggle, so no gesture is the only way in, and both are
+//! reading rather than watching: a toggle on a following window takes the
+//! reader's place at that entry, and `End` is the key that gives it back.
 
 use crate::app::App;
 use crate::entry::Entry;
+use crate::window::Ask;
 
 impl App {
     /// Opens the chosen entry, or the newest one there is anything to open
@@ -35,6 +38,13 @@ impl App {
         let (entry, row) = self.window.at;
         let held = !self.window.follow;
         self.dirty();
+        // A reader who opens a call while the column is following is reading
+        // rather than watching: the entry becomes the top row of the column and
+        // what arrives below it is counted, not followed. `End` takes the tail
+        // again, exactly as it does for a reader who scrolled back.
+        if !held {
+            self.window.want(Ask::Hold(index));
+        }
         // An entry that opens or folds moves every row below it, and not at
         // the tail: what the window counted there is stale.
         self.window.forget();
