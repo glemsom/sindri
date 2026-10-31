@@ -42,7 +42,7 @@ impl Pty {
                 Ok(0) => break,
                 Ok(read) => {
                     let text = String::from_utf8_lossy(&buffer[..read]).to_string();
-                    self.look(&text);
+                    self.look(&buffer[..read]);
                     drawn.push_str(&text);
                 }
                 Err(error) if error.kind() == ErrorKind::WouldBlock => {}
@@ -70,7 +70,7 @@ impl Pty {
         while Instant::now() < deadline {
             match port.read(&mut buffer) {
                 Ok(0) => break,
-                Ok(read) => self.look(&String::from_utf8_lossy(&buffer[..read])),
+                Ok(read) => self.look(&buffer[..read]),
                 Err(error) if error.kind() == ErrorKind::WouldBlock => {}
                 Err(error) if error.kind() == ErrorKind::Interrupted => {}
                 Err(_) => break,
@@ -122,7 +122,7 @@ impl Pty {
                 Ok(read) => {
                     quiet = Instant::now();
                     let text = String::from_utf8_lossy(&buffer[..read]).to_string();
-                    self.look(&text);
+                    self.look(&buffer[..read]);
                     if said {
                         since_words.push_str(&text);
                         if since_words.contains(SHOW_CURSOR) {

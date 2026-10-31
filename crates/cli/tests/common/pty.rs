@@ -121,7 +121,7 @@ impl Pty {
                 Ok(0) => break,
                 Ok(read) => {
                     let text = String::from_utf8_lossy(&buffer[..read]).to_string();
-                    self.look(&text);
+                    self.look(&buffer[..read]);
                     seen.push_str(&text);
                 }
                 Err(error) if error.kind() == ErrorKind::WouldBlock => {}
@@ -149,7 +149,7 @@ impl Pty {
                 Ok(0) => break,
                 Ok(read) => {
                     let text = String::from_utf8_lossy(&buffer[..read]).to_string();
-                    self.look(&text);
+                    self.look(&buffer[..read]);
                     raw.push_str(&text);
                 }
                 Err(error) if error.kind() == ErrorKind::WouldBlock => {}
@@ -177,7 +177,7 @@ impl Pty {
                 Ok(0) => break,
                 Ok(read) => {
                     let text = String::from_utf8_lossy(&buffer[..read]).to_string();
-                    self.look(&text);
+                    self.look(&buffer[..read]);
                     drawn.push_str(&text);
                 }
                 Err(error) if error.kind() == ErrorKind::WouldBlock => {
@@ -208,9 +208,9 @@ impl Pty {
         unsafe { libc::kill(child.id() as libc::pid_t, libc::SIGWINCH) };
     }
 
-    fn look(&self, text: &str) {
+    fn look(&self, read: &[u8]) {
         if let Ok(mut screen) = self.screen.lock() {
-            screen.feed(text);
+            screen.feed(read);
         }
     }
 
@@ -256,7 +256,7 @@ impl Pty {
                 Ok(0) | Err(_) => return seen.clone(),
                 Ok(read) => {
                     let text = String::from_utf8_lossy(&buffer[..read]).to_string();
-                    self.look(&text);
+                    self.look(&buffer[..read]);
                     seen.push_str(&text);
                 }
             }
