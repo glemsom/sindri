@@ -146,8 +146,16 @@ whole. One **ink** of the theme is painted and only as a surface, so the ink
 under it — syntax, a heading, a panel's border — still reads as itself while the
 row is marked. One function computes the spans a drag covers and both the mark
 and the copy read it (`mark::span`), so the mark can never light a cell the copy
-does not take nor leave dark a cell it does. A plain click lights nothing, and
-the selection is spent with the copy, so the mark goes with it.
+does not take nor leave dark a cell it does — but for a **picture**'s block,
+which is marked as one block: a drag that reaches any row of it lights the
+graphic's rows and its caption together — however deep in the block the drag
+began or ended, and whichever rows of it the **window** holds — and the block's
+words are taken once, on the row the block starts at. A block is the one thing
+the copy differs from the screen in, and marking it whole is what keeps that
+honest: the reader sees a whole thing taken, not a run of blank cells. A plain
+click lights nothing, a click that opens a spill row or a call's row starts no
+mark, nothing is painted behind an overlay that covers the **frame**, and the
+selection is spent with the copy, so the mark goes with it.
 
 **pulse** — the frame's own clock, and the only thing drawn without being asked:
 a `pulse::TICK` of ~120 ms while a run is live or a completion is walking, nothing at
@@ -271,6 +279,14 @@ starts with the slash, the name not yet ended by whitespace — ranked by the na
 typed with the names it starts first, and needing no walk because the catalogue is in
 hand. `Tab` and `Enter` take the marked offer, `↑`/`↓` walk it, `Esc` dismisses it and
 leaves the draft as typed; taking one closes the box and never sends.
+
+**block** — the rows a **picture** takes of an answer, and the one place a copy
+differs from the screen: its graphic's rows together with its **caption**, or with
+the `‹›` that says what it could not be drawn as. A drag that reaches any row of
+one takes it whole, and every row of it the **window** holds is marked, however
+deep in it the drag began or ended; its words are taken once, on the row the block
+starts at — the **caption**, or a **diagram**'s fence body (`Viewport::block` in
+`crates/tui/src/selection.rs`).
 
 **picture** — a markdown image the frame draws: a block of its own in the answer, drawn
 only where the terminal speaks Kitty graphics, from a file in the workspace and never from

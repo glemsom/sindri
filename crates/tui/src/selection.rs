@@ -75,13 +75,13 @@ impl Viewport {
             .map(|(_, entry)| *entry)
     }
 
-    /// The picture a row is filler for: one of its block's rows past the first,
-    /// which carries no words because the graphic is drawn there or they are
-    /// above it. A copy takes the block's words once and none of these.
-    pub fn filler(&self, row: usize) -> Option<&Placed> {
+    /// The picture a row is a row of: the block a drag reaching that row has
+    /// taken. Its first row holds the words the block copies as and the rest
+    /// carry none, because a graphic is drawn there or the words are above it.
+    pub fn block(&self, row: usize) -> Option<&Placed> {
         self.pictures
             .iter()
-            .find(|picture| row > picture.at && row < picture.at + picture.rows)
+            .find(|picture| row >= picture.at && row < picture.at + picture.rows)
     }
 
     pub fn row_of(&self, at: Position) -> Option<usize> {
@@ -115,13 +115,13 @@ impl Selection {
 }
 
 /// The words a drawn row copies as: what a picture's block stands for — its
-/// caption, or the fence body a diagram hides — when the row is one of the
-/// block's filler rows, which is where a drag that starts inside a block lands
-/// and why it still takes the words; the row itself everywhere else.
+/// caption, or the fence body a diagram hides — on the row the block starts at,
+/// which is where the frame puts them and why a drag that lands anywhere in a
+/// block still takes them; the row itself everywhere else.
 pub fn words(viewport: &Viewport, row: usize) -> &str {
-    match viewport.filler(row) {
-        Some(picture) => &picture.copy,
-        None => viewport.rows.get(row).map_or("", String::as_str),
+    match viewport.block(row) {
+        Some(picture) if picture.at == row => &picture.copy,
+        _ => viewport.rows.get(row).map_or("", String::as_str),
     }
 }
 
@@ -135,13 +135,18 @@ pub fn copied(viewport: &Viewport, selection: &Selection) -> Option<String> {
         .into_iter()
         .enumerate()
     {
+        // A block's rows past its first are lit and not taken: the words are
+        // the block's, and they are taken once.
+        let Some(chars) = covered.chars else {
+            continue;
+        };
         let row = words(viewport, covered.row);
         // The text a row yields is the characters the span names, cut at their
         // end: a selection of characters, never of cells.
         let taken: String = row
             .chars()
-            .skip(covered.chars.start)
-            .take(covered.chars.len())
+            .skip(chars.start)
+            .take(chars.len())
             .collect::<String>()
             .trim_end()
             .to_string();
