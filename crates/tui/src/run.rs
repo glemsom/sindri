@@ -49,7 +49,7 @@ pub fn open(
     match alternate_screen() {
         Some(mut terminal) => {
             let ending = session(&mut terminal, launch, driver, cancel, missing);
-            release_mouse();
+            release_terminal();
             ratatui::restore();
             ending
         }
@@ -61,7 +61,7 @@ pub fn refuse(card: Card) -> Ending {
     match alternate_screen() {
         Some(mut terminal) => {
             let ending = show_card(&mut terminal, &card);
-            release_mouse();
+            release_terminal();
             ratatui::restore();
             ending
         }
@@ -80,11 +80,33 @@ fn alternate_screen() -> Option<DefaultTerminal> {
     // The frame takes the mouse because it draws its own selection: a drag
     // copies rendered rows, and Shift hands the gesture back.
     let _ = crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture,);
+    take_keys();
     Some(terminal)
 }
 
-fn release_mouse() {
-    let _ = crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture,);
+/// What the frame asked the terminal for, and gives back when it closes: the
+/// mouse, and keys it can tell apart.
+fn release_terminal() {
+    let _ = crossterm::execute!(
+        std::io::stdout(),
+        crossterm::event::PopKeyboardEnhancementFlags,
+        crossterm::event::DisableMouseCapture,
+    );
+}
+
+/// `Shift+Enter` and `Enter` are the same byte (`0x0d`) until the terminal is
+/// asked to disambiguate its keys, and the composer breaks the line on the
+/// first of them: the frame asks on entry, and the request is a frame of the
+/// keyboard protocol's stack, so it is popped again as the frame closes — a
+/// shell opened underneath never inherits it. A terminal that does not speak
+/// the protocol ignores the sequence and keeps the keys it always sent.
+fn take_keys() {
+    let _ = crossterm::execute!(
+        std::io::stdout(),
+        crossterm::event::PushKeyboardEnhancementFlags(
+            crossterm::event::KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+        ),
+    );
 }
 
 /// The card stays until it is read: a key leaves it, the page keys move a
