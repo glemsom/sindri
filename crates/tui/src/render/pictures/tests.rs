@@ -45,6 +45,12 @@ fn decodes(app: &App) -> u64 {
     app.pictures().map(Store::decodes).unwrap_or_default()
 }
 
+/// How many fence bodies the store has put through the renderer: the five
+/// milliseconds a frame full of diagrams must not pay again.
+fn renders(app: &App) -> u64 {
+    app.pictures().map(Store::renders).unwrap_or_default()
+}
+
 /// Whether the buffer carries a graphic on any row of it.
 fn drawn(buf: &Buffer) -> bool {
     buf.content
@@ -182,11 +188,14 @@ fn a_repaint_of_a_mermaid_fence_paints_pixels_and_renders_it_once() {
     assert!(!drawn(&tail), "the tail shows the notes, not the diagram");
     assert_eq!(decodes(&app), 0, "nothing was drawn, nothing was rendered");
 
-    // The first turn: the diagram, rendered once.
+    // The first turn: the diagram, rendered once. The svg behind it is rendered
+    // once too — a measure is the same drawing, and measuring one is what a
+    // frame does to every entry it lays out.
     press(&mut app, KeyCode::Home);
     let top = frame(&mut app, 100, 30);
     assert!(drawn(&top), "the diagram is drawn on the rows it reserved");
     assert_eq!(decodes(&app), 1, "the first draw renders it once");
+    assert_eq!(renders(&app), 1, "and the svg behind it once as well");
 
     // A repaint of a live run: the same rows, the pixels the store holds.
     let again = frame(&mut app, 100, 30);
@@ -203,4 +212,5 @@ fn a_repaint_of_a_mermaid_fence_paints_pixels_and_renders_it_once() {
         "scrolled back, drawn again"
     );
     assert_eq!(decodes(&app), 1, "from the pixels the store still holds");
+    assert_eq!(renders(&app), 1, "and the svg the store still holds");
 }

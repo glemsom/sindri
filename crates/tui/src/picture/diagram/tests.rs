@@ -83,10 +83,11 @@ fn every_ink_a_diagram_is_drawn_in_is_a_colour_the_frame_names() {
 
 #[test]
 fn a_diagram_is_rasterised_on_the_panels_ground() {
-    let (width, height) = measured(DIAGRAM).expect("a state diagram parses");
+    let shape = render(DIAGRAM).expect("a state diagram parses");
+    let (width, height) = shape.size;
     assert!(width > 1 && height > 1, "it is a picture of a size");
 
-    let image = rasterised(DIAGRAM, 160, 90).expect("it rasterises");
+    let image = raster(&shape, 160, 90).expect("it rasterises");
     let pixels = image.to_rgba8();
     assert_eq!((pixels.width(), pixels.height()), (160, 90));
 
@@ -110,8 +111,9 @@ fn a_diagram_is_drawn_with_the_fonts_the_theme_names() {
     // The same diagram, drawn with no font at all. Shapes and ground are the
     // same either way, so pixels that differ are the words: a box with no ink
     // in it would be a diagram the reader cannot read.
-    let with = rasterised(DIAGRAM, 160, 90).expect("it rasterises");
-    let without = drawn(DIAGRAM, 160, 90, &usvg::Options::default()).expect("it rasterises");
+    let shape = render(DIAGRAM).expect("a state diagram parses");
+    let with = raster(&shape, 160, 90).expect("it rasterises");
+    let without = drawn(&shape.svg, 160, 90, &usvg::Options::default()).expect("it rasterises");
     assert_ne!(
         with.to_rgba8().as_raw(),
         without.to_rgba8().as_raw(),
@@ -121,12 +123,8 @@ fn a_diagram_is_drawn_with_the_fonts_the_theme_names() {
 
 #[test]
 fn a_fence_that_will_not_parse_is_the_parsers_own_reason() {
-    let Err(Refusal::Diagram(reason)) = measured("flowchart TD\n    A --> \n") else {
+    let Err(Refusal::Diagram(reason)) = render("flowchart TD\n    A --> \n") else {
         panic!("a broken fence draws no svg");
     };
     assert!(!reason.is_empty(), "and the reason says what it was");
-    assert!(
-        rasterised("flowchart TD\n    A --> \n", 80, 40).is_none(),
-        "nothing is rasterised from a diagram that never was"
-    );
 }

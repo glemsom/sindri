@@ -12,6 +12,7 @@ use ratatui_image::protocol::StatefulProtocol;
 
 use crate::graphics::Graphics;
 use crate::picture::source::Source;
+use crate::picture::svgs::Svgs;
 use crate::picture::{MAX_ROWS, PIXELS, Refusal, Worth};
 
 /// How many rendered protocols stay live: each holds its pixels, so the store
@@ -24,6 +25,10 @@ pub struct Store {
     /// The answer a protocol is built from. It speaks Kitty, or there is no
     /// store: no sixel, no half-blocks, no fallback.
     picker: Picker,
+    /// The svgs a fence body has been drawn into, keyed by the body alone: a
+    /// diagram's column mapping comes after the drawing, so the same body at
+    /// another width is the same svg and another block.
+    svgs: Svgs,
     /// What has been rendered, oldest first: the last is the most recent, and
     /// the first is what makes room for a ninth.
     live: Vec<Live>,
@@ -95,6 +100,7 @@ impl Store {
         Some(Store {
             workspace: workspace.into(),
             picker,
+            svgs: Svgs::default(),
             live: Vec::new(),
             decodes: 0,
         })
@@ -118,7 +124,7 @@ impl Store {
 
     fn weigh(&self, source: Source, columns: u16) -> Worth {
         source
-            .measured()
+            .measured(&self.svgs)
             .and_then(|pixels| self.guarded(pixels))
             .map(|pixels| {
                 let (span, rows) = self.block(pixels, columns);
@@ -163,7 +169,7 @@ impl Store {
                     u32::from(*columns) * u32::from(cell_w.max(1)),
                     u32::from(*rows) * u32::from(cell_h.max(1)),
                 );
-                let pixels = source.rasterised(width, height)?;
+                let pixels = source.rasterised(&self.svgs, width, height)?;
                 let protocol = self.picker.new_resize_protocol(pixels);
                 self.decodes += 1;
                 if self.live.len() >= LIVE {
@@ -182,6 +188,14 @@ impl Store {
     #[cfg(test)]
     pub(crate) fn decodes(&self) -> u64 {
         self.decodes
+    }
+
+    /// How many fence bodies have been put through the renderer: the other half
+    /// of what a picture costs, read where a repaint has to prove it spent
+    /// nothing.
+    #[cfg(test)]
+    pub(crate) fn renders(&self) -> u64 {
+        self.svgs.renders()
     }
 
     /// How many protocols are live: each holds its pixels, so a test can see
