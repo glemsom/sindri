@@ -89,6 +89,9 @@ pub struct ToolOutcome {
     pub name: String,
     pub content: String,
     pub is_error: bool,
+    /// The same facts `content` states, as fields. Absent ones mean the call
+    /// never reached the sandbox, which is not the same as an outcome of zero.
+    pub facts: ToolFacts,
 }
 
 impl ToolOutcome {
@@ -98,6 +101,7 @@ impl ToolOutcome {
             name: call.name.clone(),
             content,
             is_error,
+            facts: ToolFacts::default(),
         }
     }
 
@@ -107,8 +111,28 @@ impl ToolOutcome {
             name: call.name.clone(),
             content: format!("tool_error: the call was not run: {reason}"),
             is_error: true,
+            facts: ToolFacts::default(),
         }
     }
+
+    /// The facts the content was rendered from: given here, where both are
+    /// built from one result, so the two cannot disagree.
+    pub fn with_facts(mut self, facts: ToolFacts) -> Self {
+        self.facts = facts;
+        self
+    }
+}
+
+/// A tool result's facts as fields rather than prose: what the record keeps
+/// beside the text the model was shown.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ToolFacts {
+    /// `exited`, `timed_out` or `sandbox_error`; absent when no command ran.
+    pub outcome: Option<String>,
+    pub exit_code: Option<i32>,
+    pub duration_ms: Option<u64>,
+    pub truncated: bool,
+    pub spill: Vec<String>,
 }
 
 /// The token counters a provider reports. Absent means unreported, never zero:

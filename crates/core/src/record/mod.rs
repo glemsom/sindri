@@ -23,14 +23,34 @@ use std::fs::File;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::agent::Report;
 use crate::exec::StatusSink;
 use crate::paths::SessionDir;
-use crate::provider::{Call, ToolOutcome};
+use crate::provider::{Call, ToolOutcome, Usage};
 use crate::sandbox::Enforcement;
 use entry::Entry as Line;
+
+/// What a turn cost, when the loop measured it: the turn's own counters and the
+/// span it took. Default is "nobody measured it", which is not the same as
+/// free, so an entry never claims a zero it did not see.
+#[derive(Debug, Clone, Default)]
+pub struct Cost {
+    /// The counters the provider reported for the turn; empty when it reported
+    /// none, which the record writes as absent.
+    pub usage: Usage,
+    pub duration: Option<Duration>,
+}
+
+impl Cost {
+    pub fn measured(usage: Usage, duration: Duration) -> Self {
+        Cost {
+            usage,
+            duration: Some(duration),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Start {
@@ -97,11 +117,16 @@ impl Recorder {
         });
     }
 
-    pub fn assistant(&self, turn: u32, text: &str, reasoning: Option<&str>) {
+    /// One turn: what it said and what it cost. The cost is measured by the
+    /// caller, because only the loop holds a clock; an absent one means nobody
+    /// measured it, which is not the same as free.
+    pub fn assistant(&self, turn: u32, text: &str, reasoning: Option<&str>, cost: Cost) {
         self.note(Line::Assistant {
             turn,
             text: self.redaction.apply(text),
             reasoning: reasoning.map(|text| self.redaction.apply(text)),
+            usage: (!cost.usage.is_empty()).then_some(cost.usage),
+            duration_ms: cost.duration.map(millis),
         });
     }
 
@@ -122,11 +147,23 @@ impl Recorder {
     }
 
     pub fn tool_result(&self, turn: u32, outcome: &ToolOutcome) {
+        let facts = &outcome.facts;
         self.note(Line::ToolResult {
             turn,
             call_id: outcome.call_id.clone(),
             content: self.redaction.apply(&outcome.content),
             is_error: outcome.is_error,
+            outcome: facts.outcome.clone(),
+            exit_code: facts.exit_code,
+            duration_ms: facts.duration_ms,
+            truncated: facts.truncated,
+            // Redacted like the content it is also written in, so the two
+            // spellings of one path cannot disagree either.
+            spill: facts
+                .spill
+                .iter()
+                .map(|path| self.redaction.apply(path))
+                .collect(),
         });
     }
 
@@ -136,7 +173,7 @@ impl Recorder {
             meta.answered_model.clone_from(&report.model);
             meta.turns = Some(report.turns);
             meta.tool_calls = Some(report.tool_calls);
-            meta.duration_ms = Some(u64::try_from(report.duration.as_millis()).unwrap_or(u64::MAX));
+            meta.duration_ms = Some(millis(report.duration));
             meta.usage = (!report.usage.is_empty()).then(|| report.usage.clone());
         })
     }
@@ -202,6 +239,11 @@ fn write_meta(root: &Path, meta: &Meta) -> io::Result<()> {
     let staging = root.join("session.json.tmp");
     std::fs::write(&staging, format!("{}\n", json(meta)))?;
     std::fs::rename(&staging, root.join("session.json"))
+}
+
+/// A span in whole milliseconds, the one unit the record speaks.
+fn millis(duration: Duration) -> u64 {
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
 
 fn now_ms() -> u64 {

@@ -152,6 +152,7 @@ impl Stored {
                     turn,
                     text,
                     reasoning,
+                    ..
                 } => {
                     out.push_str(&format!("\n--- assistant (turn {turn}) ---\n"));
                     out.push_str(text);
@@ -183,6 +184,7 @@ impl Stored {
                     call_id,
                     content,
                     is_error,
+                    ..
                 } => {
                     let failed = if *is_error { " (failed)" } else { "" };
                     out.push_str(&format!(

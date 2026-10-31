@@ -40,6 +40,7 @@ impl Stored {
                     turn,
                     text,
                     reasoning,
+                    ..
                 } => {
                     let _ = write!(out, "\n## assistant (turn {turn})\n\n{}", block(text));
                     if let Some(reasoning) = reasoning {
@@ -80,6 +81,7 @@ impl Stored {
                     call_id,
                     content,
                     is_error,
+                    ..
                 } => {
                     let failed = if *is_error { " (failed)" } else { "" };
                     let _ = write!(

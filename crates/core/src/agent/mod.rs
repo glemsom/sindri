@@ -18,7 +18,7 @@ use std::time::Instant;
 
 use crate::cancel::Cancel;
 use crate::provider::{Delta, DeltaSink, Error, Message, Model};
-use crate::record::Recorder;
+use crate::record::{Cost, Recorder};
 
 /// What one conversation runs on: the model to ask, the tool to run it with,
 /// how many turns it may take, and whether it pays for reasoning. A front end
@@ -117,6 +117,11 @@ impl Agent {
                 break;
             }
             report.turns += 1;
+            // The turn's own clock, from the first byte of the request to the
+            // reply: it is written with the reply, before the calls the reply
+            // asks for have run, because a run killed mid-command must still
+            // hold what the model said. Each call carries its own duration.
+            let turn_started = Instant::now();
             let mut sink = StreamSink {
                 events: self.events.as_ref(),
                 cancel: &self.cancel,
@@ -141,7 +146,12 @@ impl Agent {
             }
             self.reasoning(report.turns, &turn.reasoning);
             if let Some(recorder) = &self.recorder {
-                recorder.assistant(report.turns, &turn.text, turn.reasoning.as_deref());
+                recorder.assistant(
+                    report.turns,
+                    &turn.text,
+                    turn.reasoning.as_deref(),
+                    Cost::measured(turn.usage.clone(), turn_started.elapsed()),
+                );
             }
             if !turn.text.trim().is_empty() {
                 report.answer.clone_from(&turn.text);

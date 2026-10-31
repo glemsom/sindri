@@ -42,11 +42,18 @@ pub enum Entry {
     User {
         text: String,
     },
+    /// One turn: what it said, and what it cost. The cost sits beside the text
+    /// because `Meta.usage` is the run's total — it cannot say which turn spent
+    /// it — and both parts are absent when nobody measured them, never zero.
     Assistant {
         turn: u32,
         text: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reasoning: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        usage: Option<crate::provider::Usage>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        duration_ms: Option<u64>,
     },
     ToolCall {
         turn: u32,
@@ -57,10 +64,27 @@ pub enum Entry {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         problem: Option<String>,
     },
+    /// One result: the text the model read, verbatim, and the same facts as
+    /// fields — a debugger must not have to parse a prompt to learn an exit
+    /// code. `content` is never derived from them and never changes.
     ToolResult {
         turn: u32,
         call_id: String,
         content: String,
         is_error: bool,
+        /// The word the tool result was rendered with; absent when the call
+        /// never ran because its arguments were unusable, which
+        /// `ToolCall.problem` already says.
+        #[serde(default)]
+        outcome: Option<String>,
+        #[serde(default)]
+        exit_code: Option<i32>,
+        #[serde(default)]
+        duration_ms: Option<u64>,
+        #[serde(default)]
+        truncated: bool,
+        /// Where the untruncated text went, spelled as the model was told.
+        #[serde(default)]
+        spill: Vec<String>,
     },
 }

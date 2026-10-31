@@ -15,6 +15,7 @@ use sindri_core::agent::{Agent, Event, Report};
 use sindri_core::cancel::Cancel;
 use sindri_core::exec::{BashExecutor, Outcome, ToolResult};
 use sindri_core::provider::{Call, Delta, DeltaSink, Error, Message, Model, ToolSpec, Turn, Usage};
+use sindri_core::record::Recorder;
 use sindri_core::sandbox::{Enforcement, NetworkPosture, SandboxPolicy, WritableSet};
 use tempfile::TempDir;
 
@@ -271,6 +272,12 @@ impl Harness {
 
     pub fn run(&mut self, prompt: &str) -> Report {
         self.agent.run(prompt).expect("the loop completed")
+    }
+
+    /// Attaches a recorder, so the run writes the record a test reads back from
+    /// the directory: the loop hands the recorder its facts and never reads it.
+    pub fn set_recorder(&mut self, recorder: Arc<Recorder>) {
+        self.agent.set_recorder(recorder);
     }
 
     pub fn forget(&mut self) {

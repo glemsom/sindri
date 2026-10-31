@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use crate::exec::{BashExecutor, Outcome, ToolResult};
-use crate::provider::{Call, ToolOutcome, ToolSpec};
+use crate::provider::{Call, ToolFacts, ToolOutcome, ToolSpec};
 use crate::sandbox::SandboxPolicy;
 
 pub struct BashTool {
@@ -32,7 +32,8 @@ impl BashTool {
         };
         let result = self.executor.execute(&script)?;
         let failed = matches!(result.outcome, Outcome::SandboxError { .. });
-        Some(ToolOutcome::new(call, render(&result), failed))
+        let content = render(&result);
+        Some(ToolOutcome::new(call, content, failed).with_facts(facts(&result)))
     }
 }
 
@@ -70,25 +71,26 @@ fn describe(policy: &SandboxPolicy) -> ToolSpec {
 /// model can act on it rather than guess. A field with nothing to say is said
 /// absent rather than left out, so the shape never depends on the outcome.
 fn render(result: &ToolResult) -> String {
-    let mut out = String::new();
-    match &result.outcome {
-        Outcome::Exited { exit_code } => {
-            out.push_str("outcome: exited\n");
-            out.push_str(&format!("exit_code: {exit_code}\n"));
-        }
-        Outcome::TimedOut => out.push_str("outcome: timed_out\n"),
-        Outcome::SandboxError { detail } => {
-            out.push_str("outcome: sandbox_error\n");
-            out.push_str(&format!("detail: {detail}\n"));
-        }
+    let facts = facts(result);
+    let mut out = format!(
+        "outcome: {}\n",
+        facts.outcome.as_deref().unwrap_or_default()
+    );
+    if let Some(exit_code) = facts.exit_code {
+        out.push_str(&format!("exit_code: {exit_code}\n"));
+    }
+    // The sandbox's own words, which are prose and so have no field of their
+    // own: the one thing `facts` does not carry.
+    if let Outcome::SandboxError { detail } = &result.outcome {
+        out.push_str(&format!("detail: {detail}\n"));
     }
     out.push_str(&format!("duration_ms: {}\n", result.duration_ms));
     out.push_str(&format!("truncated: {}\n", result.truncated));
-    match result.spill.as_slice() {
+    match facts.spill.as_slice() {
         [] => out.push_str("spill: none\n"),
-        spill => {
-            for path in spill {
-                out.push_str(&format!("spill: {}\n", path.display()));
+        paths => {
+            for path in paths {
+                out.push_str(&format!("spill: {path}\n"));
             }
         }
     }
@@ -101,4 +103,34 @@ fn render(result: &ToolResult) -> String {
         out.push('\n');
     }
     out
+}
+
+/// The same facts `render` puts into words, as fields: one result, two
+/// spellings, derived once here so a reader of the record never parses the text
+/// a model was shown, and the two cannot disagree.
+fn facts(result: &ToolResult) -> ToolFacts {
+    let (outcome, exit_code) = spelled(&result.outcome);
+    ToolFacts {
+        outcome: Some(outcome.to_string()),
+        exit_code,
+        duration_ms: Some(result.duration_ms),
+        truncated: result.truncated,
+        // The paths the sandbox named, not a host path invented at read time.
+        spill: result
+            .spill
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect(),
+    }
+}
+
+/// An outcome as its one word and its exit status: the single exhaustive match,
+/// so a fourth outcome is a compile error here rather than a fact the record
+/// quietly stops carrying.
+fn spelled(outcome: &Outcome) -> (&'static str, Option<i32>) {
+    match outcome {
+        Outcome::Exited { exit_code } => ("exited", Some(*exit_code)),
+        Outcome::TimedOut => ("timed_out", None),
+        Outcome::SandboxError { .. } => ("sandbox_error", None),
+    }
 }
