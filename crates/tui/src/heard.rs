@@ -52,7 +52,7 @@ impl App {
             at: sindri_core::clock::now(),
             cwd: self.rail.workspace(),
         }));
-        self.dirty();
+        self.dirty_tail();
         Some(Job { prompt, cancel })
     }
 
@@ -112,7 +112,7 @@ impl App {
         };
         if let Some(streamed) = open {
             streamed.push_str(&text);
-            self.dirty();
+            self.dirty_tail();
             return;
         }
         self.close_answers(false);
@@ -132,33 +132,39 @@ impl App {
                 took: None,
             });
         }
-        self.dirty();
+        self.dirty_tail();
     }
 
     pub fn output(&mut self, side: Side, text: &str) {
         match self.entries.last_mut() {
-            Some(Entry::Call(call)) if call.running() => call.push(side, text.to_string()),
+            Some(Entry::Call(call)) if call.running() => {
+                call.push(side, text.to_string());
+                // The line joined the newest entry, so nothing above it moved.
+                self.dirty_tail();
+            }
             // Output can arrive a moment before the call that produced it was
-            // announced, because the two travel different threads.
+            // announced, because the two travel different threads. It is held
+            // for that call and no entry has changed yet.
             _ => self.early.push((side, text.to_string())),
         }
-        self.dirty();
     }
 
     pub fn over(&mut self, over: CallOver, spilled: Spilled) {
-        let last = self.entries.iter_mut().rev().find_map(|entry| match entry {
-            Entry::Call(call) if call.running() => Some(call),
-            _ => None,
-        });
-        if let Some(call) = last {
+        let ended = self
+            .entries
+            .iter()
+            .rposition(|entry| matches!(entry, Entry::Call(call) if call.running()));
+        if let Some(index) = ended
+            && let Some(Entry::Call(call)) = self.entries.get_mut(index)
+        {
             // The duration freezes where the call ended: a finished call is
             // not still counting.
             call.took = Some(self.now.saturating_sub(call.started));
             call.over = Some(over);
             call.truncated = spilled.truncated;
             call.spill = spilled.files;
+            self.dirty_from(index);
         }
-        self.dirty();
     }
 
     pub fn finished(&mut self, finished: Finished) {
