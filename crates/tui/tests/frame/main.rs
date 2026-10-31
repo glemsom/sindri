@@ -13,7 +13,8 @@
 mod common;
 
 pub use common::{
-    any, badge, buffer, call, cursor, press, row, row_of, screen, shown, turn, type_text,
+    any, badge, buffer, call, cursor, frame_cells, press, row, row_of, screen, shown, turn,
+    type_text,
 };
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -359,6 +360,7 @@ mod first;
 mod glow;
 mod hold;
 mod ledger;
+mod mark;
 mod pictures;
 mod prose;
 mod pulse;

@@ -18,7 +18,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
-use ratatui::layout::Position;
+use ratatui::layout::{Position, Rect};
 use sindri_core::agent::Event;
 use sindri_tui::driver::{CallOver, Finished, Side, Spilled, Stop};
 use sindri_tui::entry::Entry;
@@ -58,6 +58,22 @@ pub fn buffer(app: &mut App, width: u16, height: u16) -> Buffer {
         .draw(|frame| render::draw(app, frame))
         .expect("the frame draws");
     terminal.backend().buffer().clone()
+}
+
+/// A frame drawn at `width` by `height`, read back as the frame's own cells
+/// rather than as a backend's diff of them: a wide glyph's second cell is
+/// skipped by a diff, so a style laid on it — a wash, a mark — can only be read
+/// here.
+pub fn frame_cells(app: &mut App, width: u16, height: u16) -> Buffer {
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
+    let mut cells = Buffer::empty(Rect::new(0, 0, width, height));
+    terminal
+        .draw(|frame| {
+            render::draw(app, frame);
+            cells = frame.buffer_mut().clone();
+        })
+        .expect("the frame draws");
+    cells
 }
 
 /// A frame drawn at `width` by `height`, read back as its rows: what the user

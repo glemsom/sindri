@@ -7,6 +7,7 @@ mod completion;
 pub mod composer;
 pub mod hello;
 pub(crate) mod layout;
+pub(crate) mod mark;
 mod overlay;
 pub(crate) mod pictures;
 mod queue;

@@ -15,6 +15,7 @@ use ratatui::widgets::{Paragraph, Widget};
 use crate::app::App;
 use crate::render::hello;
 use crate::render::layout::{Frame, drawn, offset_of, place, resolve};
+use crate::render::mark;
 use crate::render::pictures::{self, Shown};
 use crate::selection::Viewport;
 
@@ -67,6 +68,9 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
         pictures: placed.clone(),
     });
     Paragraph::new(rows).render(at, buf);
+    // The cells a drag has reached are washed after the words are drawn, so the
+    // ink beneath is the row's own and survives the mark.
+    mark::draw(app, buf);
     // A picture is drawn where its rows are, after the paragraph that reserved
     // them — and never behind an overlay, which is cells and not a graphic.
     if app.overlay().is_none() {

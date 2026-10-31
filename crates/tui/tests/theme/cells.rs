@@ -4,15 +4,11 @@
 //! they are one claim — every byte of the frame is a colour the theme chose —
 //! which is why they share one frame with one of everything in it.
 
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
-use ratatui::layout::Rect;
 use ratatui::style::Color;
 use sindri_core::agent::Event;
 use sindri_tui::driver::{CallOver, Finished, Side, Spilled, Stop};
 use sindri_tui::graphics::Graphics;
-use sindri_tui::render;
 use sindri_tui::theme;
 use sindri_tui::{App, Face, Launch};
 
@@ -25,14 +21,16 @@ fn launch() -> Launch {
     }
 }
 
-/// The surfaces a cell of a painted frame may sit on: the three tiers, and a
-/// diff row's wash — a tint over the panel rather than a fourth tier.
-const SURFACES: [Color; 5] = [
+/// The surfaces a cell of a painted frame may sit on: the three tiers, and the
+/// two washes — a diff row's tint over the panel, and the drag's tint over both
+/// — rather than two more tiers.
+const SURFACES: [Color; 6] = [
     theme::CANVAS,
     theme::PANEL,
     theme::RAISED,
     theme::DIFF_ADDED_BG,
     theme::DIFF_REMOVED_BG,
+    theme::MARK,
 ];
 
 fn app() -> App {
@@ -51,6 +49,17 @@ fn pictured(width: u16, height: u16) -> Buffer {
 /// code, a highlighted fence and a diff fence, a call's two sides, an error
 /// note, the rail, the composer, and a modal on the raised tier above them.
 fn busy(app: &mut App, width: u16, height: u16) -> Buffer {
+    fill(app);
+    app.key(crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Char('?'),
+        crossterm::event::KeyModifiers::NONE,
+    ));
+    common::frame_cells(app, width, height)
+}
+
+/// The same frame without the modal over it: a test that drives the frame
+/// itself hangs its gesture here.
+fn fill(app: &mut App) {
     app.event(Event::TextDelta {
         turn: 1,
         text: "A `code` word and two fences:\n\n```rust\n// a note\nfn main() -> u32 {\n    let answer: u32 = 42;\n    println!(\"answer {}\");\n    answer\n}\n```\n\n```diff\n-old\n+new\n```\n"
@@ -69,22 +78,6 @@ fn busy(app: &mut App, width: u16, height: u16) -> Buffer {
         error: Some("provider error (HTTP 529): overloaded".to_string()),
         ..Finished::default()
     });
-    app.key(crossterm::event::KeyEvent::new(
-        crossterm::event::KeyCode::Char('?'),
-        crossterm::event::KeyModifiers::NONE,
-    ));
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
-    let mut drawn = Buffer::empty(Rect::new(0, 0, width, height));
-    terminal
-        .draw(|frame| {
-            render::draw(app, frame);
-            // The frame's own cells: a backend's buffer is the diff from the
-            // frame before it, and a picture's escape is wider than the cell it
-            // fills, so the diff cannot answer for the cells beside one.
-            drawn = frame.buffer_mut().clone();
-        })
-        .expect("the frame draws");
-    drawn
 }
 
 #[test]
@@ -173,6 +166,53 @@ fn no_cell_of_a_painted_frame_leaves_its_ink_to_the_terminal() {
             }
         }
     }
+}
+
+/// A marked frame is the quiet one with a wash on it: the mark paints a surface
+/// and no ink, so every cell under it is still a colour the theme names.
+#[test]
+fn every_cell_of_a_marked_frame_is_a_colour_the_theme_names() {
+    let mut app = app();
+    fill(&mut app);
+    let rows = crate::common::screen(&mut app, 100, 40);
+    let row = crate::common::row_of(&rows, "two fences");
+    let drag = |kind, column, row| crossterm::event::MouseEvent {
+        kind,
+        column,
+        row,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    app.mouse(drag(
+        crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+        0,
+        row as u16,
+    ));
+    app.mouse(drag(
+        crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left),
+        20,
+        row as u16,
+    ));
+    let buf = crate::common::buffer(&mut app, 100, 40);
+    let mut washed = 0;
+    for y in 0..buf.area.height {
+        for x in 0..buf.area.width {
+            let cell = &buf[(x, y)];
+            assert!(
+                theme::owns(cell.fg),
+                "({x},{y}) {:?} is painted in a colour the theme does not name: {:?}",
+                cell.symbol(),
+                cell.fg
+            );
+            assert!(
+                SURFACES.contains(&cell.bg),
+                "({x},{y}) {:?} is marked in {:?}, a surface the theme does not paint",
+                cell.symbol(),
+                cell.bg
+            );
+            washed += usize::from(cell.bg == theme::MARK);
+        }
+    }
+    assert!(washed > 10, "the drag lit the row: {washed} washed cells");
 }
 
 /// The cell law over the pictures: an escape covers cells without painting
