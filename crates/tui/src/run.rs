@@ -49,7 +49,7 @@ pub fn open(
     match alternate_screen() {
         Some(mut terminal) => {
             let ending = session(&mut terminal, launch, driver, cancel, missing);
-            release_mouse();
+            release_terminal();
             ratatui::restore();
             ending
         }
@@ -61,7 +61,7 @@ pub fn refuse(card: Card) -> Ending {
     match alternate_screen() {
         Some(mut terminal) => {
             let ending = show_card(&mut terminal, &card);
-            release_mouse();
+            release_terminal();
             ratatui::restore();
             ending
         }
@@ -80,11 +80,27 @@ fn alternate_screen() -> Option<DefaultTerminal> {
     // The frame takes the mouse because it draws its own selection: a drag
     // copies rendered rows, and Shift hands the gesture back.
     let _ = crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture,);
+    // And it asks the terminal for unambiguous keys, because nothing else can
+    // tell `Shift+Enter` from `Enter`: without this the composer's newline
+    // arrives as a send. A terminal that has no such protocol ignores it, and
+    // one that has it answers in `CSI u` from here on.
+    let _ = crossterm::execute!(
+        std::io::stdout(),
+        crossterm::event::PushKeyboardEnhancementFlags(
+            crossterm::event::KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES,
+        ),
+    );
     Some(terminal)
 }
 
-fn release_mouse() {
-    let _ = crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture,);
+/// What the frame took from the terminal, given back: the mouse, and the
+/// keyboard flags, which are a stack a shell inherits if they are left pushed.
+fn release_terminal() {
+    let _ = crossterm::execute!(
+        std::io::stdout(),
+        crossterm::event::DisableMouseCapture,
+        crossterm::event::PopKeyboardEnhancementFlags,
+    );
 }
 
 /// The card stays until it is read: a key leaves it, the page keys move a

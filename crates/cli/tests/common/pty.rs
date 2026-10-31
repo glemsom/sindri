@@ -25,7 +25,7 @@ mod spawn;
     unused_imports,
     reason = "each test binary uses a different slice of the harness"
 )]
-pub use spawn::{Said, exit, expect, spawn, spawn_with_stderr, type_command, type_line};
+pub use spawn::{Said, exit, expect, spawn, spawn_with_stderr, type_command, type_line, type_text};
 
 /// The escape sequence that enters the alternate screen: the frame's first act.
 pub const ALTERNATE_SCREEN: &str = "\u{1b}[?1049h";
@@ -35,6 +35,12 @@ pub const QUIT: u8 = 0x11;
 pub const CLEAR_FIELD: u8 = 0x15;
 /// Enter, as a terminal sends it.
 pub const ENTER: u8 = 0x0d;
+/// The frame's ask for unambiguous keys: the Kitty keyboard protocol's
+/// disambiguate flag. A terminal sends `Shift+Enter` as `ENTER` until a frame
+/// pushes it, so a frame that never does cannot tell a newline from a send.
+pub const DISAMBIGUATE: &str = "\u{1b}[>1u";
+/// `Shift+Enter`, as a terminal that was asked for unambiguous keys sends it.
+pub const SHIFT_ENTER: &str = "\u{1b}[13;2u";
 /// Down, as a terminal sends it.
 pub const DOWN: &[u8] = b"\x1b[B";
 /// The sequence that shows the terminal's cursor: a frame ends with it, so one

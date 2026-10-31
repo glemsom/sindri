@@ -162,7 +162,9 @@ canvas the rest of the rail is drawn on.
 column runs out.
 
 **composer** — the input at the bottom: 2–6 rows, `Shift+Enter` for a newline, `@` for a
-path completion, `/` for a command. With no text in it at all it carries the placeholder
+path completion, `/` for a command. The newline is the terminal's to keep: the frame pushes
+the Kitty keyboard protocol's disambiguate flag on its way in and pops it on its way out,
+because a terminal that was never asked sends `Shift+Enter` as `Enter`. With no text in it at all it carries the placeholder
 `Ask, or drop a log here · @ path · / command`, which a draft — a space is a draft —
 never sits behind. Its border is a **walk**: `PROMPT` while it holds the keyboard and
 `FAINT` while a run has it, walked toward `SEAM` across the top and bottom rules so the

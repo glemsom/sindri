@@ -15,7 +15,9 @@ use std::os::unix::fs::PermissionsExt;
 use std::time::Duration;
 
 use common::provider::{MockProvider, Reply, frames};
-use common::pty::{Pty, expect, spawn, type_command, type_line};
+use common::pty::{
+    DISAMBIGUATE, ENTER, Pty, SHIFT_ENTER, expect, spawn, type_command, type_line, type_text,
+};
 use common::screen;
 use common::{Env, TEST_KEY, write_config};
 
@@ -246,5 +248,55 @@ fn a_note_that_wrapped_is_found_by_its_words_not_by_a_rows_substring() {
     assert!(
         !screen::says(&another_note, "the record could not be finished"),
         "a screen that says something else does not say this: {another_note:?}"
+    );
+}
+
+/// `Shift+Enter` is a newline in the draft, and the draft leaves as one prompt:
+/// a terminal only tells the two Enters apart for a frame that asked it to, so
+/// this test asks the frame first and then sends what a terminal that was asked
+/// sends — the byte a real terminal would use, picked by the frame's own answer.
+#[test]
+fn shift_enter_breaks_the_line_instead_of_sending() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: the composer's newline is not tested here");
+        return;
+    };
+    let env = Env::new();
+    let mock = MockProvider::start(vec![Reply::answer("the answer")]);
+    let mut child = frame_on(&env, &pty, &mock);
+    let boot = pty.wait_for(&mut child, "cache");
+    // A terminal sends `Shift+Enter` as itself only to a frame that asked for
+    // unambiguous keys; to a frame that never asked it sends what `Enter` sends.
+    let asked = boot.contains(DISAMBIGUATE);
+
+    type_text(&pty, "first line");
+    type_text(&pty, if asked { SHIFT_ENTER } else { "\r" });
+    type_text(&pty, "second line");
+    pty.type_key(ENTER);
+    expect(&pty, &mut child, "the answer");
+
+    let requests = mock.requests();
+    let first = requests.first().expect("the frame sends the draft");
+    let body = first.json();
+    let said: String = body["messages"]
+        .as_array()
+        .and_then(|messages| messages.last())
+        .and_then(|message| message["content"].as_array())
+        .map(|blocks| {
+            blocks
+                .iter()
+                .filter_map(|block| block["text"].as_str())
+                .collect()
+        })
+        .unwrap_or_default();
+    assert_eq!(
+        said, "first line\nsecond line",
+        "Shift+Enter breaks the line, and the whole draft is one prompt: {body}"
+    );
+    assert_eq!(
+        requests.len(),
+        1,
+        "a newline is not a send: one prompt left the frame, {} did",
+        requests.len()
     );
 }

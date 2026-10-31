@@ -8,6 +8,7 @@
 )]
 
 use std::fs::File;
+use std::io::Write;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Stdio};
@@ -115,6 +116,13 @@ pub fn type_line(pty: &Pty, text: &str) {
         pty.type_key(byte);
     }
     pty.type_key(ENTER);
+}
+
+/// Types what a terminal sends as more than one byte: the escape sequences of
+/// the Kitty keyboard protocol, and a line of text in one write rather than a
+/// keystroke at a time.
+pub fn type_text(pty: &Pty, text: &str) {
+    let _ = pty.port().write_all(text.as_bytes());
 }
 
 /// A `/` command is sent the way a user sends one: its name opens the offer
