@@ -12,6 +12,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
+use unicode_width::UnicodeWidthStr;
 
 use crate::app::App;
 use crate::face;
@@ -197,7 +198,7 @@ fn row(fact: &Fact, width: usize) -> Row {
             // column and runs to its last, so the chip is right-aligned on the
             // edge the values hang off and flush to the rail's edge.
             let said = format!(" ⬢ {} ", fact.value());
-            let pad = width.saturating_sub(said.chars().count());
+            let pad = width.saturating_sub(said.width());
             Row::said(
                 Line::from(vec![
                     Span::styled(" ".repeat(pad), theme::raised()),
@@ -210,7 +211,7 @@ fn row(fact: &Fact, width: usize) -> Row {
             // The figure hangs off the rail's last column, so every value in
             // the ledger ends on one edge and can be read down it.
             let said = value(fact, width.saturating_sub(RAIL_INSET + LEDGER));
-            let gap = width.saturating_sub(RAIL_INSET + LEDGER + said.chars().count());
+            let gap = width.saturating_sub(RAIL_INSET + LEDGER + said.width());
             let leader = leader(gap);
             // A figure that has just grown is the accent for a moment, so the
             // motion is visible rather than inferred; a quiet one is prose like
@@ -246,8 +247,10 @@ fn leader(gap: usize) -> Span<'static> {
     }
 }
 
-/// The value, shortened to the column the rail has for it: an id or a path
-/// keeps both its ends, so nothing is ever broken mid-token across rows.
+/// The value, shortened to `room` display cells — the column the rail has
+/// beside the label's field: an id or a path keeps both its ends, so nothing is
+/// ever broken mid-token across rows, and a wide glyph is two cells either
+/// wholly in or wholly out.
 fn value(fact: &Fact, room: usize) -> String {
     match fact.fit() {
         Fit::Middle => text::middle(fact.value(), room),
@@ -300,6 +303,33 @@ mod tests {
             model: "claude-sonnet-4-6".to_string(),
             max_turns: 250,
             context_limit: Some(200_000),
+        }
+    }
+
+    #[test]
+    fn a_value_of_wide_glyphs_still_ends_on_the_rails_last_column() {
+        // A CJK workspace draws two cells a glyph, so a leader measured in
+        // chars leaves a row wider than the rail — and a row that outgrows its
+        // column wraps, which the rail may not do.
+        let app = App::new(
+            Launch {
+                workspace: "東京都/レポ".to_string(),
+                model: "gpt-東".to_string(),
+                ..launch()
+            },
+            None,
+        );
+        let width = 32;
+        let facts = app.rail().facts(app.now());
+        for fact in &facts {
+            let drawn = row(fact, width);
+            assert_eq!(
+                drawn.line.width(),
+                width,
+                "{:?} fills the rail's {width} columns: {:?}",
+                fact.label(),
+                drawn.line
+            );
         }
     }
 
