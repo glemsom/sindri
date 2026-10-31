@@ -8,14 +8,14 @@
     reason = "a panicking test is how a broken contract reports itself"
 )]
 
+#[path = "../common/mod.rs"]
+mod common;
+
+pub use common::{buffer, launch, notes, press, row, screen, shown, type_text};
 use std::path::{Path, PathBuf};
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
+use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::style::Modifier;
-use sindri_tui::entry::Entry;
-use sindri_tui::render;
 use sindri_tui::{App, Launch};
 use tempfile::TempDir;
 
@@ -32,21 +32,7 @@ fn fixture(file: Option<&str>) -> Fixture {
         std::fs::create_dir_all(path.parent().expect("a parent")).expect("the config dir");
         std::fs::write(&path, file).expect("the config file");
     }
-    let app = App::new(
-        Launch {
-            session: "4f1c8f2e-8a24-4b93-9c0e-0d3f0e5c1a77".to_string(),
-            temp: "/state/sindri/sessions/4f1c8f2e/tmp".to_string(),
-            branch: Some("main".to_string()),
-            sandbox: "bwrap · 1 writable".to_string(),
-            workspace: "~/git/sindri".to_string(),
-            provider: "anthropic".to_string(),
-            model: "claude-sonnet-4-6".to_string(),
-            max_turns: 250,
-            context_limit: Some(200_000),
-        },
-        None,
-    )
-    .with_config(&path);
+    let app = App::new(common::launch(), None).with_config(&path);
     Fixture {
         _dir: dir,
         path,
@@ -56,16 +42,6 @@ fn fixture(file: Option<&str>) -> Fixture {
 
 fn written(path: &Path) -> String {
     std::fs::read_to_string(path).unwrap_or_default()
-}
-
-fn press(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
-    app.key(KeyEvent::new(code, modifiers));
-}
-
-fn type_text(app: &mut App, text: &str) {
-    for ch in text.chars() {
-        press(app, KeyCode::Char(ch), KeyModifiers::NONE);
-    }
 }
 
 fn down(app: &mut App) {
@@ -78,43 +54,6 @@ fn open(app: &mut App) {
     type_text(app, "/settings");
     press(app, KeyCode::Enter, KeyModifiers::NONE);
     press(app, KeyCode::Enter, KeyModifiers::NONE);
-}
-
-fn screen(app: &mut App, width: u16, height: u16) -> Vec<String> {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
-    terminal
-        .draw(|frame| render::draw(app, frame))
-        .expect("the frame draws");
-    let buffer = terminal.backend().buffer().clone();
-    (0..height)
-        .map(|y| {
-            (0..width)
-                .map(|x| buffer[(x, y)].symbol())
-                .collect::<String>()
-        })
-        .collect()
-}
-
-fn shown(rows: &[String]) -> String {
-    rows.join("\n")
-}
-
-fn notes(app: &App) -> String {
-    app.entries()
-        .iter()
-        .filter_map(|entry| match entry {
-            Entry::Note(note) => Some(note.text.clone()),
-            _ => None,
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-fn row(rows: &[String], key: &str) -> String {
-    rows.iter()
-        .find(|row| row.contains(key))
-        .cloned()
-        .unwrap_or_default()
 }
 
 #[test]

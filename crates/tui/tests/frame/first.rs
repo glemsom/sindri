@@ -7,8 +7,7 @@
 
 use super::*;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::buffer::Buffer;
+use crossterm::event::{KeyCode, KeyModifiers};
 use sindri_tui::command::{self, Command};
 use sindri_tui::render::{composer, hello};
 use sindri_tui::theme;
@@ -22,24 +21,6 @@ fn body(rows: &[String]) -> Vec<String> {
         .take_while(|row| !row.starts_with('╭'))
         .map(|row| row[..COLUMN.min(row.len())].trim_end().to_string())
         .collect()
-}
-
-fn buffer(app: &mut App, width: u16, height: u16) -> Buffer {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
-    terminal
-        .draw(|frame| render::draw(app, frame))
-        .expect("the frame draws");
-    terminal.backend().buffer().clone()
-}
-
-fn typed(app: &mut App, text: &str) {
-    for ch in text.chars() {
-        app.key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE));
-    }
-}
-
-fn pressed(app: &mut App, code: KeyCode) {
-    app.key(KeyEvent::new(code, KeyModifiers::NONE));
 }
 
 #[test]
@@ -117,8 +98,8 @@ fn every_example_the_first_frame_offers_is_accepted_as_written() {
             // Not a command, so it is a prompt: the frame sends exactly it.
             None => {
                 let mut app = app();
-                typed(&mut app, example);
-                pressed(&mut app, KeyCode::Enter);
+                type_text(&mut app, example);
+                press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
                 let job = app
                     .start()
                     .unwrap_or_else(|| panic!("{example:?} starts a run"));
@@ -149,7 +130,7 @@ fn the_placeholder_is_drawn_only_while_the_composer_is_empty() {
         "an empty composer says what can be typed: {rows:#?}"
     );
 
-    typed(&mut app, "w");
+    type_text(&mut app, "w");
     let rows = screen(&mut app, 100, 24);
     assert!(
         !any(&rows, placeholder),
@@ -158,7 +139,7 @@ fn the_placeholder_is_drawn_only_while_the_composer_is_empty() {
 
     // A draft is a draft, even when it is only a space: the placeholder never
     // sits in front of what is being typed.
-    typed(&mut app, " ");
+    type_text(&mut app, " ");
     let rows = screen(&mut app, 100, 24);
     assert!(
         !any(&rows, placeholder),

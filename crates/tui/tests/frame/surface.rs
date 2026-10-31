@@ -10,14 +10,6 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::Modifier;
 use sindri_tui::theme;
 
-fn buffer(app: &mut App, width: u16, height: u16) -> Buffer {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
-    terminal
-        .draw(|frame| render::draw(app, frame))
-        .expect("the frame draws");
-    terminal.backend().buffer().clone()
-}
-
 /// Where a glyph was drawn, top-left first: the composer's corner and the
 /// panel's are both found this way rather than by counting rows.
 fn find(buf: &Buffer, glyph: char) -> Option<(u16, u16)> {
@@ -26,12 +18,6 @@ fn find(buf: &Buffer, glyph: char) -> Option<(u16, u16)> {
     (0..buf.area.height)
         .flat_map(|y| (0..buf.area.width).map(move |x| (x, y)))
         .find(|(x, y)| buf[(*x, *y)].symbol() == symbol)
-}
-
-fn typed(app: &mut App, text: &str) {
-    for ch in text.chars() {
-        app.key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE));
-    }
 }
 
 #[test]
@@ -74,7 +60,7 @@ fn the_composer_is_a_panel_whose_border_says_who_has_the_focus() {
     );
     assert_eq!(idle[(x + 2, y + 1)].bg, theme::PANEL, "the panel is filled");
 
-    typed(&mut app, "why does this test fail?");
+    type_text(&mut app, "why does this test fail?");
     app.key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.start().expect("the draft becomes a run");
     let running = buffer(&mut app, 100, 24);
@@ -235,17 +221,6 @@ fn the_composer_ends_where_the_words_end() {
     }
 }
 
-/// The cell the frame gives the cursor, as the terminal is told it.
-fn cursor(app: &mut App, width: u16, height: u16) -> Position {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
-    terminal
-        .draw(|frame| render::draw(app, frame))
-        .expect("the frame draws");
-    terminal
-        .get_cursor_position()
-        .expect("the frame places the cursor")
-}
-
 #[test]
 fn the_cursor_lands_on_the_cell_the_draft_begins_at() {
     // The panel narrowed, the words did not move: an empty draft's cursor is the
@@ -259,7 +234,7 @@ fn the_cursor_lands_on_the_cell_the_draft_begins_at() {
         "an empty composer puts the cursor where the first character will go"
     );
 
-    typed(&mut app, "wh");
+    type_text(&mut app, "wh");
     let buf = buffer(&mut app, 100, 24);
     let (left, top) = find(&buf, '╭').expect("the composer's corner");
     assert_eq!(

@@ -6,7 +6,6 @@
 
 use super::*;
 
-use ratatui::buffer::Buffer;
 use sindri_tui::theme;
 
 /// The labels the rail states, in the order it states them.
@@ -21,34 +20,6 @@ const LABELS: &[&str] = &[
     "session",
     "temp",
 ];
-
-fn spent() -> App {
-    let mut app = app();
-    app.event(Event::TextDelta {
-        turn: 1,
-        text: "Two files changed.".to_string(),
-    });
-    app.finished(Finished {
-        stopped: Stop::Final,
-        turns: 1,
-        tokens: Tokens {
-            input: 12_400,
-            output: 2_100,
-            cached: 10_168,
-        },
-        error: None,
-        note: None,
-    });
-    app
-}
-
-fn buffer(app: &mut App, width: u16, height: u16) -> Buffer {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
-    terminal
-        .draw(|frame| render::draw(app, frame))
-        .expect("the frame draws");
-    terminal.backend().buffer().clone()
-}
 
 /// The rail as one line under the transcript, where the terminal gives it no
 /// column of its own.

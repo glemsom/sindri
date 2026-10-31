@@ -9,6 +9,12 @@
     reason = "a panicking test is how a broken contract reports itself"
 )]
 
+#[path = "../common/mod.rs"]
+mod common;
+
+pub use common::{
+    any, badge, buffer, call, cursor, press, row, row_of, screen, shown, turn, type_text,
+};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
@@ -28,15 +34,8 @@ const MARGIN: usize = 100 - RAIL - render::GAP_COLUMNS as usize;
 
 fn launch() -> Launch {
     Launch {
-        session: "4f1c8f2e-8a24-4b93-9c0e-0d3f0e5c1a77".to_string(),
-        temp: "/state/sindri/sessions/4f1c8f2e/tmp".to_string(),
         branch: Some("t15-the-frame".to_string()),
-        sandbox: "bwrap · 1 writable".to_string(),
-        workspace: "~/git/sindri".to_string(),
-        provider: "anthropic".to_string(),
-        model: "claude-sonnet-4-6".to_string(),
-        max_turns: 250,
-        context_limit: Some(200_000),
+        ..common::launch()
     }
 }
 
@@ -44,37 +43,25 @@ fn app() -> App {
     App::new(launch(), None)
 }
 
-fn press(app: &mut App, code: crossterm::event::KeyCode) {
-    app.key(crossterm::event::KeyEvent::new(
-        code,
-        crossterm::event::KeyModifiers::NONE,
-    ));
-}
-
-fn screen(app: &mut App, width: u16, height: u16) -> Vec<String> {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
-    terminal
-        .draw(|frame| render::draw(app, frame))
-        .expect("the frame draws");
-    let buffer = terminal.backend().buffer().clone();
-    (0..height)
-        .map(|y| {
-            (0..width)
-                .map(|x| glyph(&buffer[(x, y)]))
-                .collect::<String>()
-        })
-        .collect()
-}
-
-/// A cell as a row reads. A picture is drawn as an escape sequence in the first
-/// cell of each of its rows, which a test backend cannot paint, so it reads as
-/// the one mark that says a graphic is there.
-fn glyph(cell: &ratatui::buffer::Cell) -> &str {
-    if cell.symbol().contains('\u{1b}') {
-        "\u{25A9}"
-    } else {
-        cell.symbol()
-    }
+/// A run that answered and stopped: the figures the rail reads are spent.
+fn spent() -> App {
+    let mut app = app();
+    app.event(Event::TextDelta {
+        turn: 1,
+        text: "Two files changed.".to_string(),
+    });
+    app.finished(Finished {
+        stopped: Stop::Final,
+        turns: 1,
+        tokens: Tokens {
+            input: 12_400,
+            output: 2_100,
+            cached: 10_168,
+        },
+        error: None,
+        note: None,
+    });
+    app
 }
 
 fn rail_of_width(row: &str, width: usize) -> String {
@@ -117,10 +104,6 @@ fn value(rails: &[String], label: &str) -> String {
         .trim_start_matches(['·', ' '])
         .trim_end()
         .to_string()
-}
-
-fn any(rows: &[String], needle: &str) -> bool {
-    rows.iter().any(|row| row.contains(needle))
 }
 
 #[test]

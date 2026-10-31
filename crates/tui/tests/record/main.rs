@@ -9,35 +9,29 @@
     reason = "a panicking test is how a broken record reports itself"
 )]
 
+#[path = "../common/mod.rs"]
+mod common;
+
+pub use common::{notes, press, row_of, screen, type_text};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
+use crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use sindri_core::agent::{Report, Stopped};
 use sindri_core::paths::SessionDir;
 use sindri_core::provider::Usage;
 use sindri_core::record::{Cost, Recorder, Redaction, Start};
 use sindri_core::sandbox::Enforcement;
 use sindri_tui::copy::Clipboard;
-use sindri_tui::entry::Entry;
-use sindri_tui::render;
 use sindri_tui::{App, Launch};
 use tempfile::TempDir;
 
 fn launch(session: &str) -> Launch {
     Launch {
         session: session.to_string(),
-        temp: "/state/sindri/sessions/4f1c8f2e/tmp".to_string(),
         branch: Some("t33-the-record".to_string()),
-        sandbox: "bwrap · 1 writable".to_string(),
-        workspace: "~/git/sindri".to_string(),
-        provider: "anthropic".to_string(),
-        model: "claude-sonnet-4-6".to_string(),
-        max_turns: 250,
-        context_limit: Some(200_000),
+        ..common::launch()
     }
 }
 
@@ -148,16 +142,6 @@ impl Fixture {
     }
 }
 
-fn press(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
-    app.key(KeyEvent::new(code, modifiers));
-}
-
-fn type_text(app: &mut App, text: &str) {
-    for ch in text.chars() {
-        press(app, KeyCode::Char(ch), KeyModifiers::NONE);
-    }
-}
-
 /// Sends a command the way a user sends one now: a bare name opens the offer
 /// the catalogue makes, so the first `Enter` takes it and the second sends it.
 /// A line with an argument opens no offer and costs one `Enter` — a second one
@@ -178,42 +162,6 @@ fn click(app: &mut App, column: u16, row: u16) {
         row,
         modifiers: KeyModifiers::NONE,
     });
-}
-
-fn screen(app: &mut App, width: u16, height: u16) -> Vec<String> {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
-    terminal
-        .draw(|frame| render::draw(app, frame))
-        .expect("the frame draws");
-    let buffer = terminal.backend().buffer().clone();
-    (0..height)
-        .map(|y| {
-            (0..width)
-                .map(|x| buffer[(x, y)].symbol())
-                .collect::<String>()
-        })
-        .collect()
-}
-
-fn shown(rows: &[String]) -> String {
-    rows.join("\n")
-}
-
-fn notes(app: &App) -> String {
-    app.entries()
-        .iter()
-        .filter_map(|entry| match entry {
-            Entry::Note(note) => Some(note.text.clone()),
-            _ => None,
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-fn row_of(rows: &[String], needle: &str) -> usize {
-    rows.iter()
-        .position(|row| row.contains(needle))
-        .unwrap_or_else(|| panic!("{needle:?} is on screen: {}", shown(rows)))
 }
 
 mod export;

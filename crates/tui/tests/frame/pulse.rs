@@ -19,12 +19,6 @@ fn asked(app: &mut App, prompt: &str) -> sindri_tui::driver::Job {
     app.start().expect("the draft becomes a run")
 }
 
-fn row_of(rows: &[String], needle: &str) -> usize {
-    rows.iter()
-        .position(|row| row.contains(needle))
-        .unwrap_or_else(|| panic!("no row says {needle:?}: {rows:#?}"))
-}
-
 /// What the frame says above the answer: the marker row.
 fn marker_of(rows: &[String], answer: &str) -> String {
     let row = row_of(rows, answer);

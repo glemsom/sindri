@@ -150,7 +150,7 @@ fn an_open_overlay_stops_the_picture_and_closing_it_draws_it_again() {
 
     // An overlay dims cells, and a graphic is not a cell: nothing may be drawn
     // behind it.
-    press(&mut app, KeyCode::Char('?'));
+    press(&mut app, KeyCode::Char('?'), KeyModifiers::NONE);
     assert!(app.overlay().is_some(), "? opens the help overlay");
     let shown = column(&screen(&mut app, 100, 30));
     assert_eq!(
@@ -164,7 +164,7 @@ fn an_open_overlay_stops_the_picture_and_closing_it_draws_it_again() {
         "the block is still placed where it is; only the painting stopped: {shown:#?}"
     );
 
-    press(&mut app, KeyCode::Esc);
+    press(&mut app, KeyCode::Esc, KeyModifiers::NONE);
     assert!(app.overlay().is_none(), "Esc closes it");
     let shown = column(&screen(&mut app, 100, 30));
     assert!(
@@ -182,7 +182,7 @@ fn a_picture_partly_scrolled_out_is_drawn_nowhere_and_whole_once_it_is_in() {
     }
     // The first turn, where the picture is: twelve rows of it and its caption,
     // whole in a window of a screenful.
-    press(&mut app, KeyCode::Home);
+    press(&mut app, KeyCode::Home, KeyModifiers::NONE);
     let shown = column(&screen(&mut app, 100, 30));
     let whole = app.viewport().pictures.clone();
     assert_eq!(whole.len(), 1, "the whole picture is placed: {shown:#?}");
@@ -305,11 +305,7 @@ fn row_styles(
     let column = shown[row]
         .find(needle)
         .unwrap_or_else(|| panic!("row {row} says {needle:?}: {shown:#?}"));
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
-    terminal
-        .draw(|frame| render::draw(app, frame))
-        .expect("the frame draws");
-    terminal.backend().buffer()[(column as u16, row as u16)].fg
+    buffer(app, width, height)[(column as u16, row as u16)].fg
 }
 
 #[test]

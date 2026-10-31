@@ -5,15 +5,6 @@
 use super::*;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::buffer::Buffer;
-
-fn buffer(app: &mut App, width: u16, height: u16) -> Buffer {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
-    terminal
-        .draw(|frame| render::draw(app, frame))
-        .expect("the frame draws");
-    terminal.backend().buffer().clone()
-}
 
 /// Every hint the footer can state, most important first. Written out here
 /// rather than read out of the renderer: a hint the frame gained and this list

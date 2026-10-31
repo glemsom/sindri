@@ -5,7 +5,6 @@
 
 use super::*;
 
-use ratatui::buffer::Buffer;
 use sindri_tui::theme;
 
 /// The nine columns a label sits in, after the rail's inset.
@@ -13,34 +12,6 @@ const FIELD: std::ops::Range<usize> = render::RAIL_INSET..render::RAIL_INSET + L
 /// Where the room for a gap and a value starts: the label's field and the
 /// space after it.
 const LEDGER: usize = render::RAIL_INSET + LABEL + 1;
-
-fn spent() -> App {
-    let mut app = app();
-    app.event(Event::TextDelta {
-        turn: 1,
-        text: "Two files changed.".to_string(),
-    });
-    app.finished(Finished {
-        stopped: Stop::Final,
-        turns: 1,
-        tokens: Tokens {
-            input: 12_400,
-            output: 2_100,
-            cached: 10_168,
-        },
-        error: None,
-        note: None,
-    });
-    app
-}
-
-fn buffer(app: &mut App, width: u16, height: u16) -> Buffer {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
-    terminal
-        .draw(|frame| render::draw(app, frame))
-        .expect("the frame draws");
-    terminal.backend().buffer().clone()
-}
 
 #[test]
 fn every_value_hangs_off_the_rails_last_column() {

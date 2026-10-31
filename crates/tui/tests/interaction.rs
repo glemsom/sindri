@@ -7,60 +7,17 @@
     reason = "a panicking test is how a broken contract reports itself"
 )]
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+mod common;
+
+pub use common::{any, app, buffer, press, screen, type_text};
+use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use sindri_core::cancel::Cancel;
+use sindri_tui::Card;
 use sindri_tui::card::View;
 use sindri_tui::driver::{CallOver, Finished, Spilled, Stop, Tokens};
 use sindri_tui::render;
-use sindri_tui::{App, Card, Launch};
-
-fn app() -> App {
-    App::new(
-        Launch {
-            session: "4f1c8f2e-8a24-4b93-9c0e-0d3f0e5c1a77".to_string(),
-            temp: "/state/sindri/sessions/4f1c8f2e/tmp".to_string(),
-            branch: Some("main".to_string()),
-            sandbox: "bwrap · 1 writable".to_string(),
-            workspace: "~/git/sindri".to_string(),
-            provider: "anthropic".to_string(),
-            model: "claude-sonnet-4-6".to_string(),
-            max_turns: 250,
-            context_limit: Some(200_000),
-        },
-        None,
-    )
-}
-
-fn type_text(app: &mut App, text: &str) {
-    for ch in text.chars() {
-        app.key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE));
-    }
-}
-
-fn press(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
-    app.key(KeyEvent::new(code, modifiers));
-}
-
-fn screen(app: &mut App, width: u16, height: u16) -> Vec<String> {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
-    terminal
-        .draw(|frame| render::draw(app, frame))
-        .expect("the frame draws");
-    let buffer = terminal.backend().buffer().clone();
-    (0..height)
-        .map(|y| {
-            (0..width)
-                .map(|x| buffer[(x, y)].symbol())
-                .collect::<String>()
-        })
-        .collect()
-}
-
-fn any(rows: &[String], needle: &str) -> bool {
-    rows.iter().any(|row| row.contains(needle))
-}
 
 #[test]
 fn ctrl_c_cancels_the_run_and_the_composer_keeps_its_draft() {
