@@ -325,3 +325,5 @@ fn a_drag_that_starts_on_a_wide_glyphs_second_cell_lights_it_whole() {
         "and the copy starts at the glyph the press landed on, whole"
     );
 }
+
+mod block;
