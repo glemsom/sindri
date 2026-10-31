@@ -1,8 +1,9 @@
 //! The theme's promises, held by something other than the renderers: every
 //! colour the frame paints is one the theme names, no renderer carries a
-//! literal of its own, the faint grey is legible on every surface, and — the
-//! law in `pixels` — every pixel of a picture the frame generates is a colour
-//! the theme owns.
+//! literal of its own, the faint grey is legible on every surface, the inks
+//! that order themselves against a surface are ordered by nearness rather than
+//! brightness (`orderings`), and — the law in `pixels` — every pixel of a
+//! picture the frame generates is a colour the theme owns.
 
 #![allow(
     clippy::expect_used,
@@ -13,6 +14,10 @@
 /// below: a picture the frame generates is held to the ramps one pixel at a
 /// time.
 mod pixels;
+
+/// The theme's ordering laws: nearness, stated in one place so a light palette
+/// can be held to it too.
+mod orderings;
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -279,10 +284,9 @@ fn the_panels_faint_and_a_diffs_file_line_hold_the_floor_with_margin() {
         file >= 4.5,
         "a diff's file line on the panel is {file:.2}:1"
     );
-    assert!(
-        luminance(theme::DIFF_FILE) < luminance(theme::FAINT),
-        "and the file line follows faint as the step below it"
-    );
+    // The file line follows faint, which is nearness to the panel both are
+    // drawn on — see `orderings` for why an ordering is never brightness.
+    orderings::Inks::shipped().assert_file_line_nearer_the_panel();
 }
 
 /// A fence's ink is the theme's, and every role in it is body text: a reader
@@ -325,15 +329,13 @@ fn the_rails_leader_and_seam_are_named_stops_a_step_apart() {
     );
     // The leader only has to be seen, so it is dimmer than the label it
     // bridges from; the seam is dots at an eighth of a cell, which read darker
-    // than they are, so it is a step above faint.
-    assert!(
-        luminance(theme::LEADER) < luminance(theme::FAINT),
-        "a leader is dimmer than a label"
-    );
-    assert!(
-        luminance(theme::SEAM) > luminance(theme::FAINT),
-        "the seam is a step above faint"
-    );
+    // than they are, so it is a step above faint. Both are statements about
+    // nearness — contrast against the canvas — and never about brightness:
+    // `orderings` holds the same two laws against a light palette, where a
+    // nearer ink is a darker one.
+    let inks = orderings::Inks::shipped();
+    inks.assert_leader_nearer_the_canvas();
+    inks.assert_seam_beyond_faint();
     // A leader is a graphic, not a word, so 3:1 is the bar it clears on the
     // canvas — the gap it bridges is seen, never guessed at. It is measured on
     // the canvas the frame paints, not on a black the frame never sees, and it
