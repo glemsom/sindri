@@ -160,7 +160,8 @@ being absent there.
 `theme.rs` names every colour the frame paints. One dark theme, three tiers.
 
 **canvas** — the terminal's own black: the lowest **surface**, and the one the frame
-paints nothing on. Above it: **panel**, then **raised**.
+paints nothing on — a code word in prose included, since a wash is a patch on it and
+the canvas has nothing quieter than itself. Above it: **panel**, then **raised**.
 
 **panel** — the **surface** the frame draws on, one tier above the canvas: the
 composer, a fenced code block, the **queue panel**, the band a turn's **prompt**
@@ -169,6 +170,14 @@ sits on. The rail is not one: it is chrome, drawn on the canvas.
 **raised** — the **surface** an overlay is drawn on, one tier above a panel; the frame
 is dimmed beneath it. The rail's sandbox **chip** sits on it too, a tier above the
 canvas the rest of the rail is drawn on.
+
+**role** — one of the seven inks a **fence** is painted in — `PLAIN`, `COMMENT`,
+`KEYWORD`, `FUNCTION`, `TYPE`, `NUMBER`, `STRING` — each a colour `theme.rs` names and
+each clearing 4.5:1 on the **panel** a fence sits on, because code is read as body text.
+Which scope is which role is a fact about languages and is decided in
+`markdown/code.rs`; which hex a role is painted in is a fact about the theme and lives in
+`theme.rs`, so a fence's cell is the theme's like any other and a language no rule knows
+is `PLAIN` rather than wrong.
 
 **chip** — the rail's statement of the sandbox posture, `⬢ bwrap · 1 writable`: a
 **raised** box rather than another label and value, shortened to `⬢ bwrap` when its

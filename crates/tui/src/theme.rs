@@ -7,16 +7,27 @@
 use ratatui::style::{Color, Modifier, Style};
 
 pub const HEADING: Color = Color::Rgb(0xc0, 0x9a, 0xf0);
-/// Grey enough to recede, bright enough to clear 4.5:1 on every surface.
-pub const FAINT: Color = Color::Rgb(0x8f, 0x98, 0xa8);
+/// Grey enough to recede, bright enough to clear 4.5:1 on every surface — and
+/// 6.84:1 on the panel, where it is a fence's edge and a diff's file line.
+pub const FAINT: Color = Color::Rgb(0x9a, 0xa3, 0xb2);
 pub const BAD: Color = Color::Rgb(0xe0, 0x6c, 0x75);
 pub const GOOD: Color = Color::Rgb(0x6a, 0xc9, 0x7a);
 pub const PROMPT: Color = Color::Rgb(0x61, 0xaf, 0xef);
+/// A code word in prose: inline code's ink, and no fence's.
 pub const CODE: Color = Color::Rgb(0xe5, 0xc0, 0x7b);
+/// A fence's seven roles, beside `PALETTE`'s others: each measured on `PANEL`
+/// and clearing 4.5:1 there, because code is read as body text.
+pub const PLAIN: Color = Color::Rgb(0xc8, 0xcc, 0xd4);
+pub const COMMENT: Color = Color::Rgb(0x8b, 0x95, 0xa5);
+pub const KEYWORD: Color = Color::Rgb(0xc3, 0x9b, 0xea);
+pub const FUNCTION: Color = Color::Rgb(0x79, 0xb8, 0xf3);
+pub const TYPE: Color = Color::Rgb(0xa2, 0xc9, 0xc8);
+pub const NUMBER: Color = Color::Rgb(0xe5, 0xa0, 0x6c);
+pub const STRING: Color = Color::Rgb(0x9e, 0xcf, 0x8e);
 pub const DIFF_ADDED: Color = Color::Rgb(0x6a, 0xc9, 0x7a);
 pub const DIFF_REMOVED: Color = Color::Rgb(0xe0, 0x6c, 0x75);
 pub const DIFF_HUNK: Color = Color::Rgb(0x61, 0xaf, 0xef);
-pub const DIFF_FILE: Color = Color::Rgb(0x8b, 0x98, 0xa9);
+pub const DIFF_FILE: Color = Color::Rgb(0x96, 0xa3, 0xb3);
 /// A diff row's wash: the green and the red again, at panel weight, so an
 /// added row and a removed one still differ in a terminal that cannot tell the
 /// two hues apart.
@@ -28,8 +39,6 @@ pub const DIFF_REMOVED_BG: Color = Color::Rgb(0x2f, 0x20, 0x23);
 /// fence or the rail, and raised is a step above a panel.
 pub const PANEL: Color = Color::Rgb(0x17, 0x1a, 0x21);
 pub const RAISED: Color = Color::Rgb(0x23, 0x27, 0x33);
-/// Inline code's tint, light enough to sit on a panel as well as the canvas.
-pub const CODE_BG: Color = Color::Rgb(0x2b, 0x30, 0x3b);
 
 /// A dot leader's dots: the dimmest ink the frame spends, because a run of
 /// dots reads heavier than the label it bridges to and only has to be seen,
@@ -50,9 +59,15 @@ pub const PALETTE: &[Color] = &[
     GOOD,
     PROMPT,
     CODE,
+    PLAIN,
+    COMMENT,
+    KEYWORD,
+    FUNCTION,
+    TYPE,
+    NUMBER,
+    STRING,
     PANEL,
     RAISED,
-    CODE_BG,
     LEADER,
     SEAM,
     DIFF_ADDED,
@@ -75,8 +90,12 @@ pub fn good() -> Style {
     Style::new().fg(GOOD)
 }
 
+/// A code word in prose: the ink and no surface, because every answer is drawn
+/// on the canvas and the canvas has nothing quieter than itself — a wash tuned
+/// for a panel reads as a patch there. A code word on a panel, the day a
+/// renderer draws one, gets a wash above that panel instead.
 pub fn code() -> Style {
-    Style::new().fg(CODE).bg(CODE_BG)
+    Style::new().fg(CODE)
 }
 
 pub fn leader() -> Style {

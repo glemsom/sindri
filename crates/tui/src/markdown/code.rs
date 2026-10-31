@@ -1,18 +1,18 @@
-//! Fenced code: the language's own colours where the language is known, and a
-//! diff coloured line by line — an agent emits code and diffs more than
-//! anything else. A fence is drawn as the panel it is, with a
-//! gutter down its left edge and a line too long for it cut and marked
-//! rather than silently swallowed.
+//! Fenced code: the theme's own ink, by role, where the language is known, and
+//! a diff coloured line by line — an agent emits code and diffs more than
+//! anything else. A fence is drawn as the panel it is, with a gutter down its
+//! left edge and a line too long for it cut and marked rather than silently
+//! swallowed. `ROLES` decides which scope is a comment; the hexes are the
+//! theme's, because a colour named here would be a second source of truth.
 
 use std::sync::OnceLock;
 
-use ratatui::style::{Color, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use syntect::easy::HighlightLines;
-use syntect::highlighting::{Theme, ThemeSet};
-use syntect::parsing::SyntaxSet;
+use syntect::parsing::{ParseState, ScopeStack, SyntaxSet};
 use unicode_width::UnicodeWidthChar;
 
+use crate::markdown::role;
 use crate::markdown::text::{Glyph, clip};
 use crate::theme;
 
@@ -27,17 +27,6 @@ const MIN_PANEL: usize = 12;
 fn syntaxes() -> &'static SyntaxSet {
     static SET: OnceLock<SyntaxSet> = OnceLock::new();
     SET.get_or_init(SyntaxSet::load_defaults_newlines)
-}
-
-fn theme() -> &'static Theme {
-    static THEME: OnceLock<Theme> = OnceLock::new();
-    THEME.get_or_init(|| {
-        let mut themes = ThemeSet::load_defaults().themes;
-        themes
-            .remove("base16-ocean.dark")
-            .or_else(|| themes.into_values().next())
-            .unwrap_or_default()
-    })
 }
 
 fn is_diff(language: &str) -> bool {
@@ -96,28 +85,46 @@ fn diff_line(line: &str) -> Line<'static> {
     Line::from(Span::styled(line.to_string(), style))
 }
 
+/// A known language's rows, painted in the theme's own roles: the parser
+/// hands out the scope changes between tokens and `ScopeStack` applies them,
+/// which is the walk `HighlightIterator` makes while it looks a theme's style
+/// up — we want no theme's style, only the stack, and the iterator leaves the
+/// stack behind a borrow. The tokens are syntect's either way.
 fn highlight(body: &str, language: &str) -> Vec<Line<'static>> {
     let Some(syntax) = syntaxes().find_syntax_by_token(language) else {
         return plain(body);
     };
-    let mut highlighter = HighlightLines::new(syntax, theme());
     let set = syntaxes();
+    let mut parser = ParseState::new(syntax);
+    let mut scopes = ScopeStack::new();
     let mut lines = Vec::new();
     for line in syntect::util::LinesWithEndings::from(body) {
-        let ranges = highlighter.highlight_line(line, set).unwrap_or_default();
-        let spans: Vec<Span<'static>> = ranges
-            .iter()
-            .map(|(style, text)| {
-                Span::styled(
-                    text.trim_end_matches('\n').to_string(),
-                    Style::new().fg(Color::Rgb(
-                        style.foreground.r,
-                        style.foreground.g,
-                        style.foreground.b,
-                    )),
-                )
-            })
-            .collect();
+        let mut spans: Vec<Span<'static>> = Vec::new();
+        let mut pos = 0;
+        // A line the parser cannot read is drawn plain, never dropped: an
+        // unreadable fence is a worse failure than an unhighlighted one.
+        let Ok(ops) = parser.parse_line(line, set) else {
+            let text = line.strip_suffix('\n').unwrap_or(line);
+            lines.push(Line::from(Span::styled(
+                text.to_string(),
+                Style::new().fg(theme::PLAIN),
+            )));
+            continue;
+        };
+        for (end, op) in ops {
+            let text = line.get(pos..end).unwrap_or_default();
+            let text = text.strip_suffix('\n').unwrap_or(text);
+            if !text.is_empty() {
+                spans.push(Span::styled(
+                    text.to_string(),
+                    Style::new().fg(role::of(&scopes)),
+                ));
+            }
+            // A stack that will not apply leaves the token in the ink read so
+            // far: an unreadable fence is a worse failure than a plain one.
+            let _ = scopes.apply(&op);
+            pos = end;
+        }
         lines.push(Line::from(spans));
     }
     lines

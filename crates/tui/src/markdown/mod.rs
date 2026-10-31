@@ -6,6 +6,7 @@
 mod code;
 mod heading;
 mod picture;
+mod role;
 mod table;
 pub(crate) mod text;
 

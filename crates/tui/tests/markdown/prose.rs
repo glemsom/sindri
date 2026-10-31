@@ -6,6 +6,33 @@ use super::*;
 
 use ratatui::style::Modifier;
 
+/// A code word in prose is a recess, not a chip: the theme's amber and no
+/// surface under it. On the canvas there is nothing quieter than the canvas
+/// itself, so painting one would be a patch, not a recession.
+#[test]
+fn a_code_word_in_prose_is_the_themes_ink_with_no_surface_under_it() {
+    assert_eq!(
+        sindri_tui::theme::code().bg,
+        None,
+        "inline code paints no background"
+    );
+    let lines = lines("a `code` word", 60);
+    let word = lines
+        .iter()
+        .flat_map(|line| line.spans.iter())
+        .find(|span| span.content.as_ref() == "code")
+        .expect("the code word");
+    assert_eq!(
+        word.style.fg,
+        Some(sindri_tui::theme::CODE),
+        "it is the theme's code ink: {word:?}"
+    );
+    assert_eq!(
+        word.style.bg, None,
+        "and there is no surface under it: {word:?}"
+    );
+}
+
 #[test]
 fn a_link_keeps_its_text_and_the_target_it_points_at() {
     let source = "see [the docs](https://example.com/x) for more";
