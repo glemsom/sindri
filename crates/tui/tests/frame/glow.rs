@@ -54,10 +54,12 @@ fn margins(cells: &Buffer) -> Vec<char> {
         .collect()
 }
 
-/// The first row the composer's border opens on: the body ends above it.
+/// The first row the composer's border opens on: the body ends above it. The
+/// composer draws its frame as a picture here, so the row opens on the escape
+/// that carries it rather than on a corner glyph.
 fn composer_at(rows: &[String]) -> usize {
     rows.iter()
-        .position(|row| row.starts_with('╭'))
+        .position(|row| row.starts_with('╭') || row.starts_with('\u{25A9}'))
         .unwrap_or_else(|| panic!("the composer is drawn: {rows:#?}"))
 }
 
@@ -90,10 +92,12 @@ fn the_glow_is_the_margins_cells_at_the_height_of_the_body() {
 }
 
 #[test]
-fn the_glow_touches_the_margin_and_nothing_else() {
-    // What the strip may not change: the transcript, the rail's own area, the
-    // composer and the footer. A frame with a glow is the frame without one
-    // everywhere but the cells the margin was given.
+fn the_glow_changes_the_margins_cells_and_nothing_but_the_composers_own() {
+    // What the strip may not change: the transcript, the rail's own area and the
+    // footer. A frame with a glow is the frame without one everywhere but the
+    // cells the margin was given. The composer's own rows are left out: on this
+    // terminal its border is a picture too — `render/composer.rs` holds that —
+    // and it differs for a reason that is not the glow.
     let plain = cells(&mut app(), 100, 30);
     let shown: Vec<String> = (0..plain.area.height).map(|y| row(&plain, y)).collect();
     let body = composer_at(&shown);
@@ -102,6 +106,9 @@ fn the_glow_touches_the_margin_and_nothing_else() {
     for y in 0..plain.area.height {
         for x in 0..plain.area.width {
             if gap.contains(&(x as usize)) && (y as usize) < body {
+                continue;
+            }
+            if (body..plain.area.height as usize - 1).contains(&(y as usize)) {
                 continue;
             }
             let (left, right) = (&plain[(x, y)], &glowing[(x, y)]);
@@ -144,14 +151,21 @@ fn the_margin_keeps_the_canvas_and_spends_no_colour_of_its_own() {
 }
 
 #[test]
-fn the_facts_start_where_they_start_without_a_glow() {
+fn the_rails_facts_and_the_words_sit_where_they_sit_beside_a_glow() {
     // The seam is additive: the rail's columns are the rail's whether or not
-    // the margin is lit, and the first fact begins at the start of the rail.
+    // the margin is lit, and the first fact begins at the start of the rail. The
+    // composer's rows are the composer's: its border is a picture on this
+    // terminal, and the footer under it is not.
     let plain = cells(&mut app(), 100, 30);
     let glowing = cells(&mut lit(), 100, 30);
     let plain: Vec<String> = (0..plain.area.height).map(|y| row(&plain, y)).collect();
     let glowing: Vec<String> = (0..glowing.area.height).map(|y| row(&glowing, y)).collect();
-    for (plain, glowing) in plain.iter().zip(&glowing) {
+    let body = composer_at(&plain);
+    let footer = plain.len() - 1;
+    for (y, (plain, glowing)) in plain.iter().zip(&glowing).enumerate() {
+        if (body..footer).contains(&y) {
+            continue;
+        }
         assert_eq!(
             rail_of(plain),
             rail_of(glowing),

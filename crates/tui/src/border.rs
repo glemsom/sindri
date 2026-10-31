@@ -51,15 +51,16 @@ pub const PAD: u32 = 4;
 /// it. A panel that cannot send says so in words, and never turns its border
 /// red, so these are the only stops a walk here may leave from — which is what
 /// `theme::RAMPS` names.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Ink {
     Prompt,
     Faint,
 }
 
 impl Ink {
-    /// The theme's colour for this ink: named here, invented nowhere.
-    fn colour(self) -> Color {
+    /// The theme's colour for this ink: named here, invented nowhere. The
+    /// renderer that draws the glyphs walks the same two stops.
+    pub(crate) fn colour(self) -> Color {
         match self {
             Ink::Prompt => theme::PROMPT,
             Ink::Faint => theme::FAINT,

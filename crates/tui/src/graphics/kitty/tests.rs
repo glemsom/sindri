@@ -157,6 +157,30 @@ fn a_new_rect_transmits_the_image_again_under_an_id_no_other_placement_has_used(
 }
 
 #[test]
+fn a_renewed_placement_sends_new_pixels_under_an_id_the_old_ones_never_had() {
+    // A layer whose pixels change at a rect that does not — a border's ink, when
+    // the composer gains or loses the keyboard — is a new image at the same
+    // cells, which `place` reads as nothing to send unless it is told.
+    let (mut placement, mut first) = placed();
+    placement.place(&image(), at(), -1, &mut first);
+    let before = id(&escapes(&first)[0]);
+
+    placement.renew();
+    let mut repainted = screen();
+    placement.place(&image(), at(), -1, &mut repainted);
+    let after = escapes(&repainted);
+    assert!(
+        transmits(&after[0]),
+        "the pixels are new even though the rect is not: {after:?}"
+    );
+    assert_ne!(
+        before,
+        id(&after[0]),
+        "and they arrive under an id of their own: a transmit under a live one is refused"
+    );
+}
+
+#[test]
 fn a_new_layer_places_the_image_again_on_the_layer_it_is_given() {
     let (mut placement, mut first) = placed();
     placement.place(&image(), at(), -1, &mut first);

@@ -22,6 +22,7 @@ use crate::overlay::Overlay;
 use crate::picture::Store;
 use crate::rail::{Launch, Rail, RailView};
 use crate::render::seam::Seam;
+use crate::render::stroke::Stroke;
 use crate::selection::{Selection, Viewport};
 use crate::settings::Missing;
 use crate::window::Window;
@@ -57,6 +58,9 @@ pub struct App {
     /// `graphics` the face and a picture read. A terminal that draws no
     /// graphics has no seam to draw.
     pub(crate) seam: Option<Seam>,
+    /// The composer's border as a picture, from the same `graphics` the seam
+    /// is: the cells it was last made for, and the stroke they were made into.
+    pub(crate) border: Option<Stroke>,
     /// What the terminal said it can draw, asked once at launch: the face draws
     /// from it, and a picture draws from the same answer.
     graphics: Option<Graphics>,
@@ -128,6 +132,7 @@ impl App {
             quit: false,
             face,
             seam: None,
+            border: None,
             graphics: None,
             pictures: None,
             window: Window::default(),
@@ -259,6 +264,7 @@ impl App {
     /// and a picture borrow it rather than asking again.
     pub fn with_graphics(mut self, graphics: Option<Graphics>) -> Self {
         self.seam = graphics.as_ref().and_then(Seam::new);
+        self.border = graphics.as_ref().and_then(Stroke::new);
         self.graphics = graphics;
         self.store()
     }

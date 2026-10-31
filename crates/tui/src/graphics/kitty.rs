@@ -61,6 +61,15 @@ impl Placement {
         })
     }
 
+    /// Forgets the image the terminal holds, under a new id: the pixels changed
+    /// while the rect they fill did not, which [`Placement::place`] reads as
+    /// nothing to send. The next placement transmits the image again — a
+    /// transmit under a live id is refused, so it is never the same id twice.
+    pub fn renew(&mut self) {
+        self.id = next_id();
+        self.sent = None;
+    }
+
     /// Places `image` in `at`, on layer `z`: `-1` draws above the cells and below
     /// the glyphs, which is what a wash under text wants, and `0` is right for a
     /// stroke drawn where no glyph lives.
