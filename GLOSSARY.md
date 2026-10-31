@@ -280,7 +280,12 @@ parse is that panel with the parser's own words under it, in the ink a **caption
 alt text's words, the target in `‹›` as a link keeps its own, the reason in their place
 when there is no picture. A mermaid fence has no target and its source is not printed, so
 its caption is the fence's own name, `‹mermaid›`. It is what the rows cost when nothing is
-drawn, and what a copy of the block yields.
+drawn, and what a copy of an image's block yields. A **diagram**'s block copies as the
+fence body it was drawn from instead, because `‹mermaid›` is a name and not a diagram: a
+reader who pastes one out of the frame gets mermaid. The diagram does not open in place
+for it — an **expanded call** opens an entry, and a diagram is a block inside an answer's
+(`crates/tui/src/expand.rs`) — so the block's source is what the frame owes a reader who
+wants it, and the copy is where they get it.
 
 **export** — `/export [path]`: the **thread** as one markdown file, at the path named or
 `sindri-<guid>.md` in the workspace, read out of the record so it says what `sindri

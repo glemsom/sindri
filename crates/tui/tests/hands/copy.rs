@@ -297,3 +297,63 @@ fn ctrl_g_copies_the_session_id_alone() {
         "Ctrl-G is the id alone, pasted into `sindri sessions show`"
     );
 }
+
+/// A diagram no file backs: a mermaid fence's body is its own source.
+const DIAGRAM: &str = "stateDiagram-v2\n    [*] --> Resting\n    Resting --> [*]\n";
+
+/// One answer whose whole body is a diagram: a block of rows and its caption.
+fn diagrammed(clipboard: Fake) -> App {
+    let mut app = App::with_clipboard(
+        launch("4f1c8f2e-8a24-4b93-9c0e-0d3f0e5c1a77"),
+        None,
+        Box::new(clipboard),
+    )
+    .with_graphics(Some(Graphics::kitty()));
+    app.note_info("a question");
+    app.event(Event::TextDelta {
+        turn: 1,
+        text: format!("```mermaid\n{DIAGRAM}```\n"),
+    });
+    app
+}
+
+#[test]
+fn a_diagrams_block_copies_as_its_mermaid_source_and_never_as_its_caption() {
+    let clipboard = Fake::taking();
+    let mut app = diagrammed(clipboard.clone());
+    let rows = screen(&mut app, 100, 30);
+    assert!(
+        rows.iter()
+            .any(|row| row.contains("\u{2039}mermaid\u{203A}")),
+        "the fence is a block with its caption: {rows:#?}"
+    );
+
+    // The whole block, dragged over as a reader takes a diagram: only its rows
+    // leave with the selection, and what leaves is the source.
+    let block = app
+        .viewport()
+        .pictures
+        .first()
+        .cloned()
+        .unwrap_or_else(|| panic!("the diagram was placed: {rows:#?}"));
+    let area = app.viewport().area;
+    let (top, bottom) = (
+        area.y + block.at as u16,
+        area.y + (block.at + block.rows - 1) as u16,
+    );
+    mouse(&mut app, MouseEventKind::Down(MouseButton::Left), 0, top);
+    mouse(
+        &mut app,
+        MouseEventKind::Drag(MouseButton::Left),
+        60,
+        bottom,
+    );
+    mouse(&mut app, MouseEventKind::Up(MouseButton::Left), 60, bottom);
+
+    let copied = clipboard.saw();
+    assert_eq!(
+        copied,
+        vec![DIAGRAM.trim_end_matches('\n').to_string()],
+        "a diagram pasted somewhere is mermaid, not a pair of guillemets: {copied:?}"
+    );
+}

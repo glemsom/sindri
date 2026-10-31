@@ -47,6 +47,10 @@ pub struct Picture {
     /// The source as the model wrote it — a target, or a fence's own name.
     pub src: String,
     pub caption: String,
+    /// What a copy of the block yields: the caption where the caption is the
+    /// words, and the fence body where it is not. `‹mermaid›` is a name, and a
+    /// block that copies as a name copies as nothing a reader can paste.
+    pub copy: String,
     /// What the source is worth: the rows it takes, or the reason it takes
     /// none. A frame with no store at all is refused by the terminal itself.
     pub worth: Worth,
@@ -94,7 +98,9 @@ impl Writer<'_> {
     /// measured at, the caption under them, and the paragraph it interrupted
     /// going on below. A source that could not be drawn reserves no rows, so it
     /// is its caption alone rather than a hole where a box would have been.
-    pub(super) fn place(&mut self, src: String, caption: String, worth: Worth) {
+    /// `copy` is what a copy of the block yields, which is the caption for
+    /// everything whose caption is its words and the fence body for a diagram.
+    pub(super) fn place(&mut self, src: String, caption: String, worth: Worth, copy: String) {
         self.flush();
         let (prefix, columns) = self.block_margin();
         let taken = usize::from(worth.rows());
@@ -114,6 +120,7 @@ impl Writer<'_> {
             inset: prefix.chars().count() as u16,
             src,
             caption,
+            copy,
             worth,
         });
     }
@@ -147,6 +154,7 @@ impl Writer<'_> {
             None => Worth::Refused(Refusal::NoGraphics),
         };
         let caption = caption(&image.src, &image.alt, &worth);
-        self.place(image.src, caption, worth);
+        // An image copies as its caption, which is the words the alt text gave.
+        self.place(image.src, caption.clone(), worth, caption);
     }
 }

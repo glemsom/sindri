@@ -115,7 +115,7 @@ fn laid(written: Vec<markdown::Picture>, above: usize, dropped: usize) -> Vec<La
                 column: GUTTER + picture.inset,
                 cut: 0,
                 block: picture.rows,
-                caption: picture.caption,
+                copy: picture.copy,
                 src: picture.src,
                 worth: picture.worth,
             })

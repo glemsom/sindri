@@ -154,9 +154,10 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
     let mut plain: Vec<String> = rows.iter().map(plain).collect();
     let pictures = pictures::on_screen(pictures, start, visible);
     // A picture's rows are drawn on, so they carry no words of their own: a copy
-    // of the block is its caption once, on the block's first row, and nothing on
+    // of the block is its words once, on the block's first row, and nothing on
     // the rest — drawn or not, because the blank rows are the window's either
-    // way.
+    // way. The words are the caption, or the fence body a diagram was drawn
+    // from, since `‹mermaid›` is not something anyone can paste.
     for picture in &pictures {
         let laid = &picture.laid;
         let end = laid.end().min(plain.len());
@@ -164,7 +165,7 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
             row.clear();
         }
         if let Some(first) = plain.get_mut(laid.row) {
-            *first = laid.caption.clone();
+            *first = laid.copy.clone();
         }
     }
     app.window.settled(ask, at, follow, below, plain.len());
