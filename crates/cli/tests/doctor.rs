@@ -43,7 +43,7 @@ fn doctor_prints_the_sandbox_description_and_exits_zero() {
     assert!(stdout.contains("writable set"), "{stdout}");
     assert!(stdout.contains("network: shared"), "{stdout}");
     assert!(
-        stdout.contains("TMPDIR, TEMP and TMP"),
+        stdout.contains("(TMPDIR)"),
         "the temp mapping is stated: {stdout}"
     );
     assert!(

@@ -138,9 +138,7 @@ fn the_argv_redirects_the_temp_variables_and_a_writable_home_into_the_session_te
     };
 
     let temp = session_temp.display().to_string();
-    for key in ["TMPDIR", "TEMP", "TMP"] {
-        assert_eq!(value(key), temp, "{key} is the session temp");
-    }
+    assert_eq!(value("TMPDIR"), temp, "TMPDIR is the session temp");
     assert_eq!(
         value("HOME"),
         format!("{temp}/home"),
@@ -189,7 +187,8 @@ fn the_description_names_every_variable_the_argv_sets() {
         .lines()
         .find(|line| line.trim_start().starts_with("environment:"))
         .unwrap_or_else(|| panic!("the environment is stated: {description}"));
-    // Whole words only: naming `TMPDIR` does not name `TMP`.
+    // A name is matched whole: the line is split on everything that is not a
+    // name character, so `PATH` in prose is not the `PATH` that is set.
     let named: Vec<&str> = line
         .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
         .collect();

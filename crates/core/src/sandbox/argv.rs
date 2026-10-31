@@ -80,9 +80,7 @@ impl SandboxPolicy {
         let home = self.session_temp().join("home").display().to_string();
         vec![
             ("HOME", home),
-            ("TMPDIR", temp.clone()),
-            ("TEMP", temp.clone()),
-            ("TMP", temp.clone()),
+            ("TMPDIR", temp),
             ("PATH", self.search_path().to_string()),
             ("LANG", LOCALE.to_string()),
             ("LC_ALL", LOCALE.to_string()),

@@ -34,8 +34,8 @@ plus **extras**.
 
 **extras** — user-configured extra writable paths.
 
-**session temp** — per-run writable scratch, mapped to `TMPDIR`, `TEMP` and `TMP` in the
-sandbox, and mounted as `HOME` beneath it.
+**session temp** — per-run writable scratch, mapped to `TMPDIR` in the sandbox, and
+mounted as `HOME` beneath it.
 
 **read-only root** — `--ro-bind / /`: the host filesystem inside the sandbox read-only.
 A boundary on writes, not on reads.

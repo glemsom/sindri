@@ -72,10 +72,12 @@ if [ "$kernel" != "Linux" ]; then
     printf 'install: sindri ships Linux binaries only; this is %s\n' "$kernel" >&2
     exit 2
 fi
+# `uname -m`'s two Linux names, and only those: `amd64` and `arm64` are what BSD
+# and Darwin answer with, and this installer has already refused those kernels.
 machine=${SINDRI_UNAME_M:-$(uname -m)}
 case "$machine" in
-    x86_64 | amd64) target=x86_64-unknown-linux-musl ;;
-    aarch64 | arm64) target=aarch64-unknown-linux-musl ;;
+    x86_64) target=x86_64-unknown-linux-musl ;;
+    aarch64) target=aarch64-unknown-linux-musl ;;
     *)
         printf 'install: no static binary for this machine (%s)\n' "$machine" >&2
         printf 'install: releases carry x86_64-unknown-linux-musl and aarch64-unknown-linux-musl\n' >&2
