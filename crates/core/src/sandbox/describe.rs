@@ -31,22 +31,47 @@ impl SandboxPolicy {
             out.push_str(&format!("    {}\n", path.display()));
         }
 
+        // Every line below that states a value names the variables holding it,
+        // and all of them read the one list the argv enforces.
+        let environment = self.environment();
+        let names: Vec<&str> = environment.iter().map(|(name, _)| *name).collect();
         let temp = self.session_temp();
+        let temp_path = temp.display().to_string();
+        let home_path = temp.join("home").display().to_string();
         out.push_str(&format!(
-            "  session temp: {} (TMPDIR, TEMP and TMP)\n",
-            temp.display()
+            "  session temp: {temp_path} ({})\n",
+            and_list(&variables_holding(&environment, &temp_path))
         ));
         out.push_str(&format!(
-            "  home: {} (writable and empty — created for the run)\n",
-            temp.join("home").display()
+            "  home: {home_path} ({} — writable and empty, created for the run)\n",
+            and_list(&variables_holding(&environment, &home_path))
         ));
         out.push_str(&format!(
-            "  environment: cleared, then PATH, HOME, TMPDIR and LANG={LOCALE} set explicitly\n"
+            "  environment: cleared, then {} set explicitly; the locale is {LOCALE}\n",
+            and_list(&names),
         ));
         out.push_str(
             "  isolation: own pid, ipc, uts and cgroup namespaces; /proc lists only this sandbox\n",
         );
         out.push_str("  read-only: the rest of the host filesystem, readable but not writable\n");
         out
+    }
+}
+
+/// The names in `environment` whose value is `value`: the temp path's, HOME's.
+fn variables_holding(environment: &[(&'static str, String)], value: &str) -> Vec<&'static str> {
+    environment
+        .iter()
+        .filter(|(_, held)| held == value)
+        .map(|(name, _)| *name)
+        .collect()
+}
+
+/// `a`, `a and b`, `a, b and c`: the description is a sentence, not a listing.
+fn and_list(names: &[&str]) -> String {
+    match names {
+        [] => String::new(),
+        [one] => (*one).to_string(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
     }
 }

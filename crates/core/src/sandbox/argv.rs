@@ -31,10 +31,8 @@ impl SandboxPolicy {
         if self.is_unsafe() {
             return Invocation::Unsandboxed(command.to_vec());
         }
-        let temp = self.session_temp().display().to_string();
-        let home = self.session_temp().join("home").display().to_string();
-
         let mut argv: Vec<String> = Vec::with_capacity(40 + command.len());
+        let temp = self.session_temp().display().to_string();
         push(&mut argv, &["bwrap"]);
         push(&mut argv, &["--ro-bind", "/", "/"]);
         for path in self.writable().paths() {
@@ -65,21 +63,30 @@ impl SandboxPolicy {
         }
 
         push(&mut argv, &["--clearenv"]);
-        for (key, value) in [
-            ("HOME", home.as_str()),
-            ("TMPDIR", temp.as_str()),
-            ("TEMP", temp.as_str()),
-            ("TMP", temp.as_str()),
-            ("PATH", self.search_path()),
-            ("LANG", LOCALE),
-            ("LC_ALL", LOCALE),
-        ] {
-            push(&mut argv, &["--setenv", key, value]);
+        for (key, value) in self.environment() {
+            push(&mut argv, &["--setenv", key, &value]);
         }
 
         push(&mut argv, &["--"]);
         argv.extend(command.iter().cloned());
         Invocation::Sandboxed(argv)
+    }
+
+    /// The variables the sandbox sets, in the order `--setenv` writes them. The
+    /// one list: the argv enforces it and the description names it, so the
+    /// boundary the model is told is the boundary it runs in.
+    pub(super) fn environment(&self) -> Vec<(&'static str, String)> {
+        let temp = self.session_temp().display().to_string();
+        let home = self.session_temp().join("home").display().to_string();
+        vec![
+            ("HOME", home),
+            ("TMPDIR", temp.clone()),
+            ("TEMP", temp.clone()),
+            ("TMP", temp.clone()),
+            ("PATH", self.search_path().to_string()),
+            ("LANG", LOCALE.to_string()),
+            ("LC_ALL", LOCALE.to_string()),
+        ]
     }
 }
 
