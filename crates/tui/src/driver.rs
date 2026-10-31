@@ -1,6 +1,7 @@
 //! The seam a front end implements: how to run one prompt, and the live line
-//! back into the frame while it runs. No provider type crosses it:
-//! the frame is told how a run ended in its own words.
+//! back into the frame while it runs. No provider type crosses it, and why a run
+//! ended crosses as the core's own closed set, re-exported as [`Stop`] rather
+//! than spelled a second time.
 
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
@@ -11,6 +12,7 @@ use sindri_core::cancel::Cancel;
 use crate::msg::Msg;
 use crate::rail::Launch;
 
+pub use sindri_core::agent::Stopped as Stop;
 pub use sindri_core::exec::Side;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,26 +30,6 @@ pub enum CallOver {
 pub struct Spilled {
     pub truncated: bool,
     pub files: Vec<PathBuf>,
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum Stop {
-    #[default]
-    Final,
-    MaxTurns,
-    Cancelled,
-    Error,
-}
-
-impl Stop {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Stop::Final => "final",
-            Stop::MaxTurns => "max_turns",
-            Stop::Cancelled => "cancelled",
-            Stop::Error => "error",
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

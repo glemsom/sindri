@@ -6,8 +6,11 @@ use crate::provider::Usage;
 
 /// Why the loop ended (the glossary's `stopped`). Every word below appears in
 /// the JSON output, and the set is closed: a run ends for one of these reasons.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Stopped {
+    /// The run answered: the default, so a front end that names no stop
+    /// reason still ends the run finally.
+    #[default]
     Final,
     MaxTurns,
     /// The run was cancelled with SIGINT; stdout stays empty.
