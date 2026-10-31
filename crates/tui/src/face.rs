@@ -33,6 +33,13 @@ const RESIZE: Resize = Resize::Fit(Some(FilterType::Lanczos3));
 /// stretched back over the range so the glow keeps its curve.
 const GROUND: u8 = 48;
 
+/// How much of the asset's light is kept, in tenths: nine. The artist drew the
+/// glow to sit on a black canvas at full strength, and beside the rail's quiet
+/// ink the lid and the edges of the face read as glare rather than as light. A
+/// tenth off is the same curve, still lit — it settles into the frame instead
+/// of over it.
+const LIGHT: (u16, u16) = (9, 10);
+
 const PNG: &[u8] = include_bytes!("../../../face.png");
 
 pub struct Face {
@@ -71,12 +78,13 @@ impl Face {
     }
 }
 
-/// The picture with its ground taken out: the whole frame, uncropped so that
-/// no glow is cut off at an edge, and with the alpha below [`GROUND`] turned
-/// off so that nothing is drawn where the artist only meant to draw a ground.
-/// Colour goes with it: a pixel that is transparent still carries blue, and
-/// resampling mixes the colour of pixels the eye never sees, so the two are
-/// cleared together.
+/// The picture with its ground taken out and its light held down: the whole
+/// frame, uncropped so that no glow is cut off at an edge, with the alpha below
+/// [`GROUND`] turned off so that nothing is drawn where the artist only meant
+/// to draw a ground, and the rest drawn at [`LIGHT`] of the brightness it was
+/// painted at. Colour goes with the ground: a pixel that is transparent still
+/// carries blue, and resampling mixes the colour of pixels the eye never sees,
+/// so the two are cleared together.
 fn grounded(image: DynamicImage) -> DynamicImage {
     let mut image = image.to_rgba8();
     for pixel in image.pixels_mut() {
@@ -84,6 +92,9 @@ fn grounded(image: DynamicImage) -> DynamicImage {
         if alpha == 0 {
             *pixel = image::Rgba([0, 0, 0, 0]);
         } else {
+            for channel in &mut pixel.0[..3] {
+                *channel = (u16::from(*channel) * LIGHT.0 / LIGHT.1) as u8;
+            }
             pixel[3] = (u16::from(alpha) * 255 / u16::from(255 - GROUND)) as u8;
         }
     }
@@ -121,8 +132,8 @@ mod tests {
         );
         assert_eq!(
             grounded.get_pixel(1, 1).0[..3],
-            [85, 255, 225],
-            "and keeps its colour"
+            [76, 229, 202],
+            "and keeps its colour at nine tenths of the light it was painted at"
         );
         assert!(
             grounded.get_pixel(2, 1)[3] < 4,
