@@ -13,7 +13,7 @@ use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Widget};
 use crate::app::App;
 use crate::markdown::text;
 use crate::overlay::{Overlay, help_rows};
-use crate::render::{sessions, settings};
+use crate::render::settings;
 use crate::theme;
 
 const KEYS: usize = 20;
@@ -38,7 +38,7 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
     // The overlay's own rows are drawn after `Clear`, at full
     // strength, so this pass costs nothing to undo.
     dim(area, buf);
-    // The box's outside, then the columns its inside has: a picker's rows are
+    // The box's outside, then the columns its inside has: a box's rows are
     // clipped to what the box will hold, not to the terminal.
     let width = area.width.saturating_sub(8).clamp(20, 110);
     let inside = Rect {
@@ -74,11 +74,6 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
                 },
                 lines[window].to_vec(),
             )
-        }
-        Overlay::Sessions(sessions) => {
-            let (height, title, lines) = sessions::draw(sessions, content);
-            app.window.page = lines.len().max(1);
-            (height, title, More::default(), lines)
         }
         Overlay::Spill(spill) => {
             spill.settled(spill_window(area).height as usize);

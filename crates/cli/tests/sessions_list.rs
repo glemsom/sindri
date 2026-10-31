@@ -90,7 +90,7 @@ fn three_records_are_listed_newest_first_with_what_each_row_carries() {
 }
 
 #[test]
-fn a_row_counts_one_turn_the_way_the_picker_does() {
+fn a_row_counts_one_turn_and_invents_no_zero() {
     let env = Env::new();
     write(
         &root(&env),

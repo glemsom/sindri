@@ -1,11 +1,10 @@
 //! The overlays that take the screen while they are open: `?`'s list of every
-//! binding, the untruncated output a spill affordance offers, and the records a
-//! run left behind. All close with `Esc`, and none is the only way
+//! binding, the untruncated output a spill affordance offers, and the settings
+//! modal. All close with `Esc`, and none is the only way
 //! to do what it does. An open overlay owns its own space: the page keys and
 //! the wheel move it, never the frame beneath it.
 
 use crate::command;
-use crate::sessions::Sessions;
 use crate::settings::Settings;
 use crate::spill::Spill;
 
@@ -173,9 +172,8 @@ impl Help {
     }
 }
 
-/// Where a cursor lands after one step of a list that keeps a chosen row: one
-/// answer for the settings modal and the record picker, so neither drifts from
-/// the other.
+/// Where a cursor lands after one step of a list that keeps a chosen row: the
+/// settings modal walks its rows with it and clamps on the same answer.
 pub(crate) fn step(chosen: usize, rows: usize, len: usize, up: bool) -> usize {
     if up {
         chosen.saturating_sub(rows)
@@ -191,8 +189,6 @@ pub enum Overlay {
     /// Boxed: the modal is the largest thing the frame can overlay, and the
     /// enum is carried in every match on an overlay.
     Settings(Box<Settings>),
-    /// The record picker: what the state directory holds, newest first.
-    Sessions(Sessions),
 }
 
 /// The rows `?` lists: the keys in their column and what they do. The one row
@@ -243,16 +239,16 @@ mod tests {
         "Ctrl-Q",
         "?",
         "@",
-        "/new, /sessions, /export, /settings, /help, /quit",
+        "/new, /export, /settings, /help, /quit",
         "Ctrl-G",
     ];
 
-    /// `?`'s command row as the frame said it before the catalogue: written
-    /// here from the frame rather than read back out of the catalogue, so a
-    /// seventh command that the row does not say is a failure.
+    /// `?`'s command row as the frame says it: written here rather than read
+    /// back out of the catalogue, so a command the row does not say is a
+    /// failure.
     const COMMANDS_ROW: (&str, &str) = (
-        "/new, /sessions, /export, /settings, /help, /quit",
-        "start a session, read an old one, export this one, edit the config, show this, leave",
+        "/new, /export, /settings, /help, /quit",
+        "start a session, export this one, edit the config, show this, leave",
     );
 
     /// The one row that names commands rather than keys.
@@ -264,7 +260,7 @@ mod tests {
     }
 
     #[test]
-    fn the_command_row_is_the_catalogue_and_a_seventh_command_cannot_miss_it() {
+    fn the_command_row_is_the_catalogue_and_a_sixth_command_cannot_miss_it() {
         let (keys, what) = command_row(&help_rows());
         assert_eq!(keys, COMMANDS_ROW.0, "the row names every command");
         assert_eq!(what, COMMANDS_ROW.1, "and says what each of them does");

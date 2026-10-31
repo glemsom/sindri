@@ -115,10 +115,6 @@ impl App {
             self.settings_key(key);
             return;
         }
-        if matches!(self.overlay, Some(Overlay::Sessions(_))) {
-            self.sessions_key(key, ctrl);
-            return;
-        }
         match key.code {
             KeyCode::Esc | KeyCode::Enter => self.overlay = None,
             KeyCode::Char('q') if ctrl => self.quit = true,
@@ -134,7 +130,6 @@ impl App {
         match self.overlay.as_mut() {
             Some(Overlay::Help(help)) => help.page(self.window.page, up),
             Some(Overlay::Settings(settings)) => settings.page(self.window.page, up),
-            Some(Overlay::Sessions(sessions)) => sessions.page(self.window.page, up),
             Some(Overlay::Spill(spill)) => spill.scroll_by(self.window.page, up),
             None => self.scroll_by(self.window.page, up),
         }
@@ -231,7 +226,6 @@ impl App {
             Command::Settings => self.open_settings(None),
             Command::Help => self.show(Overlay::Help(Help::default())),
             Command::Quit => self.quit = true,
-            Command::Sessions => self.open_sessions(),
             Command::Export(path) => self.export(path.as_deref()),
             Command::Unknown(name) => self.note_error(command::refusal(&name)),
         }

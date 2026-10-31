@@ -1,7 +1,7 @@
 //! The `/` commands and the one catalogue of them: a name, the
 //! one line it is said in, and the command it opens. The parser, the line an
 //! unknown name is refused with and `?`'s command row all read it, so a
-//! seventh command is added in one place. `/settings` is one of
+//! sixth command is added in one place. `/settings` is one of
 //! the two that write the user's disk, and it writes through the schema the run
 //! reads; `/export` writes one markdown file, where it is told to.
 
@@ -11,8 +11,6 @@ pub enum Command {
     Settings,
     Help,
     Quit,
-    /// The record picker: what every run left, read-only.
-    Sessions,
     /// The thread as markdown, at the path named or the workspace's default.
     Export(Option<String>),
     Unknown(String),
@@ -29,17 +27,12 @@ pub struct Spec {
 }
 
 /// Every `/` command, in the order the frame says them. This is the one list
-/// of names: a seventh command is added here and nowhere else.
+/// of names: a sixth command is added here and nowhere else.
 pub const COMMANDS: &[Spec] = &[
     Spec {
         name: "new",
         summary: "start a session",
         open: |_| Command::New,
-    },
-    Spec {
-        name: "sessions",
-        summary: "read an old one",
-        open: |_| Command::Sessions,
     },
     Spec {
         name: "export",
@@ -100,8 +93,8 @@ pub fn row() -> (String, String) {
 /// What a name the catalogue has no entry for is answered with: that there is
 /// no such command, and the ones there are. They are said in the catalogue's
 /// order, which is the order `?` says them in: the hand-written line this
-/// replaces had drifted to `/sessions, /export, /new, …`, so one order had to
-/// win and the frame's is the help row's.
+/// replaces had drifted from it, so one order had to win and the frame's is the
+/// help row's.
 pub fn refusal(name: &str) -> String {
     format!("{name}: no such command — {}", names())
 }
@@ -122,8 +115,7 @@ mod tests {
     }
 
     #[test]
-    fn the_record_commands_are_recognised_with_and_without_a_path() {
-        assert_eq!(parse("/sessions"), Some(Command::Sessions));
+    fn an_export_is_recognised_with_and_without_a_path() {
         assert_eq!(parse("/export"), Some(Command::Export(None)));
         assert_eq!(
             parse("  /export  notes/gate two.md  "),
@@ -137,7 +129,6 @@ mod tests {
     /// failure, not a tautology.
     const OPENS: &[(&str, Command)] = &[
         ("new", Command::New),
-        ("sessions", Command::Sessions),
         ("export", Command::Export(None)),
         ("settings", Command::Settings),
         ("help", Command::Help),

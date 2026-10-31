@@ -28,7 +28,6 @@ pub mod render;
 pub mod run;
 pub mod seam;
 pub mod selection;
-pub mod sessions;
 pub mod settings;
 pub mod spill;
 pub mod theme;

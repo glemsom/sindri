@@ -1,9 +1,8 @@
-//! The record in the frame: `/sessions` lists what every run left, `Enter`
-//! reads one back without touching it, `/export` writes the current thread as
-//! markdown, and the rail's session id can be copied out to the
-//! `sindri sessions show` that already exists. Every fixture is a record under
-//! a temporary state directory, written by the same `Recorder` a run writes
-//! with, so nothing here reads or writes a real user's state.
+//! The record in the frame: `/export` writes the current thread as markdown,
+//! and the rail's session id can be copied out to the `sindri sessions show`
+//! that already exists. Every fixture is a record under a temporary state
+//! directory, written by the same `Recorder` a run writes with, so nothing here
+//! reads or writes a real user's state.
 
 #![allow(
     clippy::expect_used,
@@ -24,7 +23,6 @@ use sindri_core::record::{Cost, Recorder, Redaction, Start};
 use sindri_core::sandbox::Enforcement;
 use sindri_tui::copy::Clipboard;
 use sindri_tui::entry::Entry;
-use sindri_tui::overlay::Overlay;
 use sindri_tui::render;
 use sindri_tui::{App, Launch};
 use tempfile::TempDir;
@@ -148,29 +146,6 @@ impl Fixture {
             clipboard,
         }
     }
-
-    /// Everything under the state directory, path and bytes: what a picker may
-    /// read and may never change.
-    fn state(&self) -> Vec<(PathBuf, Vec<u8>)> {
-        let mut all = Vec::new();
-        let mut pending = vec![self._state.path().to_path_buf()];
-        while let Some(next) = pending.pop() {
-            let Ok(entries) = std::fs::read_dir(&next) else {
-                continue;
-            };
-            for entry in entries {
-                let path = entry.expect("an entry").path();
-                if path.is_dir() {
-                    pending.push(path.clone());
-                    all.push((path, Vec::new()));
-                } else {
-                    all.push((path.clone(), std::fs::read(&path).unwrap_or_default()));
-                }
-            }
-        }
-        all.sort();
-        all
-    }
 }
 
 fn press(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
@@ -242,4 +217,3 @@ fn row_of(rows: &[String], needle: &str) -> usize {
 }
 
 mod export;
-mod picker;

@@ -4,7 +4,7 @@
 )]
 
 //! A record's date: one format, in the local zone, and the same one `sessions
-//! list` prints and the frame's picker draws.
+//! list` prints.
 
 use std::process::Command;
 

@@ -13,7 +13,6 @@ mod queue;
 mod rail;
 pub(crate) mod rows;
 pub(crate) mod seam;
-mod sessions;
 mod settings;
 pub mod transcript;
 
