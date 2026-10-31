@@ -370,6 +370,7 @@ fn with_kitty_graphics_the_face_draws_in_the_top_of_the_rail() {
 
 mod card;
 mod chrome;
+mod cursor;
 mod expand;
 mod first;
 mod glow;

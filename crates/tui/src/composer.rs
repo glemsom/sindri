@@ -1,6 +1,10 @@
 //! The composer: the prompt being typed, as rows and a cursor. Enter
 //! sends, Shift+Enter breaks the line, and a cancel leaves the draft where
-//! it was.
+//! it was. The cursor is held as a character index, because an edit is
+//! expressed in characters, and reported in cells, because the terminal
+//! draws cells and a glyph may be two of them wide.
+
+use unicode_width::UnicodeWidthStr;
 
 const MIN_ROWS: u16 = 2;
 const MAX_ROWS: u16 = 6;
@@ -21,8 +25,12 @@ impl Composer {
         &self.rows
     }
 
+    /// Where the terminal puts the cursor: the column of cells the row up to
+    /// the character index occupies, and the row it is on. The index itself
+    /// stays in characters — arrows, backspace and splice all count them — so a
+    /// wide glyph moves the cursor two columns and the index one.
     pub fn cursor(&self) -> (u16, u16) {
-        (self.column as u16, self.row as u16)
+        (cell_column(self.row(), self.column) as u16, self.row as u16)
     }
 
     pub fn row(&self) -> &str {
@@ -171,6 +179,13 @@ fn byte_index(row: &str, column: usize) -> usize {
         .map_or(row.len(), |(index, _)| index)
 }
 
+/// How many cells the first `column` characters of `row` take up: the offset
+/// the cursor is drawn at, and never the count of characters the cursor is held
+/// at.
+fn cell_column(row: &str, column: usize) -> usize {
+    UnicodeWidthStr::width(&row[..byte_index(row, column)])
+}
+
 #[cfg(test)]
 mod tests {
     use super::Composer;
@@ -184,6 +199,17 @@ mod tests {
         composer.backspace();
         composer.backspace();
         assert_eq!(composer.text(), "");
+    }
+
+    #[test]
+    fn a_wide_glyph_moves_the_cursor_by_both_its_cells() {
+        let mut composer = Composer::new();
+        for ch in "漢字".chars() {
+            composer.insert(ch);
+        }
+        assert_eq!(composer.cursor(), (4, 0), "two characters, four cells");
+        composer.backspace();
+        assert_eq!(composer.cursor(), (2, 0), "an edit is still one character");
     }
 
     #[test]
