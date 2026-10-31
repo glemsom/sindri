@@ -1,31 +1,41 @@
 //! Where Sindri keeps its state: the state directory and the session
 //! identifiers that name a record.
 
+use std::ffi::OsString;
 use std::io;
 use std::path::{Path, PathBuf};
 
+#[cfg(test)]
+mod tests;
+
 pub fn state_dir() -> io::Result<PathBuf> {
-    match std::env::var_os("XDG_STATE_HOME").filter(|v| !v.is_empty()) {
-        Some(dir) => Ok(PathBuf::from(dir).join("sindri")),
-        None => {
-            let home = std::env::var_os("HOME")
-                .filter(|v| !v.is_empty())
-                .ok_or_else(|| io::Error::other("neither XDG_STATE_HOME nor HOME is set"))?;
-            Ok(PathBuf::from(home).join(".local/state/sindri"))
-        }
-    }
+    under_from(
+        std::env::var_os("XDG_STATE_HOME"),
+        "XDG_STATE_HOME",
+        ".local/state/sindri",
+    )
 }
 
 pub fn config_dir() -> io::Result<PathBuf> {
-    match std::env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty()) {
-        Some(dir) => Ok(PathBuf::from(dir).join("sindri")),
-        None => {
-            let home = std::env::var_os("HOME")
-                .filter(|v| !v.is_empty())
-                .ok_or_else(|| io::Error::other("neither XDG_CONFIG_HOME nor HOME is set"))?;
-            Ok(PathBuf::from(home).join(".config/sindri"))
-        }
+    under_from(
+        std::env::var_os("XDG_CONFIG_HOME"),
+        "XDG_CONFIG_HOME",
+        ".config/sindri",
+    )
+}
+
+/// The one XDG rule: a value that names a directory roots a `sindri` leaf, and
+/// an empty or absent one falls back under `$HOME`. It takes the value rather
+/// than reading it, so the empty case is a test instead of an environment
+/// mutation; `variable` names what was missing, so one message covers both.
+fn under_from(value: Option<OsString>, variable: &str, fallback: &str) -> io::Result<PathBuf> {
+    if let Some(dir) = value.filter(|v| !v.is_empty()) {
+        return Ok(PathBuf::from(dir).join("sindri"));
     }
+    let home = std::env::var_os("HOME")
+        .filter(|v| !v.is_empty())
+        .ok_or_else(|| io::Error::other(format!("neither {variable} nor HOME is set")))?;
+    Ok(PathBuf::from(home).join(fallback))
 }
 
 /// The one config file a run reads. Never a repository-local one: a
