@@ -18,6 +18,10 @@ pub enum Ask {
     Home,
     /// The tail, which is followed again.
     End,
+    /// The entry the reader engaged with — `Enter` or a click on it — at its
+    /// first row: a place taken rather than a page turned, and the frame that
+    /// answers it is the one that stops following.
+    Hold(usize),
 }
 
 /// The rows below a window's screen, and what they were counted from: the first
@@ -50,6 +54,13 @@ pub struct Window {
     pub(crate) below: Option<(Below, usize)>,
     /// What the reader asked of the window since the last frame.
     pub(crate) ask: Ask,
+    /// The entry the reader engaged with, whose place is theirs until a key
+    /// takes the tail. It is what tells a column the thread is too short to
+    /// fill that the newest rows are not where the reader wants to be.
+    hold: Option<usize>,
+    /// Whether the thread changed under the window since the last frame, so
+    /// what the badge counted no longer means anything.
+    recount: bool,
     /// The rows the place has still to move, in `Ask::Rows`' sign: what a
     /// toggle that changed a block's height owes a reader whose top row sat
     /// inside it. Not an ask: an ask is the reader moving and is counted
@@ -71,6 +82,8 @@ impl Default for Window {
             new_below: 0,
             below: None,
             ask: Ask::None,
+            hold: None,
+            recount: false,
             moved: 0,
             page: crate::app::DEFAULT_PAGE,
         }
@@ -117,11 +130,19 @@ impl Window {
         std::mem::take(&mut self.moved)
     }
 
+    /// Whether the frame answering `ask` is on a place the reader engaged with
+    /// rather than one they scrolled back from: a hold already settled, or the
+    /// one this frame was asked for.
+    pub(crate) fn engaged(&self, ask: Ask) -> bool {
+        self.hold.is_some() || matches!(ask, Ask::Hold(_))
+    }
+
     /// The thread changed somewhere other than its tail — an entry opened, an
     /// entry taken out — so the rows below the screen are no longer the rows
-    /// that were counted.
+    /// that were counted, and the badge's count starts again from them.
     pub fn forget(&mut self) {
         self.below = None;
+        self.recount = true;
     }
 
     /// The first turn, and the tail followed again: the two ends of the thread.
@@ -160,7 +181,10 @@ impl Window {
         // down reads them one for one, so the count falls with the window and
         // what is left is what is still new.
         self.new_below = match ask {
-            Ask::Home => scroll,
+            // The first turn, and an engagement: the rows below the reader are
+            // taken as read, so the count starts at nothing and only what
+            // arrives after them is new.
+            Ask::Home | Ask::Hold(_) => scroll,
             Ask::Rows(rows) if rows > 0 => self.new_below.saturating_add(rows.unsigned_abs()),
             Ask::Rows(rows) => self.new_below.saturating_sub(rows.unsigned_abs()),
             Ask::End | Ask::None => self.new_below,
@@ -168,6 +192,17 @@ impl Window {
         if scroll == 0 {
             self.new_below = 0;
         }
+        // The thread changed under the window: what is below it now was not
+        // under it when the reader last looked, so it is neither new nor read,
+        // and the count starts again from what is there.
+        if std::mem::take(&mut self.recount) {
+            self.new_below = scroll;
+        }
+        self.hold = match ask {
+            Ask::Hold(entry) => Some(entry),
+            _ if follow => None,
+            _ => self.hold,
+        };
     }
 }
 

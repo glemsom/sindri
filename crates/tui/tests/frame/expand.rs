@@ -24,8 +24,8 @@ fn enter(app: &mut App) {
     app.key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 }
 
-fn page_up(app: &mut App) {
-    app.key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
+fn page_down(app: &mut App) {
+    app.key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
 }
 
 fn click(app: &mut App, row: usize) {
@@ -64,18 +64,18 @@ fn a_four_hundred_line_call_expands_in_place_and_collapses_again() {
     enter(&mut app);
     let expanded = screen(&mut app, 100, 30);
     assert!(
-        any(&expanded, "line 400"),
-        "one key opens the newest call: {expanded:#?}"
+        any(&expanded, "line 1"),
+        "one key opens the newest call on its own row, with its output beneath: {expanded:#?}"
     );
     assert!(
-        !any(&expanded, "line 1"),
+        !any(&expanded, "line 400"),
         "and the window is a screen tall, not the whole output: {expanded:#?}"
     );
 
     enter(&mut app);
     let folded = screen(&mut app, 100, 30);
     assert!(
-        !any(&folded, "line 400"),
+        !any(&folded, "line 1"),
         "the same key folds it again: {folded:#?}"
     );
     assert!(
@@ -88,24 +88,30 @@ fn a_four_hundred_line_call_expands_in_place_and_collapses_again() {
 fn the_expansion_scrolls_within_the_window() {
     let mut app = app();
     call_with(&mut app, 1, "cargo test", 400);
+    // Opening holds the window on the call's own row, so the body is read
+    // forwards from the first line the call kept.
     enter(&mut app);
-    let bottom = screen(&mut app, 100, 30);
-
-    page_up(&mut app);
-    let earlier = screen(&mut app, 100, 30);
-    assert_ne!(bottom, earlier, "PgUp moves inside the expansion");
-    assert!(
-        !any(&earlier, "line 400"),
-        "the rows a screen up are shown instead: {earlier:#?}"
-    );
-
-    for _ in 0..40 {
-        page_up(&mut app);
-    }
     let top = screen(&mut app, 100, 30);
     assert!(
         any(&top, "line 1"),
-        "scrolling reaches the first line the call kept: {top:#?}"
+        "the first row of the expansion is under the call's own: {top:#?}"
+    );
+
+    page_down(&mut app);
+    let later = screen(&mut app, 100, 30);
+    assert_ne!(later, top, "PgDn moves inside the expansion");
+    assert!(
+        !any(&later, "line 1"),
+        "the rows a screen on are shown instead: {later:#?}"
+    );
+
+    for _ in 0..40 {
+        page_down(&mut app);
+    }
+    let bottom = screen(&mut app, 100, 30);
+    assert!(
+        any(&bottom, "line 400"),
+        "scrolling reaches the last line the call kept: {bottom:#?}"
     );
 }
 
