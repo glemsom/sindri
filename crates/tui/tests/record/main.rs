@@ -20,7 +20,7 @@ use ratatui::backend::TestBackend;
 use sindri_core::agent::{Report, Stopped};
 use sindri_core::paths::SessionDir;
 use sindri_core::provider::Usage;
-use sindri_core::record::{Recorder, Redaction, Start};
+use sindri_core::record::{Cost, Recorder, Redaction, Start};
 use sindri_core::sandbox::Enforcement;
 use sindri_tui::copy::Clipboard;
 use sindri_tui::entry::Entry;
@@ -87,7 +87,7 @@ fn record(state: &Path, model: &str, prompt: &str, answer: &str, stop: Option<St
     )
     .expect("the record starts");
     recorder.user(prompt);
-    recorder.assistant(1, answer, None);
+    recorder.assistant(1, answer, None, Cost::default());
     if let Some(stopped) = stop {
         recorder.finish(&report(stopped)).expect("the record ends");
     }

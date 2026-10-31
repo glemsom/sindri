@@ -13,7 +13,7 @@ use sindri_core::agent::{Report, Stopped};
 use sindri_core::exec::StatusSink;
 use sindri_core::paths::SessionDir;
 use sindri_core::provider::{Call, ToolOutcome, Usage};
-use sindri_core::record::{Entry, Recorder, Redaction, ShowError, Start, Stored};
+use sindri_core::record::{Cost, Entry, Recorder, Redaction, ShowError, Start, Stored};
 use sindri_core::sandbox::Enforcement;
 use tempfile::TempDir;
 
@@ -85,7 +85,7 @@ fn a_record_names_the_run_the_sandbox_and_where_it_got_to() {
     let (_root, session, recorder) = recording(Enforcement::Bubblewrap);
 
     recorder.user("how many files?");
-    recorder.assistant(1, "Looking.", Some("counting"));
+    recorder.assistant(1, "Looking.", Some("counting"), Cost::default());
     recorder.tool_call(1, &call("call_1", "ls | wc -l"));
     recorder.tool_result(
         1,
@@ -95,7 +95,7 @@ fn a_record_names_the_run_the_sandbox_and_where_it_got_to() {
             false,
         ),
     );
-    recorder.assistant(2, "Twelve files.", None);
+    recorder.assistant(2, "Twelve files.", None, Cost::default());
     recorder.finish(&report()).expect("finish the record");
 
     let stored = Stored::load_in(&session).expect("read the record back");
@@ -118,7 +118,7 @@ fn a_record_names_the_run_the_sandbox_and_where_it_got_to() {
         stored.entries
     );
     assert!(
-        matches!(&stored.entries[1], Entry::Assistant { turn: 1, text, reasoning }
+        matches!(&stored.entries[1], Entry::Assistant { turn: 1, text, reasoning, .. }
             if text == "Looking." && reasoning.as_deref() == Some("counting")),
         "{:?}",
         stored.entries

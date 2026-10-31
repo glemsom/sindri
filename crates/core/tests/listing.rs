@@ -64,6 +64,22 @@ fn answer(turn: u32, text: &str) -> Entry {
         turn,
         text: text.to_string(),
         reasoning: None,
+        usage: None,
+        duration_ms: None,
+    }
+}
+
+fn result(turn: u32, call_id: &str, content: &str) -> Entry {
+    Entry::ToolResult {
+        turn,
+        call_id: call_id.to_string(),
+        content: content.to_string(),
+        is_error: false,
+        outcome: None,
+        exit_code: None,
+        duration_ms: None,
+        truncated: false,
+        spill: Vec::new(),
     }
 }
 
@@ -149,7 +165,7 @@ fn a_run_that_never_finished_says_running_and_still_reads_back() {
 }
 
 #[test]
-fn the_markdown_export_says_everything_the_record_says() {
+fn the_markdown_export_says_every_text_the_record_says() {
     let state = TempDir::new().expect("a state directory");
     let sessions = state.path().join("sessions");
     let dir = record(
@@ -161,6 +177,8 @@ fn the_markdown_export_says_everything_the_record_says() {
                 turn: 1,
                 text: "Looking.".to_string(),
                 reasoning: Some("counting".to_string()),
+                usage: None,
+                duration_ms: None,
             },
             Entry::ToolCall {
                 turn: 1,
@@ -169,12 +187,7 @@ fn the_markdown_export_says_everything_the_record_says() {
                 command: Some("ls | wc -l".to_string()),
                 problem: None,
             },
-            Entry::ToolResult {
-                turn: 1,
-                call_id: "call_1".to_string(),
-                content: "12\n".to_string(),
-                is_error: false,
-            },
+            result(1, "call_1", "12\n"),
             answer(2, "Twelve files."),
         ],
     );
@@ -216,12 +229,7 @@ fn a_tool_result_that_quotes_a_fence_does_not_close_the_export() {
         meta("eeee", 1_000, "final", Some(1)),
         &[
             user("show me the file"),
-            Entry::ToolResult {
-                turn: 1,
-                call_id: "call_1".to_string(),
-                content: "```\nnot the end\n```\n".to_string(),
-                is_error: false,
-            },
+            result(1, "call_1", "```\nnot the end\n```\n"),
         ],
     );
     let markdown = Stored::load_in(&dir).expect("the record reads").markdown();
