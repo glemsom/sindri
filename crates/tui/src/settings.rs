@@ -378,7 +378,7 @@ impl crate::app::App {
                     Some(missing) => settings.staged(missing),
                     None => settings,
                 };
-                self.overlay = Some(Overlay::Settings(Box::new(settings)));
+                self.show(Overlay::Settings(Box::new(settings)));
             }
             Err(message) => self.note_error(format!("settings: {message}")),
         }

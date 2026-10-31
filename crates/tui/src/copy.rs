@@ -141,29 +141,39 @@ impl Clipboard for System {
 }
 
 impl crate::app::App {
-    /// What `Ctrl-Y` copies: the rendered rows the selection covers, or — with
-    /// no selection — the whole of what the frame was told to copy.
+    /// What a mark is copied as: the rows it covers, and how many of them there
+    /// are — which is what the note says, because the mark is what the reader
+    /// is looking at and a picture's block is several rows and one line of
+    /// words. The mark is not spent here: it stands until the reader's next
+    /// gesture, so `Ctrl-Y` copies the same rows again. Where the mark covered
+    /// no character at all — a drag in the blank of a row — it is no mark
+    /// either: it is taken away, and nothing is said of it.
     pub(crate) fn copy_selection(&mut self) {
-        if let Some(text) = crate::selection::copied(&self.viewport, &self.selection) {
-            self.copy(&text);
-        }
-        self.selection = crate::selection::Selection::default();
-        self.selecting = 0;
+        // The rows a drag took are the ones the window holds: a drag that ran
+        // off its edge took the rows that were at the edge, and the mark stands
+        // on those rather than on cells no frame has.
+        self.selection.clip(self.viewport.area);
+        let Some(text) = crate::selection::copied(&self.viewport, &self.selection) else {
+            self.clear_mark();
+            return;
+        };
+        let covered = crate::mark::span(&self.viewport, &self.selection).len();
+        self.copy_named(&text, None, Some(covered));
     }
 
     pub(crate) fn copy(&mut self, text: &str) {
-        self.copy_named(text, None);
+        self.copy_named(text, None, None);
     }
 
     /// The session id alone, with no column of the rail around it: what a user
     /// pastes into `sindri sessions show`.
     pub(crate) fn copy_session_id(&mut self) {
         let id = self.rail.session();
-        self.copy_named(&id, Some("session id"));
+        self.copy_named(&id, Some("session id"), None);
     }
 
-    fn copy_named(&mut self, text: &str, named: Option<&str>) {
-        let rows = text.lines().count();
+    fn copy_named(&mut self, text: &str, named: Option<&str>, covered: Option<usize>) {
+        let rows = covered.unwrap_or_else(|| text.lines().count());
         let said = match self.clipboard.copy(text) {
             // A terminal does not answer, so this says the copy was sent and
             // says outright that nobody confirmed it.

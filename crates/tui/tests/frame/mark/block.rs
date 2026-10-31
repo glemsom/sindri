@@ -105,6 +105,51 @@ fn a_drag_that_starts_inside_a_pictures_block_washes_the_whole_block() {
 }
 
 #[test]
+fn a_released_block_mark_stands_and_the_note_counts_the_rows_it_covers() {
+    let clipboard = Taking::default();
+    let mut app = pictured(
+        "![a chart](narrow.png)\n\nthe next block\n",
+        clipboard.clone(),
+    );
+    let rows = screen(&mut app, 100, 30);
+    let caption = row_of(&rows, "a chart ‹narrow.png›") as u16;
+    let (top, bottom) = (caption - 3, caption);
+    mouse(
+        &mut app,
+        MouseEventKind::Down(MouseButton::Left),
+        6,
+        top + 1,
+    );
+    mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), 9, bottom);
+    mouse(&mut app, MouseEventKind::Up(MouseButton::Left), 9, bottom);
+
+    // The note the copy leaves lands under the mark and pushes the thread up:
+    // the mark goes with the block, which is still lit whole and nowhere else.
+    let rows = screen(&mut app, 100, 30);
+    let caption = row_of(&rows, "a chart ‹narrow.png›") as u16;
+    let cells = frame_cells(&mut app, 100, 30);
+    assert_eq!(
+        (0..30)
+            .filter(|y| !washed(&cells, *y, 100).is_empty())
+            .collect::<Vec<_>>(),
+        (caption - 3..=caption).collect::<Vec<_>>(),
+        "the block is still washed whole after the button comes up, and on the \
+         rows it is drawn on: {rows:#?}"
+    );
+    assert_eq!(
+        clipboard.saw(),
+        vec!["a chart ‹narrow.png›".to_string()],
+        "and the copy is still the block's words, once"
+    );
+    assert!(
+        crate::common::notes(&app).contains("copy sent: 4 rows"),
+        "the note counts the rows the mark covers — the graphic's and the \
+         caption's — and not the one line a block is taken as: {:?}",
+        crate::common::notes(&app)
+    );
+}
+
+#[test]
 fn no_mark_is_painted_behind_an_overlay_that_covers_the_frame() {
     let clipboard = Taking::default();
     let mut app = answered(
@@ -123,12 +168,14 @@ fn no_mark_is_painted_behind_an_overlay_that_covers_the_frame() {
     );
 
     // `?` covers the frame with the bindings: a wash under it is a lit cell
-    // nobody can see, so the frame paints none.
+    // nobody can see, so the frame paints none — and an overlay taking the
+    // screen is the reader's next gesture, so the mark goes with the frame it
+    // was drawn on rather than waiting behind the box.
     press(&mut app, KeyCode::Char('?'), KeyModifiers::NONE);
     assert!(app.overlay().is_some(), "the help overlay is open");
     assert!(
-        !app.selection().is_empty(),
-        "and the selection is still the reader's"
+        app.selection().is_empty(),
+        "an overlay takes the screen and the mark with it"
     );
     assert_eq!(
         washes(&frame_cells(&mut app, 100, 20)),

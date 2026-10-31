@@ -109,6 +109,27 @@ impl Selection {
         self.dragging = false;
     }
 
+    /// Moves the selection by `rows` of the screen, as the rows under it moved:
+    /// what a drag covered is a place in the thread and not on the glass, so a
+    /// note that arrives at the tail moves the mark with the text rather than
+    /// leaving it over a neighbour's rows.
+    pub fn translate(&mut self, rows: isize) {
+        for at in [&mut self.anchor, &mut self.head] {
+            let rows = rows.clamp(isize::from(i16::MIN), isize::from(i16::MAX)) as i16;
+            at.y = at.y.saturating_add_signed(rows);
+        }
+    }
+
+    /// Pulls both ends into the rows the window holds: a drag that ran off the
+    /// edge took the rows that were at the edge, and the mark stands on those
+    /// rather than on cells no frame has.
+    pub fn clip(&mut self, area: Rect) {
+        let last = area.y.saturating_add(area.height.saturating_sub(1));
+        for at in [&mut self.anchor, &mut self.head] {
+            at.y = at.y.clamp(area.y, last);
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.anchor == self.head
     }

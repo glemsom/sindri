@@ -1,8 +1,9 @@
-//! The hands: what one key, or one gesture, does to the frame.
-//! Everything the mouse can do is here as a key as well, because a pointer is
-//! an accelerator and never the only way in.
+//! The hands: what one key does to the frame, and the overlays that take the
+//! keys before it does. The pointer is `mouse`'s, beside this — everything it
+//! can do is here as a key as well, because a pointer is an accelerator and
+//! never the only way in.
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Position;
 
 use crate::app::{App, Renew};
@@ -14,7 +15,10 @@ use crate::selection::Selection;
 use crate::spill::Spill;
 use crate::window::Ask;
 
-const WHEEL_ROWS: usize = 3;
+/// The rows one notch of the wheel is worth.
+pub(crate) const WHEEL_ROWS: usize = 3;
+
+mod mouse;
 
 impl App {
     pub fn key(&mut self, key: KeyEvent) {
@@ -22,6 +26,12 @@ impl App {
         if self.overlay.is_some() {
             self.overlay_key(key, ctrl);
             return;
+        }
+        // A mark stands until the reader's next gesture, and every key is one —
+        // but the copy the mark is waiting for, and the two keys that draw a
+        // mark of their own over it and must not lose the count they grow by.
+        if !keeps_mark(key) {
+            self.clear_mark();
         }
         match key.code {
             KeyCode::Char('q') if ctrl => self.quit = true,
@@ -70,38 +80,6 @@ impl App {
         }
     }
 
-    /// One mouse event. `Shift` hands the gesture back to the terminal: the
-    /// frame never sees a drag it must not take.
-    pub fn mouse(&mut self, event: MouseEvent) {
-        if event.modifiers.contains(KeyModifiers::SHIFT) {
-            return;
-        }
-        if self.overlay.is_some() {
-            match event.kind {
-                MouseEventKind::ScrollUp => self.scroll_page(true),
-                MouseEventKind::ScrollDown => self.scroll_page(false),
-                _ => {}
-            }
-            return;
-        }
-        let at = Position::new(event.column, event.row);
-        match event.kind {
-            MouseEventKind::Down(MouseButton::Left) => self.press(at),
-            MouseEventKind::Drag(MouseButton::Left) => {
-                if self.selection.dragging {
-                    self.selection.head = at;
-                }
-            }
-            MouseEventKind::Up(MouseButton::Left) => {
-                self.selection.finish();
-                self.copy_selection();
-            }
-            MouseEventKind::ScrollUp => self.scroll_by(WHEEL_ROWS, true),
-            MouseEventKind::ScrollDown => self.scroll_by(WHEEL_ROWS, false),
-            _ => {}
-        }
-    }
-
     /// The keys an open overlay takes. It owns them: nothing behind it moves
     /// while it has the screen, and the page keys move it by the screenful its
     /// own box shows rather than the transcript's.
@@ -132,47 +110,6 @@ impl App {
             Some(Overlay::Settings(settings)) => settings.page(self.window.page, up),
             Some(Overlay::Spill(spill)) => spill.scroll_by(self.window.page, up),
             None => self.scroll_by(self.window.page, up),
-        }
-    }
-
-    fn press(&mut self, at: Position) {
-        // A row of the rail is a row like any other: the session id can be
-        // taken out of the frame and pasted into `sindri sessions show`.
-        // The whole fact is copied, so a wrapped id is never half
-        // an id.
-        if let Some(row) = self.rail_view.row_at(at) {
-            let text = if self.rail_view.session.contains(&row) {
-                self.rail.session()
-            } else {
-                self.rail_view.rows.get(row).cloned().unwrap_or_default()
-            };
-            if !text.trim().is_empty() {
-                self.copy(&text);
-            }
-            return;
-        }
-        let offered = self
-            .viewport
-            .row_of(at)
-            .and_then(|row| self.viewport.spilled(row))
-            .cloned();
-        if let Some(path) = offered {
-            self.show_spill(&path);
-            return;
-        }
-        // A click on an expandable entry's own row opens that entry, and is
-        // never a selection: the row a reader points at is the one they mean.
-        if let Some(index) = self
-            .viewport
-            .row_of(at)
-            .and_then(|row| self.viewport.expandable(row))
-        {
-            self.chosen = Some(index);
-            self.toggle(index);
-            return;
-        }
-        if self.viewport.holds(at) {
-            self.selection = Selection::start(at);
         }
     }
 
@@ -240,7 +177,7 @@ impl App {
         if let Some(cancel) = &self.running {
             cancel.trigger();
         }
-        self.selection = Selection::default();
+        self.clear_mark();
         self.overlay = None;
         self.completion = None;
         self.renew = Renew::Asked;
@@ -251,10 +188,13 @@ impl App {
             self.walking = None;
             return;
         }
-        self.selection = Selection::default();
+        self.clear_mark();
     }
 
-    fn show(&mut self, overlay: Overlay) {
+    /// An overlay takes the screen, and a mark under it would be a lit cell
+    /// nobody can see: the mark goes with the frame it was drawn on.
+    pub(crate) fn show(&mut self, overlay: Overlay) {
+        self.clear_mark();
         self.overlay = Some(overlay);
     }
 
@@ -328,7 +268,7 @@ impl App {
             self.selecting.saturating_sub(1)
         };
         if self.selecting == 0 {
-            self.selection = Selection::default();
+            self.clear_mark();
             return;
         }
         let bottom = area.y + rows as u16 - 1;
@@ -369,8 +309,23 @@ impl App {
 
     fn show_spill(&mut self, path: &std::path::Path) {
         match Spill::open(path) {
-            Ok(spill) => self.overlay = Some(Overlay::Spill(spill)),
+            Ok(spill) => self.show(Overlay::Spill(spill)),
             Err(error) => self.note_error(format!("cannot open {}: {error}", path.display())),
         }
+    }
+}
+
+/// Whether a key is the mark's own rather than a gesture that spends it:
+/// `Ctrl-Y` copies the rows a standing mark covers, and `Shift`+`↑`/`↓` redraw
+/// the mark as a selection grown from the bottom row — which replaces what the
+/// drag took and copies nothing. Neither has the mark cleared under it, the
+/// first because it is what the mark is for and the second because clearing it
+/// would take the count it grows by.
+fn keeps_mark(key: KeyEvent) -> bool {
+    let shift = key.modifiers.contains(KeyModifiers::SHIFT);
+    match key.code {
+        KeyCode::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => true,
+        KeyCode::Up | KeyCode::Down if shift => true,
+        _ => false,
     }
 }

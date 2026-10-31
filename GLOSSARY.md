@@ -139,10 +139,10 @@ keeps one row to say how many went (`+7 more`), and a fact too long for its room
 shortened rather than skipped — a posture to `⬢ bwrap` — and dropped only when nothing of
 it can be said. The GUID is copied with `Ctrl-G`, or by clicking its row.
 
-**mark** — the wash a drag leaves on the rows it will copy, live from press to
-release: the first row from the column the drag started on, the last up to the
-column it ended on, the rows between in full, and a wide glyph at either edge
-whole. One **ink** of the theme is painted and only as a surface, so the ink
+**mark** — the wash a drag leaves on the rows it copies, live from press to
+release and standing after it: the first row from the column the drag started
+on, the last up to the column it ended on, the rows between in full, and a wide
+glyph at either edge whole. One **ink** of the theme is painted and only as a surface, so the ink
 under it — syntax, a heading, a panel's border — still reads as itself while the
 row is marked. One function computes the spans a drag covers and both the mark
 and the copy read it (`mark::span`), so the mark can never light a cell the copy
@@ -154,8 +154,16 @@ words are taken once, on the row the block starts at. A block is the one thing
 the copy differs from the screen in, and marking it whole is what keeps that
 honest: the reader sees a whole thing taken, not a run of blank cells. A plain
 click lights nothing, a click that opens a spill row or a call's row starts no
-mark, nothing is painted behind an overlay that covers the **frame**, and the
-selection is spent with the copy, so the mark goes with it.
+mark, and nothing is painted behind an overlay that covers the **frame**. The
+mark outlives the release: it stands on the rows it took — a place in the
+**thread** and not on the glass, so the note a copy leaves landing under it moves
+the mark with the text — until the reader's next gesture, a key, a click, the
+wheel or an overlay taking the frame, which clears it and copies nothing further;
+`Ctrl-Y` while it stands copies those rows again rather than the last **answer**,
+and `Shift`+`↑`/`↓` draw a selection of their own over it. A mark whose rows the
+**window** no longer holds has nothing left to stand on, and goes rather than
+copy the rows that took its place. A release that covered no text copies nothing,
+says nothing, and leaves no mark.
 
 **pulse** — the frame's own clock, and the only thing drawn without being asked:
 a `pulse::TICK` of ~120 ms while a run is live or a completion is walking, nothing at
