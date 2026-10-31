@@ -77,13 +77,9 @@ fn a_refused_copy_is_reported_as_a_refusal_and_never_as_success() {
     );
 
     let said = notes(&app);
-    assert!(
-        said.contains("copy refused"),
-        "a refusal says it refused: {said:?}"
-    );
-    assert!(
-        !shown(&screen(&mut app, 100, 24)).contains("copy sent"),
-        "and nothing claims the copy worked"
+    assert_eq!(
+        said, "a question\ncopy refused: no tool on PATH took the text",
+        "a refusal says it refused, and nothing else is said of the copy"
     );
 }
 
@@ -97,9 +93,10 @@ fn ctrl_y_copies_the_last_answer_without_a_mouse() {
         vec!["the answer, in full".to_string()],
         "Ctrl-Y is the drag's keyboard twin"
     );
-    assert!(
-        notes(&app).contains("OSC 52"),
-        "and it says how, without claiming a confirmation it cannot have: {:?}",
+    assert_eq!(
+        notes(&app),
+        "a question",
+        "and a copy the terminal cannot confirm says nothing of itself: {:?}",
         notes(&app)
     );
 }

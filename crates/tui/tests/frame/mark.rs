@@ -13,22 +13,40 @@ use sindri_tui::copy::{Clipboard, Copied};
 use sindri_tui::theme;
 
 /// A clipboard that only records: what a drag takes is asserted on, and the
-/// test never touches the user's own.
+/// test never touches the user's own. It answers as a terminal does — sent,
+/// and unconfirmed, which leaves no note — unless it is told a tool took the
+/// text: a tool's note is the only one that counts rows.
 #[derive(Clone, Default)]
-struct Taking(Arc<Mutex<Vec<String>>>);
+struct Taking {
+    seen: Arc<Mutex<Vec<String>>>,
+    tool: Option<&'static str>,
+}
 
 impl Taking {
+    fn through(tool: &'static str) -> Taking {
+        Taking {
+            tool: Some(tool),
+            ..Taking::default()
+        }
+    }
+
     fn saw(&self) -> Vec<String> {
-        self.0.lock().map(|seen| seen.clone()).unwrap_or_default()
+        self.seen
+            .lock()
+            .map(|seen| seen.clone())
+            .unwrap_or_default()
     }
 }
 
 impl Clipboard for Taking {
     fn copy(&self, text: &str) -> Copied {
-        if let Ok(mut seen) = self.0.lock() {
+        if let Ok(mut seen) = self.seen.lock() {
             seen.push(text.to_string());
         }
-        Copied::Sent
+        match self.tool {
+            Some(tool) => Copied::Tool(tool),
+            None => Copied::Sent,
+        }
     }
 }
 
@@ -142,8 +160,8 @@ fn a_drag_lights_exactly_the_cells_its_copy_takes() {
     );
 }
 
-/// A drag of the two rows above, released: the mark it leaves, and the note's
-/// count against the rows it covers.
+/// A drag of the two rows above, released: the mark it leaves, and a tool's
+/// note to count the rows it covers against.
 fn released(clipboard: Taking) -> App {
     let mut app = answered(clipboard, "alpha bravo charlie\n\ndelta echo foxtrot");
     let rows = screen(&mut app, 100, 20);
@@ -159,7 +177,7 @@ fn released(clipboard: Taking) -> App {
 
 #[test]
 fn the_mark_stands_after_the_button_comes_up_and_the_note_counts_its_rows() {
-    let mut app = released(Taking::default());
+    let mut app = released(Taking::through("wl-copy"));
     let cells = frame_cells(&mut app, 100, 20);
     assert_eq!(
         lit(&cells, app.viewport().area),
@@ -168,7 +186,7 @@ fn the_mark_stands_after_the_button_comes_up_and_the_note_counts_its_rows() {
          comes up"
     );
     assert!(
-        crate::common::notes(&app).contains("copy sent: 3 rows"),
+        crate::common::notes(&app).contains("copied 3 rows via wl-copy"),
         "and the note names the rows the mark covers — the two with words, and \
          the blank row between them: {:?}",
         crate::common::notes(&app)

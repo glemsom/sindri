@@ -121,8 +121,8 @@ transcript, rail, composer; off a terminal it is a refusal at exit 2.
   copies it again — or the last answer, when no mark does. `Shift`+`↑`/`↓` grow a mark a
   row at a time up from the last row on screen, and shrink it back. A picture's block is
   one thing and copies as its words; `Shift+drag` is handed to the terminal, whose own
-  selection it is. The words leave by OSC 52, falling back to `wl-copy` or `xclip` —
-  *sent*, since a terminal never confirms.
+  selection it is. The words leave by OSC 52, falling back to `wl-copy` or `xclip`;
+  a copy the terminal cannot confirm says nothing, and one a tool took names the tool.
 - **`@`** walks the workspace (`.git` skipped, `.gitignore` ignored), proximity-ranked,
   capped at eight rows. `Tab`/`Enter` takes one; `Esc` dismisses, both while one is open.
 - **`/`** runs `/new` (fresh session GUID, empty transcript), `/export`, `/settings`,

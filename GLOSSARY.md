@@ -155,7 +155,7 @@ keeps that honest: the reader sees a whole thing taken, not a run of blank cells
 click lights nothing, a click that opens a spill row or a call's row starts no mark, and
 nothing is painted behind an overlay that covers the **frame**. The mark outlives the
 release: it stands on the rows it took — a place in the **thread** and not on the glass,
-so the note a copy leaves landing under it moves the mark with the text — until the
+so a note landing under it moves the mark with the text — until the
 reader's next gesture, a key, a click, the wheel or an overlay taking the frame, which
 clears it and copies nothing further; `Ctrl-Y` while it stands copies those rows again
 rather than the last **answer**, and `Shift`+`↑`/`↓` replace it with a mark of their own,

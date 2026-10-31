@@ -17,9 +17,9 @@ pub const OSC52_LIMIT: usize = 100_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Copied {
-    /// Written to the terminal as OSC 52. A terminal does not answer, so
-    /// this says the text was *sent*; saying "copied" would claim what
-    /// nobody can check.
+    /// Written to the terminal as OSC 52. A terminal does not answer, so a
+    /// note about one says the text was *sent*; saying "copied" would claim
+    /// what nobody can check, and an unnamed copy says nothing at all.
     Sent,
     Tool(&'static str),
     Refused(String),
@@ -142,9 +142,9 @@ impl Clipboard for System {
 
 impl crate::app::App {
     /// What a mark is copied as: the rows it covers, and how many of them there
-    /// are — which is what the note says, because the mark is what the reader
-    /// is looking at and a picture's block is several rows and one line of
-    /// words. The mark is not spent here: it stands until the reader's next
+    /// are — which is what a tool's note counts, because the mark is what the
+    /// reader is looking at and a picture's block is several rows and one line
+    /// of words. The mark is not spent here: it stands until the reader's next
     /// gesture, so `Ctrl-Y` copies the same rows again. Where the mark covered
     /// no character at all — a drag in the blank of a row — it is no mark
     /// either: it is taken away, and nothing is said of it.
@@ -173,19 +173,22 @@ impl crate::app::App {
     }
 
     fn copy_named(&mut self, text: &str, named: Option<&str>, covered: Option<usize>) {
-        let rows = covered.unwrap_or_else(|| text.lines().count());
         let said = match self.clipboard.copy(text) {
-            // A terminal does not answer, so this says the copy was sent and
-            // says outright that nobody confirmed it.
+            // A terminal does not answer, so a plain copy has nothing to say:
+            // nobody can confirm it landed and the words leaving is no news.
+            // A named copy still says which thing went.
             Copied::Sent => match named {
                 Some(name) => format!("{name} sent as OSC 52, which the terminal does not confirm"),
-                None => {
-                    format!("copy sent: {rows} rows as OSC 52, which the terminal does not confirm")
-                }
+                None => return,
             },
+            // A tool answered, so this is a copy and the note can say how many
+            // rows it took: the mark's own, not the lines of its text.
             Copied::Tool(tool) => match named {
                 Some(name) => format!("{name} copied via {tool}"),
-                None => format!("copied {rows} rows via {tool}"),
+                None => format!(
+                    "copied {} rows via {tool}",
+                    covered.unwrap_or_else(|| text.lines().count())
+                ),
             },
             Copied::Refused(why) => return self.note_error(format!("copy refused: {why}")),
         };

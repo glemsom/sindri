@@ -106,7 +106,7 @@ fn a_drag_that_starts_inside_a_pictures_block_washes_the_whole_block() {
 
 #[test]
 fn a_released_block_mark_stands_and_the_note_counts_the_rows_it_covers() {
-    let clipboard = Taking::default();
+    let clipboard = Taking::through("wl-copy");
     let mut app = pictured(
         "![a chart](narrow.png)\n\nthe next block\n",
         clipboard.clone(),
@@ -142,7 +142,7 @@ fn a_released_block_mark_stands_and_the_note_counts_the_rows_it_covers() {
         "and the copy is still the block's words, once"
     );
     assert!(
-        crate::common::notes(&app).contains("copy sent: 4 rows"),
+        crate::common::notes(&app).contains("copied 4 rows via wl-copy"),
         "the note counts the rows the mark covers — the graphic's and the \
          caption's — and not the one line a block is taken as: {:?}",
         crate::common::notes(&app)
