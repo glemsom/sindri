@@ -49,7 +49,13 @@ pub fn column(app: &mut App, area: Rect, buf: &mut Buffer) {
             height: spare,
             ..area
         });
-        face.render(Rect { height, ..area }, buf);
+        // The face is a picture the rail only places, and its edge is
+        // transparent: a pixel it did not paint shows the cell behind it. So the
+        // rail paints the canvas it hands the picture before the picture lands,
+        // rather than borrowing the fill the frame happens to have done.
+        let placed = Rect { height, ..area };
+        buf.set_style(placed, theme::canvas());
+        face.render(placed, buf);
         rows = Rect {
             y: area.y + height,
             height: area.height - height,
@@ -276,4 +282,55 @@ pub fn strip(app: &App, area: Rect, buf: &mut Buffer) {
         app.rail().strip(room, app.now())
     );
     Paragraph::new(Line::from(Span::styled(line, theme::faint()))).render(area, buf);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Launch;
+    use ratatui::style::Color;
+
+    fn launch() -> Launch {
+        Launch {
+            session: "4f1c8f2e-8a24-4b93-9c0e-0d3f0e5c1a77".to_string(),
+            temp: "/state/sindri/sessions/4f1c8f2e/tmp".to_string(),
+            branch: Some("t107-the-canvas".to_string()),
+            sandbox: "bwrap · 1 writable".to_string(),
+            workspace: "~/git/sindri".to_string(),
+            provider: "anthropic".to_string(),
+            model: "claude-sonnet-4-6".to_string(),
+            max_turns: 250,
+            context_limit: Some(200_000),
+        }
+    }
+
+    #[test]
+    fn the_rows_the_face_takes_are_canvas_before_the_picture_lands() {
+        // The face is a picture the rail only places: its edge is transparent,
+        // and what shows through is the cell behind it, so the rows it takes are
+        // the theme's before the picture lands.
+        let mut app = App::new(launch(), crate::face::Face::kitty());
+        let area = Rect::new(64, 0, 32, 40);
+        let mut buf = Buffer::empty(area);
+        column(&mut app, area, &mut buf);
+        let placed: Vec<u16> = (0..area.height)
+            .filter(|y| buf[(area.x, *y)].symbol().contains('\u{10EEEE}'))
+            .collect();
+        assert!(!placed.is_empty(), "the face is placed in the rail's top");
+        for y in placed {
+            for x in area.x..area.right() {
+                let cell = &buf[(x, y)];
+                assert_eq!(
+                    cell.bg,
+                    theme::CANVAS,
+                    "({x}, {y}) is behind the face, and the theme names the canvas there"
+                );
+                assert_eq!(
+                    cell.fg,
+                    Color::Reset,
+                    "({x}, {y}) carries no ink of the rail's own under the picture"
+                );
+            }
+        }
+    }
 }

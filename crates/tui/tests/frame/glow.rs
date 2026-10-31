@@ -174,9 +174,9 @@ fn the_glow_changes_the_margins_cells_and_nothing_but_the_composers_own() {
 
 #[test]
 fn with_no_answer_from_the_terminal_the_margin_is_the_canvas_it_was() {
-    // No graphics value, no glow: the margin is the terminal's own black from
-    // the top of the body down to the composer, and this frame draws what a
-    // frame that never asked for graphics draws.
+    // No graphics value, no glow: the margin is the canvas the theme names from
+    // the top of the body down to the composer, untouched by any picture, and
+    // this frame draws what a frame that never asked for graphics draws.
     let plain = cells(&mut app(), 100, 30);
     let shown: Vec<String> = (0..plain.area.height).map(|y| row(&plain, y)).collect();
     for y in 0..composer_at(&shown) {
@@ -193,12 +193,16 @@ fn with_no_answer_from_the_terminal_the_margin_is_the_canvas_it_was() {
 
 #[test]
 fn the_margin_keeps_the_canvas_and_spends_no_colour_of_its_own() {
-    // The strip is a picture, not paint: its cell carries no foreground and no
-    // background, so the terminal's own black still shows through and
-    // `tests/theme.rs` has nothing to refuse.
+    // The strip is a picture, not paint: its cell carries no ink of its own, so
+    // what it is drawn over is the canvas the theme names — the colour its
+    // edges antialias against is the theme's and not the terminal's, and
+    // `tests/theme` has nothing to refuse. Its last row is the composer's last
+    // row, so the margin is canvas beside the panel's every row as well as the
+    // body's: the rect is sized from the panel and not from the terminal.
     let glowing = cells(&mut lit(), 100, 30);
     let shown: Vec<String> = (0..glowing.area.height).map(|y| row(&glowing, y)).collect();
-    for y in 0..composer_at(&shown) {
+    let footer = shown.len() - 1;
+    for y in 0..footer {
         let cell = &glowing[(MARGIN as u16, y as u16)];
         assert_eq!(cell.fg, Color::Reset, "({MARGIN}, {y}) paints no ink");
         assert_eq!(
@@ -207,6 +211,16 @@ fn the_margin_keeps_the_canvas_and_spends_no_colour_of_its_own() {
             "and sits on the canvas the theme names"
         );
     }
+    assert_eq!(
+        column_of(&shown, footer - 1),
+        '\u{25A9}',
+        "the strip is still a picture on the composer's last row: {shown:#?}"
+    );
+}
+
+/// One row's margin, as the terminal reads it.
+fn column_of(rows: &[String], y: usize) -> char {
+    rows[y].chars().nth(MARGIN).unwrap_or(' ')
 }
 
 #[test]

@@ -168,9 +168,12 @@ terminal speaks no Kitty graphics the border is that walk of glyphs instead.
 
 **surface** — one of the three tiers of nearness the frame paints on:
 **canvas**, **panel**, **raised**, in that order. A renderer asks
-`theme::surface()` or `theme::raised()`, and the frame fills the canvas from
-`theme::CANVAS` before the layout, so no renderer asks for a background: `theme.rs`
-names every colour the frame paints. One dark theme, three tiers.
+`theme::canvas()`, `theme::surface()` or `theme::raised()`, and the frame fills the
+canvas from `theme::canvas()` before the layout, so no renderer writes a background of
+its own: `theme.rs` names every colour the frame paints. A renderer that *places* a
+picture — the seam's strip, the face — paints the canvas under it first, because a
+pixel the picture left transparent shows the cell behind it rather than the
+terminal's. One dark theme, three tiers.
 
 **canvas** — the lowest **surface**, and the theme's own: the frame fills `frame.area()`
 with it before the first region is drawn, so a resize, a scrolled region, a card or a

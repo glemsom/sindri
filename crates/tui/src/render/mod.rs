@@ -20,7 +20,6 @@ pub mod transcript;
 use ratatui::Frame;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 
@@ -159,7 +158,7 @@ pub fn draw_card(card: &Card, view: &mut crate::card::View, frame: &mut Frame) {
 /// terminal or one with a background image would otherwise change the frame as
 /// surely as a palette would.
 fn canvas(area: Rect, buf: &mut Buffer) {
-    buf.set_style(area, Style::new().bg(theme::CANVAS));
+    buf.set_style(area, theme::canvas());
 }
 
 fn footer_rows(app: &App, area: Rect, buf: &mut Buffer) {
