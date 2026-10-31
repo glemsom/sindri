@@ -118,12 +118,11 @@ fn main() {
             "batch mode takes no subcommand: `sindri -b \"your prompt\"`",
         ));
     }
+    // Read before the match, so the arms share the one value rather than each
+    // narrowing the flags its own way.
+    let overrides = cli.overrides();
     let code = match cli.command {
-        Some(Command::Doctor) => doctor::run(Overrides {
-            writable: (!cli.writable.is_empty()).then_some(cli.writable),
-            yolo_unsafe: cli.yolo_unsafe,
-            ..Overrides::default()
-        }),
+        Some(Command::Doctor) => doctor::run(policy_only(&overrides)),
         Some(Command::Sessions { command }) => match command {
             SessionsCommand::List { limit, json } => sessions::list(limit, json),
             SessionsCommand::Show { id, json } => sessions::show(id.as_deref(), json),
@@ -131,15 +130,7 @@ fn main() {
         Some(Command::Sandbox {
             command: SandboxCommand::Exec { timeout, command },
         }) => match sindri_core::exec::timeout_from_secs(timeout) {
-            Ok(timeout) => sandbox::exec(
-                timeout,
-                Overrides {
-                    writable: (!cli.writable.is_empty()).then_some(cli.writable),
-                    yolo_unsafe: cli.yolo_unsafe,
-                    ..Overrides::default()
-                },
-                &command,
-            ),
+            Ok(timeout) => sandbox::exec(timeout, policy_only(&overrides), &command),
             Err(message) => failure::usage_error(&message),
         },
         None => match cli.batch {
@@ -147,45 +138,60 @@ fn main() {
                 prompt,
                 batch::Flags {
                     format: cli.format,
-                    provider: cli.provider,
-                    theme: cli.theme,
-                    model: cli.model,
-                    base_url: cli.base_url,
-                    max_turns: cli.max_turns,
-                    timeout: cli.timeout,
-                    writable: (!cli.writable.is_empty()).then_some(cli.writable),
-                    extra_headers: (!cli.header.is_empty()).then_some(cli.header),
-                    yolo_unsafe: cli.yolo_unsafe,
-                    thinking: match (cli.thinking, cli.no_thinking) {
-                        (true, _) => Some(true),
-                        (_, true) => Some(false),
-                        _ => None,
-                    },
                     verbose: cli.verbose,
+                    overrides,
                 },
             ),
-            None => {
-                let overrides = Overrides {
-                    provider: cli.provider,
-                    theme: cli.theme,
-                    model: cli.model,
-                    base_url: cli.base_url,
-                    max_turns: cli.max_turns,
-                    timeout: cli.timeout,
-                    thinking: match (cli.thinking, cli.no_thinking) {
-                        (true, _) => Some(true),
-                        (_, true) => Some(false),
-                        _ => None,
-                    },
-                    writable: (!cli.writable.is_empty()).then_some(cli.writable),
-                    extra_headers: (!cli.header.is_empty()).then_some(cli.header),
-                    yolo_unsafe: cli.yolo_unsafe,
-                };
-                interactive(overrides)
-            }
+            None => interactive(overrides),
         },
     };
     std::process::exit(code);
+}
+
+impl Cli {
+    /// The one translation from the parsed command line to the overrides boot
+    /// reads: every arm calls it, so a flag is added in one place. A repeatable
+    /// flag left empty overrides nothing — it must never replace a configured
+    /// set with an empty one. Clap refuses both thinking flags at once, so the
+    /// ladder below is one rule rather than one per arm.
+    fn overrides(&self) -> Overrides {
+        Overrides {
+            provider: self.provider.clone(),
+            theme: self.theme.clone(),
+            model: self.model.clone(),
+            base_url: self.base_url.clone(),
+            max_turns: self.max_turns,
+            timeout: self.timeout,
+            thinking: match (self.thinking, self.no_thinking) {
+                (true, _) => Some(true),
+                (_, true) => Some(false),
+                _ => None,
+            },
+            writable: (!self.writable.is_empty()).then(|| self.writable.clone()),
+            extra_headers: (!self.header.is_empty()).then(|| self.header.clone()),
+            yolo_unsafe: self.yolo_unsafe,
+        }
+    }
+}
+
+/// The narrower value the doors take — `doctor` and `sandbox exec` are a
+/// diagnostic of the sandbox, not a run of the model: they shape the policy and
+/// none of the model's dials. Every field is named, so a setting added to
+/// `Overrides` is a decision here rather than an omission that silently leaks
+/// into a door.
+fn policy_only(overrides: &Overrides) -> Overrides {
+    Overrides {
+        provider: None,
+        theme: None,
+        model: None,
+        base_url: None,
+        max_turns: None,
+        timeout: None,
+        thinking: None,
+        writable: overrides.writable.clone(),
+        extra_headers: None,
+        yolo_unsafe: overrides.yolo_unsafe,
+    }
 }
 
 /// A non-batch launch: the terminal UI on a terminal, and a refusal otherwise.
@@ -196,4 +202,131 @@ fn interactive(overrides: Overrides) -> i32 {
         return frame::run(overrides);
     }
     failure::usage_error(r#"piped stdin needs -b: `… | sindri -b "your prompt"`"#)
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(
+        clippy::expect_used,
+        reason = "a panicking test is how a broken seam is reported"
+    )]
+
+    use super::*;
+
+    fn cli(args: &[&str]) -> Cli {
+        let mut argv = vec!["sindri"];
+        argv.extend_from_slice(args);
+        Cli::try_parse_from(argv).expect("a command line the parser takes")
+    }
+
+    #[test]
+    fn a_parsed_command_line_carries_every_flag_into_the_overrides() {
+        let overrides = cli(&[
+            "--provider",
+            "anthropic",
+            "--theme",
+            "anvil",
+            "--model",
+            "claude-sonnet-4-6",
+            "--base-url",
+            "http://gateway",
+            "--max-turns",
+            "7",
+            "--timeout",
+            "9",
+            "--writable",
+            "/one",
+            "--writable",
+            "/two",
+            "--header",
+            "X-Route: beta",
+            "--yolo-unsafe",
+        ])
+        .overrides();
+
+        assert_eq!(overrides.provider.as_deref(), Some("anthropic"));
+        assert_eq!(overrides.theme.as_deref(), Some("anvil"));
+        assert_eq!(overrides.model.as_deref(), Some("claude-sonnet-4-6"));
+        assert_eq!(overrides.base_url.as_deref(), Some("http://gateway"));
+        assert_eq!(overrides.max_turns, Some(7));
+        assert_eq!(overrides.timeout, Some(9));
+        assert_eq!(
+            overrides.writable,
+            Some(vec!["/one".to_string(), "/two".to_string()])
+        );
+        assert_eq!(
+            overrides.extra_headers,
+            Some(vec!["X-Route: beta".to_string()])
+        );
+        assert!(overrides.yolo_unsafe);
+    }
+
+    #[test]
+    fn a_flag_left_off_the_command_line_overrides_nothing() {
+        let overrides = cli(&[]).overrides();
+
+        assert_eq!(overrides.provider, None);
+        assert_eq!(overrides.theme, None);
+        assert_eq!(overrides.model, None);
+        assert_eq!(overrides.base_url, None);
+        assert_eq!(overrides.max_turns, None);
+        assert_eq!(overrides.timeout, None);
+        assert_eq!(overrides.thinking, None);
+        assert_eq!(overrides.writable, None, "no grant replaces no grant");
+        assert_eq!(overrides.extra_headers, None);
+        assert!(!overrides.yolo_unsafe);
+    }
+
+    #[test]
+    fn thinking_is_asked_for_by_one_flag_and_refused_by_the_other() {
+        assert_eq!(cli(&[]).overrides().thinking, None, "the config decides");
+        assert_eq!(
+            cli(&["--thinking"]).overrides().thinking,
+            Some(true),
+            "--thinking asks for it"
+        );
+        assert_eq!(
+            cli(&["--no-thinking"]).overrides().thinking,
+            Some(false),
+            "--no-thinking refuses it"
+        );
+    }
+
+    #[test]
+    fn the_doors_take_the_sandbox_flags_and_name_the_model_dials_absent() {
+        let overrides = policy_only(
+            &cli(&[
+                "--provider",
+                "gemini",
+                "--theme",
+                "anvil",
+                "--model",
+                "m",
+                "--base-url",
+                "http://gateway",
+                "--max-turns",
+                "7",
+                "--timeout",
+                "9",
+                "--thinking",
+                "--writable",
+                "/granted",
+                "--header",
+                "X-Route: beta",
+                "--yolo-unsafe",
+            ])
+            .overrides(),
+        );
+
+        assert_eq!(overrides.writable, Some(vec!["/granted".to_string()]));
+        assert!(overrides.yolo_unsafe);
+        assert_eq!(overrides.provider, None);
+        assert_eq!(overrides.theme, None);
+        assert_eq!(overrides.model, None);
+        assert_eq!(overrides.base_url, None);
+        assert_eq!(overrides.max_turns, None);
+        assert_eq!(overrides.timeout, None);
+        assert_eq!(overrides.thinking, None);
+        assert_eq!(overrides.extra_headers, None);
+    }
 }
