@@ -38,17 +38,6 @@ base_url = "https://api.anthropic.com"
 # should stay cheap.
 thinking = false
 
-# Headers every provider request carries, for a gateway that routes on one of
-# its own — a session id, a referer, a routing hint. A table of names to
-# values; SINDRI_EXTRA_HEADERS takes the same headers as `Name: value` lines,
-# and --header takes one per flag. Names are case-insensitive, and the level
-# that names any replaces the rest rather than adding to them. Never printed
-# and never recorded, because a gateway's header is as likely to be a secret as
-# the credential is.
-#
-# [extra_headers]
-# x-opencode-session = "sindri-batch"
-
 # Extra directories mounted read-write inside the sandbox, besides the
 # workspace and the session temp. Absolute, canonical, never "/", and never one
 # inside another. This is the setting that makes a repository-local config
@@ -60,3 +49,19 @@ max_turns = 250
 
 # How long one command may run inside the sandbox, in seconds (1–3600).
 timeout = 120
+
+# Headers every provider request carries, for a gateway that routes on one of
+# its own — a session id, a referer, a routing hint. A table of names to
+# values; SINDRI_EXTRA_HEADERS takes the same headers as `Name: value` lines,
+# and --header takes one per flag. Names are case-insensitive, and the level
+# that names any replaces the rest rather than adding to them. Never printed
+# and never recorded, because a gateway's header is as likely to be a secret as
+# the credential is.
+#
+# It is the one setting that is a table, so it comes last: in TOML every key
+# after a table header belongs to that table, and a table in the middle would
+# swallow the settings below it. The line below is a placeholder, like the
+# credential above: name your gateway's own header, or delete the table, whose
+# absence is the default.
+[extra_headers]
+x-gateway-hint = "replace this line, or delete this table"
