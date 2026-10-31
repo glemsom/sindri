@@ -193,9 +193,14 @@ column runs out.
 **composer** — the input at the bottom: 2–6 rows, `Shift+Enter` for a newline, `@` for a
 path completion, `/` for a command. With no text in it at all it carries the placeholder
 `Ask, or drop a log here · @ path · / command`, which a draft — a space is a draft —
-never sits behind. Its border is a **walk**: `PROMPT` while it holds the keyboard and
+never sits behind. It is laid out in the **transcript**'s column and not across the
+terminal, so the panel ends where the prose does: its right border sits one cell off the
+seam's light strip and no cell of the **rail**'s column is the panel's — the footer, a
+strip of hints rather than a panel, is the one row that still runs under the rail. Its
+border is a **walk**: `PROMPT` while it holds the keyboard and
 `FAINT` while a run has it, walked toward `SEAM` across the top and bottom rules so the
-panel is lit from the rail's side and its right-hand corners take the rail's own ink.
+panel is lit from the rail's side and its right-hand corners take the rail's own ink —
+which is the light the strip sets the walk beside.
 
 **first frame** — the frame before the first prompt: an empty **thread** is not a blank
 page, but the line naming the wire, the model, the workspace and the sandbox, one dim
