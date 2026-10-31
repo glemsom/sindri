@@ -10,7 +10,9 @@
 
 mod entry;
 mod export;
+mod json;
 mod redact;
+mod render;
 mod stored;
 mod summary;
 

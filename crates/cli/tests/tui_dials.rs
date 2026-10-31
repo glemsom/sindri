@@ -332,9 +332,26 @@ fn shown(env: &Env, id: &str) -> String {
     stdout(output)
 }
 
+/// The transcript, minus the one fact two runs of one prompt cannot share: the
+/// span the loop measured. The counters beside it are the mock's to repeat.
 fn entries(shown: &str) -> String {
-    match shown.find("\n--- ") {
-        Some(at) => shown[at..].to_string(),
-        None => panic!("a record has a transcript: {shown}"),
+    let Some(at) = shown.find("\n--- ") else {
+        panic!("a record has a transcript: {shown}");
+    };
+    shown[at..]
+        .lines()
+        .map(untimed)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn untimed(line: &str) -> String {
+    let Some(cost) = line.strip_prefix("turn cost: ") else {
+        return line.to_string();
+    };
+    match cost.split_once(", ") {
+        Some((span, counters)) if span.ends_with(" ms") => format!("turn cost: {counters}"),
+        None if cost.ends_with(" ms") => "turn cost:".to_string(),
+        _ => line.to_string(),
     }
 }

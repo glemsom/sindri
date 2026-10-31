@@ -107,3 +107,90 @@ pub fn three(sessions: &Path) {
         },
     );
 }
+
+pub const DETAILED: &str = "0f1c8f2e-4444-4a2b-8c3d-000000000004";
+
+/// Where the one truncated result's untruncated text went, as the model was
+/// told: a path the render must hand back unchanged.
+pub const SPILL: &str = "tmp/spill/t1.txt";
+
+/// One record holding everything the last two tickets put in it: the run's
+/// boundary and dials, what each turn cost, what the call did, and bubblewrap's
+/// own documents. Written by hand rather than by a run, so `show` is proven
+/// against the files a run leaves and not against the writer that made them.
+pub fn detailed(sessions: &Path) {
+    let dir = sessions.join(DETAILED);
+    std::fs::create_dir_all(&dir).expect("a session directory");
+    let meta = serde_json::json!({
+        "id": DETAILED,
+        "version": "0.1.0",
+        "provider": "anthropic",
+        "model": "claude-detailed",
+        "enforcement": "bubblewrap",
+        "pid": 4242,
+        "started_ms": 1_700_000_180_000u64,
+        "ended_ms": 1_700_000_184_200u64,
+        "duration_ms": 4_200u64,
+        "answered_model": "claude-detailed",
+        "turns": 2,
+        "tool_calls": 1,
+        "stopped": "final",
+        "usage": { "input_tokens": 150, "output_tokens": 42, "total_tokens": 192 },
+        "policy": "read the workspace, write nowhere",
+        "workspace": "/tmp/workspace",
+        "max_turns": 250,
+        "thinking": true,
+    });
+    std::fs::write(dir.join("session.json"), format!("{meta}\n")).expect("session.json");
+
+    let entries = [
+        serde_json::json!({ "type": "user", "text": "how many files?" }),
+        serde_json::json!({
+            "type": "assistant",
+            "turn": 1,
+            "text": "Let me look.",
+            "usage": { "input_tokens": 120, "output_tokens": 33, "total_tokens": 153 },
+            "duration_ms": 2100,
+        }),
+        serde_json::json!({
+            "type": "tool_call",
+            "turn": 1,
+            "call_id": "t1",
+            "tool": "bash",
+            "command": "ls | wc -l",
+        }),
+        serde_json::json!({
+            "type": "tool_result",
+            "turn": 1,
+            "call_id": "t1",
+            "content": "outcome: exited\nexit_code: 0\nstdout:\n12\n",
+            "is_error": false,
+            "outcome": "exited",
+            "exit_code": 0,
+            "duration_ms": 37,
+            "truncated": true,
+            "spill": [SPILL],
+        }),
+        serde_json::json!({ "type": "assistant", "turn": 2, "text": "Twelve files.", "duration_ms": 900 }),
+    ];
+    let mut transcript = String::new();
+    for entry in entries {
+        transcript.push_str(&entry.to_string());
+        transcript.push('\n');
+    }
+    // A kill cuts the line it was writing: the count of lines lost is a fact the
+    // render states, so the fixture carries one.
+    transcript.push_str(r#"{"type":"assistant","turn":3,"te"#);
+    std::fs::write(dir.join("transcript.jsonl"), transcript).expect("transcript.jsonl");
+
+    let status = [
+        serde_json::json!({ "call": 1, "document": { "child-pid": 4242, "unshare-net": true } }),
+        serde_json::json!({ "call": 1, "line": "bwrap: the sandbox started" }),
+    ];
+    let mut documents = String::new();
+    for line in status {
+        documents.push_str(&line.to_string());
+        documents.push('\n');
+    }
+    std::fs::write(dir.join("status.json"), documents).expect("status.json");
+}

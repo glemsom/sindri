@@ -88,8 +88,14 @@ enum SessionsCommand {
         #[arg(long)]
         json: bool,
     },
+    /// One record whole: the newest run when no id is named.
     Show {
-        id: String,
+        /// A session id, or a leading prefix of one.
+        id: Option<String>,
+        /// The record as one compact object: its metadata, its entries and,
+        /// when the run left any, bubblewrap's own documents.
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -118,7 +124,7 @@ fn main() {
         }),
         Some(Command::Sessions { command }) => match command {
             SessionsCommand::List { limit, json } => sessions::list(limit, json),
-            SessionsCommand::Show { id } => sessions::show(&id),
+            SessionsCommand::Show { id, json } => sessions::show(id.as_deref(), json),
         },
         Some(Command::Sandbox {
             command: SandboxCommand::Exec { timeout, command },

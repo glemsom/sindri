@@ -1,5 +1,7 @@
-//! Reading a record back: `sindri sessions show <id>` and, later, a TUI's
-//! session restore, from the same files the run wrote.
+//! Reading a record back: `sindri sessions show` and, later, a TUI's session
+//! restore, from the same files the run wrote. A reader may name a record by a
+//! whole id or by a leading prefix of one, and either way it is the same guard
+//! that decides a name can be a record at all.
 
 use std::fmt;
 use std::io;
@@ -13,6 +15,13 @@ pub enum ShowError {
     /// The id is not a session GUID: never a path, so a lookup cannot escape.
     BadId {
         id: String,
+    },
+    /// More than one record starts with the prefix the reader typed: which one
+    /// they meant is a question only they can answer, and the candidates are
+    /// the answer's shape.
+    Ambiguous {
+        prefix: String,
+        candidates: Vec<String>,
     },
     Missing {
         path: PathBuf,
@@ -35,6 +44,11 @@ impl fmt::Display for ShowError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ShowError::BadId { id } => write!(f, "`{id}` is not a session id"),
+            ShowError::Ambiguous { prefix, candidates } => write!(
+                f,
+                "`{prefix}` names more than one session: {}",
+                candidates.join(", ")
+            ),
             ShowError::Missing { path } => write!(f, "no session recorded in {}", path.display()),
             ShowError::Unreadable { path, source } => {
                 write!(f, "{} cannot be read: {source}", path.display())
@@ -61,17 +75,52 @@ pub struct Stored {
 }
 
 impl Stored {
-    pub fn load(id: &str) -> Result<Self, ShowError> {
-        if !is_session_id(id) {
-            return Err(ShowError::BadId { id: id.to_string() });
+    /// The record a reader asked for: the newest one when they named none, the
+    /// one `name` starts when they did. Reading is not resuming — nothing here
+    /// writes, so a record is never scolded for being looked at.
+    pub fn resolve(name: Option<&str>) -> Result<Self, ShowError> {
+        let root = sessions_root()?;
+        match name {
+            Some(name) => Self::by_name(&root, name),
+            None => Self::newest(&root),
         }
-        let session = state_dir()
-            .map(|state| SessionDir::at(state.join("sessions").join(id)))
-            .map_err(|source| ShowError::Unreadable {
-                path: PathBuf::from("<state dir>"),
-                source,
-            })?;
-        Stored::load_in(&session)
+    }
+
+    /// The run you just did. It comes from the listing `sessions list` prints,
+    /// so the two commands cannot disagree about which record came last.
+    fn newest(root: &Path) -> Result<Self, ShowError> {
+        let rows = super::listing(root).map_err(|source| ShowError::Unreadable {
+            path: root.to_path_buf(),
+            source,
+        })?;
+        let Some(row) = rows.into_iter().next() else {
+            return Err(ShowError::Missing {
+                path: root.to_path_buf(),
+            });
+        };
+        Self::load_in(&SessionDir::at(root.join(row.id)))
+    }
+
+    /// A whole id or a leading prefix of one, git-style: the guard stays the
+    /// only door, so a prefix can no more leave the state directory than an id
+    /// can, and an ambiguous one names its candidates rather than guessing.
+    fn by_name(root: &Path, name: &str) -> Result<Self, ShowError> {
+        if !is_session_id(name) {
+            return Err(ShowError::BadId {
+                id: name.to_string(),
+            });
+        }
+        let mut ids = candidates(root, name)?;
+        match ids.len() {
+            0 => Err(ShowError::Missing {
+                path: root.join(name),
+            }),
+            1 => Self::load_in(&SessionDir::at(root.join(ids.remove(0)))),
+            _ => Err(ShowError::Ambiguous {
+                prefix: name.to_string(),
+                candidates: ids,
+            }),
+        }
     }
 
     pub fn load_in(session: &SessionDir) -> Result<Self, ShowError> {
@@ -104,132 +153,6 @@ impl Stored {
             status,
         })
     }
-
-    pub fn render(&self) -> String {
-        let mut out = format!(
-            "session {} ({}/{}); recorded by sindri {}\n",
-            self.meta.id, self.meta.provider, self.meta.model, self.meta.version
-        );
-        out.push_str(&format!("sandbox: {}\n", self.meta.enforcement));
-        // Only what the record holds: an old record names no tree, and a run
-        // outside a repository has no git facts to state.
-        if !self.meta.workspace.is_empty() {
-            out.push_str(&format!("workspace: {}", self.meta.workspace));
-            if let Some(git) = &self.meta.git {
-                let dirty = if git.dirty { ", dirty" } else { "" };
-                out.push_str(&format!(" ({} @ {}{dirty})", git.branch, git.commit));
-            }
-            out.push('\n');
-        }
-        // `max_turns` is zero only in a record written before the dials were
-        // kept, and no run obeyed no cap.
-        if self.meta.max_turns > 0 {
-            let thinking = if self.meta.thinking { "on" } else { "off" };
-            out.push_str(&format!(
-                "dials: max turns {}, thinking {thinking}\n",
-                self.meta.max_turns
-            ));
-        }
-        out.push_str(&format!(
-            "started: {} ms since the epoch\n",
-            self.meta.started_ms
-        ));
-        match (self.meta.ended_ms, self.meta.duration_ms) {
-            (Some(ended), Some(duration)) => {
-                out.push_str(&format!("ended: {ended} after {duration} ms\n"));
-            }
-            (Some(ended), None) => out.push_str(&format!("ended: {ended}\n")),
-            (None, _) => out.push_str("ended: never — the run did not finish\n"),
-        }
-        out.push_str(&format!("stopped: {}", self.meta.stopped));
-        if let (Some(turns), Some(tool_calls)) = (self.meta.turns, self.meta.tool_calls) {
-            out.push_str(&format!(
-                ", after {turns} turns and {tool_calls} tool calls"
-            ));
-        }
-        out.push('\n');
-        if let Some(answered) = &self.meta.answered_model {
-            out.push_str(&format!("answered by: {answered}\n"));
-        }
-        out.push_str(&format!("usage: {}\n", usage(self.meta.usage.as_ref())));
-        if let Some(error) = &self.meta.error {
-            out.push_str(&format!("error: {error}\n"));
-        }
-        if self.unread > 0 {
-            let line = if self.unread == 1 { "line" } else { "lines" };
-            out.push_str(&format!("{} {line} could not be read\n", self.unread));
-        }
-
-        for entry in &self.entries {
-            match entry {
-                Entry::User { text } => {
-                    out.push_str("\n--- user ---\n");
-                    out.push_str(text);
-                    end_line(&mut out, text);
-                }
-                Entry::Assistant {
-                    turn,
-                    text,
-                    reasoning,
-                    ..
-                } => {
-                    out.push_str(&format!("\n--- assistant (turn {turn}) ---\n"));
-                    out.push_str(text);
-                    end_line(&mut out, text);
-                    if let Some(reasoning) = reasoning {
-                        out.push_str(&format!("reasoning: {reasoning}\n"));
-                    }
-                }
-                Entry::ToolCall {
-                    turn,
-                    call_id,
-                    tool,
-                    command,
-                    problem,
-                } => {
-                    out.push_str(&format!("\n--- {tool} (turn {turn}) {call_id} ---\n"));
-                    match command {
-                        Some(command) => {
-                            out.push_str(&format!("$ {command}\n"));
-                        }
-                        None => out.push_str(&format!(
-                            "not run: {}\n",
-                            problem.as_deref().unwrap_or("the arguments were unusable")
-                        )),
-                    }
-                }
-                Entry::Policy { description } => {
-                    out.push_str("\n--- policy (from here on) ---\n");
-                    out.push_str(description);
-                    end_line(&mut out, description);
-                }
-                Entry::ToolResult {
-                    turn,
-                    call_id,
-                    content,
-                    is_error,
-                    ..
-                } => {
-                    let failed = if *is_error { " (failed)" } else { "" };
-                    out.push_str(&format!(
-                        "\n--- result (turn {turn}) {call_id}{failed} ---\n"
-                    ));
-                    for line in content.lines() {
-                        out.push_str(&format!("  {line}\n"));
-                    }
-                }
-            }
-        }
-
-        if !self.status.is_empty() {
-            out.push_str("\n--- sandbox status ---\n");
-            for line in &self.status {
-                out.push_str(line);
-                out.push('\n');
-            }
-        }
-        out
-    }
 }
 
 /// A file's lines, or none at all when the file was never written: a record
@@ -260,28 +183,42 @@ fn read(path: &Path) -> Result<String, ShowError> {
     })
 }
 
-fn end_line(out: &mut String, text: &str) {
-    if !text.ends_with('\n') {
-        out.push('\n');
-    }
+/// The directory every run writes into, and the one thing a lookup cannot do
+/// without: a reader who asked for a record is owed the reason rather than an
+/// empty answer.
+fn sessions_root() -> Result<PathBuf, ShowError> {
+    state_dir()
+        .map(|state| state.join("sessions"))
+        .map_err(|source| ShowError::Unreadable {
+            path: PathBuf::from("<state dir>"),
+            source,
+        })
 }
 
-fn usage(usage: Option<&crate::provider::Usage>) -> String {
-    let Some(usage) = usage else {
-        return "none reported".to_string();
+/// Every record directory whose name `name` starts, sorted so the candidates an
+/// ambiguous prefix prints read the same twice. A directory is the only thing
+/// that can be a record, so a stray file cannot shadow a session, and a state
+/// directory no run has written to holds no candidates rather than being a
+/// failure.
+fn candidates(root: &Path, name: &str) -> Result<Vec<String>, ShowError> {
+    let entries = match std::fs::read_dir(root) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(source) => {
+            return Err(ShowError::Unreadable {
+                path: root.to_path_buf(),
+                source,
+            });
+        }
     };
-    let counter = |name: &str, value: Option<u64>| match value {
-        Some(value) => format!("{name} {value}"),
-        None => format!("{name} unreported"),
-    };
-    [
-        counter("input", usage.input_tokens),
-        counter("output", usage.output_tokens),
-        counter("cached", usage.cached_input_tokens),
-        counter("reasoning", usage.reasoning_tokens),
-        counter("total", usage.total_tokens),
-    ]
-    .join(", ")
+    let mut ids: Vec<String> = entries
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+        .filter_map(|entry| Some(entry.file_name().to_str()?.to_string()))
+        .filter(|id| id.starts_with(name) && is_session_id(id))
+        .collect();
+    ids.sort();
+    Ok(ids)
 }
 
 /// Whether `id` is a session GUID: hex and dashes only, so a lookup can never be
