@@ -3,8 +3,10 @@
 //! segment, within the one step a float walk rounds to — whatever its alpha.
 //! Alpha is not a hiding place, so a hue drawn at four out of two hundred and
 //! fifty-five is as much a renderer's invention as one drawn opaque, and a
-//! stroke's edge antialiases in alpha alone because blending a hue toward the
-//! panel would leave the ramp.
+//! picture's edge antialiases in alpha alone because blending a hue toward the
+//! canvas would leave the ramp. What that edge fades against is the canvas the
+//! frame paints, which is why a renderer draws a picture over a ground it has
+//! painted rather than over whatever the terminal had there.
 //!
 //! A picture whose pixels the frame *chooses* is held to it: the composer's
 //! stroke and the seam's strip, which are geometry and constants walked into

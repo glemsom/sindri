@@ -118,6 +118,13 @@ pub fn prompt() -> Style {
     Style::new().fg(PROMPT).add_modifier(Modifier::BOLD)
 }
 
+/// The canvas: the surface the frame fills with before the first region is
+/// drawn, and the ground a renderer paints under a picture it only places — a
+/// pixel such a picture left transparent shows the cell behind it.
+pub fn canvas() -> Style {
+    Style::new().bg(CANVAS)
+}
+
 /// A panel: the surface a composer, a fence or the rail sits on.
 pub fn surface() -> Style {
     Style::new().bg(PANEL)
@@ -168,9 +175,10 @@ pub fn owns(colour: Color) -> bool {
 /// judged exactly as a cell's is: a `PALETTE` name or a step of a `RAMPS` walk,
 /// within the one step a float walk rounds to. Alpha is not a colour and is
 /// exempt, but it is not a hiding place: the hue is read at every opacity, so a
-/// picture cannot smuggle one in by drawing it faintly. And a stroke's edge
-/// antialiases in alpha alone — blending a hue toward the panel would leave the
-/// ramp this refuses.
+/// picture cannot smuggle one in by drawing it faintly. And a picture's edge
+/// antialiases in alpha alone — blending a hue toward the canvas would leave the
+/// ramp this refuses — so what the edge fades against is the canvas the frame
+/// paints behind it, and never the terminal's own background.
 pub fn owns_pixel(pixel: &Rgba<u8>) -> bool {
     owns(Color::Rgb(pixel[0], pixel[1], pixel[2]))
 }
