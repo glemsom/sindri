@@ -196,7 +196,7 @@ the run goes. `sindri sandbox exec` opens one too; `sindri doctor` writes none.
 
 | file | what it holds |
 | --- | --- |
-| `session.json` | provider, model, enforcement (`bubblewrap`), start, end, turns, usage, and why it stopped |
+| `session.json` | provider, model, enforcement (`bubblewrap`), the policy the model was handed, the workspace and its branch and commit, the dials the run obeyed, start, end, turns, usage, and why it stopped |
 | `transcript.jsonl` | one entry per thing that happened — prompt, turns, tool calls, tool results — in order |
 | `status.json` | bubblewrap's own status documents, one per line, as they arrived |
 | `tmp/`, `tmp/home/` | the session temp, and the empty `HOME` the sandbox mounts inside it |
@@ -205,7 +205,12 @@ The GUID is the `session` field of `--format json` and the last line of `-v`; `s
 sessions show ID` reads a record back.
 
 Written incrementally, so a cancelled or `kill -9`ed run still reads; a session `/new`
-supersedes keeps saying `running`, because it did not stop, it was left. The known gap:
+supersedes keeps saying `running`, because it did not stop, it was left.
+
+Fields are only ever appended, and every field added after a record was written is
+defaulted rather than required: a record from any earlier sindri still reads, and says
+nothing about what it never recorded. `version` is the build that wrote the run — per-run
+provenance, **not** a schema version; the record has none. The known gap:
 nothing is pruned, ever — every run keeps its transcript, spill files and session temp.
 Deliberate for v0.1; `sessions prune` is a later issue.
 

@@ -61,7 +61,8 @@ ends where a session begins.
 
 **record** — the files one **session** leaves in that directory: what `sindri sessions
 show`, the **record picker** and `/export` read, and what the frame never writes
-directly. A record is a session read back, not a second thing.
+directly. A record is a session read back, not a second thing, and it is added to and
+never rewritten — except for the metadata it settles at its end.
 
 **transcript** — the ordered history of messages, tool calls and tool results of a
 session.

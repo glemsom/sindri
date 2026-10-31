@@ -28,11 +28,11 @@ fn recording() -> (TempDir, SessionDir, Recorder) {
     let session = SessionDir::at(root.path().join("sessions/session-1"));
     let recorder = Recorder::start(
         &session,
-        Start {
-            provider: "anthropic".to_string(),
-            model: "claude-mock".to_string(),
-            enforcement: Enforcement::Bubblewrap,
-        },
+        Start::of(
+            "anthropic".to_string(),
+            "claude-mock".to_string(),
+            Enforcement::Bubblewrap,
+        ),
         Redaction::default(),
     )
     .expect("the record starts");
@@ -377,11 +377,11 @@ fn attach(h: &mut Harness) -> (TempDir, SessionDir, Arc<Recorder>) {
     let recorder = Arc::new(
         Recorder::start(
             &session,
-            Start {
-                provider: "anthropic".to_string(),
-                model: "claude-mock".to_string(),
-                enforcement: Enforcement::Bubblewrap,
-            },
+            Start::of(
+                "anthropic".to_string(),
+                "claude-mock".to_string(),
+                Enforcement::Bubblewrap,
+            ),
             Redaction::default(),
         )
         .expect("the record starts"),

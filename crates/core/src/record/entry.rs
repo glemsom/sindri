@@ -9,6 +9,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Meta {
     pub id: String,
+    /// The build that wrote the run: per-run provenance, not a schema version.
+    /// The record has none — every field added later is defaulted, so an old
+    /// record always reads.
     pub version: String,
     pub provider: String,
     pub model: String,
@@ -34,6 +37,27 @@ pub struct Meta {
     pub usage: Option<crate::provider::Usage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// The boundary, as the model was handed it: `SandboxPolicy::describe()`
+    /// verbatim, never a paraphrase of it. `Recorder::rebase` moves it when a
+    /// writable set moves, so the last one written is the one the run ended
+    /// under. Absent only in a record written before the boundary was kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy: Option<String>,
+    /// The tree the run stood in, empty only in a record written before it was
+    /// kept.
+    #[serde(default)]
+    pub workspace: String,
+    /// The repository facts of that tree; absent when the directory is not a
+    /// repository or git could not answer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub git: Option<crate::workspace::Git>,
+    /// The dials the run obeyed — resolved values, not the flags it was asked
+    /// with, which would be a second source of truth for one number. Zero only
+    /// in a record written before they were kept.
+    #[serde(default)]
+    pub max_turns: u32,
+    #[serde(default)]
+    pub thinking: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -63,6 +87,12 @@ pub enum Entry {
         command: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         problem: Option<String>,
+    },
+    /// The boundary moved under a thread: the description the model is handed
+    /// from here on. Appended only when it differs from the last one recorded,
+    /// so a rebase that moved nothing says nothing.
+    Policy {
+        description: String,
     },
     /// One result: the text the model read, verbatim, and the same facts as
     /// fields — a debugger must not have to parse a prompt to learn an exit

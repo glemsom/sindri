@@ -76,6 +76,15 @@ impl Stored {
                         }
                     }
                 }
+                Entry::Policy { description } => {
+                    let _ = write!(
+                        out,
+                        "\n## policy (from here on)\n\n{}\n{}\n{}\n",
+                        fence(description),
+                        description.trim_end(),
+                        fence(description)
+                    );
+                }
                 Entry::ToolResult {
                     turn,
                     call_id,

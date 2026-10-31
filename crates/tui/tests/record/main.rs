@@ -78,11 +78,11 @@ fn record(state: &Path, model: &str, prompt: &str, answer: &str, stop: Option<St
     let session = SessionDir::create_in(state).expect("a session directory");
     let recorder = Recorder::start(
         &session,
-        Start {
-            provider: "anthropic".to_string(),
-            model: model.to_string(),
-            enforcement: Enforcement::Bubblewrap,
-        },
+        Start::of(
+            "anthropic".to_string(),
+            model.to_string(),
+            Enforcement::Bubblewrap,
+        ),
         Redaction::new(Vec::<String>::new()),
     )
     .expect("the record starts");

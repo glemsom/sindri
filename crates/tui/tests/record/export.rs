@@ -99,6 +99,7 @@ fn a_session_exported_reads_back_identically_through_sessions_show() {
             sindri_core::record::Entry::ToolCall { command, .. } => {
                 command.as_deref().unwrap_or_default()
             }
+            sindri_core::record::Entry::Policy { description } => description,
         };
         assert!(
             shown.contains(text.trim()),

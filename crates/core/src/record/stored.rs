@@ -111,6 +111,25 @@ impl Stored {
             self.meta.id, self.meta.provider, self.meta.model, self.meta.version
         );
         out.push_str(&format!("sandbox: {}\n", self.meta.enforcement));
+        // Only what the record holds: an old record names no tree, and a run
+        // outside a repository has no git facts to state.
+        if !self.meta.workspace.is_empty() {
+            out.push_str(&format!("workspace: {}", self.meta.workspace));
+            if let Some(git) = &self.meta.git {
+                let dirty = if git.dirty { ", dirty" } else { "" };
+                out.push_str(&format!(" ({} @ {}{dirty})", git.branch, git.commit));
+            }
+            out.push('\n');
+        }
+        // `max_turns` is zero only in a record written before the dials were
+        // kept, and no run obeyed no cap.
+        if self.meta.max_turns > 0 {
+            let thinking = if self.meta.thinking { "on" } else { "off" };
+            out.push_str(&format!(
+                "dials: max turns {}, thinking {thinking}\n",
+                self.meta.max_turns
+            ));
+        }
         out.push_str(&format!(
             "started: {} ms since the epoch\n",
             self.meta.started_ms
@@ -178,6 +197,11 @@ impl Stored {
                             problem.as_deref().unwrap_or("the arguments were unusable")
                         )),
                     }
+                }
+                Entry::Policy { description } => {
+                    out.push_str("\n--- policy (from here on) ---\n");
+                    out.push_str(description);
+                    end_line(&mut out, description);
                 }
                 Entry::ToolResult {
                     turn,
