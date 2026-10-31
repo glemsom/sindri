@@ -168,12 +168,17 @@ terminal speaks no Kitty graphics the border is that walk of glyphs instead.
 
 **surface** — one of the three tiers of nearness the frame paints on:
 **canvas**, **panel**, **raised**, in that order. A renderer asks
-`theme::surface()` or `theme::raised()` and never asks for a background, because
-`theme.rs` names every colour the frame paints. One dark theme, three tiers.
+`theme::surface()` or `theme::raised()`, and the frame fills the canvas from
+`theme::CANVAS` before the layout, so no renderer asks for a background: `theme.rs`
+names every colour the frame paints. One dark theme, three tiers.
 
-**canvas** — the terminal's own black: the lowest **surface**, and the one the frame
-paints nothing on — a code word in prose included, since a wash is a patch on it and
-the canvas has nothing quieter than itself. Above it: **panel**, then **raised**.
+**canvas** — the lowest **surface**, and the theme's own: the frame fills `frame.area()`
+with it before the first region is drawn, so a resize, a scrolled region, a card or a
+gap a picture's escape leaves behind is still the theme's and never the terminal's — a
+light terminal or one with a background image would otherwise change the frame as
+surely as a palette would. A code word in prose is drawn straight on it, with no wash,
+since a wash is a patch and the canvas has nothing quieter than itself. Above it:
+**panel**, then **raised**.
 
 **panel** — the **surface** the frame draws on, one tier above the canvas: the
 composer, a fenced code block, the **queue panel**, the band a turn's **prompt**

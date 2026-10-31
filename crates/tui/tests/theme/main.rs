@@ -44,7 +44,7 @@ fn app() -> App {
 /// A frame with one of everything that paints: prose and inline code, a
 /// highlighted fence and a diff fence, a call's two sides, an error note, the
 /// rail, the composer, and a modal on the raised tier above them.
-fn painted() -> Buffer {
+fn painted(width: u16, height: u16) -> Buffer {
     let mut app = app();
     app.event(Event::TextDelta {
         turn: 1,
@@ -68,7 +68,7 @@ fn painted() -> Buffer {
         crossterm::event::KeyCode::Char('?'),
         crossterm::event::KeyModifiers::NONE,
     ));
-    let mut terminal = Terminal::new(TestBackend::new(100, 70)).expect("a test terminal");
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
     terminal
         .draw(|frame| render::draw(&mut app, frame))
         .expect("the frame draws");
@@ -77,7 +77,7 @@ fn painted() -> Buffer {
 
 #[test]
 fn every_colour_the_frame_paints_comes_from_the_theme() {
-    let buf = painted();
+    let buf = painted(100, 70);
     // The theme answers for both kinds of ink it allows: a colour `PALETTE`
     // names, and a step of a walk between two of them (`theme::RAMPS`).
     let named = theme::owns;
@@ -98,7 +98,7 @@ fn every_colour_the_frame_paints_comes_from_the_theme() {
             );
         }
     }
-    let surfaces: Vec<Color> = [theme::PANEL, theme::RAISED]
+    let surfaces: Vec<Color> = [theme::CANVAS, theme::PANEL, theme::RAISED]
         .into_iter()
         .filter(|surface| {
             (0..buf.area.height).any(|y| (0..buf.area.width).any(|x| buf[(x, y)].bg == *surface))
@@ -106,9 +106,44 @@ fn every_colour_the_frame_paints_comes_from_the_theme() {
         .collect();
     assert_eq!(
         surfaces.len(),
-        2,
+        3,
         "the frame paints all three tiers: the canvas, a panel and raised"
     );
+}
+
+/// The canvas is the theme's, not the terminal's: every cell of a frame sits on
+/// a surface the theme paints, so a light terminal or one with a background
+/// image never shows through a hole a renderer left. A narrow frame and a wide
+/// one alike leave no unpainted row — the fill happens before the layout, so a
+/// region the frame does not draw into is still the theme's.
+///
+/// A diff row's wash is the one thing beside the three tiers, and it is not a
+/// fourth: it is a tint over the panel, which is why it is named here as a tint
+/// and not as a surface. `GLOSSARY.md` holds the fence's gutter and its rows to
+/// that wash, and `tests/markdown/prose.rs` holds the spans to it.
+#[test]
+fn every_cell_of_a_painted_frame_sits_on_a_surface_the_theme_paints() {
+    let tiers = [theme::CANVAS, theme::PANEL, theme::RAISED];
+    let washes = [theme::DIFF_ADDED_BG, theme::DIFF_REMOVED_BG];
+    for (width, height) in [(40, 10), (200, 60)] {
+        let buf = painted(width, height);
+        for y in 0..buf.area.height {
+            for x in 0..buf.area.width {
+                let bg = buf[(x, y)].bg;
+                assert_ne!(
+                    bg,
+                    Color::Reset,
+                    "({x},{y}) at {width}x{height} is {:?} on the terminal's own background",
+                    buf[(x, y)].symbol()
+                );
+                assert!(
+                    tiers.contains(&bg) || washes.contains(&bg),
+                    "({x},{y}) at {width}x{height} is {:?} on {bg:?}, which the theme does not paint",
+                    buf[(x, y)].symbol()
+                );
+            }
+        }
+    }
 }
 
 /// A walk names no hue of its own: every step of the composer's border is on
@@ -219,9 +254,8 @@ fn ratio(fg: Color, bg: Color) -> f64 {
 
 #[test]
 fn faint_clears_four_and_a_half_to_one_on_the_panel_and_on_the_canvas() {
-    // The canvas is the terminal's own black: the frame paints nothing there.
-    let canvas = Color::Rgb(0, 0, 0);
-    for surface in [theme::PANEL, canvas] {
+    // The canvas is the theme's own, filled before anything is drawn on it.
+    for surface in [theme::PANEL, theme::CANVAS] {
         let cleared = ratio(theme::FAINT, surface);
         assert!(
             cleared >= 4.5,
@@ -301,10 +335,12 @@ fn the_rails_leader_and_seam_are_named_stops_a_step_apart() {
         "the seam is a step above faint"
     );
     // A leader is a graphic, not a word, so 3:1 is the bar it clears on the
-    // canvas — the gap it bridges is seen, never guessed at.
-    let cleared = ratio(theme::LEADER, Color::Rgb(0, 0, 0));
+    // canvas — the gap it bridges is seen, never guessed at. It is measured on
+    // the canvas the frame paints, not on a black the frame never sees, and it
+    // clears the bar with margin rather than sitting on it.
+    let cleared = ratio(theme::LEADER, theme::CANVAS);
     assert!(
-        cleared >= 3.0,
-        "a leader on the canvas is {cleared:.2}:1, under the 3:1 a graphic needs"
+        cleared >= 3.3,
+        "a leader on the canvas is {cleared:.2}:1, under the 3.3:1 it was raised to"
     );
 }

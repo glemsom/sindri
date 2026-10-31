@@ -1,9 +1,10 @@
 //! One dark theme, in truecolour. There is no light mode and no 256-colour
 //! fallback to maintain. The theme owns every colour the frame
-//! paints, and the three surfaces that make nearness legible: the terminal's
-//! own canvas, the panel a composer or a code fence sits on, and the raised
-//! tier above it. It answers for pixels too (`owns_pixel`): a picture a
-//! renderer generates is held to the same law as a cell it paints.
+//! paints, and the three surfaces that make nearness legible: the canvas the
+//! frame fills before anything is drawn, the panel a composer or a code fence
+//! sits on, and the raised tier above it. It answers for pixels too
+//! (`owns_pixel`): a picture a renderer generates is held to the same law as a
+//! cell it paints.
 
 use image::Rgba;
 use ratatui::style::{Color, Modifier, Style};
@@ -36,17 +37,25 @@ pub const DIFF_FILE: Color = Color::Rgb(0x96, 0xa3, 0xb3);
 pub const DIFF_ADDED_BG: Color = Color::Rgb(0x1c, 0x2b, 0x22);
 pub const DIFF_REMOVED_BG: Color = Color::Rgb(0x2f, 0x20, 0x23);
 
-/// The surfaces, in the order they read as nearer: the canvas is the
-/// terminal's own black and nothing paints it, a panel is a composer, a
-/// fence or the rail, and raised is a step above a panel.
+/// The tier underneath a panel: the surface every word is written on. It
+/// used to be the terminal's, and a theme that owns every ink and stops at
+/// the background owns nothing — a light terminal or a terminal with a
+/// background image changes the frame as surely as a palette would. The frame
+/// fills it before the first region is drawn, so a resize, a scrolled region
+/// or a card never shows the terminal through a hole.
+pub const CANVAS: Color = Color::Rgb(0x09, 0x0c, 0x11);
+/// A step above the canvas: a composer, a fence or the rail sits on it.
 pub const PANEL: Color = Color::Rgb(0x17, 0x1a, 0x21);
+/// A step above a panel, for a thing drawn on top of one.
 pub const RAISED: Color = Color::Rgb(0x23, 0x27, 0x33);
 
 /// A dot leader's dots: the dimmest ink the frame spends, because a run of
 /// dots reads heavier than the label it bridges to and only has to be seen,
-/// not read. Dimmer than FAINT, and still over the 3:1 a graphic needs on the
-/// canvas, so the gap is visible rather than guessed at.
-pub const LEADER: Color = Color::Rgb(0x55, 0x5e, 0x70);
+/// not read. Dimmer than FAINT, and 3.34:1 on `CANVAS` — over the 3:1 a
+/// graphic needs there, with a margin rather than sitting on the bar, so the
+/// gap is visible rather than guessed at. Measured on the canvas the frame
+/// paints, not on a black it never sees.
+pub const LEADER: Color = Color::Rgb(0x5b, 0x65, 0x78);
 /// The seam's ink: a step above FAINT, because a dot at one-eighth of a cell
 /// loses apparent luminance and the light it is drawn in has to hold the same
 /// edge the rail's facts hold.
@@ -68,6 +77,7 @@ pub const PALETTE: &[Color] = &[
     TYPE,
     NUMBER,
     STRING,
+    CANVAS,
     PANEL,
     RAISED,
     LEADER,

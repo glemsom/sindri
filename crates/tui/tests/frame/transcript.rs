@@ -220,10 +220,10 @@ fn the_prompt_is_full_strength_on_a_panel_band_under_a_header() {
     );
 
     let answer = row_of(&rows, "answer 1") as u16;
-    assert_ne!(
+    assert_eq!(
         buf[(middle, answer)].bg,
-        theme::PANEL,
-        "an answer sits on the canvas, not on the prompt's band"
+        theme::CANVAS,
+        "an answer sits on the canvas the theme names, not on the prompt's band"
     );
 }
 

@@ -7,7 +7,7 @@ use super::*;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
-use ratatui::style::{Color, Modifier};
+use ratatui::style::Modifier;
 use sindri_tui::theme;
 
 fn buffer(app: &mut App, width: u16, height: u16) -> Buffer {
@@ -223,8 +223,8 @@ fn the_composer_ends_where_the_words_end() {
             let cell = &buf[(x, y)];
             assert_eq!(
                 cell.bg,
-                Color::Reset,
-                "({x}, {y}) is beside the panel, and the panel paints no cell there"
+                theme::CANVAS,
+                "({x}, {y}) is beside the panel, and the canvas the theme names is under it"
             );
             assert_eq!(
                 cell.symbol(),
@@ -347,14 +347,14 @@ fn the_rail_is_chrome_on_the_canvas_one_column_away_from_the_transcript() {
             }
             assert_eq!(
                 tier,
-                Color::Reset,
-                "the rail draws no fill, so the canvas shows through: ({x},{y})"
+                theme::CANVAS,
+                "the rail draws no fill, so the canvas the theme names is under it: ({x},{y})"
             );
         }
         assert_eq!(
             buf[((width - RAIL - 1) as u16, y)].bg,
-            Color::Reset,
-            "and it leaves the terminal's own canvas between it and the words: ({y})"
+            theme::CANVAS,
+            "and it leaves the canvas the theme names between it and the words: ({y})"
         );
         banded += usize::from(crossable);
     }
