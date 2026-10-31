@@ -112,12 +112,17 @@ transcript, rail, composer; off a terminal it is a refusal at exit 2.
 - **Composer,** two to six rows: `Enter` sends, `Shift+Enter` breaks the line, `Ctrl-Q`
   leaves, `Ctrl-C` cancels a run and keeps the draft — or clears it when nothing is
   running.
-- **Scroll and copy:** `PgUp`/`PgDn` and the wheel move the transcript, `Home` goes to
-  the first turn and `End` back to the tail, which is followed again; a reader who is
-  scrolled back is told what arrived below them (`↓ 4 new rows`) and a thread longer than
-  the window marks its position in the last column. Only on-screen rows are laid out. Dragging selects rendered rows; releasing copies them, styles
-  stripped, through OSC 52, falling back to `wl-copy` or `xclip` — *sent*, since a
-  terminal never confirms.
+- **Scroll and copy:** `PgUp`/`PgDn` and the wheel move the transcript, `Home` goes to the
+  first turn and `End` back to the tail, which is followed again; a reader who is scrolled
+  back is told what arrived below them (`↓ 4 new rows`) and a thread longer than the
+  window marks its position in the last column. Only on-screen rows are laid out. A drag
+  marks what it will take: the cells it lights from press to release are the rows the copy
+  takes, styles stripped, and the mark stands after the button comes up, so `Ctrl-Y`
+  copies it again — or the last answer, when no mark does. `Shift`+`↑`/`↓` grow a mark a
+  row at a time up from the last row on screen, and shrink it back. A picture's block is
+  one thing and copies as its words; `Shift+drag` is handed to the terminal, whose own
+  selection it is. The words leave by OSC 52, falling back to `wl-copy` or `xclip` —
+  *sent*, since a terminal never confirms.
 - **`@`** walks the workspace (`.git` skipped, `.gitignore` ignored), proximity-ranked,
   capped at eight rows. `Tab`/`Enter` takes one; `Esc` dismisses, both while one is open.
 - **`/`** runs `/new` (fresh session GUID, empty transcript), `/export`, `/settings`,

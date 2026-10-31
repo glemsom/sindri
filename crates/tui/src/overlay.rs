@@ -62,12 +62,12 @@ pub const BINDINGS: &[Binding] = &[
     Binding {
         keys: "Shift+Up, Shift+Down",
         mouse: None,
-        what: "select rendered rows from the newest row upwards",
+        what: "mark rendered rows up from the last row on screen, a row at a time either way",
     },
     Binding {
         keys: "Ctrl-Y",
         mouse: Some("drag"),
-        what: "copy the selection, or the last answer, styles stripped",
+        what: "copy the mark, or the last answer, styles stripped; a picture's block as its words",
     },
     Binding {
         keys: "Ctrl-O",
@@ -107,7 +107,7 @@ pub const BINDINGS: &[Binding] = &[
     Binding {
         keys: "—",
         mouse: None,
-        what: "Shift+drag is the terminal's own selection, never the frame's",
+        what: "Shift+drag is handed to the terminal, whose own selection it is",
     },
 ];
 
