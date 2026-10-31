@@ -176,8 +176,10 @@ fn on_ramp(colour: Color, from: Color, to: Color) -> bool {
 }
 
 /// A stop's truecolour bytes: a walk between two colours that are not
-/// truecolour is a module that panics rather than a gradient nobody can see.
-const fn channels(colour: Color) -> [u8; 3] {
+/// truecolour is a module that panics rather than a gradient nobody can see. A
+/// picture reads them too, because it paints in the theme's bytes and not in a
+/// `Color` the terminal parses.
+pub(crate) const fn channels(colour: Color) -> [u8; 3] {
     match colour {
         Color::Rgb(r, g, b) => [r, g, b],
         _ => panic!("a ramp is walked between two truecolour stops"),

@@ -154,6 +154,13 @@ walked cell to the segments exactly as it holds a flat one to `PALETTE`. On term
 that speak no Kitty graphics it is the only light the frame has, the seam's strip
 being absent there.
 
+**stroke** — the composer's border drawn in pixels rather than glyphs
+(`border.rs`): one line around the panel, cut by 45° at its four corners and cut
+again where its label sits. It is a hairline on the side the panel's ink is on
+and grows toward the lamp — the corner nearest the seam — and it antialiases in
+alpha alone, so every hue it paints is a **walk** the theme names. Where the
+terminal speaks no Kitty graphics the border is that walk of glyphs instead.
+
 **surface** — one of the three tiers of nearness the frame paints on:
 **canvas**, **panel**, **raised**, in that order. A renderer asks
 `theme::surface()` or `theme::raised()` and never asks for a background, because
