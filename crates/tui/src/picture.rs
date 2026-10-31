@@ -10,6 +10,7 @@
 mod diagram;
 mod source;
 mod store;
+mod svgs;
 #[cfg(test)]
 mod tests;
 

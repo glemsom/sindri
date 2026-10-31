@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use image::{DynamicImage, ImageFormat, ImageReader, Limits};
 
-use crate::picture::diagram;
+use crate::picture::svgs::Svgs;
 use crate::picture::{BYTES, PIXELS, Refusal};
 
 /// The formats the store draws: the four the decoders behind `ratatui-image`
@@ -54,22 +54,23 @@ impl Source {
     }
 
     /// The natural size of what this source draws, in pixels: a file's header
-    /// and never its pixels, a fence's diagram from the svg the renderer would
-    /// write for it.
-    pub(super) fn measured(&self) -> Result<(u32, u32), Refusal> {
+    /// and never its pixels, a fence's diagram from the svg the renderer wrote
+    /// for it — which `svgs` holds, so a body measured twice is parsed once.
+    pub(super) fn measured(&self, svgs: &Svgs) -> Result<(u32, u32), Refusal> {
         match self {
             Source::File(path) => dimensions(path),
-            Source::Fence(body) => diagram::measured(body),
+            Source::Fence(body) => svgs.measured(body),
         }
     }
 
     /// The pixels this source draws, fitted into `width` by `height`, or `None`
     /// where nothing can be drawn: a file decoded under the cap its header was
-    /// already held to, a fence rasterised on the panel's ground.
-    pub(super) fn rasterised(&self, width: u32, height: u32) -> Option<DynamicImage> {
+    /// already held to, a fence rasterised on the panel's ground from the svg
+    /// the store already has.
+    pub(super) fn rasterised(&self, svgs: &Svgs, width: u32, height: u32) -> Option<DynamicImage> {
         match self {
             Source::File(path) => decode(path),
-            Source::Fence(body) => diagram::rasterised(body, width, height),
+            Source::Fence(body) => svgs.rasterised(body, width, height),
         }
     }
 }

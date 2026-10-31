@@ -90,31 +90,42 @@ fn options() -> RenderOptions {
     }
 }
 
-/// The size a fence's diagram is drawn at, in pixels: what the svg the renderer
-/// writes says it is, and the parser's own reason when there is no svg at all.
-pub(super) fn measured(body: &str) -> Result<(u32, u32), Refusal> {
+/// One rendered diagram: the svg the renderer wrote for a fence's body, and the
+/// size it says it is. The svg is kept rather than the pixels because drawing
+/// one and measuring one are the same drawing — the store measures an entry
+/// every frame and draws it once — so a body costs the renderer once, whatever
+/// the frame asks of it afterwards.
+pub(super) struct Shape {
+    pub(super) svg: String,
+    /// The size in pixels, read off the svg's own attributes: no font is loaded
+    /// to learn it, and the walk over fontconfig is the raster's business.
+    pub(super) size: (u32, u32),
+}
+
+/// The diagram a fence's body draws, or the parser's own reason there is none.
+pub(super) fn render(body: &str) -> Result<Shape, Refusal> {
     let svg = render_strict(body, options()).map_err(diagnostic)?;
-    // No fonts are loaded to read a size: an svg carries it in its own
-    // attributes, and the walk over fontconfig is the raster's business.
     let tree = usvg::Tree::from_str(&svg, &usvg::Options::default()).map_err(diagnostic)?;
     let size = tree.size().to_int_size();
-    Ok((size.width(), size.height()))
+    Ok(Shape {
+        svg,
+        size: (size.width(), size.height()),
+    })
 }
 
-/// The pixels a fence's diagram draws at `width` by `height`, on the panel's
+/// The pixels a rendered diagram draws at `width` by `height`, on the panel's
 /// ground: the whole diagram, fitted and never drawn past its own pixels.
-pub(super) fn rasterised(body: &str, width: u32, height: u32) -> Option<DynamicImage> {
+pub(super) fn raster(shape: &Shape, width: u32, height: u32) -> Option<DynamicImage> {
     let mut fonts = usvg::Options::default();
     *fonts.fontdb_mut() = fonts_system().as_ref().clone();
-    drawn(body, width, height, &fonts)
+    drawn(&shape.svg, width, height, &fonts)
 }
 
-/// The same drawing, with whatever fonts the caller brought: a diagram's words
-/// are the one part of it that needs a font database, so the ground and the
-/// shapes are drawn with or without one and only the words are not.
-fn drawn(body: &str, width: u32, height: u32, fonts: &usvg::Options<'_>) -> Option<DynamicImage> {
-    let svg = render_strict(body, options()).ok()?;
-    let tree = usvg::Tree::from_str(&svg, fonts).ok()?;
+/// The svg drawn, with whatever fonts the caller brought: a diagram's words are
+/// the one part of it that needs a font database, so the ground and the shapes
+/// are drawn with or without one and only the words are not.
+fn drawn(svg: &str, width: u32, height: u32, fonts: &usvg::Options<'_>) -> Option<DynamicImage> {
+    let tree = usvg::Tree::from_str(svg, fonts).ok()?;
     let natural = tree.size();
     let (width, height) = (width.max(1), height.max(1));
     let mut pixmap = tiny_skia::Pixmap::new(width, height)?;
