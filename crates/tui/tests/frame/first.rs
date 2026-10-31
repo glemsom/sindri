@@ -1,6 +1,6 @@
 //! The first frame: an empty thread is not a blank page. It names the wire,
 //! the model, the workspace and the sandbox it was launched with, says the
-//! contract once, and offers three things that can be typed as written — and
+//! contract once, and offers two prompts that can be typed as written — and
 //! it leaves a placeholder in the composer and a short thread on the floor, so
 //! the newest row is the one above the composer rather than a screenful of
 //! blank rows below a lone answer.
@@ -93,7 +93,7 @@ fn the_first_frame_says_the_contract_once_in_a_dim_sentence() {
 }
 
 #[test]
-fn the_first_frame_offers_three_things_to_type_and_help() {
+fn the_first_frame_offers_two_things_to_type_and_help() {
     let mut app = app();
     let rows = screen(&mut app, 100, 24);
     let column = body(&rows);
@@ -241,4 +241,22 @@ fn a_narrow_first_frame_still_names_the_wire_the_model_and_the_sandbox() {
         first.contains('…'),
         "the directory is the fact that gives way, shortened and not cut: {first:?}"
     );
+}
+
+#[test]
+fn a_narrow_first_frame_offers_its_two_examples_and_help_without_cutting_one() {
+    let mut app = app();
+    let rows = screen(&mut app, 60, 24);
+    for offer in hello::EXAMPLES.into_iter().chain([hello::HELP]) {
+        let row = rows
+            .iter()
+            .find(|row| row.contains(offer))
+            .unwrap_or_else(|| {
+                panic!("at sixty columns the first frame offers {offer:?}: {rows:#?}")
+            });
+        assert!(
+            !row.contains('…'),
+            "the offer is whole rather than cut: {row:?} in {rows:#?}"
+        );
+    }
 }

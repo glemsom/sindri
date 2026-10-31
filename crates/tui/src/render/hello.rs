@@ -1,6 +1,6 @@
 //! The first frame: a thread with nothing in it yet is not a blank page. It
 //! says what the run is — the wire, the model, the directory and the sandbox —
-//! the one sentence of the contract that matters, and three things that can be
+//! the one sentence of the contract that matters, and two prompts that can be
 //! typed as they read, so the first keystroke is not a guess. Every fact comes
 //! from the launch and nothing else does: an empty frame can say what it was
 //! launched with, and cannot say what a run it has not had has spent.
@@ -23,13 +23,13 @@ use crate::theme;
 pub const CONTRACT: &str =
     "one tool, bash, sandboxed: the host is readable, only the chosen paths writable";
 
-/// Three things to type, each one accepted exactly as it is written: two
-/// prompts the loop sends whole, and a command the frame runs. `HELP` is
-/// offered beside them, because the rest are on it.
-pub const EXAMPLES: [&str; 3] = [
+/// Two prompts to type, each one accepted exactly as it is written and sent
+/// whole. They are prompts and not commands because every command left needs a
+/// thread (`/export` would write an empty file) or needs a run (`/new`);
+/// `HELP` is offered beside them, because the rest are on it.
+pub const EXAMPLES: [&str; 2] = [
     "what changed here today?",
     "run the tests and fix what fails",
-    "/sessions",
 ];
 
 pub const HELP: &str = "/help";

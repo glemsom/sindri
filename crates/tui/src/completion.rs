@@ -267,7 +267,7 @@ mod tests {
 
     #[test]
     fn a_fragment_narrows_the_offer_and_the_names_it_starts_come_first() {
-        assert_eq!(commands("s"), paths(&["/sessions", "/settings"]));
+        assert_eq!(commands("s"), paths(&["/settings"]));
         assert!(
             commands("zzzz").is_empty(),
             "a fragment that names nothing offers nothing"

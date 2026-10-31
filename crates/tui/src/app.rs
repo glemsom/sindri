@@ -92,8 +92,8 @@ pub struct App {
     /// composer says so rather than pretending.
     pub(crate) missing: Option<Missing>,
     pub(crate) rail_view: RailView,
-    /// Where the records live: `/sessions` and `/export` read this directory
-    /// and write nothing into it.
+    /// Where the records live: `/export` reads this directory and writes
+    /// nothing into it.
     pub(crate) sessions: Option<PathBuf>,
     /// The directory a default export lands in: the workspace the frame was
     /// launched in.
@@ -159,8 +159,8 @@ impl App {
         self
     }
 
-    /// Where the records live: `/sessions` lists it, `/export`
-    /// reads the frame's own record from it.
+    /// Where the records live: `/export` reads the frame's own
+    /// record from it.
     pub fn with_sessions(mut self, root: impl Into<PathBuf>) -> Self {
         self.sessions = Some(root.into());
         self

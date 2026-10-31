@@ -86,8 +86,8 @@ Bare `sindri` on a terminal opens the frame — alternate screen, streaming mark
 transcript, rail, composer; off a terminal it is a refusal at exit 2.
 
 - **First frame:** an empty thread is not a blank page — the wire, the model, the
-  workspace and the sandbox, one dim sentence of the contract, and three things that can
-  be typed as they read (with `/sessions` and `/help` beside them). The composer holds
+  workspace and the sandbox, one dim sentence of the contract, and two prompts that can
+  be typed as they read (with `/help` beside them). The composer holds
   the placeholder `Ask, or drop a log here · @ path · / command` until there is a draft.
 - **Pulse:** while a run is live, a braille marker at the head of the newest answer
   carries the elapsed time (`⠸ 0.8s`) and settles on `✓` or `✗` with the duration it
@@ -120,10 +120,10 @@ transcript, rail, composer; off a terminal it is a refusal at exit 2.
   terminal never confirms.
 - **`@`** walks the workspace (`.git` skipped, `.gitignore` ignored), proximity-ranked,
   capped at eight rows. `Tab`/`Enter` takes one; `Esc` dismisses, both while one is open.
-- **`/`** runs `/new` (fresh session GUID, empty transcript), `/settings`, `/help`,
-  `/sessions`, `/export` and `/quit`. `/sessions` reads a record back read-only — reading
-  is not resuming; `/export [path]` writes the thread as one markdown file, asking twice
-  before replacing a file. **`?` and `/help` list the same bindings**, each gesture beside
+- **`/`** runs `/new` (fresh session GUID, empty transcript), `/export`, `/settings`,
+  `/help` and `/quit`. `/export [path]` writes the thread as one markdown file, asking
+  twice before replacing a file; reading a record back is `sindri sessions show`, in the
+  shell. **`?` and `/help` list the same bindings**, each gesture beside
   its key.
 - **Chrome:** a narrow terminal shortens what the frame says and never cuts a key or a
   fact in half. The footer states its seven hints from 120 columns up, five from 100 and

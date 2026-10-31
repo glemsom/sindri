@@ -60,7 +60,7 @@ ends where a session begins.
 `$XDG_STATE_HOME/sindri/sessions/<guid>/`.
 
 **record** — the files one **session** leaves in that directory: what `sindri sessions
-show`, the **record picker** and `/export` read, and what the frame never writes
+show` and `/export` read, and what the frame never writes
 directly. A record is a session read back, not a second thing, and it is added to and
 never rewritten — except for the metadata it settles at its end.
 
@@ -170,7 +170,7 @@ panel is lit from the rail's side and its right-hand corners take the rail's own
 
 **first frame** — the frame before the first prompt: an empty **thread** is not a blank
 page, but the line naming the wire, the model, the workspace and the sandbox, one dim
-sentence of the contract, and three things that can be typed as they read beside `/help`.
+sentence of the contract, and two prompts that can be typed as they read beside `/help`.
 Every fact on it comes from `Launch`; nothing it says is a figure, because no run has
 spent any.
 
@@ -225,11 +225,6 @@ alt text's words, the target in `‹›` as a link keeps its own, the reason in 
 when there is no picture. It is what the rows cost when nothing is drawn, and what a copy
 of the block yields.
 
-**record picker** — the `/sessions` overlay: one row per **session** under
-`$XDG_STATE_HOME/sindri/sessions/`, newest first — when it ran, its model, its turns, why
-it stopped, and the first prompt. `Enter` reads that **transcript** back read-only, `Esc`
-closes. Reading is not resuming.
-
 **export** — `/export [path]`: the **thread** as one markdown file, at the path named or
 `sindri-<guid>.md` in the workspace, read out of the record so it says what `sindri
 sessions show` prints. A file already there is not overwritten without a second ask.
@@ -244,7 +239,7 @@ that fell off.
 their accelerator, that do one thing — and what that thing is. `BINDINGS` is the one
 list, and nothing on it is reachable only with a pointer. The one row that is
 not a binding is the **command** catalogue's: the commands share a row, because one
-name there is six names.
+name there is five names.
 
 **command** — one of the `/` names the **composer** sends: the name, the one line the
 **help overlay** says of it, and what it opens. One catalogue (`COMMANDS`) holds them
