@@ -172,6 +172,36 @@ fn binds(argv: &[String]) -> Vec<&String> {
 }
 
 #[test]
+fn the_description_names_every_variable_the_argv_sets() {
+    let (_workspace, _, policy) = fixtures();
+    let Invocation::Sandboxed(argv) = policy.to_argv(&["true".to_string()], None) else {
+        panic!("sandboxed");
+    };
+    let set: Vec<&str> = argv
+        .windows(3)
+        .filter(|window| window[0] == "--setenv")
+        .map(|window| window[1].as_str())
+        .collect();
+    assert!(!set.is_empty(), "the argv clears and then sets variables");
+
+    let description = policy.describe();
+    let line = description
+        .lines()
+        .find(|line| line.trim_start().starts_with("environment:"))
+        .unwrap_or_else(|| panic!("the environment is stated: {description}"));
+    // Whole words only: naming `TMPDIR` does not name `TMP`.
+    let named: Vec<&str> = line
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .collect();
+    for name in set {
+        assert!(
+            named.contains(&name),
+            "the description understates the boundary: {name} is set and not named: {line}"
+        );
+    }
+}
+
+#[test]
 fn the_argv_unshares_the_namespaces_that_matter_and_keeps_the_network() {
     let (_, _, policy) = fixtures();
     let Invocation::Sandboxed(argv) = policy.to_argv(&["true".to_string()], None) else {
