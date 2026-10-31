@@ -20,6 +20,7 @@ pub mod transcript;
 use ratatui::Frame;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 
@@ -59,6 +60,9 @@ const HINT_GAP: &str = " · ";
 
 pub fn draw(app: &mut App, frame: &mut Frame) {
     let area = frame.area();
+    // Before the layout, so a region the frame draws nothing into is still the
+    // theme's.
+    canvas(area, frame.buffer_mut());
     // The queue is a row the layout gives up only when something is waiting
     // in it: an empty panel would be a row stolen from the transcript. It
     // never takes the room the composer and the footer need, because a queue
@@ -143,7 +147,19 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
 
 pub fn draw_card(card: &Card, view: &mut crate::card::View, frame: &mut Frame) {
     let area = frame.area();
+    // The card does not go through `draw`, so it fills its own canvas: what
+    // the last frame left under it is not the surface this one is written on.
+    canvas(area, frame.buffer_mut());
     card::draw(card, view, area, frame.buffer_mut());
+}
+
+/// Fills a region with the canvas, the surface every word is written on. A
+/// resize, a scrolled region, a card or the gap a picture's escape leaves
+/// unpainted is the theme's surface then, never the terminal's — a light
+/// terminal or one with a background image would otherwise change the frame as
+/// surely as a palette would.
+fn canvas(area: Rect, buf: &mut Buffer) {
+    buf.set_style(area, Style::new().bg(theme::CANVAS));
 }
 
 fn footer_rows(app: &App, area: Rect, buf: &mut Buffer) {

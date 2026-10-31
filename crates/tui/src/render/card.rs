@@ -76,7 +76,11 @@ pub fn draw(card: &Card, view: &mut View, area: Rect, buf: &mut Buffer) {
         height: (hint.len() as u16).min(inner.height),
         ..inner
     };
+    // The box is wiped and then filled with the canvas, not left at the
+    // terminal's background: `Clear` empties the cells of the frame under the
+    // card, and the fill under them is the one `draw_card` painted.
     Clear.render(boxed, buf);
+    super::canvas(boxed, buf);
     Paragraph::new(content[window].to_vec()).render(body, buf);
     Paragraph::new(hint).render(foot, buf);
     block(view).render(boxed, buf);

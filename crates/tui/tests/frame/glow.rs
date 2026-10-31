@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use ratatui::buffer::Buffer;
 use ratatui::style::Color;
 use sindri_tui::graphics::Graphics;
+use sindri_tui::theme;
 
 /// A frame whose terminal speaks Kitty graphics, and so draws the glow.
 fn lit() -> App {
@@ -182,7 +183,11 @@ fn with_no_answer_from_the_terminal_the_margin_is_the_canvas_it_was() {
         let cell = &plain[(MARGIN as u16, y as u16)];
         assert_eq!(cell.symbol(), " ", "({MARGIN}, {y}) is canvas");
         assert_eq!(cell.fg, Color::Reset, "with no ink of its own");
-        assert_eq!(cell.bg, Color::Reset, "and no background");
+        assert_eq!(
+            cell.bg,
+            theme::CANVAS,
+            "and a background the theme names, not the terminal's"
+        );
     }
 }
 
@@ -196,7 +201,11 @@ fn the_margin_keeps_the_canvas_and_spends_no_colour_of_its_own() {
     for y in 0..composer_at(&shown) {
         let cell = &glowing[(MARGIN as u16, y as u16)];
         assert_eq!(cell.fg, Color::Reset, "({MARGIN}, {y}) paints no ink");
-        assert_eq!(cell.bg, Color::Reset, "nor a background");
+        assert_eq!(
+            cell.bg,
+            theme::CANVAS,
+            "and sits on the canvas the theme names"
+        );
     }
 }
 
