@@ -11,13 +11,11 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use crate::exec::{DEFAULT_TIMEOUT_SECS, timeout_from_secs};
 use crate::paths;
 use crate::sandbox::{Enforcement, WritableSet};
 
 pub const DEFAULT_MAX_TURNS: u32 = 250;
-pub const DEFAULT_TIMEOUT_SECS: u64 = 120;
-
-pub const MAX_TIMEOUT_SECS: u64 = 3600;
 
 mod document;
 mod file;
@@ -163,11 +161,7 @@ impl Config {
             .or(number("SINDRI_TIMEOUT")?.map(u64::from))
             .or(file.timeout)
             .unwrap_or(DEFAULT_TIMEOUT_SECS);
-        if timeout_secs == 0 || timeout_secs > MAX_TIMEOUT_SECS {
-            return Err(ConfigError::Usage(format!(
-                "timeout must be between 1 and {MAX_TIMEOUT_SECS} seconds, got {timeout_secs}"
-            )));
-        }
+        let timeout = timeout_from_secs(timeout_secs).map_err(ConfigError::Usage)?;
 
         let named = overrides
             .model
@@ -227,7 +221,7 @@ impl Config {
             api_key,
             base_url,
             max_turns,
-            timeout: Duration::from_secs(timeout_secs),
+            timeout,
             thinking,
             extra_writable,
             enforcement,

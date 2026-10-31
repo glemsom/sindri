@@ -11,6 +11,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use sindri_core::config::{Document, KEYS, Key};
+use sindri_core::exec::timeout_from_secs;
 use tempfile::TempDir;
 
 fn document(text: Option<&str>) -> (TempDir, PathBuf, Document) {
@@ -157,6 +158,24 @@ fn a_value_the_schema_refuses_changes_nothing_and_writes_nothing() {
         after, before,
         "a refused value never reaches the file: {after}"
     );
+}
+
+#[test]
+fn the_form_and_the_executor_agree_on_which_timeouts_are_legal() {
+    // One bound, one verdict: a form that accepted what the executor refuses
+    // would hand the user a setting their own runs reject, so the two answers
+    // are asserted against each other rather than against a copy of the bound.
+    let (_dir, _path, mut document) = document(None);
+
+    for seconds in [0u64, 1, 120, 3599, 3600, 3601, u64::MAX] {
+        let written = document.set(Key::Timeout, &seconds.to_string());
+        let execution = timeout_from_secs(seconds);
+        assert_eq!(
+            written.is_ok(),
+            execution.is_ok(),
+            "{seconds} seconds: the form says {written:?}, the executor says {execution:?}"
+        );
+    }
 }
 
 #[test]
