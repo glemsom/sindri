@@ -218,11 +218,11 @@ fn a_description_wraps_under_its_keys_instead_of_being_cut_at_the_edge() {
         "copy the session id",
         "sessions show",
         "show` takes",
-        "select rendered rows",
-        "row upwards",
+        "mark rendered rows",
+        "a row at a time either way",
         "newest queued prompt taken back",
         "click the spill row",
-        "selection, never the frame's",
+        "whose own selection it is",
     ] {
         assert!(
             seen.contains(wanted),

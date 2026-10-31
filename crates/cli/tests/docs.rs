@@ -28,3 +28,27 @@ fn the_glossary_defines_boot_as_the_turn_from_flags_and_process_into_a_session()
         "boot ends where a session begins, and the glossary must say so: {entry:?}"
     );
 }
+
+#[test]
+fn the_glossary_defines_mark_as_the_cells_a_drag_lights_and_the_words_that_leave() {
+    let entry = GLOSSARY
+        .split("\n\n")
+        .find(|entry| entry.starts_with("**mark**"))
+        .map(|entry| entry.replace('\n', " "))
+        .unwrap_or_else(|| {
+            panic!(
+                "GLOSSARY.md has no **mark** entry: mark names what a drag lights and \
+                 what the copy takes (crates/tui/src/mark.rs)"
+            )
+        });
+
+    assert!(
+        entry.contains("the cells a drag lights and the words that leave with them"),
+        "the entry defines both halves of the word, the wash and the copy: {entry:?}"
+    );
+    assert!(
+        entry.contains("replace it with a mark of their own"),
+        "`Shift`+`↑`/`↓` replace the drag's mark rather than lay a second one over it, \
+         and the entry must say so: {entry:?}"
+    );
+}
