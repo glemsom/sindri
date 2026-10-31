@@ -251,7 +251,7 @@ fn a_description_wraps_under_its_keys_instead_of_being_cut_at_the_edge() {
 fn a_failed_save_says_why_at_a_hundred_by_twelve() {
     let mut f = fixture("model = \"m\"\n");
     open_settings(&mut f.app);
-    for _ in 0..4 {
+    for _ in 0..5 {
         press(&mut f.app, KeyCode::Down, KeyModifiers::NONE);
     }
     type_text(&mut f.app, "nope");
@@ -289,8 +289,8 @@ fn the_modal_scrolls_to_a_chosen_row_past_the_fold_and_keeps_it_on_screen() {
     let mut f = fixture("model = \"m\"\n");
     open_settings(&mut f.app);
 
-    // Nine rows in a box of twelve: the last of them is past the fold.
-    for _ in 0..8 {
+    // Ten rows in a box of twelve: the last of them is past the fold.
+    for _ in 0..9 {
         press(&mut f.app, KeyCode::Down, KeyModifiers::NONE);
     }
     let rows = screen(&mut f.app, 100, 12);
@@ -312,7 +312,7 @@ fn the_modal_scrolls_to_a_chosen_row_past_the_fold_and_keeps_it_on_screen() {
     );
 
     // Back up, and the first row is on screen again.
-    for _ in 0..8 {
+    for _ in 0..9 {
         press(&mut f.app, KeyCode::Up, KeyModifiers::NONE);
     }
     let up = screen(&mut f.app, 100, 12);

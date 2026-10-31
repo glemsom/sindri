@@ -7,9 +7,7 @@ use super::*;
 fn the_thinking_toggle_is_a_keystroke_and_lands_in_the_file() {
     let mut f = fixture(Some("model = \"m\"\n"));
     open(&mut f.app);
-    for _ in 0..6 {
-        down(&mut f.app);
-    }
+    down_to(&mut f.app, Key::Thinking);
     assert!(
         row(&screen(&mut f.app, 100, 30), "thinking").contains("off"),
         "the file said nothing, so the toggle shows the run's default"
@@ -31,9 +29,7 @@ fn the_thinking_toggle_is_a_keystroke_and_lands_in_the_file() {
 fn the_extra_writable_paths_are_a_field_the_run_would_accept() {
     let mut f = fixture(Some("model = \"m\"\n"));
     open(&mut f.app);
-    for _ in 0..7 {
-        down(&mut f.app);
-    }
+    down_to(&mut f.app, Key::ExtraWritablePaths);
     type_text(&mut f.app, "/usr/share");
     press(&mut f.app, KeyCode::Enter, KeyModifiers::NONE);
     assert!(
@@ -68,9 +64,7 @@ fn an_unknown_key_in_the_file_refuses_the_modal_and_says_why() {
 fn the_modal_fits_a_hundred_columns_and_a_hundred_and_sixty() {
     let mut f = fixture(Some("model = \"qwen3-32b\"\napi_key = \"sk-hidden\"\n"));
     open(&mut f.app);
-    for _ in 0..3 {
-        down(&mut f.app);
-    }
+    down_to(&mut f.app, Key::ApiKey);
     type_text(&mut f.app, "sk-typed-secret");
     for width in [100u16, 160] {
         let rows = screen(&mut f.app, width, 30);
@@ -78,6 +72,7 @@ fn the_modal_fits_a_hundred_columns_and_a_hundred_and_sixty() {
         for wanted in [
             "settings",
             "provider",
+            "theme",
             "model",
             "api_key",
             "thinking",
@@ -129,5 +124,49 @@ fn the_modal_dims_the_frame_it_covers_and_reads_at_full_strength_itself() {
             .filter(|x| buf[(*x, title)].symbol() != " ")
             .all(|x| !buf[(x, title)].modifier.contains(Modifier::DIM)),
         "and the modal itself is drawn at full strength: {title}"
+    );
+}
+
+#[test]
+fn the_theme_row_shows_the_runs_default_and_saves_the_name_it_is_given() {
+    let mut f = fixture(Some("model = \"m\"\n"));
+    open(&mut f.app);
+    down_to(&mut f.app, Key::Theme);
+
+    assert!(
+        row(&screen(&mut f.app, 100, 30), "theme ").contains("anvil"),
+        "the file says nothing, so the row shows the run's default"
+    );
+    press(&mut f.app, KeyCode::Char('u'), KeyModifiers::CONTROL);
+    type_text(&mut f.app, "anvil");
+    press(&mut f.app, KeyCode::Enter, KeyModifiers::NONE);
+    assert!(
+        written(&f.path).contains("theme = \"anvil\""),
+        "saving writes the name as a file key: {}",
+        written(&f.path)
+    );
+}
+
+#[test]
+fn a_theme_that_is_not_one_leaves_the_file_alone_and_says_which_themes_there_are() {
+    let mut f = fixture(Some("model = \"m\"\n"));
+    open(&mut f.app);
+    down_to(&mut f.app, Key::Theme);
+    press(&mut f.app, KeyCode::Char('u'), KeyModifiers::CONTROL);
+    type_text(&mut f.app, "forge");
+    press(&mut f.app, KeyCode::Enter, KeyModifiers::NONE);
+
+    assert!(f.app.overlay().is_some(), "the modal stays open");
+    assert!(!f.app.take_reload(), "and no reload was asked for");
+    let rows = shown(&screen(&mut f.app, 100, 30));
+    assert!(
+        rows.contains("not saved") && rows.contains("unknown theme `forge`"),
+        "the refusal names the field and the name: {rows}"
+    );
+    assert!(rows.contains("anvil"), "and the themes there are: {rows}");
+    assert_eq!(
+        written(&f.path),
+        "model = \"m\"\n",
+        "the file is exactly as it was"
     );
 }

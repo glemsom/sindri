@@ -2,6 +2,8 @@
 //! and a name outside it is a usage error naming the value, the themes there
 //! are and the file, wherever the name was set.
 
+use sindri_core::config::{Document, Key};
+
 use crate::common::provider::{MockProvider, Reply};
 use crate::common::{Env, TEST_KEY, stderr, stdout, write_config};
 use crate::run;
@@ -107,4 +109,54 @@ theme = "anvil"
         stderr(&output)
     );
     assert_eq!(stdout(&output), "from the flag\n");
+}
+
+#[test]
+fn the_theme_the_settings_document_writes_is_the_one_the_next_run_reads() {
+    let env = Env::new();
+    write_config(&env, "model = \"claude-from-file\"\n");
+    let path = env.config.join("sindri").join("config.toml");
+
+    let mut document = Document::load_at(&path).expect("the config parses");
+    document
+        .set(Key::Theme, "anvil")
+        .expect("the closed set's only name");
+    document.save().expect("the file is written");
+
+    let mock = MockProvider::start(vec![Reply::answer("ok")]);
+    let output = run(&env, &mock, &["-b", "summarise this"], &[]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "the name the form wrote is one the run accepts: {}",
+        stderr(&output)
+    );
+    assert_eq!(stdout(&output), "ok\n", "and the answer prints");
+}
+
+#[test]
+fn the_name_the_form_refuses_never_reaches_the_file_the_run_reads() {
+    let env = Env::new();
+    write_config(&env, "model = \"claude-from-file\"\n");
+    let path = env.config.join("sindri").join("config.toml");
+
+    let mut document = Document::load_at(&path).expect("the config parses");
+    let refused = document
+        .set(Key::Theme, "forge")
+        .expect_err("forge is not a theme");
+    assert!(
+        refused.message().contains("forge") && refused.message().contains("anvil"),
+        "the refusal names the name and the themes there are: {}",
+        refused.message()
+    );
+    document.save().expect("the file is written");
+
+    let mock = MockProvider::start(vec![Reply::answer("ok")]);
+    let output = run(&env, &mock, &["-b", "summarise this"], &[]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "the file holds no theme, so the run takes the default: {}",
+        stderr(&output)
+    );
 }
