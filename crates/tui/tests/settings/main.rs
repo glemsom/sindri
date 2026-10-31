@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::style::Modifier;
 use sindri_core::config::{KEYS, Key};
-use sindri_tui::{App, Launch};
+use sindri_tui::App;
 use tempfile::TempDir;
 
 struct Fixture {

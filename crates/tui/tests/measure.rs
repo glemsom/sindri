@@ -3,26 +3,12 @@
 //! was measured for. A run streams into the tail several times a second, and
 //! only the entry the delta landed in may cost the frame a layout.
 
-use sindri_core::agent::Event;
-use sindri_tui::render::transcript;
-use sindri_tui::{App, Launch};
+mod common;
 
-fn app() -> App {
-    App::new(
-        Launch {
-            session: "4f1c8f2e-8a24-4b93-9c0e-0d3f0e5c1a77".to_string(),
-            temp: "/state/sindri/sessions/4f1c8f2e/tmp".to_string(),
-            branch: Some("main".to_string()),
-            sandbox: "bwrap · 1 writable".to_string(),
-            workspace: "~/git/sindri".to_string(),
-            provider: "anthropic".to_string(),
-            model: "claude-sonnet-4-6".to_string(),
-            max_turns: 250,
-            context_limit: Some(200_000),
-        },
-        None,
-    )
-}
+pub use common::app;
+use sindri_core::agent::Event;
+use sindri_tui::App;
+use sindri_tui::render::transcript;
 
 /// A question and the answer streaming under it: two entries, the second the
 /// one a delta lands in.

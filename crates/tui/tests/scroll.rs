@@ -14,11 +14,11 @@ mod common;
 pub use common::{any, badge, press, reading, screen, shown};
 use crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use sindri_core::agent::Event;
+use sindri_tui::App;
 use sindri_tui::copy::{Clipboard, Copied};
 use sindri_tui::driver::{Finished, Stop};
 use sindri_tui::render::transcript;
 use sindri_tui::selection::Selection;
-use sindri_tui::{App, Launch};
 
 struct Nowhere;
 
@@ -29,21 +29,7 @@ impl Clipboard for Nowhere {
 }
 
 fn app() -> App {
-    App::with_clipboard(
-        Launch {
-            session: "4f1c8f2e-8a24-4b93-9c0e-0d3f0e5c1a77".to_string(),
-            temp: "/state/sindri/sessions/4f1c8f2e/tmp".to_string(),
-            branch: Some("main".to_string()),
-            sandbox: "bwrap · 1 writable".to_string(),
-            workspace: "~/git/sindri".to_string(),
-            provider: "anthropic".to_string(),
-            model: "claude-sonnet-4-6".to_string(),
-            max_turns: 250,
-            context_limit: Some(200_000),
-        },
-        None,
-        Box::new(Nowhere),
-    )
+    App::with_clipboard(common::launch(), None, Box::new(Nowhere))
 }
 
 fn thread(turns: u32) -> App {
