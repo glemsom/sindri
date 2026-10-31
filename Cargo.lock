@@ -2963,7 +2963,6 @@ version = "0.1.0"
 dependencies = [
  "crossterm",
  "image",
- "libc",
  "pulldown-cmark",
  "ratatui",
  "ratatui-image",

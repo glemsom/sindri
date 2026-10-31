@@ -49,7 +49,7 @@ impl App {
         self.running = Some(cancel.clone());
         self.entries.push(Entry::Prompt(Prompt {
             text: prompt.clone(),
-            at: crate::clock::now(),
+            at: sindri_core::clock::now(),
             cwd: self.rail.workspace(),
         }));
         self.dirty();

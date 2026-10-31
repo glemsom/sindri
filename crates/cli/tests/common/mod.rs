@@ -13,6 +13,7 @@
 pub use sindri_harness as provider;
 
 pub mod pty;
+pub mod records;
 pub mod screen;
 
 use std::path::{Path, PathBuf};

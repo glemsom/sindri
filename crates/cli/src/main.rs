@@ -79,7 +79,18 @@ enum Command {
 
 #[derive(Subcommand)]
 enum SessionsCommand {
-    Show { id: String },
+    /// One row per record, newest first.
+    List {
+        /// Print at most N rows. No default: a list cuts nothing unless told.
+        #[arg(long, value_name = "N")]
+        limit: Option<usize>,
+        /// One compact object per line, the fields in the row's order.
+        #[arg(long)]
+        json: bool,
+    },
+    Show {
+        id: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -105,9 +116,10 @@ fn main() {
             yolo_unsafe: cli.yolo_unsafe,
             ..Overrides::default()
         }),
-        Some(Command::Sessions {
-            command: SessionsCommand::Show { id },
-        }) => sessions::show(&id),
+        Some(Command::Sessions { command }) => match command {
+            SessionsCommand::List { limit, json } => sessions::list(limit, json),
+            SessionsCommand::Show { id } => sessions::show(&id),
+        },
         Some(Command::Sandbox {
             command: SandboxCommand::Exec { timeout, command },
         }) => match sindri_core::exec::timeout_from_secs(timeout) {

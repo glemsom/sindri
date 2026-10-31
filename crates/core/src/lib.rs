@@ -3,6 +3,7 @@
 
 pub mod agent;
 pub mod cancel;
+pub mod clock;
 pub mod config;
 pub mod doctor;
 pub mod exec;

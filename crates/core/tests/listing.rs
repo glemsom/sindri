@@ -141,6 +141,41 @@ fn the_records_are_listed_newest_first_with_what_each_one_did() {
 }
 
 #[test]
+fn the_row_carries_the_tokens_the_run_spent() {
+    let state = TempDir::new().expect("a state directory");
+    let sessions = state.path().join("sessions");
+    let mut billed = meta("ffff", 1_000, "final", Some(2));
+    billed.usage = Some(sindri_core::provider::Usage {
+        input_tokens: Some(1_200),
+        output_tokens: Some(90),
+        cached_input_tokens: None,
+        reasoning_tokens: None,
+        total_tokens: Some(1_290),
+    });
+    record(&sessions, billed, &[user("how many files?")]);
+    // A run whose provider reported no counters: the row holds nothing, which
+    // is not the same as holding a zero.
+    record(
+        &sessions,
+        meta("gggg", 2_000, "final", Some(1)),
+        &[user("how many files?")],
+    );
+
+    let listed = summaries(&sessions);
+    assert_eq!(
+        listed[0].id, "gggg",
+        "newest first, and a row is still a row without a bill"
+    );
+    assert_eq!(
+        listed[0].usage, None,
+        "nobody measured it, so it is not zero"
+    );
+    let usage = listed[1].usage.as_ref().expect("the run's own total");
+    assert_eq!(usage.total_tokens, Some(1_290));
+    assert_eq!(usage.input_tokens, Some(1_200));
+}
+
+#[test]
 fn a_run_that_never_finished_says_running_and_still_reads_back() {
     let state = TempDir::new().expect("a state directory");
     let sessions = state.path().join("sessions");
