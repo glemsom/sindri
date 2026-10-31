@@ -1,11 +1,18 @@
 //! The theme's promises, held by something other than the renderers: every
 //! colour the frame paints is one the theme names, no renderer carries a
-//! literal of its own, and the faint grey is legible on every surface.
+//! literal of its own, the faint grey is legible on every surface, and — the
+//! law in `pixels` — every pixel of a picture the frame generates is a colour
+//! the theme owns.
 
 #![allow(
     clippy::expect_used,
     reason = "a panicking test is how a broken contract reports itself"
 )]
+
+/// The law for pixels, in the same spirit and the same place as the cell law
+/// below: a picture the frame generates is held to the ramps one pixel at a
+/// time.
+mod pixels;
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;

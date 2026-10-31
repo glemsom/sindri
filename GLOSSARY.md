@@ -153,9 +153,11 @@ those is moving. While it runs the footer says `working · ` before its hints, a
 `RAMPS` lists the pairs a renderer may interpolate, one step per cell. It is how a
 border gets a gradient without a picture and without a colour a renderer wrote down: a
 cell is enough room for a step across a hundred columns, and `tests/theme.rs` holds a
-walked cell to the segments exactly as it holds a flat one to `PALETTE`. On terminals
-that speak no Kitty graphics it is the only light the frame has, the seam's strip
-being absent there.
+walked cell to the segments exactly as it holds a flat one to `PALETTE`. A picture's
+pixels are held the same way, one at a time, by `theme::owns_pixel`: every pixel is a
+step on a segment whatever its alpha, because alpha is not a hiding place and a stroke's
+edge antialiases in alpha alone. On terminals that speak no Kitty graphics it is the only
+light the frame has, the seam's strip being absent there.
 
 **stroke** — the composer's border drawn in pixels rather than glyphs
 (`border.rs`): one line around the panel, cut by 45° at its four corners and cut

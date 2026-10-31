@@ -2,8 +2,10 @@
 //! fallback to maintain. The theme owns every colour the frame
 //! paints, and the three surfaces that make nearness legible: the terminal's
 //! own canvas, the panel a composer or a code fence sits on, and the raised
-//! tier above it.
+//! tier above it. It answers for pixels too (`owns_pixel`): a picture a
+//! renderer generates is held to the same law as a cell it paints.
 
+use image::Rgba;
 use ratatui::style::{Color, Modifier, Style};
 
 pub const HEADING: Color = Color::Rgb(0xc0, 0x9a, 0xf0);
@@ -133,17 +135,34 @@ pub fn ramp(from: Color, to: Color, t: f32) -> Color {
 /// The segments a renderer may walk, and the only ones. The composer's border
 /// is lit from the rail's side: it leaves the ink the panel has when it is
 /// quiet, or the ink it has when it holds the keyboard, and arrives at the
-/// seam's — the colour of the spine it is being lit by.
-pub const RAMPS: &[(Color, Color)] = &[(FAINT, SEAM), (PROMPT, SEAM)];
+/// seam's — the colour of the spine it is being lit by. The seam's strip leaves
+/// `HEADING` at the top of the body and arrives at `PROMPT` on its last row, so
+/// the light beside the composer is a walk this list names rather than one a
+/// picture invented: a walk missing here is a picture off the ramps, and
+/// [`owns_pixel`] refuses it.
+pub const RAMPS: &[(Color, Color)] = &[(FAINT, SEAM), (PROMPT, SEAM), (HEADING, PROMPT)];
 
 /// Whether the frame may paint a colour: one `PALETTE` names, one a walk of
 /// `RAMPS` arrives at, or nothing at all. `tests/theme.rs` asks this of every
-/// cell, and a renderer that invents a hue fails the law stated where the walk
-/// lives.
+/// cell and [`owns_pixel`] of every pixel, and a renderer that invents a hue
+/// fails the law stated where the walk lives.
 pub fn owns(colour: Color) -> bool {
     colour == Color::Reset
         || PALETTE.contains(&colour)
         || RAMPS.iter().any(|(from, to)| on_ramp(colour, *from, *to))
+}
+
+/// The law for pixels, as [`owns`] is the law for cells: whether a picture may
+/// paint this pixel, whatever its alpha. A picture's pixels are the frame's
+/// chrome — the composer's stroke, the seam's strip — so the hue of one is
+/// judged exactly as a cell's is: a `PALETTE` name or a step of a `RAMPS` walk,
+/// within the one step a float walk rounds to. Alpha is not a colour and is
+/// exempt, but it is not a hiding place: the hue is read at every opacity, so a
+/// picture cannot smuggle one in by drawing it faintly. And a stroke's edge
+/// antialiases in alpha alone — blending a hue toward the panel would leave the
+/// ramp this refuses.
+pub fn owns_pixel(pixel: &Rgba<u8>) -> bool {
+    owns(Color::Rgb(pixel[0], pixel[1], pixel[2]))
 }
 
 /// Whether `colour` sits on the segment `from`–`to`, within the step a float
