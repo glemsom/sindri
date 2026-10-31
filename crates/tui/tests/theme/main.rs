@@ -3,8 +3,10 @@
 //! literal of its own, the faint grey is legible on every surface, the inks
 //! that order themselves against a surface are ordered by nearness rather than
 //! brightness (`orderings`), every surface and every ink of a painted frame
-//! (`cells`), and — the law in `pixels` — every pixel of a picture the frame
-//! generates is a colour the theme owns.
+//! (`cells`), every pixel of a picture the frame generates is a colour the theme
+//! owns (`pixels`), the mapping a diagram's renderer is handed writes no hex of
+//! its own, and the pair of inks that mapping leaves to the renderer's own
+//! contrast still clears the floor a body is read at.
 
 #![allow(
     clippy::expect_used,
@@ -26,6 +28,12 @@ mod orderings;
 
 use ratatui::style::Color;
 use sindri_tui::theme;
+
+/// A renderer's code without the tests under it: a unit test may name a colour
+/// to prove a style is copied without one, the renderer above it may not.
+fn before_tests(source: &str) -> &str {
+    source.split("#[cfg(test)]").next().unwrap_or_default()
+}
 
 /// A walk names no hue of its own: every step of the composer's border is on
 /// the segment between two colours the theme names, and anything off it is a
@@ -91,21 +99,83 @@ fn no_renderer_hard_codes_a_colour() {
     ];
     for file in files {
         let source = std::fs::read_to_string(&file).expect("a source file");
-        // A unit test may name a colour to prove a style is copied without
-        // one; the renderer above it may not.
-        let source = source
-            .split("#[cfg(test)]")
-            .next()
-            .unwrap_or_default()
-            .to_string();
+        let renderer = before_tests(&source);
         for needle in named {
             assert!(
-                !source.contains(needle),
+                !renderer.contains(needle),
                 "{} names a colour ({needle}) instead of asking the theme",
                 file.display()
             );
         }
     }
+}
+
+/// A second palette has to be expressible, and the diagram's mapping is the
+/// first thing that could stop it: a renderer that writes `#171a21` down has a
+/// palette of its own, whatever `theme.rs` says. A mermaid `Theme` is built out
+/// of hex strings, so the law `no_renderer_hard_codes_a_colour` states for
+/// `Color` is stated here for the strings the renderer parses: the mapping
+/// names `theme::` constants and the only `#` in it begins a format string.
+#[test]
+fn the_diagrams_mapping_writes_no_hex_down() {
+    let module = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/picture/diagram.rs");
+    let source = std::fs::read_to_string(&module).expect("the diagram's mapping");
+    let mapping = before_tests(&source);
+    assert!(
+        mapping.len() > 1000 && mapping.contains("theme::PANEL"),
+        "the mapping was read whole, and it is the one that asks the theme"
+    );
+    let found = hexes(mapping);
+    assert!(
+        found.is_empty(),
+        "the diagram is drawn in the palette, never in a hex of its own: {found:?}"
+    );
+    // The scan is worth its lines only if it can fail: one hex is one finding.
+    assert_eq!(
+        hexes("theme.background = \"#ffffff\".to_string();"),
+        ["#ffffff"]
+    );
+}
+
+/// The `#rrggbb` runs in a piece of Rust: a `#` and the hex digits that follow
+/// it, three or six of them. Doc prose (`#rrggbb`), an attribute (`#[cfg]`) and
+/// a format string (`#{r:02x}`) are not colours and do not match.
+fn hexes(source: &str) -> Vec<String> {
+    let chars: Vec<char> = source.chars().collect();
+    let mut found = Vec::new();
+    let mut at = 0;
+    while at < chars.len() {
+        if chars[at] != '#' {
+            at += 1;
+            continue;
+        }
+        let start = at + 1;
+        let mut end = start;
+        while end < chars.len() && chars[end].is_ascii_hexdigit() {
+            end += 1;
+        }
+        if matches!(end - start, 3 | 6) {
+            found.push(chars[at..end].iter().collect());
+        }
+        at = end.max(at + 1);
+    }
+    found
+}
+
+/// The pair a diagram hands its renderer for a node — the fill and the ink on
+/// it — is the one thing about a diagram's readability the frame delegates:
+/// mermaid resolves its own contrast, and a theme that hands it two tiers a
+/// palette apart has done its job. That delegation is only honest if the pair
+/// we hand it is legible, so the palette's floor is what is held here.
+#[test]
+fn plain_clears_four_and_a_half_to_one_on_the_fill_a_diagram_hands_a_renderer() {
+    let cleared = ratio(theme::PLAIN, theme::RAISED);
+    assert!(
+        cleared >= 4.5,
+        "a node's label on a node is {cleared:.2}:1, under the 4.5:1 body text needs: \
+         a diagram hands mermaid these two and mermaid resolves nothing this pair \
+         does not already clear"
+    );
 }
 
 /// WCAG's relative luminance, so the ratio below is the one a reader's eye
