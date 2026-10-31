@@ -102,6 +102,17 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
             Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).areas(body);
         (above, None, None, Some(below))
     };
+    // The composer is laid out in the words' column, not across the terminal:
+    // its right border stops one column short of the margin the seam's strip
+    // runs in, so the light the border walks toward is beside the corner that
+    // walk brightens. Every cell to the right of it stays canvas — the rail's
+    // column at the composer's rows is the canvas the rail's column below its
+    // last fact already is — and the footer, a strip of hints rather than a
+    // panel, keeps the whole width.
+    let panel = Rect {
+        width: transcript.width,
+        ..input
+    };
     if let Some(completions) = completions {
         completion::draw(app, completions, frame.buffer_mut());
     }
@@ -120,7 +131,7 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
     if queued > 0 {
         queue::draw(app, regions[1], frame.buffer_mut());
     }
-    let cursor = composer::draw(app, input, frame.buffer_mut());
+    let cursor = composer::draw(app, panel, frame.buffer_mut());
     frame.set_cursor_position(cursor);
     footer_rows(app, footer, frame.buffer_mut());
     overlay::draw(app, area, frame.buffer_mut());

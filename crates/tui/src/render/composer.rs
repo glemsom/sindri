@@ -29,6 +29,11 @@ use crate::theme;
 /// brightest where the light lands and the panel reads as part of the rail's
 /// column rather than a box beside it.
 ///
+/// The light lands because `render::draw` gives the composer the transcript's
+/// width: the panel ends one column short of the margin the seam's strip is
+/// drawn in, so the corner this walk brightens is the one the light stands
+/// beside, not one thirty-three columns past it.
+///
 /// The ` prompt ` title and the two vertical rules keep one ink: a walk across
 /// one cell says nothing, and the title's letters are a word, not a rule.
 fn lit(area: Rect, buf: &mut Buffer, ink: Color) {
