@@ -8,35 +8,20 @@
 //! frame paints, which is why a renderer draws a picture over a ground it has
 //! painted rather than over whatever the terminal had there.
 //!
-//! A picture whose pixels the frame *chooses* is held to it: the composer's
-//! stroke and the seam's strip, which are geometry and constants walked into
-//! ink. A picture the frame only *places* — the face, an answer's image — is
-//! not: its hues are the artist's and the reader's, never a renderer's.
+//! A picture whose pixels the frame *chooses* is held to it: the seam's strip,
+//! which is a constant walked into ink. A picture the frame only *places* — the
+//! face, an answer's image — is not: its hues are the artist's and the
+//! reader's, never a renderer's.
 
 use image::{Rgba, RgbaImage};
-use ratatui::layout::Rect;
-use sindri_tui::{border, seam, theme};
+use sindri_tui::{seam, theme};
 
-/// The generated pictures this frame paints, at the sizes and inks it asks
-/// for them, including a panel too narrow for a chamfer and a strip too small
-/// to be a gradient. A painter that generates pixels is added here as well as
-/// to the frame: the law only sees the pictures it is shown.
+/// The generated pictures this frame paints, at the sizes the frame asks them
+/// for, including a strip too small to be a gradient. A painter that generates
+/// pixels is added here as well as to the frame: the law only sees the pictures
+/// it is shown.
 fn pictures() -> Vec<(&'static str, RgbaImage)> {
-    let cell = (8, 18);
-    let panel = Rect::new(0, 0, 80, 4);
     vec![
-        (
-            "the composer's stroke at the prompt's ink",
-            border::stroke(panel, cell, border::Ink::Prompt, 2..10),
-        ),
-        (
-            "the composer's stroke at the faint ink",
-            border::stroke(panel, cell, border::Ink::Faint, 2..10),
-        ),
-        (
-            "a panel with no room for a chamfer or a label",
-            border::stroke(Rect::new(0, 0, 1, 1), cell, border::Ink::Prompt, 0..0),
-        ),
         ("the seam's strip", seam::strip(8, 12 * 18)),
         ("a strip of one pixel", seam::strip(1, 1)),
         ("a strip with no row to fade down", seam::strip(8, 1)),

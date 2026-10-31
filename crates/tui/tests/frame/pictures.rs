@@ -37,7 +37,7 @@ const COLUMN: usize = MARGIN;
 
 fn column(rows: &[String]) -> Vec<String> {
     rows.iter()
-        .take_while(|row| !row.starts_with('╭') && !row.starts_with(DRAWN))
+        .take_while(|row| !row.starts_with('╭'))
         .map(|row| {
             row.chars()
                 .take(COLUMN)

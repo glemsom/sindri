@@ -128,8 +128,8 @@ down to the **composer**'s last row, brightest against the rail and dissolving t
 words until it leaves at the footer, and two cells wide because a picture's escape costs
 the cell after it and that cell has to be the strip's own, never the rail's first
 (`render::GAP_COLUMNS`). The margin is canvas beside the panel for the panel's whole
-height, so the light runs beside the composer, and the lamp at the end of its taper is
-the corner the composer's border walk brightens.
+height, so the light runs beside the composer, and the brightest end of its fade is the
+corner the composer's border walk brightens.
 32 columns from 100 up; below that, the same facts in the same order as one line under
 the transcript, inset the same two cells, which never loses the posture, the model or the
 workspace. One priority order (`rail::priority`) ends with the posture, and the column
@@ -155,16 +155,9 @@ border gets a gradient without a picture and without a colour a renderer wrote d
 cell is enough room for a step across a hundred columns, and `tests/theme.rs` holds a
 walked cell to the segments exactly as it holds a flat one to `PALETTE`. A picture's
 pixels are held the same way, one at a time, by `theme::owns_pixel`: every pixel is a
-step on a segment whatever its alpha, because alpha is not a hiding place and a stroke's
+step on a segment whatever its alpha, because alpha is not a hiding place and a strip's
 edge antialiases in alpha alone. On terminals that speak no Kitty graphics it is the only
 light the frame has, the seam's strip being absent there.
-
-**stroke** — the composer's border drawn in pixels rather than glyphs
-(`border.rs`): one line around the panel, cut by 45° at its four corners and cut
-again where its label sits. It is a hairline on the side the panel's ink is on
-and grows toward the lamp — the corner nearest the seam — and it antialiases in
-alpha alone, so every hue it paints is a **walk** the theme names. Where the
-terminal speaks no Kitty graphics the border is that walk of glyphs instead.
 
 **surface** — one of the three tiers of nearness the frame paints on:
 **canvas**, **panel**, **raised**, in that order. A renderer asks

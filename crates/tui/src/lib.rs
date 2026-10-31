@@ -4,7 +4,6 @@
 //! prompt, and this crate draws what the run did while it does.
 
 pub mod app;
-pub mod border;
 pub mod card;
 pub mod command;
 pub mod completion;

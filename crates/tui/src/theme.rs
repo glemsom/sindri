@@ -188,14 +188,14 @@ pub fn owns(colour: Color) -> bool {
 
 /// The law for pixels, as [`owns`] is the law for cells: whether a picture may
 /// paint this pixel, whatever its alpha. A picture's pixels are the frame's
-/// chrome — the composer's stroke, the seam's strip — so the hue of one is
-/// judged exactly as a cell's is: a `PALETTE` name or a step of a `RAMPS` walk,
-/// within the one step a float walk rounds to. Alpha is not a colour and is
-/// exempt, but it is not a hiding place: the hue is read at every opacity, so a
-/// picture cannot smuggle one in by drawing it faintly. And a picture's edge
-/// antialiases in alpha alone — blending a hue toward the canvas would leave the
-/// ramp this refuses — so what the edge fades against is the canvas the frame
-/// paints behind it, and never the terminal's own background.
+/// chrome — the seam's strip — so the hue of one is judged exactly as a cell's
+/// is: a `PALETTE` name or a step of a `RAMPS` walk, within the one step a float
+/// walk rounds to. Alpha is not a colour and is exempt, but it is not a hiding
+/// place: the hue is read at every opacity, so a picture cannot smuggle one in
+/// by drawing it faintly. And a picture's edge antialiases in alpha alone —
+/// blending a hue toward the canvas would leave the ramp this refuses — so what
+/// the edge fades against is the canvas the frame paints behind it, and never
+/// the terminal's own background.
 pub fn owns_pixel(pixel: &Rgba<u8>) -> bool {
     owns(Color::Rgb(pixel[0], pixel[1], pixel[2]))
 }
@@ -230,10 +230,8 @@ fn on_ramp(colour: Color, from: Color, to: Color) -> bool {
 }
 
 /// A stop's truecolour bytes: a walk between two colours that are not
-/// truecolour is a module that panics rather than a gradient nobody can see. A
-/// picture reads them too, because it paints in the theme's bytes and not in a
-/// `Color` the terminal parses.
-pub(crate) const fn channels(colour: Color) -> [u8; 3] {
+/// truecolour is a module that panics rather than a gradient nobody can see.
+const fn channels(colour: Color) -> [u8; 3] {
     match colour {
         Color::Rgb(r, g, b) => [r, g, b],
         _ => panic!("a ramp is walked between two truecolour stops"),
