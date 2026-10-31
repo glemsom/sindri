@@ -5,6 +5,7 @@
 
 mod code;
 mod heading;
+mod mermaid;
 mod picture;
 mod role;
 mod table;
@@ -311,11 +312,26 @@ impl<'a> Writer<'a> {
             self.lines.push(Line::default());
         }
         self.apart = false;
+        // A fence naming `mermaid` is a picture where a picture is a block. It
+        // branches here so that the panel below stays the one thing every other
+        // fence is drawn as.
+        let refused = match mermaid::fence(self, language.as_deref(), &body) {
+            mermaid::Fence::Drawn => return,
+            mermaid::Fence::Panel => None,
+            mermaid::Fence::Refused(reason) => Some(reason),
+        };
         self.lines.extend(code::panel(
             body.trim_end_matches('\n'),
             language.as_deref(),
             self.width,
         ));
+        // A fence nothing would draw keeps its source, with the parser's words
+        // under it in the ink a caption keeps: no cell of it is swallowed.
+        if let Some(reason) = refused {
+            let words = [Span::styled(reason, theme::faint())];
+            let rows = text::wrap(text::glyphs(&words), "", theme::faint(), self.width);
+            self.lines.extend(rows);
+        }
         self.apart = true;
     }
 

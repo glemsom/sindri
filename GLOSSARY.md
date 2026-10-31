@@ -266,12 +266,18 @@ leaves the draft as typed; taking one closes the box and never sends.
 only where the terminal speaks Kitty graphics, from a file in the workspace and never from
 a URL, at most twenty rows — the face's own allowance — whole in the **window**
 or not at all. A picture that
-cannot be drawn is its **caption** with the reason in the `‹›`.
+cannot be drawn is its **caption** with the reason in the `‹›`. A source is a file or, for
+a fence marked `mermaid`, the fence's own body: mermaid is a second kind of source for the
+same store and not a second pipeline, so a diagram is measured, laid out and
+**captioned** exactly as an image is. Where a picture is not a block — a table cell, a
+list item, a heading — a mermaid fence is the **panel** it was, and a fence that will not
+parse is that panel with the parser's own words under it, in the ink a **caption** keeps.
 
 **caption** — the words and `‹src›` a **picture** is drawn under, `a chart ‹plot.png›`: the
 alt text's words, the target in `‹›` as a link keeps its own, the reason in their place
-when there is no picture. It is what the rows cost when nothing is drawn, and what a copy
-of the block yields.
+when there is no picture. A mermaid fence has no target and its source is not printed, so
+its caption is the fence's own name, `‹mermaid›`. It is what the rows cost when nothing is
+drawn, and what a copy of the block yields.
 
 **export** — `/export [path]`: the **thread** as one markdown file, at the path named or
 `sindri-<guid>.md` in the workspace, read out of the record so it says what `sindri
