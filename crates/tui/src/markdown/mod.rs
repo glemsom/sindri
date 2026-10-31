@@ -13,6 +13,8 @@ pub(crate) mod text;
 
 pub use picture::{Picture, Written};
 
+use std::ops::Range;
+
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -26,10 +28,10 @@ use table::Table;
 /// source, and `None` where the terminal draws none, which makes every picture
 /// its caption and the reason.
 pub fn lines(source: &str, width: u16, store: Option<&Store>) -> Written {
-    let mut writer = Writer::new(width.max(1) as usize, store);
+    let mut writer = Writer::new(width.max(1) as usize, store, source);
     let options = Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH;
-    for event in Parser::new_ext(source, options) {
-        writer.event(event);
+    for (event, range) in Parser::new_ext(source, options).into_offset_iter() {
+        writer.event(event, range);
     }
     writer.finish()
 }
@@ -40,6 +42,10 @@ struct List {
 
 struct Writer<'a> {
     width: usize,
+    /// The answer being written, whole: a fence's place in it is read from
+    /// these bytes and nowhere else, because the parser says where a block
+    /// ends and nothing about whether its delimiter arrived.
+    source: &'a str,
     lines: Vec<Line<'static>>,
     /// The pictures the writer placed, and the row each block starts at: what
     /// the frame draws where, once it knows what the terminal can draw.
@@ -63,12 +69,16 @@ struct Writer<'a> {
     store: Option<&'a Store>,
     /// The image being written: its source, and the alt text it carried.
     image: Option<Image>,
+    /// How far into the source the code block being written has been read: the
+    /// end of the last of its text, and nothing else.
+    code_read: usize,
 }
 
 impl<'a> Writer<'a> {
-    fn new(width: usize, store: Option<&'a Store>) -> Self {
+    fn new(width: usize, store: Option<&'a Store>, source: &'a str) -> Self {
         Writer {
             width,
+            source,
             lines: Vec::new(),
             pictures: Vec::new(),
             pending: Vec::new(),
@@ -85,6 +95,7 @@ impl<'a> Writer<'a> {
             in_table_head: false,
             store,
             image: None,
+            code_read: 0,
         }
     }
 
@@ -96,7 +107,7 @@ impl<'a> Writer<'a> {
         }
     }
 
-    fn event(&mut self, event: Event<'_>) {
+    fn event(&mut self, event: Event<'_>, range: Range<usize>) {
         match event {
             Event::Start(tag) => self.start(tag),
             Event::End(tag) => self.end(tag),
@@ -108,7 +119,10 @@ impl<'a> Writer<'a> {
                     return;
                 }
                 match (&mut self.code, &mut self.table) {
-                    (Some((_, body)), _) => body.push_str(&text),
+                    (Some((_, body)), _) => {
+                        body.push_str(&text);
+                        self.code_read = self.code_read.max(range.end);
+                    }
                     (None, Some(_)) => self.pending.push(Span::raw(text.to_string())),
                     (None, None) => {
                         let style = self.style();
@@ -157,6 +171,7 @@ impl<'a> Writer<'a> {
                     CodeBlockKind::Indented => None,
                 };
                 self.code = Some((language, String::new()));
+                self.code_read = 0;
             }
             Tag::Table(_) => self.table = Some(Table::default()),
             Tag::TableHead => {
@@ -304,6 +319,17 @@ impl<'a> Writer<'a> {
             .extend(text::wrap(glyphs, &prefix, theme::faint(), cells));
     }
 
+    /// Whether the fence that has just ended is still arriving: its body runs
+    /// to the end of the answer, so its closing delimiter is a line the stream
+    /// has not sent yet and the body will be longer on the next delta. Read
+    /// from the bytes rather than from the parser, which ends an unterminated
+    /// block at the document's end and says nothing about why.
+    fn arriving(&self) -> bool {
+        self.source
+            .get(self.code_read..)
+            .is_some_and(|tail| tail.trim().is_empty())
+    }
+
     fn code_block(&mut self) {
         let Some((language, body)) = self.code.take() else {
             return;
@@ -315,7 +341,8 @@ impl<'a> Writer<'a> {
         // A fence naming `mermaid` is a picture where a picture is a block. It
         // branches here so that the panel below stays the one thing every other
         // fence is drawn as.
-        let refused = match mermaid::fence(self, language.as_deref(), &body) {
+        let arriving = self.arriving();
+        let refused = match mermaid::fence(self, language.as_deref(), &body, arriving) {
             mermaid::Fence::Drawn => return,
             mermaid::Fence::Panel => None,
             mermaid::Fence::Refused(reason) => Some(reason),

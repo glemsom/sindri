@@ -1,5 +1,5 @@
 //! The svgs a fence's body has already been drawn into: a mermaid render is
-//! five milliseconds, a frame asks for it once per entry per frame, and the
+//! tens of milliseconds, a frame asks for it once per entry per frame, and the
 //! answer never changes for a body that did not. So the svg is kept and handed
 //! back for the measure and for the raster both — one render per distinct body
 //! is the whole of it, because a diagram's column mapping is the block's job
