@@ -70,9 +70,14 @@ session.
 **window** — the rows of the **transcript** the frame shows at once. It has a place in
 the thread rather than an offset from its tail: a reader on the **tail** follows what
 arrives, and a reader scrolled back keeps the row they are reading while a run appends
-below them, told how much by the **new-rows badge**. `End` takes the tail again, `Home`
-the first turn, and nothing in the last column claims to say where the window sits: the
-**new-rows badge** is the frame's only word on it.
+below them, told how much by the **new-rows badge**. That place is an entry and the
+rows into it, so a block that grows or folds above the window moves no row under the
+reader, and one the top row sits in moves the place back to that entry's own row — the
+row `Enter` was pressed on, and the only row of a folded call that is there both before
+and after — where a fold would otherwise leave a place that no longer exists and hand
+the reader to the tail. `End` takes the tail again, `Home` the first turn, and nothing in
+the last column claims to say where the window sits: the **new-rows badge** is the
+frame's only word on it.
 
 **new-rows badge** — `↓ 4 new rows`, against the footer's right edge: how many rows
 arrived below a **window** that is off the **tail**. It says `1 new row` for one, clears

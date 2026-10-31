@@ -26,13 +26,28 @@ impl App {
     }
 
     /// A click on an entry's own row: that entry, open or folded, as the row
-    /// says.
+    /// says. The window is corrected here rather than re-placed by every frame,
+    /// because the delta is known at the one gesture that causes it.
     pub(crate) fn toggle(&mut self, index: usize) {
-        if self.entries.get_mut(index).is_some_and(Entry::toggle) {
-            self.dirty();
-            // An entry that opens or folds moves every row below it, and not
-            // at the tail: what the window counted there is stale.
-            self.window.forget();
+        if !self.entries.get_mut(index).is_some_and(Entry::toggle) {
+            return;
+        }
+        let (entry, row) = self.window.at;
+        let held = !self.window.follow;
+        self.dirty();
+        // An entry that opens or folds moves every row below it, and not at
+        // the tail: what the window counted there is stale.
+        self.window.forget();
+        // A block above the window needs nothing — `at` names a row of a block
+        // whose index did not change, which is what the place is an entry and a
+        // row for — and one below it moves only rows the window never counted.
+        // The block the top row sits in is the case with a row to keep: an
+        // expansion inserts its rows below the entry's own row, so an offset
+        // past that row no longer means what it did. The place steps back to
+        // it, to the row a reader pressed `Enter` on — the only row of a folded
+        // call that is there both before and after.
+        if held && index == entry {
+            self.window.shift(row as isize);
         }
     }
 }

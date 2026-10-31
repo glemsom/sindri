@@ -162,6 +162,13 @@ impl<'a> Frame<'a> {
 /// turn, or the tail. Moving by rows measures only the entries it crosses, so a
 /// page costs a page.
 pub(crate) fn resolve(app: &mut App, width: u16, count: usize, ask: Ask, follow: &mut bool) {
+    // What a height change owes the place is paid before the reader's own
+    // request is answered: a following window has no place of its own to move,
+    // and an ask is the reader's and comes last.
+    let moved = app.window.take_shift();
+    if moved != 0 && !*follow {
+        app.window.at = step(app, width, app.window.at, moved);
+    }
     match ask {
         Ask::Home => {
             *follow = false;
@@ -182,6 +189,19 @@ pub(crate) fn resolve(app: &mut App, width: u16, count: usize, ask: Ask, follow:
     }
     if app.window.at.0 >= count {
         *follow = true;
+    }
+}
+
+/// The place `delta` rows away: `back` into the thread and `forward` towards
+/// its tail. A shift that runs past the newest row leaves the place alone
+/// rather than following the tail, because the place is the reader's and the
+/// tail is `Ask::End`'s.
+fn step(app: &mut App, width: u16, at: (usize, usize), delta: isize) -> (usize, usize) {
+    let rows = delta.unsigned_abs();
+    if delta > 0 {
+        back(app, width, at, rows)
+    } else {
+        forward(app, width, at, rows).unwrap_or(at)
     }
 }
 
