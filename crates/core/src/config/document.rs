@@ -7,7 +7,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use super::file::{self, FileConfig};
-use super::{ConfigError, MAX_TIMEOUT_SECS, Provider, extra_paths};
+use super::{ConfigError, Provider, extra_paths};
+use crate::exec::MAX_TIMEOUT_SECS;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Key {
