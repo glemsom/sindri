@@ -87,12 +87,15 @@ impl Stored {
     }
 
     /// The run you just did. It comes from the listing `sessions list` prints,
-    /// so the two commands cannot disagree about which record came last.
+    /// so the two commands cannot disagree about which record came last — and
+    /// it asks that listing for one row, since an id is all a lookup needs and
+    /// the prompts of the rows it never shows are reads nobody asked for.
     fn newest(root: &Path) -> Result<Self, ShowError> {
-        let rows = super::listing(root).map_err(|source| ShowError::Unreadable {
-            path: root.to_path_buf(),
-            source,
-        })?;
+        let rows =
+            super::listing_limited(root, Some(1)).map_err(|source| ShowError::Unreadable {
+                path: root.to_path_buf(),
+                source,
+            })?;
         let Some(row) = rows.into_iter().next() else {
             return Err(ShowError::Missing {
                 path: root.to_path_buf(),
