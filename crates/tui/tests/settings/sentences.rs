@@ -4,7 +4,6 @@
 //! of absence, pinned word for word. They are built from one description of an
 //! absence, so a fourth state must not be able to change what a reader sees.
 
-use super::*;
 use sindri_core::config::Provider;
 use sindri_tui::settings::Missing;
 

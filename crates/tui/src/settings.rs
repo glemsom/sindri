@@ -40,6 +40,20 @@ enum Absent {
     Both,
 }
 
+/// An absence in words: what a run has nothing for, the variables that set it,
+/// and what `/settings` does about it — one vocabulary behind three sentences.
+struct Lack {
+    /// `no key`, `no model`, `no key and no model`.
+    what: &'static str,
+    /// What the transcript has the reader type: the row, and every variable
+    /// that sets it.
+    ways: String,
+    /// The same in the composer's one row, which leaves the model to `/settings`.
+    room: String,
+    /// What `/settings` does for it: `saves one`, `names one`, `sets both`.
+    acted: &'static str,
+}
+
 /// What the front door found absent when it opened the frame itself: the run
 /// has no credential, or no model, or neither. It holds no value —
 /// the modal says where a key comes from, never what one is.
@@ -85,54 +99,51 @@ impl Missing {
         }
     }
 
+    /// The one description of an absence, and the only `match` on it: a fourth
+    /// state is one arm here rather than three found by reading three of them.
+    fn lack(self) -> Lack {
+        let key_vars = self.key_vars();
+        match self.absent {
+            Absent::Key => Lack {
+                what: "no key",
+                ways: format!("one in the settings modal, or set {key_vars}"),
+                room: key_vars,
+                acted: "saves one",
+            },
+            Absent::Model => Lack {
+                what: "no model",
+                ways: "one in the settings modal, or set SINDRI_MODEL".to_string(),
+                room: "SINDRI_MODEL".to_string(),
+                acted: "names one",
+            },
+            Absent::Both => Lack {
+                what: "no key and no model",
+                ways: format!("them in the settings modal, or set {key_vars} and SINDRI_MODEL"),
+                room: key_vars,
+                acted: "sets both",
+            },
+        }
+    }
+
     /// The transcript's one line: what is absent and every way to set it —
     /// said once, when the frame opens, and never on a frame.
     pub fn said(self) -> String {
-        match self.absent {
-            Absent::Key => {
-                format!(
-                    "no key: type one in the settings modal, or set {}",
-                    self.key_vars()
-                )
-            }
-            Absent::Model => {
-                "no model: type one in the settings modal, or set SINDRI_MODEL".to_string()
-            }
-            Absent::Both => format!(
-                "no key and no model: type them in the settings modal, or set {} and SINDRI_MODEL",
-                self.key_vars()
-            ),
-        }
+        let Lack { what, ways, .. } = self.lack();
+        format!("{what}: type {ways}")
     }
 
     /// What the composer says where the prompt would be: a run with no key
     /// cannot send one, and the frame says why rather than pretending.
     pub fn composer(self) -> String {
-        match self.absent {
-            Absent::Key => format!(
-                "no key · a prompt cannot be sent · /settings, or set {}",
-                self.key_vars()
-            ),
-            Absent::Model => {
-                "no model · a prompt cannot be sent · /settings, or set SINDRI_MODEL".to_string()
-            }
-            Absent::Both => format!(
-                "no key and no model · a prompt cannot be sent · /settings, or set {}",
-                self.key_vars()
-            ),
-        }
+        let Lack { what, room, .. } = self.lack();
+        format!("{what} · a prompt cannot be sent · /settings, or set {room}")
     }
 
     /// A prompt sent anyway: the draft stays where it was, and this is the one
     /// line the transcript gets for the keystroke.
     pub fn refused(self) -> String {
-        match self.absent {
-            Absent::Key => "not sent: this run has no key — /settings saves one".to_string(),
-            Absent::Model => "not sent: this run has no model — /settings names one".to_string(),
-            Absent::Both => {
-                "not sent: this run has no key and no model — /settings sets both".to_string()
-            }
-        }
+        let Lack { what, acted, .. } = self.lack();
+        format!("not sent: this run has {what} — /settings {acted}")
     }
 
     /// What is still absent once a save has landed: a row the file now carries
@@ -156,10 +167,9 @@ pub struct Settings {
 
 impl Settings {
     pub fn open() -> Result<Settings, String> {
-        match Document::load() {
-            Ok(document) => Ok(Settings::at(document)),
-            Err(error) => Err(error.message().to_string()),
-        }
+        Document::load()
+            .map(Settings::at)
+            .map_err(|error| error.message().to_string())
     }
 
     pub fn at_path(path: &Path) -> Result<Settings, String> {
