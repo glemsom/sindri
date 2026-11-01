@@ -7,24 +7,32 @@
 use sindri_core::config::Provider;
 use sindri_tui::settings::Missing;
 
-/// A run speaking Anthropic, absent in this row or these rows.
-fn absent(key: bool, model: bool) -> Missing {
-    Missing::of(Provider::Anthropic, key, model).expect("a run missing at least one row")
+/// A run speaking Anthropic that has no key, or no model, or neither.
+fn no_key() -> Missing {
+    Missing::of(Provider::Anthropic, true, false).expect("a run with no key")
+}
+
+fn no_model() -> Missing {
+    Missing::of(Provider::Anthropic, false, true).expect("a run with no model")
+}
+
+fn neither() -> Missing {
+    Missing::of(Provider::Anthropic, true, true).expect("a run with no key and no model")
 }
 
 #[test]
 fn the_transcript_says_what_is_absent_and_every_variable_that_sets_it() {
     for (missing, wanted) in [
         (
-            absent(true, false),
+            no_key(),
             "no key: type one in the settings modal, or set SINDRI_API_KEY or ANTHROPIC_API_KEY",
         ),
         (
-            absent(false, true),
+            no_model(),
             "no model: type one in the settings modal, or set SINDRI_MODEL",
         ),
         (
-            absent(true, true),
+            neither(),
             "no key and no model: type them in the settings modal, or set SINDRI_API_KEY or ANTHROPIC_API_KEY and SINDRI_MODEL",
         ),
     ] {
@@ -36,15 +44,15 @@ fn the_transcript_says_what_is_absent_and_every_variable_that_sets_it() {
 fn the_composer_says_what_is_absent_and_where_settings_fixes_it() {
     for (missing, wanted) in [
         (
-            absent(true, false),
+            no_key(),
             "no key · a prompt cannot be sent · /settings, or set SINDRI_API_KEY or ANTHROPIC_API_KEY",
         ),
         (
-            absent(false, true),
+            no_model(),
             "no model · a prompt cannot be sent · /settings, or set SINDRI_MODEL",
         ),
         (
-            absent(true, true),
+            neither(),
             "no key and no model · a prompt cannot be sent · /settings, or set SINDRI_API_KEY or ANTHROPIC_API_KEY",
         ),
     ] {
@@ -56,15 +64,15 @@ fn the_composer_says_what_is_absent_and_where_settings_fixes_it() {
 fn a_prompt_sent_anyway_says_which_row_settings_answers() {
     for (missing, wanted) in [
         (
-            absent(true, false),
+            no_key(),
             "not sent: this run has no key — /settings saves one",
         ),
         (
-            absent(false, true),
+            no_model(),
             "not sent: this run has no model — /settings names one",
         ),
         (
-            absent(true, true),
+            neither(),
             "not sent: this run has no key and no model — /settings sets both",
         ),
     ] {

@@ -48,8 +48,9 @@ struct Lack {
     /// What the transcript has the reader type: the row, and every variable
     /// that sets it.
     ways: String,
-    /// The same in the composer's one row, which leaves the model to `/settings`.
-    room: String,
+    /// The same variables in the room the composer has, one row: it leaves the
+    /// model to `/settings`.
+    composer: String,
     /// What `/settings` does for it: `saves one`, `names one`, `sets both`.
     acted: &'static str,
 }
@@ -107,19 +108,19 @@ impl Missing {
             Absent::Key => Lack {
                 what: "no key",
                 ways: format!("one in the settings modal, or set {key_vars}"),
-                room: key_vars,
+                composer: key_vars,
                 acted: "saves one",
             },
             Absent::Model => Lack {
                 what: "no model",
                 ways: "one in the settings modal, or set SINDRI_MODEL".to_string(),
-                room: "SINDRI_MODEL".to_string(),
+                composer: "SINDRI_MODEL".to_string(),
                 acted: "names one",
             },
             Absent::Both => Lack {
                 what: "no key and no model",
                 ways: format!("them in the settings modal, or set {key_vars} and SINDRI_MODEL"),
-                room: key_vars,
+                composer: key_vars,
                 acted: "sets both",
             },
         }
@@ -135,8 +136,8 @@ impl Missing {
     /// What the composer says where the prompt would be: a run with no key
     /// cannot send one, and the frame says why rather than pretending.
     pub fn composer(self) -> String {
-        let Lack { what, room, .. } = self.lack();
-        format!("{what} · a prompt cannot be sent · /settings, or set {room}")
+        let Lack { what, composer, .. } = self.lack();
+        format!("{what} · a prompt cannot be sent · /settings, or set {composer}")
     }
 
     /// A prompt sent anyway: the draft stays where it was, and this is the one
@@ -167,9 +168,10 @@ pub struct Settings {
 
 impl Settings {
     pub fn open() -> Result<Settings, String> {
-        Document::load()
-            .map(Settings::at)
-            .map_err(|error| error.message().to_string())
+        match Document::load() {
+            Ok(document) => Ok(Settings::at(document)),
+            Err(error) => Err(error.message().to_string()),
+        }
     }
 
     pub fn at_path(path: &Path) -> Result<Settings, String> {
