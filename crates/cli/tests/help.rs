@@ -60,3 +60,29 @@ fn every_flag_already_spelled_here_is_still_spelled_the_same_way() {
         "there is no shorthand and no negation: {text}"
     );
 }
+
+/// Clap wraps a doc comment to the terminal's width, so a phrase is matched on
+/// the words rather than on where the line ends.
+fn mentions(text: &str, phrase: &str) -> bool {
+    text.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .contains(phrase)
+}
+
+#[test]
+fn every_flag_that_printed_bare_says_what_it_is_for() {
+    let env = Env::new();
+    let text = help(&env);
+
+    for phrase in [
+        "Which wire to speak",
+        "the turn cap",
+        "one command may run inside the sandbox",
+    ] {
+        assert!(
+            mentions(&text, phrase),
+            "`{phrase}` is missing from:\n{text}"
+        );
+    }
+}

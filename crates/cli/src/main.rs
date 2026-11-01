@@ -25,14 +25,24 @@ struct Cli {
     /// argument, stdin is the prompt.
     #[arg(short = 'b', long = "batch", value_name = "PROMPT", num_args = 0..=1)]
     batch: Option<Option<String>>,
+    /// Which wire to speak: `anthropic`, or `openai` for OpenAI itself and the
+    /// servers that speak its shape — Ollama, vLLM, LM Studio, OpenRouter.
     #[arg(long, value_name = "NAME")]
     provider: Option<String>,
+    /// Which palette to draw with: `anvil`, the one there is. `SINDRI_THEME`
+    /// names the same key, and the flag wins over the environment.
     #[arg(long, value_name = "NAME")]
     theme: Option<String>,
+    /// The model to ask. There is no default, so a run without one is an error
+    /// naming the wire it is missing a model for.
     #[arg(long, value_name = "NAME")]
     model: Option<String>,
+    /// Another API root: a gateway, a proxy, or a local server. Left out, the
+    /// provider's own default is used.
     #[arg(long, value_name = "URL")]
     base_url: Option<String>,
+    /// How many turns one run may take before it stops: the turn cap, and exit
+    /// 100 when it is reached.
     #[arg(long, value_name = "N")]
     max_turns: Option<u32>,
     /// Grant an extra directory read-write inside the sandbox. Repeatable;
@@ -44,8 +54,11 @@ struct Cli {
     /// that routes on a header of its own needs one.
     #[arg(long, value_name = "NAME: VALUE")]
     header: Vec<String>,
+    /// How long one command may run inside the sandbox, in seconds (1–3600).
     #[arg(long, value_name = "SECONDS")]
     timeout: Option<u64>,
+    /// Pay for the model's reasoning, whatever the config or the environment
+    /// says. `--no-thinking` is the other end of the same key.
     #[arg(long, conflicts_with = "no_thinking")]
     thinking: bool,
     /// Do not pay for the model's reasoning, whatever the config or the
@@ -59,6 +72,8 @@ struct Cli {
     /// `json` is one compact object for a script.
     #[arg(long, value_name = "FORMAT", default_value = "text")]
     format: batch::OutputFormat,
+    /// Say what the run did on stderr, after it ran. stdout is the answer only,
+    /// so a verbose run pipes exactly like a silent one.
     #[arg(short = 'v', long = "verbose")]
     verbose: bool,
     #[command(subcommand)]
@@ -67,7 +82,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Check the sandbox before a run: bubblewrap, the binaries it needs and
+    /// the mount plan, and print the description the model reads.
     Doctor,
+    /// The sandbox itself, without the model: run one command in it under the
+    /// policy a run would use.
     Sandbox {
         #[command(subcommand)]
         command: SandboxCommand,
@@ -103,9 +122,13 @@ enum SessionsCommand {
 
 #[derive(Subcommand)]
 enum SandboxCommand {
+    /// Run a command inside the sandbox and print what it wrote.
     Exec {
+        /// How long the command may run, in seconds (1–3600).
         #[arg(long, default_value_t = sindri_core::exec::DEFAULT_TIMEOUT_SECS)]
         timeout: u64,
+        /// The command and its arguments, after `--`: everything that follows
+        /// belongs to the command.
         #[arg(last = true, required = true, num_args = 1..)]
         command: Vec<String>,
     },
