@@ -5,6 +5,9 @@
 pub const VERSION: &str = env!("SINDRI_VERSION");
 /// The commit date of the build, `YYYY-MM-DD`, never the wall clock.
 pub const COMMIT_DATE: &str = env!("SINDRI_COMMIT_DATE");
+/// `git describe` and the commit date as one line, `{version} ({date})`: the
+/// string `--version` prints, and so the one a user sees. Injected by
+/// `crates/types/build.rs`, which is where the two halves are cut.
 pub const VERSION_LONG: &str = env!("SINDRI_VERSION_LONG");
 
 /// Every way a `sindri` run can end, numbered as the batch contract promises.
