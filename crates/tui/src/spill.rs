@@ -107,4 +107,19 @@ mod tests {
         spill.scroll_by(1000, false);
         assert_eq!(spill.scroll, 0, "and at the first");
     }
+
+    #[test]
+    fn a_record_with_no_lines_opens_on_one_blank_row() {
+        let mut spill = Spill::text("record", "");
+        assert_eq!(
+            spill.lines,
+            vec![String::new()],
+            "one line, and it is blank"
+        );
+        assert_eq!(
+            spill.window().len(),
+            1,
+            "a window on an empty record is still a row, not nothing"
+        );
+    }
 }
