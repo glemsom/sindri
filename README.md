@@ -257,4 +257,3 @@ A tag is the only thing a release needs; the workflow builds, verifies and publi
 (see [`docs/install.md`](docs/install.md)). [`GLOSSARY.md`](GLOSSARY.md) has the
 vocabulary, [`docs/adr/0001-llm-friendly-code.md`](docs/adr/0001-llm-friendly-code.md)
 how the code is written.
-canary-1793386843
