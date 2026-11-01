@@ -21,15 +21,35 @@ pub struct Git {
 
 /// The repository `dir` is inside of, if any. A directory that is not one, a
 /// repository with no commit yet, and a host without git all answer `None`.
+///
+/// Two processes and no more, because this is boot's critical path: `rev-parse
+/// --abbrev-ref` is the one call that names a detached HEAD `HEAD`, and
+/// `status --porcelain=v2 --branch` reports the commit and the dirt together.
 pub fn git(dir: &Path) -> Option<Git> {
     let branch = field(dir, &["rev-parse", "--abbrev-ref", "HEAD"])?;
-    let commit = field(dir, &["rev-parse", "HEAD"])?;
-    let status = field(dir, &["status", "--porcelain"])?;
+    let status = field(dir, &["status", "--porcelain=v2", "--branch"])?;
     Some(Git {
         branch,
-        commit,
-        dirty: !status.is_empty(),
+        commit: oid(&status)?,
+        dirty: dirty(&status),
     })
+}
+
+/// The commit in the status's `# branch.oid` header, absent while the branch is
+/// unborn — the `(initial)` git writes there is not a commit.
+fn oid(status: &str) -> Option<String> {
+    status
+        .lines()
+        .find_map(|line| line.strip_prefix("# branch.oid "))
+        .filter(|oid| *oid != "(initial)")
+        .map(str::to_string)
+}
+
+/// Every line of a `--porcelain=v2` report that is not a `#` header is an entry.
+fn dirty(status: &str) -> bool {
+    status
+        .lines()
+        .any(|line| !line.is_empty() && !line.starts_with('#'))
 }
 
 fn field(dir: &Path, args: &[&str]) -> Option<String> {
