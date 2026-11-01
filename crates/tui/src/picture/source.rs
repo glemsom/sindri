@@ -13,6 +13,20 @@ use image::{DynamicImage, ImageFormat, ImageReader, Limits};
 use crate::picture::svgs::Svgs;
 use crate::picture::{BYTES, DIAGRAM_ROWS, MAX_ROWS, PIXELS, Refusal};
 
+/// What a source comes to before a pixel is spent: the pixels it is, the reason
+/// it draws none, or a drawing a frame has asked for and no thread has handed
+/// back yet. A pending source is silence — never a refusal, which is a sentence
+/// a caption prints — and only a fence is ever pending.
+pub(super) enum Sized {
+    /// The pixels the source is, read from a header or off the svg.
+    Of((u32, u32)),
+    /// Why it draws none, in the words its caption prints.
+    Refused(Refusal),
+    /// Not drawn yet: the frame laid out the panel and asked, and the answer
+    /// arrives through the loop's own channel.
+    Pending,
+}
+
 /// The formats the store draws: the four the decoders behind `ratatui-image`
 /// link, and nothing else.
 const DRAWS: [ImageFormat; 4] = [
@@ -65,10 +79,15 @@ impl Source {
     /// The natural size of what this source draws, in pixels: a file's header
     /// and never its pixels, a fence's diagram from the svg the renderer wrote
     /// for it — which `svgs` holds, so a body measured twice is parsed once.
-    pub(super) fn measured(&self, svgs: &Svgs) -> Result<(u32, u32), Refusal> {
+    /// Only a fence is ever pending: a file's size is in its header, and that
+    /// read is a frame's own to make.
+    pub(super) fn sized(&self, svgs: &Svgs) -> Sized {
         match self {
-            Source::File(path) => dimensions(path),
-            Source::Fence(body) => svgs.measured(body),
+            Source::File(path) => match dimensions(path) {
+                Ok(pixels) => Sized::Of(pixels),
+                Err(refusal) => Sized::Refused(refusal),
+            },
+            Source::Fence(body) => svgs.sized(body),
         }
     }
 

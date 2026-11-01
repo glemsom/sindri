@@ -14,6 +14,13 @@
 //! away as they are made. The diagram appears the instant its fence closes, and
 //! its source is on screen until then, which is what a reader mid-answer wants
 //! to read anyway.
+//!
+//! The layout itself is never the frame's: a closed fence asks the store and is
+//! handed either its diagram or nothing at all — a drawing the loop is making on
+//! a thread of its own. Nothing is a panel with no reason under it, because "not
+//! drawn yet" is silence and a refusal is a sentence; a tick or two later the
+//! drawing lands, the entry is measured again, and the diagram takes the panel's
+//! rows.
 
 use crate::picture::Worth;
 
@@ -22,7 +29,8 @@ use super::Writer;
 /// What a fence naming `mermaid` is at the place in the answer it sits.
 pub(super) enum Fence {
     /// The panel it always was: some other language, a terminal that draws no
-    /// picture, a place where a block cannot go, or a fence still arriving.
+    /// picture, a place where a block cannot go, a fence still arriving, or a
+    /// fence whose diagram no thread has drawn yet.
     Panel,
     /// A mermaid fence nothing will draw, and what the parser said about it.
     Refused(String),
@@ -65,5 +73,9 @@ pub(super) fn fence(
             Fence::Drawn
         }
         Worth::Refused(refusal) => Fence::Refused(refusal.said()),
+        // The frame has asked and the answer is on its way: the panel is what a
+        // reader reads in the meantime, and it says nothing of a diagram nothing
+        // has refused.
+        Worth::Pending => Fence::Panel,
     }
 }

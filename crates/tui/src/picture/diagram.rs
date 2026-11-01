@@ -121,12 +121,16 @@ fn options() -> RenderOptions {
     }
 }
 
-/// One rendered diagram: the svg the renderer wrote for a fence's body, and the
-/// size it says it is. The svg is kept rather than the pixels because drawing
-/// one and measuring one are the same drawing — the store measures an entry
-/// every frame and draws it once — so a body costs the renderer once, whatever
-/// the frame asks of it afterwards.
-pub(super) struct Shape {
+/// One drawn diagram: the svg the renderer wrote for a fence's body, and the
+/// size it says it is. The svg is kept rather than the pixels because a block's
+/// rows are read off it and its pixels are drawn from it, so a body costs the
+/// renderer once however often the frame asks afterwards.
+///
+/// It is opaque because all of it is the renderer's: a caller is handed one by
+/// [`drawn`](crate::picture::drawn) and asks the store nothing about it but the
+/// rows it takes.
+#[derive(Debug)]
+pub struct Drawing {
     pub(super) svg: String,
     /// The size in pixels, read off the svg's own attributes: no font is loaded
     /// to learn it, and the walk over fontconfig is the raster's business.
@@ -134,28 +138,28 @@ pub(super) struct Shape {
 }
 
 /// The diagram a fence's body draws, or the parser's own reason there is none.
-pub(super) fn render(body: &str) -> Result<Shape, Refusal> {
+pub(super) fn render(body: &str) -> Result<Drawing, Refusal> {
     let svg = render_strict(body, options()).map_err(diagnostic)?;
     let tree = usvg::Tree::from_str(&svg, &usvg::Options::default()).map_err(diagnostic)?;
     let size = tree.size().to_int_size();
-    Ok(Shape {
+    Ok(Drawing {
         svg,
         size: (size.width(), size.height()),
     })
 }
 
-/// The pixels a rendered diagram draws at `width` by `height`, on the panel's
+/// The pixels a drawn diagram draws at `width` by `height`, on the panel's
 /// ground: the whole diagram, fitted and never drawn past its own pixels.
-pub(super) fn raster(shape: &Shape, width: u32, height: u32) -> Option<DynamicImage> {
+pub(super) fn raster(drawn: &Drawing, width: u32, height: u32) -> Option<DynamicImage> {
     let mut fonts = usvg::Options::default();
     *fonts.fontdb_mut() = fonts_system().as_ref().clone();
-    drawn(&shape.svg, width, height, &fonts)
+    paint(&drawn.svg, width, height, &fonts)
 }
 
 /// The svg drawn, with whatever fonts the caller brought: a diagram's words are
 /// the one part of it that needs a font database, so the ground and the shapes
 /// are drawn with or without one and only the words are not.
-fn drawn(svg: &str, width: u32, height: u32, fonts: &usvg::Options<'_>) -> Option<DynamicImage> {
+fn paint(svg: &str, width: u32, height: u32, fonts: &usvg::Options<'_>) -> Option<DynamicImage> {
     let tree = usvg::Tree::from_str(svg, fonts).ok()?;
     let natural = tree.size();
     let (width, height) = (width.max(1), height.max(1));

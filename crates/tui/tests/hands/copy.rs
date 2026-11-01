@@ -297,6 +297,10 @@ fn diagrammed(clipboard: Fake) -> App {
 fn a_diagrams_block_copies_as_its_mermaid_source_and_never_as_its_caption() {
     let clipboard = Fake::taking();
     let mut app = diagrammed(clipboard.clone());
+    // The frame that lays the fence out is its panel and asks for the drawing:
+    // the diagram is in the frame after the answer lands.
+    screen(&mut app, 100, 30);
+    drawn(&mut app);
     let rows = screen(&mut app, 100, 30);
     assert!(
         rows.iter()

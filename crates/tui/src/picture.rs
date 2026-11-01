@@ -6,6 +6,11 @@
 //! same answer redraws for nothing. It decides nothing about rows or drawing:
 //! the layout asks it how many rows a source takes at a column width, and the
 //! renderer asks it for the protocol that draws them.
+//!
+//! A fence is the one source a frame cannot afford to measure: laying a diagram
+//! out is tens of milliseconds, so a body the store has not been handed is
+//! [`Worth::Pending`] — its panel for a tick — and the layout it asks for is made
+//! by [`drawn`], off the frame's thread, and handed back to [`Store::keep`].
 
 mod diagram;
 mod source;
@@ -14,8 +19,19 @@ mod svgs;
 #[cfg(test)]
 mod tests;
 
+pub use diagram::Drawing;
 pub use source::Source;
 pub use store::Store;
+
+/// A fence's body drawn: the svg the renderer wrote for it and the size it says
+/// it is, or the parser's own reason there is none. A layout is tens of
+/// milliseconds, so a frame never calls this — it is the loop's, made on a thread
+/// of its own and handed back through the loop's channel, like a line of output.
+/// Two drawings of one body are the same svg, which is why the same body at
+/// another width is another block and not another drawing.
+pub fn drawn(body: &str) -> Result<Drawing, Refusal> {
+    diagram::render(body)
+}
 
 /// The most rows a picture may take: the face's own allowance.
 ///
@@ -79,6 +95,10 @@ pub enum Worth {
         rows: u16,
     },
     Refused(Refusal),
+    /// A fence whose diagram no thread has drawn yet: not a refusal, which is a
+    /// sentence a caption prints, but silence — the block is its panel until the
+    /// drawing arrives, and the svg that will measure it is being made.
+    Pending,
 }
 
 impl Worth {
@@ -87,7 +107,7 @@ impl Worth {
     pub fn rows(&self) -> u16 {
         match self {
             Worth::Drawn { rows, .. } => *rows,
-            Worth::Refused(_) => 0,
+            Worth::Refused(_) | Worth::Pending => 0,
         }
     }
 
@@ -96,7 +116,7 @@ impl Worth {
     pub fn columns(&self) -> u16 {
         match self {
             Worth::Drawn { columns, .. } => *columns,
-            Worth::Refused(_) => 0,
+            Worth::Refused(_) | Worth::Pending => 0,
         }
     }
 }

@@ -156,6 +156,17 @@ pub fn badge(rows: &[String]) -> Option<String> {
         .find_map(|row| row.find('↓').map(|at| row[at..].trim_end().to_string()))
 }
 
+/// The drawing a frame has asked for, made here as the loop makes it off the
+/// frame's own thread: the store asks, the drawing is made, and the answer is
+/// handed back. A test has no loop, so it is the loop — and a diagram takes two
+/// frames to see, the one that stands the panel up and the one after the answer.
+pub fn drawn(app: &mut App) {
+    for body in app.take_drawings() {
+        let drawing = sindri_tui::picture::drawn(&body);
+        app.drawn(body, drawing);
+    }
+}
+
 /// What the reader's window is showing, without drawing it again.
 pub fn reading(app: &mut App) -> Vec<String> {
     app.viewport().rows.clone()

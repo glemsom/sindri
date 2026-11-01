@@ -8,12 +8,41 @@ use super::*;
 
 use sindri_tui::graphics::Graphics;
 use sindri_tui::markdown;
-use sindri_tui::picture::{Refusal, Store, Worth};
+use sindri_tui::picture::{self, Refusal, Store, Worth};
 
 /// The store a test measures with: the made-up Kitty answer the other picture
 /// tests use. No workspace is needed — a fence is its own source.
 fn store() -> Store {
     Store::new(Some(&Graphics::kitty()), ".").expect("a Kitty answer is a store")
+}
+
+/// The rows an answer is written as once the drawings it asks for have been
+/// made: a fence is laid out as its panel, the store asks, the drawing is made —
+/// on a thread of its own in the frame, on this one here — and the answer is
+/// handed back, which is the state every frame after the first one sees. A test
+/// has no loop, so it is the loop.
+fn rows(store: &Store, text: &str, width: u16) -> markdown::Written {
+    let asked = markdown::lines(text, width, Some(store));
+    let wanted = store.take_wanted();
+    if wanted.is_empty() {
+        return asked;
+    }
+    for body in &wanted {
+        store.keep(body, picture::drawn(body));
+    }
+    markdown::lines(text, width, Some(store))
+}
+
+/// What a fence's body is worth once its drawing has been made.
+fn worth(store: &Store, body: &str, columns: u16) -> Worth {
+    let worth = store.fence(body, columns);
+    for body in store.take_wanted() {
+        store.keep(&body, picture::drawn(&body));
+    }
+    match worth {
+        Worth::Pending => store.fence(body, columns),
+        drawn => drawn,
+    }
 }
 
 /// A diagram the crate draws: flat and wide, so it is drawn at its own size.
@@ -42,7 +71,7 @@ fn arriving(language: &str, body: &str) -> String {
 
 #[test]
 fn a_mermaid_fence_reserves_the_rows_the_store_measured_and_captions_them() {
-    let block = markdown::lines(&fence("mermaid", DIAGRAM), 60, Some(&store()));
+    let block = rows(&store(), &fence("mermaid", DIAGRAM), 60);
     let shown = texts(&block.rows);
     let picture = block
         .pictures
@@ -72,7 +101,7 @@ fn a_mermaid_fence_reserves_the_rows_the_store_measured_and_captions_them() {
 #[test]
 fn a_mermaid_fence_that_will_not_parse_is_its_panel_and_the_parser_s_reason() {
     let broken = fence("mermaid", BROKEN);
-    let block = markdown::lines(&broken, 60, Some(&store()));
+    let block = rows(&store(), &broken, 60);
     let shown = texts(&block.rows);
     let plain = texts(&markdown::lines(&broken, 60, None).rows);
 
@@ -111,6 +140,36 @@ fn a_mermaid_fence_that_will_not_parse_is_its_panel_and_the_parser_s_reason() {
     );
 }
 
+/// A fence the store has asked for a drawing of and not been handed yet is the
+/// panel it was, with nothing under it: "not drawn yet" is silence, and a refusal
+/// is a sentence the caption prints. The frame that asks pays the renderer
+/// nothing for it.
+#[test]
+fn a_fence_waiting_for_its_drawing_is_its_panel_and_says_nothing_of_it() {
+    let store = store();
+    let asked = markdown::lines(&fence("mermaid", DIAGRAM), 60, Some(&store));
+    let shown = texts(&asked.rows);
+    let undrawn = texts(&markdown::lines(&fence("mermaid", DIAGRAM), 60, None).rows);
+
+    assert!(
+        asked.pictures.is_empty(),
+        "nothing is measured, so there is nothing to draw: {shown:?}"
+    );
+    assert_eq!(
+        shown, undrawn,
+        "the panel every fence without a graphic is: {shown:?}"
+    );
+    assert!(
+        !shown.iter().any(|row| row.contains('‹')),
+        "and nothing is said of a diagram nothing has refused: {shown:?}"
+    );
+    assert_eq!(
+        store.take_wanted(),
+        vec![DIAGRAM.trim_end_matches('\n').to_string()],
+        "and the body is what the frame asked to have drawn"
+    );
+}
+
 /// A fence whose closing delimiter the stream has not sent is the panel it is,
 /// and no diagram is made of it: its body is a prefix the next delta lengthens,
 /// and a layout is tens of milliseconds of a frame spent on a figure thrown
@@ -140,13 +199,14 @@ fn a_fence_still_arriving_shows_its_source_and_asks_for_no_diagram() {
     );
 }
 
-/// The instant the closing delimiter lands the diagram is drawn, in an answer
+/// A diagram is a block the instant the closing delimiter lands, in an answer
 /// whose prose is still streaming: what arrives after a closed fence does not
-/// wait for the answer to end.
+/// wait for the answer to end, and the rows the panel stood in for are the
+/// diagram's as soon as the loop has drawn it.
 #[test]
 fn a_fence_that_closed_is_drawn_while_the_answer_runs_on() {
     let closed = format!("```mermaid\n{PORTRAIT}```\n\nand the prose after it\n");
-    let block = markdown::lines(&closed, 60, Some(&store()));
+    let block = rows(&store(), &closed, 60);
     let shown = texts(&block.rows);
 
     assert_eq!(
@@ -209,7 +269,7 @@ fn a_terminal_that_draws_no_picture_draws_a_mermaid_fence_as_any_other_fence() {
 
 #[test]
 fn a_mermaid_fence_that_will_not_parse_is_refused_in_the_stores_own_words() {
-    let worth = store().fence(BROKEN, 60);
+    let worth = worth(&store(), BROKEN, 60);
     assert_eq!(worth.rows(), 0, "a refusal takes no rows");
     match worth {
         Worth::Refused(reason @ Refusal::Diagram(_)) => {
@@ -226,7 +286,7 @@ fn a_portrait_mermaid_fence_takes_more_rows_than_a_photograph_may() {
     // columns is forty-five rows — over the twenty a photograph may take and
     // inside the forty a diagram may, so the writer reserves the diagram's
     // allowance whole rather than a picture's shrunken one.
-    let block = markdown::lines(&fence("mermaid", PORTRAIT), 60, Some(&store()));
+    let block = rows(&store(), &fence("mermaid", PORTRAIT), 60);
     let shown = texts(&block.rows);
     let picture = block
         .pictures
@@ -264,7 +324,7 @@ fn a_portrait_mermaid_fence_takes_more_rows_than_a_photograph_may() {
 fn a_diagram_copies_as_the_fence_body_it_was_drawn_from() {
     // The ticket's bug: a block that copies as `‹mermaid›` is not a diagram and
     // not a document. What a reader pastes out of the frame is the source.
-    let block = markdown::lines(&fence("mermaid", DIAGRAM), 60, Some(&store()));
+    let block = rows(&store(), &fence("mermaid", DIAGRAM), 60);
     let picture = block
         .pictures
         .first()

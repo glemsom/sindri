@@ -308,9 +308,13 @@ same store and not a second pipeline, so a diagram is measured, laid out and
 **captioned** exactly as an image is. Where a picture is not a block — a table cell, a
 list item, a heading — a mermaid fence is the **panel** it was, and a fence that will not
 parse is that panel with the parser's own words under it, in the ink a **caption** keeps.
-A fence the stream has not closed is that panel too, and its diagram is drawn the instant the
-closing line lands: a layout is tens of milliseconds, and a body that another delta will
-lengthen is not yet one to draw.
+A fence the stream has not closed is that panel too: a layout is tens of milliseconds,
+and a body that another delta will lengthen is not yet one to draw. A fence that has closed
+is that panel for a tick while the **frame** asks and the drawing is made off its own
+thread — nothing a frame lays out may wait for a layout — and the diagram then takes the
+panel's rows, measured again in the entry it landed in. A block waiting for its drawing is
+a panel and nothing else: "not drawn yet" is silence, and a refusal is a sentence the
+caption prints.
 
 **caption** — the words and `‹src›` a **picture** is drawn under, `a chart ‹plot.png›`: the
 alt text's words, the target in `‹›` as a link keeps its own, the reason in their place
