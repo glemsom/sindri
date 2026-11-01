@@ -33,14 +33,19 @@ pub fn drain<R: Read + Send + 'static>(
         Some(sink) => {
             let mut reader = BufReader::new(source);
             let mut seen = Vec::new();
+            // One buffer for the whole stream: a command streaming tens of
+            // thousands of short lines would otherwise pay a heap allocation
+            // per line on the thread whose only job is to keep up with it.
+            let mut line = Vec::new();
             loop {
-                let mut line = Vec::new();
                 if reader.read_until(b'\n', &mut line)? == 0 {
                     return Ok(seen);
                 }
                 let text = String::from_utf8_lossy(&line);
                 sink.output(side, text.trim_end_matches(['\n', '\r']));
                 seen.extend_from_slice(&line);
+                // After the sink, never before: `text` borrows `line`.
+                line.clear();
             }
         }
     })
