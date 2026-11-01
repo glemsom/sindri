@@ -227,7 +227,12 @@ fn turn_of_the_loop(
     }
     begin(app, jobs);
     walk(app, tx, walking, root);
-    draw(app)
+    let painted = draw(app);
+    // The frame just drawn is what asked: a fence it laid out as its panel asked
+    // for its diagram, and the drawing is made off this thread so the next frame
+    // costs what a frame with no picture in it costs.
+    drawing(app, tx);
+    painted
 }
 
 /// Where the records live and where a default `/export` lands: the state
@@ -272,6 +277,7 @@ fn apply(app: &mut App, message: Msg) {
         Msg::Over(over, spilled) => app.over(over, spilled),
         Msg::Finished(finished) => app.finished(finished),
         Msg::Paths(generation, paths, capped) => app.paths(generation, paths, capped),
+        Msg::Drawn(body, drawn) => app.drawn(body, drawn),
         Msg::Renewed(launch) => app.renewed(launch),
         Msg::Reloaded(reloaded) => app.reloaded(reloaded),
     }
@@ -312,6 +318,21 @@ fn walk(app: &mut App, tx: &Sender<Msg>, walking: &mut bool, root: &std::path::P
             .collect();
         let _ = tx.send(Msg::Paths(generation, paths, found.capped));
     });
+}
+
+/// Draws the diagrams the frame has asked for on threads of its own, and hands
+/// each answer back on the loop's own channel: a mermaid layout is tens of
+/// milliseconds, and a frame that waits for one is a keystroke behind a figure.
+/// Nothing is joined — the frame asked, and an answer that arrives after the
+/// thread it was asked for has gone is dropped where it lands.
+fn drawing(app: &mut App, tx: &Sender<Msg>) {
+    for body in app.take_drawings() {
+        let tx = tx.clone();
+        std::thread::spawn(move || {
+            let drawn = crate::picture::drawn(&body);
+            let _ = tx.send(Msg::Drawn(body, drawn));
+        });
+    }
 }
 
 fn listen_for_keys(tx: Sender<Msg>) {
