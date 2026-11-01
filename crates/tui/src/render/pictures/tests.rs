@@ -188,10 +188,13 @@ fn a_repaint_of_a_mermaid_fence_paints_pixels_and_renders_it_once() {
     assert!(!drawn(&tail), "the tail shows the notes, not the diagram");
     assert_eq!(decodes(&app), 0, "nothing was drawn, nothing was rendered");
 
-    // The first turn: the diagram, rendered once. The svg behind it is rendered
-    // once too — a measure is the same drawing, and measuring one is what a
-    // frame does to every entry it lays out.
+    // The first turn: the frame stands the panel up and asks, and lays nothing
+    // out — the diagram is made off its thread.
     press(&mut app, KeyCode::Home);
+    let asked = frame(&mut app, 100, 30);
+    assert!(!drawn(&asked), "the panel stands where the diagram goes");
+    assert_eq!(renders(&app), 0, "and the frame laid nothing out");
+    app.drained();
     let top = frame(&mut app, 100, 30);
     assert!(drawn(&top), "the diagram is drawn on the rows it reserved");
     assert_eq!(decodes(&app), 1, "the first draw renders it once");
@@ -223,6 +226,8 @@ fn a_delta_below_a_closed_diagram_recosts_neither_the_diagram_nor_its_pixels() {
         text: format!("```mermaid\n{DIAGRAM}```\n\nA paragraph that"),
     });
     press(&mut app, KeyCode::Home);
+    frame(&mut app, 100, 30);
+    app.drained();
     assert!(drawn(&frame(&mut app, 100, 30)), "the diagram is drawn");
     assert_eq!(renders(&app), 1, "and rendered once");
 
@@ -282,6 +287,8 @@ fn portrait() -> App {
 #[test]
 fn a_diagram_taller_than_the_window_says_so_instead_of_a_blank_block() {
     let mut app = portrait();
+    frame(&mut app, 100, 30);
+    app.drained();
     let short = frame(&mut app, 100, 30);
     let shown = words(&short);
 
@@ -303,6 +310,8 @@ fn a_diagram_taller_than_the_window_says_so_instead_of_a_blank_block() {
 #[test]
 fn a_diagram_whole_in_a_tall_window_is_drawn_and_says_nothing_about_it() {
     let mut app = portrait();
+    frame(&mut app, 100, 60);
+    app.drained();
     let tall = frame(&mut app, 100, 60);
     let shown = words(&tall);
 
@@ -328,6 +337,8 @@ fn a_portrait_diagram_is_drawn_whole_in_a_forty_column_window_of_eighty_rows() {
     // not the allowance, is what it is capped by here — and all of them are
     // inside the window, so the reader is looking at the diagram.
     let mut app = portrait();
+    frame(&mut app, 40, 80);
+    app.drained();
     let acceptance = frame(&mut app, 40, 80);
     let worth = app.viewport().pictures[0].worth.clone();
     let shown = words(&acceptance);

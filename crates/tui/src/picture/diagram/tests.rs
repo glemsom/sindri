@@ -188,7 +188,7 @@ fn a_diagram_is_drawn_with_the_fonts_the_theme_names() {
     // in it would be a diagram the reader cannot read.
     let shape = render(DIAGRAM).expect("a state diagram parses");
     let with = raster(&shape, 160, 90).expect("it rasterises");
-    let without = drawn(&shape.svg, 160, 90, &usvg::Options::default()).expect("it rasterises");
+    let without = paint(&shape.svg, 160, 90, &usvg::Options::default()).expect("it rasterises");
     assert_ne!(
         with.to_rgba8().as_raw(),
         without.to_rgba8().as_raw(),

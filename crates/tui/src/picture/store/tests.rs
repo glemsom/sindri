@@ -1,11 +1,13 @@
 //! A fence's laws in the store: a diagram is measured from the svg the renderer
-//! would write and rendered like any other source, and it is keyed by its own
-//! text rather than by a file no one wrote.
+//! writes, rendered like any other source once it has, and keyed by its own text
+//! rather than by a file no one wrote. No frame lays one out: the store is asked
+//! for a body it has not been handed, answers that it is pending, and is handed
+//! the drawing by the loop — which is what `drawn` below stands in for.
 
 use super::*;
 
 use crate::picture::svgs::SVGS;
-use crate::picture::{DIAGRAM_ROWS, MAX_ROWS};
+use crate::picture::{DIAGRAM_ROWS, MAX_ROWS, draw as drawn};
 
 /// The store a test asks: the made-up Kitty answer a layout test uses. A fence
 /// needs no workspace, so none is offered.
@@ -39,9 +41,31 @@ fn fence(n: usize) -> String {
     format!("stateDiagram-v2\n    [*] --> Node{n}\n    Node{n} --> [*]")
 }
 
+/// The drawings the store has asked for, made here as the loop makes them — on a
+/// thread of its own there, on this one here — and handed back. A test has no
+/// loop, so it is the loop, and a body drawn once is never asked for again.
+fn draw(store: &Store) -> Vec<String> {
+    let asked = store.take_wanted();
+    for body in &asked {
+        store.keep(body, drawn(body));
+    }
+    asked
+}
+
+/// What a fence is worth once its drawing has been made: the measure that asks,
+/// the drawing, and the measure that has it.
+fn measured(store: &Store, body: &str, columns: u16) -> Worth {
+    let worth = store.fence(body, columns);
+    draw(store);
+    match worth {
+        Worth::Pending => store.fence(body, columns),
+        drawn => drawn,
+    }
+}
+
 #[test]
 fn a_fence_is_measured_from_the_svg_the_renderer_draws() {
-    let worth = store().fence(DIAGRAM, 60);
+    let worth = measured(&store(), DIAGRAM, 60);
     let Worth::Drawn {
         source,
         columns,
@@ -62,16 +86,16 @@ fn a_fence_is_measured_from_the_svg_the_renderer_draws() {
 #[test]
 fn a_fence_is_keyed_by_its_body_and_the_block_it_is_drawn_into() {
     let mut store = store();
-    let worth = store.fence(DIAGRAM, 60);
-    assert!(store.protocol(&worth).is_some(), "the diagram is drawable");
+    let first = measured(&store, DIAGRAM, 60);
+    assert!(store.protocol(&first).is_some(), "the diagram is drawable");
     assert_eq!(store.decodes, 1, "the first draw renders it");
-    store.protocol(&worth);
+    store.protocol(&first);
     assert_eq!(
         store.decodes, 1,
         "the same body in the same block is the same pixels"
     );
 
-    let other = store.fence(OTHER, 60);
+    let other = measured(&store, OTHER, 60);
     store.protocol(&other);
     assert_eq!(
         store.decodes, 2,
@@ -80,7 +104,7 @@ fn a_fence_is_keyed_by_its_body_and_the_block_it_is_drawn_into() {
 
     // The same body offered a narrower column is drawn into another block, so
     // it is another picture rather than the one already held.
-    let narrow = store.fence(DIAGRAM, 12);
+    let narrow = measured(&store, DIAGRAM, 12);
     assert_ne!(narrow.rows(), 0, "the diagram still fits a narrow column");
     store.protocol(&narrow);
     assert_eq!(store.decodes, 3, "another block is another render");
@@ -94,13 +118,31 @@ fn a_fence_is_keyed_by_its_body_and_the_block_it_is_drawn_into() {
 #[test]
 fn a_fence_that_will_not_parse_has_nothing_to_draw() {
     let mut store = store();
-    let worth = store.fence(BROKEN, 60);
+    // The frame that first lays the fence out asks and is handed nothing: the
+    // parser has not spoken yet, and silence is not a refusal.
+    assert_eq!(
+        store.fence(BROKEN, 60),
+        Worth::Pending,
+        "a body no thread has drawn yet is pending"
+    );
+    let worth = measured(&store, BROKEN, 60);
     assert!(
         matches!(worth, Worth::Refused(Refusal::Diagram(_))),
         "a broken fence is the parser's own typed reason: {worth:?}"
     );
     assert!(store.protocol(&worth).is_none(), "nothing was measured");
     assert_eq!(store.decodes, 0, "and nothing was rendered");
+    assert_eq!(
+        store.renders(),
+        1,
+        "the reason is held, so the frame that asks again renders nothing"
+    );
+    measured(&store, BROKEN, 60);
+    assert_eq!(
+        store.renders(),
+        1,
+        "and a repaint asks the renderer nothing"
+    );
 }
 
 #[test]
@@ -108,20 +150,29 @@ fn a_repaint_of_a_frame_full_of_diagrams_renders_nothing() {
     let store = store();
     let bodies: Vec<String> = (0..4).map(fence).collect();
     for body in &bodies {
-        assert!(
-            matches!(store.fence(body, 60), Worth::Drawn { .. }),
-            "the store draws a diagram of a fence"
+        assert_eq!(
+            store.fence(body, 60),
+            Worth::Pending,
+            "the first frame asks and lays nothing out"
         );
     }
     assert_eq!(
         store.renders(),
-        4,
-        "the first frame renders each diagram once"
+        0,
+        "and no diagram was put through the renderer to ask"
     );
+    assert_eq!(draw(&store).len(), 4, "the loop draws the four bodies");
+    assert_eq!(store.renders(), 4, "each diagram once, and never twice");
+    for body in &bodies {
+        assert!(
+            matches!(store.fence(body, 60), Worth::Drawn { .. }),
+            "a body the store holds is a diagram"
+        );
+    }
     // The reader scrolls past all four and back: the whole frame is measured
     // again, at the width it was measured at, and no diagram is drawn twice.
     for body in &bodies {
-        store.fence(body, 60);
+        measured(&store, body, 60);
     }
     assert_eq!(
         store.renders(),
@@ -133,7 +184,8 @@ fn a_repaint_of_a_frame_full_of_diagrams_renders_nothing() {
 #[test]
 fn the_same_fence_body_at_two_column_widths_is_rendered_once_and_measured_twice() {
     let store = store();
-    let (narrow, wide) = (store.fence(DIAGRAM, 8), store.fence(DIAGRAM, 80));
+    let narrow = measured(&store, DIAGRAM, 8);
+    let wide = measured(&store, DIAGRAM, 80);
     assert_eq!(
         store.renders(),
         1,
@@ -151,15 +203,15 @@ fn the_same_fence_body_at_two_column_widths_is_rendered_once_and_measured_twice(
 #[test]
 fn a_rewritten_fence_body_is_rendered_again() {
     let store = store();
-    store.fence(DIAGRAM, 60);
+    measured(&store, DIAGRAM, 60);
     assert_eq!(store.renders(), 1, "a body is rendered once");
-    store.fence(DIAGRAM, 60);
+    measured(&store, DIAGRAM, 60);
     assert_eq!(
         store.renders(),
         1,
         "and the same body is never rendered twice"
     );
-    store.fence(REWRITTEN, 60);
+    measured(&store, REWRITTEN, 60);
     assert_eq!(
         store.renders(),
         2,
@@ -172,7 +224,7 @@ fn the_svg_cache_lets_go_the_least_recently_used_and_not_the_oldest() {
     let store = store();
     let bodies: Vec<String> = (0..SVGS).map(fence).collect();
     for body in &bodies {
-        store.fence(body, 60);
+        measured(&store, body, 60);
     }
     assert_eq!(
         store.renders(),
@@ -181,30 +233,39 @@ fn the_svg_cache_lets_go_the_least_recently_used_and_not_the_oldest() {
     );
     // The reader scrolls back to the top of the thread: a hit, which is what
     // makes that diagram the most recently used of the lot.
-    store.fence(&bodies[0], 60);
+    measured(&store, &bodies[0], 60);
     assert_eq!(
         store.renders(),
         SVGS as u64,
         "and costs nothing to draw again"
     );
 
-    store.fence(&fence(SVGS), 60);
+    measured(&store, &fence(SVGS), 60);
     assert_eq!(
         store.renders(),
         SVGS as u64 + 1,
         "one body past the bound makes room for itself"
     );
-    store.fence(&bodies[0], 60);
+    measured(&store, &bodies[0], 60);
     assert_eq!(
         store.renders(),
         SVGS as u64 + 1,
         "and the diagram the reader scrolled back to is still held"
     );
-    store.fence(&bodies[1], 60);
+
+    // The one above it was the least recently used of the lot, so it was let go:
+    // the frame that lays it out again has no drawing for it and asks afresh,
+    // and the panel stands until the answer lands.
+    assert_eq!(
+        store.fence(&bodies[1], 60),
+        Worth::Pending,
+        "a diagram the store let go is not one it still holds"
+    );
+    measured(&store, &bodies[1], 60);
     assert_eq!(
         store.renders(),
         SVGS as u64 + 2,
-        "while the one above it, least recently used, was let go"
+        "and it is put through the renderer once more"
     );
 }
 
@@ -216,7 +277,7 @@ fn a_portrait_diagram_takes_the_rows_a_diagram_may_and_a_photograph_does_not() {
     // 808 tall: forty-five rows of eighteen. It takes the diagram's allowance
     // and stops there, where tall.png — ten pixels by five thousand — takes a
     // picture's twenty.
-    let worth = store().fence(PORTRAIT.trim_end_matches('\n'), 60);
+    let worth = measured(&store(), PORTRAIT.trim_end_matches('\n'), 60);
     assert_eq!(
         worth.rows(),
         DIAGRAM_ROWS,
@@ -240,7 +301,7 @@ fn a_portrait_diagram_in_a_narrow_body_takes_the_rows_the_column_gives_it() {
     // width, so 538 pixels tall — thirty rows of eighteen, at 7.7 pixels of
     // text where the twenty the old cap allowed drew 5.1. The allowance is a
     // ceiling and never a target.
-    let worth = store().fence(PORTRAIT.trim_end_matches('\n'), 40);
+    let worth = measured(&store(), PORTRAIT.trim_end_matches('\n'), 40);
     assert_eq!(
         worth.rows(),
         30,

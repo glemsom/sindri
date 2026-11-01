@@ -12,7 +12,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-pub use common::{any, notes, press, screen, shown, type_text};
+pub use common::{any, drained, notes, press, screen, shown, type_text};
 use std::sync::{Arc, Mutex};
 
 use crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};

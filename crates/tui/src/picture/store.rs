@@ -1,8 +1,10 @@
 //! The store itself: it measures a source at a column width, and holds the
 //! protocols it has already rendered so an answer that is redrawn costs pixels
 //! and not a decode. A mermaid fence is the same bargain as a file — it is
-//! measured where it is laid out and rendered where it is drawn — so nothing
-//! here knows which kind of source it is holding.
+//! measured where it is laid out and rendered where it is drawn — except that a
+//! diagram's measure is a layout of tens of milliseconds, so a fence no thread
+//! has drawn yet is measured as pending and laid out as its panel: what has been
+//! asked for is `wanted`, and what has come back is `keep`.
 
 use std::path::PathBuf;
 use std::time::SystemTime;
@@ -11,7 +13,8 @@ use ratatui_image::picker::{Picker, ProtocolType};
 use ratatui_image::protocol::StatefulProtocol;
 
 use crate::graphics::Graphics;
-use crate::picture::source::Source;
+use crate::picture::diagram::Drawing;
+use crate::picture::source::{Sized, Source};
 use crate::picture::svgs::Svgs;
 use crate::picture::{PIXELS, Refusal, Worth};
 
@@ -116,25 +119,42 @@ impl Store {
     }
 
     /// What a fence's body is worth at `columns`: the diagram it draws, measured
-    /// from the svg the renderer would write, or the parser's own reason it
-    /// draws none.
+    /// from the svg that has been written for it, the parser's own reason it
+    /// draws none, or nothing at all — a drawing the frame has asked for and no
+    /// thread has handed back, which is its panel for a tick.
     pub fn fence(&self, body: &str, columns: u16) -> Worth {
         self.weigh(Source::Fence(body.to_owned()), columns)
     }
 
     fn weigh(&self, source: Source, columns: u16) -> Worth {
-        source
-            .measured(&self.svgs)
-            .and_then(|pixels| self.guarded(pixels))
-            .map(|pixels| {
+        let pixels = match source.sized(&self.svgs) {
+            Sized::Of(pixels) => pixels,
+            Sized::Refused(refusal) => return Worth::Refused(refusal),
+            Sized::Pending => return Worth::Pending,
+        };
+        match self.guarded(pixels) {
+            Ok(pixels) => {
                 let (span, rows) = self.block(pixels, columns, source.allowance());
                 Worth::Drawn {
                     source,
                     columns: span,
                     rows,
                 }
-            })
-            .unwrap_or_else(Worth::Refused)
+            }
+            Err(refusal) => Worth::Refused(refusal),
+        }
+    }
+
+    /// The bodies the frames so far have asked to have drawn and no thread has
+    /// been given: the loop takes them and makes each one on a thread of its own.
+    pub fn take_wanted(&self) -> Vec<String> {
+        self.svgs.take_wanted()
+    }
+
+    /// A drawing of `body`, as the thread that made it hands it back: held for
+    /// the measure that asked, which is the next frame that lays the fence out.
+    pub fn keep(&self, body: &str, drawing: Result<Drawing, Refusal>) {
+        self.svgs.keep(body, drawing)
     }
 
     /// The pixels a source claims, held to the cap before a decoder spends

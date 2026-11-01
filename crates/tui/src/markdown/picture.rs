@@ -71,7 +71,9 @@ pub struct Picture {
 /// absent is its target alone.
 fn caption(src: &str, alt: &str, worth: &Worth) -> String {
     let target = match worth {
-        Worth::Drawn { .. } => format!("‹{src}›"),
+        // A block nothing has refused names its source and says no reason. A
+        // pending fence never reaches a caption: it is placed as its panel.
+        Worth::Drawn { .. } | Worth::Pending => format!("‹{src}›"),
         Worth::Refused(refusal) => format!("‹{src}: {}›", refusal.said()),
     };
     let words = alt.trim();

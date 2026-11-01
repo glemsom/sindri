@@ -37,6 +37,7 @@ fn shown(src: &str, columns: u16) -> (u16, u16) {
     match worth {
         Worth::Drawn { columns, rows, .. } => (columns, rows),
         Worth::Refused(reason) => panic!("{src} was refused: {reason:?}"),
+        Worth::Pending => panic!("a file is measured from its header and never pending"),
     }
 }
 
@@ -47,6 +48,7 @@ fn refused(src: &str) -> (Refusal, u16) {
     match worth {
         Worth::Refused(reason) => (reason, rows),
         Worth::Drawn { rows, .. } => panic!("{src} was drawn in {rows} rows"),
+        Worth::Pending => panic!("a file is measured from its header and never pending"),
     }
 }
 
