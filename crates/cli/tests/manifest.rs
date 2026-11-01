@@ -20,9 +20,14 @@ fn declares(section_name: &str) -> Vec<String> {
     lines
         .take_while(|line| !line.trim_start().starts_with('['))
         .filter(|line| !line.trim().is_empty() && !line.trim_start().starts_with('#'))
-        .filter_map(|line| line.split('=').next())
-        .filter_map(|key| key.split('.').next())
-        .map(|key| key.trim().to_string())
+        .map(|line| {
+            let (key, _) = line.split_once('=').expect("a dependency line holds a `=`");
+            // `.workspace = true` and friends make the key a path, not a name.
+            key.split_once('.')
+                .map_or(key, |(name, _)| name)
+                .trim()
+                .to_string()
+        })
         .collect()
 }
 
@@ -48,7 +53,9 @@ fn the_binary_depends_on_sindri_core() {
     // The redundant line is the one under `[dev-dependencies]`: `sindri-core` is
     // the binary's own dependency and stays where the binary asks for it.
     assert!(
-        declares("dependencies").iter().any(|name| name == "sindri-core"),
+        declares("dependencies")
+            .iter()
+            .any(|name| name == "sindri-core"),
         "`sindri-core` is a dependency of the binary, not only of its tests"
     );
 }
