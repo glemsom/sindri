@@ -45,6 +45,17 @@ pub fn launch() -> Launch {
     }
 }
 
+/// A launch whose run left the sandbox — `--yolo-unsafe` — so a test can see
+/// what the frame says about a run that gave the boundary up. It is named here
+/// because the shared literal is read whole, and a test may rename only the
+/// facts it asserts on.
+pub fn unsafe_launch() -> Launch {
+    Launch {
+        sandbox: "unsafe · your own privileges".to_string(),
+        ..launch()
+    }
+}
+
 pub fn app() -> App {
     App::new(launch(), None)
 }
@@ -98,6 +109,32 @@ fn glyph(cell: &ratatui::buffer::Cell) -> &str {
     } else {
         cell.symbol()
     }
+}
+
+/// The ink the posture chip is drawn in, wherever the frame wears it — the
+/// rail's posture row or the first frame's head: the chip is one raised run
+/// from its `⬢` to its last cell, and that run's colour is the frame's only
+/// word on whether the run is still inside its boundary.
+pub fn posture_ink(app: &mut App, width: u16, height: u16) -> ratatui::style::Color {
+    let cells = buffer(app, width, height);
+    let glyph = (0..height)
+        .flat_map(|y| (0..width).map(move |x| (x, y)))
+        .find(|(x, y)| cells[(*x, *y)].symbol() == "⬢")
+        .expect("the frame wears the posture's glyph");
+    let (x, y) = glyph;
+    let ink: Vec<ratatui::style::Color> = (x..width)
+        .take_while(|x| cells[(*x, y)].bg == sindri_tui::theme::RAISED)
+        .map(|x| cells[(x, y)].fg)
+        .collect();
+    assert!(
+        ink.len() > 1,
+        "the chip is a run of cells and not a lone glyph: {ink:?}"
+    );
+    assert!(
+        ink.windows(2).all(|pair| pair[0] == pair[1]),
+        "the chip is one ink from its glyph to its last cell: {ink:?}"
+    );
+    ink[0]
 }
 
 /// The cell the frame gives the cursor, as the terminal is told it: a glyph two

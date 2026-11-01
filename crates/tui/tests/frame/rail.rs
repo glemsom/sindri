@@ -140,6 +140,20 @@ fn the_strip_carries_the_rails_facts_in_the_rails_order() {
 }
 
 #[test]
+fn a_run_that_left_the_sandbox_wears_a_bad_chip_and_a_sandboxed_run_a_good_one() {
+    assert_eq!(
+        posture_ink(&mut spent(), 100, 26),
+        theme::GOOD,
+        "a run still inside bwrap says so in the chip's ink"
+    );
+    assert_eq!(
+        posture_ink(&mut App::new(unsafe_launch(), None), 100, 26),
+        theme::BAD,
+        "and a run that gave the boundary up is not painted as one that did not"
+    );
+}
+
+#[test]
 fn the_sandbox_posture_is_a_chip_and_not_another_label_value_pair() {
     let mut app = spent();
     let buf = buffer(&mut app, 100, 26);
