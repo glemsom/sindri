@@ -108,7 +108,7 @@ mod tests {
     use super::{COMMANDS, Command, parse, refusal};
 
     #[test]
-    fn the_three_commands_are_recognised() {
+    fn a_command_is_recognised_with_or_without_surrounding_space() {
         assert_eq!(parse("/new"), Some(Command::New));
         assert_eq!(parse("  /help  "), Some(Command::Help));
         assert_eq!(parse("/quit"), Some(Command::Quit));
