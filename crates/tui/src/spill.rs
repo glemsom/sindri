@@ -27,22 +27,23 @@ impl Spill {
             .lines()
             .map(|line| line.to_string())
             .collect();
-        Ok(Spill {
-            title: format!("output: {}", path.display()),
-            lines: if lines.is_empty() {
-                vec![String::new()]
-            } else {
-                lines
-            },
-            scroll: 0,
-            visible: 1,
-        })
+        Ok(Spill::from_lines(
+            format!("output: {}", path.display()),
+            lines,
+        ))
     }
 
     /// A reader over text the frame already has: the rendered record of a past
     /// session, read-only in the same box a spill opens in.
     pub fn text(title: impl Into<String>, text: &str) -> Spill {
         let lines: Vec<String> = text.lines().map(|line| line.to_string()).collect();
+        Spill::from_lines(title, lines)
+    }
+
+    /// The one place a spill is built, so that "a spill has at least one line"
+    /// is stated once: `window()` can then never hand back an empty slice, and
+    /// a box opened on nothing still draws its own row.
+    fn from_lines(title: impl Into<String>, lines: Vec<String>) -> Spill {
         Spill {
             title: title.into(),
             lines: if lines.is_empty() {
