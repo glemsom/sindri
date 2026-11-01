@@ -20,14 +20,14 @@ pub fn list(limit: Option<usize>, json: bool) -> i32 {
         Ok(state) => state.join("sessions"),
         Err(error) => return unreadable(&error.to_string()),
     };
-    let rows = match record::listing(&root) {
+    let rows = match record::listing_limited(&root, limit) {
         Ok(rows) => rows,
         Err(error) => {
             return unreadable(&format!("{} cannot be read: {error}", root.display()));
         }
     };
     let mut out = String::new();
-    for row in rows.iter().take(limit.unwrap_or(usize::MAX)) {
+    for row in &rows {
         // A row serializes itself, in the order the text row prints, so `jq`
         // streams one object per line and neither shape can drift from the
         // other. Every field is a string or a number, so this cannot refuse;

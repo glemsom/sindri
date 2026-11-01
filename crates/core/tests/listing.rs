@@ -11,7 +11,7 @@
 use std::path::Path;
 
 use sindri_core::paths::SessionDir;
-use sindri_core::record::{Entry, Meta, Stored, listing};
+use sindri_core::record::{Entry, Meta, Stored, listing, listing_limited};
 use tempfile::TempDir;
 
 fn meta(id: &str, started_ms: u64, stopped: &str, turns: Option<u32>) -> Meta {
@@ -277,4 +277,56 @@ fn a_tool_result_that_quotes_a_fence_does_not_close_the_export() {
         markdown.contains("````\n```\nnot the end\n```\n````"),
         "the block is fenced wider than what it holds: {markdown}"
     );
+}
+
+#[test]
+fn a_limited_listing_keeps_the_newest_row_with_its_prompt() {
+    let state = TempDir::new().expect("a state directory");
+    let sessions = state.path().join("sessions");
+    three(&sessions);
+    // The rows are sorted before they are cut, so the row kept is the newest
+    // and not whichever the directory happened to hand over first; the prompt
+    // of a record whose transcript cannot be read is nobody's but its own.
+    let unreadable = sessions.join("bbbb").join("transcript.jsonl");
+    std::fs::remove_file(&unreadable).expect("the transcript it replaces");
+    std::fs::create_dir(&unreadable).expect("a directory where the transcript was");
+
+    let listed = listing_limited(&sessions, Some(1)).expect("a listing");
+    assert_eq!(listed.len(), 1, "the limit cut the list to one row");
+    assert_eq!(listed[0].id, "cccc", "the newest row is the one kept");
+    assert_eq!(
+        listed[0].prompt.as_deref(),
+        Some("why is the gate red?"),
+        "and it carries the first thing the human asked"
+    );
+}
+
+#[test]
+fn a_listing_cut_by_a_limit_never_opens_the_transcript_it_drops() {
+    let state = TempDir::new().expect("a state directory");
+    let sessions = state.path().join("sessions");
+    three(&sessions);
+    // A fifo where a dropped record's transcript should be: opening one blocks
+    // until a writer arrives, and none ever does, so a listing that reads past
+    // the limit cannot answer at all. A transcript that merely failed to read
+    // would look the same as one never opened — which is why this is a fifo.
+    let fifo = sessions.join("bbbb").join("transcript.jsonl");
+    std::fs::remove_file(&fifo).expect("the transcript it replaces");
+    let made = std::process::Command::new("mkfifo")
+        .arg(&fifo)
+        .status()
+        .expect("mkfifo");
+    assert!(made.success(), "a fifo standing in for a transcript");
+
+    let (sent, answered) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = sent.send(listing_limited(&sessions, Some(1)));
+    });
+    let listed = answered
+        .recv_timeout(std::time::Duration::from_secs(20))
+        .expect("one kept row is a prompt read, and the dropped row's transcript stays shut")
+        .expect("a listing");
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].id, "cccc");
+    assert_eq!(listed[0].prompt.as_deref(), Some("why is the gate red?"));
 }
