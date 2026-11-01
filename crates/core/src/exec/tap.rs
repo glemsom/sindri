@@ -86,6 +86,37 @@ mod tests {
     }
 
     #[test]
+    fn a_thousand_lines_arrive_whole_and_in_order_without_the_newline_and_leak_nothing() {
+        let recorder = Arc::new(Recorder::default());
+        let stream: Vec<u8> = (0..1_000)
+            .flat_map(|n| format!("line {n}\n").into_bytes())
+            .collect();
+        let all = drain(
+            Cursor::new(stream.clone()),
+            Side::Stdout,
+            Some(recorder.clone()),
+        )
+        .join()
+        .expect("the reader thread ran")
+        .expect("read");
+        assert_eq!(all, stream, "the bytes are kept for the model");
+        let expected: Vec<(Side, String)> = (0..1_000)
+            .map(|n| (Side::Stdout, format!("line {n}")))
+            .collect();
+        let seen = recorder.0.lock().expect("lock").clone();
+        assert_eq!(
+            seen.len(),
+            1_000,
+            "the sink sees one entry per line, not one per read"
+        );
+        assert_eq!(
+            seen, expected,
+            "each line arrives once, in order, without its newline, and no text of an \
+             earlier line survives into the next"
+        );
+    }
+
+    #[test]
     fn without_a_sink_nothing_is_decorated() {
         let handle = drain(Cursor::new(b"only\n".to_vec()), Side::Stderr, None);
         let all = handle.join().expect("the reader thread ran").expect("read");
