@@ -13,7 +13,7 @@ use sindri_core::agent::Event;
 
 use crate::app::App;
 use crate::graphics::Graphics;
-use crate::picture::{self, Store};
+use crate::picture::Store;
 use crate::rail::Launch;
 use crate::render::transcript;
 
@@ -59,18 +59,6 @@ fn diagrammed(body: &str) -> App {
 /// frame must not make, and the figure these tests read to say it made none.
 fn renders(app: &App) -> u64 {
     app.pictures().map(Store::renders).unwrap_or_default()
-}
-
-/// The drawings the frames so far have asked for, made here as the loop makes
-/// them — on a thread of its own there, on this one here — and handed back to
-/// the store. A test has no loop, so it is the loop.
-fn drained(app: &mut App) -> usize {
-    let asked = app.take_drawings();
-    for body in &asked {
-        let drawing = picture::drawn(body);
-        app.drawn(body.clone(), drawing);
-    }
-    asked.len()
 }
 
 /// The words of the rows the window built: what the writer drew, before a
@@ -149,7 +137,7 @@ fn a_fence_that_closed_mid_stream_becomes_its_diagram_with_nothing_typed() {
     );
 
     // The drawing is made, as the loop makes it, and the answer is kept.
-    assert_eq!(drained(&mut app), 1, "the fence asked for one drawing");
+    assert_eq!(app.drained(), 1, "the fence asked for one drawing");
     let diagram = transcript::window(&mut app, 100, 30);
     assert_eq!(renders(&app), 1, "and it was made once");
     assert_eq!(
@@ -175,6 +163,60 @@ fn a_fence_that_closed_mid_stream_becomes_its_diagram_with_nothing_typed() {
     );
 }
 
+/// A diagram above the answer's last block is measured again when its drawing
+/// lands: a streamed answer is counted from the cut its last delta left, and a
+/// diagram above that cut is a row count the cut was counted past — so the
+/// heights are forgotten whole, and not from the entry the fence is in.
+#[test]
+fn a_diagram_above_the_answers_last_block_takes_its_rows_when_it_lands() {
+    let mut app = pictured();
+    let mut said = format!("```mermaid\n{DIAGRAM}```\n\nA paragraph that");
+    app.event(Event::TextDelta {
+        turn: 1,
+        text: said.clone(),
+    });
+    transcript::window(&mut app, 100, 30);
+    assert_eq!(renders(&app), 0, "the frame lays nothing out");
+
+    // A delta lands in the paragraph under the fence, so the cut the answer is
+    // counted from is the paragraph's and the fence is above it.
+    let more = " goes on, and on, as the stream says more of it.";
+    said.push_str(more);
+    app.event(Event::TextDelta {
+        turn: 1,
+        text: more.to_string(),
+    });
+    let streamed = transcript::window(&mut app, 100, 30);
+    assert!(
+        row_of(&written(&streamed), "goes on").is_some(),
+        "the delta is on screen: {:?}",
+        streamed.plain
+    );
+    assert_eq!(renders(&app), 0, "and the fence was asked for once");
+
+    assert_eq!(app.drained(), 1, "the drawing is made");
+    let diagram = transcript::window(&mut app, 100, 30);
+    assert_eq!(
+        diagram.pictures.len(),
+        1,
+        "the panel above the delta is a block now: {:?}",
+        diagram.plain
+    );
+    assert!(
+        row_of(&written(&diagram), "Resting").is_none(),
+        "and its source has gone: {:?}",
+        diagram.plain
+    );
+    // The answer is worth what the answer says: the diagram's rows above the
+    // prose, and not the panel's the cut was counted past.
+    let worth = 1 + crate::markdown::lines(&said, 98, app.pictures()).total;
+    assert_eq!(
+        app.measure(0, 100),
+        worth,
+        "the rows a diagram above the cut added are the entry's"
+    );
+}
+
 /// A diagram that will not draw is its panel with the parser's reason under it,
 /// in the same words it was ever said in — and between the ask and the answer it
 /// is the panel alone, because "not drawn yet" is silence and never a refusal.
@@ -194,7 +236,7 @@ fn a_diagram_that_will_not_draw_is_its_panel_and_then_the_parser_s_reason() {
         asked.plain
     );
 
-    assert_eq!(drained(&mut app), 1, "the fence asked for one drawing");
+    assert_eq!(app.drained(), 1, "the fence asked for one drawing");
     let refused = transcript::window(&mut app, 100, 30);
     assert!(
         row_of(&written(&refused), "flowchart TD").is_some(),
@@ -222,7 +264,7 @@ fn a_drawing_in_flight_when_the_thread_goes_is_dropped() {
     assert_eq!(renders(&app), 0, "the frame asked and waited for nothing");
 
     app.renewed(Ok(launch()));
-    assert_eq!(drained(&mut app), 1, "the drawing is still made");
+    assert_eq!(app.drained(), 1, "the drawing is still made");
     let fresh = transcript::window(&mut app, 100, 30);
     assert!(
         fresh.pictures.is_empty(),

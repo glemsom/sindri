@@ -28,7 +28,7 @@ fn rows(store: &Store, text: &str, width: u16) -> markdown::Written {
         return asked;
     }
     for body in &wanted {
-        store.keep(body, picture::drawn(body));
+        store.keep(body, picture::draw(body));
     }
     markdown::lines(text, width, Some(store))
 }
@@ -36,8 +36,8 @@ fn rows(store: &Store, text: &str, width: u16) -> markdown::Written {
 /// What a fence's body is worth once its drawing has been made.
 fn worth(store: &Store, body: &str, columns: u16) -> Worth {
     let worth = store.fence(body, columns);
-    for body in store.take_wanted() {
-        store.keep(&body, picture::drawn(&body));
+    for wanted in store.take_wanted() {
+        store.keep(&wanted, picture::draw(&wanted));
     }
     match worth {
         Worth::Pending => store.fence(body, columns),

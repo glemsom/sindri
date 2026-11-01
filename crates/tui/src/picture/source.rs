@@ -15,8 +15,7 @@ use crate::picture::{BYTES, DIAGRAM_ROWS, MAX_ROWS, PIXELS, Refusal};
 
 /// What a source comes to before a pixel is spent: the pixels it is, the reason
 /// it draws none, or a drawing a frame has asked for and no thread has handed
-/// back yet. A pending source is silence — never a refusal, which is a sentence
-/// a caption prints — and only a fence is ever pending.
+/// back yet. Only a fence is ever pending, and pending is not a refusal.
 pub(super) enum Sized {
     /// The pixels the source is, read from a header or off the svg.
     Of((u32, u32)),

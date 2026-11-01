@@ -146,19 +146,15 @@ impl Store {
     }
 
     /// The bodies the frames so far have asked to have drawn and no thread has
-    /// been given: the loop takes them and makes each one off the frame's own
-    /// thread, so the frame that draws a diagram costs what a frame with no
-    /// picture in it costs.
+    /// been given: the loop takes them and makes each one on a thread of its own.
     pub fn take_wanted(&self) -> Vec<String> {
         self.svgs.take_wanted()
     }
 
     /// A drawing of `body`, as the thread that made it hands it back: held for
-    /// the measure that asked, and the body is no longer in flight. Answers the
-    /// body let go to make room, where one was — a block that is its panel again
-    /// until it is drawn afresh.
-    pub fn keep(&self, body: &str, drawn: Result<Drawing, Refusal>) -> Option<String> {
-        self.svgs.keep(body, drawn)
+    /// the measure that asked, which is the next frame that lays the fence out.
+    pub fn keep(&self, body: &str, drawing: Result<Drawing, Refusal>) {
+        self.svgs.keep(body, drawing)
     }
 
     /// The pixels a source claims, held to the cap before a decoder spends

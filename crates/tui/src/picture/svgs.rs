@@ -18,9 +18,11 @@
 //! a re-render for the round trip is the trade this cache exists to refuse. A
 //! body let go is asked for again, and is its panel until the answer lands.
 //!
-//! A body that will not render is held too, as the reason: a refusal costs the
-//! renderer the same walk as a drawing, and a fence that will not parse is one
-//! the frame would otherwise ask about every time it lays it out.
+//! A body that will not render is held too, as the reason. No layout is made
+//! where a body is measured, so a refusal that was not kept would be asked for
+//! again by every frame that laid the fence out — and the reason the old cache
+//! had for letting one go is gone with it: a fence the stream has not closed is
+//! never measured at all.
 
 use std::cell::{Cell, Ref, RefCell};
 use std::collections::VecDeque;
@@ -41,21 +43,19 @@ use super::store::LIVE;
 pub(super) const SVGS: usize = LIVE;
 
 /// The drawings a fence body has been made into, least recently used first, and
-/// the bodies a frame has asked for that no thread has been given yet.
+/// the bodies a frame has asked for that no thread has answered for yet.
 #[derive(Default)]
 pub(super) struct Svgs {
     /// What has been drawn or refused, least recently used first: the back is
     /// the most recent, and the front is what makes room for one past the bound.
     held: RefCell<VecDeque<Held>>,
-    /// The bodies the frame has asked about and no thread has been given: the
-    /// loop takes them, and what it hands back is `keep`'s.
-    asked: RefCell<Vec<String>>,
-    /// The bodies a thread is drawing: asked for once and never twice while the
-    /// answer is out, so a frame a tick long asks one question and not eight.
-    flight: RefCell<Vec<String>>,
-    /// How many bodies have been handed to the renderer. The layout this cache
-    /// exists to keep off the frame's path, counted where a repaint has to prove
-    /// it made none.
+    /// What the frames have asked about and no thread has answered for, oldest
+    /// first: the loop takes the ones it has not been given, and `keep` takes an
+    /// answer out of it.
+    pending: RefCell<Vec<Pending>>,
+    /// How many drawings have come back from the renderer, refusals and all. The
+    /// layout this cache exists to keep off the frame's path, counted where a
+    /// repaint has to prove it made none.
     renders: Cell<u64>,
 }
 
@@ -64,6 +64,15 @@ pub(super) struct Svgs {
 struct Held {
     body: String,
     drawn: Result<Drawing, Refusal>,
+}
+
+/// A body a frame has asked about and no answer has come back for yet.
+struct Pending {
+    body: String,
+    /// Whether the loop has it on a thread already: a body is drawn once and
+    /// never twice while the answer is out, so a frame a tick long asks one
+    /// question and not eight.
+    handed: bool,
 }
 
 impl Svgs {
@@ -96,36 +105,35 @@ impl Svgs {
 
     /// The bodies a frame has asked for and no thread has been given: each is
     /// drawn once, off the frame's own thread, and its answer is `keep`'s.
-    /// Handing them over is where a layout is counted, and not the ask: the frame
-    /// that asked made none, and a repaint before the answer lands makes none
-    /// either.
     pub(super) fn take_wanted(&self) -> Vec<String> {
-        let taken = std::mem::take(&mut *self.asked.borrow_mut());
-        self.flight.borrow_mut().extend(taken.iter().cloned());
-        self.renders.set(self.renders.get() + taken.len() as u64);
-        taken
+        self.pending
+            .borrow_mut()
+            .iter_mut()
+            .filter(|one| !one.handed)
+            .map(|one| {
+                one.handed = true;
+                one.body.clone()
+            })
+            .collect()
     }
 
     /// A drawing of `body`, as the thread that made it hands it back: held as the
-    /// most recent of the lot, and no longer in flight. Answers the body let go to
-    /// make room, where one was — a block that is its panel again until it is
-    /// drawn afresh.
-    pub(super) fn keep(&self, body: &str, drawn: Result<Drawing, Refusal>) -> Option<String> {
-        self.flight.borrow_mut().retain(|one| one != body);
+    /// most recent of the lot, and no longer waited for. The body it made room for
+    /// by being held is let go, and is its panel again until it is drawn afresh.
+    pub(super) fn keep(&self, body: &str, drawing: Result<Drawing, Refusal>) {
+        self.pending.borrow_mut().retain(|one| one.body != body);
         let mut held = self.held.borrow_mut();
-        let let_go = if held.len() >= SVGS {
-            held.pop_front().map(|one| one.body)
-        } else {
-            None
-        };
+        if held.len() >= SVGS {
+            held.pop_front();
+        }
         held.push_back(Held {
             body: body.to_owned(),
-            drawn,
+            drawn: drawing,
         });
-        let_go
+        self.renders.set(self.renders.get() + 1);
     }
 
-    /// How many bodies have been put through the renderer, for the store to
+    /// How many drawings have come back from the renderer, for the store to
     /// report and a test to read.
     #[cfg(test)]
     pub(super) fn renders(&self) -> u64 {
@@ -149,16 +157,16 @@ impl Svgs {
         Ref::map(self.held.borrow(), |held| &held[at])
     }
 
-    /// Asks for a body's drawing: it is asked for once and never twice while the
-    /// answer is out, so a frame a tick long asks one question and not eight.
+    /// Asks for a body's drawing, once: an answer already on its way is not
+    /// asked for a second time.
     fn ask(&self, body: &str) {
-        if self.flight.borrow().iter().any(|one| one == body) {
+        let mut pending = self.pending.borrow_mut();
+        if pending.iter().any(|one| one.body == body) {
             return;
         }
-        let mut asked = self.asked.borrow_mut();
-        if asked.iter().any(|one| one == body) {
-            return;
-        }
-        asked.push(body.to_owned());
+        pending.push(Pending {
+            body: body.to_owned(),
+            handed: false,
+        });
     }
 }

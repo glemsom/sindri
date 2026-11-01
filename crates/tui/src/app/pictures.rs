@@ -32,39 +32,42 @@ impl App {
 
     /// The bodies the frames so far have asked to have drawn and no thread has
     /// been given: what the loop takes and makes, each once, off the frame's own
-    /// thread. A drawing is a mermaid layout and not a line of output, so the
-    /// frame that laid its panel out waited for nothing.
+    /// thread — so the frame that laid a panel out waited for no layout.
     pub fn take_drawings(&mut self) -> Vec<String> {
         self.pictures().map(Store::take_wanted).unwrap_or_default()
     }
 
     /// A drawing that has come back, kept where the frames that asked for it
-    /// will find it — and the entries that say its fence are measured again,
-    /// because the rows a panel stood in for are the diagram's now. A body no
-    /// entry says belongs to a thread that went while it was being drawn: it is
-    /// kept, and it dirties nothing, because the answer is dropped rather than
-    /// joined.
+    /// will find it, and every height forgotten with it. What a fence is worth in
+    /// rows is the diagram's now and the panel stood in for it — and the answer
+    /// above a streamed cut says how many rows it is worth, so a diagram above
+    /// that cut moves every row below it. A body nothing holds any more belongs
+    /// to a thread that went while it was being drawn: the answer is dropped
+    /// rather than joined, and forgetting heights it did not cause costs a
+    /// frame's measure and nothing else.
     pub fn drawn(&mut self, body: String, drawing: Result<Drawing, Refusal>) {
         let Some(store) = self.pictures() else {
             return;
         };
-        let let_go = store.keep(&body, drawing);
-        // A drawing let go to make room is a block that is its panel again until
-        // it is drawn afresh, so the entry that says it is measured again too.
-        let changed = std::iter::once(&body).chain(let_go.as_ref());
-        let found = self
-            .entries()
-            .iter()
-            .position(|entry| changed.clone().any(|body| entry.holds(body)));
-        match found {
-            Some(index) => self.dirty_from(index),
-            None => self.dirty(),
+        store.keep(&body, drawing);
+        self.dirty();
+        // The rows below a reader's window were counted from heights that changed.
+        self.window.forget();
+    }
+}
+
+#[cfg(test)]
+impl App {
+    /// The drawings the frames so far have asked for, made here as the loop makes
+    /// them — on a thread of its own there, on this one here — and handed back to
+    /// the store. A test has no loop, so it is the loop, and answers how many
+    /// bodies it drew.
+    pub(crate) fn drained(&mut self) -> usize {
+        let asked = self.take_drawings();
+        for body in &asked {
+            self.drawn(body.clone(), crate::picture::draw(body));
         }
-        // The rows below a reader's window were counted from heights the drawing
-        // changed, unless the block is above the place they are reading.
-        if found.is_none_or(|index| index >= self.window.at.0) {
-            self.window.forget();
-        }
+        asked.len()
     }
 }
 

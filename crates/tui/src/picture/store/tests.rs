@@ -7,7 +7,7 @@
 use super::*;
 
 use crate::picture::svgs::SVGS;
-use crate::picture::{DIAGRAM_ROWS, MAX_ROWS, drawn};
+use crate::picture::{DIAGRAM_ROWS, MAX_ROWS, draw as drawn};
 
 /// The store a test asks: the made-up Kitty answer a layout test uses. A fence
 /// needs no workspace, so none is offered.

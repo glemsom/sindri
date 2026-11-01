@@ -310,11 +310,12 @@ list item, a heading — a mermaid fence is the **panel** it was, and a fence th
 parse is that panel with the parser's own words under it, in the ink a **caption** keeps.
 A fence the stream has not closed is that panel too: a layout is tens of milliseconds,
 and a body that another delta will lengthen is not yet one to draw. A fence that has closed
-is that panel for a tick while the **frame** asks and the drawing is made off its own
-thread — nothing a frame lays out may wait for a layout — and the diagram then takes the
-panel's rows, measured again in the entry it landed in. A block waiting for its drawing is
-a panel and nothing else: "not drawn yet" is silence, and a refusal is a sentence the
-caption prints.
+is that panel for a tick while the **frame** asks for its **drawing** — the svg the
+renderer writes for a body, made off the frame's own thread and handed back through the
+loop's channel, because no frame may wait for a layout — and the diagram then takes the
+panel's rows, the entry it landed in measured again. A block waiting for its drawing is a
+panel and nothing else: "not drawn yet" is silence, and a refusal is a sentence the caption
+prints.
 
 **caption** — the words and `‹src›` a **picture** is drawn under, `a chart ‹plot.png›`: the
 alt text's words, the target in `‹›` as a link keeps its own, the reason in their place

@@ -23,13 +23,13 @@ pub use diagram::Drawing;
 pub use source::Source;
 pub use store::Store;
 
-/// A fence's body drawn: the svg the renderer wrote for it and the size it says
+/// Draws a fence's body: the svg the renderer writes for it and the size it says
 /// it is, or the parser's own reason there is none. A layout is tens of
 /// milliseconds, so a frame never calls this — it is the loop's, made on a thread
 /// of its own and handed back through the loop's channel, like a line of output.
 /// Two drawings of one body are the same svg, which is why the same body at
 /// another width is another block and not another drawing.
-pub fn drawn(body: &str) -> Result<Drawing, Refusal> {
+pub fn draw(body: &str) -> Result<Drawing, Refusal> {
     diagram::render(body)
 }
 
@@ -95,9 +95,8 @@ pub enum Worth {
         rows: u16,
     },
     Refused(Refusal),
-    /// A fence whose diagram no thread has drawn yet: not a refusal, which is a
-    /// sentence a caption prints, but silence — the block is its panel until the
-    /// drawing arrives, and the svg that will measure it is being made.
+    /// A fence whose diagram no thread has drawn yet: the block is its panel
+    /// until the drawing arrives, and the svg that will measure it is being made.
     Pending,
 }
 

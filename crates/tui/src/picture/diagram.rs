@@ -126,8 +126,8 @@ fn options() -> RenderOptions {
 /// rows are read off it and its pixels are drawn from it, so a body costs the
 /// renderer once however often the frame asks afterwards.
 ///
-/// It is opaque because all of it is the renderer's: a caller is handed one by
-/// [`drawn`](crate::picture::drawn) and asks the store nothing about it but the
+/// It is opaque outside this module: a caller is handed one by
+/// [`draw`](crate::picture::draw) and asks the store nothing about it but the
 /// rows it takes.
 #[derive(Debug)]
 pub struct Drawing {

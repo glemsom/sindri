@@ -231,7 +231,7 @@ fn turn_of_the_loop(
     // The frame just drawn is what asked: a fence it laid out as its panel asked
     // for its diagram, and the drawing is made off this thread so the next frame
     // costs what a frame with no picture in it costs.
-    drawing(app, tx);
+    draw_off_thread(app, tx);
     painted
 }
 
@@ -323,13 +323,15 @@ fn walk(app: &mut App, tx: &Sender<Msg>, walking: &mut bool, root: &std::path::P
 /// Draws the diagrams the frame has asked for on threads of its own, and hands
 /// each answer back on the loop's own channel: a mermaid layout is tens of
 /// milliseconds, and a frame that waits for one is a keystroke behind a figure.
-/// Nothing is joined — the frame asked, and an answer that arrives after the
-/// thread it was asked for has gone is dropped where it lands.
-fn drawing(app: &mut App, tx: &Sender<Msg>) {
+/// A frame asks for what it lays out and no more, so these are a screenful of
+/// threads at most, and each body is asked for once. Nothing is joined — the
+/// frame asked, and an answer that arrives after the thread it was asked for has
+/// gone is dropped where it lands.
+fn draw_off_thread(app: &mut App, tx: &Sender<Msg>) {
     for body in app.take_drawings() {
         let tx = tx.clone();
         std::thread::spawn(move || {
-            let drawn = crate::picture::drawn(&body);
+            let drawn = crate::picture::draw(&body);
             let _ = tx.send(Msg::Drawn(body, drawn));
         });
     }

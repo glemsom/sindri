@@ -161,16 +161,6 @@ impl Entry {
         }
     }
 
-    /// Whether the entry's text says `body` whole: how a drawing that has come
-    /// back is found again — the fence it was asked for by is in the entry that
-    /// wrote it.
-    pub fn holds(&self, body: &str) -> bool {
-        match self {
-            Entry::Answer { text, .. } | Entry::Reasoning { text, .. } => text.contains(body),
-            Entry::Prompt(_) | Entry::Call(_) | Entry::Note(_) => false,
-        }
-    }
-
     /// Opens what is folded, folds what is open, and says whether it found
     /// anything to do it to.
     pub fn toggle(&mut self) -> bool {
