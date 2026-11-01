@@ -202,7 +202,7 @@ fn row(fact: &Fact, width: usize) -> Row {
             Row::said(
                 Line::from(vec![
                     Span::styled(" ".repeat(pad), theme::raised()),
-                    Span::styled(said, chip()),
+                    Span::styled(said, chip(fact.value())),
                 ]),
                 format!("⬢ {}", fact.value()),
             )
@@ -269,8 +269,17 @@ fn rule(width: usize) -> Row {
 /// thing on the rail that is not a label and a value — and the only row of the
 /// rail that carries a colour behind it. The first frame's posture line
 /// borrows the same one.
-pub(crate) fn chip() -> ratatui::style::Style {
-    theme::raised().patch(theme::good())
+///
+/// Its ink is the frame's word on the boundary, so it cannot say "fine" of a
+/// run that gave the boundary up: the value `--yolo-unsafe` yields begins
+/// `unsafe`, and that one posture is painted bad while every other is good.
+pub(crate) fn chip(said: &str) -> ratatui::style::Style {
+    let ink = if said.starts_with("unsafe") {
+        theme::bad()
+    } else {
+        theme::good()
+    };
+    theme::raised().patch(ink)
 }
 
 pub fn strip(app: &App, area: Rect, buf: &mut Buffer) {

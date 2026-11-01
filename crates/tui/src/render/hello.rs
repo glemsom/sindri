@@ -60,7 +60,8 @@ pub fn rows(app: &App, width: u16) -> Vec<Line<'static>> {
 /// half-said names something else, and the rail states the path whole.
 fn head(app: &App, width: usize) -> Line<'static> {
     let launch = app.rail().launch();
-    let posture = format!("⬢ {}", contains(&launch.sandbox));
+    let sandbox = contains(&launch.sandbox);
+    let posture = format!("⬢ {sandbox}");
     let fixed =
         "◆ sindri".width() + launch.provider.width() + launch.model.width() + 2 * GAP.width();
     let room = width.saturating_sub(fixed + 2 * GAP.width() + posture.width());
@@ -79,7 +80,7 @@ fn head(app: &App, width: usize) -> Line<'static> {
         ));
         spans.push(Span::raw(GAP));
     }
-    spans.push(Span::styled(posture, chip()));
+    spans.push(Span::styled(posture, chip(sandbox)));
     Line::from(spans)
 }
 

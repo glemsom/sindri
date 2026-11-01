@@ -48,6 +48,20 @@ fn the_first_frame_names_the_wire_the_model_the_workspace_and_the_sandbox() {
 }
 
 #[test]
+fn the_first_frame_paints_the_posture_in_the_ink_the_rail_does() {
+    assert_eq!(
+        posture_ink(&mut app(), 100, 24),
+        theme::GOOD,
+        "a sandboxed run's posture is good on the first frame too"
+    );
+    assert_eq!(
+        posture_ink(&mut App::new(unsafe_launch(), None), 100, 24),
+        theme::BAD,
+        "and a run that left the sandbox is painted as one that did"
+    );
+}
+
+#[test]
 fn the_first_frame_says_the_contract_once_in_a_dim_sentence() {
     let mut app = app();
     let rows = screen(&mut app, 100, 24);

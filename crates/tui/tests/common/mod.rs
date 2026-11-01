@@ -19,11 +19,12 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
+use ratatui::style::Color;
 use sindri_core::agent::Event;
 use sindri_tui::driver::{CallOver, Finished, Side, Spilled, Stop};
 use sindri_tui::entry::Entry;
 use sindri_tui::render;
-use sindri_tui::{App, Launch};
+use sindri_tui::{App, Launch, theme};
 
 /// The session the shared fixture names; a test that needs another says so.
 const SESSION: &str = "4f1c8f2e-8a24-4b93-9c0e-0d3f0e5c1a77";
@@ -42,6 +43,17 @@ pub fn launch() -> Launch {
         model: "claude-sonnet-4-6".to_string(),
         max_turns: 250,
         context_limit: Some(200_000),
+    }
+}
+
+/// A launch whose run left the sandbox — `--yolo-unsafe` — so a test can see
+/// what the frame says about a run that gave the boundary up. It is named here
+/// because the shared literal is read whole, and a test may rename only the
+/// facts it asserts on.
+pub fn unsafe_launch() -> Launch {
+    Launch {
+        sandbox: "unsafe · your own privileges".to_string(),
+        ..launch()
     }
 }
 
@@ -98,6 +110,32 @@ fn glyph(cell: &ratatui::buffer::Cell) -> &str {
     } else {
         cell.symbol()
     }
+}
+
+/// The ink the posture chip is drawn in, wherever the frame wears it — the
+/// rail's posture row or the first frame's head: the chip is one raised run
+/// from its `⬢` to its last cell, and that run's colour is the frame's only
+/// word on whether the run is still inside its boundary.
+pub fn posture_ink(app: &mut App, width: u16, height: u16) -> Color {
+    let cells = buffer(app, width, height);
+    let glyph = (0..height)
+        .flat_map(|y| (0..width).map(move |x| (x, y)))
+        .find(|(x, y)| cells[(*x, *y)].symbol() == "⬢")
+        .expect("the frame wears the posture's glyph");
+    let (x, y) = glyph;
+    let ink: Vec<Color> = (x..width)
+        .take_while(|x| cells[(*x, y)].bg == theme::RAISED)
+        .map(|x| cells[(x, y)].fg)
+        .collect();
+    assert!(
+        ink.len() > 1,
+        "the chip is a run of cells and not a lone glyph: {ink:?}"
+    );
+    assert!(
+        ink.windows(2).all(|pair| pair[0] == pair[1]),
+        "the chip is one ink from its glyph to its last cell: {ink:?}"
+    );
+    ink[0]
 }
 
 /// The cell the frame gives the cursor, as the terminal is told it: a glyph two

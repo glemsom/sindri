@@ -227,7 +227,9 @@ is `PLAIN` rather than wrong.
 
 **chip** — the rail's statement of the sandbox posture, `⬢ bwrap · 1 writable`: a
 **raised** box rather than another label and value, shortened to `⬢ bwrap` when its
-column runs out.
+column runs out. Its ink is the boundary's state, and the first frame's posture line
+wears the same chip: `GOOD` while the run is inside `bwrap`, `BAD` once it has left the
+sandbox (`--yolo-unsafe`), whose posture begins `unsafe`.
 
 **composer** — the input at the bottom: 2–6 rows, `Shift+Enter` for a newline, `@` for a
 path completion, `/` for a command. With no text in it at all it carries the placeholder
