@@ -37,20 +37,84 @@ pub fn lines(source: &str, width: u16, store: Option<&Store>) -> Written {
 /// is counted rather than laid out. A caller that wants every row asks for
 /// `lines`.
 pub fn lines_in(source: &str, width: u16, store: Option<&Store>, rows: Range<usize>) -> Written {
-    let mut writer = Writer::new(width.max(1) as usize, store, source);
-    writer.keep = rows;
-    let options = Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH;
-    for (event, range) in Parser::new_ext(source, options).into_offset_iter() {
-        writer.event(event, range);
-    }
-    writer.finish()
+    walk(source, width, store, rows, 0)
 }
 
 /// How many rows the answer is worth at `width`, counted and not built: what a
 /// frame places a window against, and the number a scroll-back, `End`, `Home`
 /// and the new-rows badge all land on.
 pub fn height(source: &str, width: u16, store: Option<&Store>) -> usize {
-    lines_in(source, width, store, 0..0).total
+    counted(source, width, store, None).rows
+}
+
+/// Where an answer's last block begins, and the rows it is worth above it: the
+/// two figures a streamed delta is counted from, so the answer above the block
+/// it landed in is counted once and never read again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Cut {
+    /// Bytes into the answer at the first character of its last top-level block.
+    pub at: usize,
+    /// The rows the answer is worth above that block.
+    pub above: usize,
+}
+
+/// An answer as a count: the rows it is worth, and the cut the next delta
+/// landing in it is counted from.
+pub struct Counted {
+    pub rows: usize,
+    pub cut: Cut,
+}
+
+/// The rows the answer is worth, and the cut its tail is counted from. From a
+/// `cut` left by the last count it reads only the block that cut opens: the
+/// answer above it is what `above` already says it is worth, so a fence that
+/// closed there is neither laid out nor highlighted again — which is what makes
+/// a delta cost the rows it touched and not the answer it landed in.
+pub fn counted(source: &str, width: u16, store: Option<&Store>, from: Option<Cut>) -> Counted {
+    let Some(from) = from.filter(|from| from.at <= source.len()) else {
+        let written = walk(source, width, store, 0..0, 0);
+        return Counted {
+            rows: written.total,
+            cut: written.cut,
+        };
+    };
+    let written = walk(&source[from.at..], width, store, 0..0, from.above);
+    // The writer is handed the rows the answer is worth above the cut, so what
+    // it counts is the answer's own arithmetic and only the bytes are the
+    // tail's: the one figure that has to be moved is where the block starts.
+    Counted {
+        rows: written.total,
+        cut: Cut {
+            at: from.at + written.cut.at,
+            above: written.cut.above,
+        },
+    }
+}
+
+/// The answer walked whole, with `rows` of it kept and `above` rows already
+/// counted before the first of them: the one place the parser is driven, and so
+/// the one place the answer's row count and its rows are made from the same
+/// walk.
+fn walk(
+    source: &str,
+    width: u16,
+    store: Option<&Store>,
+    rows: Range<usize>,
+    above: usize,
+) -> Written {
+    let mut writer = Writer::new(width.max(1) as usize, store, source);
+    writer.keep = rows;
+    // The rows above this source are the answer's, and they are what tells the
+    // writer a block introduces itself with a blank row: an answer counted from
+    // its first byte has none, and one counted from a cut has them all.
+    writer.apart = above > 0;
+    writer.counted = above;
+    writer.cut = Cut { at: 0, above };
+    let options = Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH;
+    for (event, range) in Parser::new_ext(source, options).into_offset_iter() {
+        writer.event(event, range);
+    }
+    writer.finish()
 }
 
 struct List {
@@ -96,6 +160,12 @@ struct Writer<'a> {
     /// goes: the count is kept in the answer's coordinates even where the rows
     /// themselves are not.
     counted: usize,
+    /// Where the last top-level block of the answer begins, and the rows above
+    /// it: the place a delta that lands in it is counted from.
+    cut: Cut,
+    /// How deep in blocks the writer is: a block inside another — a paragraph
+    /// in a list item, a row of a table — is no place to resume the answer at.
+    depth: usize,
 }
 
 impl<'a> Writer<'a> {
@@ -122,6 +192,8 @@ impl<'a> Writer<'a> {
             code_read: 0,
             keep: 0..usize::MAX,
             counted: 0,
+            cut: Cut { at: 0, above: 0 },
+            depth: 0,
         }
     }
 
@@ -131,10 +203,12 @@ impl<'a> Writer<'a> {
             rows: self.lines,
             pictures: self.pictures,
             total: self.counted,
+            cut: self.cut,
         }
     }
 
     fn event(&mut self, event: Event<'_>, range: Range<usize>) {
+        self.block(&event, &range);
         match event {
             Event::Start(tag) => self.start(tag),
             Event::End(tag) => self.end(tag),
@@ -181,6 +255,32 @@ impl<'a> Writer<'a> {
             }
             _ => {}
         }
+    }
+
+    /// Records where the last block the answer is made of begins, and the rows
+    /// above it: a block still arriving keeps the place it opened at, so the
+    /// delta that lengthens it is counted from there and not from the answer's
+    /// first row.
+    fn block(&mut self, event: &Event<'_>, range: &Range<usize>) {
+        match event {
+            Event::Start(_) => {
+                if self.depth == 0 {
+                    self.open(range.start);
+                }
+                self.depth += 1;
+            }
+            Event::End(_) => self.depth = self.depth.saturating_sub(1),
+            // A rule is a block with no tag to open or close it.
+            Event::Rule if self.depth == 0 => self.open(range.start),
+            _ => {}
+        }
+    }
+
+    fn open(&mut self, at: usize) {
+        self.cut = Cut {
+            at,
+            above: self.counted,
+        };
     }
 
     fn start(&mut self, tag: Tag<'_>) {
