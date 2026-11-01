@@ -110,11 +110,6 @@ mod tests {
             .collect();
         let seen = recorder.0.lock().expect("lock").clone();
         assert_eq!(
-            seen.len(),
-            1_000,
-            "the sink sees one entry per line, not one per read"
-        );
-        assert_eq!(
             seen, expected,
             "each line arrives once, in order, without its newline, and no text of an \
              earlier line survives into the next"
