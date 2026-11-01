@@ -21,6 +21,7 @@ fn repository() -> (TempDir, String) {
     (root, head)
 }
 
+/// One `git` invocation in `dir`, its trimmed stdout.
 fn run(dir: &Path, args: &[&str]) -> String {
     let out = std::process::Command::new("git")
         .args(args)
@@ -32,7 +33,7 @@ fn run(dir: &Path, args: &[&str]) -> String {
 }
 
 #[test]
-fn a_repository_records_its_branch_its_commit_and_a_tree_nothing_touched() {
+fn a_repository_records_its_branch_commit_and_an_untouched_tree() {
     let (root, head) = repository();
 
     let facts = git(root.path()).expect("a repository is a repository");
@@ -47,7 +48,7 @@ fn a_repository_records_its_branch_its_commit_and_a_tree_nothing_touched() {
 
 #[test]
 fn an_untracked_file_makes_the_tree_dirty() {
-    let (root, _head) = repository();
+    let (root, _) = repository();
     std::fs::write(root.path().join("uncommitted"), "wip\n").expect("an untracked file");
 
     let facts = git(root.path()).expect("a repository is a repository");
