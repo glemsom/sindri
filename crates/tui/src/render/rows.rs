@@ -264,12 +264,29 @@ fn answer_rows(text: &str, state: State, body: Body<'_>, want: Want) -> Rows {
 /// badge adds up.
 pub fn entry_height(entry: &Entry, width: u16, now: Duration, store: Option<&Store>) -> usize {
     let width = width.max(1);
-    let body = width.saturating_sub(GUTTER);
     match entry {
         // An answer is the one entry whose rows can outrun any window, so its
         // count is its own: the markdown is counted and no fence in it painted.
-        Entry::Answer { text, .. } => MARKER_ROWS + markdown::height(text, body, store),
+        Entry::Answer { text, .. } => answer_height(text, width, store, None).rows,
         _ => entry_rows(entry, width, now, store, Want::ALL).total,
+    }
+}
+
+/// How many rows an answer is worth at `width`, its marker included, and where
+/// its tail is counted from next: a streamed delta asks from the cut the last
+/// one left, so the answer above it is counted once and the rows the delta
+/// touched are the whole of what it costs.
+pub fn answer_height(
+    text: &str,
+    width: u16,
+    store: Option<&Store>,
+    from: Option<markdown::Cut>,
+) -> markdown::Counted {
+    let body = width.max(1).saturating_sub(GUTTER);
+    let counted = markdown::counted(text, body, store, from);
+    markdown::Counted {
+        rows: MARKER_ROWS + counted.rows,
+        cut: counted.cut,
     }
 }
 

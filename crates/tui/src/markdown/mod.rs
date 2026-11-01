@@ -60,6 +60,7 @@ pub struct Cut {
 
 /// An answer as a count: the rows it is worth, and the cut the next delta
 /// landing in it is counted from.
+#[derive(Debug, Clone, Copy)]
 pub struct Counted {
     pub rows: usize,
     pub cut: Cut,
@@ -71,7 +72,7 @@ pub struct Counted {
 /// closed there is neither laid out nor highlighted again — which is what makes
 /// a delta cost the rows it touched and not the answer it landed in.
 pub fn counted(source: &str, width: u16, store: Option<&Store>, from: Option<Cut>) -> Counted {
-    let Some(from) = from.filter(|from| from.at <= source.len()) else {
+    let Some(from) = from.filter(|from| source.is_char_boundary(from.at)) else {
         let written = walk(source, width, store, 0..0, 0);
         return Counted {
             rows: written.total,
@@ -208,7 +209,7 @@ impl<'a> Writer<'a> {
     }
 
     fn event(&mut self, event: Event<'_>, range: Range<usize>) {
-        self.block(&event, &range);
+        self.boundary(&event, &range);
         match event {
             Event::Start(tag) => self.start(tag),
             Event::End(tag) => self.end(tag),
@@ -261,7 +262,7 @@ impl<'a> Writer<'a> {
     /// above it: a block still arriving keeps the place it opened at, so the
     /// delta that lengthens it is counted from there and not from the answer's
     /// first row.
-    fn block(&mut self, event: &Event<'_>, range: &Range<usize>) {
+    fn boundary(&mut self, event: &Event<'_>, range: &Range<usize>) {
         match event {
             Event::Start(_) => {
                 if self.depth == 0 {

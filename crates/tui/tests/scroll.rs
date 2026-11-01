@@ -227,6 +227,39 @@ fn rows_that_arrive_off_screen_are_badged_and_end_clears_the_badge() {
 }
 
 #[test]
+fn an_answer_streaming_below_a_reader_scrolled_back_badges_the_rows_that_arrived() {
+    const NOTES: usize = 12;
+    let mut app = app();
+    for note in 1..=NOTES {
+        app.note_info(format!("note {note}"));
+    }
+    app.event(Event::TextDelta {
+        turn: 1,
+        text: "The answer begins, and its last paragraph".to_string(),
+    });
+    screen(&mut app, 80, 12);
+    press(&mut app, KeyCode::PageUp, KeyModifiers::NONE);
+    let rows = screen(&mut app, 80, 12);
+    assert_eq!(badge(&rows), None, "scrolling back is not new output");
+
+    let before = app.measure(NOTES, 80);
+    app.event(Event::TextDelta {
+        turn: 1,
+        text: " goes on here, and on, until it has wrapped across several of the \
+               rows this column has, and then across several more of them."
+            .to_string(),
+    });
+    let grown = app.measure(NOTES, 80) - before;
+    assert!(grown > 1, "the delta added {grown} rows of the answer");
+    let rows = screen(&mut app, 80, 12);
+    assert_eq!(
+        badge(&rows).as_deref(),
+        Some(format!("↓ {grown} new rows").as_str()),
+        "the badge counts the rows the answer grew by, exactly: {rows:#?}"
+    );
+}
+
+#[test]
 fn coming_back_down_reads_the_rows_that_arrived() {
     let mut app = thread(40);
     screen(&mut app, 100, 12);
