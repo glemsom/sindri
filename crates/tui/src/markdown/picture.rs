@@ -7,7 +7,7 @@
 
 use ratatui::text::{Line, Span};
 
-use crate::markdown::text;
+use crate::markdown::{Cut, text};
 use crate::picture::{Refusal, Worth};
 use crate::theme;
 
@@ -29,6 +29,10 @@ pub struct Written {
     /// How many rows the whole answer is, whatever part of it `rows` holds: the
     /// count a frame places a window against.
     pub total: usize,
+    /// Where the answer's last block begins and the rows above it: what a delta
+    /// landing in the answer is counted from, so the rows above it are not read
+    /// again.
+    pub cut: Cut,
 }
 
 /// A picture the writer placed: the row its block starts at, the source as the

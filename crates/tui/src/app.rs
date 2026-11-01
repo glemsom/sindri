@@ -351,30 +351,6 @@ impl App {
         }
     }
 
-    /// How many rows entry `index` takes at `width`: the store's answer, kept
-    /// per entry at the width it was measured at, so the same question is asked
-    /// once and never costs a file read, while a resize is measured again from
-    /// the store.
-    pub fn measure(&mut self, index: usize, width: u16) -> usize {
-        if let Some(rows) = self.heights.at(index, width) {
-            return rows;
-        }
-        let rows = crate::render::rows::entry_height(
-            &self.entries[index],
-            width,
-            self.now,
-            self.pictures.as_ref(),
-        );
-        self.heights.keep(index, width, rows);
-        rows
-    }
-
-    /// How many heights have been measured from scratch over the frame's whole
-    /// life: a frame reports the difference as its own.
-    pub(crate) fn measured(&self) -> usize {
-        self.heights.measured()
-    }
-
     pub(crate) fn set_rail_view(
         &mut self,
         area: Rect,

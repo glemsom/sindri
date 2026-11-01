@@ -34,6 +34,10 @@ pub struct View {
     /// How many rows the frame built: the window's own, and none of the answer
     /// above or below it — the cost a long answer must not pay for a page.
     pub built: usize,
+    /// How many rows the frame counted to place what it placed: a delta into an
+    /// answer costs the rows it touched, so this is what a stream charges a
+    /// frame and it does not grow with the answer around it.
+    pub recounted: usize,
     pub spill: Vec<(usize, PathBuf)>,
     /// The drawn rows that are an expandable entry's own row, and the entry
     /// behind each: a click there opens it.
@@ -108,6 +112,7 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
     // Every measurement this frame asks the store for is counted from here, so
     // what the view reports is this frame's work and not the session's.
     let measured_from = app.measured();
+    let counted_from = app.counted();
 
     // What the reader asked for is answered against the thread as it is now,
     // and only then laid out.
@@ -194,6 +199,7 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
     }
     app.window.settled(ask, at, follow, below, plain.len());
     let remeasured = app.measured() - measured_from;
+    let recounted = app.counted() - counted_from;
     let spill = drawn(spill, start, plain.len());
     let expand = drawn(expand, start, plain.len());
     View {
@@ -203,6 +209,7 @@ pub fn window(app: &mut App, width: u16, height: usize) -> View {
         measured,
         remeasured,
         built,
+        recounted,
         spill,
         expand,
         pictures,

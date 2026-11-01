@@ -54,6 +54,29 @@ fn a_long_answer_costs_the_window_and_not_the_answer() {
 }
 
 #[test]
+fn a_delta_costs_the_rows_it_touched_and_not_the_answer_it_landed_in() {
+    let mut recounted = Vec::new();
+    for fences in [5, 20, 60] {
+        let mut app = answering(fences);
+        transcript::window(&mut app, 120, 40);
+        app.event(Event::TextDelta {
+            turn: 1,
+            text: "\n\nAnd one more paragraph, which is the delta.\n".to_string(),
+        });
+        let view = transcript::window(&mut app, 120, 40);
+        recounted.push(view.recounted);
+    }
+    assert!(
+        recounted.iter().all(|&rows| (1..=8).contains(&rows)),
+        "a delta recounts the rows it landed on and no more: {recounted:?}"
+    );
+    assert_eq!(
+        recounted[0], recounted[2],
+        "a delta costs the same at sixty fences as at five: {recounted:?}"
+    );
+}
+
+#[test]
 fn the_tick_of_a_settled_frame_costs_the_window_and_not_the_thread() {
     let mut app = answering(400);
     let first = transcript::window(&mut app, 120, 40);

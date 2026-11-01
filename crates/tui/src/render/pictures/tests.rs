@@ -215,6 +215,37 @@ fn a_repaint_of_a_mermaid_fence_paints_pixels_and_renders_it_once() {
     assert_eq!(renders(&app), 1, "and the svg the store still holds");
 }
 
+#[test]
+fn a_delta_below_a_closed_diagram_recosts_neither_the_diagram_nor_its_pixels() {
+    let mut app = App::new(launch(), None).with_graphics(Some(Graphics::kitty()));
+    app.event(Event::TextDelta {
+        turn: 1,
+        text: format!("```mermaid\n{DIAGRAM}```\n\nA paragraph that"),
+    });
+    press(&mut app, KeyCode::Home);
+    assert!(drawn(&frame(&mut app, 100, 30)), "the diagram is drawn");
+    assert_eq!(renders(&app), 1, "and rendered once");
+
+    // The delta lands in the paragraph under the diagram, which closed above it.
+    app.event(Event::TextDelta {
+        turn: 1,
+        text: " goes on, and on, as the stream says more of it.".to_string(),
+    });
+    let view = crate::render::transcript::window(&mut app, 100, 30);
+    assert!(drawn(&frame(&mut app, 100, 30)), "the diagram still drawn");
+    assert_eq!(
+        renders(&app),
+        1,
+        "a fence closed above the delta is neither laid out nor rendered again"
+    );
+    assert_eq!(decodes(&app), 1, "and its pixels are the ones held");
+    assert!(
+        view.recounted <= 8,
+        "the delta recounts the rows it landed in, not the diagram above it: {}",
+        view.recounted
+    );
+}
+
 /// A diagram drawn top to bottom and long with it: ten nodes, one under the
 /// next, whose height is the dimension that carries its words. Committed beside
 /// the crate so the store, the writer and the frame all measure one diagram.
