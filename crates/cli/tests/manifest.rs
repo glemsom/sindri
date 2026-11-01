@@ -20,8 +20,8 @@ fn declares(section_name: &str) -> Vec<String> {
     lines
         .take_while(|line| !line.trim_start().starts_with('['))
         .filter(|line| !line.trim().is_empty() && !line.trim_start().starts_with('#'))
-        .map(|line| {
-            let (key, _) = line.split_once('=').expect("a dependency line holds a `=`");
+        .filter_map(|line| line.split_once('='))
+        .map(|(key, _)| {
             // `.workspace = true` and friends make the key a path, not a name.
             key.split_once('.')
                 .map_or(key, |(name, _)| name)
