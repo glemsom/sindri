@@ -33,14 +33,19 @@ pub fn drain<R: Read + Send + 'static>(
         Some(sink) => {
             let mut reader = BufReader::new(source);
             let mut seen = Vec::new();
+            // One buffer for the whole stream: a command streaming tens of
+            // thousands of short lines would otherwise pay a heap allocation
+            // per line on the thread whose only job is to keep up with it.
+            let mut line = Vec::new();
             loop {
-                let mut line = Vec::new();
                 if reader.read_until(b'\n', &mut line)? == 0 {
                     return Ok(seen);
                 }
                 let text = String::from_utf8_lossy(&line);
                 sink.output(side, text.trim_end_matches(['\n', '\r']));
                 seen.extend_from_slice(&line);
+                // After the sink, never before: `text` borrows `line`.
+                line.clear();
             }
         }
     })
@@ -82,6 +87,32 @@ mod tests {
                 (Side::Stdout, "three".to_string()),
             ],
             "each line arrives once, in order, without its newline"
+        );
+    }
+
+    #[test]
+    fn a_thousand_lines_arrive_whole_and_in_order_without_the_newline_and_leak_nothing() {
+        let recorder = Arc::new(Recorder::default());
+        let stream: Vec<u8> = (0..1_000)
+            .flat_map(|n| format!("line {n}\n").into_bytes())
+            .collect();
+        let all = drain(
+            Cursor::new(stream.clone()),
+            Side::Stdout,
+            Some(recorder.clone()),
+        )
+        .join()
+        .expect("the reader thread ran")
+        .expect("read");
+        assert_eq!(all, stream, "the bytes are kept for the model");
+        let expected: Vec<(Side, String)> = (0..1_000)
+            .map(|n| (Side::Stdout, format!("line {n}")))
+            .collect();
+        let seen = recorder.0.lock().expect("lock").clone();
+        assert_eq!(
+            seen, expected,
+            "each line arrives once, in order, without its newline, and no text of an \
+             earlier line survives into the next"
         );
     }
 
