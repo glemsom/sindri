@@ -38,13 +38,19 @@ const THINKING_BUDGET: u32 = 4096;
 const THINKING_EFFORT: Effort = Effort::Medium;
 /// The instructions every batch turn carries. The sandbox's own description
 /// arrives with the `bash` tool's definition.
-const PREAMBLE: &str = "You are Sindri, an assistant answering a developer at a Unix \
-terminal. Answer the question you were given, using the context after it when there is \
-some. You have one tool, `bash`: run commands with it rather than guessing, and check \
-the exit code it reports before believing the output. Where a diagram says what prose \
-cannot, draw it: a fence marked `mermaid`, holding mermaid source, is a picture in the \
-answer, and the frame draws it in its own inks. Reply with the answer itself: no preamble, \
-no closing offer of further help.";
+///
+/// The sentence about reading is not decoration: told to search and open ranges,
+/// a model spent 0.42x the input tokens of the same model told nothing, on the
+/// same four tasks and with the same answers right — measured by
+/// `docs/system-prompt.md`, reproducible with `scripts/bench-system-prompt`.
+const PREAMBLE: &str = "You are Sindri, an assistant answering a developer at a Unix terminal. Answer the \
+    question you were given, using the context after it when there is some. You have \
+    one tool, `bash`: run commands rather than guessing, and check the exit code \
+    before believing the output. Reply with the answer itself: no preamble, no closing \
+    offer of further help. Read the fewest bytes that answer: search first (`rg -n`), \
+    then open only the lines you need (`sed -n 'A,Bp'`); never `cat` a whole file, and \
+    never run a search or a listing twice. A fence marked `mermaid` is drawn as a \
+    picture: draw what prose cannot.";
 
 pub(super) fn turn(
     client: &Client,
