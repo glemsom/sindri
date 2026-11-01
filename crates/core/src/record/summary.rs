@@ -9,7 +9,7 @@
 //! and the row a person reads cannot disagree about which fact comes where.
 
 use std::io::{self, BufRead, BufReader};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::entry::{Entry, Meta};
 use crate::provider::Usage;
@@ -48,39 +48,79 @@ pub struct Summary {
 /// unreadable run does not hide the rest, and a listing is a read of the state
 /// directory and nothing else.
 pub fn listing(sessions: &Path) -> io::Result<Vec<Summary>> {
+    listing_limited(sessions, None)
+}
+
+/// The newest `limit` rows of [`listing`], or every row when there is no limit:
+/// what a front end printing a slice of the list asks for.
+///
+/// The limit is what keeps a listing cheap. Every row's metadata is still read —
+/// the sort cannot know which runs are newest before it has them — but a
+/// transcript is opened only for the rows the limit keeps, so
+/// `sindri sessions list --limit 5` scans five prompts rather than five hundred.
+pub fn listing_limited(sessions: &Path, limit: Option<usize>) -> io::Result<Vec<Summary>> {
+    let mut rows = metadata(sessions)?;
+    // Two runs that started in the same millisecond are ordered by id, so a
+    // list is stable rather than however the directory happened to be read.
+    rows.sort_by(|a, b| {
+        b.summary
+            .started_ms
+            .cmp(&a.summary.started_ms)
+            .then_with(|| a.summary.id.cmp(&b.summary.id))
+    });
+    rows.truncate(limit.unwrap_or(usize::MAX));
+    Ok(rows.into_iter().map(Row::prompted).collect())
+}
+
+/// One record read as far as its metadata goes, with the directory it came from:
+/// the prompt is a second read of the transcript, and the row kept has to know
+/// where to make it.
+struct Row {
+    dir: PathBuf,
+    summary: Summary,
+}
+
+impl Row {
+    /// The same row with the first thing the human asked, read now because this
+    /// row survived the limit.
+    fn prompted(self) -> Summary {
+        Summary {
+            prompt: first_prompt(&self.dir.join("transcript.jsonl")),
+            ..self.summary
+        }
+    }
+}
+
+/// Every record's metadata, in the order the directory handed them over.
+fn metadata(sessions: &Path) -> io::Result<Vec<Row>> {
     let entries = match std::fs::read_dir(sessions) {
         Ok(entries) => entries,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(error) => return Err(error),
     };
-    let mut rows: Vec<Summary> = entries
+    Ok(entries
         .filter_map(Result::ok)
-        .filter_map(|entry| summary_of(&entry.path()))
-        .collect();
-    // Two runs that started in the same millisecond are ordered by id, so a
-    // list is stable rather than however the directory happened to be read.
-    rows.sort_by(|a, b| {
-        b.started_ms
-            .cmp(&a.started_ms)
-            .then_with(|| a.id.cmp(&b.id))
-    });
-    Ok(rows)
+        .filter_map(|entry| metadata_of(&entry.path()))
+        .collect())
 }
 
-fn summary_of(dir: &Path) -> Option<Summary> {
+fn metadata_of(dir: &Path) -> Option<Row> {
     let text = std::fs::read_to_string(dir.join("session.json")).ok()?;
     let meta: Meta = serde_json::from_str(&text).ok()?;
-    Some(Summary {
-        prompt: first_prompt(&dir.join("transcript.jsonl")),
-        // The directory's own name, not the id inside the document: a name a
-        // directory listing handed us cannot walk out of the state directory,
-        // and a record is the directory it lives in.
-        id: dir.file_name()?.to_str()?.to_string(),
-        started_ms: meta.started_ms,
-        model: meta.model,
-        turns: meta.turns,
-        stopped: meta.stopped,
-        usage: meta.usage,
+    Some(Row {
+        dir: dir.to_path_buf(),
+        summary: Summary {
+            // The directory's own name, not the id inside the document: a name
+            // a directory listing handed us cannot walk out of the state
+            // directory, and a record is the directory it lives in.
+            id: dir.file_name()?.to_str()?.to_string(),
+            started_ms: meta.started_ms,
+            model: meta.model,
+            turns: meta.turns,
+            stopped: meta.stopped,
+            usage: meta.usage,
+            prompt: None,
+        },
     })
 }
 
