@@ -47,6 +47,45 @@ fn the_model_gets_exactly_one_tool_named_bash_described_by_the_policy() {
 }
 
 #[test]
+fn the_description_costs_at_most_145_words_besides_the_policy() {
+    let (_workspace, _session_temp, policy) = fixtures();
+    let tool = BashTool::new(&policy, Scripted::silent());
+
+    // The policy is derived and its length is the sandbox's business; the tax
+    // that can creep back unnoticed is the prose written around it.
+    let prose = tool.spec().description.replacen(&policy.describe(), "", 1);
+    let words = prose.split_whitespace().count();
+    assert!(
+        words <= 145,
+        "the description is re-sent every turn, so it stays at most 145 words of prose around the policy, not {words}: {prose}"
+    );
+}
+
+#[test]
+fn the_description_leaves_shell_semantics_and_field_names_to_the_results() {
+    let (_workspace, _session_temp, policy) = fixtures();
+    let tool = BashTool::new(&policy, Scripted::silent());
+    let description = &tool.spec().description;
+
+    // A name the model can read off its first result is not a word worth
+    // sending on every turn; what a name cannot say stays above.
+    for taught in [
+        "set -e",
+        "pipefail",
+        "exit status",
+        "duration_ms",
+        "truncated",
+        "stdout",
+        "stderr",
+    ] {
+        assert!(
+            !description.contains(taught),
+            "the description does not teach `{taught}`: {description}"
+        );
+    }
+}
+
+#[test]
 fn a_tool_result_reaches_the_model_with_every_field_it_needs() {
     let (_workspace, session_temp, policy) = fixtures();
     let spill = session_temp.join("spill/bash-1.out");
