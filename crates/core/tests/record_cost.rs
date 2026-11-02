@@ -14,7 +14,7 @@ mod support;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use sindri_core::agent::BashTool;
+use sindri_core::agent::{BashTool, Limits};
 use sindri_core::exec::{Outcome, ToolResult};
 use sindri_core::paths::SessionDir;
 use sindri_core::provider::{ToolOutcome, Usage};
@@ -54,7 +54,11 @@ fn usage(input: u64, output: u64) -> Usage {
 fn ran(result: ToolResult) -> ToolOutcome {
     let (_workspace, _session_temp, policy) = fixtures();
     let seen = Arc::new(Mutex::new(Vec::new()));
-    let tool = BashTool::new(&policy, Arc::new(Scripted::new(vec![result], seen)));
+    let tool = BashTool::new(
+        &policy,
+        Limits::default(),
+        Arc::new(Scripted::new(vec![result], seen)),
+    );
     tool.call(&call("call_1", "ls | wc -l"))
         .expect("the run was not cancelled")
 }

@@ -56,7 +56,11 @@ impl Harness {
         let seen_scripts = Arc::new(Mutex::new(Vec::new()));
         let cancel = Cancel::new();
         let executor = Echoing::sharing(Arc::clone(&seen_scripts), delay);
-        let tool = sindri_core::agent::BashTool::new(&policy, executor);
+        let tool = sindri_core::agent::BashTool::new(
+            &policy,
+            sindri_core::agent::Limits::default(),
+            executor,
+        );
         let seen = Arc::new(Mutex::new(Vec::new()));
         let told = Arc::new(Mutex::new(Vec::new()));
         let model = ScriptedModel::new(replies, Arc::clone(&seen), Arc::clone(&told));

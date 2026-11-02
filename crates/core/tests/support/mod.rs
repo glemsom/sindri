@@ -291,7 +291,11 @@ impl Harness {
             Arc::clone(&seen_scripts),
             mid_command,
         ));
-        let tool = sindri_core::agent::BashTool::new(&policy, executor);
+        let tool = sindri_core::agent::BashTool::new(
+            &policy,
+            sindri_core::agent::Limits::default(),
+            executor,
+        );
         let seen = Arc::new(Mutex::new(Vec::new()));
         let told = Arc::new(Mutex::new(Vec::new()));
         let model = ScriptedModel::new(replies, Arc::clone(&seen), Arc::clone(&told))

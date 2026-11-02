@@ -1,6 +1,6 @@
 //! The `bash` tool's contract with the model: one tool, a description derived
-//! from the sandbox policy rather than written by hand, and a
-//! structured result rendered with every field promised.
+//! from the sandbox policy and the limits in force rather than written by hand,
+//! and a structured result rendered with every field promised.
 
 #![allow(
     clippy::expect_used,
@@ -10,8 +10,9 @@
 mod support;
 
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
-use sindri_core::agent::BashTool;
+use sindri_core::agent::{BashTool, Budget, Limits};
 use sindri_core::exec::{Outcome, ToolResult};
 use sindri_core::provider::Call;
 use support::{Scripted, fixtures};
@@ -19,7 +20,7 @@ use support::{Scripted, fixtures};
 #[test]
 fn the_model_gets_exactly_one_tool_named_bash_described_by_the_policy() {
     let (workspace, _session_temp, policy) = fixtures();
-    let tool = BashTool::new(&policy, Scripted::silent());
+    let tool = BashTool::new(&policy, Limits::default(), Scripted::silent());
 
     let spec = tool.spec();
     assert_eq!(spec.name, "bash", "the only tool is bash");
@@ -47,24 +48,26 @@ fn the_model_gets_exactly_one_tool_named_bash_described_by_the_policy() {
 }
 
 #[test]
-fn the_description_costs_at_most_145_words_besides_the_policy() {
+fn the_description_costs_at_most_160_words_besides_the_policy() {
     let (_workspace, _session_temp, policy) = fixtures();
-    let tool = BashTool::new(&policy, Scripted::silent());
+    let tool = BashTool::new(&policy, Limits::default(), Scripted::silent());
 
     // The policy is derived and its length is the sandbox's business; the tax
-    // that can creep back unnoticed is the prose written around it.
+    // that can creep back unnoticed is the prose written around it. The limits
+    // sentence is the ~30 words this ceiling pays for: what `Budget::default()`
+    // and the timeout are is a fact about this program, not about bash.
     let prose = tool.spec().description.replacen(&policy.describe(), "", 1);
     let words = prose.split_whitespace().count();
     assert!(
-        words <= 145,
-        "the description is re-sent every turn, so it stays at most 145 words of prose around the policy, not {words}: {prose}"
+        words <= 160,
+        "the description is re-sent every turn, so it stays at most 160 words of prose around the policy, not {words}: {prose}"
     );
 }
 
 #[test]
 fn the_description_leaves_shell_semantics_and_field_names_to_the_results() {
     let (_workspace, _session_temp, policy) = fixtures();
-    let tool = BashTool::new(&policy, Scripted::silent());
+    let tool = BashTool::new(&policy, Limits::default(), Scripted::silent());
     let description = &tool.spec().description;
 
     // A name the model can read off its first result is not a word worth
@@ -86,6 +89,51 @@ fn the_description_leaves_shell_semantics_and_field_names_to_the_results() {
 }
 
 #[test]
+fn the_description_names_the_limits_that_end_a_run_from_the_values_in_force() {
+    let (_workspace, _session_temp, policy) = fixtures();
+    let limits = Limits {
+        command_timeout: Duration::from_secs(7),
+        budget: Budget {
+            wall: Duration::from_secs(90),
+            bytes: 4096,
+        },
+    };
+    let tool = BashTool::new(&policy, limits, Scripted::silent());
+    let description = &tool.spec().description;
+
+    // The numbers are formatted from the values, never written by hand, so a
+    // config that shortens the timeout shortens the sentence with it.
+    for named in [
+        "killed after 7 s",
+        "90 s of command time",
+        "4 KiB of output",
+    ] {
+        assert!(
+            description.contains(named),
+            "the description says `{named}`: {description}"
+        );
+    }
+}
+
+#[test]
+fn the_default_description_names_the_defaults_the_run_actually_enforces() {
+    let (_workspace, _session_temp, policy) = fixtures();
+    let tool = BashTool::new(&policy, Limits::default(), Scripted::silent());
+    let description = &tool.spec().description;
+
+    for named in ["killed after 120 s", "one hour of command time", "8 MiB"] {
+        assert!(
+            description.contains(named),
+            "the description says `{named}`: {description}"
+        );
+    }
+    assert!(
+        description.contains("timed_out"),
+        "the model is told what a killed command is reported as: {description}"
+    );
+}
+
+#[test]
 fn a_tool_result_reaches_the_model_with_every_field_it_needs() {
     let (_workspace, session_temp, policy) = fixtures();
     let spill = session_temp.join("spill/bash-1.out");
@@ -104,7 +152,7 @@ fn a_tool_result_reaches_the_model_with_every_field_it_needs() {
         }],
         Arc::clone(&seen),
     ));
-    let tool = BashTool::new(&policy, executor);
+    let tool = BashTool::new(&policy, Limits::default(), executor);
 
     let outcome = tool
         .call(&command_call("call_1", "ls | wc -l"))
@@ -158,7 +206,7 @@ fn a_call_the_sandbox_never_started_is_reported_as_a_tool_error() {
         }],
         Arc::new(Mutex::new(Vec::new())),
     ));
-    let tool = BashTool::new(&policy, executor);
+    let tool = BashTool::new(&policy, Limits::default(), executor);
 
     let outcome = tool
         .call(&command_call("call_1", "true"))

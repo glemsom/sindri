@@ -7,11 +7,13 @@
 mod budget;
 mod calls;
 mod event;
+mod limits;
 mod report;
 mod tool;
 
 pub use budget::{Budget, Spent};
 pub use event::Event;
+pub use limits::Limits;
 pub use report::{Report, Stopped};
 pub use tool::BashTool;
 
