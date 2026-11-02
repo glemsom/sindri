@@ -8,7 +8,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use super::entry::{Entry, Meta};
-use crate::paths::{SessionDir, state_dir};
+use crate::paths::{SessionDir, is_session_id, state_dir};
 
 #[derive(Debug)]
 pub enum ShowError {
@@ -222,10 +222,4 @@ fn candidates(root: &Path, name: &str) -> Result<Vec<String>, ShowError> {
         .collect();
     ids.sort();
     Ok(ids)
-}
-
-/// Whether `id` is a session GUID: hex and dashes only, so a lookup can never be
-/// a path and `sessions show ../../etc` can never leave the state directory.
-fn is_session_id(id: &str) -> bool {
-    !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
 }

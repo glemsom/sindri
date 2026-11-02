@@ -99,3 +99,9 @@ pub fn new_session_id() -> io::Result<String> {
     let uuid = std::fs::read_to_string("/proc/sys/kernel/random/uuid")?;
     Ok(uuid.trim().to_string())
 }
+
+/// Whether `id` is a session GUID: hex and dashes only, so a lookup can never be
+/// a path and `sessions show ../../etc` can never leave the state directory.
+pub fn is_session_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
+}
