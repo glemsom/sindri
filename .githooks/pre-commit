@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# The audits run at the commit, not six minutes into the gate at the push:
+# `make check` is minutes, `make audit` is milliseconds, and a broken commit
+# found now never stacks under two more before anyone sees it.
+#
+# It runs `make audit` — the gate's own definition of the fast audits — so an
+# audit added to the gate is an audit added to the commit, with no second list
+# here to drift from it. It reaches for no pinned toolchain, because the audits
+# are shell over `git ls-files`: a hook that needed devbox would be a hook
+# people learn to skip.
+#
+# Enabled by `make hooks`; a fresh clone commits freely until it runs that.
+set -euo pipefail
+
+if ! make -s --no-print-directory audit; then
+    echo "pre-commit: the audits above refused this commit; \`git commit --no-verify\` skips them" >&2
+    exit 1
+fi

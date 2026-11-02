@@ -257,9 +257,18 @@ at your own cost, skipping the assertions that need a recorded conversation. See
 
 Everything goes through devbox, and `make check` is the definition of done.
 
+Run `make hooks` once per clone. It points `core.hooksPath` at `.githooks`, and every
+commit then runs `make audit` — the fast audits, in milliseconds — before it lands, so a
+broken commit is refused while it is still the only one. It needs no devbox; nothing is
+wired until you ask, so a fresh clone commits freely. `git commit --no-verify` skips it,
+and `make check` still is the gate: the hook moves the cheap part earlier, it does not
+narrow what is required.
+
 | Target | What it runs |
 | --- | --- |
 | `make check` | fmt, clippy, the three audits (800 lines, module docs, test names), tests, evals, the no-relink proof, the release scripts |
+| `make audit` | the three fast audits on their own, in milliseconds |
+| `make hooks` | enable the pre-commit hook: those audits, before every commit |
 | `make build` / `install` / `clean` / `run ARGS=…` | release build / install the tree's binary / `cargo clean` / run it |
 | `make eval` / `eval-live` / `scripts-check` | the evals, offline or against your provider; the release scripts, offline |
 | `make release TAG=v0.1.0` | both static binaries, `SHA256SUMS`, changelog |

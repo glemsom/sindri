@@ -4,7 +4,7 @@
 DEVBOX ?= devbox
 CARGO  ?= $(DEVBOX) run -- cargo
 
-.PHONY: all check fmt clippy audit test relink eval eval-live scripts-check build release run install clean
+.PHONY: all check fmt clippy audit hooks test relink eval eval-live scripts-check build release run install clean
 
 all: check
 
@@ -25,6 +25,13 @@ audit:
 	@scripts/audit-line-length.sh
 	@scripts/audit-module-docs.sh
 	@scripts/audit-test-names.sh
+
+## hooks: put the fast audits in front of the commit rather than the push — a
+## local `core.hooksPath`, opt-in, so a fresh clone commits freely until it asks
+## for this. `make check` stays the gate; this only moves the cheap part earlier.
+hooks:
+	@git config core.hooksPath .githooks
+	@echo "hooks: core.hooksPath is .githooks — every commit now runs make audit"
 
 test:
 	$(CARGO) nextest run --workspace --no-fail-fast
