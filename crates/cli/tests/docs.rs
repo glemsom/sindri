@@ -2,6 +2,8 @@
 //! ends in this crate use that word. Documents drift, so the entry an agent
 //! reads first is asserted here rather than trusted.
 
+use sindri_tui::command::COMMANDS;
+
 /// The glossary, as committed: `include_str!` so the test cannot pass against a
 /// file it read from the wrong directory.
 const GLOSSARY: &str = include_str!("../../../GLOSSARY.md");
@@ -113,5 +115,33 @@ fn the_readme_names_both_tools_and_points_at_the_record_that_decided_it() {
         !opening.contains("get `bash` and nothing else"),
         "the run hands the model two tools, so the opening list cannot say one: \
          {opening:?}"
+    );
+}
+
+#[test]
+fn the_readme_names_every_command_the_composer_can_send() {
+    let bullet = README
+        .split("\n- **")
+        .find(|bullet| bullet.starts_with("`/`**"))
+        .map(|bullet| bullet.replace('\n', " "))
+        .unwrap_or_else(|| panic!("README.md has no `/` bullet: the composer sends six commands"));
+
+    for spec in COMMANDS {
+        assert!(
+            bullet.contains(&format!("/{}", spec.name)),
+            "the `/` bullet must name `/{}`, or a reader never learns the composer can \
+             send it: {bullet:?}",
+            spec.name
+        );
+    }
+    assert!(
+        bullet.contains("/skill:") && bullet.contains("/skill "),
+        "`/skill` is the one name a colon may end, and both spellings are what a user \
+         types: {bullet:?}"
+    );
+    assert!(
+        bullet.contains("catalog"),
+        "the name it takes is one the catalog offers, and the bullet must say so: \
+         {bullet:?}"
     );
 }

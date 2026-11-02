@@ -132,11 +132,14 @@ transcript, rail, composer; off a terminal it is a refusal at exit 2.
   a copy the terminal cannot confirm says nothing, and one a tool took names the tool.
 - **`@`** walks the workspace (`.git` skipped, `.gitignore` ignored), proximity-ranked,
   capped at eight rows. `Tab`/`Enter` takes one; `Esc` dismisses, both while one is open.
-- **`/`** runs `/new` (fresh session GUID, empty transcript), `/export`, `/settings`,
-  `/help` and `/quit`. `/export [path]` writes the thread as one markdown file, asking
-  twice before replacing a file; reading a record back is `sindri sessions show`, in the
-  shell. **`?` and `/help` list the same bindings**, each gesture beside
-  its key.
+- **`/`** runs `/new` (fresh session GUID, empty transcript), `/export`, `/skill`,
+  `/settings`, `/help` and `/quit`. `/skill` is the one name that takes an argument, and
+  the one a colon may end — `/skill:house-style` and `/skill house-style` are the same
+  line — where the rest of it is the prompt the skill is put to work on and a bare name
+  arms it without starting a turn; the names offered are the ones the catalog says you
+  may invoke. `/export [path]` writes the thread as one markdown file, asking twice before
+  replacing a file; reading a record back is `sindri sessions show`, in the shell.
+  **`?` and `/help` list the same bindings**, each gesture beside its key.
 - **Chrome:** a narrow terminal shortens what the frame says and never cuts a key or a
   fact in half. The footer states its seven hints from 120 columns up, five from 100 and
   never fewer than `Enter send` and `? keys`; the rail gives facts up in one priority
