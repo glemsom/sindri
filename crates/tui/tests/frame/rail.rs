@@ -6,6 +6,9 @@
 
 use super::*;
 
+use std::time::Duration;
+
+use sindri_tui::rail::Rail;
 use sindri_tui::theme;
 
 /// The labels the rail states, in the order it states them.
@@ -335,5 +338,43 @@ fn the_context_meter_fills_as_the_conversation_takes_the_window() {
             "half a window reads as half a meter at {width} columns: {rows:#?}"
         );
         assert_eq!(value(&rows, "cache"), "30%", "{width} columns: {rows:#?}");
+    }
+}
+
+#[test]
+fn the_least_room_a_fact_is_given_is_the_smallest_room_it_can_be_cut_to() {
+    // The strip holds room back with the same function the draw asks, so the
+    // room reserved for a fact is the room it needs: a floor written twice
+    // drifts, and a reserved cell too few is a fact dropped from a line that
+    // had room for it.
+    let mut with_skills = Rail::new(launch());
+    with_skills.skill_loaded("alpha");
+    with_skills.skill_loaded("house-style");
+    let mut wide_launch = launch();
+    wide_launch.workspace = "東京都/レポ".to_string();
+    wide_launch.model = "gpt-東".to_string();
+    wide_launch.temp = "/state/sindri/sessions/東京都/tmp".to_string();
+    wide_launch.branch = None;
+    let wide = Rail::new(wide_launch);
+
+    for facts in [
+        with_skills.facts(Duration::ZERO),
+        wide.facts(Duration::ZERO),
+    ] {
+        for fact in &facts {
+            let least = fact.least();
+            assert!(
+                fact.cut(least).is_some(),
+                "{} is cut in the {least} cells the strip holds back for it",
+                fact.label()
+            );
+            for room in 0..least {
+                assert!(
+                    fact.cut(room).is_none(),
+                    "{} is not cut in {room} cells, below the {least} held back for it",
+                    fact.label()
+                );
+            }
+        }
     }
 }

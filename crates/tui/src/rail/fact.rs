@@ -7,6 +7,11 @@ use unicode_width::UnicodeWidthStr;
 /// rather than mangled, because half a word is not a fact.
 const CUT_FLOOR: usize = 6;
 
+/// The widest room a fact is ever asked about: the room a strip holds back is
+/// a rail's, far short of this, so `least` stops searching here rather than
+/// running out to the width of a terminal.
+const ROOM_CEILING: usize = 64;
+
 /// One row of the rail: a label in a fixed field and its value beside it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Fact {
@@ -183,12 +188,15 @@ impl Fact {
     }
 
     /// The fewest display cells this fact can be said in: what a line too
-    /// narrow for everything holds back for it.
+    /// narrow for everything holds back for it. It asks `cut` rather than
+    /// counting the floor a second time, so the room the strip reserves and
+    /// the room the draw needs cannot drift apart. A fact no room up to
+    /// `ROOM_CEILING` can say holds the ceiling back; the strip drops it
+    /// either way.
     pub fn least(&self) -> usize {
-        match self.block {
-            Block::Posture | Block::Skills => 2 + self.head().width(),
-            _ => self.short_label().width() + 1 + CUT_FLOOR,
-        }
+        (0..=ROOM_CEILING)
+            .find(|room| self.cut(*room).is_some())
+            .unwrap_or(ROOM_CEILING)
     }
 
     /// The glyph a chip opens with: the boundary for the posture, the skills it
