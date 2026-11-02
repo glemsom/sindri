@@ -10,7 +10,7 @@ mod mermaid;
 mod picture;
 mod role;
 mod table;
-pub(crate) mod text;
+pub mod text;
 
 pub use picture::{Picture, Written};
 

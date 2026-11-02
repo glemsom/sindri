@@ -11,6 +11,7 @@ mod common;
 
 use common::records::{NEWEST, Record, root, three, write};
 use common::{Env, stderr, stdout};
+use unicode_width::UnicodeWidthStr;
 
 fn objects(env: &Env) -> Vec<serde_json::Value> {
     let listed = env.cmd().args(["sessions", "list", "--json"]).assert();
@@ -123,7 +124,7 @@ fn a_long_prompt_is_clipped_to_one_column_and_json_holds_it_whole() {
     let row = text.trim_end();
     let column = row.rsplit("  ").next().expect("the prompt column");
     assert_eq!(
-        column.chars().count(),
+        column.width(),
         60,
         "the prompt is clipped at one column's width: {column:?}"
     );

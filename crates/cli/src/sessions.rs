@@ -6,14 +6,15 @@ use sindri_core::clock;
 use sindri_core::paths::state_dir;
 use sindri_core::provider::Usage;
 use sindri_core::record::{self, ShowError, Stored, Summary};
+use sindri_tui::markdown::text::clip;
 use sindri_types::ExitCode;
-use unicode_width::UnicodeWidthChar;
 
 /// The one field a row can run long with. A subcommand printing a table does
-/// not ask the terminal how wide it is: the prompt is clipped here, to a column
-/// of cells and not a count of characters, so a prompt written in wide glyphs
-/// cannot push the columns after it out of line. `--json` and `sessions show`
-/// hold the whole of it.
+/// not ask the terminal how wide it is: the prompt is held to a column of cells,
+/// cut by `sindri_tui::markdown::text::clip` so that a wide glyph and a
+/// combining mark are answered the one way for the whole tree, and so a prompt
+/// written in wide glyphs cannot push the columns after it out of line.
+/// `--json` and `sessions show` hold the whole of it.
 const PROMPT_CELLS: usize = 60;
 
 /// Prints the records, newest first, or nothing when the state directory holds
@@ -124,22 +125,58 @@ fn prompt(prompt: Option<&str>) -> String {
         return "—".to_string();
     };
     let text = prompt.split_whitespace().collect::<Vec<_>>().join(" ");
-    let cells = |ch: char| UnicodeWidthChar::width(ch).unwrap_or(0);
-    if text.chars().map(cells).sum::<usize>() <= PROMPT_CELLS {
+    // A text that survives the whole column is the text, and nothing was cut. A
+    // text that does not stops one cell short of the column: the ellipsis is a
+    // column of its own, and a glyph is whole or it is not there, so it may stop
+    // further.
+    let head = clip(&text, PROMPT_CELLS);
+    if head == text {
         return text;
     }
-    // The ellipsis is a column of its own, so the text stops one cell short of
-    // the column; a glyph is whole or it is not there, so it may stop further.
-    let mut used = 0;
-    let mut clipped = String::new();
-    for ch in text.chars() {
-        let width = cells(ch);
-        if used + width > PROMPT_CELLS - 1 {
-            break;
-        }
-        used += width;
-        clipped.push(ch);
+    format!("{}…", clip(&head, PROMPT_CELLS - 1))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{PROMPT_CELLS, prompt};
+
+    #[test]
+    fn a_prompt_inside_its_column_is_unchanged() {
+        let fits = "x".repeat(PROMPT_CELLS);
+        assert_eq!(prompt(Some(&fits)), fits, "the last cell is still inside");
     }
-    clipped.push('…');
-    clipped
+
+    #[test]
+    fn a_prompt_past_its_column_ends_in_an_ellipsis() {
+        let long = "x".repeat(PROMPT_CELLS + 1);
+        let shown = format!("{}…", "x".repeat(PROMPT_CELLS - 1));
+        assert_eq!(prompt(Some(&long)), shown, "the ellipsis takes a cell");
+    }
+
+    #[test]
+    fn a_wide_glyph_is_whole_or_it_is_absent() {
+        // Two columns a glyph, so a column of 60 holds twenty-nine of them and
+        // the ellipsis: the thirtieth is dropped rather than cut in half.
+        let wide = "日".repeat(PROMPT_CELLS);
+        let shown = format!("{}…", "日".repeat(PROMPT_CELLS / 2 - 1));
+        assert_eq!(prompt(Some(&wide)), shown);
+    }
+
+    #[test]
+    fn a_combining_mark_is_no_column_of_its_own() {
+        // Sixty base glyphs of one cell each, each carrying a zero-width mark:
+        // a count of characters would call this a hundred and twenty cells.
+        let marked = "e\u{301}".repeat(PROMPT_CELLS);
+        assert_eq!(prompt(Some(&marked)), marked);
+    }
+
+    #[test]
+    fn a_prompt_lands_on_one_line_whatever_was_typed() {
+        assert_eq!(prompt(Some("  how\nmany\t files? ")), "how many files?");
+    }
+
+    #[test]
+    fn a_record_with_no_prompt_shows_a_dash() {
+        assert_eq!(prompt(None), "—");
+    }
 }
