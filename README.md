@@ -9,9 +9,13 @@ $ git diff | sindri -b "summarise this"
 stdout is the answer and exactly one newline; stderr is silent unless `-v`, and stdout
 stays empty when a run fails or is cancelled.
 
-**One tool.** The model gets `bash` and nothing else: search, fetch, patch and HTTP all
-go through the shell, and pipelines or a short script do in one turn what a
-tool-per-task agent needs several.
+**Two tools.** `bash` runs everything behind the sandbox: search, fetch, patch and HTTP
+all go through the shell, and pipelines or a short script do in one turn what a
+tool-per-task agent needs several. `skill` loads instructions the workspace ships —
+once per conversation, in a wrapper that lists the skill's own files — and it does not
+exist when there is nothing to load, so a run with no skills pays nothing for them.
+Why a skill is not a file the model reads through `bash`:
+[`docs/adr/0002-two-tools.md`](docs/adr/0002-two-tools.md).
 
 **Sandboxed by default.** Every `bash` call runs in unprivileged bubblewrap, host root
 read-only (a boundary on writes, not reads) plus a writable set you chose. The escape

@@ -6,6 +6,11 @@
 /// file it read from the wrong directory.
 const GLOSSARY: &str = include_str!("../../../GLOSSARY.md");
 
+/// The README, as committed: the opening list of properties is the first thing a
+/// reader deciding whether to write a skill reads, so it is asserted rather than
+/// trusted to keep up with the run.
+const README: &str = include_str!("../../../README.md");
+
 #[test]
 fn the_glossary_defines_boot_as_the_turn_from_flags_and_process_into_a_session() {
     let entry = GLOSSARY
@@ -83,5 +88,30 @@ fn the_glossary_defines_instructions_as_the_repositorys_own_rules() {
     assert!(
         entry.contains("`Taken`"),
         "and the word the code uses is the one the glossary carries: {entry:?}"
+    );
+}
+
+#[test]
+fn the_readme_names_both_tools_and_points_at_the_record_that_decided_it() {
+    let opening = README.split("\n## ").next().unwrap_or_default();
+
+    assert!(
+        opening.contains("`bash`"),
+        "the opening list names the tool that runs everything: {opening:?}"
+    );
+    assert!(
+        opening.contains("`skill`"),
+        "the run registers a second tool whenever the workspace ships one, and the \
+         opening list must name it: {opening:?}"
+    );
+    assert!(
+        opening.contains("docs/adr/0002-two-tools.md"),
+        "the decision lives in ADR 0002, and the opening list must point a reader at \
+         it: {opening:?}"
+    );
+    assert!(
+        !opening.contains("get `bash` and nothing else"),
+        "the run hands the model two tools, so the opening list cannot say one: \
+         {opening:?}"
     );
 }
