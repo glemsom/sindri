@@ -159,9 +159,12 @@ fn a_symlinked_skill_directory_is_followed_and_a_broken_link_is_a_diagnostic() {
     assert_eq!(catalog.refused.len(), 1, "a broken link is said, not fatal");
     assert_eq!(catalog.refused[0].path, scope.join("gone"));
     assert_eq!(catalog.refused[0].line, None, "a link has no line");
+    let target = root.path().join("gone");
+    let named = format!("a broken link to {}: ", target.display());
+    let reason = &catalog.refused[0].reason;
     assert!(
-        catalog.refused[0].reason.contains("broken link"),
-        "{catalog:?}"
+        reason.starts_with(&named) && reason.len() > named.len(),
+        "the target that was read is named, with the error beside it: {reason}"
     );
 }
 
