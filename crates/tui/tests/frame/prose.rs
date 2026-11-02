@@ -1,5 +1,5 @@
 //! The prose seam, read off the cells the frame painted: a heading scale, a
-//! link that keeps its target, a fence whose edge names its language, and a
+//! link that keeps its destination, a fence whose edge names its language, and a
 //! code line too long for the column saying so.
 
 use super::*;

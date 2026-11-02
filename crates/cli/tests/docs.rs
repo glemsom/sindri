@@ -135,7 +135,14 @@ fn the_glossary_names_running_as_the_records_word_for_a_run_still_going() {
 
 #[test]
 fn the_readme_names_every_tool_and_points_at_the_records_that_decided_them() {
-    let opening = README.split("\n## ").next().unwrap_or_default();
+    // Joined, because the list is wrapped prose: a claim that crosses a line
+    // break is one claim, and an absent one is absent either way.
+    let opening = README
+        .split("\n## ")
+        .next()
+        .unwrap_or_default()
+        .replace('\n', " ");
+    let opening = opening.as_str();
 
     assert!(
         opening.contains("`bash`"),
@@ -164,6 +171,102 @@ fn the_readme_names_every_tool_and_points_at_the_records_that_decided_them() {
         !opening.contains("get `bash` and nothing else"),
         "the run hands the model three tools, so the opening list cannot say one: \
          {opening:?}"
+    );
+    assert!(
+        opening.contains("**Three tools.**"),
+        "the count is the first thing in the list and it is three: {opening:?}"
+    );
+    for stale in ["**Two tools.**", "**One tool.**", "both tools"] {
+        assert!(
+            !opening.contains(stale),
+            "the opening list counts three, so it cannot still say {stale:?}: \
+             {opening:?}"
+        );
+    }
+    assert!(
+        opening.contains("host was asked") && opening.contains("never that you looked"),
+        "the third tool's result says `started` and never that a human looked, and \
+         the opening list must say so: {opening:?}"
+    );
+    assert!(
+        opening.contains("URL") && opening.contains("a file in the workspace"),
+        "the third tool takes a **target**, a URL or a file, and the opening list \
+         cannot name only the URL: {opening:?}"
+    );
+}
+
+/// One glossary entry, its lines joined so an assertion reads a sentence
+/// rather than a wrap.
+fn entry(word: &str) -> String {
+    GLOSSARY
+        .split("\n\n")
+        .find(|entry| entry.starts_with(&format!("**{word}**")))
+        .map(|entry| entry.replace('\n', " "))
+        .unwrap_or_else(|| panic!("GLOSSARY.md has no **{word}** entry"))
+}
+
+#[test]
+fn the_glossary_defines_open_target_and_started_as_the_records_do() {
+    let open = entry("open");
+    assert!(
+        open.contains("the third tool") && open.contains("host's opener"),
+        "`open` is the third tool and hands a target to the host's opener: {open:?}"
+    );
+    assert!(
+        open.contains("an absence, not a refusal"),
+        "a batch run has no `open` in its schema, which is an absence and not a \
+         refusal: {open:?}"
+    );
+
+    let target = entry("target");
+    for claim in ["exactly one of them", "`url`", "`path`", "`Target`"] {
+        assert!(
+            target.contains(claim),
+            "`target` is what one `open` call names — {claim:?} — and the entry must \
+             say so: {target:?}"
+        );
+    }
+
+    let started = entry("started");
+    assert!(
+        started.contains("the word an `open` result carries"),
+        "`started` is the result's word for the host being asked: {started:?}"
+    );
+    assert!(
+        started.contains("Neither says a human looked"),
+        "`started` never claims the human looked, and the entry must say so: \
+         {started:?}"
+    );
+    for synonym in ["launched", "displayed", "shown in the browser"] {
+        assert!(
+            !started.contains(synonym),
+            "the result's word is `started` and not {synonym:?}, which would say more \
+             than the host can know: {started:?}"
+        );
+    }
+}
+
+#[test]
+fn the_doctor_says_xdg_open_is_load_bearing_and_why_its_output_never_changes() {
+    let doctor = include_str!("../../../crates/core/src/doctor.rs");
+    let note = doctor
+        .split("pub const REQUIRED_BINARIES")
+        .next()
+        .unwrap_or_default();
+    assert!(
+        note.contains("load-bearing") && note.contains("`xdg-open`"),
+        "`xdg-open` is a binary the `open` tool's host runs and not a claim the \
+         system prompt makes, and the list's comment must say so: {note:?}"
+    );
+    assert!(
+        note.contains("per-call") && note.contains("graphical session"),
+        "a machine with no graphical session is an honest per-call failure from the \
+         probe window, which is why `doctor` prints nothing new: {note:?}"
+    );
+    assert!(
+        note.contains("this call"),
+        "the failure is a fact about this call and not about the machine, and the \
+         comment must say so: {note:?}"
     );
 }
 

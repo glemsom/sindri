@@ -74,11 +74,11 @@ fn the_first_frame_says_the_contract_once_in_a_dim_sentence() {
 
     let row = column
         .iter()
-        .position(|row| row.contains("one tool"))
+        .position(|row| row.contains("three tools"))
         .unwrap_or_else(|| panic!("the contract is said once: {rows:#?}"));
     let buf = buffer(&mut app, 100, 24);
     let at = column[row]
-        .find("one tool")
+        .find("three tools")
         .expect("the sentence begins there");
     assert_eq!(
         buf[(at as u16, row as u16)].fg,

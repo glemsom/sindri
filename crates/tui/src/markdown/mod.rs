@@ -375,13 +375,17 @@ impl<'a> Writer<'a> {
         style
     }
 
-    /// A link's target, dimmed beside its words. A link that names nowhere
-    /// adds nothing at all: the words were already drawn as plain text.
+    /// A link's destination, dimmed beside its words. A link that names
+    /// nowhere adds nothing at all: the words were already drawn as plain text.
     fn link_end(&mut self) {
-        let Some(target) = self.link.take().filter(|target| !target.is_empty()) else {
+        let Some(destination) = self
+            .link
+            .take()
+            .filter(|destination| !destination.is_empty())
+        else {
             return;
         };
         self.pending
-            .push(Span::styled(format!(" ‹{target}›"), theme::faint()));
+            .push(Span::styled(format!(" ‹{destination}›"), theme::faint()));
     }
 }

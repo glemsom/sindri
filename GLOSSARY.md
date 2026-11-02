@@ -45,7 +45,7 @@ reason when it exited non-zero inside that window. Neither says a human looked: 
 window drew is on the far side of a process boundary.
 
 **answer** — the final assistant text of the last turn. The product. Markdown read into
-the frame: prose, fences drawn as panels, links that keep their targets, and **pictures**
+the frame: prose, fences drawn as panels, links that keep their destinations, and **pictures**
 with their **captions**.
 
 **stopped** — why the loop ended: `final`, `max_turns`, `budget`, `cancelled` or `error`.
@@ -434,8 +434,8 @@ panel and nothing else: "not drawn yet" is silence, and a refusal is a sentence 
 prints.
 
 **caption** — the words and `‹src›` a **picture** is drawn under, `a chart ‹plot.png›`: the
-alt text's words, the target in `‹›` as a link keeps its own, the reason in their place
-when there is no picture. A mermaid fence has no target and its source is not printed, so
+alt text's words, the destination in `‹›` as a link keeps its own, the reason in their place
+when there is no picture. A mermaid fence has no destination and its source is not printed, so
 its caption is the fence's own name, `‹mermaid›`. It is what the rows cost when nothing is
 drawn, and what a copy of an image's block yields. A **diagram**'s block copies as the
 fence body it was drawn from instead, because `‹mermaid›` is a name and not a diagram: a

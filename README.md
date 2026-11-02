@@ -14,8 +14,10 @@ all go through the shell, and pipelines or a short script do in one turn what a
 tool-per-task agent needs several. `skill` loads instructions the workspace ships —
 once per conversation, in a wrapper that lists the skill's own files — and it does not
 exist when there is nothing to load, so a run with no skills pays nothing for them.
-`open` puts one `http://` or `https://` URL in front of you, in the browser of the
-machine running sindri, and says only that the host was asked — never that you looked.
+`open` hands the host one target — an `http://` or `https://` URL, or a file in the
+workspace — for the browser of the machine running sindri to show you, and its result
+says `started`, that the host was asked, or `failed:` with the opener's own reason,
+and never that you looked.
 No environment inside the sandbox has a display to open a page on, so the browser is the
 host's; batch mode, which has no one to look, is offered no `open` at all.
 Why a skill is not a file the model reads through `bash`:

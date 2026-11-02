@@ -11,9 +11,18 @@ use crate::paths;
 use crate::sandbox::{Enforcement, PolicyError, SandboxPolicy};
 use crate::session::Env;
 
-/// The binaries the system prompt may claim exist; `doctor` resolves each one
-/// through the same `PATH` the sandbox will use. `bwrap` itself is checked
-/// separately, because without it there is no sandbox to check anything in.
+/// The binaries a run depends on; `doctor` resolves each one through the same
+/// `PATH` the sandbox will use. Most are the ones the system prompt may claim
+/// exist, and two are load-bearing rather than claimed: `xdg-open`, the binary
+/// the `open` tool's host runs, and `lynx`, the fallback that would answer for
+/// it. Both are checked as a tool's dependency and not as a sentence the prompt
+/// says. `bwrap` itself is checked separately, because without it there is no
+/// sandbox to check anything in.
+///
+/// Nothing here says a graphical session is a requirement, and no output
+/// changes for that: there is no display in the sandbox either, so the host's
+/// absence of one is not a missing binary — it is an honest per-call failure
+/// from the probe window, a fact about *this call* and not about the machine.
 pub const REQUIRED_BINARIES: &[&str] = &[
     "bash", "rg", "curl", "lynx", "patch", "python3", "git", "jq", "yq", "xdg-open",
 ];

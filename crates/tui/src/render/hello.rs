@@ -15,13 +15,16 @@ use crate::render::rail::chip;
 use crate::render::transcript::plain;
 use crate::theme;
 
-/// The contract in one sentence: the tool there is, and the boundary it runs
-/// behind — readable everywhere, writable only where the policy says.
-/// It is a fact of the launch and not a promise: the
-/// doctor proves the sandbox before the first frame, and a run whose bwrap
-/// cannot start draws a card instead of this.
-pub const CONTRACT: &str =
-    "one tool, bash, sandboxed: the host is readable, only the chosen paths writable";
+/// The contract in one sentence: the three tools there are, what each is for,
+/// and the boundary they run behind — readable everywhere, writable only where
+/// the policy says. It is a fact of the launch and not a promise: the doctor
+/// proves the sandbox before the first frame, and a run whose bwrap cannot start
+/// draws a card instead of this. Which of the three a run was handed is the
+/// schema's to say, and the one `open` puts a file in front of is the host's
+/// browser, so the sentence names it and never promises a window.
+pub const CONTRACT: &str = "three tools, sandboxed: bash runs everything, skill brings \
+     instructions, open asks your browser — the host is readable, only the chosen paths \
+     writable";
 
 /// Two prompts to type, each one accepted exactly as it is written and sent
 /// whole. They are prompts and not commands because every command left needs a
