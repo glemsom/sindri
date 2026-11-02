@@ -39,10 +39,12 @@ pub fn lines(table: &Table, width: usize) -> Vec<Line<'static>> {
     }
     // A table wider than the column is cut at the last column that fits, so
     // the rows stay aligned instead of folding into porridge.
+    // Only the columns after the first cost a separator: a table whose widths
+    // and one `" │ "` fill the column exactly still keeps them all.
     let mut used = 0;
     let mut keep = 0;
     for width_found in &widths {
-        used += width_found + 3;
+        used += width_found + if keep == 0 { 0 } else { 3 };
         if used > width {
             break;
         }

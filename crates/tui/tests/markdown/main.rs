@@ -143,6 +143,36 @@ fn a_table_renders_its_cells_in_aligned_columns() {
 }
 
 #[test]
+fn a_table_that_fills_its_column_exactly_keeps_its_last_column() {
+    let left = "a".repeat(20);
+    let right = "b".repeat(37);
+    let source = format!("| {left} | {right} |\n| --- | --- |\n| {left} | {right} |\n");
+    let shown = texts(&lines(&source, 60));
+    let row = shown
+        .iter()
+        .find(|line| line.starts_with(&left))
+        .expect("the first row");
+    assert!(
+        row.ends_with(&right),
+        "20 cells, one separator and 37 cells are sixty and both columns stay: {row:?}"
+    );
+    assert_eq!(row.width(), 60, "the row is exactly the column's width");
+}
+
+#[test]
+fn a_table_wider_than_its_column_drops_columns_from_the_right() {
+    let cell = "c".repeat(20);
+    let source = format!("| {cell} | {cell} | {cell} |\n| --- | --- | --- |\n");
+    let shown = texts(&lines(&source, 60));
+    let row = shown.first().expect("the header row");
+    assert_eq!(
+        row.matches(&cell).count(),
+        2,
+        "sixty-six cells do not fit in sixty, so the third column goes: {row:?}"
+    );
+}
+
+#[test]
 fn fenced_code_is_highlighted_in_truecolour() {
     let source = "```rust\nfn main() { let x = 1; }\n```\n";
     let lines = lines(source, 60);
