@@ -1,7 +1,8 @@
 //! The tool that runs things: `bash`. Its description is derived from the
-//! sandbox policy and the limits in force, never written by hand, so the model
-//! is told exactly the boundary that is enforced and the two figures that end
-//! its work.
+//! sandbox policy and the limits in force, so the model is told exactly the
+//! boundary that is enforced and the two figures that end its work. One sentence
+//! beside that derivation is written by hand, and only where there is a catalog
+//! to point at: the pointer below.
 
 use std::sync::Arc;
 
@@ -9,6 +10,15 @@ use super::Limits;
 use crate::exec::{BashExecutor, Outcome, ToolResult};
 use crate::provider::{Call, ToolFacts, ToolOutcome, ToolSpec};
 use crate::sandbox::SandboxPolicy;
+
+/// The one sentence a model reading this schema is told about the catalog: the
+/// instructions for this environment are behind `skill`, said where the model
+/// that reaches for `bash` first is already reading. It names the tool and
+/// nothing else — the boundary is this description's to state, the procedure is
+/// the skill body's, and a sentence that repeated either would be the second
+/// place for one fact to disagree with itself.
+const SKILL_POINTER: &str = "Instructions for this environment live in `skill`: look there before \
+                             your first command.";
 
 pub struct BashTool {
     spec: ToolSpec,
@@ -25,6 +35,17 @@ impl BashTool {
 
     pub fn spec(&self) -> &ToolSpec {
         &self.spec
+    }
+
+    /// The same tool, one sentence longer: the one that says this environment's
+    /// instructions are behind `skill`. The guard is the caller's — it asks only
+    /// where there is a catalog the model may see — and a workspace with none is
+    /// handed the description it was handed before this sentence existed, byte
+    /// for byte.
+    pub(crate) fn pointing_at_skills(mut self) -> Self {
+        self.spec.description.push('\n');
+        self.spec.description.push_str(SKILL_POINTER);
+        self
     }
 
     /// The call run. The script is the one the parse already took out of the

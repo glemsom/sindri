@@ -12,10 +12,11 @@ mod support;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use sindri_core::agent::{BashTool, Budget, Limits};
+use sindri_core::agent::{BashTool, Budget, Limits, SkillTool, Tools};
 use sindri_core::exec::{Outcome, ToolResult};
 use sindri_core::provider::Call;
-use support::{Scripted, fixtures};
+use sindri_core::skills::{Catalog, builtins};
+use support::{Scripted, fixtures, skills};
 
 #[test]
 fn the_model_gets_exactly_one_tool_named_bash_described_by_the_policy() {
@@ -79,6 +80,24 @@ fn the_description_costs_at_most_160_words_besides_the_policy() {
     assert!(
         words <= 160,
         "the description is re-sent every turn, so it stays at most 160 words of prose around the policy, not {words}: {prose}"
+    );
+
+    // The one sentence a catalog adds is paid for beside that budget, and it is
+    // bounded here so a pointer cannot grow into a second description: the text
+    // a run with a skill sends is this prose and that sentence, and the sentence
+    // is a sentence.
+    let pointed = Tools::new(tool, SkillTool::new(&builtins()), None).specs()[0]
+        .description
+        .replacen(&policy.describe(), "", 1);
+    let sentence = POINTER.split_whitespace().count();
+    assert!(
+        sentence <= 14,
+        "the pointer to the catalog is 13 words, so the pointed text stays under 160 plus one sentence rather than gaining a second description: {sentence}: {POINTER}"
+    );
+    assert_eq!(
+        pointed.split_whitespace().count(),
+        words + sentence,
+        "the pointer is the whole of what a catalog adds to the description, so a run with a skill sends those {words} words and that sentence, not {pointed}"
     );
 }
 
@@ -251,4 +270,64 @@ pub fn command_call(id: &str, command: &str) -> Call {
             serde_json::json!(command),
         )])),
     )
+}
+
+/// The one sentence the bash description carries about the catalog, spelled out
+/// here rather than quoted from the source: a test that read the constant would
+/// pass on whatever the constant came to say.
+const POINTER: &str = "Instructions for this environment live in `skill`: look there before your \
+                       first command.";
+
+#[test]
+fn the_pointer_to_the_catalog_rides_on_bash_only_where_there_is_one() {
+    let (workspace, _session_temp, policy) = fixtures();
+    let bash = || BashTool::new(&policy, Limits::default(), Scripted::silent());
+    // What a run with no skill the model may see sends, which is what every run
+    // sent before the pointer existed.
+    let today = bash().spec().description.clone();
+    assert!(
+        !today.contains(POINTER),
+        "the description is not pointed at a catalog when there is none: {today}"
+    );
+
+    // An empty catalog: no tool, no pointer, and the description byte for byte.
+    let none = Tools::new(bash(), SkillTool::new(&Catalog::default()), None);
+    assert_eq!(
+        none.specs()[0].description,
+        today,
+        "a run with no skill spends nothing on a pointer to one"
+    );
+
+    // A house rule a human may reach for and the model may not see is not a
+    // catalog the model can reach either.
+    skills::write(
+        workspace.path(),
+        "house",
+        "disable-model-invocation: true\n",
+        "Be brief.",
+    );
+    let hand_only = skills::catalog(workspace.path());
+    let unreachable = Tools::new(bash(), SkillTool::new(&hand_only), None);
+    assert_eq!(
+        unreachable.specs()[0].description,
+        today,
+        "a catalog the model may not see is not one it is pointed at"
+    );
+
+    // One skill the model may see: one sentence more, and nothing else.
+    skills::write(workspace.path(), "alpha", "", "Follow the steps.");
+    let catalog = skills::catalog(workspace.path());
+    let reachable = Tools::new(bash(), SkillTool::new(&catalog), None);
+    let specs = reachable.specs();
+    assert_eq!(
+        specs[1].name,
+        "skill",
+        "the pointer is to a tool the model is also handed: {:?}",
+        specs.iter().map(|spec| &spec.name).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        specs[0].description,
+        format!("{today}\n{POINTER}"),
+        "the pointer is the whole of what the catalog adds to the bash description"
+    );
 }

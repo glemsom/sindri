@@ -425,6 +425,88 @@ mod tests {
         );
     }
 
+    /// The one sentence the bash description carries about the catalog, spelled
+    /// out here rather than quoted from the source: this test exists to show
+    /// what that sentence costs, so it must not read the cost off the code that
+    /// writes it.
+    const POINTER: &str = "Instructions for this environment live in `skill`: look there before \
+                           your first command.";
+
+    /// One request's tool descriptions and the system message beside them, for a
+    /// catalog: built through the tools the agent hands over, so the text read
+    /// here is the text that goes on the wire.
+    fn wire(
+        root: &std::path::Path,
+        catalog: &crate::skills::Catalog,
+    ) -> (Vec<(String, String)>, String) {
+        // One root for both requests, so the policy's own words are the same
+        // words and the difference read below is the catalog's alone.
+        let writable = WritableSet::new([root.to_path_buf()]).expect("writable set");
+        let policy = SandboxPolicy::new(
+            writable,
+            root.join("session/tmp"),
+            "/usr/bin:/bin".to_string(),
+            NetworkPosture::Shared,
+            Enforcement::Bubblewrap,
+        )
+        .expect("policy");
+        let bash = BashTool::new(&policy, Limits::default(), Arc::new(Silent));
+        let tools = crate::agent::Tools::new(bash, crate::agent::SkillTool::new(catalog), None);
+        let request = super::request(
+            &[],
+            &tools.specs(),
+            false,
+            crate::config::Provider::Anthropic,
+            None,
+        )
+        .expect("a request");
+        (
+            request
+                .tools
+                .iter()
+                .map(|tool| (tool.name.to_string(), tool.description.clone()))
+                .collect(),
+            format!("{:?}", request.chat_history[0]),
+        )
+    }
+
+    #[test]
+    fn the_wire_shows_what_the_catalog_costs_the_bash_description() {
+        // A run with nothing the model may see: the description it sent before
+        // the pointer existed, and no second tool to point at.
+        let root = tempfile::TempDir::new().expect("workspace");
+        let (without, preamble_without) = wire(root.path(), &crate::skills::Catalog::default());
+        assert_eq!(without.len(), 1, "no catalog, no `skill` tool: {without:?}");
+        assert_eq!(without[0].0, "bash");
+
+        // A run with a built-in, which is the one every run carries: the same
+        // description with one sentence after it, and the tool it names.
+        let (with, preamble_with) = wire(root.path(), &crate::skills::builtins());
+        assert_eq!(
+            with.len(),
+            2,
+            "the pointed-at tool is on the wire: {with:?}"
+        );
+        assert_eq!(with[1].0, "skill", "{with:?}");
+        assert_eq!(
+            with[0].1,
+            format!("{}\n{POINTER}", without[0].1),
+            "the pointer is the whole of the difference the catalog makes to the bash description"
+        );
+
+        // The preamble is not where the pointer was paid for: it is the message
+        // it always was, in both requests, byte for byte.
+        assert_eq!(
+            preamble_with, preamble_without,
+            "the catalog leaves the system message alone"
+        );
+        assert_eq!(
+            preamble_without,
+            format!("{:?}", super::WireMessage::system(PREAMBLE.to_string())),
+            "the message is the preamble and nothing else: {preamble_without}"
+        );
+    }
+
     /// The description as the model receives it: a policy refuses a writable path
     /// that is not there, so the test makes one.
     fn tool_description() -> String {

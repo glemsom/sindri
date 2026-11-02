@@ -83,7 +83,14 @@ mounted as `HOME` beneath it.
 A boundary on writes, not on reads.
 
 **description** — the model-facing text derived from the sandbox policy, also printed by
-`sindri doctor`.
+`sindri doctor`. One sentence may be appended to it that the policy does not derive: the
+**pointer** to the **catalog**, added only where the model may see one.
+
+**pointer** — the one sentence appended to the **description** saying this environment's
+instructions are behind `skill`, so a model reading the schema it reaches for first learns
+the **catalog** is there. Not a **skill** body's and not the **preamble**'s: the preamble is
+re-sent on every turn of every run, and the pointer is paid for only where there is a
+catalog the model may see. The record is `docs/adr/0004-built-in-skills.md` §3.
 
 **yolo-unsafe** — `--yolo-unsafe`: the policy whose enforcement is `none`, so commands run
 with the caller's own privileges, outside bubblewrap, inheriting its environment and

@@ -18,6 +18,14 @@ impl Tools {
     /// and no browser to open hands `None`, and its schema never mentions
     /// either. Absence, not refusal — a refusal is a result the model pays for.
     pub fn new(bash: BashTool, skill: Option<SkillTool>, open: Option<OpenTool>) -> Self {
+        // The pointer rides on `bash`, the schema a model reads while it is
+        // deciding to run something. Whether there is one to make is decided
+        // here, because this is the one place that knows whether `skill` is
+        // registered at all.
+        let bash = match skill {
+            Some(_) => bash.pointing_at_skills(),
+            None => bash,
+        };
         Tools { bash, skill, open }
     }
 
