@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::sync::mpsc;
 
 use clap::ValueEnum;
-use sindri_core::agent::{BashTool, Dials, Event, Limits, Stopped};
+use sindri_core::agent::{BashTool, Dials, Event, Limits, Stopped, Tools};
 use sindri_core::cancel::Cancel;
 use sindri_core::config::Overrides;
 use sindri_core::output;
@@ -61,11 +61,14 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     let executor = Arc::new(session.executor(config.timeout, cancel.clone()));
     // The description names the timeout this run enforces, so the model is
     // never told a boundary it does not have.
-    let tool = BashTool::new(
+    let bash = BashTool::new(
         session.policy(),
         Limits::for_timeout(config.timeout),
         executor,
     );
+    // The catalog is boot's, so the model is handed the skills this workspace
+    // holds — and no second tool at all when it holds none it may see.
+    let tool = Tools::new(bash, session.skill_tool());
     let mut agent = session.agent(
         Dials {
             model: Box::new(Client::new(&config)),

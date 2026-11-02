@@ -96,9 +96,10 @@ fn a_session_exported_reads_back_identically_through_sessions_show() {
             sindri_core::record::Entry::User { text } => text,
             sindri_core::record::Entry::Assistant { text, .. } => text,
             sindri_core::record::Entry::ToolResult { content, .. } => content,
-            sindri_core::record::Entry::ToolCall { command, .. } => {
-                command.as_deref().unwrap_or_default()
-            }
+            sindri_core::record::Entry::ToolCall { asked, .. } => match asked {
+                sindri_core::provider::Asked::Bash { command } => command.as_str(),
+                _ => "",
+            },
             sindri_core::record::Entry::Policy { description } => description,
         };
         assert!(

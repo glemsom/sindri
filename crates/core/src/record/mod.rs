@@ -30,7 +30,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use crate::agent::Report;
 use crate::exec::StatusSink;
 use crate::paths::SessionDir;
-use crate::provider::{Call, ToolOutcome, Usage};
+use crate::provider::{Asked, Call, ToolOutcome, Usage};
 use crate::sandbox::Enforcement;
 use crate::workspace::Git;
 use entry::Entry as Line;
@@ -170,18 +170,14 @@ impl Recorder {
     }
 
     /// One call, written before it runs, so a command killed mid-flight is still
-    /// on the record.
+    /// on the record. The request is written as the loop read it, redacted field
+    /// by field: a script that carries the key is written without it, and the
+    /// line still says which tool was asked.
     pub fn tool_call(&self, turn: u32, call: &Call) {
-        let (command, problem) = match call.command() {
-            Ok(command) => (Some(self.redaction.apply(&command).into_owned()), None),
-            Err(reason) => (None, Some(self.redaction.apply(&reason).into_owned())),
-        };
         self.note(Line::ToolCall {
             turn,
             call_id: call.id.clone(),
-            tool: call.name.clone(),
-            command,
-            problem,
+            asked: asked(&call.asked(), &self.redaction),
         });
     }
 
@@ -278,6 +274,23 @@ impl StatusSink for Recorder {
             Err(_) => serde_json::json!({ "call": call, "line": document }),
         };
         let _ = writeln!(inner.status, "{}", json(&line));
+    }
+}
+
+/// A request as the record may keep it: every word the model wrote passes the
+/// run's redaction, and the variant is matched rather than copied, so a third
+/// tool is a compile error here too.
+fn asked(asked: &Asked, redaction: &Redaction) -> Asked {
+    let clean = |text: &str| redaction.apply(text).into_owned();
+    match asked {
+        Asked::Bash { command } => Asked::Bash {
+            command: clean(command),
+        },
+        Asked::Skill { name } => Asked::Skill { name: clean(name) },
+        Asked::Refused { named, problem } => Asked::Refused {
+            named: clean(named),
+            problem: clean(problem),
+        },
     }
 }
 

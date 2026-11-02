@@ -4,6 +4,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::provider::Asked;
+
 /// The metadata document: one run, from the moment it started to the reason it
 /// stopped. A record still saying `running` is a run that crashed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -79,14 +81,15 @@ pub enum Entry {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         duration_ms: Option<u64>,
     },
+    /// The call as it was read: the tool, and what it was asked. The request is
+    /// flattened into the line, so `bash` and `skill` calls share one entry and
+    /// a third tool is a compile error in every reader rather than a fact the
+    /// record quietly stops carrying.
     ToolCall {
         turn: u32,
         call_id: String,
-        tool: String,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        command: Option<String>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        problem: Option<String>,
+        #[serde(flatten)]
+        asked: Asked,
     },
     /// The boundary moved under a thread: the description the model is handed
     /// from here on. Appended only when it differs from the last one recorded,

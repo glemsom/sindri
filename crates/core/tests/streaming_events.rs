@@ -11,6 +11,7 @@
 mod support;
 
 use sindri_core::agent::Event;
+use sindri_core::provider::Asked;
 use sindri_core::provider::Turn;
 use support::{Harness, answer, call, calls};
 
@@ -137,7 +138,9 @@ fn a_tool_turn_streams_its_text_before_announcing_the_call() {
         events[call_at],
         Event::ToolCall {
             turn: 1,
-            command: Some("true".to_string()),
+            asked: Asked::Bash {
+                command: "true".to_string(),
+            },
         }
     );
 }

@@ -4,10 +4,9 @@
 
 use std::path::{Path, PathBuf};
 
+use super::SKILL;
 use super::catalog::{Catalog, Refusal, Scope, Skill};
 use super::frontmatter;
-
-const SKILL: &str = "SKILL.md";
 
 /// Where one scope lives, from the directory it is relative to.
 pub fn scope_dir(from: &Path) -> PathBuf {

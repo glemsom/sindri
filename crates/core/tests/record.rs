@@ -12,7 +12,7 @@ use std::time::Duration;
 use sindri_core::agent::{Report, Spent, Stopped};
 use sindri_core::exec::StatusSink;
 use sindri_core::paths::SessionDir;
-use sindri_core::provider::{Call, ToolOutcome, Usage};
+use sindri_core::provider::{Asked, Call, ToolOutcome, Usage};
 use sindri_core::record::{Cost, Entry, Recorder, Redaction, ShowError, Start, Stored};
 use sindri_core::sandbox::Enforcement;
 use tempfile::TempDir;
@@ -125,8 +125,8 @@ fn a_record_names_the_run_the_sandbox_and_where_it_got_to() {
         stored.entries
     );
     assert!(
-        matches!(&stored.entries[2], Entry::ToolCall { call_id, command, .. }
-            if call_id == "call_1" && command.as_deref() == Some("ls | wc -l")),
+        matches!(&stored.entries[2], Entry::ToolCall { call_id, asked, .. }
+            if call_id == "call_1" && *asked == Asked::Bash { command: "ls | wc -l".to_string() }),
         "{:?}",
         stored.entries
     );

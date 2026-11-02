@@ -2,6 +2,8 @@
 //! core holds no terminal concerns, so a TUI renders this stream instead of
 //! reimplementing the loop.
 
+use crate::provider::Asked;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
     TextDelta {
@@ -18,8 +20,9 @@ pub enum Event {
     },
     ToolCall {
         turn: u32,
-        /// The script that will run, or `None` when the call's arguments were
-        /// unusable and nothing ran.
-        command: Option<String>,
+        /// What the call asks for, as the loop read it: the script, the skill,
+        /// or the reason nothing ran. The variant is the tool, so a frame that
+        /// draws one call draws every kind of call.
+        asked: Asked,
     },
 }

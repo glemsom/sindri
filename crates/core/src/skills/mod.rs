@@ -11,6 +11,7 @@
 //! and say.
 
 mod catalog;
+mod content;
 mod frontmatter;
 mod report;
 mod scan;
@@ -18,6 +19,9 @@ mod scan;
 use std::path::{Path, PathBuf};
 
 pub use catalog::{Catalog, Refusal, Scope, Shadow, Skill};
+
+/// The file every skill directory holds, and the one the scan reads.
+pub(crate) const SKILL: &str = "SKILL.md";
 
 /// Both scopes. The repository's directories are folded in nearest first and the
 /// home directory last of all, so the first skill to hold a name keeps it: a

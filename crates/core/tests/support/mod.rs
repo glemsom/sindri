@@ -13,7 +13,7 @@ use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use sindri_core::agent::{Agent, Event, Report};
+use sindri_core::agent::{Agent, Event, Report, SkillTool, Tools};
 use sindri_core::cancel::Cancel;
 use sindri_core::config::{Config, Provider, Theme};
 use sindri_core::exec::{BashExecutor, Outcome, ToolResult};
@@ -21,10 +21,12 @@ use sindri_core::provider::{Call, Delta, DeltaSink, Error, Message, Model, ToolS
 use sindri_core::record::Recorder;
 use sindri_core::sandbox::{Enforcement, NetworkPosture, SandboxPolicy, WritableSet};
 use sindri_core::session::Env;
+use sindri_core::skills::Catalog;
 use tempfile::TempDir;
 
 mod batch;
 mod git;
+pub mod skills;
 
 pub use batch::Echoing;
 pub use git::commit;
@@ -271,6 +273,20 @@ impl Harness {
         Harness::build(replies, commands, 8, false, interrupt, false)
     }
 
+    /// A harness whose tools include the `skill` tool a catalog describes, so a
+    /// turn can load a skill the way a run does.
+    pub fn skilled(replies: Vec<Turn>, commands: Vec<ToolResult>, catalog: &Catalog) -> Self {
+        Harness::built(
+            replies,
+            commands,
+            8,
+            false,
+            Interrupt::Never,
+            false,
+            SkillTool::new(catalog),
+        )
+    }
+
     fn build(
         replies: Vec<Turn>,
         commands: Vec<ToolResult>,
@@ -278,6 +294,20 @@ impl Harness {
         thinking: bool,
         interrupt: Interrupt,
         stream: bool,
+    ) -> Self {
+        Harness::built(
+            replies, commands, max_turns, thinking, interrupt, stream, None,
+        )
+    }
+
+    fn built(
+        replies: Vec<Turn>,
+        commands: Vec<ToolResult>,
+        max_turns: u32,
+        thinking: bool,
+        interrupt: Interrupt,
+        stream: bool,
+        skill: Option<SkillTool>,
     ) -> Self {
         let (workspace, _session_temp, policy) = fixtures();
         let seen_scripts = Arc::new(Mutex::new(Vec::new()));
@@ -291,11 +321,12 @@ impl Harness {
             Arc::clone(&seen_scripts),
             mid_command,
         ));
-        let tool = sindri_core::agent::BashTool::new(
+        let bash = sindri_core::agent::BashTool::new(
             &policy,
             sindri_core::agent::Limits::default(),
             executor,
         );
+        let tool = Tools::new(bash, skill);
         let seen = Arc::new(Mutex::new(Vec::new()));
         let told = Arc::new(Mutex::new(Vec::new()));
         let model = ScriptedModel::new(replies, Arc::clone(&seen), Arc::clone(&told))
@@ -332,6 +363,11 @@ impl Harness {
 
     pub fn forget(&mut self) {
         self.agent.forget();
+    }
+
+    /// The skills the conversation has been told, as the agent holds them.
+    pub fn loaded(&self) -> Vec<String> {
+        self.agent.loaded_skills()
     }
 
     pub fn events(&self) -> Vec<Event> {

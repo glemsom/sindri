@@ -7,6 +7,7 @@ use std::fmt::Write as _;
 
 use super::entry::Entry;
 use super::stored::Stored;
+use crate::provider::Asked;
 
 impl Stored {
     /// The thread as one markdown document: what the run was, then every entry
@@ -50,13 +51,13 @@ impl Stored {
                 Entry::ToolCall {
                     turn,
                     call_id,
-                    tool,
-                    command,
-                    problem,
+                    asked,
                 } => {
-                    let _ = write!(out, "\n### {tool} `{call_id}` (turn {turn})\n\n");
-                    match command {
-                        Some(command) => {
+                    let _ = write!(out, "\n### {} `{call_id}` (turn {turn})\n\n", asked.tool());
+                    match asked {
+                        // A script is what a reader copies out of an export, so
+                        // it keeps its own fence; a load is one line of prose.
+                        Asked::Bash { command } => {
                             let _ = write!(
                                 out,
                                 "{}sh\n{}\n{}\n",
@@ -65,14 +66,8 @@ impl Stored {
                                 fence(command)
                             );
                         }
-                        None => {
-                            let _ = writeln!(
-                                out,
-                                "not run: {}",
-                                one_line(
-                                    problem.as_deref().unwrap_or("the arguments were unusable")
-                                )
-                            );
+                        loaded => {
+                            let _ = writeln!(out, "{loaded}");
                         }
                     }
                 }

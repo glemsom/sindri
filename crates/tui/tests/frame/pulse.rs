@@ -4,6 +4,7 @@
 //! is asserted by asking the frame set, not by naming one frame of it.
 
 use super::*;
+use sindri_core::provider::Asked;
 
 use std::time::Duration;
 
@@ -124,7 +125,9 @@ fn a_running_call_counts_up_and_freezes_at_the_duration_it_ended_on() {
     });
     app.event(Event::ToolCall {
         turn: 1,
-        command: Some("cargo test".to_string()),
+        asked: Asked::Bash {
+            command: "cargo test".to_string(),
+        },
     });
     app.pulse(Duration::from_millis(1300));
 

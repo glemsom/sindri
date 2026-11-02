@@ -59,7 +59,7 @@ fn ran(result: ToolResult) -> ToolOutcome {
         Limits::default(),
         Arc::new(Scripted::new(vec![result], seen)),
     );
-    tool.call(&call("call_1", "ls | wc -l"))
+    tool.call(&call("call_1", "ls | wc -l"), "ls | wc -l")
         .expect("the run was not cancelled")
 }
 

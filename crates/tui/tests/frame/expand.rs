@@ -4,6 +4,7 @@
 //! top of that rather than the way back in.
 
 use super::*;
+use sindri_core::provider::Asked;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use sindri_tui::entry::{Call, Entry, FULL_LINES};
@@ -12,7 +13,9 @@ use sindri_tui::entry::{Call, Entry, FULL_LINES};
 fn call_with(app: &mut App, turn: u32, command: &str, lines: usize) {
     app.event(Event::ToolCall {
         turn,
-        command: Some(command.to_string()),
+        asked: Asked::Bash {
+            command: command.to_string(),
+        },
     });
     for line in 1..=lines {
         app.output(Side::Stdout, &format!("line {line}"));
@@ -120,7 +123,9 @@ fn a_collapsed_call_says_its_status_its_duration_and_its_line_count() {
     let mut app = app();
     app.event(Event::ToolCall {
         turn: 1,
-        command: Some("make test".to_string()),
+        asked: Asked::Bash {
+            command: "make test".to_string(),
+        },
     });
     for line in 1..=14 {
         app.output(Side::Stdout, &format!("out {line}"));
@@ -281,7 +286,9 @@ fn ctrl_o_still_opens_the_untruncated_stream_and_nothing_alarming_without_one() 
     let mut app = app();
     app.event(Event::ToolCall {
         turn: 1,
-        command: Some("seq 500".to_string()),
+        asked: Asked::Bash {
+            command: "seq 500".to_string(),
+        },
     });
     app.over(
         CallOver::Exited(0),
@@ -314,7 +321,9 @@ fn five_hundred_calls_keep_a_bounded_tail_each() {
     for turn in 1..=500 {
         app.event(Event::ToolCall {
             turn,
-            command: Some(format!("run {turn}")),
+            asked: Asked::Bash {
+                command: format!("run {turn}"),
+            },
         });
         for line in 1..=1000 {
             app.output(Side::Stdout, &format!("turn {turn} line {line}"));

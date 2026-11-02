@@ -7,6 +7,7 @@
 use ratatui::buffer::Buffer;
 use ratatui::style::Color;
 use sindri_core::agent::Event;
+use sindri_core::provider::Asked;
 use sindri_tui::driver::{CallOver, Finished, Side, Spilled, Stop};
 use sindri_tui::graphics::Graphics;
 use sindri_tui::theme;
@@ -67,7 +68,9 @@ fn fill(app: &mut App) {
     });
     app.event(Event::ToolCall {
         turn: 1,
-        command: Some("make".to_string()),
+        asked: Asked::Bash {
+            command: "make".to_string(),
+        },
     });
     app.output(Side::Stdout, "compiling");
     app.output(Side::Stderr, "warning: unused import");

@@ -4,6 +4,7 @@
 use std::time::Duration;
 
 use sindri_core::agent::Event;
+use sindri_core::provider::Asked;
 
 use crate::app::{App, Renew};
 use crate::driver::{CallOver, Finished, Job, Side, Spilled, Stop};
@@ -78,10 +79,10 @@ impl App {
                 });
                 self.dirty();
             }
-            Event::ToolCall { turn, command } => {
+            Event::ToolCall { turn, asked } => {
                 self.rail.turn(turn, self.now);
                 self.close_answers(false);
-                let mut call = Call::new(turn, command, self.now);
+                let mut call = Call::new(turn, requested(&asked), self.now);
                 for (side, line) in self.early.drain(..) {
                     call.push(side, line);
                 }
@@ -211,5 +212,16 @@ impl App {
             }
         }
         self.dirty();
+    }
+}
+
+/// What the call's row says it runs: the script, `skill <name>` for a load, and
+/// nothing at all for a call no tool could answer, which is a row with no
+/// command behind it.
+fn requested(asked: &Asked) -> Option<String> {
+    match asked {
+        Asked::Bash { command } => Some(command.clone()),
+        Asked::Skill { name } => Some(format!("skill {name}")),
+        Asked::Refused { .. } => None,
     }
 }

@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::agent::{Agent, Dials, Report};
+use crate::agent::{Agent, Dials, Report, SkillTool};
 use crate::cancel::Cancel;
 use crate::config::Config;
 use crate::exec::SandboxExecutor;
@@ -22,6 +22,7 @@ use crate::record::{Recorder, Redaction, Start};
 use crate::sandbox::{
     Enforcement, FALLBACK_PATH, NetworkPosture, PolicyError, SandboxPolicy, WritableSet,
 };
+use crate::skills::{self, Catalog};
 use crate::workspace::{self, Git};
 
 pub type LoopError = Error;
@@ -98,6 +99,10 @@ pub struct Session {
     /// read this one value, so they cannot name different branches.
     git: Option<Git>,
     recorder: Arc<Recorder>,
+    /// The skills both scopes hold, read once at boot: the catalog is a fact
+    /// about the tree, and the tool that carries it is built from this scan
+    /// rather than from a second one per prompt.
+    catalog: Catalog,
 }
 
 impl Session {
@@ -133,6 +138,7 @@ impl Session {
             policy,
             git,
             recorder: Arc::new(recorder),
+            catalog: skills::discover(&env.workspace, paths::home().as_deref()),
         })
     }
 
@@ -187,6 +193,12 @@ impl Session {
 
     pub fn recorder(&self) -> Arc<Recorder> {
         self.recorder.clone()
+    }
+
+    /// The `skill` tool, or none when this workspace holds no skill the model
+    /// may see — in which case the model is handed `bash` and nothing else.
+    pub fn skill_tool(&self) -> Option<SkillTool> {
+        SkillTool::new(&self.catalog)
     }
 }
 

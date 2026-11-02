@@ -14,6 +14,7 @@ use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use sindri_core::cancel::Cancel;
+use sindri_core::provider::Asked;
 use sindri_tui::Card;
 use sindri_tui::card::View;
 use sindri_tui::driver::{CallOver, Finished, Spilled, Stop, Tokens};
@@ -176,7 +177,9 @@ fn a_killed_command_and_a_timeout_each_say_so_where_they_happened() {
     app.start().expect("a run starts");
     app.event(sindri_core::agent::Event::ToolCall {
         turn: 1,
-        command: Some("sleep 600".to_string()),
+        asked: Asked::Bash {
+            command: "sleep 600".to_string(),
+        },
     });
     app.over(CallOver::Cancelled, Spilled::default());
     let rows = screen(&mut app, 100, 20);
@@ -191,7 +194,9 @@ fn a_killed_command_and_a_timeout_each_say_so_where_they_happened() {
     app.start().expect("a run starts");
     app.event(sindri_core::agent::Event::ToolCall {
         turn: 1,
-        command: Some("cargo build".to_string()),
+        asked: Asked::Bash {
+            command: "cargo build".to_string(),
+        },
     });
     app.over(CallOver::TimedOut, Spilled::default());
     let rows = screen(&mut app, 100, 20);
