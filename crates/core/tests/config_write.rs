@@ -319,6 +319,39 @@ fn a_header_value_holding_a_semicolon_survives_the_form() {
 }
 
 #[test]
+fn every_key_the_form_offers_is_one_row_of_the_table() {
+    // The table is private, so the committed source is the fact: one row per
+    // key, each key at its own place, because a key finds its row by its own
+    // number. A key the form offers and the table misses would read another
+    // key's field; a row that moved inside the table would swap two keys.
+    const SOURCE: &str = include_str!("../src/config/document.rs");
+    let table = SOURCE
+        .split_once("const SPECS: [Spec;")
+        .and_then(|(_, rest)| rest.split_once("\n];"))
+        .map(|(table, _)| table)
+        .expect("the document carries one table of specs");
+    let names: Vec<&str> = table
+        .lines()
+        .map(str::trim)
+        .filter_map(|line| line.strip_prefix("name: \""))
+        .map(|name| name.trim_end_matches([',', '"']))
+        .collect();
+
+    assert_eq!(names.len(), KEYS.len(), "one row per key: {names:?}");
+    let mut unique = names.clone();
+    unique.sort_unstable();
+    unique.dedup();
+    assert_eq!(unique.len(), names.len(), "no two rows share a name");
+    for (row, key) in KEYS.iter().enumerate() {
+        assert_eq!(
+            key.name(),
+            names[row],
+            "{key:?} reads the name of the row it finds by its own number"
+        );
+    }
+}
+
+#[test]
 fn every_key_the_file_carries_is_a_key_the_form_offers() {
     // The file's struct is private, so the committed source is the fact: a
     // field added there and not to `KEYS` is a key with no row in `/settings`,

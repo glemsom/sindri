@@ -2,6 +2,10 @@
 //! against the schema the run itself reads, and written only when
 //! the user asks for it. Nothing here is a second schema: a value
 //! this refuses is a value the run would refuse.
+//!
+//! One table holds every key whole, and it is the only list of them: `KEYS`,
+//! the name, the secret flag and the three things a document does with a key
+//! all answer from a row, so a key is added in one place or not at all.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -10,6 +14,7 @@ use super::file::{self, FileConfig};
 use super::{ConfigError, Provider, Theme, extra_paths};
 use crate::exec::MAX_TIMEOUT_SECS;
 
+#[repr(usize)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Key {
     Provider,
@@ -24,39 +29,212 @@ pub enum Key {
     ExtraHeaders,
 }
 
-pub const KEYS: [Key; 10] = [
-    Key::Provider,
-    Key::Theme,
-    Key::Model,
-    Key::BaseUrl,
-    Key::ApiKey,
-    Key::MaxTurns,
-    Key::Timeout,
-    Key::Thinking,
-    Key::ExtraWritablePaths,
-    Key::ExtraHeaders,
+/// How many keys there are: the table's length, and the modal's.
+const N_KEYS: usize = 10;
+
+pub const KEYS: [Key; N_KEYS] = keys();
+
+/// The keys the form draws, in the order the table holds them, so the modal's
+/// rows are the table's rows and not a second list that could lose one.
+const fn keys() -> [Key; N_KEYS] {
+    let mut keys = [SPECS[0].key; N_KEYS];
+    let mut index = 0;
+    while index < N_KEYS {
+        keys[index] = SPECS[index].key;
+        index += 1;
+    }
+    keys
+}
+
+/// One key as the form sees it: what it is called, whether its value is a
+/// secret, what its field starts with, and how the file carries it.
+struct Spec {
+    key: Key,
+    name: &'static str,
+    /// A secret is never handed back to the reader, so no front end can print
+    /// one by accident. Its `get` says only that the file holds one.
+    secret: bool,
+    /// The text a field starts with, whatever the file says: the run's own
+    /// default, which is nothing for every key but the theme's name.
+    start: fn() -> String,
+    get: fn(&FileConfig) -> Option<String>,
+    clear: fn(&mut FileConfig),
+    put: fn(&mut FileConfig, &str) -> Result<(), ConfigError>,
+}
+
+/// Every key, one row each, read by the key's own number: one row per variant,
+/// at that variant's number, or the crate does not build. The four things a
+/// document does with a key and the row the modal draws it from are then one
+/// row rather than four matches.
+const SPECS: [Spec; N_KEYS] = [
+    Spec {
+        key: Key::Provider,
+        name: "provider",
+        secret: false,
+        start: || String::new(),
+        get: |values| values.provider.clone(),
+        clear: |values| values.provider = None,
+        put: |values, value| {
+            values.provider = Some(Provider::parse(value)?.as_str().to_string());
+            Ok(())
+        },
+    },
+    Spec {
+        key: Key::Theme,
+        name: "theme",
+        secret: false,
+        start: || Theme::default().as_str().to_string(),
+        get: |values| values.theme.clone(),
+        clear: |values| values.theme = None,
+        put: |values, value| {
+            values.theme = Some(Theme::parse(value)?.as_str().to_string());
+            Ok(())
+        },
+    },
+    Spec {
+        key: Key::Model,
+        name: "model",
+        secret: false,
+        start: || String::new(),
+        get: |values| values.model.clone(),
+        clear: |values| values.model = None,
+        put: |values, value| {
+            values.model = Some(value.to_string());
+            Ok(())
+        },
+    },
+    Spec {
+        key: Key::BaseUrl,
+        name: "base_url",
+        secret: false,
+        start: || String::new(),
+        get: |values| values.base_url.clone(),
+        clear: |values| values.base_url = None,
+        put: |values, value| {
+            values.base_url = Some(value.to_string());
+            Ok(())
+        },
+    },
+    Spec {
+        key: Key::ApiKey,
+        name: "api_key",
+        secret: true,
+        start: || String::new(),
+        get: |values| values.api_key.as_ref().map(|_| String::new()),
+        clear: |values| values.api_key = None,
+        put: |values, value| {
+            values.api_key = Some(value.to_string());
+            Ok(())
+        },
+    },
+    Spec {
+        key: Key::MaxTurns,
+        name: "max_turns",
+        secret: false,
+        start: || String::new(),
+        get: |values| values.max_turns.map(|turns| turns.to_string()),
+        clear: |values| values.max_turns = None,
+        put: |values, value| {
+            values.max_turns = Some(count(value, 1, u32::MAX)?);
+            Ok(())
+        },
+    },
+    Spec {
+        key: Key::Timeout,
+        name: "timeout",
+        secret: false,
+        start: || String::new(),
+        get: |values| values.timeout.map(|seconds| seconds.to_string()),
+        clear: |values| values.timeout = None,
+        put: |values, value| {
+            values.timeout = Some(count(value, 1, MAX_TIMEOUT_SECS)?);
+            Ok(())
+        },
+    },
+    Spec {
+        key: Key::Thinking,
+        name: "thinking",
+        secret: false,
+        start: || String::new(),
+        get: |values| values.thinking.map(|on| on.to_string()),
+        clear: |values| values.thinking = None,
+        put: |values, value| {
+            values.thinking = Some(toggle(value)?);
+            Ok(())
+        },
+    },
+    Spec {
+        key: Key::ExtraWritablePaths,
+        name: "extra_writable_paths",
+        secret: false,
+        start: || String::new(),
+        get: |values| {
+            values
+                .extra_writable_paths
+                .as_ref()
+                .map(|paths| paths.join(":"))
+        },
+        clear: |values| values.extra_writable_paths = None,
+        put: |values, value| {
+            values.extra_writable_paths = Some(
+                paths(value)?
+                    .iter()
+                    .map(|path| path.display().to_string())
+                    .collect(),
+            );
+            Ok(())
+        },
+    },
+    Spec {
+        key: Key::ExtraHeaders,
+        name: "extra_headers",
+        secret: true,
+        start: || String::new(),
+        get: |values| {
+            values
+                .extra_headers
+                .as_ref()
+                .filter(|headers| !headers.is_empty())
+                .map(|_| String::new())
+        },
+        clear: |values| values.extra_headers = None,
+        put: |values, value| {
+            values.extra_headers = Some(headers(value)?);
+            Ok(())
+        },
+    },
 ];
 
+/// A row read at the key's own number is that key's row only while the table
+/// holds each key at its own number: `keys` and the modal's order are the
+/// table's, so a row that moved would draw one key and write another's field,
+/// and that is a build to refuse rather than a run to debug.
+const _: () = {
+    let mut index = 0;
+    while index < N_KEYS {
+        assert!(
+            SPECS[index].key as usize == index,
+            "one row per key, at the key's own number"
+        );
+        index += 1;
+    }
+};
+
 impl Key {
-    pub const fn name(self) -> &'static str {
-        match self {
-            Key::Provider => "provider",
-            Key::Theme => "theme",
-            Key::Model => "model",
-            Key::BaseUrl => "base_url",
-            Key::ApiKey => "api_key",
-            Key::MaxTurns => "max_turns",
-            Key::Timeout => "timeout",
-            Key::Thinking => "thinking",
-            Key::ExtraWritablePaths => "extra_writable_paths",
-            Key::ExtraHeaders => "extra_headers",
-        }
+    /// The key's own row, read at the key's own number: a lookup is an index,
+    /// never a search that can come up short.
+    fn spec(self) -> &'static Spec {
+        &SPECS[self as usize]
+    }
+
+    pub fn name(self) -> &'static str {
+        self.spec().name
     }
 
     /// Whether the value is a secret. A secret is never handed back to the
     /// reader, so no front end can print one by accident.
-    pub const fn secret(self) -> bool {
-        matches!(self, Key::ApiKey | Key::ExtraHeaders)
+    pub fn secret(self) -> bool {
+        self.spec().secret
     }
 }
 
@@ -84,93 +262,25 @@ impl Document {
     /// The text a form starts a field with. A secret starts empty whatever the
     /// file holds: the value is the file's, and a screen is not where it lives.
     pub fn editable(&self, key: Key) -> String {
-        if key.secret() {
+        let spec = key.spec();
+        if spec.secret {
             return String::new();
         }
-        match key {
-            Key::Provider => self.values.provider.clone().unwrap_or_default(),
-            Key::Theme => self
-                .values
-                .theme
-                .clone()
-                .unwrap_or_else(|| Theme::default().as_str().to_string()),
-            Key::Model => self.values.model.clone().unwrap_or_default(),
-            Key::BaseUrl => self.values.base_url.clone().unwrap_or_default(),
-            Key::MaxTurns => self
-                .values
-                .max_turns
-                .map(|n| n.to_string())
-                .unwrap_or_default(),
-            Key::Timeout => self
-                .values
-                .timeout
-                .map(|n| n.to_string())
-                .unwrap_or_default(),
-            Key::Thinking => self
-                .values
-                .thinking
-                .map(|on| on.to_string())
-                .unwrap_or_default(),
-            Key::ExtraWritablePaths => self
-                .values
-                .extra_writable_paths
-                .as_ref()
-                .map(|paths| paths.join(":"))
-                .unwrap_or_default(),
-            Key::ApiKey | Key::ExtraHeaders => String::new(),
-        }
+        (spec.get)(&self.values).unwrap_or_else(spec.start)
     }
 
     pub fn is_set(&self, key: Key) -> bool {
-        match key {
-            Key::Provider => self.values.provider.is_some(),
-            Key::Theme => self.values.theme.is_some(),
-            Key::Model => self.values.model.is_some(),
-            Key::BaseUrl => self.values.base_url.is_some(),
-            Key::ApiKey => self.values.api_key.is_some(),
-            Key::MaxTurns => self.values.max_turns.is_some(),
-            Key::Timeout => self.values.timeout.is_some(),
-            Key::Thinking => self.values.thinking.is_some(),
-            Key::ExtraWritablePaths => self.values.extra_writable_paths.is_some(),
-            Key::ExtraHeaders => self
-                .values
-                .extra_headers
-                .as_ref()
-                .is_some_and(|headers| !headers.is_empty()),
-        }
+        (key.spec().get)(&self.values).is_some()
     }
 
     pub fn set(&mut self, key: Key, value: &str) -> Result<(), ConfigError> {
         let value = value.trim();
+        let spec = key.spec();
         if value.is_empty() {
             self.unset(key);
             return Ok(());
         }
-        match key {
-            Key::Provider => {
-                self.values.provider = Some(Provider::parse(value)?.as_str().to_string());
-            }
-            Key::Theme => self.values.theme = Some(Theme::parse(value)?.as_str().to_string()),
-            Key::Model => self.values.model = Some(value.to_string()),
-            Key::BaseUrl => self.values.base_url = Some(value.to_string()),
-            Key::ApiKey => self.values.api_key = Some(value.to_string()),
-            Key::MaxTurns => self.values.max_turns = Some(count(value, 1, u32::MAX)?),
-            Key::Timeout => {
-                let seconds: u64 = count(value, 1, MAX_TIMEOUT_SECS)?;
-                self.values.timeout = Some(seconds);
-            }
-            Key::Thinking => self.values.thinking = Some(toggle(value)?),
-            Key::ExtraWritablePaths => {
-                self.values.extra_writable_paths = Some(
-                    paths(value)?
-                        .iter()
-                        .map(|p| p.display().to_string())
-                        .collect(),
-                );
-            }
-            Key::ExtraHeaders => self.values.extra_headers = Some(headers(value)?),
-        }
-        Ok(())
+        (spec.put)(&mut self.values, value)
     }
 
     /// Writes the file, immediately and atomically. This is the only place the
@@ -179,19 +289,11 @@ impl Document {
         file::write(&self.path, &self.values)
     }
 
+    /// Clears the key: an empty value is the form's way of saying the file
+    /// should carry no value here, and a cleared key falls back to the run's
+    /// default.
     fn unset(&mut self, key: Key) {
-        match key {
-            Key::Provider => self.values.provider = None,
-            Key::Theme => self.values.theme = None,
-            Key::Model => self.values.model = None,
-            Key::BaseUrl => self.values.base_url = None,
-            Key::ApiKey => self.values.api_key = None,
-            Key::MaxTurns => self.values.max_turns = None,
-            Key::Timeout => self.values.timeout = None,
-            Key::Thinking => self.values.thinking = None,
-            Key::ExtraWritablePaths => self.values.extra_writable_paths = None,
-            Key::ExtraHeaders => self.values.extra_headers = None,
-        }
+        (key.spec().clear)(&mut self.values);
     }
 }
 
