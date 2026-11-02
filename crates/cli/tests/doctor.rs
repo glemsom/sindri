@@ -416,6 +416,45 @@ fn a_skill_that_will_not_load_is_named_with_its_file_and_line_and_is_not_a_failu
     assert!(stdout.contains("description"), "{stdout}");
 }
 
+#[test]
+fn doctor_says_which_file_spent_too_much_description_and_drops_the_skill() {
+    let env = Env::new();
+    env.repository();
+    let ceiling = sindri_core::skills::DESCRIPTION_CEILING;
+    let file = write_skill(
+        &env.workspace,
+        "too-long",
+        &format!(
+            "---\nname: too-long\ndescription: {}\n---\n",
+            "x".repeat(ceiling + 1)
+        ),
+    );
+
+    // The process seam, not the catalog the report is written from: what a user
+    // is handed is this line, at this file and this line, or the budget is only
+    // a value a test happened to agree with.
+    let assert = env.cmd().arg("doctor").assert().success();
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
+
+    let at = format!("{}:3: ", file.display());
+    assert!(
+        stdout.contains(&at),
+        "the file and the line the key is on — expected {at:?} in {stdout}"
+    );
+    assert!(
+        stdout.contains(&format!("{} characters", ceiling + 1))
+            && stdout.contains(&format!("the {ceiling} a routing key may spend")),
+        "the message says what the description measured and what the ceiling is: {stdout}"
+    );
+    assert!(
+        stdout.contains(&format!(
+            "skills: {} found",
+            sindri_core::skills::builtins().skills.len()
+        )),
+        "a description past the ceiling is out of the catalog, not merely refused: {stdout}"
+    );
+}
+
 /// The built-in the binary ships, and the row its catalog prints for it.
 fn builtin_name() -> String {
     sindri_core::skills::builtins().skills[0].name.clone()

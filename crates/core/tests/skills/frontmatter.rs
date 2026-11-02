@@ -1,6 +1,9 @@
 //! The frontmatter a real collection carries — quoted descriptions with
-//! colons, nested metadata, keys no specification knows — and the two ways a
-//! `SKILL.md` is refused: no description, and no YAML to read.
+//! colons, nested metadata, keys no specification knows — and the three ways a
+//! `SKILL.md` is refused: no description, a description past the ceiling, and no
+//! YAML to read.
+
+use sindri_core::skills::DESCRIPTION_CEILING;
 
 use crate::fixtures::{repo, scanned, skill};
 
@@ -154,4 +157,95 @@ fn a_skill_md_that_is_not_yaml_is_refused_with_the_line_that_broke_it() {
     );
     assert_eq!(catalog.refused[1].path, dir.join("unfenced/SKILL.md"));
     assert_eq!(catalog.refused[1].line, Some(1));
+}
+
+#[test]
+fn a_description_past_the_ceiling_is_refused_with_its_file_line_and_both_lengths() {
+    let (root, workspace) = repo();
+    let dir = root.path().join(".agents/skills");
+    let measured = DESCRIPTION_CEILING + 1;
+    skill(
+        &dir,
+        "too-long",
+        &format!(
+            "---\nname: too-long\ndescription: {}\n---\n",
+            "x".repeat(measured)
+        ),
+    );
+
+    let catalog = scanned(&workspace, None);
+
+    assert!(
+        catalog.skills.is_empty(),
+        "a description past the ceiling is not in the catalog: {catalog:?}"
+    );
+    assert_eq!(catalog.refused.len(), 1, "{catalog:?}");
+    let refusal = &catalog.refused[0];
+    assert_eq!(refusal.path, dir.join("too-long/SKILL.md"), "the file");
+    assert_eq!(refusal.line, Some(3), "the line the key is on");
+    let reason = &refusal.reason;
+    assert!(
+        reason.contains(&DESCRIPTION_CEILING.to_string()),
+        "the ceiling is stated, so a reader knows the number to cut to: {reason}"
+    );
+    assert!(
+        reason.contains(&measured.to_string()),
+        "and what the description measured, so a reader knows how far over: {reason}"
+    );
+    assert!(
+        reason.contains("description"),
+        "the key that is over is named, which is the fix: {reason}"
+    );
+    let report = catalog.report();
+    assert!(
+        report.contains("too-long/SKILL.md:3"),
+        "`sindri doctor` prints the refusal at its file and line: {report}"
+    );
+    assert!(
+        report.contains(&measured.to_string()),
+        "and the message a user reads carries both numbers: {report}"
+    );
+}
+
+#[test]
+fn a_description_at_the_ceiling_loads_and_one_character_past_it_does_not() {
+    let (root, workspace) = repo();
+    let dir = root.path().join(".agents/skills");
+    // Every character is two bytes in UTF-8, so a reader that measured bytes
+    // while the message spoke of characters would refuse the first of these:
+    // the ceiling is counted in the characters a model is handed.
+    skill(
+        &dir,
+        "at-the-ceiling",
+        &format!(
+            "---\nname: at-the-ceiling\ndescription: {}\n---\n",
+            "é".repeat(DESCRIPTION_CEILING)
+        ),
+    );
+    skill(
+        &dir,
+        "one-past-the-ceiling",
+        &format!(
+            "---\nname: one-past-the-ceiling\ndescription: {}\n---\n",
+            "é".repeat(DESCRIPTION_CEILING + 1)
+        ),
+    );
+
+    let catalog = scanned(&workspace, None);
+
+    let names: Vec<&str> = catalog
+        .skills
+        .iter()
+        .map(|skill| skill.name.as_str())
+        .collect();
+    assert_eq!(
+        names,
+        vec!["at-the-ceiling"],
+        "at the ceiling loads and one past it is refused: {catalog:?}"
+    );
+    assert_eq!(catalog.refused.len(), 1, "{catalog:?}");
+    assert_eq!(
+        catalog.refused[0].path,
+        dir.join("one-past-the-ceiling/SKILL.md")
+    );
 }

@@ -26,6 +26,7 @@ use crate::workspace;
 
 pub use builtin::{BUILTINS, Builtin, builtins};
 pub use catalog::{Catalog, Content, File, Origin, Refusal, Scope, Shadow, Skill};
+pub use frontmatter::DESCRIPTION_CEILING;
 
 /// The file every skill directory holds, and the one the scan reads.
 pub(crate) const SKILL: &str = "SKILL.md";

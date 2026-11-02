@@ -34,6 +34,20 @@ const USER_INVOCABLE: &str = "user-invocable";
 /// second line: every line inside it is counted from there.
 const BLOCK_OFFSET: usize = 2;
 
+/// The most characters a `description` may spend: one stated number rather than
+/// a habit. The catalog sits in the `skill` tool's description and is re-sent on
+/// every turn of every run that has a skill, so a description is a routing key —
+/// the task it covers, and where the model's default is wrong — and not a
+/// summary of what the body would say. The number is about two sentences — one
+/// for the task, one for where the default is wrong — which is the room both
+/// halves of a routing key need and no more: a dozen skills then cost a couple
+/// of kilobytes a turn, and the built-in this binary ships spends well under
+/// half of it, so a shipped skill keeps its headroom. A description past it is a
+/// refusal said out loud and never a truncation,
+/// because a truncated routing key is a skill that silently stops being found.
+/// `DESCRIPTION_CEILING` is the whole of the number; nothing else bounds it.
+pub const DESCRIPTION_CEILING: usize = 200;
+
 /// The frontmatter of a whole `SKILL.md`. A file that does not open with a
 /// fence, whose fence is never closed, or whose block is not YAML is a problem
 /// and never a panic: none of that is under our control.
@@ -66,7 +80,7 @@ pub fn parse(text: &str) -> Result<Frontmatter, Problem> {
 
     Ok(Frontmatter {
         name: required(&fields, NAME, block)?,
-        description: required(&fields, DESCRIPTION, block)?,
+        description: description(&fields, block)?,
         // The two extensions the specification does not have, and the reason
         // they are read as flags: a skill the model must not see is still a
         // skill a human may run, and the other way round. A flag the file does
@@ -116,6 +130,29 @@ fn required(fields: &Hash, key: &str, block: &[&str]) -> Result<String, Problem>
             &format!("no `{key}`, which every skill must have"),
         )),
     }
+}
+
+/// The specification's `description`, read like any required field and then
+/// measured: it is the one field with a length of its own, because it is the one
+/// field the catalog spends on every turn. Past [`DESCRIPTION_CEILING`] it is a
+/// problem on the line the key is written on, carrying the ceiling and what the
+/// description measured — a user is never refused without knowing the number to
+/// cut to, nor how far over the description is.
+fn description(fields: &Hash, block: &[&str]) -> Result<String, Problem> {
+    let read = required(fields, DESCRIPTION, block)?;
+    let measured = read.chars().count();
+    if measured <= DESCRIPTION_CEILING {
+        return Ok(read);
+    }
+    let at = line_of(block, DESCRIPTION).unwrap_or(FENCE_LINE);
+    Err(problem(
+        at,
+        &format!(
+            "`{DESCRIPTION}` is {measured} characters, past the {DESCRIPTION_CEILING} a routing \
+             key may spend: it is in the catalog, re-sent on every turn, so cut it to \
+             {DESCRIPTION_CEILING} — the task it covers and where the default is wrong, and stop"
+        ),
+    ))
 }
 
 /// A flag's value, and only when it is a boolean: absent, a string or a nested

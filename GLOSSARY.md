@@ -164,6 +164,15 @@ all: the frontmatter's `name` and `description`, the two flags that say who may 
 and the body beneath the fence that **activation** returns. A skill no version of the
 specification knows how to read is a **refusal**, never a silence.
 
+**description ceiling** — the character budget a **skill**'s `description` may spend, read
+as characters and not bytes: the catalog sits in the `skill` tool's description, so every
+description is paid for on every turn of every run that has a skill, and a description is a
+routing key — the task it covers and where the model's default is wrong — rather than a
+summary of the body. A description past it is a **refusal** naming the ceiling, what the
+description measured, and the line to cut, never a truncation: a truncated routing key is a
+skill that silently stops being found. The code's word for it is `DESCRIPTION_CEILING`, and
+every **built-in skill** is tested against it so none can refuse itself at runtime.
+
 **skill scope** — one of the three places a **catalog** reads, and the three are ordered by
 nearness: `builtin`, compiled into the binary; `user`, under the home directory at
 `~/.agents/skills`; and `repo`, at every `.agents/skills` between the workspace and its
@@ -204,7 +213,8 @@ claims the name the same way the tool's own call does. The code's word for it is
 **shadowed** names. Sorted by name, so two scans of one tree say the same thing.
 
 **refusal** — a `SKILL.md` the scan would not load, held with its file and the line that
-broke it: no description, no YAML, a link to nothing. A refusal is a diagnostic, not a
+broke it: no description, no YAML, a description past the **description ceiling**, a link
+to nothing. A refusal is a diagnostic, not a
 failure — the rest of the **catalog** still holds.
 
 **user-only skill** — one the model may not see: `disable-model-invocation: true`. It is

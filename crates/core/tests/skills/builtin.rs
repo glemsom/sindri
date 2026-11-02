@@ -3,7 +3,9 @@
 //! name. Every tree here holds no skill of its own, so a name in the catalog
 //! belongs to the binary or to the one directory the test wrote.
 
-use sindri_core::skills::{Catalog, Scope, Skill, builtins, discover};
+use sindri_core::skills::{
+    BUILTINS, Catalog, DESCRIPTION_CEILING, Scope, Skill, builtins, discover,
+};
 use tempfile::TempDir;
 
 use crate::fixtures::{repo, skill};
@@ -90,7 +92,7 @@ fn every_builtin_skill_parses_and_names_a_file_its_body_points_at() {
     let shipped = builtins().skills;
     assert_eq!(
         shipped.len(),
-        sindri_core::skills::BUILTINS.len(),
+        BUILTINS.len(),
         "a built-in the frontmatter reader refused is skipped, so the count is what says none was"
     );
     for found in shipped {
@@ -215,4 +217,27 @@ fn the_report_prints_a_builtins_own_scope_word_and_no_path_under_it() {
         !row.contains('/'),
         "no path is printed for a skill that has none: {row}"
     );
+}
+
+#[test]
+fn every_builtin_description_fits_the_ceiling_so_none_can_refuse_itself_at_runtime() {
+    let shipped = builtins().skills;
+    assert_eq!(
+        shipped.len(),
+        BUILTINS.len(),
+        "a built-in past the ceiling is refused by the reader that a directory's copy goes \
+         through, and the built-in list skips what it cannot parse: the count is what says no \
+         shipped skill was dropped"
+    );
+    for found in &shipped {
+        let measured = found.description.chars().count();
+        assert!(
+            measured <= DESCRIPTION_CEILING,
+            "`{}` spends {measured} of the {DESCRIPTION_CEILING} characters a description has, \
+             and a built-in that refused itself would be a skill the binary ships and never \
+             hands the model: {}",
+            found.name,
+            found.description
+        );
+    }
 }
