@@ -16,6 +16,7 @@ use crate::agent::{Agent, Dials, Report, SkillTool, UserSkills};
 use crate::cancel::Cancel;
 use crate::config::Config;
 use crate::exec::SandboxExecutor;
+use crate::instructions::{self, Taken};
 use crate::paths::{self, SessionDir};
 use crate::provider::Error;
 use crate::record::{Recorder, Redaction, Start};
@@ -109,6 +110,9 @@ pub struct Session {
     /// The half of the catalog a human may reach for, built once from the same
     /// scan: the composer's names, and the skills a load by hand is read from.
     hand: UserSkills,
+    /// The repository's own rules, read once here and handed to the model
+    /// beside the preamble on every turn of the thread.
+    instructions: Taken,
 }
 
 impl Session {
@@ -119,6 +123,10 @@ impl Session {
         // reader could tell from a run that is still going.
         let policy = derive(env, &dir, &config.extra_writable, config.enforcement)?;
         let git = workspace::git(&env.workspace);
+        // Before the record, because the start block says what the model was
+        // handed: a file read after the metadata was written would be missing
+        // from the one document a reader looks for it in.
+        let instructions = instructions::read(&env.workspace);
         let recorder = Recorder::start(
             &dir,
             Start {
@@ -128,6 +136,7 @@ impl Session {
                 policy: Some(policy.describe()),
                 workspace: env.workspace.display().to_string(),
                 git: git.clone(),
+                instructions: instructions.handed(),
                 max_turns: config.max_turns,
                 thinking: config.thinking,
             },
@@ -150,6 +159,7 @@ impl Session {
             catalog,
             skill,
             hand,
+            instructions,
         })
     }
 
@@ -223,6 +233,12 @@ impl Session {
     /// load by hand is read from.
     pub fn hand(&self) -> &UserSkills {
         &self.hand
+    }
+
+    /// The repository's own rules: what the model is handed beside the preamble,
+    /// and what `-v` and `sindri doctor` name.
+    pub fn instructions(&self) -> &Taken {
+        &self.instructions
     }
 }
 

@@ -53,6 +53,12 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     };
     // One line, on stderr, before anything runs: stdout is the answer.
     notice::unsafe_run(config.enforcement);
+    // A rules file that cannot be read is a diagnostic and never a failure to
+    // start: the run goes on, and the model is given no rules rather than half
+    // of them.
+    if let Some(line) = session.instructions().diagnostic() {
+        eprintln!("sindri: {line}");
+    }
     // One flag for the whole run: Ctrl-C raises it, the loop stops on it between
     // turns, and the executor kills a running command's group on it.
     let cancel = Cancel::new();
@@ -71,7 +77,7 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     let tool = Tools::new(bash, session.skill_tool());
     let mut agent = session.agent(
         Dials {
-            model: Box::new(Client::new(&config)),
+            model: Box::new(Client::new(&config, session.instructions().block())),
             tool,
             max_turns: config.max_turns,
             thinking: config.thinking,
@@ -111,7 +117,11 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
                 }
             }
             if verbose {
-                for line in verbose::lines(events.try_iter().collect(), session.dir().id()) {
+                for line in verbose::lines(
+                    events.try_iter().collect(),
+                    session.dir().id(),
+                    session.instructions().handed().map(|handed| handed.line()),
+                ) {
                     eprintln!("{line}");
                 }
             }

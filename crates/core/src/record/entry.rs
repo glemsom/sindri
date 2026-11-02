@@ -53,6 +53,11 @@ pub struct Meta {
     /// repository or git could not answer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub git: Option<crate::workspace::Git>,
+    /// The repository's own rules the run was handed: the file and the bytes
+    /// of it. Absent when the repository has none, and when it has one the run
+    /// could not read — a diagnostic is not a fact about what the model read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<crate::instructions::Handed>,
     /// The dials the run obeyed — resolved values, not the flags it was asked
     /// with, which would be a second source of truth for one number. Zero only
     /// in a record written before they were kept.

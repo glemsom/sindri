@@ -3,6 +3,7 @@
 //! own HTTP client with explicit timeouts, and the translation of the
 //! library's vocabulary into ours.
 
+use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -62,7 +63,13 @@ pub(super) fn turn(
 
     let http = http(client)?;
 
-    let request = request(history, tools, thinking, client.provider())?;
+    let request = request(
+        history,
+        tools,
+        thinking,
+        client.provider(),
+        client.instructions(),
+    )?;
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -187,14 +194,16 @@ fn request(
     tools: &[ToolSpec],
     thinking: bool,
     provider: Provider,
+    instructions: Option<&str>,
 ) -> Result<CompletionRequest, Error> {
     let mut request = CompletionRequest::new(WireMessage::user(String::new()));
     request.chat_history = history
         .iter()
         .map(|message| wire_message(message).map(Arc::new))
         .collect::<Result<Vec<_>, Error>>()?;
+    let preamble = preamble(instructions);
     let mut request = request
-        .preamble(PREAMBLE)
+        .preamble(preamble.as_ref())
         .max_tokens(MAX_OUTPUT_TOKENS)
         .tools(
             tools
@@ -212,6 +221,20 @@ fn request(
         request.options = GenerationOptions::default().reasoning(reasoning);
     }
     Ok(request)
+}
+
+/// The system message every turn carries: the preamble, and the repository's
+/// own rules after it when the run stands in a repository that has any.
+///
+/// They are one message rather than a turn of their own, so the transcript the
+/// user reads is their own words and the preamble's measured words are the
+/// preamble's: what follows is a file, and its size is the cap's business, never
+/// the budget's.
+fn preamble(instructions: Option<&str>) -> Cow<'_, str> {
+    match instructions {
+        None => Cow::Borrowed(PREAMBLE),
+        Some(text) => Cow::Owned(format!("{PREAMBLE}\n\n{text}")),
+    }
 }
 
 fn tool_definition(spec: &ToolSpec) -> Result<ToolDefinition, Error> {
@@ -378,6 +401,28 @@ mod tests {
                 "the preamble still carries `{kept}`: {PREAMBLE}"
             );
         }
+    }
+
+    #[test]
+    fn rules_beside_the_preamble_leave_its_words_alone() {
+        let rules = "The repository you are working in carries its house rules.\n\nBe brief.\n";
+
+        let alone = super::preamble(None);
+        let together = super::preamble(Some(rules));
+
+        assert_eq!(alone, PREAMBLE, "no rules is the preamble and no more");
+        assert!(
+            together.starts_with(PREAMBLE) && together.ends_with(rules),
+            "the rules follow the preamble, whole: {together}"
+        );
+        // The measurement `docs/system-prompt.md` states is the preamble's own,
+        // and a file beside it is not folded into it: what follows is a
+        // repository's words, measured against the cap and never this budget.
+        assert_eq!(
+            together[..PREAMBLE.len()].split_whitespace().count(),
+            PREAMBLE.split_whitespace().count(),
+            "the preamble's own words are unchanged by what follows it"
+        );
     }
 
     /// The description as the model receives it: a policy refuses a writable path

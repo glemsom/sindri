@@ -247,17 +247,26 @@ pub struct Client {
     base_url: Option<String>,
     model: String,
     extra_headers: Vec<(String, String)>,
+    /// The repository's own rules as the model receives them, beside the
+    /// preamble. Settled when the client is built, because a file read once at
+    /// boot is not read again on every turn.
+    instructions: Option<String>,
 }
 
 impl Client {
-    pub fn new(config: &Config) -> Client {
+    pub fn new(config: &Config, instructions: Option<String>) -> Client {
         Client {
             provider: config.provider,
             api_key: config.api_key.clone(),
             base_url: config.base_url.clone(),
             model: config.model.clone(),
             extra_headers: config.extra_headers.clone(),
+            instructions,
         }
+    }
+
+    pub(crate) fn instructions(&self) -> Option<&str> {
+        self.instructions.as_deref()
     }
 
     pub fn provider(&self) -> crate::config::Provider {

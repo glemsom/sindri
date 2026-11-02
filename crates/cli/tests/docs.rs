@@ -52,3 +52,36 @@ fn the_glossary_defines_mark_as_the_cells_a_drag_lights_and_the_words_that_leave
          and the entry must say so: {entry:?}"
     );
 }
+
+#[test]
+fn the_glossary_defines_instructions_as_the_repositorys_own_rules() {
+    let entry = GLOSSARY
+        .split("\n\n")
+        .find(|entry| entry.starts_with("**instructions**"))
+        .map(|entry| entry.replace('\n', " "))
+        .unwrap_or_else(|| {
+            panic!(
+                "GLOSSARY.md has no **instructions** entry: instructions names the \
+                 repository's rules a run hands the model (crates/core/src/instructions.rs)"
+            )
+        });
+
+    assert!(
+        entry.contains("a repository's own house rules"),
+        "the entry says what they are: {entry:?}"
+    );
+    assert!(
+        entry.contains("never as a turn of their own"),
+        "they arrive beside the preamble and not as a user turn, and the entry must say \
+         so: {entry:?}"
+    );
+    assert!(
+        entry.contains("cut with a marker"),
+        "a file past the cap arrives cut with a marker rather than silently short: \
+         {entry:?}"
+    );
+    assert!(
+        entry.contains("`Taken`"),
+        "and the word the code uses is the one the glossary carries: {entry:?}"
+    );
+}

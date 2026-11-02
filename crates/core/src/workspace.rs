@@ -1,8 +1,9 @@
-//! The tree a run stands in: the path the sandbox mounts, and the git facts a
-//! record and a rail both want. One probe, so a record cannot name a branch the
-//! frame never showed.
+//! The tree a run stands in: the path the sandbox mounts, the repository root a
+//! run's own files are read from, and the git facts a record and a rail both
+//! want. One probe per fact, so a record cannot name a branch the frame never
+//! showed.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde::{Deserialize, Serialize};
@@ -33,6 +34,16 @@ pub fn git(dir: &Path) -> Option<Git> {
         commit: oid(&status)?,
         dirty: dirty(&status),
     })
+}
+
+/// The repository `dir` stands in, as git names its top level, or the directory
+/// itself when it is no repository: the one root a run reads a repository's own
+/// files from. A repository above `dir` belongs to whoever put the checkout
+/// there, and is not walked past.
+pub fn root(dir: &Path) -> Option<PathBuf> {
+    let top = field(dir, &["rev-parse", "--show-toplevel"])?;
+    let top = PathBuf::from(top);
+    Some(top.canonicalize().unwrap_or(top))
 }
 
 /// The commit in the status's `# branch.oid` header, absent while the branch is

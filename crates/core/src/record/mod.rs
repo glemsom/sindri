@@ -67,6 +67,8 @@ pub struct Start {
     /// The tree the run stands in, and its git facts where it is a repository.
     pub workspace: String,
     pub git: Option<Git>,
+    /// The repository's own rules handed to the model beside the preamble.
+    pub instructions: Option<crate::instructions::Handed>,
     /// The dials the run obeys.
     pub max_turns: u32,
     pub thinking: bool,
@@ -87,6 +89,7 @@ impl Start {
             policy: None,
             workspace: String::new(),
             git: None,
+            instructions: None,
             max_turns: 0,
             thinking: false,
         }
@@ -128,6 +131,7 @@ impl Recorder {
             policy: start.policy,
             workspace: start.workspace,
             git: start.git,
+            instructions: start.instructions,
             max_turns: start.max_turns,
             thinking: start.thinking,
         };

@@ -1,11 +1,14 @@
-//! `-v`: what the run did, on stderr, after it ran. stdout is left untouched,
-//! so a verbose run pipes exactly like a silent one.
+//! `-v`: what the run did and what it stood in, on stderr, after it ran. stdout
+//! is left untouched, so a verbose run pipes exactly like a silent one.
 
 use sindri_core::agent::Event;
 use sindri_core::provider::Asked;
 
-pub fn lines(events: Vec<Event>, session: &str) -> Vec<String> {
+pub fn lines(events: Vec<Event>, session: &str, instructions: Option<String>) -> Vec<String> {
     let mut lines = Vec::new();
+    // What the run was working to, said before the session it was working in:
+    // the same sentence `sindri doctor` prints, so the two cannot drift.
+    lines.extend(instructions.map(|line| format!("sindri: {line}")));
     for event in events {
         match event {
             Event::Reasoning { turn, text } => {

@@ -25,6 +25,13 @@ impl Stored {
             }
             out.push('\n');
         }
+        // The repository's own rules, said as the diagnostics say them: a
+        // reader asking what the model was working to gets the file and the
+        // bytes rather than a claim that it had some.
+        if let Some(instructions) = &self.meta.instructions {
+            out.push_str(&instructions.line());
+            out.push('\n');
+        }
         // `max_turns` is zero only in a record written before the dials were
         // kept, and no run obeyed no cap.
         if self.meta.max_turns > 0 {

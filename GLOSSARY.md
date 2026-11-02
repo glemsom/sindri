@@ -65,6 +65,17 @@ the description, and lists the **skill** **catalog**.
 and the one line a front end says when it cannot. Not a synonym for **session**: a boot
 ends where a session begins.
 
+**instructions** — a repository's own house rules: the `AGENTS.md` at its root, found
+through the workspace's git root — or the workspace itself where that is no repository —
+and read once at **boot**. They travel beside the **preamble** and never as a turn of
+their own, so the **transcript** stays the user's words and the preamble's measured words
+are the preamble's: the read is capped by a byte count stated in one place, and a file
+past it arrives cut with a marker rather than silently short. A repository with no
+`AGENTS.md` says nothing and adds nothing; one that cannot be read is a diagnostic naming
+the file and the reason, and the run still starts. The record's start block, `-v` and
+`sindri doctor` name the file and the bytes handed over, in one sentence. The code's word
+for the file is `Taken`, and its three answers are `Absent`, `Found` and `Unreadable`.
+
 **session** — one run, identified by a GUID, recorded under
 `$XDG_STATE_HOME/sindri/sessions/<guid>/`.
 
@@ -108,7 +119,8 @@ takes it again.
 model-facing copy is truncated head+tail.
 
 **batch mode** — `-b`: the Unix-filter front end. stdout is the answer only; stderr is
-silent unless `-v`; `--format json` changes the output shape.
+silent unless `-v`, but for a fault the run cannot leave unsaid — a repository config it
+refused, an `AGENTS.md` it could not read; `--format json` changes the output shape.
 
 **reasoning** — provider-side thinking tokens, off by default, shown on stderr with `-v`.
 

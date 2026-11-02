@@ -129,7 +129,10 @@ impl Front {
             }),
         );
         Dials {
-            model: Box::new(Client::new(&self.boot.config)),
+            model: Box::new(Client::new(
+                &self.boot.config,
+                self.boot.session.instructions().block(),
+            )),
             tool: Tools::new(bash, self.boot.session.skill_tool()),
             max_turns: self.boot.config.max_turns,
             thinking: self.boot.config.thinking,

@@ -35,6 +35,7 @@ fn meta(id: &str, started_ms: u64, stopped: &str, turns: Option<u32>) -> Meta {
         policy: None,
         workspace: String::new(),
         git: None,
+        instructions: None,
         max_turns: 0,
         thinking: false,
     }

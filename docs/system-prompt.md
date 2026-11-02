@@ -11,6 +11,12 @@ tasks, two readings and two edits, on three models, and every run was scored. A
 fifteenth, v14, is written and not yet run. The machine is in
 `scripts/bench-system-prompt`; the numbers below came out of it.
 
+One thing travels beside this prompt and is not counted here: the repository's own
+**instructions**, its `AGENTS.md`, read once at boot. Their bytes are a file's, not the
+prompt's, so they are bounded where they are read — one stated byte cap, and a marker in
+the text the model receives when a file is longer — so the measurement below stays about
+`PREAMBLE` alone.
+
 ## What is counted
 
 *Input tokens, summed over the turns of a run.* Not the length of the prompt —

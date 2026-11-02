@@ -7,6 +7,7 @@ pub mod clock; // the wall clock a record is dated by
 pub mod config; // a run's settings, and which source wins
 pub mod doctor; // the environment probe behind `sindri doctor`
 pub mod exec; // the bash executor: one port, two implementations
+pub mod instructions; // a repository's own rules, read once at boot
 pub mod output; // the machine-readable output contract
 pub mod paths; // where Sindri keeps its state
 pub mod provider; // the model, behind one seam
