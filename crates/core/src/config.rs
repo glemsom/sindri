@@ -285,17 +285,16 @@ fn extra_paths(given: &[String]) -> Result<Vec<PathBuf>, ConfigError> {
         .map_err(|error| ConfigError::Usage(format!("extra_writable_paths: {error}")))
 }
 
+/// A toggle from the environment, read by the file's own list of the words that
+/// mean on and off: a spelling one source takes the other takes, and a refusal
+/// is the file's words behind the variable's name.
 fn boolean(name: &str) -> Result<Option<bool>, ConfigError> {
     let Some(value) = env(name) else {
         return Ok(None);
     };
-    match value.trim() {
-        "true" | "1" | "yes" | "on" => Ok(Some(true)),
-        "false" | "0" | "no" | "off" => Ok(Some(false)),
-        other => Err(ConfigError::Usage(format!(
-            "{name} is not a toggle: `{other}` (use true or false)"
-        ))),
-    }
+    toggle(&value)
+        .map(Some)
+        .map_err(|error| ConfigError::Usage(format!("{name}: {}", error.message())))
 }
 
 fn number(name: &str) -> Result<Option<u32>, ConfigError> {
