@@ -11,6 +11,7 @@
 use ratatui::style::{Color, Modifier};
 use ratatui::text::Line;
 use sindri_tui::markdown;
+use unicode_width::UnicodeWidthStr;
 
 fn text(line: &Line<'_>) -> String {
     line.spans
@@ -361,6 +362,42 @@ fn a_fenced_line_wider_than_the_panel_is_cut_and_says_so() {
     assert!(
         shown.iter().all(|row| row.chars().count() == 24),
         "and the panel is still a rectangle: {shown:?}"
+    );
+}
+
+/// A fence's title is measured in the cells it fills, not in the characters it
+/// is written with: an info string of wide glyphs must not push the panel's top
+/// rule past the corners its body sits between.
+#[test]
+fn a_fence_titled_in_wide_glyphs_draws_its_top_rule_no_wider_than_its_body() {
+    let width = 24;
+    let source = "```東京都\nfn main() {}\n```\n";
+    let lines = lines(source, width);
+    let shown: Vec<String> = lines.iter().map(raw).collect();
+    let top = &shown[0];
+
+    assert!(
+        top.contains("東京都"),
+        "the title keeps its own words: {shown:?}"
+    );
+    for row in &shown {
+        assert_eq!(
+            row.width(),
+            usize::from(width),
+            "every row of the panel is one rectangle, the top rule included: {shown:?}"
+        );
+    }
+    let body = shown
+        .iter()
+        .find(|row| row.contains("fn main"))
+        .expect("the fence's one line of code");
+    assert!(
+        body.starts_with('│') && body.ends_with('│'),
+        "the body's corners are where the panel's are: {shown:?}"
+    );
+    assert!(
+        top.starts_with('╭') && top.ends_with('╮'),
+        "and the top rule closes on them: {shown:?}"
     );
 }
 

@@ -12,7 +12,7 @@ use std::sync::OnceLock;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use syntect::parsing::{ParseState, ScopeStack, SyntaxSet};
-use unicode_width::UnicodeWidthChar;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::markdown::role;
 use crate::markdown::text::{self, Glyph, clip};
@@ -158,7 +158,10 @@ fn top(language: Option<&str>, width: usize) -> Line<'static> {
         .filter(|token| !token.is_empty())
         .map(|token| format!(" {} ", clip(token, width.saturating_sub(5))))
         .unwrap_or_default();
-    let used = 2 + title.chars().count() + 1;
+    // A title is cut in cells and counted in cells: an info string of wide
+    // glyphs fills more columns than it has characters, and the rule's repeat
+    // count is a cell count like every other width here.
+    let used = 2 + title.width() + 1;
     Line::from(Span::styled(
         format!("╭─{title}{}╮", "─".repeat(width.saturating_sub(used))),
         edge(),
