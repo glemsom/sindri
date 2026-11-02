@@ -11,6 +11,7 @@ mod common;
 
 use common::records::{MIDDLE, NEWEST, OLDEST, Record, root, three, write};
 use common::{Env, stderr, stdout};
+use unicode_width::UnicodeWidthStr;
 
 /// The date a row carries, in the one format a record is dated in: proven to be
 /// a date here, and proven to be the right moment in `core/tests/clock.rs`.
@@ -209,5 +210,65 @@ fn a_state_directory_that_cannot_be_read_exits_three() {
         stderr(listed).contains("sessions"),
         "the refusal names what it could not read: {}",
         stderr(listed)
+    );
+}
+
+#[test]
+fn a_prompt_of_wide_glyphs_is_cut_to_the_column_it_was_given() {
+    let env = Env::new();
+    let sessions = root(&env);
+    // Forty glyphs, each two columns wide: eighty cells in forty characters, so
+    // a count of characters would leave the row twenty columns long.
+    let wide = "日".repeat(40).leak();
+    write(
+        &sessions,
+        &Record {
+            id: NEWEST,
+            started_ms: 1_700_000_120_000,
+            model: "claude-new",
+            turns: Some(1),
+            stopped: "final",
+            usage: None,
+            prompt: Some(wide),
+        },
+    );
+    // The same column, filled to its last cell by a prompt of narrow glyphs: the
+    // two rows must come out the same width, or the table has stopped being one.
+    let narrow = "x".repeat(59).leak();
+    write(
+        &sessions,
+        &Record {
+            id: OLDEST,
+            started_ms: 1_700_000_000_000,
+            model: "claude-old",
+            turns: Some(1),
+            stopped: "final",
+            usage: None,
+            prompt: Some(narrow),
+        },
+    );
+
+    let listed = env.cmd().args(["sessions", "list"]).assert();
+    let listed = listed.get_output();
+    assert_eq!(listed.status.code(), Some(0), "stderr: {}", stderr(listed));
+    let text = stdout(listed);
+    let rows: Vec<&str> = text.lines().collect();
+    assert_eq!(rows.len(), 2, "one row per record:\n{text}");
+
+    let shown = rows[0].rsplit("  ").next().unwrap_or_default();
+    assert!(
+        shown.ends_with('…'),
+        "a prompt longer than its column says it was cut: {shown:?}"
+    );
+    assert_eq!(
+        shown.chars().count(),
+        30,
+        "twenty-nine two-column glyphs and an ellipsis, not fifty-nine glyphs: {shown:?}"
+    );
+    assert_eq!(
+        rows[0].width(),
+        rows[1].width(),
+        "a row of wide glyphs is no wider than the same column of narrow ones:\n{}",
+        text
     );
 }

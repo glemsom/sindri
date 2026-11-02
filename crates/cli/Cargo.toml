@@ -21,6 +21,9 @@ sindri-tui.workspace = true
 clap = { version = "4", features = ["derive"] }
 serde_json = "1"
 libc = "0.2"
+# A session row's prompt is cut to a column of cells: a wide glyph is two
+# columns, and a count of characters would leave the row wider than the table.
+unicode-width.workspace = true
 
 [dev-dependencies]
 assert_cmd = "2"

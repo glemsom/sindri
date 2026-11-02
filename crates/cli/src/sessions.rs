@@ -7,11 +7,14 @@ use sindri_core::paths::state_dir;
 use sindri_core::provider::Usage;
 use sindri_core::record::{self, ShowError, Stored, Summary};
 use sindri_types::ExitCode;
+use unicode_width::UnicodeWidthChar;
 
 /// The one field a row can run long with. A subcommand printing a table does
-/// not ask the terminal how wide it is: the prompt is clipped here, and
-/// `--json` and `sessions show` hold the whole of it.
-const PROMPT_COLUMNS: usize = 60;
+/// not ask the terminal how wide it is: the prompt is clipped here, to a column
+/// of cells and not a count of characters, so a prompt written in wide glyphs
+/// cannot push the columns after it out of line. `--json` and `sessions show`
+/// hold the whole of it.
+const PROMPT_CELLS: usize = 60;
 
 /// Prints the records, newest first, or nothing when the state directory holds
 /// none: an empty list is not a failure.
@@ -121,10 +124,22 @@ fn prompt(prompt: Option<&str>) -> String {
         return "—".to_string();
     };
     let text = prompt.split_whitespace().collect::<Vec<_>>().join(" ");
-    if text.chars().count() <= PROMPT_COLUMNS {
+    let cells = |ch: char| UnicodeWidthChar::width(ch).unwrap_or(0);
+    if text.chars().map(cells).sum::<usize>() <= PROMPT_CELLS {
         return text;
     }
-    let mut clipped: String = text.chars().take(PROMPT_COLUMNS - 1).collect();
+    // The ellipsis is a column of its own, so the text stops one cell short of
+    // the column; a glyph is whole or it is not there, so it may stop further.
+    let mut used = 0;
+    let mut clipped = String::new();
+    for ch in text.chars() {
+        let width = cells(ch);
+        if used + width > PROMPT_CELLS - 1 {
+            break;
+        }
+        used += width;
+        clipped.push(ch);
+    }
     clipped.push('…');
     clipped
 }
