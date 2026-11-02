@@ -23,6 +23,8 @@ Each line below saves a reader a search; none of it is ceremony.
 - **Comments say what the code cannot** — the rule behind it, the trap it avoids. A
   comment that repeats the line beneath it is noise.
 - **Tests hold the spec.** A behaviour worth a sentence is worth a test name, and the
-  name states the behaviour rather than the function.
-- **`make check` is done**: fmt, clippy, the audit, the tests, the evals. Nothing lands
+  name states the behaviour rather than the function: `scripts/audit-test-names.sh` holds
+  every `#[test]` name to four words and to no `test_`, `it_`, `works` or `check_` first
+  word, and names the test that stopped short of one.
+- **`make check` is done**: fmt, clippy, the audits, the tests, the evals. Nothing lands
   on a subset.
