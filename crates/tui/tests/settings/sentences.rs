@@ -21,62 +21,30 @@ fn neither() -> Missing {
 }
 
 #[test]
-fn the_transcript_says_what_is_absent_and_every_variable_that_sets_it() {
-    for (missing, wanted) in [
+fn the_three_sentences_are_built_from_one_absence_and_do_not_change() {
+    for (missing, said, composer, refused) in [
         (
             no_key(),
             "no key: type one in the settings modal, or set SINDRI_API_KEY or ANTHROPIC_API_KEY",
-        ),
-        (
-            no_model(),
-            "no model: type one in the settings modal, or set SINDRI_MODEL",
-        ),
-        (
-            neither(),
-            "no key and no model: type them in the settings modal, or set SINDRI_API_KEY or ANTHROPIC_API_KEY and SINDRI_MODEL",
-        ),
-    ] {
-        assert_eq!(missing.said(), wanted);
-    }
-}
-
-#[test]
-fn the_composer_says_what_is_absent_and_where_settings_fixes_it() {
-    for (missing, wanted) in [
-        (
-            no_key(),
             "no key · a prompt cannot be sent · /settings, or set SINDRI_API_KEY or ANTHROPIC_API_KEY",
-        ),
-        (
-            no_model(),
-            "no model · a prompt cannot be sent · /settings, or set SINDRI_MODEL",
-        ),
-        (
-            neither(),
-            "no key and no model · a prompt cannot be sent · /settings, or set SINDRI_API_KEY or ANTHROPIC_API_KEY",
-        ),
-    ] {
-        assert_eq!(missing.composer(), wanted);
-    }
-}
-
-#[test]
-fn a_prompt_sent_anyway_says_which_row_settings_answers() {
-    for (missing, wanted) in [
-        (
-            no_key(),
             "not sent: this run has no key — /settings saves one",
         ),
         (
             no_model(),
+            "no model: type one in the settings modal, or set SINDRI_MODEL",
+            "no model · a prompt cannot be sent · /settings, or set SINDRI_MODEL",
             "not sent: this run has no model — /settings names one",
         ),
         (
             neither(),
+            "no key and no model: type them in the settings modal, or set SINDRI_API_KEY or ANTHROPIC_API_KEY and SINDRI_MODEL",
+            "no key and no model · a prompt cannot be sent · /settings, or set SINDRI_API_KEY or ANTHROPIC_API_KEY",
             "not sent: this run has no key and no model — /settings sets both",
         ),
     ] {
-        assert_eq!(missing.refused(), wanted);
+        assert_eq!(missing.said(), said, "the transcript's line");
+        assert_eq!(missing.composer(), composer, "the composer's line");
+        assert_eq!(missing.refused(), refused, "the refused prompt's line");
     }
 }
 

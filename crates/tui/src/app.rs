@@ -210,9 +210,9 @@ impl App {
     /// the modal is saved. A run that stops for a missing key never reaches a
     /// card or a line on stderr — a card has no field to type in.
     pub fn with_missing(mut self, missing: Missing) -> Self {
-        self.missing = Some(missing);
         self.note_error(missing.said());
-        self.open_settings(Some(missing));
+        self.open_settings(Some(missing.clone()));
+        self.missing = Some(missing);
         self
     }
 

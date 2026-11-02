@@ -74,7 +74,7 @@ pub fn draw(app: &App, area: Rect, buf: &mut Buffer) -> Position {
         .border_style(border)
         .title(ratatui::text::Span::styled(" prompt ", border));
     let inner = block.inner(area);
-    let lines: Vec<Line<'static>> = match app.missing {
+    let lines: Vec<Line<'static>> = match app.missing.as_ref() {
         // What this composer cannot do, where the prompt would be: a run with
         // no key cannot send one, and saying so is the frame's.
         Some(missing) if app.composer().is_blank() => {

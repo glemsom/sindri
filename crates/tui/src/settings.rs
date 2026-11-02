@@ -31,20 +31,19 @@ pub struct Field {
     pub touched: bool,
 }
 
-/// Which rows a run has nothing for. One absent row is a run that cannot send
-/// a prompt; both is the machine that has never been configured at all.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Absent {
-    Key,
-    Model,
-    Both,
-}
-
-/// An absence in words: what a run has nothing for, the variables that set it,
-/// and what `/settings` does about it — one vocabulary behind three sentences.
-struct Lack {
-    /// `no key`, `no model`, `no key and no model`.
-    what: &'static str,
+/// What the front door found absent when it opened the frame itself: the run
+/// has no credential, or no model, or neither — and the words for that absence,
+/// which the transcript, the composer and a refused prompt each read. It holds
+/// no value: the modal says where a key comes from, never what one is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Missing {
+    /// The wire the run speaks: its variable is where the credential comes
+    /// from, and a local server needs none.
+    provider: Provider,
+    /// Whether the credential is one of the absent rows.
+    key: bool,
+    /// Whether the model is.
+    model: bool,
     /// What the transcript has the reader type: the row, and every variable
     /// that sets it.
     ways: String,
@@ -55,104 +54,109 @@ struct Lack {
     acted: &'static str,
 }
 
-/// What the front door found absent when it opened the frame itself: the run
-/// has no credential, or no model, or neither. It holds no value —
-/// the modal says where a key comes from, never what one is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Missing {
-    /// The wire the run speaks: its variable is where the credential comes
-    /// from, and a local server needs none.
-    provider: Provider,
-    absent: Absent,
-}
-
 impl Missing {
     /// What a resolved config could not find, when it found all of it: `None`
-    /// is a run that can send a prompt, and there is nothing to say.
+    /// is a run that can send a prompt, and there is nothing to say. The two
+    /// flags are the one `match` on an absence, and they are kept, so the words
+    /// a reader sees and the rows they describe are read off the same pair.
     pub fn of(provider: Provider, key: bool, model: bool) -> Option<Missing> {
-        let absent = match (key, model) {
-            (true, false) => Absent::Key,
-            (false, true) => Absent::Model,
-            (true, true) => Absent::Both,
-            (false, false) => return None,
+        if !key && !model {
+            return None;
+        }
+        let key_vars = Self::key_vars_for(provider);
+        let (ways, composer, acted) = match (key, model) {
+            (true, false) => (
+                format!("one in the settings modal, or set {key_vars}"),
+                key_vars,
+                "saves one",
+            ),
+            (false, true) => (
+                "one in the settings modal, or set SINDRI_MODEL".to_string(),
+                "SINDRI_MODEL".to_string(),
+                "names one",
+            ),
+            _ => (
+                format!("them in the settings modal, or set {key_vars} and SINDRI_MODEL"),
+                key_vars,
+                "sets both",
+            ),
         };
-        Some(Missing { provider, absent })
+        Some(Missing {
+            provider,
+            key,
+            model,
+            ways,
+            composer,
+            acted,
+        })
     }
 
     /// The credential's two variables, in the wire's own terms: the one fact
     /// every sentence about a missing key has to say, spelled once.
-    pub fn key_vars(self) -> String {
-        format!("SINDRI_API_KEY or {}", self.provider.api_key_env())
+    pub fn key_vars(&self) -> String {
+        Self::key_vars_for(self.provider)
+    }
+
+    fn key_vars_for(provider: Provider) -> String {
+        format!("SINDRI_API_KEY or {}", provider.api_key_env())
+    }
+
+    /// The absence in words: `no key`, `no model`, `no key and no model` —
+    /// read off the two flags rather than stored beside them, so the words and
+    /// the rows they describe cannot drift apart. `of` never builds the pair
+    /// with neither, which is why the last arm is the both-absent one.
+    fn what(&self) -> &'static str {
+        match (self.key, self.model) {
+            (true, false) => "no key",
+            (false, true) => "no model",
+            _ => "no key and no model",
+        }
     }
 
     /// Whether the credential is one of the absent rows: what the modal's key
     /// row says, and what the composer cannot do.
-    pub fn wants_key(self) -> bool {
-        matches!(self.absent, Absent::Key | Absent::Both)
+    pub fn wants_key(&self) -> bool {
+        self.key
     }
 
     /// The row the modal opens on: the key when there is none, because a run
     /// with no credential is the failure a frame answers with a field.
-    pub fn row(self) -> Key {
-        match self.absent {
-            Absent::Model => Key::Model,
-            Absent::Key | Absent::Both => Key::ApiKey,
-        }
-    }
-
-    /// The one description of an absence, and the only `match` on it: a fourth
-    /// state is one arm here rather than three found by reading three of them.
-    fn lack(self) -> Lack {
-        let key_vars = self.key_vars();
-        match self.absent {
-            Absent::Key => Lack {
-                what: "no key",
-                ways: format!("one in the settings modal, or set {key_vars}"),
-                composer: key_vars,
-                acted: "saves one",
-            },
-            Absent::Model => Lack {
-                what: "no model",
-                ways: "one in the settings modal, or set SINDRI_MODEL".to_string(),
-                composer: "SINDRI_MODEL".to_string(),
-                acted: "names one",
-            },
-            Absent::Both => Lack {
-                what: "no key and no model",
-                ways: format!("them in the settings modal, or set {key_vars} and SINDRI_MODEL"),
-                composer: key_vars,
-                acted: "sets both",
-            },
-        }
+    pub fn row(&self) -> Key {
+        if self.key { Key::ApiKey } else { Key::Model }
     }
 
     /// The transcript's one line: what is absent and every way to set it —
     /// said once, when the frame opens, and never on a frame.
-    pub fn said(self) -> String {
-        let Lack { what, ways, .. } = self.lack();
-        format!("{what}: type {ways}")
+    pub fn said(&self) -> String {
+        format!("{}: type {}", self.what(), self.ways)
     }
 
     /// What the composer says where the prompt would be: a run with no key
     /// cannot send one, and the frame says why rather than pretending.
-    pub fn composer(self) -> String {
-        let Lack { what, composer, .. } = self.lack();
-        format!("{what} · a prompt cannot be sent · /settings, or set {composer}")
+    pub fn composer(&self) -> String {
+        format!(
+            "{} · a prompt cannot be sent · /settings, or set {}",
+            self.what(),
+            self.composer
+        )
     }
 
     /// A prompt sent anyway: the draft stays where it was, and this is the one
     /// line the transcript gets for the keystroke.
-    pub fn refused(self) -> String {
-        let Lack { what, acted, .. } = self.lack();
-        format!("not sent: this run has {what} — /settings {acted}")
+    pub fn refused(&self) -> String {
+        format!(
+            "not sent: this run has {} — /settings {}",
+            self.what(),
+            self.acted
+        )
     }
 
     /// What is still absent once a save has landed: a row the file now carries
     /// is filled in, and the rest is not. A key in the environment is not this
     /// frame's to see, so the file is what a save can answer for.
-    pub fn satisfied(self, document: &Document) -> Option<Missing> {
-        let key = self.absent != Absent::Model && !document.is_set(Key::ApiKey);
-        let model = self.absent != Absent::Key && !document.is_set(Key::Model);
+    pub fn satisfied(&self, document: &Document) -> Option<Missing> {
+        let key = self.key && !document.is_set(Key::ApiKey);
+        let model = self.model && !document.is_set(Key::Model);
         Missing::of(self.provider, key, model)
     }
 }
@@ -228,8 +232,8 @@ impl Settings {
     }
 
     /// Why the modal opened without being asked, when it did.
-    pub fn missing(&self) -> Option<Missing> {
-        self.missing
+    pub fn missing(&self) -> Option<&Missing> {
+        self.missing.as_ref()
     }
 
     pub fn staged_secret(&self) -> bool {

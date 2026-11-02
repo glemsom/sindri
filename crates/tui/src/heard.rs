@@ -18,7 +18,7 @@ impl App {
         // A run with no key cannot answer: sending the prompt would spend a
         // round trip to be told 401, so the draft stays and the frame says what
         // is missing instead.
-        if let Some(missing) = self.missing {
+        if let Some(missing) = self.missing.as_ref() {
             self.note_error(missing.refused());
             return;
         }
