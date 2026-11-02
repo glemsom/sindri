@@ -6,7 +6,10 @@ date: 2026-11-02
 # 0002 — Two tools: `bash`, and `skill`
 
 The ground rules promised one tool. They now promise two, and the argument lives here so
-the third agent to read the agent core finds a decision rather than a hole.
+the third agent to read the agent core finds a decision rather than a hole. They promise
+three since ADR 0003, which adds `open`; what follows is unchanged and stands under it —
+this record is why `bash` is not the tool a permission is enforced in, and 0003 is that
+argument made about a browser instead of a skill.
 
 A skill is not a shell composition. It is instructions written for the model, found in
 someone's home directory or in the repository the run happens in, carrying a permission
