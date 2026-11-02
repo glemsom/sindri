@@ -23,14 +23,14 @@ track() {
 
 test_a_module_that_opens_with_its_paragraph_passes() {
     module src/loop.rs <<'RS'
-//! What the loop proves, in one paragraph.
+//! What the loop proves, in one paragraph, at the seam.
 
 #![allow(clippy::expect_used, reason = "a test reports by panicking")]
 
 mod support;
 RS
     module crates/tui/tests/frame.rs <<'RS'
-//! The frame's seam, proven through a pseudo-terminal.
+//! The frame's seam, proven through a pseudo-terminal, byte by byte.
 RS
     track
     audit
@@ -40,7 +40,7 @@ RS
 
 test_a_module_that_opens_with_an_attribute_is_reported_by_name() {
     module src/loop.rs <<'RS'
-//! What the loop proves.
+//! What the loop proves, in one paragraph, at the seam.
 
 #![allow(clippy::expect_used, reason = "a test reports by panicking")]
 RS
@@ -74,6 +74,31 @@ test_an_empty_file_is_reported_rather_than_printed_blank() {
     assert_contains "$ERR" "src/empty.rs is empty"
 }
 
+test_a_bare_marker_is_reported_for_its_missing_words() {
+    # A `//!` on its own satisfies the shape the audit reads and says nothing, so
+    # the paragraph is held to words. The count spans the wrapped lines, because
+    # that is how the paragraphs in this tree are written, and the eighth word is
+    # the edge the rule turns on: seven is a stub, eight is a paragraph.
+    module src/bare.rs <<'RS'
+//!
+
+fn main() {}
+RS
+    module src/thin.rs <<'RS'
+//! The loop proves itself and nothing else.
+RS
+    module src/real.rs <<'RS'
+//! The frame's seam, proven through
+//! a pseudo-terminal, byte by byte.
+RS
+    track
+    audit
+    assert_status 1 "$STATUS"
+    assert_contains "$ERR" "src/bare.rs says //! and 8 words are not there"
+    assert_contains "$ERR" "src/thin.rs says //! and 8 words are not there"
+    assert_contains_absent "$ERR" "src/real.rs"
+}
+
 test_only_rust_files_are_checked() {
     module scripts/thing.sh <<'SH'
 #!/usr/bin/env bash
@@ -91,7 +116,7 @@ test_a_module_written_but_not_staged_is_checked_too() {
     # The audit sees what `git status` sees: a file an agent has just written is
     # checked before anyone stages it.
     module src/tracked.rs <<'RS'
-//! What the loop proves.
+//! What the loop proves, in one paragraph, at the seam.
 RS
     track
     module src/written.rs <<'RS'

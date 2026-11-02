@@ -17,7 +17,9 @@ Each line below saves a reader a search; none of it is ceremony.
 - **A module opens with `//!`**: one paragraph on what it is for, and a second only when
   it carries a separate decision, so the file can be placed without reading its body.
   Inner attributes go below it — the first line is the one that gets scanned — and
-  `scripts/audit-module-docs.sh` holds every file to that.
+  `scripts/audit-module-docs.sh` holds every file to that, down to a minimum of
+  eight words after the marker: a bare `//!` is a placeholder, and the audit names
+  the file that stopped at one.
 - **Comments say what the code cannot** — the rule behind it, the trap it avoids. A
   comment that repeats the line beneath it is noise.
 - **Tests hold the spec.** A behaviour worth a sentence is worth a test name, and the
