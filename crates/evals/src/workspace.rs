@@ -29,10 +29,10 @@ impl Workspace {
         let repo = root.path().join("repo");
         copy_dir(Path::new(FIXTURES).join("repo").as_path(), &repo)?;
         // The repo skill scope is walked from the repository root and from
-        // nowhere else, so a copy that is not a repository carries no
-        // `.agents/skills` at all and the catalog eval would pass by finding
-        // nothing. `git init` leaves an unborn branch, which is no commit: the
-        // record still carries no git block, exactly as the fixture did before.
+        // nowhere else, so a copy that is not a repository has no catalog at all
+        // and eval 9 would have no skill to trigger. `git init` leaves an unborn
+        // branch, which is no commit: the record still carries no git block,
+        // exactly as the fixture carried none before.
         let init = Command::new("git")
             .arg("init")
             .arg("--quiet")

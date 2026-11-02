@@ -78,10 +78,9 @@ fn a_run_that_printed_nothing_is_reported() {
     assert!(!problems.is_empty(), "silence is not an answer");
 }
 
-#[test]
-fn an_answer_that_skipped_the_skill_call_is_reported() {
-    // The answer is right and the script is right; the call is missing, and
-    // that is the one thing this eval exists to see.
+/// A run that answered, with the script eval 9 asks for already on disk: what a
+/// case leaves behind when everything holds but the one fact it turns on.
+fn answered_with_the_script(answer: &str, requests: Vec<Request>) -> (tempfile::TempDir, Run) {
     let root = tempfile::TempDir::new().expect("temp dir");
     let repo = root.path().join("repo");
     std::fs::create_dir_all(repo.join("src")).expect("the script's directory");
@@ -90,15 +89,32 @@ fn an_answer_that_skipped_the_skill_call_is_reported() {
         "#!/bin/sh\n# house: spindle-4411\nexec uptime -p\n",
     )
     .expect("the script the task asked for");
-    let skipped = Run {
+    let run = Run {
         exit_code: 0,
-        stdout: "{\"answer\":\"Added src/uptime.sh with # house: spindle-4411 on its second line.\",\"turns\":1,\"stopped\":\"final\",\"tool_calls\":0}\n".to_string(),
+        stdout: format!(
+            "{{\"answer\":\"{answer}\",\"turns\":2,\"stopped\":\"final\",\"tool_calls\":1}}\n"
+        ),
         stderr: String::new(),
-        requests: vec![Request::literal("POST", "/v1/messages", "{\"messages\":[]}")],
+        requests,
         workspace: repo,
         state: root.path().join("state"),
         live: false,
     };
+    (root, run)
+}
+
+#[test]
+fn an_answer_that_skipped_the_skill_call_is_reported() {
+    // The answer is right and the script is right; the call is missing, and
+    // that is the one thing this eval exists to see.
+    let (_root, skipped) = answered_with_the_script(
+        "Added src/uptime.sh with # house: spindle-4411 on its second line.",
+        vec![Request::literal(
+            "POST",
+            "/v1/messages",
+            "{\"messages\":[]}",
+        )],
+    );
     let problems = sindri_evals::catalog::the_catalog_triggers(&skipped);
     assert!(
         problems.iter().any(|line| line.contains("never loaded")),
@@ -110,14 +126,17 @@ fn an_answer_that_skipped_the_skill_call_is_reported() {
 fn a_load_whose_rule_never_reaches_the_answer_is_reported() {
     // Everything else holds — one record, the body in the prompt, the script
     // carrying the rule — and the answer states it nowhere.
-    let root = tempfile::TempDir::new().expect("temp dir");
-    let repo = root.path().join("repo");
-    std::fs::create_dir_all(repo.join("src")).expect("the script's directory");
-    std::fs::write(
-        repo.join("src/uptime.sh"),
-        "#!/bin/sh\n# house: spindle-4411\nexec uptime -p\n",
-    )
-    .expect("the script the task asked for");
+    let (root, quiet) = answered_with_the_script(
+        "Added src/uptime.sh.",
+        vec![
+            Request::literal("POST", "/v1/messages", "{\"messages\":[]}"),
+            Request::literal(
+                "POST",
+                "/v1/messages",
+                "{\"messages\":[{\"content\":\"<skill_content>\n# house: spindle-4411\n</skill_content>\"}]}",
+            ),
+        ],
+    );
     let session = root.path().join("state/sindri/sessions/one");
     std::fs::create_dir_all(&session).expect("the session directory");
     std::fs::write(
@@ -131,27 +150,22 @@ fn a_load_whose_rule_never_reaches_the_answer_is_reported() {
          {\"type\":\"tool_result\",\"turn\":1,\"call_id\":\"c1\",\"content\":\"outcome: loaded\",\"is_error\":false,\"outcome\":\"loaded\"}\n",
     )
     .expect("the transcript");
-    let quiet = Run {
-        exit_code: 0,
-        stdout: "{\"answer\":\"Added src/uptime.sh.\",\"turns\":2,\"stopped\":\"final\",\"tool_calls\":1}\n"
-            .to_string(),
-        stderr: String::new(),
-        requests: vec![
-            Request::literal("POST", "/v1/messages", "{\"messages\":[]}"),
-            Request::literal(
-                "POST",
-                "/v1/messages",
-                "{\"messages\":[{\"content\":\"<skill_content>\n# house: spindle-4411\n</skill_content>\"}]}",
-            ),
-        ],
-        workspace: repo,
-        state: root.path().join("state"),
-        live: false,
-    };
     let problems = sindri_evals::catalog::the_catalog_triggers(&quiet);
     assert_eq!(
         problems,
         vec!["the answer never states the house rule \"# house: spindle-4411\""],
         "the answer is the only thing missing"
+    );
+}
+
+#[test]
+fn the_rule_the_catalog_eval_turns_on_lives_in_the_skill_alone() {
+    // A rule copied into the fixture's own README would let an answer be right
+    // without the catalog, and the case would quietly stop proving anything.
+    let repo = std::path::Path::new(sindri_evals::workspace::FIXTURES).join("repo");
+    assert_eq!(
+        sindri_evals::workspace::files_containing(&repo, "# house: spindle-4411"),
+        vec![".agents/skills/house-style/SKILL.md"],
+        "the rule the eval turns on has one home"
     );
 }
