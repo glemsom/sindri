@@ -42,13 +42,19 @@ impl BashTool {
 fn describe(policy: &SandboxPolicy) -> ToolSpec {
     let description = format!(
         "Run a bash command on the user's machine. It is the only tool, so pipelines and small \
-         scripts are how you explore and act.\n\n{}\n\
+         scripts are how you explore and act: put the steps of one task in one script, not in \
+         three calls.\n\n{}\n\
+         Every result is carried in the conversation for the rest of the run and sent again with \
+         every later turn, so filter in the script and print only what you concluded; keep \
+         intermediates in `$TMPDIR`, which outlives the call.\n\
          How a result comes back: the outcome (`exited`, `timed_out` or `sandbox_error`), the \
-         `exit_code` when the command exited, `duration_ms`, a `truncated` flag, then `stdout` \
-         and `stderr`. Over-long output is cut head and tail; the full text is left in a spill \
-         file whose path the result names. `sandbox_error` means the sandbox never started, so \
-         no command ran. The status of the last command in the script is the status you get; \
-         `set -e` and `set -o pipefail` work as in any bash script.",
+         `exit_code` when the command exited, `duration_ms`, a `truncated` flag, \
+         `retained_bytes` (what this result costs the conversation), then `stdout` and `stderr`. \
+         Over-long output is cut head and tail and the full text is left in a spill file whose \
+         path the result names: grep that file from the next script rather than printing it \
+         again. `sandbox_error` means the sandbox never started, so no command ran. The status of \
+         the last command in the script is the status you get; `set -e` and `set -o pipefail` \
+         work as in any bash script.",
         policy.describe()
     );
     ToolSpec {
@@ -86,11 +92,15 @@ fn render(result: &ToolResult) -> String {
     }
     out.push_str(&format!("duration_ms: {}\n", result.duration_ms));
     out.push_str(&format!("truncated: {}\n", result.truncated));
+    out.push_str(&format!(
+        "retained_bytes: {}\n",
+        result.stdout.len() + result.stderr.len()
+    ));
     match facts.spill.as_slice() {
         [] => out.push_str("spill: none\n"),
         paths => {
             for path in paths {
-                out.push_str(&format!("spill: {path}\n"));
+                out.push_str(&format!("spill: {path} (grep it from the next script)\n"));
             }
         }
     }

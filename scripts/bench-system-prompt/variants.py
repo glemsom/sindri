@@ -48,6 +48,13 @@ VARIANTS = {
             "only the lines you must, and prove it with the narrowest command that can fail. Join "
             "the steps of one task into one script. Reply with the answer itself: no preamble."),
 
+    "v14": ("final-batched", TRIM + " Read the fewest bytes that answer: search first "
+            "(`rg -n`), then open only the lines you need (`sed -n 'A,Bp'`); never `cat` a whole "
+            "file, and never run a search or a listing twice. Put the steps of one task in one "
+            "script: filter there, print only what you concluded, and keep intermediates in "
+            "`$TMPDIR`, which outlives the call. A fence marked `mermaid` is drawn as a picture: "
+            "draw what prose cannot."),
+
     "v13": ("final", TRIM + " Read the fewest bytes that answer: search first (`rg -n`), then "
             "open only the lines you need (`sed -n 'A,Bp'`); never `cat` a whole file, and never "
             "run a search or a listing twice. A fence marked `mermaid` is drawn as a picture: draw "

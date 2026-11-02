@@ -107,7 +107,7 @@ fn a_tool_result_entry_carries_the_facts_its_content_states() {
     assert_eq!(
         content,
         &format!(
-            "outcome: exited\nexit_code: 7\nduration_ms: 42\ntruncated: true\nspill: {}\n\
+            "outcome: exited\nexit_code: 7\nduration_ms: 42\ntruncated: true\nretained_bytes: 21\nspill: {} (grep it from the next script)\n\
              stdout:\ntwelve files\nstderr:\na warning\n",
             spill.display()
         ),
@@ -166,15 +166,16 @@ fn a_call_that_timed_out_and_one_whose_sandbox_never_started_say_so() {
                 "timed_out",
                 None,
                 Some(30_000),
-                "outcome: timed_out\nduration_ms: 30000\ntruncated: false\nspill: none\n\
-                 stdout:\nstderr:\n",
+                "outcome: timed_out\nduration_ms: 30000\ntruncated: false\n\
+                 retained_bytes: 0\nspill: none\nstdout:\nstderr:\n",
             ),
             (
                 "sandbox_error",
                 None,
                 Some(2),
                 "outcome: sandbox_error\ndetail: setting up uid map: Permission denied\n\
-                 duration_ms: 2\ntruncated: false\nspill: none\nstdout:\nstderr:\n",
+                 duration_ms: 2\ntruncated: false\nretained_bytes: 0\nspill: none\n\
+                 stdout:\nstderr:\n",
             ),
         ],
         "an outcome word is never a status: only an exit has an exit code, and \

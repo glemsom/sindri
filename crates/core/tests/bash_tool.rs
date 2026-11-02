@@ -32,6 +32,16 @@ fn the_model_gets_exactly_one_tool_named_bash_described_by_the_policy() {
         description.contains(&workspace.path().display().to_string()),
         "the model is told which paths it may write: {description}"
     );
+    for promised in [
+        "put the steps of one task in one script",
+        "$TMPDIR",
+        "retained_bytes",
+    ] {
+        assert!(
+            description.contains(promised),
+            "the description says `{promised}`: {description}"
+        );
+    }
     assert_eq!(spec.parameters["type"], "object");
     assert_eq!(spec.parameters["required"][0], "command");
 }
@@ -73,6 +83,8 @@ fn a_tool_result_reaches_the_model_with_every_field_it_needs() {
         "exit_code: 7",
         "duration_ms: 42",
         "truncated: true",
+        // What this result costs the conversation, in the bytes it carries.
+        "retained_bytes: 21", // "twelve files" and "a warning", as the model is charged
         "stdout:\ntwelve files",
         "stderr:\na warning",
     ] {
@@ -82,8 +94,12 @@ fn a_tool_result_reaches_the_model_with_every_field_it_needs() {
         );
     }
     assert!(
-        content.contains(&spill.display().to_string()),
-        "the model is told where the untruncated text went: {content}"
+        content.contains(&format!(
+            "{} (grep it from the next script)",
+            spill.display()
+        )),
+        "the model is told where the untruncated text went, and to read it from \
+         inside the next script rather than print it again: {content}"
     );
 }
 

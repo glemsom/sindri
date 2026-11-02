@@ -49,8 +49,10 @@ const PREAMBLE: &str = "You are Sindri, an assistant answering a developer at a 
     before believing the output. Reply with the answer itself: no preamble, no closing \
     offer of further help. Read the fewest bytes that answer: search first (`rg -n`), \
     then open only the lines you need (`sed -n 'A,Bp'`); never `cat` a whole file, and \
-    never run a search or a listing twice. A fence marked `mermaid` is drawn as a \
-    picture: draw what prose cannot.";
+    never run a search or a listing twice. Put the steps of one task in one script: \
+    filter there, print only what you concluded, and keep intermediates in `$TMPDIR`, \
+    which outlives the call. A fence marked `mermaid` is drawn as a picture: draw what \
+    prose cannot.";
 
 pub(super) fn turn(
     client: &Client,

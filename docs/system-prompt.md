@@ -27,7 +27,7 @@ prefix of, in the tree as a trap.
 One run per task per repetition, each in a fresh copy of the fixture repo. The
 variants differ only in the prompt.
 
-## The thirteen
+## The variants
 
 | variant | what it adds to the shipped prompt | words |
 | --- | --- | --- |
@@ -44,6 +44,7 @@ variants differ only in the prompt.
 | v10 | v01 plus a worked example of a good read and a good edit | 97 |
 | v11 | v02, plus the minimal patch of v04 and the narrow proof of v05 | 121 |
 | v13 | v02, plus "A fence marked `mermaid` is drawn as a picture: draw what prose cannot." — this one landed | 106 |
+| v14 | v13, plus "Put the steps of one task in one script: filter there, print only what you concluded, and keep intermediates in `$TMPDIR`, which outlives the call." — shipped unmeasured, see below | 131 |
 
 ## The ranking, `deepseek-v4.1-flash`, two repetitions each
 
@@ -118,6 +119,21 @@ shortened diagram sentence:
 
 `make check` is unchanged and green under it: the offline evals replay their
 fixtures and assert the same eight things, because the prompt is not the answer.
+
+## The batching sentence, shipped before it was measured
+
+`PREAMBLE` now also carries v14's sentence. It was written from v07 — *"Do several
+steps in one turn"*, 74,804 tokens against v00's 121,885 with no answer lost — and
+compressed, because the same doctrine is already stated once in the `bash` tool's
+description and a second full sentence in the prompt would be the same advice paid for
+twice per request. The two words v07 did not need are here instead: *filter there*, and
+`$TMPDIR`, which names the one channel a result can cross the turn in without entering
+the conversation.
+
+It is in `scripts/bench-system-prompt/variants.py` as `v14` and **has not been run**.
+The claim it rests on is v07's, not its own: a prompt that puts the steps of a task in
+one script buys turns, and a prompt that says what a result costs buys bytes. Run it
+before believing the second half.
 
 ## What this does not prove
 
