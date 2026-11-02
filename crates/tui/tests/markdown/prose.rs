@@ -220,3 +220,34 @@ fn a_diff_row_is_tinted_as_well_as_coloured() {
         texts(&lines)
     );
 }
+
+/// Wrapping is a display decision, so however many breaks a paragraph takes the
+/// glyphs are all there and in the order they were written: a tail carried to
+/// the next row is moved, never rewritten.
+#[test]
+fn a_line_of_twenty_thousand_words_wraps_whole_and_in_order() {
+    let width = 60;
+    let source = (0..20_000)
+        .map(|index| format!("word{index}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let lines = lines(&source, width);
+    let shown = texts(&lines);
+
+    assert!(
+        shown.len() > 1_000,
+        "the paragraph is laid out across many rows: {}",
+        shown.len()
+    );
+    for row in &shown {
+        assert!(
+            row.chars().count() <= usize::from(width),
+            "no row is wider than the column: {row:?}"
+        );
+    }
+    assert_eq!(
+        shown.join(" "),
+        source,
+        "every word is on a row, in the order it was written"
+    );
+}

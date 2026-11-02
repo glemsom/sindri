@@ -26,30 +26,39 @@ pub fn wrap(
     let mut rows: Vec<Line<'static>> = Vec::new();
     let mut row: Vec<Glyph> = Vec::new();
     let mut used = 0usize;
+    // Where the row's last space sits and the cells before it, so a break there
+    // keeps the width already counted: the tail carries over with its width in
+    // hand, and neither the tail nor what it came from is walked a second time.
+    let mut last_space: Option<(usize, usize)> = None;
     let width = width.max(1);
 
     for (ch, style) in glyphs {
         if ch == '\n' {
             rows.push(line(std::mem::take(&mut row), prefix, prefix_style));
             used = 0;
+            last_space = None;
             continue;
         }
         let cells = UnicodeWidthChar::width(ch).unwrap_or(0);
         if used + cells > width && !row.is_empty() {
-            let at = row
+            let at = last_space.map_or(row.len(), |(at, _)| at);
+            let mut rest = row.split_off(at);
+            // A space is one cell, so the dropped ones are counted rather than
+            // shifted one at a time: `remove(0)` per space is a memmove of the
+            // tail for each.
+            let leading = rest
                 .iter()
-                .rposition(|(ch, _)| *ch == ' ')
-                .unwrap_or(row.len());
-            let mut rest = row.split_off(at.min(row.len()));
-            while rest.first().is_some_and(|(ch, _)| *ch == ' ') {
-                rest.remove(0);
-            }
+                .position(|(ch, _)| *ch != ' ')
+                .unwrap_or(rest.len());
+            rest.drain(..leading);
             rows.push(line(std::mem::take(&mut row), prefix, prefix_style));
+            used = last_space.map_or(0, |(_, kept)| used - kept - leading);
+            // `at` was the row's *last* space, so what carried over holds none.
+            last_space = None;
             row = rest;
-            used = row
-                .iter()
-                .map(|(ch, _)| UnicodeWidthChar::width(*ch).unwrap_or(0))
-                .sum();
+        }
+        if ch == ' ' {
+            last_space = Some((row.len(), used));
         }
         row.push((ch, style));
         used += cells;
