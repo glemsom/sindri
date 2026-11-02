@@ -1,7 +1,8 @@
 //! The `open` tool's contract with the model: one target per call, the refusals
 //! made before the host is asked anything, and a result that says what the opener
 //! did rather than what a human saw. The record and the row that read the same
-//! call are proven beside the two that write them.
+//! call are proven beside the two that write them. A `file:` URI, which is the
+//! `path` argument in another spelling, is proven in `open_file_uri.rs`.
 
 #![allow(
     clippy::expect_used,
@@ -10,74 +11,13 @@
 
 mod support;
 
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use sindri_core::agent::{BashTool, Limits, OpenTool, Opened, Opener, Tools};
-use sindri_core::provider::{Asked, Call, Target, ToolOutcome};
-use sindri_core::sandbox::SandboxPolicy;
-use support::{Scripted, fixtures, policy};
+use sindri_core::agent::{BashTool, Limits, OpenTool, Opened, Tools};
+use sindri_core::provider::{Asked, Target, ToolOutcome};
+use support::open::{Fake, READABLE, Run, call, open, tools, windowless};
+use support::{Scripted, fixtures};
 use tempfile::TempDir;
-
-/// The host's opener, faked: every target it was asked for, and the one answer
-/// it gives. A test that says it was never asked reads an empty list.
-struct Fake {
-    seen: Mutex<Vec<String>>,
-    answer: Opened,
-}
-
-impl Fake {
-    fn answering(answer: Opened) -> Arc<Fake> {
-        Arc::new(Fake {
-            seen: Mutex::default(),
-            answer,
-        })
-    }
-
-    fn asked(&self) -> Vec<String> {
-        self.seen.lock().expect("the opener's log").clone()
-    }
-}
-
-impl Opener for Fake {
-    fn open(&self, target: &str) -> Opened {
-        self.seen
-            .lock()
-            .expect("the opener's log")
-            .push(target.to_string());
-        self.answer.clone()
-    }
-}
-
-/// A run with the third tool, over an opener a test controls.
-fn tools(opener: Arc<Fake>) -> Tools {
-    let (workspace, _session_temp, policy) = fixtures();
-    let root = workspace
-        .path()
-        .canonicalize()
-        .expect("a canonical workspace");
-    let bash = BashTool::new(&policy, Limits::default(), Scripted::silent());
-    Tools::new(bash, None, Some(OpenTool::new(opener, policy, root)))
-}
-
-/// A run with no browser anywhere near it, as batch mode builds one.
-fn windowless() -> Tools {
-    let (_workspace, _session_temp, policy) = fixtures();
-    let bash = BashTool::new(&policy, Limits::default(), Scripted::silent());
-    Tools::new(bash, None, None)
-}
-
-/// The call the model makes to `open`, with the arguments it sent.
-fn call(arguments: &[(&str, &str)]) -> Call {
-    let sent = arguments
-        .iter()
-        .map(|(key, value)| ((*key).to_string(), serde_json::json!(value)));
-    Call::new("call_1", "open", Ok(serde_json::Map::from_iter(sent)))
-}
-
-fn open(target: &str) -> Call {
-    call(&[("url", target)])
-}
 
 #[test]
 fn an_https_url_is_handed_to_the_host_and_the_result_reads_started() {
@@ -153,9 +93,11 @@ fn an_opener_that_fails_inside_the_window_is_failed_with_its_reason() {
 }
 
 #[test]
-fn a_scheme_that_is_not_http_is_refused_naming_the_scheme_it_got() {
+fn every_scheme_but_http_https_and_file_is_refused_naming_the_scheme_it_got() {
+    // `file:` is not this rule's to refuse: it is the `path` argument in another
+    // spelling, so it reduces to a path and is guarded as one — which
+    // `open_file_uri.rs` proves beside the identical refusal a path gets.
     for (target, scheme) in [
-        ("file:///etc/passwd", "file:"),
         ("ftp://example.com/x", "ftp:"),
         ("mailto:someone@example.com", "mailto:"),
     ] {
@@ -196,6 +138,11 @@ fn a_call_naming_neither_argument_is_refused_before_the_opener_runs() {
         "the refusal says what was missing: {}",
         outcome.content
     );
+    assert!(
+        outcome.content.contains("file:"),
+        "and names every spelling a target may be sent in, `file:` beside the two URLs: {}",
+        outcome.content
+    );
 }
 
 #[test]
@@ -218,89 +165,6 @@ fn a_call_naming_both_arguments_is_refused_before_the_opener_runs() {
         outcome.content
     );
 }
-
-/// A run whose workspace a test can put a file in, and whose opener it reads
-/// afterwards: the two places a `path` may name, and the third tool over them.
-struct Run {
-    workspace: TempDir,
-    /// Held only where the session temp is a tree of its own: the shared
-    /// fixtures keep it inside the workspace.
-    _session: Option<TempDir>,
-    session_temp: PathBuf,
-    opener: Arc<Fake>,
-    tools: Tools,
-}
-
-impl Run {
-    fn new() -> Run {
-        let (workspace, session_temp, policy) = fixtures();
-        Run::over(workspace, None, session_temp, policy)
-    }
-
-    /// A run whose session temp is outside its workspace, so the two places a
-    /// `path` may name are two different trees.
-    fn apart() -> Run {
-        let workspace = TempDir::new().expect("workspace");
-        let session = TempDir::new().expect("session temp");
-        let session_temp = session.path().to_path_buf();
-        let policy = policy(&workspace, &session_temp);
-        Run::over(workspace, Some(session), session_temp, policy)
-    }
-
-    fn over(
-        workspace: TempDir,
-        session: Option<TempDir>,
-        session_temp: PathBuf,
-        policy: SandboxPolicy,
-    ) -> Run {
-        let opener = Fake::answering(Opened::Started);
-        let root = workspace
-            .path()
-            .canonicalize()
-            .expect("a canonical workspace");
-        let bash = BashTool::new(&policy, Limits::default(), Scripted::silent());
-        let hand: Arc<dyn Opener> = opener.clone();
-        let tools = Tools::new(bash, None, Some(OpenTool::new(hand, policy, root)));
-        Run {
-            workspace,
-            _session: session,
-            session_temp,
-            opener,
-            tools,
-        }
-    }
-
-    /// A report written at `base`/`name`, as the canonical path the guard is
-    /// expected to hand over.
-    fn write(&self, base: &Path, name: &str) -> PathBuf {
-        let path = base.join(name);
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).expect("a directory for the report");
-        }
-        std::fs::write(&path, "<html>a report</html>").expect("a report");
-        path.canonicalize().expect("a canonical report")
-    }
-
-    /// A report in the workspace.
-    fn report(&self, name: &str) -> PathBuf {
-        self.write(self.workspace.path(), name)
-    }
-
-    /// One `open` call naming a `path`, answered.
-    fn shown(&self, given: &str) -> ToolOutcome {
-        self.tools
-            .call(&call(&[("path", given)]), &Default::default())
-            .expect("a call is answered")
-    }
-
-    fn asked(&self) -> Vec<String> {
-        self.opener.asked()
-    }
-}
-
-/// The whole allow-list, as a refusal names it: written out here rather than
-/// read from the code, so the two cannot agree by construction.
-const READABLE: &str = ".html, .htm, .pdf, .png, .jpg, .jpeg, .gif, .webp, .svg, .txt, .md, .csv";
 
 #[test]
 fn a_file_in_the_writable_set_is_handed_over_as_its_canonical_path() {
@@ -568,6 +432,7 @@ fn the_description_teaches_the_two_shapes_and_for_whom_the_window_opens() {
         "`bash` is how you read",
         "`url`",
         "`path`",
+        "`file:` URI",
         "`started`",
         "`failed:`",
         "a human looked",

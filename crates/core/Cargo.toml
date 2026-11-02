@@ -16,6 +16,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 libc = "0.2"
 toml = "1"
+# A `file:` URI is percent-decoded before the guard reads it, because the URI is a
+# spelling of a path and not the name a filesystem holds. Already in the graph
+# (through `url`), so this line costs no new dependency.
+percent-encoding = "2"
 # A skill's frontmatter is read as a value tree, so a key no version of the
 # specification knows is ignored rather than refused. Already in the graph
 # (through the diagram renderer), so this line costs no new dependency.

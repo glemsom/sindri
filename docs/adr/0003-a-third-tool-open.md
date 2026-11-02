@@ -92,6 +92,15 @@ made before the host is asked anything.
   and where it led, because a check on the string the model wrote is a check on the wrong
   string.
 
+**Amendment (issue #288): `file:` is read, not refused.** The scheme bullet above named
+`file:` and `http:` alike. A `file:` URI is now a second spelling of `path` and not a second
+door: the URI is percent-decoded and its authority read on what decoding left, so an empty
+authority and `localhost` reduce to the same path and any other is refused naming it, and the
+reduced path then runs the guard the
+`path` argument runs and is refused in the identical words — so a reader of the record
+cannot tell which spelling the model chose, and nothing a `file:` URI opens may be something
+a `path` could not. `http:` and every other scheme stay refused as written here.
+
 ## 4. What the core decides, and what only the host can do
 
 The core owns the contract: it reads the argument, applies the four refusals, and yields

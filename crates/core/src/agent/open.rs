@@ -4,11 +4,12 @@
 //! and the browser belong to the process the run was started from and the
 //! sandbox is the thing that takes them away.
 //!
-//! A `path` is guarded here, against the policy's own sets, because showing a
-//! file is only ever what a run could already have written: the host gives the
-//! file to whichever handler its desktop registered, so the guard is the whole
-//! of what keeps a write permission from becoming a way to run something with
-//! the human's privileges. It is resolved first and the resolved path is what is
+//! A `path` — written as `path`, or as the `file:` URI that is the same thing
+//! spelled differently — is guarded here, against the policy's own sets, because
+//! showing a file is only ever what a run could already have written: the host
+//! gives the file to whichever handler its desktop registered, so the guard is
+//! the whole of what keeps a write permission from becoming a way to run
+//! something with the human's privileges. It is resolved first and the resolved path is what is
 //! handed over, so a link cannot be a promise the tool does not keep.
 
 use std::path::PathBuf;
@@ -166,9 +167,14 @@ fn describe() -> ToolSpec {
          running sindri: for them, not for you. It is how you show someone a page you wrote or \
          found, and never how you read one — `bash` is how you read.\n\
          One target per call, named one way: `url`, an `http://` or `https://` address the host's \
-         browser fetches; `path`, a file a run could have written — inside the writable set or the \
-         session temp, and of a kind a browser reads, since the host hands a file to whatever \
-         handler its desktop registered. A refusal names the whole list of kinds.\n\
+         browser fetches, or a `file:` URI, which is `path` written another way; `path`, a file a \
+         run could have written — inside the writable set or the session temp, and of a kind a \
+         browser reads, since the host hands a file to whatever handler its desktop registered. A \
+         refusal names the whole list of kinds.\n\
+         A `file:` URI is a second spelling of `path` and not a second door: `url` may carry one, \
+         and it is percent-decoded and reduced to the path it names — an empty authority or \
+         `localhost`, never another host — before the same rule reads it, so it opens nothing a \
+         `path` could not and is refused in the same words.\n\
          The result is `started` — the host was asked and had not refused it a quarter of a \
          second later — or `failed:` with the reason the opener gave. A `path` is echoed as the \
          absolute, resolved path the host was given, not as you typed it. Neither means a human \
@@ -182,7 +188,9 @@ fn describe() -> ToolSpec {
             "properties": {
                 "url": {
                     "type": "string",
-                    "description": "An `http://` or `https://` address, opened in the human's browser.",
+                    "description": "An `http://` or `https://` address, opened in the human's \
+                                    browser, or a `file:` URI, which is a `path` in another \
+                                    spelling and passes the same rules.",
                 },
                 "path": {
                     "type": "string",

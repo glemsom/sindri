@@ -8,6 +8,7 @@ use std::ffi::OsStr;
 use std::fmt;
 use std::path::Path;
 
+use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::{Call, json_kind};
@@ -34,6 +35,11 @@ pub enum Asked {
 }
 
 const BASH: &str = "bash";
+/// The scheme that is not a page but a path: the one name `page` refuses and the
+/// reduction reads.
+const FILE: &str = "file";
+/// The one authority a `file:` URI may name besides none at all.
+const LOCALHOST: &str = "localhost";
 const SKILL: &str = "skill";
 const OPEN: &str = "open";
 
@@ -45,8 +51,10 @@ const OPEN: &str = "open";
 pub enum Target {
     /// An `http` or `https` address the host's browser fetches itself.
     Url(String),
-    /// A file the host hands to the browser, as the model wrote it: the guard
-    /// that resolves and admits it is the tool's, because it reads the policy.
+    /// A file the host hands to the browser, as the model wrote it — or as a
+    /// `file:` URI spelled it, reduced to the path it names before it is put
+    /// here, so one door has one key: the guard that resolves and admits it is
+    /// the tool's, because it reads the policy.
     Path(String),
 }
 
@@ -143,10 +151,10 @@ impl Call {
         let url = optional(arguments, "url")?;
         let path = optional(arguments, "path")?;
         match (url, path) {
-            (Some(url), None) => page(url).map(Target::Url),
+            (Some(url), None) => from_url(url),
             (None, Some(path)) => file(path).map(Target::Path),
             (None, None) => Err(
-                "the call names no target: send one of `{\"url\": \"<an http or https URL>\"}` \
+                "the call names no target: send one of `{\"url\": \"<an http, https or file: URL>\"}` \
                  and `{\"path\": \"<a file in the workspace>\"}`"
                     .to_string(),
             ),
@@ -172,6 +180,66 @@ fn optional(
             json_kind(other)
         )),
     }
+}
+
+/// A `url` argument, as the target it names: an `http` or `https` page, or a
+/// `file:` URI. A `file:` URI is the `path` argument in another spelling and not
+/// a second door, so it is reduced to the path it spells and handed on as one —
+/// to pass the guard a `path` passes, and to be refused in the words a `path` is
+/// refused in, because the record cannot tell which spelling was chosen and a
+/// reader of it should not need to.
+fn from_url(url: String) -> Result<Target, String> {
+    match scheme(&url) {
+        Some(scheme) if scheme.eq_ignore_ascii_case(FILE) => file(reduced(&url)?).map(Target::Path),
+        _ => page(url).map(Target::Url),
+    }
+}
+
+/// The path a `file:` URI spells, with the scheme and the authority dropped and
+/// what is left percent-decoded — because the URI is a spelling of a name and not
+/// a name a filesystem holds, and `%20` on disk is a file called `%20`.
+///
+/// Decoded before the authority is read, so that the string the guard sees is
+/// the only string there is: `%2F` is a separator the filesystem holds, and a
+/// spelling that hides one — `file://%2Fetc%2Fpasswd`, or `..` written as
+/// `%2e%2e` — is that path, refused in the words that path is refused in rather
+/// than misread as a host no machine has.
+fn reduced(uri: &str) -> Result<String, String> {
+    let rest = match uri.split_once(':') {
+        Some((_, rest)) => rest,
+        None => uri,
+    };
+    let decoded = percent_decode_str(rest)
+        .decode_utf8()
+        .map_err(|_| format!("`{uri}` is not a path: its percent escapes do not spell text"))?;
+    let path = after_authority(uri, &decoded)?;
+    if path.is_empty() {
+        return Err(format!(
+            "`{uri}` names no path: a `file:` URI is a path written down, as \
+             `file:///home/you/report.html` is"
+        ));
+    }
+    Ok(path.to_string())
+}
+
+/// What the authority of a `file:` URI leaves: the path beside an empty one or
+/// `localhost`, and a refusal naming it when it is another machine, because a run
+/// shows a human a file on this one.
+fn after_authority<'a>(uri: &str, rest: &'a str) -> Result<&'a str, String> {
+    let Some(after) = rest.strip_prefix("//") else {
+        return Ok(rest);
+    };
+    let (authority, path) = match after.find('/') {
+        Some(at) => after.split_at(at),
+        None => (after, ""),
+    };
+    if !authority.is_empty() && !authority.eq_ignore_ascii_case(LOCALHOST) {
+        return Err(format!(
+            "`{uri}` names the host `{authority}`, and `open` shows a human a file on this \
+             machine: a `file:` URI names no authority, or `localhost`"
+        ));
+    }
+    Ok(path)
 }
 
 /// A target the browser may be asked for: `http` or `https` and nothing else, so

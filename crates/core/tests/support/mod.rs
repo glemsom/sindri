@@ -26,6 +26,7 @@ use tempfile::TempDir;
 
 mod batch;
 mod git;
+pub mod open;
 mod replies;
 pub mod skills;
 

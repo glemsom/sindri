@@ -3117,6 +3117,7 @@ version = "0.1.0"
 dependencies = [
  "futures",
  "libc",
+ "percent-encoding",
  "reqwest",
  "rig-core",
  "rig-reqwest",

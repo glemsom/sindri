@@ -25,7 +25,12 @@ refusal.
 `https://` address, or `path`, a file. The code's word for it is `Target`, and its two shapes are
 `Url` and `Path`, because the rules that read them differ. Both are read in one place — a scheme
 that is neither is refused there, and so is an extension no browser reads — so the opener is only
-ever handed a target the core accepted. A `path` is then guarded against the **sandbox policy**'s
+ever handed a target the core accepted. A `file:` URI is a second spelling of `path` and not a
+second door: it is percent-decoded first and read for its authority afterwards, so an empty one and
+`localhost` reduce to the same path and any other is refused naming it, and what is left is a `Path`
+that runs the guard below and is
+refused in the identical words — so it opens nothing a `path` could not, and the record cannot tell
+which spelling was chosen. A `path` is then guarded against the **sandbox policy**'s
 own sets and never a second list: it must lie inside the **writable set** or the **session temp**,
 as given and as resolved, and must be a regular file, since the host hands it to whichever handler
 its desktop registered. The guard is the `open` tool's, because it reads the policy, and it reads
