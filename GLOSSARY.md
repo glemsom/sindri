@@ -7,10 +7,11 @@ Sindri's vocabulary. Use these words exactly; do not drift to synonyms.
 **turn** — one round trip to the model: our request, its response, the tool results we
 feed back. Bounded by the **turn cap** (`max_turns`, default 250).
 
-**tool call** — one request from the model to run `bash`, plus the structured **tool
-result** returned. One call may run a whole pipeline or script.
+**tool call** — one request from the model to run a tool — `bash` or `skill` — plus the
+structured **tool result** returned. One `bash` call may run a whole pipeline or script.
 
-**bash tool** — the only tool. Runs a command string inside the sandbox.
+**bash tool** — the one tool that runs anything. Runs a command string inside the
+sandbox; the model composes shell tools through it rather than being handed one per job.
 
 **answer** — the final assistant text of the last turn. The product. Markdown read into
 the frame: prose, fences drawn as panels, links that keep their targets, and **pictures**
@@ -112,13 +113,21 @@ silent unless `-v`; `--format json` changes the output shape.
 ## Skills
 
 **skill** — a directory holding a `SKILL.md`: the frontmatter's `name` and `description`,
-and the two flags that say who may reach for it. A skill no version of the
-specification knows how to read is a **refusal**, never a silence.
+the two flags that say who may reach for it, and the body beneath the fence that
+**activation** returns. A skill no version of the specification knows how to read is a
+**refusal**, never a silence.
 
-**scope** — one of the two places a **catalog** reads: `user`, under the home directory
-at `~/.agents/skills`, and `repo`, at every `.agents/skills` between the workspace and
-its repository root. The specification governs what is inside a skill directory and says
-nothing about where one lives, so these paths are ours.
+**skill scope** — one of the two places a **catalog** reads: `user`, under the home
+directory at `~/.agents/skills`, and `repo`, at every `.agents/skills` between the
+workspace and its repository root. The specification governs what is inside a skill
+directory and says nothing about where one lives, so these paths are ours. The code's
+word for it is `Scope`, and its two values are `User` and `Repo`.
+
+**activation** — one `skill` call's result: the body with the frontmatter stripped, in a
+named `<skill_content>` wrapper, with the skill's directory and its file listing beside
+it so a relative reference in the body resolves. Once per **session** and no more: a
+second call is `already_loaded` with no body, because a **tool result** is sent again
+with every later turn, and the loaded set is cleared with the history it was made in.
 
 **catalog** — everything one scan found: the **skills**, the **refusals**, and the
 **shadowed** names. Sorted by name, so two scans of one tree say the same thing.
@@ -127,8 +136,17 @@ nothing about where one lives, so these paths are ours.
 broke it: no description, no YAML, a link to nothing. A refusal is a diagnostic, not a
 failure — the rest of the **catalog** still holds.
 
-**shadowing** — one name two scopes carry. The nearer scope's skill holds it and the
-farther one is recorded as shadowed, so a reader sees both what won and what it
+**user-only skill** — one the model may not see: `disable-model-invocation: true`. It is
+absent from the **catalog** the `skill` tool carries and from that tool's schema, and a
+human reaches it from the **composer** alone. A scan still found it, so `sindri doctor`
+still prints it.
+
+**model-only skill** — one a human may not type: `user-invocable: false`. It is in the
+catalog the tool carries and callable, and absent from completion. A skill that says both
+is one nobody may run, and the report says `none` for it.
+
+**shadowing** — one name two **skill scopes** carry. The nearer one's skill holds it and
+the farther one is recorded as shadowed, so a reader sees both what won and what it
 displaced: a repository's skill over the home directory's, a crate's over its
 repository's.
 
