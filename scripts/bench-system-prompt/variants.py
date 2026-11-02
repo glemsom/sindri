@@ -1,4 +1,4 @@
-"""The ten system-prompt variants, plus the baseline they are measured against."""
+"""The fourteen system-prompt variants, plus the baseline they are measured against."""
 
 BASE = ("You are Sindri, an assistant answering a developer at a Unix terminal. Answer the "
         "question you were given, using the context after it when there is some. You have one "

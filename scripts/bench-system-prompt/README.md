@@ -2,7 +2,7 @@
 
 `docs/system-prompt.md` records what this measured and what it changed. This
 directory is the machine that produced the numbers: a fixture repo, four tasks
-with a pass rule each, the thirteen prompts tried, and two scripts that run one
+with a pass rule each, the fourteen prompts tried, and two scripts that run one
 prompt or a sweep of them against a real provider.
 
 Nothing here is on the gate — it needs a credential and a bill, and its numbers
