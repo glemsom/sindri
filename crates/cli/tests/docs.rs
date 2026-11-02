@@ -94,6 +94,46 @@ fn the_glossary_defines_instructions_as_the_repositorys_own_rules() {
 }
 
 #[test]
+fn the_glossary_names_running_as_the_records_word_for_a_run_still_going() {
+    let entry = GLOSSARY
+        .split("\n\n")
+        .find(|entry| entry.starts_with("**stopped**"))
+        .map(|entry| entry.replace('\n', " "))
+        .unwrap_or_else(|| {
+            panic!(
+                "GLOSSARY.md has no **stopped** entry: stopped names why a run ended \
+                 (crates/core/src/agent/report.rs)"
+            )
+        });
+
+    assert!(
+        entry.contains("`running`"),
+        "a record writes `stopped: running` until its run ends, so the entry must name \
+         the word a reader meets most often: {entry:?}"
+    );
+    assert!(
+        entry.contains("the record's word for a run still going"),
+        "`running` is the record's word for a run that has not ended, and the entry \
+         must say so in the record's own terms: {entry:?}"
+    );
+    assert!(
+        entry.contains("not a way the loop stops"),
+        "the loop's set is closed, so the entry cannot read as though it could stop \
+         at `running`: {entry:?}"
+    );
+
+    let loops = entry
+        .split('.')
+        .find(|sentence| sentence.contains("why the loop ended"))
+        .unwrap_or_default();
+    assert!(
+        loops.contains("`error`") && !loops.contains("`running`"),
+        "the five words are the loop's own, and `running` stands beside them rather \
+         than among them: {loops:?}"
+    );
+}
+
+#[test]
 fn the_readme_names_both_tools_and_points_at_the_record_that_decided_it() {
     let opening = README.split("\n## ").next().unwrap_or_default();
 

@@ -20,6 +20,10 @@ the frame: prose, fences drawn as panels, links that keep their targets, and **p
 with their **captions**.
 
 **stopped** — why the loop ended: `final`, `max_turns`, `budget`, `cancelled` or `error`.
+The set is the loop's and it is closed: `Stopped` holds those five and no sixth. The
+**record** writes one word more — `running` — from the moment it starts, and it is the
+record's word for a run still going, not a way the loop stops: a record still saying
+`running` never finished.
 
 **budget** — what one prompt's commands may spend before the run stops: an hour of
 command time and 8 MiB of output fed back, spent inside a script where the **turn
