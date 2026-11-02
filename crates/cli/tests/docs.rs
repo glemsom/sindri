@@ -145,3 +145,36 @@ fn the_readme_names_every_command_the_composer_can_send() {
          {bullet:?}"
     );
 }
+
+#[test]
+fn the_readme_states_that_a_repositorys_agents_md_reaches_the_model() {
+    let configuration = README
+        .split("\n## ")
+        .find(|section| section.starts_with("Configuration"))
+        .unwrap_or_else(|| panic!("README.md has no `## Configuration` section"));
+    let paragraph = configuration
+        .split("\n\n")
+        .find(|paragraph| paragraph.contains("`AGENTS.md`"))
+        .map(|paragraph| paragraph.replace('\n', " "))
+        .unwrap_or_else(|| {
+            panic!(
+                "the Configuration section never names `AGENTS.md`: a user who writes \
+                 house rules has no way to learn that they arrive: {configuration:?}"
+            )
+        });
+
+    assert!(
+        paragraph.contains("8 KiB"),
+        "the cap is what bounds the bill, and the paragraph must state it: {paragraph:?}"
+    );
+    assert!(
+        paragraph.contains("still starts"),
+        "an unreadable file is a diagnostic that never stops the run, and the paragraph \
+         must say so: {paragraph:?}"
+    );
+    assert!(
+        paragraph.contains("(GLOSSARY.md)") && paragraph.contains("`instructions`"),
+        "the glossary defines the word, and the paragraph must link its `instructions` \
+         entry: {paragraph:?}"
+    );
+}

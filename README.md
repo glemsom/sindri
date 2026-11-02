@@ -206,6 +206,16 @@ matching `*_BASE_URL`, and is redacted everywhere; a file carrying one is `0600`
 `.sindri.toml` in the working directory is **never** read: a checked-in config granting
 writable paths would turn every `git clone && sindri` into a privilege escalation.
 
+A repository's own house rules are not a setting, and they arrive all the same: the
+`AGENTS.md` at the repository root — never a nested one, never an ancestor's — is read
+once at boot and travels beside the preamble rather than as a turn, so the transcript
+stays your words. The read is capped at **8 KiB**, a byte count rather than a line or
+word count because bytes are what the request pays for, and a longer file arrives cut
+with a marker naming the bytes left out. A repository without one adds nothing; one that
+cannot be read is a diagnostic naming the file and the reason, and the run still starts.
+`-v`, `sindri doctor` and the record's start block name the file and the bytes handed
+over in one sentence. [`GLOSSARY.md`](GLOSSARY.md) defines the word, under `instructions`.
+
 ## Session records
 
 Every run leaves a record under `$XDG_STATE_HOME/sindri/sessions/<guid>/`, written as
