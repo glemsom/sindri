@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use std::sync::mpsc;
 
-use sindri_core::agent::{Agent, BashTool, Dials, Event, Limits, Report, Tools};
+use sindri_core::agent::{Agent, BashTool, Dials, Event, Limits, OpenTool, Report, Tools};
 use sindri_core::cancel::Cancel;
 use sindri_core::config::{Config, ConfigError, Overrides};
 use sindri_core::doctor::{self, DoctorError};
@@ -133,7 +133,14 @@ impl Front {
                 &self.boot.config,
                 self.boot.session.instructions().block(),
             )),
-            tool: Tools::new(bash, self.boot.session.skill_tool()),
+            // The frame is where a human is, so it is the one front end that
+            // offers the third tool: the opener is the host's own, outside the
+            // sandbox, where the display and the browser are.
+            tool: Tools::new(
+                bash,
+                self.boot.session.skill_tool(),
+                Some(OpenTool::new(Arc::new(crate::opener::Desktop::new()))),
+            ),
             max_turns: self.boot.config.max_turns,
             thinking: self.boot.config.thinking,
         }

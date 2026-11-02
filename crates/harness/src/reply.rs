@@ -103,6 +103,33 @@ impl Reply {
         )
     }
 
+    /// A turn that asks for one target to be put in front of the human: the
+    /// third tool a run may be handed, and the one that reaches no command.
+    pub fn open_call(id: &str, target: &str, text: &str) -> Self {
+        let mut content = Vec::new();
+        if !text.is_empty() {
+            content.push(serde_json::json!({"type": "text", "text": text}));
+        }
+        content.push(serde_json::json!({
+            "type": "tool_use",
+            "id": id,
+            "name": "open",
+            "input": {"url": target},
+        }));
+        Reply::whole(
+            200,
+            json(serde_json::json!({
+                "id": "msg_mock",
+                "type": "message",
+                "role": "assistant",
+                "model": "claude-mock",
+                "content": content,
+                "stop_reason": "tool_use",
+                "usage": {"input_tokens": 20, "output_tokens": 5},
+            })),
+        )
+    }
+
     pub fn thinking_answer(reasoning: &str, text: &str) -> Self {
         Reply::whole(
             200,

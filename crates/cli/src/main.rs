@@ -7,6 +7,7 @@ mod doctor;
 mod failure;
 mod frame;
 mod notice;
+mod opener;
 mod sandbox;
 mod sessions;
 mod signal;

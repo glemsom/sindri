@@ -29,6 +29,7 @@ pub fn lines(events: Vec<Event>, session: &str, instructions: Option<String>) ->
                     command.lines().collect::<Vec<_>>().join(" ")
                 ),
                 Asked::Skill { name } => format!("sindri: skill (turn {turn}): {name}"),
+                Asked::Open { target } => format!("sindri: open (turn {turn}): {target}"),
                 Asked::Refused { named, problem } => {
                     format!("sindri: {named} (turn {turn}): not run, {problem}")
                 }

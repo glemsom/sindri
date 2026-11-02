@@ -60,3 +60,80 @@ fn a_skill_call_is_written_as_the_call_it_was() {
         "and a reader is told which skill was loaded: {shown}"
     );
 }
+
+/// A call to the third tool: one target, as the model wrote it.
+fn opening(id: &str, target: &str) -> Call {
+    Call::new(
+        id,
+        "open",
+        Ok(serde_json::Map::from_iter([(
+            "url".to_string(),
+            serde_json::json!(target),
+        )])),
+    )
+}
+
+#[test]
+fn an_open_call_is_written_as_the_call_it_was() {
+    let (_root, session, recorder) = recording();
+    let opened = opening("call_2", "https://example.com/report.html");
+
+    recorder.user("show me the report");
+    recorder.tool_call(1, &opened);
+
+    let stored = Stored::load_in(&session).expect("a record still being written reads");
+    assert!(
+        matches!(
+            &stored.entries[1],
+            Entry::ToolCall { asked: Asked::Open { target }, .. }
+                if target == "https://example.com/report.html"
+        ),
+        "the record keeps the target as a field, not a string to parse twice: {:?}",
+        stored.entries
+    );
+    let shown = stored.render();
+    assert!(
+        shown.contains("open (turn 1) call_2")
+            && shown.contains("open https://example.com/report.html"),
+        "a reader of the record is told what was opened: {shown}"
+    );
+    assert!(
+        stored
+            .markdown()
+            .contains("open https://example.com/report.html"),
+        "and the export says it in the same words: {}",
+        stored.markdown()
+    );
+}
+
+#[test]
+fn an_open_target_is_redacted_in_the_record_as_a_command_is() {
+    let key = "sk-ant-test-not-a-real-key";
+    let root = TempDir::new().expect("state dir");
+    let session = SessionDir::at(root.path().join("sessions/session-1"));
+    let recorder = Recorder::start(
+        &session,
+        Start::of(
+            "anthropic".to_string(),
+            "claude-mock".to_string(),
+            Enforcement::Bubblewrap,
+        ),
+        Redaction::new([key.to_string()]),
+    )
+    .expect("start the record");
+    let leaky = format!("https://example.com/{key}/report");
+
+    recorder.user("show me the page");
+    recorder.tool_call(1, &opening("call_2", &leaky));
+
+    let stored = Stored::load_in(&session).expect("a record still being written reads");
+    let written = stored.render();
+    assert!(
+        !written.contains(key),
+        "a target is a string the model composed, and it is redacted like a command: {written}"
+    );
+    assert!(
+        written.contains("https://example.com/[redacted]/report"),
+        "the rest of the URL is kept, so a reader can still see where it pointed: {written}"
+    );
+}

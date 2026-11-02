@@ -7,13 +7,29 @@ Sindri's vocabulary. Use these words exactly; do not drift to synonyms.
 **turn** — one round trip to the model: our request, its response, the tool results we
 feed back. Bounded by the **turn cap** (`max_turns`, default 250).
 
-**tool call** — one request from the model to run a tool — `bash` or `skill` — plus the
-structured **tool result** returned. One `bash` call may run a whole pipeline or script.
+**tool call** — one request from the model to run a tool — `bash`, `skill` or `open` —
+plus the structured **tool result** returned. One `bash` call may run a whole pipeline or script.
 The code's word for the request once its arguments are read is `Asked`: a variant per
 tool, so a third tool is a compile error wherever a call is dispatched or written down.
 
 **bash tool** — the one tool that runs anything. Runs a command string inside the
 sandbox; the model composes shell tools through it rather than being handed one per job.
+
+**open** — the third tool: one **target** handed to the host's opener, for the human to look
+at. It runs nothing inside the sandbox — the core parses the target and refuses it, and the
+one front end a human with a browser sits in front of is the only one that registers the tool
+at all. A run with no window, **batch mode**, has no `open` in its schema: an absence, not a
+refusal.
+
+**target** — what one `open` call names, and exactly one of them: `url`, an `http://` or
+`https://` address, or `path`, a file in the workspace, which is not opened until the guard
+that decides which files may be shown exists. It is read in one place and a scheme that is
+neither is refused there, so the opener is only ever handed a target the core accepted.
+
+**started** — the word an `open` result carries when the host was asked and the opener had
+not refused it when the quarter-second probe window closed; `failed:` with the opener's own
+reason when it exited non-zero inside that window. Neither says a human looked: whether a
+window drew is on the far side of a process boundary.
 
 **answer** — the final assistant text of the last turn. The product. Markdown read into
 the frame: prose, fences drawn as panels, links that keep their targets, and **pictures**

@@ -73,8 +73,10 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
         executor,
     );
     // The catalog is boot's, so the model is handed the skills this workspace
-    // holds — and no second tool at all when it holds none it may see.
-    let tool = Tools::new(bash, session.skill_tool());
+    // holds — and no third tool at all: a script has no window and nobody to
+    // look at it, so `open` is absent from this schema rather than refused in a
+    // result nobody reads.
+    let tool = Tools::new(bash, session.skill_tool(), None);
     let mut agent = session.agent(
         Dials {
             model: Box::new(Client::new(&config, session.instructions().block())),

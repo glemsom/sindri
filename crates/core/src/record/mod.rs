@@ -291,6 +291,11 @@ fn asked(asked: &Asked, redaction: &Redaction) -> Asked {
             command: clean(command),
         },
         Asked::Skill { name } => Asked::Skill { name: clean(name) },
+        // A target holds whatever the model put in a URL, which is a string like
+        // any other the model composed: it passes the same redaction.
+        Asked::Open { target } => Asked::Open {
+            target: clean(target),
+        },
         Asked::Refused { named, problem } => Asked::Refused {
             named: clean(named),
             problem: clean(problem),

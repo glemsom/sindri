@@ -9,13 +9,18 @@ $ git diff | sindri -b "summarise this"
 stdout is the answer and exactly one newline; stderr is silent unless `-v`, and stdout
 stays empty when a run fails or is cancelled.
 
-**Two tools.** `bash` runs everything behind the sandbox: search, fetch, patch and HTTP
+**Three tools.** `bash` runs everything behind the sandbox: search, fetch, patch and HTTP
 all go through the shell, and pipelines or a short script do in one turn what a
 tool-per-task agent needs several. `skill` loads instructions the workspace ships —
 once per conversation, in a wrapper that lists the skill's own files — and it does not
 exist when there is nothing to load, so a run with no skills pays nothing for them.
+`open` puts one `http://` or `https://` URL in front of you, in the browser of the
+machine running sindri, and says only that the host was asked — never that you looked.
+No environment inside the sandbox has a display to open a page on, so the browser is the
+host's; batch mode, which has no one to look, is offered no `open` at all.
 Why a skill is not a file the model reads through `bash`:
-[`docs/adr/0002-two-tools.md`](docs/adr/0002-two-tools.md).
+[`docs/adr/0002-two-tools.md`](docs/adr/0002-two-tools.md), and why the browser is not
+one either: [`docs/adr/0003-a-third-tool-open.md`](docs/adr/0003-a-third-tool-open.md).
 
 **Sandboxed by default.** Every `bash` call runs in unprivileged bubblewrap, host root
 read-only (a boundary on writes, not reads) plus a writable set you chose. The escape

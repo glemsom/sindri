@@ -100,6 +100,13 @@ impl App {
                         call.took = Some(std::time::Duration::ZERO);
                     }
                     Asked::Bash { .. } => {}
+                    // An `open` spawns nothing this process watches: the row
+                    // prints the target and is over the moment it is announced,
+                    // because there is no exit for the human to wait for.
+                    Asked::Open { .. } => {
+                        call.over = Some(CallOver::Announced);
+                        call.took = Some(std::time::Duration::ZERO);
+                    }
                     Asked::Refused { .. } => {
                         call.over = Some(CallOver::Exited(0));
                         call.took = Some(std::time::Duration::ZERO);
@@ -281,13 +288,14 @@ impl App {
     }
 }
 
-/// What the call's row says it runs: the script, `skill <name>` for a load, and
-/// nothing at all for a call no tool could answer, which is a row with no
-/// command behind it.
+/// What the call's row says it runs: the script, `skill <name>` for a load, the
+/// target for an `open`, and nothing at all for a call no tool could answer,
+/// which is a row with no command behind it.
 fn requested(asked: &Asked) -> Option<String> {
     match asked {
         Asked::Bash { command } => Some(command.clone()),
         Asked::Skill { name } => Some(format!("skill {name}")),
+        Asked::Open { target } => Some(target.clone()),
         Asked::Refused { .. } => None,
     }
 }

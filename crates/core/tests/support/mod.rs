@@ -260,7 +260,7 @@ impl Harness {
             sindri_core::agent::Limits::default(),
             executor,
         );
-        let tool = Tools::new(bash, skill);
+        let tool = Tools::new(bash, skill, None);
         let seen = Arc::new(Mutex::new(Vec::new()));
         let told = Arc::new(Mutex::new(Vec::new()));
         let model = ScriptedModel::new(replies, Arc::clone(&seen), Arc::clone(&told))

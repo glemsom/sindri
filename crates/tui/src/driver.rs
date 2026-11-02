@@ -21,6 +21,11 @@ pub enum CallOver {
     TimedOut,
     Cancelled,
     Refused(String),
+    /// A call with no exit to watch: `open` hands one target to the host's
+    /// opener and the loop is already past it, so the row is over the moment it
+    /// was announced. What the opener answered is the model's to read, never
+    /// something this column can say.
+    Announced,
 }
 
 /// What a command's output had to leave behind: the streams the model

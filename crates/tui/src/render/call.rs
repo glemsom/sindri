@@ -52,15 +52,20 @@ pub fn rows(call: &Call, width: u16, now: Duration) -> Vec<Line<'static>> {
         (Some(CallOver::Refused(detail)), None) => {
             ("✗", format!("sandbox: {detail}"), theme::bad())
         }
+        // A call with nothing to watch: it was announced and the loop is past
+        // it. The dot is the same one a repeat gets — nothing here says a human
+        // looked, because nothing here can know.
+        (Some(CallOver::Announced), None) => ("·", "announced".to_string(), theme::faint()),
     };
     // An open call says so with its marker: the row a key opens is the row
     // that shows it is open.
     let marker = if call.expanded() { "▾ " } else { "⎿ " };
     // How long the call has been running, or how long it took: frozen at the
     // duration it ended on, so a finished call is not still counting.
-    // A load spends no turn and takes no clock: the column stays, empty, so
-    // the two kinds of call still line their names up on one column.
-    let took = if call.skill.is_some() {
+    // A load and an `open` spend no clock: the column stays, empty, so the
+    // three kinds of call still line their names up on one column. An `open`
+    // that showed the zero it measured would be a duration nothing took.
+    let took = if call.skill.is_some() || call.over == Some(CallOver::Announced) {
         String::new()
     } else {
         pulse::said(call.elapsed(now))

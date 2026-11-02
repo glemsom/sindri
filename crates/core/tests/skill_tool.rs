@@ -73,7 +73,7 @@ fn with_no_skill_the_model_may_see_the_tool_is_not_registered() {
     let (_workspace, _session_temp, policy) = fixtures();
     let bash = BashTool::new(&policy, Limits::default(), Scripted::silent());
     assert_eq!(
-        Tools::new(bash, None).specs().len(),
+        Tools::new(bash, None, None).specs().len(),
         1,
         "the model is handed bash and nothing else"
     );
@@ -367,7 +367,7 @@ fn a_skill_body_is_charged_to_the_budget_as_any_result_is() {
 fn a_skill_call_in_a_run_without_the_tool_is_answered_not_run() {
     let (_workspace, _session_temp, policy) = fixtures();
     let bash = BashTool::new(&policy, Limits::default(), Scripted::silent());
-    let tools = Tools::new(bash, None);
+    let tools = Tools::new(bash, None, None);
 
     let outcome = tools
         .call(&load("call_1", "alpha"), &Default::default())

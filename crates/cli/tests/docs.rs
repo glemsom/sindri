@@ -134,7 +134,7 @@ fn the_glossary_names_running_as_the_records_word_for_a_run_still_going() {
 }
 
 #[test]
-fn the_readme_names_both_tools_and_points_at_the_record_that_decided_it() {
+fn the_readme_names_every_tool_and_points_at_the_records_that_decided_them() {
     let opening = README.split("\n## ").next().unwrap_or_default();
 
     assert!(
@@ -147,13 +147,22 @@ fn the_readme_names_both_tools_and_points_at_the_record_that_decided_it() {
          opening list must name it: {opening:?}"
     );
     assert!(
-        opening.contains("docs/adr/0002-two-tools.md"),
-        "the decision lives in ADR 0002, and the opening list must point a reader at \
-         it: {opening:?}"
+        opening.contains("`open`"),
+        "the frame registers a third tool, and the opening list must name it: {opening:?}"
     );
+    for record in [
+        "docs/adr/0002-two-tools.md",
+        "docs/adr/0003-a-third-tool-open.md",
+    ] {
+        assert!(
+            opening.contains(record),
+            "the decision lives in `{record}`, and the opening list must point a reader \
+             at it: {opening:?}"
+        );
+    }
     assert!(
         !opening.contains("get `bash` and nothing else"),
-        "the run hands the model two tools, so the opening list cannot say one: \
+        "the run hands the model three tools, so the opening list cannot say one: \
          {opening:?}"
     );
 }
