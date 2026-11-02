@@ -3,13 +3,14 @@
 //! watch and no output this process ever saw.
 
 use super::*;
+use sindri_core::provider::Target;
 
 /// The one call the model makes to the third tool.
 fn opened(app: &mut App, turn: u32, target: &str) {
     app.event(Event::ToolCall {
         turn,
         asked: Asked::Open {
-            target: target.to_string(),
+            target: Target::Url(target.to_string()),
         },
     });
 }

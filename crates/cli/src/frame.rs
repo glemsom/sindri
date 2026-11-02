@@ -139,7 +139,11 @@ impl Front {
             tool: Tools::new(
                 bash,
                 self.boot.session.skill_tool(),
-                Some(OpenTool::new(Arc::new(crate::opener::Desktop::new()))),
+                Some(OpenTool::new(
+                    Arc::new(crate::opener::Desktop::new()),
+                    self.boot.session.policy().clone(),
+                    self.boot.session.workspace().to_path_buf(),
+                )),
             ),
             max_turns: self.boot.config.max_turns,
             thinking: self.boot.config.thinking,

@@ -22,9 +22,17 @@ at all. A run with no window, **batch mode**, has no `open` in its schema: an ab
 refusal.
 
 **target** — what one `open` call names, and exactly one of them: `url`, an `http://` or
-`https://` address, or `path`, a file in the workspace, which is not opened until the guard
-that decides which files may be shown exists. It is read in one place and a scheme that is
-neither is refused there, so the opener is only ever handed a target the core accepted.
+`https://` address, or `path`, a file. The code's word for it is `Target`, and its two shapes are
+`Url` and `Path`, because the rules that read them differ. Both are read in one place — a scheme
+that is neither is refused there, and so is an extension no browser reads — so the opener is only
+ever handed a target the core accepted. A `path` is then guarded against the **sandbox policy**'s
+own sets and never a second list: it must lie inside the **writable set** or the **session temp**,
+as given and as resolved, and must be a regular file, since the host hands it to whichever handler
+its desktop registered. The guard is the `open` tool's, because it reads the policy, and it reads
+the extension rule a second time on the resolved path, since that is the file handed over: the
+path it hands over is the resolved absolute one, and it is the resolved file's extension the
+allow-list holds, so a link cannot promise one file and deliver another. A refusal never names a
+path outside what a run may read: `open` is not a way to ask the host what exists out there.
 
 **started** — the word an `open` result carries when the host was asked and the opener had
 not refused it when the quarter-second probe window closed; `failed:` with the opener's own

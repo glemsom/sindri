@@ -222,6 +222,27 @@ mod tests {
     }
 
     #[test]
+    fn a_file_path_is_one_argument_and_never_a_word_a_shell_reads() {
+        let fake = Faked::saying(RECORDING);
+        let root = tempfile::TempDir::new().expect("a place for the file");
+        let file = root.path().join("report;touch hoisted-by-a-path.html");
+        std::fs::write(&file, "<html>a report</html>").expect("a report");
+        let target = file.display().to_string();
+
+        let opened = fake.opener().open(&target);
+
+        assert_eq!(opened, Opened::Started);
+        let log = fake.logged();
+        assert!(
+            log.contains("args: 1") && log.contains(&format!("arg: {target}")),
+            "the path arrives whole, as one argv word: {log}"
+        );
+        let hoisted = std::path::Path::new("hoisted-by-a-path").exists();
+        let _ = std::fs::remove_file("hoisted-by-a-path");
+        assert!(!hoisted, "no shell read the path: nothing in it ran");
+    }
+
+    #[test]
     fn an_opener_that_exits_non_zero_inside_the_window_fails_with_its_status() {
         let fake = Faked::saying("#!/bin/sh\nexit 4\n");
 

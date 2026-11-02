@@ -183,6 +183,19 @@ impl SandboxPolicy {
         &self.writable
     }
 
+    /// Whether a path lies inside what this policy lets a run write: the
+    /// writable set or the session temp. One answer, so a rule that puts a file
+    /// in front of a human and the mounts that let a command write that file
+    /// cannot disagree about which files those are.
+    pub fn may_write(&self, path: &Path) -> bool {
+        path.starts_with(&self.session_temp)
+            || self
+                .writable
+                .paths()
+                .iter()
+                .any(|root| path.starts_with(root))
+    }
+
     pub fn session_temp(&self) -> &Path {
         &self.session_temp
     }

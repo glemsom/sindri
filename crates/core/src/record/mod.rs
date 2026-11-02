@@ -294,7 +294,7 @@ fn asked(asked: &Asked, redaction: &Redaction) -> Asked {
         // A target holds whatever the model put in a URL, which is a string like
         // any other the model composed: it passes the same redaction.
         Asked::Open { target } => Asked::Open {
-            target: clean(target),
+            target: target.clone().map(|text| clean(&text)),
         },
         Asked::Refused { named, problem } => Asked::Refused {
             named: clean(named),

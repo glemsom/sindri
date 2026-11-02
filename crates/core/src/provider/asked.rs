@@ -4,9 +4,11 @@
 //! of letting a call run that nothing answers or be written down as a shape no
 //! reader knows.
 
+use std::ffi::OsStr;
 use std::fmt;
+use std::path::Path;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::{Call, json_kind};
 
@@ -21,11 +23,10 @@ pub enum Asked {
     Bash { command: String },
     /// A skill by name, loaded into this conversation once.
     Skill { name: String },
-    /// One target for the human's browser: an `http` or `https` URL, read out of
-    /// the two argument shapes here, so a call that names none, names both or
-    /// names a scheme this does not open is a [`Asked::Refused`] before any host
-    /// is asked anything.
-    Open { target: String },
+    /// One target for the human's browser, read out of the two argument shapes
+    /// here, so a call that names none, names both, or names a target the host
+    /// may not be handed is a [`Asked::Refused`] before anything is opened.
+    Open { target: Target },
     /// A call no tool can answer: a name this run does not have, or arguments
     /// that are not what the tool takes. `named` is the name as the model wrote
     /// it, because the call happened under it whatever it meant.
@@ -36,12 +37,60 @@ const BASH: &str = "bash";
 const SKILL: &str = "skill";
 const OPEN: &str = "open";
 
-/// What a `path` is answered with until the guard that decides which files may
-/// be shown exists: the host's mimetype handler is the escalation, so a path no
-/// rule has read is not a target.
-const UNGUARDED: &str = "`open` does not open a `path`: nothing in this run decides which \
-                         files may be shown to the human, so send an `http://` or `https://` \
-                         `url`";
+/// What one `open` call names, and the reason it is a value rather than the
+/// string the model wrote: a page and a file are read by different rules — a
+/// scheme for one, a guard over the filesystem for the other — so a target that
+/// had forgotten which it was could only be guessed at by a second reader.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Target {
+    /// An `http` or `https` address the host's browser fetches itself.
+    Url(String),
+    /// A file the host hands to the browser, as the model wrote it: the guard
+    /// that resolves and admits it is the tool's, because it reads the policy.
+    Path(String),
+}
+
+impl Target {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Target::Url(text) | Target::Path(text) => text,
+        }
+    }
+
+    /// The same target with its text passed through `f`: a record redacts what
+    /// a target holds as it redacts a command, whichever shape it is.
+    pub fn map(self, f: impl FnOnce(String) -> String) -> Target {
+        match self {
+            Target::Url(text) => Target::Url(f(text)),
+            Target::Path(text) => Target::Path(f(text)),
+        }
+    }
+}
+
+impl fmt::Display for Target {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl Serialize for Target {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for Target {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Target, D::Error> {
+        let text = String::deserialize(deserializer)?;
+        // A record keeps a target as one string, and nothing that reads a record
+        // opens anything: a target read back is classified by its own text,
+        // which is the only thing there is to classify it by.
+        Ok(match scheme(&text) {
+            Some(scheme) if web(scheme) => Target::Url(text),
+            _ => Target::Path(text),
+        })
+    }
+}
 
 impl Call {
     /// The call as the loop reads it. Read once, here, so the tool that runs it,
@@ -84,17 +133,18 @@ impl Call {
     }
 
     /// The one target an `open` call names: exactly one of `url` and `path`, and
-    /// a `url` is handed on only when its scheme is one a browser is asked for a
-    /// page with.
-    fn target(&self) -> Result<String, String> {
+    /// each is read by the rule that holds for it — a `url` by its scheme, a
+    /// `path` by the extensions a browser reads — so the target handed on is one
+    /// the host may be given as what it is.
+    fn target(&self) -> Result<Target, String> {
         let arguments = self
             .sent()
             .map_err(|sent| format!("the arguments were not a JSON object: `{sent}`"))?;
         let url = optional(arguments, "url")?;
         let path = optional(arguments, "path")?;
         match (url, path) {
-            (Some(url), None) => page(url),
-            (None, Some(_)) => Err(UNGUARDED.to_string()),
+            (Some(url), None) => page(url).map(Target::Url),
+            (None, Some(path)) => file(path).map(Target::Path),
             (None, None) => Err(
                 "the call names no target: send one of `{\"url\": \"<an http or https URL>\"}` \
                  and `{\"path\": \"<a file in the workspace>\"}`"
@@ -128,11 +178,7 @@ fn optional(
 /// a browser handed it has stayed where a run has a claim.
 fn page(target: String) -> Result<String, String> {
     match scheme(&target) {
-        Some(scheme)
-            if scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https") =>
-        {
-            Ok(target)
-        }
+        Some(scheme) if web(scheme) => Ok(target),
         Some(scheme) => Err(format!(
             "`open` does not open `{scheme}:` targets: it opens `http:` and `https:` URLs, and \
              `{scheme}:` is neither"
@@ -141,6 +187,58 @@ fn page(target: String) -> Result<String, String> {
             "`{target}` names no scheme: `open` takes an `http://` or `https://` URL"
         )),
     }
+}
+
+/// Whether a scheme names a page a browser is asked for.
+fn web(scheme: &str) -> bool {
+    scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https")
+}
+
+/// The extensions the host's handler may be trusted with. One list in one place:
+/// a refusal names the whole of it, and nothing else repeats it.
+const READABLE: [&str; 12] = [
+    "html", "htm", "pdf", "png", "jpg", "jpeg", "gif", "webp", "svg", "txt", "md", "csv",
+];
+
+/// A file the host may be asked to show. The handler is the escalation and not
+/// the scheme — the host hands a file to whatever its desktop registered, so a
+/// `.desktop` or a script would run with the human's privileges — and the
+/// extension in the spelling the model wrote is read here, before anything
+/// resolves, so a call naming a kind no browser reads never reaches the guard.
+fn file(given: String) -> Result<String, String> {
+    reads(Path::new(&given))?;
+    Ok(given)
+}
+
+/// Whether `path` ends in a kind a browser reads, and when it does not, the
+/// refusal, naming the whole list. One rule read in two places because the two
+/// strings differ: the model's, here, and the resolved path's in the guard —
+/// a link inside the writable set named `report.html` resolves to a
+/// `payload.desktop`, and the resolved file is the one the host is handed.
+pub fn reads(path: &Path) -> Result<(), String> {
+    let extension = path.extension().and_then(OsStr::to_str);
+    if let Some(extension) = extension
+        && READABLE
+            .iter()
+            .any(|read| extension.eq_ignore_ascii_case(read))
+    {
+        return Ok(());
+    }
+    let name = path.display();
+    let why = match extension {
+        Some(extension) => format!("ends in `.{extension}`"),
+        None => "has no extension".to_string(),
+    };
+    Err(format!(
+        "`open` does not open `{name}`: the host hands a file to whichever handler its desktop \
+         registered, so a `path` must be one a browser reads — {} — and it {why}",
+        readable()
+    ))
+}
+
+/// The allow-list as a refusal names it: `html, htm, … csv`, each as an extension.
+fn readable() -> String {
+    READABLE.map(|extension| format!(".{extension}")).join(", ")
 }
 
 /// The scheme a target opens with, if it opens with one: the text before the

@@ -214,6 +214,12 @@ impl Session {
         &self.policy
     }
 
+    /// The tree the run was opened in: what a relative path in a call is read
+    /// from, since it is the directory a command starts in inside the sandbox.
+    pub fn workspace(&self) -> &Path {
+        &self.env.workspace
+    }
+
     /// The tree's git facts as the record holds them, so a front end states
     /// what the run recorded rather than shelling git a second time.
     pub fn git(&self) -> Option<&Git> {

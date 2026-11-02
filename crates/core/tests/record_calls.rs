@@ -86,7 +86,7 @@ fn an_open_call_is_written_as_the_call_it_was() {
         matches!(
             &stored.entries[1],
             Entry::ToolCall { asked: Asked::Open { target }, .. }
-                if target == "https://example.com/report.html"
+                if target.as_str() == "https://example.com/report.html"
         ),
         "the record keeps the target as a field, not a string to parse twice: {:?}",
         stored.entries

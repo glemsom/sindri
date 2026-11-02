@@ -10,11 +10,14 @@
 
 mod support;
 
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use sindri_core::agent::{BashTool, Limits, OpenTool, Opened, Opener, Tools};
-use sindri_core::provider::{Asked, Call, ToolOutcome};
-use support::{Scripted, fixtures};
+use sindri_core::provider::{Asked, Call, Target, ToolOutcome};
+use sindri_core::sandbox::SandboxPolicy;
+use support::{Scripted, fixtures, policy};
+use tempfile::TempDir;
 
 /// The host's opener, faked: every target it was asked for, and the one answer
 /// it gives. A test that says it was never asked reads an empty list.
@@ -48,9 +51,13 @@ impl Opener for Fake {
 
 /// A run with the third tool, over an opener a test controls.
 fn tools(opener: Arc<Fake>) -> Tools {
-    let (_workspace, _session_temp, policy) = fixtures();
+    let (workspace, _session_temp, policy) = fixtures();
+    let root = workspace
+        .path()
+        .canonicalize()
+        .expect("a canonical workspace");
     let bash = BashTool::new(&policy, Limits::default(), Scripted::silent());
-    Tools::new(bash, None, Some(OpenTool::new(opener)))
+    Tools::new(bash, None, Some(OpenTool::new(opener, policy, root)))
 }
 
 /// A run with no browser anywhere near it, as batch mode builds one.
@@ -88,7 +95,7 @@ fn an_https_url_is_handed_to_the_host_and_the_result_reads_started() {
     assert_eq!(
         call.asked(),
         Asked::Open {
-            target: "https://example.com/report.html".to_string(),
+            target: Target::Url("https://example.com/report.html".to_string()),
         }
     );
     assert_eq!(outcome.facts.outcome.as_deref(), Some("started"));
@@ -212,25 +219,301 @@ fn a_call_naming_both_arguments_is_refused_before_the_opener_runs() {
     );
 }
 
-#[test]
-fn a_path_is_refused_until_the_guard_that_reads_files_exists() {
-    let opener = Fake::answering(Opened::Started);
-    let tools = tools(Arc::clone(&opener));
+/// A run whose workspace a test can put a file in, and whose opener it reads
+/// afterwards: the two places a `path` may name, and the third tool over them.
+struct Run {
+    workspace: TempDir,
+    /// Held only where the session temp is a tree of its own: the shared
+    /// fixtures keep it inside the workspace.
+    _session: Option<TempDir>,
+    session_temp: PathBuf,
+    opener: Arc<Fake>,
+    tools: Tools,
+}
 
-    let outcome = tools
-        .call(&call(&[("path", "report.html")]), &Default::default())
-        .expect("a call is answered");
+impl Run {
+    fn new() -> Run {
+        let (workspace, session_temp, policy) = fixtures();
+        Run::over(workspace, None, session_temp, policy)
+    }
+
+    /// A run whose session temp is outside its workspace, so the two places a
+    /// `path` may name are two different trees.
+    fn apart() -> Run {
+        let workspace = TempDir::new().expect("workspace");
+        let session = TempDir::new().expect("session temp");
+        let session_temp = session.path().to_path_buf();
+        let policy = policy(&workspace, &session_temp);
+        Run::over(workspace, Some(session), session_temp, policy)
+    }
+
+    fn over(
+        workspace: TempDir,
+        session: Option<TempDir>,
+        session_temp: PathBuf,
+        policy: SandboxPolicy,
+    ) -> Run {
+        let opener = Fake::answering(Opened::Started);
+        let root = workspace
+            .path()
+            .canonicalize()
+            .expect("a canonical workspace");
+        let bash = BashTool::new(&policy, Limits::default(), Scripted::silent());
+        let hand: Arc<dyn Opener> = opener.clone();
+        let tools = Tools::new(bash, None, Some(OpenTool::new(hand, policy, root)));
+        Run {
+            workspace,
+            _session: session,
+            session_temp,
+            opener,
+            tools,
+        }
+    }
+
+    /// A report written at `base`/`name`, as the canonical path the guard is
+    /// expected to hand over.
+    fn write(&self, base: &Path, name: &str) -> PathBuf {
+        let path = base.join(name);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).expect("a directory for the report");
+        }
+        std::fs::write(&path, "<html>a report</html>").expect("a report");
+        path.canonicalize().expect("a canonical report")
+    }
+
+    /// A report in the workspace.
+    fn report(&self, name: &str) -> PathBuf {
+        self.write(self.workspace.path(), name)
+    }
+
+    /// One `open` call naming a `path`, answered.
+    fn shown(&self, given: &str) -> ToolOutcome {
+        self.tools
+            .call(&call(&[("path", given)]), &Default::default())
+            .expect("a call is answered")
+    }
+
+    fn asked(&self) -> Vec<String> {
+        self.opener.asked()
+    }
+}
+
+/// The whole allow-list, as a refusal names it: written out here rather than
+/// read from the code, so the two cannot agree by construction.
+const READABLE: &str = ".html, .htm, .pdf, .png, .jpg, .jpeg, .gif, .webp, .svg, .txt, .md, .csv";
+
+#[test]
+fn a_file_in_the_writable_set_is_handed_over_as_its_canonical_path() {
+    let run = Run::new();
+    let report = run.report("notes/report.html");
+
+    let outcome = run.shown("notes/report.html");
+
+    assert_eq!(
+        run.asked(),
+        vec![report.display().to_string()],
+        "the host is asked for the resolved file, never the string the model typed"
+    );
+    assert_eq!(outcome.facts.outcome.as_deref(), Some("started"));
+    assert!(!outcome.is_error, "a file the guard admitted is no error");
+    assert!(
+        outcome
+            .content
+            .contains(&format!("target: {}\n", report.display())),
+        "the result echoes the absolute canonical path, so the model can quote the one a \
+         human could paste: {}",
+        outcome.content
+    );
+    assert!(
+        !outcome.content.contains("target: notes/"),
+        "and never the relative path it was given: {}",
+        outcome.content
+    );
+}
+
+#[test]
+fn a_file_in_the_session_temp_is_admitted_too() {
+    let run = Run::apart();
+    let report = run.write(&run.session_temp, "chart.svg");
+
+    let outcome = run.shown(&report.display().to_string());
+
+    assert_eq!(
+        run.asked(),
+        vec![report.display().to_string()],
+        "the session temp is the other place a run may write, and a file it put there is a \
+         file a human may be shown: {}",
+        outcome.content
+    );
+    assert_eq!(outcome.facts.outcome.as_deref(), Some("started"));
+}
+
+#[test]
+fn a_path_outside_the_writable_set_and_the_session_temp_is_refused() {
+    let run = Run::new();
+    let outside = TempDir::new().expect("a tree the run may not write");
+    let report = run.write(outside.path(), "report.html");
+
+    let outcome = run.shown(&report.display().to_string());
 
     assert!(
-        opener.asked().is_empty(),
-        "a path no rule has read never reaches the host's mimetype handler"
+        run.asked().is_empty(),
+        "a file outside the run's own writes never reaches the host's handler"
     );
     assert!(outcome.is_error);
     assert!(
-        outcome.content.contains("does not open a `path`"),
-        "the refusal names the ground it stopped on: {}",
+        outcome.content.contains("outside the writable set")
+            && outcome.content.contains(&report.display().to_string()),
+        "the refusal names the ground it stopped on and the file it refused: {}",
         outcome.content
     );
+}
+
+#[test]
+fn a_symlink_that_leaves_the_writable_set_is_refused_without_naming_where_it_led() {
+    let run = Run::new();
+    let outside = TempDir::new().expect("a tree the run may not write");
+    let secret = run.write(outside.path(), "report.html");
+    let link = run.workspace.path().join("escape.html");
+    std::os::unix::fs::symlink(&secret, &link).expect("a link out of the writable set");
+
+    let outcome = run.shown("escape.html");
+
+    assert!(
+        run.asked().is_empty(),
+        "a write permission is not laundered into a file shown to a human"
+    );
+    assert!(outcome.is_error);
+    assert!(
+        outcome.content.contains("escape.html"),
+        "the refusal names the link it would not follow: {}",
+        outcome.content
+    );
+    assert!(
+        !outcome.content.contains(&secret.display().to_string()),
+        "and never echoes a path outside what a run may read, or `open` would answer whether \
+         a file the run cannot read exists: {}",
+        outcome.content
+    );
+}
+
+#[test]
+fn a_link_whose_resolved_file_is_not_one_a_browser_reads_is_refused() {
+    let run = Run::new();
+    for (shows_as, really) in [("report.html", "payload.desktop"), ("notes.txt", "notes")] {
+        let payload = run.write(run.workspace.path(), really);
+        let link = run.workspace.path().join(shows_as);
+        std::os::unix::fs::symlink(&payload, &link).expect("a link to the file it really is");
+
+        let outcome = run.shown(shows_as);
+
+        assert!(
+            run.asked().is_empty(),
+            "`{shows_as}` is a `{really}` underneath, and the host is handed what it resolves to, \
+             so no `.desktop` may reach a handler: {}",
+            outcome.content
+        );
+        assert!(outcome.is_error);
+        assert!(
+            outcome.content.contains(READABLE),
+            "the refusal names every kind that would have opened: {}",
+            outcome.content
+        );
+    }
+}
+
+#[test]
+fn a_path_that_names_nothing_is_refused() {
+    let run = Run::new();
+
+    let outcome = run.shown("missing.html");
+
+    assert!(run.asked().is_empty(), "nothing that is not there is shown");
+    assert!(outcome.is_error);
+    assert!(
+        outcome.content.contains("missing.html") && outcome.content.contains("does not exist"),
+        "the refusal says there is no such file: {}",
+        outcome.content
+    );
+}
+
+#[test]
+fn a_directory_is_refused_because_a_browser_is_handed_files() {
+    let run = Run::new();
+    std::fs::create_dir(run.workspace.path().join("pages.html")).expect("a directory");
+
+    let outcome = run.shown("pages.html");
+
+    assert!(run.asked().is_empty(), "a directory is not a file to open");
+    assert!(outcome.is_error);
+    assert!(
+        outcome.content.contains("not a regular file"),
+        "the refusal names what the path is instead: {}",
+        outcome.content
+    );
+}
+
+#[test]
+fn an_extension_no_browser_reads_is_refused_naming_the_whole_set() {
+    let run = Run::new();
+
+    for given in ["install.desktop", "script.sh", "Makefile", "notes.rst"] {
+        let outcome = run.shown(given);
+
+        assert!(
+            run.asked().is_empty(),
+            "`{given}` must never reach the host's mimetype guesser"
+        );
+        assert!(outcome.is_error);
+        assert!(
+            outcome.content.contains(READABLE),
+            "the refusal names every extension that would have opened: {}",
+            outcome.content
+        );
+        assert!(
+            outcome.content.contains(given),
+            "and the path it refused: {}",
+            outcome.content
+        );
+    }
+}
+
+#[test]
+fn an_extension_is_read_whatever_its_case() {
+    let run = Run::new();
+    let report = run.report("index.HTML");
+
+    let outcome = run.shown("index.HTML");
+
+    assert_eq!(
+        run.asked(),
+        vec![report.display().to_string()],
+        "an upper-case spelling is the same kind of file: {}",
+        outcome.content
+    );
+    assert!(!outcome.is_error);
+}
+
+#[test]
+fn a_path_is_one_argument_never_a_word_a_shell_reads() {
+    let run = Run::new();
+    let name = "report;touch hoisted.html";
+    let report = run.report(name);
+
+    let outcome = run.shown(name);
+
+    assert_eq!(
+        run.asked(),
+        vec![report.display().to_string()],
+        "the path arrives as one target, whatever words it holds: {}",
+        outcome.content
+    );
+    for hoisted in ["hoisted", "hoisted.html"] {
+        assert!(
+            !run.workspace.path().join(hoisted).exists(),
+            "no shell read the path: `{hoisted}` was not created"
+        );
+    }
 }
 
 #[test]
@@ -261,12 +544,19 @@ fn a_run_with_no_browser_is_never_offered_the_tool() {
 
 #[test]
 fn the_description_teaches_the_two_shapes_and_for_whom_the_window_opens() {
-    let (_workspace, _session_temp, policy) = fixtures();
+    let (workspace, _session_temp, policy) = fixtures();
     let bash = BashTool::new(&policy, Limits::default(), Scripted::silent());
     let tools = Tools::new(
         bash,
         None,
-        Some(OpenTool::new(Fake::answering(Opened::Started))),
+        Some(OpenTool::new(
+            Fake::answering(Opened::Started),
+            policy.clone(),
+            workspace
+                .path()
+                .canonicalize()
+                .expect("a canonical workspace"),
+        )),
     );
     let specs = tools.specs();
     let spec = specs.last().expect("the third tool is registered");
@@ -282,6 +572,9 @@ fn the_description_teaches_the_two_shapes_and_for_whom_the_window_opens() {
         "`failed:`",
         "a human looked",
         "far side of a process boundary",
+        "a run could have written",
+        "writable set",
+        "browser reads",
     ] {
         assert!(
             description.contains(taught),

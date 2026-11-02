@@ -295,7 +295,7 @@ fn requested(asked: &Asked) -> Option<String> {
     match asked {
         Asked::Bash { command } => Some(command.clone()),
         Asked::Skill { name } => Some(format!("skill {name}")),
-        Asked::Open { target } => Some(target.clone()),
+        Asked::Open { target } => Some(target.to_string()),
         Asked::Refused { .. } => None,
     }
 }

@@ -6,7 +6,7 @@ mod asked;
 mod rig_wire;
 mod window;
 
-pub use asked::Asked;
+pub use asked::{Asked, Target, reads};
 pub use window::context_window;
 
 use std::time::Duration;
