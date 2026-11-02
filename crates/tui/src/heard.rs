@@ -83,6 +83,14 @@ impl App {
                 self.rail.turn(turn, self.now);
                 self.close_answers(false);
                 let mut call = Call::new(turn, requested(&asked), self.now);
+                // A load runs no command, so there is no exit to wait for: its
+                // row is over the moment it was announced, rather than counting
+                // up until the next call's own end. What the row says a load
+                // did is the rail's to answer, with the chip a load earns.
+                if !matches!(asked, Asked::Bash { .. }) {
+                    call.over = Some(CallOver::Exited(0));
+                    call.took = Some(std::time::Duration::ZERO);
+                }
                 for (side, line) in self.early.drain(..) {
                     call.push(side, line);
                 }

@@ -44,11 +44,3 @@ impl Tools {
         }
     }
 }
-
-impl std::fmt::Debug for Tools {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Tools")
-            .field("skill", &self.skill)
-            .finish_non_exhaustive()
-    }
-}

@@ -81,22 +81,21 @@ pub fn parse(text: &str) -> Result<Frontmatter, Problem> {
 /// taken off. `None` when the file has no fence that closes, which [`parse`]
 /// has already refused — this is the second read of a file, not a second parse.
 pub fn body(text: &str) -> Option<&str> {
-    if text.lines().next()?.trim_end() != FENCE {
+    let mut lines = text.split_inclusive('\n');
+    let first = lines.next()?;
+    if first.trim_end() != FENCE {
         return None;
     }
-    let mut rest = text;
-    let mut opened = false;
-    loop {
-        let (line, tail) = rest.split_once('\n')?;
-        rest = tail;
-        if line.trim_end() != FENCE {
-            continue;
+    // Every line passed is counted, so what comes back is the file's own text
+    // from the closing fence's end onwards, trimmed of the blank line between.
+    let mut offset = first.len();
+    for line in lines {
+        offset += line.len();
+        if line.trim_end() == FENCE {
+            return Some(text.get(offset..)?.trim());
         }
-        if opened {
-            return Some(rest.trim());
-        }
-        opened = true;
     }
+    None
 }
 
 /// A field the specification requires, as a string that says something. A key

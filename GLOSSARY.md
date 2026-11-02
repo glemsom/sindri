@@ -9,6 +9,8 @@ feed back. Bounded by the **turn cap** (`max_turns`, default 250).
 
 **tool call** — one request from the model to run a tool — `bash` or `skill` — plus the
 structured **tool result** returned. One `bash` call may run a whole pipeline or script.
+The code's word for the request once its arguments are read is `Asked`: a variant per
+tool, so a third tool is a compile error wherever a call is dispatched or written down.
 
 **bash tool** — the one tool that runs anything. Runs a command string inside the
 sandbox; the model composes shell tools through it rather than being handed one per job.

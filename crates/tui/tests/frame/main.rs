@@ -373,6 +373,7 @@ mod prose;
 mod pulse;
 mod queue;
 mod rail;
+mod skill;
 mod surface;
 mod transcript;
 mod window;

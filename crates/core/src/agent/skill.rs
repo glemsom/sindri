@@ -5,7 +5,6 @@
 //! preamble stays exactly what it was.
 
 use std::collections::BTreeSet;
-use std::fmt;
 use std::sync::Mutex;
 use std::time::Instant;
 
@@ -100,16 +99,6 @@ impl SkillTool {
             "there is no skill called `{name}`: `skill` takes one of {}",
             valid.join(", ")
         )
-    }
-}
-
-impl fmt::Debug for SkillTool {
-    /// The spec is a paragraph and the catalog a list of paths: a test that
-    /// prints the tool prints what it offers, not the prose it offers it in.
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("SkillTool")
-            .field("skills", &self.names())
-            .finish_non_exhaustive()
     }
 }
 
