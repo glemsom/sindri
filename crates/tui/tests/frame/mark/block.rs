@@ -4,6 +4,7 @@
 //! covers the frame, or a click that opens a row, lights nothing at all.
 
 use super::*;
+use sindri_core::provider::Asked;
 
 use crossterm::event::KeyCode;
 use ratatui::buffer::Buffer;
@@ -195,7 +196,9 @@ fn a_click_that_opens_a_spill_row_starts_no_mark_and_lights_nothing() {
     let mut app = App::with_clipboard(launch(), None, Box::new(clipboard.clone()));
     app.event(Event::ToolCall {
         turn: 1,
-        command: Some("seq 500".to_string()),
+        asked: Asked::Bash {
+            command: "seq 500".to_string(),
+        },
     });
     app.over(
         CallOver::Exited(0),
@@ -226,7 +229,9 @@ fn a_click_that_opens_a_spill_row_starts_no_mark_and_lights_nothing() {
     let mut app = App::with_clipboard(launch(), None, Box::new(clipboard));
     app.event(Event::ToolCall {
         turn: 1,
-        command: Some("cargo test".to_string()),
+        asked: Asked::Bash {
+            command: "cargo test".to_string(),
+        },
     });
     for line in 1..=20 {
         app.output(Side::Stdout, &format!("line {line}"));

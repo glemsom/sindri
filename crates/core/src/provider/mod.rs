@@ -2,9 +2,11 @@
 //! safe to print. Retries and redaction live here; the provider library lives
 //! only in [`rig_wire`], so a library rewrite is one file's problem.
 
+mod asked;
 mod rig_wire;
 mod window;
 
+pub use asked::Asked;
 pub use window::context_window;
 
 use std::time::Duration;
@@ -48,27 +50,6 @@ impl Call {
 
     pub(crate) fn sent(&self) -> Result<&serde_json::Map<String, serde_json::Value>, &String> {
         self.arguments.as_ref()
-    }
-
-    /// The script this call asks for, or why the call cannot be run: malformed
-    /// arguments are answered, never dropped, so the model can correct itself.
-    pub fn command(&self) -> Result<String, String> {
-        let arguments = self
-            .arguments
-            .as_ref()
-            .map_err(|sent| format!("the arguments were not a JSON object: `{sent}`"))?;
-        match arguments.get("command") {
-            Some(serde_json::Value::String(command)) if !command.trim().is_empty() => {
-                Ok(command.clone())
-            }
-            Some(serde_json::Value::String(_)) | None => {
-                Err("the call has no `command`: send {\"command\": \"<bash script>\"}".to_string())
-            }
-            Some(other) => Err(format!(
-                "`command` must be a string, not {}",
-                json_kind(other)
-            )),
-        }
     }
 }
 

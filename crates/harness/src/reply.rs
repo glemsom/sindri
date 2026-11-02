@@ -76,6 +76,33 @@ impl Reply {
         )
     }
 
+    /// A turn that asks for one skill by name: the second tool a run may be
+    /// handed, and the only one that is not a command.
+    pub fn skill_call(id: &str, name: &str, text: &str) -> Self {
+        let mut content = Vec::new();
+        if !text.is_empty() {
+            content.push(serde_json::json!({"type": "text", "text": text}));
+        }
+        content.push(serde_json::json!({
+            "type": "tool_use",
+            "id": id,
+            "name": "skill",
+            "input": {"name": name},
+        }));
+        Reply::whole(
+            200,
+            json(serde_json::json!({
+                "id": "msg_mock",
+                "type": "message",
+                "role": "assistant",
+                "model": "claude-mock",
+                "content": content,
+                "stop_reason": "tool_use",
+                "usage": {"input_tokens": 20, "output_tokens": 5},
+            })),
+        )
+    }
+
     pub fn thinking_answer(reasoning: &str, text: &str) -> Self {
         Reply::whole(
             200,

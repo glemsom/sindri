@@ -1,6 +1,7 @@
 //! `?`'s list of every binding, and what an output too large to show offers.
 
 use super::*;
+use sindri_core::provider::Asked;
 
 #[test]
 fn question_mark_lists_every_binding_and_esc_closes_it() {
@@ -65,7 +66,9 @@ fn an_output_too_large_to_show_offers_its_spill_file_and_opens_untruncated() {
     let mut app = app_with(Fake::taking());
     app.event(Event::ToolCall {
         turn: 1,
-        command: Some("seq 500".to_string()),
+        asked: Asked::Bash {
+            command: "seq 500".to_string(),
+        },
     });
     app.over(
         CallOver::Exited(0),
@@ -106,7 +109,9 @@ fn a_click_on_the_spill_row_opens_it_like_ctrl_o() {
     let mut app = app_with(Fake::taking());
     app.event(Event::ToolCall {
         turn: 1,
-        command: Some("seq 3".to_string()),
+        asked: Asked::Bash {
+            command: "seq 3".to_string(),
+        },
     });
     app.over(
         CallOver::Exited(0),
@@ -144,7 +149,9 @@ fn a_click_on_an_older_affordance_opens_that_rows_file() {
     for (turn, path) in [(1, &older), (2, &newer)] {
         app.event(Event::ToolCall {
             turn,
-            command: Some("seq 500".to_string()),
+            asked: Asked::Bash {
+                command: "seq 500".to_string(),
+            },
         });
         app.over(
             CallOver::Exited(0),

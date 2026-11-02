@@ -76,6 +76,28 @@ pub fn parse(text: &str) -> Result<Frontmatter, Problem> {
     })
 }
 
+/// The body under the fence: everything after the block's closing `---`, with
+/// the blank line that separates the two and the file's trailing whitespace
+/// taken off. `None` when the file has no fence that closes, which [`parse`]
+/// has already refused — this is the second read of a file, not a second parse.
+pub fn body(text: &str) -> Option<&str> {
+    let mut lines = text.split_inclusive('\n');
+    let first = lines.next()?;
+    if first.trim_end() != FENCE {
+        return None;
+    }
+    // Every line passed is counted, so what comes back is the file's own text
+    // from the closing fence's end onwards, trimmed of the blank line between.
+    let mut offset = first.len();
+    for line in lines {
+        offset += line.len();
+        if line.trim_end() == FENCE {
+            return Some(text.get(offset..)?.trim());
+        }
+    }
+    None
+}
+
 /// A field the specification requires, as a string that says something. A key
 /// that is there and says nothing is blamed on its own line; a key that is
 /// absent is blamed on the fence the frontmatter opens at, which is the first

@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::agent::{Agent, Dials, Report};
+use crate::agent::{Agent, Dials, Report, SkillTool};
 use crate::cancel::Cancel;
 use crate::config::Config;
 use crate::exec::SandboxExecutor;
@@ -22,6 +22,7 @@ use crate::record::{Recorder, Redaction, Start};
 use crate::sandbox::{
     Enforcement, FALLBACK_PATH, NetworkPosture, PolicyError, SandboxPolicy, WritableSet,
 };
+use crate::skills::{self, Catalog};
 use crate::workspace::{self, Git};
 
 pub type LoopError = Error;
@@ -98,6 +99,13 @@ pub struct Session {
     /// read this one value, so they cannot name different branches.
     git: Option<Git>,
     recorder: Arc<Recorder>,
+    /// The skills both scopes hold, read once at boot: the catalog is a fact
+    /// about the tree, not about a turn.
+    catalog: Catalog,
+    /// The tool that carries the model-invocable ones, built with the catalog
+    /// it describes: a prompt is handed this value, so the description and the
+    /// schema are made once rather than derived again on every turn.
+    skill: Option<SkillTool>,
 }
 
 impl Session {
@@ -127,12 +135,16 @@ impl Session {
             source,
         })?;
 
+        let catalog = skills::discover(&env.workspace, paths::home().as_deref());
+        let skill = SkillTool::new(&catalog);
         Ok(Session {
             env: env.clone(),
             dir,
             policy,
             git,
             recorder: Arc::new(recorder),
+            catalog,
+            skill,
         })
     }
 
@@ -187,6 +199,18 @@ impl Session {
 
     pub fn recorder(&self) -> Arc<Recorder> {
         self.recorder.clone()
+    }
+
+    /// The `skill` tool, or none when this workspace holds no skill the model
+    /// may see — in which case the model is handed `bash` and nothing else.
+    pub fn skill_tool(&self) -> Option<SkillTool> {
+        self.skill.clone()
+    }
+
+    /// Every skill the scan found, both scopes and both invocation rights: what
+    /// a human may reach for is not what the model is handed.
+    pub fn catalog(&self) -> &Catalog {
+        &self.catalog
     }
 }
 

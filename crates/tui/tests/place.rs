@@ -15,6 +15,7 @@ mod common;
 pub use common::{any, app, call, press, reading, screen};
 use crossterm::event::{KeyCode, KeyModifiers};
 use sindri_core::agent::Event;
+use sindri_core::provider::Asked;
 use sindri_tui::driver::{CallOver, Side, Spilled};
 
 /// The reader opens a call, pages deep into its output and folds it again: the
@@ -204,7 +205,9 @@ fn a_call_finishing_above_the_window_while_following_moves_nothing() {
     let mut app = app();
     app.event(Event::ToolCall {
         turn: 1,
-        command: Some("cargo test".to_string()),
+        asked: Asked::Bash {
+            command: "cargo test".to_string(),
+        },
     });
     for line in 1..=3 {
         app.output(Side::Stdout, &format!("line {line}"));
@@ -240,7 +243,9 @@ fn a_call_finishing_at_the_tail_still_shows_its_rows_and_settles_its_duration() 
     let mut app = app();
     app.event(Event::ToolCall {
         turn: 1,
-        command: Some("cargo test".to_string()),
+        asked: Asked::Bash {
+            command: "cargo test".to_string(),
+        },
     });
     for line in 1..=3 {
         app.output(Side::Stdout, &format!("line {line}"));

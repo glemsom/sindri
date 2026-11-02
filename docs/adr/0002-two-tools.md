@@ -15,8 +15,9 @@ loading one through `bash` would be the model reading a file and deciding for it
 the file is worth — and a decision the reading side makes is not an enforcement.
 
 `crates/core/src/skills/` scans and reads skills; `sindri doctor` prints the catalog.
-The tool that calls one is not built yet. Nothing below depends on which turn it lands
-in.
+The tool that calls one is `crates/core/src/agent/skill.rs`, built once at boot from that
+scan, and `provider::Asked` carries the call it makes — a variant per tool — to the
+record.
 
 ## 1. A second tool, and not a file the model reads through `bash`
 

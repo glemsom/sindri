@@ -1,21 +1,25 @@
-//! The agent: the turn loop and the one tool it drives. It emits events on a
+//! The agent: the turn loop and the tools it drives. It emits events on a
 //! channel and returns a report, so it holds no terminal concerns, and it owns
 //! the conversation itself: the messages the model was shown, kept across
-//! prompts so a second question builds on the first answer. One launch is one
-//! thread; `/new` forgets it.
+//! prompts so a second question builds on the first answer, together with the
+//! skills those messages hold. One launch is one thread; `/new` forgets it.
 
 mod budget;
 mod calls;
 mod event;
 mod limits;
 mod report;
+mod skill;
 mod tool;
+mod tools;
 
 pub use budget::{Budget, Spent};
 pub use event::Event;
 pub use limits::Limits;
 pub use report::{Report, Stopped};
+pub use skill::{Loaded, SkillTool};
 pub use tool::BashTool;
+pub use tools::Tools;
 
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
@@ -31,14 +35,14 @@ use crate::record::{Cost, Recorder};
 /// any of them and none of them is the conversation.
 pub struct Dials {
     pub model: Box<dyn Model>,
-    pub tool: BashTool,
+    pub tool: Tools,
     pub max_turns: u32,
     pub thinking: bool,
 }
 
 pub struct Agent {
     model: Box<dyn Model>,
-    tool: BashTool,
+    tool: Tools,
     max_turns: u32,
     /// The bound on what the commands may spend, which a batched script can
     /// reach where the turn cap cannot see it.
@@ -47,11 +51,15 @@ pub struct Agent {
     events: Option<Sender<Event>>,
     cancel: Cancel,
     recorder: Option<Arc<Recorder>>,
+    /// The skills this conversation has been told, cleared with the history:
+    /// a body in the transcript is in force, and one in a forgotten transcript
+    /// is not.
+    loaded: Arc<Loaded>,
     history: Vec<Message>,
 }
 
 impl Agent {
-    pub fn new(model: Box<dyn Model>, tool: BashTool, max_turns: u32, thinking: bool) -> Self {
+    pub fn new(model: Box<dyn Model>, tool: Tools, max_turns: u32, thinking: bool) -> Self {
         Agent {
             model,
             tool,
@@ -61,6 +69,7 @@ impl Agent {
             events: None,
             cancel: Cancel::new(),
             recorder: None,
+            loaded: Arc::new(Loaded::default()),
             history: Vec::new(),
         }
     }
@@ -81,8 +90,16 @@ impl Agent {
         self.budget = budget;
     }
 
+    /// A new history, and no skill in force: what `/new` promises.
     pub fn forget(&mut self) {
         self.history.clear();
+        self.loaded.clear();
+    }
+
+    /// The skills this conversation has been told, in name order: what a frame
+    /// says is in force, read from the set the tool wrote.
+    pub fn loaded_skills(&self) -> Vec<String> {
+        self.loaded.names()
     }
 
     pub fn set_recorder(&mut self, recorder: Arc<Recorder>) {
@@ -121,7 +138,7 @@ impl Agent {
             usage: crate::provider::Usage::default(),
             duration: std::time::Duration::ZERO,
         };
-        let tools = [self.tool.spec().clone()];
+        let tools = self.tool.specs();
 
         loop {
             if self.cancel.is_triggered() {
@@ -201,7 +218,7 @@ impl Agent {
                     break;
                 }
                 let mut killed = false;
-                for outcome in calls::wave(&self.tool, wave) {
+                for outcome in calls::wave(&self.tool, &self.loaded, wave) {
                     // Counted before it is read: a call the cancel killed was
                     // started, and the record says so even with no result.
                     report.tool_calls += 1;
@@ -262,7 +279,7 @@ impl Agent {
     fn announce(&self, turn: u32, call: &crate::provider::Call) {
         self.emit(Event::ToolCall {
             turn,
-            command: call.command().ok(),
+            asked: call.asked(),
         });
     }
 

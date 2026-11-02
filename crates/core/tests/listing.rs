@@ -11,6 +11,7 @@
 use std::path::Path;
 
 use sindri_core::paths::SessionDir;
+use sindri_core::provider::Asked;
 use sindri_core::record::{Entry, Meta, Stored, listing, listing_limited};
 use tempfile::TempDir;
 
@@ -223,9 +224,9 @@ fn the_markdown_export_says_every_text_the_record_says() {
             Entry::ToolCall {
                 turn: 1,
                 call_id: "call_1".to_string(),
-                tool: "bash".to_string(),
-                command: Some("ls | wc -l".to_string()),
-                problem: None,
+                asked: Asked::Bash {
+                    command: "ls | wc -l".to_string(),
+                },
             },
             result(1, "call_1", "12\n"),
             answer(2, "Twelve files."),

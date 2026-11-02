@@ -7,6 +7,7 @@
     reason = "a panicking test is how a broken scan reports itself"
 )]
 
+mod content;
 mod discovery;
 mod fixtures;
 mod frontmatter;

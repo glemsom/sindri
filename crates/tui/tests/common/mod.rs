@@ -21,6 +21,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::Color;
 use sindri_core::agent::Event;
+use sindri_core::provider::Asked;
 use sindri_tui::driver::{CallOver, Finished, Side, Spilled, Stop};
 use sindri_tui::entry::Entry;
 use sindri_tui::render;
@@ -223,7 +224,9 @@ pub fn turn(app: &mut App, prompt: &str, turn: u32, command: &str) {
     });
     app.event(Event::ToolCall {
         turn,
-        command: Some(command.to_string()),
+        asked: Asked::Bash {
+            command: command.to_string(),
+        },
     });
     app.output(Side::Stdout, "out 1");
     app.finished(Finished {
@@ -237,7 +240,9 @@ pub fn turn(app: &mut App, prompt: &str, turn: u32, command: &str) {
 pub fn call(app: &mut App, turn: u32, lines: usize) {
     app.event(Event::ToolCall {
         turn,
-        command: Some("cargo test".to_string()),
+        asked: Asked::Bash {
+            command: "cargo test".to_string(),
+        },
     });
     for line in 1..=lines {
         app.output(Side::Stdout, &format!("line {line}"));

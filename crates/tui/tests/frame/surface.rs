@@ -3,6 +3,7 @@
 //! that dims what it covers rather than punching a hole in it.
 
 use super::*;
+use sindri_core::provider::Asked;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::buffer::Buffer;
@@ -141,7 +142,9 @@ fn a_spill_overlay_dims_the_transcript_it_covers() {
     let mut app = app();
     app.event(Event::ToolCall {
         turn: 1,
-        command: Some("seq 500".to_string()),
+        asked: Asked::Bash {
+            command: "seq 500".to_string(),
+        },
     });
     app.over(
         CallOver::Exited(0),
@@ -345,7 +348,9 @@ fn a_running_calls_stdout_and_stderr_differ_without_colour() {
     let mut app = app();
     app.event(Event::ToolCall {
         turn: 1,
-        command: Some("make".to_string()),
+        asked: Asked::Bash {
+            command: "make".to_string(),
+        },
     });
     app.output(Side::Stdout, "compiling sindri-tui");
     app.output(Side::Stderr, "warning: unused import");

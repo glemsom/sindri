@@ -7,7 +7,7 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use super::BashTool;
+use super::{Loaded, Tools};
 use crate::provider::{Call, ToolOutcome};
 
 /// The most scripts one turn runs at once. Small on purpose: it keeps a budget
@@ -16,16 +16,18 @@ use crate::provider::{Call, ToolOutcome};
 pub const PARALLEL_CALLS: usize = 4;
 
 /// One wave, each call run once, results in submission order. `None` is a call
-/// a cancel killed mid-flight, which the loop reads as the run ending.
-pub fn wave(tool: &BashTool, calls: &[Call]) -> Vec<Option<ToolOutcome>> {
+/// a cancel killed mid-flight, which the loop reads as the run ending. The
+/// loaded set is shared by the whole wave: two identical calls in one turn are
+/// one turn, and the turn leaves one body behind.
+pub fn wave(tools: &Tools, loaded: &Loaded, calls: &[Call]) -> Vec<Option<ToolOutcome>> {
     match calls {
         [] => Vec::new(),
-        [one] => vec![tool.call(one)],
-        several => spread(tool, several),
+        [one] => vec![tools.call(one, loaded)],
+        several => spread(tools, loaded, several),
     }
 }
 
-fn spread(tool: &BashTool, calls: &[Call]) -> Vec<Option<ToolOutcome>> {
+fn spread(tools: &Tools, loaded: &Loaded, calls: &[Call]) -> Vec<Option<ToolOutcome>> {
     let next = AtomicUsize::new(0);
     std::thread::scope(|scope| {
         let workers: Vec<_> = (0..calls.len().min(PARALLEL_CALLS))
@@ -35,7 +37,7 @@ fn spread(tool: &BashTool, calls: &[Call]) -> Vec<Option<ToolOutcome>> {
                     loop {
                         let index = next.fetch_add(1, Ordering::Relaxed);
                         let Some(call) = calls.get(index) else { break };
-                        mine.push((index, tool.call(call)));
+                        mine.push((index, tools.call(call, loaded)));
                     }
                     mine
                 })

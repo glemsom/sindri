@@ -9,6 +9,8 @@ feed back. Bounded by the **turn cap** (`max_turns`, default 250).
 
 **tool call** — one request from the model to run a tool — `bash` or `skill` — plus the
 structured **tool result** returned. One `bash` call may run a whole pipeline or script.
+The code's word for the request once its arguments are read is `Asked`: a variant per
+tool, so a third tool is a compile error wherever a call is dispatched or written down.
 
 **bash tool** — the one tool that runs anything. Runs a command string inside the
 sandbox; the model composes shell tools through it rather than being handed one per job.
@@ -128,6 +130,11 @@ named `<skill_content>` wrapper, with the skill's directory and its file listing
 it so a relative reference in the body resolves. Once per **session** and no more: a
 second call is `already_loaded` with no body, because a **tool result** is sent again
 with every later turn, and the loaded set is cleared with the history it was made in.
+
+**loaded set** — the skills one conversation has been told, held with the **history** and
+cleared with it: a body is in force while the transcript still carries it. Two identical
+calls in one turn's wave are one load, because the wave is one turn. The code's word for
+it is `Loaded`, and `Agent::loaded_skills` is how a frame reads it.
 
 **catalog** — everything one scan found: the **skills**, the **refusals**, and the
 **shadowed** names. Sorted by name, so two scans of one tree say the same thing.

@@ -20,6 +20,7 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use sindri_core::agent::Event;
+use sindri_core::provider::Asked;
 use sindri_tui::driver::{CallOver, Finished, Side, Spilled, Stop, Tokens};
 use sindri_tui::render;
 use sindri_tui::{App, Face, Launch};
@@ -112,7 +113,9 @@ fn a_running_call_shows_one_line_and_the_last_five_lines_of_its_output() {
     let mut app = app();
     app.event(Event::ToolCall {
         turn: 1,
-        command: Some("cargo test 2>&1 | tail -20".to_string()),
+        asked: Asked::Bash {
+            command: "cargo test 2>&1 | tail -20".to_string(),
+        },
     });
     for line in 1..=7 {
         app.output(Side::Stdout, &format!("out {line}"));
@@ -140,7 +143,9 @@ fn a_collapsed_call_shows_its_exit_status_and_its_tail_is_gone() {
     let mut app = app();
     app.event(Event::ToolCall {
         turn: 1,
-        command: Some("cargo test".to_string()),
+        asked: Asked::Bash {
+            command: "cargo test".to_string(),
+        },
     });
     app.output(Side::Stdout, "running 12 tests");
     app.over(CallOver::Exited(0), Spilled::default());
@@ -157,7 +162,9 @@ fn a_collapsed_call_shows_its_exit_status_and_its_tail_is_gone() {
     let mut app = self::app();
     app.event(Event::ToolCall {
         turn: 1,
-        command: Some("cargo test".to_string()),
+        asked: Asked::Bash {
+            command: "cargo test".to_string(),
+        },
     });
     app.over(CallOver::Exited(3), Spilled::default());
     let rows = screen(&mut app, 100, 20);
@@ -366,6 +373,7 @@ mod prose;
 mod pulse;
 mod queue;
 mod rail;
+mod skill;
 mod surface;
 mod transcript;
 mod window;

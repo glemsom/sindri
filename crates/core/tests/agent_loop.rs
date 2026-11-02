@@ -11,6 +11,7 @@
 mod support;
 
 use sindri_core::agent::{Event, Stopped};
+use sindri_core::provider::Asked;
 use sindri_core::provider::{Call, Message, ToolOutcome, Turn, Usage};
 use support::{Harness, Interrupt, answer, call, calls, exited, usage};
 
@@ -94,7 +95,9 @@ fn one_tool_call_runs_and_its_result_is_fed_back() {
         h.events(),
         vec![Event::ToolCall {
             turn: 1,
-            command: Some("ls | wc -l".to_string()),
+            asked: Asked::Bash {
+                command: "ls | wc -l".to_string(),
+            },
         }],
         "one event per call, named before it runs"
     );
@@ -140,7 +143,10 @@ fn a_call_with_malformed_arguments_is_answered_not_run() {
         h.events(),
         vec![Event::ToolCall {
             turn: 1,
-            command: None,
+            asked: Asked::Refused {
+                named: "bash".to_string(),
+                problem: "the arguments were not a JSON object: `{oops`".to_string(),
+            },
         }],
         "a call that cannot run is still announced"
     );
@@ -334,7 +340,9 @@ fn a_command_cancelled_mid_flight_ends_the_run_without_a_result_fed_back() {
         h.events(),
         vec![Event::ToolCall {
             turn: 1,
-            command: Some("sleep 30".to_string()),
+            asked: Asked::Bash {
+                command: "sleep 30".to_string(),
+            },
         }],
         "the call was announced before it was killed"
     );

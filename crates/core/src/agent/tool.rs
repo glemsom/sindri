@@ -1,4 +1,4 @@
-//! The one tool the model gets: `bash`. Its description is derived from the
+//! The tool that runs things: `bash`. Its description is derived from the
 //! sandbox policy and the limits in force, never written by hand, so the model
 //! is told exactly the boundary that is enforced and the two figures that end
 //! its work.
@@ -27,12 +27,10 @@ impl BashTool {
         &self.spec
     }
 
-    pub fn call(&self, call: &Call) -> Option<ToolOutcome> {
-        let script = match call.command() {
-            Ok(script) => script,
-            Err(reason) => return Some(ToolOutcome::malformed(call, &reason)),
-        };
-        let result = self.executor.execute(&script)?;
+    /// The call run. The script is the one the parse already took out of the
+    /// arguments, so a call that never parsed never reaches the sandbox.
+    pub fn call(&self, call: &Call, script: &str) -> Option<ToolOutcome> {
+        let result = self.executor.execute(script)?;
         let failed = matches!(result.outcome, Outcome::SandboxError { .. });
         let content = render(&result);
         Some(ToolOutcome::new(call, content, failed).with_facts(facts(&result)))
@@ -46,8 +44,8 @@ fn describe(policy: &SandboxPolicy, limits: Limits) -> ToolSpec {
     // Every word here is re-sent on every turn, so it says only what the
     // model cannot read off a field name or a result it has already seen.
     let description = format!(
-        "It is the only tool, so pipelines and small scripts are how you explore and act: put \
-         the steps of one task in one script, not in three calls.\n\n{}\n\n{}\n\
+        "It is the only tool that runs anything, so pipelines and small scripts are how you \
+         explore and act: put the steps of one task in one script, not in three calls.\n\n{}\n\n{}\n\
          Every result is carried in the conversation for the rest of the run and sent again with \
          every later turn, so filter in the script and print only what you concluded; keep \
          intermediates in `$TMPDIR`, which outlives the call.\n\

@@ -93,20 +93,13 @@ impl Stored {
                 Entry::ToolCall {
                     turn,
                     call_id,
-                    tool,
-                    command,
-                    problem,
+                    asked,
                 } => {
-                    out.push_str(&format!("\n--- {tool} (turn {turn}) {call_id} ---\n"));
-                    match command {
-                        Some(command) => {
-                            out.push_str(&format!("$ {command}\n"));
-                        }
-                        None => out.push_str(&format!(
-                            "not run: {}\n",
-                            problem.as_deref().unwrap_or("the arguments were unusable")
-                        )),
-                    }
+                    out.push_str(&format!(
+                        "\n--- {} (turn {turn}) {call_id} ---\n",
+                        asked.tool()
+                    ));
+                    out.push_str(&format!("{asked}\n"));
                 }
                 Entry::Policy { description } => {
                     out.push_str("\n--- policy (from here on) ---\n");

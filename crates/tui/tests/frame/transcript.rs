@@ -3,6 +3,7 @@
 //! the prompt at full strength on its own band.
 
 use super::*;
+use sindri_core::provider::Asked;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use sindri_tui::render::transcript;
@@ -100,7 +101,9 @@ fn a_running_call_and_the_same_call_collapsed_agree_on_every_column() {
     app.start().expect("a prompt starts a run");
     app.event(Event::ToolCall {
         turn: 1,
-        command: Some("cargo build".to_string()),
+        asked: Asked::Bash {
+            command: "cargo build".to_string(),
+        },
     });
     let running = screen(&mut app, 100, 20);
     let live = row_of(&running, "cargo build");

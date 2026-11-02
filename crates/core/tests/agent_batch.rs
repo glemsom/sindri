@@ -13,6 +13,7 @@ mod support;
 use std::time::{Duration, Instant};
 
 use sindri_core::agent::{Budget, Event, Stopped};
+use sindri_core::provider::Asked;
 use sindri_core::provider::{Message, Turn};
 use support::{Harness, answer, call, calls, exited};
 
@@ -70,11 +71,15 @@ fn several_tool_calls_in_one_turn_all_run_and_come_back_together() {
             },
             Event::ToolCall {
                 turn: 1,
-                command: Some("echo one".to_string()),
+                asked: Asked::Bash {
+                    command: "echo one".to_string(),
+                },
             },
             Event::ToolCall {
                 turn: 1,
-                command: Some("echo two".to_string()),
+                asked: Asked::Bash {
+                    command: "echo two".to_string(),
+                },
             },
         ]
     );
