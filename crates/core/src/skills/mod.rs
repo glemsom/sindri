@@ -18,6 +18,8 @@ mod scan;
 
 use std::path::{Path, PathBuf};
 
+use crate::workspace;
+
 pub use catalog::{Catalog, Refusal, Scope, Shadow, Skill};
 
 /// The file every skill directory holds, and the one the scan reads.
@@ -27,8 +29,19 @@ pub(crate) const SKILL: &str = "SKILL.md";
 /// home directory last of all, so the first skill to hold a name keeps it: a
 /// repository's over the home directory's, a crate's over its repository's.
 pub fn discover(workspace: &Path, home: Option<&Path>) -> Catalog {
+    discover_in(workspace, workspace::root(workspace).as_deref(), home)
+}
+
+/// Both scopes, with the repository root a caller has already probed handed in:
+/// the rules, the skills and the git facts then hang off one root instead of
+/// three definitions of "the repository root" that can disagree. `None` is a
+/// workspace in no repository, and leaves the user scope as the only one.
+pub fn discover_in(workspace: &Path, root: Option<&Path>, home: Option<&Path>) -> Catalog {
     let mut catalog = Catalog::default();
-    for dir in repo_scopes(workspace) {
+    for dir in root
+        .map(|root| repo_scopes(workspace, root))
+        .unwrap_or_default()
+    {
         absorb(&mut catalog, scan::scan(&dir, Scope::Repo));
     }
     if let Some(home) = home {
@@ -60,13 +73,10 @@ fn absorb(into: &mut Catalog, scope: Catalog) {
 }
 
 /// The repository's skill directories, nearest first, and never one above the
-/// repository root: a directory above it belongs to somebody else's repository.
+/// root it was given: a directory above it belongs to somebody else's repository.
 /// Every one of them is a scope, so a crate's own skills do not hide the ones the
 /// repository root carries for everybody.
-fn repo_scopes(workspace: &Path) -> Vec<PathBuf> {
-    let Some(root) = workspace.ancestors().find(|dir| dir.join(".git").exists()) else {
-        return Vec::new();
-    };
+fn repo_scopes(workspace: &Path, root: &Path) -> Vec<PathBuf> {
     workspace
         .ancestors()
         .take_while(|dir| dir.starts_with(root))

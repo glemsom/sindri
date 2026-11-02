@@ -117,14 +117,22 @@ impl Taken {
     }
 }
 
-/// Reads the rules of the repository `workspace` stands in: its root's
-/// `AGENTS.md`, or the workspace's own when the directory is no repository.
+/// Reads the rules of the repository `workspace` stands in, asking the tree for
+/// the root itself: for a caller that has not probed it already.
+pub fn read(workspace: &Path) -> Taken {
+    read_in(workspace::root(workspace).as_deref(), workspace)
+}
+
+/// Reads the root's `AGENTS.md`, or the workspace's own `AGENTS.md` when the
+/// directory is no repository and `root` is `None`. The root is handed in
+/// rather than found again, so the rules and the skill scopes cannot be read
+/// from two different repositories.
 ///
 /// One file and one level, deliberately: a walk above the root would read
 /// somebody else's repository, and a nested file would be a second source of
 /// the same truth.
-pub fn read(workspace: &Path) -> Taken {
-    let root = workspace::root(workspace).unwrap_or_else(|| workspace.to_path_buf());
+pub fn read_in(root: Option<&Path>, workspace: &Path) -> Taken {
+    let root = root.unwrap_or(workspace);
     let path = root.join(FILE);
     let raw = match std::fs::read(&path) {
         Ok(raw) => raw,

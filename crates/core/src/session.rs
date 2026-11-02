@@ -122,11 +122,17 @@ impl Session {
         // sandbox refuses must not leave a record saying `running`, which no
         // reader could tell from a run that is still going.
         let policy = derive(env, &dir, &config.extra_writable, config.enforcement)?;
-        let git = workspace::git(&env.workspace);
+        // One probe of the tree for both facts boot needs from it: the git facts
+        // the record and the rail read, and the root the rules and the skill
+        // scopes are found from. Asking twice would fork git a third time and
+        // let the rules and the skills be read from two different repositories.
+        let probe = workspace::probe(&env.workspace);
+        let git = probe.git;
+        let root = probe.root;
         // Before the record, because the start block says what the model was
         // handed: a file read after the metadata was written would be missing
         // from the one document a reader looks for it in.
-        let instructions = instructions::read(&env.workspace);
+        let instructions = instructions::read_in(root.as_deref(), &env.workspace);
         let recorder = Recorder::start(
             &dir,
             Start {
@@ -147,7 +153,8 @@ impl Session {
             source,
         })?;
 
-        let catalog = skills::discover(&env.workspace, paths::home().as_deref());
+        let catalog =
+            skills::discover_in(&env.workspace, root.as_deref(), paths::home().as_deref());
         let skill = SkillTool::new(&catalog);
         let hand = UserSkills::new(&catalog);
         Ok(Session {

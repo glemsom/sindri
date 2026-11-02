@@ -48,7 +48,7 @@ fn the_first_frame_says_nothing_about_the_skills_it_found() {
     let env = Env::new();
     // A repository carrying a skill: the catalog `sindri doctor` prints is not
     // something the frame says on the way in, in this ticket or by accident.
-    std::fs::create_dir_all(env.workspace.join(".git")).expect("a git marker");
+    env.repository();
     let dir = env.workspace.join(".agents/skills/house-style");
     std::fs::create_dir_all(&dir).expect("a skill directory");
     std::fs::write(

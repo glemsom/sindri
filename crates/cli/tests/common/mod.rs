@@ -50,6 +50,18 @@ impl Env {
         }
     }
 
+    /// A repository git will answer for, with nothing committed: the root a run's
+    /// own files are read from is the root git names, so a directory called
+    /// `.git` is not one.
+    pub fn repository(&self) {
+        let out = std::process::Command::new("git")
+            .args(["init", "-q", "--initial-branch=main"])
+            .current_dir(&self.workspace)
+            .output()
+            .expect("git runs");
+        assert!(out.status.success(), "git init: {out:?}");
+    }
+
     pub fn command(&self) -> std::process::Command {
         let mut cmd = std::process::Command::new(assert_cmd::cargo::cargo_bin!("sindri"));
         cmd.current_dir(&self.workspace)

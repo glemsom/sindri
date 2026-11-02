@@ -340,7 +340,7 @@ fn doctor_lists_both_scopes_with_the_name_the_scope_and_who_may_invoke_it() {
     let env = Env::new();
     // A repository, so the repo scope has a root to stop at, with a skill
     // three directories down from it — which is where a run really boots.
-    std::fs::create_dir_all(env.workspace.join(".git")).expect("a git marker");
+    env.repository();
     write_skill(
         &env.workspace,
         "house-style",
@@ -373,7 +373,7 @@ fn doctor_lists_both_scopes_with_the_name_the_scope_and_who_may_invoke_it() {
 #[test]
 fn a_skill_that_will_not_load_is_named_with_its_file_and_line_and_is_not_a_failure() {
     let env = Env::new();
-    std::fs::create_dir_all(env.workspace.join(".git")).expect("a git marker");
+    env.repository();
     let file = write_skill(
         &env.workspace,
         "broken",

@@ -198,7 +198,8 @@ fn the_scan_is_one_level_deep_so_only_directories_holding_a_skill_md_are_skills(
 fn the_repo_scope_never_reaches_above_the_repository_root() {
     let above = TempDir::new().expect("a directory above the repository");
     let root = above.path().join("repo");
-    std::fs::create_dir_all(root.join(".git")).expect("a git marker");
+    std::fs::create_dir_all(&root).expect("a repository");
+    crate::fixtures::init(&root);
     let workspace = root.join("a/b/c");
     std::fs::create_dir_all(&workspace).expect("a workspace");
     skill(

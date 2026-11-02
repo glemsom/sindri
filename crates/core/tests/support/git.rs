@@ -4,6 +4,17 @@
 
 use std::path::Path;
 
+/// A repository git will answer for, with nothing committed: the root every
+/// reader of the tree stops at, and no facts to record yet.
+pub fn init(dir: &Path) {
+    let out = std::process::Command::new("git")
+        .args(["init", "-q", "--initial-branch=main"])
+        .current_dir(dir)
+        .output()
+        .expect("git runs");
+    assert!(out.status.success(), "git init: {out:?}");
+}
+
 /// A tree with one commit, so the probe has a branch and a commit to name.
 pub fn commit(dir: &Path) -> String {
     let author = [

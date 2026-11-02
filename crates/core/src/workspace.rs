@@ -1,7 +1,9 @@
 //! The tree a run stands in: the path the sandbox mounts, the repository root a
 //! run's own files are read from, and the git facts a record and a rail both
 //! want. One probe per fact, so a record cannot name a branch the frame never
-//! showed.
+//! showed — and one probe for the two facts boot pays for, so the root a run's
+//! files are found from is the root the facts were read at, and no third
+//! process is spent learning it twice.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -20,30 +22,73 @@ pub struct Git {
     pub dirty: bool,
 }
 
-/// The repository `dir` is inside of, if any. A directory that is not one, a
-/// repository with no commit yet, and a host without git all answer `None`.
-///
-/// Two processes and no more, because this is boot's critical path: `rev-parse
-/// --abbrev-ref` is the one call that names a detached HEAD `HEAD`, and
-/// `status --porcelain=v2 --branch` reports the commit and the dirt together.
-pub fn git(dir: &Path) -> Option<Git> {
-    let branch = field(dir, &["rev-parse", "--abbrev-ref", "HEAD"])?;
-    let status = field(dir, &["status", "--porcelain=v2", "--branch"])?;
-    Some(Git {
-        branch,
-        commit: oid(&status)?,
-        dirty: dirty(&status),
-    })
+/// What one probe of the tree says: the facts a record and a rail read, and the
+/// root a run's own files are read from. The two arrive together because boot
+/// pays for them together, and a launch that reads one of them has already paid
+/// for the other.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Probe {
+    pub git: Option<Git>,
+    /// The repository `dir` stands in, as git names its top level, or `None`
+    /// when it is no repository. A repository above `dir` belongs to whoever
+    /// put the checkout there, and is not walked past.
+    pub root: Option<PathBuf>,
 }
 
-/// The repository `dir` stands in, as git names its top level, or the directory
-/// itself when it is no repository: the one root a run reads a repository's own
-/// files from. A repository above `dir` belongs to whoever put the checkout
-/// there, and is not walked past.
+/// The root `dir` stands in, and the git facts read at it. A directory that is
+/// not a repository, a repository with no commit yet, and a host without git
+/// all answer `None`.
+///
+/// Two processes and no more, because this is boot's critical path: `rev-parse
+/// --show-toplevel` names the root, and `status --porcelain=v2 --branch` reports
+/// the branch, the commit and the dirt together. A repository is asked for its
+/// root once, and every reader of the tree hangs off that one answer.
+pub fn probe(dir: &Path) -> Probe {
+    let Some(root) = root(dir) else {
+        return Probe {
+            git: None,
+            root: None,
+        };
+    };
+    let git = field(dir, &["status", "--porcelain=v2", "--branch"]).and_then(|status| {
+        Some(Git {
+            branch: head(&status)?,
+            commit: oid(&status)?,
+            dirty: dirty(&status),
+        })
+    });
+    Probe {
+        git,
+        root: Some(root),
+    }
+}
+
+/// The git facts of `dir` alone, for a caller with no use for the root.
+pub fn git(dir: &Path) -> Option<Git> {
+    probe(dir).git
+}
+
+/// The repository `dir` stands in, as git names its top level, or `None` when
+/// it is no repository: the one root a run reads a repository's own files from.
 pub fn root(dir: &Path) -> Option<PathBuf> {
-    let top = field(dir, &["rev-parse", "--show-toplevel"])?;
-    let top = PathBuf::from(top);
-    Some(top.canonicalize().unwrap_or(top))
+    field(dir, &["rev-parse", "--show-toplevel"]).map(|line| top(&line))
+}
+
+/// git's top level as a path: canonical, because git reports the tree it really
+/// walked and every reader of it compares paths.
+fn top(top: &str) -> PathBuf {
+    let path = PathBuf::from(top);
+    path.canonicalize().unwrap_or(path)
+}
+
+/// The branch in the status's `# branch.head` header: the name git writes there,
+/// but for a HEAD with no branch, which porcelain calls `(detached)` and a run
+/// has always recorded as `HEAD`.
+fn head(status: &str) -> Option<String> {
+    let name = status
+        .lines()
+        .find_map(|line| line.strip_prefix("# branch.head "))?;
+    Some(if name == "(detached)" { "HEAD" } else { name }.to_string())
 }
 
 /// The commit in the status's `# branch.oid` header, absent while the branch is

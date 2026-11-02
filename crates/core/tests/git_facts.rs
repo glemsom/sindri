@@ -11,7 +11,11 @@ mod support;
 
 use std::path::{Path, PathBuf};
 
+use sindri_core::instructions::Taken;
+use sindri_core::session::{Env, Session};
+use sindri_core::skills::Scope;
 use sindri_core::workspace::{Git, git};
+use support::config;
 use tempfile::TempDir;
 
 /// A repository with one commit, and the commit it planted.
@@ -121,6 +125,101 @@ fn a_probe_reads_the_git_facts_in_two_processes() {
     assert!(
         calls.iter().any(|call| call.contains("--porcelain=v2")),
         "the status is asked for its branch and oid headers: {calls:?}"
+    );
+}
+
+/// A skill directory under `at`, holding a `SKILL.md` a scan will load.
+fn skill(at: &Path, name: &str) {
+    let dir = at.join(name);
+    std::fs::create_dir_all(&dir).expect("a skill directory");
+    std::fs::write(
+        dir.join("SKILL.md"),
+        format!("---\nname: {name}\ndescription: where {name} came from\n---\n\nA body.\n"),
+    )
+    .expect("SKILL.md");
+}
+
+/// Boot asks the tree where its repository root is once and hands the answer to
+/// both readers, so a workspace three directories deep pays one `--show-toplevel`
+/// rather than one per reader — and the rules and both scopes still arrive.
+#[test]
+fn a_launch_probes_the_repository_root_once_for_the_rules_and_the_skills() {
+    let (root, _) = repository();
+    std::fs::write(root.path().join("AGENTS.md"), "# House rules\n").expect("the root's rules");
+    skill(&root.path().join(".agents/skills"), "root-scope-probe");
+    let deep = root.path().join("crates/deep/inner");
+    std::fs::create_dir_all(&deep).expect("a workspace three directories in");
+    skill(&deep.join(".agents/skills"), "workspace-scope-probe");
+    let home = TempDir::new().expect("a home");
+    skill(&home.path().join(".agents/skills"), "user-scope-probe");
+
+    let (shim, log) = counting_git();
+    let path = format!(
+        "{}:{}",
+        shim.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    // SAFETY: no other thread of this process reads either variable while the
+    // launch runs, and the shim and the home exist only for this test.
+    unsafe {
+        std::env::set_var("PATH", path);
+        std::env::set_var("HOME", home.path());
+    }
+    let env = Env {
+        workspace: deep.canonicalize().expect("a canonical workspace"),
+        search_path: "/usr/bin:/bin".to_string(),
+        state: root.path().join("state"),
+    };
+
+    let session = Session::open(&env, &config(&[])).expect("a session opens");
+
+    let calls: Vec<String> = std::fs::read_to_string(&log)
+        .unwrap_or_default()
+        .lines()
+        .map(str::to_string)
+        .collect();
+    let roots = calls
+        .iter()
+        .filter(|call| call.contains("--show-toplevel"))
+        .count();
+    assert_eq!(
+        roots, 1,
+        "the root is asked for once, and this launch asked {roots} times: {calls:?}"
+    );
+    assert!(
+        calls.len() <= 2,
+        "the probe's two processes are a launch's whole git bill, and this one paid {}: {calls:?}",
+        calls.len()
+    );
+    let Taken::Found(found) = session.instructions() else {
+        panic!(
+            "the root's rules are the run's: {:?}",
+            session.instructions()
+        );
+    };
+    assert_eq!(
+        found.path,
+        root.path()
+            .join("AGENTS.md")
+            .canonicalize()
+            .expect("the file"),
+        "the rules are read from the root the same probe named"
+    );
+    let scopes: Vec<(&str, Scope)> = session
+        .catalog()
+        .skills
+        .iter()
+        .map(|skill| (skill.name.as_str(), skill.scope))
+        .collect();
+    assert_eq!(
+        scopes,
+        vec![
+            ("root-scope-probe", Scope::Repo),
+            ("user-scope-probe", Scope::User),
+            ("workspace-scope-probe", Scope::Repo),
+        ],
+        "the workspace's own skills, the root's above it, and the user's: {:?}",
+        session.catalog()
     );
 }
 
