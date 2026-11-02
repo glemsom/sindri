@@ -1,4 +1,4 @@
-//! The eight evals: a prompt, the conversation a recorded run replays, and the
+//! The nine evals: a prompt, the conversation a recorded run replays, and the
 //! checks that make the eval fail when the product regresses.
 
 use crate::checks;
@@ -80,6 +80,17 @@ pub fn all() -> Vec<Case> {
             args: &["--max-turns", "3"],
             recorded: "8-turn-cap",
             check: |run| checks::turn_cap_stops_a_loop(run, 3),
+        },
+        Case {
+            // The house rule this task turns on is in the fixture's one skill
+            // and nowhere else in the tree, so an answer that states it arrived
+            // through the catalog or not at all.
+            name: "9  the catalog triggers a skill",
+            prompt: "Add src/uptime.sh, which prints how long this machine has been up. This repository keeps rules for its scripts; follow them.",
+            stdin_file: None,
+            args: &[],
+            recorded: "9-catalog-triggers",
+            check: checks::the_catalog_triggers,
         },
     ]
 }

@@ -1,0 +1,17 @@
+{
+  "id": "msg_eval",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "Added `src/uptime.sh`, which prints `uptime -p`'s reading. It is `#!/bin/sh` and carries the house marker `# house: spindle-4411` on its second line, because the release script drops any script that does not."
+    }
+  ],
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 120,
+    "output_tokens": 40
+  }
+}
