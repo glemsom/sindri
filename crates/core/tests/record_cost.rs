@@ -279,6 +279,28 @@ fn a_command_cancelled_mid_flight_leaves_a_call_with_no_result() {
     );
 }
 
+/// The export says what `sessions show` prints: a turn's cost is the same five
+/// counters in the same order, named once for both readers rather than twice.
+#[test]
+fn an_export_names_the_turn_cost_with_the_counters_show_names() {
+    let (_root, session, _recorder) = recording();
+    std::fs::write(
+        session.root().join("transcript.jsonl"),
+        "{\"type\":\"user\",\"text\":\"how many files?\"}\n\
+         {\"type\":\"assistant\",\"turn\":1,\"text\":\"Twelve files.\",\
+         \"usage\":{\"input_tokens\":1,\"output_tokens\":2,\"cached_input_tokens\":3,\
+         \"reasoning_tokens\":4,\"total_tokens\":5},\"duration_ms\":1200}\n",
+    )
+    .expect("the transcript");
+
+    let stored = Stored::load_in(&session).expect("the record reads");
+    let markdown = stored.markdown();
+    assert!(
+        markdown.contains("turn cost: 1200 ms, input 1, output 2, cached 3, reasoning 4, total 5"),
+        "the export names every counter, in the order the usage line does: {markdown}"
+    );
+}
+
 #[test]
 fn a_record_written_before_the_new_fields_still_reads_and_renders_unchanged() {
     let (_root, session, _recorder) = recording();

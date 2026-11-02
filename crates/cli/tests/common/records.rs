@@ -110,6 +110,12 @@ pub fn three(sessions: &Path) {
 
 pub const DETAILED: &str = "0f1c8f2e-4444-4a2b-8c3d-000000000004";
 
+/// A record whose single turn reported every counter the provider has.
+pub const ALL_FIVE: &str = "0f1c8f2e-5555-4a2b-8c3d-000000000005";
+
+/// A record whose single turn reported no counter at all.
+pub const NO_COUNTERS: &str = "0f1c8f2e-6666-4a2b-8c3d-000000000006";
+
 /// Where the one truncated result's untruncated text went, as the model was
 /// told: a path the render must hand back unchanged.
 pub const SPILL: &str = "tmp/spill/t1.txt";
@@ -193,4 +199,42 @@ pub fn detailed(sessions: &Path) {
         documents.push('\n');
     }
     std::fs::write(dir.join("status.json"), documents).expect("status.json");
+}
+
+/// One record whose single turn reported exactly the counters given, and the run
+/// totals the same: a reader that names them is proven against a turn that
+/// holds them rather than against a fixture's luck.
+pub fn with_counters(sessions: &Path, id: &'static str, usage: serde_json::Value) {
+    let dir = sessions.join(id);
+    std::fs::create_dir_all(&dir).expect("a session directory");
+    let meta = serde_json::json!({
+        "id": id,
+        "version": "0.1.0",
+        "provider": "anthropic",
+        "model": "claude-counters",
+        "enforcement": "bubblewrap",
+        "pid": 4242,
+        "started_ms": 1_700_000_240_000u64,
+        "stopped": "final",
+        "turns": 1,
+        "max_turns": 250,
+        "usage": usage,
+    });
+    std::fs::write(dir.join("session.json"), format!("{meta}\n")).expect("session.json");
+    let entries = [
+        serde_json::json!({ "type": "user", "text": "how many files?" }),
+        serde_json::json!({
+            "type": "assistant",
+            "turn": 1,
+            "text": "Twelve files.",
+            "usage": usage,
+            "duration_ms": 1200,
+        }),
+    ];
+    let mut transcript = String::new();
+    for entry in entries {
+        transcript.push_str(&entry.to_string());
+        transcript.push('\n');
+    }
+    std::fs::write(dir.join("transcript.jsonl"), transcript).expect("transcript.jsonl");
 }

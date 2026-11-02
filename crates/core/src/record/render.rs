@@ -162,24 +162,35 @@ impl Stored {
     }
 }
 
+/// One counter: the name a reader is given, and how its figure is read off the
+/// usage it was reported in. Named because the inline shape is long enough to
+/// bury the table it is written in.
+type Counter = (&'static str, fn(&Usage) -> Option<u64>);
+
+/// The counters a provider reports, in the one order every reader says them:
+/// the run's usage line, a turn's cost and the markdown export all read this
+/// table, so a counter added to [`Usage`] is one they all name or one none of
+/// them does.
+const COUNTERS: [Counter; 5] = [
+    ("input", |usage| usage.input_tokens),
+    ("output", |usage| usage.output_tokens),
+    ("cached", |usage| usage.cached_input_tokens),
+    ("reasoning", |usage| usage.reasoning_tokens),
+    ("total", |usage| usage.total_tokens),
+];
+
 /// A turn's cost, in the one line the turn has room for: the span the loop
 /// measured and the counters the provider reported, each only when the record
 /// holds it. A turn nobody measured says nothing, because zero is a
 /// measurement and an absent one is not a zero.
-fn cost(usage: Option<&Usage>, duration_ms: Option<u64>) -> Option<String> {
+pub(super) fn cost(usage: Option<&Usage>, duration_ms: Option<u64>) -> Option<String> {
     let mut parts = Vec::new();
     if let Some(ms) = duration_ms {
         parts.push(format!("{ms} ms"));
     }
     if let Some(usage) = usage {
-        for (name, value) in [
-            ("input", usage.input_tokens),
-            ("output", usage.output_tokens),
-            ("cached", usage.cached_input_tokens),
-            ("reasoning", usage.reasoning_tokens),
-            ("total", usage.total_tokens),
-        ] {
-            if let Some(value) = value {
+        for (name, counter) in COUNTERS {
+            if let Some(value) = counter(usage) {
                 parts.push(format!("{name} {value}"));
             }
         }
@@ -222,20 +233,19 @@ fn end_line(out: &mut String, text: &str) {
     }
 }
 
-fn usage(usage: Option<&crate::provider::Usage>) -> String {
+/// The run's own counters, every one of them named: a reader asking what a run
+/// spent is told of each that nobody reported it, which is a fact, rather than
+/// handed a line that quietly leaves it out.
+fn usage(usage: Option<&Usage>) -> String {
     let Some(usage) = usage else {
         return "none reported".to_string();
     };
-    let counter = |name: &str, value: Option<u64>| match value {
-        Some(value) => format!("{name} {value}"),
-        None => format!("{name} unreported"),
-    };
-    [
-        counter("input", usage.input_tokens),
-        counter("output", usage.output_tokens),
-        counter("cached", usage.cached_input_tokens),
-        counter("reasoning", usage.reasoning_tokens),
-        counter("total", usage.total_tokens),
-    ]
-    .join(", ")
+    COUNTERS
+        .iter()
+        .map(|(name, counter)| match counter(usage) {
+            Some(value) => format!("{name} {value}"),
+            None => format!("{name} unreported"),
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }

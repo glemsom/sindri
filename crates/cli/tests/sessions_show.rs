@@ -11,7 +11,10 @@
 mod common;
 
 use common::provider::{MockProvider, Reply};
-use common::records::{DETAILED, MIDDLE, NEWEST, OLDEST, SPILL, detailed, root, three};
+use common::records::{
+    ALL_FIVE, DETAILED, MIDDLE, NEWEST, NO_COUNTERS, OLDEST, SPILL, detailed, root, three,
+    with_counters,
+};
 use common::{Env, batch, sessions, stderr, stdout};
 
 /// The id one run printed, so the directory a test reads is the one it made.
@@ -320,4 +323,81 @@ fn json_exits_the_way_the_text_render_does() {
         "and it says which: {}",
         stderr(missing)
     );
+}
+
+/// The line the run's own counters are read off and the line a turn's are: one
+/// list, named in one order, so a sixth counter added to `Usage` is a counter
+/// both lines say rather than one each remembers differently.
+#[test]
+fn the_usage_line_and_the_turn_cost_name_the_same_counters_in_the_same_order() {
+    let env = Env::new();
+    let sessions = root(&env);
+    with_counters(
+        &sessions,
+        ALL_FIVE,
+        serde_json::json!({
+            "input_tokens": 1,
+            "output_tokens": 2,
+            "cached_input_tokens": 3,
+            "reasoning_tokens": 4,
+            "total_tokens": 5,
+        }),
+    );
+    with_counters(&sessions, NO_COUNTERS, serde_json::json!({}));
+
+    let shown = env.cmd().args(["sessions", "show", ALL_FIVE]).assert();
+    let shown = shown.get_output();
+    assert_eq!(shown.status.code(), Some(0), "stderr: {}", stderr(shown));
+    let text = stdout(shown);
+    let usage = counters(after(&text, "usage: "));
+    let cost = counters(after(&text, "turn cost: "));
+    assert_eq!(
+        usage,
+        vec!["input", "output", "cached", "reasoning", "total"],
+        "the usage line names every counter the record holds, in one order:\n{text}"
+    );
+    assert_eq!(
+        cost, usage,
+        "and the turn cost names them in that same order:\n{text}"
+    );
+    assert!(
+        text.contains("usage: input 1, output 2, cached 3, reasoning 4, total 5"),
+        "each name keeps its own figure:\n{text}"
+    );
+    assert!(
+        text.contains("turn cost: 1200 ms, input 1, output 2, cached 3, reasoning 4, total 5"),
+        "the span first, then the counters the turn reported:\n{text}"
+    );
+
+    let shown = env.cmd().args(["sessions", "show", NO_COUNTERS]).assert();
+    let shown = shown.get_output();
+    assert_eq!(shown.status.code(), Some(0), "stderr: {}", stderr(shown));
+    let text = stdout(shown);
+    assert!(
+        counters(after(&text, "turn cost: ")).is_empty(),
+        "a turn that reported no counter names none, because zero is a figure and this is not one:\n{text}"
+    );
+    assert_eq!(
+        after(&text, "usage: "),
+        "input unreported, output unreported, cached unreported, reasoning unreported, total unreported",
+        "while the usage line says of each that nobody reported it:\n{text}"
+    );
+}
+
+/// The rest of a line a render put a fact on, without its newline.
+fn after<'a>(text: &'a str, prefix: &str) -> &'a str {
+    text.lines()
+        .find_map(|line| line.strip_prefix(prefix))
+        .unwrap_or_else(|| panic!("the render states {prefix:?}:\n{text}"))
+}
+
+/// The counters a line names, in the order it names them: a part that is a name
+/// and a figure, or a name and the word for a figure nobody reported.
+fn counters(line: &str) -> Vec<&str> {
+    line.split(", ")
+        .filter_map(|part| {
+            let (name, value) = part.split_once(' ')?;
+            (value.parse::<u64>().is_ok() || value == "unreported").then_some(name)
+        })
+        .collect()
 }

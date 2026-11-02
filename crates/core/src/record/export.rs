@@ -6,6 +6,7 @@
 use std::fmt::Write as _;
 
 use super::entry::Entry;
+use super::render::cost;
 use super::stored::Stored;
 use crate::provider::Asked;
 
@@ -41,9 +42,16 @@ impl Stored {
                     turn,
                     text,
                     reasoning,
-                    ..
+                    usage,
+                    duration_ms,
                 } => {
                     let _ = write!(out, "\n## assistant (turn {turn})\n\n{}", block(text));
+                    // The same line `sessions show` prints, from the same
+                    // helper: an export that said a turn cost differently from
+                    // the record would be a second account of one run.
+                    if let Some(cost) = cost(usage.as_ref(), *duration_ms) {
+                        let _ = writeln!(out, "\nturn cost: {cost}");
+                    }
                     if let Some(reasoning) = reasoning {
                         let _ = write!(out, "\n> reasoned: {}\n", one_line(reasoning));
                     }
