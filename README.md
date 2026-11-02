@@ -32,7 +32,8 @@ $ sindri doctor
 ```
 
 The installer verifies the checksum before writing; `doctor` proves `bwrap`, the binary
-set and the mount plan. Flags and the runbook: [`docs/install.md`](docs/install.md).
+set and the mount plan, and lists every skill under `~/.agents/skills` and the
+repository's `.agents/skills`. Flags and the runbook: [`docs/install.md`](docs/install.md).
 
 ## Batch mode
 
@@ -74,7 +75,7 @@ A field the run knows nothing about is left out, never `null`.
 | --- | --- |
 | `sindri` | the terminal UI, on a terminal |
 | `sindri -b PROMPT` | batch: ask the model, print the answer |
-| `sindri doctor` | prove the sandbox, print the description the model sees |
+| `sindri doctor` | prove the sandbox, print the description the model sees, and list the skills it found |
 | `sindri sandbox exec [--timeout N] [--yolo-unsafe] -- CMD` | one command through the sandbox, no model, outcome as JSON |
 | `sindri sessions list [--limit N] [--json]` | the records, newest first, one row each |
 | `sindri sessions show [ID] [--json]` | one transcript: the newest record, or the one `ID` or a prefix names |

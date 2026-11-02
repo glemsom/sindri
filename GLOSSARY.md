@@ -53,8 +53,8 @@ A boundary on writes, not on reads.
 with the caller's own privileges, outside bubblewrap, inheriting its environment and
 working directory. Never persisted: asked for by the invocation that makes it.
 
-**doctor** — `sindri doctor`: verifies bwrap, the binary set and the mount plan, and
-prints the description.
+**doctor** — `sindri doctor`: verifies bwrap, the binary set and the mount plan, prints
+the description, and lists the **skill** **catalog**.
 
 ## Run
 
@@ -108,6 +108,29 @@ model-facing copy is truncated head+tail.
 silent unless `-v`; `--format json` changes the output shape.
 
 **reasoning** — provider-side thinking tokens, off by default, shown on stderr with `-v`.
+
+## Skills
+
+**skill** — a directory holding a `SKILL.md`: the frontmatter's `name` and `description`,
+and the two flags that say who may reach for it. A skill no version of the
+specification knows how to read is a **refusal**, never a silence.
+
+**scope** — one of the two places a **catalog** reads: `user`, under the home directory
+at `~/.agents/skills`, and `repo`, at every `.agents/skills` between the workspace and
+its repository root. The specification governs what is inside a skill directory and says
+nothing about where one lives, so these paths are ours.
+
+**catalog** — everything one scan found: the **skills**, the **refusals**, and the
+**shadowed** names. Sorted by name, so two scans of one tree say the same thing.
+
+**refusal** — a `SKILL.md` the scan would not load, held with its file and the line that
+broke it: no description, no YAML, a link to nothing. A refusal is a diagnostic, not a
+failure — the rest of the **catalog** still holds.
+
+**shadowing** — one name two scopes carry. The nearer scope's skill holds it and the
+farther one is recorded as shadowed, so a reader sees both what won and what it
+displaced: a repository's skill over the home directory's, a crate's over its
+repository's.
 
 ## Terminal UI
 
