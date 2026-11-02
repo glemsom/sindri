@@ -26,6 +26,9 @@ pub struct Env {
     pub workspace: PathBuf,
     pub state: PathBuf,
     pub config: PathBuf,
+    /// The home a run reads its user-scope skills from. A test's own, because
+    /// the host's collection is not a fact about the test.
+    pub home: PathBuf,
 }
 
 impl Env {
@@ -34,7 +37,8 @@ impl Env {
         let workspace = root.path().join("workspace");
         let state = root.path().join("state");
         let config = root.path().join("config");
-        for dir in [&workspace, &state, &config] {
+        let home = root.path().join("home");
+        for dir in [&workspace, &state, &config, &home] {
             std::fs::create_dir_all(dir).expect("create dir");
         }
         Env {
@@ -42,6 +46,7 @@ impl Env {
             workspace,
             state,
             config,
+            home,
         }
     }
 
@@ -49,7 +54,8 @@ impl Env {
         let mut cmd = std::process::Command::new(assert_cmd::cargo::cargo_bin!("sindri"));
         cmd.current_dir(&self.workspace)
             .env("XDG_STATE_HOME", &self.state)
-            .env("XDG_CONFIG_HOME", &self.config);
+            .env("XDG_CONFIG_HOME", &self.config)
+            .env("HOME", &self.home);
         // The host's own settings must not leak into a test's run, and that
         // includes what it says about its terminal: a frame that hears a
         // Kitty-capable terminal asks it a question, and the answer it gets is

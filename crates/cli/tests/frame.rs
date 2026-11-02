@@ -40,6 +40,41 @@ fn bare_sindri_on_a_terminal_opens_the_frame() {
 }
 
 #[test]
+fn the_first_frame_says_nothing_about_the_skills_it_found() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: the frame's launch is not tested here");
+        return;
+    };
+    let env = Env::new();
+    // A repository carrying a skill: the catalog `sindri doctor` prints is not
+    // something the frame says on the way in, in this ticket or by accident.
+    std::fs::create_dir_all(env.workspace.join(".git")).expect("a git marker");
+    let dir = env.workspace.join(".agents/skills/house-style");
+    std::fs::create_dir_all(&dir).expect("a skill directory");
+    std::fs::write(
+        dir.join("SKILL.md"),
+        "---\nname: house-style\ndescription: Short sentences.\n---\n",
+    )
+    .expect("a SKILL.md");
+
+    let mut child = spawn(&env, &pty, &defaults());
+    let drawn = pty.wait_for(&mut child, "run the tests and fix what fails");
+    if !drawn.contains("run the tests and fix what fails") {
+        let _ = child.kill();
+        let _ = child.wait();
+        panic!("the first frame must draw, drew: {drawn:?}");
+    }
+
+    let (code, _) = pty.quit(&mut child);
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+    assert!(
+        !drawn.contains("house-style"),
+        "a skill is not announced at startup: {drawn:?}"
+    );
+    assert!(!drawn.contains("skills:"), "nor is the catalog: {drawn:?}");
+}
+
+#[test]
 fn a_sandbox_that_cannot_exist_is_a_card_before_anything_else_draws() {
     let Some(pty) = Pty::new() else {
         eprintln!("no pty on this machine: the card's launch is not tested here");
