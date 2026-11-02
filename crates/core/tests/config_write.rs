@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
-use sindri_core::config::{Document, KEYS, Key};
+use sindri_core::config::{Document, KEYS, Key, MAX_TURNS};
 use sindri_core::exec::timeout_from_secs;
 use tempfile::TempDir;
 
@@ -148,6 +148,40 @@ fn a_value_the_schema_refuses_changes_nothing_and_writes_nothing() {
     assert_eq!(
         after, before,
         "a refused value never reaches the file: {after}"
+    );
+}
+
+#[test]
+fn a_count_too_large_to_hold_is_refused_as_too_large_and_not_as_unreadable() {
+    // `5000000000` is a number; it is too large for the field, and telling a
+    // reader it is "not a number" sends them looking for a typo that is not
+    // there. The other failure says its own thing, and the two never trade.
+    let (_dir, _path, mut document) = document(None);
+
+    let too_large = document
+        .set(Key::MaxTurns, "5000000000")
+        .expect_err("a count past the field's largest is refused");
+    let said = too_large.message().to_string();
+    assert!(
+        said.contains("too large") && said.contains(&MAX_TURNS.to_string()),
+        "the refusal says it is too large and names the largest count it takes: {said}"
+    );
+    assert!(
+        !said.contains("not a number"),
+        "a count the field cannot hold is still a number: {said}"
+    );
+
+    let unreadable = document
+        .set(Key::MaxTurns, "many")
+        .expect_err("a word is not a count");
+    let said = unreadable.message().to_string();
+    assert!(
+        said.contains("not a number"),
+        "a word is refused as unreadable: {said}"
+    );
+    assert!(
+        !said.contains("too large"),
+        "and the refusal does not claim the other fault: {said}"
     );
 }
 

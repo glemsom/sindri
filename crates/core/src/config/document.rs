@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use super::file::{self, FileConfig};
-use super::{ConfigError, Provider, Theme, extra_paths};
+use super::{ConfigError, MAX_TURNS, Provider, Theme, extra_paths};
 use crate::exec::MAX_TIMEOUT_SECS;
 
 #[repr(usize)]
@@ -135,7 +135,7 @@ const SPECS: [Spec; N_KEYS] = [
         get: |values| values.max_turns.map(|turns| turns.to_string()),
         clear: |values| values.max_turns = None,
         put: |values, value| {
-            values.max_turns = Some(count(value, 1, u32::MAX)?);
+            values.max_turns = Some(count(value, 1, MAX_TURNS)?);
             Ok(())
         },
     },
@@ -301,9 +301,21 @@ fn count<T>(value: &str, low: T, high: T) -> Result<T, ConfigError>
 where
     T: std::str::FromStr + PartialOrd + std::fmt::Display + Copy,
 {
-    let parsed: T = value
-        .parse()
-        .map_err(|_| ConfigError::Usage(format!("not a number: `{value}`")))?;
+    // Two failures, two sentences: a count the type cannot hold is a number,
+    // and calling it "not a number" sends the reader after a typo that is not
+    // there. It names the bound the key takes, which is what to stay under.
+    // A leading `+` is a sign the parse accepts, so it does not make the count
+    // unreadable — `+5` and `5000000000` are counts, one of them too large.
+    let parsed: T = value.parse().map_err(|_| {
+        let digits = value.strip_prefix('+').unwrap_or(value);
+        if !digits.is_empty() && digits.chars().all(|digit| digit.is_ascii_digit()) {
+            ConfigError::Usage(format!(
+                "too large: a count no larger than {high}, got {value}"
+            ))
+        } else {
+            ConfigError::Usage(format!("not a number: `{value}`"))
+        }
+    })?;
     if parsed < low || parsed > high {
         return Err(ConfigError::Usage(format!(
             "must be between {low} and {high}, got {parsed}"

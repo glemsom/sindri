@@ -17,6 +17,11 @@ use crate::sandbox::{Enforcement, WritableSet};
 
 pub const DEFAULT_MAX_TURNS: u32 = 250;
 
+/// The largest turn cap a run takes, and the bound the form states: a cap
+/// nobody could reach is not a setting, and a refusal has to name a number the
+/// reader can act on rather than the width of the type it was parsed into.
+pub const MAX_TURNS: u32 = 10_000;
+
 mod document;
 mod file;
 mod headers;
@@ -150,10 +155,10 @@ impl Config {
             .or(number("SINDRI_MAX_TURNS")?)
             .or(file.max_turns)
             .unwrap_or(DEFAULT_MAX_TURNS);
-        if max_turns == 0 {
-            return Err(ConfigError::Usage(
-                "max_turns must be at least 1".to_string(),
-            ));
+        if !(1..=MAX_TURNS).contains(&max_turns) {
+            return Err(ConfigError::Usage(format!(
+                "max_turns must be between 1 and {MAX_TURNS}, got {max_turns}"
+            )));
         }
 
         let timeout_secs = overrides
