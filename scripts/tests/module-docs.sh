@@ -86,3 +86,30 @@ MD
     assert_status 0 "$STATUS"
     assert_contains "$OUT" "0 files"
 }
+
+test_a_module_written_but_not_staged_is_checked_too() {
+    # The audit sees what `git status` sees: a file an agent has just written is
+    # checked before anyone stages it.
+    module src/tracked.rs <<'RS'
+//! What the loop proves.
+RS
+    track
+    module src/written.rs <<'RS'
+#![allow(dead_code)]
+RS
+    audit
+    assert_status 1 "$STATUS"
+    assert_contains "$ERR" "src/written.rs opens with"
+    assert_contains_absent "$ERR" "src/tracked.rs"
+}
+
+test_a_gitignored_module_stays_out_of_the_audit() {
+    printf '.scratch/\n' >.gitignore
+    track
+    module .scratch/draft.rs <<'RS'
+#![allow(dead_code)]
+RS
+    audit
+    assert_status 0 "$STATUS"
+    assert_contains "$OUT" "0 files"
+}

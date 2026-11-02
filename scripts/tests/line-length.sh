@@ -64,3 +64,23 @@ test_only_rust_files_are_measured() {
     assert_status 0 "$STATUS"
     assert_contains "$OUT" "0 files"
 }
+
+test_a_file_written_but_not_staged_is_measured_too() {
+    # The moment the rule matters most: a new file is where the split has not
+    # happened yet, and it is not in the index when it is written.
+    long_file src/tracked.rs 3
+    track
+    long_file src/written.rs 801
+    audit
+    assert_status 1 "$STATUS"
+    assert_contains "$ERR" "src/written.rs has 801 lines, over the 800-line limit"
+}
+
+test_a_gitignored_file_stays_out_of_the_audit() {
+    printf '.scratch/\n' >.gitignore
+    track
+    long_file .scratch/notes.rs 801
+    audit
+    assert_status 0 "$STATUS"
+    assert_contains "$OUT" "0 files"
+}

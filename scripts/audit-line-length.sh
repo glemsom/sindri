@@ -3,6 +3,9 @@
 # reading the world, and a file that outgrows the limit is split — there is no
 # allowlist to reach for. Shell scripts and docs are outside it: they are read
 # whole or searched, never navigated, so `GLOSSARY.md` is a stated choice.
+#
+# The set it walks is what `git status` sees: an unstaged file is measured
+# too, and a gitignored tree stays out.
 set -euo pipefail
 
 limit=800
@@ -18,7 +21,7 @@ while IFS= read -r file; do
     fi
     echo "audit: $file has $lines lines, over the $limit-line limit" >&2
     failed=1
-done < <(git ls-files '*.rs')
+done < <({ git ls-files; git ls-files --others --exclude-standard; } | grep '\.rs$')
 
 if [ "$failed" -ne 0 ]; then
     echo "audit: split the file" >&2

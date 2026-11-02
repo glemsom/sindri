@@ -3,6 +3,9 @@
 # agent holding a narrow slice — can place the file without reading its body.
 # Inner attributes go after it, because the first line is the line that gets
 # scanned; boilerplate there costs exactly the read the rule exists to save.
+#
+# The set it walks is what `git status` sees: an unstaged file is checked
+# too, and a gitignored tree stays out.
 set -euo pipefail
 
 failed=0
@@ -19,7 +22,7 @@ while IFS= read -r file; do
     esac
     printf 'audit: %s %s, not a //! paragraph\n' "$file" "$what" >&2
     failed=1
-done < <(git ls-files '*.rs')
+done < <({ git ls-files; git ls-files --others --exclude-standard; } | grep '\.rs$')
 
 if [ "$failed" -ne 0 ]; then
     echo "audit: open the module with a //! paragraph saying what it is for, above any inner attribute" >&2
