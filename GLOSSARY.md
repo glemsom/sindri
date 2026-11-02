@@ -129,6 +129,11 @@ it so a relative reference in the body resolves. Once per **session** and no mor
 second call is `already_loaded` with no body, because a **tool result** is sent again
 with every later turn, and the loaded set is cleared with the history it was made in.
 
+**loaded set** — the skills one conversation has been told, held with the **history** and
+cleared with it: a body is in force while the transcript still carries it. Two identical
+calls in one turn's wave are one load, because the wave is one turn. The code's word for
+it is `Loaded`, and `Agent::loaded_skills` is how a frame reads it.
+
 **catalog** — everything one scan found: the **skills**, the **refusals**, and the
 **shadowed** names. Sorted by name, so two scans of one tree say the same thing.
 
