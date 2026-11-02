@@ -19,6 +19,9 @@ pub enum ExitCode {
     EnvironmentFailure,
     /// The turn cap was reached; a partial answer is allowed.
     TurnCap,
+    /// The run spent its command time or its output; a partial answer is
+    /// allowed, exactly as at the turn cap.
+    Budget,
     /// The run was cancelled with SIGINT; stdout stays empty.
     Cancelled,
 }
@@ -31,6 +34,7 @@ impl ExitCode {
             ExitCode::UsageError => 2,
             ExitCode::EnvironmentFailure => 3,
             ExitCode::TurnCap => 100,
+            ExitCode::Budget => 101,
             ExitCode::Cancelled => 130,
         }
     }

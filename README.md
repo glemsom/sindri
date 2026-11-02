@@ -46,9 +46,10 @@ prompt, and a pipe without `-b` is refused. `-v` puts the run on stderr.
 
 | Exit | Meaning | Exit | Meaning |
 | --- | --- | --- | --- |
-| `0` | an answer | `3` | sandbox or setup failure |
-| `1` | model or provider error | `100` | turn cap |
+| `0` | an answer | `100` | turn cap |
+| `1` | model or provider error | `101` | spent its command time or its output |
 | `2` | usage error | `130` | cancelled, nothing on stdout |
+| `3` | sandbox or setup failure | | |
 
 `sindri sandbox exec` reports the *sandbox* instead: `0` for any outcome, `3` when the
 sandbox failed, the command's own status only in the JSON.
@@ -63,8 +64,9 @@ $ sindri -b "summarise this diff" --format json | jq -r .session
 ```
 
 Field order is fixed and later fields only append; `stopped` is `final`, `max_turns`,
-`cancelled` or `error`, and `enforcement` is `bubblewrap` or `unsafe`. A field the run
-knows nothing about is left out, never `null`.
+`budget`, `cancelled` or `error`, and `enforcement` is `bubblewrap` or `unsafe` — the
+last field, after `command_ms` and `output_bytes`, which say what the commands spent.
+A field the run knows nothing about is left out, never `null`.
 
 ## Commands
 

@@ -9,7 +9,7 @@
 
 use std::time::Duration;
 
-use sindri_core::agent::{Report, Stopped};
+use sindri_core::agent::{Report, Spent, Stopped};
 use sindri_core::exec::StatusSink;
 use sindri_core::paths::SessionDir;
 use sindri_core::provider::{Call, ToolOutcome, Usage};
@@ -53,6 +53,7 @@ fn report() -> Report {
         stopped: Stopped::Final,
         model: Some("claude-mock".to_string()),
         tool_calls: 1,
+        spent: Spent::default(),
         usage: Usage {
             input_tokens: Some(35),
             output_tokens: Some(12),

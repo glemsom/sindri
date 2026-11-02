@@ -16,7 +16,13 @@ result** returned. One call may run a whole pipeline or script.
 the frame: prose, fences drawn as panels, links that keep their targets, and **pictures**
 with their **captions**.
 
-**stopped** — why the loop ended: `final`, `max_turns`, `cancelled` or `error`.
+**stopped** — why the loop ended: `final`, `max_turns`, `budget`, `cancelled` or `error`.
+
+**budget** — what one prompt's commands may spend before the run stops: an hour of
+command time and 8 MiB of output fed back, spent inside a script where the **turn
+cap** cannot count it. A **tool result** is re-sent with every later turn, so the bytes
+counted are the bytes the conversation keeps; a run that reaches the budget stops as a
+run that reaches the cap does, with whatever answer exists.
 
 **cancel** — Ctrl-C (SIGINT): one flag the loop and the executor share. The loop stops
 between turns, the command's process group is killed, stdout stays empty, exit is 130.

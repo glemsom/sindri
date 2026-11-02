@@ -14,7 +14,8 @@ use common::provider::{MockProvider, Reply};
 use common::{batch, stderr, stdout};
 
 /// The contract's field order. Later fields append; this order never changes.
-const FIELD_ORDER: [&str; 9] = [
+/// `enforcement` stays last, so a script can read the posture off the end.
+const FIELD_ORDER: [&str; 11] = [
     "answer",
     "session",
     "turns",
@@ -23,6 +24,8 @@ const FIELD_ORDER: [&str; 9] = [
     "duration_ms",
     "tool_calls",
     "usage",
+    "command_ms",
+    "output_bytes",
     "enforcement",
 ];
 
@@ -106,7 +109,7 @@ fn a_finished_run_is_one_compact_object_in_the_contract_order() {
                 r#"{{"answer":"Two files changed.","session":"{}","turns":1,"#,
                 r#""stopped":"final","model":"claude-mock","duration_ms":{},"#,
                 r#""tool_calls":0,"usage":{{"input_tokens":11,"output_tokens":7,"#,
-                r#""total_tokens":18}},"#,
+                r#""total_tokens":18}},"command_ms":0,"output_bytes":0,"#,
                 r#""enforcement":"bubblewrap"}}"#
             ),
             session, duration

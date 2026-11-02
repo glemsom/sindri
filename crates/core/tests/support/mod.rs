@@ -4,6 +4,7 @@
 
 #![allow(
     dead_code,
+    unused_imports,
     reason = "each test binary uses a different slice of the fixtures"
 )]
 
@@ -21,6 +22,12 @@ use sindri_core::record::Recorder;
 use sindri_core::sandbox::{Enforcement, NetworkPosture, SandboxPolicy, WritableSet};
 use sindri_core::session::Env;
 use tempfile::TempDir;
+
+mod batch;
+mod git;
+
+pub use batch::Echoing;
+pub use git::commit;
 
 pub fn fixtures() -> (TempDir, PathBuf, SandboxPolicy) {
     let workspace = TempDir::new().expect("workspace");
@@ -72,31 +79,6 @@ pub fn config(extras: &[&Path]) -> Config {
         extra_headers: Vec::new(),
         refused_repo_config: None,
     }
-}
-
-/// A tree with one commit, so the probe has a branch and a commit to name.
-pub fn commit(dir: &Path) -> String {
-    let author = [
-        "-c",
-        "user.name=sindri",
-        "-c",
-        "user.email=sindri@example.invalid",
-    ];
-    let git = |args: &[&str]| {
-        let out = std::process::Command::new("git")
-            .args(author)
-            .args(args)
-            .current_dir(dir)
-            .output()
-            .expect("git runs");
-        assert!(out.status.success(), "git {args:?}: {out:?}");
-        String::from_utf8_lossy(&out.stdout).trim().to_string()
-    };
-    git(&["init", "-q", "--initial-branch=main"]);
-    std::fs::write(dir.join("readme"), "one line\n").expect("a file to commit");
-    git(&["add", "readme"]);
-    git(&["commit", "-q", "-m", "the first commit"]);
-    git(&["rev-parse", "HEAD"])
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -338,6 +320,10 @@ impl Harness {
     /// the directory: the loop hands the recorder its facts and never reads it.
     pub fn set_recorder(&mut self, recorder: Arc<Recorder>) {
         self.agent.set_recorder(recorder);
+    }
+
+    pub fn set_budget(&mut self, budget: sindri_core::agent::Budget) {
+        self.agent.set_budget(budget);
     }
 
     pub fn forget(&mut self) {

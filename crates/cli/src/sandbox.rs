@@ -7,7 +7,7 @@
 
 use std::time::{Duration, Instant};
 
-use sindri_core::agent::{Report, Stopped};
+use sindri_core::agent::{Report, Spent, Stopped};
 use sindri_core::cancel::Cancel;
 use sindri_core::config::Overrides;
 use sindri_core::exec::{BashExecutor, Outcome, ToolResult};
@@ -77,6 +77,7 @@ fn command_over(result: Option<&ToolResult>, took: Duration) -> Result<Report, L
         stopped,
         model: None,
         tool_calls,
+        spent: Spent::default(),
         usage: Usage::default(),
         duration: took,
     })

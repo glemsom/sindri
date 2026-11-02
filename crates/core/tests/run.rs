@@ -14,7 +14,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use sindri_core::agent::{Report, Stopped};
+use sindri_core::agent::{Report, Spent, Stopped};
 use sindri_core::provider::{Error, Usage};
 use sindri_core::record::Stored;
 use sindri_core::sandbox::{Enforcement, PolicyError};
@@ -28,6 +28,7 @@ fn report(stopped: Stopped) -> Report {
         stopped,
         model: Some("claude-mock".to_string()),
         tool_calls: 0,
+        spent: Spent::default(),
         usage: Usage::default(),
         duration: Duration::from_millis(20),
     }

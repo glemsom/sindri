@@ -109,6 +109,7 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
             match report.stopped {
                 Stopped::Final => ExitCode::Success.code(),
                 Stopped::MaxTurns => ExitCode::TurnCap.code(),
+                Stopped::Budget => ExitCode::Budget.code(),
                 Stopped::Cancelled => ExitCode::Cancelled.code(),
                 Stopped::Error => ExitCode::ModelError.code(),
             }

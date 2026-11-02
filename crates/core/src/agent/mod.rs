@@ -4,10 +4,13 @@
 //! prompts so a second question builds on the first answer. One launch is one
 //! thread; `/new` forgets it.
 
+mod budget;
+mod calls;
 mod event;
 mod report;
 mod tool;
 
+pub use budget::{Budget, Spent};
 pub use event::Event;
 pub use report::{Report, Stopped};
 pub use tool::BashTool;
@@ -35,6 +38,9 @@ pub struct Agent {
     model: Box<dyn Model>,
     tool: BashTool,
     max_turns: u32,
+    /// The bound on what the commands may spend, which a batched script can
+    /// reach where the turn cap cannot see it.
+    budget: Budget,
     thinking: bool,
     events: Option<Sender<Event>>,
     cancel: Cancel,
@@ -48,6 +54,7 @@ impl Agent {
             model,
             tool,
             max_turns,
+            budget: Budget::default(),
             thinking,
             events: None,
             cancel: Cancel::new(),
@@ -64,6 +71,12 @@ impl Agent {
         self.tool = dials.tool;
         self.max_turns = dials.max_turns;
         self.thinking = dials.thinking;
+    }
+
+    /// The bound this conversation runs under, replaced only by a test or a
+    /// front end that has measured what a task may cost.
+    pub fn set_budget(&mut self, budget: Budget) {
+        self.budget = budget;
     }
 
     pub fn forget(&mut self) {
@@ -102,6 +115,7 @@ impl Agent {
             stopped: Stopped::Final,
             model: None,
             tool_calls: 0,
+            spent: Spent::default(),
             usage: crate::provider::Usage::default(),
             duration: std::time::Duration::ZERO,
         };
@@ -114,6 +128,10 @@ impl Agent {
             }
             if report.turns >= self.max_turns {
                 report.stopped = Stopped::MaxTurns;
+                break;
+            }
+            if self.budget.reached(report.spent) {
+                report.stopped = Stopped::Budget;
                 break;
             }
             report.turns += 1;
@@ -163,35 +181,48 @@ impl Agent {
             if turn.calls.is_empty() {
                 break;
             }
-            let mut outcomes = Vec::with_capacity(turn.calls.len());
-            let mut cancelled = false;
             for call in &turn.calls {
-                if self.cancel.is_triggered() {
-                    cancelled = true;
-                    break;
-                }
                 self.announce(report.turns, call);
                 if let Some(recorder) = &self.recorder {
                     recorder.tool_call(report.turns, call);
                 }
-                match self.tool.call(call) {
-                    Some(outcome) => {
-                        if let Some(recorder) = &self.recorder {
-                            recorder.tool_result(report.turns, &outcome);
-                        }
-                        outcomes.push(outcome);
-                    }
-                    // The command was killed mid-flight; there is no result to
-                    // feed back, and no model left to read it.
-                    None => cancelled = true,
+            }
+            let mut outcomes = Vec::with_capacity(turn.calls.len());
+            let mut stopped = None;
+            for wave in turn.calls.chunks(calls::PARALLEL_CALLS) {
+                if self.cancel.is_triggered() {
+                    stopped = Some(Stopped::Cancelled);
+                    break;
                 }
-                report.tool_calls += 1;
-                if cancelled {
+                if self.budget.reached(report.spent) {
+                    stopped = Some(Stopped::Budget);
+                    break;
+                }
+                let mut killed = false;
+                for outcome in calls::wave(&self.tool, wave) {
+                    // Counted before it is read: a call the cancel killed was
+                    // started, and the record says so even with no result.
+                    report.tool_calls += 1;
+                    let Some(outcome) = outcome else {
+                        killed = true;
+                        break;
+                    };
+                    if let Some(recorder) = &self.recorder {
+                        recorder.tool_result(report.turns, &outcome);
+                    }
+                    report.spent.add(
+                        outcome.facts.duration_ms.unwrap_or_default(),
+                        outcome.content.len(),
+                    );
+                    outcomes.push(outcome);
+                }
+                if killed {
+                    stopped = Some(Stopped::Cancelled);
                     break;
                 }
             }
-            if cancelled {
-                report.stopped = Stopped::Cancelled;
+            if let Some(stopped) = stopped {
+                report.stopped = stopped;
                 break;
             }
             self.history.push(Message::ToolResults(outcomes));

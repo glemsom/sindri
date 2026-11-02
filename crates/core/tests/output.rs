@@ -5,7 +5,7 @@
 
 use std::time::Duration;
 
-use sindri_core::agent::{Report, Stopped};
+use sindri_core::agent::{Report, Spent, Stopped};
 use sindri_core::output::to_json;
 use sindri_core::provider::Usage;
 use sindri_core::sandbox::Enforcement;
@@ -20,6 +20,7 @@ fn the_shape_is_pinned_byte_for_byte() {
         stopped: Stopped::Final,
         model: Some("claude-sonnet-4-6".to_string()),
         tool_calls: 1,
+        spent: Spent::default(),
         usage: Usage {
             input_tokens: Some(1234),
             output_tokens: Some(56),
@@ -42,6 +43,8 @@ fn the_shape_is_pinned_byte_for_byte() {
             r#""tool_calls":1,"#,
             r#""usage":{"input_tokens":1234,"output_tokens":56,"#,
             r#""cached_input_tokens":1000,"total_tokens":1290},"#,
+            r#""command_ms":0,"#,
+            r#""output_bytes":0,"#,
             r#""enforcement":"bubblewrap"}"#
         ),
         "the contract's order, and the counters nobody reported left out"
@@ -56,6 +59,7 @@ fn a_field_nobody_reported_is_absent_and_never_null() {
         stopped: Stopped::Final,
         model: None,
         tool_calls: 0,
+        spent: Spent::default(),
         usage: Usage::default(),
         duration: Duration::from_millis(7),
     };
@@ -70,6 +74,8 @@ fn a_field_nobody_reported_is_absent_and_never_null() {
             r#""stopped":"final","#,
             r#""duration_ms":7,"#,
             r#""tool_calls":0,"#,
+            r#""command_ms":0,"#,
+            r#""output_bytes":0,"#,
             r#""enforcement":"bubblewrap"}"#
         ),
         "no model and no usage means no fields, not null fields"
@@ -82,6 +88,7 @@ fn every_stop_reason_has_its_own_word() {
     for (stopped, word) in [
         (Stopped::Final, "final"),
         (Stopped::MaxTurns, "max_turns"),
+        (Stopped::Budget, "budget"),
         (Stopped::Cancelled, "cancelled"),
         (Stopped::Error, "error"),
     ] {
@@ -91,6 +98,7 @@ fn every_stop_reason_has_its_own_word() {
             stopped,
             model: None,
             tool_calls: 0,
+            spent: Spent::default(),
             usage: Usage::default(),
             duration: Duration::ZERO,
         };
@@ -111,6 +119,7 @@ fn an_answer_that_needs_escaping_stays_on_one_line() {
         stopped: Stopped::Final,
         model: None,
         tool_calls: 0,
+        spent: Spent::default(),
         usage: Usage::default(),
         duration: Duration::ZERO,
     };
@@ -133,6 +142,7 @@ fn the_enforcement_the_run_had_is_the_last_field_so_a_script_can_trust_what_it_r
         stopped: Stopped::Final,
         model: Some("claude-sonnet-4-6".to_string()),
         tool_calls: 0,
+        spent: Spent::default(),
         usage: Usage::default(),
         duration: Duration::from_millis(12),
     };

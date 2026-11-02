@@ -24,6 +24,10 @@ struct Run<'a> {
     tool_calls: u32,
     #[serde(skip_serializing_if = "Usage::is_empty")]
     usage: &'a Usage,
+    /// What the commands cost: the wall clock they took, and the bytes of their
+    /// output fed back. Both always reported, because zero is a measurement.
+    command_ms: u64,
+    output_bytes: u64,
     enforcement: &'static str,
 }
 
@@ -40,6 +44,8 @@ pub fn to_json(report: &Report, session: &str, enforcement: Enforcement) -> Stri
         duration_ms: u64::try_from(report.duration.as_millis()).unwrap_or(u64::MAX),
         tool_calls: report.tool_calls,
         usage: &report.usage,
+        command_ms: u64::try_from(report.spent.wall.as_millis()).unwrap_or(u64::MAX),
+        output_bytes: report.spent.bytes,
         enforcement: enforcement.as_str(),
     };
     serde_json::to_string(&run).unwrap_or_default()

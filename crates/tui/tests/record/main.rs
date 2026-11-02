@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use sindri_core::agent::{Report, Stopped};
+use sindri_core::agent::{Report, Spent, Stopped};
 use sindri_core::paths::SessionDir;
 use sindri_core::provider::Usage;
 use sindri_core::record::{Cost, Recorder, Redaction, Start};
@@ -59,6 +59,7 @@ fn report(stopped: Stopped) -> Report {
         stopped,
         model: Some("claude-mock".to_string()),
         tool_calls: 0,
+        spent: Spent::default(),
         usage: Usage::default(),
         duration: Duration::from_millis(10),
     }

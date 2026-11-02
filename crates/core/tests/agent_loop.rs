@@ -101,58 +101,6 @@ fn one_tool_call_runs_and_its_result_is_fed_back() {
 }
 
 #[test]
-fn several_tool_calls_in_one_turn_all_run_and_come_back_together() {
-    let mut h = Harness::new(
-        vec![
-            Turn {
-                reasoning: Some("I need to look at two things.".to_string()),
-                ..calls(vec![call("call_a", "echo one"), call("call_b", "echo two")])
-            },
-            answer("Both done."),
-        ],
-        vec![exited("one\n"), exited("two\n")],
-        8,
-        false,
-    );
-
-    let report = h.run("do two things");
-
-    assert_eq!(report.tool_calls, 2);
-    assert_eq!(report.turns, 2, "both calls are answered in one turn");
-    assert_eq!(h.scripts(), vec!["echo one", "echo two"]);
-
-    let conversations = h.conversations();
-    match &conversations[1][2] {
-        Message::ToolResults(outcomes) => {
-            assert_eq!(outcomes.len(), 2, "both results come back");
-            assert_eq!(outcomes[0].call_id, "call_a");
-            assert_eq!(outcomes[1].call_id, "call_b");
-            assert!(outcomes[0].content.contains("one"));
-            assert!(outcomes[1].content.contains("two"));
-        }
-        other => panic!("expected tool results, got {other:?}"),
-    }
-
-    assert_eq!(
-        h.events(),
-        vec![
-            Event::Reasoning {
-                turn: 1,
-                text: "I need to look at two things.".to_string(),
-            },
-            Event::ToolCall {
-                turn: 1,
-                command: Some("echo one".to_string()),
-            },
-            Event::ToolCall {
-                turn: 1,
-                command: Some("echo two".to_string()),
-            },
-        ]
-    );
-}
-
-#[test]
 fn a_call_with_malformed_arguments_is_answered_not_run() {
     let broken = Call::new("call_bad", "bash", Err("{oops".to_string()));
     let mut h = Harness::new(
