@@ -1,0 +1,21 @@
+{
+  "id": "msg_eval",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "tool_use",
+      "id": "toolu_status",
+      "name": "bash",
+      "input": {
+        "command": "cat > bin/status <<'SH'\n#!/bin/sh\n# status: the greeting, as the front end prints it.\nhere=$(dirname \"$0\")\nexec sh \"$here/greet\" Ada\nSH\nchmod +x bin/status\nsh bin/status"
+      }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 120,
+    "output_tokens": 40
+  }
+}

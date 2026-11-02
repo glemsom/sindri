@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 publish = false
-description = "Nine scripted runs that prove the sandbox blocks what it claims, the turn cap stops a loop, and the catalog triggers."
+description = "Ten scripted runs that prove the sandbox blocks what it claims, the turn cap stops a loop, the catalog triggers, and a repository's rules change the run."
 
 [[bin]]
 name = "sindri-evals"

@@ -109,7 +109,7 @@ fn tests_pass(run: &Run) -> Vec<String> {
 
 /// Runs a command in the eval's workspace, outside the sandbox: the check reads
 /// the fixture the way its own tests would.
-fn shell(run: &Run, script: &str) -> Result<std::process::Output, String> {
+pub(crate) fn shell(run: &Run, script: &str) -> Result<std::process::Output, String> {
     std::process::Command::new("sh")
         .arg("-c")
         .arg(script)

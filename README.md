@@ -231,10 +231,10 @@ Deliberate for v0.1; `sessions prune` is a later issue.
 
 ## Evals
 
-Three promises cannot be checked from a run's output: that the sandbox blocks what it
-claims, that the turn cap stops a loopy run, and that a skill the workspace ships is
-loaded before the answer that needed it. Nine scripted batch runs (`make eval`) prove
-them.
+Four promises cannot be checked from a run's output: that the sandbox blocks what it
+claims, that the turn cap stops a loopy run, that a skill the workspace ships is loaded
+before the answer that needed it, and that a repository's own `AGENTS.md` changes what a
+run does. Ten scripted batch runs (`make eval`) prove them.
 
 Each eval runs the real binary in its own copy of a small fixture repository and asserts
 on exit codes, JSON fields, what the model was shown, the record it left and the files on
@@ -249,7 +249,14 @@ that states it arrived through the catalog and could not have been guessed. The 
 fails on an answer without the skill call, on a first turn already carrying the rule, and
 on a script written without it.
 
-`make eval-live` runs the same nine prompts against your own provider and credential,
+Eval 10 is the case that turns on the repository's own rules: its fixture carries an
+`AGENTS.md` whose answer heading and forbidden command appear in no other file of the
+tree, so a run that obeyed them was handed them. The check fails when that file is gone
+from the fixture, when the block the model read arrived truncated at the instructions cap,
+and when the record shows the forbidden command was run — the cap and the rules are held
+from the run's side, not from the answer's word for it.
+
+`make eval-live` runs the same ten prompts against your own provider and credential,
 at your own cost, skipping the assertions that need a recorded conversation. See
 [`crates/evals/fixtures/README.md`](crates/evals/fixtures/README.md).
 

@@ -1,0 +1,25 @@
+{
+  "id": "msg_eval",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "The house rules forbid the test suite here, so I will prove the greeting by running it."
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_greet",
+      "name": "bash",
+      "input": {
+        "command": "sh bin/greet Ada"
+      }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 120,
+    "output_tokens": 40
+  }
+}

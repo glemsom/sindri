@@ -1,7 +1,8 @@
 # Eval fixtures
 
-Two kinds of document — the fixture repository, with the one skill it ships,
-and the conversations each eval replays — and neither is a live capture.
+Three kinds of document — the fixture repository, with the one skill it ships,
+the repository's rules one case carries, and the conversations each eval replays
+— and none of them is a live capture.
 
 **`repo/`** — the fixture repository every eval works in: a one-command
 greeting in POSIX shell, `bin/greet`, `src/greet.sh`, `src/lib.sh` and
@@ -16,6 +17,12 @@ appears in that body and in no other file of the tree, so an answer stating it
 was reached through the catalog. The skill is found because each eval's copy of
 the repository is `git init`ed: a repo skill scope is walked from the
 repository root, and nothing above the copy is ever read.
+
+**`10-house-rules/AGENTS.md`** — the house rules eval 10's repository carries,
+copied to the root of that case's copy and to no other case's: every answer opens
+with the heading `## house report`, and the suite `sh tests/run.sh` is never run.
+Neither rule is in the fixture's own README, so a run that kept them was handed
+them. The other nine cases run in a repository that says nothing.
 
 **`<n>-<name>/*.json`** — the conversation each eval replays, one Anthropic
 `message` body per turn, served in filename order by the mock provider

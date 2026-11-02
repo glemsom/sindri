@@ -14,6 +14,10 @@ pub const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures");
 /// files is visible afterwards.
 pub const SENTINEL: &str = "sentinel.txt";
 
+/// The file a repository's rules live in, at its root: eval 10's copy carries
+/// one, and the other nine stand in a repository that says nothing.
+pub const AGENTS: &str = "AGENTS.md";
+
 pub const SENTINEL_TEXT: &str = "the run's own file\n";
 
 pub struct Workspace {
@@ -58,6 +62,19 @@ impl Workspace {
             state,
             config,
         })
+    }
+
+    /// Gives the copy the `AGENTS.md` the case's repository carries, read from
+    /// the fixture rather than written here: the rules a case turns on are a
+    /// fixture, and the run reads them through this one file like any other.
+    pub fn install_instructions(&self, instructions: Option<&str>) -> Result<(), String> {
+        let Some(name) = instructions else {
+            return Ok(());
+        };
+        let from = Path::new(FIXTURES).join(name);
+        fs::copy(&from, self.repo.join(AGENTS))
+            .map_err(|error| format!("{}: {error}", from.display()))?;
+        Ok(())
     }
 
     pub fn root(&self) -> &Path {

@@ -1,8 +1,9 @@
 //! `sindri-evals`: the promises a user cannot verify by reading output, made
 //! verifiable — the sandbox blocks what it claims, the turn cap stops a loopy
-//! run, and a rule the tree keeps in a skill reaches the answer only through the
-//! catalog. Nine scripted batch runs against a fixture repository, asserted on
-//! exit codes, JSON fields, the record and the files on disk.
+//! run, a rule the tree keeps in a skill reaches the answer only through the
+//! catalog, and a repository's own `AGENTS.md` changes what a run does. Ten
+//! scripted batch runs against a fixture repository, asserted on exit codes,
+//! JSON fields, the record and the files on disk.
 
 #![allow(
     clippy::expect_used,
@@ -21,7 +22,7 @@ use sindri_evals::{guard, run};
 #[derive(Parser)]
 #[command(
     name = "sindri-evals",
-    about = "The eval suite: nine scripted runs that catch silent degradation"
+    about = "The eval suite: ten scripted runs that catch silent degradation"
 )]
 struct Args {
     /// Ask a real provider instead of replaying recorded fixtures. Uses your
@@ -70,6 +71,7 @@ fn suite(args: &Args, selected: &[Case]) -> Result<u8, String> {
     let mut verdicts = Vec::new();
     for case in selected {
         let workspace = Workspace::new()?;
+        workspace.install_instructions(case.instructions)?;
         let outcome = run::execute(&bin, &workspace, case, args.live)?;
         let verdict = Verdict {
             name: case.name,

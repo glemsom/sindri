@@ -1,8 +1,9 @@
-//! The nine evals: a prompt, the conversation a recorded run replays, and the
+//! The ten evals: a prompt, the conversation a recorded run replays, and the
 //! checks that make the eval fail when the product regresses.
 
 use crate::catalog;
 use crate::checks;
+use crate::house;
 use crate::run::Run;
 
 pub struct Case {
@@ -11,6 +12,9 @@ pub struct Case {
     pub stdin_file: Option<&'static str>,
     pub args: &'static [&'static str],
     pub recorded: &'static str,
+    /// The `AGENTS.md` this case's repository carries, named from `fixtures/`:
+    /// `None` for a run the repository's own rules say nothing about.
+    pub instructions: Option<&'static str>,
     pub check: fn(&Run) -> Vec<String>,
 }
 
@@ -22,6 +26,7 @@ pub fn all() -> Vec<Case> {
             stdin_file: Some("diff.patch"),
             args: &[],
             recorded: "1-summarise-diff",
+            instructions: None,
             check: checks::summarise_a_diff,
         },
         Case {
@@ -30,6 +35,7 @@ pub fn all() -> Vec<Case> {
             stdin_file: None,
             args: &[],
             recorded: "2-explain-file",
+            instructions: None,
             check: checks::explain_a_file,
         },
         Case {
@@ -38,6 +44,7 @@ pub fn all() -> Vec<Case> {
             stdin_file: None,
             args: &[],
             recorded: "3-find-a-symbol",
+            instructions: None,
             check: checks::find_a_symbol,
         },
         Case {
@@ -46,6 +53,7 @@ pub fn all() -> Vec<Case> {
             stdin_file: None,
             args: &[],
             recorded: "4-rename-a-symbol",
+            instructions: None,
             check: checks::rename_across_files,
         },
         Case {
@@ -54,6 +62,7 @@ pub fn all() -> Vec<Case> {
             stdin_file: None,
             args: &[],
             recorded: "5-fix-the-tests",
+            instructions: None,
             check: checks::fix_the_failing_tests,
         },
         Case {
@@ -62,6 +71,7 @@ pub fn all() -> Vec<Case> {
             stdin_file: None,
             args: &[],
             recorded: "6-add-a-flag",
+            instructions: None,
             check: checks::add_a_flag_and_a_test,
         },
         Case {
@@ -70,6 +80,7 @@ pub fn all() -> Vec<Case> {
             stdin_file: None,
             args: &[],
             recorded: "7-sandbox",
+            instructions: None,
             check: checks::sandbox_refuses_an_outside_write,
         },
         Case {
@@ -80,6 +91,7 @@ pub fn all() -> Vec<Case> {
             stdin_file: None,
             args: &["--max-turns", "3"],
             recorded: "8-turn-cap",
+            instructions: None,
             check: |run| checks::turn_cap_stops_a_loop(run, 3),
         },
         Case {
@@ -91,7 +103,21 @@ pub fn all() -> Vec<Case> {
             stdin_file: None,
             args: &[],
             recorded: "9-catalog-triggers",
+            instructions: None,
             check: catalog::the_catalog_triggers,
+        },
+        Case {
+            // The two rules this case turns on are in its fixture's `AGENTS.md`
+            // and in no other file of the fixture, so an answer under the house
+            // heading, a script proven by running it and a suite the run never
+            // touched arrived through the instructions or not at all.
+            name: "10 the house rules change the run",
+            prompt: "Add bin/status, which prints the same line `bin/greet Ada` prints, and check your work.",
+            stdin_file: None,
+            args: &[],
+            recorded: "10-house-rules",
+            instructions: Some("10-house-rules/AGENTS.md"),
+            check: house::the_house_rules_change_the_run,
         },
     ]
 }
