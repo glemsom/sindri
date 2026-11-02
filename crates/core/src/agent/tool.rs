@@ -40,21 +40,18 @@ impl BashTool {
 /// The policy's own description, plus how a result comes back: one derivation,
 /// so the model is never told a comfortable lie about its boundary.
 fn describe(policy: &SandboxPolicy) -> ToolSpec {
+    // Every word here is re-sent on every turn, so it says only what the
+    // model cannot read off a field name or a result it has already seen.
     let description = format!(
-        "Run a bash command on the user's machine. It is the only tool, so pipelines and small \
-         scripts are how you explore and act: put the steps of one task in one script, not in \
-         three calls.\n\n{}\n\
+        "It is the only tool, so pipelines and small scripts are how you explore and act: put \
+         the steps of one task in one script, not in three calls.\n\n{}\n\
          Every result is carried in the conversation for the rest of the run and sent again with \
          every later turn, so filter in the script and print only what you concluded; keep \
          intermediates in `$TMPDIR`, which outlives the call.\n\
-         How a result comes back: the outcome (`exited`, `timed_out` or `sandbox_error`), the \
-         `exit_code` when the command exited, `duration_ms`, a `truncated` flag, \
-         `retained_bytes` (what this result costs the conversation), then `stdout` and `stderr`. \
-         Over-long output is cut head and tail and the full text is left in a spill file whose \
-         path the result names: grep that file from the next script rather than printing it \
-         again. `sandbox_error` means the sandbox never started, so no command ran. The status of \
-         the last command in the script is the status you get; `set -e` and `set -o pipefail` \
-         work as in any bash script.",
+         How a result comes back: fields are named for what they hold, `exit_code` is absent \
+         when the command did not exit, and `retained_bytes` is what the result costs the \
+         conversation. Over-long output is cut head and tail and the whole text is in the \
+         `spill` file. `sandbox_error` means the sandbox never started, so no command ran.",
         policy.describe()
     );
     ToolSpec {
@@ -63,10 +60,7 @@ fn describe(policy: &SandboxPolicy) -> ToolSpec {
         parameters: serde_json::json!({
             "type": "object",
             "properties": {
-                "command": {
-                    "type": "string",
-                    "description": "The bash script to run.",
-                },
+                "command": { "type": "string" },
             },
             "required": ["command"],
         }),
