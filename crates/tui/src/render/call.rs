@@ -36,7 +36,9 @@ pub fn rows(call: &Call, width: u16, now: Duration) -> Vec<Line<'static>> {
     let (glyph, status, accent) = match (&call.over, &call.skill) {
         // A load has no exit and no clock to run: its row says what it made
         // true, and what it read is behind the fold.
-        (Some(_), Some(skill)) if skill.in_force() => ("✓", skill.said().to_string(), theme::good()),
+        (Some(_), Some(skill)) if skill.in_force() => {
+            ("✓", skill.said().to_string(), theme::good())
+        }
         (Some(_), Some(skill)) => ("✗", skill.said().to_string(), theme::bad()),
         (None, Some(_)) => ("⏺", "loading".to_string(), theme::faint()),
         (None, None) => ("⏺", "running".to_string(), theme::faint()),

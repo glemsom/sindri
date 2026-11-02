@@ -4,11 +4,12 @@
 //! in the one column above the composer and taken by the same keys; only the
 //! path side walks, because only the filesystem is not already in hand.
 
-use crate::command::{COMMANDS, SKILL_COLON, SKILL_SPACE};
+use crate::command::COMMANDS;
 use crate::completion::walk::visible;
 
 pub const ROWS: usize = 8;
 
+pub(crate) mod skill;
 pub(crate) mod walk;
 
 /// What asked for the offer: an `@` path token, a `/` command named at the start
@@ -61,7 +62,7 @@ impl Completion {
             // later.
             items: match query.trigger {
                 Trigger::Slash => commands(&query.typed),
-                Trigger::Skill => skills_offered(&query.typed, skills, query.inline),
+                Trigger::Skill => skill::offered(&query.typed, skills, query.inline),
                 Trigger::At => Vec::new(),
             },
             chosen: 0,
@@ -87,36 +88,9 @@ impl Completion {
 /// a command named at the start of a one-row draft, or else the path token of the
 /// row being typed.
 pub fn ask(draft: &str, row: &str) -> Option<Query> {
-    skill(draft).or_else(|| command(draft)).or_else(|| path(row))
-}
-
-/// The skill names a draft asks for: `/skill:` or `/skill ` and what is typed
-/// after it, on one row and with no whitespace yet — the moment a tail begins,
-/// the line is a prompt and the offer is over.
-pub fn skill(draft: &str) -> Option<Query> {
-    if let Some(typed) = draft.strip_prefix(SKILL_COLON) {
-        return one_row(typed).then(|| Query {
-            // The colon spelling replaces the whole command, slash and colon
-            // included: what is typed after it is the name being narrowed.
-            at: 0,
-            typed: typed.to_string(),
-            trigger: Trigger::Skill,
-            inline: true,
-        });
-    }
-    let typed = draft.strip_prefix(SKILL_SPACE)?;
-    one_row(typed).then(|| Query {
-        // The space spelling leaves the command where it is and replaces the
-        // name after it, because a splice ends where the whitespace does.
-        at: SKILL_SPACE.chars().count(),
-        typed: typed.to_string(),
-        trigger: Trigger::Skill,
-        inline: false,
-    })
-}
-
-fn one_row(typed: &str) -> bool {
-    !typed.chars().any(char::is_whitespace)
+    skill::ask(draft)
+        .or_else(|| command(draft))
+        .or_else(|| path(row))
 }
 
 /// The `/` a draft opens with and the name typed after it, offered only where
@@ -149,21 +123,6 @@ pub fn commands(typed: &str) -> Vec<String> {
         .collect()
 }
 
-/// The skill names a fragment names, in the same tiers the commands are ranked
-/// by and in the order the catalog holds them — a skill is offered by the one
-/// ranking, so a fragment that names a command and a skill reads alike. The
-/// names are the ones a human may reach for: a skill the user may not invoke was
-/// never in the list, and so is never offered.
-pub fn skills_offered(typed: &str, skills: &[String], inline: bool) -> Vec<String> {
-    ranked(skills.iter().map(String::as_str), typed)
-        .into_iter()
-        .map(|name| match inline {
-            true => format!("{SKILL_COLON}{name}"),
-            false => name.to_string(),
-        })
-        .collect()
-}
-
 /// The names a fragment names, nearest first: the ones it starts, then the ones
 /// it sits inside, then the ones it is a subsequence of — each tier in the order
 /// the list holds them, which is the order the frame says them in.
@@ -186,7 +145,11 @@ fn ranked<'a>(names: impl Iterator<Item = &'a str>, typed: &str) -> Vec<&'a str>
         })
         .collect();
     scored.sort_unstable();
-    scored.into_iter().take(ROWS).map(|(_, _, name)| name).collect()
+    scored
+        .into_iter()
+        .take(ROWS)
+        .map(|(_, _, name)| name)
+        .collect()
 }
 
 /// The last `@` on the row being typed, and what follows it. An `@` inside a

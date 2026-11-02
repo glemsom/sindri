@@ -179,7 +179,9 @@ fn a_command_the_catalogue_dropped_is_refused_and_the_slash_never_offers_it() {
     press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     let said = notes(&app);
     assert!(
-        said.contains("/sessions: no such command — /new, /export, /skill, /settings, /help, /quit"),
+        said.contains(
+            "/sessions: no such command — /new, /export, /skill, /settings, /help, /quit"
+        ),
         "the refusal names the six commands there are: {said}"
     );
     assert!(app.overlay().is_none(), "and it opens nothing: {said}");

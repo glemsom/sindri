@@ -217,11 +217,10 @@ impl Driver for Front {
         }
         if activated.is_error {
             let said = activated.content.trim();
-            return Err(
-                said.strip_prefix("tool_error: the call was not run: ")
-                    .unwrap_or(said)
-                    .to_string(),
-            );
+            return Err(said
+                .strip_prefix("tool_error: the call was not run: ")
+                .unwrap_or(said)
+                .to_string());
         }
         Ok(match activated.loaded {
             true => Loaded::Loaded(activated.name),

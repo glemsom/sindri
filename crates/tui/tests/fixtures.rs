@@ -14,8 +14,10 @@ use std::path::{Path, PathBuf};
 
 /// The launch facts a test may spell out: the ones a fixture renames. A launch
 /// that names anything else has copied the shared literal instead of taking the
-/// rest from it, whatever field `Launch` grows next.
-const RENAMED: [&str; 4] = ["session", "temp", "branch", "workspace"];
+/// rest from it, whatever field `Launch` grows next. The catalog is one of them
+/// because a test about what the frame offers is a test about which skills the
+/// boot found.
+const RENAMED: [&str; 5] = ["session", "temp", "branch", "workspace", "skills"];
 
 /// Every test source but the two the walk leaves out: the shared fixture is the
 /// one file that names the whole launch, and this one is the law rather than a

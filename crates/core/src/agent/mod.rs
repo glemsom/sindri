@@ -7,6 +7,7 @@
 mod budget;
 mod calls;
 mod event;
+mod hand;
 mod limits;
 mod report;
 mod skill;
@@ -114,50 +115,6 @@ impl Agent {
     /// says is in force, read from the set the tool wrote.
     pub fn loaded_skills(&self) -> Vec<String> {
         self.loaded.names()
-    }
-
-    /// A skill a human asked for, loaded without a turn: the same call the
-    /// model would make, run where the human asked for it, so the body is in
-    /// the conversation from here on and the deduplication counted it. Nothing
-    /// is sent to the provider — a skill in force is a fact about the next turn,
-    /// not a question to ask now — and a repeat or a name no skill answers
-    /// changes neither the conversation nor the record, because an exchange
-    /// nobody made is not one the model should read.
-    pub fn activate(&mut self, name: &str) -> Activated {
-        self.by_hand += 1;
-        let call = Call::new(
-            format!("user_skill_{}", self.by_hand),
-            "skill",
-            Ok(serde_json::Map::from_iter([(
-                "name".to_string(),
-                serde_json::json!(name),
-            )])),
-        );
-        let outcome = self.hand.call(&call, name, &self.loaded);
-        let loaded = outcome.facts.outcome.as_deref() == Some("loaded");
-        if loaded {
-            if let Some(recorder) = &self.recorder {
-                // Turn zero: a load by hand happens between turns, so it
-                // belongs to no turn of a run.
-                recorder.tool_call(0, &call);
-                recorder.tool_result(0, &outcome);
-            }
-            // The exchange the model will read: the call it did not make, and
-            // the result it did. A body in the history without the call that
-            // asked for it is a conversation no provider will take.
-            self.history.push(Message::Assistant {
-                text: String::new(),
-                calls: vec![call],
-            });
-            self.history.push(Message::ToolResults(vec![outcome.clone()]));
-        }
-        Activated {
-            name: name.to_string(),
-            content: outcome.content,
-            is_error: outcome.is_error,
-            loaded,
-            outcome: outcome.facts.outcome,
-        }
     }
 
     pub fn set_recorder(&mut self, recorder: Arc<Recorder>) {

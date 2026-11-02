@@ -31,6 +31,9 @@ pub enum Msg {
     /// `Event::SkillLoaded` before it, and this is the frame's answer that the
     /// task is done.
     Loaded(Result<Loaded, String>),
-    Renewed(Result<Launch, String>),
-    Reloaded(Result<Launch, String>),
+    /// The launch a `/new` or a save produced, boxed: it is a bag of a dozen
+    /// facts and arrives twice in a session, where every key of the frame does
+    /// not, so the box costs the two places that make one and nothing else.
+    Renewed(Result<Box<Launch>, String>),
+    Reloaded(Result<Box<Launch>, String>),
 }

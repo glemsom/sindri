@@ -247,7 +247,9 @@ impl UserSkills {
             .map(|skill| format!("`{}`", skill.name))
             .collect();
         if valid.is_empty() {
-            return format!("there is no skill called `{name}`: this workspace holds none you may invoke");
+            return format!(
+                "there is no skill called `{name}`: this workspace holds none you may invoke"
+            );
         }
         format!(
             "there is no skill called `{name}`: the ones you may invoke are {}",
