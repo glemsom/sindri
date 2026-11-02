@@ -17,7 +17,7 @@ pub use budget::{Budget, Spent};
 pub use event::Event;
 pub use limits::Limits;
 pub use report::{Report, Stopped};
-pub use skill::{Loaded, SkillTool};
+pub use skill::{Activated, Loaded, SkillTool, UserSkills};
 pub use tool::BashTool;
 pub use tools::Tools;
 
@@ -26,7 +26,7 @@ use std::sync::mpsc::Sender;
 use std::time::Instant;
 
 use crate::cancel::Cancel;
-use crate::provider::{Delta, DeltaSink, Error, Message, Model};
+use crate::provider::{Asked, Call, Delta, DeltaSink, Error, Message, Model, ToolOutcome};
 use crate::record::{Cost, Recorder};
 
 /// What one conversation runs on: the model to ask, the tool to run it with,
@@ -56,6 +56,12 @@ pub struct Agent {
     /// is not.
     loaded: Arc<Loaded>,
     history: Vec<Message>,
+    /// How many skills a human has loaded by hand, so each of those calls has
+    /// an id of its own and two loads in one conversation cannot share one.
+    by_hand: u32,
+    /// The skills a human may reach for: the half of the catalog the model is
+    /// never handed, which is what a load by hand is read from.
+    hand: UserSkills,
 }
 
 impl Agent {
@@ -71,6 +77,8 @@ impl Agent {
             recorder: None,
             loaded: Arc::new(Loaded::default()),
             history: Vec::new(),
+            by_hand: 0,
+            hand: UserSkills::default(),
         }
     }
 
@@ -90,6 +98,12 @@ impl Agent {
         self.budget = budget;
     }
 
+    /// The skills a human may reach for, handed in by the boot that read the
+    /// catalog: the agent never scans a tree of its own.
+    pub fn set_hand(&mut self, hand: UserSkills) {
+        self.hand = hand;
+    }
+
     /// A new history, and no skill in force: what `/new` promises.
     pub fn forget(&mut self) {
         self.history.clear();
@@ -100,6 +114,50 @@ impl Agent {
     /// says is in force, read from the set the tool wrote.
     pub fn loaded_skills(&self) -> Vec<String> {
         self.loaded.names()
+    }
+
+    /// A skill a human asked for, loaded without a turn: the same call the
+    /// model would make, run where the human asked for it, so the body is in
+    /// the conversation from here on and the deduplication counted it. Nothing
+    /// is sent to the provider — a skill in force is a fact about the next turn,
+    /// not a question to ask now — and a repeat or a name no skill answers
+    /// changes neither the conversation nor the record, because an exchange
+    /// nobody made is not one the model should read.
+    pub fn activate(&mut self, name: &str) -> Activated {
+        self.by_hand += 1;
+        let call = Call::new(
+            format!("user_skill_{}", self.by_hand),
+            "skill",
+            Ok(serde_json::Map::from_iter([(
+                "name".to_string(),
+                serde_json::json!(name),
+            )])),
+        );
+        let outcome = self.hand.call(&call, name, &self.loaded);
+        let loaded = outcome.facts.outcome.as_deref() == Some("loaded");
+        if loaded {
+            if let Some(recorder) = &self.recorder {
+                // Turn zero: a load by hand happens between turns, so it
+                // belongs to no turn of a run.
+                recorder.tool_call(0, &call);
+                recorder.tool_result(0, &outcome);
+            }
+            // The exchange the model will read: the call it did not make, and
+            // the result it did. A body in the history without the call that
+            // asked for it is a conversation no provider will take.
+            self.history.push(Message::Assistant {
+                text: String::new(),
+                calls: vec![call],
+            });
+            self.history.push(Message::ToolResults(vec![outcome.clone()]));
+        }
+        Activated {
+            name: name.to_string(),
+            content: outcome.content,
+            is_error: outcome.is_error,
+            loaded,
+            outcome: outcome.facts.outcome,
+        }
     }
 
     pub fn set_recorder(&mut self, recorder: Arc<Recorder>) {
@@ -218,7 +276,8 @@ impl Agent {
                     break;
                 }
                 let mut killed = false;
-                for outcome in calls::wave(&self.tool, &self.loaded, wave) {
+                let results = calls::wave(&self.tool, &self.loaded, wave);
+                for (call, outcome) in wave.iter().zip(results) {
                     // Counted before it is read: a call the cancel killed was
                     // started, and the record says so even with no result.
                     report.tool_calls += 1;
@@ -229,6 +288,7 @@ impl Agent {
                     if let Some(recorder) = &self.recorder {
                         recorder.tool_result(report.turns, &outcome);
                     }
+                    self.loaded_skill(report.turns, call, &outcome);
                     report.spent.add(
                         outcome.facts.duration_ms.unwrap_or_default(),
                         outcome.content.len(),
@@ -276,7 +336,27 @@ impl Agent {
         });
     }
 
-    fn announce(&self, turn: u32, call: &crate::provider::Call) {
+    /// A call that put a skill in force says so once, with the result the
+    /// conversation now carries: a frame's chip, a check's assertion and a
+    /// record's column all read the load here rather than inferring it from a
+    /// call's name.
+    fn loaded_skill(&self, turn: u32, call: &Call, outcome: &ToolOutcome) {
+        let Asked::Skill { name } = call.asked() else {
+            return;
+        };
+        self.emit(Event::SkillLoaded {
+            turn,
+            name,
+            outcome: outcome
+                .facts
+                .outcome
+                .clone()
+                .unwrap_or_else(|| "refused".to_string()),
+            body: outcome.content.clone(),
+        });
+    }
+
+    fn announce(&self, turn: u32, call: &Call) {
         self.emit(Event::ToolCall {
             turn,
             asked: call.asked(),

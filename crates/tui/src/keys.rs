@@ -6,8 +6,8 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Position;
 
-use crate::app::{App, Renew};
-use crate::command::{self, Command};
+use crate::app::{App, Loading, Renew};
+use crate::command::{self, Command, SkillAsk};
 use crate::completion::{self, Completion};
 use crate::entry::Entry;
 use crate::overlay::{Help, Overlay};
@@ -164,7 +164,62 @@ impl App {
             Command::Help => self.show(Overlay::Help(Help::default())),
             Command::Quit => self.quit = true,
             Command::Export(path) => self.export(path.as_deref()),
+            Command::Skill(ask) => self.skill(ask),
             Command::Unknown(name) => self.note_error(command::refusal(&name)),
+        }
+    }
+
+    /// `/skill`: a name loaded by hand, or — with no name — a question about the
+    /// catalog. A bare name arms the skill and starts no turn: the body is in
+    /// the conversation from here on, and a transcript row says so. A tail
+    /// becomes the prompt the run answers once the load has landed.
+    fn skill(&mut self, ask: Option<SkillAsk>) {
+        let Some(ask) = ask else {
+            return self.skill_question();
+        };
+        // A run has its history in flight: a body injected now is a body the
+        // turn already sent did not carry, and a turn already read is not one to
+        // write under.
+        if self.running.is_some() {
+            self.note_error(format!(
+                "cannot load {} while a run is in flight — ask again when it stops",
+                ask.name
+            ));
+            return;
+        }
+        if !self.skill_known(&ask.name) {
+            let known = self.rail.launch().skills.join(", ");
+            self.note_error(match known.is_empty() {
+                true => format!(
+                    "there is no skill called {}: this workspace holds none you may invoke",
+                    ask.name
+                ),
+                false => format!("there is no skill called {}: {}", ask.name, known),
+            });
+            return;
+        }
+        self.loading = Loading::Asked(ask.name);
+        self.armed = ask.prompt;
+        self.completion = None;
+        self.walking = None;
+    }
+
+    /// Whether the workspace holds a skill a human may invoke under this name.
+    fn skill_known(&self, name: &str) -> bool {
+        self.rail.launch().skills.iter().any(|held| held == name)
+    }
+
+    /// `/skill` with no name: which skills this workspace holds, and how one is
+    /// typed. A frame that answered nothing would look like a load that did not
+    /// happen.
+    fn skill_question(&mut self) {
+        let names = self.rail.launch().skills.clone();
+        match names.is_empty() {
+            true => self.note_info("this workspace holds no skill you may invoke"),
+            false => self.note_info(format!(
+                "skills: {} — `/skill:name` loads one, `/skill:name <prompt>` runs it",
+                names.join(", ")
+            )),
         }
     }
 
@@ -223,7 +278,7 @@ impl App {
             return;
         }
         self.generation = self.generation.wrapping_add(1);
-        let open = Completion::new(query, self.generation);
+        let open = Completion::new(query, self.generation, &self.rail.launch().skills);
         self.walking = open.walk();
         self.completion = Some(open);
     }

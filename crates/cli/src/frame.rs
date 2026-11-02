@@ -14,7 +14,7 @@ use sindri_core::exec::{BashExecutor, Outcome, OutputSink, SandboxExecutor, Side
 use sindri_core::provider::{self, Client, Usage};
 use sindri_core::sandbox::{Enforcement, SandboxPolicy};
 use sindri_core::session::{LoopError, Session};
-use sindri_tui::driver::{CallOver, Driver, Finished, Spilled, Stop, Tap, Tokens};
+use sindri_tui::driver::{CallOver, Driver, Finished, Loaded, Spilled, Stop, Tap, Tokens};
 use sindri_tui::run::{self, Ending};
 use sindri_tui::settings::Missing;
 use sindri_tui::{Card, Launch};
@@ -92,6 +92,9 @@ fn launch(boot: &Boot) -> Launch {
         provider: boot.config.provider.as_str().to_string(),
         model: boot.config.model.clone(),
         workspace: workspace(&boot.env.workspace),
+        // The half of the catalog a human may reach for: `/skill` offers these,
+        // and a load by hand is read from the same set the scan found.
+        skills: boot.session.hand().names(),
         max_turns: boot.config.max_turns,
         // The meter's denominator is the family's advertised window, where the
         // adapter knows it; where it does not, the rail counts up without one.
@@ -105,12 +108,14 @@ struct Front {
     agent: Option<Agent>,
 }
 
-impl Driver for Front {
-    fn run(&mut self, prompt: &str, cancel: Cancel, tap: Tap) -> Finished {
+impl Front {
+    /// One prompt's dials, wired to the tap the frame reads: a run and a load by
+    /// hand differ in what they are asked, not in what they run on.
+    fn dials(&self, tap: &Tap, cancel: Cancel) -> Dials {
         let executor = Arc::new(
             self.boot
                 .session
-                .executor(self.boot.config.timeout, cancel.clone())
+                .executor(self.boot.config.timeout, cancel)
                 .with_output_sink(Arc::new(Told(tap.clone()))),
         );
         // The description names the timeout this run enforces, so the model is
@@ -123,30 +128,48 @@ impl Driver for Front {
                 tap: tap.clone(),
             }),
         );
-        let tool = Tools::new(bash, self.boot.session.skill_tool());
-        let (max_turns, thinking) = (self.boot.config.max_turns, self.boot.config.thinking);
-        let model = Box::new(Client::new(&self.boot.config));
+        Dials {
+            model: Box::new(Client::new(&self.boot.config)),
+            tool: Tools::new(bash, self.boot.session.skill_tool()),
+            max_turns: self.boot.config.max_turns,
+            thinking: self.boot.config.thinking,
+        }
+    }
 
-        let (events, stream) = mpsc::channel::<Event>();
-        let forward = std::thread::spawn(move || {
-            for event in stream {
-                tap.event(event);
-            }
-        });
-
-        let dials = Dials {
-            model,
-            tool,
-            max_turns,
-            thinking,
-        };
-        let agent = match self.agent.as_mut() {
+    /// The conversation this launch is having, on the dials it runs on now. It is
+    /// made by the first prompt or the first load by hand, whichever comes
+    /// first, and kept after: the thread it holds is the conversation's.
+    fn conversation(&mut self, tap: &Tap, cancel: Cancel) -> &mut Agent {
+        let dials = self.dials(tap, cancel.clone());
+        // Taken and handed back, so the boot's session is read before the frame's
+        // own agent is written: one borrow of one field at a time.
+        let mut agent = match self.agent.take() {
             Some(agent) => {
+                let mut agent = agent;
                 agent.set_dials(dials);
                 agent
             }
-            None => self.agent.insert(self.boot.session.agent(dials, cancel)),
+            None => self.boot.session.agent(dials, cancel.clone()),
         };
+        // The flag is the launch's, and the frame puts it down before every run:
+        // a conversation that kept the flag it was born with would stop being
+        // cancellable after the first `/new`.
+        agent.set_cancel(cancel);
+        self.agent.insert(agent)
+    }
+}
+
+impl Driver for Front {
+    fn run(&mut self, prompt: &str, cancel: Cancel, tap: Tap) -> Finished {
+        let (events, stream) = mpsc::channel::<Event>();
+        let forwarding = tap.clone();
+        let forward = std::thread::spawn(move || {
+            for event in stream {
+                forwarding.event(event);
+            }
+        });
+
+        let agent = self.conversation(&tap, cancel);
         agent.set_events(events);
         // The agent stays: the thread it holds is the conversation's. Only its
         // channel is dropped, so the forwarding thread sees the stream end.
@@ -173,6 +196,37 @@ impl Driver for Front {
                 note,
             },
         }
+    }
+
+    fn load(&mut self, skill: &str, tap: Tap) -> Result<Loaded, String> {
+        // No prompt's clock and no prompt's flag: a load reads a file, and the
+        // run behind it is given the frame's flag when it starts.
+        let agent = self.conversation(&tap, Cancel::new());
+        let activated = agent.activate(skill);
+        // The row and the chip are drawn from this event, whether a human asked
+        // or the model did: one spelling of a load, read by one handler.
+        if let Some(outcome) = &activated.outcome {
+            tap.event(Event::SkillLoaded {
+                // Turn zero: a load by hand happens between turns, so it belongs
+                // to no turn of a run.
+                turn: 0,
+                name: activated.name.clone(),
+                outcome: outcome.clone(),
+                body: activated.content.clone(),
+            });
+        }
+        if activated.is_error {
+            let said = activated.content.trim();
+            return Err(
+                said.strip_prefix("tool_error: the call was not run: ")
+                    .unwrap_or(said)
+                    .to_string(),
+            );
+        }
+        Ok(match activated.loaded {
+            true => Loaded::Loaded(activated.name),
+            false => Loaded::Already(activated.name),
+        })
     }
 
     fn renew(&mut self) -> Result<Launch, String> {

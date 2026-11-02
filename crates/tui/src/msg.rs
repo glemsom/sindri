@@ -5,7 +5,7 @@
 use crossterm::event::{KeyEvent, MouseEvent};
 use sindri_core::agent::Event;
 
-use crate::driver::{CallOver, Finished, Side, Spilled};
+use crate::driver::{CallOver, Finished, Loaded, Side, Spilled};
 use crate::picture::{Drawing, Refusal};
 use crate::rail::Launch;
 
@@ -27,6 +27,10 @@ pub enum Msg {
     /// here like a line of output — the frame that laid its panel out waited
     /// for nothing.
     Drawn(String, Result<Drawing, Refusal>),
+    /// What a skill the frame asked for came to: the load itself arrived as the
+    /// `Event::SkillLoaded` before it, and this is the frame's answer that the
+    /// task is done.
+    Loaded(Result<Loaded, String>),
     Renewed(Result<Launch, String>),
     Reloaded(Result<Launch, String>),
 }

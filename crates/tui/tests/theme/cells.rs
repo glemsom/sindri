@@ -243,8 +243,25 @@ fn the_cell_law_holds_over_a_frame_with_the_strip_lit_and_the_face_shown() {
             covered += usize::from(cell.symbol().contains('\u{10EEEE}'));
         }
     }
+    // The strip runs the margin's whole height and the face sits at the top of
+    // the rail; the modal between them covers neither. Each picture is a column
+    // of placeholders, and what the law is owed is that both are there: a
+    // picture that is not placed covers no cell, and one placed over a cell the
+    // theme does not own has already been refused above.
+    let mut columns: std::collections::BTreeMap<u16, usize> = std::collections::BTreeMap::new();
+    for y in 0..buf.area.height {
+        for x in 0..buf.area.width {
+            if buf[(x, y)].symbol().contains('\u{10EEEE}') {
+                *columns.entry(x).or_default() += 1;
+            }
+        }
+    }
     assert!(
-        covered > 20,
-        "the strip is lit and the face is placed: {covered} placeholder cells"
+        columns.len() >= 2,
+        "the strip and the face both place a picture: {columns:?}"
+    );
+    assert!(
+        columns.values().all(|placed| *placed > 6),
+        "each of them covers the cells it is drawn over: {columns:?} of {covered}"
     );
 }

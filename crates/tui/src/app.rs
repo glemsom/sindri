@@ -28,6 +28,19 @@ use crate::selection::{Selection, Viewport};
 use crate::settings::Missing;
 use crate::window::Window;
 
+/// Where `/skill` has got to, in the same three states as [`Renew`]: the frame
+/// marks the request, the loop hands it to the front end once, and the turn a
+/// reader armed behind it starts only when an answer arrives either way.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum Loading {
+    #[default]
+    Idle,
+    /// The name the reader asked for, not yet handed over.
+    Asked(String),
+    /// Handed over, and the answer has not come back.
+    Waiting,
+}
+
 /// Where `/new` has got to. Two states would not do: the frame marks the
 /// request, the loop hands it to the front end once, and nothing may run
 /// until an answer arrives either way.
@@ -89,6 +102,12 @@ pub struct App {
     pub(crate) overlay: Option<Overlay>,
     pub(crate) walking: Option<(u64, String)>,
     pub(crate) renew: Renew,
+    /// Where the skill the reader asked for has got to, and the prompt they
+    /// wrote after it: a load is a task of its own, so the turn it precedes waits
+    /// until the body is in the conversation it will be sent with. `armed` is
+    /// what runs once the answer lands.
+    pub(crate) loading: Loading,
+    pub(crate) armed: Option<String>,
     pub(crate) selecting: usize,
     pub(crate) generation: u64,
     pub(crate) config: Option<PathBuf>,
@@ -148,6 +167,8 @@ impl App {
             overlay: None,
             walking: None,
             renew: Renew::Idle,
+            loading: Loading::Idle,
+            armed: None,
             selecting: 0,
             generation: 0,
             config: None,
@@ -278,6 +299,51 @@ impl App {
         self.walking.take()
     }
 
+    /// The skill the frame is waiting on, once: what the loop hands the front end
+    /// as a task of its own. Two states would not do — the frame marks the
+    /// request and the loop hands it over once — so it is asked, then waited on,
+    /// until the answer arrives either way.
+    pub fn take_load(&mut self) -> Option<String> {
+        match std::mem::take(&mut self.loading) {
+            Loading::Asked(skill) => {
+                self.loading = Loading::Waiting;
+                Some(skill)
+            }
+            other => {
+                self.loading = other;
+                None
+            }
+        }
+    }
+
+    /// What the front end made of the skill the frame asked for. The load
+    /// itself arrives as the event every other load arrives as — one row and one
+    /// chip, whether a human asked or the model did — so a repeat and a refusal
+    /// are the two answers left to say here.
+    pub fn loaded(&mut self, loaded: Result<crate::driver::Loaded, String>) {
+        self.loading = Loading::Idle;
+        match loaded {
+            // The row and the rail's chip came with the event the front end
+            // sent before this answer; nothing is left to say.
+            Ok(crate::driver::Loaded::Loaded(_)) => {}
+            Ok(crate::driver::Loaded::Already(name)) => {
+                self.note_info(format!("{name} is already in force"));
+            }
+            Err(error) => {
+                self.note_error(error);
+                // A prompt waiting on a load that did not happen is not run: it
+                // would be a turn the skill the reader asked for was not in.
+                self.armed = None;
+            }
+        }
+    }
+
+    /// Whether the frame is waiting on a load: a turn the reader armed does not
+    /// start until the answer lands.
+    pub fn is_loading(&self) -> bool {
+        self.loading != Loading::Idle
+    }
+
     pub fn take_renew(&mut self) -> bool {
         if self.renew == Renew::Asked {
             self.renew = Renew::Pending;
@@ -313,6 +379,8 @@ impl App {
             Ok(launch) => {
                 self.renew = Renew::Idle;
                 let session = launch.session.clone();
+                self.loading = Loading::Idle;
+                self.armed = None;
                 self.entries.clear();
                 self.queue.clear();
                 self.early.clear();

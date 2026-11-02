@@ -30,6 +30,9 @@ pub enum Block {
     /// The sandbox posture, which draws as a chip rather than as another
     /// label/value pair.
     Posture,
+    /// The skills in force, drawn as the second chip: what the run *is* from
+    /// here on, beside what it is inside.
+    Skills,
 }
 
 /// How a value longer than its column is shortened. A value is never wrapped
@@ -82,6 +85,7 @@ impl Fact {
     pub fn line(&self) -> String {
         match self.block {
             Block::Posture => format!("⬢ {}", self.value),
+            Block::Skills => format!("◆ {}", self.value),
             _ => format!("{} {}", self.label, self.value),
         }
     }
@@ -90,6 +94,7 @@ impl Fact {
     pub fn brief(&self) -> String {
         match self.block {
             Block::Posture => format!("⬢ {}", self.value),
+            Block::Skills => format!("◆ {}", self.value),
             _ => format!("{} {}", self.short_label(), self.value),
         }
     }
@@ -118,6 +123,17 @@ impl Fact {
             value,
             block: Block::Identity,
             fit,
+            keep: false,
+            fresh: false,
+        }
+    }
+
+    pub(super) fn skills(value: String) -> Fact {
+        Fact {
+            label: "skills",
+            value,
+            block: Block::Skills,
+            fit: Fit::End,
             keep: false,
             fresh: false,
         }
@@ -153,8 +169,10 @@ impl Fact {
     /// where nothing of it can be said.
     pub fn cut(&self, room: usize) -> Option<String> {
         match self.block {
-            Block::Posture => {
-                let head = format!("⬢ {}", self.head());
+            // A chip keeps its head — `⬢ bwrap`, `◆ alpha` — because which
+            // sandbox, or which skill, is the fact and the rest is detail.
+            Block::Posture | Block::Skills => {
+                let head = format!("{} {}", self.glyph(), self.head());
                 (head.width() <= room).then_some(head)
             }
             _ => {
@@ -170,13 +188,22 @@ impl Fact {
     /// narrow for everything holds back for it.
     pub fn least(&self) -> usize {
         match self.block {
-            Block::Posture => 2 + self.head().width(),
+            Block::Posture | Block::Skills => 2 + self.head().width(),
             _ => self.short_label().width() + 1 + CUT_FLOOR,
         }
     }
 
-    /// The first word of the value: what a posture says when it has room for
-    /// one word and not two.
+    /// The glyph a chip opens with: the boundary for the posture, the skills it
+    /// keeps for the skills.
+    fn glyph(&self) -> &'static str {
+        match self.block {
+            Block::Skills => "◆",
+            _ => "⬢",
+        }
+    }
+
+    /// The first word of the value: what a chip says when it has room for one
+    /// word and not two.
     fn head(&self) -> &str {
         self.value.split(' ').next().unwrap_or_default()
     }

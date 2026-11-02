@@ -16,6 +16,10 @@ pub fn lines(events: Vec<Event>, session: &str) -> Vec<String> {
             // A delta is a fragment of what `Reasoning` and the tool calls say
             // whole: a verbose run reports the turn, not every chunk.
             Event::TextDelta { .. } | Event::ReasoningDelta { .. } => {}
+            // A load is said once, where the tool call that asked for it was
+            // already said: the body is what the model reads, not what a
+            // verbose run prints.
+            Event::SkillLoaded { .. } => {}
             Event::ToolCall { turn, asked } => lines.push(match asked {
                 Asked::Bash { command } => format!(
                     "sindri: bash (turn {turn}): {}",

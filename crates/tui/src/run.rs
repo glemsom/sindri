@@ -278,6 +278,7 @@ fn apply(app: &mut App, message: Msg) {
         Msg::Finished(finished) => app.finished(finished),
         Msg::Paths(generation, paths, capped) => app.paths(generation, paths, capped),
         Msg::Drawn(body, drawn) => app.drawn(body, drawn),
+        Msg::Loaded(loaded) => app.loaded(loaded),
         Msg::Renewed(launch) => app.renewed(launch),
         Msg::Reloaded(reloaded) => app.reloaded(reloaded),
     }
@@ -288,6 +289,14 @@ fn begin(app: &mut App, jobs: &Sender<Task>) {
         return;
     }
     if app.take_reload() && jobs.send(Task::Reload).is_err() {
+        return;
+    }
+    // The load goes first, and the prompt that waits on it is not started until
+    // the front end has answered: a turn with a skill the reader asked for left
+    // out is a turn they did not ask for.
+    if let Some(skill) = app.take_load()
+        && jobs.send(Task::Load(skill)).is_err()
+    {
         return;
     }
     while let Some(job) = app.start() {
@@ -374,6 +383,10 @@ fn drive(mut driver: Box<dyn Driver>, tx: Sender<Msg>) -> Sender<Task> {
                 Task::Run(job) => {
                     let finished = driver.run(&job.prompt, job.cancel, Tap::new(tx.clone()));
                     tx.send(Msg::Finished(finished))
+                }
+                Task::Load(skill) => {
+                    let loaded = driver.load(&skill, Tap::new(tx.clone()));
+                    tx.send(Msg::Loaded(loaded))
                 }
                 Task::Renew => tx.send(Msg::Renewed(driver.renew())),
                 Task::Reload => tx.send(Msg::Reloaded(driver.reload())),

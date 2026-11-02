@@ -33,6 +33,11 @@ pub struct Launch {
     /// mounts — shortened to `~` under the home: the header of every turn
     /// names it, and the rail states it.
     pub workspace: String,
+    /// The skills a human may reach for, in name order: the catalog's
+    /// `user-invocable` half, which is what `/` completion offers. A skill the
+    /// user may not invoke is not in it, and a model-only one is not offered
+    /// there either, because the frame offers what a human may type.
+    pub skills: Vec<String>,
     pub max_turns: u32,
     pub context_limit: Option<u64>,
 }
@@ -55,6 +60,10 @@ pub struct Rail {
     /// When each spend figure last grew, so the rail can accent what just
     /// moved for a moment.
     fresh: Vec<(&'static str, Duration)>,
+    /// The skills in force in this conversation, in name order: a body in the
+    /// transcript is in force, and a new session has been told nothing, so the
+    /// set is the rail's, made with the launch it belongs to.
+    loaded: Vec<String>,
 }
 
 /// The characters one token is worth, as the frame counts them: a guess, and
@@ -75,7 +84,23 @@ impl Rail {
             stop: None,
             streamed: 0,
             fresh: Vec::new(),
+            loaded: Vec::new(),
         }
+    }
+
+    /// A skill is in force from here on: the one fact the transcript and the
+    /// rail both state, written where it happened.
+    pub fn skill_loaded(&mut self, name: &str) {
+        if self.loaded.iter().any(|held| held == name) {
+            return;
+        }
+        self.loaded.push(name.to_string());
+        self.loaded.sort();
+    }
+
+    /// The skills in force, in name order.
+    pub fn skills(&self) -> &[String] {
+        &self.loaded
     }
 
     pub fn turn(&mut self, turn: u32, now: Duration) {
@@ -213,6 +238,12 @@ impl Rail {
             self.launch.temp.clone(),
             Fit::Middle,
         ));
+        // What is in force is said beside what the run is inside: one chip each,
+        // and the skills chip only when there is one — a chip that says `none`
+        // would be a row of the rail spent on nothing.
+        if !self.loaded.is_empty() {
+            facts.push(Fact::skills(self.loaded.join(SEPARATOR)));
+        }
         facts.push(Fact::kept(Fact::posture(self.launch.sandbox.clone())));
         facts
             .into_iter()

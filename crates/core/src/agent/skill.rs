@@ -179,6 +179,101 @@ fn millis(started: Instant) -> u64 {
     u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
+/// The half of the catalog a human may reach for: the composer's, which the tool
+/// the model is handed never carries. A user-only skill is in this set and in
+/// nothing the model sees, a model-only skill is in the other one and not here,
+/// and the two share one loaded set — a body in the conversation is one
+/// activation whoever asked for it, and the turn that follows it pays for it
+/// once.
+#[derive(Debug, Clone, Default)]
+pub struct UserSkills {
+    skills: Vec<Skill>,
+}
+
+impl UserSkills {
+    /// The skills with `user-invocable` in force. A skill nobody may run is in
+    /// neither half: a permission refused here is a permission the composer
+    /// cannot get around.
+    pub fn new(catalog: &Catalog) -> UserSkills {
+        UserSkills {
+            skills: catalog
+                .skills
+                .iter()
+                .filter(|skill| skill.user_invocable)
+                .cloned()
+                .collect(),
+        }
+    }
+
+    /// The names a human may type, in the catalog's order: what `/` completion
+    /// offers, read from the one scan that found them.
+    pub fn names(&self) -> Vec<String> {
+        self.skills.iter().map(|skill| skill.name.clone()).collect()
+    }
+
+    /// One activation, as the call it is: the body frontmatter-stripped in its
+    /// named wrapper with the skill's directory beside it — the same result the
+    /// model is handed — and the same once-per-conversation claim, so the model's
+    /// later call for it reads `already_loaded`.
+    pub fn call(&self, call: &Call, name: &str, loaded: &Loaded) -> ToolOutcome {
+        let Some(skill) = self.skills.iter().find(|skill| skill.name == name) else {
+            return ToolOutcome::malformed(call, &self.unknown(name));
+        };
+        let started = Instant::now();
+        let body = match skill.body() {
+            Ok(body) => body,
+            Err(problem) => return refused(call, skill, &problem, started),
+        };
+        let (content, outcome) = if loaded.claim(name) {
+            (activation(skill, &body), "loaded")
+        } else {
+            (
+                format!("outcome: already_loaded\nskill: {name}\n"),
+                "already_loaded",
+            )
+        };
+        ToolOutcome::new(call, content, false).with_facts(ToolFacts {
+            outcome: Some(outcome.to_string()),
+            duration_ms: Some(millis(started)),
+            ..ToolFacts::default()
+        })
+    }
+
+    /// A name no skill answers, refused with the names that would have.
+    fn unknown(&self, name: &str) -> String {
+        let valid: Vec<String> = self
+            .skills
+            .iter()
+            .map(|skill| format!("`{}`", skill.name))
+            .collect();
+        if valid.is_empty() {
+            return format!("there is no skill called `{name}`: this workspace holds none you may invoke");
+        }
+        format!(
+            "there is no skill called `{name}`: the ones you may invoke are {}",
+            valid.join(", ")
+        )
+    }
+}
+
+/// A skill a human loaded by hand, and what came of it: the name, the result
+/// the conversation now carries, and whether this was the load or a repeat. A
+/// front end reads it to say something and to draw a row; the conversation was
+/// changed here, where the set that decides what is in force lives.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Activated {
+    pub name: String,
+    /// The result as the model will read it, which is empty in its body when
+    /// the skill was already in force or the name answers nothing.
+    pub content: String,
+    pub is_error: bool,
+    /// Whether this call was the one that put the skill in force.
+    pub loaded: bool,
+    /// The word the result opened with — `loaded`, `already_loaded`,
+    /// `unreadable` — or none where the call never reached the tool.
+    pub outcome: Option<String>,
+}
+
 /// The bodies this conversation has received. It lives with the agent and is
 /// cleared with the history, because activation is a fact about a conversation
 /// and not about a process: `/new` starts a history that was told nothing, and

@@ -209,7 +209,7 @@ mod tests {
         "Ctrl-Q",
         "?",
         "@",
-        "/new, /export, /settings, /help, /quit",
+        "/new, /export, /skill, /settings, /help, /quit",
         "Ctrl-G",
     ];
 
@@ -217,8 +217,8 @@ mod tests {
     /// back out of the catalogue, so a command the row does not say is a
     /// failure.
     const COMMANDS_ROW: (&str, &str) = (
-        "/new, /export, /settings, /help, /quit",
-        "start a session, export this one, edit the config, show this, leave",
+        "/new, /export, /skill, /settings, /help, /quit",
+        "start a session, export this one, load a skill, edit the config, show this, leave",
     );
 
     /// The one row that names commands rather than keys.

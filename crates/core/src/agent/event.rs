@@ -25,4 +25,21 @@ pub enum Event {
         /// draws one call draws every kind of call.
         asked: Asked,
     },
+    /// A skill is in force from here on, and the result the conversation now
+    /// carries. The body comes with the event rather than being fetched by
+    /// whoever draws it: a frame has no business reading a skill, and a load
+    /// this event does not say is a load the frame would have to infer from a
+    /// call's name.
+    SkillLoaded {
+        turn: u32,
+        name: String,
+        /// The word the result opened with — `loaded`, `already_loaded`,
+        /// `unreadable` — so a frame says which of the three it was without
+        /// reading the result.
+        outcome: String,
+        /// The result as the model will read it on every turn from here:
+        /// frontmatter stripped, in its named wrapper, with its directory and
+        /// the files beside the body.
+        body: String,
+    },
 }

@@ -193,18 +193,29 @@ fn more(hidden: usize) -> Row {
 
 fn row(fact: &Fact, width: usize) -> Row {
     match fact.block() {
-        Block::Posture => {
-            // The chip's row is one raised run: it begins at the rail's first
-            // column and runs to its last, so the chip is right-aligned on the
-            // edge the values hang off and flush to the rail's edge.
-            let said = format!(" ⬢ {} ", fact.value());
+        // A chip's row is one raised run: it begins at the rail's first column
+        // and runs to its last, so the chip is right-aligned on the edge the
+        // values hang off and flush to the rail's edge. The sandbox posture and
+        // the skills in force are the two facts the frame says this way.
+        Block::Posture | Block::Skills => {
+            let glyph = if fact.block() == Block::Skills {
+                "◆"
+            } else {
+                "⬢"
+            };
+            let said = format!(" {glyph} {} ", fact.value());
             let pad = width.saturating_sub(said.width());
+            let ink = if fact.block() == Block::Skills {
+                skills_chip()
+            } else {
+                chip(fact.value())
+            };
             Row::said(
                 Line::from(vec![
                     Span::styled(" ".repeat(pad), theme::raised()),
-                    Span::styled(said, chip(fact.value())),
+                    Span::styled(said, ink),
                 ]),
-                format!("⬢ {}", fact.value()),
+                format!("{glyph} {}", fact.value()),
             )
         }
         _ => {
@@ -273,6 +284,13 @@ fn rule(width: usize) -> Row {
 /// Its ink is the frame's word on the boundary, so it cannot say "fine" of a
 /// run that gave the boundary up: the value `--yolo-unsafe` yields begins
 /// `unsafe`, and that one posture is painted bad while every other is good.
+/// The skills chip's ink: the accent, because what is in force is the frame
+/// pointing at something rather than the boundary's state. One raised tier, like
+/// the posture's, so the two chips read as the same kind of fact.
+pub(crate) fn skills_chip() -> ratatui::style::Style {
+    theme::raised().patch(theme::prompt())
+}
+
 pub(crate) fn chip(said: &str) -> ratatui::style::Style {
     let ink = if said.starts_with("unsafe") {
         theme::bad()
@@ -308,6 +326,7 @@ mod tests {
             branch: Some("t107-the-canvas".to_string()),
             sandbox: "bwrap · 1 writable".to_string(),
             workspace: "~/git/sindri".to_string(),
+            skills: Vec::new(),
             provider: "anthropic".to_string(),
             model: "claude-sonnet-4-6".to_string(),
             max_turns: 250,

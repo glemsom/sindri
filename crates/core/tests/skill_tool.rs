@@ -14,7 +14,7 @@ mod support;
 use std::path::Path;
 
 use sindri_core::agent::{BashTool, Limits, SkillTool, Tools};
-use sindri_core::provider::{Asked, Call, Turn};
+use sindri_core::provider::{Asked, Call, Message, Turn};
 use sindri_core::skills::Catalog;
 use support::{Harness, Scripted, answer, calls, fixtures, skills};
 
@@ -350,4 +350,133 @@ fn a_skill_call_in_a_run_without_the_tool_is_answered_not_run() {
             name: "alpha".to_string()
         }
     );
+}
+
+#[test]
+fn a_load_by_hand_puts_the_body_in_the_conversation_and_asks_for_no_turn() {
+    let workspace = tempfile::TempDir::new().expect("workspace");
+    let catalog = alpha(workspace.path());
+    let mut h = Harness::skilled(vec![answer("Done.")], Vec::new(), &catalog);
+
+    let activated = h.activate("alpha");
+
+    assert!(activated.loaded, "{activated:?}");
+    assert!(!activated.is_error, "{activated:?}");
+    assert_eq!(
+        activated.outcome.as_deref(),
+        Some("loaded"),
+        "the word the frame's row states"
+    );
+    assert_eq!(
+        h.loaded(),
+        vec!["alpha".to_string()],
+        "the conversation was told it"
+    );
+    assert_eq!(h.events(), Vec::new(), "nothing was sent to the provider");
+
+    // The history the next prompt is sent with: the call the model did not
+    // make, and the result it will read, in the order a provider takes.
+    h.run("follow the steps");
+    let first = &h.conversations()[0];
+    match &first[0] {
+        Message::Assistant { text, calls } => {
+            assert!(text.is_empty(), "a load says nothing of its own");
+            assert_eq!(calls.len(), 1);
+            assert_eq!(
+                calls[0].asked(),
+                Asked::Skill {
+                    name: "alpha".to_string()
+                }
+            );
+        }
+        other => panic!("the load opens the history: {other:?}"),
+    }
+    let Message::ToolResults(results) = &first[1] else {
+        panic!("the result follows the call: {first:?}");
+    };
+    assert!(
+        results[0].content.contains("<skill_content name=\"alpha\">"),
+        "the body is what the conversation carries: {}",
+        results[0].content
+    );
+    assert!(
+        matches!(&first[2], Message::User(prompt) if prompt == "follow the steps"),
+        "and the prompt follows it: {first:?}"
+    );
+}
+
+#[test]
+fn a_second_load_by_hand_is_already_loaded_and_tells_the_model_nothing_new() {
+    let workspace = tempfile::TempDir::new().expect("workspace");
+    let catalog = alpha(workspace.path());
+    let mut h = Harness::skilled(vec![answer("Done.")], Vec::new(), &catalog);
+
+    h.activate("alpha");
+    let again = h.activate("alpha");
+
+    assert!(!again.loaded, "the set is the conversation's: once, not twice");
+    assert_eq!(again.outcome.as_deref(), Some("already_loaded"));
+    assert_eq!(h.loaded(), vec!["alpha".to_string()]);
+    h.run("follow the steps");
+    let first = &h.conversations()[0];
+    assert_eq!(
+        first.len(),
+        3,
+        "the repeat is not an exchange the model reads: {first:?}"
+    );
+}
+
+#[test]
+fn a_user_only_skill_loads_by_hand_and_is_never_in_the_models_tool() {
+    let workspace = tempfile::TempDir::new().expect("workspace");
+    skills::write(
+        workspace.path(),
+        "house",
+        "disable-model-invocation: true\n",
+        "Never rewrite a file.",
+    );
+    let alpha_only = alpha(workspace.path());
+    assert!(
+        alpha_only.skills.iter().any(|skill| skill.name == "house"),
+        "the scan found it"
+    );
+    let mut h = Harness::skilled(vec![answer("Done.")], Vec::new(), &alpha_only);
+
+    let activated = h.activate("house");
+
+    assert!(activated.loaded, "a human may reach it: {activated:?}");
+    assert!(
+        activated.content.contains("Never rewrite a file."),
+        "{}",
+        activated.content
+    );
+    let built = SkillTool::new(&alpha_only).expect("alpha is a skill the model may see");
+    assert!(
+        !built.spec().description.contains("house"),
+        "and the catalog the model is handed never carried it"
+    );
+}
+
+#[test]
+fn a_model_only_skill_cannot_be_loaded_by_hand() {
+    let workspace = tempfile::TempDir::new().expect("workspace");
+    skills::write(
+        workspace.path(),
+        "hidden",
+        "user-invocable: false\n",
+        "Follow this silently.",
+    );
+    let catalog = alpha(workspace.path());
+    let mut h = Harness::skilled(vec![answer("Done.")], Vec::new(), &catalog);
+
+    let activated = h.activate("hidden");
+
+    assert!(!activated.loaded);
+    assert!(activated.is_error, "{activated:?}");
+    assert!(
+        activated.content.contains("there is no skill called `hidden`"),
+        "{}",
+        activated.content
+    );
+    assert!(h.loaded().is_empty(), "nothing was put in force");
 }

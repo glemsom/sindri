@@ -33,20 +33,33 @@ pub fn rows(call: &Call, width: u16, now: Duration) -> Vec<Line<'static>> {
     // A refused call's reason is longer than the column and
     // pushes its own command right; a call that never ran has no earlier row
     // for that to disagree with.
-    let (glyph, status, accent) = match &call.over {
-        None => ("⏺", "running".to_string(), theme::faint()),
-        Some(CallOver::Exited(0)) => ("✓", "exit 0".to_string(), theme::good()),
-        Some(CallOver::Exited(code)) => ("✗", format!("exit {code}"), theme::bad()),
-        Some(CallOver::TimedOut) => ("✗", "timed out".to_string(), theme::bad()),
-        Some(CallOver::Cancelled) => ("✗", "cancelled".to_string(), theme::bad()),
-        Some(CallOver::Refused(detail)) => ("✗", format!("sandbox: {detail}"), theme::bad()),
+    let (glyph, status, accent) = match (&call.over, &call.skill) {
+        // A load has no exit and no clock to run: its row says what it made
+        // true, and what it read is behind the fold.
+        (Some(_), Some(skill)) if skill.in_force() => ("✓", skill.said().to_string(), theme::good()),
+        (Some(_), Some(skill)) => ("✗", skill.said().to_string(), theme::bad()),
+        (None, Some(_)) => ("⏺", "loading".to_string(), theme::faint()),
+        (None, None) => ("⏺", "running".to_string(), theme::faint()),
+        (Some(CallOver::Exited(0)), None) => ("✓", "exit 0".to_string(), theme::good()),
+        (Some(CallOver::Exited(code)), None) => ("✗", format!("exit {code}"), theme::bad()),
+        (Some(CallOver::TimedOut), None) => ("✗", "timed out".to_string(), theme::bad()),
+        (Some(CallOver::Cancelled), None) => ("✗", "cancelled".to_string(), theme::bad()),
+        (Some(CallOver::Refused(detail)), None) => {
+            ("✗", format!("sandbox: {detail}"), theme::bad())
+        }
     };
     // An open call says so with its marker: the row a key opens is the row
     // that shows it is open.
     let marker = if call.expanded() { "▾ " } else { "⎿ " };
     // How long the call has been running, or how long it took: frozen at the
     // duration it ended on, so a finished call is not still counting.
-    let took = pulse::said(call.elapsed(now));
+    // A load spends no turn and takes no clock: the column stays, empty, so
+    // the two kinds of call still line their names up on one column.
+    let took = if call.skill.is_some() {
+        String::new()
+    } else {
+        pulse::said(call.elapsed(now))
+    };
     let mut spans = vec![
         Span::styled(marker, theme::faint()),
         Span::styled(format!("{glyph} {status:<STATUS$} "), accent),

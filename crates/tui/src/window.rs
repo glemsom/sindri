@@ -233,6 +233,7 @@ mod tests {
                 provider: "anthropic".to_string(),
                 model: "claude-sonnet-4-6".to_string(),
                 workspace: "~/git/sindri".to_string(),
+            skills: Vec::new(),
                 max_turns: 250,
                 context_limit: None,
             },
