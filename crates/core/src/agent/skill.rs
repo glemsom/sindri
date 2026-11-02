@@ -111,10 +111,7 @@ fn describe(skills: &[Skill]) -> ToolSpec {
          before acting when a task is one it covers: the result is the skill's body with its \
          frontmatter stripped, together with the skill's directory and the files beside the \
          body, so a relative reference in the body resolves.\n\
-         A skill is loaded once per conversation: a second call answers `already_loaded` and \
-         no body, because a result is carried in the conversation for the rest of the run and \
-         sent again with every later turn. A body is charged to the run's budget as any other \
-         result is.\n\
+         Loads once per conversation: a second call answers `already_loaded` with no body.\n\
          Skills:\n",
     );
     for skill in skills {

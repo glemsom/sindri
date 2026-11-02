@@ -87,10 +87,11 @@ fn the_catalog_and_the_doctrine_are_in_the_tool_it_describes() {
 
     let spec = tool.spec();
     assert_eq!(spec.name, "skill");
+    // Not the cost of a result: `bash` states it in the same request, and a
+    // sentence paid on every turn to repeat it buys nothing.
     for promised in [
         "already_loaded",
         "frontmatter stripped",
-        "budget",
         "- alpha: what alpha is for",
     ] {
         assert!(
@@ -105,6 +106,40 @@ fn the_catalog_and_the_doctrine_are_in_the_tool_it_describes() {
         spec.parameters["properties"]["name"]["enum"],
         serde_json::json!(["alpha"]),
         "the name parameter is the set of names that may be called"
+    );
+}
+
+#[test]
+fn the_skill_description_does_not_restate_the_rule_the_bash_description_states() {
+    let workspace = tempfile::TempDir::new().expect("workspace");
+    let catalog = alpha(workspace.path());
+    // `bash` is in every run, and it already says what a result costs: it is
+    // carried and re-sent on every later turn. The one sentence that repeats it
+    // here is paid on every turn of every run that has a skill, to buy what the
+    // request has already bought one tool over.
+    let (_workspace, _session_temp, policy) = fixtures();
+    let bash = BashTool::new(&policy, Limits::default(), Scripted::silent());
+    let built = tool(&catalog);
+    let skill = built.spec();
+
+    assert!(
+        bash.spec()
+            .description
+            .contains("sent again with every later turn"),
+        "the cost of a result is stated by the tool every run has"
+    );
+    let description = &skill.description;
+    assert!(
+        !description.contains("sent again with every later turn"),
+        "so `skill` spends no word on it: {description}"
+    );
+    assert!(
+        !description.contains("budget"),
+        "nor on the cost of a body, which is a result like any other: {description}"
+    );
+    assert!(
+        description.contains("already_loaded"),
+        "what the schema cannot carry is still said: {description}"
     );
 }
 
