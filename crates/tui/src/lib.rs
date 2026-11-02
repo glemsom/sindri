@@ -32,7 +32,7 @@ pub mod scroll; // where a reader is in something taller than the box holding it
 pub mod seam; // the seam's light strip: the picture the seam is made of
 pub mod selection; // selecting rendered rows with the mouse
 pub mod settings; // `/settings`: the one config file, edited through the one schema
-pub mod spill; // the box a file too large to show, or a record, is opened in
+pub mod spill; // the box a file too large to show is opened in
 pub mod theme; // one dark theme, in truecolour
 pub mod window; // the window onto the transcript
 

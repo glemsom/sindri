@@ -1,16 +1,15 @@
-//! The box a file too large to show, or a record read back, is opened in: read
-//! once, windowed while it is up, and closed with `Esc`.
+//! The box a file too large to show is opened in: read once, scrolled and
+//! windowed while it is up, and closed with `Esc`.
 //! A reader, not an overlay: the overlay is what opens it.
 
 use std::path::Path;
 
-/// A file too large to show, or a record read back, open in the frame. It is
-/// read once, when it is opened, and only the rows on screen are ever copied
-/// out of it, so a megabyte of output is a window per frame and
-/// never a copy of itself.
+/// A file too large to show, open in the frame: read once, when it is opened,
+/// scrolled while it is up, and only the rows on screen are ever copied out of
+/// it, so a megabyte of output is a window per frame and never a copy of itself.
 #[derive(Debug, Clone)]
 pub struct Spill {
-    /// What the box is called: the file it came from, or the session it is.
+    /// What the box is called: the file it came from.
     pub title: String,
     pub lines: Vec<String>,
     pub scroll: usize,
@@ -31,13 +30,6 @@ impl Spill {
             format!("output: {}", path.display()),
             lines,
         ))
-    }
-
-    /// A reader over text the frame already has: the rendered record of a past
-    /// session, read-only in the same box a spill opens in.
-    pub fn text(title: impl Into<String>, text: &str) -> Spill {
-        let lines: Vec<String> = text.lines().map(|line| line.to_string()).collect();
-        Spill::from_lines(title, lines)
     }
 
     /// The one place a spill is built, so that "a spill has at least one line"
@@ -110,8 +102,12 @@ mod tests {
     }
 
     #[test]
-    fn a_record_with_no_lines_opens_on_one_blank_row() {
-        let mut spill = Spill::text("record", "");
+    fn an_empty_spill_file_opens_on_one_blank_row() {
+        let file = tempfile::tempdir().expect("a temp directory");
+        let path = file.path().join("empty");
+        std::fs::write(&path, "").expect("write the empty spill");
+
+        let mut spill = Spill::open(&path).expect("the spill opens");
         assert_eq!(
             spill.lines,
             vec![String::new()],
@@ -120,7 +116,7 @@ mod tests {
         assert_eq!(
             spill.window().len(),
             1,
-            "a window on an empty record is still a row, not nothing"
+            "a window on an empty spill file is still a row, not nothing"
         );
     }
 }
