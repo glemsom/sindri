@@ -1,5 +1,6 @@
 fixture/
 bin-*/
 runs/
-results/
 __pycache__/
+# results/ is not ignored on purpose: the lines a table came from are the
+# evidence for it. See results/README.md.

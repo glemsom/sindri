@@ -14,7 +14,7 @@ export BENCH_MODEL=<the model the prompts are compared on>
 
 python3 make_fixture.py fixture          # the repo every run works in
 ./build_variant.sh v02                   # patch the prompt, build, keep bin-v02
-./sweep.sh results/v02.jsonl v02          # four tasks, one JSON line per run
+REPS=6 TAG=$BENCH_MODEL ./sweep.sh results/$BENCH_MODEL-v02.jsonl v02
 ```
 
 `run_one.sh` does one run: a fresh copy of `fixture/`, the task's question, then
@@ -25,4 +25,46 @@ The prompt under test lives in `variants.py`; `build_variant.sh` writes it into
 `crates/core/src/provider/rig_wire.rs`, builds, and copies the binary, so
 `git checkout crates/core/src/provider/rig_wire.rs` afterwards restores the tree.
 
-`bin-*/`, `fixture/`, `runs/` and `results/` are build products and are ignored.
+## Repetitions
+
+`REPS` is the number of complete passes over the four tasks, six by default. The
+sweep appends to its file rather than truncating it, one JSON line per run, and
+each line carries its own `variant`, `tag`, `repetition` and `attempt`: the
+repetition is what makes a median possible, and the tag is what keeps two sweeps
+in one file apart.
+
+`TAG` names the run directories under `runs/`, and defaults to `run`. The
+repetition is part of that name, so a repeated tag never overwrites the attempt
+whose transcript explains a number. A repetition the file already holds for the
+same variant and tag is refused rather than recorded twice under one number:
+give the new sweep its own tag, or its own file.
+
+A retry is not a repetition: a run that never reached the model is tried once
+more, and only the line that came back is recorded. It carries `attempt: 2`,
+which is how a file says a provider was flaky without inventing a repetition
+that never happened.
+
+## From lines to the numbers in the doc
+
+One file per model per variant, and `median.jq` turns one into the median pass
+the second table reports:
+
+```sh
+jq -s -f median.jq results/deepseek-v4.1-flash-v00.jsonl
+```
+
+A file holding two variants is refused, not averaged — that is a mistake in the
+file name, not a spread. The first table's per-task means come out of the same
+file; `docs/system-prompt.md` prints that `jq` beside the table it produces, so
+there is one copy of it to keep right.
+
+`results/README.md` says what belongs in `results/` and which sweeps are still
+missing.
+
+`bin-*/`, `fixture/` and `runs/` are build products and are ignored; `results/`
+is committed, because a number nobody can recompute is a claim.
+
+`self-test.sh` proves the loop and the median without a key or a bill: it copies
+the scripts to a temporary directory, stubs `run_one.sh`, and asserts the line
+counts, the tag, the refusal and the median. It is manual like the rest of the
+bench.

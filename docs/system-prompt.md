@@ -48,7 +48,19 @@ variants differ only in the prompt.
 
 ## The ranking, `deepseek-v4.1-flash`, two repetitions each
 
-Mean input tokens per task; the sum is one complete pass of all four.
+Mean input tokens per task; the sum is one complete pass of all four. Each row
+is one sweep file of the same shape as the second table's —
+`scripts/bench-system-prompt/results/deepseek-v4.1-flash-vNN.jsonl` — holding two
+repetitions of the four tasks; the means are
+
+```sh
+cd scripts/bench-system-prompt
+jq -s -r 'group_by(.task)[] | "\(.[0].task) \(map(.in_tokens) | add / length | round)"' \
+  results/deepseek-v4.1-flash-v02.jsonl
+```
+
+and the turn and right columns are the mean of `.turns` and the count of
+`.checks.ok` over the same lines.
 
 | prompt | T1 | T2 | T3 | T4 | total | turns | right |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -77,6 +89,22 @@ v13), so that a single lucky run cannot carry the claim.
 | v02 | 65569 | 0.49× | 28158 | 0.41× |
 | v11 | 54316 | 0.41× | 36450 | 0.53× |
 | v13 | 55486 | 0.42× | 32818 | 0.47× |
+
+Both columns come out of files of the same shape,
+`scripts/bench-system-prompt/results/<model>-<variant>.jsonl`, and a cell is one
+`jq` over one of them:
+
+```sh
+cd scripts/bench-system-prompt
+jq -s -f median.jq results/deepseek-v4.1-flash-v00.jsonl    # 132564
+```
+
+so the ratio beside it is that median divided by v00's. The lines behind both
+tables are not in the tree: those sweeps ran before `sweep.sh` kept repetitions —
+it truncated its file once per variant — and no results file was committed, so
+the medians are a record of what was observed rather than something a clone can
+recompute. The eight sweeps that would close it, and the files they land in, are
+named in `scripts/bench-system-prompt/results/README.md`.
 
 Right, over the same runs: 23/24 for v00 on deepseek (two over-eager rename
 edits), 22/24 for v11, 24/24 for v02 and v13; 24/24 and 16/16 for all four on
