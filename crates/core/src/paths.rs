@@ -8,6 +8,15 @@ use std::path::{Path, PathBuf};
 #[cfg(test)]
 mod tests;
 
+/// The home directory, when the process has one. `None` is a real answer — a
+/// service or a container may have none — so a caller decides whether that is a
+/// failure (`under_from`) or simply a scope that does not exist (skills).
+pub fn home() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .filter(|home| !home.is_empty())
+        .map(PathBuf::from)
+}
+
 pub fn state_dir() -> io::Result<PathBuf> {
     under_from(
         std::env::var_os("XDG_STATE_HOME"),
@@ -32,10 +41,9 @@ fn under_from(value: Option<OsString>, variable: &str, fallback: &str) -> io::Re
     if let Some(dir) = value.filter(|v| !v.is_empty()) {
         return Ok(PathBuf::from(dir).join("sindri"));
     }
-    let home = std::env::var_os("HOME")
-        .filter(|v| !v.is_empty())
-        .ok_or_else(|| io::Error::other(format!("neither {variable} nor HOME is set")))?;
-    Ok(PathBuf::from(home).join(fallback))
+    let home =
+        home().ok_or_else(|| io::Error::other(format!("neither {variable} nor HOME is set")))?;
+    Ok(home.join(fallback))
 }
 
 /// The one config file a run reads. Never a repository-local one: a

@@ -86,9 +86,16 @@ fn a_batch_run_records_the_boundary_the_tree_and_the_dials() {
         .get_output()
         .clone();
     let doctor = String::from_utf8_lossy(&doctor.stdout).to_string();
+    // Doctor prints the skill catalog beside the description, and a record
+    // holds the description: the catalog is not part of the boundary.
+    let (description, catalog) = doctor
+        .split_once("\nskills: ")
+        .expect("the catalog follows the description");
+    assert!(!catalog.is_empty());
+    let description = format!("{description}\n");
     // The one part of the description a run cannot share with the probe: the
     // session temp belongs to the session that derived it.
-    let diagnosed = doctor.replace("sessions/<session>/tmp", &format!("sessions/{id}/tmp"));
+    let diagnosed = description.replace("sessions/<session>/tmp", &format!("sessions/{id}/tmp"));
     assert_eq!(
         meta["policy"].as_str(),
         Some(diagnosed.as_str()),

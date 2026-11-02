@@ -1,8 +1,10 @@
-//! `sindri doctor`: run the probe, print the description, and turn a failure
-//! into one actionable line on stderr.
+//! `sindri doctor`: run the probe, print the description and the skill catalog,
+//! and turn a failure into one actionable line on stderr.
 
 use sindri_core::config::Overrides;
 use sindri_core::doctor;
+use sindri_core::paths;
+use sindri_core::skills;
 use sindri_types::ExitCode;
 
 use crate::boot;
@@ -19,7 +21,12 @@ pub fn run(overrides: Overrides) -> i32 {
     let (env, config) = (&configured.env, &configured.config);
     match doctor::probe(env, &config.extra_writable, config.enforcement) {
         Ok(report) => {
-            print!("{}", report.description);
+            // The catalog is not the sandbox's business, so it is read and said
+            // beside the description rather than folded into it. A probe that
+            // fails says only its own line, on stderr: a machine with no sandbox
+            // can run no skill, and a failure is not the place to list them.
+            let catalog = skills::discover(&env.workspace, paths::home().as_deref());
+            print!("{}{}", report.description, catalog.report());
             ExitCode::Success.code()
         }
         Err(error) => {

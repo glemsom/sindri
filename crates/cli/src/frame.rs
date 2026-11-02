@@ -288,7 +288,7 @@ fn failing_check(error: &DoctorError) -> String {
 /// booted in, which is the one the sandbox mounts, with the home shortened to
 /// `~` because a home path is the one part a reader already knows.
 fn workspace(dir: &std::path::Path) -> String {
-    match std::env::var_os("HOME").map(std::path::PathBuf::from) {
+    match sindri_core::paths::home() {
         Some(home) => match dir.strip_prefix(&home) {
             Ok(rest) if rest.as_os_str().is_empty() => "~".to_string(),
             Ok(rest) => format!("~/{}", rest.display()),

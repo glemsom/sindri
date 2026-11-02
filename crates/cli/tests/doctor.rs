@@ -64,15 +64,21 @@ fn doctor_prints_the_sandbox_description_and_exits_zero() {
 }
 
 #[test]
-fn doctor_prints_only_the_description() {
+fn doctor_prints_the_description_and_the_catalog_and_nothing_else() {
     let env = Env::new();
     let output = env.cmd().arg("doctor").output().expect("run");
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
 
-    // Nothing but the description: every line is a known part of it, so prose
-    // that is not the policy cannot leak onto stdout.
+    assert!(
+        stdout.ends_with("skills: none found\n"),
+        "a machine with no skills says so rather than saying nothing: {stdout}"
+    );
+
+    // Nothing but the description and the catalog: every line is a known part
+    // of one, so prose that is neither cannot leak onto stdout.
     for line in stdout.lines() {
         let known = line == "sandbox policy"
+            || line.starts_with("skills: ")
             || (line.starts_with("    /") && line.trim_start() == line.trim())
             || [
                 "enforcement: ",
@@ -318,4 +324,73 @@ fn the_flag_does_not_excuse_the_writable_set_it_no_longer_bounds() {
         .code(2)
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::contains("/nonexistent-sindri-extra"));
+}
+
+/// One skill directory, as a user or a repository would hold it.
+fn write_skill(scope: &std::path::Path, name: &str, body: &str) -> std::path::PathBuf {
+    let dir = scope.join(".agents/skills").join(name);
+    std::fs::create_dir_all(&dir).expect("a skill directory");
+    let file = dir.join("SKILL.md");
+    std::fs::write(&file, body).expect("a SKILL.md");
+    file
+}
+
+#[test]
+fn doctor_lists_both_scopes_with_the_name_the_scope_and_who_may_invoke_it() {
+    let env = Env::new();
+    // A repository, so the repo scope has a root to stop at, with a skill
+    // three directories down from it — which is where a run really boots.
+    std::fs::create_dir_all(env.workspace.join(".git")).expect("a git marker");
+    write_skill(
+        &env.workspace,
+        "house-style",
+        "---\nname: house-style\ndescription: Short sentences.\ndisable-model-invocation: true\n---\n",
+    );
+    write_skill(
+        &env.home,
+        "research",
+        "---\nname: research\ndescription: Read primary sources.\n---\n",
+    );
+
+    let assert = env.cmd().arg("doctor").assert().success();
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
+
+    let report = stdout
+        .split_once("skills: 2 found\n")
+        .expect("the catalog says how many it found")
+        .1;
+    let rows: Vec<&str> = report.lines().take(2).collect();
+    assert!(
+        rows[0].contains("repo") && rows[0].contains("house-style") && rows[0].contains("user"),
+        "a repo skill the model may not see: {rows:?}"
+    );
+    assert!(
+        rows[1].contains("user") && rows[1].contains("research") && rows[1].contains("model,user"),
+        "a user skill both may invoke: {rows:?}"
+    );
+}
+
+#[test]
+fn a_skill_that_will_not_load_is_named_with_its_file_and_line_and_is_not_a_failure() {
+    let env = Env::new();
+    std::fs::create_dir_all(env.workspace.join(".git")).expect("a git marker");
+    let file = write_skill(
+        &env.workspace,
+        "broken",
+        "---\nname: broken\n---\n\n# Broken\n",
+    );
+
+    // A skill the scan refused is a diagnostic, not a broken environment: the
+    // sandbox is still proven and doctor still exits zero.
+    let assert = env.cmd().arg("doctor").assert().success();
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
+
+    assert!(stdout.contains("skills: none found"), "{stdout}");
+    assert!(stdout.contains("skills: 1 refused"), "{stdout}");
+    let at = format!("{}:1: ", file.display());
+    assert!(
+        stdout.contains(&at),
+        "the file and the line are named — expected {at:?} in {stdout}"
+    );
+    assert!(stdout.contains("description"), "{stdout}");
 }
