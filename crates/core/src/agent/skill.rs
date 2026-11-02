@@ -16,6 +16,9 @@ use crate::skills::{Catalog, Skill};
 /// spend a run's budget, and a file past this one is still reachable by name.
 const LISTED: usize = 200;
 
+/// Cloned rather than rebuilt: a prompt is handed the schema and the catalog
+/// the boot decided on, not a second derivation of them.
+#[derive(Clone)]
 pub struct SkillTool {
     spec: ToolSpec,
     /// Only the skills the model may see: a user-only skill is in neither the
@@ -60,13 +63,18 @@ impl SkillTool {
             Ok(body) => body,
             Err(problem) => return refused(call, skill, &problem, started),
         };
-        let content = if loaded.claim(name) {
-            activation(skill, &body)
+        // The word the content opens with is the word the fields carry: one
+        // result, two spellings, derived here so they cannot disagree.
+        let (content, outcome) = if loaded.claim(name) {
+            (activation(skill, &body), "loaded")
         } else {
-            format!("outcome: already_loaded\nskill: {name}\n")
+            (
+                format!("outcome: already_loaded\nskill: {name}\n"),
+                "already_loaded",
+            )
         };
         ToolOutcome::new(call, content, false).with_facts(ToolFacts {
-            outcome: Some("loaded".to_string()),
+            outcome: Some(outcome.to_string()),
             duration_ms: Some(millis(started)),
             ..ToolFacts::default()
         })

@@ -100,9 +100,12 @@ pub struct Session {
     git: Option<Git>,
     recorder: Arc<Recorder>,
     /// The skills both scopes hold, read once at boot: the catalog is a fact
-    /// about the tree, and the tool that carries it is built from this scan
-    /// rather than from a second one per prompt.
+    /// about the tree, not about a turn.
     catalog: Catalog,
+    /// The tool that carries the model-invocable ones, built with the catalog
+    /// it describes: a prompt is handed this value, so the description and the
+    /// schema are made once rather than derived again on every turn.
+    skill: Option<SkillTool>,
 }
 
 impl Session {
@@ -132,13 +135,16 @@ impl Session {
             source,
         })?;
 
+        let catalog = skills::discover(&env.workspace, paths::home().as_deref());
+        let skill = SkillTool::new(&catalog);
         Ok(Session {
             env: env.clone(),
             dir,
             policy,
             git,
             recorder: Arc::new(recorder),
-            catalog: skills::discover(&env.workspace, paths::home().as_deref()),
+            catalog,
+            skill,
         })
     }
 
@@ -198,7 +204,13 @@ impl Session {
     /// The `skill` tool, or none when this workspace holds no skill the model
     /// may see — in which case the model is handed `bash` and nothing else.
     pub fn skill_tool(&self) -> Option<SkillTool> {
-        SkillTool::new(&self.catalog)
+        self.skill.clone()
+    }
+
+    /// Every skill the scan found, both scopes and both invocation rights: what
+    /// a human may reach for is not what the model is handed.
+    pub fn catalog(&self) -> &Catalog {
+        &self.catalog
     }
 }
 

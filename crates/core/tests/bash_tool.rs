@@ -23,7 +23,7 @@ fn the_model_gets_exactly_one_tool_named_bash_described_by_the_policy() {
     let tool = BashTool::new(&policy, Limits::default(), Scripted::silent());
 
     let spec = tool.spec();
-    assert_eq!(spec.name, "bash", "the only tool is bash");
+    assert_eq!(spec.name, "bash");
     let description = &spec.description;
     assert!(
         description.contains(&policy.describe()),
@@ -45,6 +45,24 @@ fn the_model_gets_exactly_one_tool_named_bash_described_by_the_policy() {
     }
     assert_eq!(spec.parameters["type"], "object");
     assert_eq!(spec.parameters["required"][0], "command");
+}
+
+#[test]
+fn the_description_claims_only_the_ground_it_still_holds() {
+    let (_workspace, _session_temp, policy) = fixtures();
+    let tool = BashTool::new(&policy, Limits::default(), Scripted::silent());
+    let description = &tool.spec().description;
+
+    // A skill is a second tool that runs nothing at all: `bash` is no longer
+    // the only one, and it is still the only one whose call reaches a command.
+    assert!(
+        description.contains("the only tool that runs anything"),
+        "the description says what is still true of it: {description}"
+    );
+    assert!(
+        !description.contains("the only tool,") && !description.contains("the only tool."),
+        "and no longer says what is not: {description}"
+    );
 }
 
 #[test]
