@@ -14,9 +14,10 @@ Single-context: `GLOSSARY.md` at the repo root. See `docs/agents/domain.md`.
 
 ## Ground rules for this POC
 
-Three records hold the decisions: `docs/adr/0001-llm-friendly-code.md` for how the code is
-written, `docs/adr/0002-two-tools.md` for why there are two tools, and
-`docs/adr/0003-a-third-tool-open.md` for the third, `open`.
+Four records hold the decisions: `docs/adr/0001-llm-friendly-code.md` for how the code is
+written, `docs/adr/0002-two-tools.md` for why there are two tools,
+`docs/adr/0003-a-third-tool-open.md` for the third, `open`, and
+`docs/adr/0004-built-in-skills.md` for the scope a skill is found in.
 
 - Linux only: Windows and macOS are never targets, so no cross-platform abstraction earns
   its keep.

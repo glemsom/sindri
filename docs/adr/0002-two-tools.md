@@ -12,10 +12,11 @@ this record is why `bash` is not the tool a permission is enforced in, and 0003 
 argument made about a browser instead of a skill.
 
 A skill is not a shell composition. It is instructions written for the model, found in
-someone's home directory or in the repository the run happens in, carrying a permission
-that says whether the model may see it at all. Nothing about that is a command, so
-loading one through `bash` would be the model reading a file and deciding for itself what
-the file is worth — and a decision the reading side makes is not an enforcement.
+someone's home directory, in the repository the run happens in, or — since ADR 0004 — shipped
+inside the binary itself, carrying a permission that says whether the model may see it at all.
+Nothing about that is a command, so loading one through `bash` would be the model reading a
+file and deciding for itself what the file is worth — and a decision the reading side makes is
+not an enforcement.
 
 `crates/core/src/skills/` scans and reads skills; `sindri doctor` prints the catalog.
 The tool that calls one is `crates/core/src/agent/skill.rs`, built once at boot from that
@@ -42,7 +43,12 @@ the file: they are refusals made on its behalf. A permission enforced where the 
 made is the only kind that holds, and `sindri doctor` still prints both, because a human
 has to be able to see the skill they may run.
 
-## 2. Two scopes, and the nearer one wins
+## 2. Two scopes, and the nearer one wins — three since ADR 0004
+
+ADR 0004 adds a third scope below these two, a **built-in skill** compiled into the binary,
+and this heading's count is the whole of the amendment here: its precedence is lowest, so the
+order argued below is untouched and the built-in is only what the home directory's skill
+shadows in turn.
 
 `~/.agents/skills` is the user scope. Every `.agents/skills` between the workspace and
 its repository root is the repository scope, nearest first and never above the root: a

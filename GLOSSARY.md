@@ -159,16 +159,27 @@ refused, an `AGENTS.md` it could not read; `--format json` changes the output sh
 
 ## Skills
 
-**skill** — a directory holding a `SKILL.md`: the frontmatter's `name` and `description`,
-the two flags that say who may reach for it, and the body beneath the fence that
-**activation** returns. A skill no version of the specification knows how to read is a
-**refusal**, never a silence.
+**skill** — a directory holding a `SKILL.md`, or a **built-in skill** with no directory at
+all: the frontmatter's `name` and `description`, the two flags that say who may reach for it,
+and the body beneath the fence that **activation** returns. A skill no version of the
+specification knows how to read is a **refusal**, never a silence.
 
-**skill scope** — one of the two places a **catalog** reads: `user`, under the home
-directory at `~/.agents/skills`, and `repo`, at every `.agents/skills` between the
-workspace and its repository root. The specification governs what is inside a skill
-directory and says nothing about where one lives, so these paths are ours. The code's
-word for it is `Scope`, and its two values are `User` and `Repo`.
+**skill scope** — one of the three places a **catalog** reads, and the three are ordered by
+nearness: `builtin`, compiled into the binary; `user`, under the home directory at
+`~/.agents/skills`; and `repo`, at every `.agents/skills` between the workspace and its
+repository root. The specification governs what is inside a skill directory and says nothing
+about where one lives, so these paths are ours. The code's word for it is `Scope`, and its
+values are `User` and `Repo` today, with `Builtin` the third ADR 0004 decides on.
+
+**built-in skill** — a **skill** shipped inside the binary rather than installed to a path:
+its `SKILL.md` is compiled in, so there is no directory to be absent, stale or unwritable,
+and nothing an upgrade can leave behind as the previous release's instructions. It is the
+lowest of the three **skill scopes**, so a `user` skill of the same name shadows it and a
+`repo` skill shadows them both: a user who disagrees with a built-in drops their own skill of
+the same name in `~/.agents/skills` and it wins. Its **scope** is a field and not an
+inference, so `sindri doctor` prints it beside the skill's name and names the built-in a
+nearer skill displaced. It is loaded once per **session** like any other skill, through
+the `skill` tool and no other way. The record is `docs/adr/0004-built-in-skills.md`.
 
 **activation** — one `skill` call's result: the body with the frontmatter stripped, in a
 named `<skill_content>` wrapper, with the skill's directory and its file listing beside
