@@ -87,7 +87,7 @@ impl BashExecutor for SandboxExecutor {
                 stderr: String::new(),
                 truncated: false,
                 spill: Vec::new(),
-                duration_ms: started.elapsed().as_millis() as u64,
+                duration_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
             }),
         }
     }
@@ -163,7 +163,10 @@ impl SandboxExecutor {
             .take()
             .map(|source| tap::drain(source, Side::Stderr, self.output.clone()));
 
-        let stopped = wait_until_done(&mut child, self.timeout, &self.cancel);
+        let stopped = match wait_until_done(&mut child, self.timeout, &self.cancel) {
+            Ok(stopped) => stopped,
+            Err(detail) => return Done::Broken(detail),
+        };
         let status = match child.wait() {
             Ok(status) => status,
             Err(error) => return Done::Broken(error.to_string()),
@@ -208,7 +211,7 @@ impl SandboxExecutor {
                 .into_iter()
                 .flatten()
                 .collect(),
-            duration_ms: started.elapsed().as_millis() as u64,
+            duration_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
         })
     }
 
@@ -244,37 +247,45 @@ enum Stop {
     Cancelled,
 }
 
-fn wait_until_done(child: &mut Child, timeout: Duration, cancel: &Cancel) -> Stop {
+fn wait_until_done(child: &mut Child, timeout: Duration, cancel: &Cancel) -> Result<Stop, String> {
     let started = Instant::now();
     loop {
         match child.try_wait() {
-            Ok(Some(_)) => return Stop::Finished,
+            Ok(Some(_)) => return Ok(Stop::Finished),
             Ok(None) => {}
-            Err(_) => return Stop::Finished,
+            Err(_) => return Ok(Stop::Finished),
         }
         if cancel.is_triggered() {
-            terminate(child);
-            return Stop::Cancelled;
+            terminate(child)?;
+            return Ok(Stop::Cancelled);
         }
         if started.elapsed() >= timeout {
-            terminate(child);
-            return Stop::TimedOut;
+            terminate(child)?;
+            return Ok(Stop::TimedOut);
         }
         std::thread::sleep(POLL);
     }
 }
 
-fn terminate(child: &mut Child) {
-    let group = child.id() as i32;
+/// A group that cannot be named is a group that cannot be killed, and a pid
+/// wider than the signal call's own is not one to signal as some other process.
+fn terminate(child: &mut Child) -> Result<(), String> {
+    let group = i32::try_from(child.id()).map_err(|_| {
+        format!(
+            "the command's process group {} is not a pid this process can signal",
+            child.id()
+        )
+    })?;
     signal_group(group, libc::SIGTERM);
     let deadline = Instant::now() + KILL_GRACE;
     while Instant::now() < deadline {
         if matches!(child.try_wait(), Ok(Some(_))) {
-            return;
+            return Ok(());
         }
         std::thread::sleep(POLL);
     }
     signal_group(group, libc::SIGKILL);
+    Ok(())
 }
 
 fn signal_group(group: i32, signal: i32) {
