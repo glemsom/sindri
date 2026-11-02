@@ -37,22 +37,19 @@ const THINKING_BUDGET: u32 = 4096;
 /// reasoning: that wire names a level, not a budget.
 const THINKING_EFFORT: Effort = Effort::Medium;
 /// The instructions every batch turn carries. The sandbox's own description
-/// arrives with the `bash` tool's definition.
+/// arrives with the `bash` tool's definition, and so does the batching rule:
+/// what a result costs the conversation is only legible beside the result, so
+/// this prompt states it once, there, and never here.
 ///
 /// The sentence about reading is not decoration: told to search and open ranges,
 /// a model spent 0.42x the input tokens of the same model told nothing, on the
 /// same four tasks and with the same answers right — measured by
 /// `docs/system-prompt.md`, reproducible with `scripts/bench-system-prompt`.
-const PREAMBLE: &str = "You are Sindri, an assistant answering a developer at a Unix terminal. Answer the \
-    question you were given, using the context after it when there is some. You have \
-    one tool, `bash`: run commands rather than guessing, and check the exit code \
-    before believing the output. Reply with the answer itself: no preamble, no closing \
-    offer of further help. Read the fewest bytes that answer: search first (`rg -n`), \
-    then open only the lines you need (`sed -n 'A,Bp'`); never `cat` a whole file, and \
-    never run a search or a listing twice. Put the steps of one task in one script: \
-    filter there, print only what you concluded, and keep intermediates in `$TMPDIR`, \
-    which outlives the call. A fence marked `mermaid` is drawn as a picture: draw what \
-    prose cannot.";
+const PREAMBLE: &str = "You are Sindri, answering a developer at a Unix terminal. Reply with the answer \
+    itself: no preamble, no closing offer of further help. Run commands rather than guessing. Read \
+    the fewest bytes that answer: search first (`rg -n`), then open only the lines you need \
+    (`sed -n 'A,Bp'`); never `cat` a whole file, and never run a search or a listing twice. A fence \
+    marked `mermaid` is drawn as a picture: draw what prose cannot.";
 
 pub(super) fn turn(
     client: &Client,
@@ -318,4 +315,85 @@ fn refuses_capability(message: &str) -> bool {
     ];
     REFUSALS.iter().any(|refusal| message.contains(refusal))
         || (message.contains("tool") && message.contains("not supported"))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::PREAMBLE;
+    use crate::agent::{BashTool, Limits};
+    use crate::exec::{BashExecutor, ToolResult};
+    use crate::sandbox::{Enforcement, NetworkPosture, SandboxPolicy, WritableSet};
+
+    /// The two sentences the preamble keeps whatever else it sheds: the reading
+    /// rule, measured at 0.42x the tokens of the same model told nothing, and the
+    /// renderer fact no model can know — quoted from the shipped text.
+    const READING_RULE: &str = "Read the fewest bytes that answer: search first (`rg -n`), then open \
+        only the lines you need (`sed -n 'A,Bp'`); never `cat` a whole file, and never run a search \
+        or a listing twice.";
+    const MERMAID: &str = "A fence marked `mermaid` is drawn as a picture: draw what prose cannot.";
+
+    /// No command is run to read a description.
+    struct Silent;
+
+    impl BashExecutor for Silent {
+        fn execute(&self, _script: &str) -> Option<ToolResult> {
+            None
+        }
+    }
+
+    #[test]
+    fn the_script_sentence_is_stated_once_and_in_the_tool_description() {
+        // Every phrase below was paid for twice while both copies shipped: the
+        // preamble and the tool description are re-sent on every turn of every
+        // run, so the doctrine belongs in the one that sits beside the cost.
+        for moved in [
+            "put the steps of one task",
+            "$TMPDIR",
+            "using the context after it",
+            "check the exit code",
+        ] {
+            assert!(
+                !PREAMBLE.contains(moved),
+                "the preamble no longer carries `{moved}`: {PREAMBLE}"
+            );
+        }
+        let words = PREAMBLE.split_whitespace().count();
+        assert!(
+            words <= 80,
+            "the preamble stays at or under 80 words, not {words}: {PREAMBLE}"
+        );
+
+        let description = tool_description();
+        for carried in ["put the steps of one task in one script", "$TMPDIR"] {
+            assert!(
+                description.contains(carried),
+                "the tool description carries `{carried}`: {description}"
+            );
+        }
+        for kept in [READING_RULE, MERMAID] {
+            assert!(
+                PREAMBLE.contains(kept),
+                "the preamble still carries `{kept}`: {PREAMBLE}"
+            );
+        }
+    }
+
+    /// The description as the model receives it: a policy refuses a writable path
+    /// that is not there, so the test makes one.
+    fn tool_description() -> String {
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        let writable = WritableSet::new([workspace.path().to_path_buf()]).expect("writable set");
+        let policy = SandboxPolicy::new(
+            writable,
+            workspace.path().join("session/tmp"),
+            "/usr/bin:/bin".to_string(),
+            NetworkPosture::Shared,
+            Enforcement::Bubblewrap,
+        )
+        .expect("policy");
+        let tool = BashTool::new(&policy, Limits::default(), Arc::new(Silent));
+        tool.spec().description.clone()
+    }
 }
