@@ -231,18 +231,26 @@ Deliberate for v0.1; `sessions prune` is a later issue.
 
 ## Evals
 
-Two promises cannot be checked from a run's output: that the sandbox blocks what it
-claims, and that the turn cap stops a loopy run. Eight scripted batch runs (`make eval`)
-prove them.
+Three promises cannot be checked from a run's output: that the sandbox blocks what it
+claims, that the turn cap stops a loopy run, and that a skill the workspace ships is
+loaded before the answer that needed it. Nine scripted batch runs (`make eval`) prove
+them.
 
 Each eval runs the real binary in its own copy of a small fixture repository and asserts
-on exit codes, JSON fields, what the model was shown and the files left on disk — never
-on the model's prose, which drifts. CI replays recorded responses through the mock
-provider: no credential, no network, no bill. Eval 7 writes to paths the read-only root
-protects, so the suite **refuses to run** when the sandbox is not enforcing.
+on exit codes, JSON fields, what the model was shown, the record it left and the files on
+disk — never on the model's prose, which drifts. CI replays recorded responses through
+the mock provider: no credential, no network, no bill. Eval 7 writes to paths the
+read-only root protects, so the suite **refuses to run** when the sandbox is not
+enforcing.
 
-`make eval-live` runs the same eight prompts against your own provider and credential,
-at your own cost, skipping the two assertions that need a recorded conversation. See
+Eval 9 is the one case that reads an answer: its rule (*the house marker on a script's
+second line*) lives in the fixture's one skill and nowhere else in the tree, so an answer
+that states it arrived through the catalog and could not have been guessed. The case
+fails on an answer without the skill call, on a first turn already carrying the rule, and
+on a script written without it.
+
+`make eval-live` runs the same nine prompts against your own provider and credential,
+at your own cost, skipping the assertions that need a recorded conversation. See
 [`crates/evals/fixtures/README.md`](crates/evals/fixtures/README.md).
 
 ## Working on Sindri

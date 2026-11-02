@@ -1,7 +1,8 @@
-//! `sindri-evals`: the two promises a user cannot verify by reading output,
-//! made verifiable — the sandbox blocks what it claims, and the turn cap stops a
-//! loopy run. Eight scripted batch runs against a fixture repository, asserted on
-//! exit codes, JSON fields and the files on disk, never on model prose.
+//! `sindri-evals`: the promises a user cannot verify by reading output, made
+//! verifiable — the sandbox blocks what it claims, the turn cap stops a loopy
+//! run, and a rule the tree keeps in a skill reaches the answer only through the
+//! catalog. Nine scripted batch runs against a fixture repository, asserted on
+//! exit codes, JSON fields, the record and the files on disk.
 
 #![allow(
     clippy::expect_used,
@@ -20,7 +21,7 @@ use sindri_evals::{guard, run};
 #[derive(Parser)]
 #[command(
     name = "sindri-evals",
-    about = "The eval suite: eight scripted runs that catch silent degradation"
+    about = "The eval suite: nine scripted runs that catch silent degradation"
 )]
 struct Args {
     /// Ask a real provider instead of replaying recorded fixtures. Uses your

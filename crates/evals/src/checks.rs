@@ -80,7 +80,7 @@ fn record(run: &Run) -> Vec<String> {
     problems
 }
 
-fn saw(run: &Run, turn: usize, needle: &str, what: &str) -> Vec<String> {
+pub(crate) fn saw(run: &Run, turn: usize, needle: &str, what: &str) -> Vec<String> {
     if run.live {
         return Vec::new();
     }

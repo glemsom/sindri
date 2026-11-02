@@ -34,14 +34,14 @@ test:
 relink:
 	@$(DEVBOX) run -- scripts/check-relink.sh
 
-## eval: eight scripted runs against recorded fixtures — offline, no key, no
+## eval: nine scripted runs against recorded fixtures — offline, no key, no
 ## live provider. Prints one pass/fail line per eval and fails if any did.
 ## `make eval-live` asks your own provider instead; see the README.
 eval:
 	$(CARGO) build --quiet --package sindri-cli --bin sindri
 	$(CARGO) run --quiet --package sindri-evals
 
-## eval-live: the same eight evals against a real provider, with your own
+## eval-live: the same nine evals against a real provider, with your own
 ## credential and at your own cost.
 eval-live:
 	$(CARGO) build --quiet --package sindri-cli --bin sindri
