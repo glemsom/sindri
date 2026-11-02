@@ -7,8 +7,8 @@
     reason = "a panicking harness is how a process test reports a setup failure"
 )]
 
-pub mod frames;
-mod reply;
+pub mod frames; // the event-stream frames a streamed reply is made of
+mod reply; // one canned reply: a unary body or a streamed one
 
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};

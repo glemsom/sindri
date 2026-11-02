@@ -20,6 +20,14 @@ Each line below saves a reader a search; none of it is ceremony.
   `scripts/audit-module-docs.sh` holds every file to that, down to a minimum of
   eight words after the marker: a bare `//!` is a placeholder, and the audit names
   the file that stopped at one.
+- **A crate root places its modules.** Every `mod` and `pub mod` in a
+  `crates/*/src/lib.rs` is trailed by one clause, so "which file?" is answered
+  where the search starts rather than by opening files until one matches. The
+  clause is cut from that module's own paragraph and never written twice, and it
+  is held to three words — below that it is a label, which sends the reader back
+  to the file it was meant to spare them. `scripts/audit-module-map.sh` reports a
+  declaration with no clause, a label where a clause belongs, and a word the
+  paragraph does not carry, each against the file that stopped short.
 - **Comments say what the code cannot** — the rule behind it, the trap it avoids. A
   comment that repeats the line beneath it is noise.
 - **Tests hold the spec.** A behaviour worth a sentence is worth a test name, and the

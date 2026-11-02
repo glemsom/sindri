@@ -1,17 +1,17 @@
 //! The agent core: the sandbox policy, the two derivations from it, and the
 //! environment probe. Knows nothing about a terminal.
 
-pub mod agent;
-pub mod cancel;
-pub mod clock;
-pub mod config;
-pub mod doctor;
-pub mod exec;
-pub mod output;
-pub mod paths;
-pub mod provider;
-pub mod record;
-pub mod sandbox;
-pub mod session;
-pub mod skills;
-pub mod workspace;
+pub mod agent; // the turn loop and the tools it drives
+pub mod cancel; // the one flag a run checks to know it must stop now
+pub mod clock; // the wall clock a record is dated by
+pub mod config; // a run's settings, and which source wins
+pub mod doctor; // the environment probe behind `sindri doctor`
+pub mod exec; // the bash executor: one port, two implementations
+pub mod output; // the machine-readable output contract
+pub mod paths; // where Sindri keeps its state
+pub mod provider; // the model, behind one seam
+pub mod record; // the record every run leaves
+pub mod sandbox; // one policy value, and the only two things derived from it
+pub mod session; // the value a front end holds to have a run
+pub mod skills; // the two scopes scanned, the frontmatter read
+pub mod workspace; // the tree a run stands in

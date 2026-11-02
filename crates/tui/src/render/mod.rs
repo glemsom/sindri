@@ -1,5 +1,9 @@
-//! The narrowest terminal that can hold the rail as a column; below this it
-//! is a strip.
+//! The frame's drawing: the transcript, the rail, the composer and every other
+//! surface, as rows on the theme's canvas, each part in a module of its own
+//! beside this one.
+//!
+//! `RAIL_MIN_WIDTH` is the narrowest terminal that can hold the rail as a
+//! column; below it the rail is a strip, and the drawing here is what reads it.
 
 mod call;
 mod card;
