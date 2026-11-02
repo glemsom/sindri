@@ -259,7 +259,7 @@ Everything goes through devbox, and `make check` is the definition of done.
 
 | Target | What it runs |
 | --- | --- |
-| `make check` | fmt, clippy, the 400-line audit, tests, evals, the no-relink proof, the release scripts |
+| `make check` | fmt, clippy, the 800-line audit, tests, evals, the no-relink proof, the release scripts |
 | `make build` / `install` / `clean` / `run ARGS=…` | release build / install the tree's binary / `cargo clean` / run it |
 | `make eval` / `eval-live` / `scripts-check` | the evals, offline or against your provider; the release scripts, offline |
 | `make release TAG=v0.1.0` | both static binaries, `SHA256SUMS`, changelog |

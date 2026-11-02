@@ -8,7 +8,7 @@ CARGO  ?= $(DEVBOX) run -- cargo
 
 all: check
 
-## check: the gate. fmt, clippy with warnings denied, the 400-line audit, tests,
+## check: the gate. fmt, clippy with warnings denied, the 800-line audit, tests,
 ## the evals, proof that an unchanged tree does not relink, and the release
 ## scripts run as processes.
 check: fmt clippy audit test relink eval scripts-check
@@ -19,7 +19,7 @@ fmt:
 clippy:
 	$(CARGO) clippy --workspace --all-targets -- -D warnings
 
-## audit: source files stay at or under 400 lines, and every module opens
+## audit: Rust modules stay at or under 800 lines, and every module opens
 ## with its own `//!` paragraph.
 audit:
 	@scripts/audit-line-length.sh
