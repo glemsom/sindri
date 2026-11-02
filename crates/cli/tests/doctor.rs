@@ -50,7 +50,17 @@ fn doctor_prints_the_sandbox_description_and_exits_zero() {
         stdout.contains("home: "),
         "the sandbox HOME is stated: {stdout}"
     );
-    assert!(stdout.contains("read-only"), "{stdout}");
+    assert!(
+        stdout.contains(
+            "read-only host root (readable, not writable), the writable set mounted read-write"
+        ),
+        "the writable set and the merely readable rest are one line: {stdout}"
+    );
+    assert_eq!(
+        stdout.matches("read-only").count(),
+        1,
+        "the read-only boundary is stated once: {stdout}"
+    );
 }
 
 #[test]
@@ -72,7 +82,6 @@ fn doctor_prints_only_the_description() {
                 "home: ",
                 "environment: ",
                 "isolation: ",
-                "read-only: ",
             ]
             .iter()
             .any(|prefix| line.trim_start().starts_with(prefix));

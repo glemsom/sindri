@@ -21,8 +21,11 @@ impl SandboxPolicy {
             out.push_str(&format!("  network: {}\n", self.network().describe()));
             return out;
         }
+        // The boundary is two halves in one line: the host root, readable but not
+        // writable, and the writable set. Stated once, so no later line disagrees.
         out.push_str(
-            "  enforcement: bubblewrap — read-only host root, writable set mounted read-write\n",
+            "  enforcement: bubblewrap — read-only host root (readable, not writable), \
+             the writable set mounted read-write\n",
         );
         out.push_str(&format!("  network: {}\n", self.network().describe()));
 
@@ -53,7 +56,6 @@ impl SandboxPolicy {
         out.push_str(
             "  isolation: own pid, ipc, uts and cgroup namespaces; /proc lists only this sandbox\n",
         );
-        out.push_str("  read-only: the rest of the host filesystem, readable but not writable\n");
         out
     }
 }

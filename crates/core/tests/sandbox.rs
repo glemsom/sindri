@@ -250,6 +250,23 @@ fn the_argv_parsed_back_into_a_writable_set_describes_the_same_sandbox() {
 }
 
 #[test]
+fn the_description_names_the_read_only_boundary_once() {
+    let (_, _, policy) = fixtures();
+    let description = policy.describe();
+    let stated = description.matches("read-only").count();
+    assert_eq!(
+        stated, 1,
+        "the read-only host root is stated once, not repeated: {description}"
+    );
+    assert!(
+        description.contains(
+            "read-only host root (readable, not writable), the writable set mounted read-write"
+        ),
+        "one line says what is writable and what is merely readable: {description}"
+    );
+}
+
+#[test]
 fn an_unsafe_policy_wraps_nothing_and_says_so() {
     let (_workspace, session_temp, _) = fixtures();
     let writable =
