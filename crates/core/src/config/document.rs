@@ -240,11 +240,13 @@ fn paths(value: &str) -> Result<Vec<PathBuf>, ConfigError> {
     extra_paths(&items)
 }
 
-/// Headers, as `Name: value` entries separated by a newline or a `;`. The
-/// values are secrets: an error names the position, never the text.
+/// Headers, as `Name: value` entries, one per line. A `;` is not a separator:
+/// it is legal inside a value (`Cookie: a=1; b=2`), and a value the table in
+/// the file carries whole is not cut in two here. The values are secrets: an
+/// error names the position, never the text.
 fn headers(value: &str) -> Result<BTreeMap<String, String>, ConfigError> {
     let lines: Vec<String> = value
-        .split(['\n', ';'])
+        .split('\n')
         .map(str::trim)
         .filter(|line| !line.is_empty())
         .map(str::to_string)

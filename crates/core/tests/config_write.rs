@@ -7,6 +7,7 @@
     reason = "a panicking test is how a broken contract reports itself"
 )]
 
+use std::collections::BTreeMap;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
@@ -287,6 +288,34 @@ fn every_key_can_be_set_shown_and_cleared() {
         let reread = Document::load_at(&path).expect("parses");
         assert!(!reread.is_set(key), "{key:?} is gone from the file");
     }
+}
+
+#[test]
+fn a_header_value_holding_a_semicolon_survives_the_form() {
+    // `;` is legal inside a header value — `Cookie: a=1; b=2` — so one line is
+    // one header, and a value the table in the file would carry whole must not
+    // be cut in two and refused.
+    let (_dir, path, mut document) = document(None);
+
+    document
+        .set(Key::ExtraHeaders, "Cookie: a=1; b=2")
+        .expect("the form accepts a header whose value holds a semicolon");
+    document.save().expect("the file is written");
+
+    let written: BTreeMap<String, BTreeMap<String, String>> =
+        toml::from_str(&text(&path)).expect("the file parses");
+    let headers = written.get("extra_headers").expect("the header is a table");
+    assert_eq!(
+        headers,
+        &BTreeMap::from([("cookie".to_string(), "a=1; b=2".to_string())]),
+        "one line is one header, named cookie, holding the whole value"
+    );
+
+    let reread = Document::load_at(&path).expect("the file parses");
+    assert!(
+        reread.is_set(Key::ExtraHeaders),
+        "the header it wrote reads back as set"
+    );
 }
 
 #[test]
