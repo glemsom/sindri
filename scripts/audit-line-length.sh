@@ -15,7 +15,9 @@ checked=0
 while IFS= read -r file; do
     [ -f "$file" ] || continue
     checked=$((checked + 1))
-    lines=$(wc -l <"$file")
+    # `NR` counts lines, where `wc -l` counts newlines and so measures a
+    # file whose last line carries no terminator one short.
+    lines=$(awk 'END { print NR }' "$file")
     if [ "$lines" -le "$limit" ]; then
         continue
     fi

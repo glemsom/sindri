@@ -22,6 +22,11 @@ long_file() { # path lines
     for _ in $(seq "$2"); do echo '// a line'; done >"$1"
 }
 
+unterminated_file() { # path lines, then the newline after the last is dropped
+    long_file "$1" "$2"
+    truncate -s -1 "$1"
+}
+
 track() {
     git init -q
     git add -A
@@ -48,6 +53,22 @@ test_a_file_at_the_limit_passes_and_one_line_under_does_too() {
 
 test_a_file_over_the_limit_is_reported_by_path_and_size() {
     long_file src/long.rs 801
+    track
+    audit
+    assert_status 1 "$STATUS"
+    assert_contains "$ERR" "src/long.rs has 801 lines, over the 800-line limit"
+}
+
+test_a_final_line_without_a_newline_is_still_a_line() {
+    # Both sides of the boundary, since the count is what went wrong: 800 lines
+    # with no terminator passes, and one more fails naming the file.
+    unterminated_file src/exact.rs 800
+    track
+    audit
+    assert_status 0 "$STATUS"
+    assert_contains "$OUT" "1 files, all at or under 800 lines"
+
+    unterminated_file src/long.rs 801
     track
     audit
     assert_status 1 "$STATUS"
