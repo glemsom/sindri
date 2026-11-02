@@ -4,6 +4,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use tempfile::TempDir;
 
@@ -27,6 +28,23 @@ impl Workspace {
         let root = TempDir::new().map_err(|error| format!("eval temp dir: {error}"))?;
         let repo = root.path().join("repo");
         copy_dir(Path::new(FIXTURES).join("repo").as_path(), &repo)?;
+        // The repo skill scope is walked from the repository root and from
+        // nowhere else, so a copy that is not a repository carries no
+        // `.agents/skills` at all and the catalog eval would pass by finding
+        // nothing. `git init` leaves an unborn branch, which is no commit: the
+        // record still carries no git block, exactly as the fixture did before.
+        let init = Command::new("git")
+            .arg("init")
+            .arg("--quiet")
+            .current_dir(&repo)
+            .output()
+            .map_err(|error| format!("git init the fixture copy: {error}"))?;
+        if !init.status.success() {
+            return Err(format!(
+                "git init the fixture copy: {}",
+                String::from_utf8_lossy(&init.stderr).trim()
+            ));
+        }
         let state = root.path().join("state");
         let config = root.path().join("config");
         for dir in [&state, &config] {
