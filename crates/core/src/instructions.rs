@@ -94,13 +94,14 @@ impl Taken {
 
     /// What the model is handed beside the preamble, or nothing at all: the
     /// file named in one line, then its words, exactly as the file holds them.
+    /// The line is short because it is re-sent on every turn, and the path is
+    /// the only part of it that grows.
     pub fn block(&self) -> Option<String> {
         let Taken::Found(found) = self else {
             return None;
         };
         Some(format!(
-            "The repository you are working in carries its house rules in {}; they \
-             take precedence where they are more specific than the guidance above.\n\n{}",
+            "House rules for this repository ({}), more specific than the guidance above:\n\n{}",
             found.path.display(),
             found.text
         ))

@@ -168,3 +168,35 @@ fn a_claude_md_is_no_fallback() {
 
     assert_eq!(taken, Taken::Absent, "and another tool's file is not ours");
 }
+
+#[test]
+fn the_lead_in_above_the_rules_costs_one_short_line() {
+    // A checkout three directories deep, so the line is measured with the whole
+    // absolute path in it: the line is re-sent on every turn, and the path is
+    // the one thing it may grow by.
+    let (root, deep, rules) = checkout();
+
+    let taken = read(&deep);
+    let block = taken.block().expect("the rules are handed over");
+    let (lead_in, text) = block.split_once("\n\n").expect("a lead-in, then the rules");
+
+    assert_eq!(text, rules, "the file's words follow it whole");
+    let path = root
+        .path()
+        .join("AGENTS.md")
+        .canonicalize()
+        .expect("the file");
+    assert!(
+        lead_in.contains(&path.display().to_string()),
+        "the block opens by naming the file's path: {lead_in:?}"
+    );
+    assert!(
+        lead_in.contains("more specific"),
+        "and still says the rules take precedence: {lead_in:?}"
+    );
+    let words = lead_in.split_whitespace().count();
+    assert!(
+        words <= 15,
+        "the lead-in is one short line, not {words} words: {lead_in:?}"
+    );
+}
