@@ -160,7 +160,7 @@ shortened diagram sentence:
 > draw what prose cannot.
 
 `make check` is unchanged and green under it: the offline evals replay their
-fixtures and assert the same eight things, because the prompt is not the answer.
+fixtures and assert the same nine things, because the prompt is not the answer.
 
 ## The batching sentence, shipped before it was measured
 
