@@ -40,6 +40,9 @@ pub fn launch() -> Launch {
         branch: Some("main".to_string()),
         sandbox: "bwrap · 1 writable".to_string(),
         workspace: "~/git/sindri".to_string(),
+        // The catalog's user-invocable half, as a boot that found two skills
+        // would hand it over: `/skill:` offers these and nothing else.
+        skills: vec!["house-style".to_string(), "release-checks".to_string()],
         provider: "anthropic".to_string(),
         model: "claude-sonnet-4-6".to_string(),
         max_turns: 250,

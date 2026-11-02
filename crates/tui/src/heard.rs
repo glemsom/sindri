@@ -8,7 +8,7 @@ use sindri_core::provider::Asked;
 
 use crate::app::{App, Renew};
 use crate::driver::{CallOver, Finished, Job, Side, Spilled, Stop};
-use crate::entry::{Call, Entry, Note, Prompt};
+use crate::entry::{Call, Entry, Note, Prompt, Skill};
 
 impl App {
     pub(crate) fn submit(&mut self) {
@@ -30,11 +30,13 @@ impl App {
     }
 
     pub fn start(&mut self) -> Option<Job> {
-        if self.running.is_some() || self.renew != Renew::Idle {
+        if self.running.is_some() || self.renew != Renew::Idle || self.is_loading() {
             return None;
         }
-        let prompt = match self.queue.pop_front() {
-            Some(queued) => queued,
+        // What was queued runs first and in the order it was typed; a prompt the
+        // reader wrote after a skill comes after it, once the load has landed.
+        let prompt = match self.queue.pop_front().or_else(|| self.armed.take()) {
+            Some(next) => next,
             None if !self.sent || self.composer.is_blank() => return None,
             None => self.composer.take(),
         };
@@ -86,10 +88,22 @@ impl App {
                 // A load runs no command, so there is no exit to wait for: its
                 // row is over the moment it was announced, rather than counting
                 // up until the next call's own end. What the row says a load
-                // did is the rail's to answer, with the chip a load earns.
-                if !matches!(asked, Asked::Bash { .. }) {
-                    call.over = Some(CallOver::Exited(0));
-                    call.took = Some(std::time::Duration::ZERO);
+                // did arrives with the load's own event, together with the body
+                // the reader can open.
+                match &asked {
+                    // A load runs no command, so there is no exit to wait for:
+                    // the row is over the moment it was announced, and what it
+                    // read arrives with the load's own event.
+                    Asked::Skill { name } => {
+                        call.skill = Some(Skill::new(name));
+                        call.over = Some(CallOver::Exited(0));
+                        call.took = Some(std::time::Duration::ZERO);
+                    }
+                    Asked::Bash { .. } => {}
+                    Asked::Refused { .. } => {
+                        call.over = Some(CallOver::Exited(0));
+                        call.took = Some(std::time::Duration::ZERO);
+                    }
                 }
                 for (side, line) in self.early.drain(..) {
                     call.push(side, line);
@@ -97,7 +111,51 @@ impl App {
                 self.entries.push(Entry::Call(call));
                 self.dirty();
             }
+            Event::SkillLoaded {
+                turn,
+                name,
+                outcome,
+                body,
+            } => self.skill_loaded(turn, &name, outcome.as_deref(), &body),
         }
+    }
+
+    /// A load has been answered: the row that announced it takes the word and
+    /// the text it read, and the rail says the skill is in force. A load no turn
+    /// announced — one a human asked for, which no model call made — gets its
+    /// row here, so every load is one row in the thread and never a silence.
+    /// The body is kept behind that row: the thread says what is in force, and
+    /// `Enter` is what opens the text.
+    fn skill_loaded(&mut self, turn: u32, name: &str, outcome: Option<&str>, body: &str) {
+        let announcing = self.entries.iter().rposition(|entry| {
+            matches!(entry, Entry::Call(call) if call
+                .skill
+                .as_ref()
+                .is_some_and(|skill| skill.name == name && skill.outcome.is_none()))
+        });
+        let index = match announcing {
+            Some(index) => index,
+            None => {
+                let mut call = Call::new(turn, Some(format!("skill {name}")), self.now);
+                call.skill = Some(Skill::new(name));
+                call.over = Some(CallOver::Exited(0));
+                call.took = Some(std::time::Duration::ZERO);
+                self.entries.push(Entry::Call(call));
+                self.entries.len() - 1
+            }
+        };
+        if let Some(Entry::Call(call)) = self.entries.get_mut(index) {
+            if let Some(skill) = call.skill.as_mut() {
+                skill.outcome = outcome.map(str::to_string);
+            }
+            for line in body.lines() {
+                call.push(Side::Stdout, line.to_string());
+            }
+        }
+        if outcome == Some("loaded") {
+            self.rail.skill_loaded(name);
+        }
+        self.dirty();
     }
 
     fn append(&mut self, turn: u32, text: String, reasoning: bool) {

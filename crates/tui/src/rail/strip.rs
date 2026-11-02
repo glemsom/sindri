@@ -43,9 +43,13 @@ pub(super) fn strip(facts: &[Fact], width: usize) -> String {
 /// the transcript's first line already names.
 pub fn priority(fact: &Fact) -> u8 {
     if fact.block() == Block::Posture {
-        return 10;
+        return 11;
     }
     match fact.label() {
+        // What is in force sits beside what the run is inside: the two chips
+        // are the frame's word on the boundary and on the instructions, and
+        // nothing on the screen stands in for either.
+        "skills" => 10,
         "context" => 9,
         "tokens" => 8,
         "turns" => 7,
@@ -155,6 +159,7 @@ mod tests {
             provider: "anthropic".to_string(),
             model: model.to_string(),
             workspace: workspace.to_string(),
+            skills: Vec::new(),
             max_turns: 250,
             context_limit: Some(200_000),
         })

@@ -1,23 +1,28 @@
 //! The completion offer: an `@` token ranked against a background walk of the
-//! workspace (`walk`), or a `/` name ranked against the catalogue of commands. Both
-//! are drawn in the one column above the composer and taken by the same keys;
-//! only the path side walks, because only the filesystem is not already in
-//! hand.
+//! workspace (`walk`), a `/` name ranked against the catalogue of commands, or
+//! the skill names ranked by the one command that takes one. All three are drawn
+//! in the one column above the composer and taken by the same keys; only the
+//! path side walks, because only the filesystem is not already in hand.
 
 use crate::command::COMMANDS;
 use crate::completion::walk::visible;
 
 pub const ROWS: usize = 8;
 
+pub(crate) mod skill;
 pub(crate) mod walk;
 
-/// What asked for the offer: an `@` path token, or a `/` command named at the
-/// start of the draft. The drawn column, the keys and the accept path are
-/// shared; what is ranked behind them is not.
+/// What asked for the offer: an `@` path token, a `/` command named at the start
+/// of the draft, or the name of a skill after the command that takes one. The
+/// drawn column, the keys and the accept path are shared; what is ranked behind
+/// them is not.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Trigger {
     At,
     Slash,
+    /// `/skill:name` or `/skill name`: the offer is skill names, not commands,
+    /// from the moment the command's own name is typed.
+    Skill,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,6 +30,10 @@ pub struct Query {
     pub at: usize,
     pub typed: String,
     pub trigger: Trigger,
+    /// Whether the draft spells the name with a colon, so the offer is taken in
+    /// the spelling the reader is already writing and never rewritten into the
+    /// other one.
+    pub inline: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -32,6 +41,9 @@ pub struct Completion {
     pub at: usize,
     pub typed: String,
     pub trigger: Trigger,
+    /// The spelling the offer is taken in: a colon keeps its colon, a space
+    /// keeps its space.
+    pub inline: bool,
     pub items: Vec<String>,
     pub chosen: usize,
     pub generation: u64,
@@ -39,15 +51,18 @@ pub struct Completion {
 }
 
 impl Completion {
-    pub fn new(query: Query, generation: u64) -> Self {
+    pub fn new(query: Query, generation: u64, skills: &[String]) -> Self {
         Completion {
             at: query.at,
             typed: query.typed.clone(),
             trigger: query.trigger,
-            // A catalogue is in hand, so the commands are offered at once; a
-            // walk has to be asked for, and its paths arrive later.
+            inline: query.inline,
+            // A catalogue is in hand, so the commands and the skill names are
+            // offered at once; a walk has to be asked for, and its paths arrive
+            // later.
             items: match query.trigger {
                 Trigger::Slash => commands(&query.typed),
+                Trigger::Skill => skill::offered(&query.typed, skills, query.inline),
                 Trigger::At => Vec::new(),
             },
             chosen: 0,
@@ -69,10 +84,13 @@ impl Completion {
     }
 }
 
-/// The offer a draft asks for: a command named at the start of a one-row
-/// draft, or else the path token of the row being typed.
+/// The offer a draft asks for: the skill name after the command that takes one,
+/// a command named at the start of a one-row draft, or else the path token of the
+/// row being typed.
 pub fn ask(draft: &str, row: &str) -> Option<Query> {
-    command(draft).or_else(|| path(row))
+    skill::ask(draft)
+        .or_else(|| command(draft))
+        .or_else(|| path(row))
 }
 
 /// The `/` a draft opens with and the name typed after it, offered only where
@@ -89,6 +107,7 @@ pub fn command(draft: &str) -> Option<Query> {
         at: 0,
         typed: rest.to_string(),
         trigger: Trigger::Slash,
+        inline: false,
     })
 }
 
@@ -98,29 +117,38 @@ pub fn command(draft: &str) -> Option<Query> {
 /// catalogue is the whole of what is offered, so a seventh command is
 /// completable the moment it is added to it.
 pub fn commands(typed: &str) -> Vec<String> {
+    ranked(COMMANDS.iter().map(|spec| spec.name), typed)
+        .into_iter()
+        .map(|name| format!("/{name}"))
+        .collect()
+}
+
+/// The names a fragment names, nearest first: the ones it starts, then the ones
+/// it sits inside, then the ones it is a subsequence of — each tier in the order
+/// the list holds them, which is the order the frame says them in.
+fn ranked<'a>(names: impl Iterator<Item = &'a str>, typed: &str) -> Vec<&'a str> {
     let typed = typed.to_lowercase();
-    let mut scored: Vec<(usize, usize, &str)> = COMMANDS
-        .iter()
+    let mut scored: Vec<(usize, usize, &str)> = names
         .enumerate()
-        .filter_map(|(index, spec)| {
-            let name = spec.name.to_lowercase();
-            let tier = if typed.is_empty() || name.starts_with(&typed) {
+        .filter_map(|(index, name)| {
+            let lower = name.to_lowercase();
+            let tier = if typed.is_empty() || lower.starts_with(&typed) {
                 0
-            } else if name.contains(&typed) {
+            } else if lower.contains(&typed) {
                 1
-            } else if subsequence(&name, &typed) {
+            } else if subsequence(&lower, &typed) {
                 2
             } else {
                 return None;
             };
-            Some((tier, index, spec.name))
+            Some((tier, index, name))
         })
         .collect();
     scored.sort_unstable();
     scored
         .into_iter()
         .take(ROWS)
-        .map(|(_, _, name)| format!("/{name}"))
+        .map(|(_, _, name)| name)
         .collect()
 }
 
@@ -136,6 +164,7 @@ pub fn path(row: &str) -> Option<Query> {
         at: row[..at].chars().count(),
         typed: row[at + 1..].to_string(),
         trigger: Trigger::At,
+        inline: false,
     })
 }
 
@@ -210,6 +239,7 @@ mod tests {
                 at: 8,
                 typed: "src/ma".to_string(),
                 trigger: super::Trigger::At,
+                inline: false,
             })
         );
         assert_eq!(path("no completion here"), None);
@@ -267,7 +297,11 @@ mod tests {
 
     #[test]
     fn a_fragment_narrows_the_offer_and_the_names_it_starts_come_first() {
-        assert_eq!(commands("s"), paths(&["/settings"]));
+        assert_eq!(
+            commands("s"),
+            paths(&["/skill", "/settings"]),
+            "both names the fragment starts, in the catalogue's order"
+        );
         assert!(
             commands("zzzz").is_empty(),
             "a fragment that names nothing offers nothing"

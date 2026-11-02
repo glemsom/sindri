@@ -36,8 +36,8 @@ fn a_fragment_narrows_the_offer_and_the_names_it_starts_come_first() {
     type_text(&mut app, "/s");
     assert_eq!(
         offered(&app),
-        vec!["/settings".to_string()],
-        "only the names /s has"
+        vec!["/skill".to_string(), "/settings".to_string()],
+        "only the names /s has, in the order the catalogue says them"
     );
     let rows = shown(&screen(&mut app, 100, 24));
     assert!(
@@ -179,18 +179,20 @@ fn a_command_the_catalogue_dropped_is_refused_and_the_slash_never_offers_it() {
     press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     let said = notes(&app);
     assert!(
-        said.contains("/sessions: no such command — /new, /export, /settings, /help, /quit"),
-        "the refusal names the five commands there are: {said}"
+        said.contains(
+            "/sessions: no such command — /new, /export, /skill, /settings, /help, /quit"
+        ),
+        "the refusal names the six commands there are: {said}"
     );
     assert!(app.overlay().is_none(), "and it opens nothing: {said}");
 }
 
 #[test]
-fn the_five_commands_the_catalogue_names_still_do_what_they_say() {
+fn the_six_commands_the_catalogue_names_still_do_what_they_say() {
     assert_eq!(
         COMMANDS.len(),
-        5,
-        "? says five commands, and it says all of them"
+        6,
+        "? says six commands, and it says all of them"
     );
 
     let mut new = app_with(Fake::taking());

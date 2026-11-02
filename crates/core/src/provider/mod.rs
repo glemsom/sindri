@@ -18,6 +18,10 @@ use crate::config::Config;
 const MAX_ATTEMPTS: u32 = 3;
 const BASE_BACKOFF: Duration = Duration::from_millis(200);
 pub const REDACTED: &str = "[redacted]";
+/// What a call no tool could answer is answered with. One spelling, because a
+/// front end that has to say the reason in its own words reads it off the line
+/// it was written on rather than parsing prose it guessed at.
+pub const MALFORMED: &str = "tool_error: the call was not run: ";
 
 #[derive(Debug, Clone)]
 pub struct ToolSpec {
@@ -90,7 +94,7 @@ impl ToolOutcome {
         ToolOutcome {
             call_id: call.id.clone(),
             name: call.name.clone(),
-            content: format!("tool_error: the call was not run: {reason}"),
+            content: format!("{MALFORMED}{reason}"),
             is_error: true,
             facts: ToolFacts::default(),
         }

@@ -13,7 +13,7 @@ use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use sindri_core::agent::{Agent, Event, Report, SkillTool, Tools};
+use sindri_core::agent::{Activated, Agent, Event, Report, SkillTool, Tools};
 use sindri_core::cancel::Cancel;
 use sindri_core::config::{Config, Provider, Theme};
 use sindri_core::exec::{BashExecutor, Outcome, ToolResult};
@@ -204,7 +204,7 @@ impl Harness {
     /// A harness whose tools include the `skill` tool a catalog describes, so a
     /// turn can load a skill the way a run does.
     pub fn skilled(replies: Vec<Turn>, commands: Vec<ToolResult>, catalog: &Catalog) -> Self {
-        Harness::built(
+        let mut harness = Harness::built(
             replies,
             commands,
             8,
@@ -212,7 +212,13 @@ impl Harness {
             Interrupt::Never,
             false,
             SkillTool::new(catalog),
-        )
+        );
+        // The half of the catalog a human reaches for is handed in as the boot
+        // hands it: a load by hand is what `/skill` asks for.
+        harness
+            .agent
+            .set_hand(sindri_core::agent::UserSkills::new(catalog));
+        harness
     }
 
     fn build(
@@ -291,6 +297,12 @@ impl Harness {
 
     pub fn forget(&mut self) {
         self.agent.forget();
+    }
+
+    /// A skill loaded by hand, as the frame asks for one: no turn, and the body
+    /// in the conversation from here on.
+    pub fn activate(&mut self, name: &str) -> Activated {
+        self.agent.activate(name)
     }
 
     /// The skills the conversation has been told, as the agent holds them.

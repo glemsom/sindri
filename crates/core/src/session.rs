@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::agent::{Agent, Dials, Report, SkillTool};
+use crate::agent::{Agent, Dials, Report, SkillTool, UserSkills};
 use crate::cancel::Cancel;
 use crate::config::Config;
 use crate::exec::SandboxExecutor;
@@ -106,6 +106,9 @@ pub struct Session {
     /// it describes: a prompt is handed this value, so the description and the
     /// schema are made once rather than derived again on every turn.
     skill: Option<SkillTool>,
+    /// The half of the catalog a human may reach for, built once from the same
+    /// scan: the composer's names, and the skills a load by hand is read from.
+    hand: UserSkills,
 }
 
 impl Session {
@@ -137,6 +140,7 @@ impl Session {
 
         let catalog = skills::discover(&env.workspace, paths::home().as_deref());
         let skill = SkillTool::new(&catalog);
+        let hand = UserSkills::new(&catalog);
         Ok(Session {
             env: env.clone(),
             dir,
@@ -145,6 +149,7 @@ impl Session {
             recorder: Arc::new(recorder),
             catalog,
             skill,
+            hand,
         })
     }
 
@@ -173,6 +178,7 @@ impl Session {
         let mut agent = Agent::new(dials.model, dials.tool, dials.max_turns, dials.thinking);
         agent.set_cancel(cancel);
         agent.set_recorder(self.recorder.clone());
+        agent.set_hand(self.hand.clone());
         agent
     }
 
@@ -211,6 +217,12 @@ impl Session {
     /// a human may reach for is not what the model is handed.
     pub fn catalog(&self) -> &Catalog {
         &self.catalog
+    }
+
+    /// The skills a human may reach for: the names a frame offers, and the ones a
+    /// load by hand is read from.
+    pub fn hand(&self) -> &UserSkills {
+        &self.hand
     }
 }
 

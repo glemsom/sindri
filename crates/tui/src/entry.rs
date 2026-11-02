@@ -52,6 +52,10 @@ pub struct Prompt {
 pub struct Call {
     pub turn: u32,
     pub command: Option<String>,
+    /// Set when the call is the `skill` tool's: which skill, and what the load
+    /// answered. A load is the one call whose row says what it made true rather
+    /// than what it ran, because it ran nothing.
+    pub skill: Option<Skill>,
     pub over: Option<CallOver>,
     pub tail: VecDeque<(Side, String)>,
     /// The whole output, and how much of it was ever given: a bounded tail of
@@ -75,6 +79,7 @@ impl Call {
         Call {
             turn,
             command,
+            skill: None,
             over: None,
             tail: VecDeque::with_capacity(TAIL_LINES),
             out: VecDeque::new(),
@@ -170,6 +175,51 @@ impl Entry {
             _ => return false,
         }
         true
+    }
+}
+
+/// A call to the `skill` tool: the name, and the word the result opened with
+/// once it has one. The body is kept as the call's output, so the row is the
+/// chip and `Enter` is the whole body — never the other way round.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Skill {
+    pub name: String,
+    /// `loaded`, `already_loaded` or `unreadable`: absent while the call is
+    /// still being answered.
+    pub outcome: Option<String>,
+}
+
+impl Skill {
+    pub fn new(name: impl Into<String>) -> Skill {
+        Skill {
+            name: name.into(),
+            outcome: None,
+        }
+    }
+
+    /// What the row says the load did, in the fewest cells: the status column is
+    /// eight wide, and `already_loaded` is not a word a row has room for.
+    pub fn said(&self) -> &str {
+        match self.outcome.as_deref() {
+            Some("already_loaded") => "already",
+            Some("unreadable") => "unread",
+            // A call no tool answered never reached a skill at all.
+            None => "not run",
+            Some(word) => word,
+        }
+    }
+
+    /// Whether the load put the skill in force: the one outcome the rail and
+    /// the transcript's count of loads are both made from.
+    pub fn in_force(&self) -> bool {
+        self.outcome.as_deref() == Some("loaded")
+    }
+
+    /// Whether the call failed: a skill that could not be read, or a call no
+    /// tool answered. A repeat is neither — nothing moved, and nothing went
+    /// wrong.
+    pub fn failed(&self) -> bool {
+        matches!(self.outcome.as_deref(), Some("unreadable") | None)
     }
 }
 

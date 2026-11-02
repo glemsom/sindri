@@ -130,11 +130,16 @@ named `<skill_content>` wrapper, with the skill's directory and its file listing
 it so a relative reference in the body resolves. Once per **session** and no more: a
 second call is `already_loaded` with no body, because a **tool result** is sent again
 with every later turn, and the loaded set is cleared with the history it was made in.
+`/skill:name` is the same activation asked for by a human instead of by the model —
+`Agent::activate` — so it is one call and not a second way of loading something: the
+claim is made in the conversation's own set, and the model's later call for the same
+name is `already_loaded`.
 
 **loaded set** — the skills one conversation has been told, held with the **history** and
 cleared with it: a body is in force while the transcript still carries it. Two identical
-calls in one turn's wave are one load, because the wave is one turn. The code's word for
-it is `Loaded`, and `Agent::loaded_skills` is how a frame reads it.
+calls in one turn's wave are one load, because the wave is one turn, and a load by hand
+claims the name the same way the tool's own call does. The code's word for it is
+`Loaded`, and `Agent::loaded_skills` is how a frame reads it.
 
 **catalog** — everything one scan found: the **skills**, the **refusals**, and the
 **shadowed** names. Sorted by name, so two scans of one tree say the same thing.
@@ -174,7 +179,8 @@ carries no spine of its own, and the inset holds the first word of a fact off th
 light strip, which sits against the rail's first column. The sandbox posture is a chip
 (`⬢ bwrap · 1 writable`) rather than another pair, right-aligned on the edge the values
 hang off. The rail is chrome, not a surface: it draws no fill and lets the canvas
-through, so the one band of it with a colour behind it is the row the chip sits on. What
+through, so the bands of it with a colour behind them are the rows its **chip**s sit
+on. What
 a row copies is the fact — `context 38%` — never the leader that drew it.
 The margin between the words and the rail stays canvas, and on a terminal that speaks
 Kitty graphics it carries the seam's light strip (`seam.rs`): from the top of the body
@@ -279,11 +285,15 @@ Which scope is which role is a fact about languages and is decided in
 `theme.rs`, so a fence's cell is the theme's like any other and a language no rule knows
 is `PLAIN` rather than wrong.
 
-**chip** — the rail's statement of the sandbox posture, `⬢ bwrap · 1 writable`: a
-**raised** box rather than another label and value, shortened to `⬢ bwrap` when its
-column runs out. Its ink is the boundary's state, and the first frame's posture line
-wears the same chip: `GOOD` while the run is inside `bwrap`, `BAD` once it has left the
-sandbox (`--yolo-unsafe`), whose posture begins `unsafe`.
+**chip** — the rail's two statements that are not label-and-value pairs, drawn as
+**raised** boxes on the edge the values hang off: the sandbox posture, `⬢ bwrap · 1
+writable`, and — only when there is one — the **skills** in force, `◆ house-style`. A
+chip is shortened to its head when its column runs out (`⬢ bwrap`, `◆ house-style`), and
+the posture's ink is the boundary's state: the first frame's posture line wears the same
+chip, `GOOD` while the run is inside `bwrap`, `BAD` once it has left the sandbox
+(`--yolo-unsafe`), whose posture begins `unsafe`. The skills chip is the accent instead,
+because what is in force is the frame pointing at something rather than a boundary's
+state, and it goes when a **session** starts over.
 
 **composer** — the input at the bottom: 2–6 rows, `Shift+Enter` for a newline, `@` for a
 path completion, `/` for a command. With no text in it at all it carries the placeholder
@@ -340,8 +350,13 @@ eight rows, `.git` skipped, `.gitignore` deliberately not honoured. `/` offers t
 **command** catalogue, in the one place a command can be sent — a one-row draft that
 starts with the slash, the name not yet ended by whitespace — ranked by the name being
 typed with the names it starts first, and needing no walk because the catalogue is in
-hand. `Tab` and `Enter` take the marked offer, `↑`/`↓` walk it, `Esc` dismisses it and
-leaves the draft as typed; taking one closes the box and never sends.
+hand. Once `/skill:` or `/skill ` is typed the offers are **skill** names rather than
+commands, ranked by that one function and no walk either: a name the user may not invoke
+was never in the list the frame was handed, so it cannot be offered, while a user-only
+skill is offered like any other because a human is who it is for. `Tab` and `Enter` take
+the marked offer, `↑`/`↓` walk it, `Esc` dismisses it and leaves the draft as typed;
+taking one closes the box and never sends, and it is taken in the spelling the draft is
+already in.
 
 **block** — the rows a **picture** takes of an answer, and the one place a copy
 differs from the screen: its graphic's rows together with its **caption**, or with
@@ -404,7 +419,10 @@ name there is five names.
 **help overlay** says of it, and what it opens. One catalogue (`COMMANDS`) holds them
 all, in the order the frame says them; the parser, the line an unknown name is refused
 with and the help's command row all read it, so a seventh command is added there and
-nowhere else.
+nowhere else. `/skill` is the one name that takes an argument from a fixed set and the
+one a colon may end — `/skill:house-style` is `/skill house-style` — and the rest of the
+line after the name is the prompt the skill is put to work on: a bare name arms it and
+starts no turn, a tail runs as one.
 
 **help overlay** — `?`'s list of every **binding**: the keys in their
 column, each description wrapped under them, the box sized from the wrapped rows. A

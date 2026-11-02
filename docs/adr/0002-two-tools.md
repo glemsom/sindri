@@ -85,6 +85,12 @@ conversation that never received it. Two identical calls inside one parallel wav
 load for the same reason — the wave is one turn, and the set is what the turn leaves
 behind.
 
+The composer is the other caller. `/skill:house-style` is the same call run from the
+human's side — `Agent::activate` — so the claim it makes is the one the model's later
+call reads as `already_loaded`, and a skill the model may not see is still a skill a
+human can put in force. Neither asks the provider anything: a body in force is a fact
+about the next turn, not a question to ask now.
+
 ## 5. The two flags are Claude-compatible extensions
 
 `disable-model-invocation: true` and `user-invocable: false` are not in the Agent Skills

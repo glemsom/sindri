@@ -117,15 +117,18 @@ fn every_binding_is_reachable_at_a_hundred_by_twenty_four_and_at_seventy_by_twen
                 seen.contains(keys.as_str()),
                 "{width}×{height} can reach {keys:?} by scrolling: {seen}"
             );
-            // And the end of what it says: a row cut at the border is not a
-            // row that was reached, however visible its keys are. The last two
-            // words always share a row, wrapped at either width here.
-            let words: Vec<&str> = what.split(' ').collect();
-            let tail = words[words.len() - 2..].join(" ");
-            assert!(
-                seen.contains(&tail),
-                "{width}×{height} can read the end of {keys:?} ({tail:?}): {seen}"
-            );
+            // And the whole of what it says, in order: a row cut at the border
+            // is not a row that was reached, however visible its keys are. The
+            // words are read in the order they were written rather than as one
+            // line, because how many rows they wrap into is the box's business
+            // and not the reader's.
+            let mut at = 0;
+            for word in what.split(' ') {
+                match seen[at..].find(word) {
+                    Some(found) => at += found + word.len(),
+                    None => panic!("{width}×{height} cannot read {word:?} of {keys:?}: {seen}"),
+                }
+            }
         }
     }
 }

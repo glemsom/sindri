@@ -51,8 +51,30 @@ pub struct Finished {
     pub note: Option<String>,
 }
 
+/// What a front end made of a skill a human asked for: the body is in the
+/// conversation, or it was already there and nothing moved.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Invoked {
+    /// The skill went into the conversation, and the row that says so arrived as
+    /// an `Event::SkillLoaded` through the tap.
+    Loaded(String),
+    /// It was already in force: the conversation was told nothing a second time,
+    /// because a result is sent again on every turn that follows it.
+    Already(String),
+}
+
 pub trait Driver: Send {
     fn run(&mut self, prompt: &str, cancel: Cancel, tap: Tap) -> Finished;
+
+    /// Loads one skill by hand, without a turn: the conversation the body goes
+    /// into is the front end's, so a frame can ask for a load and not make one.
+    /// The load is announced as an `Event::SkillLoaded` on `tap`, which is how
+    /// the transcript's row and the rail's chip are drawn; `Err` is why it could
+    /// not be, said in the transcript where an error belongs.
+    fn load(&mut self, skill: &str, tap: Tap) -> Result<Invoked, String> {
+        let _ = (skill, tap);
+        Err("this front end cannot load a skill".to_string())
+    }
 
     /// Starts a fresh session — a new GUID, a new record, the same frame —
     /// and says what the rail should now show. `/new` is the only caller. A
@@ -77,6 +99,10 @@ pub enum Task {
     Run(Job),
     Renew,
     Reload,
+    /// One skill, loaded by hand. It runs before any prompt behind it in the
+    /// queue, because the driver's thread is one thread and its tasks are
+    /// answered in the order they were sent.
+    Load(String),
 }
 
 #[derive(Debug)]

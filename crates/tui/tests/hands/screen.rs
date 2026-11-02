@@ -29,7 +29,7 @@ fn question_mark_lists_every_binding_and_esc_closes_it() {
         "Ctrl-Q",
         "?",
         "@",
-        "/new, /export, /settings, /help, /quit",
+        "/new, /export, /skill, /settings, /help, /quit",
     ] {
         assert!(
             rows.lines().any(|row| row.contains(wanted)),

@@ -7,6 +7,7 @@
 mod budget;
 mod calls;
 mod event;
+mod hand;
 mod limits;
 mod report;
 mod skill;
@@ -17,7 +18,7 @@ pub use budget::{Budget, Spent};
 pub use event::Event;
 pub use limits::Limits;
 pub use report::{Report, Stopped};
-pub use skill::{Loaded, SkillTool};
+pub use skill::{Activated, Loaded, SkillTool, UserSkills};
 pub use tool::BashTool;
 pub use tools::Tools;
 
@@ -26,7 +27,7 @@ use std::sync::mpsc::Sender;
 use std::time::Instant;
 
 use crate::cancel::Cancel;
-use crate::provider::{Delta, DeltaSink, Error, Message, Model};
+use crate::provider::{Asked, Call, Delta, DeltaSink, Error, Message, Model, ToolOutcome};
 use crate::record::{Cost, Recorder};
 
 /// What one conversation runs on: the model to ask, the tool to run it with,
@@ -56,6 +57,12 @@ pub struct Agent {
     /// is not.
     loaded: Arc<Loaded>,
     history: Vec<Message>,
+    /// How many skills a human has loaded by hand, so each of those calls has
+    /// an id of its own and two loads in one conversation cannot share one.
+    by_hand: u32,
+    /// The skills a human may reach for: the half of the catalog the model is
+    /// never handed, which is what a load by hand is read from.
+    hand: UserSkills,
 }
 
 impl Agent {
@@ -71,6 +78,8 @@ impl Agent {
             recorder: None,
             loaded: Arc::new(Loaded::default()),
             history: Vec::new(),
+            by_hand: 0,
+            hand: UserSkills::default(),
         }
     }
 
@@ -88,6 +97,12 @@ impl Agent {
     /// front end that has measured what a task may cost.
     pub fn set_budget(&mut self, budget: Budget) {
         self.budget = budget;
+    }
+
+    /// The skills a human may reach for, handed in by the boot that read the
+    /// catalog: the agent never scans a tree of its own.
+    pub fn set_hand(&mut self, hand: UserSkills) {
+        self.hand = hand;
     }
 
     /// A new history, and no skill in force: what `/new` promises.
@@ -218,7 +233,8 @@ impl Agent {
                     break;
                 }
                 let mut killed = false;
-                for outcome in calls::wave(&self.tool, &self.loaded, wave) {
+                let results = calls::wave(&self.tool, &self.loaded, wave);
+                for (call, outcome) in wave.iter().zip(results) {
                     // Counted before it is read: a call the cancel killed was
                     // started, and the record says so even with no result.
                     report.tool_calls += 1;
@@ -229,6 +245,7 @@ impl Agent {
                     if let Some(recorder) = &self.recorder {
                         recorder.tool_result(report.turns, &outcome);
                     }
+                    self.loaded_skill(report.turns, call, &outcome);
                     report.spent.add(
                         outcome.facts.duration_ms.unwrap_or_default(),
                         outcome.content.len(),
@@ -276,7 +293,23 @@ impl Agent {
         });
     }
 
-    fn announce(&self, turn: u32, call: &crate::provider::Call) {
+    /// A call that put a skill in force says so once, with the result the
+    /// conversation now carries: a frame's chip, a check's assertion and a
+    /// record's column all read the load here rather than inferring it from a
+    /// call's name.
+    fn loaded_skill(&self, turn: u32, call: &Call, outcome: &ToolOutcome) {
+        let Asked::Skill { name } = call.asked() else {
+            return;
+        };
+        self.emit(Event::SkillLoaded {
+            turn,
+            name,
+            outcome: outcome.facts.outcome.clone(),
+            body: outcome.content.clone(),
+        });
+    }
+
+    fn announce(&self, turn: u32, call: &Call) {
         self.emit(Event::ToolCall {
             turn,
             asked: call.asked(),

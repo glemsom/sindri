@@ -11,6 +11,7 @@ use sindri_core::cancel::Cancel;
 
 mod marks;
 mod pictures;
+mod skill;
 
 use crate::completion::Completion;
 use crate::composer::Composer;
@@ -27,6 +28,8 @@ use crate::render::seam::Seam;
 use crate::selection::{Selection, Viewport};
 use crate::settings::Missing;
 use crate::window::Window;
+
+pub use self::skill::Loading;
 
 /// Where `/new` has got to. Two states would not do: the frame marks the
 /// request, the loop hands it to the front end once, and nothing may run
@@ -89,6 +92,12 @@ pub struct App {
     pub(crate) overlay: Option<Overlay>,
     pub(crate) walking: Option<(u64, String)>,
     pub(crate) renew: Renew,
+    /// Where the skill the reader asked for has got to, and the prompt they
+    /// wrote after it: a load is a task of its own, so the turn it precedes waits
+    /// until the body is in the conversation it will be sent with. `armed` is
+    /// what runs once the answer lands.
+    pub(crate) loading: Loading,
+    pub(crate) armed: Option<String>,
     pub(crate) selecting: usize,
     pub(crate) generation: u64,
     pub(crate) config: Option<PathBuf>,
@@ -148,6 +157,8 @@ impl App {
             overlay: None,
             walking: None,
             renew: Renew::Idle,
+            loading: Loading::Idle,
+            armed: None,
             selecting: 0,
             generation: 0,
             config: None,
@@ -313,6 +324,8 @@ impl App {
             Ok(launch) => {
                 self.renew = Renew::Idle;
                 let session = launch.session.clone();
+                self.loading = Loading::Idle;
+                self.armed = None;
                 self.entries.clear();
                 self.queue.clear();
                 self.early.clear();

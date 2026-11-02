@@ -19,6 +19,7 @@ use crate::window::Ask;
 pub(crate) const WHEEL_ROWS: usize = 3;
 
 mod mouse;
+mod skill;
 
 impl App {
     pub fn key(&mut self, key: KeyEvent) {
@@ -164,6 +165,7 @@ impl App {
             Command::Help => self.show(Overlay::Help(Help::default())),
             Command::Quit => self.quit = true,
             Command::Export(path) => self.export(path.as_deref()),
+            Command::Skill(ask) => self.skill_command(ask),
             Command::Unknown(name) => self.note_error(command::refusal(&name)),
         }
     }
@@ -223,7 +225,7 @@ impl App {
             return;
         }
         self.generation = self.generation.wrapping_add(1);
-        let open = Completion::new(query, self.generation);
+        let open = Completion::new(query, self.generation, &self.rail.launch().skills);
         self.walking = open.walk();
         self.completion = Some(open);
     }
