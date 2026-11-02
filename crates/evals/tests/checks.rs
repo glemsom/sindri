@@ -99,7 +99,7 @@ fn an_answer_that_skipped_the_skill_call_is_reported() {
         state: root.path().join("state"),
         live: false,
     };
-    let problems = sindri_evals::checks::the_catalog_triggers(&skipped);
+    let problems = sindri_evals::catalog::the_catalog_triggers(&skipped);
     assert!(
         problems.iter().any(|line| line.contains("never loaded")),
         "a skill the run did not load must be a finding: {problems:?}"
@@ -148,7 +148,7 @@ fn a_load_whose_rule_never_reaches_the_answer_is_reported() {
         state: root.path().join("state"),
         live: false,
     };
-    let problems = sindri_evals::checks::the_catalog_triggers(&quiet);
+    let problems = sindri_evals::catalog::the_catalog_triggers(&quiet);
     assert_eq!(
         problems,
         vec!["the answer never states the house rule \"# house: spindle-4411\""],

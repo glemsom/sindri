@@ -1,6 +1,7 @@
 //! The nine evals: a prompt, the conversation a recorded run replays, and the
 //! checks that make the eval fail when the product regresses.
 
+use crate::catalog;
 use crate::checks;
 use crate::run::Run;
 
@@ -90,7 +91,7 @@ pub fn all() -> Vec<Case> {
             stdin_file: None,
             args: &[],
             recorded: "9-catalog-triggers",
-            check: checks::the_catalog_triggers,
+            check: catalog::the_catalog_triggers,
         },
     ]
 }
