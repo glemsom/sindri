@@ -3,7 +3,7 @@
 //! becomes one, the refusal a run in flight earns, and a session that forgets.
 
 use super::*;
-use sindri_tui::driver::Loaded;
+use sindri_tui::driver::Invoked;
 
 /// An app whose catalog holds exactly these skills, to a human's eye.
 fn skilled(names: &[&str]) -> App {
@@ -29,12 +29,12 @@ fn landed(app: &mut App, name: &str) {
     app.event(Event::SkillLoaded {
         turn: 0,
         name: name.to_string(),
-        outcome: "loaded".to_string(),
+        outcome: Some("loaded".to_string()),
         body: format!(
             "outcome: loaded\nskill: {name}\n<skill_content name=\"{name}\">\nBe brief.\n</skill_content>\n"
         ),
     });
-    app.loaded(Ok(Loaded::Loaded(name.to_string())));
+    app.loaded(Ok(Invoked::Loaded(name.to_string())));
 }
 
 /// A line typed and sent: a command whose name alone opens the offer takes two
@@ -169,6 +169,44 @@ fn a_load_asked_for_during_a_run_is_refused_with_a_note() {
     assert!(
         said.contains("cannot load house-style while a run is in flight"),
         "the reader is told why nothing happened: {said}"
+    );
+}
+
+#[test]
+fn a_load_asked_for_while_one_is_still_in_flight_is_refused() {
+    let mut app = skilled(&["house-style", "release-checks"]);
+    sent(&mut app, "/skill:house-style");
+    assert_eq!(app.take_load(), Some("house-style".to_string()));
+
+    sent(&mut app, "/skill:release-checks");
+
+    assert!(
+        app.take_load().is_none(),
+        "a second load would leave the first answer releasing the wrong prompt"
+    );
+    let said = notes(&app);
+    assert!(
+        said.contains("cannot load release-checks while another skill is still loading"),
+        "{said}"
+    );
+}
+
+#[test]
+fn a_load_asked_for_while_a_new_session_is_being_proved_is_refused() {
+    let mut app = skilled(&["house-style"]);
+    sent(&mut app, "/new");
+    assert!(app.take_renew());
+
+    sent(&mut app, "/skill:house-style");
+
+    assert!(
+        app.take_load().is_none(),
+        "the thread that is on its way out is not one to write in"
+    );
+    assert!(
+        notes(&app).contains("while a new session is being started"),
+        "{}",
+        notes(&app)
     );
 }
 

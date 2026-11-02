@@ -198,11 +198,7 @@ fn row(fact: &Fact, width: usize) -> Row {
         // values hang off and flush to the rail's edge. The sandbox posture and
         // the skills in force are the two facts the frame says this way.
         Block::Posture | Block::Skills => {
-            let glyph = if fact.block() == Block::Skills {
-                "◆"
-            } else {
-                "⬢"
-            };
+            let glyph = fact.glyph();
             let said = format!(" {glyph} {} ", fact.value());
             let pad = width.saturating_sub(said.width());
             let ink = if fact.block() == Block::Skills {
@@ -215,7 +211,7 @@ fn row(fact: &Fact, width: usize) -> Row {
                     Span::styled(" ".repeat(pad), theme::raised()),
                     Span::styled(said, ink),
                 ]),
-                format!("{glyph} {}", fact.value()),
+                fact.line(),
             )
         }
         _ => {
@@ -276,21 +272,17 @@ fn rule(width: usize) -> Row {
     Row::bare(Line::from(Span::styled("─".repeat(width), theme::faint())))
 }
 
-/// A posture is a chip: stated on the raised tier, so it reads as the one
-/// thing on the rail that is not a label and a value — and the only row of the
-/// rail that carries a colour behind it. The first frame's posture line
-/// borrows the same one.
-///
-/// Its ink is the frame's word on the boundary, so it cannot say "fine" of a
-/// run that gave the boundary up: the value `--yolo-unsafe` yields begins
-/// `unsafe`, and that one posture is painted bad while every other is good.
 /// The skills chip's ink: the accent, because what is in force is the frame
-/// pointing at something rather than the boundary's state. One raised tier, like
-/// the posture's, so the two chips read as the same kind of fact.
+/// pointing at something rather than a state of the boundary. One raised tier,
+/// like the posture's, so the two chips read as the same kind of fact.
 pub(crate) fn skills_chip() -> ratatui::style::Style {
     theme::raised().patch(theme::prompt())
 }
 
+/// The posture's ink is the frame's word on the boundary, so it cannot say
+/// "fine" of a run that gave the boundary up: the value `--yolo-unsafe` yields
+/// begins `unsafe`, and that one posture is painted bad while every other is
+/// good. The first frame's posture line borrows the same chip.
 pub(crate) fn chip(said: &str) -> ratatui::style::Style {
     let ink = if said.starts_with("unsafe") {
         theme::bad()

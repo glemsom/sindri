@@ -179,7 +179,8 @@ carries no spine of its own, and the inset holds the first word of a fact off th
 light strip, which sits against the rail's first column. The sandbox posture is a chip
 (`⬢ bwrap · 1 writable`) rather than another pair, right-aligned on the edge the values
 hang off. The rail is chrome, not a surface: it draws no fill and lets the canvas
-through, so the one band of it with a colour behind it is the row the chip sits on. What
+through, so the bands of it with a colour behind them are the rows its **chip**s sit
+on. What
 a row copies is the fact — `context 38%` — never the leader that drew it.
 The margin between the words and the rail stays canvas, and on a terminal that speaks
 Kitty graphics it carries the seam's light strip (`seam.rs`): from the top of the body

@@ -35,11 +35,14 @@ pub fn rows(call: &Call, width: u16, now: Duration) -> Vec<Line<'static>> {
     // for that to disagree with.
     let (glyph, status, accent) = match (&call.over, &call.skill) {
         // A load has no exit and no clock to run: its row says what it made
-        // true, and what it read is behind the fold.
+        // true, and what it read is behind the fold. A repeat is neither a
+        // success nor a failure — nothing moved — so it gets a dot rather than
+        // a tick or a cross.
         (Some(_), Some(skill)) if skill.in_force() => {
             ("✓", skill.said().to_string(), theme::good())
         }
-        (Some(_), Some(skill)) => ("✗", skill.said().to_string(), theme::bad()),
+        (Some(_), Some(skill)) if skill.failed() => ("✗", skill.said().to_string(), theme::bad()),
+        (Some(_), Some(skill)) => ("·", skill.said().to_string(), theme::faint()),
         (None, Some(_)) => ("⏺", "loading".to_string(), theme::faint()),
         (None, None) => ("⏺", "running".to_string(), theme::faint()),
         (Some(CallOver::Exited(0)), None) => ("✓", "exit 0".to_string(), theme::good()),

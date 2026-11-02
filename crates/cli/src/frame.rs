@@ -14,7 +14,7 @@ use sindri_core::exec::{BashExecutor, Outcome, OutputSink, SandboxExecutor, Side
 use sindri_core::provider::{self, Client, Usage};
 use sindri_core::sandbox::{Enforcement, SandboxPolicy};
 use sindri_core::session::{LoopError, Session};
-use sindri_tui::driver::{CallOver, Driver, Finished, Loaded, Spilled, Stop, Tap, Tokens};
+use sindri_tui::driver::{CallOver, Driver, Finished, Invoked, Spilled, Stop, Tap, Tokens};
 use sindri_tui::run::{self, Ending};
 use sindri_tui::settings::Missing;
 use sindri_tui::{Card, Launch};
@@ -198,7 +198,7 @@ impl Driver for Front {
         }
     }
 
-    fn load(&mut self, skill: &str, tap: Tap) -> Result<Loaded, String> {
+    fn load(&mut self, skill: &str, tap: Tap) -> Result<Invoked, String> {
         // No prompt's clock and no prompt's flag: a load reads a file, and the
         // run behind it is given the frame's flag when it starts.
         let agent = self.conversation(&tap, Cancel::new());
@@ -211,20 +211,20 @@ impl Driver for Front {
                 // to no turn of a run.
                 turn: 0,
                 name: activated.name.clone(),
-                outcome: outcome.clone(),
+                outcome: Some(outcome.clone()),
                 body: activated.content.clone(),
             });
         }
         if activated.is_error {
-            let said = activated.content.trim();
-            return Err(said
-                .strip_prefix("tool_error: the call was not run: ")
-                .unwrap_or(said)
-                .to_string());
+            return Err(activated
+                .problem
+                .clone()
+                .unwrap_or_else(|| activated.content.trim().to_string()));
         }
-        Ok(match activated.loaded {
-            true => Loaded::Loaded(activated.name),
-            false => Loaded::Already(activated.name),
+        Ok(if activated.loaded {
+            Invoked::Loaded(activated.name)
+        } else {
+            Invoked::Already(activated.name)
         })
     }
 

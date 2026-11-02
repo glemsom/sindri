@@ -35,8 +35,9 @@ pub enum Event {
         name: String,
         /// The word the result opened with — `loaded`, `already_loaded`,
         /// `unreadable` — so a frame says which of the three it was without
-        /// reading the result.
-        outcome: String,
+        /// reading the result. Absent where the call never reached the tool and
+        /// was answered for it.
+        outcome: Option<String>,
         /// The result as the model will read it on every turn from here:
         /// frontmatter stripped, in its named wrapper, with its directory and
         /// the files beside the body.

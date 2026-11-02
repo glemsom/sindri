@@ -33,15 +33,12 @@ impl App {
         if self.running.is_some() || self.renew != Renew::Idle || self.is_loading() {
             return None;
         }
-        // A prompt the reader wrote after a skill starts once the load has
-        // landed, and behind anything they queued before it.
-        let prompt = match self.armed.take() {
-            Some(armed) => armed,
-            None => match self.queue.pop_front() {
-                Some(queued) => queued,
-                None if !self.sent || self.composer.is_blank() => return None,
-                None => self.composer.take(),
-            },
+        // What was queued runs first and in the order it was typed; a prompt the
+        // reader wrote after a skill comes after it, once the load has landed.
+        let prompt = match self.queue.pop_front().or_else(|| self.armed.take()) {
+            Some(next) => next,
+            None if !self.sent || self.composer.is_blank() => return None,
+            None => self.composer.take(),
         };
         self.sent = false;
         // The clock starts with the run: a marker says how long *this* run has
@@ -119,7 +116,7 @@ impl App {
                 name,
                 outcome,
                 body,
-            } => self.skill_loaded(turn, &name, &outcome, &body),
+            } => self.skill_loaded(turn, &name, outcome.as_deref(), &body),
         }
     }
 
@@ -129,7 +126,7 @@ impl App {
     /// row here, so every load is one row in the thread and never a silence.
     /// The body is kept behind that row: the thread says what is in force, and
     /// `Enter` is what opens the text.
-    fn skill_loaded(&mut self, turn: u32, name: &str, outcome: &str, body: &str) {
+    fn skill_loaded(&mut self, turn: u32, name: &str, outcome: Option<&str>, body: &str) {
         let announcing = self.entries.iter().rposition(|entry| {
             matches!(entry, Entry::Call(call) if call
                 .skill
@@ -149,13 +146,13 @@ impl App {
         };
         if let Some(Entry::Call(call)) = self.entries.get_mut(index) {
             if let Some(skill) = call.skill.as_mut() {
-                skill.outcome = Some(outcome.to_string());
+                skill.outcome = outcome.map(str::to_string);
             }
             for line in body.lines() {
                 call.push(Side::Stdout, line.to_string());
             }
         }
-        if outcome == "loaded" {
+        if outcome == Some("loaded") {
             self.rail.skill_loaded(name);
         }
         self.dirty();

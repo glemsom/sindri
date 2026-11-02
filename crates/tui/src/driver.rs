@@ -54,7 +54,7 @@ pub struct Finished {
 /// What a front end made of a skill a human asked for: the body is in the
 /// conversation, or it was already there and nothing moved.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Loaded {
+pub enum Invoked {
     /// The skill went into the conversation, and the row that says so arrived as
     /// an `Event::SkillLoaded` through the tap.
     Loaded(String),
@@ -71,7 +71,7 @@ pub trait Driver: Send {
     /// The load is announced as an `Event::SkillLoaded` on `tap`, which is how
     /// the transcript's row and the rail's chip are drawn; `Err` is why it could
     /// not be, said in the transcript where an error belongs.
-    fn load(&mut self, skill: &str, tap: Tap) -> Result<Loaded, String> {
+    fn load(&mut self, skill: &str, tap: Tap) -> Result<Invoked, String> {
         let _ = (skill, tap);
         Err("this front end cannot load a skill".to_string())
     }

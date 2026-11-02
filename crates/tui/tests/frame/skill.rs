@@ -22,7 +22,7 @@ fn loaded(app: &mut App, turn: u32, name: &str) {
     app.event(Event::SkillLoaded {
         turn,
         name: name.to_string(),
-        outcome: "loaded".to_string(),
+        outcome: Some("loaded".to_string()),
         body: BODY.to_string(),
     });
 }
@@ -122,7 +122,7 @@ fn a_new_session_takes_the_skills_chip_and_the_rows_with_the_thread() {
 }
 
 #[test]
-fn the_postures_row_is_still_one_ink_and_the_skills_row_is_the_accent() {
+fn the_skills_chip_is_one_run_of_the_accents_ink_on_the_raised_tier() {
     let mut app = app();
     loaded(&mut app, 1, "house-style");
     let cells = frame_cells(&mut app, 100, 30);

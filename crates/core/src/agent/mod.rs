@@ -304,11 +304,7 @@ impl Agent {
         self.emit(Event::SkillLoaded {
             turn,
             name,
-            outcome: outcome
-                .facts
-                .outcome
-                .clone()
-                .unwrap_or_else(|| "refused".to_string()),
+            outcome: outcome.facts.outcome.clone(),
             body: outcome.content.clone(),
         });
     }

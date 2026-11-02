@@ -84,8 +84,7 @@ impl Fact {
     /// The fact as one strip entry, with the column's label.
     pub fn line(&self) -> String {
         match self.block {
-            Block::Posture => format!("⬢ {}", self.value),
-            Block::Skills => format!("◆ {}", self.value),
+            Block::Posture | Block::Skills => format!("{} {}", self.glyph(), self.value),
             _ => format!("{} {}", self.label, self.value),
         }
     }
@@ -93,8 +92,7 @@ impl Fact {
     /// The same fact where the strip has no room for the column's label.
     pub fn brief(&self) -> String {
         match self.block {
-            Block::Posture => format!("⬢ {}", self.value),
-            Block::Skills => format!("◆ {}", self.value),
+            Block::Posture | Block::Skills => format!("{} {}", self.glyph(), self.value),
             _ => format!("{} {}", self.short_label(), self.value),
         }
     }
@@ -194,8 +192,9 @@ impl Fact {
     }
 
     /// The glyph a chip opens with: the boundary for the posture, the skills it
-    /// keeps for the skills.
-    fn glyph(&self) -> &'static str {
+    /// keeps for the skills. The one place either is written down, so the row
+    /// the rail draws and the entry the strip says cannot disagree.
+    pub fn glyph(&self) -> &'static str {
         match self.block {
             Block::Skills => "◆",
             _ => "⬢",

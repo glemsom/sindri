@@ -4,7 +4,7 @@
 //! conversation the turn will be sent with.
 
 use super::App;
-use crate::driver::Loaded;
+use crate::driver::Invoked;
 
 /// Where `/skill` has got to, in the same three states as [`Renew`]: the frame
 /// marks the request, the loop hands it to the front end once, and the turn a
@@ -43,12 +43,12 @@ impl App {
     /// itself arrives as the event every other load arrives as — one row and one
     /// chip, whether a human asked or the model did — so a repeat and a refusal
     /// are the two answers left to say here.
-    pub fn loaded(&mut self, loaded: Result<Loaded, String>) {
+    pub fn loaded(&mut self, loaded: Result<Invoked, String>) {
         self.loading = Loading::Idle;
         match loaded {
             // The row and the rail's chip came with the event the front end
             // sent before this answer; nothing is left to say.
-            Ok(Loaded::Loaded(_) | Loaded::Already(_)) => {}
+            Ok(Invoked::Loaded(_) | Invoked::Already(_)) => {}
             Err(error) => {
                 self.note_error(error);
                 // A prompt waiting on a load that did not happen is not run: it

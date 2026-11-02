@@ -197,14 +197,15 @@ impl Skill {
         }
     }
 
-    /// What the row says the load did, in the fewest cells: a status column is
+    /// What the row says the load did, in the fewest cells: the status column is
     /// eight wide, and `already_loaded` is not a word a row has room for.
     pub fn said(&self) -> &str {
         match self.outcome.as_deref() {
-            Some("loaded") | None => "loaded",
             Some("already_loaded") => "already",
-            Some("unreadable") => "unreadable",
-            Some(other) => other,
+            Some("unreadable") => "unread",
+            // A call no tool answered never reached a skill at all.
+            None => "not run",
+            Some(word) => word,
         }
     }
 
@@ -212,6 +213,13 @@ impl Skill {
     /// the transcript's count of loads are both made from.
     pub fn in_force(&self) -> bool {
         self.outcome.as_deref() == Some("loaded")
+    }
+
+    /// Whether the call failed: a skill that could not be read, or a call no
+    /// tool answered. A repeat is neither — nothing moved, and nothing went
+    /// wrong.
+    pub fn failed(&self) -> bool {
+        matches!(self.outcome.as_deref(), Some("unreadable") | None)
     }
 }
 

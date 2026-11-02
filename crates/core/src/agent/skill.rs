@@ -274,6 +274,9 @@ pub struct Activated {
     /// The word the result opened with — `loaded`, `already_loaded`,
     /// `unreadable` — or none where the call never reached the tool.
     pub outcome: Option<String>,
+    /// Why a call no tool answered was not run, in the words the result was
+    /// written with: what a frame says in place of a load it could not make.
+    pub problem: Option<String>,
 }
 
 /// The bodies this conversation has received. It lives with the agent and is
