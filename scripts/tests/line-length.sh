@@ -35,6 +35,17 @@ test_a_tree_under_the_limit_passes_and_names_the_limit() {
     assert_contains "$OUT" "800"
 }
 
+test_a_file_at_the_limit_passes_and_one_line_under_does_too() {
+    # The boundary from the inside: `-le` and `-lt` differ by exactly this one
+    # line, so nothing but a file at 800 tells the two apart.
+    long_file src/under.rs 799
+    long_file src/exact.rs 800
+    track
+    audit
+    assert_status 0 "$STATUS"
+    assert_contains "$OUT" "2 files, all at or under 800 lines"
+}
+
 test_a_file_over_the_limit_is_reported_by_path_and_size() {
     long_file src/long.rs 801
     track
