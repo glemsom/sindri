@@ -59,7 +59,7 @@ under one number. The variants differ only in the prompt.
 | v11 | v02, plus the minimal patch of v04 and the narrow proof of v05 | 121 |
 | v12 | v11, plus "match a name whole so a longer name starting with it is left alone" | 136 |
 | v13 | v02, plus "A fence marked `mermaid` is drawn as a picture: draw what prose cannot." — this one landed | 106 |
-| v14 | v13, plus "Put the steps of one task in one script: filter there, print only what you concluded, and keep intermediates in `$TMPDIR`, which outlives the call." — shipped unmeasured, see below | 131 |
+| v14 | v13, plus "Put the steps of one task in one script: filter there, print only what you concluded, and keep intermediates in `$TMPDIR`, which outlives the call." — written and not shipped, see below | 131 |
 
 ## The ranking, `deepseek-v4.1-flash`, two repetitions each
 
@@ -168,20 +168,28 @@ shortened diagram sentence:
 `make check` is unchanged and green under it: the offline evals replay their
 fixtures and assert the same ten things, because the prompt is not the answer.
 
-## The batching sentence, shipped before it was measured
+## The batching sentence, in the tool description
 
-`PREAMBLE` now also carries v14's sentence. It was written from v07 — *"Do several
-steps in one turn"*, 74,804 tokens against v00's 121,885 with no answer lost — and
-compressed, because the same doctrine is already stated once in the `bash` tool's
-description and a second full sentence in the prompt would be the same advice paid for
-twice per request. The two words v07 did not need are here instead: *filter there*, and
-`$TMPDIR`, which names the one channel a result can cross the turn in without entering
-the conversation.
+`PREAMBLE` ships at its measured seventy-five words: the reading rule and the shortened
+diagram sentence, and nothing else. The batching doctrine is not one of its sentences.
+It lives in the `bash` tool's description — the text `crates/core/src/agent/tool.rs`
+derives beside the policy — where it is read while the model is choosing a tool. A
+second copy in the preamble would be the same advice paid for twice per request. As the
+description writes it:
 
-It is in `scripts/bench-system-prompt/variants.py` as `v14` and **has not been run**.
-The claim it rests on is v07's, not its own: a prompt that puts the steps of a task in
-one script buys turns, and a prompt that says what a result costs buys bytes. Run it
-before believing the second half.
+> put the steps of one task in one script, not in three calls.
+
+The rest of what v07 asked for travelled with it, the temp-directory clause included,
+since a copy here would be re-sent on every turn of every run.
+`crates/core/src/provider/rig_wire.rs` holds the two texts apart: its test
+`the_script_sentence_is_stated_once_and_in_the_tool_description` walks the phrases that
+were once paid for twice — the batching clause among them — and asserts the preamble
+carries none of them.
+
+v14 as written — v13 plus that sentence — is in `scripts/bench-system-prompt/variants.py`
+and **has not been run**. The claim the shipped move rests on is v07's, not its own: a
+prompt that puts the steps of a task in one script buys turns, and a prompt that says
+what a result costs buys bytes. Run it before believing the second half.
 
 ## What this does not prove
 
