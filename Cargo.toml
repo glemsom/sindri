@@ -35,7 +35,11 @@ ratatui = { version = "0.29", default-features = false, features = ["crossterm"]
 # this line from being a second reason to fetch them.
 crossterm = { version = "0.28", default-features = false, features = ["events"] }
 ratatui-image = { version = "8", default-features = false, features = ["image-defaults", "crossterm"] }
-image = { version = "0.25", default-features = false, features = ["png"] }
+# The four formats the picture store draws, named rather than defaulted: a
+# feature here is a decoder to link, and the store refuses a format it has none
+# for — so that set is written here, not left to a feature `ratatui-image` turns
+# on transitively.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 pulldown-cmark = { version = "0.12", default-features = false }
 syntect = { version = "5", default-features = false, features = ["default-fancy"] }
 unicode-width = "0.2"

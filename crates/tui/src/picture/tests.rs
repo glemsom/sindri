@@ -291,6 +291,7 @@ fn a_picture_in_any_format_the_decoders_link_is_measured() {
         image::Rgb([10, 200, 30]),
     ));
     for (format, name) in [
+        (ImageFormat::Png, "plot.png"),
         (ImageFormat::Jpeg, "photo.jpg"),
         (ImageFormat::Gif, "plot.gif"),
         (ImageFormat::WebP, "shot.webp"),
@@ -299,12 +300,15 @@ fn a_picture_in_any_format_the_decoders_link_is_measured() {
         picture
             .write_to(&mut File::create(&path).expect("a file to write"), format)
             .expect("an encoder the decoders link");
+        let mut store = store_here(scratch.path());
+        let worth = store.measure(name, 60);
         assert!(
-            matches!(
-                store_here(scratch.path()).measure(name, 60),
-                Worth::Drawn { .. }
-            ),
+            matches!(worth, Worth::Drawn { .. }),
             "{name} is a picture the store draws"
+        );
+        assert!(
+            store.protocol(&worth).is_some(),
+            "{name} decodes to pixels and is not only a header"
         );
     }
 }

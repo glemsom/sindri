@@ -1,22 +1,26 @@
-//! The dependency the frame is built on, as the workspace manifest declares it:
-//! crossterm is asked for a Linux terminal's events and never for its `default`
-//! set, whose `windows` member pins Win32 bindings nothing here can compile.
-//! The manifest is the only place that request is written down, so it is
-//! asserted rather than trusted — the reader who wants a feature back reads the
-//! line with the comment above it, and is meant to be stopped there.
+//! The dependencies the frame is built on, as the workspace manifest declares
+//! them: crossterm is asked for a Linux terminal's events and never for its
+//! `default` set, whose `windows` member pins Win32 bindings nothing here can
+//! compile, and `image` is asked for exactly the formats the picture store
+//! draws. The manifest is the only place those requests are written down, so
+//! they are asserted rather than trusted — the reader who wants a feature back
+//! reads the line with the comment above it, and is meant to be stopped there.
 
 /// The manifest, as committed: `include_str!` so the test cannot pass against a
 /// file it read from the wrong directory.
 const MANIFEST: &str = include_str!("../../../Cargo.toml");
 
-/// The workspace's line for crossterm, and the comment lines directly above it —
+/// The picture source, as committed, for the formats it says may be drawn.
+const PICTURE_SOURCE: &str = include_str!("../src/picture/source.rs");
+
+/// The workspace's line for `name`, and the comment lines directly above it —
 /// the two a reader takes together.
-fn crossterm_declaration() -> (String, String) {
+fn declaration(name: &str) -> (String, String) {
     let lines: Vec<&str> = MANIFEST.lines().collect();
     let index = lines
         .iter()
-        .position(|line| line.starts_with("crossterm = "))
-        .unwrap_or_else(|| panic!("the manifest declares no `crossterm`"));
+        .position(|line| line.starts_with(&format!("{name} = ")))
+        .unwrap_or_else(|| panic!("the manifest declares no `{name}`"));
     let mut above: Vec<&str> = lines[..index]
         .iter()
         .rev()
@@ -29,7 +33,7 @@ fn crossterm_declaration() -> (String, String) {
 
 #[test]
 fn the_manifest_asks_crossterm_for_events_and_never_for_windows() {
-    let (comment, line) = crossterm_declaration();
+    let (comment, line) = declaration("crossterm");
 
     // `windows` is the feature that names the Win32 bindings — `crossterm_winapi`
     // and `winapi` — and no crate here holds a Windows conditional.
@@ -45,8 +49,9 @@ fn the_manifest_asks_crossterm_for_events_and_never_for_windows() {
     );
     // Keys, mouse and resize reach the frame through `events`; it is what the
     // frame's key and mouse tests would miss.
-    assert!(
-        line.contains(r#"features = ["events"]"#),
+    assert_eq!(
+        features(&line),
+        ["events"],
         "the frame is fed by `events` and by no other feature: {line:?}"
     );
     // The reason, in the words the next reader needs before they add it back.
@@ -55,6 +60,81 @@ fn the_manifest_asks_crossterm_for_events_and_never_for_windows() {
             comment.to_lowercase().contains(word),
             "the comment above the dependency says what the feature set is and \
              what `windows` would fetch: {comment:?}"
+        );
+    }
+}
+
+/// What `text` holds between `opener` and the first `closer` after it — the one
+/// way this file reads a list out of a file, whether the list is `DRAWS` or a
+/// feature set.
+fn between<'a>(text: &'a str, opener: &str, closer: &str) -> &'a str {
+    let start = text
+        .find(opener)
+        .unwrap_or_else(|| panic!("no {opener:?} to read"));
+    let rest = &text[start + opener.len()..];
+    let end = rest
+        .find(closer)
+        .unwrap_or_else(|| panic!("{opener:?} never closes with {closer:?}"));
+    &rest[..end]
+}
+
+/// The formats the store draws, as words the manifest could ask for: `DRAWS`
+/// in the picture source, whose `ImageFormat` variants are the crate's own names
+/// for them, lowercased because a cargo feature is spelled that way.
+fn drawn_formats() -> Vec<String> {
+    let block = between(PICTURE_SOURCE, "const DRAWS:", "];");
+    block
+        .match_indices("ImageFormat::")
+        .map(|(at, marker)| {
+            let variant: String = block[at + marker.len()..]
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric())
+                .collect();
+            assert!(
+                !variant.is_empty(),
+                "`DRAWS` names no format after `ImageFormat::`"
+            );
+            variant.to_ascii_lowercase()
+        })
+        .collect()
+}
+
+/// The features a manifest line asks for, as it writes them.
+fn features(line: &str) -> Vec<String> {
+    between(line, "features = [", "]")
+        .split(',')
+        .map(|feature| feature.trim().trim_matches('"').to_owned())
+        .filter(|feature| !feature.is_empty())
+        .collect()
+}
+
+#[test]
+fn the_image_crate_is_asked_for_every_format_the_store_draws() {
+    let (_, line) = declaration("image");
+    let drawn = drawn_formats();
+    assert_eq!(
+        drawn.len(),
+        4,
+        "the store draws four formats, and the manifest is read against them: {drawn:?}"
+    );
+    // Defaults off, as the crossterm line's are: `image`'s default set is every
+    // format it can decode, which is more than the store draws and more than the
+    // store's refusals name.
+    assert!(
+        line.contains("default-features = false"),
+        "`image`'s defaults are not the set the store draws: {line:?}"
+    );
+    let asked = features(&line);
+    for format in &drawn {
+        assert!(
+            asked.contains(format),
+            "the store draws {format:?} and the manifest never asks for it: {line:?}"
+        );
+    }
+    for feature in &asked {
+        assert!(
+            drawn.contains(feature),
+            "the manifest asks for {feature:?}, which the store does not draw: {line:?}"
         );
     }
 }
