@@ -1,0 +1,17 @@
+{
+  "id": "msg_ablation",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "The greeting now includes the name, so the suite passes."
+    }
+  ],
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 420,
+    "output_tokens": 40
+  }
+}

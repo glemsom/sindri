@@ -517,3 +517,12 @@ on the `api_key` row.
 check and the doctor's report whole: sized from the rows that report wrapped into, paged
 with `PgUp`/`PgDn` when the screen is shorter, and left only by a key — a resize lays it
 out again rather than dismissing it.
+
+**ablation** — one **built-in skill** measured against its own absence: two builds of the
+binary that differ only in the built-in table, one **arm** each — `with`, the built-in in the
+**catalog**, and `without`, the table emptied — run on one task shaped like the capability the
+body claims and scored by a rule rather than by eye. What the line costs is paid by every run
+and what the body costs is paid after a load, so an ablation decides whether the body changes
+the outcome for less than the line is worth; the `activated` field is what tells a built-in no
+run reached from one that was reached and did not help. The machine is
+`scripts/bench-skill-ablation`, the reading is `docs/skill-ablation.md`.

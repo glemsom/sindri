@@ -1,0 +1,7 @@
+# Build products of the bench: the two arm binaries, each run's directory, and
+# the fixture copy a run works in. `results/` is committed — a number nobody can
+# recompute is a claim.
+bin-with
+bin-without
+runs/
+__pycache__/

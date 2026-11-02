@@ -1,0 +1,25 @@
+{
+  "id": "msg_ablation",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "Reading the suite and the file it exercises."
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_read",
+      "name": "bash",
+      "input": {
+        "command": "sed -n '1,40p' tests/run.sh src/greet.sh"
+      }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 980,
+    "output_tokens": 60
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "id": "msg_ablation",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "Now the proof: run the suite."
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_prove",
+      "name": "bash",
+      "input": {
+        "command": "sh tests/run.sh"
+      }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 1410,
+    "output_tokens": 40
+  }
+}

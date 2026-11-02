@@ -1,0 +1,25 @@
+{
+  "id": "msg_ablation",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "`say_hello` drops the name it is given. Patching it."
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_patch",
+      "name": "bash",
+      "input": {
+        "command": "python3 - <<'PY'\nfrom pathlib import Path\nPath(\"src/greet.sh\").write_text(\"\"\"# greet.sh: the greeting itself.\n\nsay_hello() {\n    echo \"Hello, $1!\"\n}\n\"\"\")\nPY"
+      }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 1240,
+    "output_tokens": 80
+  }
+}

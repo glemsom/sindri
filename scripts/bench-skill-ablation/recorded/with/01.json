@@ -1,0 +1,25 @@
+{
+  "id": "msg_ablation",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "The run's own rules say to read before writing, so I will load the built-in skill and then look at what fails."
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_skill",
+      "name": "skill",
+      "input": {
+        "name": "sindri"
+      }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 120,
+    "output_tokens": 40
+  }
+}

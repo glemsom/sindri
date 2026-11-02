@@ -1,0 +1,17 @@
+{
+  "id": "msg_ablation",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "`say_hello` now echoes the name it is given, so `sh tests/run.sh` prints `all tests pass`. I changed `src/greet.sh` and nothing else."
+    }
+  ],
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 1520,
+    "output_tokens": 70
+  }
+}
