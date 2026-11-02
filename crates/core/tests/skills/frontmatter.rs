@@ -2,8 +2,7 @@
 //! colons, nested metadata, keys no specification knows — and the two ways a
 //! `SKILL.md` is refused: no description, and no YAML to read.
 
-use crate::fixtures::{repo, skill};
-use sindri_core::skills::discover;
+use crate::fixtures::{repo, scanned, skill};
 
 #[test]
 fn the_two_invocation_flags_are_read_as_top_level_flags() {
@@ -20,7 +19,7 @@ fn the_two_invocation_flags_are_read_as_top_level_flags() {
         "---\nname: model-only\ndescription: Reached for by the model.\nuser-invocable: false\n---\n",
     );
 
-    let catalog = discover(&workspace, None);
+    let catalog = scanned(&workspace, None);
 
     let model_only = &catalog.skills[0];
     assert_eq!(model_only.name, "model-only", "sorted by name");
@@ -62,7 +61,7 @@ fn the_frontmatter_shapes_a_real_collection_carries_are_read_and_unknown_keys_ig
         "---\nname: teach\ndescription: Teach a concept within the workspace.\nargument-hint: \"What would you like to learn about?\"\nlicense: MIT\nallowed-tools: bash rg\n---\n",
     );
 
-    let catalog = discover(&workspace, None);
+    let catalog = scanned(&workspace, None);
 
     assert!(
         catalog.refused.is_empty(),
@@ -95,7 +94,7 @@ fn a_skill_with_no_description_is_refused_with_its_file_and_line() {
         "---\nname: empty-description\ndescription:\n---\n",
     );
 
-    let catalog = discover(&workspace, None);
+    let catalog = scanned(&workspace, None);
 
     assert!(catalog.skills.is_empty(), "neither is a skill: {catalog:?}");
     assert_eq!(catalog.refused.len(), 2, "{catalog:?}");
@@ -139,7 +138,7 @@ fn a_skill_md_that_is_not_yaml_is_refused_with_the_line_that_broke_it() {
         "name: unfenced\ndescription: No fence at all.\n",
     );
 
-    let catalog = discover(&workspace, None);
+    let catalog = scanned(&workspace, None);
 
     assert!(catalog.skills.is_empty(), "{catalog:?}");
     assert_eq!(catalog.refused.len(), 2, "{catalog:?}");

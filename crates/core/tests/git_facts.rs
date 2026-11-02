@@ -205,10 +205,13 @@ fn a_launch_probes_the_repository_root_once_for_the_rules_and_the_skills() {
             .expect("the file"),
         "the rules are read from the root the same probe named"
     );
+    // The binary's own skill is in every catalog; this test is about the three
+    // scopes the one probe finds.
     let scopes: Vec<(&str, Scope)> = session
         .catalog()
         .skills
         .iter()
+        .filter(|skill| skill.scope != Scope::Builtin)
         .map(|skill| (skill.name.as_str(), skill.scope))
         .collect();
     assert_eq!(

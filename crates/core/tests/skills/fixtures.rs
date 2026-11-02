@@ -3,6 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
+use sindri_core::skills::{Catalog, Scope, discover};
 use tempfile::TempDir;
 
 /// A repository with nothing committed and a workspace three crates deep inside
@@ -32,4 +33,13 @@ pub fn skill(at: &Path, name: &str, body: &str) {
     let dir = at.join(name);
     std::fs::create_dir_all(&dir).expect("a skill directory");
     std::fs::write(dir.join("SKILL.md"), body).expect("a SKILL.md");
+}
+
+/// The catalog of one tree with the skills the binary ships taken out. A test in
+/// this module reads what a directory holds, and the built-ins are in every tree
+/// alike; the ones that are about them read `discover` whole, in `builtin.rs`.
+pub fn scanned(workspace: &Path, home: Option<&Path>) -> Catalog {
+    let mut catalog = discover(workspace, home);
+    catalog.skills.retain(|skill| skill.scope != Scope::Builtin);
+    catalog
 }

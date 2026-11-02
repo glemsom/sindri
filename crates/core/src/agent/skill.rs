@@ -109,8 +109,8 @@ fn describe(skills: &[Skill]) -> ToolSpec {
     let mut description = String::from(
         "Loads one skill — instructions written for you — into this conversation. Call it \
          before acting when a task is one it covers: the result is the skill's body with its \
-         frontmatter stripped, together with the skill's directory and the files beside the \
-         body, so a relative reference in the body resolves.\n\
+         frontmatter stripped, with its files beside it — listed, and sent with the body when \
+         the skill has no directory — so a relative reference in the body resolves.\n\
          Loads once per conversation: a second call answers `already_loaded` with no body.\n\
          Skills:\n",
     );
@@ -137,13 +137,17 @@ fn describe(skills: &[Skill]) -> ToolSpec {
 /// What the model is handed for a load: the body in a named wrapper, and beside
 /// it where the skill lives and what is in there, so `references/api.md` in the
 /// body is a file the model can open with `bash`.
+///
+/// A built-in has no directory, so none is named: it is the one skill a path
+/// would have to be invented for, and the binary's files are sent with the body
+/// instead of being left as references to a tree that is not on disk.
 fn activation(skill: &Skill, body: &str) -> String {
     let files = skill.listing();
-    let mut out = format!(
-        "outcome: loaded\nskill: {}\ndir: {}\nfiles:\n",
-        skill.name,
-        skill.dir.display()
-    );
+    let mut out = format!("outcome: loaded\nskill: {}\n", skill.name);
+    if let Some(dir) = skill.dir() {
+        out.push_str(&format!("dir: {}\n", dir.display()));
+    }
+    out.push_str("files:\n");
     for file in files.iter().take(LISTED) {
         out.push_str(&format!("  {file}\n"));
     }
@@ -154,17 +158,24 @@ fn activation(skill: &Skill, body: &str) -> String {
         "<skill_content name=\"{}\">\n{body}\n</skill_content>\n",
         skill.name
     ));
+    for file in skill.files() {
+        out.push_str(&format!(
+            "<skill_file path=\"{}\">\n{}\n</skill_file>\n",
+            file.path,
+            file.text.trim()
+        ));
+    }
     out
 }
 
 /// A skill whose file could not be read: the call ran, so it is a result and
 /// not a refusal of the call, and the model is told which file and why.
 fn refused(call: &Call, skill: &Skill, problem: &str, started: Instant) -> ToolOutcome {
-    let content = format!(
-        "outcome: unreadable\nskill: {}\ndir: {}\nproblem: {problem}\n",
-        skill.name,
-        skill.dir.display()
-    );
+    let mut content = format!("outcome: unreadable\nskill: {}\n", skill.name);
+    if let Some(dir) = skill.dir() {
+        content.push_str(&format!("dir: {}\n", dir.display()));
+    }
+    content.push_str(&format!("problem: {problem}\n"));
     ToolOutcome::new(call, content, true).with_facts(ToolFacts {
         outcome: Some("unreadable".to_string()),
         duration_ms: Some(millis(started)),

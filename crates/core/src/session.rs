@@ -100,7 +100,7 @@ pub struct Session {
     /// read this one value, so they cannot name different branches.
     git: Option<Git>,
     recorder: Arc<Recorder>,
-    /// The skills both scopes hold, read once at boot: the catalog is a fact
+    /// The skills all three scopes hold, read once at boot: the catalog is a fact
     /// about the tree, not about a turn.
     catalog: Catalog,
     /// The tool that carries the model-invocable ones, built with the catalog
@@ -236,7 +236,7 @@ impl Session {
         self.skill.clone()
     }
 
-    /// Every skill the scan found, both scopes and both invocation rights: what
+    /// Every skill found, all three scopes and both invocation rights: what
     /// a human may reach for is not what the model is handed.
     pub fn catalog(&self) -> &Catalog {
         &self.catalog

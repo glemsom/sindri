@@ -1,10 +1,10 @@
 //! Both scopes, the shadowing between them, and the shapes of the tree a scan
 //! has to survive: a link, a broken link, a directory that is not a skill.
 
-use sindri_core::skills::{Scope, discover};
+use sindri_core::skills::{Origin, Scope};
 use tempfile::TempDir;
 
-use crate::fixtures::{repo, skill};
+use crate::fixtures::{repo, scanned, skill};
 
 #[test]
 fn a_repo_skill_is_found_with_its_name_description_and_flags() {
@@ -15,7 +15,7 @@ fn a_repo_skill_is_found_with_its_name_description_and_flags() {
         "---\nname: house-style\ndescription: Short sentences, and no adverb goes unpunished.\n---\n\n# House style\n",
     );
 
-    let catalog = discover(&workspace, None);
+    let catalog = scanned(&workspace, None);
 
     assert_eq!(catalog.skills.len(), 1, "one skill, found: {catalog:?}");
     let found = &catalog.skills[0];
@@ -40,7 +40,7 @@ fn a_user_skill_is_found_and_says_so() {
         "---\nname: grilling\ndescription: Ask until the plan stops wobbling.\n---\n",
     );
 
-    let catalog = discover(workspace.path(), Some(home.path()));
+    let catalog = scanned(workspace.path(), Some(home.path()));
 
     assert_eq!(catalog.skills.len(), 1, "{catalog:?}");
     assert_eq!(catalog.skills[0].name, "grilling");
@@ -67,7 +67,7 @@ fn both_scopes_are_read_and_a_repo_skill_displaces_the_user_one_of_that_name() {
         "---\nname: house-style\ndescription: This repository's house style.\n---\n",
     );
 
-    let catalog = discover(&workspace, Some(home.path()));
+    let catalog = scanned(&workspace, Some(home.path()));
 
     let names: Vec<&str> = catalog
         .skills
@@ -82,14 +82,23 @@ fn both_scopes_are_read_and_a_repo_skill_displaces_the_user_one_of_that_name() {
     );
     assert_eq!(winner.scope, Scope::Repo);
     assert_eq!(catalog.shadowed.len(), 1, "the shadowing is recorded");
-    assert_eq!(catalog.shadowed[0].name, "house-style");
+    let shadow = &catalog.shadowed[0];
+    assert_eq!(shadow.winner.name, "house-style");
     assert_eq!(
-        catalog.shadowed[0].loser,
-        home.path().join(".agents/skills/house-style")
+        shadow.loser,
+        Origin {
+            scope: Scope::User,
+            name: "house-style".to_string(),
+            dir: Some(home.path().join(".agents/skills/house-style")),
+        }
     );
     assert_eq!(
-        catalog.shadowed[0].winner,
-        root.path().join(".agents/skills/house-style")
+        shadow.winner,
+        Origin {
+            scope: Scope::Repo,
+            name: "house-style".to_string(),
+            dir: Some(root.path().join(".agents/skills/house-style")),
+        }
     );
 }
 
@@ -108,7 +117,7 @@ fn the_catalog_names_each_skill_its_scope_and_who_may_invoke_it() {
         "---\nname: pr\ndescription: Use when writing a PR body.\nuser-invocable: false\n---\n",
     );
 
-    let report = discover(&workspace, Some(home.path())).report();
+    let report = scanned(&workspace, Some(home.path())).report();
 
     assert!(report.starts_with("skills: 2 found\n"), "{report}");
     assert!(
@@ -129,7 +138,7 @@ fn the_catalog_names_each_skill_its_scope_and_who_may_invoke_it() {
 fn an_empty_catalog_says_so_rather_than_saying_nothing() {
     let workspace = TempDir::new().expect("a workspace");
     assert_eq!(
-        discover(workspace.path(), None).report(),
+        scanned(workspace.path(), None).report(),
         "skills: none found\n"
     );
 }
@@ -152,7 +161,7 @@ fn a_symlinked_skill_directory_is_followed_and_a_broken_link_is_a_diagnostic() {
     std::os::unix::fs::symlink(root.path().join("gone"), scope.join("gone"))
         .expect("a link to nothing");
 
-    let catalog = discover(&workspace, None);
+    let catalog = scanned(&workspace, None);
 
     assert_eq!(catalog.skills.len(), 1, "{catalog:?}");
     assert_eq!(catalog.skills[0].name, "shared");
@@ -186,7 +195,7 @@ fn the_scan_is_one_level_deep_so_only_directories_holding_a_skill_md_are_skills(
     );
     std::fs::create_dir_all(scope.join("not-a-skill/reference")).expect("a plain directory");
 
-    let catalog = discover(&workspace, None);
+    let catalog = scanned(&workspace, None);
 
     let names: Vec<&str> = catalog
         .skills
@@ -211,7 +220,7 @@ fn the_repo_scope_never_reaches_above_the_repository_root() {
         "---\nname: not-ours\ndescription: Somebody else's repository.\n---\n",
     );
 
-    let catalog = discover(&workspace, None);
+    let catalog = scanned(&workspace, None);
 
     assert!(
         catalog.skills.is_empty(),
@@ -246,7 +255,7 @@ fn every_skills_directory_from_the_workspace_up_to_the_root_is_read_and_the_near
         "---\nname: shared\ndescription: This crate's.\n---\n",
     );
 
-    let catalog = discover(&workspace, None);
+    let catalog = scanned(&workspace, None);
 
     let names: Vec<&str> = catalog
         .skills
@@ -270,7 +279,11 @@ fn every_skills_directory_from_the_workspace_up_to_the_root_is_read_and_the_near
     assert_eq!(catalog.shadowed.len(), 1, "the root's one is recorded");
     assert_eq!(
         catalog.shadowed[0].winner,
-        workspace.join(".agents/skills/shared")
+        Origin {
+            scope: Scope::Repo,
+            name: "shared".to_string(),
+            dir: Some(workspace.join(".agents/skills/shared")),
+        }
     );
 }
 
@@ -286,6 +299,6 @@ fn a_workspace_outside_any_repository_has_no_repo_scope() {
     // all: nothing above it is its scope.
     let loose = TempDir::new().expect("a directory with no repository");
 
-    assert!(discover(loose.path(), None).skills.is_empty());
-    assert_eq!(discover(&workspace, None).skills.len(), 1);
+    assert!(scanned(loose.path(), None).skills.is_empty());
+    assert_eq!(scanned(&workspace, None).skills.len(), 1);
 }

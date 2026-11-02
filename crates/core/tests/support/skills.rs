@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use sindri_core::skills::{Catalog, discover};
+use sindri_core::skills::{Catalog, Scope, discover};
 
 /// One skill directory under `workspace`, holding a `SKILL.md` with `fields`
 /// under `name` and `body` below the fence. Returns the directory.
@@ -31,7 +31,10 @@ pub fn reference(dir: &Path, path: &str, text: &str) {
 }
 
 /// The catalog the workspace holds, with no user scope: a test's collection is
-/// its own and never the host's.
+/// its own and never the host's — and with the skills the binary ships taken
+/// out, since these tests are about what a directory holds.
 pub fn catalog(workspace: &Path) -> Catalog {
-    discover(workspace, None)
+    let mut catalog = discover(workspace, None);
+    catalog.skills.retain(|skill| skill.scope != Scope::Builtin);
+    catalog
 }

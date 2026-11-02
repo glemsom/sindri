@@ -189,7 +189,11 @@ fn activation_returns_the_body_inside_a_named_wrapper_with_its_directory_and_fil
     let workspace = tempfile::TempDir::new().expect("workspace");
     let catalog = alpha(workspace.path());
     let tool = tool(&catalog);
-    let dir = catalog.skills[0].dir.display().to_string();
+    let dir = catalog.skills[0]
+        .dir()
+        .expect("a scanned skill has a directory")
+        .display()
+        .to_string();
 
     let outcome = tool.call(&load("call_1", "alpha"), "alpha", &Default::default());
 
@@ -249,7 +253,10 @@ fn a_skill_file_that_cannot_be_read_is_a_result_that_names_it() {
     let workspace = tempfile::TempDir::new().expect("workspace");
     let catalog = alpha(workspace.path());
     let tool = tool(&catalog);
-    std::fs::remove_file(catalog.skills[0].dir.join("SKILL.md")).expect("the file goes");
+    let dir = catalog.skills[0]
+        .dir()
+        .expect("a scanned skill has a directory");
+    std::fs::remove_file(dir.join("SKILL.md")).expect("the file goes");
 
     let outcome = tool.call(&load("call_1", "alpha"), "alpha", &Default::default());
 

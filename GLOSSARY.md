@@ -169,7 +169,7 @@ nearness: `builtin`, compiled into the binary; `user`, under the home directory 
 `~/.agents/skills`; and `repo`, at every `.agents/skills` between the workspace and its
 repository root. The specification governs what is inside a skill directory and says nothing
 about where one lives, so these paths are ours. The code's word for it is `Scope`, and its
-values are `User` and `Repo` today, with `Builtin` the third ADR 0004 decides on.
+three values are `Builtin`, `User` and `Repo`, in that order of nearness.
 
 **built-in skill** — a **skill** shipped inside the binary rather than installed to a path:
 its `SKILL.md` is compiled in, so there is no directory to be absent, stale or unwritable,
@@ -177,13 +177,16 @@ and nothing an upgrade can leave behind as the previous release's instructions. 
 lowest of the three **skill scopes**, so a `user` skill of the same name shadows it and a
 `repo` skill shadows them both: a user who disagrees with a built-in drops their own skill of
 the same name in `~/.agents/skills` and it wins. Its **scope** is a field and not an
-inference, so `sindri doctor` prints it beside the skill's name and names the built-in a
-nearer skill displaced. It is loaded once per **session** like any other skill, through
+inference, so `sindri doctor` prints it beside the skill's name — with `(compiled in)` where
+a scanned skill's directory would go, there being no directory to print — and names the
+built-in a nearer skill displaced. It is loaded once per **session** like any other skill, through
 the `skill` tool and no other way. The record is `docs/adr/0004-built-in-skills.md`.
 
 **activation** — one `skill` call's result: the body with the frontmatter stripped, in a
 named `<skill_content>` wrapper, with the skill's directory and its file listing beside
-it so a relative reference in the body resolves. Once per **session** and no more: a
+it so a relative reference in the body resolves. A **built-in skill** has no directory to
+name, so its files are sent with the body instead of left as references into a tree the
+binary never wrote. Once per **session** and no more: a
 second call is `already_loaded` with no body, because a **tool result** is sent again
 with every later turn, and the loaded set is cleared with the history it was made in.
 `/skill:name` is the same activation asked for by a human instead of by the model —
@@ -214,9 +217,10 @@ catalog the tool carries and callable, and absent from completion. A skill that 
 is one nobody may run, and the report says `none` for it.
 
 **shadowing** — one name two **skill scopes** carry. The nearer one's skill holds it and
-the farther one is recorded as shadowed, so a reader sees both what won and what it
-displaced: a repository's skill over the home directory's, a crate's over its
-repository's.
+the farther one is recorded as shadowed, by its scope, its name and its directory where it has
+one, so a reader sees both what won and what it displaced: a repository's skill over the home
+directory's, a crate's over its repository's, and both over a built-in's, which is the lowest
+and is named by its origin rather than by a path it has not.
 
 ## Terminal UI
 

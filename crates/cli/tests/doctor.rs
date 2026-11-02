@@ -69,9 +69,17 @@ fn doctor_prints_the_description_and_the_catalog_and_nothing_else() {
     let output = env.cmd().arg("doctor").output().expect("run");
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
 
-    assert!(
-        stdout.ends_with("skills: none found\n"),
-        "a machine with no skills says so rather than saying nothing: {stdout}"
+    // The binary ships a skill, so no machine has an empty catalog: what is
+    // held here is that the catalog is the last thing printed and says one row
+    // per skill in it.
+    let shipped = sindri_core::skills::builtins();
+    let (_, catalog) = stdout
+        .split_once(&format!("skills: {} found\n", shipped.skills.len()))
+        .unwrap_or_else(|| panic!("the catalog follows the description: {stdout}"));
+    assert_eq!(
+        catalog.lines().count(),
+        shipped.skills.len(),
+        "one row per skill and nothing after them: {stdout}"
     );
 
     // Nothing but the description and the catalog: every line is a known part
@@ -79,6 +87,7 @@ fn doctor_prints_the_description_and_the_catalog_and_nothing_else() {
     for line in stdout.lines() {
         let known = line == "sandbox policy"
             || line.starts_with("skills: ")
+            || line.starts_with("  builtin")
             || (line.starts_with("    /") && line.trim_start() == line.trim())
             || [
                 "enforcement: ",
@@ -355,11 +364,13 @@ fn doctor_lists_both_scopes_with_the_name_the_scope_and_who_may_invoke_it() {
     let assert = env.cmd().arg("doctor").assert().success();
     let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
 
+    let shipped = sindri_core::skills::builtins().skills.len();
+    let count = 2 + shipped;
     let report = stdout
-        .split_once("skills: 2 found\n")
+        .split_once(&format!("skills: {count} found\n"))
         .expect("the catalog says how many it found")
         .1;
-    let rows: Vec<&str> = report.lines().take(2).collect();
+    let rows: Vec<&str> = report.lines().take(count).collect();
     assert!(
         rows[0].contains("repo") && rows[0].contains("house-style") && rows[0].contains("user"),
         "a repo skill the model may not see: {rows:?}"
@@ -367,6 +378,10 @@ fn doctor_lists_both_scopes_with_the_name_the_scope_and_who_may_invoke_it() {
     assert!(
         rows[1].contains("user") && rows[1].contains("research") && rows[1].contains("model,user"),
         "a user skill both may invoke: {rows:?}"
+    );
+    assert!(
+        rows[2].contains("builtin") && rows[2].contains("model,user"),
+        "and the binary's own is the lowest of the three: {rows:?}"
     );
 }
 
@@ -385,7 +400,13 @@ fn a_skill_that_will_not_load_is_named_with_its_file_and_line_and_is_not_a_failu
     let assert = env.cmd().arg("doctor").assert().success();
     let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
 
-    assert!(stdout.contains("skills: none found"), "{stdout}");
+    assert!(
+        stdout.contains(&format!(
+            "skills: {} found",
+            sindri_core::skills::builtins().skills.len()
+        )),
+        "a refused skill is a diagnostic, and the built-in is still found: {stdout}"
+    );
     assert!(stdout.contains("skills: 1 refused"), "{stdout}");
     let at = format!("{}:1: ", file.display());
     assert!(
@@ -393,4 +414,62 @@ fn a_skill_that_will_not_load_is_named_with_its_file_and_line_and_is_not_a_failu
         "the file and the line are named — expected {at:?} in {stdout}"
     );
     assert!(stdout.contains("description"), "{stdout}");
+}
+
+/// The built-in the binary ships, and the row its catalog prints for it.
+fn builtin_name() -> String {
+    sindri_core::skills::builtins().skills[0].name.clone()
+}
+
+#[test]
+fn doctor_prints_a_builtin_with_its_own_scope_word_and_no_path_it_has_not() {
+    let env = Env::new();
+
+    let assert = env.cmd().arg("doctor").assert().success();
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
+
+    let name = builtin_name();
+    let (_, catalog) = stdout
+        .split_once("skills: ")
+        .expect("the catalog follows the description");
+    let row = catalog
+        .lines()
+        .find(|line| line.contains(&name))
+        .expect("the built-in is a row of the catalog");
+    assert!(
+        row.starts_with("  builtin"),
+        "the third scope has its own word: {row}"
+    );
+    assert!(
+        !row.contains('/'),
+        "a skill with no directory is not printed by a path: {row}"
+    );
+}
+
+#[test]
+fn doctor_names_the_builtin_a_nearer_scope_displaced() {
+    let env = Env::new();
+    let name = builtin_name();
+    write_skill(
+        &env.home,
+        &name,
+        &format!("---\nname: {name}\ndescription: The team's own.\n---\n"),
+    );
+
+    let assert = env.cmd().arg("doctor").assert().success();
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
+
+    assert!(stdout.contains("skills: 1 shadowed"), "{stdout}");
+    assert!(
+        stdout.contains(&format!("{name}: ")) && stdout.contains("shadows builtin"),
+        "what won is printed beside what it displaced, by origin: {stdout}"
+    );
+    let row = stdout
+        .lines()
+        .find(|line| line.contains(&name) && line.contains("user"))
+        .expect("the nearer skill is the one in the catalog");
+    assert!(
+        row.starts_with("  user") && row.contains(".agents/skills"),
+        "the user's directory holds the name: {row}"
+    );
 }

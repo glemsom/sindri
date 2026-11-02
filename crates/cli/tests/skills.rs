@@ -61,9 +61,19 @@ fn a_run_loads_the_skill_it_needs_and_the_record_says_which() {
         "the catalog is in the description: {}",
         skill["description"]
     );
+    // Every catalog the binary builds holds the skills it ships, beside the
+    // tree's own: both are names the model may call.
+    let mut names = vec!["house-style".to_string()];
+    names.extend(
+        sindri_core::skills::builtins()
+            .skills
+            .iter()
+            .map(|shipped| shipped.name.clone()),
+    );
+    names.sort();
     assert_eq!(
         skill["input_schema"]["properties"]["name"]["enum"],
-        serde_json::json!(["house-style"]),
+        serde_json::json!(names),
         "and the name parameter is the set of names it may call"
     );
 
@@ -92,7 +102,7 @@ fn a_run_loads_the_skill_it_needs_and_the_record_says_which() {
 }
 
 #[test]
-fn a_workspace_with_no_skill_the_model_may_see_is_handed_bash_alone() {
+fn a_skill_the_model_may_not_see_is_not_a_name_it_is_handed() {
     let env = Env::new();
     skill(&env, "house-style", "Answer in short sentences.");
     // A skill the model may not see is still a skill a human may run: it is in
@@ -113,9 +123,25 @@ fn a_workspace_with_no_skill_the_model_may_see_is_handed_bash_alone() {
     assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
     let tools = mock.requests()[0].json()["tools"].clone();
     let tools = tools.as_array().expect("the request carries tools").clone();
+    let skill = tools
+        .iter()
+        .find(|tool| tool["name"] == "skill")
+        .expect("the built-in keeps the tool registered");
+    let names = skill["input_schema"]["properties"]["name"]["enum"]
+        .as_array()
+        .expect("an enum of names")
+        .clone();
+    assert!(
+        !names.iter().any(|name| name == "house"),
+        "a user-only skill is in no schema: {names:?}"
+    );
+    let shipped: Vec<serde_json::Value> = sindri_core::skills::builtins()
+        .skills
+        .iter()
+        .map(|known| serde_json::json!(known.name))
+        .collect();
     assert_eq!(
-        tools.len(),
-        1,
-        "no model-visible skill means no second tool: {tools:?}"
+        names, shipped,
+        "what is left is the catalog the binary ships: {names:?}"
     );
 }

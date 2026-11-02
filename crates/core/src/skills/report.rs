@@ -31,7 +31,7 @@ impl Catalog {
         for row in &rows {
             out.push_str(&format!(
                 "  {:<scope$}  {:<name$}  {:<invocation$}  {}\n",
-                row.scope, row.name, row.invocation, row.dir,
+                row.scope, row.name, row.invocation, row.at,
             ));
         }
         out
@@ -51,16 +51,15 @@ impl Catalog {
         out
     }
 
-    /// Every name a nearer scope took, and the two directories a reader needs:
-    /// the skill that holds the name, and the one it was taken from.
+    /// Every name a nearer scope took, and the two origins a reader needs: the
+    /// skill that holds the name, and the one it was taken from. A built-in has
+    /// no directory to print, so it is named by its scope's own word.
     fn shadowed(&self) -> String {
         let mut out = heading("shadowed", self.shadowed.len());
         for shadow in &self.shadowed {
             out.push_str(&format!(
                 "  {}: {} shadows {}\n",
-                shadow.name,
-                shadow.winner.display(),
-                shadow.loser.display()
+                shadow.winner.name, shadow.winner, shadow.loser
             ));
         }
         out
@@ -83,7 +82,7 @@ struct Row {
     scope: String,
     name: String,
     invocation: String,
-    dir: String,
+    at: String,
 }
 
 impl Row {
@@ -92,7 +91,12 @@ impl Row {
             scope: skill.scope.as_str().to_string(),
             name: skill.name.clone(),
             invocation: skill.invocation(),
-            dir: skill.dir.display().to_string(),
+            // A built-in is compiled in. A path in that column would be one a
+            // reader went looking for, and there is no file to find.
+            at: match skill.dir() {
+                Some(dir) => dir.display().to_string(),
+                None => "(compiled in)".to_string(),
+            },
         }
     }
 }

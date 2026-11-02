@@ -14,5 +14,5 @@ pub mod provider; // the model, behind one seam
 pub mod record; // the record every run leaves
 pub mod sandbox; // one policy value, and the only two things derived from it
 pub mod session; // the value a front end holds to have a run
-pub mod skills; // the two scopes scanned, the frontmatter read
+pub mod skills; // the three scopes folded, the frontmatter read
 pub mod workspace; // the tree a run stands in

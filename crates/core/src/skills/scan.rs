@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use super::SKILL;
-use super::catalog::{Catalog, Refusal, Scope, Skill};
+use super::catalog::{Catalog, Content, Refusal, Scope, Skill};
 use super::frontmatter;
 
 /// Where one scope lives, from the directory it is relative to.
@@ -70,14 +70,11 @@ fn read_skill(dir: &Path, scope: Scope) -> Result<Skill, Refusal> {
         line: Some(problem.line),
         reason: problem.reason,
     })?;
-    Ok(Skill {
-        name: read.name,
-        description: read.description,
+    Ok(Skill::new(
+        read,
         scope,
-        model_invocable: read.model_invocable,
-        user_invocable: read.user_invocable,
-        dir: dir.to_path_buf(),
-    })
+        Content::Directory(dir.to_path_buf()),
+    ))
 }
 
 /// A link whose target is gone, or whose own target cannot be read. It is a

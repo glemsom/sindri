@@ -26,9 +26,13 @@ Embedded, the instructions and the enforcement ship in the same artefact or neit
 skill tree is a second thing to download, verify and place, and a thing it does not write
 cannot be left half-written.
 
-The scope is the lowest of three, so precedence runs builtin, then user, then repo, nearest
-wins: a skill the repository carries takes a name from the home directory's, and the home
-directory's takes it from a built-in's. A user who disagrees with a built-in is not left with
+The scope is the lowest of three, so precedence runs the other way — repo, then user, then
+builtin, nearest wins: a skill the repository carries takes a name from the home directory's,
+and the home directory's takes it from a built-in's. Discovery is where that order comes from,
+and it is the fold order read backwards: the scopes are folded nearest first and the built-ins
+last, and `absorb` never replaces a name already held, so the scope folded last is the one that
+loses every argument. A built-in folded first would hold every name it shares, which is the
+highest place of the three and not the lowest. A user who disagrees with a built-in is not left with
 an argument — they drop their own skill of the same name in `~/.agents/skills` and it wins,
 and the skill that lost is recorded rather than dropped, as it already is between the two
 nearer scopes. A built-in is where that order comes from: the sequence in which a run is told
@@ -47,7 +51,7 @@ built-in reads `builtin` in that column.
 
 The same holds for what a name displaced. `Shadow` holds the winner and the loser rather than
 a boolean, which is what lets `sindri doctor` print which built-in a nearer skill displaced
-instead of merely that something was displaced. What it holds of each is a directory today,
+instead of merely that something was displaced. What it held of each was a directory,
 and a built-in is the one skill that has none: so what it carries becomes a scope and a name,
 and a displaced built-in is printed by its name and its origin, never by a path it does not
 have. A doctor that said `shadows /dev/null` for one would be inventing a file to stand for a

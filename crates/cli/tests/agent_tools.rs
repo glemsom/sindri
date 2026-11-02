@@ -31,7 +31,9 @@ fn the_model_is_offered_one_bash_tool_described_by_the_sandbox_policy() {
     assert_eq!(requests.len(), 2, "one turn to call, one to answer");
     let tools = requests[0].json()["tools"].clone();
     let tools = tools.as_array().expect("the request carries tools");
-    assert_eq!(tools.len(), 1, "exactly one tool: {tools:?}");
+    // The binary ships a skill, so `skill` is registered in every run: the one
+    // tool that runs anything is still `bash`, and this reads its description.
+    assert_eq!(tools.len(), 2, "bash and skill: {tools:?}");
     assert_eq!(tools[0]["name"], "bash");
     let description = tools[0]["description"]
         .as_str()

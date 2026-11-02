@@ -1,12 +1,18 @@
 //! The values a catalog is made of: one skill as it was read, one file the scan
-//! refused, one name both scopes carried.
+//! refused, one name two scopes carried.
 
+use std::fmt;
 use std::path::PathBuf;
 
-/// Where a skill was found. The two scopes are the only two places a scan
-/// looks, and a repo skill wins a name they both carry.
+use super::frontmatter::Frontmatter;
+
+/// Where a skill was found, ordered by nearness. A built-in is compiled into the
+/// binary and is the lowest of the three; a user's own sits above it; and the
+/// repository the run stands in is nearest of all. Of two scopes carrying one
+/// name, the nearer holds it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scope {
+    Builtin,
     User,
     Repo,
 }
@@ -15,14 +21,37 @@ impl Scope {
     /// The word `sindri doctor` prints for it.
     pub fn as_str(self) -> &'static str {
         match self {
+            Scope::Builtin => "builtin",
             Scope::User => "user",
             Scope::Repo => "repo",
         }
     }
 }
 
-/// One skill directory as it was read: the two fields the specification
-/// requires, the two invocation flags, and where it lives.
+/// What a skill's content is read out of: a directory a scan walked, or bytes
+/// compiled into the binary. A built-in is the one skill with no directory, so
+/// where its body lives is a value rather than a path that has to be absent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Content {
+    /// The directory holding the `SKILL.md`, re-read at the moment of the call.
+    Directory(PathBuf),
+    /// The `SKILL.md` itself, and every file its body may name, compiled in
+    /// beside the module that reads them.
+    Compiled {
+        source: &'static str,
+        files: &'static [File],
+    },
+}
+
+/// One file a body may name: the path the body names it by, and its own text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct File {
+    pub path: &'static str,
+    pub text: &'static str,
+}
+
+/// One skill as it was read: the two fields the specification requires, the two
+/// invocation flags, and where it was found.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Skill {
     pub name: String,
@@ -32,10 +61,25 @@ pub struct Skill {
     pub model_invocable: bool,
     /// Whether a human may reach for it: `user-invocable`.
     pub user_invocable: bool,
-    pub dir: PathBuf,
+    /// Where the body and the files beside it are read from.
+    pub content: Content,
 }
 
 impl Skill {
+    /// One skill from the frontmatter that named it and the content behind its
+    /// body. A scan and the built-in list are the two ways to have both, and
+    /// neither assembles a skill of its own.
+    pub(crate) fn new(read: Frontmatter, scope: Scope, content: Content) -> Skill {
+        Skill {
+            name: read.name,
+            description: read.description,
+            scope,
+            model_invocable: read.model_invocable,
+            user_invocable: read.user_invocable,
+            content,
+        }
+    }
+
     /// `model,user`, `model`, `user` or — a skill nobody may run — `none`.
     pub fn invocation(&self) -> String {
         match (self.model_invocable, self.user_invocable) {
@@ -43,6 +87,15 @@ impl Skill {
             (true, false) => "model".to_string(),
             (false, true) => "user".to_string(),
             (false, false) => "none".to_string(),
+        }
+    }
+
+    /// This skill as a shadow names it.
+    pub fn origin(&self) -> Origin {
+        Origin {
+            scope: self.scope,
+            name: self.name.clone(),
+            dir: self.dir().map(PathBuf::from),
         }
     }
 }
@@ -58,15 +111,38 @@ pub struct Refusal {
     pub reason: String,
 }
 
+/// One skill as a shadow names it: the scope it was found in, the name it
+/// carried, and the directory it lives in where it has one. A built-in has
+/// none, and a shadow that invented a path for one would send a reader looking
+/// for a file that is not there.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Origin {
+    pub scope: Scope,
+    pub name: String,
+    pub dir: Option<PathBuf>,
+}
+
+impl fmt::Display for Origin {
+    /// The directory where there is one, and the scope's own word where there
+    /// is not: what a reader needs to find a skill, and never a path it has not.
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.dir {
+            Some(dir) => write!(formatter, "{}", dir.display()),
+            None => formatter.write_str(self.scope.as_str()),
+        }
+    }
+}
+
 /// One name two scopes carried: the skill that lost it and the one that holds
-/// it, as the directories they live in.
+/// it, each by the scope and name it was found under — and by its directory
+/// where it has one. The name is the winner's: two skills in a shadow are one
+/// name, said once.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Shadow {
-    pub name: String,
     /// The skill that was left out.
-    pub loser: PathBuf,
+    pub loser: Origin,
     /// The nearer skill that displaced it.
-    pub winner: PathBuf,
+    pub winner: Origin,
 }
 
 /// Everything one scan found: what may run, what would not load, and what was
