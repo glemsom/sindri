@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::sync::mpsc;
 
 use clap::ValueEnum;
-use sindri_core::agent::{BashTool, Dials, Event, Stopped};
+use sindri_core::agent::{BashTool, Dials, Event, Limits, Stopped};
 use sindri_core::cancel::Cancel;
 use sindri_core::config::Overrides;
 use sindri_core::output;
@@ -59,7 +59,13 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     signal::install(cancel.clone());
 
     let executor = Arc::new(session.executor(config.timeout, cancel.clone()));
-    let tool = BashTool::new(session.policy(), executor);
+    // The description names the timeout this run enforces, so the model is
+    // never told a boundary it does not have.
+    let tool = BashTool::new(
+        session.policy(),
+        Limits::for_timeout(config.timeout),
+        executor,
+    );
     let mut agent = session.agent(
         Dials {
             model: Box::new(Client::new(&config)),

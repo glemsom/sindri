@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use std::sync::mpsc;
 
-use sindri_core::agent::{Agent, BashTool, Dials, Event, Report};
+use sindri_core::agent::{Agent, BashTool, Dials, Event, Limits, Report};
 use sindri_core::cancel::Cancel;
 use sindri_core::config::{Config, ConfigError, Overrides};
 use sindri_core::doctor::{self, DoctorError};
@@ -113,8 +113,11 @@ impl Driver for Front {
                 .executor(self.boot.config.timeout, cancel.clone())
                 .with_output_sink(Arc::new(Told(tap.clone()))),
         );
+        // The description names the timeout this run enforces, so the model is
+        // never told a boundary it does not have.
         let tool = BashTool::new(
             self.boot.session.policy(),
+            Limits::for_timeout(self.boot.config.timeout),
             Arc::new(Watched {
                 inner: executor,
                 tap: tap.clone(),

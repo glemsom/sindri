@@ -1,9 +1,11 @@
 //! The one tool the model gets: `bash`. Its description is derived from the
-//! sandbox policy, never written by hand, so the model is told exactly the
-//! boundary that is enforced.
+//! sandbox policy and the limits in force, never written by hand, so the model
+//! is told exactly the boundary that is enforced and the two figures that end
+//! its work.
 
 use std::sync::Arc;
 
+use super::Limits;
 use crate::exec::{BashExecutor, Outcome, ToolResult};
 use crate::provider::{Call, ToolFacts, ToolOutcome, ToolSpec};
 use crate::sandbox::SandboxPolicy;
@@ -14,9 +16,9 @@ pub struct BashTool {
 }
 
 impl BashTool {
-    pub fn new(policy: &SandboxPolicy, executor: Arc<dyn BashExecutor>) -> Self {
+    pub fn new(policy: &SandboxPolicy, limits: Limits, executor: Arc<dyn BashExecutor>) -> Self {
         BashTool {
-            spec: describe(policy),
+            spec: describe(policy, limits),
             executor,
         }
     }
@@ -37,14 +39,15 @@ impl BashTool {
     }
 }
 
-/// The policy's own description, plus how a result comes back: one derivation,
-/// so the model is never told a comfortable lie about its boundary.
-fn describe(policy: &SandboxPolicy) -> ToolSpec {
+/// The policy's own description, the limits that end the run and how a result
+/// comes back: one derivation, so the model is never told a comfortable lie
+/// about its boundary.
+fn describe(policy: &SandboxPolicy, limits: Limits) -> ToolSpec {
     // Every word here is re-sent on every turn, so it says only what the
     // model cannot read off a field name or a result it has already seen.
     let description = format!(
         "It is the only tool, so pipelines and small scripts are how you explore and act: put \
-         the steps of one task in one script, not in three calls.\n\n{}\n\
+         the steps of one task in one script, not in three calls.\n\n{}\n\n{}\n\
          Every result is carried in the conversation for the rest of the run and sent again with \
          every later turn, so filter in the script and print only what you concluded; keep \
          intermediates in `$TMPDIR`, which outlives the call.\n\
@@ -52,6 +55,7 @@ fn describe(policy: &SandboxPolicy) -> ToolSpec {
          when the command did not exit, and `retained_bytes` is what the result costs the \
          conversation. Over-long output is cut head and tail and the whole text is in the \
          `spill` file. `sandbox_error` means the sandbox never started, so no command ran.",
+        limits.describe(),
         policy.describe()
     );
     ToolSpec {
