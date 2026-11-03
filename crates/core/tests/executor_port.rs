@@ -91,7 +91,7 @@ fn the_deadline_is_bounded_at_both_ends() {
 
 #[test]
 fn the_real_executor_honours_the_unsafe_enforcement() {
-    use sindri_core::sandbox::Enforcement;
+    use sindri_core::sandbox::{Enforcement, Extras};
 
     let scratch = tempfile::TempDir::new().expect("scratch");
     let session_temp = scratch.path().join("tmp");
@@ -99,7 +99,7 @@ fn the_real_executor_honours_the_unsafe_enforcement() {
     let workspace = scratch.path().canonicalize().expect("canonical");
     let policy = sindri_core::session::policy_for(
         &workspace,
-        &[],
+        &Extras::Named(Vec::new()),
         session_temp,
         sindri_core::session::search_path(),
         Enforcement::YoloUnsafe,
@@ -127,7 +127,7 @@ fn the_real_executor_honours_the_unsafe_enforcement() {
 #[test]
 fn a_cancelled_executor_kills_its_command_group_and_reports_no_result() {
     use sindri_core::cancel::Cancel;
-    use sindri_core::sandbox::Enforcement;
+    use sindri_core::sandbox::{Enforcement, Extras};
 
     let scratch = tempfile::TempDir::new().expect("scratch");
     let session_temp = scratch.path().join("tmp");
@@ -135,7 +135,7 @@ fn a_cancelled_executor_kills_its_command_group_and_reports_no_result() {
     let workspace = scratch.path().canonicalize().expect("canonical");
     let policy = sindri_core::session::policy_for(
         &workspace,
-        &[],
+        &Extras::Named(Vec::new()),
         session_temp,
         sindri_core::session::search_path(),
         Enforcement::Bubblewrap,
@@ -200,7 +200,7 @@ fn executor_for(
     let workspace = scratch.path().canonicalize().expect("canonical");
     let policy = sindri_core::session::policy_for(
         &workspace,
-        &[],
+        &sindri_core::sandbox::Extras::Named(Vec::new()),
         session_temp,
         sindri_core::session::search_path(),
         enforcement,

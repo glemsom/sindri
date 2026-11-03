@@ -8,7 +8,8 @@
 
 use std::path::{Path, PathBuf};
 
-use sindri_core::sandbox::{Enforcement, PolicyError, SandboxPolicy, WritableSet};
+use sindri_core::sandbox::{Enforcement, Extras, FLOOR, PolicyError, SandboxPolicy, WritableSet};
+use sindri_core::session::policy_for;
 use tempfile::TempDir;
 
 fn policy(workspace: &TempDir, session_temp: &Path) -> SandboxPolicy {
@@ -75,6 +76,172 @@ fn the_writable_set_rejects_nested_and_duplicate_paths() {
     let same = outer.path().to_path_buf();
     let error = WritableSet::new([same.clone(), same]).expect_err("duplicates must be refused");
     assert!(matches!(error, PolicyError::Duplicate { .. }), "{error}");
+}
+
+/// A home directory holding the shipped paths named, and nothing else.
+fn home_with(names: &[&str]) -> TempDir {
+    let home = TempDir::new().expect("home");
+    for name in names {
+        std::fs::create_dir_all(home.path().join(name)).expect("a shipped path");
+    }
+    home
+}
+
+/// The floor as this host holds it: canonical, in the order `FLOOR` names it.
+fn floor_of(home: &TempDir) -> Vec<PathBuf> {
+    let home = home.path().canonicalize().expect("canonical home");
+    FLOOR.iter().map(|name| home.join(name)).collect()
+}
+
+#[test]
+fn nothing_named_mounts_the_floor_every_host_is_expected_to_have() {
+    let home = home_with(&FLOOR);
+    let workspace = TempDir::new().expect("workspace");
+    assert_eq!(
+        Extras::Floor.resolve(Some(home.path()), workspace.path()),
+        floor_of(&home),
+        "a run with nothing configured starts at the shipped floor"
+    );
+}
+
+#[test]
+fn a_shipped_path_the_host_has_not_is_dropped_without_a_word() {
+    let home = home_with(&[".cargo"]);
+    let workspace = TempDir::new().expect("workspace");
+    let resolved = Extras::Floor.resolve(Some(home.path()), workspace.path());
+    assert_eq!(
+        resolved,
+        vec![
+            home.path()
+                .canonicalize()
+                .expect("canonical")
+                .join(".cargo")
+        ],
+        "only the shipped path this host has is mounted"
+    );
+    assert!(
+        Extras::Floor.resolve(None, workspace.path()).is_empty(),
+        "a host with no home directory mounts none of them"
+    );
+
+    // A file where the floor expects a directory is not a mount: the convenience
+    // yields to the host rather than being refused for it.
+    let home = home_with(&[]);
+    std::fs::write(home.path().join(".cache"), "not a directory").expect("a file");
+    assert!(
+        Extras::Floor
+            .resolve(Some(home.path()), workspace.path())
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_shipped_path_that_nests_with_the_workspace_is_dropped_without_a_word() {
+    let home = home_with(&[".cache", "go"]);
+    let canonical = home.path().canonicalize().expect("canonical home");
+    let workspace = canonical.join(".cache/checkout");
+    std::fs::create_dir_all(&workspace).expect("a workspace inside the floor");
+    assert_eq!(
+        Extras::Floor.resolve(Some(home.path()), &workspace),
+        vec![canonical.join("go")],
+        "the shipped path that would nest is dropped, and the rest still mount"
+    );
+    assert_eq!(
+        Extras::Floor.resolve(Some(home.path()), &canonical.join("go/checkout")),
+        vec![canonical.join(".cache")],
+        "and one that holds the workspace is dropped the same way"
+    );
+}
+
+#[test]
+fn a_named_list_replaces_the_floor_and_an_empty_one_means_none() {
+    let home = home_with(&FLOOR);
+    let workspace = TempDir::new().expect("workspace");
+    let extra = TempDir::new().expect("extra");
+    let extra = extra.path().canonicalize().expect("canonical extra");
+
+    assert_eq!(
+        Extras::Named(vec![extra.clone()]).resolve(Some(home.path()), workspace.path()),
+        vec![extra],
+        "a named list is exactly what was named, floor or no floor"
+    );
+    assert!(
+        Extras::Named(Vec::new())
+            .resolve(Some(home.path()), workspace.path())
+            .is_empty(),
+        "a list named empty means none"
+    );
+}
+
+#[test]
+fn the_policy_mounts_the_workspace_and_then_the_floor_it_resolves() {
+    let workspace = TempDir::new().expect("workspace");
+    let canonical = workspace
+        .path()
+        .canonicalize()
+        .expect("canonical workspace");
+    let session_temp = canonical.join("tmp");
+    std::fs::create_dir_all(&session_temp).expect("session temp");
+
+    let policy = policy_for(
+        &canonical,
+        &Extras::Floor,
+        session_temp,
+        "/usr/bin:/bin".to_string(),
+        Enforcement::Bubblewrap,
+    )
+    .expect("a policy over the floor");
+    let resolved = Extras::Floor.resolve(sindri_core::paths::home().as_deref(), &canonical);
+
+    let paths = policy.writable().paths();
+    assert_eq!(paths.first(), Some(&canonical), "the workspace comes first");
+    assert_eq!(
+        &paths[1..],
+        resolved.as_slice(),
+        "then exactly the floor this host has, and nothing the description would not print"
+    );
+    for path in &resolved {
+        assert!(
+            policy.describe().contains(&path.display().to_string()),
+            "what is mounted is what is described: {}",
+            path.display()
+        );
+    }
+}
+
+#[test]
+fn a_named_path_the_writable_set_refuses_is_still_a_refusal() {
+    let workspace = TempDir::new().expect("workspace");
+    let canonical = workspace
+        .path()
+        .canonicalize()
+        .expect("canonical workspace");
+    let session_temp = canonical.join("tmp");
+    std::fs::create_dir_all(&session_temp).expect("session temp");
+
+    let missing = policy_for(
+        &canonical,
+        &Extras::Named(vec![PathBuf::from("/nonexistent-sindri-extra")]),
+        session_temp.clone(),
+        "/usr/bin:/bin".to_string(),
+        Enforcement::Bubblewrap,
+    )
+    .expect_err("a named path that is not there is a usage error");
+    assert!(
+        matches!(missing, PolicyError::Unreadable { .. }),
+        "{missing}"
+    );
+
+    let parent = canonical.parent().expect("a parent").to_path_buf();
+    let nested = policy_for(
+        &canonical,
+        &Extras::Named(vec![parent]),
+        session_temp,
+        "/usr/bin:/bin".to_string(),
+        Enforcement::Bubblewrap,
+    )
+    .expect_err("a named path that contains the workspace is a usage error");
+    assert!(matches!(nested, PolicyError::Nested { .. }), "{nested}");
 }
 
 #[test]

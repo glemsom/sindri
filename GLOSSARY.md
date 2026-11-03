@@ -51,7 +51,11 @@ of both enforcement and description.
 **writable set** — the paths mounted read-write besides the session temp: the workspace
 plus **extras**.
 
-**extras** — user-configured extra writable paths.
+**extras** — the writable paths beyond the workspace and the session temp, floor included: a
+run with nothing configured mounts a shipped floor — `~/.cache`, `~/go`, `~/.cargo` and
+`~/.rustup` — and a level that names a list replaces it wholesale, so an empty list means none
+and a shipped path this host does not have, or one that would nest with the workspace, is
+dropped without a word.
 
 **session temp** — per-run writable scratch, mapped to `TMPDIR` in the sandbox, and
 mounted as `HOME` beneath it.

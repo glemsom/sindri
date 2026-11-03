@@ -2,6 +2,7 @@
 //! a refusal that writes nothing, and a draft `Esc` throws away.
 
 use super::*;
+use sindri_tui::overlay::Overlay;
 
 #[test]
 fn the_thinking_toggle_is_a_keystroke_and_lands_in_the_file() {
@@ -30,6 +31,7 @@ fn the_extra_writable_paths_are_a_field_the_run_would_accept() {
     let mut f = fixture(Some("model = \"m\"\n"));
     open(&mut f.app);
     down_to(&mut f.app, Key::ExtraWritablePaths);
+    press(&mut f.app, KeyCode::Char('u'), KeyModifiers::CONTROL);
     type_text(&mut f.app, "/usr/share");
     press(&mut f.app, KeyCode::Enter, KeyModifiers::NONE);
     assert!(
@@ -123,5 +125,91 @@ fn the_modal_dims_the_frame_it_covers_and_reads_at_full_strength_itself() {
             .filter(|x| buf[(*x, title)].symbol() != " ")
             .all(|x| !buf[(x, title)].modifier.contains(Modifier::DIM)),
         "and the modal itself is drawn at full strength: {title}"
+    );
+}
+
+/// The floor this host has, resolved the way the row resolves it: the modal
+/// shows a run's own mount, so a test on a machine with a home directory asks
+/// the host rather than assuming one.
+fn host_floor() -> Vec<PathBuf> {
+    let workspace = std::env::current_dir().expect("a working directory");
+    sindri_core::sandbox::Extras::Floor.resolve(sindri_core::paths::home().as_deref(), &workspace)
+}
+
+/// The text the modal holds for `key`: the field is what a save writes, so
+/// what a row says is read here rather than off a truncated screen row.
+fn field(f: &Fixture, key: Key) -> String {
+    let Some(Overlay::Settings(settings)) = f.app.overlay() else {
+        panic!("the settings modal is open");
+    };
+    settings
+        .fields()
+        .iter()
+        .find(|field| field.key == key)
+        .expect("every key has a field")
+        .text
+        .clone()
+}
+
+#[test]
+fn the_writable_row_starts_at_the_floor_so_a_blank_row_never_means_four_mounts() {
+    let mut f = fixture(Some("model = \"m\"\n"));
+    open(&mut f.app);
+    down_to(&mut f.app, Key::ExtraWritablePaths);
+
+    let floor: Vec<String> = host_floor()
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect();
+    assert_eq!(
+        field(&f, Key::ExtraWritablePaths),
+        floor.join(":"),
+        "the row starts at the shipped floor, so no blank row stands for four mounts"
+    );
+}
+
+#[test]
+fn emptying_the_writable_field_writes_an_explicit_empty_list() {
+    let mut f = fixture(Some("model = \"m\"\n"));
+    open(&mut f.app);
+    down_to(&mut f.app, Key::ExtraWritablePaths);
+
+    // Deleting the row's text is the act that means none: the field is left
+    // holding nothing, and nothing is a value this key can carry.
+    for _ in 0..=field(&f, Key::ExtraWritablePaths).len() {
+        press(&mut f.app, KeyCode::Backspace, KeyModifiers::NONE);
+    }
+    press(&mut f.app, KeyCode::Enter, KeyModifiers::NONE);
+
+    assert!(
+        written(&f.path).contains("extra_writable_paths = []"),
+        "an emptied row writes the empty list, not an absence: {}",
+        written(&f.path)
+    );
+}
+
+#[test]
+fn clearing_the_writable_field_leaves_the_key_out_of_the_file() {
+    let mut f = fixture(Some(
+        "model = \"m\"\nextra_writable_paths = [\"/usr/share\"]\n",
+    ));
+    open(&mut f.app);
+    down_to(&mut f.app, Key::ExtraWritablePaths);
+    assert!(
+        row(&screen(&mut f.app, 100, 30), "extra_writable_paths").contains("/usr/share"),
+        "the file's own list is on screen"
+    );
+
+    press(&mut f.app, KeyCode::Char('u'), KeyModifiers::CONTROL);
+    press(&mut f.app, KeyCode::Enter, KeyModifiers::NONE);
+
+    let file = written(&f.path);
+    assert!(
+        !file.contains("extra_writable_paths"),
+        "Ctrl-U unsets the key, so the shipped floor speaks again: {file}"
+    );
+    assert!(
+        file.contains("model = \"m\""),
+        "and nothing else moved: {file}"
     );
 }

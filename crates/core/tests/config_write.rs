@@ -305,11 +305,14 @@ fn every_key_can_be_set_shown_and_cleared() {
         document.save().expect("written");
         let reread = Document::load_at(&path).expect("parses");
         assert!(reread.is_set(key), "{key:?} survives the file");
-        document.set(key, "").expect("cleared");
-        assert!(
-            !document.is_set(key),
-            "{key:?} is cleared by an empty value"
-        );
+        document.set(key, "").expect("set to nothing");
+        if key == Key::ExtraWritablePaths {
+            // A list is the one key with an empty value of its own: `[]` means
+            // none, and unsetting it is what puts the shipped floor back.
+            assert!(document.is_set(key), "{key:?} can hold an empty list");
+            document.unset(key);
+        }
+        assert!(!document.is_set(key), "{key:?} is cleared by unsetting it");
         document.save().expect("written");
         let reread = Document::load_at(&path).expect("parses");
         assert!(!reread.is_set(key), "{key:?} is gone from the file");

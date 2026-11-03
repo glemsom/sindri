@@ -20,7 +20,7 @@ use crate::instructions::{self, Taken};
 use crate::paths::{self, SessionDir};
 use crate::provider::Error;
 use crate::record::{Recorder, Redaction, Start};
-use crate::sandbox::{Enforcement, FALLBACK_PATH, PolicyError, SandboxPolicy, WritableSet};
+use crate::sandbox::{Enforcement, Extras, FALLBACK_PATH, PolicyError, SandboxPolicy, WritableSet};
 use crate::skills;
 use crate::workspace::{self, Git};
 
@@ -116,7 +116,7 @@ impl Session {
         // The policy is derived before the record is started: a path the
         // sandbox refuses must not leave a record saying `running`, which no
         // reader could tell from a run that is still going.
-        let policy = derive(env, &dir, &config.extra_writable, config.enforcement)?;
+        let policy = derive(env, &dir, &config.extras, config.enforcement)?;
         // One probe of the tree for both facts boot needs from it: the git facts
         // the record and the rail read, and the root the rules and the skill
         // scopes are found from. Asking twice would fork git a third time and
@@ -167,12 +167,7 @@ impl Session {
     /// The next prompt's policy, and the record's if it moved: a writable set
     /// that changed under a thread is announced where it changed.
     pub fn rebase(&mut self, config: &Config) -> Result<(), StartError> {
-        self.policy = derive(
-            &self.env,
-            &self.dir,
-            &config.extra_writable,
-            config.enforcement,
-        )?;
+        self.policy = derive(&self.env, &self.dir, &config.extras, config.enforcement)?;
         self.recorder.rebase(&self.policy.describe());
         Ok(())
     }
@@ -278,7 +273,7 @@ fn directory(env: &Env) -> Result<SessionDir, StartError> {
 fn derive(
     env: &Env,
     dir: &SessionDir,
-    extras: &[PathBuf],
+    extras: &Extras,
     enforcement: Enforcement,
 ) -> Result<SandboxPolicy, PolicyError> {
     policy_for(
@@ -290,15 +285,19 @@ fn derive(
     )
 }
 
+/// One policy from the run's three facts: the workspace, where the extras come
+/// from, and the temp. The extras are resolved here — the floor against this
+/// host's home directory and this workspace, a named list as it was given — so
+/// what is mounted and what the description prints come from one value.
 pub fn policy_for(
     workspace: &Path,
-    extras: &[PathBuf],
+    extras: &Extras,
     session_temp: PathBuf,
     search_path: String,
     enforcement: Enforcement,
 ) -> Result<SandboxPolicy, PolicyError> {
-    let writable =
-        WritableSet::new(std::iter::once(workspace.to_path_buf()).chain(extras.iter().cloned()))?;
+    let resolved = extras.resolve(paths::home().as_deref(), workspace);
+    let writable = WritableSet::new(std::iter::once(workspace.to_path_buf()).chain(resolved))?;
     SandboxPolicy::new(writable, session_temp, search_path, enforcement)
 }
 

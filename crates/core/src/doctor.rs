@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::paths;
-use crate::sandbox::{Enforcement, PolicyError, SandboxPolicy};
+use crate::sandbox::{Enforcement, Extras, PolicyError, SandboxPolicy};
 use crate::session::Env;
 
 /// The binaries a run depends on; `doctor` resolves each one through the same
@@ -77,11 +77,7 @@ impl std::error::Error for DoctorError {}
 /// will not use `bwrap` has no sandbox to prove, so the probe is skipped and the
 /// binary set is resolved on the host instead. An absent `bwrap` is not an error
 /// there; a missing binary still is.
-pub fn probe(
-    env: &Env,
-    extras: &[PathBuf],
-    enforcement: Enforcement,
-) -> Result<Report, DoctorError> {
+pub fn probe(env: &Env, extras: &Extras, enforcement: Enforcement) -> Result<Report, DoctorError> {
     let shown_temp = env.state.join("sessions").join("<session>").join("tmp");
     let policy = build_policy(env, extras, shown_temp, enforcement)?;
 
@@ -130,7 +126,7 @@ fn missing_from(path: &str) -> Vec<String> {
 
 fn build_policy(
     env: &Env,
-    extras: &[PathBuf],
+    extras: &Extras,
     session_temp: PathBuf,
     enforcement: Enforcement,
 ) -> Result<SandboxPolicy, DoctorError> {
@@ -147,7 +143,7 @@ fn build_policy(
 fn run_probe(
     bash: &Path,
     env: &Env,
-    extras: &[PathBuf],
+    extras: &Extras,
     session_temp: &Path,
 ) -> Result<(), DoctorError> {
     let policy = build_policy(

@@ -26,9 +26,24 @@ pub enum Outcome {
 pub struct Field {
     pub key: Key,
     pub text: String,
-    /// Whether a keystroke has been in this field. A secret the file holds is
-    /// never handed back — so an untouched one must not be written as empty.
-    pub touched: bool,
+    /// What a save makes of this field. An untouched field is written as
+    /// nothing — a secret the file holds is never handed back, so writing one
+    /// empty would erase it — and an empty field is two things rather than
+    /// one: the value it does not hold, and the absence `Ctrl-U` makes of it.
+    pub edit: Edit,
+}
+
+/// What one save does with one field, so two flags cannot disagree about it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Edit {
+    /// No keystroke has been in this field: the file keeps what it had.
+    Untouched,
+    /// The field's text is the value, the empty one included — which for the
+    /// writable paths is the explicit `[]`, and not the floor.
+    Value,
+    /// `Ctrl-U`: the key leaves the file, so the environment or the run's
+    /// default speaks instead — the shipped floor, for the writable paths.
+    Unset,
 }
 
 /// What the front door found absent when it opened the frame itself: the run
@@ -190,7 +205,7 @@ impl Settings {
             .map(|key| Field {
                 key: *key,
                 text: document.editable(*key),
-                touched: false,
+                edit: Edit::Untouched,
             })
             .collect();
         Settings {
@@ -285,25 +300,28 @@ impl Settings {
     }
 
     pub fn insert(&mut self, ch: char) {
-        self.edit(|field| field.text.push(ch));
+        self.edit(Edit::Value, |field| field.text.push(ch));
     }
 
     pub fn backspace(&mut self) {
-        self.edit(|field| {
+        self.edit(Edit::Value, |field| {
             field.text.pop();
         });
     }
 
-    /// Ctrl-U: the field with the cursor, emptied. An empty value unsets the
-    /// key, so the environment or the default speaks instead.
+    /// Ctrl-U: the field with the cursor, emptied — and the key unset, so the
+    /// environment or the default speaks instead. For the writable paths the
+    /// default is the shipped floor; the other way to empty the field, one
+    /// character at a time, writes the empty list, which is a value.
     pub fn clear(&mut self) {
-        self.edit(|field| field.text.clear());
+        self.edit(Edit::Unset, |field| field.text.clear());
     }
 
-    fn edit(&mut self, change: impl FnOnce(&mut Field)) {
+    /// A keystroke in the field with the cursor, and what a save makes of it.
+    fn edit(&mut self, edit: Edit, change: impl FnOnce(&mut Field)) {
         if let Some(field) = self.fields.get_mut(self.chosen) {
             change(field);
-            field.touched = true;
+            field.edit = edit;
             self.error = None;
         }
     }
@@ -314,7 +332,7 @@ impl Settings {
             _ => return false,
         };
         let text = if on { "false" } else { "true" }.to_string();
-        self.edit(|field| field.text = text);
+        self.edit(Edit::Value, |field| field.text = text);
         true
     }
 
@@ -322,7 +340,15 @@ impl Settings {
         // Staged on a copy: a document that refuses one value must not be
         // left holding the ones before it.
         let mut staged = self.document.clone();
-        for field in self.fields.iter().filter(|field| field.touched) {
+        for field in self
+            .fields
+            .iter()
+            .filter(|field| field.edit != Edit::Untouched)
+        {
+            if field.edit == Edit::Unset {
+                staged.unset(field.key);
+                continue;
+            }
             staged
                 .set(field.key, &field.text)
                 .map_err(|error| format!("{}: {}", field.key.name(), error.message()))?;

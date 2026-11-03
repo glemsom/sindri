@@ -20,6 +20,13 @@ pub const AGENTS: &str = "AGENTS.md";
 
 pub const SENTINEL_TEXT: &str = "the run's own file\n";
 
+/// Where under the eval's config directory the run's file sits.
+const SETTINGS: &str = "sindri";
+
+/// The one key an eval's config carries: no extras at all, whatever home
+/// directory holds a `.cache` or a `.cargo` this suite never asked for.
+const PINNED_CONFIG: &str = "extra_writable_paths = []\n";
+
 pub struct Workspace {
     root: TempDir,
     pub repo: PathBuf,
@@ -51,9 +58,16 @@ impl Workspace {
         }
         let state = root.path().join("state");
         let config = root.path().join("config");
-        for dir in [&state, &config] {
+        let settings = config.join(SETTINGS);
+        for dir in [&state, &config, &settings] {
             fs::create_dir_all(dir).map_err(|error| format!("{}: {error}", dir.display()))?;
         }
+        // The suite's sandbox is the suite's: a writable set that fell back to
+        // the shipped floor would mount whichever home directory ran the eval,
+        // and eval 7 would then be probing a sandbox nobody described here. An
+        // explicit empty list is a list, so it wins over the floor.
+        let file = settings.join("config.toml");
+        fs::write(&file, PINNED_CONFIG).map_err(|error| format!("{}: {error}", file.display()))?;
         fs::write(repo.join(SENTINEL), SENTINEL_TEXT)
             .map_err(|error| format!("write sentinel: {error}"))?;
         Ok(Workspace {

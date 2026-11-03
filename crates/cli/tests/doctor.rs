@@ -8,6 +8,8 @@
 
 mod common;
 
+use std::path::PathBuf;
+
 use common::{Env, path_without, required_binaries};
 use predicates::prelude::*;
 use tempfile::TempDir;
@@ -237,6 +239,100 @@ fn doctor_describes_the_configured_extras_the_model_is_told_about() {
         output.contains(&extra.display().to_string()),
         "doctor prints the description a run would really give the model: {output}"
     );
+}
+
+/// The shipped floor, made in this test's own home: a fresh checkout with
+/// nothing configured is the case the floor exists for.
+fn floor(env: &Env) -> Vec<PathBuf> {
+    let mut made = Vec::new();
+    for name in sindri_core::sandbox::FLOOR {
+        let path = env.home.join(name);
+        std::fs::create_dir_all(&path).expect("a shipped path");
+        made.push(path.canonicalize().expect("canonical shipped path"));
+    }
+    made
+}
+
+/// Whether the writable set the description printed names `path`: a mounted
+/// path is a row of its own, indented under the only heading that names one.
+fn lists(stdout: &str, path: &std::path::Path) -> bool {
+    stdout
+        .lines()
+        .any(|line| line.trim() == path.display().to_string())
+}
+
+#[test]
+fn doctor_lists_the_shipped_floor_when_nothing_names_a_writable_path() {
+    let env = Env::new();
+    let floor = floor(&env);
+
+    let assert = env.cmd().arg("doctor").assert().success();
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
+
+    for path in &floor {
+        assert!(
+            lists(&stdout, path),
+            "what is mounted is what is printed, and {} is mounted: {stdout}",
+            path.display()
+        );
+    }
+    assert!(
+        lists(&stdout, &env.canonical_workspace()),
+        "the workspace is still the first of them: {stdout}"
+    );
+}
+
+#[test]
+fn a_shipped_path_this_host_has_not_is_dropped_and_never_printed() {
+    let env = Env::new();
+    let kept = env.home.join(".cargo");
+    std::fs::create_dir_all(&kept).expect("a shipped path");
+    let kept = kept.canonicalize().expect("canonical shipped path");
+    let absent = env.home.join("go");
+
+    let assert = env.cmd().arg("doctor").assert().success();
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
+
+    assert!(lists(&stdout, &kept), "{stdout}");
+    assert!(
+        !stdout.contains(&absent.display().to_string()),
+        "a convenience the host cannot keep is dropped without a word: {stdout}"
+    );
+}
+
+#[test]
+fn a_named_list_replaces_the_floor_and_doctor_lists_only_what_is_mounted() {
+    let env = Env::new();
+    let floor = floor(&env);
+
+    // An explicit empty list is a list that was named: it means none.
+    common::write_config(&env, "extra_writable_paths = []\n");
+    let assert = env.cmd().arg("doctor").assert().success();
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
+    for path in &floor {
+        assert!(
+            !lists(&stdout, path),
+            "an empty list mounts none of the floor, {} included: {stdout}",
+            path.display()
+        );
+    }
+
+    // And a named one is exactly what was named.
+    let extra = TempDir::new().expect("an extra path");
+    let extra = extra.path().canonicalize().expect("canonical extra");
+    let assert = env
+        .cmd()
+        .args(["--writable", &extra.display().to_string(), "doctor"])
+        .assert()
+        .success();
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
+    assert!(lists(&stdout, &extra), "{stdout}");
+    for path in &floor {
+        assert!(
+            !lists(&stdout, path),
+            "the flag replaces the floor rather than adding to it: {stdout}"
+        );
+    }
 }
 
 #[test]

@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use crate::exec::{DEFAULT_TIMEOUT_SECS, timeout_from_secs};
 use crate::paths;
-use crate::sandbox::{Enforcement, WritableSet};
+use crate::sandbox::{Enforcement, Extras, WritableSet};
 
 pub const DEFAULT_MAX_TURNS: u32 = 250;
 
@@ -58,7 +58,10 @@ pub struct Config {
     /// the environment silences it, because one switch has to reach both front
     /// ends and a per-front-end flag would be two.
     pub status: bool,
-    pub extra_writable: Vec<PathBuf>,
+    /// The writable paths besides the workspace and the session temp: the
+    /// shipped floor where no level names a list, and exactly what was named
+    /// where one does — an empty list included, which means none.
+    pub extras: Extras,
     /// The policy the session starts with, and the one its record states.
     pub enforcement: Enforcement,
     /// Never printed or recorded: a gateway's header may be as secret as the
@@ -192,7 +195,7 @@ impl Config {
 
         let status = boolean("SINDRI_STATUS")?.or(file.status).unwrap_or(true);
 
-        let extra_writable = extras(overrides.writable, file.extra_writable_paths)?;
+        let extras = extras(overrides.writable, file.extra_writable_paths)?;
         let extra_headers = headers::resolve(overrides.extra_headers, file.extra_headers)?;
 
         let enforcement = if overrides.yolo_unsafe {
@@ -211,7 +214,7 @@ impl Config {
             timeout,
             thinking,
             status,
-            extra_writable,
+            extras,
             enforcement,
             extra_headers,
         })
@@ -220,16 +223,19 @@ impl Config {
 
 /// The extras that win: a flag, then the environment, then the file. The
 /// highest level that names any replaces the rest rather than adding to them,
-/// so a pipeline can grant exactly what it means.
+/// so a pipeline can grant exactly what it means — and a level that names none
+/// means the shipped floor, which is the one thing no level has to say.
 fn extras(
     flag: Option<Vec<String>>,
     from_file: Option<Vec<String>>,
-) -> Result<Vec<PathBuf>, ConfigError> {
-    flag.or_else(|| list("SINDRI_EXTRA_WRITABLE_PATHS"))
+) -> Result<Extras, ConfigError> {
+    match flag
+        .or_else(|| list("SINDRI_EXTRA_WRITABLE_PATHS"))
         .or(from_file)
-        .map(|paths| extra_paths(&paths))
-        .transpose()
-        .map(Option::unwrap_or_default)
+    {
+        Some(paths) => extra_paths(&paths).map(Extras::Named),
+        None => Ok(Extras::Floor),
+    }
 }
 
 /// The repository-local config sitting in the working directory, if any. Its

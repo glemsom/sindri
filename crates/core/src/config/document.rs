@@ -13,6 +13,8 @@ use std::path::{Path, PathBuf};
 use super::file::{self, FileConfig};
 use super::{ConfigError, MAX_TURNS, Provider, extra_paths};
 use crate::exec::MAX_TIMEOUT_SECS;
+use crate::paths;
+use crate::sandbox::Extras;
 
 #[repr(usize)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,8 +61,15 @@ struct Spec {
     /// keypress read the one flag rather than a second list of the toggles.
     toggled: bool,
     /// The text a field starts with, whatever the file says: the run's own
-    /// default, which is nothing for every key.
+    /// default, which is nothing for every key but the writable paths — a key
+    /// whose default is a value the form must show rather than one it may
+    /// leave blank.
     start: fn() -> String,
+    /// Whether an empty field is a value the key carries rather than the form's
+    /// way of unsetting it. Only a list has one: `[]` and "not set" are two
+    /// sentences about the writable paths, and the second one is the shipped
+    /// floor.
+    empty_is_a_value: bool,
     get: fn(&FileConfig) -> Option<String>,
     clear: fn(&mut FileConfig),
     put: fn(&mut FileConfig, &str) -> Result<(), ConfigError>,
@@ -77,6 +86,7 @@ const SPECS: [Spec; N_KEYS] = [
         secret: false,
         toggled: false,
         start: || String::new(),
+        empty_is_a_value: false,
         get: |values| values.provider.clone(),
         clear: |values| values.provider = None,
         put: |values, value| {
@@ -90,6 +100,7 @@ const SPECS: [Spec; N_KEYS] = [
         secret: false,
         toggled: false,
         start: || String::new(),
+        empty_is_a_value: false,
         get: |values| values.model.clone(),
         clear: |values| values.model = None,
         put: |values, value| {
@@ -103,6 +114,7 @@ const SPECS: [Spec; N_KEYS] = [
         secret: false,
         toggled: false,
         start: || String::new(),
+        empty_is_a_value: false,
         get: |values| values.base_url.clone(),
         clear: |values| values.base_url = None,
         put: |values, value| {
@@ -116,6 +128,7 @@ const SPECS: [Spec; N_KEYS] = [
         secret: true,
         toggled: false,
         start: || String::new(),
+        empty_is_a_value: false,
         get: |values| values.api_key.as_ref().map(|_| String::new()),
         clear: |values| values.api_key = None,
         put: |values, value| {
@@ -129,6 +142,7 @@ const SPECS: [Spec; N_KEYS] = [
         secret: false,
         toggled: false,
         start: || String::new(),
+        empty_is_a_value: false,
         get: |values| values.max_turns.map(|turns| turns.to_string()),
         clear: |values| values.max_turns = None,
         put: |values, value| {
@@ -142,6 +156,7 @@ const SPECS: [Spec; N_KEYS] = [
         secret: false,
         toggled: false,
         start: || String::new(),
+        empty_is_a_value: false,
         get: |values| values.timeout.map(|seconds| seconds.to_string()),
         clear: |values| values.timeout = None,
         put: |values, value| {
@@ -155,6 +170,7 @@ const SPECS: [Spec; N_KEYS] = [
         secret: false,
         toggled: true,
         start: || String::new(),
+        empty_is_a_value: false,
         get: |values| values.thinking.map(|on| on.to_string()),
         clear: |values| values.thinking = None,
         put: |values, value| {
@@ -168,6 +184,7 @@ const SPECS: [Spec; N_KEYS] = [
         secret: false,
         toggled: true,
         start: || String::new(),
+        empty_is_a_value: false,
         get: |values| values.status.map(|on| on.to_string()),
         clear: |values| values.status = None,
         put: |values, value| {
@@ -180,7 +197,10 @@ const SPECS: [Spec; N_KEYS] = [
         name: "extra_writable_paths",
         secret: false,
         toggled: false,
-        start: || String::new(),
+        // The row starts at the floor, so a blank row never stands for the
+        // four mounts a run with nothing configured would really make.
+        start: floor_text,
+        empty_is_a_value: true,
         get: |values| {
             values
                 .extra_writable_paths
@@ -204,6 +224,7 @@ const SPECS: [Spec; N_KEYS] = [
         secret: true,
         toggled: false,
         start: || String::new(),
+        empty_is_a_value: false,
         get: |values| {
             values
                 .extra_headers
@@ -296,7 +317,7 @@ impl Document {
     pub fn set(&mut self, key: Key, value: &str) -> Result<(), ConfigError> {
         let value = value.trim();
         let spec = key.spec();
-        if value.is_empty() {
+        if value.is_empty() && !spec.empty_is_a_value {
             self.unset(key);
             return Ok(());
         }
@@ -309,12 +330,24 @@ impl Document {
         file::write(&self.path, &self.values)
     }
 
-    /// Clears the key: an empty value is the form's way of saying the file
-    /// should carry no value here, and a cleared key falls back to the run's
-    /// default.
-    fn unset(&mut self, key: Key) {
+    /// Clears the key: the file carries no value here, and a cleared key falls
+    /// back to the run's default — the floor, for the writable paths.
+    pub fn unset(&mut self, key: Key) {
         (key.spec().clear)(&mut self.values);
     }
+}
+
+/// The row's start: the shipped floor as this host has it. One derivation with
+/// the policy's, so the row shows the mounts the run would really make and
+/// never a path the sandbox would drop.
+fn floor_text() -> String {
+    let workspace = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
+    Extras::Floor
+        .resolve(paths::home().as_deref(), &workspace)
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>()
+        .join(":")
 }
 
 fn count<T>(value: &str, low: T, high: T) -> Result<T, ConfigError>

@@ -20,7 +20,7 @@ use sindri_core::config::{Config, Provider};
 use sindri_core::exec::{BashExecutor, Outcome, ToolResult};
 use sindri_core::provider::{Call, Delta, DeltaSink, Error, Message, Model, ToolSpec, Turn, Usage};
 use sindri_core::record::{Recorder, Start};
-use sindri_core::sandbox::{Enforcement, SandboxPolicy, WritableSet};
+use sindri_core::sandbox::{Enforcement, Extras, SandboxPolicy, WritableSet};
 use sindri_core::session::Env;
 use sindri_core::skills::Catalog;
 use tempfile::TempDir;
@@ -96,7 +96,7 @@ pub fn config(extras: &[&Path]) -> Config {
         timeout: Duration::from_secs(30),
         thinking: false,
         status: true,
-        extra_writable: extras.iter().map(|path| path.to_path_buf()).collect(),
+        extras: Extras::Named(extras.iter().map(|path| path.to_path_buf()).collect()),
         enforcement: Enforcement::Bubblewrap,
         extra_headers: Vec::new(),
         refused_repo_config: None,

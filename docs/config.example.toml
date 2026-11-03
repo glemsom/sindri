@@ -42,10 +42,16 @@ thinking = false
 status = true
 
 # Extra directories mounted read-write inside the sandbox, besides the
-# workspace and the session temp. Optional, since those two are already
-# writable. Absolute, canonical, never "/", and never one inside another. This
-# is the setting that makes a repository-local config dangerous, which is why
-# none is ever honoured.
+# workspace and the session temp. Optional: left out, a run mounts the shipped
+# floor — ~/.cache, ~/go, ~/.cargo and ~/.rustup, the caches a fresh checkout
+# builds with — so nothing has to be configured to start. A shipped path that
+# this host does not have, or that would nest with the workspace, is dropped
+# without a word. Name a list and it is the whole of the extras: the floor is
+# replaced, never added to, and `extra_writable_paths = []` is the explicit
+# spelling of none. A path you name is held to today's rules instead, so one
+# that is missing, nested, duplicated or not already canonical is exit 2.
+# This is the setting that makes a repository-local config dangerous, which is
+# why none is ever honoured.
 extra_writable_paths = ["/home/you/go/pkg/mod"]
 
 # How many turns one run may take before it stops with exit 100. Optional: 250

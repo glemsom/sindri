@@ -9,6 +9,7 @@
 use std::time::Duration;
 
 use sindri_core::config::Provider;
+use sindri_core::sandbox::Extras;
 use sindri_core::session::Env as RunEnv;
 use tempfile::TempDir;
 
@@ -24,7 +25,7 @@ fn config() -> Config {
         timeout: Duration::from_secs(5),
         thinking: false,
         status: true,
-        extra_writable: Vec::new(),
+        extras: Extras::Named(Vec::new()),
         enforcement: Enforcement::Bubblewrap,
         extra_headers: Vec::new(),
         refused_repo_config: None,
@@ -36,7 +37,7 @@ fn the_rail_states_your_own_privileges_when_the_run_left_the_sandbox() {
     let root = TempDir::new().expect("temp root");
     let policy = sindri_core::session::policy_for(
         &root.path().canonicalize().expect("canonical"),
-        &[],
+        &sindri_core::sandbox::Extras::Named(Vec::new()),
         root.path().join("tmp"),
         "/usr/bin:/bin".to_string(),
         Enforcement::YoloUnsafe,
