@@ -516,6 +516,10 @@ fn doctor_prints_a_builtin_with_its_own_scope_word_and_no_path_it_has_not() {
         "the third scope has its own word: {row}"
     );
     assert!(
+        row.contains("(compiled in)"),
+        "a compiled skill is marked where a scanned one's directory would go: {row}"
+    );
+    assert!(
         !row.contains('/'),
         "a skill with no directory is not printed by a path: {row}"
     );

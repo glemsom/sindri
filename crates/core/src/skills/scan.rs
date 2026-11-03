@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use super::SKILL;
-use super::catalog::{Catalog, Content, Refusal, Scope, Skill};
+use super::catalog::{Catalog, Content, Refusal, Scope, Skill, Where};
 use super::frontmatter;
 
 /// Where one scope lives, from the directory it is relative to.
@@ -22,7 +22,7 @@ pub fn scan(dir: &Path, scope: Scope) -> Catalog {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return catalog,
         Err(error) => {
             catalog.refused.push(Refusal {
-                path: dir.to_path_buf(),
+                at: Where::File(dir.to_path_buf()),
                 line: None,
                 reason: format!("the skills directory cannot be read: {error}"),
             });
@@ -61,12 +61,12 @@ pub fn scan(dir: &Path, scope: Scope) -> Catalog {
 fn read_skill(dir: &Path, scope: Scope) -> Result<Skill, Refusal> {
     let file = dir.join(SKILL);
     let text = std::fs::read_to_string(&file).map_err(|error| Refusal {
-        path: file.clone(),
+        at: Where::File(file.clone()),
         line: None,
         reason: format!("the file cannot be read: {error}"),
     })?;
     let read = frontmatter::parse(&text).map_err(|problem| Refusal {
-        path: file.clone(),
+        at: Where::File(file.clone()),
         line: Some(problem.line),
         reason: problem.reason,
     })?;
@@ -94,7 +94,7 @@ fn broken_link(path: &Path) -> Option<Refusal> {
         Err(error) => error,
     };
     Some(Refusal {
-        path: path.to_path_buf(),
+        at: Where::File(path.to_path_buf()),
         line: None,
         reason: broken_reason(target, &why),
     })

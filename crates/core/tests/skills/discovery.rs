@@ -1,7 +1,7 @@
 //! Both scopes, the shadowing between them, and the shapes of the tree a scan
 //! has to survive: a link, a broken link, a directory that is not a skill.
 
-use sindri_core::skills::{Origin, Scope};
+use sindri_core::skills::{Origin, Scope, Where};
 use tempfile::TempDir;
 
 use crate::fixtures::{repo, scanned, skill};
@@ -166,7 +166,7 @@ fn a_symlinked_skill_directory_is_followed_and_a_broken_link_is_a_diagnostic() {
     assert_eq!(catalog.skills.len(), 1, "{catalog:?}");
     assert_eq!(catalog.skills[0].name, "shared");
     assert_eq!(catalog.refused.len(), 1, "a broken link is said, not fatal");
-    assert_eq!(catalog.refused[0].path, scope.join("gone"));
+    assert_eq!(catalog.refused[0].at, Where::File(scope.join("gone")));
     assert_eq!(catalog.refused[0].line, None, "a link has no line");
     let target = root.path().join("gone");
     let named = format!("a broken link to {}: ", target.display());

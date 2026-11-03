@@ -181,9 +181,12 @@ is `Loaded`, and a frame builds its ledger from the `SkillLoaded` event.
 **catalog** — everything one scan found: every **skill**, every **refusal**, and the shadowed
 names. Sorted by name, so two scans of one tree say the same thing.
 
-**refusal** — a `SKILL.md` the scan would not load, held with its file and the line that broke it:
-no description, no YAML, a description past the **description ceiling**, a link to nothing. A
-refusal is a diagnostic, not a failure — the rest of the **catalog** still holds.
+**refusal** — a `SKILL.md` the scan or the built-in table would not load, held with where it came
+from and the line that broke it: no description, no YAML, a description past the **description
+ceiling**, a link to nothing. Where it came from is its file — or, a **built-in skill** being
+compiled in and having none, the **skill scope** that carries it, which is the word `sindri doctor`
+prints in place of a path. The code's word for the two is `Where`: `File` and `Scope`. A refusal is
+a diagnostic, not a failure — the rest of the **catalog** still holds.
 
 **user-only skill** — one the model may not see: `disable-model-invocation: true`. It is absent
 from the **catalog** the `skill` tool carries and from that tool's schema, and a human reaches it

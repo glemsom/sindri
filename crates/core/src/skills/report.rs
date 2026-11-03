@@ -37,14 +37,15 @@ impl Catalog {
         out
     }
 
-    /// Every file the scan would not load, with the line that broke it where
-    /// there is one.
+    /// Every skill that would not load, with where it came from and the line
+    /// that broke it where there is one: a file, or the scope that carries a
+    /// built-in, which has none.
     fn refused(&self) -> String {
         let mut out = heading("refused", self.refused.len());
         for refusal in &self.refused {
             let at = match refusal.line {
-                Some(line) => format!("{}:{line}", refusal.path.display()),
-                None => refusal.path.display().to_string(),
+                Some(line) => format!("{}:{line}", refusal.at),
+                None => refusal.at.to_string(),
             };
             out.push_str(&format!("  {at}: {}\n", refusal.reason));
         }

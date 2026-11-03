@@ -100,15 +100,36 @@ impl Skill {
     }
 }
 
-/// A file the scan would not load, and the line that broke it: a skill is
-/// skipped out loud, never silently.
+/// A skill the scan or the built-in table would not load, and the line that
+/// broke it: such a skill is skipped out loud, never silently.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Refusal {
-    pub path: PathBuf,
+    /// Where the skill it was about came from.
+    pub at: Where,
     /// The line the refusal is about, when there is one: a directory that is a
     /// broken link has no line to point at.
     pub line: Option<usize>,
     pub reason: String,
+}
+
+/// Where a refusal came from: the file it was read out of, or — a built-in's
+/// `SKILL.md` is compiled in and there is no file — the scope that carries it.
+/// A refusal names what a reader can go and look at, and never a path the
+/// binary has not got.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Where {
+    File(PathBuf),
+    Scope(Scope),
+}
+
+impl fmt::Display for Where {
+    /// The path where there is one, and the scope's own word where there is not.
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Where::File(path) => write!(formatter, "{}", path.display()),
+            Where::Scope(scope) => formatter.write_str(scope.as_str()),
+        }
+    }
 }
 
 /// One skill as a shadow names it: the scope it was found in, the name it

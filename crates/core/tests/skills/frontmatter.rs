@@ -3,7 +3,7 @@
 //! `SKILL.md` is refused: no description, a description past the ceiling, and no
 //! YAML to read.
 
-use sindri_core::skills::DESCRIPTION_CEILING;
+use sindri_core::skills::{DESCRIPTION_CEILING, Where};
 
 use crate::fixtures::{repo, scanned, skill};
 
@@ -102,8 +102,8 @@ fn a_skill_with_no_description_is_refused_with_its_file_and_line() {
     assert!(catalog.skills.is_empty(), "neither is a skill: {catalog:?}");
     assert_eq!(catalog.refused.len(), 2, "{catalog:?}");
     assert_eq!(
-        catalog.refused[0].path,
-        dir.join("empty-description/SKILL.md"),
+        catalog.refused[0].at,
+        Where::File(dir.join("empty-description/SKILL.md")),
         "the file is named"
     );
     assert_eq!(
@@ -112,8 +112,8 @@ fn a_skill_with_no_description_is_refused_with_its_file_and_line() {
         "the line that broke it is the key's own"
     );
     assert_eq!(
-        catalog.refused[1].path,
-        dir.join("nameless-description/SKILL.md")
+        catalog.refused[1].at,
+        Where::File(dir.join("nameless-description/SKILL.md"))
     );
     assert_eq!(
         catalog.refused[1].line,
@@ -145,7 +145,10 @@ fn a_skill_md_that_is_not_yaml_is_refused_with_the_line_that_broke_it() {
 
     assert!(catalog.skills.is_empty(), "{catalog:?}");
     assert_eq!(catalog.refused.len(), 2, "{catalog:?}");
-    assert_eq!(catalog.refused[0].path, dir.join("broken/SKILL.md"));
+    assert_eq!(
+        catalog.refused[0].at,
+        Where::File(dir.join("broken/SKILL.md"))
+    );
     assert_eq!(
         catalog.refused[0].line,
         Some(4),
@@ -155,7 +158,10 @@ fn a_skill_md_that_is_not_yaml_is_refused_with_the_line_that_broke_it() {
         catalog.refused[0].reason.contains("not YAML"),
         "{catalog:?}"
     );
-    assert_eq!(catalog.refused[1].path, dir.join("unfenced/SKILL.md"));
+    assert_eq!(
+        catalog.refused[1].at,
+        Where::File(dir.join("unfenced/SKILL.md"))
+    );
     assert_eq!(catalog.refused[1].line, Some(1));
 }
 
@@ -181,7 +187,11 @@ fn a_description_past_the_ceiling_is_refused_with_its_file_line_and_both_lengths
     );
     assert_eq!(catalog.refused.len(), 1, "{catalog:?}");
     let refusal = &catalog.refused[0];
-    assert_eq!(refusal.path, dir.join("too-long/SKILL.md"), "the file");
+    assert_eq!(
+        refusal.at,
+        Where::File(dir.join("too-long/SKILL.md")),
+        "the file"
+    );
     assert_eq!(refusal.line, Some(3), "the line the key is on");
     let reason = &refusal.reason;
     assert!(
@@ -245,7 +255,7 @@ fn a_description_at_the_ceiling_loads_and_one_character_past_it_does_not() {
     );
     assert_eq!(catalog.refused.len(), 1, "{catalog:?}");
     assert_eq!(
-        catalog.refused[0].path,
-        dir.join("one-past-the-ceiling/SKILL.md")
+        catalog.refused[0].at,
+        Where::File(dir.join("one-past-the-ceiling/SKILL.md"))
     );
 }

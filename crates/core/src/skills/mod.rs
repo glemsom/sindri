@@ -24,8 +24,8 @@ use std::path::{Path, PathBuf};
 
 use crate::workspace;
 
-pub use builtin::{BUILTINS, Builtin, builtins};
-pub use catalog::{Catalog, Content, File, Origin, Refusal, Scope, Shadow, Skill};
+pub use builtin::{BUILTINS, builtins};
+pub use catalog::{Catalog, Content, File, Origin, Refusal, Scope, Shadow, Skill, Where};
 pub use frontmatter::DESCRIPTION_CEILING;
 
 /// The file every skill directory holds, and the one the scan reads.
