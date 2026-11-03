@@ -177,10 +177,9 @@ impl App {
 
     /// A fragment of the run's thinking: the pane is the one surface it is
     /// drawn on, so nothing of it is an entry of the thread. The first fragment
-    /// makes the thought and the ones after it queue behind it, and no fragment
-    /// moves a row of what has already been said — nor reaches the pane at the
-    /// rate the provider sent it, because the thought is the buffer between the
-    /// two and `Thought::drain` is the rate.
+    /// makes the thought and the ones after it are appended to it, and no
+    /// fragment moves a row of what has already been said — nor waits for a
+    /// tick, because the pane draws the thought the provider has sent.
     fn think(&mut self, turn: u32, text: String) {
         match self.thought.as_mut() {
             Some(thought) if thought.turn == turn => thought.push(&text),
@@ -200,9 +199,8 @@ impl App {
             if let Some(thought) = self.thought.as_mut() {
                 // The event carries the whole reasoning of the turn, which is
                 // what the scar opens: the deltas are that text arriving, never
-                // a second text. What the queue still held is dropped where it
-                // stood, so the pane folds on the tick it would have folded
-                // anyway rather than holding the frame open to catch up.
+                // a second text, so closing a thought says what the pane is
+                // already drawing and gives the fold its clock.
                 thought.close(text, now);
             }
             return;

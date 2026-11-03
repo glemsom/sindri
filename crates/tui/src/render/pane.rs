@@ -72,7 +72,7 @@ pub(crate) fn closing(elapsed: Duration) -> usize {
 pub fn height(thought: &Thought, width: u16, now: Duration) -> usize {
     match thought.closed_for(now) {
         Some(since) => closing(since),
-        None => settled(written(thought.shown(), width).len())
+        None => settled(written(&thought.text, width).len())
             .min(rows(now.saturating_sub(thought.started))),
     }
 }
@@ -93,7 +93,7 @@ pub fn draw(app: &App, area: Rect, buf: &mut Buffer) {
     if area.height == 0 {
         return;
     }
-    let body = written(thought.shown(), area.width);
+    let body = written(&thought.text, area.width);
     let steps = settled(body.len());
     let rows = laid(thought, body, area.height as usize, app.now());
     let rows = ruled(rows, steps);
@@ -190,12 +190,10 @@ mod tests {
     use crate::thought::Thought;
     use std::time::Duration;
 
-    /// A thought whose glide has run: what the pane is worth once it has said
-    /// all it was given, which is what a height is measured against.
+    /// A thought holding `text`: what the pane is worth once the clock has
+    /// unfurled it, which is what a height is measured against.
     fn thought(text: &str) -> Thought {
-        let mut thought = Thought::new(1, text.to_string(), Duration::ZERO);
-        thought.drain(Duration::from_secs(60));
-        thought
+        Thought::new(1, text.to_string(), Duration::ZERO)
     }
 
     /// The clock `nth` ticks of the pulse in, which is what a pane's motion is

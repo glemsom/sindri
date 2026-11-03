@@ -174,9 +174,9 @@ fn no_row_of_the_thread_moves_while_the_thought_streams() {
         return;
     };
     let env = Env::new();
-    // A thought of two rows at the transcript's sixty-two columns, arriving as
-    // a burst the pane reads a tick at a time: the pane is standing at its
-    // height while the words are still arriving, which is when a row could move.
+    // A thought of two rows at the transcript's sixty-two columns, arriving in
+    // fragments the provider paces: the pane is standing at its height while
+    // the words are still arriving, which is when a row could move.
     let mock = MockProvider::start(vec![thinking(
         &numbered(20),
         "the answer",
@@ -189,7 +189,7 @@ fn no_row_of_the_thread_moves_while_the_thought_streams() {
     let first = pty.wait_for_whole_words(&mut child, "w008");
     assert!(
         screen::says(&first, "w008"),
-        "the glide reaches the eighth fragment: {first:?}"
+        "the eighth fragment is on the glass: {first:?}"
     );
     let second = pty.wait_for_frame(&mut child);
 
@@ -389,9 +389,9 @@ fn a_thought_longer_than_the_pane_keeps_its_newest_row_and_the_frame_keeps_ticki
     let env = Env::new();
     // One burst of six hundred characters — ten rows of the transcript's
     // columns, so more than the pane's eight — and then a trickle beside it, so
-    // the provider is still thinking while the pane reads the burst at its own
-    // rate. `w085` is five hundred characters in: the pane has cut the head of
-    // the thought by the time the glide reaches it.
+    // the provider is still thinking while the pane draws what it sent. `w085`
+    // is five hundred characters in: the pane has cut the head of the thought
+    // and is standing on its tail.
     let mut fragments = vec![numbered(100).concat()];
     fragments.extend(std::iter::repeat_n("and then ".to_string(), 15));
     let mock = MockProvider::start(vec![thinking(
@@ -404,7 +404,17 @@ fn a_thought_longer_than_the_pane_keeps_its_newest_row_and_the_frame_keeps_ticki
     expect(&pty, &mut child, "cache");
     type_line(&pty, PROMPT);
     expect(&pty, &mut child, "thinking");
-    let drawn = pty.wait_for_whole_words(&mut child, "w085");
+    let mut drawn = pty.wait_for_whole_words(&mut child, "w085");
+    // The unfurl is the clock's and not the words': the burst is on the glass
+    // before the pane has stood to its most, so the frames are read until it
+    // has.
+    for _ in 0..8 {
+        let pane = pane(&drawn);
+        if *pane.end() - *pane.start() + 1 == 8 {
+            break;
+        }
+        drawn = pty.wait_for_frame(&mut child);
+    }
 
     let pane = pane(&drawn);
     let rows = *pane.end() - *pane.start() + 1;
