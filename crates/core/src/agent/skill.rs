@@ -256,27 +256,6 @@ impl UserSkills {
     }
 }
 
-/// A skill a human loaded by hand, and what came of it: the name, the result
-/// the conversation now carries, and whether this was the load or a repeat. A
-/// front end reads it to say something and to draw a row; the conversation was
-/// changed here, where the set that decides what is in force lives.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Activated {
-    pub name: String,
-    /// The result as the model will read it, which is empty in its body when
-    /// the skill was already in force or the name answers nothing.
-    pub content: String,
-    pub is_error: bool,
-    /// Whether this call was the one that put the skill in force.
-    pub loaded: bool,
-    /// The word the result opened with — `loaded`, `already_loaded`,
-    /// `unreadable` — or none where the call never reached the tool.
-    pub outcome: Option<String>,
-    /// Why a call no tool answered was not run, in the words the result was
-    /// written with: what a frame says in place of a load it could not make.
-    pub problem: Option<String>,
-}
-
 /// The bodies this conversation has received. It lives with the agent and is
 /// cleared with the history, because activation is a fact about a conversation
 /// and not about a process: `/new` starts a history that was told nothing, and

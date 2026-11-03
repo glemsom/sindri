@@ -7,7 +7,6 @@
 mod budget;
 mod calls;
 mod event;
-mod hand;
 mod limits;
 mod open;
 mod report;
@@ -20,7 +19,7 @@ pub use event::Event;
 pub use limits::Limits;
 pub use open::{OpenTool, Opened, Opener};
 pub use report::{Report, Stopped};
-pub use skill::{Activated, Loaded, SkillTool, UserSkills};
+pub use skill::{Loaded, SkillTool, UserSkills};
 pub use tool::BashTool;
 pub use tools::Tools;
 
@@ -131,6 +130,49 @@ impl Agent {
     /// cancel would only be noticed once the command had finished on its own.
     pub fn set_cancel(&mut self, cancel: Cancel) {
         self.cancel = cancel;
+    }
+
+    /// A skill a human asked for, loaded without a turn: `/skill:name` is the
+    /// call the model would make, run where the human asked for it, so the body
+    /// is in the conversation from here on and the once-per-conversation claim
+    /// counted it. Nothing is sent to the provider — a skill in force is a fact
+    /// about the next turn, not a question to ask now — and a repeat or a name
+    /// no skill answers changes neither the conversation nor the record,
+    /// because an exchange nobody made is not one the model should read.
+    pub fn activate(&mut self, name: &str) -> Activated {
+        self.by_hand += 1;
+        let call = Call::new(
+            format!("user_skill_{}", self.by_hand),
+            "skill",
+            Ok(serde_json::Map::from_iter([(
+                "name".to_string(),
+                serde_json::json!(name),
+            )])),
+        );
+        let outcome = self.hand.call(&call, name, &self.loaded);
+        let loaded = outcome.facts.outcome.as_deref() == Some("loaded");
+        if loaded {
+            if let Some(recorder) = &self.recorder {
+                // Turn zero: a load by hand happens between turns, so it
+                // belongs to no turn of a run.
+                recorder.tool_call(0, &call);
+                recorder.tool_result(0, &outcome);
+            }
+            // The exchange the model will read: the call it did not make, and
+            // the result it did. A body in the history without the call that
+            // asked for it is a conversation no provider will take.
+            self.history.push(Message::Assistant {
+                text: String::new(),
+                calls: vec![call],
+            });
+            self.history
+                .push(Message::ToolResults(vec![outcome.clone()]));
+        }
+        Activated {
+            name: name.to_string(),
+            outcome,
+            loaded,
+        }
     }
 
     pub fn run(&mut self, prompt: &str) -> Result<Report, Error> {
@@ -317,6 +359,21 @@ impl Agent {
             let _ = events.send(event);
         }
     }
+}
+
+/// A skill a human loaded by hand, and what came of it: the name, the result
+/// the tool produced, and whether this call was the load or a repeat. The
+/// result is the tool's own — its content, its error and its facts — so a front
+/// end reads one thing rather than six fields that re-derived it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Activated {
+    pub name: String,
+    /// The result the conversation now carries, which is the `already_loaded`
+    /// answer when the skill was already in force, and a call no tool answered
+    /// when the name is not one a human may reach.
+    pub outcome: ToolOutcome,
+    /// Whether this call was the one that put the skill in force.
+    pub loaded: bool,
 }
 
 /// The loop's side of a streamed turn: each fragment becomes an event at once,

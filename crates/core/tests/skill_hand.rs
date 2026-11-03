@@ -37,9 +37,9 @@ fn a_load_by_hand_puts_the_body_in_the_conversation_and_asks_for_no_turn() {
     let activated = h.activate("alpha");
 
     assert!(activated.loaded, "{activated:?}");
-    assert!(!activated.is_error, "{activated:?}");
+    assert!(!activated.outcome.is_error, "{activated:?}");
     assert_eq!(
-        activated.outcome.as_deref(),
+        activated.outcome.facts.outcome.as_deref(),
         Some("loaded"),
         "the word the frame's row states"
     );
@@ -84,6 +84,34 @@ fn a_load_by_hand_puts_the_body_in_the_conversation_and_asks_for_no_turn() {
 }
 
 #[test]
+fn a_load_by_hand_returns_the_result_the_tool_produced() {
+    let workspace = tempfile::TempDir::new().expect("workspace");
+    let catalog = alpha(workspace.path());
+    let mut h = Harness::skilled(vec![answer("Done.")], Vec::new(), &catalog);
+
+    let activated = h.activate("alpha");
+
+    // The call's own identity and the facts the content was rendered from: one
+    // result, made by the tool, rather than a second reading of its fields.
+    assert_eq!(activated.name, "alpha");
+    assert_eq!(activated.outcome.call_id, "user_skill_1");
+    assert_eq!(activated.outcome.name, "skill");
+    assert_eq!(
+        activated.outcome.facts.outcome.as_deref(),
+        Some("loaded"),
+        "the word the content opens with, as a field beside it"
+    );
+    assert!(
+        activated
+            .outcome
+            .content
+            .starts_with("outcome: loaded\nskill: alpha\ndir: "),
+        "the content is the tool's own: {}",
+        activated.outcome.content
+    );
+}
+
+#[test]
 fn a_second_load_by_hand_is_already_loaded_and_tells_the_model_nothing_new() {
     let workspace = tempfile::TempDir::new().expect("workspace");
     let catalog = alpha(workspace.path());
@@ -96,7 +124,15 @@ fn a_second_load_by_hand_is_already_loaded_and_tells_the_model_nothing_new() {
         !again.loaded,
         "the set is the conversation's: once, not twice"
     );
-    assert_eq!(again.outcome.as_deref(), Some("already_loaded"));
+    assert_eq!(
+        again.outcome.facts.outcome.as_deref(),
+        Some("already_loaded")
+    );
+    assert_eq!(
+        again.outcome.content, "outcome: already_loaded\nskill: alpha\n",
+        "a repeat is the tool's own quiet result: {}",
+        again.outcome.content
+    );
     assert_eq!(h.loaded(), vec!["alpha".to_string()]);
     h.run("follow the steps");
     let first = &h.conversations()[0];
@@ -127,9 +163,9 @@ fn a_user_only_skill_loads_by_hand_and_is_never_in_the_models_tool() {
 
     assert!(activated.loaded, "a human may reach it: {activated:?}");
     assert!(
-        activated.content.contains("Never rewrite a file."),
+        activated.outcome.content.contains("Never rewrite a file."),
         "{}",
-        activated.content
+        activated.outcome.content
     );
     let built = SkillTool::new(&alpha_only).expect("alpha is a skill the model may see");
     assert!(
@@ -153,18 +189,35 @@ fn a_model_only_skill_cannot_be_loaded_by_hand() {
     let activated = h.activate("hidden");
 
     assert!(!activated.loaded);
-    assert!(activated.is_error, "{activated:?}");
+    assert!(activated.outcome.is_error, "{activated:?}");
     assert!(
         activated
+            .outcome
             .content
             .contains("there is no skill called `hidden`"),
         "{}",
-        activated.content
+        activated.outcome.content
     );
     assert_eq!(
-        activated.problem.as_deref(),
+        activated.outcome.facts.reason.as_deref(),
         Some("there is no skill called `hidden`: `skill` takes one of `alpha`"),
         "the reason a frame says is the fact the result carries, in its own words"
     );
     assert!(h.loaded().is_empty(), "nothing was put in force");
+}
+
+#[test]
+fn a_load_by_hand_is_forgotten_with_the_history_it_was_told_in() {
+    let workspace = tempfile::TempDir::new().expect("workspace");
+    let catalog = alpha(workspace.path());
+    let mut h = Harness::skilled(vec![answer("Done.")], Vec::new(), &catalog);
+
+    h.activate("alpha");
+    h.forget();
+    let again = h.activate("alpha");
+
+    assert!(
+        again.loaded,
+        "a history that was told nothing holds nothing: {again:?}"
+    );
 }

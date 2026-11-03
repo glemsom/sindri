@@ -188,22 +188,26 @@ impl Driver for Front {
         let activated = agent.activate(skill);
         // The row and the chip are drawn from this event, whether a human asked
         // or the model did: one spelling of a load, read by one handler.
-        if let Some(outcome) = &activated.outcome {
+        if let Some(word) = &activated.outcome.facts.outcome {
             tap.event(Event::SkillLoaded {
                 // Turn zero: a load by hand happens between turns, so it belongs
                 // to no turn of a run.
                 turn: 0,
                 name: activated.name.clone(),
-                outcome: Some(outcome.clone()),
-                body: activated.content.clone(),
+                outcome: Some(word.clone()),
+                body: activated.outcome.content.clone(),
             });
         }
         self.agent = Some(agent);
-        if activated.is_error {
+        if activated.outcome.is_error {
+            // The reason the result carries, in its own words, and the whole
+            // result where it carries none.
             return Err(activated
-                .problem
+                .outcome
+                .facts
+                .reason
                 .clone()
-                .unwrap_or_else(|| activated.content.trim().to_string()));
+                .unwrap_or_else(|| activated.outcome.content.trim().to_string()));
         }
         Ok(if activated.loaded {
             Invoked::Loaded(activated.name)
