@@ -29,21 +29,26 @@ hatch is `--yolo-unsafe`: it runs one invocation's commands with your own privil
 outside bubblewrap, inheriting your environment and working directory — and it costs the
 boundary entirely, which is why the run's record, its JSON and its rail all say `unsafe`.
 
-**Linux only.** Static `x86_64` and `aarch64` releases; an unprivileged `bwrap` that can
-build a namespace is the precondition for running at all.
+**Linux only.** `x86_64` and `aarch64` are the two targets, static musl for a release; an
+unprivileged `bwrap` that can build a namespace is the precondition for running at all.
 
 ## Install
 
-A static binary, checksum-verified, into `~/.local/bin` — no Rust toolchain.
+**Nothing is released yet**: `git tag` is empty, so the installer has no release to fetch.
+Build it from a checkout with the pinned toolchain instead.
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/glemsom/sindri/main/install.sh | sh
+$ git clone https://github.com/glemsom/sindri && cd sindri
+$ devbox run -- cargo install --path crates/cli
 $ sindri doctor
 ```
 
-The installer verifies the checksum before writing; `doctor` proves `bwrap`, the binary
-set and the mount plan, and lists every skill under `~/.agents/skills` and the
-repository's `.agents/skills`. Flags and the runbook: [`docs/install.md`](docs/install.md).
+Any recent stable Rust builds the same binary as `cargo install --path crates/cli`, and
+either way it lands on your `PATH` (`~/.cargo/bin` without devbox). `doctor` proves
+`bwrap`, the binary set and the mount plan, and lists every skill under
+`~/.agents/skills` and the repository's `.agents/skills`. The static, checksum-verified
+`curl … | sh` install into `~/.local/bin` is the plan for v0.1.0; the runbook and what is
+proven of it: [`docs/install.md`](docs/install.md).
 
 ## Batch mode
 
@@ -300,9 +305,10 @@ narrow what is required.
 | `make hooks` | enable the pre-commit hook: those audits, before every commit |
 | `make build` / `install` / `clean` / `run ARGS=…` | release build / install the tree's binary / `cargo clean` / run it |
 | `make eval` / `eval-live` / `scripts-check` | the evals, offline or against your provider; the release scripts, offline |
-| `make release TAG=v0.1.0` | both static binaries, `SHA256SUMS`, changelog |
+| `make release TAG=v0.1.0` | both static binaries, `SHA256SUMS`, changelog — inside the release image; devbox has no musl `std`, so this target fails on a dev machine (see [`docs/install.md`](docs/install.md)) |
 
-A tag is the only thing a release needs; the workflow builds, verifies and publishes it
+A tag is the only thing a release needs, and the workflow builds, verifies and publishes
+it; none is cut yet, so every release path here is the plan rather than the state
 (see [`docs/install.md`](docs/install.md)). [`GLOSSARY.md`](GLOSSARY.md) has the
 vocabulary, [`docs/adr/0001-llm-friendly-code.md`](docs/adr/0001-llm-friendly-code.md)
 how the code is written.

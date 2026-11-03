@@ -68,8 +68,9 @@ build:
 	$(CARGO) build --release
 
 ## release: both static musl binaries for TAG, plus SHA256SUMS and the changelog,
-## into dist/. The steps are the release image's; the workflow is authoritative
-## (it also verifies and publishes). See docs/install.md.
+## into dist/. The steps are the release image's, and so is the musl std they
+## need: on a dev machine this fails, and the workflow is authoritative (it also
+## verifies and publishes). See docs/install.md.
 release:
 	@rm -rf dist && mkdir -p dist
 	@scripts/release-build.sh "$(TAG)" dist

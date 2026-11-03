@@ -1,11 +1,47 @@
 # Installing, and shipping, Sindri
 
-Sindri ships as two static musl binaries — `x86_64-unknown-linux-musl` and
-`aarch64-unknown-linux-musl` — plus `SHA256SUMS` and a changelog, on a GitHub
-Release tagged `vX.Y.Z`. No Rust toolchain, no libc to match, nothing to
-compile on the machine that runs it.
+**Nothing is published yet.** `git tag` is empty and the releases API answers `[]`, so
+`install.sh` — which asks `releases/latest` for a `tag_name` — finds none and stops asking
+you to pass `--version`. The installer, the release workflow and the release scripts are
+all in the tree and exercised by `make check`; what is missing is the first tag. Until it
+is cut, the source build below is the path that installs, and every section after it
+describes the release as the plan rather than the state.
 
-## Install, in one command
+## Install from source
+
+Sindri is a Rust workspace, so a checkout and a toolchain are the whole of it. `devbox` is
+the toolchain the tree is tested with; any recent stable Rust builds the same binary.
+
+```console
+$ git clone https://github.com/glemsom/sindri
+$ cd sindri
+$ devbox run -- cargo install --path crates/cli
+$ sindri doctor
+```
+
+Without devbox the same line without the wrapper works — `cargo install --path
+crates/cli` — and installs to `~/.cargo/bin`, which has to be on your `PATH`. Either way it
+is a release build from a cold target directory, so it takes a couple of minutes.
+
+The binary reports `git describe --tags --always` and the commit date, injected at build
+time by `crates/types/build.rs` — never the wall clock, so an unchanged tree does not
+relink (`make relink` proves it). A build from a commit rather than a tag says the short
+commit hash instead: `sindri 9be47ec (2026-11-03)`. That is the tree's own version, not a
+fault.
+
+`sindri doctor` is not decoration: **run it on a fresh install.** It proves bubblewrap, the
+binary set and the mount plan on *your* machine, and tells you one actionable line if your
+distribution blocks unprivileged user namespaces. It exits `0` when the sandbox can start,
+`3` when it cannot, and `2` for a configuration a run would refuse. An agent failure
+caused by a sandbox that could never start is the one bad first impression a fresh install
+must not deliver.
+
+## Install, in one command (the plan: needs v0.1.0)
+
+Once a release exists, Sindri ships as two static musl binaries —
+`x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl` — plus `SHA256SUMS` and a
+changelog, on a GitHub Release tagged `vX.Y.Z`. No Rust toolchain, no libc to match,
+nothing to compile on the machine that runs it.
 
 ```console
 $ curl -fsSL https://raw.githubusercontent.com/glemsom/sindri/main/install.sh | sh
@@ -44,13 +80,7 @@ aarch64 and unsupported-machine paths on one host. Exit `2` is a usage error —
 including a kernel or a machine no release serves — and `1` anything else: a
 failed download, a checksum mismatch, an unwritable directory.
 
-The last line is not decoration: **run `sindri doctor` on a fresh install.** It
-proves bubblewrap, the binary set and the mount plan on *your* machine, and
-tells you one actionable line if your distribution blocks unprivileged user
-namespaces. An agent failure caused by a sandbox that could never start is the
-one bad first impression a static binary must not deliver.
-
-## What a release carries
+## What a release will carry (plan)
 
 | File | What it is |
 | --- | --- |
@@ -59,15 +89,11 @@ one bad first impression a static binary must not deliver.
 | `SHA256SUMS` | the two lines above, sorted, verified by the installer |
 | `CHANGELOG.md` | the changelog: the tickets closed since the previous tag |
 
-The version reported by `--version` is `git describe --tags --always` (a leading
-`v` stripped) and the commit date, injected at build time by
-`crates/types/build.rs` — never the wall clock, so an unchanged tree does not
-relink. The release binaries are built from the tagged checkout, so
-they report the tag. A build from a tree without tags reports the short commit
-hash instead, and a tree without `git` at all falls back to the `Cargo.toml`
-version with a commit date of `unknown`.
+The release binaries are built from the tagged checkout, so they report the tag. A tree
+without `git` at all falls back to the `Cargo.toml` version with a commit date of
+`unknown`.
 
-## Cutting a release (maintainer)
+## Cutting a release (maintainer, plan)
 
 The whole of it is one tag; the workflow does the rest.
 
@@ -95,21 +121,41 @@ $ git push origin v0.1.0
 5. creates the GitHub Release with both binaries, the checksums and the
    changelog.
 
-Locally the same steps, without Docker:
-
-```console
-$ make release TAG=v0.1.0   # dist/: both binaries, SHA256SUMS, CHANGELOG.md
-$ make scripts-check        # the installer and release scripts, offline
-```
-
 A ticket is in the changelog if it landed as a merge commit whose subject is
 `TN: <title> (#issue)`, which is this repository's style. A ticket closed by a
 squash or a direct commit does not appear, so amend the release notes by hand
 when one does.
 
-`make scripts-check` is part of `make check`. It runs the installer through
-`sh` against a `file://` release, so the artefact names the build produces are
-proven to be the names the installer looks for.
+### Building the artefacts locally
+
+There is no local path to the two binaries on a machine that has only devbox: nixpkgs'
+`rustc` carries the host's standard library alone, so `cargo zigbuild --target …-musl`
+stops with no `core` for that target, and `make release` — the same three scripts in one
+target — fails in the same place.
+
+The one build that produces `dist/` runs in the release image, whose `docker run` step in
+`.github/workflows/release.yml` is the command to copy: it installs a rustup toolchain of
+devbox's own rustc version inside the container (*Where musl std comes from* below) before
+`scripts/release-build.sh`, and nothing outside that image has that toolchain.
+
+```console
+$ devbox generate dockerfile --force --root-user
+$ docker build --tag sindri-release .
+$ # then the `docker run … sindri-release` step from .github/workflows/release.yml
+```
+
+Two of the three scripts do run locally, on artefacts you already have:
+
+```console
+$ make scripts-check                          # the installer and the scripts, offline
+$ scripts/release-checksums.sh dist           # SHA256SUMS for whatever is in dist/
+$ scripts/release-changelog.sh v0.1.0 > dist/CHANGELOG.md
+```
+
+`make scripts-check` is part of `make check`. It runs the installer through `sh` against a
+`file://` release laid out under the names a dry run of `scripts/release-build.sh` says it
+would write, so the build's naming and the installer's lookup cannot drift apart
+unnoticed; it proves that contract, and nothing about whether a binary exists.
 
 ### Where musl std comes from
 
@@ -125,11 +171,11 @@ untouched, and `make check` never sees it.
 
 ## Proving it end to end (acceptance)
 
-The acceptance criterion for the release is a **pristine container with no Rust
+The acceptance criterion for a release is a **pristine container with no Rust
 installed, going from the release page to a successful batch task**. It needs a
 real release and a model credential, so it is deliberately not part of
 `make check` — but it is the one check that proves the whole chain, and a
-maintainer runs it once per release:
+maintainer runs it once per release. No release exists yet, so nothing has run it:
 
 ```console
 $ docker run --rm -it ubuntu:24.04 bash
@@ -150,9 +196,9 @@ agent — can run at all.
 
 ### What is proven here, and what is not
 
-`make scripts-check` proves the installer, the checksums, the changelog and the
-artefact naming offline: a `file://` release, a throwaway git repository and a
-build dry run. It does **not** prove the two static binaries exist, because a
-machine with devbox has no musl `std` to build them with (see below); the first
-tag is what proves that, and the release job refuses to publish anything that
-fails the checksum or static-link check.
+`make scripts-check` proves the installer, the checksums, the changelog and the artefact
+naming offline: a `file://` release, a throwaway git repository and a dry run of the build
+whose own printed names the fixture release is laid out under. It does **not** prove the
+two static binaries exist, because a machine with devbox has no musl `std` to build them
+with (see above); the first tag is what proves that, and the release job refuses to
+publish anything that fails the checksum or static-link check.

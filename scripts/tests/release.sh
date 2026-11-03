@@ -71,9 +71,17 @@ test_dry_run_names_both_targets_and_their_artefacts() {
 }
 
 test_installer_takes_the_artefact_names_the_build_produces() {
+    # The names are the build's, not this test's: `--dry-run` says what it would
+    # write, and the release is laid out under exactly those basenames, so a
+    # naming convention that drifts on either side fails here instead of at a
+    # user's `curl`. Composing the name here would make two literals agree and
+    # prove nothing.
     out=$(bash "$SINDRI_ROOT/scripts/release-build.sh" --dry-run v0.1.0 dist)
-    for name in $(printf '%s\n' "$out" | grep -o 'sindri-0\.1\.0-[A-Za-z0-9_-]*musl'); do
-        make_release "$PWD/releases" 0.1.0 "${name#sindri-0.1.0-}" >/dev/null
+    names=$(printf '%s\n' "$out" | awk '/would write/ { sub(/.*would write .*\//, ""); print }')
+    count=$(printf '%s\n' "$names" | awk 'NF { n++ } END { print n+0 }')
+    [ "$count" = 2 ] || fail "the dry run named $count artefacts, want 2: $out"
+    for name in $names; do
+        make_named_release "$PWD/releases" 0.1.0 "$name" >/dev/null
     done
     run_installer --version 0.1.0 --dir "$PWD/bin"
     assert_status 0 "$STATUS"

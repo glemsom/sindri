@@ -31,15 +31,23 @@ assert_executable() { # path
     [ -x "$1" ] || fail "$1 is not executable"
 }
 
-# A release as a user's `curl` would find it: an asset whose `--version` names
-# its version and target, and the checksum file the installer verifies.
-make_release() { # dir version target
+# One asset of a release as a user's `curl` would find it: a file under exactly
+# the name it is given, plus the checksum file the installer verifies. A test
+# that names an artefact hands over the name it read, never one it composes.
+make_named_release() { # dir version name
     mkdir -p "$1/v$2"
-    printf '#!/bin/sh\n# built for %s\necho "sindri %s (2025-10-29)"\n' "$3" "$2" \
-        >"$1/v$2/sindri-$2-$3"
-    chmod +x "$1/v$2/sindri-$2-$3"
+    printf '#!/bin/sh\n# built as %s\necho "sindri %s (2025-10-29)"\n' "$3" "$2" \
+        >"$1/v$2/$3"
+    chmod +x "$1/v$2/$3"
     (cd "$1/v$2" && sha256sum ./*sindri-* | sed 's#\./##' >SHA256SUMS)
-    printf '%s\n' "$1/v$2/sindri-$2-$3"
+    printf '%s\n' "$1/v$2/$3"
+}
+
+# The same fixture for a test that has only a version and a target to go on: the
+# installer's own naming, spelled out here, which is why the artefact-naming
+# test above reads the build's answer instead.
+make_release() { # dir version target
+    make_named_release "$1" "$2" "sindri-$2-$3"
 }
 
 # The installer, run the way `curl | sh` runs it: through `sh`, never bash.

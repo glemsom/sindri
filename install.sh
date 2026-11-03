@@ -6,6 +6,10 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/glemsom/sindri/main/install.sh | sh
 #
+# No release is published yet, so today the lookup finds no `tag_name` and this
+# stops asking for --version; v0.1.0 is the tag that makes the line above work
+# (docs/install.md). Until then, install from source.
+#
 # Flags: --version VERSION, --dir DIR. Exit 2 is a usage error — including a
 # kernel or machine no release serves — and 1 anything else: a failed download,
 # a checksum mismatch, an unwritable directory.
