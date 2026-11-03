@@ -435,25 +435,36 @@ impl App {
         std::mem::take(&mut self.reload)
     }
 
-    pub fn reloaded(&mut self, reloaded: Result<Launch, String>) {
+    /// The launch a save asked for, and whether the rail heard it: a refusal is
+    /// a line in the thread, and a launch is the rail's own facts rewritten.
+    pub fn reloaded(&mut self, reloaded: Result<Launch, String>) -> bool {
         match reloaded {
             Ok(launch) => self.rail.reconfigured(launch),
             Err(error) => self.note_error(format!(
                 "settings saved, but the next run cannot start: {error}"
             )),
         }
+        true
     }
 
-    pub fn paths(&mut self, generation: u64, paths: Vec<String>, capped: bool) {
-        if let Some(completion) = self.completion.as_mut()
-            && completion.generation == generation
-        {
-            completion.items = crate::completion::offered(&paths, &completion.typed);
-            completion.capped = capped;
+    /// A walk of the workspace answering, and whether the offer standing in the
+    /// composer is the one that asked: a generation the frame is not holding
+    /// belongs to a draft that has moved on, and its paths are nothing to draw.
+    pub fn paths(&mut self, generation: u64, paths: Vec<String>, capped: bool) -> bool {
+        let Some(completion) = self.completion.as_mut() else {
+            return false;
+        };
+        if completion.generation != generation {
+            return false;
         }
+        completion.items = crate::completion::offered(&paths, &completion.typed);
+        completion.capped = capped;
+        true
     }
 
-    pub fn renewed(&mut self, renewed: Result<Launch, String>) {
+    /// The launch `/new` asked for: either way the frame says something, a
+    /// thread cleared or the reason it was not.
+    pub fn renewed(&mut self, renewed: Result<Launch, String>) -> bool {
         match renewed {
             Ok(launch) => {
                 self.renew = Renew::Idle;
@@ -478,6 +489,7 @@ impl App {
                 self.note_error(error);
             }
         }
+        true
     }
 
     pub fn note_info(&mut self, text: impl Into<String>) {

@@ -497,3 +497,206 @@ fn a_drag_copies_the_marked_rows_it_draws_for() {
         "the marked rows are the ones copied: {copied:?}"
     );
 }
+
+#[test]
+fn a_pointer_report_that_changed_no_row_draws_no_frame_and_a_press_that_marks_draws_one() {
+    let mut app = app();
+    app.note_info("alpha bravo charlie");
+    let (jobs, _job_queue) = mpsc::channel();
+    let (tx, rx) = mpsc::channel::<Msg>();
+    let root = tempfile::tempdir().expect("a workspace");
+    let mut walking = false;
+    let mut surface = Painted::new(Arc::new(AtomicUsize::new(0)));
+    // The rows a gesture can reach are the frame's own: one draw lays them out.
+    surface.show(&mut app);
+    let drawn = surface.drawn();
+    let area = app.viewport().area;
+
+    // Every one of these is a report the frame reads and says nothing with: the
+    // pointer moving with no button held, a right button with no mark standing
+    // to spend, a release with nothing selected, and a drag no press began.
+    for quiet in [
+        gesture(MouseEventKind::Moved, area.x, area.y),
+        gesture(MouseEventKind::Down(MouseButton::Right), area.x, area.y),
+        gesture(MouseEventKind::Up(MouseButton::Left), area.x, area.y),
+        gesture(MouseEventKind::Drag(MouseButton::Left), area.x, area.y + 1),
+    ] {
+        let _ = tx.send(quiet);
+        assert!(turn_of_the_loop(
+            &mut app,
+            &rx,
+            &jobs,
+            &tx,
+            &mut walking,
+            root.path(),
+            &mut surface
+        ));
+        assert_eq!(
+            surface.drawn(),
+            drawn,
+            "a gesture that changed no row drew no frame"
+        );
+    }
+
+    // And the pointer is still heard: a press that lights rows is one frame.
+    let row = app
+        .viewport()
+        .rows
+        .iter()
+        .position(|row| row.contains("alpha bravo"))
+        .expect("the note is a row");
+    let _ = tx.send(gesture(
+        MouseEventKind::Down(MouseButton::Left),
+        area.x,
+        area.y + row as u16,
+    ));
+    assert!(turn_of_the_loop(
+        &mut app,
+        &rx,
+        &jobs,
+        &tx,
+        &mut walking,
+        root.path(),
+        &mut surface
+    ));
+    assert_eq!(
+        surface.drawn(),
+        drawn + 1,
+        "a press that marks a row is a frame drawn"
+    );
+}
+
+#[test]
+fn a_key_the_frame_binds_to_nothing_draws_no_frame_and_a_typed_one_draws_once() {
+    let mut app = app();
+    let (jobs, _job_queue) = mpsc::channel();
+    let (tx, rx) = mpsc::channel::<Msg>();
+    let root = tempfile::tempdir().expect("a workspace");
+    let mut walking = false;
+    let mut surface = Painted::new(Arc::new(AtomicUsize::new(0)));
+    surface.show(&mut app);
+    let drawn = surface.drawn();
+
+    // A key no arm of the frame's takes: nothing in the composer and nothing in
+    // the thread changed, so there is no frame to draw for it.
+    let _ = tx.send(Msg::Key(KeyEvent::new(KeyCode::F(5), KeyModifiers::NONE)));
+    assert!(turn_of_the_loop(
+        &mut app,
+        &rx,
+        &jobs,
+        &tx,
+        &mut walking,
+        root.path(),
+        &mut surface
+    ));
+    assert_eq!(surface.drawn(), drawn, "an unbound key draws nothing");
+
+    // A key that types a character is a draft with one more character in it.
+    let _ = tx.send(Msg::Key(KeyEvent::new(
+        KeyCode::Char('x'),
+        KeyModifiers::NONE,
+    )));
+    assert!(turn_of_the_loop(
+        &mut app,
+        &rx,
+        &jobs,
+        &tx,
+        &mut walking,
+        root.path(),
+        &mut surface
+    ));
+    assert_eq!(
+        surface.drawn(),
+        drawn + 1,
+        "a typed character is drawn exactly once"
+    );
+}
+
+/// A walk answers the completion that asked for it. An answer that names a
+/// generation the frame is not holding belongs to a draft that has moved on,
+/// and there is nothing in it to draw.
+#[test]
+fn an_answer_to_a_walk_the_frame_asked_nothing_of_draws_no_frame() {
+    let mut app = app();
+    let (jobs, _job_queue) = mpsc::channel();
+    let (tx, rx) = mpsc::channel::<Msg>();
+    let root = tempfile::tempdir().expect("a workspace");
+    let mut walking = false;
+    let mut surface = Painted::new(Arc::new(AtomicUsize::new(0)));
+    surface.show(&mut app);
+    let drawn = surface.drawn();
+
+    let stale = app.generation.wrapping_add(1);
+    let _ = tx.send(Msg::Paths(stale, vec!["main.rs".to_string()], false));
+    assert!(turn_of_the_loop(
+        &mut app,
+        &rx,
+        &jobs,
+        &tx,
+        &mut walking,
+        root.path(),
+        &mut surface
+    ));
+    assert_eq!(
+        surface.drawn(),
+        drawn,
+        "a walk no offer is waiting on draws nothing"
+    );
+}
+
+/// A modal takes the keys it is drawn for and holds nothing for the rest: a
+/// character typed into the field it is on is a row of the modal changing, and a
+/// key no row and no field of it takes leaves the frame as it was. The two are
+/// the same law the pointer answers to, in a kind of its own.
+#[test]
+fn a_key_the_settings_modal_takes_draws_a_frame_and_one_it_holds_nothing_for_draws_none() {
+    let config = tempfile::tempdir().expect("a config directory");
+    let mut app = app().with_config(config.path().join("config.toml"));
+    app.open_settings(None);
+    assert!(app.overlay().is_some(), "the modal has the screen");
+    let (jobs, _job_queue) = mpsc::channel();
+    let (tx, rx) = mpsc::channel::<Msg>();
+    let root = tempfile::tempdir().expect("a workspace");
+    let mut walking = false;
+    let mut surface = Painted::new(Arc::new(AtomicUsize::new(0)));
+    surface.show(&mut app);
+    let drawn = surface.drawn();
+
+    // A key the modal reads as a character: the field it is on takes it, and the
+    // warning a secret draws hangs off the same row.
+    let _ = tx.send(Msg::Key(KeyEvent::new(
+        KeyCode::Char('k'),
+        KeyModifiers::NONE,
+    )));
+    assert!(turn_of_the_loop(
+        &mut app,
+        &rx,
+        &jobs,
+        &tx,
+        &mut walking,
+        root.path(),
+        &mut surface
+    ));
+    assert_eq!(
+        surface.drawn(),
+        drawn + 1,
+        "a key the modal took is a frame"
+    );
+
+    // A key that is no row, no field and no way out of the modal.
+    let _ = tx.send(Msg::Key(KeyEvent::new(KeyCode::F(5), KeyModifiers::NONE)));
+    assert!(turn_of_the_loop(
+        &mut app,
+        &rx,
+        &jobs,
+        &tx,
+        &mut walking,
+        root.path(),
+        &mut surface
+    ));
+    assert_eq!(
+        surface.drawn(),
+        drawn + 1,
+        "a key the modal holds nothing for draws nothing"
+    );
+}

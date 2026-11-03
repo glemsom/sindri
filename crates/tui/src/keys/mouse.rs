@@ -11,69 +11,90 @@ use crate::app::App;
 use crate::selection::Selection;
 
 impl App {
-    /// One mouse event, and whether the pointer said anything the frame draws.
-    /// `Shift` hands the gesture back to the terminal: the frame never sees a
-    /// drag it must not take.
+    /// One mouse event, and whether the pointer said anything the frame draws:
+    /// the answer is what the gesture did, and a gesture that did nothing says
+    /// nothing. `Shift` hands the report back to the terminal: the frame never
+    /// sees a drag it must not take, so nothing of its own moves for one.
     ///
-    /// Motion with no button held is the one report that says nothing. The
+    /// Motion with no button held is the report that made this worth saying. The
     /// frame asks the terminal for any-event tracking, so the pointer moving
-    /// over a still frame arrives as one report per sample, and no part of the
-    /// frame reads it: a press, a drag and the wheel are told apart from it and
-    /// each does its own work. What a frame drawn for it would cost is the
-    /// cursor's blink — every draw ends by showing the terminal's cursor and
-    /// moving it back into the composer, and a terminal restarts a blink on
-    /// both — so a moving pointer leaves the composer's cursor blinking at the
-    /// pointer's sample rate, and a still one leaves it alone.
+    /// over a still frame arrives as one report per sample — and it has no arm
+    /// of its own below, because no part of the frame reads it. What a frame
+    /// drawn for it would cost is the cursor's blink: every draw ends by showing
+    /// the terminal's cursor and moving it back into the composer, and a
+    /// terminal restarts a blink on both. So a moving pointer leaves the
+    /// composer's cursor blinking at the pointer's sample rate, and a still one
+    /// leaves it alone.
     pub fn mouse(&mut self, event: MouseEvent) -> bool {
-        if event.kind == MouseEventKind::Moved {
+        if event.modifiers.contains(KeyModifiers::SHIFT) {
             return false;
         }
-        if event.modifiers.contains(KeyModifiers::SHIFT) {
-            return true;
-        }
         if self.overlay.is_some() {
-            match event.kind {
-                MouseEventKind::ScrollUp => self.scroll_page(true),
-                MouseEventKind::ScrollDown => self.scroll_page(false),
-                _ => {}
-            }
-            return true;
+            return match event.kind {
+                MouseEventKind::ScrollUp => {
+                    self.scroll_page(true);
+                    true
+                }
+                MouseEventKind::ScrollDown => {
+                    self.scroll_page(false);
+                    true
+                }
+                // An overlay owns the screen: a press or a drag under it is no
+                // part of the frame's.
+                _ => false,
+            };
         }
         let at = Position::new(event.column, event.row);
         match event.kind {
             MouseEventKind::Down(MouseButton::Left) => self.press(at),
             // A right or middle button is a click too, and a click is the
-            // reader's next gesture: it spends the mark and takes nothing.
+            // reader's next gesture: it spends the mark and takes nothing. With
+            // no mark standing there is nothing to spend.
             MouseEventKind::Down(_) => self.clear_mark(),
-            MouseEventKind::Drag(MouseButton::Left) => {
-                if self.selection.dragging {
-                    self.selection.head = at;
-                }
+            // A drag is the mark the press began growing: with no press behind
+            // it there is no mark to grow.
+            MouseEventKind::Drag(MouseButton::Left) if self.selection.dragging => {
+                self.selection.head = at;
+                true
             }
-            MouseEventKind::Up(MouseButton::Left) => {
-                // The button coming up copies what the mark covers and leaves
-                // the mark standing: the note names rows the reader can still
-                // see, and `Ctrl-Y` copies them again.
-                self.selection.finish();
-                self.copy_selection();
-            }
+            // The button coming up copies what the mark covers and leaves the
+            // mark standing: the note names rows the reader can still see, and
+            // `Ctrl-Y` copies them again. A button coming up over nothing took
+            // nothing.
+            MouseEventKind::Up(MouseButton::Left) => self.lift(),
             MouseEventKind::ScrollUp => {
                 self.clear_mark();
                 self.scroll_by(WHEEL_ROWS, true);
+                true
             }
             MouseEventKind::ScrollDown => {
                 self.clear_mark();
                 self.scroll_by(WHEEL_ROWS, false);
+                true
             }
-            _ => {}
+            // Motion with no button held, and every report the frame has no use
+            // for: no arm of its own, so no row changed and nothing is drawn.
+            _ => false,
         }
+    }
+
+    /// A release: the mark stops following the pointer and is copied from. What
+    /// a release over no mark is worth is nothing at all — a press nobody
+    /// dragged took no row.
+    fn lift(&mut self) -> bool {
+        let marked = !self.selection.is_empty();
+        self.selection.finish();
+        if !marked {
+            return false;
+        }
+        self.copy_selection();
         true
     }
 
     /// A press: what a row is worth before it is a place in the text. A click
     /// of any kind is also the reader's next gesture, so the mark goes first.
-    fn press(&mut self, at: Position) {
-        self.clear_mark();
+    fn press(&mut self, at: Position) -> bool {
+        let spent = self.clear_mark();
         // A row of the rail is a row like any other: the session id can be
         // taken out of the frame and pasted into `sindri sessions show`.
         // The whole fact is copied, so a wrapped id is never half
@@ -84,10 +105,11 @@ impl App {
             } else {
                 self.rail_view.rows.get(row).cloned().unwrap_or_default()
             };
-            if !text.trim().is_empty() {
+            let copied = !text.trim().is_empty();
+            if copied {
                 self.copy(&text);
             }
-            return;
+            return spent || copied;
         }
         let offered = self
             .viewport
@@ -96,7 +118,7 @@ impl App {
             .cloned();
         if let Some(path) = offered {
             self.show_spill(&path);
-            return;
+            return true;
         }
         // A click on an expandable entry's own row opens that entry, and is
         // never a selection: the row a reader points at is the one they mean.
@@ -107,10 +129,12 @@ impl App {
         {
             self.chosen = Some(index);
             self.toggle(index);
-            return;
+            return true;
         }
         if self.viewport.holds(at) {
             self.selection = Selection::start(at);
+            return true;
         }
+        spent
     }
 }

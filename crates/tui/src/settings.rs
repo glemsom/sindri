@@ -13,9 +13,14 @@ use sindri_core::config::{Document, KEYS, Key, Provider, toggle_shown};
 
 use crate::overlay::Overlay;
 
+/// What one key did to the modal: the four things it can ask for, and the two
+/// ways of asking for nothing. `Staying` is the modal taking the key and staying
+/// — a field edited, a cursor moved — and `Held` is a key it holds nothing for,
+/// which is the one answer that leaves the frame as it was.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Outcome {
     Staying,
+    Held,
     Discard,
     Save,
     Quit,
@@ -285,7 +290,9 @@ impl Settings {
                 self.insert(ch);
                 Outcome::Staying
             }
-            _ => Outcome::Staying,
+            // A key no field and no row of the modal takes: nothing of the
+            // frame moved with it.
+            _ => Outcome::Held,
         }
     }
 
@@ -369,15 +376,28 @@ impl Settings {
 }
 
 impl crate::app::App {
-    pub(crate) fn settings_key(&mut self, key: KeyEvent) {
+    /// A key while the settings modal has the screen, and whether the modal
+    /// took it: a key it stays on and does nothing with leaves the frame as it
+    /// was.
+    pub(crate) fn settings_key(&mut self, key: KeyEvent) -> bool {
         let Some(Overlay::Settings(settings)) = self.overlay.as_mut() else {
-            return;
+            return false;
         };
         match settings.key(key) {
-            Outcome::Staying => {}
-            Outcome::Discard => self.overlay = None,
-            Outcome::Save => self.save_settings(),
-            Outcome::Quit => self.quit = true,
+            Outcome::Staying => true,
+            Outcome::Held => false,
+            Outcome::Discard => {
+                self.overlay = None;
+                true
+            }
+            Outcome::Save => {
+                self.save_settings();
+                true
+            }
+            Outcome::Quit => {
+                self.quit = true;
+                true
+            }
             Outcome::CancelRun => self.cancel_or_clear(),
         }
     }

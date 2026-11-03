@@ -43,7 +43,11 @@ impl App {
     /// itself arrives as the event every other load arrives as — one row and one
     /// chip, whether a human asked or the model did — so a repeat and a refusal
     /// are the two answers left to say here.
-    pub fn loaded(&mut self, loaded: Result<Invoked, String>) {
+    ///
+    /// It says something either way: the wait is over, so the prompt the reader
+    /// armed behind the load starts, and the frame that draws that prompt's row
+    /// is owed whether or not the load itself wrote one.
+    pub fn loaded(&mut self, loaded: Result<Invoked, String>) -> bool {
         self.loading = Loading::Idle;
         match loaded {
             // The row and the rail's chip came with the event the front end
@@ -56,6 +60,7 @@ impl App {
                 self.armed = None;
             }
         }
+        true
     }
 
     /// Whether the frame is waiting on a load: a turn the reader armed does not

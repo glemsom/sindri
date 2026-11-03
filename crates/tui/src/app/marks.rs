@@ -52,10 +52,14 @@ impl App {
         self.selection.translate(shift as isize);
     }
 
-    /// Takes the mark away. Every gesture but the copy itself does this: a mark
-    /// is the reader's until they do the next thing, and no longer.
-    pub(crate) fn clear_mark(&mut self) {
+    /// Takes the mark away, and says whether one stood: a gesture with no mark
+    /// under it has taken nothing off the frame. Every gesture but the copy
+    /// itself does this: a mark is the reader's until they do the next thing,
+    /// and no longer.
+    pub(crate) fn clear_mark(&mut self) -> bool {
+        let stood = !self.selection.is_empty() || self.selecting > 0;
         self.selection = Selection::default();
         self.selecting = 0;
+        stood
     }
 }

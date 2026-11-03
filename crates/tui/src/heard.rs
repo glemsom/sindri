@@ -14,22 +14,23 @@ use crate::entry::{Call, CallOver, Entry, Note, Prompt, Skill};
 use crate::thought::Thought;
 
 impl App {
-    pub(crate) fn submit(&mut self) {
+    pub(crate) fn submit(&mut self) -> bool {
         if self.composer.is_blank() {
-            return;
+            return false;
         }
         // A run with no key cannot answer: sending the prompt would spend a
         // round trip to be told 401, so the draft stays and the frame says what
         // is missing instead.
         if let Some(missing) = self.missing.as_ref() {
             self.note_error(missing.refused());
-            return;
+            return true;
         }
         if self.running.is_some() {
             self.queue.push_back(self.composer.take());
         } else {
             self.sent = true;
         }
+        true
     }
 
     pub fn start(&mut self) -> Option<Job> {
@@ -65,7 +66,10 @@ impl App {
         Some(Job { prompt, cancel })
     }
 
-    pub fn event(&mut self, event: Event) {
+    /// One thing the run said, and — always — something the frame shows: every
+    /// arm below writes a row of the thread or a figure of the rail, and the
+    /// doing word above them moves the report the terminal is owed.
+    pub fn event(&mut self, event: Event) -> bool {
         // What the run is doing is the stream's own reading, made once here and
         // in no arm: the table is `Event::doing`'s, because a batch run reads
         // the same stream and neither front end may spell it again. The arms
@@ -129,6 +133,7 @@ impl App {
                 body,
             } => self.skill_loaded(turn, &name, outcome.as_deref(), &body),
         }
+        true
     }
 
     /// A load has been answered: the row that announced it takes the word and
@@ -254,7 +259,10 @@ impl App {
         });
     }
 
-    pub fn output(&mut self, side: Side, text: &str) {
+    /// One line of a call's output, and whether it reached a row: a line that
+    /// arrived before the call that produced it is held for that call, and no
+    /// entry of the frame holds it yet.
+    pub fn output(&mut self, side: Side, text: &str) -> bool {
         // Output can arrive a moment before the call that produced it was
         // announced, because the two travel different threads. It is held for
         // that call and no entry has changed yet.
@@ -264,7 +272,7 @@ impl App {
             .is_some_and(|entry| matches!(entry, Entry::Call(call) if call.running()));
         if !running {
             self.early.push((side, text.to_string()));
-            return;
+            return false;
         }
         // The line joined the newest entry, so nothing above it moved.
         self.thread.edit_last(|entry| {
@@ -272,9 +280,12 @@ impl App {
                 call.push(side, text.to_string());
             }
         });
+        true
     }
 
-    pub fn over(&mut self, result: Option<ToolResult>) {
+    /// One call's end, and whether a call was still standing to take it: a
+    /// result for a call the frame holds no row of closes nothing.
+    pub fn over(&mut self, result: Option<ToolResult>) -> bool {
         let ended = self
             .thread
             .position(|entry| matches!(entry, Entry::Call(call) if call.running()));
@@ -291,10 +302,14 @@ impl App {
                     None => call.cancelled(now),
                 }
             });
+            return true;
         }
+        false
     }
 
-    pub fn finished(&mut self, finished: Finished) {
+    /// The run's end, which is always something the frame shows: the marker
+    /// settles, the answers close and the clock stops.
+    pub fn finished(&mut self, finished: Finished) -> bool {
         self.running = None;
         // A run that is over is not thinking, whatever door it left by: a
         // thought has no pane once there is nothing left to think it.
@@ -326,6 +341,7 @@ impl App {
                 "cancelled — the draft is kept, and a prompt typed now queues",
             )));
         }
+        true
     }
 
     /// The newest answer is over — because a call followed it, or because the

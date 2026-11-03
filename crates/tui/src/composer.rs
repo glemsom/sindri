@@ -81,11 +81,15 @@ impl Composer {
         text
     }
 
-    pub fn clear(&mut self) {
+    /// Empties the draft, and says whether there was one: a `Ctrl-C` over a
+    /// composer with nothing in it has taken nothing away.
+    pub fn clear(&mut self) -> bool {
+        let drafted = !self.is_blank() || self.rows.len() > 1;
         self.rows.clear();
         self.rows.push(String::new());
         self.row = 0;
         self.column = 0;
+        drafted
     }
 
     pub fn height(&self) -> u16 {
@@ -93,7 +97,9 @@ impl Composer {
         rows.clamp(MIN_ROWS, MAX_ROWS) + 2
     }
 
-    pub fn insert(&mut self, ch: char) {
+    /// One character at the cursor. A character is always a draft with one more
+    /// character in it, so it always says something.
+    pub fn insert(&mut self, ch: char) -> bool {
         self.ensure_row();
         let column = self.column;
         if let Some(row) = self.rows.get_mut(self.row) {
@@ -101,6 +107,7 @@ impl Composer {
             row.insert(at, ch);
             self.column = column + 1;
         }
+        true
     }
 
     /// A paste, inserted at the cursor as the rows it holds rather than as the
@@ -108,7 +115,10 @@ impl Composer {
     /// character's doors, and a clipboard arrives with hundreds at once. A line
     /// break is sent three ways — `\n`, `\r\n` and a lone `\r` — and each is
     /// one row, so a pasted prompt keeps the shape it was copied in.
-    pub fn insert_str(&mut self, text: &str) {
+    pub fn insert_str(&mut self, text: &str) -> bool {
+        if text.is_empty() {
+            return false;
+        }
         self.ensure_row();
         let lines = text.replace("\r\n", "\n").replace('\r', "\n");
         for (index, line) in lines.split('\n').enumerate() {
@@ -119,9 +129,12 @@ impl Composer {
                 self.insert(ch);
             }
         }
+        true
     }
 
-    pub fn newline(&mut self) {
+    /// Breaks the row the cursor is on. Even at the end of a row it is a row the
+    /// frame did not have, so it always says something.
+    pub fn newline(&mut self) -> bool {
         self.ensure_row();
         if let Some(row) = self.rows.get_mut(self.row) {
             let at = byte_index(row, self.column);
@@ -130,16 +143,19 @@ impl Composer {
             self.column = 0;
             self.rows.insert(self.row, rest);
         }
+        true
     }
 
-    pub fn backspace(&mut self) {
+    /// One character back, or a row joined to the one above it. At the head of
+    /// an empty draft there is nothing behind the cursor to take.
+    pub fn backspace(&mut self) -> bool {
         if self.column > 0 {
             if let Some(row) = self.rows.get_mut(self.row) {
                 let at = byte_index(row, self.column - 1);
                 row.remove(at);
                 self.column -= 1;
             }
-            return;
+            return true;
         }
         if self.row > 0 {
             let rest = self.rows.remove(self.row);
@@ -148,34 +164,46 @@ impl Composer {
                 self.column = row.chars().count();
                 row.push_str(&rest);
             }
+            return true;
         }
+        false
     }
 
-    pub fn left(&mut self) {
+    /// The cursor one cell back, and whether it moved: the frame draws where the
+    /// cursor is, so an arrow at the head of the draft says nothing.
+    pub fn left(&mut self) -> bool {
         if self.column > 0 {
             self.column -= 1;
+            return true;
         }
+        false
     }
 
-    pub fn right(&mut self) {
+    pub fn right(&mut self) -> bool {
         let end = self.rows.get(self.row).map_or(0, |row| row.chars().count());
         if self.column < end {
             self.column += 1;
+            return true;
         }
+        false
     }
 
-    pub fn up(&mut self) {
+    pub fn up(&mut self) -> bool {
         if self.row > 0 {
             self.row -= 1;
             self.clamp_column();
+            return true;
         }
+        false
     }
 
-    pub fn down(&mut self) {
+    pub fn down(&mut self) -> bool {
         if self.row + 1 < self.rows.len() {
             self.row += 1;
             self.clamp_column();
+            return true;
         }
+        false
     }
 
     fn clamp_column(&mut self) {

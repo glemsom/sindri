@@ -249,6 +249,11 @@ fn turn_of_the_loop(
     if app.wants_quit() {
         return false;
     }
+    // A walk the frame asked for is started whether or not this message draws:
+    // it lays nothing out, and the answer it walks for is what a later frame
+    // reads — so a draft that moved on is still answered for, whichever
+    // generation's paths arrive first.
+    walk(app, tx, walking, root);
     // What the frame says nothing with is never a frame drawn — a draw shows
     // the cursor in the composer again and restarts its blink — and the work
     // between a message and its frame goes with it: nothing is laid out twice
@@ -257,7 +262,6 @@ fn turn_of_the_loop(
         return true;
     }
     tasks::begin(app, jobs);
-    walk(app, tx, walking, root);
     let painted = surface.show(app);
     // The frame just drawn is what asked: a fence it laid out as its panel asked
     // for its diagram, and the drawing is made off this thread so the next frame
@@ -332,17 +336,22 @@ impl Paint for Screen<'_> {
 }
 
 /// Tells the frame what it heard, and answers whether the frame has anything to
-/// draw for it. Every kind of message answers here, so an event the frame says
-/// nothing with cannot drift back into a redraw in silence: the mouse is the
-/// first kind to say no — motion with no button held, a report per sample that
-/// no part of the frame reads — and the rest still answer `true` for what they
-/// do.
+/// draw for it: the gate, and the only one. There is no list of kinds here to
+/// keep up to date — a list is a place a later kind is forgotten — because the
+/// answer is the message's own: every verb on [`App`] returns whether what it
+/// was told left a row, a mark, a cursor or a clock saying something it did not
+/// say before, and this hands that answer back unchanged. A kind that turns out
+/// to say nothing is a `false` in the module that knows the kind, and the loop
+/// draws nothing for it.
 fn apply(app: &mut App, message: Msg) -> bool {
     match message {
-        Msg::Mouse(mouse) => return app.mouse(mouse),
+        Msg::Mouse(mouse) => app.mouse(mouse),
         Msg::Key(key) => app.key(key),
         Msg::Paste(text) => app.paste(&text),
-        Msg::Resize => {}
+        // The one message the frame holds nothing for and still draws: a resize
+        // changes no state at all, and every row of it is laid out at a width
+        // the next frame asks the terminal for.
+        Msg::Resize => true,
         Msg::Event(event) => app.event(event),
         Msg::Output(side, text) => app.output(side, &text),
         Msg::Over(result) => app.over(result),
@@ -353,7 +362,6 @@ fn apply(app: &mut App, message: Msg) -> bool {
         Msg::Renewed(launch) => app.renewed(launch.map(|launch| *launch)),
         Msg::Reloaded(reloaded) => app.reloaded(reloaded.map(|launch| *launch)),
     }
-    true
 }
 
 /// Walks the workspace on a thread of its own for the completion that just

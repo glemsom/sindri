@@ -45,14 +45,19 @@ impl App {
     /// to a thread that went while it was being drawn: the answer is dropped
     /// rather than joined, and forgetting heights it did not cause costs a
     /// frame's measure and nothing else.
-    pub fn drawn(&mut self, body: String, drawing: Result<Drawing, Refusal>) {
+    /// A drawing come back, and whether the frame has a store to keep it in: a
+    /// terminal that draws no picture answers nothing to the thread that asked,
+    /// so no height of the frame changed with it. A drawing kept is every height
+    /// worked out again, which is what the answer says.
+    pub fn drawn(&mut self, body: String, drawing: Result<Drawing, Refusal>) -> bool {
         let Some(store) = self.pictures() else {
-            return;
+            return false;
         };
         store.keep(&body, drawing);
         self.thread.forget();
         // The rows below a reader's window were counted from heights that changed.
         self.window.forget();
+        true
     }
 }
 

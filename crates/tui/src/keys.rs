@@ -22,40 +22,73 @@ mod mouse;
 mod skill;
 
 impl App {
-    pub fn key(&mut self, key: KeyEvent) {
+    /// One key, and whether it left the frame something new to draw. Every arm
+    /// answers for itself: a key no arm takes says nothing, a cursor that cannot
+    /// move where it was asked to says nothing, and a key that spends a standing
+    /// mark says something even where the rest of it does nothing, because the
+    /// mark going is a row of the frame changing.
+    pub fn key(&mut self, key: KeyEvent) -> bool {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         if self.overlay.is_some() {
-            self.overlay_key(key, ctrl);
-            return;
+            return self.overlay_key(key, ctrl);
         }
         // A mark stands until the reader's next gesture, and every key is one —
         // but the copy the mark is waiting for, and the two keys that draw a
         // mark of their own over it and must not lose the count they grow by.
-        if !keeps_mark(key) {
-            self.clear_mark();
-        }
-        match key.code {
-            KeyCode::Char('q') if ctrl => self.quit = true,
-            KeyCode::Char('c') if ctrl => self.cancel_or_clear(),
-            KeyCode::Char('y') if ctrl => self.copy_last_answer(),
-            KeyCode::Char('o') if ctrl => self.open_spill(),
-            KeyCode::Char('r') if ctrl => self.open_reasoning(),
-            KeyCode::Char('x') if ctrl => {
-                self.drop_queued();
+        let spent = !keeps_mark(key) && self.clear_mark();
+        let said = match key.code {
+            KeyCode::Char('q') if ctrl => {
+                self.quit = true;
+                true
             }
-            KeyCode::Char('g') if ctrl => self.copy_session_id(),
+            KeyCode::Char('c') if ctrl => self.cancel_or_clear(),
+            KeyCode::Char('y') if ctrl => {
+                self.copy_last_answer();
+                true
+            }
+            KeyCode::Char('o') if ctrl => {
+                self.open_spill();
+                true
+            }
+            KeyCode::Char('r') if ctrl => {
+                self.open_reasoning();
+                true
+            }
+            KeyCode::Char('x') if ctrl => self.drop_queued(),
+            KeyCode::Char('g') if ctrl => {
+                self.copy_session_id();
+                true
+            }
             KeyCode::Char('?') if self.composer.is_blank() => {
-                self.show(Overlay::Help(Help::default()))
+                self.show(Overlay::Help(Help::default()));
+                true
             }
             KeyCode::Esc => self.dismiss(),
             KeyCode::Tab => self.accept_completion(),
-            KeyCode::PageUp => self.scroll_page(true),
-            KeyCode::PageDown => self.scroll_page(false),
-            KeyCode::Home => self.window.to_top(),
-            KeyCode::End => self.window.to_tail(),
+            // A page, the first turn and the tail are questions asked of the
+            // window, which is the only thing that knows how many rows the
+            // thread holds: the next frame answers them, so the key has said
+            // something even where it was already there.
+            KeyCode::PageUp => {
+                self.scroll_page(true);
+                true
+            }
+            KeyCode::PageDown => {
+                self.scroll_page(false);
+                true
+            }
+            KeyCode::Home => {
+                self.window.to_top();
+                true
+            }
+            KeyCode::End => {
+                self.window.to_tail();
+                true
+            }
             KeyCode::Enter if key.modifiers.contains(KeyModifiers::SHIFT) => {
                 self.composer.newline();
                 self.refresh_completion();
+                true
             }
             // `0x0a` is `Ctrl-J` in raw mode, which is how a newline inside a
             // paste arrives at a terminal that sends off the clipboard without
@@ -63,11 +96,13 @@ impl App {
             KeyCode::Char('j') if ctrl => {
                 self.composer.newline();
                 self.refresh_completion();
+                true
             }
             KeyCode::Enter => self.enter(),
             KeyCode::Backspace => {
-                self.composer.backspace();
+                let erased = self.composer.backspace();
                 self.refresh_completion();
+                erased
             }
             KeyCode::Left => self.composer.left(),
             KeyCode::Right => self.composer.right(),
@@ -77,16 +112,19 @@ impl App {
             KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => {
                 self.select_by_keyboard(false)
             }
-            KeyCode::Up if self.choose_completion(false) => {}
-            KeyCode::Down if self.choose_completion(true) => {}
+            KeyCode::Up if self.choose_completion(false) => true,
+            KeyCode::Down if self.choose_completion(true) => true,
             KeyCode::Up => self.up(),
             KeyCode::Down => self.composer.down(),
             KeyCode::Char(ch) if !ctrl => {
                 self.composer.insert(ch);
                 self.refresh_completion();
+                true
             }
-            _ => {}
-        }
+            // A key the frame binds to nothing: it takes no row with it.
+            _ => false,
+        };
+        said || spent
     }
 
     /// A paste is one draft and never a keystroke: the text lands at the cursor
@@ -95,33 +133,46 @@ impl App {
     /// A run in flight changes nothing, because the queue is `Enter`'s. An open
     /// overlay owns the screen, so a paste under one is ignored like every
     /// other event that is not a key.
-    pub fn paste(&mut self, text: &str) {
+    pub fn paste(&mut self, text: &str) -> bool {
         if self.overlay.is_some() {
-            return;
+            return false;
         }
-        self.clear_mark();
-        self.composer.insert_str(text);
-        self.refresh_completion();
+        // A mark goes with the draft it stood over, so a paste of nothing that
+        // spends one has still taken a row of the frame with it.
+        let spent = self.clear_mark();
+        self.composer.insert_str(text) || spent
     }
 
     /// The keys an open overlay takes. It owns them: nothing behind it moves
     /// while it has the screen, and the page keys move it by the screenful its
-    /// own box shows rather than the transcript's.
-    fn overlay_key(&mut self, key: KeyEvent, ctrl: bool) {
+    /// own box shows rather than the transcript's. A key the overlay does not
+    /// take changes nothing in the frame, the box under the key included.
+    fn overlay_key(&mut self, key: KeyEvent, ctrl: bool) -> bool {
         match key.code {
-            KeyCode::PageUp => return self.scroll_page(true),
-            KeyCode::PageDown => return self.scroll_page(false),
+            KeyCode::PageUp => {
+                self.scroll_page(true);
+                return true;
+            }
+            KeyCode::PageDown => {
+                self.scroll_page(false);
+                return true;
+            }
             _ => {}
         }
         if matches!(self.overlay, Some(Overlay::Settings(_))) {
-            self.settings_key(key);
-            return;
+            return self.settings_key(key);
         }
         match key.code {
-            KeyCode::Esc | KeyCode::Enter => self.overlay = None,
-            KeyCode::Char('q') if ctrl => self.quit = true,
+            KeyCode::Esc | KeyCode::Enter => {
+                self.overlay = None;
+                true
+            }
+            KeyCode::Char('q') if ctrl => {
+                self.quit = true;
+                true
+            }
             KeyCode::Char('c') if ctrl => self.cancel_or_clear(),
-            _ => {}
+            _ => false,
         }
     }
 
@@ -143,37 +194,39 @@ impl App {
     /// `↑` is the row above in the draft, and the newest queued prompt when
     /// the draft has no row above: the queue is reached from the top of the
     /// composer, never instead of it.
-    fn up(&mut self) {
+    fn up(&mut self) -> bool {
         if self.composer.cursor().1 > 0 || !self.take_back() {
-            self.composer.up();
+            return self.composer.up();
         }
+        true
     }
 
-    pub(crate) fn cancel_or_clear(&mut self) {
+    pub(crate) fn cancel_or_clear(&mut self) -> bool {
         let Some(cancel) = self.running.clone() else {
-            self.composer.clear();
-            self.completion = None;
-            return;
+            let cleared = self.composer.clear();
+            let offered = self.completion.take().is_some();
+            self.walking = None;
+            return cleared || offered;
         };
         cancel.trigger();
         // A cancel is answered the moment the key lands, so the thought goes
         // with it: the run is not finished with it, but the reader is.
         self.thought_over();
+        true
     }
 
-    fn enter(&mut self) {
+    fn enter(&mut self) -> bool {
         if self
             .completion
             .as_ref()
             .is_some_and(|open| !open.items.is_empty())
         {
-            self.accept_completion();
-            return;
+            return self.accept_completion();
         }
         // An empty composer has nothing to send: `Enter` there opens the call
         // the reader last touched, or the newest one, and folds it again.
         if self.composer.is_blank() && self.reveal() {
-            return;
+            return true;
         }
         let draft = self.composer.text();
         let single = !draft.trim_end().contains('\n');
@@ -181,9 +234,9 @@ impl App {
             self.composer.take();
             self.completion = None;
             self.run(named);
-            return;
+            return true;
         }
-        self.submit();
+        self.submit()
     }
 
     fn run(&mut self, named: Command) {
@@ -213,12 +266,12 @@ impl App {
         self.renew = Renew::Asked;
     }
 
-    fn dismiss(&mut self) {
+    fn dismiss(&mut self) -> bool {
         if self.completion.take().is_some() {
             self.walking = None;
-            return;
+            return true;
         }
-        self.clear_mark();
+        self.clear_mark()
     }
 
     /// An overlay takes the screen, and a mark under it would be a lit cell
@@ -258,17 +311,18 @@ impl App {
         self.completion = Some(open);
     }
 
-    fn accept_completion(&mut self) {
+    fn accept_completion(&mut self) -> bool {
         let Some(open) = self.completion.as_ref() else {
-            return;
+            return false;
         };
         let Some(path) = open.items.get(open.chosen).cloned() else {
-            return;
+            return false;
         };
         let at = open.at;
         self.completion = None;
         self.walking = None;
         self.composer.splice(at, &path);
+        true
     }
 
     fn copy_last_answer(&mut self) {
@@ -291,11 +345,11 @@ impl App {
         }
     }
 
-    fn select_by_keyboard(&mut self, grow: bool) {
+    fn select_by_keyboard(&mut self, grow: bool) -> bool {
         let area = self.viewport.area;
         let rows = self.viewport.rows.len();
         if rows == 0 {
-            return;
+            return false;
         }
         self.selecting = if grow {
             (self.selecting + 1).min(rows)
@@ -304,7 +358,7 @@ impl App {
         };
         if self.selecting == 0 {
             self.clear_mark();
-            return;
+            return true;
         }
         let bottom = area.y + rows as u16 - 1;
         let top = bottom - (self.selecting as u16 - 1);
@@ -313,6 +367,7 @@ impl App {
             head: Position::new(area.x + area.width.saturating_sub(1), bottom),
             dragging: false,
         };
+        true
     }
 
     fn choose_completion(&mut self, down: bool) -> bool {
