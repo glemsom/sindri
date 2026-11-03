@@ -347,7 +347,7 @@ mod tests {
     use super::PREAMBLE;
     use crate::agent::{BashTool, Limits};
     use crate::exec::{BashExecutor, ToolResult};
-    use crate::sandbox::{Enforcement, NetworkPosture, SandboxPolicy, WritableSet};
+    use crate::sandbox::{Enforcement, SandboxPolicy, WritableSet};
 
     /// The two sentences the preamble keeps whatever else it sheds: the reading
     /// rule, measured at 0.42x the tokens of the same model told nothing, and the
@@ -446,7 +446,6 @@ mod tests {
             writable,
             root.join("session/tmp"),
             "/usr/bin:/bin".to_string(),
-            NetworkPosture::Shared,
             Enforcement::Bubblewrap,
         )
         .expect("policy");
@@ -516,7 +515,6 @@ mod tests {
             writable,
             workspace.path().join("session/tmp"),
             "/usr/bin:/bin".to_string(),
-            NetworkPosture::Shared,
             Enforcement::Bubblewrap,
         )
         .expect("policy");

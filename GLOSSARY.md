@@ -68,8 +68,8 @@ run has actually stopped, because a request in flight is not interrupted.
 
 ## Sandbox
 
-**sandbox policy** — the value holding writable set, network posture and temp mapping:
-the only source of both enforcement and description.
+**sandbox policy** — the value holding writable set and temp mapping: the only source
+of both enforcement and description.
 
 **writable set** — the paths mounted read-write besides the session temp: the workspace
 plus **extras**.

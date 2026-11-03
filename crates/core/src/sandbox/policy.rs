@@ -6,21 +6,6 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NetworkPosture {
-    Shared,
-}
-
-impl NetworkPosture {
-    pub fn describe(self) -> &'static str {
-        match self {
-            NetworkPosture::Shared => {
-                "shared — outbound network works; the sandbox bounds the filesystem, not the network"
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Enforcement {
     Bubblewrap,
     YoloUnsafe,
@@ -155,7 +140,6 @@ pub struct SandboxPolicy {
     writable: WritableSet,
     session_temp: PathBuf,
     search_path: String,
-    network: NetworkPosture,
     enforcement: Enforcement,
 }
 
@@ -164,7 +148,6 @@ impl SandboxPolicy {
         writable: WritableSet,
         session_temp: PathBuf,
         search_path: String,
-        network: NetworkPosture,
         enforcement: Enforcement,
     ) -> Result<Self, PolicyError> {
         if !session_temp.is_absolute() || session_temp.parent().is_none() {
@@ -174,7 +157,6 @@ impl SandboxPolicy {
             writable,
             session_temp,
             search_path,
-            network,
             enforcement,
         })
     }
@@ -202,10 +184,6 @@ impl SandboxPolicy {
 
     pub fn search_path(&self) -> &str {
         &self.search_path
-    }
-
-    pub fn network(&self) -> NetworkPosture {
-        self.network
     }
 
     pub fn enforcement(&self) -> Enforcement {

@@ -98,7 +98,9 @@ pub fn probe(
     let bash = which("bash").ok_or_else(|| DoctorError::BinariesMissing {
         missing: vec!["bash".to_string()],
     })?;
-    let bwrap = which("bwrap").ok_or(DoctorError::BwrapMissing)?;
+    if which("bwrap").is_none() {
+        return Err(DoctorError::BwrapMissing);
+    }
 
     let scratch = std::env::temp_dir()
         .join("sindri-doctor")
@@ -106,7 +108,7 @@ pub fn probe(
     let session_temp = scratch.join("tmp");
     std::fs::create_dir_all(session_temp.join("home")).map_err(DoctorError::Setup)?;
 
-    let probed = run_probe(&bwrap, &bash, env, extras, &session_temp);
+    let probed = run_probe(&bash, env, extras, &session_temp);
     let _ = std::fs::remove_dir_all(&scratch);
 
     probed?;
@@ -143,7 +145,6 @@ fn build_policy(
 }
 
 fn run_probe(
-    bwrap: &Path,
     bash: &Path,
     env: &Env,
     extras: &[PathBuf],
@@ -160,12 +161,7 @@ fn run_probe(
         REQUIRED_BINARIES.join(" ")
     );
     let command = vec![bash.display().to_string(), "-c".to_string(), script];
-    let invocation = policy.to_argv(&command, None);
-
-    // `_` keeps the resolved bwrap only as the reason the check exists; the
-    // invocation itself is built from the argv, never assembled by hand.
-    let _ = bwrap;
-    let argv = invocation.argv();
+    let argv = policy.to_argv(&command, None);
     let (program, args) = argv
         .split_first()
         .ok_or_else(|| DoctorError::Setup(io::Error::other("the sandbox argv is empty")))?;

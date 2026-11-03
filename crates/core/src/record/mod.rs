@@ -5,8 +5,8 @@
 //! until the end, because the end is exactly what a crash takes away.
 //!
 //! Writing is best effort: a full disk must not turn an answer into a failure.
-//! `start` and `finish` do report trouble, because those are the two moments a
-//! front end can still say something.
+//! `start` and the two ends, `finish` and `ran_command`, do report trouble,
+//! because those are the moments a front end can still say something.
 
 mod entry;
 mod export;
@@ -233,6 +233,18 @@ impl Recorder {
             meta.tool_calls = Some(report.tool_calls);
             meta.duration_ms = Some(millis(report.duration));
             meta.usage = (!report.usage.is_empty()).then(|| report.usage.clone());
+        })
+    }
+
+    /// Ends a record for a run that asked no model: the stop reason, the
+    /// commands that ran and the span it took are the whole of what it has, so
+    /// no answer, turn count or spend is written. `finish` is the other shape —
+    /// a run that answered.
+    pub fn ran_command(&self, stopped: &str, tool_calls: u32, took: Duration) -> io::Result<()> {
+        self.settle(|meta| {
+            meta.stopped = stopped.to_string();
+            meta.tool_calls = Some(tool_calls);
+            meta.duration_ms = Some(millis(took));
         })
     }
 

@@ -7,12 +7,12 @@
 
 use std::time::{Duration, Instant};
 
-use sindri_core::agent::{Report, Spent, Stopped};
+use sindri_core::agent::Stopped;
 use sindri_core::cancel::Cancel;
 use sindri_core::config::Overrides;
 use sindri_core::exec::{BashExecutor, Outcome, ToolResult};
-use sindri_core::provider::{Error, Usage};
-use sindri_core::session::{LoopError, Session};
+use sindri_core::provider::Error;
+use sindri_core::session::Session;
 use sindri_types::ExitCode;
 
 use crate::boot;
@@ -40,7 +40,7 @@ pub fn exec(timeout: Duration, overrides: Overrides, command: &[String]) -> i32 
     let result = executor.execute(&script);
     // The session ends whatever the command did: a record left saying `running`
     // could not be told from a diagnostic that is still going.
-    end(&session, &command_over(result.as_ref(), started.elapsed()));
+    end(&session, result.as_ref(), started.elapsed());
 
     let Some(result) = result else {
         return ExitCode::Cancelled.code();
@@ -65,26 +65,16 @@ pub fn exec(timeout: Duration, overrides: Overrides, command: &[String]) -> i32 
     }
 }
 
-fn command_over(result: Option<&ToolResult>, took: Duration) -> Result<Report, LoopError> {
-    let (stopped, tool_calls) = match result.map(|result| &result.outcome) {
-        None => (Stopped::Cancelled, 0),
-        Some(Outcome::SandboxError { detail }) => return Err(Error::transport(detail)),
-        Some(_) => (Stopped::Final, 1),
+/// Ends the session on the three facts a command leaves: it failed, it was
+/// cancelled, or it ran. No model was asked here, so the record is written
+/// without an answer rather than around an empty `Report`.
+fn end(session: &Session, result: Option<&ToolResult>, took: Duration) {
+    let written = match result.map(|result| &result.outcome) {
+        None => session.finish_command(Stopped::Cancelled, 0, took),
+        Some(Outcome::SandboxError { detail }) => session.finish(&Err(Error::transport(detail))),
+        Some(_) => session.finish_command(Stopped::Final, 1, took),
     };
-    Ok(Report {
-        answer: String::new(),
-        turns: 0,
-        stopped,
-        model: None,
-        tool_calls,
-        spent: Spent::default(),
-        usage: Usage::default(),
-        duration: took,
-    })
-}
-
-fn end(session: &Session, outcome: &Result<Report, LoopError>) {
-    if let Err(error) = session.finish(outcome) {
+    if let Err(error) = written {
         eprintln!(
             "sindri: session {}: the record could not be finished: {error}",
             session.dir().root().display()

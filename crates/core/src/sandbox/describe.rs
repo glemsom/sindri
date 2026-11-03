@@ -1,8 +1,16 @@
 //! The published description of the sandbox: the text the model reads and
-//! `sindri doctor` prints. Derived from the policy, never written by hand.
+//! `sindri doctor` prints. Derived from the policy, never written by hand —
+//! except the network line, which has one value, so it is a constant below.
 
 use super::SandboxPolicy;
 use super::argv::LOCALE;
+
+/// The network is the one thing bwrap leaves alone: the sandbox bounds the
+/// filesystem, not the network, and there is no second posture to name.
+const NETWORK: &str = concat!(
+    "shared — outbound network works; ",
+    "the sandbox bounds the filesystem, not the network"
+);
 
 impl SandboxPolicy {
     /// The human-and-model-facing description. One derivation, so it
@@ -18,7 +26,7 @@ impl SandboxPolicy {
                 "  environment: inherited from the caller, as is the working directory;\n\
                  \x20              nothing is remapped and nothing is cleared\n",
             );
-            out.push_str(&format!("  network: {}\n", self.network().describe()));
+            out.push_str(&format!("  network: {NETWORK}\n"));
             return out;
         }
         // The boundary is two halves in one line: the host root, readable but not
@@ -27,7 +35,7 @@ impl SandboxPolicy {
             "  enforcement: bubblewrap — read-only host root (readable, not writable), \
              the writable set mounted read-write\n",
         );
-        out.push_str(&format!("  network: {}\n", self.network().describe()));
+        out.push_str(&format!("  network: {NETWORK}\n"));
 
         out.push_str("  writable set:\n");
         for path in self.writable().paths() {

@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::agent::{Agent, Dials, Report, SkillTool, UserSkills};
+use crate::agent::{Agent, Dials, Report, SkillTool, Stopped, UserSkills};
 use crate::cancel::Cancel;
 use crate::config::Config;
 use crate::exec::SandboxExecutor;
@@ -20,9 +20,7 @@ use crate::instructions::{self, Taken};
 use crate::paths::{self, SessionDir};
 use crate::provider::Error;
 use crate::record::{Recorder, Redaction, Start};
-use crate::sandbox::{
-    Enforcement, FALLBACK_PATH, NetworkPosture, PolicyError, SandboxPolicy, WritableSet,
-};
+use crate::sandbox::{Enforcement, FALLBACK_PATH, PolicyError, SandboxPolicy, WritableSet};
 use crate::skills::{self, Catalog};
 use crate::workspace::{self, Git};
 
@@ -206,6 +204,19 @@ impl Session {
         }
     }
 
+    /// Ends a session that ran a command and no model — `sandbox exec` has a
+    /// stop reason, the commands that ran and a duration, and no answer to give,
+    /// so it writes an end block without dressing one up as a `Report`.
+    pub fn finish_command(
+        &self,
+        stopped: Stopped,
+        tool_calls: u32,
+        took: Duration,
+    ) -> io::Result<()> {
+        self.recorder
+            .ran_command(stopped.as_str(), tool_calls, took)
+    }
+
     pub fn dir(&self) -> &SessionDir {
         &self.dir
     }
@@ -292,13 +303,7 @@ pub fn policy_for(
 ) -> Result<SandboxPolicy, PolicyError> {
     let writable =
         WritableSet::new(std::iter::once(workspace.to_path_buf()).chain(extras.iter().cloned()))?;
-    SandboxPolicy::new(
-        writable,
-        session_temp,
-        search_path,
-        NetworkPosture::Shared,
-        enforcement,
-    )
+    SandboxPolicy::new(writable, session_temp, search_path, enforcement)
 }
 
 pub fn search_path() -> String {

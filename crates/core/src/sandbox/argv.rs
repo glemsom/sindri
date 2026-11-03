@@ -10,26 +10,12 @@ use super::SandboxPolicy;
 /// the host.
 pub const LOCALE: &str = "C.UTF-8";
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Invocation {
-    Sandboxed(Vec<String>),
-    Unsandboxed(Vec<String>),
-}
-
-impl Invocation {
-    pub fn argv(&self) -> &[String] {
-        match self {
-            Invocation::Sandboxed(argv) | Invocation::Unsandboxed(argv) => argv,
-        }
-    }
-}
-
 impl SandboxPolicy {
     /// The argv that enforces this policy. Mount order is load-bearing: the
     /// read-only root first, or the writable binds are shadowed.
-    pub fn to_argv(&self, command: &[String], status_fd: Option<RawFd>) -> Invocation {
+    pub fn to_argv(&self, command: &[String], status_fd: Option<RawFd>) -> Vec<String> {
         if self.is_unsafe() {
-            return Invocation::Unsandboxed(command.to_vec());
+            return command.to_vec();
         }
         let mut argv: Vec<String> = Vec::with_capacity(40 + command.len());
         let temp = self.session_temp().display().to_string();
@@ -69,7 +55,7 @@ impl SandboxPolicy {
 
         push(&mut argv, &["--"]);
         argv.extend(command.iter().cloned());
-        Invocation::Sandboxed(argv)
+        argv
     }
 
     /// The variables the sandbox sets, in the order `--setenv` writes them. The

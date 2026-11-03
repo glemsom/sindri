@@ -97,10 +97,9 @@ impl SandboxExecutor {
     fn run(&self, script: &str, started: Instant) -> Done {
         let command = vec!["bash".to_string(), "-c".to_string(), script.to_string()];
         let sandboxed = !self.policy.is_unsafe();
-        let invocation = self
+        let argv = self
             .policy
             .to_argv(&command, sandboxed.then_some(STATUS_FD));
-        let argv = invocation.argv();
 
         let mut process = Command::new(&argv[0]);
         process

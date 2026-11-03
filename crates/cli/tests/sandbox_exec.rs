@@ -6,7 +6,7 @@
 
 mod common;
 
-use common::Env;
+use common::{Env, the_session};
 use serde_json::Value;
 
 fn exec(env: &Env, command: &[&str]) -> Value {
@@ -334,4 +334,25 @@ fn without_the_flag_the_same_write_is_refused_by_the_kernel() {
         "{out}"
     );
     assert!(!outside.exists(), "nothing escaped the sandbox");
+}
+
+#[test]
+fn the_record_ends_without_claiming_an_answer() {
+    let env = Env::new();
+    exec(&env, &["bash", "-c", "echo out"]);
+
+    let meta: Value = serde_json::from_str(
+        &std::fs::read_to_string(the_session(&env).join("session.json")).expect("session.json"),
+    )
+    .expect("metadata");
+
+    assert_eq!(meta["stopped"], "final", "the record ends: {meta}");
+    assert!(meta["ended_ms"].is_u64(), "and says when: {meta}");
+    assert_eq!(meta["tool_calls"], 1, "one command ran: {meta}");
+    for absent in ["turns", "usage", "answered_model"] {
+        assert!(
+            meta.get(absent).is_none(),
+            "no model was asked, so `{absent}` is not claimed: {meta}"
+        );
+    }
 }

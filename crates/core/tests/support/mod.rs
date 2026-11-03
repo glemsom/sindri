@@ -19,7 +19,7 @@ use sindri_core::config::{Config, Provider};
 use sindri_core::exec::{BashExecutor, Outcome, ToolResult};
 use sindri_core::provider::{Call, Delta, DeltaSink, Error, Message, Model, ToolSpec, Turn, Usage};
 use sindri_core::record::Recorder;
-use sindri_core::sandbox::{Enforcement, NetworkPosture, SandboxPolicy, WritableSet};
+use sindri_core::sandbox::{Enforcement, SandboxPolicy, WritableSet};
 use sindri_core::session::Env;
 use sindri_core::skills::Catalog;
 use tempfile::TempDir;
@@ -49,7 +49,6 @@ pub fn policy(workspace: &TempDir, session_temp: &Path) -> SandboxPolicy {
         writable,
         session_temp.to_path_buf(),
         "/usr/bin:/bin".to_string(),
-        NetworkPosture::Shared,
         Enforcement::Bubblewrap,
     )
     .expect("policy")
