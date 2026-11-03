@@ -106,6 +106,123 @@ fn a_new_session_is_opened_in_the_same_run_environment() {
     }
 }
 
+/// What one session's record says it was asked: the transcript file itself, so a
+/// prompt is found where the run wrote it and not where a renderer would print it.
+/// A session's transcript that cannot be read is a failure, never an absence: a
+/// claim that a record holds no line is only as good as the read behind it.
+fn transcript(env: &Env, id: &str) -> String {
+    let path = sessions(env).join(id).join("transcript.jsonl");
+    std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()))
+}
+
+/// One field of a session's metadata, as `session.json` wrote it.
+fn meta(env: &Env, id: &str, field: &str) -> serde_json::Value {
+    let path = sessions(env).join(id).join("session.json");
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+    let meta: serde_json::Value = serde_json::from_str(&text).expect("a record's metadata");
+    meta[field].clone()
+}
+
+/// A frame that has answered one prompt and opened the next session, and the
+/// record that prompt was written to: what a test about `/new` starts on. The
+/// mock is the caller's, so the replies after the first one are its to script.
+fn after_a_new_session(pty: &Pty, env: &Env, mock: &MockProvider) -> (std::process::Child, String) {
+    let mut child = frame_on(env, pty, mock);
+    expect(pty, &mut child, "cache");
+    type_line(pty, "what changed?");
+    expect(pty, &mut child, "the first answer");
+    let before = recorded(env);
+    assert_eq!(before.len(), 1, "one launch, one record: {before:?}");
+    type_command(pty, "/new");
+    (child, before[0].clone())
+}
+
+#[test]
+fn a_prompt_after_a_new_session_is_written_to_the_record_that_session_opened() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: `/new`'s next record is not tested here");
+        return;
+    };
+    let env = Env::new();
+    let mock = MockProvider::start(vec![
+        Reply::answer("the first answer"),
+        Reply::answer("the second answer"),
+    ]);
+    let (mut child, before) = after_a_new_session(&pty, &env, &mock);
+
+    type_line(&pty, "and now?");
+    expect(&pty, &mut child, "the second answer");
+    let (code, _) = pty.quit(&mut child);
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+
+    let after = recorded(&env);
+    assert_eq!(after.len(), 2, "`/new` opens a session: {after:?}");
+    let asked: Vec<&String> = after
+        .iter()
+        .filter(|id| transcript(&env, id).contains("and now?"))
+        .collect();
+    assert_eq!(
+        asked.len(),
+        1,
+        "the prompt after `/new` is written to one record: {after:?}"
+    );
+    assert_ne!(
+        asked[0], &before,
+        "and to the record of the session `/new` opened, not the one it superseded"
+    );
+    assert!(
+        transcript(&env, asked[0]).contains("the second answer"),
+        "the answer is written beside it"
+    );
+    assert!(
+        !transcript(&env, &before).contains("and now?"),
+        "the superseded record keeps the conversation it had and gains no line of the next"
+    );
+    assert_eq!(
+        meta(&env, &before, "stopped"),
+        "final",
+        "and it is closed where its last prompt closed it, never left saying a run is going"
+    );
+
+    let requests = mock.requests();
+    assert_eq!(requests.len(), 2, "two prompts, two requests");
+    let second = requests[1].body.as_str();
+    assert!(
+        !second.contains("what changed?") && !second.contains("the first answer"),
+        "and `/new` starts the thread over rather than carrying it: {second}"
+    );
+}
+
+#[test]
+fn a_prompt_after_a_new_session_is_still_cancellable() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: `/new`'s cancel is not tested here");
+        return;
+    };
+    let env = Env::new();
+    let fragments: Vec<String> = (0..200).map(|index| format!("word{index} ")).collect();
+    let fragments: Vec<&str> = fragments.iter().map(String::as_str).collect();
+    let mock = MockProvider::start(vec![
+        Reply::answer("the first answer"),
+        Reply::streamed_paced(frames::text(&fragments), Duration::from_millis(25)),
+        Reply::answer("the third answer"),
+    ]);
+    let (mut child, _) = after_a_new_session(&pty, &env, &mock);
+
+    type_line(&pty, "answer slowly");
+    expect(&pty, &mut child, "word0");
+    // The flag a signal raises is the launch's, so a session opened after it is
+    // no less cancellable than the first: the run in flight ends on the signal.
+    common::signal(child.id(), libc::SIGINT);
+    expect(&pty, &mut child, "cancelled");
+
+    type_line(&pty, "and then?");
+    expect(&pty, &mut child, "the third answer");
+    let (code, _) = pty.quit(&mut child);
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+}
+
 #[test]
 fn a_new_session_that_cannot_start_keeps_the_answer_and_says_why() {
     let Some(pty) = Pty::new() else {

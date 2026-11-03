@@ -12,14 +12,16 @@ mod support;
 
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use sindri_core::agent::{Report, Spent, Stopped};
+use sindri_core::agent::{Dials, Report, Spent, Stopped};
+use sindri_core::cancel::Cancel;
 use sindri_core::provider::{Error, Usage};
-use sindri_core::record::Stored;
+use sindri_core::record::{Entry, Stored};
 use sindri_core::sandbox::{Enforcement, PolicyError};
 use sindri_core::session::{Env, Session, StartError};
-use support::{config, host};
+use support::{ScriptedModel, answer, config, host};
 
 fn report(stopped: Stopped) -> Report {
     Report {
@@ -123,6 +125,46 @@ fn finishing_a_failed_run_writes_the_error_the_shell_was_told() {
         stored.meta.error.as_deref(),
         Some("the provider hung up"),
         "the word the shell saw is the word the record keeps"
+    );
+}
+
+#[test]
+fn a_conversation_taken_onto_a_second_session_is_recorded_in_that_session() {
+    let (_root, env) = host();
+    let first = Session::open(&env, &config(&[])).expect("a session opens");
+    let second = Session::open(&env, &config(&[])).expect("a second session opens");
+    let model = ScriptedModel::new(
+        vec![answer("Twelve files.")],
+        Arc::new(Mutex::new(Vec::new())),
+        Arc::new(Mutex::new(Vec::new())),
+    );
+    let dials = Dials {
+        model: Box::new(model),
+        tool: support::open::windowless(),
+        max_turns: 4,
+        thinking: false,
+    };
+    // The conversation a frame keeps: born in one session, run in the next.
+    let mut agent = first.agent(dials, Cancel::new());
+
+    second.adopt(&mut agent);
+    agent
+        .run("how many files changed?")
+        .expect("the run answers");
+
+    let written = Stored::load_in(second.dir()).expect("the second record reads back");
+    assert!(
+        written.entries.iter().any(
+            |entry| matches!(entry, Entry::User { text } if text == "how many files changed?")
+        ),
+        "the prompt is written to the session the conversation now runs in: {:?}",
+        written.entries
+    );
+    let replaced = Stored::load_in(first.dir()).expect("the superseded record reads back");
+    assert!(
+        replaced.entries.is_empty(),
+        "and the record of the session before it gains no line of this one: {:?}",
+        replaced.entries
     );
 }
 

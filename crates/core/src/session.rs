@@ -183,14 +183,24 @@ impl Session {
     }
 
     /// One prompt's loop, wired to the session: the dials the front end decided
-    /// on, the cancel flag it owns, and this record. The caller keeps the agent,
+    /// on, the cancel flag it owns, and this session. The caller keeps the agent,
     /// because the frame's thread outlives a prompt.
     pub fn agent(&self, dials: Dials, cancel: Cancel) -> Agent {
         let mut agent = Agent::new(dials.model, dials.tool, dials.max_turns, dials.thinking);
         agent.set_cancel(cancel);
+        self.adopt(&mut agent);
+        agent
+    }
+
+    /// Takes a conversation a front end keeps onto this session: the record it
+    /// writes and the skills a human may reach for are this session's. An agent
+    /// made here has them once, so a front end that keeps one across prompts
+    /// takes this session again before the next one — `/new` puts a new record
+    /// and a new hand under the same conversation, and a prompt written to the
+    /// record of the session it replaced is two records of one run.
+    pub fn adopt(&self, agent: &mut Agent) {
         agent.set_recorder(self.recorder.clone());
         agent.set_hand(self.hand.clone());
-        agent
     }
 
     pub fn finish(&self, outcome: &Result<Report, LoopError>) -> io::Result<()> {

@@ -62,11 +62,14 @@ impl Stack<'_> {
     /// The next prompt on the agent a front end already keeps, which is what a
     /// thread is: the dials composed here again — a saved setting changes what a
     /// prompt runs on and not what it is about — the launch's flag, put down
-    /// before the prompt rather than kept from the last one, and a channel of its
-    /// own, because a run's events are one run's.
+    /// before the prompt rather than kept from the last one, this session taken
+    /// again, and a channel of its own, because a run's events are one run's.
     pub fn wire(&self, agent: &mut Agent) -> Receiver<Event> {
         agent.set_dials(self.dials());
         agent.set_cancel(self.cancel.clone());
+        // `/new` puts a new record under the thread, so the kept agent takes the
+        // session again rather than writing to the one it replaced.
+        self.session.adopt(agent);
         let (sender, events) = mpsc::channel();
         agent.set_events(sender);
         events
