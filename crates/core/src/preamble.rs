@@ -149,6 +149,32 @@ mod tests {
     }
 
     #[test]
+    fn the_stance_points_at_a_skill_at_most_once() {
+        // The trigger is the doctrine's own sentence, beside the tool it asks
+        // for, and the bench moves that one to measure it. A clause here that
+        // asked for a load as well would be the same nudge paid for on every
+        // turn of every run, in a second place to disagree with the first.
+        let names: Vec<String> = crate::skills::builtins()
+            .skills
+            .into_iter()
+            .map(|skill| skill.name)
+            .collect();
+        let triggers: Vec<&str> = STANCE
+            .split(". ")
+            .filter(|sentence| {
+                sentence.contains("`skill`")
+                    || names.iter().any(|name| sentence.contains(name.as_str()))
+            })
+            .collect();
+
+        assert!(
+            triggers.len() <= 1,
+            "the stance carries at most one clause pointing at a procedure, not {}: {triggers:?}",
+            triggers.len()
+        );
+    }
+
+    #[test]
     fn the_instructions_follow_the_preamble_whole_and_change_no_word_of_it() {
         let rules = "Be brief, and prove what you claim.\n";
 

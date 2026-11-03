@@ -38,8 +38,10 @@ import subprocess
 import sys
 from fractions import Fraction
 
-# The built-in this bench ablates: the one the binary ships, and the only skill
-# a run in the bare fixture repository can see.
+# The built-in this bench ablates: the one it was built around. A run in the bare
+# fixture repository may see the others the binary ships as well, and a load of
+# any of them is a load of something else: `activated` reads this name and no
+# other, so the arms still differ by this body and by nothing beside it.
 SKILL = "sandbox-refusal"
 
 # The three arms, stated once for the whole bench: `with` ships the built-in and

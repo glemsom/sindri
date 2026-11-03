@@ -512,9 +512,16 @@ fn doctor_lists_both_scopes_with_the_name_the_scope_and_who_may_invoke_it() {
         rows[1].contains("user") && rows[1].contains("research") && rows[1].contains("model,user"),
         "a user skill both may invoke: {rows:?}"
     );
-    assert!(
-        rows[2].contains("builtin") && rows[2].contains("model,user"),
-        "and the binary's own is the lowest of the three: {rows:?}"
+    for row in &rows[2..] {
+        assert!(
+            row.contains("builtin") && row.contains("model,user"),
+            "and every skill the binary ships is the lowest of the three: {rows:?}"
+        );
+    }
+    assert_eq!(
+        rows.len(),
+        2 + shipped,
+        "every row is one of the three scopes: {rows:?}"
     );
 }
 
@@ -526,32 +533,31 @@ fn doctor_prints_a_builtin_displaced_by_a_user_skill_of_its_name() {
     // named as the skill that lost — by its origin, since it has no path.
     let env = Env::new();
     env.repository();
-    let builtin = sindri_core::skills::builtins()
-        .skills
-        .first()
-        .map(|skill| skill.name.clone())
-        .expect("the binary ships a built-in skill");
-    write_skill(
-        &env.home,
-        &builtin,
-        &format!("---\nname: {builtin}\ndescription: Ours, not the binary's.\n---\n"),
-    );
+    for builtin in builtin_names() {
+        write_skill(
+            &env.home,
+            &builtin,
+            &format!("---\nname: {builtin}\ndescription: Ours, not the binary's.\n---\n"),
+        );
+    }
 
     let assert = env.cmd().arg("doctor").assert().success();
     let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
 
-    let row = stdout
-        .lines()
-        .find(|line| line.contains(&builtin) && line.trim_start().starts_with("user"))
-        .unwrap_or_else(|| panic!("the user's skill holds the name: {stdout}"));
-    assert!(
-        !row.contains("(compiled in)"),
-        "the nearer scope's copy is the one listed: {row}"
-    );
-    assert!(
-        stdout.contains(&format!("{builtin}: ")) && stdout.contains("shadows builtin"),
-        "the built-in it displaced is named by its scope, not by a path it has not: {stdout}"
-    );
+    for builtin in builtin_names() {
+        let row = stdout
+            .lines()
+            .find(|line| line.contains(&builtin) && line.trim_start().starts_with("user"))
+            .unwrap_or_else(|| panic!("the user's skill holds `{builtin}`: {stdout}"));
+        assert!(
+            !row.contains("(compiled in)"),
+            "the nearer scope's copy is the one listed: {row}"
+        );
+        assert!(
+            stdout.contains(&format!("{builtin}: ")) && stdout.contains("shadows builtin"),
+            "the built-in it displaced is named by its scope, not by a path it has not: {stdout}"
+        );
+    }
 }
 
 #[test]
@@ -624,9 +630,12 @@ fn doctor_says_which_file_spent_too_much_description_and_drops_the_skill() {
     );
 }
 
-/// The built-in the binary ships, and the row its catalog prints for it.
-fn builtin_name() -> String {
-    sindri_core::skills::builtins().skills[0].name.clone()
+/// Every skill the binary ships, by name, so a test that walks the catalog walks
+/// all of it: a rule proved for the first skill is one a second never met.
+fn builtin_names() -> Vec<String> {
+    let shipped = sindri_core::skills::builtins().skills;
+    assert!(!shipped.is_empty(), "the binary ships a built-in skill");
+    shipped.into_iter().map(|skill| skill.name).collect()
 }
 
 #[test]
@@ -636,52 +645,60 @@ fn doctor_prints_a_builtin_with_its_own_scope_word_and_no_path_it_has_not() {
     let assert = env.cmd().arg("doctor").assert().success();
     let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
 
-    let name = builtin_name();
     let (_, catalog) = stdout
         .split_once("skills: ")
         .expect("the catalog follows the description");
-    let row = catalog
-        .lines()
-        .find(|line| line.contains(&name))
-        .expect("the built-in is a row of the catalog");
-    assert!(
-        row.starts_with("  builtin"),
-        "the third scope has its own word: {row}"
-    );
-    assert!(
-        row.contains("(compiled in)"),
-        "a compiled skill is marked where a scanned one's directory would go: {row}"
-    );
-    assert!(
-        !row.contains('/'),
-        "a skill with no directory is not printed by a path: {row}"
-    );
+    for name in builtin_names() {
+        let row = catalog
+            .lines()
+            .find(|line| line.contains(&name))
+            .unwrap_or_else(|| panic!("`{name}` is a row of the catalog: {catalog}"));
+        assert!(
+            row.starts_with("  builtin"),
+            "the third scope has its own word: {row}"
+        );
+        assert!(
+            row.contains("(compiled in)"),
+            "a compiled skill is marked where a scanned one's directory would go: {row}"
+        );
+        assert!(
+            !row.contains('/'),
+            "a skill with no directory is not printed by a path: {row}"
+        );
+    }
 }
 
 #[test]
 fn doctor_names_the_builtin_a_nearer_scope_displaced() {
     let env = Env::new();
-    let name = builtin_name();
-    write_skill(
-        &env.home,
-        &name,
-        &format!("---\nname: {name}\ndescription: The team's own.\n---\n"),
-    );
+    let names = builtin_names();
+    for name in &names {
+        write_skill(
+            &env.home,
+            name,
+            &format!("---\nname: {name}\ndescription: The team's own.\n---\n"),
+        );
+    }
 
     let assert = env.cmd().arg("doctor").assert().success();
     let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
 
-    assert!(stdout.contains("skills: 1 shadowed"), "{stdout}");
     assert!(
-        stdout.contains(&format!("{name}: ")) && stdout.contains("shadows builtin"),
-        "what won is printed beside what it displaced, by origin: {stdout}"
+        stdout.contains(&format!("skills: {} shadowed", names.len())),
+        "every displaced built-in is recorded: {stdout}"
     );
-    let row = stdout
-        .lines()
-        .find(|line| line.contains(&name) && line.contains("user"))
-        .expect("the nearer skill is the one in the catalog");
-    assert!(
-        row.starts_with("  user") && row.contains(".agents/skills"),
-        "the user's directory holds the name: {row}"
-    );
+    for name in &names {
+        assert!(
+            stdout.contains(&format!("{name}: ")) && stdout.contains("shadows builtin"),
+            "what won is printed beside what it displaced, by origin: {stdout}"
+        );
+        let row = stdout
+            .lines()
+            .find(|line| line.contains(name) && line.contains("user"))
+            .unwrap_or_else(|| panic!("the nearer skill holds `{name}`: {stdout}"));
+        assert!(
+            row.starts_with("  user") && row.contains(".agents/skills"),
+            "the user's directory holds the name: {row}"
+        );
+    }
 }

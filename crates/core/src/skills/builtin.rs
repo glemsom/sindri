@@ -15,23 +15,40 @@ use super::frontmatter;
 /// Every built-in skill: the one table, holding what a compiled skill already is
 /// — its whole `SKILL.md`, and every file its body may name, compiled in beside
 /// it. One table, no directory and no path: a scope is a place a skill is found,
-/// and a compiled one is found in the binary.
+/// and a compiled one is found in the binary. Each entry is one directory under
+/// `builtin/`, so a skill's body and its own files are read from the same place a
+/// reader goes to change them, and a second skill is a second entry here.
 ///
 /// A directory's copy cannot be written here even by mistake: a `PathBuf` is not
 /// a thing a `const` can hold, so every entry is by construction a compiled one.
-pub const BUILTINS: &[Content] = &[Content::Compiled {
-    source: include_str!("builtin/SKILL.md"),
-    files: &[
-        File {
-            path: "references/refusals.md",
-            text: include_str!("builtin/references/refusals.md"),
-        },
-        File {
-            path: "references/worked-example.md",
-            text: include_str!("builtin/references/worked-example.md"),
-        },
-    ],
-}];
+pub const BUILTINS: &[Content] = &[
+    Content::Compiled {
+        source: include_str!("builtin/sandbox-refusal/SKILL.md"),
+        files: &[
+            File {
+                path: "references/refusals.md",
+                text: include_str!("builtin/sandbox-refusal/references/refusals.md"),
+            },
+            File {
+                path: "references/worked-example.md",
+                text: include_str!("builtin/sandbox-refusal/references/worked-example.md"),
+            },
+        ],
+    },
+    Content::Compiled {
+        source: include_str!("builtin/search-and-read/SKILL.md"),
+        files: &[
+            File {
+                path: "references/recipes.md",
+                text: include_str!("builtin/search-and-read/references/recipes.md"),
+            },
+            File {
+                path: "references/many-files.md",
+                text: include_str!("builtin/search-and-read/references/many-files.md"),
+            },
+        ],
+    },
+];
 
 /// The built-in scope's found, handed to the fold after the two scopes a
 /// scan reads, and therefore the lowest of the three.
