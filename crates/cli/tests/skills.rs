@@ -13,6 +13,7 @@ mod common;
 
 use common::provider::{MockProvider, Reply};
 use common::{Env, batch, stderr, stdout, the_session};
+use serde_json::json;
 
 /// A skill in the home scope, which is where a user's own collection lives.
 fn skill(env: &Env, name: &str, body: &str) {
@@ -34,8 +35,8 @@ fn a_run_loads_the_skill_it_needs_and_the_record_says_which() {
         "Answer in short sentences. See `references/more.md`.",
     );
     let mock = MockProvider::start(vec![
-        Reply::skill_call("t1", "house-style", ""),
-        Reply::skill_call("t2", "house-style", ""),
+        Reply::one_tool("t1", "skill", json!({"name": "house-style"}), ""),
+        Reply::one_tool("t2", "skill", json!({"name": "house-style"}), ""),
         Reply::answer("Short. Done."),
     ]);
 

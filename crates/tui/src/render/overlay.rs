@@ -76,8 +76,9 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
             )
         }
         Overlay::Spill(spill) => {
-            spill.settled(spill_window(area).height as usize);
-            app.window.page = spill_window(area).height.max(1) as usize;
+            let visible = spill_window(area).height as usize;
+            spill.scroll.settled(spill.lines.len(), visible);
+            app.window.page = visible.max(1);
             let title = format!("{} · {} lines", spill.title, spill.lines.len());
             let lines = spill
                 .window()

@@ -17,13 +17,26 @@ const LISTED: usize = 200;
 
 /// Cloned rather than rebuilt: a prompt is handed the schema and the catalog
 /// the boot decided on, not a second derivation of them.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct SkillTool {
     spec: ToolSpec,
-    /// Only the skills the model may see: a user-only skill is in neither the
-    /// schema nor the catalog, because a permission the call site does not hold
-    /// is a permission nobody holds.
+    /// Only the skills one invocation right reaches: a user-only skill is in
+    /// neither the schema nor the catalog the model reads, and a model-only one
+    /// is in no name list the composer offers, because a permission the call
+    /// site does not hold is a permission nobody holds.
     skills: Vec<Skill>,
+}
+
+impl Default for SkillTool {
+    /// A tool with no skill in it, which is what a workspace with none leaves a
+    /// front end holding: the schema says what an empty catalog says, and no
+    /// name is one a call may take.
+    fn default() -> Self {
+        SkillTool {
+            spec: describe(&[]),
+            skills: Vec::new(),
+        }
+    }
 }
 
 impl SkillTool {
@@ -31,19 +44,27 @@ impl SkillTool {
     /// see. Built once, with the description it will be handed to the model
     /// with: the catalog is a fact about the tree, not about a turn.
     pub fn new(catalog: &Catalog) -> Option<SkillTool> {
+        let tool = SkillTool::only(catalog, |skill| skill.model_invocable);
+        (!tool.skills.is_empty()).then_some(tool)
+    }
+
+    /// The catalog filtered to one invocation right, which is the whole
+    /// difference between the tool the model is handed and the hand a human
+    /// reaches with: the load, the once-per-conversation claim and the refusal
+    /// of a name nobody answers are one body, read from both ends. The schema
+    /// is built either way and only the model's end is ever asked for it —
+    /// cheaper than a second copy of the three, which is what drifted before.
+    fn only(catalog: &Catalog, right: impl Fn(&Skill) -> bool) -> SkillTool {
         let skills: Vec<Skill> = catalog
             .skills
             .iter()
-            .filter(|skill| skill.model_invocable)
+            .filter(|skill| right(skill))
             .cloned()
             .collect();
-        if skills.is_empty() {
-            return None;
-        }
-        Some(SkillTool {
+        SkillTool {
             spec: describe(&skills),
             skills,
-        })
+        }
     }
 
     pub fn spec(&self) -> &ToolSpec {
@@ -88,13 +109,17 @@ impl SkillTool {
     }
 
     /// A name the catalog does not hold: a hallucination is answered with the
-    /// names that would have worked, so the next turn can take one of them.
+    /// names that would have worked, so the next turn can take one of them —
+    /// and a catalog with no name in it says that rather than listing nothing.
     fn unknown(&self, name: &str) -> String {
         let valid: Vec<String> = self
             .names()
             .iter()
             .map(|name| format!("`{name}`"))
             .collect();
+        if valid.is_empty() {
+            return format!("there is no skill called `{name}`: this workspace holds none");
+        }
         format!(
             "there is no skill called `{name}`: `skill` takes one of {}",
             valid.join(", ")
@@ -193,9 +218,13 @@ fn millis(started: Instant) -> u64 {
 /// and the two share one loaded set — a body in the conversation is one
 /// activation whoever asked for it, and the turn that follows it pays for it
 /// once.
+///
+/// The same tool with the human's half in it, so the load is the model's own
+/// call, and its schema is built and never read: a hand offers names, and a
+/// model chooses from a schema.
 #[derive(Debug, Clone, Default)]
 pub struct UserSkills {
-    skills: Vec<Skill>,
+    tool: SkillTool,
 }
 
 impl UserSkills {
@@ -204,19 +233,18 @@ impl UserSkills {
     /// cannot get around.
     pub fn new(catalog: &Catalog) -> UserSkills {
         UserSkills {
-            skills: catalog
-                .skills
-                .iter()
-                .filter(|skill| skill.user_invocable)
-                .cloned()
-                .collect(),
+            tool: SkillTool::only(catalog, |skill| skill.user_invocable),
         }
     }
 
     /// The names a human may type, in the catalog's order: what `/` completion
     /// offers, read from the one scan that found them.
     pub fn names(&self) -> Vec<String> {
-        self.skills.iter().map(|skill| skill.name.clone()).collect()
+        self.tool
+            .names()
+            .iter()
+            .map(|name| name.to_string())
+            .collect()
     }
 
     /// One activation, as the call it is: the body frontmatter-stripped in its
@@ -224,45 +252,7 @@ impl UserSkills {
     /// model is handed — and the same once-per-conversation claim, so the model's
     /// later call for it reads `already_loaded`.
     pub fn call(&self, call: &Call, name: &str, loaded: &Loaded) -> ToolOutcome {
-        let Some(skill) = self.skills.iter().find(|skill| skill.name == name) else {
-            return ToolOutcome::malformed(call, &self.unknown(name));
-        };
-        let started = Instant::now();
-        let body = match skill.body() {
-            Ok(body) => body,
-            Err(problem) => return refused(call, skill, &problem, started),
-        };
-        let (content, outcome) = if loaded.claim(name) {
-            (activation(skill, &body), "loaded")
-        } else {
-            (
-                format!("outcome: already_loaded\nskill: {name}\n"),
-                "already_loaded",
-            )
-        };
-        ToolOutcome::new(call, content, false).with_facts(ToolFacts {
-            outcome: Some(outcome.to_string()),
-            duration_ms: Some(millis(started)),
-            ..ToolFacts::default()
-        })
-    }
-
-    /// A name no skill answers, refused with the names that would have.
-    fn unknown(&self, name: &str) -> String {
-        let valid: Vec<String> = self
-            .skills
-            .iter()
-            .map(|skill| format!("`{}`", skill.name))
-            .collect();
-        if valid.is_empty() {
-            return format!(
-                "there is no skill called `{name}`: this workspace holds none you may invoke"
-            );
-        }
-        format!(
-            "there is no skill called `{name}`: the ones you may invoke are {}",
-            valid.join(", ")
-        )
+        self.tool.call(call, name, loaded)
     }
 }
 

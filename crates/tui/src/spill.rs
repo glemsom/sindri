@@ -4,6 +4,8 @@
 
 use std::path::Path;
 
+use crate::scroll::Scroll;
+
 /// A file too large to show, open in the frame: read once, when it is opened,
 /// scrolled while it is up, and only the rows on screen are ever copied out of
 /// it, so a megabyte of output is a window per frame and never a copy of itself.
@@ -12,8 +14,9 @@ pub struct Spill {
     /// What the box is called: the file it came from.
     pub title: String,
     pub lines: Vec<String>,
-    pub scroll: usize,
-    pub visible: usize,
+    /// The window over `lines`: the rows the reader is on, and the clamp that
+    /// keeps them off the bottom, held here rather than derived again.
+    pub scroll: Scroll,
 }
 
 impl Spill {
@@ -36,40 +39,26 @@ impl Spill {
     /// is stated once: `window()` can then never hand back an empty slice, and
     /// a box opened on nothing still draws its own row.
     fn from_lines(title: impl Into<String>, lines: Vec<String>) -> Spill {
+        let lines = if lines.is_empty() {
+            vec![String::new()]
+        } else {
+            lines
+        };
+        let mut scroll = Scroll::default();
+        // One row until the box measures itself, so a spill opened on nothing
+        // still draws the row it has rather than no rows at all.
+        scroll.settled(lines.len(), 1);
         Spill {
             title: title.into(),
-            lines: if lines.is_empty() {
-                vec![String::new()]
-            } else {
-                lines
-            },
-            scroll: 0,
-            visible: 1,
+            lines,
+            scroll,
         }
     }
 
-    pub fn settled(&mut self, visible: usize) {
-        self.visible = visible.max(1);
-    }
-
-    /// The lines a window of `visible` rows shows, from where the reader is.
-    /// A slice, not a copy: a megabyte of output is a window per frame.
-    pub fn window(&mut self) -> &[String] {
-        let height = self.visible.min(self.lines.len().max(1));
-        let last = self.lines.len().saturating_sub(height);
-        self.scroll = self.scroll.min(last);
-        let start = self.scroll;
-        let end = (start + height).min(self.lines.len());
-        &self.lines[start..end]
-    }
-
-    pub fn scroll_by(&mut self, rows: usize, up: bool) {
-        let last = self.lines.len().saturating_sub(self.visible.max(1));
-        self.scroll = if up {
-            self.scroll.saturating_add(rows).min(last)
-        } else {
-            self.scroll.saturating_sub(rows)
-        };
+    /// The lines a window of the box shows, from where the reader is. A slice,
+    /// not a copy: a megabyte of output is a window per frame.
+    pub fn window(&self) -> &[String] {
+        &self.lines[self.scroll.window()]
     }
 }
 
@@ -86,19 +75,20 @@ mod tests {
 
         let mut spill = Spill::open(&path).expect("the spill opens");
         assert_eq!(spill.lines.len(), 50, "nothing is cut down");
-        spill.settled(10);
+        spill.scroll.settled(spill.lines.len(), 10);
         assert_eq!(spill.window().first().map(String::as_str), Some("line 0"));
-        spill.scroll_by(5, true);
-        assert_eq!(spill.scroll, 5);
+        spill.scroll.page_by(5, false);
+        assert_eq!(spill.scroll.window().start, 5);
         assert_eq!(spill.window().first().map(String::as_str), Some("line 5"));
-        spill.scroll_by(1000, true);
+        spill.scroll.page_by(1000, false);
         assert_eq!(
-            spill.scroll, 40,
+            spill.scroll.window().start,
+            40,
             "scrolling stops where the last screenful is full, not at the last line"
         );
         assert_eq!(spill.window().last().map(String::as_str), Some("line 49"));
-        spill.scroll_by(1000, false);
-        assert_eq!(spill.scroll, 0, "and at the first");
+        spill.scroll.page_by(1000, true);
+        assert_eq!(spill.scroll.window().start, 0, "and at the first");
     }
 
     #[test]
@@ -107,7 +97,7 @@ mod tests {
         let path = file.path().join("empty");
         std::fs::write(&path, "").expect("write the empty spill");
 
-        let mut spill = Spill::open(&path).expect("the spill opens");
+        let spill = Spill::open(&path).expect("the spill opens");
         assert_eq!(
             spill.lines,
             vec![String::new()],

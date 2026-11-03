@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use common::provider::{MockProvider, Reply};
 use common::pty::{Pty, expect, spawn, type_line};
 use common::{Env, TEST_KEY, batch, stderr, stdout, write_config};
+use serde_json::json;
 use tempfile::TempDir;
 
 /// The target every test opens: one page, on a machine that is nobody's.
@@ -53,7 +54,7 @@ fn path_with(root: &Path) -> String {
 fn a_batch_run_is_offered_no_open_tool_and_hears_why_when_it_asks() {
     let env = Env::new();
     let mock = MockProvider::start(vec![
-        Reply::open_call("toolu_1", TARGET, ""),
+        Reply::one_tool("toolu_1", "open", json!({"url": TARGET}), ""),
         Reply::answer("Nothing to open here."),
     ]);
 
@@ -90,7 +91,7 @@ fn the_frame_opens_an_https_url_on_the_host_and_its_opener_says_nothing() {
     };
     let env = Env::new();
     let mock = MockProvider::start(vec![
-        Reply::open_call("toolu_1", TARGET, ""),
+        Reply::one_tool("toolu_1", "open", json!({"url": TARGET}), ""),
         Reply::answer("Put it on your screen."),
     ]);
     let (fake, log) = fake_opener();

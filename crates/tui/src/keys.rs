@@ -109,7 +109,7 @@ impl App {
         match self.overlay.as_mut() {
             Some(Overlay::Help(help)) => help.page(self.window.page, up),
             Some(Overlay::Settings(settings)) => settings.page(self.window.page, up),
-            Some(Overlay::Spill(spill)) => spill.scroll_by(self.window.page, up),
+            Some(Overlay::Spill(spill)) => spill.scroll.page_by(self.window.page, up),
             None => self.scroll_by(self.window.page, up),
         }
     }

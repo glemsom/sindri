@@ -8,6 +8,10 @@ use serde_json::Value;
 
 use crate::HARNESS_FIXTURES;
 
+/// One tool ask: the id the result is answered to, the tool's name, and the
+/// input it takes.
+type Ask<'a> = (&'a str, &'a str, Value);
+
 #[derive(Debug, Clone)]
 pub struct Reply {
     pub status: u16,
@@ -49,17 +53,37 @@ impl Reply {
         Reply::tool_calls(&[(id, command)], text)
     }
 
+    /// Several commands in one turn: the wave a run answers together.
     pub fn tool_calls(calls: &[(&str, &str)], text: &str) -> Self {
+        let asks: Vec<Ask> = calls
+            .iter()
+            .map(|(id, command)| (*id, "bash", serde_json::json!({"command": command})))
+            .collect();
+        Reply::asks(&asks, text)
+    }
+
+    /// One turn asking for one tool by name, with the input that tool takes:
+    /// `skill` and `open` are this, and so is a single `bash`.
+    pub fn one_tool(id: &str, name: &str, input: Value, text: &str) -> Self {
+        Reply::asks(&[(id, name, input)], text)
+    }
+
+    /// The assistant message every tool ask is: the text, where there is any,
+    /// then one `tool_use` per call, and the usage a tool turn reports. One
+    /// body for all of them, because a tool turn's usage is a fact about a tool
+    /// turn rather than about which tool was asked — the drift a second copy
+    /// buys is one constructor reporting a cached prefix and another not.
+    fn asks(calls: &[Ask], text: &str) -> Self {
         let mut content = Vec::new();
         if !text.is_empty() {
             content.push(serde_json::json!({"type": "text", "text": text}));
         }
-        for (id, command) in calls {
+        for (id, name, input) in calls {
             content.push(serde_json::json!({
                 "type": "tool_use",
                 "id": id,
-                "name": "bash",
-                "input": {"command": command},
+                "name": name,
+                "input": input,
             }));
         }
         Reply::whole(
@@ -72,60 +96,6 @@ impl Reply {
                 "content": content,
                 "stop_reason": "tool_use",
                 "usage": {"input_tokens": 20, "output_tokens": 5, "cache_read_input_tokens": 4},
-            })),
-        )
-    }
-
-    /// A turn that asks for one skill by name: the second tool a run may be
-    /// handed, and the only one that is not a command.
-    pub fn skill_call(id: &str, name: &str, text: &str) -> Self {
-        let mut content = Vec::new();
-        if !text.is_empty() {
-            content.push(serde_json::json!({"type": "text", "text": text}));
-        }
-        content.push(serde_json::json!({
-            "type": "tool_use",
-            "id": id,
-            "name": "skill",
-            "input": {"name": name},
-        }));
-        Reply::whole(
-            200,
-            json(serde_json::json!({
-                "id": "msg_mock",
-                "type": "message",
-                "role": "assistant",
-                "model": "claude-mock",
-                "content": content,
-                "stop_reason": "tool_use",
-                "usage": {"input_tokens": 20, "output_tokens": 5},
-            })),
-        )
-    }
-
-    /// A turn that asks for one target to be put in front of the human: the
-    /// third tool a run may be handed, and the one that reaches no command.
-    pub fn open_call(id: &str, target: &str, text: &str) -> Self {
-        let mut content = Vec::new();
-        if !text.is_empty() {
-            content.push(serde_json::json!({"type": "text", "text": text}));
-        }
-        content.push(serde_json::json!({
-            "type": "tool_use",
-            "id": id,
-            "name": "open",
-            "input": {"url": target},
-        }));
-        Reply::whole(
-            200,
-            json(serde_json::json!({
-                "id": "msg_mock",
-                "type": "message",
-                "role": "assistant",
-                "model": "claude-mock",
-                "content": content,
-                "stop_reason": "tool_use",
-                "usage": {"input_tokens": 20, "output_tokens": 5},
             })),
         )
     }

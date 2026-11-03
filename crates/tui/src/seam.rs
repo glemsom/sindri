@@ -7,9 +7,8 @@
 //! drawing side's business.
 
 use image::RgbaImage;
-use ratatui::style::Color;
 
-use crate::theme::{HEADING, PROMPT};
+use crate::theme::{HEADING, PROMPT, channels, ramp};
 
 /// The alpha the strip peaks at: about a half, not nine tenths.
 ///
@@ -27,11 +26,6 @@ pub const PEAK: f32 = 0.55;
 /// a hundredth of the peak, and the second-to-last column stays under it even
 /// where a terminal triples the light.
 pub const FALLOFF: i32 = 4;
-
-/// The two stops the light is made of, read off the theme's names once: a
-/// renderer names a colour or nothing, so the strip blends `HEADING` and
-/// `PROMPT` and names no third hue of its own.
-const STOPS: [[u8; 3]; 2] = [channels(HEADING), channels(PROMPT)];
 
 /// The strip as a picture: `px_w` pixels across and `px_h` pixels down, the
 /// transcript's edge as its first column and the rail's as its last. A size too small to have both edges is no light
@@ -96,25 +90,11 @@ fn share(at: u32, px: u32) -> f32 {
 }
 
 /// One row's colour: the theme's `HEADING` at the top, its `PROMPT` on the
-/// last row, and the walk between them. Every pixel carries the hue,
+/// last row, and [`ramp`]'s walk between them — one of the pairs `RAMPS` names,
+/// so the strip spends no hue the theme does not. Every pixel carries the hue,
 /// transparent ones too, because a terminal that resamples the strip mixes the
 /// colour of pixels the eye never sees, and a black pixel would drag the lamp
 /// grey.
 fn hue(size: Size, y: u32) -> [u8; 3] {
-    let t = 1.0 - size.fade(y);
-    let [from, to] = STOPS;
-    [0, 1, 2].map(|channel| {
-        let (start, end) = (f32::from(from[channel]), f32::from(to[channel]));
-        (start + (end - start) * t).round() as u8
-    })
-}
-
-/// A theme stop's truecolour bytes, read at compile time: a stop that is not a
-/// truecolour is a module that does not build rather than a colour the strip
-/// cannot blend.
-const fn channels(colour: Color) -> [u8; 3] {
-    match colour {
-        Color::Rgb(r, g, b) => [r, g, b],
-        _ => panic!("the strip blends two truecolour stops"),
-    }
+    channels(ramp(HEADING, PROMPT, 1.0 - size.fade(y)))
 }

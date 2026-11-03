@@ -8,6 +8,9 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
+
 pub const TOOLS: &[(&str, &[&str])] = &[("wl-copy", &[]), ("xclip", &["-selection", "clipboard"])];
 
 /// The most a terminal is asked to carry through one OSC 52 sequence. Past
@@ -196,28 +199,11 @@ impl crate::app::App {
     }
 }
 
-/// Base64, because an OSC 52 payload is base64 and one alphabet is not
-/// worth a dependency.
+/// Base64 in the one alphabet a terminal reads, spelled by the crate that
+/// writes it: an OSC 52 payload is base64, and the alphabet is a fact about
+/// the terminal rather than a rule of ours to keep.
 pub fn base64(bytes: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
-    for chunk in bytes.chunks(3) {
-        let b = [
-            chunk[0],
-            chunk.get(1).copied().unwrap_or(0),
-            chunk.get(2).copied().unwrap_or(0),
-        ];
-        let triple = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
-        for index in 0..4 {
-            if index <= chunk.len() {
-                let at = (triple >> (18 - 6 * index)) & 0x3f;
-                out.push(ALPHABET[at as usize] as char);
-            } else {
-                out.push('=');
-            }
-        }
-    }
-    out
+    STANDARD.encode(bytes)
 }
 
 #[cfg(test)]

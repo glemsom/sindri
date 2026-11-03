@@ -251,7 +251,9 @@ fn on_ramp(colour: Color, from: Color, to: Color) -> bool {
 
 /// A stop's truecolour bytes: a walk between two colours that are not
 /// truecolour is a module that panics rather than a gradient nobody can see.
-const fn channels(colour: Color) -> [u8; 3] {
+/// `seam` reads its own rows through this, so "a stop is a truecolour" is
+/// stated once for every renderer that walks one.
+pub(crate) const fn channels(colour: Color) -> [u8; 3] {
     match colour {
         Color::Rgb(r, g, b) => [r, g, b],
         _ => panic!("a ramp is walked between two truecolour stops"),
