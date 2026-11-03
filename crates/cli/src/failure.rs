@@ -5,10 +5,11 @@
 
 use std::fmt;
 use std::io;
+use std::path::Path;
 
 use sindri_core::config::ConfigError;
 use sindri_core::provider::Error;
-use sindri_core::session::StartError;
+use sindri_core::session::{Session, StartError};
 use sindri_types::ExitCode;
 
 #[derive(Debug)]
@@ -59,6 +60,24 @@ impl fmt::Display for Failure {
 /// code through the same `report`.
 pub(crate) fn usage_error(message: &str) -> i32 {
     Failure::Config(ConfigError::Usage(message.to_string())).report()
+}
+
+/// The one sentence a run says when its record cannot be finished: the record's
+/// own directory and the error that stopped it. Batch mode and `sandbox exec`
+/// print it after `sindri: `, and the frame draws it in the transcript — none of
+/// them spells it itself, so a reader who learns it once knows all three.
+pub(crate) fn record_note(dir: &Path, error: &io::Error) -> String {
+    format!(
+        "session {}: the record could not be finished: {error}",
+        dir.display()
+    )
+}
+
+/// The same sentence, said on stderr by a front end whose contract is a stream:
+/// one spelling and one printer, so batch mode and `sandbox exec` cannot drift
+/// apart in the words a script sees.
+pub(crate) fn record_failed(session: &Session, error: &io::Error) {
+    eprintln!("sindri: {}", record_note(session.dir().root(), error));
 }
 
 pub(crate) fn provider_message(error: &Error) -> String {
@@ -129,6 +148,19 @@ mod tests {
             "a record is named by its own path, not by the sandbox"
         );
         assert_eq!(code, 3, "a run that cannot be evidenced is not a run");
+    }
+
+    #[test]
+    fn a_record_that_cannot_be_finished_is_one_sentence_naming_its_directory() {
+        assert_eq!(
+            record_note(
+                Path::new("/state/sessions/4f1c8f2e"),
+                &io_error("no space left on device")
+            ),
+            "session /state/sessions/4f1c8f2e: the record could not be finished: \
+             no space left on device",
+            "one sentence, the same in every front end that says it"
+        );
     }
 
     #[test]

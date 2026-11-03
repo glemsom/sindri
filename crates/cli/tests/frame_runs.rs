@@ -218,13 +218,15 @@ fn a_record_that_cannot_be_finished_is_said_in_the_transcript() {
         "and the note keeps its cause, or it is only noise: {drawn:?}"
     );
 }
-/// The screen the note test below draws, as CI drew it: the sentence wraps at
-/// the transcript's 68 columns (marker `! ` on both rows), and the rail's facts
-/// sit to the right of each. The first row fills its column exactly, so the
-/// rail starts with no gap at all.
+/// The screen a note draws at the transcript's 68 columns, with a state root
+/// short enough to say the whole sentence: the record's failure names its own
+/// directory, so it wraps into four rows (marker `! ` on every one) with the
+/// rail's facts to the right of the first two.
 const NOTE_ROWS: &str = "\
-! session 49df10bb-3cd7-47f8-9d22-7b58b0fbbc10: the record could not│ sandbox bwrap · 1 writable   \n\
-! be finished: No such file or directory (os error 2)               │ turns 1/250          ";
+! session                                                           │ sandbox bwrap · 1 writable   \n\
+! /run/sindri/sessions/49df10bb-3cd7-47f8-9d22-7b58b0fbbc10: the    │ turns 1/250                  \n\
+! record could not be finished: No such file or directory (os error │                              \n\
+! 2)                                                                │                              ";
 
 #[test]
 fn a_note_that_wrapped_is_found_by_its_words_not_by_a_rows_substring() {

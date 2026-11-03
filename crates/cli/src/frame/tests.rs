@@ -102,6 +102,44 @@ fn the_rail_names_the_workspace_the_sandbox_actually_mounts() {
     assert_eq!(launch.model, "model-one", "the model the run asks");
 }
 
+/// The record's failure is one sentence, and the frame draws the one the run
+/// writes: the record's own directory, named the way batch mode names it,
+/// rather than a second spelling with a session id in its place.
+#[test]
+fn a_record_that_cannot_be_finished_is_drawn_in_the_sentence_the_run_writes() {
+    let root = TempDir::new().expect("temp root");
+    let boot = boot::Configured {
+        env: env(&root),
+        config: config(),
+    }
+    .start()
+    .expect("a session in the temporary environment");
+    std::fs::remove_dir_all(boot.session.dir().root()).expect("remove the record's directory");
+
+    let note = closing_note(
+        &boot.session,
+        &Ok(Report {
+            answer: "Twelve files.".to_string(),
+            turns: 1,
+            stopped: sindri_core::agent::Stopped::Final,
+            model: None,
+            tool_calls: 0,
+            spent: Default::default(),
+            usage: Default::default(),
+            duration: Duration::from_millis(1),
+        }),
+    )
+    .expect("a record that cannot be finished has a note to say so");
+
+    assert!(
+        note.starts_with(&format!(
+            "session {}: the record could not be finished: ",
+            boot.session.dir().root().display()
+        )),
+        "the note is the run's one sentence, naming the record's directory: {note}"
+    );
+}
+
 /// One probe of one repository: the branch the rail states is the branch the
 /// record holds, because the frame reads the session's own value and never
 /// shells git a second time.

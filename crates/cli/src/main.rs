@@ -12,6 +12,7 @@ mod opener;
 mod sandbox;
 mod sessions;
 mod signal;
+mod stack;
 mod status;
 mod verbose;
 

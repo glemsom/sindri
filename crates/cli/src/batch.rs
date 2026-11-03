@@ -1,22 +1,20 @@
 //! Batch mode: the Unix filter front end. It reads the prompt and the stdin
 //! context, runs the agent to an answer and prints it plus exactly one newline;
-//! everything else is a decision made in `sindri-core`. Exit codes, not prose,
-//! tell a script what happened.
+//! everything else is a decision made in `sindri-core`, and the stack it runs on
+//! is composed in `stack`. Exit codes, not prose, tell a script what happened.
 
 use std::io::{IsTerminal, Read};
-use std::sync::Arc;
-use std::sync::mpsc;
 
 use clap::ValueEnum;
-use sindri_core::agent::{BashTool, Dials, Event, Limits, Stopped, Tools};
+use sindri_core::agent::Stopped;
 use sindri_core::cancel::Cancel;
 use sindri_core::config::Overrides;
 use sindri_core::output;
-use sindri_core::provider::{Client, Error};
+use sindri_core::provider::Error;
 use sindri_types::ExitCode;
 
 use crate::boot::{self, Boot};
-use crate::{failure, notice, signal, status, verbose};
+use crate::{failure, notice, signal, stack, status, verbose};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
 pub enum OutputFormat {
@@ -63,35 +61,24 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     // turns, and the executor kills a running command's group on it.
     let cancel = Cancel::new();
     signal::install(cancel.clone());
-
-    let executor = Arc::new(session.executor(config.timeout, cancel.clone()));
-    // The description names the timeout this run enforces, so the model is
-    // never told a boundary it does not have.
-    let bash = BashTool::new(
-        session.policy(),
-        Limits::for_timeout(config.timeout),
-        executor,
-    );
-    // The catalog is boot's, so the model is handed the skills this workspace
-    // holds — and no third tool at all: a script has no window and nobody to
-    // look at it, so `open` is absent from this schema rather than refused in a
-    // result nobody reads.
-    let tool = Tools::new(bash, session.skill_tool(), None);
-    let mut agent = session.agent(
-        Dials {
-            model: Box::new(Client::new(&config, session.instructions().block())),
-            tool,
-            max_turns: config.max_turns,
-            thinking: config.thinking,
-        },
-        cancel.clone(),
-    );
+    // The stack is composed in one place and this front end says only what
+    // differs: a script has no window and nobody to look at it, so nothing is
+    // told of a command's output as it arrives, and no `open` is offered at all
+    // — the schema never mentions it, rather than refusing a call in a result
+    // nobody reads.
+    let bare = stack::Bare;
+    let (mut agent, events) = stack::Stack {
+        session: &session,
+        config: &config,
+        cancel,
+        executor: &bare,
+        opener: None,
+    }
+    .agent();
     // The tap is unconditional: the reports are read from it, and `-v` reads
     // what the same thread kept. A run whose stderr is no terminal still taps —
     // the channel and the setting are decided in one place, and a second
     // decision here would be a second answer.
-    let (sender, events) = mpsc::channel::<Event>();
-    agent.set_events(sender);
     let reports = status::Reports::new(session.workspace(), config.status);
     reports.begun();
     let watching = reports.watch(events, verbose);
@@ -109,10 +96,7 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     // The record's end is written before anything is printed, so the session the
     // output names is already on disk and complete.
     if let Err(error) = session.finish(&outcome) {
-        eprintln!(
-            "sindri: session {}: the record could not be finished: {error}",
-            session.dir().root().display()
-        );
+        failure::record_failed(&session, &error);
     }
 
     match outcome {

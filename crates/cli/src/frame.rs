@@ -1,17 +1,17 @@
 //! The terminal UI's launch: what a bare `sindri` on a terminal does. Boot
 //! proves the sandbox and opens a session before the first frame, the rail
 //! carries the facts the filter used to keep to stderr, and the driver runs one
-//! prompt at a time through the same session batch mode uses.
+//! prompt at a time on the same stack batch mode runs on.
 
 use std::sync::Arc;
-use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
 
-use sindri_core::agent::{Agent, BashTool, Dials, Event, Limits, OpenTool, Report, Tools};
+use sindri_core::agent::{Agent, Event, Report};
 use sindri_core::cancel::Cancel;
 use sindri_core::config::{Config, ConfigError, Overrides};
 use sindri_core::doctor::{self, DoctorError};
 use sindri_core::exec::{BashExecutor, Outcome, OutputSink, SandboxExecutor, Side, ToolResult};
-use sindri_core::provider::{self, Client, Usage};
+use sindri_core::provider::{self, Usage};
 use sindri_core::sandbox::{Enforcement, SandboxPolicy};
 use sindri_core::session::{LoopError, Session};
 use sindri_tui::driver::{CallOver, Driver, Finished, Invoked, Spilled, Stop, Tap, Tokens};
@@ -21,6 +21,7 @@ use sindri_tui::{Card, Launch};
 use sindri_types::ExitCode;
 
 use crate::boot::{self, Boot};
+use crate::stack::{self, Stack};
 use crate::{failure, signal};
 
 pub fn run(overrides: Overrides) -> i32 {
@@ -105,94 +106,56 @@ fn launch(boot: &Boot) -> Launch {
     }
 }
 
+/// The stack this launch runs a prompt on: the frame is where a human is, so
+/// commands are dressed for the tap and the third tool comes with the host's own
+/// opener — outside the sandbox, where the display and the browser are.
+fn stack_of<'a>(boot: &'a Boot, dressed: &'a Dressed, cancel: Cancel) -> Stack<'a> {
+    Stack {
+        session: &boot.session,
+        config: &boot.config,
+        cancel,
+        executor: dressed,
+        opener: Some(Arc::new(crate::opener::Desktop::new())),
+    }
+}
+
+/// The conversation this launch is having, wired onto this prompt's stack. It is
+/// made by the first prompt or the first load by hand, whichever comes first, and
+/// kept after: the thread it holds is the conversation's.
+fn conversing(stack: &Stack<'_>, kept: Option<Agent>) -> (Agent, Receiver<Event>) {
+    match kept {
+        Some(mut agent) => {
+            let events = stack.wire(&mut agent);
+            (agent, events)
+        }
+        None => stack.agent(),
+    }
+}
+
 struct Front {
     boot: Boot,
     overrides: Overrides,
     agent: Option<Agent>,
 }
 
-impl Front {
-    /// One prompt's dials, wired to the tap the frame reads: a run and a load by
-    /// hand differ in what they are asked, not in what they run on.
-    fn dials(&self, tap: &Tap, cancel: Cancel) -> Dials {
-        let executor = Arc::new(
-            self.boot
-                .session
-                .executor(self.boot.config.timeout, cancel)
-                .with_output_sink(Arc::new(Told(tap.clone()))),
-        );
-        // The description names the timeout this run enforces, so the model is
-        // never told a boundary it does not have.
-        let bash = BashTool::new(
-            self.boot.session.policy(),
-            Limits::for_timeout(self.boot.config.timeout),
-            Arc::new(Watched {
-                inner: executor,
-                tap: tap.clone(),
-            }),
-        );
-        Dials {
-            model: Box::new(Client::new(
-                &self.boot.config,
-                self.boot.session.instructions().block(),
-            )),
-            // The frame is where a human is, so it is the one front end that
-            // offers the third tool: the opener is the host's own, outside the
-            // sandbox, where the display and the browser are.
-            tool: Tools::new(
-                bash,
-                self.boot.session.skill_tool(),
-                Some(OpenTool::new(
-                    Arc::new(crate::opener::Desktop::new()),
-                    self.boot.session.policy().clone(),
-                    self.boot.session.workspace().to_path_buf(),
-                )),
-            ),
-            max_turns: self.boot.config.max_turns,
-            thinking: self.boot.config.thinking,
-        }
-    }
-
-    /// The conversation this launch is having, on the dials it runs on now. It is
-    /// made by the first prompt or the first load by hand, whichever comes
-    /// first, and kept after: the thread it holds is the conversation's.
-    fn conversation(&mut self, tap: &Tap, cancel: Cancel) -> &mut Agent {
-        let dials = self.dials(tap, cancel.clone());
-        // Taken and handed back, so the boot's session is read before the frame's
-        // own agent is written: one borrow of one field at a time.
-        let mut agent = match self.agent.take() {
-            Some(agent) => {
-                let mut agent = agent;
-                agent.set_dials(dials);
-                agent
-            }
-            None => self.boot.session.agent(dials, cancel.clone()),
-        };
-        // The flag is the launch's, and the frame puts it down before every run:
-        // a conversation that kept the flag it was born with would stop being
-        // cancellable after the first `/new`.
-        agent.set_cancel(cancel);
-        self.agent.insert(agent)
-    }
-}
-
 impl Driver for Front {
     fn run(&mut self, prompt: &str, cancel: Cancel, tap: Tap) -> Finished {
-        let (events, stream) = mpsc::channel::<Event>();
+        let dressed = Dressed(tap.clone());
+        let stack = stack_of(&self.boot, &dressed, cancel);
+        let (mut agent, events) = conversing(&stack, self.agent.take());
         let forwarding = tap.clone();
         let forward = std::thread::spawn(move || {
-            for event in stream {
+            for event in events {
                 forwarding.event(event);
             }
         });
 
-        let agent = self.conversation(&tap, cancel);
-        agent.set_events(events);
         // The agent stays: the thread it holds is the conversation's. Only its
         // channel is dropped, so the forwarding thread sees the stream end.
         let outcome = agent.run(prompt);
         agent.close_events();
         let _ = forward.join();
+        self.agent = Some(agent);
 
         // The record's end is written here, and a failure to write it is said in
         // the transcript rather than dropped.
@@ -217,8 +180,11 @@ impl Driver for Front {
 
     fn load(&mut self, skill: &str, tap: Tap) -> Result<Invoked, String> {
         // No prompt's clock and no prompt's flag: a load reads a file, and the
-        // run behind it is given the frame's flag when it starts.
-        let agent = self.conversation(&tap, Cancel::new());
+        // run behind it is given the frame's flag when it starts. Nothing emits
+        // on a load, so the channel composed with the agent is dropped here.
+        let dressed = Dressed(tap.clone());
+        let stack = stack_of(&self.boot, &dressed, Cancel::new());
+        let (mut agent, _) = conversing(&stack, self.agent.take());
         let activated = agent.activate(skill);
         // The row and the chip are drawn from this event, whether a human asked
         // or the model did: one spelling of a load, read by one handler.
@@ -232,6 +198,7 @@ impl Driver for Front {
                 body: activated.content.clone(),
             });
         }
+        self.agent = Some(agent);
         if activated.is_error {
             return Err(activated
                 .problem
@@ -275,12 +242,24 @@ impl Driver for Front {
 }
 
 fn closing_note(session: &Session, outcome: &Result<Report, LoopError>) -> Option<String> {
-    session.finish(outcome).err().map(|error| {
-        format!(
-            "session {}: the record could not be finished: {error}",
-            session.dir().id()
-        )
-    })
+    session
+        .finish(outcome)
+        .err()
+        .map(|error| failure::record_note(session.dir().root(), &error))
+}
+
+/// The frame's executor, dressed for the tap: every line a command writes is
+/// drawn as it arrives, and every result is drawn as the call that ended.
+struct Dressed(Tap);
+
+impl stack::Dress for Dressed {
+    fn dress(&self, executor: SandboxExecutor) -> Arc<dyn BashExecutor> {
+        let output = Arc::new(Told(self.0.clone()));
+        Arc::new(Watched {
+            inner: Arc::new(executor.with_output_sink(output)),
+            tap: self.0.clone(),
+        })
+    }
 }
 
 struct Told(Tap);

@@ -16,7 +16,7 @@ use sindri_core::session::Session;
 use sindri_types::ExitCode;
 
 use crate::boot;
-use crate::{notice, signal};
+use crate::{failure, notice, signal};
 
 /// Runs the command and prints one JSON object describing what happened. A
 /// session is opened the one way a run opens one, so a diagnostic cannot probe a
@@ -75,10 +75,7 @@ fn end(session: &Session, result: Option<&ToolResult>, took: Duration) {
         Some(_) => session.finish_command(Stopped::Final, 1, took),
     };
     if let Err(error) = written {
-        eprintln!(
-            "sindri: session {}: the record could not be finished: {error}",
-            session.dir().root().display()
-        );
+        failure::record_failed(session, &error);
     }
 }
 
