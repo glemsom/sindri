@@ -12,7 +12,7 @@ mod support;
 
 use sindri_core::agent::{SkillTool, UserSkills};
 use sindri_core::provider::{Call, Message};
-use sindri_core::skills::{Catalog, Skill, builtins};
+use sindri_core::skills::{Catalog, Skill, builtins, fold};
 use support::{Harness, answer, calls};
 
 /// The built-in this file is written about: the ticket ships one.
@@ -42,7 +42,7 @@ fn tool(catalog: &Catalog) -> SkillTool {
 
 #[test]
 fn a_builtin_activates_to_its_body_and_its_files_with_no_path_to_open() {
-    let catalog: Catalog = builtins();
+    let catalog: Catalog = fold([builtins()]);
     let found = one();
     let built = tool(&catalog);
 
@@ -89,7 +89,7 @@ fn a_builtin_activates_to_its_body_and_its_files_with_no_path_to_open() {
 
 #[test]
 fn two_calls_for_a_builtin_in_one_wave_leave_one_body() {
-    let catalog: Catalog = builtins();
+    let catalog: Catalog = fold([builtins()]);
     let name = one().name;
     let mut h = Harness::skilled(
         vec![
@@ -122,7 +122,7 @@ fn two_calls_for_a_builtin_in_one_wave_leave_one_body() {
 
 #[test]
 fn a_builtin_carries_no_body_into_a_conversation_that_already_has_it() {
-    let catalog: Catalog = builtins();
+    let catalog: Catalog = fold([builtins()]);
     let name = one().name;
     let built = tool(&catalog);
     let loaded = sindri_core::agent::Loaded::default();
@@ -141,7 +141,7 @@ fn a_builtin_carries_no_body_into_a_conversation_that_already_has_it() {
 
 #[test]
 fn a_builtin_is_held_to_the_two_invocation_flags_as_a_scanned_skill_is() {
-    let mut catalog: Catalog = builtins();
+    let mut catalog: Catalog = fold([builtins()]);
     let name = one().name;
 
     // `disable-model-invocation: true`: in no catalog the model reads and in no

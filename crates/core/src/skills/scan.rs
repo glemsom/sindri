@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use super::SKILL;
-use super::catalog::{Catalog, Content, Refusal, Scope, Skill, Where};
+use super::catalog::{Content, Found, Refusal, Scope, Skill, Where};
 use super::frontmatter;
 
 /// Where one scope lives, from the directory it is relative to.
@@ -15,27 +15,27 @@ pub fn scope_dir(from: &Path) -> PathBuf {
 
 /// Everything one scope holds: its skills, and every file the scan refused. A
 /// scope directory that is not there holds nothing, which is not a refusal.
-pub fn scan(dir: &Path, scope: Scope) -> Catalog {
-    let mut catalog = Catalog::default();
+pub fn scan(dir: &Path, scope: Scope) -> Found {
+    let mut found = Found::default();
     let entries = match std::fs::read_dir(dir) {
         Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return catalog,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return found,
         Err(error) => {
-            catalog.refused.push(Refusal {
+            found.refused.push(Refusal {
                 at: Where::File(dir.to_path_buf()),
                 line: None,
                 reason: format!("the skills directory cannot be read: {error}"),
             });
-            return catalog;
+            return found;
         }
     };
 
-    let mut found: Vec<PathBuf> = entries.flatten().map(|entry| entry.path()).collect();
-    found.sort();
-    for path in found {
+    let mut paths: Vec<PathBuf> = entries.flatten().map(|entry| entry.path()).collect();
+    paths.sort();
+    for path in paths {
         if !path.is_dir() {
             if let Some(refusal) = broken_link(&path) {
-                catalog.refused.push(refusal);
+                found.refused.push(refusal);
             }
             continue;
         }
@@ -45,16 +45,16 @@ pub fn scan(dir: &Path, scope: Scope) -> Catalog {
             // `SKILL.md` that is a link to nothing is one that was meant to be
             // there, and silence would hide exactly that.
             if let Some(refusal) = broken_link(&file) {
-                catalog.refused.push(refusal);
+                found.refused.push(refusal);
             }
             continue;
         }
         match read_skill(&path, scope) {
-            Ok(skill) => catalog.skills.push(skill),
-            Err(refusal) => catalog.refused.push(refusal),
+            Ok(skill) => found.skills.push(skill),
+            Err(refusal) => found.refused.push(refusal),
         }
     }
-    catalog
+    found
 }
 
 /// One skill directory: its `SKILL.md` read, or the reason it was refused.

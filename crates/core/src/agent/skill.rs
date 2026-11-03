@@ -238,7 +238,7 @@ impl UserSkills {
     }
 
     /// The names a human may type, in the catalog's order: what `/` completion
-    /// offers, read from the one scan that found them.
+    /// offers, read from the one catalog the fold built.
     pub fn names(&self) -> Vec<String> {
         self.tool
             .names()

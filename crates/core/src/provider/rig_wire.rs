@@ -480,7 +480,10 @@ mod tests {
 
         // A run with a built-in, which is the one every run carries: the same
         // description with one sentence after it, and the tool it names.
-        let (with, preamble_with) = wire(root.path(), &crate::skills::builtins());
+        let (with, preamble_with) = wire(
+            root.path(),
+            &crate::skills::fold([crate::skills::builtins()]),
+        );
         assert_eq!(
             with.len(),
             2,

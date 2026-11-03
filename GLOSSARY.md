@@ -155,7 +155,7 @@ read is a **refusal**, never a silence.
 `skill` tool's description, so every description is paid for every turn, and one is a routing key
 rather than a summary of the body: past the ceiling it is a **refusal** naming the line to cut.
 
-**skill scope** — one of the three places a **catalog** reads, and the three are ordered by
+**skill scope** — one of the three places a **scan** reads, and the three are ordered by
 nearness: `builtin`, compiled into the binary; `user`, under the home directory at
 `~/.agents/skills`; and `repo`, at every `.agents/skills` between the workspace and its repository
 root. The specification governs what is inside a skill directory and says nothing about where one
@@ -178,8 +178,17 @@ it: a body is in force while the **transcript** still carries it. Two identical 
 wave are one load, and a load by hand claims the name as the tool's own call does. The code's word
 is `Loaded`, and a frame builds its ledger from the `SkillLoaded` event.
 
-**catalog** — everything one scan found: every **skill**, every **refusal**, and the shadowed
-names. Sorted by name, so two scans of one tree say the same thing.
+**found** — what one **skill scope**'s scan hands back: its skills and its refusals, and no
+shadowed list, because a scope has no nearer one to lose a name to. The code's word is `Found`,
+and `skills::scan` is the function that returns one.
+
+**fold** — the one function that makes the **catalog** of every scope's **found**, in precedence
+order: a name already held is not replaced, and the skill that would have taken it is recorded as
+**shadowing**. It is the only place a shadow is made, and it reads each found once. The code's
+word is `fold`, and `skills::fold` is it.
+
+**catalog** — what a **fold** makes: every **skill**, every **refusal**, and the shadowed names.
+Sorted by name, so two scans of one tree say the same thing.
 
 **refusal** — a `SKILL.md` the scan or the built-in table would not load, held with where it came
 from and the line that broke it: no description, no YAML, a description past the **description
@@ -198,8 +207,8 @@ report says `none` for it.
 
 **shadowing** — one name two of the **skill scope**s carry. The nearer one's skill holds it and the
 farther one is recorded as shadowed, by its scope, its name and its directory where it has one, so
-a reader sees both what won and what it displaced: a repository's over the home directory's, and
-both over a built-in's.
+a reader sees both what won and what it displaced. The **fold** makes them, so a repository's skill
+is recorded over the home directory's, and both over a built-in's.
 
 ## Terminal UI
 

@@ -56,7 +56,7 @@ fn alpha(workspace: &Path) -> Catalog {
 fn with_no_skill_the_model_may_see_the_tool_is_not_registered() {
     let workspace = tempfile::TempDir::new().expect("workspace");
     // A house rule a human may reach for and the model may not see: it is in
-    // the catalog the scan found, and in nothing the model is handed.
+    // the catalog the fold built, and in nothing the model is handed.
     skills::write(
         workspace.path(),
         "house",

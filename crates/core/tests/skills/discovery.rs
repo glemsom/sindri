@@ -1,7 +1,7 @@
 //! Both scopes, the shadowing between them, and the shapes of the tree a scan
 //! has to survive: a link, a broken link, a directory that is not a skill.
 
-use sindri_core::skills::{Origin, Scope, Where};
+use sindri_core::skills::{Found, Origin, Scope, Where, builtins, discover, fold, scan};
 use tempfile::TempDir;
 
 use crate::fixtures::{repo, scanned, skill};
@@ -301,4 +301,91 @@ fn a_workspace_outside_any_repository_has_no_repo_scope() {
 
     assert!(scanned(loose.path(), None).skills.is_empty());
     assert_eq!(scanned(&workspace, None).skills.len(), 1);
+}
+
+#[test]
+fn a_scan_hands_back_its_skills_and_its_refusals_and_no_shadow_it_could_not_make() {
+    let (root, _) = repo();
+    let scope = root.path().join(".agents/skills");
+    skill(
+        &scope,
+        "house-style",
+        "---\nname: house-style\ndescription: The repository's own.\n---\n",
+    );
+    skill(&scope, "broken", "---\nname: broken\n---\n");
+
+    // Named field by field, so a third one — a `shadowed` list no scope could
+    // fill — would not compile.
+    let Found { skills, refused } = scan(&scope, Scope::Repo);
+
+    let names: Vec<&str> = skills.iter().map(|skill| skill.name.as_str()).collect();
+    assert_eq!(names, vec!["house-style"], "{skills:?}");
+    assert_eq!(
+        refused.len(),
+        1,
+        "a file with no description is said: {refused:?}"
+    );
+}
+
+#[test]
+fn the_fold_builds_the_catalog_and_is_where_every_shadow_is_made() {
+    let home = TempDir::new().expect("a home");
+    let (root, workspace) = repo();
+    let name = builtins()
+        .skills
+        .first()
+        .map(|shipped| shipped.name.clone())
+        .expect("the binary ships a skill");
+    skill(
+        &home.path().join(".agents/skills"),
+        &name,
+        &format!("---\nname: {name}\ndescription: The user's own.\n---\n"),
+    );
+    skill(
+        &root.path().join(".agents/skills"),
+        &name,
+        &format!("---\nname: {name}\ndescription: This repository's.\n---\n"),
+    );
+    skill(
+        &root.path().join(".agents/skills"),
+        "house-style",
+        "---\nname: house-style\ndescription: The repository's own.\n---\n",
+    );
+
+    let catalog = fold([
+        scan(&root.path().join(".agents/skills"), Scope::Repo),
+        scan(&home.path().join(".agents/skills"), Scope::User),
+        builtins(),
+    ]);
+
+    let names: Vec<&str> = catalog
+        .skills
+        .iter()
+        .map(|skill| skill.name.as_str())
+        .collect();
+    let mut sorted = names.clone();
+    sorted.sort_unstable();
+    assert_eq!(names, sorted, "sorted by name, as a catalog is: {names:?}");
+    let winner = catalog
+        .skills
+        .iter()
+        .find(|skill| skill.name == name)
+        .expect("the name is held");
+    assert_eq!(winner.scope, Scope::Repo, "the nearest scope wins");
+    assert_eq!(winner.description, "This repository's.");
+    let mut lost: Vec<Scope> = catalog.shadowed.iter().map(|one| one.loser.scope).collect();
+    lost.sort_by_key(|scope| scope.as_str());
+    assert_eq!(
+        lost,
+        vec![Scope::Builtin, Scope::User],
+        "both losers are recorded, by the fold: {:?}",
+        catalog.shadowed
+    );
+    assert_eq!(
+        catalog,
+        discover(&workspace, Some(home.path())),
+        "one fold of the three scopes is the catalog, and it says what a walk of \
+         the same tree says: {}",
+        catalog.report()
+    );
 }

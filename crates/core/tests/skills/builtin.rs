@@ -89,17 +89,17 @@ fn a_builtin_body_and_its_files_are_read_from_the_binary() {
 
 #[test]
 fn every_builtin_skill_parses_and_names_a_file_its_body_points_at() {
-    let catalog = builtins();
+    let found = builtins();
     assert!(
-        catalog.refused.is_empty(),
-        "a built-in that will not read is a refusal and not a silence: {catalog:?}"
+        found.refused.is_empty(),
+        "a built-in that will not read is a refusal and not a silence: {found:?}"
     );
     assert_eq!(
-        catalog.skills.len(),
+        found.skills.len(),
         BUILTINS.len(),
         "every entry in the table is a skill, so nothing was dropped on the way in"
     );
-    let shipped = catalog.skills;
+    let shipped = found.skills;
     for found in shipped {
         assert!(!found.description.trim().is_empty(), "{found:?}");
         let body = found.body().expect("a built-in's frontmatter parses");
@@ -255,14 +255,14 @@ fn the_report_prints_a_builtins_own_scope_word_and_no_path_under_it() {
 
 #[test]
 fn every_builtin_description_fits_the_ceiling_so_none_can_refuse_itself_at_runtime() {
-    let catalog = builtins();
+    let found = builtins();
     assert!(
-        catalog.refused.is_empty(),
+        found.refused.is_empty(),
         "a description past the ceiling is refused by the reader a directory's copy goes \
          through, and a built-in that refused itself would be a skill the binary ships and \
-         never hands the model: {catalog:?}"
+         never hands the model: {found:?}"
     );
-    let shipped = catalog.skills;
+    let shipped = found.skills;
     for found in &shipped {
         let measured = found.description.chars().count();
         assert!(

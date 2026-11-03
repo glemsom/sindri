@@ -86,7 +86,8 @@ fn the_description_costs_at_most_160_words_besides_the_policy() {
     // bounded here so a pointer cannot grow into a second description: the text
     // a run with a skill sends is this prose and that sentence, and the sentence
     // is a sentence.
-    let pointed = Tools::new(tool, SkillTool::new(&builtins()), None).specs()[0]
+    let shipped = sindri_core::skills::fold([builtins()]);
+    let pointed = Tools::new(tool, SkillTool::new(&shipped), None).specs()[0]
         .description
         .replacen(&policy.describe(), "", 1);
     let sentence = POINTER.split_whitespace().count();

@@ -94,7 +94,7 @@ fn launch(boot: &Boot) -> Launch {
         model: boot.config.model.clone(),
         workspace: workspace(&boot.env.workspace),
         // The half of the catalog a human may reach for: `/skill` offers these,
-        // and a load by hand is read from the same set the scan found.
+        // and a load by hand is read from the same catalog the fold built.
         skills: boot.session.hand().names(),
         max_turns: boot.config.max_turns,
         // The one switch, read where both front ends read it: a run whose

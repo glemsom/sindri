@@ -1,5 +1,6 @@
 //! The values a catalog is made of: one skill as it was read, one file the scan
-//! refused, one name two scopes carried.
+//! refused, one name two scopes carried, and the found one scope hands back
+//! before any fold has seen it.
 
 use std::fmt;
 use std::path::PathBuf;
@@ -166,11 +167,22 @@ pub struct Shadow {
     pub winner: Origin,
 }
 
-/// Everything one scan found: what may run, what would not load, and what was
-/// displaced. Sorted by name, so two scans of one tree say the same thing.
+/// Everything the fold made of every scope's found: what may run, what would not
+/// load, and what was displaced. Sorted by name, so two scans of one tree say the
+/// same thing.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Catalog {
     pub skills: Vec<Skill>,
     pub refused: Vec<Refusal>,
     pub shadowed: Vec<Shadow>,
+}
+
+/// One skill scope's found, as its scan hands it back: its skills and every
+/// file it refused. A scope cannot shadow itself — shadowing is a nearer scope
+/// carrying a name a farther one already has — so the field a single scope could
+/// never fill is not here. `fold` is what makes a `Catalog` of them.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Found {
+    pub skills: Vec<Skill>,
+    pub refused: Vec<Refusal>,
 }

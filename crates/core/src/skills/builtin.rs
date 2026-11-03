@@ -4,12 +4,12 @@
 //! is no directory to be absent, stale or unwritable, and no second copy of
 //! ours under a path a model may also `cat`.
 //!
-//! The list is folded into every catalog after the two scopes a scan reads, and
-//! that order is where the precedence comes from: a name already held is not
-//! replaced, so a built-in is the lowest of the three and a nearer scope's skill
-//! takes its name.
+//! The list is the third scope's found, handed to the fold after the two a scan
+//! reads, and that order is where the precedence comes from: a name already held
+//! is not replaced, so a built-in is the lowest of the three and a nearer scope's
+//! skill takes its name.
 
-use super::catalog::{Catalog, Content, File, Refusal, Scope, Skill, Where};
+use super::catalog::{Content, File, Found, Refusal, Scope, Skill, Where};
 use super::frontmatter;
 
 /// Every built-in skill: the one table, holding what a compiled skill already is
@@ -33,38 +33,38 @@ pub const BUILTINS: &[Content] = &[Content::Compiled {
     ],
 }];
 
-/// The built-in scope as a catalog, folded in after the two scopes a scan
-/// reads, and therefore the lowest.
+/// The built-in scope's found, handed to the fold after the two scopes a
+/// scan reads, and therefore the lowest of the three.
 ///
 /// A built-in that will not read is a refusal naming the scope that carries it,
 /// because a compiled skill has no file: the rest of the catalog still holds, so
 /// one broken `SKILL.md` costs the model that one skill and never the binary's
 /// others.
-pub fn builtins() -> Catalog {
-    folded(BUILTINS)
+pub fn builtins() -> Found {
+    known(BUILTINS)
 }
 
-/// A table folded into a catalog: the frontmatter of each entry by the same
-/// reader a directory's copy goes through, so a built-in and a scanned skill are
+/// One table read into a found: the frontmatter of each entry by the same reader
+/// a directory's copy goes through, so a built-in and a scanned skill are
 /// assembled by one path rather than two.
-fn folded(table: &[Content]) -> Catalog {
-    let mut catalog = Catalog::default();
+fn known(table: &[Content]) -> Found {
+    let mut found = Found::default();
     for content in table {
         let Content::Compiled { source, .. } = content else {
             continue;
         };
         match frontmatter::parse(source) {
-            Ok(fields) => catalog
+            Ok(fields) => found
                 .skills
                 .push(Skill::new(fields, Scope::Builtin, content.clone())),
-            Err(problem) => catalog.refused.push(Refusal {
+            Err(problem) => found.refused.push(Refusal {
                 at: Where::Scope(Scope::Builtin),
                 line: Some(problem.line),
                 reason: problem.reason,
             }),
         }
     }
-    catalog
+    found
 }
 
 #[cfg(test)]
@@ -74,7 +74,7 @@ mod tests {
         reason = "a panicking test is how a broken contract reports itself"
     )]
 
-    use super::{Content, File, Scope, Where, folded};
+    use super::{Content, File, Scope, Where, known};
 
     /// One skill with no description, which is the reader's refusal to make.
     const BROKEN: &[Content] = &[Content::Compiled {
@@ -93,11 +93,11 @@ mod tests {
 
     #[test]
     fn a_builtin_that_will_not_read_is_a_refusal_naming_the_scope_that_carries_it() {
-        let catalog = folded(BROKEN);
+        let found = known(BROKEN);
 
-        assert!(catalog.skills.is_empty(), "no name is invented for it");
-        assert_eq!(catalog.refused.len(), 1, "{catalog:?}");
-        let refusal = &catalog.refused[0];
+        assert!(found.skills.is_empty(), "no name is invented for it");
+        assert_eq!(found.refused.len(), 1, "{found:?}");
+        let refusal = &found.refused[0];
         assert_eq!(
             refusal.at,
             Where::Scope(Scope::Builtin),
@@ -108,12 +108,12 @@ mod tests {
             refusal.reason.contains("description"),
             "the reason is the reader's own: {refusal:?}"
         );
+        let reason = refusal.reason.clone();
+        // The built-ins folded on their own, which is the catalog the doctor
+        // reads when they are the only scope a tree carries.
         assert_eq!(
-            catalog.report(),
-            format!(
-                "skills: none found\nskills: 1 refused\n  builtin:1: {}\n",
-                refusal.reason
-            ),
+            crate::skills::fold([found]).report(),
+            format!("skills: none found\nskills: 1 refused\n  builtin:1: {reason}\n"),
             "`sindri doctor` prints the scope's word where a path would go"
         );
     }
@@ -122,32 +122,32 @@ mod tests {
     fn a_broken_builtin_leaves_the_rest_of_the_catalog_standing() {
         let table: Vec<Content> = BROKEN.iter().chain(SOUND).cloned().collect();
 
-        let catalog = folded(&table);
+        let found = known(&table);
 
         assert_eq!(
-            catalog.skills.len(),
+            found.skills.len(),
             1,
-            "the sound one still loads: {catalog:?}"
+            "the sound one still loads: {found:?}"
         );
-        assert_eq!(catalog.skills[0].name, "sound");
-        assert_eq!(catalog.skills[0].scope, Scope::Builtin);
-        assert_eq!(catalog.refused.len(), 1, "{catalog:?}");
+        assert_eq!(found.skills[0].name, "sound");
+        assert_eq!(found.skills[0].scope, Scope::Builtin);
+        assert_eq!(found.refused.len(), 1, "{found:?}");
     }
 
     #[test]
     fn a_builtin_that_reads_is_a_compiled_skill_with_its_own_files() {
-        let catalog = folded(SOUND);
+        let found = known(SOUND);
 
-        assert!(catalog.refused.is_empty(), "{catalog:?}");
-        let found = &catalog.skills[0];
-        assert!(found.dir().is_none(), "a built-in is found in the binary");
+        assert!(found.refused.is_empty(), "{found:?}");
+        let sound = &found.skills[0];
+        assert!(sound.dir().is_none(), "a built-in is found in the binary");
         assert_eq!(
-            found.files().len(),
+            sound.files().len(),
             1,
             "the files the table carries go with the body"
         );
         assert_eq!(
-            found.body().expect("the body is under the fence"),
+            sound.body().expect("the body is under the fence"),
             "# Sound"
         );
     }
