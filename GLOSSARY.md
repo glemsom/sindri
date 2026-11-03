@@ -51,6 +51,22 @@ conversation once, frontmatter stripped and the skill's own files listed beside 
 (`crates/core/src/agent/skill.rs`). A tool and not a file read through `bash`, because a
 permission nobody enforces is a suggestion.
 
+**doctrine** — the prose the `skill` tool is described to the model with, and nothing about
+the workspace: what a load gives back, the **trigger sentence**, which asks for one before
+acting, and the line that says the load happens once (`crates/core/src/agent/skill.rs`).
+A text of its own, `DOCTRINE` from the `doctrine.md` beside that module, because it is the
+one text of the tool a bench can move to measure the wording, and a wording nobody measured
+is an argument: the bench's third arm is the shipped doctrine with the trigger sentence gone
+and the line that says the load happens once left in place. The catalog sits beside the
+doctrine in the same description and is not part of it — that one changes with the tree.
+
+**trigger sentence** — the one line of a doctrine that asks for a load before acting, with
+the clause that limits it to a task the skill covers ("Call it before acting when a task is
+one it covers.", `crates/core/src/agent/skill.rs`). It is a sentence of its own and alone on
+its line, so removing it takes nothing with it: that is what makes the bench's third arm the
+absence of one sentence rather than a rewrite
+(`scripts/bench-skill-ablation/doctrines.py`).
+
 **open** — the third tool: one target handed to the host's opener
 (`crates/core/src/agent/open.rs`). The core decides and refuses; the spawn belongs to the
 process that still holds a display, which the sandbox is what takes away.

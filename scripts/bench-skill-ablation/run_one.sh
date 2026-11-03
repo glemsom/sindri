@@ -4,8 +4,10 @@
 # built-in was activated, and the rule's verdict on what the run left behind.
 #
 # The arm is a binary, not a flag: `bin-with` was built with the built-in in the
-# catalog and `bin-without` with the table emptied (see build_arm.sh), so what
-# changes between the two runs is the catalog and nothing else.
+# catalog and the shipped doctrine, `bin-without` with the table emptied and
+# `bin-no-trigger` with the doctrine one sentence shorter (see build_arm.sh), so
+# what changes between two runs is the text the binary was built from and nothing
+# else.
 #
 # A run never sees the developer's own skills: `HOME` points into the run
 # directory and holds no `.agents/skills`, so the only skill in the catalog is
@@ -15,7 +17,7 @@
 # bench names one.
 set -u
 BENCH=$(dirname "$(readlink -f "$0")")
-arm=${1:?usage: run_one.sh with|without RUNDIR}
+arm=${1:?usage: run_one.sh with|without|no-trigger RUNDIR}
 RUNDIR=$(readlink -m "$2")
 BIN=${BENCH_BIN:-$BENCH/bin-$arm}
 TAG=${TAG:-run}
@@ -24,19 +26,21 @@ ATTEMPT=${ATTEMPT:-1}
 PROMPT=$(python3 -c "import sys; sys.path.insert(0,'$BENCH'); import tasks; print(tasks.PROMPT)")
 : "${BENCH_MODEL:?set BENCH_MODEL to the model this arm is measured on}"
 
-case $arm in with|without) : ;; *) echo "run_one: arm must be with or without, not '$arm'" >&2; exit 2;; esac
+# shellcheck source=arms.sh
+. "$BENCH/arms.sh"
+if ! arm_is_a_name "$arm"; then
+  echo "run_one: arm must be $(arms_words), not '$arm'" >&2; exit 2
+fi
 [ -x "$BIN" ] || { echo "run_one: $BIN is not built — run ./build_arm.sh $arm" >&2; exit 2; }
 
-# The arm is the binary's catalog, not the word on the command line: a run
-# labelled `with` on the `without` binary would land in the with row with the
-# skill never activated, which is the one number this bench exists to be honest
-# about. So the binary is asked, and a mismatch is refused before it runs.
-if "$BIN" doctor 2>/dev/null | grep -q '^  builtin '; then
-  [ "$arm" = with ] || {
-    echo "run_one: $BIN ships a built-in, so it is not the without arm" >&2; exit 2; }
-else
-  [ "$arm" = without ] || {
-    echo "run_one: $BIN ships no built-in, so it is not the with arm — ./build_arm.sh $arm" >&2; exit 2; }
+# The arm is what the binary carries, not the word on the command line: a run
+# labelled `with` on another arm's binary would land in the with row with the
+# wrong words in front of the model, which is the one number this bench exists to
+# be honest about. So the binary is asked (see arms.sh), and a mismatch is refused
+# before it runs.
+if ! reason=$(arm_mismatch "$arm" "$BIN"); then
+  echo "run_one: $BIN is not the $arm arm: $reason — build it with ./build_arm.sh $arm" >&2
+  exit 2
 fi
 
 rm -rf "$RUNDIR"; mkdir -p "$RUNDIR/repo" "$RUNDIR/state" "$RUNDIR/config" "$RUNDIR/home"

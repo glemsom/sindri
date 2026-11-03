@@ -1,9 +1,9 @@
 # The ablation bench's shell, driven as a process and with nothing that costs
 # anything: no cargo build, no arm binary, no model. What is asserted is the
 # bench's guard rails — the ones that stand between a mistake and a number
-# nobody can trust — because the pipeline itself is `bench-skill-ablation/
-# self-test.sh`'s job and that one is manual, needs two builds and is not on
-# this gate.
+# nobody can trust, including the third arm's — because the pipeline itself is
+# `bench-skill-ablation/self-test.sh`'s job and that one is manual, needs three
+# builds and is not on this gate.
 
 BENCH="$SINDRI_ROOT/scripts/bench-skill-ablation"
 
@@ -19,18 +19,53 @@ detached() { # command…
 }
 
 test_a_build_of_an_arm_that_is_not_a_name_is_refused() {
-    before=$(sha256sum "$SINDRI_ROOT/crates/core/src/skills/builtin.rs")
+    before=$(sha256sum "$SINDRI_ROOT/crates/core/src/skills/builtin.rs" \
+        "$SINDRI_ROOT/crates/core/src/agent/skill/doctrine.md")
     detached "$BENCH/build_arm.sh" sideways
     assert_status 2 "$status"
-    assert_contains "$ERR" "arm must be with or without"
-    after=$(sha256sum "$SINDRI_ROOT/crates/core/src/skills/builtin.rs")
-    [ "$before" = "$after" ] || fail "a refused build touched the built-in table"
+    assert_contains "$ERR" "arm must be with, without or no-trigger"
+    after=$(sha256sum "$SINDRI_ROOT/crates/core/src/skills/builtin.rs" \
+        "$SINDRI_ROOT/crates/core/src/agent/skill/doctrine.md")
+    [ "$before" = "$after" ] || fail "a refused build touched the text an arm is built from"
+}
+
+# The third arm is the shipped doctrine one line shorter, so the line has to be
+# there: a doctrine that lost it would build the shipped arm under another name
+# and the sweep would report one wording twice.
+test_the_third_arms_text_is_the_shipped_doctrine_less_the_trigger_sentence() {
+    shipped="$SINDRI_ROOT/crates/core/src/agent/skill/doctrine.md"
+    # The sentence is the module's to name, so a shell never keeps a copy of it.
+    sentence=$(python3 "$BENCH/doctrines.py" sentence)
+    detached python3 "$BENCH/doctrines.py" without-trigger "$shipped"
+    assert_status 0 "$status"
+    assert_contains_absent "$(cat out)" "$sentence"
+    [ "$(awk 'END { print NR }' out)" -eq "$(( $(awk 'END { print NR }' "$shipped") - 1 ))" ] \
+        || fail "the third arm's text is not the shipped one with a single line removed"
+}
+
+test_a_doctrine_that_lost_the_trigger_sentence_is_refused() {
+    printf 'Loads one skill into this conversation.\n' > doctrine.md
+    detached python3 "$BENCH/doctrines.py" without-trigger doctrine.md
+    [ "$status" -ne 0 ] || fail "a doctrine with no trigger sentence became an arm"
+    assert_contains "$ERR" "no trigger sentence"
+    assert_contains_absent "$(cat out)" "Loads one skill"
+}
+
+# A run's label and its binary are two claims, and only the binary can be asked:
+# the sentence is in the text it ships, so the words are what the question reads.
+test_a_binary_is_asked_whether_it_carries_the_trigger_sentence() {
+    printf 'x %s y\n' "$(python3 "$BENCH/doctrines.py" sentence)" > bin-carries
+    printf 'Loads one skill into this conversation.\n' > bin-short
+    detached python3 "$BENCH/doctrines.py" carries bin-carries
+    assert_status 0 "$status"
+    detached python3 "$BENCH/doctrines.py" carries bin-short
+    assert_status 1 "$status"
 }
 
 test_a_run_of_an_arm_that_is_not_a_name_is_refused() {
     detached env BENCH_MODEL=mock "$BENCH/run_one.sh" sideways "$PWD/run"
     assert_status 2 "$status"
-    assert_contains "$ERR" "arm must be with or without"
+    assert_contains "$ERR" "arm must be with, without or no-trigger"
 }
 
 test_a_run_without_the_model_it_is_measured_on_is_refused() {
@@ -57,6 +92,19 @@ test_a_record_line_for_an_arm_that_is_not_a_name_is_refused() {
     detached python3 "$BENCH/bench.py" record run --task refused-write --arm sideways
     assert_status 2 "$status"
     assert_contains "$ERR" "invalid choice"
+}
+
+# The third arm is a name a run is recorded under, and its line carries the fact
+# it is scored on: whether a body entered the conversation before the first
+# command, read from the transcript rather than from the arm's own label. A run
+# that left no transcript reads null — absent is not zero, and a zero here would
+# read as a run the sentence failed to reach.
+test_a_record_line_for_the_third_arm_carries_the_fact_it_is_scored_on() {
+    mkdir -p run
+    detached python3 "$BENCH/bench.py" record run --task refused-write --arm no-trigger
+    assert_status 0 "$status"
+    assert_contains "$(cat out)" '"arm": "no-trigger"'
+    assert_contains "$(cat out)" '"loaded_before_bash": null'
 }
 
 test_a_report_over_a_file_no_sweep_wrote_claims_no_number() {

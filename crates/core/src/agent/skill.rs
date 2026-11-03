@@ -3,6 +3,15 @@
 //! built at boot and read from the schema while the model is choosing, so a
 //! workspace with no skill the model may see registers no tool at all and the
 //! preamble stays exactly what it was.
+//!
+//! The prose that asks for a load is the doctrine, and it is a text of its own
+//! ([`DOCTRINE`], compiled in from the `doctrine.md` beside this module) rather
+//! than a literal in the function that assembles the description. Nothing
+//! product-side switches on it: the one reader that differs is
+//! `scripts/bench-skill-ablation`, which builds an arm carrying a doctrine one
+//! sentence shorter to measure whether the sentence earns its place, and writes
+//! the shipped text back byte for byte. A wording nobody measured is an
+//! argument, and this is the seam the number comes through.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -11,6 +20,12 @@ use std::time::Instant;
 
 use crate::provider::{Call, ToolFacts, ToolOutcome, ToolSpec};
 use crate::skills::{Catalog, Skill};
+
+/// The doctrine: the words the model reads while it is choosing whether to load
+/// something, and nothing about the workspace. It is compiled in from a file of
+/// its own so the bench can move a sentence of it without editing this module —
+/// the arm is the text the binary carries, not a flag a run could forget to set.
+pub const DOCTRINE: &str = include_str!("skill/doctrine.md");
 
 /// The most files one activation lists. A skill directory is not the place to
 /// spend a run's budget, and a file past this one is still reachable by name.
@@ -132,14 +147,7 @@ impl SkillTool {
 /// choosing a tool. Every word is paid for on every turn of every run that has
 /// a skill, so it says only what the schema and the result cannot.
 fn describe(skills: &[Skill]) -> ToolSpec {
-    let mut description = String::from(
-        "Loads one skill — instructions written for you — into this conversation. Call it \
-         before acting when a task is one it covers: the result is the skill's body with its \
-         frontmatter stripped, and its files beside it: listed, and sent with the body when \
-         the skill has no directory.\n\
-         Loads once per conversation: a second call answers `already_loaded` with no body.\n\
-         Skills:\n",
-    );
+    let mut description = format!("{DOCTRINE}Skills:\n");
     for skill in skills {
         description.push_str(&format!("- {}: {}\n", skill.name, skill.description));
     }

@@ -5,6 +5,8 @@ Every test builds the lines it reads rather than borrowing another's, and every
 name states the behaviour it proves — a bench whose own arithmetic is wrong
 reports a number nobody can trust.
 """
+import contextlib
+import io
 import json
 import pathlib
 import sys
@@ -64,6 +66,57 @@ class TheRecordLineCarriesTheFourFieldsTheAblationTurnsOn(unittest.TestCase):
                             attempt=1, model="m", run=run, entries=[],
                             fixed=False, elapsed_s=1)
         self.assertIsNone(line["in_tokens"])
+
+    def test_a_load_before_the_first_command_is_a_fact_of_the_record(self):
+        # The arm the doctrine is moved by is scored on this and not on the
+        # arm's own label: the transcript says whether a body entered the
+        # conversation before anything was run.
+        before = skill_call(1, bench.SKILL) + [call(2, "sh tests/run.sh"),
+                                              result(2, 0)]
+        after = [call(2, "sh tests/run.sh"), result(2, 0)] + \
+            skill_call(3, bench.SKILL)
+        self.assertTrue(self.line(entries=before)["loaded_before_bash"])
+        self.assertFalse(self.line(entries=after)["loaded_before_bash"])
+
+    def test_a_refused_second_call_is_not_a_body_loaded_before_the_command(self):
+        # `already_loaded` is no body, so it is not the fact the third arm is
+        # scored on, however early in the run it came.
+        entries = skill_call(1, bench.SKILL, outcome="already_loaded") + \
+            [call(2, "sh tests/run.sh"), result(2, 0)]
+        self.assertFalse(self.line(entries=entries)["loaded_before_bash"])
+
+    def test_another_skills_body_is_not_this_arms_load(self):
+        entries = skill_call(1, "house-style") + [call(2, "sh tests/run.sh"),
+                                                 result(2, 0)]
+        self.assertFalse(self.line(entries=entries)["loaded_before_bash"])
+
+    def test_a_load_asked_in_the_same_wave_as_the_command_is_not_before_it(self):
+        # A wave's calls are written before any of its results, and the body a
+        # load carries arrives with them — so the command ran without it, and the
+        # call before the command is not a load before the command.
+        asked = {"type": "tool_call", "turn": 1, "call_id": "s1", "tool": "skill",
+                 "name": bench.SKILL}
+        command = {"type": "tool_call", "turn": 1, "call_id": "c1", "tool": "bash",
+                   "command": "sh tests/run.sh"}
+        entries = [asked, command, skill_call(1, bench.SKILL)[1], result(1, 2)]
+        self.assertFalse(self.line(entries=entries)["loaded_before_bash"])
+
+    def test_a_run_that_ran_no_command_has_no_first_command_to_be_before(self):
+        # The fact is undefined rather than false: a run that loaded the body and
+        # answered without running anything is not evidence that the sentence
+        # failed to reach it, and counting it as one deflates the shipped arm.
+        self.assertIsNone(self.line(entries=skill_call(1, bench.SKILL))
+                          ["loaded_before_bash"])
+
+    def test_a_run_that_left_no_transcript_has_no_load_to_count(self):
+        # Absent is not zero, as everywhere in this file: a run that never
+        # reached the model wrote no entry to read, so it is left out of the
+        # rate instead of being counted as a run the sentence failed to reach.
+        run = {"turns": 0, "tool_calls": 0, "stopped": "error", "rc": 1}
+        line = bench.record(task="t", arm="with", tag="a", repetition=1,
+                            attempt=1, model="m", run=run, entries=[],
+                            fixed=False, elapsed_s=1)
+        self.assertIsNone(line["loaded_before_bash"])
 
     def test_whether_the_skill_was_activated_is_a_field_of_its_own(self):
         without = [call(1, "sh tests/run.sh"), result(1, 0)]
@@ -152,7 +205,7 @@ class AnUnusedBuiltInIsToldFromAUselessOne(unittest.TestCase):
 class TheTableIsTheMeansOfOneArmAgainstTheOther(unittest.TestCase):
     def file(self):
         with_right = [{"arm": "with", "in_tokens": 1000, "activated": True,
-                       "checks": {"ok": True}},
+                       "loaded_before_bash": True, "checks": {"ok": True}},
                       {"arm": "with", "in_tokens": 1400, "activated": False,
                        "checks": {"ok": False}}]
         without = [{"arm": "without", "in_tokens": 300, "activated": False,
@@ -166,9 +219,13 @@ class TheTableIsTheMeansOfOneArmAgainstTheOther(unittest.TestCase):
     def test_each_arm_is_one_row_of_runs_tokens_activations_and_rights(self):
         table = bench.summarize(self.file())
         self.assertEqual(table["with"], {"runs": 2, "billed": 2, "mean": 1200,
-                                         "median": 1200, "activated": 1, "right": 1})
+                                         "median": 1200, "activated": 1,
+                                         "loaded_first": 1, "commanded": 1,
+                                         "right": 1})
         self.assertEqual(table["without"], {"runs": 2, "billed": 1, "mean": 300,
-                                            "median": 300, "activated": 0, "right": 1})
+                                            "median": 300, "activated": 0,
+                                            "loaded_first": 0, "commanded": 0,
+                                            "right": 1})
 
     def test_an_arm_with_a_run_that_never_reached_the_model_says_so_beside_its_mean(self):
         # The mean is over one run and the row counts two: a reader who is not
@@ -274,6 +331,92 @@ class TheShippingRuleIsAppliedToTheTable(unittest.TestCase):
     def test_a_file_holding_one_arm_has_no_comparison_to_make(self):
         report = bench.report(sweep()[:6])
         self.assertIn("needs both arms", report)
+
+
+class TheThirdArmMovesTheSentenceAndTheTableSaysSo(unittest.TestCase):
+    """The shipped arm, the shipped arm one sentence shorter, and the arm with no
+    built-in at all: the third one is what makes the trigger sentence a number
+    rather than an argument, so the report prints all three and names what the
+    sentence came to."""
+
+    def file(self, with_first=6, quiet_first=2):
+        """Three arms of six runs over one model and one task. `with_first` and
+        `quiet_first` are how many of each shipped-catalog arm's six runs loaded
+        a skill before their first command; both arms were right every time and
+        the arm with no skill was never right, so the shipping rule holds."""
+        lines = []
+        for arm, tokens, first, right in (("with", 1000, with_first, True),
+                                          ("no-trigger", 1040, quiet_first, True),
+                                          ("without", 1200, 0, False)):
+            for index in range(6):
+                lines.append({"arm": arm, "model": "m", "task": "refused-write",
+                              "in_tokens": tokens, "activated": arm != "without",
+                              "loaded_before_bash": index < first,
+                              "checks": {"ok": right}})
+        return lines
+
+    def test_the_report_prints_one_row_per_arm_and_the_third_beside_the_two(self):
+        table = bench.report(self.file())
+        for arm in ("| with |", "| without |", "| no-trigger |"):
+            self.assertIn(arm, table)
+
+    def test_the_runs_whose_load_came_before_the_command_are_counted_per_arm(self):
+        table = bench.summarize(self.file(with_first=6, quiet_first=2))
+        self.assertEqual(table["with"]["loaded_first"], 6)
+        self.assertEqual(table["no-trigger"]["loaded_first"], 2)
+        self.assertEqual(table["without"]["loaded_first"], 0)
+        self.assertEqual(table["no-trigger"]["commanded"], 6)
+
+    def test_an_arm_whose_runs_measured_no_first_command_reads_no_rate(self):
+        # The same discipline as a mean over no billed run: a rate over no
+        # transcript is not a rate, and saying so is not the same as saying zero.
+        lines = self.file()
+        for line in lines:
+            line["loaded_before_bash"] = None
+        sentence = bench.wording(bench.summarize(lines))
+        self.assertIn("has no rate to read", sentence)
+        self.assertNotIn("earns its place", sentence)
+
+    def test_the_column_says_before_bash_rather_than_activated_twice(self):
+        # `activated` says a body entered the conversation and `loaded first`
+        # says it entered before anything ran: an arm can be activated in every
+        # run and still have reached none of them in time.
+        table = bench.report(self.file(with_first=6, quiet_first=2))
+        self.assertIn("| activated | loaded before bash | right |", table)
+
+    def test_the_sentence_that_lifts_the_rate_is_named_as_earning_its_place(self):
+        table = bench.report(self.file(with_first=6, quiet_first=2))
+        self.assertIn("### The sentence", table)
+        self.assertIn("earns its place", table)
+        self.assertIn("6 of 6 runs with the trigger sentence and 2 of 6 without it",
+                      table)
+
+    def test_a_sentence_that_lifts_no_rate_is_said_to_move_nothing(self):
+        self.assertIn("moves nothing", bench.report(self.file(quiet_first=6)))
+
+    def test_a_sentence_that_lowers_the_rate_is_the_words_to_rewrite(self):
+        self.assertIn("rewrite", bench.report(self.file(with_first=2,
+                                                        quiet_first=6)))
+
+    def test_a_sweep_of_two_arms_says_nothing_about_a_sentence_it_did_not_move(self):
+        self.assertNotIn("### The sentence", bench.report(sweep()))
+
+    def test_the_arm_names_are_stated_once_and_read_back_by_the_scripts(self):
+        # `build_arm.sh` and `run_one.sh` ask for this list instead of spelling
+        # it, so a fourth arm is one line and no script can hold a stale set.
+        with contextlib.redirect_stdout(io.StringIO()) as printed:
+            bench.main(["arms"])
+        self.assertEqual(printed.getvalue().split(), list(bench.ARMS))
+        self.assertEqual(bench.ARMS[2], "no-trigger")
+
+    def test_a_record_line_is_written_for_the_third_arm_by_name(self):
+        with tempfile.TemporaryDirectory() as root:
+            rundir = pathlib.Path(root)
+            (rundir / "out.json").write_text('{"usage": {"input_tokens": 10}}')
+            with contextlib.redirect_stdout(io.StringIO()) as printed:
+                bench.main(["record", str(rundir), "--task", "refused-write",
+                            "--arm", "no-trigger"])
+        self.assertEqual(json.loads(printed.getvalue())["arm"], "no-trigger")
 
 
 if __name__ == "__main__":

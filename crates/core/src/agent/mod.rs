@@ -19,7 +19,7 @@ pub use event::Event;
 pub use limits::Limits;
 pub use open::{OpenTool, Opened, Opener};
 pub use report::{Report, Stopped};
-pub use skill::{Loaded, SkillTool, UserSkills};
+pub use skill::{DOCTRINE, Loaded, SkillTool, UserSkills};
 pub use tool::BashTool;
 pub use tools::Tools;
 

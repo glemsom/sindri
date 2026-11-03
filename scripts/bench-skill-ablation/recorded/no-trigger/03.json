@@ -1,0 +1,25 @@
+{
+  "id": "msg_ablation",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "`Read-only file system` on `/var/lib/greet`: the log's directory is hard-coded and refused. Reading the two files that name it."
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_read",
+      "name": "bash",
+      "input": {
+        "command": "sed -n '1,40p' tests/run.sh src/lib.sh src/greet.sh"
+      }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 1420,
+    "output_tokens": 66
+  }
+}

@@ -30,6 +30,17 @@ triggers once the task is recognised as covered. Nothing here measures whether a
 calls `skill` before its first `bash`, or whether one catalog line per skill is enough to
 make it do so. `scripts/bench-skill-ablation` settles that by measurement.
 
+The words that ask for the load are as much a part of it as the body, so they are a text of
+their own: `doctrine`, compiled in from `crates/core/src/agent/skill/doctrine.md` beside the
+module that assembles the tool's description. That is the seam the bench's third arm uses —
+the shipped arm, the same arm one sentence shorter, and the arm with no built-in at all —
+and which wording earns its place is decided by whether a run loaded a skill before its
+first command, which the run's own record says.
+
+Making the trigger a sentence of its own meant repunctuating and rewrapping the prose and
+changing no word of it, so an arm is the absence of one line; the words the model reads, and
+the shape they are read in, are `scripts/bench-skill-ablation/README.md`'s to state.
+
 ## The alternative that lost
 
 Ship the built-ins as files in this repository's `.agents/skills`. A run outside the

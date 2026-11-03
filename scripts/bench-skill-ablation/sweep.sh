@@ -1,8 +1,9 @@
 #!/bin/bash
 # sweep.sh RESULTS.jsonl ARM... — every arm, REPS times over, one JSON line per
-# run appended to RESULTS.jsonl. Both arms land in one file because the file is
-# one comparison: the mean of `with` against the mean of `without`, over the same
-# task and the same repetitions.
+# run appended to RESULTS.jsonl. All the arms land in one file because the file is
+# one comparison: the mean of `with` against the mean of `without`, and the rate
+# at which `with` and `no-trigger` load a skill before the first command, over the
+# same task and the same repetitions.
 #
 # The file is a record, not a workbench: a repetition already in it is refused
 # rather than measured twice under one number. A run that never reached the model

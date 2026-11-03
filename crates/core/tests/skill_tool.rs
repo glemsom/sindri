@@ -13,7 +13,7 @@ mod support;
 
 use std::path::Path;
 
-use sindri_core::agent::{BashTool, Limits, SkillTool, Tools};
+use sindri_core::agent::{BashTool, DOCTRINE, Limits, SkillTool, Tools};
 use sindri_core::provider::{Asked, Call, Turn};
 use sindri_core::skills::Catalog;
 use support::{Harness, Scripted, answer, calls, fixtures, skills};
@@ -108,6 +108,46 @@ fn the_catalog_and_the_doctrine_are_in_the_tool_it_describes() {
         "the name parameter is the set of names that may be called"
     );
 }
+
+#[test]
+fn the_description_opens_with_the_doctrine_compiled_in_beside_this_module() {
+    // The doctrine is the prose, not the catalog: it is a text of its own so a
+    // bench can move the wording of the one sentence that asks for a load
+    // without touching a line of product code, and the description is built
+    // from that file and nothing else — a second copy would be a second answer
+    // to what the model was told.
+    let workspace = tempfile::TempDir::new().expect("workspace");
+    let catalog = alpha(workspace.path());
+    let tool = tool(&catalog);
+
+    let description = &tool.spec().description;
+    assert!(
+        description.starts_with(DOCTRINE),
+        "the description opens with the compiled doctrine: {description}"
+    );
+    assert!(
+        description
+            .trim_end()
+            .ends_with("- alpha: what alpha is for"),
+        "and ends with the catalog, which changes with the workspace: {description}"
+    );
+    assert!(
+        DOCTRINE.contains(TRIGGER),
+        "the trigger sentence is one line of the doctrine, which is what a bench moves it by"
+    );
+    assert!(
+        DOCTRINE.ends_with('\n'),
+        "the doctrine ends a line, so the catalog's heading opens its own: {DOCTRINE:?}"
+    );
+    assert!(
+        !DOCTRINE.contains("Skills:"),
+        "the catalog's heading belongs to the catalog: {DOCTRINE}"
+    );
+}
+
+/// The sentence a run is asked to load a skill by, and the one the bench's third
+/// arm removes: one line, so the arm differs by that line alone.
+const TRIGGER: &str = "Call it before acting when a task is one it covers.";
 
 #[test]
 fn the_skill_description_does_not_restate_the_rule_the_bash_description_states() {

@@ -2,14 +2,16 @@
 # self-test.sh — the bench proven end to end without a key or a bill.
 #
 # Two halves. The unit tests prove the arithmetic: how a transcript is read, what
-# the rule scores, what a record line carries, what the table averages. The
-# offline pass proves the pipeline: the two arm binaries, a recorded conversation
-# served on loopback, one sweep through both arms, and the report the numbers
-# come out of. What it does NOT prove is any model's behaviour — the replies are
-# scripts, not captures, and the token counts on those lines are the mock's.
+# the rule scores, what a record line carries, whether a load came before the
+# first command, what the table averages. The offline pass proves the pipeline:
+# the three arm binaries, a recorded conversation served on loopback, one sweep
+# through all three arms, and the report the numbers come out of. What it does NOT
+# prove is any model's behaviour — the replies are scripts, not captures, and the
+# token counts on those lines are the mock's.
 #
-# `BENCH_SKIP_BUILD=1` reuses `bin-with` and `bin-without` instead of building
-# them; without it the two arm builds run, which is a cargo build each.
+# `BENCH_SKIP_BUILD=1` reuses `bin-with`, `bin-without` and `bin-no-trigger`
+# instead of building them; without it the three arm builds run, which is a cargo
+# build each.
 set -uo pipefail
 BENCH=$(dirname "$(readlink -f "$0")")
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/skill-ablation-selftest.XXXXXX")
@@ -24,9 +26,10 @@ test_the_units_of_the_bench_pass() {
         || { note "the unit tests failed: $(tail -5 "$tmp/units.txt")"; }
 }
 
-# The ablation is a build: the catalog line is really gone from `without`.
-test_the_two_arms_differ_only_in_the_catalog() {
-    for arm in with without; do
+# The arms are builds: the catalog line is really gone from `without`, and the
+# trigger sentence is really gone from `no-trigger` while the catalog stays.
+test_the_three_arms_differ_only_in_the_text_they_were_built_from() {
+    for arm in with without no-trigger; do
         if [ -z "${BENCH_SKIP_BUILD:-}" ]; then
             "$BENCH/build_arm.sh" "$arm" >> "$tmp/build.txt" 2>&1 \
                 || { note "build_arm.sh $arm failed: $(tail -3 "$tmp/build.txt")"; return; }
@@ -37,32 +40,41 @@ test_the_two_arms_differ_only_in_the_catalog() {
         || note "the with arm does not ship the built-in"
     ! "$BENCH/bin-without" doctor | grep -q '^  builtin ' \
         || note "the without arm still ships a built-in, so it is not an ablation"
+    "$BENCH/bin-no-trigger" doctor | grep -q '^  builtin  sandbox-refusal ' \
+        || note "the no-trigger arm does not ship the built-in it ablates the sentence of"
+    python3 "$BENCH/doctrines.py" carries "$BENCH/bin-with" \
+        || note "the with arm does not carry the trigger sentence"
+    ! python3 "$BENCH/doctrines.py" carries "$BENCH/bin-no-trigger" \
+        || note "the no-trigger arm carries the sentence it is named for removing"
 }
 
-# The arm is the binary's catalog, never the word on the command line: the two
-# binaries above are swapped and the run must refuse rather than record a
-# `with` line whose skill was never activated.
+# The arm is what the binary carries, never the word on the command line: the
+# binaries above are swapped and the run must refuse rather than record a `with`
+# line whose skill was never activated, or a `with` line built from the words the
+# third arm is the absence of.
 test_a_run_label_its_binary_contradicts_is_refused() {
-    for pair in "with bin-without" "without bin-with"; do
+    for pair in "with bin-without" "without bin-with" \
+                "with bin-no-trigger" "no-trigger bin-with"; do
         set -- $pair
         if BENCH_BIN="$BENCH/$2" BENCH_OFFLINE=1 BENCH_MODEL=mock \
             "$BENCH/run_one.sh" "$1" "$tmp/lie-$1" > "$tmp/lie-$1.out" 2>&1; then
             note "a run labelled $1 on bin-$2 was recorded: $(cat "$tmp/lie-$1.out")"
         fi
-        grep -q 'so it is not the' "$tmp/lie-$1.out" \
+        grep -q "is not the $1 arm" "$tmp/lie-$1.out" \
             || note "the refusal of $1 on bin-$2 did not say why: $(cat "$tmp/lie-$1.out")"
     done
 }
 
-# One sweep, both arms, through the shell loop that produce the real numbers.
+# One sweep, all three arms, through the shell loop that produces the real numbers.
 test_the_offline_sweep_writes_one_line_per_arm_per_repetition() {
     REPS=2 BENCH_OFFLINE=1 BENCH_MODEL=mock TAG=selftest \
-        "$BENCH/sweep.sh" "$tmp/offline.jsonl" with without > /dev/null 2> "$tmp/sweep.txt" \
+        "$BENCH/sweep.sh" "$tmp/offline.jsonl" with without no-trigger \
+        > /dev/null 2> "$tmp/sweep.txt" \
         || { note "the offline sweep failed: $(tail -3 "$tmp/sweep.txt")"; return; }
-    [ "$(wc -l < "$tmp/offline.jsonl")" -eq 4 ] \
-        || note "two arms x two repetitions wrote $(wc -l < "$tmp/offline.jsonl") lines, not 4"
-    [ "$(jq -s -c '[group_by(.arm)[] | map(.repetition) | sort]' "$tmp/offline.jsonl")" = '[[1,2],[1,2]]' ] \
-        || note "the lines are not two arms of two repetitions: $(jq -s -c 'map([.arm,.repetition])' "$tmp/offline.jsonl")"
+    [ "$(wc -l < "$tmp/offline.jsonl")" -eq 6 ] \
+        || note "three arms x two repetitions wrote $(wc -l < "$tmp/offline.jsonl") lines, not 6"
+    [ "$(jq -s -c '[group_by(.arm)[] | map(.repetition) | sort]' "$tmp/offline.jsonl")" = '[[1,2],[1,2],[1,2]]' ] \
+        || note "the lines are not three arms of two repetitions: $(jq -s -c 'map([.arm,.repetition])' "$tmp/offline.jsonl")"
 }
 
 test_a_run_that_answered_carries_its_tokens_and_is_not_retried() {
@@ -113,6 +125,17 @@ test_the_recorded_conversations_are_told_apart_by_the_activation_field() {
         || note "the without arm activated a skill it does not have"
 }
 
+# The third arm is scored on whether the body came before the first command, and
+# that is a fact of the transcript: the recorded conversations for the two shipped
+# arms are the same work in a different order, so the field is what tells them
+# apart — and the offline lines are the mock's, not a model's.
+test_the_third_arm_is_scored_on_whether_the_load_came_first() {
+    [ "$(jq -s -c 'map(select(.arm == "with") | .loaded_before_bash) | unique' "$tmp/offline.jsonl")" = '[true]' ] \
+        || note "the with arm did not load before its first command: $(jq -s -c 'map([.arm,.loaded_before_bash])' "$tmp/offline.jsonl")"
+    [ "$(jq -s -c 'map(select(.arm == "no-trigger") | .loaded_before_bash) | unique' "$tmp/offline.jsonl")" = '[false]' ] \
+        || note "the no-trigger arm loaded before anything ran, so the arm is not the sentence: $(jq -s -c 'map([.arm,.loaded_before_bash])' "$tmp/offline.jsonl")"
+}
+
 test_the_rule_scores_the_two_recorded_conversations_differently() {
     # The with arm runs the suite and passes it; the without arm patches the
     # same file and claims the suite is green. `fixed` is true for both, and
@@ -124,12 +147,25 @@ test_the_rule_scores_the_two_recorded_conversations_differently() {
         || note "the without arm was not scored the way the rule reads: $(jq -s -c 'map(select(.arm=="without")|.checks)' "$tmp/offline.jsonl")"
 }
 
-test_the_report_is_a_table_of_both_arms() {
+test_the_report_is_a_table_of_all_three_arms() {
     ( cd "$BENCH" && python3 bench.py report "$tmp/offline.jsonl" ) > "$tmp/table.md" 2>&1
-    grep -q '^| arm | runs | billed | mean input tokens |' "$tmp/table.md" || note "the report printed no header: $(cat "$tmp/table.md")"
-    grep -q '^| with | 2 |' "$tmp/table.md" || note "the report has no with row: $(cat "$tmp/table.md")"
-    grep -q '^| without | 2 |' "$tmp/table.md" || note "the report has no without row: $(cat "$tmp/table.md")"
+    grep -q '^| arm | runs | billed | mean input tokens | median input tokens | activated | loaded before bash | right |$' "$tmp/table.md" \
+        || note "the report printed no header: $(cat "$tmp/table.md")"
+    for arm in with without no-trigger; do
+        grep -q "^| $arm | 2 |" "$tmp/table.md" || note "the report has no $arm row: $(cat "$tmp/table.md")"
+    done
     grep -q '2/2' "$tmp/table.md" || note "the report does not count the rights: $(cat "$tmp/table.md")"
+}
+
+# The sentence is the third arm's number, so the report says what it came to:
+# the offline lines are two runs of each, and the two shipped arms differ in the
+# one fact the arm moves.
+test_the_report_says_what_the_trigger_sentence_came_to() {
+    grep -q '^### The sentence$' "$tmp/table.md" || note "the report printed no sentence: $(cat "$tmp/table.md")"
+    grep -q 'earns its place' "$tmp/table.md" \
+        || note "the report did not name the sentence's place: $(cat "$tmp/table.md")"
+    grep -q '2 of 2 runs with the trigger sentence and 0 of 2 without it' "$tmp/table.md" \
+        || note "the report did not count the runs the sentence moved: $(cat "$tmp/table.md")"
 }
 
 # The rule the page states is applied by the report, so a sweep arrives as a
@@ -149,17 +185,19 @@ test_an_empty_file_has_measured_nothing() {
 }
 
 # In order: the first builds the arms, the second spends one offline sweep on
-# them, and the rest read those four lines.
+# them, and the rest read those six lines.
 test_the_units_of_the_bench_pass
-test_the_two_arms_differ_only_in_the_catalog
+test_the_three_arms_differ_only_in_the_text_they_were_built_from
 test_a_run_label_its_binary_contradicts_is_refused
 test_the_offline_sweep_writes_one_line_per_arm_per_repetition
 test_a_run_that_answered_carries_its_tokens_and_is_not_retried
 test_a_run_that_never_reached_the_model_is_tried_once_more
 test_the_same_repetition_twice_in_one_file_is_refused
 test_the_recorded_conversations_are_told_apart_by_the_activation_field
+test_the_third_arm_is_scored_on_whether_the_load_came_first
 test_the_rule_scores_the_two_recorded_conversations_differently
-test_the_report_is_a_table_of_both_arms
+test_the_report_is_a_table_of_all_three_arms
+test_the_report_says_what_the_trigger_sentence_came_to
 test_the_report_applies_the_shipping_rule_to_the_sweep
 test_an_empty_file_has_measured_nothing
 

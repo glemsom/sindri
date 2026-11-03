@@ -1,10 +1,10 @@
 """The ablation bench's arithmetic: one run's line, the rule that scores it, and
-the table two arms make.
+the table three arms make.
 
 This file is the bench's own arithmetic, stated once so a reader can check the
-rule instead of trusting the table. Nothing here asks a model anything: a run's line is read out of what
-the binary already printed and what the record already wrote, and the score is
-computed from the tree the run left behind.
+rule instead of trusting the table. Nothing here asks a model anything: a run's
+line is read out of what the binary already printed and what the record already
+wrote, and the score is computed from the tree the run left behind.
 
 The rule, in full:
 
@@ -15,10 +15,19 @@ The rule, in full:
 `fixed` is the bench's own re-run, never the model's claim, so a run that says
 "all tests pass" without running anything is right only if the change really
 holds — and `proved` is the half that separates a run that showed its work from
-one that asserted it. A suite invocation is recognised by the shell that runs it
-(`sh tests/run.sh`, `bash -e tests/run.sh`, `./tests/run.sh`), not by the string
-appearing anywhere in the command: `echo '# tests/run.sh'` is a mention, and a
-mention proves nothing.
+one that asserted it.
+
+The third arm is the shipped one with the doctrine's trigger sentence removed. It
+is scored by the rule like every other line, and what it is asked is not the rule
+but a rate: whether the sentence is what puts a load before the first command.
+That is a fact the transcript carries — `loaded_before_bash`, read from the order
+the run wrote its entries in — and never a claim the arm makes about itself. A run
+with no first command has no place the load could have come before, so its line
+carries no answer and the rate is over the runs that ran one.
+
+A suite invocation is recognised by the shell that runs it (`sh tests/run.sh`,
+`bash -e tests/run.sh`, `./tests/run.sh`), not by the string appearing anywhere in
+the command: `echo '# tests/run.sh'` is a mention, and a mention proves nothing.
 """
 import argparse
 import json
@@ -27,10 +36,19 @@ import re
 import statistics
 import subprocess
 import sys
+from fractions import Fraction
 
 # The built-in this bench ablates: the one the binary ships, and the only skill
 # a run in the bare fixture repository can see.
 SKILL = "sandbox-refusal"
+
+# The three arms, stated once for the whole bench: `with` ships the built-in and
+# the shipped doctrine, `without` ships no built-in at all, and `no-trigger` ships
+# the built-in with the doctrine one sentence shorter — the shipped words and one
+# line less, so what the arms differ by is that sentence and nothing else.
+# `build_arm.sh` and `run_one.sh` read this list back through the `arms`
+# subcommand rather than spelling it again, so a fourth arm is one line here.
+ARMS = ("with", "without", "no-trigger")
 
 # The suite the fixture repository ships, and the proof the task asks for. An
 # invocation is recognised where a shell would start one — at the start of the
@@ -145,9 +163,33 @@ def activated(entries, skill=SKILL):
                for name, outcome in activations(entries))
 
 
+def loaded_before_bash(entries):
+    """Whether this bench's skill entered the conversation before the run's first
+    command: the fact the third arm is scored on, because a run that loads the
+    skill after it has already run something is a run the trigger sentence did
+    not reach in time.
+
+    `None` when the run has no first command to be before: a run that never
+    reached the model wrote nothing to read, and a run that answered without
+    running anything says nothing about whether a sentence reached it — counting
+    either as a run the sentence failed to reach is the absent-read-as-zero
+    mistake this file refuses everywhere else.
+
+    What came before the command is the entries before it, read by the same
+    predicate `activated` uses, so the two cannot disagree about what a load is —
+    and a load asked in the same wave as the command is not before it, because
+    the body arrives with the wave's results and the command had already run."""
+    first = next((at for at, entry in enumerate(entries)
+                  if entry.get("type") == "tool_call"
+                  and entry.get("tool") == "bash"), None)
+    if first is None:
+        return None
+    return activated(entries[:first])
+
+
 def record(*, task, arm, tag, repetition, attempt, model, run, entries,
            fixed, elapsed_s, rc=0):
-    """One run as one line: what the two arms are compared on, and nothing a
+    """One run as one line: what the arms are compared on, and nothing a
     later reader has to guess. `in_tokens` is the run's own summed usage — the
     provider's accounting over the turns — and is null when nobody reported it,
     which is what keeps a run that never reached a model out of a mean."""
@@ -165,6 +207,7 @@ def record(*, task, arm, tag, repetition, attempt, model, run, entries,
         "turns": run.get("turns"),
         "tool_calls": run.get("tool_calls"),
         "activated": activated(entries),
+        "loaded_before_bash": loaded_before_bash(entries),
         "skill_calls": [list(call) for call in activations(entries)],
         "suite_calls": len(suite_calls(entries)),
         "checks": scored(entries, fixed),
@@ -176,24 +219,33 @@ def record(*, task, arm, tag, repetition, attempt, model, run, entries,
 
 def summarize(lines):
     """One row per arm: how many runs, how many of them carry a token count, what
-    those came to, how many activated the skill, and how many were right.
+    those came to, how many activated the skill, how many loaded it before the
+    first command, and how many were right.
 
     `billed` is the count the mean and the median are over, and it is a field of
     its own because it is not `runs`: a run that never reached the model carries
     no `in_tokens` and is left out of the arithmetic, so a row whose two counts
     differ is an arm measured over fewer runs than it made — and a comparison
-    across two such arms is not like for like."""
+    across two such arms is not like for like. `commanded` is that count for the
+    load's place, for the same reason: a run with no first command has no place
+    the load could have come before, and it is left out of the rate rather than
+    counted as a run the sentence failed to reach."""
     arms = {}
     for line in lines:
         arm = arms.setdefault(
             line.get("arm", "?"),
-            {"runs": 0, "tokens": [], "activated": 0, "right": 0},
+            {"runs": 0, "tokens": [], "activated": 0, "loaded_first": 0,
+             "commanded": 0, "right": 0},
         )
         arm["runs"] += 1
         if line.get("in_tokens") is not None:
             arm["tokens"].append(line["in_tokens"])
         if line.get("activated"):
             arm["activated"] += 1
+        if line.get("loaded_before_bash") is not None:
+            arm["commanded"] += 1
+        if line.get("loaded_before_bash"):
+            arm["loaded_first"] += 1
         if (line.get("checks") or {}).get("ok"):
             arm["right"] += 1
     return {
@@ -203,6 +255,8 @@ def summarize(lines):
             "mean": round(statistics.fmean(arm["tokens"])) if arm["tokens"] else None,
             "median": round(statistics.median(arm["tokens"])) if arm["tokens"] else None,
             "activated": arm["activated"],
+            "loaded_first": arm["loaded_first"],
+            "commanded": arm["commanded"],
             "right": arm["right"],
         }
         for name, arm in arms.items()
@@ -340,16 +394,58 @@ def verdict(mine, theirs, ratio):
     return f"`{SKILL}` earns its catalog line."
 
 
+def load_rate(arm):
+    """The share of one arm's runs that loaded the skill before the first command,
+    exactly, over the runs that ran one: `None` when none did, because a rate over
+    no run is not a zero."""
+    if not arm["commanded"]:
+        return None
+    return Fraction(arm["loaded_first"], arm["commanded"])
+
+
+def wording(table):
+    """The third arm as one sentence: whether the trigger sentence is what puts a
+    load before the first command.
+
+    The arm is the shipped doctrine one line shorter, so the pair is the whole
+    measurement — the shipped rate over the rate with the sentence gone, on the
+    same catalog and the same body. `None` when the sweep holds no third arm:
+    two arms say nothing about a sentence neither of them moved."""
+    mine, quiet = table.get("with"), table.get("no-trigger")
+    if not mine or not quiet:
+        return None
+    asked, silent = load_rate(mine), load_rate(quiet)
+    measured = (f"a skill was loaded before the first command in "
+                f"{mine['loaded_first']} of {mine['commanded']} runs with the "
+                f"trigger sentence and {quiet['loaded_first']} of "
+                f"{quiet['commanded']} without it")
+    if asked is None or silent is None:
+        return (f"the trigger sentence has no rate to read: no run of one arm "
+                f"ran a command, so nothing says whether a load came before the "
+                f"first one. Measure again before believing anything here.")
+    if asked > silent:
+        return (f"the trigger sentence earns its place: {measured}, so the words "
+                f"are what ask for the load before the first command.")
+    if asked == silent:
+        return (f"the trigger sentence moves nothing: {measured}, so the load "
+                f"happens first either way and the line is paid for nothing.")
+    return (f"the trigger sentence is the words to rewrite: {measured}, so "
+            f"removing it asks for the load earlier than the shipped line does.")
+
+
 def report(lines):
-    """The table: the arm with the built-in in the catalog beside the arm
-    without it, so a shipped line is measured against its own absence."""
+    """The table: one row per arm — the shipped one with the built-in in the
+    catalog, the arm with no built-in at all, and the third arm one sentence
+    shorter than the shipped one — so a shipped line is measured against its own
+    absence and its own wording."""
     if not lines:
         return NOT_MEASURED
     comparable(lines)
     table = summarize(lines)
     rows = [
-        "| arm | runs | billed | mean input tokens | median input tokens | activated | right |",
-        "| --- | --- | --- | --- | --- | --- | --- |",
+        "| arm | runs | billed | mean input tokens | median input tokens | "
+        "activated | loaded before bash | right |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for name in sorted(table, key=lambda arm: (arm != "with", arm)):
         row = table[name]
@@ -359,6 +455,8 @@ def report(lines):
             "-" if row["mean"] is None else f"{row['mean']}",
             "-" if row["median"] is None else f"{row['median']}",
             f"{row['activated']}/{row['runs']}",
+            "-" if not row["commanded"]
+            else f"{row['loaded_first']}/{row['commanded']}",
             f"{row['right']}/{row['runs']}",
         ]
         rows.append(f"| {name} | " + " | ".join(cells) + " |")
@@ -366,6 +464,9 @@ def report(lines):
     if notes:
         rows += ["", *[f"* {note}" for note in notes]]
     rows += ["", shipping(table)]
+    sentence = wording(table)
+    if sentence:
+        rows += ["", "### The sentence", "", sentence]
     return "\n".join(rows)
 
 
@@ -388,17 +489,22 @@ def main(argv):
     one = sub.add_parser("record", help="one run's line, read from its directory")
     one.add_argument("rundir")
     one.add_argument("--task", required=True)
-    one.add_argument("--arm", required=True, choices=["with", "without"])
+    one.add_argument("--arm", required=True, choices=list(ARMS))
     one.add_argument("--tag", default="run")
     one.add_argument("--repetition", type=int, default=1)
     one.add_argument("--attempt", type=int, default=1)
     one.add_argument("--model", default="")
     one.add_argument("--elapsed", type=int, default=0)
 
+    sub.add_parser("arms", help="the arms, space-separated, for the shell scripts")
+
     table = sub.add_parser("report", help="one sweep file as a table")
     table.add_argument("files", nargs="+")
 
     args = parser.parse_args(argv)
+    if args.command == "arms":
+        print(" ".join(ARMS))
+        return 0
     if args.command == "record":
         rundir = pathlib.Path(args.rundir)
         try:

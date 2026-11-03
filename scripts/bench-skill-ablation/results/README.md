@@ -1,11 +1,11 @@
 # The lines the table came from
 
-One file per model, `<model>.jsonl`, holding exactly the lines `sweep.sh` appended — both
-arms in one file, because the table is a comparison.
+One file per model, `<model>.jsonl`, holding exactly the lines `sweep.sh` appended — all
+three arms in one file, because the table is a comparison.
 
 ```sh
 export BENCH_MODEL=deepseek-v4.1-flash
-REPS=6 TAG=$BENCH_MODEL ./sweep.sh results/$BENCH_MODEL.jsonl with without
+REPS=6 TAG=$BENCH_MODEL ./sweep.sh results/$BENCH_MODEL.jsonl with without no-trigger
 python3 bench.py report results/$BENCH_MODEL.jsonl
 ```
 
