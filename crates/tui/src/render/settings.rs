@@ -10,6 +10,7 @@ use ratatui::widgets::{Clear, Paragraph, Widget};
 use sindri_core::config::Key;
 
 use sindri_core::config::toggle_shown;
+use unicode_width::UnicodeWidthChar;
 
 use crate::markdown::text::{self, clip};
 use crate::settings::{Field, Settings};
@@ -17,14 +18,33 @@ use crate::theme;
 
 const LABEL: usize = 20;
 const MARGIN: u16 = 4;
+/// The narrowest a modal still reads at, and the widest: past the wide one a
+/// row of setting and value grows no easier to read for the columns it costs.
+const NARROW: u16 = 30;
+const WIDE: u16 = 110;
 
 const HINTS: &str = "↑↓/Tab move · PgUp/PgDn page · Ctrl-U clear · Enter save · Esc discard";
 
 /// Draws the modal and answers with the field rows its box showed, which is
 /// what a page moves the cursor by.
 pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) -> usize {
-    let width = area.width.saturating_sub(MARGIN * 2).clamp(30, 110);
+    // The box is sized to what it has to say, not to a guess: the file's path
+    // is the one fact it cannot shorten and still state, so a frame too narrow
+    // for it at the margin the box would like gives the margin up rather than
+    // the path, and only a frame narrower than the path itself wraps it.
+    let path = settings.path().display().to_string();
+    let needed = u16::try_from("file ".len() + cells(&path) + 2).unwrap_or(u16::MAX);
+    let width = area
+        .width
+        .saturating_sub(MARGIN * 2)
+        .max(needed)
+        .clamp(NARROW, WIDE)
+        .min(area.width);
     let columns = width.saturating_sub(2) as usize;
+    // And a path the frame still cannot hold breaks at its separators, never
+    // inside a name: what the modal names is a file, and half a name on each of
+    // two rows is not one.
+    let broken = broken_at_separators(&path, columns);
 
     // Above the list: the file saving writes to, and — when the door opened
     // the modal — what is absent. Pinned, because a row a user needs is never
@@ -33,7 +53,7 @@ pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) -> usize {
     head.extend(text::wrap(
         text::glyphs(&[
             Span::styled("file ", theme::faint()),
-            Span::raw(settings.path().display().to_string()),
+            Span::raw(broken.clone()),
         ]),
         "",
         theme::faint(),
@@ -50,10 +70,7 @@ pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) -> usize {
                 theme::faint(),
             ),
             (
-                format!(
-                    "written to {} · 0600 · the value is never shown again",
-                    settings.path().display()
-                ),
+                format!("written to {broken} · 0600 · the value is never shown again"),
                 theme::faint(),
             ),
         ] {
@@ -74,10 +91,7 @@ pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) -> usize {
     if settings.staged_secret() {
         foot.extend(text::wrap(
             text::glyphs(&[Span::styled(
-                format!(
-                    "plaintext: saving writes this secret, unencrypted, to {}",
-                    settings.path().display()
-                ),
+                format!("plaintext: saving writes this secret, unencrypted, to {broken}"),
                 theme::bad(),
             )]),
             "",
@@ -149,6 +163,47 @@ pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) -> usize {
         .render(inner, buf);
     block.render(boxed, buf);
     last - first
+}
+
+/// A path is a token with places to break — its separators — and one too long
+/// for the row breaks there rather than at the width: every segment but the
+/// last keeps its `/`, so each row reads as a path continuing rather than as a
+/// second one, and a file's name is never cut in half. A single segment longer
+/// than the row has no such place, so it is left to the wrapper.
+fn broken_at_separators(path: &str, columns: usize) -> String {
+    let columns = columns.max(1);
+    let segments: Vec<&str> = path.split_inclusive('/').collect();
+    // The file's name and the directory it sits in are the two segments a
+    // reader reads as one fact, so the row breaks before them rather than
+    // between them: every other break is the plain one, because a path that
+    // spends a row on each of its segments is a path that costs the list its
+    // rows.
+    let tail = segments.len().saturating_sub(2);
+    let mut broken = String::new();
+    let mut used = 0;
+    for (at, segment) in segments.iter().enumerate() {
+        let taken = cells(segment);
+        let after = if at + 1 >= tail {
+            segments.get(at + 1).map_or(0, |next| cells(next))
+        } else {
+            0
+        };
+        if used > 0 && used + taken + after > columns {
+            broken.push('\n');
+            used = 0;
+        }
+        broken.push_str(segment);
+        used += taken;
+    }
+    broken
+}
+
+/// The cells a row of text takes, as the wrapper counts them: a wide glyph is
+/// two, and a path holds whatever its directories are named.
+fn cells(text: &str) -> usize {
+    text.chars()
+        .map(|ch| UnicodeWidthChar::width(ch).unwrap_or(0))
+        .sum()
 }
 
 fn row(settings: &Settings, field: &Field, columns: usize) -> Line<'static> {

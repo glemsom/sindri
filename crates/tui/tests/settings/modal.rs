@@ -236,3 +236,46 @@ fn the_ssh_agent_is_one_row_a_toggle_and_on_by_default() {
         written(&f.path)
     );
 }
+
+/// A config file whose path is longer than `cells` whatever the sandbox's own
+/// temp directory is: the directories stay short, so every break has a
+/// separator to fall on, and the length the frame is asked to hold is a fact
+/// about this test rather than about whose `TMPDIR` it runs in.
+fn long_path(dir: &TempDir, cells: usize) -> PathBuf {
+    let mut path = dir.path().to_path_buf();
+    while path.display().to_string().len() < cells {
+        path.push("dddddddd");
+    }
+    path.join("sindri/config.toml")
+}
+
+#[test]
+fn a_path_the_frame_cannot_hold_breaks_at_a_separator_and_never_splits_the_name() {
+    let dir = TempDir::new().expect("a temp directory");
+    let path = long_path(&dir, 180);
+    let mut app = App::new(common::launch(), None).with_config(&path);
+    open(&mut app);
+
+    let rows = shown(&screen(&mut app, 100, 30));
+    assert!(
+        rows.contains("config.toml"),
+        "the file's name reaches a reader whole: {rows}"
+    );
+    for cut in [
+        "c",
+        "co",
+        "con",
+        "conf",
+        "confi",
+        "config",
+        "config.",
+        "config.t",
+        "config.to",
+        "config.tom",
+    ] {
+        assert!(
+            !rows.contains(&format!("{cut}\n")),
+            "no row ends inside the name, cut after {cut:?}: {rows}"
+        );
+    }
+}
