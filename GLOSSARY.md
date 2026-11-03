@@ -7,44 +7,15 @@ this file is only what a reader needs to look in the right place.
 
 ## The run and its loop
 
-**run** — one prompt carried through the turn loop to an answer, from the session that
-opens it to the report it leaves. `crates/core/src/agent/mod.rs` holds the loop;
-`crates/cli/src/stack.rs` composes the stack a run stands on, and a front end keeps only
-what is its own.
-
 **turn** — one request to the model and the calls it asks for in reply. The loop spends a
 turn per request, and `max_turns` caps them: the key is set in the config file and
 defaults to 250, so a run that never stops of its own accord still ends and says why.
-
-**turn cap** — the bound `max_turns` puts on a run, and one of the two figures the `bash`
-description states. Spending it is not a failure: the answer is still the product, so the
-run reports `done` and `stopped: max_turns`.
-
-**stopped** — why the loop stopped, a closed set of five words `Stopped` spells: `final`
-an answer was delivered, `max_turns` the cap was spent, `budget` the command time or output
-was, `cancelled` a signal raised the flag, `error` the run could not deliver. A record
-written from the moment it starts says `running` until one of them lands, which is what a
-session `/new` superseded still says: it did not stop, it was left
-(`crates/core/src/agent/report.rs`).
 
 **wave** — the tool calls one turn emitted, run together because a model that emitted
 them declared them independent. Results come back in the order asked for, whatever order
 they finished in, and the wave is what carries the loaded-skill set from one turn to the
 next (`crates/core/src/agent/calls.rs`).
 
-**budget** — what a run may spend inside one wave where the turn cap cannot see it: the
-wall clock its commands take and the bytes of their output fed back to the model
-(`crates/core/src/agent/budget.rs`). Spending it stops the run with `stopped: budget`,
-which still reports `done`.
-
-**cancel** — the one flag a run checks to know it must stop now. A signal handler raises
-it, the loop reads it between turns and the executor kills the command's process group
-mid-flight, so a cancelled run leaves no orphan (`crates/core/src/cancel.rs`).
-
-**preamble** — the fixed system prompt, re-sent on every turn of every run
-(`crates/core/src/provider/rig_wire.rs`). Its words are a tax paid per request, which is
-why the catalog is in a tool description instead, and why `AGENTS.md` travels beside it
-rather than as a turn.
 
 **provider** — the model behind one seam: a call asks, and gets an answer or a failure
 that is safe to print (`crates/core/src/provider/mod.rs`). No part of the tree above that
@@ -88,22 +59,6 @@ because a permission nobody enforces is a suggestion.
 (`crates/core/src/agent/open.rs`). The core decides and refuses; the spawn belongs to the
 process that still holds a display, which the sandbox is the thing that takes away.
 
-**target** — the one thing `open` hands over: an `http` or `https` URL the host's browser
-fetches itself, or a path to a regular file inside what the run may write. Exactly one of
-the two, and a `file:` URI is a path in another spelling, refused in the path rules'
-words.
-
-**outcome** — what `bash` returns instead of a process: an exit, a timeout, a cancel or a
-sandbox error, with the two streams (`crates/core/src/exec/result.rs`). "The sandbox never
-started" and "the command failed" are different outcomes and are never the same word.
-
-**spill file** — where output too large to feed back is written in full, while the model
-is handed the head and the tail. The truncation is the cap; the file is how a reader
-recovers what the cap cut.
-
-**refusal** — a thing the tool declined to do, said in the call and before anything was
-attempted, naming the ground it stopped on. A refusal is a result the model can act on,
-where a failure is a fact about the machine.
 
 ## Skills
 
@@ -129,18 +84,6 @@ description. It is there and not in the preamble because it changes with the wor
 and it is paid only where it buys something: with no model-visible skill the tool is not
 registered at all.
 
-**shadowing** — a name two scopes both carried, kept as a record rather than dropped, so
-`sindri doctor` prints the winner and the skill it displaced.
-
-**frontmatter** — the YAML fence that opens a `SKILL.md`, read as a value tree rather
-than a schema: the specification's required fields are taken, the two extensions are
-honoured, and everything else is ignored rather than refused
-(`crates/core/src/skills/frontmatter.rs`).
-
-**description ceiling** — the limit `DESCRIPTION_CEILING` puts on a skill's description,
-200 characters, because that line is what the catalog carries on every turn and the
-refusal names the constant and the figure.
-
 **instructions** — a repository's own rules: the `AGENTS.md` at the repository root, read
 once at boot and handed to the model beside the preamble. Never a nested file, never an
 ancestor's; the read is capped at 8 KiB and a longer file arrives cut with a marker saying
@@ -155,9 +98,6 @@ chose. Read-only is a boundary on writes and not on reads, which is why a host s
 process already holds is reachable and why a tool that would route around a refusal is
 not the shape to build.
 
-**policy** — the one sandbox value: private fields, a validating constructor and the
-accessors the two derivations read (`crates/core/src/sandbox/policy.rs`). Nothing in the
-tree builds a bwrap invocation by hand.
 
 **bubblewrap** — `bwrap`, the program the policy is enforced through. A word a run reports
 as its `enforcement` when it is in force; a `bwrap` that cannot start is a failure to
@@ -181,11 +121,6 @@ to the boundary: `bubblewrap` or `unsafe`.
 **description** — the published text of the sandbox, derived from the policy rather than
 written by hand, so the model's words and the mounts it runs under cannot disagree
 (`crates/core/src/sandbox/describe.rs`). `sindri doctor` prints the same text.
-
-**doctor** — the environment probe behind `sindri doctor`: prove bubblewrap, the required
-binaries and the mount plan before any model is in the loop
-(`crates/core/src/doctor.rs`). It also prints the skill catalog and the rules a run stands
-in, and writes no record.
 
 ## Status and records
 
@@ -220,9 +155,6 @@ its temp, the record, and the identity that names them (`crates/core/src/session
 whole id or a leading prefix of one; an ambiguous prefix is a usage error listing the
 candidates.
 
-**redaction** — the one value holding the secrets a run knows, through which every string
-the record writes passes first, so a new field cannot forget
-(`crates/core/src/record/redact.rs`).
 
 ## The frame
 
