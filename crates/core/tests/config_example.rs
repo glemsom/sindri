@@ -11,7 +11,7 @@
 
 use std::path::PathBuf;
 
-use sindri_core::config::{Document, KEYS};
+use sindri_core::config::{Config, ConfigError, Document, KEYS, Key, Overrides};
 use tempfile::TempDir;
 
 /// The example, as committed: `include_str!` so the test cannot pass against a
@@ -60,4 +60,137 @@ fn the_example_sets_every_key_the_schema_names() {
         );
     }
     assert_eq!(KEYS.len(), 9, "the schema's keys, and no more");
+}
+
+/// A value the run's own reader accepts for `key`, so a config file this test
+/// writes is refused for the one key it leaves out and for nothing else.
+fn value_for(key: Key, home: &TempDir) -> String {
+    match key {
+        Key::Provider => "anthropic".to_string(),
+        Key::Model => "claude-sonnet-4-6".to_string(),
+        Key::ApiKey => "sk-test".to_string(),
+        Key::BaseUrl => "https://example.test".to_string(),
+        Key::MaxTurns => "250".to_string(),
+        Key::Timeout => "120".to_string(),
+        Key::Thinking => "false".to_string(),
+        Key::ExtraWritablePaths => home.path().display().to_string(),
+        Key::ExtraHeaders => "x-test: y".to_string(),
+    }
+}
+
+/// The keys a run cannot start without, as the run's own reader answers it: a
+/// document holding every key but one, resolved through `Config::resolve`, is a
+/// key the run demands — asked of the validator rather than read off the prose
+/// the validator is supposed to agree with.
+fn required_keys() -> Vec<&'static str> {
+    // An empty variable is how the reader spells unset, so the answer is the
+    // file's and never this shell's: a key this process happens to export must
+    // not be able to turn a required key into an optional one here.
+    // SAFETY: no other test in this binary reads a variable, and these are
+    // written before the runs below read them.
+    unsafe {
+        for name in [
+            "SINDRI_PROVIDER",
+            "SINDRI_MODEL",
+            "SINDRI_API_KEY",
+            "SINDRI_BASE_URL",
+            "SINDRI_MAX_TURNS",
+            "SINDRI_TIMEOUT",
+            "SINDRI_THINKING",
+            "SINDRI_EXTRA_WRITABLE_PATHS",
+            "SINDRI_EXTRA_HEADERS",
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_BASE_URL",
+        ] {
+            std::env::set_var(name, "");
+        }
+    }
+
+    let mut required = Vec::new();
+    for missing in KEYS {
+        let home = TempDir::new().expect("a config home");
+        let path = home.path().join("sindri/config.toml");
+        std::fs::create_dir_all(path.parent().expect("a parent")).expect("the config dir");
+        let mut file = Document::load_at(&path).expect("an empty document loads");
+        for key in KEYS {
+            if key == missing {
+                continue;
+            }
+            file.set(key, &value_for(key, &home))
+                .unwrap_or_else(|error| panic!("`{}`: {}", key.name(), error.message()));
+        }
+        file.save().expect("the document is written");
+        // SAFETY: as above.
+        unsafe { std::env::set_var("XDG_CONFIG_HOME", home.path()) };
+
+        match Config::resolve(Overrides::default()) {
+            Ok(_) => {}
+            Err(error) => {
+                assert!(
+                    matches!(error, ConfigError::Missing(_)),
+                    "a file without `{}` is refused for that key alone: {}",
+                    missing.name(),
+                    error.message()
+                );
+                required.push(missing.name());
+            }
+        }
+    }
+    required
+}
+
+/// The comment block immediately above the line that sets `name`, table header
+/// included: the paragraph a reader finds beside the key when it is described.
+fn prose_for(name: &str) -> String {
+    let lines: Vec<&str> = EXAMPLE.lines().collect();
+    let at = lines
+        .iter()
+        .position(|line| {
+            line.starts_with(&format!("{name} =")) || line.starts_with(&format!("[{name}]"))
+        })
+        .unwrap_or_else(|| panic!("docs/config.example.toml sets `{name}`"));
+    let mut block: Vec<&str> = lines[..at]
+        .iter()
+        .rev()
+        .take_while(|line| line.starts_with('#'))
+        .copied()
+        .collect();
+    block.reverse();
+    block.join("\n")
+}
+
+#[test]
+fn the_example_says_which_keys_a_run_cannot_start_without() {
+    let required = required_keys();
+    let opening: String = EXAMPLE
+        .lines()
+        .take_while(|line| !line.is_empty())
+        .collect::<Vec<&str>>()
+        .join("\n");
+
+    for name in &required {
+        assert!(
+            opening.contains(&format!("`{name}`")),
+            "the opening says `{name}` is required, since a run cannot start without it: {opening}"
+        );
+    }
+    assert!(
+        !opening.contains("Every key is optional"),
+        "a run cannot start without a model, so the opening cannot say every key is optional: {opening}"
+    );
+
+    for key in KEYS {
+        let prose = prose_for(key.name());
+        assert_eq!(
+            prose.contains("Required"),
+            required.contains(&key.name()),
+            "the example says of `{}` exactly what the validation answers: a run {}start without it. {prose}",
+            key.name(),
+            if required.contains(&key.name()) {
+                "cannot "
+            } else {
+                "can "
+            }
+        );
+    }
 }

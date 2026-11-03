@@ -61,11 +61,16 @@ under one number. The variants differ only in the prompt.
 | v13 | v02, plus "A fence marked `mermaid` is drawn as a picture: draw what prose cannot." — this one landed | 106 |
 | v14 | v13, plus "Put the steps of one task in one script: filter there, print only what you concluded, and keep intermediates in `$TMPDIR`, which outlives the call." — written and not shipped, see below | 131 |
 
-v00 has no word count of its own: `variants.BASE` is read out of the tree, and
+The `words` column is `variants.py`'s own count of the text the row names — the
+words the bench builds, never a number written down beside it — and
+`every_word_count_in_the_page_is_the_count_of_the_text_that_holds_it` derives each
+cell from that module, so a row that drifted fails there rather than here. v00 has
+no count of its own: `variants.BASE` is read out of the tree, and
 `the_bench_baseline_is_the_preamble_the_tree_ships` holds the two together. The
-two tables below were measured while v00 was an earlier, 94-word baseline that
-the tree no longer ships, so a fresh sweep from `v00` starts from a shorter
-prompt than they were measured against.
+two tables below were measured while v00 was an earlier baseline the tree no
+longer ships — a longer prompt than the one that ships today — so a fresh sweep
+from `v00` starts from different text than they were measured against, and those
+rows cannot be reproduced until one is run.
 
 ## The ranking, `deepseek-v4.1-flash`, two repetitions each
 
@@ -136,10 +141,10 @@ not cheaper because they answer less.
 
 ## What the numbers say
 
-- **The lever is the reading instruction, not the prompt's length.** v02 is 93
-  words against the baseline's 94 and spends half the tokens; v10, 97 words to v02's
-  93, spends 125,346 against the baseline's 121,885. What changes is the shape of
-  the first command: the baseline opens `wc -l src/ledger.py; grep -n ""
+- **The lever is the reading instruction, not the prompt's length.** v02, at 93
+  words, spends half the tokens of the baseline it was measured against; v10, at 97
+  words, spends 125,346 against that baseline's 121,885. What changes is the shape
+  of the first command: the baseline opens `wc -l src/ledger.py; grep -n ""
   src/ledger.py` — the whole file, with line numbers — where v13 runs
   `rg -n normalise_config` and then `sed -n '366,400p'`. On T2, the median run
   falls from 18962 tokens to 5440 on haiku.
@@ -158,8 +163,8 @@ not cheaper because they answer less.
   their place only folded into it: v11 spends 68,566.
 - **The mermaid sentence costs nothing measurable.** No task here asks for a
   diagram, so what is measured is only that cutting it changed no answer. It was
-  kept, compressed from 31 words to 13, because the frame draws those fences and
-  a diagram nobody emits is no feature.
+  kept, cut down to the one sentence `PREAMBLE` carries, because the frame draws
+  those fences and a diagram nobody emits is no feature.
 
 ## What landed
 
@@ -176,8 +181,10 @@ fixtures and assert the same ten things, because the prompt is not the answer.
 
 ## The batching sentence, in the tool description
 
-`PREAMBLE` ships at its measured seventy-five words: the reading rule and the shortened
-diagram sentence, and nothing else. The batching doctrine is not one of its sentences.
+`PREAMBLE` ships at 75 words today — `rig_wire.rs`'s own count, which
+`every_word_count_in_the_page_is_the_count_of_the_text_that_holds_it` derives rather
+than trusting this line: the reading rule and the shortened diagram sentence, and
+nothing else. The batching doctrine is not one of its sentences.
 It lives in the `bash` tool's description — the text `crates/core/src/agent/tool.rs`
 derives beside the policy — where it is read while the model is choosing a tool. A
 second copy in the preamble would be the same advice paid for twice per request. As the

@@ -64,10 +64,6 @@ fn the_measurement_page_does_not_claim_the_preamble_carries_what_the_tool_descri
         "the preamble carries no `$TMPDIR`, and the page no longer says it does: {said}"
     );
     assert!(
-        said.contains("seventy-five"),
-        "the page states the words the preamble actually ships: {said}"
-    );
-    assert!(
         said.contains("has not been run"),
         "v14 was never measured, and the page still says so: {said}"
     );
@@ -144,4 +140,108 @@ fn the_bench_baseline_is_the_preamble_the_tree_ships() {
         preamble(),
         "`variants.BASE` is the shipped `PREAMBLE`, so `build_variant.sh v00` builds the prompt the tree ships"
     );
+}
+
+/// Every count the bench holds: the words of each variant's text and of the
+/// shipped baseline, as `variants.py` reads them. A count is derived here rather
+/// than trusted, so the page's numbers are the texts' and never a copy of one.
+fn counted() -> Vec<(String, usize)> {
+    let printed = std::process::Command::new("python3")
+        .args([
+            "-c",
+            "import sys; sys.path.insert(0, sys.argv[1]); import variants; \
+             [print(f'{name} {len(text.split())}') for name, (_, text) in variants.VARIANTS.items()]; \
+             print(f'BASE {len(variants.BASE.split())}')",
+        ])
+        .arg(BENCH)
+        .output()
+        .unwrap_or_else(|error| panic!("python3 runs the bench's own module: {error}"));
+    assert!(
+        printed.status.success(),
+        "variants.py would not import: {}",
+        String::from_utf8_lossy(&printed.stderr)
+    );
+    String::from_utf8(printed.stdout)
+        .unwrap_or_else(|error| panic!("the counts print as text: {error}"))
+        .lines()
+        .map(|line| {
+            let (name, count) = line
+                .split_once(' ')
+                .unwrap_or_else(|| panic!("`name count` on every line: {line}"));
+            let count = count
+                .parse()
+                .unwrap_or_else(|error| panic!("`{line}` carries a count: {error}"));
+            (name.to_string(), count)
+        })
+        .collect()
+}
+
+/// The `words` cell of the page's row for `variant`.
+fn words_cell(variant: &str) -> &'static str {
+    row(variant)
+        .rsplit('|')
+        .nth(1)
+        .unwrap_or_else(|| panic!("`{variant}` row ends with its words cell: {}", row(variant)))
+        .trim()
+}
+
+/// Every count the page prints as words — `93-word`, `93 words` — because a
+/// number beside a prompt is what drifts when the prompt is rewritten.
+fn stated_words() -> Vec<usize> {
+    let mut counts = Vec::new();
+    for line in PAGE.lines() {
+        let tokens: Vec<&str> = line.split_whitespace().collect();
+        for (at, token) in tokens.iter().enumerate() {
+            let beside = tokens
+                .get(at + 1)
+                .is_some_and(|next| next.starts_with("word"));
+            let glued = token.ends_with("-word") || token.ends_with("-words");
+            if !beside && !glued {
+                continue;
+            }
+            let digits = token
+                .trim_end_matches("-words")
+                .trim_end_matches("-word")
+                .trim_start_matches(['(', '`'])
+                .trim_end_matches([',', '.']);
+            if let Ok(count) = digits.parse::<usize>() {
+                counts.push(count);
+            }
+        }
+    }
+    counts
+}
+
+#[test]
+fn every_word_count_in_the_page_is_the_count_of_the_text_that_holds_it() {
+    let texts = counted();
+    let mut derived: Vec<usize> = Vec::new();
+    for (variant, count) in &texts {
+        derived.push(*count);
+        if variant == "BASE" {
+            continue;
+        }
+        assert_eq!(
+            words_cell(variant),
+            count.to_string(),
+            "the page's `{variant}` row states the words `variants.py` holds for it"
+        );
+    }
+
+    let shipped = preamble().split_whitespace().count();
+    derived.push(shipped);
+    derived.sort_unstable();
+    derived.dedup();
+    let said = section("## The batching sentence");
+    assert!(
+        said.contains(&format!("{shipped} words today")),
+        "the batching section states the words `rig_wire.rs` holds today ({shipped}): {said}"
+    );
+
+    for stated in stated_words() {
+        assert!(
+            derived.contains(&stated),
+            "every count the page prints is one of the texts' own {derived:?}, and {stated} is not"
+        );
+    }
 }
