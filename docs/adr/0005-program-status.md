@@ -31,10 +31,13 @@ holding nothing, and a record still saying `working` for a process that has gone
 lying about a machine.
 
 `working` is not a `Stopped` at all, since it is not a way to end: a run says it when a turn
-begins, so the terminal knows the minutes are being spent and not lost. `blocked` is never sent
-by anything, and the mapping says so rather than leaving a reader to wonder: nothing in a turn
-waits on a human — the sandbox asks no permission, the tools ask no confirmation — so a run is
-never in the state the word names.
+begins, so the terminal knows the minutes are being spent and not lost. `blocked` is no turn's
+word, and the mapping says so rather than leaving a reader to wonder: nothing in a turn waits on
+a human — the sandbox asks no permission, the tools ask no confirmation — so a run is never in the
+state the word names. The frame is the one thing that sends it, with `kind=auth`, while the
+settings modal it staged is asking for a key: a run with no credential cannot answer, that is the
+one genuine blockage sindri has, and a human in another tab is owed knowing that someone has to
+type something rather than that the machine is thinking.
 
 No `progress`, ever. Turn 12 of a cap of 250 is not 5% of anything: what a turn costs is
 whatever the command inside it costs, so sixty turns that each ran a one-second command and one
@@ -133,6 +136,15 @@ stdout is the answer and a script parsing it must not find an escape in it, whic
 `crates/cli/src/notice.rs`'s rule for the front ends whose stdout is a contract. A front end
 whose channel is not a terminal writes nothing at all: an escape handed to a file is bytes in
 the file, and bytes in a file are the one thing this feature must never add.
+
+In the frame that means two places and no third. A report goes out after `terminal.draw` has
+returned, from the loop, and never from inside a draw closure, or ratatui's diff repaints cells
+around a sequence the emulator has already consumed; and `state=clear` goes out where the frame is
+leaving, before `ratatui::restore()`, because `done` and `error` are meant to outlive a shell
+prompt and the frame's own record is not. How often either may be said is `status::Told`'s and is
+not left to a front end: a state the terminal has already been told is not said again, and nothing
+is said twice inside a second — a report the second withholds is one the loop is told it owes, so
+it is said late and never lost.
 
 ## The alternative that lost
 

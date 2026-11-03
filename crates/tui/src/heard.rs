@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use sindri_core::agent::Event;
 use sindri_core::provider::Asked;
+use sindri_core::status::{Doing, State};
 
 use crate::app::{App, Renew};
 use crate::driver::{CallOver, Finished, Job, Side, Spilled, Stop};
@@ -50,6 +51,10 @@ impl App {
         self.cancel.clear();
         let cancel = self.cancel.clone();
         self.running = Some(cancel.clone());
+        // A run begins thinking, and the frame has nothing settled to report:
+        // the terminal is told what this run does, not what the last one did.
+        self.doing = Doing::Thinking;
+        self.settled = None;
         self.entries.push(Entry::Prompt(Prompt {
             text: prompt.clone(),
             at: sindri_core::clock::now(),
@@ -63,10 +68,14 @@ impl App {
         match event {
             Event::TextDelta { turn, text } => {
                 self.rail.turn(turn, self.now);
+                // The model call has come back and the answer is arriving: the
+                // one point of a turn that is neither a tool nor a thought.
+                self.doing = Doing::Answer;
                 self.append(turn, text, false);
             }
             Event::ReasoningDelta { turn, text } => {
                 self.rail.turn(turn, self.now);
+                self.doing = Doing::Thinking;
                 self.append(turn, text, true);
             }
             Event::Reasoning { turn, text } => {
@@ -83,6 +92,9 @@ impl App {
             }
             Event::ToolCall { turn, asked } => {
                 self.rail.turn(turn, self.now);
+                // What the run is doing is the call's own word, which is what
+                // the terminal is owed: a command is not a thought.
+                self.doing = Doing::of(&asked);
                 self.close_answers(false);
                 let mut call = Call::new(turn, requested(&asked), self.now);
                 // A load runs no command, so there is no exit to wait for: its
@@ -240,6 +252,10 @@ impl App {
 
     pub fn finished(&mut self, finished: Finished) {
         self.running = None;
+        // Why the run ended, in the word the terminal reads: `Stopped`'s own
+        // mapping, so a cancelled run leaves the terminal `idle` and a cap or a
+        // budget is a run that delivered an answer.
+        self.settled = Some(State::settled(finished.stopped));
         self.rail
             .settled(finished.turns, finished.tokens, finished.stopped, self.now);
         // A line that never found the call it belonged to belongs to no

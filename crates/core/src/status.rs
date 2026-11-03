@@ -16,7 +16,7 @@
 //! (`base64`), because a report's values and an OSC 52 copy's payload are the
 //! same spelling of the same fact and a second copy of it is the one that drifts.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::agent::Stopped;
 use crate::provider::Asked;
@@ -34,6 +34,10 @@ pub const TITLE_ENCODED_CEILING: usize = 256;
 /// The application's ceiling. `app` is the one plain value, so it is the one a
 /// `:` could break; it is a constant of ours with no punctuation in it.
 pub const APP_CEILING: usize = 32;
+/// How often a terminal may be told anything at all: one report a second is
+/// what the specification asks, and a run's own clock is coarse enough that a
+/// report inside that window says nothing the last one did not.
+pub const PERIOD: Duration = Duration::from_secs(1);
 
 /// The name a terminal keys the root record by: the binary's, never the release.
 const APP: &str = "sindri";
@@ -54,11 +58,15 @@ pub enum State {
         turn: u32,
         elapsing: Duration,
     },
-    /// The answer is written, whichever way the loop was told to stop.
-    Done,
-    /// The specification's word for a program waiting on a human. Nothing sends
-    /// it; it is here so the set is the specification's and no sixth word can
-    /// stand in for it.
+    /// The answer is written, whichever way the loop was told to stop: the
+    /// words say which of the three, since a run stopped by its own cap
+    /// delivered an answer and a human in another tab is owed that it did.
+    Done { stopped: Stopped },
+    /// The specification's word for a program waiting on a human. No turn sends
+    /// it — nothing in a turn waits on one — and the frame does, with
+    /// `kind=auth`, while the settings modal is asking for the key a run cannot
+    /// answer without. The rest of the set is the specification's, and no sixth
+    /// word can stand in for this one.
     Blocked,
     /// The run could not deliver.
     Error,
@@ -72,7 +80,7 @@ impl State {
     /// machine.
     pub const fn settled(stopped: Stopped) -> Self {
         match stopped {
-            Stopped::Final | Stopped::MaxTurns | Stopped::Budget => State::Done,
+            Stopped::Final | Stopped::MaxTurns | Stopped::Budget => State::Done { stopped },
             Stopped::Cancelled => State::Idle,
             Stopped::Error => State::Error,
         }
@@ -83,7 +91,7 @@ impl State {
         match self {
             State::Idle => "idle",
             State::Working { .. } => "working",
-            State::Done => "done",
+            State::Done { .. } => "done",
             State::Blocked => "blocked",
             State::Error => "error",
         }
@@ -102,9 +110,25 @@ impl State {
                 turn,
                 elapsing,
             } => format!("turn {turn} · {} · {}s", doing.as_str(), elapsing.as_secs()),
-            State::Done => "the answer is written".to_string(),
+            State::Done { stopped } => match stopped {
+                Stopped::MaxTurns => "the answer is written · the turn cap was reached".to_string(),
+                Stopped::Budget => "the answer is written · the budget was spent".to_string(),
+                // `Final`, and the two words `settled` never puts here: a run
+                // that ended with an answer is a run that wrote one.
+                _ => "the answer is written".to_string(),
+            },
             State::Blocked => "waiting for a human".to_string(),
             State::Error => "the run could not deliver".to_string(),
+        }
+    }
+
+    /// The optional `kind=` one state names, and the one sindri has: a run with
+    /// no credential cannot answer, so the terminal is told which blockage it
+    /// is rather than that there is one.
+    const fn kind(self) -> Option<&'static str> {
+        match self {
+            State::Blocked => Some("auth"),
+            _ => None,
         }
     }
 }
@@ -153,23 +177,39 @@ impl Doing {
 /// whole sequence for. A front end writes these and nothing else: the escape is
 /// not its business to spell.
 pub fn report(state: &State, title: &str) -> Option<Vec<u8>> {
-    escape(state.word(), APP, title, &state.msg())
+    escape(state.word(), APP, title, &state.msg(), state.kind())
 }
 
-/// One sequence from the four values the wire carries, checked against every
+/// The bytes that take the frame's record away, and nothing else. Not a
+/// `State`: the five are the ways a run is and stops, and `clear` is a frame
+/// handing back a record it made in a tab it is leaving, so `done` and `error`
+/// — which a shell prompt is meant to keep — do not outlive the frame that
+/// said them.
+pub fn clear(title: &str) -> Option<Vec<u8>> {
+    escape("clear", APP, title, "", None)
+}
+
+/// One sequence from the values the wire carries, checked against every
 /// ceiling of the specification and encoded, and `None` if any of them refuses
 /// it. The state word arrives as a `&str` rather than a `State` because it is
 /// the wire's value and not a reading of one: a front end has nothing to say
 /// here, and the whole-sequence ceiling is reachable only over a word longer
 /// than any `State` holds, so the rule is checked where the bytes are composed.
-fn escape(state: &str, app: &str, title: &str, msg: &str) -> Option<Vec<u8>> {
+fn escape(state: &str, app: &str, title: &str, msg: &str, kind: Option<&str>) -> Option<Vec<u8>> {
     let title = value(title, TITLE_CEILING, TITLE_ENCODED_CEILING)?;
     let msg = value(msg, MSG_CEILING, MSG_ENCODED_CEILING)?;
     if !plain(app, APP_CEILING) {
         return None;
     }
-    let bytes =
-        format!("\x1b]7501;state={state}:app={app}:title={title}:msg={msg}{END}").into_bytes();
+    // A kind is a plain word of the specification's, and the one we send is a
+    // constant of ours, so it is held to the same rule as `app`.
+    let kind = match kind {
+        Some(kind) if plain(kind, APP_CEILING) => format!(":kind={kind}"),
+        Some(_) => return None,
+        None => String::new(),
+    };
+    let bytes = format!("\x1b]7501;state={state}:app={app}:title={title}:msg={msg}{kind}{END}")
+        .into_bytes();
     (bytes.len() <= SEQUENCE_CEILING).then_some(bytes)
 }
 
@@ -196,6 +236,79 @@ fn plain(text: &str, ceiling: usize) -> bool {
         && !text.contains([':', ';'])
         && !text.chars().any(char::is_control)
         && !text.is_empty()
+}
+
+/// What a terminal has been told, and the gate on saying more: the report one
+/// state owes it at `now`, or nothing because the state says what the last
+/// report said or because the last report went less than [`PERIOD`] ago.
+///
+/// The writing is not here — this value holds no tty — and the rule is here
+/// rather than in either front end because both of them repeat states: the
+/// frame tells the terminal on every frame it has something to say, and batch
+/// mode on every event, and a second copy of "not twice, not within a second"
+/// is the copy that drifts.
+#[derive(Debug, Default)]
+pub struct Told {
+    /// The state the last report carried, its clock cut to whole seconds: the
+    /// message spells `as_secs`, so two states inside one second are one word.
+    sent: Option<State>,
+    /// When that report went out, and `None` until the first one.
+    at: Option<Instant>,
+}
+
+impl Told {
+    pub fn new() -> Self {
+        Told::default()
+    }
+
+    /// The bytes `state` owes the terminal at `now`, or nothing. A state the
+    /// terminal has already been told is not said again, and one it has not is
+    /// held until the second is out — [`Told::owed`] is what tells a frame to
+    /// keep its clock running for it, so a report held is a report late and
+    /// never one lost.
+    pub fn next(&mut self, state: &State, title: &str, now: Instant) -> Option<Vec<u8>> {
+        if !self.owed(state) {
+            return None;
+        }
+        if self.at.is_some_and(|at| now.duration_since(at) < PERIOD) {
+            return None;
+        }
+        let state = still(state);
+        // The report is composed once and the state is spent whether or not a
+        // part of it breaks a ceiling: a title a terminal would discard the
+        // sequence for is a decision, not a composition to retry every frame.
+        self.sent = Some(state);
+        self.at = Some(now);
+        report(&state, title)
+    }
+
+    /// Whether the terminal is owed a report for `state`: the state says
+    /// something other than the last report did, and the terminal has been told
+    /// something at all — a frame that has started no run has no news.
+    pub fn owed(&self, state: &State) -> bool {
+        match self.sent {
+            None => !matches!(state, State::Idle),
+            Some(sent) => sent != still(state),
+        }
+    }
+}
+
+/// `state` with its clock cut to whole seconds: what its message can tell apart,
+/// and no more, so a run that has thought for twelve seconds and one that has
+/// thought for twelve and a half are one word to a terminal.
+fn still(state: &State) -> State {
+    match *state {
+        State::Working {
+            doing,
+            turn,
+            elapsing,
+        } => State::Working {
+            doing,
+            turn,
+            elapsing: Duration::from_secs(elapsing.as_secs()),
+        },
+        other => other,
+    }
 }
 
 /// Base64 in the one alphabet a terminal reads, spelled by the crate that writes
@@ -228,22 +341,31 @@ mod tests {
     #[test]
     fn an_app_past_its_ceiling_is_refused() {
         let long = "a".repeat(APP_CEILING + 1);
-        assert_eq!(escape("done", &long, "sindri", "done"), None);
-        assert!(escape("done", "sindri", "sindri", "done").is_some());
+        assert_eq!(escape("done", &long, "sindri", "done", None), None);
+        assert!(escape("done", "sindri", "sindri", "done", None).is_some());
     }
 
     #[test]
     fn a_message_past_either_ceiling_is_refused() {
         let long = "m".repeat(MSG_CEILING + 1);
-        assert_eq!(escape("working", "sindri", "sindri", &long), None);
-        assert!(escape("working", "sindri", "sindri", &"m".repeat(MSG_CEILING)).is_some());
+        assert_eq!(escape("working", "sindri", "sindri", &long, None), None);
+        assert!(
+            escape(
+                "working",
+                "sindri",
+                "sindri",
+                &"m".repeat(MSG_CEILING),
+                None
+            )
+            .is_some()
+        );
     }
 
     #[test]
     fn a_title_past_its_ceiling_is_refused() {
         let long = "t".repeat(TITLE_CEILING + 1);
-        assert_eq!(escape("done", "sindri", &long, "done"), None);
-        assert!(escape("done", "sindri", &"t".repeat(TITLE_CEILING), "done").is_some());
+        assert_eq!(escape("done", "sindri", &long, "done", None), None);
+        assert!(escape("done", "sindri", &"t".repeat(TITLE_CEILING), "done", None).is_some());
     }
 
     #[test]
@@ -251,13 +373,19 @@ mod tests {
         // Every value inside its own ceiling, and the sequence still past 4096:
         // the word the specification does not cap is what pushes it over.
         let long = "s".repeat(SEQUENCE_CEILING);
-        assert_eq!(escape(&long, "sindri", "sindri", "done"), None);
+        assert_eq!(escape(&long, "sindri", "sindri", "done", None), None);
     }
 
     #[test]
     fn a_message_carrying_a_newline_is_refused() {
-        assert_eq!(escape("working", "sindri", "sindri", "two\nlines"), None);
-        assert_eq!(escape("working", "sindri", "sindri", "bell\u{7}"), None);
+        assert_eq!(
+            escape("working", "sindri", "sindri", "two\nlines", None),
+            None
+        );
+        assert_eq!(
+            escape("working", "sindri", "sindri", "bell\u{7}", None),
+            None
+        );
     }
 
     #[test]

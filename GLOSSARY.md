@@ -127,12 +127,18 @@ is `sindri_core::status::State`, and one report is made by the pure encoder `sta
 returns the bytes or nothing at all: a report past a ceiling the specification sets is one a
 terminal discards whole, so it is not sent rather than shortened. The mapping is `Stopped`'s and it
 is closed — `final`, `max_turns` and `budget` report `done`, `error` reports `error`, and
-`cancelled` reports `idle`, which is what an interrupted program owes its terminal — and `blocked`
-is never sent. There is no `progress`, since a turn is not a fraction of anything, and no `id=`,
-since several runs are several ptys and so several root records. `msg` is coarse — `Doing`'s five,
-thinking, running a command, loading a skill, opening a target and writing the answer, plus the
-turn count — and never the shell command, the prompt or the answer, because a report is a channel
-no redaction in the record guards.
+`cancelled` reports `idle`, which is what an interrupted program owes its terminal. `blocked` is no
+turn's word: a turn never waits on a human, so the frame alone sends it, with `kind=auth`, while
+the settings modal is asking for a key — a run with no credential cannot answer, and that is the
+one genuine blockage sindri has. There is no `progress`, since a turn is not a fraction of anything,
+and no `id=`, since several runs are several ptys and so several root records. `msg` is coarse —
+`Doing`'s five, thinking, running a command, loading a skill, opening a target and writing the
+answer, plus the turn count — and never the shell command, the prompt or the answer, because a
+report is a channel no redaction in the record guards. A frame that leaves its screen says `clear`
+first, which is not one of the five: `done` and `error` outlive a shell prompt by design, and the
+frame's own record must not outlive the frame. `status::clear` is that report, and `status::Told`
+is the gate both front ends share — a state the terminal has already been told is not said again,
+and none is said twice in a second.
 
 ## Skills
 

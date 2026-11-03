@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use ratatui::layout::Rect;
 use sindri_core::cancel::Cancel;
+use sindri_core::status::{Doing, State};
 
 mod marks;
 mod pictures;
@@ -119,6 +120,14 @@ pub struct App {
     /// told by the clock rather than by the run. It starts at
     /// zero with every prompt and stops when the run does.
     pub(crate) now: Duration,
+    /// What the run is doing, in the five words a report may carry: set by the
+    /// event the run last sent, and `Thinking` again for every prompt.
+    pub(crate) doing: Doing,
+    /// The state the last run ended in, until the next one begins: one of
+    /// `done`, `error` and `idle`, decided by `Stopped` and by nothing else.
+    /// `None` before the first run, because a frame that has started none has
+    /// nothing to tell its terminal.
+    pub(crate) settled: Option<State>,
 }
 
 impl App {
@@ -169,6 +178,8 @@ impl App {
             workspace: None,
             export_pending: None,
             now: Duration::ZERO,
+            doing: Doing::Thinking,
+            settled: None,
         }
     }
 
@@ -247,6 +258,34 @@ impl App {
         if self.is_running() {
             self.now += delta;
         }
+    }
+
+    /// What this frame is doing, as the one thing a terminal is told: a run in
+    /// flight is working on what its last event named, a staged missing key is
+    /// the one blockage sindri has, and a still frame is whatever its last run
+    /// settled in. The clock is the frame's own, so a report says how long the
+    /// work has taken rather than asking the run again.
+    pub fn status(&self) -> State {
+        if self.running.is_some() {
+            return State::Working {
+                doing: self.doing,
+                turn: self.rail.turns(),
+                elapsing: self.now,
+            };
+        }
+        if self.awaiting_key() {
+            return State::Blocked;
+        }
+        self.settled.unwrap_or(State::Idle)
+    }
+
+    /// Whether the modal the front door staged is still asking for a key: a run
+    /// with no credential cannot answer, so the frame says it waits for a human
+    /// rather than that it is thinking. The modal going takes the blockage with
+    /// it — a human who has typed the key, or dismissed the ask, is owed the
+    /// word that nothing is running.
+    fn awaiting_key(&self) -> bool {
+        matches!(&self.overlay, Some(Overlay::Settings(settings)) if settings.missing().is_some())
     }
 
     pub fn wants_quit(&self) -> bool {

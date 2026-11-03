@@ -159,6 +159,24 @@ impl Rail {
         self.launch.workspace.clone()
     }
 
+    /// The turn the run in flight is on, as the rail counts it.
+    pub fn turns(&self) -> u32 {
+        self.turns
+    }
+
+    /// The name a terminal labels this frame by: the workspace's own name, and
+    /// never its path — a title is a label a terminal may put in a window
+    /// border, and a border has no room for `~/Documents/git/sindri`. Four
+    /// frames in four workspaces are four labelled records rather than four
+    /// identical ones. A workspace with no name of its own (`/`, `~`) is
+    /// spelled as it is.
+    pub fn title(&self) -> String {
+        std::path::Path::new(&self.launch.workspace)
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_else(|| self.launch.workspace.clone())
+    }
+
     /// What the launch established: the facts the rail states and the first
     /// frame names — the wire, the model, the directory and the sandbox.
     pub fn launch(&self) -> &Launch {

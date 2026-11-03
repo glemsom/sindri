@@ -375,6 +375,7 @@ mod pulse;
 mod queue;
 mod rail;
 mod skill;
+mod status;
 mod surface;
 mod transcript;
 mod window;

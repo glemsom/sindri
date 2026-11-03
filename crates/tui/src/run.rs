@@ -20,6 +20,7 @@ use crate::pulse;
 use crate::rail::Launch;
 use crate::render;
 use crate::settings::Missing;
+use crate::status::Channel;
 
 pub use crate::render::Card;
 
@@ -165,11 +166,20 @@ fn session(
 
     // Nothing has been said yet, so the first frame is drawn here.
     let root = std::env::current_dir().unwrap_or_default();
-    let mut draw = |app: &mut App| paint(terminal, app);
-    let mut painted = draw(&mut app);
+    let title = app.rail.title();
+    let mut screen = Screen {
+        terminal,
+        reports: Channel::stdout(title),
+    };
+    let mut painted = screen.show(&mut app);
     while painted {
-        painted = turn_of_the_loop(&mut app, &rx, &jobs, &tx, &mut walking, &root, &mut draw);
+        painted = turn_of_the_loop(&mut app, &rx, &jobs, &tx, &mut walking, &root, &mut screen);
     }
+    // `done` and `error` are meant to survive a shell prompt; the frame's own
+    // record is not, and a tab that has moved on should not hold one for a run
+    // that has gone. Written here, so it is in the stream before the alternate
+    // screen is left.
+    screen.reports.clear();
     Ending::Left
 }
 
@@ -209,9 +219,11 @@ fn turn_of_the_loop(
     tx: &Sender<Msg>,
     walking: &mut bool,
     root: &Path,
-    draw: &mut impl FnMut(&mut App) -> bool,
+    surface: &mut impl Paint,
 ) -> bool {
-    let live = app.is_running() || *walking;
+    // A report the last second is withholding is a reason to keep the clock
+    // running, or the word a settled run owes would wait for a keystroke.
+    let live = app.is_running() || *walking || surface.owes(app);
     match wait(rx, live) {
         Wake::Said(message) => {
             if matches!(message, Msg::Paths(..)) {
@@ -227,7 +239,7 @@ fn turn_of_the_loop(
     }
     tasks::begin(app, jobs);
     walk(app, tx, walking, root);
-    let painted = draw(app);
+    let painted = surface.show(app);
     // The frame just drawn is what asked: a fence it laid out as its panel asked
     // for its diagram, and the drawing is made off this thread so the next frame
     // costs what a frame with no picture in it costs.
@@ -249,22 +261,55 @@ fn recorded(app: App) -> App {
     }
 }
 
-/// The terminal's cursor is hidden while the frame is written and shown again
-/// where the composer puts it. A frame that leaves it showing carries it
-/// wherever the diff writes next, and a streamed answer repaints the
-/// transcript every frame: a reader then watches the cursor leave the
-/// composer and come back. `draw` shows it at the position the frame set and
-/// never hides it, so the hiding is the loop's.
-///
-/// Which is also why an idle frame is drawn only because something happened:
-/// every frame ends by showing the cursor and moving it to the composer, and a
-/// terminal restarts its blink on every move, so a loop that redrew an
-/// unchanged frame would leave an idle composer blinking at the frame rate.
-/// While a run is live the frame is drawn on the pulse, and pays that blink
-/// eight times a second for a marker that moves.
-fn paint(terminal: &mut DefaultTerminal, app: &mut App) -> bool {
-    let _ = terminal.hide_cursor();
-    terminal.draw(|frame| render::draw(app, frame)).is_ok()
+/// What the loop paints on: the terminal this crate owns, and — in a test — a
+/// counter, so that the loop's own clock is proven without a pty. The reports
+/// are part of it because their order against a draw is the point.
+trait Paint {
+    /// Draws the frame, and says what the frame is doing once the draw has
+    /// returned.
+    fn show(&mut self, app: &mut App) -> bool;
+
+    /// Whether the terminal is owed a report the second is still withholding.
+    fn owes(&self, app: &App) -> bool;
+}
+
+/// The one thing that touches the terminal: the frame's draws, and the reports
+/// it says into the same screen between them. The two are one value because the
+/// order between them is the point — a report is written where a draw has come
+/// back, and a report written from inside one is a sequence ratatui would
+/// repaint cells around.
+struct Screen<'a> {
+    terminal: &'a mut DefaultTerminal,
+    reports: Channel,
+}
+
+impl Paint for Screen<'_> {
+    /// The terminal's cursor is hidden while the frame is written and shown
+    /// again where the composer puts it. A frame that leaves it showing carries
+    /// it wherever the diff writes next, and a streamed answer repaints the
+    /// transcript every frame: a reader then watches the cursor leave the
+    /// composer and come back. The draw shows it at the position the frame set
+    /// and never hides it, so the hiding is the loop's.
+    ///
+    /// Which is also why an idle frame is drawn only because something
+    /// happened: every frame ends by showing the cursor and moving it to the
+    /// composer, and a terminal restarts its blink on every move, so a loop that
+    /// redrew an unchanged frame would leave an idle composer blinking at the
+    /// frame rate. While a run is live the frame is drawn on the pulse, and pays
+    /// that blink eight times a second for a marker that moves.
+    ///
+    /// And what the frame is doing is said here, once the draw has returned:
+    /// the reports are the frame's business only in where they are written.
+    fn show(&mut self, app: &mut App) -> bool {
+        let _ = self.terminal.hide_cursor();
+        let painted = self.terminal.draw(|frame| render::draw(app, frame)).is_ok();
+        self.reports.say(&app.status(), Instant::now());
+        painted
+    }
+
+    fn owes(&self, app: &App) -> bool {
+        self.reports.owes(&app.status())
+    }
 }
 
 fn apply(app: &mut App, message: Msg) {

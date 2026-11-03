@@ -14,11 +14,28 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use super::{turn_of_the_loop, walk};
+use super::{Paint, turn_of_the_loop, walk};
 use crate::app::App;
 use crate::driver::Finished;
 use crate::msg::Msg;
 use crate::rail::Launch;
+
+/// The frame's own draw, counted: the loop asks what it is painting and this
+/// answers without a terminal, so the clock is proven and nothing is drawn.
+struct Counted {
+    draws: Arc<AtomicUsize>,
+}
+
+impl Paint for Counted {
+    fn show(&mut self, _: &mut App) -> bool {
+        self.draws.fetch_add(1, Ordering::SeqCst);
+        true
+    }
+
+    fn owes(&self, _: &App) -> bool {
+        false
+    }
+}
 
 fn app() -> App {
     App::with_clipboard(
@@ -95,10 +112,7 @@ fn the_loop_draws_for_the_clock_while_a_run_is_live_and_never_while_idle() {
     let mut walking = false;
     let draws = Arc::new(AtomicUsize::new(0));
     let counted = Arc::clone(&draws);
-    let mut draw = move |_: &mut App| {
-        counted.fetch_add(1, Ordering::SeqCst);
-        true
-    };
+    let mut surface = Counted { draws: counted };
 
     // A live run keeps the frame on the clock: nothing is said, and the frame
     // is drawn anyway, because time changes what it shows.
@@ -111,7 +125,7 @@ fn the_loop_draws_for_the_clock_while_a_run_is_live_and_never_while_idle() {
             &tx,
             &mut walking,
             root.path(),
-            &mut draw
+            &mut surface
         ));
     }
     let live = draws.load(Ordering::SeqCst);
@@ -137,7 +151,7 @@ fn the_loop_draws_for_the_clock_while_a_run_is_live_and_never_while_idle() {
         &tx,
         &mut walking,
         root.path(),
-        &mut draw
+        &mut surface
     ));
     wake.join().expect("the waker finishes");
     assert_eq!(
