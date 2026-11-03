@@ -210,6 +210,7 @@ One file, `$XDG_CONFIG_HOME/sindri/config.toml` (example:
 | Turn cap | `max_turns` | `SINDRI_MAX_TURNS` | `--max-turns` |
 | Command timeout | `timeout` | `SINDRI_TIMEOUT` | `--timeout` |
 | Terminal reports | `status` | `SINDRI_STATUS` | — |
+| ssh agent | `ssh_agent` | `SINDRI_SSH_AGENT` | `--ssh-agent`, `--no-ssh-agent` |
 
 `--yolo-unsafe` is the one flag with no file key and no environment variable: a run
 that leaves the sandbox is asked for in the invocation that makes it and dies with that

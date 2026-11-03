@@ -32,6 +32,10 @@ pub(super) struct FileConfig {
     pub(super) thinking: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) status: Option<bool>,
+    // Before the one table: in TOML every key after a table header belongs to
+    // that table, so a key written below it would be written into it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) ssh_agent: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) extra_writable_paths: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]

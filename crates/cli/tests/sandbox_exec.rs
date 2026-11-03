@@ -386,3 +386,102 @@ fn the_record_ends_without_claiming_an_answer() {
         );
     }
 }
+
+/// A path for a unix socket: the kernel bounds one's length, so it is named in
+/// the target directory rather than under the test's own temporary root.
+fn short_socket(name: &str) -> std::path::PathBuf {
+    let socket = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("{name}.sock"));
+    let _ = std::fs::remove_file(&socket);
+    socket
+}
+
+#[test]
+fn the_hosts_agent_is_reachable_from_inside_the_sandbox() {
+    // The socket needs no mount: a unix socket across the read-only root is
+    // connectable, which is what makes naming it enough. The socket sits in the
+    // state root — a directory the sandbox cannot write and never binds — so a
+    // connection proves the claim rather than the mount.
+    use std::io::{Read, Write};
+    use std::os::unix::net::UnixListener;
+
+    let env = Env::new();
+    // Outside the run's workspace and outside its writable set, so a connection
+    // proves the socket was neither mounted nor made writable — only named.
+    let socket = short_socket("agent");
+    let listener = UnixListener::bind(&socket).expect("a socket to connect to");
+    let answering = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("the sandbox connects");
+        let mut said = [0u8; 4];
+        stream.read_exact(&mut said).expect("the sandbox speaks");
+        assert_eq!(&said, b"ping", "and says what the command said");
+        stream.write_all(b"pong").expect("the agent answers");
+    });
+
+    let script = "python3 -c 'import os, socket\n\
+                  s = socket.socket(socket.AF_UNIX)\n\
+                  s.connect(os.environ[\"SSH_AUTH_SOCK\"])\n\
+                  s.sendall(b\"ping\")\n\
+                  print(s.recv(4).decode(), os.environ[\"SSH_AUTH_SOCK\"])'";
+    let assert = env
+        .cmd()
+        .env("SSH_AUTH_SOCK", &socket)
+        .args(["sandbox", "exec", "--"])
+        .args(["bash", "-c", script])
+        .assert()
+        .success();
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
+    let out: Value =
+        serde_json::from_str(&stdout).unwrap_or_else(|error| panic!("not JSON: {error}\n{stdout}"));
+
+    assert_eq!(
+        out["outcome"], "exited",
+        "the command ran in the sandbox: {out}"
+    );
+    assert_eq!(
+        out["stdout"],
+        format!("pong {}\n", socket.display()),
+        "the agent answered, and the variable is the host's own socket, unchanged"
+    );
+    answering.join().expect("the agent answered");
+}
+
+#[test]
+fn the_variable_is_absent_when_the_setting_is_off_or_the_host_has_no_agent() {
+    let env = Env::new();
+    let probe = ["bash", "-c", "echo \"agent:[${SSH_AUTH_SOCK-unset}]\""];
+    let socket = short_socket("probe");
+
+    let reading = |flags: &[&str], agent: Option<&std::path::Path>| {
+        let mut cmd = env.cmd();
+        match agent {
+            Some(socket) => cmd.env("SSH_AUTH_SOCK", socket),
+            None => cmd.env_remove("SSH_AUTH_SOCK"),
+        };
+        let assert = cmd
+            .args(flags)
+            .args(["sandbox", "exec", "--"])
+            .args(probe)
+            .assert()
+            .success();
+        let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
+        let out: Value = serde_json::from_str(&stdout)
+            .unwrap_or_else(|error| panic!("not JSON: {error}\n{stdout}"));
+        out["stdout"].as_str().expect("stdout").to_string()
+    };
+
+    assert_eq!(
+        reading(&["--no-ssh-agent"], Some(&socket)),
+        "agent:[unset]\n",
+        "the toggle is the last word, and an absent variable is absent rather than empty"
+    );
+    assert_eq!(
+        reading(&[], None),
+        "agent:[unset]\n",
+        "and a host with no agent names none, whatever the setting says"
+    );
+    assert_eq!(
+        reading(&[], Some(&socket)),
+        format!("agent:[{}]\n", socket.display()),
+        "while a host with one hands it over by default"
+    );
+}

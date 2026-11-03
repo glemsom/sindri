@@ -103,6 +103,7 @@ fn the_real_executor_honours_the_unsafe_enforcement() {
         session_temp,
         sindri_core::session::search_path(),
         Enforcement::YoloUnsafe,
+        None,
     )
     .expect("policy");
 
@@ -139,6 +140,7 @@ fn a_cancelled_executor_kills_its_command_group_and_reports_no_result() {
         session_temp,
         sindri_core::session::search_path(),
         Enforcement::Bubblewrap,
+        None,
     )
     .expect("policy");
 
@@ -204,6 +206,7 @@ fn executor_for(
         session_temp,
         sindri_core::session::search_path(),
         enforcement,
+        None,
     )
     .expect("policy");
 

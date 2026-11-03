@@ -21,7 +21,7 @@ pub fn run(overrides: Overrides) -> i32 {
         Err(error) => return error.report(),
     };
     let (env, config) = (&configured.env, &configured.config);
-    match doctor::probe(env, &config.extras, config.enforcement) {
+    match doctor::probe(env, config) {
         Ok(report) => {
             // The catalog is not the sandbox's business, so it is read and said
             // beside the description rather than folded into it. A probe that

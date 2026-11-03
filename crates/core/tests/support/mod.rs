@@ -66,6 +66,7 @@ pub fn policy(workspace: &TempDir, session_temp: &Path) -> SandboxPolicy {
         writable,
         session_temp.to_path_buf(),
         sindri_core::paths::home(),
+        None,
         "/usr/bin:/bin".to_string(),
         Enforcement::Bubblewrap,
     )
@@ -83,6 +84,7 @@ pub fn host() -> (TempDir, Env) {
         workspace: workspace.canonicalize().expect("canonical workspace"),
         search_path: "/usr/bin:/bin".to_string(),
         state: root.path().join("state"),
+        ssh_agent: None,
     };
     (root, env)
 }
@@ -97,6 +99,7 @@ pub fn config(extras: &[&Path]) -> Config {
         timeout: Duration::from_secs(30),
         thinking: false,
         status: true,
+        ssh_agent: true,
         extras: Extras::Named(extras.iter().map(|path| path.to_path_buf()).collect()),
         enforcement: Enforcement::Bubblewrap,
         extra_headers: Vec::new(),

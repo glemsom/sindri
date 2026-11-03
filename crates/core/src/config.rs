@@ -38,6 +38,9 @@ pub struct Overrides {
     pub max_turns: Option<u32>,
     pub timeout: Option<u64>,
     pub thinking: Option<bool>,
+    /// Whether the sandbox is given the host's ssh agent socket. `--ssh-agent`
+    /// and `--no-ssh-agent` are the two ends of the one key.
+    pub ssh_agent: Option<bool>,
     pub writable: Option<Vec<String>>,
     pub extra_headers: Option<Vec<String>>,
     /// Asked for in the invocation that makes it, and only there: a persisted
@@ -58,6 +61,11 @@ pub struct Config {
     /// the environment silences it, because one switch has to reach both front
     /// ends and a per-front-end flag would be two.
     pub status: bool,
+    /// Whether the sandbox is handed the host's ssh agent socket, so `git push`
+    /// and `ssh-add -l` work in it: on unless the file or the environment says
+    /// off, because an assistant that cannot use the keys it was given cannot
+    /// finish the job.
+    pub ssh_agent: bool,
     /// The writable paths besides the workspace and the session temp: the
     /// shipped floor where no level names a list, and exactly what was named
     /// where one does — an empty list included, which means none.
@@ -195,6 +203,12 @@ impl Config {
 
         let status = boolean("SINDRI_STATUS")?.or(file.status).unwrap_or(true);
 
+        let ssh_agent = overrides
+            .ssh_agent
+            .or(boolean("SINDRI_SSH_AGENT")?)
+            .or(file.ssh_agent)
+            .unwrap_or(true);
+
         let extras = extras(overrides.writable, file.extra_writable_paths)?;
         let extra_headers = headers::resolve(overrides.extra_headers, file.extra_headers)?;
 
@@ -214,6 +228,7 @@ impl Config {
             timeout,
             thinking,
             status,
+            ssh_agent,
             extras,
             enforcement,
             extra_headers,

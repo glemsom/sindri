@@ -140,6 +140,7 @@ pub struct SandboxPolicy {
     writable: WritableSet,
     session_temp: PathBuf,
     home: Option<PathBuf>,
+    ssh_agent: Option<PathBuf>,
     search_path: String,
     enforcement: Enforcement,
 }
@@ -149,10 +150,17 @@ impl SandboxPolicy {
     /// already carries it. `None` is a real answer — a service or a container
     /// has no home directory — so the sandbox is given no `HOME` at all rather
     /// than an empty one, and the description says which of the two it is.
+    ///
+    /// The ssh agent's socket is the host's own too, and needs no mount either:
+    /// a unix socket across the read-only root is connectable, so the policy
+    /// only has to name it. `None` is again a real answer — the setting is off,
+    /// or the host has no agent — and the variable is then absent rather than
+    /// empty, so `ssh` falls back to what it would do anywhere.
     pub fn new(
         writable: WritableSet,
         session_temp: PathBuf,
         home: Option<PathBuf>,
+        ssh_agent: Option<PathBuf>,
         search_path: String,
         enforcement: Enforcement,
     ) -> Result<Self, PolicyError> {
@@ -163,6 +171,7 @@ impl SandboxPolicy {
             writable,
             session_temp,
             home,
+            ssh_agent,
             search_path,
             enforcement,
         })
@@ -193,6 +202,13 @@ impl SandboxPolicy {
     /// what a tool that looks in `~` finds is the host's own files, read-only.
     pub fn home(&self) -> Option<&Path> {
         self.home.as_deref()
+    }
+
+    /// The host's ssh agent socket, handed to the sandbox as `SSH_AUTH_SOCK`:
+    /// the one value the argv exports and the description names, so a run that
+    /// says it had the user's keys and one that did cannot be two answers.
+    pub fn ssh_agent(&self) -> Option<&Path> {
+        self.ssh_agent.as_deref()
     }
 
     pub fn search_path(&self) -> &str {

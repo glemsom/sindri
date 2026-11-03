@@ -446,6 +446,7 @@ mod tests {
             writable,
             root.join("session/tmp"),
             crate::paths::home(),
+            None,
             "/usr/bin:/bin".to_string(),
             Enforcement::Bubblewrap,
         )
@@ -519,6 +520,7 @@ mod tests {
             writable,
             workspace.path().join("session/tmp"),
             crate::paths::home(),
+            None,
             "/usr/bin:/bin".to_string(),
             Enforcement::Bubblewrap,
         )

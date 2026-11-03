@@ -7,8 +7,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::config::Config;
 use crate::paths;
-use crate::sandbox::{Enforcement, Extras, PolicyError, SandboxPolicy};
+use crate::sandbox::{Enforcement, PolicyError, SandboxPolicy};
 use crate::session::Env;
 
 /// The binaries a run depends on; `doctor` resolves each one through the same
@@ -77,11 +78,11 @@ impl std::error::Error for DoctorError {}
 /// will not use `bwrap` has no sandbox to prove, so the probe is skipped and the
 /// binary set is resolved on the host instead. An absent `bwrap` is not an error
 /// there; a missing binary still is.
-pub fn probe(env: &Env, extras: &Extras, enforcement: Enforcement) -> Result<Report, DoctorError> {
+pub fn probe(env: &Env, config: &Config) -> Result<Report, DoctorError> {
     let shown_temp = env.state.join("sessions").join("<session>").join("tmp");
-    let policy = build_policy(env, extras, shown_temp, enforcement)?;
+    let policy = build_policy(env, config, shown_temp, config.enforcement)?;
 
-    if enforcement == Enforcement::YoloUnsafe {
+    if config.enforcement == Enforcement::YoloUnsafe {
         let missing = missing_from(&env.search_path);
         if !missing.is_empty() {
             return Err(DoctorError::BinariesMissing { missing });
@@ -104,7 +105,7 @@ pub fn probe(env: &Env, extras: &Extras, enforcement: Enforcement) -> Result<Rep
     let session_temp = scratch.join("tmp");
     std::fs::create_dir_all(&session_temp).map_err(DoctorError::Setup)?;
 
-    let probed = run_probe(&bash, env, extras, &session_temp);
+    let probed = run_probe(&bash, env, config, &session_temp);
     let _ = std::fs::remove_dir_all(&scratch);
 
     probed?;
@@ -124,18 +125,22 @@ fn missing_from(path: &str) -> Vec<String> {
         .collect()
 }
 
+/// The policy a run would make, from the settings a run would read: the same
+/// derivation, so `sindri doctor` prints the description the model would be
+/// handed rather than a second opinion about it.
 fn build_policy(
     env: &Env,
-    extras: &Extras,
+    config: &Config,
     session_temp: PathBuf,
     enforcement: Enforcement,
 ) -> Result<SandboxPolicy, DoctorError> {
     crate::session::policy_for(
         &env.workspace,
-        extras,
+        &config.extras,
         session_temp,
         env.search_path.clone(),
         enforcement,
+        env.agent_socket(config.ssh_agent),
     )
     .map_err(DoctorError::Policy)
 }
@@ -143,12 +148,12 @@ fn build_policy(
 fn run_probe(
     bash: &Path,
     env: &Env,
-    extras: &Extras,
+    config: &Config,
     session_temp: &Path,
 ) -> Result<(), DoctorError> {
     let policy = build_policy(
         env,
-        extras,
+        config,
         session_temp.to_path_buf(),
         Enforcement::Bubblewrap,
     )?;

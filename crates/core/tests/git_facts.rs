@@ -179,6 +179,7 @@ fn a_launch_probes_the_repository_root_once_for_the_rules_and_the_skills() {
         workspace: deep.canonicalize().expect("a canonical workspace"),
         search_path: "/usr/bin:/bin".to_string(),
         state: root.path().join("state"),
+        ssh_agent: None,
     };
 
     let session = Session::open(&env, &config(&[])).expect("a session opens");

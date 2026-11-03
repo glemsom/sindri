@@ -63,12 +63,19 @@ impl SandboxPolicy {
     /// boundary the model is told is the boundary it runs in.
     pub(super) fn environment(&self) -> Vec<(&'static str, String)> {
         let temp = self.session_temp().display().to_string();
-        let mut environment: Vec<(&'static str, String)> = Vec::with_capacity(5);
+        let mut environment: Vec<(&'static str, String)> = Vec::with_capacity(6);
         // A host with no home directory passes none: the variable is absent, not
         // empty, so a shell can tell `HOME not set` from `HOME=` and nothing
         // that expands `~` mistakes the root for somebody's home.
         if let Some(home) = self.home() {
             environment.push(("HOME", home.display().to_string()));
+        }
+        // The agent's socket is named and not mounted: connecting across the
+        // read-only root is already permitted, so the value alone is the whole
+        // of it. A host with no agent, or one that turned the setting off,
+        // passes the variable not at all — `ssh` then does what it would.
+        if let Some(socket) = self.ssh_agent() {
+            environment.push(("SSH_AUTH_SOCK", socket.display().to_string()));
         }
         environment.extend([
             ("TMPDIR", temp),

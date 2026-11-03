@@ -100,6 +100,20 @@ pub const TERMINAL_ENV: &[&str] = &[
     "COLORTERM",
 ];
 
+/// How many rows down the settings modal's cursor must move to sit on `key`:
+/// the schema's order, read from `KEYS` rather than counted by hand, so a key
+/// the schema grows never silently moves a test's cursor onto another field.
+pub const fn rows_to(key: sindri_core::config::Key) -> usize {
+    let mut index = 0;
+    while index < sindri_core::config::KEYS.len() {
+        if sindri_core::config::KEYS[index] as usize == key as usize {
+            return index;
+        }
+        index += 1;
+    }
+    panic!("the schema holds the key the modal is walked to")
+}
+
 pub fn write_config(env: &Env, toml: &str) {
     let dir = env.config.join("sindri");
     std::fs::create_dir_all(&dir).expect("config dir");

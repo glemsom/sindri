@@ -51,7 +51,7 @@ pub fn run(overrides: Overrides) -> i32 {
     // The sandbox is the precondition for the agent, so it is proven before the
     // first frame: a broken sandbox is a card, never a half-drawn interface
     let (env, config) = (&configured.env, &configured.config);
-    if let Err(error) = doctor::probe(env, &config.extras, config.enforcement) {
+    if let Err(error) = doctor::probe(env, config) {
         let card = Card {
             title: "sindri cannot start: the sandbox does not work here".to_string(),
             check: failing_check(&error),

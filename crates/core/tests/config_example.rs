@@ -59,7 +59,7 @@ fn the_example_sets_every_key_the_schema_names() {
             key.name()
         );
     }
-    assert_eq!(KEYS.len(), 10, "the schema's keys, and no more");
+    assert_eq!(KEYS.len(), 11, "the schema's keys, and no more");
 }
 
 /// A value the run's own reader accepts for `key`, so a config file this test
@@ -74,6 +74,7 @@ fn value_for(key: Key, home: &TempDir) -> String {
         Key::Timeout => "120".to_string(),
         Key::Thinking => "false".to_string(),
         Key::Status => "false".to_string(),
+        Key::SshAgent => "true".to_string(),
         Key::ExtraWritablePaths => home.path().display().to_string(),
         Key::ExtraHeaders => "x-test: y".to_string(),
     }
@@ -99,6 +100,7 @@ fn required_keys() -> Vec<&'static str> {
             "SINDRI_TIMEOUT",
             "SINDRI_THINKING",
             "SINDRI_STATUS",
+            "SINDRI_SSH_AGENT",
             "SINDRI_EXTRA_WRITABLE_PATHS",
             "SINDRI_EXTRA_HEADERS",
             "ANTHROPIC_API_KEY",

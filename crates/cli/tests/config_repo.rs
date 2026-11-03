@@ -19,10 +19,6 @@ use common::pty::{
 };
 use common::{Env, stderr, stdout};
 
-/// How many rows down the settings modal's `extra_writable_paths` field sits
-/// from where it opens: the schema's order, which the modal draws.
-const SETTINGS_EXTRAS_ROW: usize = 8;
-
 fn extra(env: &Env) -> std::path::PathBuf {
     let dir = env.workspace.parent().expect("root").join("repo-grant");
     std::fs::create_dir_all(&dir).expect("extra dir");
@@ -202,7 +198,8 @@ fn a_settings_save_inside_the_frame_says_nothing_on_stderr() {
     type_command(&pty, "/settings");
     expect(&pty, &mut child, "extra_writable_paths");
     let mut port = pty.port();
-    for _ in 0..SETTINGS_EXTRAS_ROW {
+    let extras = common::rows_to(sindri_core::config::Key::ExtraWritablePaths);
+    for _ in 0..extras {
         std::io::Write::write_all(&mut port, DOWN).expect("a cursor move");
     }
     drop(port);

@@ -65,6 +65,14 @@ struct Cli {
     /// environment says.
     #[arg(long = "no-thinking")]
     no_thinking: bool,
+    /// Hand the sandbox the host's ssh agent socket, whatever the config or the
+    /// environment says. `--no-ssh-agent` is the other end of the same key.
+    #[arg(long, conflicts_with = "no_ssh_agent")]
+    ssh_agent: bool,
+    /// Do not hand the sandbox the host's ssh agent socket, whatever the config
+    /// or the environment says.
+    #[arg(long = "no-ssh-agent")]
+    no_ssh_agent: bool,
     /// Leave the sandbox: commands run with your own privileges, outside bubblewrap.
     #[arg(long = "yolo-unsafe", global = true)]
     yolo_unsafe: bool,
@@ -189,6 +197,11 @@ impl Cli {
                 (_, true) => Some(false),
                 _ => None,
             },
+            ssh_agent: match (self.ssh_agent, self.no_ssh_agent) {
+                (true, _) => Some(true),
+                (_, true) => Some(false),
+                _ => None,
+            },
             writable: (!self.writable.is_empty()).then(|| self.writable.clone()),
             extra_headers: (!self.header.is_empty()).then(|| self.header.clone()),
             yolo_unsafe: self.yolo_unsafe,
@@ -209,6 +222,7 @@ fn policy_only(overrides: &Overrides) -> Overrides {
         max_turns: None,
         timeout: None,
         thinking: None,
+        ssh_agent: overrides.ssh_agent,
         writable: overrides.writable.clone(),
         extra_headers: None,
         yolo_unsafe: overrides.yolo_unsafe,
@@ -259,6 +273,7 @@ mod tests {
             "/two",
             "--header",
             "X-Route: beta",
+            "--no-ssh-agent",
             "--yolo-unsafe",
         ])
         .overrides();
@@ -276,6 +291,7 @@ mod tests {
             overrides.extra_headers,
             Some(vec!["X-Route: beta".to_string()])
         );
+        assert_eq!(overrides.ssh_agent, Some(false));
         assert!(overrides.yolo_unsafe);
     }
 
@@ -289,6 +305,7 @@ mod tests {
         assert_eq!(overrides.max_turns, None);
         assert_eq!(overrides.timeout, None);
         assert_eq!(overrides.thinking, None);
+        assert_eq!(overrides.ssh_agent, None, "the config decides");
         assert_eq!(overrides.writable, None, "no grant replaces no grant");
         assert_eq!(overrides.extra_headers, None);
         assert!(!overrides.yolo_unsafe);
@@ -306,6 +323,21 @@ mod tests {
             cli(&["--no-thinking"]).overrides().thinking,
             Some(false),
             "--no-thinking refuses it"
+        );
+    }
+
+    #[test]
+    fn the_ssh_agent_is_asked_for_by_one_flag_and_refused_by_the_other() {
+        assert_eq!(cli(&[]).overrides().ssh_agent, None, "the config decides");
+        assert_eq!(
+            cli(&["--ssh-agent"]).overrides().ssh_agent,
+            Some(true),
+            "--ssh-agent asks for it"
+        );
+        assert_eq!(
+            cli(&["--no-ssh-agent"]).overrides().ssh_agent,
+            Some(false),
+            "--no-ssh-agent refuses it"
         );
     }
 
@@ -328,12 +360,18 @@ mod tests {
                 "/granted",
                 "--header",
                 "X-Route: beta",
+                "--no-ssh-agent",
                 "--yolo-unsafe",
             ])
             .overrides(),
         );
 
         assert_eq!(overrides.writable, Some(vec!["/granted".to_string()]));
+        assert_eq!(
+            overrides.ssh_agent,
+            Some(false),
+            "the sandbox's own setting reaches the doors"
+        );
         assert!(overrides.yolo_unsafe);
         assert_eq!(overrides.provider, None);
         assert_eq!(overrides.model, None);

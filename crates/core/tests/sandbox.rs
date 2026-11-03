@@ -16,6 +16,11 @@ use tempfile::TempDir;
 /// mounted for it, so it need not be a directory here.
 const HOST_HOME: &str = "/home/tester";
 
+/// The ssh agent socket a policy is given: the host's own, as a value. A socket
+/// connects across the read-only root, so it is named and never mounted, and it
+/// need not exist here either.
+const HOST_AGENT: &str = "/run/user/1000/ssh-agent.socket";
+
 fn policy(workspace: &TempDir, session_temp: &Path) -> SandboxPolicy {
     policy_homed(workspace, session_temp, Some(Path::new(HOST_HOME)))
 }
@@ -26,6 +31,25 @@ fn policy_homed(workspace: &TempDir, session_temp: &Path, home: Option<&Path>) -
         writable,
         session_temp.to_path_buf(),
         home.map(Path::to_path_buf),
+        None,
+        "/usr/bin:/bin".to_string(),
+        Enforcement::Bubblewrap,
+    )
+    .expect("policy")
+}
+
+/// A policy that names the host's ssh agent socket, or none.
+fn policy_naming_agent(
+    workspace: &TempDir,
+    session_temp: &Path,
+    agent: Option<&Path>,
+) -> SandboxPolicy {
+    let writable = WritableSet::new([workspace.path().to_path_buf()]).expect("writable set");
+    SandboxPolicy::new(
+        writable,
+        session_temp.to_path_buf(),
+        Some(PathBuf::from(HOST_HOME)),
+        agent.map(Path::to_path_buf),
         "/usr/bin:/bin".to_string(),
         Enforcement::Bubblewrap,
     )
@@ -217,6 +241,7 @@ fn the_policy_mounts_the_workspace_and_then_the_floor_it_resolves() {
         session_temp,
         "/usr/bin:/bin".to_string(),
         Enforcement::Bubblewrap,
+        None,
     )
     .expect("a policy over the floor");
     let resolved = Extras::Floor.resolve(sindri_core::paths::home().as_deref(), &canonical);
@@ -253,6 +278,7 @@ fn a_named_path_the_writable_set_refuses_is_still_a_refusal() {
         session_temp.clone(),
         "/usr/bin:/bin".to_string(),
         Enforcement::Bubblewrap,
+        None,
     )
     .expect_err("a named path that is not there is a usage error");
     assert!(
@@ -267,6 +293,7 @@ fn a_named_path_the_writable_set_refuses_is_still_a_refusal() {
         session_temp,
         "/usr/bin:/bin".to_string(),
         Enforcement::Bubblewrap,
+        None,
     )
     .expect_err("a named path that contains the workspace is a usage error");
     assert!(matches!(nested, PolicyError::Nested { .. }), "{nested}");
@@ -505,6 +532,7 @@ fn the_argv_parsed_back_into_a_writable_set_describes_the_same_sandbox() {
         WritableSet::new(parsed).expect("the argv names a legal writable set"),
         session_temp.clone(),
         policy.home().map(Path::to_path_buf),
+        policy.ssh_agent().map(Path::to_path_buf),
         policy.search_path().to_string(),
         policy.enforcement(),
     )
@@ -545,6 +573,7 @@ fn an_unsafe_policy_wraps_nothing_and_says_so() {
         writable,
         session_temp,
         Some(PathBuf::from(HOST_HOME)),
+        None,
         "/usr/bin:/bin".to_string(),
         Enforcement::YoloUnsafe,
     )
@@ -583,5 +612,84 @@ fn the_argv_mounts_a_fresh_procfs_so_the_pid_namespace_is_not_a_lie() {
                 .position(|arg| arg == "--ro-bind")
                 .expect("root bind"),
         "the procfs mount follows the read-only root"
+    );
+}
+
+#[test]
+fn the_agent_socket_is_exported_and_the_variable_is_mounted_by_nothing() {
+    let workspace = TempDir::new().expect("workspace");
+    let session_temp = workspace.path().join("session/tmp");
+    std::fs::create_dir_all(&session_temp).expect("session temp");
+    let policy = policy_naming_agent(&workspace, &session_temp, Some(Path::new(HOST_AGENT)));
+
+    let argv = policy.to_argv(&["true".to_string()], None);
+    assert_eq!(
+        value_of(&argv, "SSH_AUTH_SOCK"),
+        HOST_AGENT,
+        "the socket is the host's own, named exactly as it was read"
+    );
+    assert!(
+        !binds(&argv).iter().any(|bind| *bind == HOST_AGENT),
+        "and it needs no mount: a socket across the read-only root connects: {:?}",
+        binds(&argv)
+    );
+}
+
+#[test]
+fn a_host_with_no_agent_hands_the_sandbox_no_variable_at_all() {
+    let workspace = TempDir::new().expect("workspace");
+    let session_temp = workspace.path().join("session/tmp");
+    std::fs::create_dir_all(&session_temp).expect("session temp");
+    let policy = policy_naming_agent(&workspace, &session_temp, None);
+
+    let argv = policy.to_argv(&["true".to_string()], None);
+    assert!(
+        !argv.iter().any(|arg| arg == "SSH_AUTH_SOCK"),
+        "the variable is absent rather than empty, so `ssh` falls back to what \
+         it would do anywhere: {argv:?}"
+    );
+    assert!(
+        !policy.describe().contains("SSH_AUTH_SOCK"),
+        "the description names no variable the argv does not set: {}",
+        policy.describe()
+    );
+}
+
+#[test]
+fn the_description_names_the_socket_and_gains_no_line_of_its_own() {
+    let workspace = TempDir::new().expect("workspace");
+    let session_temp = workspace.path().join("session/tmp");
+    std::fs::create_dir_all(&session_temp).expect("session temp");
+    let with = policy_naming_agent(&workspace, &session_temp, Some(Path::new(HOST_AGENT)));
+    let without = policy_naming_agent(&workspace, &session_temp, None);
+
+    // The environment list already publishes every name the policy sets, so the
+    // socket arrives there: one name, and the description is otherwise the same
+    // text. A dedicated line would be the model told about ssh.
+    assert!(
+        described_line(&with, "environment:").contains("SSH_AUTH_SOCK"),
+        "the environment list names it: {}",
+        with.describe()
+    );
+    let described = with.describe();
+    let plain = without.describe();
+    let difference: Vec<&str> = described
+        .lines()
+        .filter(|line| !plain.lines().any(|other| other == *line))
+        .collect();
+    assert_eq!(
+        difference.len(),
+        1,
+        "one line differs — the environment list — and no line is added: {difference:?}"
+    );
+    assert!(
+        difference[0].trim_start().starts_with("environment:"),
+        "the difference is the list it already publishes: {difference:?}"
+    );
+    assert!(
+        !with.describe().contains(HOST_AGENT),
+        "and the socket's path is nowhere in it: the names are the fact, not a \
+         new sentence: {}",
+        with.describe()
     );
 }

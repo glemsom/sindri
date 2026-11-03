@@ -189,10 +189,14 @@ fn value(settings: &Settings, field: &Field) -> (String, Style) {
         Key::Thinking if typed.is_empty() => {
             (format!("{} (default)", toggle_shown(typed)), theme::plain())
         }
-        // The reports are on unless something silences them, so the row states
-        // the default it is running on.
-        Key::Status if typed.is_empty() => ("on (default)".to_string(), theme::plain()),
-        Key::Thinking | Key::Status => (toggle_shown(typed).to_string(), theme::plain()),
+        // The reports and the agent's socket are on unless something silences
+        // them, so the row states the default it is running on.
+        Key::Status | Key::SshAgent if typed.is_empty() => {
+            ("on (default)".to_string(), theme::plain())
+        }
+        Key::Thinking | Key::Status | Key::SshAgent => {
+            (toggle_shown(typed).to_string(), theme::plain())
+        }
         _ if field.key.secret() && !typed.is_empty() => (
             "•••• (will be written to the file)".to_string(),
             theme::faint(),

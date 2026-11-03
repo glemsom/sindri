@@ -31,6 +31,10 @@ pub struct Env {
     pub workspace: PathBuf,
     pub search_path: String,
     pub state: PathBuf,
+    /// The host's own ssh agent socket, read from the process once: every
+    /// policy this launch derives is handed this one value or none, so what a
+    /// run's argv exports cannot be a different socket than the one it read.
+    pub ssh_agent: Option<PathBuf>,
 }
 
 impl Env {
@@ -39,8 +43,24 @@ impl Env {
             workspace: std::env::current_dir()?.canonicalize()?,
             search_path: search_path(),
             state: paths::state_dir()?,
+            ssh_agent: ssh_agent(),
         })
     }
+
+    /// The socket a policy is given: the host's own where the setting is on,
+    /// and none where it was turned off — the toggle decides, so a setting and
+    /// a host fact cannot each claim half of the answer.
+    pub fn agent_socket(&self, setting: bool) -> Option<PathBuf> {
+        self.ssh_agent.clone().filter(|_| setting)
+    }
+}
+
+/// The host's ssh agent socket, as the process names it. An exported variable
+/// left empty is a shell un-setting one, so it is no socket at all.
+pub fn ssh_agent() -> Option<PathBuf> {
+    std::env::var_os("SSH_AUTH_SOCK")
+        .filter(|socket| !socket.is_empty())
+        .map(PathBuf::from)
 }
 
 /// Why a run could not be started: one error, naming what failed and carrying
@@ -116,7 +136,7 @@ impl Session {
         // The policy is derived before the record is started: a path the
         // sandbox refuses must not leave a record saying `running`, which no
         // reader could tell from a run that is still going.
-        let policy = derive(env, &dir, &config.extras, config.enforcement)?;
+        let policy = derive(env, &dir, config)?;
         // One probe of the tree for both facts boot needs from it: the git facts
         // the record and the rail read, and the root the rules and the skill
         // scopes are found from. Asking twice would fork git a third time and
@@ -167,7 +187,7 @@ impl Session {
     /// The next prompt's policy, and the record's if it moved: a writable set
     /// that changed under a thread is announced where it changed.
     pub fn rebase(&mut self, config: &Config) -> Result<(), StartError> {
-        self.policy = derive(&self.env, &self.dir, &config.extras, config.enforcement)?;
+        self.policy = derive(&self.env, &self.dir, config)?;
         self.recorder.rebase(&self.policy.describe());
         Ok(())
     }
@@ -272,38 +292,43 @@ fn directory(env: &Env) -> Result<SessionDir, StartError> {
     Ok(dir)
 }
 
-fn derive(
-    env: &Env,
-    dir: &SessionDir,
-    extras: &Extras,
-    enforcement: Enforcement,
-) -> Result<SandboxPolicy, PolicyError> {
+fn derive(env: &Env, dir: &SessionDir, config: &Config) -> Result<SandboxPolicy, PolicyError> {
     policy_for(
         &env.workspace,
-        extras,
+        &config.extras,
         dir.temp(),
         env.search_path.clone(),
-        enforcement,
+        config.enforcement,
+        env.agent_socket(config.ssh_agent),
     )
 }
 
-/// One policy from the run's three facts: the workspace, where the extras come
-/// from, and the temp. The extras are resolved here — the floor against this
-/// host's home directory and this workspace, a named list as it was given — so
-/// what is mounted and what the description prints come from one value.
+/// One policy from the run's facts: the workspace, where the extras come from,
+/// the temp, and the ssh agent socket the setting and the host agreed on. The
+/// extras are resolved here — the floor against this host's home directory and
+/// this workspace, a named list as it was given — so what is mounted and what
+/// the description prints come from one value.
 pub fn policy_for(
     workspace: &Path,
     extras: &Extras,
     session_temp: PathBuf,
     search_path: String,
     enforcement: Enforcement,
+    ssh_agent: Option<PathBuf>,
 ) -> Result<SandboxPolicy, PolicyError> {
     // One read of the host's home answers both questions it is asked: where the
     // shipped floor comes from, and what `HOME` the sandbox is given.
     let home = paths::home();
     let resolved = extras.resolve(home.as_deref(), workspace);
     let writable = WritableSet::new(std::iter::once(workspace.to_path_buf()).chain(resolved))?;
-    SandboxPolicy::new(writable, session_temp, home, search_path, enforcement)
+    SandboxPolicy::new(
+        writable,
+        session_temp,
+        home,
+        ssh_agent,
+        search_path,
+        enforcement,
+    )
 }
 
 pub fn search_path() -> String {

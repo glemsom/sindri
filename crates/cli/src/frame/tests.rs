@@ -25,6 +25,7 @@ fn config() -> Config {
         timeout: Duration::from_secs(5),
         thinking: false,
         status: true,
+        ssh_agent: true,
         extras: Extras::Named(Vec::new()),
         enforcement: Enforcement::Bubblewrap,
         extra_headers: Vec::new(),
@@ -41,6 +42,7 @@ fn the_rail_states_your_own_privileges_when_the_run_left_the_sandbox() {
         root.path().join("tmp"),
         "/usr/bin:/bin".to_string(),
         Enforcement::YoloUnsafe,
+        None,
     )
     .expect("policy");
 
@@ -63,6 +65,7 @@ fn env(root: &TempDir) -> RunEnv {
         workspace: workspace.canonicalize().expect("canonical workspace"),
         search_path: "/usr/bin:/bin".to_string(),
         state,
+        ssh_agent: None,
     }
 }
 

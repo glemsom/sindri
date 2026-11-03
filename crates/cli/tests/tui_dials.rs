@@ -16,7 +16,7 @@ use common::provider::{MockProvider, Reply};
 use std::io::Write;
 
 use common::pty::{CLEAR_FIELD, DOWN, ENTER, Pty, expect, spawn, type_command, type_line};
-use common::{Env, TEST_KEY, stderr, stdout, write_config};
+use common::{Env, TEST_KEY, rows_to, stderr, stdout, write_config};
 
 const TYPED_KEY: &str = "sk-typed-in-the-settings-modal-0f2c";
 
@@ -87,7 +87,7 @@ fn a_model_changed_in_settings_answers_the_next_prompt_on_the_same_thread() {
 
     type_command(&pty, "/settings");
     expect(&pty, &mut child, "extra_writable_paths");
-    set_field(&pty, 1, "model-two");
+    set_field(&pty, rows_to(sindri_core::config::Key::Model), "model-two");
     pty.type_key(ENTER);
     expect(&pty, &mut child, "settings saved");
 
@@ -139,7 +139,11 @@ fn a_saved_extra_path_is_in_force_for_the_very_next_command() {
     assert!(!opened.is_empty(), "the frame is drawing");
     type_command(&pty, "/settings");
     expect(&pty, &mut child, "extra_writable_paths");
-    set_field(&pty, 8, &scratch.display().to_string());
+    set_field(
+        &pty,
+        rows_to(sindri_core::config::Key::ExtraWritablePaths),
+        &scratch.display().to_string(),
+    );
     pty.type_key(ENTER);
     expect(&pty, &mut child, "settings saved");
 
@@ -187,14 +191,14 @@ fn a_key_typed_in_the_modal_is_written_to_the_file_and_nowhere_else() {
 
     expect(&pty, &mut child, "cache");
     type_command(&pty, "/settings");
-    // The key field is the fourth of the schema's nine, and it starts where
-    // the run does: at the environment, never at a secret.
+    // The key field sits where the schema puts it, and it starts where the run
+    // does: at the environment, never at a secret.
     let drawn = pty.wait_for_text(&mut child, "from environment");
     assert!(
         drawn.contains("api_key"),
         "the modal opened on the key field's row: {drawn:?}"
     );
-    set_field(&pty, 3, TYPED_KEY);
+    set_field(&pty, rows_to(sindri_core::config::Key::ApiKey), TYPED_KEY);
     let warned = pty.wait_for_text(&mut child, "plaintext");
     assert!(
         warned.contains("plaintext") && warned.contains("config.toml"),

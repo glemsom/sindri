@@ -27,12 +27,13 @@ pub enum Key {
     Timeout,
     Thinking,
     Status,
+    SshAgent,
     ExtraWritablePaths,
     ExtraHeaders,
 }
 
 /// How many keys there are: the table's length, and the modal's.
-const N_KEYS: usize = 10;
+const N_KEYS: usize = 11;
 
 pub const KEYS: [Key; N_KEYS] = keys();
 
@@ -189,6 +190,20 @@ const SPECS: [Spec; N_KEYS] = [
         clear: |values| values.status = None,
         put: |values, value| {
             values.status = Some(toggle(value)?);
+            Ok(())
+        },
+    },
+    Spec {
+        key: Key::SshAgent,
+        name: "ssh_agent",
+        secret: false,
+        toggled: true,
+        start: || String::new(),
+        empty_is_a_value: false,
+        get: |values| values.ssh_agent.map(|on| on.to_string()),
+        clear: |values| values.ssh_agent = None,
+        put: |values, value| {
+            values.ssh_agent = Some(toggle(value)?);
             Ok(())
         },
     },

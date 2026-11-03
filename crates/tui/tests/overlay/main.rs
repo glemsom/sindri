@@ -16,6 +16,7 @@ pub use common::{any, launch, press, screen, shown, type_text};
 use std::path::PathBuf;
 
 use crossterm::event::{KeyCode, KeyModifiers, MouseEvent, MouseEventKind};
+use sindri_core::config::{KEYS, Key};
 use sindri_tui::overlay::{BINDINGS, help_rows};
 use sindri_tui::{App, Launch};
 use tempfile::TempDir;
@@ -292,8 +293,13 @@ fn the_modal_scrolls_to_a_chosen_row_past_the_fold_and_keeps_it_on_screen() {
     let mut f = fixture("model = \"m\"\n");
     open_settings(&mut f.app);
 
-    // Ten rows in a box of twelve: the last of them is past the fold.
-    for _ in 0..9 {
+    // The schema's rows in a box of twelve: the last of them is past the fold.
+    // Which row that is belongs to the schema, so the walk counts to the key.
+    let last = KEYS
+        .iter()
+        .position(|key| *key == Key::ExtraHeaders)
+        .expect("the schema has the key the modal ends on");
+    for _ in 0..last {
         press(&mut f.app, KeyCode::Down, KeyModifiers::NONE);
     }
     let rows = screen(&mut f.app, 100, 12);

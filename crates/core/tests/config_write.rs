@@ -52,6 +52,7 @@ fn every_key_the_schema_names_is_written_and_reads_back() {
         (Key::Timeout, "90"),
         (Key::Thinking, "true"),
         (Key::Status, "true"),
+        (Key::SshAgent, "true"),
         (Key::ExtraWritablePaths, "/usr/share"),
         (Key::ExtraHeaders, "x-session: gateway, x-route: other"),
     ];
@@ -274,7 +275,7 @@ fn every_key_the_form_offers_is_one_the_file_can_carry() {
             key.name()
         );
     }
-    assert_eq!(KEYS.len(), 10, "the schema's keys, and no more");
+    assert_eq!(KEYS.len(), 11, "the schema's keys, and no more");
 }
 
 #[test]
@@ -291,6 +292,7 @@ fn every_key_can_be_set_shown_and_cleared() {
         (Key::Timeout, "3"),
         (Key::Thinking, "true"),
         (Key::Status, "true"),
+        (Key::SshAgent, "true"),
         (Key::ExtraWritablePaths, "/usr/share"),
         (Key::ExtraHeaders, "x-one: 1"),
     ];

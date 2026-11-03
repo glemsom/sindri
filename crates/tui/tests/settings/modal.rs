@@ -213,3 +213,26 @@ fn clearing_the_writable_field_leaves_the_key_out_of_the_file() {
         "and nothing else moved: {file}"
     );
 }
+
+#[test]
+fn the_ssh_agent_is_one_row_a_toggle_and_on_by_default() {
+    let mut f = fixture(Some("model = \"m\"\n"));
+    open(&mut f.app);
+    down_to(&mut f.app, Key::SshAgent);
+    assert!(
+        row(&screen(&mut f.app, 100, 30), "ssh_agent").contains("on (default)"),
+        "the file says nothing, so the row states the default the run is on"
+    );
+    press(&mut f.app, KeyCode::Char(' '), KeyModifiers::NONE);
+    press(&mut f.app, KeyCode::Char(' '), KeyModifiers::NONE);
+    assert!(
+        row(&screen(&mut f.app, 100, 30), "ssh_agent").contains("off"),
+        "space flips it"
+    );
+    press(&mut f.app, KeyCode::Enter, KeyModifiers::NONE);
+    assert!(
+        written(&f.path).contains("ssh_agent = false"),
+        "and saving writes the setting the run reads: {}",
+        written(&f.path)
+    );
+}

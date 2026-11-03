@@ -110,6 +110,7 @@ mod tests {
             timeout: Duration::from_secs(5),
             thinking: false,
             status: true,
+            ssh_agent: true,
             extras: Extras::Named(Vec::new()),
             enforcement: Enforcement::Bubblewrap,
             extra_headers: Vec::new(),
@@ -127,6 +128,7 @@ mod tests {
             workspace: workspace.canonicalize().expect("canonical workspace"),
             search_path: "/usr/bin:/bin".to_string(),
             state,
+            ssh_agent: None,
         }
     }
 

@@ -1,6 +1,6 @@
 # $XDG_CONFIG_HOME/sindri/config.toml — the one file Sindri reads.
 #
-# Two keys are required and the other eight have a default: a run cannot start
+# Two keys are required and the other nine have a default: a run cannot start
 # without `model`, nor without `api_key` on a wire that wants a credential —
 # `anthropic`, the default — where the provider's own environment variable will
 # do in its place. Every key, required or not, can be set without editing this
@@ -53,6 +53,16 @@ status = true
 # This is the setting that makes a repository-local config dangerous, which is
 # why none is ever honoured.
 extra_writable_paths = ["/home/you/go/pkg/mod"]
+
+# Whether the sandbox is handed the host's ssh agent socket, so `git push` over
+# ssh and `ssh-add -l` work inside it. Optional: on by default, because an
+# assistant that cannot use the credentials it was given cannot finish the job.
+# The socket needs no mount — connecting across the read-only root is already
+# permitted — so this only names the host's own `SSH_AUTH_SOCK` in the sandbox
+# environment. It is resolved once, when the run starts: turning the setting off,
+# or a host with no agent, leaves the variable absent rather than empty, and
+# `sindri doctor` prints the environment list it appears in.
+ssh_agent = true
 
 # How many turns one run may take before it stops with exit 100. Optional: 250
 # by default, and a cap of 1 to 10000.
