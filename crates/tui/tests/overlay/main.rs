@@ -1,8 +1,9 @@
 //! The overlays own their space: the help list
 //! wraps a description, sizes its box from the wrapped rows and scrolls
-//! itself, and the settings modal keeps its refusal and its keys on screen
-//! when the list of rows does not fit. Every fixture points the frame at a
-//! temporary config path, or at a thread it built itself.
+//! itself, the settings modal keeps its refusal and its keys on screen when the
+//! list of rows does not fit, and a finished thought's whole text is a box the
+//! frame's own page keys move. Every fixture points the frame at a temporary
+//! config path, or at a thread it built itself.
 
 #![allow(
     clippy::expect_used,
@@ -12,10 +13,11 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-pub use common::{any, launch, press, screen, shown, type_text};
+pub use common::{any, launch, press, row_of, screen, shown, type_text};
 use std::path::PathBuf;
 
-use crossterm::event::{KeyCode, KeyModifiers, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use sindri_core::agent::Event;
 use sindri_core::config::{KEYS, Key};
 use sindri_tui::overlay::{BINDINGS, help_rows};
 use sindri_tui::{App, Launch};
@@ -329,5 +331,113 @@ fn the_modal_scrolls_to_a_chosen_row_past_the_fold_and_keeps_it_on_screen() {
         any(&up, "provider"),
         "the list scrolls back with the cursor: {}",
         shown(&up)
+    );
+}
+
+/// A finished thought of forty numbered lines: longer than any box these tests
+/// draw, so a page key has somewhere to move to. The lines are numbered from
+/// one with a leading zero, so a test that names one cannot match another.
+fn a_long_thought() -> String {
+    (1..=40).map(|n| format!("thought {n:02}\n")).collect()
+}
+
+#[test]
+fn ctrl_r_opens_the_newest_thought_whole_and_esc_closes_it() {
+    let mut app = app();
+    app.event(Event::Reasoning {
+        turn: 1,
+        text: "an older thought\n".to_string(),
+    });
+    app.event(Event::Reasoning {
+        turn: 2,
+        text: a_long_thought(),
+    });
+    assert!(
+        any(&screen(&mut app, 100, 24), "⌁ reasoned"),
+        "the thread holds one row of each of them"
+    );
+
+    press(&mut app, KeyCode::Char('r'), KeyModifiers::CONTROL);
+    assert!(
+        app.overlay().is_some(),
+        "Ctrl-R opens the whole of a finished thought over the frame"
+    );
+    let rows = screen(&mut app, 100, 24);
+    assert!(
+        any(&rows, "thought 01"),
+        "on the newest thought's own text: {rows:#?}"
+    );
+    assert!(
+        !any(&rows, "an older thought"),
+        "and not the one before it: {rows:#?}"
+    );
+
+    press(&mut app, KeyCode::PageDown, KeyModifiers::NONE);
+    let down = screen(&mut app, 100, 24);
+    assert!(
+        any(&down, "thought 40") && !any(&down, "thought 01"),
+        "the page keys move the box by its screenful: {down:#?}"
+    );
+    press(&mut app, KeyCode::PageUp, KeyModifiers::NONE);
+    assert!(
+        any(&screen(&mut app, 100, 24), "thought 01"),
+        "and back to the head of the thought: {:#?}",
+        screen(&mut app, 100, 24)
+    );
+    wheel(&mut app, MouseEventKind::ScrollDown);
+    assert!(
+        !any(&screen(&mut app, 100, 24), "thought 01"),
+        "the wheel moves the same box the keys do"
+    );
+
+    press(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+    assert!(app.overlay().is_none(), "Esc closes it");
+    let back = screen(&mut app, 100, 24);
+    assert!(
+        any(&back, "⌁ reasoned") && !any(&back, "thought 01"),
+        "and the frame beneath is the thread it was: {back:#?}"
+    );
+
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+    assert!(
+        any(&screen(&mut app, 100, 24), "thought 01"),
+        "Enter on the scar opens the same text, so the key is a shortcut and \
+         never the only way in"
+    );
+}
+
+#[test]
+fn ctrl_r_opens_the_thought_the_reader_last_touched() {
+    let mut app = app();
+    app.event(Event::Reasoning {
+        turn: 1,
+        text: "an older thought\n".to_string(),
+    });
+    app.event(Event::Reasoning {
+        turn: 2,
+        text: "the newer thought\n".to_string(),
+    });
+    // The older scar is the entry the reader takes: a click on its row opens it
+    // in place and `Enter` folds it again, which leaves it the one they touched
+    // last — and `Ctrl-R` opens what `Enter` would have opened.
+    let rows = screen(&mut app, 100, 24);
+    let older = row_of(&rows, "⌁ reasoned");
+    app.mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: 4,
+        row: older as u16,
+        modifiers: KeyModifiers::NONE,
+    });
+    assert!(
+        any(&screen(&mut app, 100, 24), "an older thought"),
+        "the click opened the row it landed on"
+    );
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+
+    press(&mut app, KeyCode::Char('r'), KeyModifiers::CONTROL);
+    let rows = screen(&mut app, 100, 24);
+    assert!(
+        any(&rows, "an older thought") && !any(&rows, "the newer thought"),
+        "Ctrl-R opens the entry the reader last touched, as Enter chooses: {rows:#?}"
     );
 }

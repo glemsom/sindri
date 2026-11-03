@@ -208,6 +208,9 @@ impl App {
             text,
             done: true,
             open: false,
+            // No pane ever stood for it, so nothing counted its clock: the row
+            // says it was reasoned and says no duration it cannot know.
+            took: None,
         });
     }
 

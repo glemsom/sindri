@@ -22,6 +22,7 @@ fn question_mark_lists_every_binding_and_esc_closes_it() {
         "Shift+Up, Shift+Down",
         "Ctrl-Y",
         "Ctrl-O",
+        "Ctrl-R",
         "Ctrl-G",
         "Ctrl-C",
         "↑",
@@ -49,7 +50,7 @@ fn question_mark_lists_every_binding_and_esc_closes_it() {
     }
     assert_eq!(
         help_rows().len(),
-        18,
+        19,
         "every binding is listed exactly once, and the commands are one row"
     );
     press(&mut app, KeyCode::Esc, KeyModifiers::NONE);

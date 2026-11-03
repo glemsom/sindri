@@ -6,6 +6,8 @@
 
 use super::*;
 
+use std::time::Duration;
+
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::buffer::Buffer;
 use sindri_tui::entry::Entry;
@@ -628,6 +630,50 @@ fn a_run_that_ends_inside_the_fold_still_leaves_one_scar() {
         scars[0].contains("⌁ reasoned"),
         "the scar a finished thought leaves: {:?}",
         scars[0]
+    );
+}
+
+/// The scar's own words: its row cut where the transcript's column ends, so the
+/// rail to its right is no part of what it says, and the gutter it hangs off
+/// neither.
+fn scar_of(app: &mut App, width: u16, height: u16) -> String {
+    let rows = screen(app, width, height);
+    let scar = &rows[row_of(&rows, "⌁ reasoned")];
+    scar.chars()
+        .take(column(width) as usize)
+        .collect::<String>()
+        .trim()
+        .to_string()
+}
+
+#[test]
+fn a_scar_counts_the_thought_it_closes() {
+    let mut counted = app();
+    turn_behind(&mut counted);
+    thought(&mut counted, 2, 4);
+    // The run's own clock, the one the pane's head counts from: a thought that
+    // ran four seconds and a fifth before its final event landed.
+    counted.pulse(Duration::from_millis(4200));
+    done(&mut counted, 2, 4);
+    tick(&mut counted, 5);
+
+    assert_eq!(
+        scar_of(&mut counted, 100, 30),
+        "⌁ reasoned 4.2s",
+        "the one row a finished thought leaves says how long the run spent on it"
+    );
+
+    let mut minute = app();
+    turn_behind(&mut minute);
+    thought(&mut minute, 2, 4);
+    minute.pulse(Duration::from_secs(62));
+    done(&mut minute, 2, 4);
+    tick(&mut minute, 5);
+
+    assert_eq!(
+        scar_of(&mut minute, 100, 30),
+        "⌁ reasoned 1m02s",
+        "and a minute of thinking is read the way a minute of anything else is"
     );
 }
 

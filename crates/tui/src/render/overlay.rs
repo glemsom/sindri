@@ -83,9 +83,38 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
             let lines = spill
                 .window()
                 .iter()
-                .map(|line| Line::from(Span::styled(line.as_str(), theme::faint())))
+                .map(String::as_str)
+                .map(text_line)
                 .collect();
             (area.height, title, More::default(), lines)
+        }
+        Overlay::Reasoning(reasoning) => {
+            // The whole of a finished thought: what the scar is one row of,
+            // drawn in a box as tall as the thought and no taller than the
+            // terminal. What does not fit is reached with the page keys, and the
+            // box says which way there is more, as the help list does.
+            let height = (reasoning.lines.len() as u16)
+                .saturating_add(2)
+                .min(area.height);
+            let visible = height.saturating_sub(2) as usize;
+            reasoning.scroll.settled(reasoning.lines.len(), visible);
+            app.window.page = visible.max(1);
+            let title = format!("reasoning · {} lines", reasoning.lines.len());
+            let lines = reasoning
+                .window()
+                .iter()
+                .map(String::as_str)
+                .map(text_line)
+                .collect();
+            (
+                height,
+                title,
+                More {
+                    above: reasoning.scroll.above(),
+                    below: reasoning.scroll.below(),
+                },
+                lines,
+            )
         }
     };
     let boxed = Rect {
@@ -105,6 +134,13 @@ fn dim(area: Rect, buf: &mut Buffer) {
             buf[(x, y)].modifier.insert(Modifier::DIM);
         }
     }
+}
+
+/// One line of a box that holds plain text: a spill's file and a finished
+/// thought's are read the same way, in the faint ink that is not the frame
+/// speaking.
+fn text_line(line: &str) -> Line<'_> {
+    Line::from(Span::styled(line, theme::faint()))
 }
 
 fn spill_window(area: Rect) -> Rect {

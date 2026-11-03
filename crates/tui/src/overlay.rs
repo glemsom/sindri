@@ -1,8 +1,13 @@
 //! The overlays that take the screen while they are open: `?`'s list of every
-//! binding, the untruncated output a spill affordance offers, and the settings
-//! modal. All close with `Esc`, and none is the only way
+//! binding, the untruncated output a spill affordance offers, the settings
+//! modal, and the whole of a finished thought — the reader's view of the text a
+//! scar is one row of. All close with `Esc`, and none is the only way
 //! to do what it does. An open overlay owns its own space: the page keys and
 //! the wheel move it, never the frame beneath it.
+//!
+//! A finished thought's whole text is one of these and its pane never is: what
+//! is on the glass because a run is thinking takes no key, and this box is the
+//! reader's and takes all of them. `expand` states the law both point at.
 
 use crate::command;
 use crate::scroll::Scroll;
@@ -73,6 +78,11 @@ pub const BINDINGS: &[Binding] = &[
         keys: "Ctrl-O",
         mouse: Some("click the spill row"),
         what: "open a command's untruncated output",
+    },
+    Binding {
+        keys: "Ctrl-R",
+        mouse: None,
+        what: "open the whole of a finished thought",
     },
     Binding {
         keys: "Ctrl-G",
@@ -152,10 +162,47 @@ pub(crate) fn step(chosen: usize, rows: usize, len: usize, up: bool) -> usize {
     }
 }
 
+/// A finished thought, opened whole over the frame: what a scar is one row of,
+/// read as the text it holds. It is the counterpart of the pane and not a second
+/// pane — the pane is the run's and takes no key, this is the reader's and takes
+/// them all — and a thought has no spill file, because it was never an answer:
+/// the entry holds every word of it, and that is what the box shows.
+#[derive(Debug, Clone)]
+pub struct Reasoning {
+    /// The thought's lines, whole: read once from the entry when the box opens,
+    /// and windowed while it is up.
+    pub lines: Vec<String>,
+    /// The window over `lines`, held here rather than derived again, and
+    /// clamped by the same [`Scroll`] the spill box and the help list are.
+    pub scroll: Scroll,
+}
+
+impl Reasoning {
+    /// The box for one thought's text. A thought whose text is one blank line
+    /// still gets that line, so a box opened on it draws a row rather than no
+    /// rows at all.
+    pub fn of(text: &str) -> Reasoning {
+        let mut lines: Vec<String> = text.lines().map(str::to_string).collect();
+        if lines.is_empty() {
+            lines.push(String::new());
+        }
+        let mut scroll = Scroll::default();
+        // One row until the box measures itself.
+        scroll.settled(lines.len(), 1);
+        Reasoning { lines, scroll }
+    }
+
+    /// The lines the box shows, from where the reader is. A slice, not a copy.
+    pub fn window(&self) -> &[String] {
+        &self.lines[self.scroll.window()]
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Overlay {
     Help(Help),
     Spill(Spill),
+    Reasoning(Reasoning),
     /// Boxed: the modal is the largest thing the frame can overlay, and the
     /// enum is carried in every match on an overlay.
     Settings(Box<Settings>),
@@ -203,6 +250,7 @@ mod tests {
         "Shift+Up, Shift+Down",
         "Ctrl-Y",
         "Ctrl-O",
+        "Ctrl-R",
         "Ctrl-C",
         "↑",
         "Ctrl-X",

@@ -225,7 +225,11 @@ fn every_cell_of_a_marked_frame_is_a_colour_the_theme_names() {
 /// terminal's.
 #[test]
 fn the_cell_law_holds_over_a_frame_with_the_strip_lit_and_the_face_shown() {
-    let buf = pictured(100, 40);
+    // Four rows more than the other frames these tests draw: the help list is
+    // as tall as its wrapped rows, and at forty rows the box would reach the
+    // face at the top of the rail — which is a modal covering a picture, and not
+    // the picture failing to cover its cells.
+    let buf = pictured(100, 44);
     let mut covered = 0;
     for y in 0..buf.area.height {
         for x in 0..buf.area.width {

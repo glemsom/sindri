@@ -164,6 +164,42 @@ fn a_spill_overlay_dims_the_transcript_it_covers() {
     );
 }
 
+#[test]
+fn a_reasoning_box_is_raised_over_a_dimmed_frame_like_every_other_overlay() {
+    let mut app = app();
+    app.event(Event::Reasoning {
+        turn: 1,
+        text: "a thought, and what it was worth\n".to_string(),
+    });
+    app.key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
+    assert!(
+        matches!(
+            app.overlay(),
+            Some(sindri_tui::overlay::Overlay::Reasoning(_))
+        ),
+        "Ctrl-R opens the whole of a finished thought"
+    );
+    let buf = buffer(&mut app, 100, 40);
+    let boxed = overlay_box(&buf);
+
+    let inside = (0..buf.area.height)
+        .flat_map(|y| (0..buf.area.width).map(move |x| (x, y)))
+        .filter(|(x, y)| boxed.contains(Position::new(*x, *y)))
+        .collect::<Vec<_>>();
+    let covered = dims(&buf);
+    assert!(
+        covered.len() > 1000
+            && covered
+                .iter()
+                .all(|(x, y)| !boxed.contains(Position::new(*x, *y)))
+            && inside
+                .iter()
+                .all(|(x, y)| buf[(*x, *y)].bg == theme::RAISED),
+        "the thought's box stands raised over a frame dimmed to its last cell, \
+         as every other overlay does: {boxed:?}"
+    );
+}
+
 /// The composer's own rectangle, found by its corner: nothing is open above it,
 /// so the topmost rounded corner on screen is the panel's.
 fn composer_box(buf: &Buffer) -> Rect {

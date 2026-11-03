@@ -77,6 +77,11 @@ pub enum Entry {
         /// Whether the reader has the text open: closed, the scar is one row
         /// and `Enter` is what opens the text it held.
         open: bool,
+        /// How long the run spent on it, from the run's own clock, read through
+        /// `pulse::said` on the row as the answer's marker is. `None` for a
+        /// thought nobody watched arrive: there is no clock to count from, and
+        /// the row says only that it was reasoned.
+        took: Option<Duration>,
     },
     Call(Call),
     Note(Note),
@@ -238,8 +243,19 @@ impl Entry {
     pub fn expandable(&self) -> bool {
         match self {
             Entry::Call(call) => call.expandable(),
-            Entry::Reasoning { text, .. } => !text.trim().is_empty(),
+            Entry::Reasoning { .. } => self.thought().is_some(),
             _ => false,
+        }
+    }
+
+    /// The text of a finished thought, where this entry is one a reader can
+    /// open: what `Ctrl-R` hands the overlay, as `expandable` is what `Enter`
+    /// asks. It is `None` for every other entry, and for a thought whose text
+    /// is blank — there is nothing to read and nothing to open.
+    pub fn thought(&self) -> Option<&str> {
+        match self {
+            Entry::Reasoning { text, .. } if !text.trim().is_empty() => Some(text),
+            _ => None,
         }
     }
 

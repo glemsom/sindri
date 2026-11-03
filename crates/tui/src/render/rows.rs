@@ -133,17 +133,16 @@ pub fn entry_rows(
             },
             want,
         ),
-        Entry::Reasoning { text, open, .. } => {
+        Entry::Reasoning {
+            text, open, took, ..
+        } => {
             // A thought is over by the time it is an entry: the pane was the
             // run's while it arrived, and what the thread holds of it is the
             // scar — one row until the reader opens it, and then the text it
             // held. A thought is one entry and not an answer, so it is laid
             // out whole and cut here.
             if !*open {
-                return Rows::plain(
-                    gutter(vec![Line::from(Span::styled("⌁ reasoned", theme::faint()))]),
-                    want,
-                );
+                return Rows::plain(gutter(vec![scar(*took)]), want);
             }
             let written = markdown::lines(text, body, store);
             let total = written.rows.len();
@@ -174,6 +173,22 @@ pub fn entry_rows(
             )
         }
     }
+}
+
+/// The scar: the one faint row a finished thought leaves, and how long the run
+/// spent on it — the duration read through `pulse::said`, as the answer's
+/// marker and a call's own duration are, so a minute of thinking is read the way
+/// a minute of anything else is. A thought nobody watched arrive has no clock to
+/// count from, so the row is the two words alone.
+fn scar(took: Option<Duration>) -> Line<'static> {
+    let mut spans = vec![Span::styled("⌁ reasoned", theme::faint())];
+    if let Some(took) = took {
+        spans.push(Span::styled(
+            format!(" {}", pulse::said(took)),
+            theme::faint(),
+        ));
+    }
+    Line::from(spans)
 }
 
 /// The pictures a written body placed, re-based to the rows the window holds:

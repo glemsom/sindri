@@ -150,9 +150,12 @@ folds on the tick it would have folded anyway — and its queue is capped, the o
 past the cap, because a thought is not an answer and has no **spill file**: the **record** holds the
 whole text.
 
-**scar** — the one row a finished thought leaves in the **thread**, `⌁ reasoned`, until `Enter` opens
-the text it held. It is all of a thought the transcript ever holds, and its entry is never open while
-the thought is still arriving.
+**scar** — the one row a finished thought leaves in the **thread**, `⌁ reasoned 4.2s`: the words and
+how long the run spent on it, read through the **pulse** as the answer's marker and a call's
+duration are, and no duration where no **pane** stood to count one. `Enter` opens the text it held
+in place, and `Ctrl-R` opens the whole of it in an **overlay** — the view of a finished thought is
+the reader's and takes every key the **pane** never would. It is all of a thought the transcript
+ever holds, and its entry is never open while the thought is still arriving.
 
 **status** — what a run tells the terminal it is doing: one `OSC 7501` report holding one of five
 states — `idle`, `working`, `done`, `blocked`, `error` — one coarse line of our own words, and the

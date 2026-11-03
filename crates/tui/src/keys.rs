@@ -39,6 +39,7 @@ impl App {
             KeyCode::Char('c') if ctrl => self.cancel_or_clear(),
             KeyCode::Char('y') if ctrl => self.copy_last_answer(),
             KeyCode::Char('o') if ctrl => self.open_spill(),
+            KeyCode::Char('r') if ctrl => self.open_reasoning(),
             KeyCode::Char('x') if ctrl => {
                 self.drop_queued();
             }
@@ -132,6 +133,9 @@ impl App {
             Some(Overlay::Help(help)) => help.page(self.window.page, up),
             Some(Overlay::Settings(settings)) => settings.page(self.window.page, up),
             Some(Overlay::Spill(spill)) => spill.scroll.page_by(self.window.page, up),
+            Some(Overlay::Reasoning(reasoning)) => {
+                reasoning.scroll.page_by(self.window.page, up);
+            }
             None => self.scroll_by(self.window.page, up),
         }
     }

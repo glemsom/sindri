@@ -161,6 +161,14 @@ impl Thought {
         at
     }
 
+    /// How long the thought ran, from the run's own clock: the moment its final
+    /// event landed less the moment its first fragment did. `None` while it is
+    /// still arriving, because a thought has no duration until it is over.
+    pub fn took(&self) -> Option<Duration> {
+        self.closed
+            .map(|closed| closed.saturating_sub(self.started))
+    }
+
     /// How long the thought has been closed at `now`: the fold's own clock, and
     /// `None` while the thought is still arriving, which is a pane that has no
     /// folding to do.
@@ -266,6 +274,25 @@ mod tests {
         assert!(
             thought.queued() <= PANE_QUEUE && thought.text.ends_with('z'),
             "the newest fragment is what a full queue keeps"
+        );
+    }
+
+    #[test]
+    fn a_closed_thought_says_how_long_it_ran() {
+        let mut thought = thinking();
+        assert_eq!(
+            thought.took(),
+            None,
+            "a thought still arriving has no duration to say"
+        );
+
+        thought.close("a thought".to_string(), ticks(35));
+
+        assert_eq!(
+            thought.took(),
+            Some(Duration::from_millis(4200)),
+            "the run's own clock, from the first fragment it was given to the \
+             final event that closed it"
         );
     }
 

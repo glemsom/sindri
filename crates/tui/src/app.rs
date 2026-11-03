@@ -334,7 +334,9 @@ impl App {
     /// pane is down to a row — or the moment a door takes the pane away before
     /// the fold got there, so a run that ends inside the fold still leaves its
     /// scar. A thought that was still arriving leaves nothing: it never
-    /// finished, so it is no part of the document.
+    /// finished, so it is no part of the document. The row carries the run's
+    /// clock as the duration it spent thinking, because that is the fact a
+    /// finished thought leaves that nothing else in the thread states.
     pub(crate) fn scar(&mut self) {
         let Some(thought) = self.thought.as_mut() else {
             return;
@@ -343,12 +345,13 @@ impl App {
             return;
         }
         thought.scarred = true;
-        let (turn, text) = (thought.turn, thought.text.clone());
+        let (turn, text, took) = (thought.turn, thought.text.clone(), thought.took());
         self.thread.push(Entry::Reasoning {
             turn,
             text,
             done: true,
             open: false,
+            took,
         });
     }
 

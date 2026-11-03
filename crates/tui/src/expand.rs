@@ -6,6 +6,19 @@
 //! reading rather than watching: a toggle on a following window takes the
 //! reader's place at that entry, and `End` is the key that gives it back.
 //!
+//! A finished thought is read two ways from here, and `target` is the one rule
+//! both of them find it by: `Enter` opens it in place, as it opens a call, and
+//! `Ctrl-R` opens the whole of it over the frame, so the key is a shortcut and
+//! never the only way in. The two ways are the law the pane and the overlay
+//! point at:
+//!
+//! > The pane is the run's: it appears, it cannot be dismissed, and it takes no
+//! > key. The view of a finished thought is the reader's: it is an overlay, and
+//! > takes all of them.
+//!
+//! Which is why a thought is not an overlay while it lives: nothing on the
+//! glass because a run is thinking may take a key the composer needs.
+//!
 //! An entry is what this opens, and a diagram is not one: it is a block inside
 //! an answer's entry, one of however many that answer holds. Opening it in place
 //! would need a click target and a place finer than an entry — a second
@@ -15,17 +28,23 @@
 
 use crate::app::App;
 use crate::entry::Entry;
+use crate::overlay::{Overlay, Reasoning};
 use crate::window::Ask;
 
 impl App {
+    /// The entry a key that opens something means: the one the reader last
+    /// touched, where there is something in it to open, or the newest one there
+    /// is. `Enter` and `Ctrl-R` both ask this and neither spells the rule again.
+    fn target(&self, openable: fn(&Entry) -> bool) -> Option<usize> {
+        self.chosen
+            .filter(|index| self.thread.get(*index).is_some_and(openable))
+            .or_else(|| self.thread.position(openable))
+    }
+
     /// Opens the chosen entry, or the newest one there is anything to open
     /// in, and says whether it found one.
     pub(crate) fn reveal(&mut self) -> bool {
-        let chosen = self
-            .chosen
-            .filter(|index| self.thread.get(*index).is_some_and(Entry::expandable))
-            .or_else(|| self.thread.position(Entry::expandable));
-        match chosen {
+        match self.target(Entry::expandable) {
             Some(index) => {
                 self.chosen = Some(index);
                 self.toggle(index);
@@ -33,6 +52,23 @@ impl App {
             }
             None => false,
         }
+    }
+
+    /// `Ctrl-R`: the whole of a finished thought, opened over the frame rather
+    /// than in place — the text a scar is one row of, pageable and dimmed, which
+    /// is the reader's and takes every key the pane beside it never would. The
+    /// entry is `target`'s, so the key opens what `Enter` would have opened.
+    pub(crate) fn open_reasoning(&mut self) {
+        let Some(index) = self.target(|entry| entry.thought().is_some()) else {
+            self.note_info("no finished thought in this session to open");
+            return;
+        };
+        let Some(text) = self.thread.get(index).and_then(Entry::thought) else {
+            return;
+        };
+        let text = text.to_string();
+        self.chosen = Some(index);
+        self.show(Overlay::Reasoning(Reasoning::of(&text)));
     }
 
     /// A click on an entry's own row: that entry, open or folded, as the row
