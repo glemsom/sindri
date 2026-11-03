@@ -274,6 +274,8 @@ fn the_text_render_carries_what_the_record_now_holds() {
         // #67: the turn's own counters and the span it took.
         "turn cost: 2100 ms, input 120, output 33, total 153",
         "turn cost: 900 ms",
+        // #406: a turn's own reasoning, under the glossary's word for it.
+        "thought: counting the files",
         // #67: the call's outcome, exit code, span and the text it spilled to.
         "exited (0), 37 ms, truncated, spill tmp/spill/t1.txt",
         // #66: the line the crash took, and what bwrap said.

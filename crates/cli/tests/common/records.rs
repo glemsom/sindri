@@ -155,6 +155,7 @@ pub fn detailed(sessions: &Path) {
             "type": "assistant",
             "turn": 1,
             "text": "Let me look.",
+            "reasoning": "counting the files",
             "usage": { "input_tokens": 120, "output_tokens": 33, "total_tokens": 153 },
             "duration_ms": 2100,
         }),

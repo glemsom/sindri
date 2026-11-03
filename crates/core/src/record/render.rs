@@ -93,8 +93,10 @@ impl Stored {
                     if let Some(cost) = cost(usage.as_ref(), *duration_ms) {
                         out.push_str(&format!("turn cost: {cost}\n"));
                     }
-                    if let Some(reasoning) = reasoning {
-                        out.push_str(&format!("reasoning: {reasoning}\n"));
+                    // The glossary's word, not the provider's: a reader is
+                    // told what the run thought, not what the wire called it.
+                    if let Some(thought) = reasoning {
+                        out.push_str(&format!("thought: {thought}\n"));
                     }
                 }
                 Entry::ToolCall {

@@ -389,7 +389,7 @@ fn a_record_written_before_the_new_fields_still_reads_and_renders_unchanged() {
     assert_eq!(
         stored.render(),
         BEFORE_THE_FIELDS,
-        "the readable transcript of an old record is byte for byte what it was"
+        "the readable transcript of an old record is exactly this, word and all"
     );
 }
 
@@ -406,7 +406,7 @@ how many files?
 
 --- assistant (turn 1) ---
 Looking.
-reasoning: counting
+thought: counting
 
 --- bash (turn 1) call_1 ---
 $ ls | wc -l
