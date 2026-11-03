@@ -15,7 +15,7 @@ use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::process::Child;
 use std::time::{Duration, Instant};
 
-use super::screen::Screen;
+use super::screen::{Screen, Status};
 
 mod frames;
 mod spawn;
@@ -221,6 +221,15 @@ impl Pty {
             .unwrap_or_default()
     }
 
+    /// The **status** reports the run sent the terminal, in arrival order: the
+    /// one thing a screen cannot show, since a report is drawn nowhere.
+    pub fn status(&self) -> Vec<Status> {
+        self.screen
+            .lock()
+            .map(|screen| screen.status().to_vec())
+            .unwrap_or_default()
+    }
+
     pub fn screen(&self) -> String {
         self.screen
             .lock()
@@ -300,4 +309,20 @@ pub fn visible(raw: &str) -> String {
         out.push(' ');
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::visible;
+
+    /// A report ended by a bell and one ended by a string terminator: a
+    /// terminal must take either, and the one reader that keeps no sequences
+    /// must lose both whole rather than leave half of one in the words it says.
+    const STATUSES: &str = "before\u{1b}]7501;state=working:app=sindri\u{7}between\u{1b}]7501;state=done:app=sindri\u{1b}\\after";
+
+    #[test]
+    fn the_plain_words_of_a_stream_carry_no_report_in_them() {
+        let said = visible(STATUSES);
+        assert_eq!(said, "before between after");
+    }
 }
