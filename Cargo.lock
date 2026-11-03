@@ -3115,6 +3115,7 @@ dependencies = [
 name = "sindri-core"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "futures",
  "libc",
  "percent-encoding",
@@ -3152,7 +3153,6 @@ dependencies = [
 name = "sindri-tui"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
  "crossterm",
  "image",
  "mermaid-rs-renderer",

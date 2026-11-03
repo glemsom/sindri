@@ -8,8 +8,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 
-use base64::Engine as _;
-use base64::engine::general_purpose::STANDARD;
+use sindri_core::status::base64;
 
 pub const TOOLS: &[(&str, &[&str])] = &[("wl-copy", &[]), ("xclip", &["-selection", "clipboard"])];
 
@@ -199,16 +198,9 @@ impl crate::app::App {
     }
 }
 
-/// Base64 in the one alphabet a terminal reads, spelled by the crate that
-/// writes it: an OSC 52 payload is base64, and the alphabet is a fact about
-/// the terminal rather than a rule of ours to keep.
-pub fn base64(bytes: &[u8]) -> String {
-    STANDARD.encode(bytes)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{Clipboard, Copied, System, base64};
+    use super::{Clipboard, Copied, System};
     use std::io::Write;
     use std::sync::{Arc, Mutex};
 
@@ -226,16 +218,6 @@ mod tests {
         fn flush(&mut self) -> std::io::Result<()> {
             Ok(())
         }
-    }
-
-    #[test]
-    fn base64_matches_the_alphabet_every_terminal_expects() {
-        assert_eq!(base64(b""), "");
-        assert_eq!(base64(b"f"), "Zg==");
-        assert_eq!(base64(b"fo"), "Zm8=");
-        assert_eq!(base64(b"foo"), "Zm9v");
-        assert_eq!(base64(b"foob"), "Zm9vYg==");
-        assert_eq!(base64(b"hello"), "aGVsbG8=");
     }
 
     #[test]

@@ -165,15 +165,19 @@ refused, an `AGENTS.md` it could not read; `--format json` changes the output sh
 five states — `idle`, `working`, `done`, `blocked`, `error` — one coarse line of our own
 words, and the run's identity, `app=sindri` with the workspace's own name as `title`. The
 code's word for the set is `sindri_core::status::State`, and one report is made by the pure
-encoder `status::report`, which returns bytes and writes none: the writing belongs to whoever
-owns the tty, which is `crates/tui/src/run.rs` for the **frame** and `crates/cli/src/batch.rs`
-for batch mode's stderr, and never the core. The mapping is `Stopped`'s and it is closed —
-`final`, `max_turns` and `budget` report `done`, `error` reports `error`, and `cancelled`
-reports `idle`, which is what an interrupted program owes its terminal — and `blocked` is
-never sent, because nothing in a turn waits on a human. There is no `progress`, since a turn
-is not a fraction of anything, and no `id=`, since several runs are several ptys and so
-several root records. `msg` is coarse and never the shell command, the prompt or the answer,
-because a report is a channel `record/redact.rs` cannot guard. The decision is
+encoder `status::report`, which returns the bytes or nothing at all and writes none: a report
+past a ceiling the specification sets, on the whole sequence or on one value in it, is a report
+a terminal discards whole, so it is not sent rather than shortened. The writing belongs to
+whoever owns the tty, which is `crates/tui/src/run.rs` for the **frame** and
+`crates/cli/src/batch.rs` for batch mode's stderr, and never the core. The mapping is
+`Stopped`'s and it is closed — `final`, `max_turns` and `budget` report `done`, `error` reports
+`error`, and `cancelled` reports `idle`, which is what an interrupted program owes its terminal
+— and `blocked` is never sent, because nothing in a turn waits on a human. There is no
+`progress`, since a turn is not a fraction of anything, and no `id=`, since several runs are
+several ptys and so several root records. `msg` is coarse — built from `Doing`, the closed set
+of what a working run is at (thinking, running a command, loading a skill, opening a target,
+writing the answer), and the turn count — and never the shell command, the prompt or the
+answer, because a report is a channel `record/redact.rs` cannot guard. The decision is
 `docs/adr/0005-program-status.md`.
 
 ## Skills

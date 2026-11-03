@@ -26,6 +26,9 @@ percent-encoding = "2"
 yaml-rust = "0.4"
 # The catalog's columns are measured in cells, not bytes: a name is a name.
 unicode-width.workspace = true
+# A status report's values are base64, as its OSC 52 copy already was: one
+# alphabet, and the crate that spells it.
+base64.workspace = true
 # Pinned to an exact version on purpose: a rig rewrite must touch
 # `provider/rig_wire.rs` and nothing else.
 rig-core = { version = "=0.45.0", default-features = false, features = ["rustls", "reqwest"] }
