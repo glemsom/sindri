@@ -127,9 +127,9 @@ fn laid(
 fn written(text: &str, width: u16) -> Vec<Line<'static>> {
     let columns = (width as usize).saturating_sub(GUTTER as usize + RULE_COLUMNS);
     let mut rows = markdown::text::wrap(
-        markdown::text::glyphs(&[Span::styled(tail(text).to_string(), theme::faint())]),
+        markdown::text::glyphs(&[Span::styled(tail(text).to_string(), theme::thought())]),
         "",
-        theme::faint(),
+        theme::thought(),
         columns,
     );
     let over = rows.len().saturating_sub(BODY_ROWS);

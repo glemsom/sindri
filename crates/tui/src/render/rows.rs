@@ -181,11 +181,11 @@ pub fn entry_rows(
 /// a minute of anything else is. A thought nobody watched arrive has no clock to
 /// count from, so the row is the two words alone.
 fn scar(took: Option<Duration>) -> Line<'static> {
-    let mut spans = vec![Span::styled("⌁ reasoned", theme::faint())];
+    let mut spans = vec![Span::styled("⌁ reasoned", theme::thought())];
     if let Some(took) = took {
         spans.push(Span::styled(
             format!(" {}", pulse::said(took)),
-            theme::faint(),
+            theme::thought(),
         ));
     }
     Line::from(spans)

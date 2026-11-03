@@ -170,6 +170,9 @@ fn the_drags_wash_keeps_every_ink_a_row_carries_at_the_body_text_floor() {
         ("DIFF_ADDED", theme::DIFF_ADDED),
         ("DIFF_REMOVED", theme::DIFF_REMOVED),
         ("DIFF_HUNK", theme::DIFF_HUNK),
+        // A finished thought's scar is a row of the thread like any other, so a
+        // drag can wash it and its ink is read through the wash as well.
+        ("THOUGHT", theme::THOUGHT),
     ];
     for (role, ink) in inks {
         let cleared = ratio(ink, theme::MARK);
@@ -228,6 +231,75 @@ fn plain_clears_four_and_a_half_to_one_on_the_fill_a_diagram_hands_a_renderer() 
          a diagram hands mermaid these two and mermaid resolves nothing this pair \
          does not already clear"
     );
+}
+
+/// A thought is read at the contrast the frame holds every other block to, on
+/// every surface one is drawn on: the canvas a finished thought's scar sits on,
+/// and the raised tier a live thought is written over. That is the law the
+/// `FAINT` it used to be drawn in was held to, and the thought's ink inherits
+/// it rather than being eyeballed.
+#[test]
+fn the_thoughts_ink_clears_four_and_a_half_to_one_wherever_a_thought_is_drawn() {
+    assert!(
+        theme::PALETTE.contains(&theme::THOUGHT),
+        "a thought is painted in a colour the theme names"
+    );
+    for surface in [theme::CANVAS, theme::PANEL, theme::RAISED, theme::MARK] {
+        let cleared = ratio(theme::THOUGHT, surface);
+        assert!(
+            cleared >= 4.5,
+            "the thought's ink on {surface:?} is {cleared:.2}:1, under the 4.5:1 a \
+             body of text is read at"
+        );
+    }
+}
+
+/// The thought's ink is a hue of its own: a step off the body prose's hue and
+/// off every grey the frame already spends, so a block reads as thinking before
+/// a word of it is read — and the dimness that separates it from an answer is
+/// carried by the hue and the pane's edge rather than by luminance alone.
+#[test]
+fn the_thoughts_ink_is_a_hue_apart_from_prose_and_every_grey_the_frame_spends() {
+    let thought = hue(theme::THOUGHT);
+    let inks = [
+        ("PLAIN", theme::PLAIN),
+        ("FAINT", theme::FAINT),
+        ("COMMENT", theme::COMMENT),
+        ("LEADER", theme::LEADER),
+        ("DIFF_FILE", theme::DIFF_FILE),
+        ("SEAM", theme::SEAM),
+    ];
+    for (role, ink) in inks {
+        let apart = (thought - hue(ink)).abs();
+        let apart = apart.min(360.0 - apart);
+        assert!(
+            apart >= 30.0,
+            "the thought's ink is {apart:.0}° from {role}'s: the two share a hue, so \
+             a thought is told from prose by its luminance alone"
+        );
+    }
+}
+
+/// A colour's hue in degrees: where a truecolour sits on the wheel, which is
+/// what "a hue of its own" is measured in.
+fn hue(colour: Color) -> f64 {
+    let Color::Rgb(r, g, b) = colour else {
+        panic!("a hue needs a truecolour");
+    };
+    let [r, g, b] = [r, g, b].map(|byte| f64::from(byte) / 255.0);
+    let (high, low) = (r.max(g).max(b), r.min(g).min(b));
+    let span = high - low;
+    if span == 0.0 {
+        return 0.0;
+    }
+    let angle = if high == r {
+        ((g - b) / span).rem_euclid(6.0)
+    } else if high == g {
+        (b - r) / span + 2.0
+    } else {
+        (r - g) / span + 4.0
+    };
+    angle * 60.0
 }
 
 /// WCAG's relative luminance, so the ratio below is the one a reader's eye

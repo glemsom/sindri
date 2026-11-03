@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::buffer::Buffer;
+use ratatui::style::Color;
 use sindri_tui::pulse;
 use sindri_tui::render::pane;
 use sindri_tui::render::transcript;
@@ -278,6 +279,61 @@ fn a_folded_thought_leaves_one_scar_and_no_fragment_in_the_thread() {
     assert!(
         !any(&rows, "fragment 20"),
         "with nothing of the thought left in the thread: {rows:#?}"
+    );
+}
+
+/// The cells of the words on the rows `rows` of a frame, one ink each: what the
+/// pane and the scar are drawn in, read off the glass rather than off the code.
+fn inks(cells: &Buffer, rows: &[u16], width: u16) -> Vec<Color> {
+    let mut inks = Vec::new();
+    for row in rows {
+        for x in 0..width {
+            let cell = &cells[(x, *row)];
+            if cell.symbol().chars().any(char::is_alphanumeric) {
+                inks.push(cell.fg);
+            }
+        }
+    }
+    inks
+}
+
+#[test]
+fn a_live_thought_and_its_scar_are_both_drawn_in_the_thoughts_ink() {
+    let mut app = app();
+    turn_behind(&mut app);
+    thought(&mut app, 2, 3);
+    tick(&mut app, 8);
+
+    let cells: Buffer = frame_cells(&mut app, 100, 30);
+    let pane = pane_rows(&mut app, 100, 30);
+    let body: Vec<u16> = pane.iter().copied().skip(1).collect();
+    let words = inks(&cells, &body, column(100));
+    assert!(words.len() > 20, "the pane drew the thought: {words:?}");
+    assert!(
+        words.iter().all(|ink| *ink == theme::THOUGHT),
+        "the pane's words are the thought's ink and not a grey the frame \
+         spends elsewhere: {:?}",
+        words
+            .iter()
+            .filter(|ink| **ink != theme::THOUGHT)
+            .collect::<Vec<_>>()
+    );
+
+    // The fold leaves one row behind, and it is the same ink: a reader tells a
+    // thought from an answer at either age by the hue alone.
+    app.event(Event::Reasoning {
+        turn: 2,
+        text: thought_of(3),
+    });
+    tick(&mut app, 5);
+    let rows = screen(&mut app, 100, 30);
+    let scar = row_of(&rows, "⌁ reasoned") as u16;
+    let cells: Buffer = frame_cells(&mut app, 100, 30);
+    let words = inks(&cells, &[scar], column(100));
+    assert!(words.len() > 5, "the scar drew its row: {words:?}");
+    assert!(
+        words.iter().all(|ink| *ink == theme::THOUGHT),
+        "the scar is drawn in the thought's ink too: {words:?}"
     );
 }
 

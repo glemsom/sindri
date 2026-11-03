@@ -19,6 +19,15 @@ pub const FAINT: Color = Color::Rgb(0x9a, 0xa3, 0xb2);
 pub const BAD: Color = Color::Rgb(0xe0, 0x6c, 0x75);
 pub const GOOD: Color = Color::Rgb(0x6a, 0xc9, 0x7a);
 pub const PROMPT: Color = Color::Rgb(0x61, 0xaf, 0xef);
+/// A thought's ink: the one hue the frame spends on reasoning, and the ink a
+/// block of it is read in. The dimness that sets a thought below an answer is
+/// carried by this hue and by the pane's own edge, never by luminance alone:
+/// the body of a thought clears 5.7:1 on `RAISED`, where a live thought is
+/// written over, and 7.6:1 on the canvas a finished thought's scar sits on, so
+/// it is read at the floor the frame holds every other block to. It is a
+/// teal-grey — a hue of its own, a step off `PLAIN`'s and off every grey the
+/// frame already spends (`FAINT`, `COMMENT`, `LEADER`, `DIFF_FILE`, `SEAM`).
+pub const THOUGHT: Color = Color::Rgb(0x7a, 0xab, 0x96);
 /// A code word in prose: inline code's ink, and no fence's.
 pub const CODE: Color = Color::Rgb(0xe5, 0xc0, 0x7b);
 /// Body ink: every word that is neither chrome nor a role of its own — prose,
@@ -85,6 +94,7 @@ pub const PALETTE: &[Color] = &[
     BAD,
     GOOD,
     PROMPT,
+    THOUGHT,
     CODE,
     PLAIN,
     COMMENT,
@@ -109,6 +119,13 @@ pub const PALETTE: &[Color] = &[
 
 pub fn faint() -> Style {
     Style::new().fg(FAINT)
+}
+
+/// A thought: the body of the reasoning a run is having, and the scar it leaves
+/// in the thread. One ink at both ages, so a block is known for what it is
+/// before a word of it is read.
+pub fn thought() -> Style {
+    Style::new().fg(THOUGHT)
 }
 
 pub fn bad() -> Style {
