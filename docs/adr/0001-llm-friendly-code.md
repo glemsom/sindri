@@ -12,7 +12,7 @@ Each line below saves a reader a search; none of it is ceremony.
 - **Rust modules stay small enough to navigate.** No `*.rs` file over 800 lines, checked
   by `scripts/audit-line-length.sh`, which has no allowlist and offers one way out: split
   the file. The limit is about module navigation, so `*.sh` and `*.md` are outside it
-  (`scripts/tests/module-docs.sh` pins that scope) and `GLOSSARY.md`, well past it, is a
+  (`scripts/tests/line-length.sh` pins that scope) and `GLOSSARY.md`, well past it, is a
   stated choice rather than a violation.
 - **A module opens with `//!`**: one paragraph on what it is for, and a second only when
   it carries a separate decision, so the file can be placed without reading its body.

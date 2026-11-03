@@ -20,9 +20,8 @@ says `started`, that the host was asked, or `failed:` with the opener's own reas
 and never that you looked.
 No environment inside the sandbox has a display to open a page on, so the browser is the
 host's; batch mode, which has no one to look, is offered no `open` at all.
-Why a skill is not a file the model reads through `bash`:
-[`docs/adr/0002-two-tools.md`](docs/adr/0002-two-tools.md), and why the browser is not
-one either: [`docs/adr/0003-a-third-tool-open.md`](docs/adr/0003-a-third-tool-open.md).
+Why a skill is not a file the model reads through `bash`, and why the browser is not
+a shell command either: [`docs/adr/0002-two-tools.md`](docs/adr/0002-two-tools.md).
 
 **Sandboxed by default.** Every `bash` call runs in unprivileged bubblewrap, host root
 read-only (a boundary on writes, not reads) plus a writable set you chose. The escape

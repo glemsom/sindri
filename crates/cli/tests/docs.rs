@@ -13,6 +13,18 @@ const GLOSSARY: &str = include_str!("../../../GLOSSARY.md");
 /// trusted to keep up with the run.
 const README: &str = include_str!("../../../README.md");
 
+/// The tool set's record, as committed: the one argument for `bash` against the two
+/// tools the shell cannot carry, since ADR 0003 was folded into it.
+const TOOLS: &str = include_str!("../../../docs/adr/0002-two-tools.md");
+
+/// ADR 0003, as committed: superseded, so it stays for the links that point at it
+/// and is a pointer to the section that replaced it — never a second copy.
+const THIRD_TOOL: &str = include_str!("../../../docs/adr/0003-a-third-tool-open.md");
+
+/// The code's own record, as committed: each bullet points at the script that holds
+/// the rule it states, and a wrong pointer is a reader searching the wrong file.
+const CODE_RULES: &str = include_str!("../../../docs/adr/0001-llm-friendly-code.md");
+
 #[test]
 fn the_glossary_defines_boot_as_the_turn_from_flags_and_process_into_a_session() {
     let entry = GLOSSARY
@@ -157,16 +169,17 @@ fn the_readme_names_every_tool_and_points_at_the_records_that_decided_them() {
         opening.contains("`open`"),
         "the frame registers a third tool, and the opening list must name it: {opening:?}"
     );
-    for record in [
-        "docs/adr/0002-two-tools.md",
-        "docs/adr/0003-a-third-tool-open.md",
-    ] {
-        assert!(
-            opening.contains(record),
-            "the decision lives in `{record}`, and the opening list must point a reader \
-             at it: {opening:?}"
-        );
-    }
+    let record = "docs/adr/0002-two-tools.md";
+    assert!(
+        opening.contains(record),
+        "the decision lives in `{record}`, and the opening list must point a reader \
+         at it: {opening:?}"
+    );
+    assert!(
+        !opening.contains("docs/adr/0003-a-third-tool-open.md"),
+        "ADR 0003 is superseded and folded into `{record}`, so the opening list sends a \
+         reader to the record that holds the argument and not to the pointer: {opening:?}"
+    );
     assert!(
         !opening.contains("get `bash` and nothing else"),
         "the run hands the model three tools, so the opening list cannot say one: \
@@ -192,6 +205,53 @@ fn the_readme_names_every_tool_and_points_at_the_records_that_decided_them() {
         opening.contains("URL") && opening.contains("a file in the workspace"),
         "the third tool takes a **target**, a URL or a file, and the opening list \
          cannot name only the URL: {opening:?}"
+    );
+}
+
+#[test]
+fn the_superseded_record_points_at_the_one_that_replaced_it() {
+    assert!(
+        THIRD_TOOL.starts_with("---\nstatus: superseded\n"),
+        "ADR 0003 was folded into ADR 0002, so its status says so at the top of the \
+         file: {:?}",
+        THIRD_TOOL.lines().take(4).collect::<Vec<_>>()
+    );
+    assert!(
+        THIRD_TOOL.contains("docs/adr/0002-two-tools.md"),
+        "a superseded record is a pointer, so it names the record it was folded into"
+    );
+    assert!(
+        TOOLS.contains("xdg-open") && TOOLS.contains("`started`") && TOOLS.contains("https"),
+        "the argument 0003 made is the one 0002 must now carry: the browser is not a \
+         `bash` command, and the result says `started` and never that a human looked"
+    );
+    let lines = THIRD_TOOL.lines().count();
+    assert!(
+        lines <= 20,
+        "a pointer and not a copy — the failure ADR 0004's duplication rule forbids — is \
+         a few lines, and this one is {lines}"
+    );
+}
+
+#[test]
+fn the_line_length_rule_names_the_script_that_holds_its_scope() {
+    let bullet = CODE_RULES
+        .split("\n- **")
+        .find(|bullet| bullet.starts_with("Rust modules stay small"))
+        .map(|bullet| bullet.replace('\n', " "))
+        .unwrap_or_else(|| {
+            panic!("ADR 0001 has no line-length bullet: it is the rule every module is measured against")
+        });
+    assert!(
+        bullet.contains("scripts/tests/line-length.sh"),
+        "the scope rule — `*.rs` measured, `*.sh` and `*.md` outside it — is held by the \
+         line-length test, and the bullet must point there: {bullet:?}"
+    );
+    assert!(
+        !bullet.contains("module-docs"),
+        "the module-docs test asserts what a file opens with and says nothing about \
+         which files are measured, so it is the wrong script to send a reader to: \
+         {bullet:?}"
     );
 }
 

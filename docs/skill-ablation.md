@@ -4,7 +4,7 @@
 switch that decides how the model works. A built-in skill is a different tax with
 the same shape — one line in the catalog, re-sent in the `skill` tool's
 description on every turn of every run, plus a body paid once if it is loaded at
-all — and the question it raises is the one ADR 0004 §4 names and does not
+all — and the question it raises is the one ADR 0004 §3 names and does not
 answer: *is this worth its catalog line?*
 
 The built-in this bench ablates is `sandbox-refusal`: what a run does when the
@@ -111,7 +111,7 @@ table is a cell with no measurement behind it.
 
 Every number the shipping rule below compares is one of those twelve cells, and
 none of them has been measured: `sandbox-refusal` is shipped on the argument ADR
-0004 §3 makes for the split — procedure in the body, the enforced boundary in the
+0004 §2 makes for the split — procedure in the body, the enforced boundary in the
 `bash` description — and **not** on a measurement, which this document refuses to
 invent in its place. The command that produces the numbers is under
 *Reproducibility*, and the file it lands in is named in
@@ -170,7 +170,7 @@ described:
   run pays and no run is reached by, and the thing to fix is the pointer, not the
   body: the catalog entry is the routing key the model reads while it is choosing
   a tool, and a body nobody loads cannot be useless or useful. This is ADR
-  0004 §4's untested risk, made a number.
+  0004 §3's untested risk, made a number.
 - **Useless.** Activated, and `right` in the `with` arm is where `right` in the
   `without` arm is. The body changed the conversation and not the outcome, and
   the run paid for it twice — the line on every turn, the body on every turn
