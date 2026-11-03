@@ -47,13 +47,14 @@ Making the trigger a sentence of its own meant repunctuating and rewrapping the 
 changing no word of it, so an arm is the absence of one line; the words the model reads, and
 the shape they are read in, are `scripts/bench-skill-ablation/README.md`'s to state.
 
-The bench asks the question twice, because a body can be worth two different things. A body
-that buys an *outcome* — `sandbox-refusal`, recovering from a refused write — is scored on
-whether the work held afterwards. A body that buys a *cheaper read* cannot buy an outcome a
-model would reach anyway: `search-and-read` is scored on the input tokens the same answer
-cost, on an inspect-shaped task whose fact is cheap to find and expensive to read whole.
+A body can be worth two different things, and the bench scores both. A body that buys an
+*outcome* is scored on whether the work held afterwards — the axis that measured recovering
+from a refused write, and that went with the skill it was measuring. A body that buys a
+*cheaper read* cannot buy an outcome a model would reach anyway: `search-and-read-files` is
+scored on the input tokens the same answer cost, on an inspect-shaped task whose fact is
+cheap to find and expensive to read whole.
 
-Both tasks, both axes and the trigger sentence's rate run behind one command over each. What
+The task, both axes and the trigger sentence's rate run behind one command. What
 the bench decides, when it is run, is a recorded verdict: a body that comes out unused,
 useless or dearer than the reads it replaces is dropped by the sentence the report writes
 into the committed results file, rather than kept on the argument that the doctrine reads

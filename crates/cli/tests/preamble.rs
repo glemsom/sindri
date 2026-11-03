@@ -29,15 +29,29 @@ fn a_batch_run_asks_from_the_workspace_it_stands_in() {
     let request = &mock.requests()[0];
     let system = system_text(request);
     assert!(
-        system.contains(&format!("workspace: {}", workspace.display())),
-        "the request names the workspace the run stands in, and the run derived it: {system}"
+        system.contains(&format!(
+            "Current working directory: {}",
+            workspace.display()
+        )),
+        "the request names the directory the run stands in, and the run derived it: {system}"
+    );
+    // The Environment section names the variable a run writes its own files to;
+    // the description names the path that variable holds. Neither states the
+    // other's fact, so the temp is a path in exactly one place.
+    let session_temp = system
+        .split("Current working directory:")
+        .next()
+        .expect("the section is there");
+    assert!(
+        session_temp.contains("`$TMPDIR`"),
+        "the habit is the preamble's: {system}"
     );
     assert!(
-        !system.contains("$TMPDIR"),
-        "the sandbox's boundary is not the preamble's to state: {system}"
+        !system.contains("(TMPDIR)"),
+        "the path the variable holds is not: {system}"
     );
     assert!(
-        tool_text(request).contains("$TMPDIR"),
+        tool_text(request).contains("(TMPDIR)"),
         "it is the `bash` description's, and it is there: {}",
         tool_text(request)
     );

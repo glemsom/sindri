@@ -5,9 +5,9 @@
 # at which `with` and `no-trigger` load a skill before the first command, over the
 # same task and the same repetitions.
 #
-# `BENCH_TASK` names the task and defaults to `refused-write`: one file holds one
-# task, because two tasks in one file would be two questions averaged into one
-# table — the same reason a file holding two models is refused.
+# `BENCH_TASK` names the task and defaults to `inspect`: one file holds one task,
+# because two tasks in one file would be two questions averaged into one table —
+# the same reason a file holding two models is refused.
 #
 # The file is a record, not a workbench: a repetition already in it is refused
 # rather than measured twice under one number. A run that never reached the model
@@ -17,7 +17,7 @@ BENCH=$(dirname "$(readlink -f "$0")")
 out=${1:?usage: sweep.sh RESULTS.jsonl ARM...}; shift
 REPS=${REPS:-6}
 tag=${TAG:-run}
-export BENCH_TASK=${BENCH_TASK:-refused-write}
+export BENCH_TASK=${BENCH_TASK:-inspect}
 case $REPS in ''|*[!0-9]*|0) echo "sweep: REPS must be a positive number, not '$REPS'" >&2; exit 2;; esac
 [ "$#" -gt 0 ] || { echo "sweep: name at least one arm" >&2; exit 2; }
 case " $(python3 "$BENCH/bench.py" tasks) " in

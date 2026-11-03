@@ -39,12 +39,18 @@ fn the_model_is_offered_one_bash_tool_described_by_the_sandbox_policy() {
         .as_str()
         .expect("the tool is described");
     assert!(
-        description.contains("sandbox policy") && description.contains("writable set"),
-        "the description is the sandbox policy's own, not written by hand: {description}"
+        description.contains("Execute a shell command in a sandbox")
+            && description.contains("Writable paths:"),
+        "the description states the boundary the run enforces, and it is the policy's own: \
+         {description}"
     );
     assert!(
         description.contains(&env.canonical_workspace().display().to_string()),
         "the model is told which paths it may write: {description}"
+    );
+    assert!(
+        description.contains("(TMPDIR)"),
+        "and the temp is named with the variable that holds it: {description}"
     );
     assert_eq!(tools[0]["input_schema"]["required"][0], "command");
 

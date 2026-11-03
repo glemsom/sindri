@@ -58,7 +58,7 @@ test_a_run_of_a_task_that_is_not_a_name_is_refused() {
     detached env BENCH_MODEL=mock BENCH_TASK=sideways "$BENCH/run_one.sh" with "$PWD/run"
     assert_status 2 "$status"
     assert_contains "$ERR" "the bench holds no task 'sideways'"
-    assert_contains "$ERR" "refused-write inspect"
+    assert_contains "$ERR" "it holds inspect"
 }
 
 test_a_sweep_of_a_task_that_is_not_a_name_is_refused() {
@@ -72,7 +72,7 @@ test_a_record_line_for_a_task_that_is_not_a_name_is_refused() {
     mkdir -p run
     detached python3 "$BENCH/bench.py" record run --task sideways --arm with
     [ "$status" -ne 0 ] || fail "a line was recorded for a task that is not a name"
-    assert_contains "$ERR" "the bench holds no task 'sideways': refused-write, inspect"
+    assert_contains "$ERR" "the bench holds no task 'sideways': inspect"
 }
 
 # A run's label and its binary are two claims, and only the binary can be asked:
@@ -113,7 +113,7 @@ test_a_sweep_of_zero_repetitions_is_refused() {
 
 test_a_record_line_for_an_arm_that_is_not_a_name_is_refused() {
     mkdir -p run
-    detached python3 "$BENCH/bench.py" record run --task refused-write --arm sideways
+    detached python3 "$BENCH/bench.py" record run --task inspect --arm sideways
     [ "$status" -ne 0 ] || fail "a line was recorded for an arm that is not a name"
     assert_contains "$ERR" "arm must be with, without or no-trigger"
 }
@@ -125,7 +125,7 @@ test_a_record_line_for_an_arm_that_is_not_a_name_is_refused() {
 # read as a run the sentence failed to reach.
 test_a_record_line_for_the_third_arm_carries_the_fact_it_is_scored_on() {
     mkdir -p run
-    detached python3 "$BENCH/bench.py" record run --task refused-write --arm no-trigger
+    detached python3 "$BENCH/bench.py" record run --task inspect --arm no-trigger
     assert_status 0 "$status"
     assert_contains "$(cat out)" '"arm": "no-trigger"'
     assert_contains "$(cat out)" '"loaded_before_bash": null'
@@ -151,14 +151,14 @@ test_a_report_over_a_file_no_sweep_wrote_claims_no_number() {
 # the lines, which is what makes six repetitions of each arm the whole argument.
 test_a_report_of_two_arms_applies_the_shipping_rule() {
     for rep in 1 2 3 4 5 6; do
-        printf '{"task":"refused-write","arm":"with","model":"m","repetition":%s,"in_tokens":1000,"activated":true,"checks":{"ok":true}}\n' "$rep"
-        printf '{"task":"refused-write","arm":"without","model":"m","repetition":%s,"in_tokens":1200,"activated":false,"checks":{"ok":false}}\n' "$rep"
+        printf '{"task":"inspect","arm":"with","model":"m","repetition":%s,"in_tokens":1000,"activated":true,"checks":{"ok":true}}\n' "$rep"
+        printf '{"task":"inspect","arm":"without","model":"m","repetition":%s,"in_tokens":1200,"activated":false,"checks":{"ok":false}}\n' "$rep"
     done > sweep.jsonl
     detached python3 "$BENCH/bench.py" report sweep.jsonl
     assert_status 0 "$status"
     assert_contains "$(cat out)" "### The shipping rule"
     assert_contains "$(cat out)" "| outcome | 6/6 with, 0/6 without |"
-    assert_contains "$(cat out)" '`sandbox-refusal` earns its catalog line.'
+    assert_contains "$(cat out)" '`search-and-read-files` earns its catalog line:'
 }
 
 # The reading task's rule is the same three checks read on a second axis: a body
@@ -172,7 +172,7 @@ test_a_report_of_the_reading_task_applies_the_rule_to_its_price() {
     detached python3 "$BENCH/bench.py" report sweep.jsonl
     assert_status 0 "$status"
     assert_contains "$(cat out)" "| outcome | 6/6 with, 6/6 without | every run with it right | yes |"
-    assert_contains "$(cat out)" '`search-and-read` earns its catalog line'
+    assert_contains "$(cat out)" '`search-and-read-files` earns its catalog line'
     assert_contains "$(cat out)" "0.43x"
 }
 
@@ -186,7 +186,7 @@ test_a_reading_task_that_costs_more_says_so_in_the_table() {
     detached python3 "$BENCH/bench.py" report sweep.jsonl
     assert_status 0 "$status"
     assert_contains "$(cat out)" "| price | 2.33x | under 1.00x | no |"
-    assert_contains "$(cat out)" '`search-and-read` does not pay for itself'
+    assert_contains "$(cat out)" '`search-and-read-files` does not pay for itself'
     assert_contains_absent "$(cat out)" "earns its catalog line"
 }
 

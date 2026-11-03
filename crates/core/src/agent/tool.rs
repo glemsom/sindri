@@ -1,6 +1,7 @@
 //! The tool that runs things: `bash`. Its description is derived from the
 //! sandbox policy and the limits in force, so the model is told exactly the
-//! boundary that is enforced and the two figures that end its work. One sentence
+//! boundary it runs inside — the paths it may write, the timeout one call gets,
+//! the wall clock the run may spend — and nothing is stated twice. One sentence
 //! beside that derivation is written by hand, and only where there is a catalog
 //! to point at: the pointer below.
 
@@ -58,24 +59,16 @@ impl BashTool {
     }
 }
 
-/// The policy's own description, the limits that end the run and how a result
-/// comes back: one derivation, so the model is never told a comfortable lie
-/// about its boundary.
+/// The boundary in force, and nothing else: what runs a command, how long one
+/// call may take, and every path a script may write. One derivation from the
+/// policy and the limits, so the model is never told a comfortable lie about its
+/// boundary — and every word here is re-sent on every turn, so a sentence the
+/// model can read off a result it has already seen is not here.
 fn describe(policy: &SandboxPolicy, limits: Limits) -> ToolSpec {
-    // Every word here is re-sent on every turn, so it says only what the
-    // model cannot read off a field name or a result it has already seen.
     let description = format!(
-        "It is the only tool that runs anything, so pipelines and small scripts are how you \
-         explore and act: put the steps of one task in one script, not in three calls.\n\n{}\n\n{}\n\
-         Every result is carried in the conversation for the rest of the run and sent again with \
-         every later turn, so filter in the script and print only what you concluded; keep \
-         intermediates in `$TMPDIR`, which outlives the call.\n\
-         How a result comes back: fields are named for what they hold, `exit_code` is absent \
-         when the command did not exit, and `retained_bytes` is what the result costs the \
-         conversation. Over-long output is cut head and tail and the whole text is in the \
-         `spill` file. `sandbox_error` means the sandbox never started, so no command ran.",
+        "Execute a shell command in a sandbox. {}\n\nWritable paths:\n{}",
         limits.describe(),
-        policy.describe()
+        writable(policy)
     );
     ToolSpec {
         name: "bash".to_string(),
@@ -88,6 +81,27 @@ fn describe(policy: &SandboxPolicy, limits: Limits) -> ToolSpec {
             "required": ["command"],
         }),
     }
+}
+
+/// The writable set as the model reads it, one path per line: the policy's own
+/// order, then the session temp named with the variable that holds it — a path
+/// a script writes to is a path the model has to be able to spell, and `$TMPDIR`
+/// is the spelling that outlives the call.
+fn writable(policy: &SandboxPolicy) -> String {
+    let temp = policy.session_temp().display().to_string();
+    let mut out = String::new();
+    for path in policy.writable().paths() {
+        let shown = path.display().to_string();
+        if shown == temp {
+            out.push_str(&format!("  {shown} (TMPDIR)\n"));
+        } else {
+            out.push_str(&format!("  {shown}\n"));
+        }
+    }
+    if !out.contains(&format!("  {temp} ")) {
+        out.push_str(&format!("  {temp} (TMPDIR)\n"));
+    }
+    out
 }
 
 /// The structured result as text, every field named so the

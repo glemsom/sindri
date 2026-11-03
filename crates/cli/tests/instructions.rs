@@ -200,8 +200,9 @@ fn a_repository_with_no_instructions_adds_nothing_and_one_with_instructions_appe
         "a workspace with no rules sends the preamble alone: {before}"
     );
     let rules = format!(
-        "House rules for this repository ({}), more specific than the guidance above:\n\n{RULES}",
-        env.canonical_workspace().join("AGENTS.md").display()
+        "## Repository instructions ({})\n\n<project_instructions>\n{}\n</project_instructions>",
+        env.canonical_workspace().join("AGENTS.md").display(),
+        RULES.trim_end()
     );
     assert!(
         after.contains("Environment\n") && after.ends_with(&format!("\n\n{rules}")),

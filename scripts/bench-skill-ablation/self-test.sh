@@ -5,7 +5,7 @@
 # the rule scores, what a record line carries, whether a load came before the
 # first command, what the table averages, and what the second task's answer has to
 # name. The offline pass proves the pipeline: the three arm binaries, a recorded
-# conversation served on loopback, one sweep of each task through all three arms,
+# conversation served on loopback, one sweep through all three arms,
 # and the report the numbers come out of. What it does NOT prove is any model's
 # behaviour — the replies are scripts, not captures, and the token counts on those
 # lines are the mock's.
@@ -37,11 +37,11 @@ test_the_three_arms_differ_only_in_the_text_they_were_built_from() {
         fi
         [ -x "$BENCH/bin-$arm" ] || { note "bin-$arm is not built"; return; }
     done
-    "$BENCH/bin-with" doctor | grep -q '^  builtin  sandbox-refusal ' \
+    "$BENCH/bin-with" doctor | grep -q '^  builtin  search-and-read-files ' \
         || note "the with arm does not ship the built-in"
     ! "$BENCH/bin-without" doctor | grep -q '^  builtin ' \
         || note "the without arm still ships a built-in, so it is not an ablation"
-    "$BENCH/bin-no-trigger" doctor | grep -q '^  builtin  sandbox-refusal ' \
+    "$BENCH/bin-no-trigger" doctor | grep -q '^  builtin  search-and-read-files ' \
         || note "the no-trigger arm does not ship the built-in it ablates the sentence of"
     python3 "$BENCH/doctrines.py" carries "$BENCH/bin-with" \
         || note "the with arm does not carry the trigger sentence"
@@ -78,24 +78,13 @@ test_the_offline_sweep_writes_one_line_per_arm_per_repetition() {
         || note "the lines are not three arms of two repetitions: $(jq -s -c 'map([.arm,.repetition])' "$tmp/offline.jsonl")"
 }
 
-test_the_reading_task_is_a_sweep_of_its_own_file() {
-    REPS=2 BENCH_TASK=inspect BENCH_OFFLINE=1 BENCH_MODEL=mock TAG=selftest \
-        "$BENCH/sweep.sh" "$tmp/inspect.jsonl" with without no-trigger \
-        > /dev/null 2> "$tmp/inspect-sweep.txt" \
-        || { note "the reading sweep failed: $(tail -3 "$tmp/inspect-sweep.txt")"; return; }
-    [ "$(wc -l < "$tmp/inspect.jsonl")" -eq 6 ] \
-        || note "three arms x two repetitions wrote $(wc -l < "$tmp/inspect.jsonl") lines, not 6"
-    [ "$(jq -s -c 'map(.task) | unique' "$tmp/inspect.jsonl")" = '["inspect"]' ] \
-        || note "the reading sweep is not one task: $(jq -s -c 'map(.task)' "$tmp/inspect.jsonl")"
-}
-
 test_a_run_that_answered_carries_its_tokens_and_is_not_retried() {
     jq -s -e 'all(.[]; .in_tokens != null and .in_tokens > 0)' "$tmp/offline.jsonl" > /dev/null 2>&1 \
         || note "a line carries no summed input tokens: $(jq -s -c 'map(.in_tokens)' "$tmp/offline.jsonl")"
     [ "$(jq -s -c 'map(.attempt) | unique' "$tmp/offline.jsonl")" = '[1]' ] \
         || note "a run that answered was retried: $(jq -s -c 'map(.attempt)' "$tmp/offline.jsonl")"
-    [ "$(jq -s -c 'map(.attempt) | unique' "$tmp/inspect.jsonl")" = '[1]' ] \
-        || note "a reading run that answered was retried: $(jq -s -c 'map(.attempt)' "$tmp/inspect.jsonl")"
+    [ "$(jq -s -c 'map(.attempt) | unique' "$tmp/offline.jsonl")" = '[1]' ] \
+        || note "a reading run that answered was retried: $(jq -s -c 'map(.attempt)' "$tmp/offline.jsonl")"
 }
 
 # A run that never reached the model is not a measurement, so it is tried once
@@ -112,7 +101,7 @@ test_a_run_that_never_reached_the_model_is_tried_once_more() {
 # attempt 1 answers nothing; attempt 2 answers with a bill
 tokens=null
 [ "$ATTEMPT" = 2 ] && tokens=500
-printf '{"task":"refused-write","arm":"%s","tag":"%s","repetition":%s,"attempt":%s,"in_tokens":%s,"checks":{"ok":false}}\n' \
+printf '{"task":"inspect","arm":"%s","tag":"%s","repetition":%s,"attempt":%s,"in_tokens":%s,"checks":{"ok":false}}\n' \
     "$1" "$TAG" "$REPETITION" "$ATTEMPT" "$tokens"
 STUB
     chmod +x "$tmp/stub/run_one.sh"
@@ -137,9 +126,9 @@ test_the_same_repetition_twice_in_one_file_is_refused() {
 test_the_reading_tasks_arms_are_told_apart_by_its_own_skill() {
     # The activation field names the task's skill and no other: the catalog ships
     # three bodies, and a load of one of the others is a load of something else.
-    [ "$(jq -s -c 'map(select(.arm == "with") | .activated) | unique' "$tmp/inspect.jsonl")" = '[true]' ] \
-        || note "the reading task's with arm did not load its own skill: $(jq -s -c 'map([.arm,.activated])' "$tmp/inspect.jsonl")"
-    [ "$(jq -s -c 'map(select(.arm == "without") | .activated) | unique' "$tmp/inspect.jsonl")" = '[false]' ] \
+    [ "$(jq -s -c 'map(select(.arm == "with") | .activated) | unique' "$tmp/offline.jsonl")" = '[true]' ] \
+        || note "the reading task's with arm did not load its own skill: $(jq -s -c 'map([.arm,.activated])' "$tmp/offline.jsonl")"
+    [ "$(jq -s -c 'map(select(.arm == "without") | .activated) | unique' "$tmp/offline.jsonl")" = '[false]' ] \
         || note "the reading task's without arm activated a skill it does not have"
 }
 
@@ -176,15 +165,15 @@ test_the_reading_task_is_scored_on_the_tokens_the_same_answer_took() {
     # Both arms answer the question — that is the premise of a reading task — and
     # the recorded conversations differ only in what reaching it cost, so the table
     # has to put one arm's mean below the other's and say the body earns its line.
-    ( cd "$BENCH" && python3 bench.py report "$tmp/inspect.jsonl" ) > "$tmp/inspect.md" 2>&1
-    grep -q '^| with | 2 | 2 |' "$tmp/inspect.md" \
-        || note "the reading report has no with row: $(cat "$tmp/inspect.md")"
-    grep -q 'scored on price' "$tmp/inspect.md" \
-        || note "the reading report did not say what it scored: $(cat "$tmp/inspect.md")"
-    grep -q '`search-and-read` earns its catalog line' "$tmp/inspect.md" \
-        || note "the reading report did not name the body's place: $(cat "$tmp/inspect.md")"
-    [ "$(jq -s -c 'map(.checks.ok) | unique' "$tmp/inspect.jsonl")" = '[true]' ] \
-        || note "a recorded conversation failed the task's own answer check: $(jq -s -c 'map([.arm,.checks])' "$tmp/inspect.jsonl")"
+    ( cd "$BENCH" && python3 bench.py report "$tmp/offline.jsonl" ) > "$tmp/table.md" 2>&1
+    grep -q '^| with | 2 | 2 |' "$tmp/table.md" \
+        || note "the reading report has no with row: $(cat "$tmp/table.md")"
+    grep -q 'scored on price' "$tmp/table.md" \
+        || note "the reading report did not say what it scored: $(cat "$tmp/table.md")"
+    grep -q '`search-and-read-files` earns its catalog line' "$tmp/table.md" \
+        || note "the reading report did not name the body's place: $(cat "$tmp/table.md")"
+    [ "$(jq -s -c 'map(.checks.ok) | unique' "$tmp/offline.jsonl")" = '[true]' ] \
+        || note "a recorded conversation failed the task's own answer check: $(jq -s -c 'map([.arm,.checks])' "$tmp/offline.jsonl")"
 }
 
 test_the_report_is_a_table_of_all_three_arms() {
@@ -216,7 +205,7 @@ test_the_report_applies_the_shipping_rule_to_the_sweep() {
     for check in reached outcome price; do
         grep -q "^| $check |" "$tmp/table.md" || note "the rule has no $check row: $(cat "$tmp/table.md")"
     done
-    grep -q '`sandbox-refusal`' "$tmp/table.md" || note "the rule named no skill: $(cat "$tmp/table.md")"
+    grep -q '`search-and-read-files`' "$tmp/table.md" || note "the rule named no skill: $(cat "$tmp/table.md")"
 }
 
 test_an_empty_file_has_measured_nothing() {

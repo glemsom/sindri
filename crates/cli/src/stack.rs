@@ -240,7 +240,7 @@ mod tests {
         let bash = &specs[0];
         assert_eq!(bash.name, "bash");
         assert!(
-            bash.description.contains("killed after 5 s"),
+            bash.description.contains("still running after 5 s"),
             "the description names the boundary the executor enforces: {}",
             bash.description
         );

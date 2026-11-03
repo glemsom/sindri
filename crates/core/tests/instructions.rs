@@ -180,7 +180,14 @@ fn the_lead_in_above_the_rules_costs_one_short_line() {
     let block = taken.block().expect("the rules are handed over");
     let (lead_in, text) = block.split_once("\n\n").expect("a lead-in, then the rules");
 
-    assert_eq!(text, rules, "the file's words follow it whole");
+    assert_eq!(
+        text,
+        format!(
+            "<project_instructions>\n{}\n</project_instructions>",
+            rules.trim_end()
+        ),
+        "the file's words follow the tags whole"
+    );
     let path = root
         .path()
         .join("AGENTS.md")
@@ -191,8 +198,8 @@ fn the_lead_in_above_the_rules_costs_one_short_line() {
         "the block opens by naming the file's path: {lead_in:?}"
     );
     assert!(
-        lead_in.contains("more specific"),
-        "and still says the rules take precedence: {lead_in:?}"
+        lead_in.starts_with("## Repository instructions"),
+        "and heads the block with what it is: {lead_in:?}"
     );
     let words = lead_in.split_whitespace().count();
     assert!(

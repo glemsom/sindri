@@ -37,15 +37,16 @@ impl Limits {
         }
     }
 
-    /// The sentences the description carries. One derivation of both figures,
-    /// so a config that changes either changes what the model reads.
+    /// The sentence the description carries. One derivation of both figures, so
+    /// a config that changes either changes what the model reads: the timeout one
+    /// call gets, and the wall clock the whole run may spend on commands.
     pub fn describe(self) -> String {
         format!(
-            "A command is killed after {}; the run gets {} of command time and {} of output in \
-             all, and `timed_out` means one of those limits: report, do not retry.",
+            "Every call is time-bounded: a command still running after {} is killed and reports \
+             `timed_out`, and the run gets {} of command time in all — split a long job into calls \
+             rather than retrying one that was killed.",
             span(self.command_timeout),
             span(self.budget.wall),
-            bytes(self.budget.bytes),
         )
     }
 }
@@ -61,19 +62,5 @@ fn span(duration: Duration) -> String {
         }
     } else {
         format!("{secs} s")
-    }
-}
-
-/// A byte count in the largest unit that divides it exactly, because 8388608
-/// tells a model nothing that 8 MiB does not.
-fn bytes(count: u64) -> String {
-    match count {
-        count if count >= 1 << 20 && count.is_multiple_of(1 << 20) => {
-            format!("{} MiB", count >> 20)
-        }
-        count if count >= 1 << 10 && count.is_multiple_of(1 << 10) => {
-            format!("{} KiB", count >> 10)
-        }
-        count => format!("{count} bytes"),
     }
 }

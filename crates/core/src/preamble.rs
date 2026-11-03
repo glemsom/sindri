@@ -1,38 +1,54 @@
 //! The preamble every turn carries: Sindri's stance in its own voice, the
-//! Environment section whose one fact is the workspace the run stands in, and a
-//! repository's instructions when it has any.
+//! Environment section whose one derived fact is the workspace the run stands
+//! in, and a repository's instructions when it has any.
 //!
 //! Three layers carry what the model is told, and each holds only its own kind
-//! of fact. The **stance** is here: who is answering, in what voice, and the two
-//! habits no tool can demonstrate — reading the fewest bytes that answer, and
-//! turning many inputs into one script. The **procedure** is a skill's body: the
-//! steps of one task, loaded once and only where a skill is offered. The
-//! **boundary** is the `bash` description, derived from the sandbox policy in
-//! force: the writable set, the session temp, `HOME`, the network. A fact in the
-//! wrong layer is paid for twice on every turn of every run and is a second
-//! place for it to disagree with the one that is enforced, so the split is
-//! stated here beside the code that depends on it rather than in a record of its
-//! own.
+//! of fact. The **stance** is here: who is answering and the principles it works
+//! by. The **environment** is here too, because the habits that keep a run cheap
+//! — staged commands, one call for one question, `$TMPDIR` for whatever it makes
+//! — are the run's own, and the one path they resolve against is derived per
+//! run rather than typed. The **procedure** is a skill's body: the steps of one
+//! task, loaded once and only where a skill is offered. The **boundary** is the
+//! `bash` description, derived from the sandbox policy in force: the paths that
+//! may be written, the timeout, the session temp. A fact in the wrong layer is
+//! paid for twice on every turn of every run and is a second place for it to
+//! disagree with the one that is enforced, so the split is stated here beside
+//! the code that depends on it rather than in a record of its own.
 //!
-//! The batching habit is the one line that reads like the `bash` description's
-//! sentence about a script, and it is here for the half that description does
-//! not say: that description is about the steps of one task, this is about many
-//! inputs. The step-by-step procedure stays there, beside the tool that runs it;
-//! only the delta is stated here, once.
+//! Both shipped texts are literals a benchmark can read back out of this file
+//! (`scripts/bench-system-prompt`), so they are spelled as one escaped literal
+//! each and never composed from pieces.
 
 use std::path::Path;
 
-/// Sindri's stance, measured: told to search and open ranges, a model spent
-/// 0.42x the input tokens of the same model told nothing, on the same four tasks
-/// with the same answers right — reproducible with `scripts/bench-system-prompt`,
-/// whose baseline reads this literal out of this file and whose arms vary it and
-/// nothing else: the Environment section is the run's, not the bench's.
-const STANCE: &str = "You are Sindri, answering a developer at a Unix terminal. Reply with the \
-    answer itself: no lead-in, no closing offer of further help. Run commands rather than \
-    guessing. Read the fewest bytes that answer: search first (`rg -n`), then open only the lines \
-    you need (`sed -n 'A,Bp'`); never `cat` a whole file, and never run a search or a listing \
-    twice. Many inputs are one script: ten files are one loop in one call. A fence marked \
-    `mermaid` is drawn as a picture: draw what prose cannot.";
+/// Sindri's stance: who answers, and the principles that shape an answer. Every
+/// word is re-sent on every turn of every run, so a line here has to change what
+/// a run does; the procedure for a task is a skill body's, loaded once.
+const STANCE: &str = "## Persona\n\
+    You are Sindri, a dwarven smith made digital — an AI assistant that can forge anything: code, \
+    prose, analysis, plans. You work in a GNU/Linux workspace through `bash`.\n\n\
+    ## Principles\n\
+    - **Smith it:** one clean strike beats a flurry — but heat every bar in the forge at once; \
+    full substance, no filler. Be concise.\n\
+    - **Simplest correct solution:** focused edits over full rewrites; match the surrounding code \
+    style.\n\
+    - **Batch the independent, chain the dependent.** Overlap independent work — several `bash` \
+    calls in one turn (they run concurrently) or `cmd & … & wait` in one call; use `&&`/pipes only \
+    when a stage needs the prior output. Fewer turns = fewer tokens and less waiting.\n\
+    - Prefer command-line tools; write a script when state or control flow requires it.";
+
+/// The Environment section: the habits of this machine, and the one path they
+/// resolve against. `{workspace}` is the only placeholder in either shipped
+/// text, and it is filled from the run rather than typed — a path written here
+/// would be a path that can be wrong the moment a run starts elsewhere.
+const ENVIRONMENT: &str = "## Environment\n\
+    - **GNU/Linux, `bash` first**: use available tools (`coreutils`, `rg`, `git`, `python3`, \
+    `curl`, `jq`, etc.).\n\
+    - For multi-stage commands, prefix each stage with `echo 'STEP: <what>'`; use `set -o \
+    pipefail` to expose failures, and `||` for intentional fallbacks.\n\
+    - Downloads, generated files, temp scripts, rendered HTML etc goes to `$TMPDIR`; `/tmp` is \
+    read-only, never hard-code it.\n\
+    - Current working directory: {workspace}";
 
 /// The preamble as one value: what [`of`] composes and the only thing a client
 /// is handed, so no front end assembles a system message of its own.
@@ -49,22 +65,20 @@ impl Preamble {
 /// repository's own instructions after them when the run stands in one that has
 /// any.
 ///
-/// The Environment section holds one fact — the workspace the run was started in,
-/// derived from the session, because every relative path in a call resolves
-/// there and a typed path is a path that can be wrong. Nothing else is said
-/// about the surroundings: what may be written, where the session temp is and what
-/// `HOME` holds are the `bash` description's facts, read off the policy in
-/// force; a copy here would be a boundary stated twice and enforced once.
+/// The Environment section holds the habits of the machine and one fact — the
+/// workspace the run was started in, derived from the session, because every
+/// relative path in a call resolves there and a typed path is a path that can be
+/// wrong. What may be written, the timeout and the session temp are the `bash`
+/// description's facts, read off the policy in force; a copy here would be a
+/// boundary stated twice and enforced once.
 ///
 /// The instructions are one message with the preamble rather than a turn of
 /// their own, so the transcript a user reads is their own words. What follows
 /// the preamble is a file, and its size is [`crate::instructions::CAP`]'s
 /// business, never the stance's.
 pub fn of(workspace: &Path, instructions: Option<&str>) -> Preamble {
-    let mut preamble = format!(
-        "{STANCE}\n\nEnvironment\n  workspace: {} — relative paths read from here\n",
-        workspace.display()
-    );
+    let environment = ENVIRONMENT.replace("{workspace}", &workspace.display().to_string());
+    let mut preamble = format!("{STANCE}\n\n{environment}\n");
     if let Some(text) = instructions {
         // The section's own line ends in a newline, so this one is the blank
         // line between it and a file someone else wrote.
@@ -78,105 +92,84 @@ pub fn of(workspace: &Path, instructions: Option<&str>) -> Preamble {
 mod tests {
     use std::path::Path;
 
-    use super::{STANCE, of};
+    use super::{ENVIRONMENT, STANCE, of};
     use crate::agent::Silent;
 
     /// A workspace path as a run holds one: absolute, and nothing this file
     /// could have known before the run started.
     const WORKSPACE: &str = "/home/dev/checkout/sindri";
 
-    /// The two sentences the stance keeps whatever else it sheds: the reading
-    /// rule, measured at 0.42x the tokens of the same model told nothing, and the
-    /// renderer fact no model can know — quoted from the shipped text.
-    const READING_RULE: &str = "Read the fewest bytes that answer: search first (`rg -n`), then open \
-        only the lines you need (`sed -n 'A,Bp'`); never `cat` a whole file, and never run a search \
-        or a listing twice.";
-    const MERMAID: &str = "A fence marked `mermaid` is drawn as a picture: draw what prose cannot.";
-
     #[test]
-    fn the_environment_section_names_the_workspace_the_run_stands_in() {
+    fn the_stance_opens_the_preamble_and_the_environment_follows_it() {
         let preamble = of(Path::new(WORKSPACE), None);
         let preamble = preamble.as_str();
         assert!(
             preamble.starts_with(STANCE),
             "the stance opens the preamble: {preamble}"
         );
-        let section = preamble
-            .split_once("\n\nEnvironment\n")
-            .map(|(_, section)| section)
-            .unwrap_or_else(|| panic!("an Environment section follows the stance: {preamble}"));
         assert!(
-            section.starts_with(&format!("  workspace: {WORKSPACE} ")),
-            "and its one fact is the workspace line, holding the run's own path: {section}"
-        );
-        assert_eq!(
-            section.lines().count(),
-            1,
-            "one line, and nothing else in the section: {section}"
+            preamble.contains(&format!(
+                "\n\n{}\n",
+                ENVIRONMENT.replace("{workspace}", WORKSPACE)
+            )),
+            "the Environment section follows it whole, filled from the run: {preamble}"
         );
     }
 
     #[test]
-    fn the_shipped_stance_holds_no_placeholder() {
-        // A path typed into the shipped text is a path that can be wrong; the
+    fn the_environment_names_the_working_directory_the_run_stands_in() {
+        let preamble = of(Path::new(WORKSPACE), None);
+        let preamble = preamble.as_str();
+        assert!(
+            preamble.contains(&format!("Current working directory: {WORKSPACE}")),
+            "the one fact the run derives is the directory every relative path resolves \
+             against: {preamble}"
+        );
+    }
+
+    #[test]
+    fn the_shipped_texts_hold_one_placeholder_and_it_is_the_runs_to_fill() {
+        // A path typed into either shipped text is a path that can be wrong; the
         // only workspace the preamble carries is the one a run derives.
         for placeholder in ['{', '}', '<', '$'] {
             assert!(
                 !STANCE.contains(placeholder),
-                "the shipped text is a prompt, not a template: {placeholder:?} in {STANCE}"
+                "the stance is a prompt, not a template: {placeholder:?} in {STANCE}"
             );
         }
-    }
-
-    #[test]
-    fn the_stance_keeps_the_reading_rule_and_the_mermaid_fact() {
-        // Every word here is re-sent on every turn of every run: the stance is
-        // the two sentences measured to be worth their price, and no more.
-        for kept in [READING_RULE, MERMAID] {
-            assert!(
-                STANCE.contains(kept),
-                "the stance still carries `{kept}`: {STANCE}"
-            );
-        }
-        // The ceiling rose from 80 when the many-inputs sentence landed: the
-        // batching delta is the one thing the `bash` description cannot say, and
-        // it costs its words like every other one here.
-        let words = STANCE.split_whitespace().count();
-        assert!(
-            words <= 90,
-            "the stance stays at or under 90 words, not {words}: {STANCE}"
+        assert_eq!(
+            ENVIRONMENT.matches("{workspace}").count(),
+            1,
+            "the Environment section has one placeholder, filled once: {ENVIRONMENT}"
         );
     }
 
     #[test]
-    fn the_stance_points_at_a_skill_at_most_once() {
-        // The trigger is the doctrine's own sentence, beside the tool it asks
-        // for, and the bench moves that one to measure it. A clause here that
-        // asked for a load as well would be the same nudge paid for on every
-        // turn of every run, in a second place to disagree with the first.
-        let names: Vec<String> = crate::skills::builtins()
-            .skills
-            .into_iter()
-            .map(|skill| skill.name)
-            .collect();
-        let triggers: Vec<&str> = STANCE
-            .split(". ")
-            .filter(|sentence| {
-                sentence.contains("`skill`")
-                    || names.iter().any(|name| sentence.contains(name.as_str()))
-            })
-            .collect();
-
+    fn the_environment_holds_the_habits_and_the_stance_holds_the_principles() {
+        // Two headings, two kinds of fact: who answers, and how this machine is
+        // worked. A habit that drifted into the stance would be a second voice
+        // for the same instruction.
         assert!(
-            triggers.len() <= 1,
-            "the stance carries at most one clause pointing at a procedure, not {}: {triggers:?}",
-            triggers.len()
+            STANCE.starts_with("## Persona\n"),
+            "the stance opens with who is answering: {STANCE}"
+        );
+        assert!(
+            STANCE.contains("\n## Principles\n"),
+            "and states its principles under their own heading: {STANCE}"
+        );
+        assert!(
+            !STANCE.contains("$TMPDIR") && !STANCE.contains("STEP:"),
+            "the machine's habits are the Environment section's: {STANCE}"
+        );
+        assert!(
+            ENVIRONMENT.starts_with("## Environment\n"),
+            "the section is named where the model reads it: {ENVIRONMENT}"
         );
     }
 
     #[test]
     fn the_instructions_follow_the_preamble_whole_and_change_no_word_of_it() {
-        let rules = "Be brief, and prove what you claim.\n";
+        let rules = "<project_instructions>\nBe brief, and prove what you claim.\n</project_instructions>\n";
 
         let alone = of(Path::new(WORKSPACE), None);
         let together = of(Path::new(WORKSPACE), Some(rules));
@@ -191,81 +184,63 @@ mod tests {
     }
 
     #[test]
-    fn the_sandbox_states_the_boundary_and_the_preamble_leaves_it_alone() {
-        // The policy's description carries the boundary; the preamble repeats
-        // no part of it, because a boundary told twice is enforced once.
+    fn the_preamble_states_no_boundary_the_tool_description_owns() {
+        // The writable set, the timeout and the session temp are derived from
+        // the policy into the `bash` description. The Environment section names
+        // the habits and the directory; it names no path a run may write, because
+        // a boundary told twice is enforced once.
         let workspace = tempfile::TempDir::new().expect("workspace");
         let policy = crate::sandbox::SandboxPolicy::fixture(workspace.path());
-        let description = policy.describe();
         let preamble = of(workspace.path(), None);
         let preamble = preamble.as_str();
+        let temp = policy.session_temp().display().to_string();
 
-        for fact in ["$TMPDIR", "HOME", "read-only", "network", "writable"] {
+        assert!(
+            !preamble.contains(&temp),
+            "the session temp path is the description's alone: {preamble}"
+        );
+        // The workspace is the one path both texts hold, and each says something
+        // else about it: the preamble names where the run stands, the description
+        // names what may be written. Every other entry is the description's.
+        let workspace_path = workspace.path().display().to_string();
+        for path in policy.writable().paths() {
+            let shown = path.display().to_string();
+            if shown == workspace_path {
+                continue;
+            }
             assert!(
-                description.contains(fact),
-                "the tool description is where `{fact}` is said: {description}"
-            );
-            assert!(
-                !preamble.contains(fact),
-                "the preamble states no `{fact}` a second time: {preamble}"
+                !preamble.contains(&shown),
+                "the writable set is the description's alone, not `{shown}`: {preamble}"
             );
         }
-        let temp = policy.session_temp().display().to_string();
-        assert!(
-            description.contains(&temp) && !preamble.contains(&temp),
-            "the session temp is the description's alone: {description} vs {preamble}"
-        );
-
-        // The one string both texts hold is the workspace path, because the
-        // writable set's first entry is the workspace the run stands in. It is not a
-        // fact said twice: the preamble names where the run stands, the policy
-        // names what may be written, and each would say something else about a
-        // different path. Every other line of the description is the policy's
-        // alone.
-        let workspace_path = workspace.path().display().to_string();
-        let shared: Vec<&str> = description
-            .lines()
-            .map(str::trim)
-            .filter(|line| !line.is_empty() && preamble.contains(line))
-            .collect();
-        assert_eq!(
-            shared,
-            vec![workspace_path.as_str()],
-            "the writable set's entry is the whole of what the two texts share: {description}"
-        );
     }
 
     #[test]
-    fn the_batching_habit_is_the_delta_the_bash_description_does_not_say() {
-        // The delta is read against the description the tool actually carries,
-        // so a sentence the description gains or loses is felt here rather than
-        // quoted from a copy that would drift.
+    fn a_pointer_to_the_catalog_is_the_tool_descriptions_and_never_the_preambles() {
+        // The nudge to load a skill rides on `bash`, beside the tool the model
+        // is already reading, and only where a catalog exists. A second copy in
+        // the preamble would be the same nudge paid for on every turn of every
+        // run, in a place that cannot know whether there is one.
         let workspace = tempfile::TempDir::new().expect("workspace");
         let policy = crate::sandbox::SandboxPolicy::fixture(workspace.path());
-        let tool = crate::agent::BashTool::new(
+        let bash = crate::agent::BashTool::new(
             &policy,
             crate::agent::Limits::default(),
             std::sync::Arc::new(Silent),
         );
-        let description = tool.spec().description.clone();
+        let shipped = crate::skills::fold([crate::skills::builtins()]);
+        let tool = crate::agent::Tools::new(bash, crate::agent::SkillTool::new(&shipped), None);
         let preamble = of(workspace.path(), None);
         let preamble = preamble.as_str();
-        const MANY: &str = "Many inputs are one script";
 
         assert!(
-            description.contains("put the steps of one task in one script"),
-            "the procedure is the description's: {description}"
+            tool.specs()[0].description.contains("`skill`"),
+            "the description is where the catalog is pointed at: {}",
+            tool.specs()[0].description
         );
         assert!(
-            preamble.contains(MANY),
-            "the many-inputs habit is the preamble's one sentence to add: {preamble}"
+            !preamble.contains("`skill`"),
+            "and the preamble points at nothing: {preamble}"
         );
-        for sentence in description.split(". ") {
-            let sentence = sentence.trim().trim_end_matches('.');
-            assert!(
-                !preamble.contains(sentence),
-                "the preamble repeats no sentence of the description (`{sentence}`): {preamble}"
-            );
-        }
     }
 }

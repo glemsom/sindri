@@ -1,23 +1,23 @@
-"""The two tasks this bench runs, and the capability each is shaped like.
+"""The one task this bench runs, and the capability its skill is supposed to buy.
 
-The first is the capability the `sandbox-refusal` body is supposed to buy —
-**recover from a refused write** — and its score is in `bench.py`: the suite passes
-in the tree the run left behind, and the record shows the run running it last.
-Nothing in this file scores it; the prompt is the question and `bench.py` is the
-rule.
+The task is the capability the `search-and-read-files` body is supposed to buy —
+**find one fact in a tree for the fewest bytes** — and its score is the price of
+the read: two runs that reach the same answer are compared by the input tokens
+they spent reaching it, because that is the only place a reading skill can win. A
+reading skill that answered more cheaply *and wrongly* has bought nothing, so the
+answer is checked as well and the check is here rather than in `bench.py`: the
+file that asks the question is the file that says what counts as an answer to it.
 
-The second is the capability the `search-and-read` body is supposed to buy — **find
-one fact in a tree for the fewest bytes** — and its score is the price of the read:
-two runs that reach the same answer are compared by the input tokens they spent
-reaching it, because that is the only place a reading skill can win. A reading
-skill that answered more cheaply *and wrongly* has bought nothing, so the answer is
-checked as well and the check is here rather than in `bench.py`: the file that asks
-the question is the file that says what counts as an answer to it.
+The capability axis is still a shape the bench knows (`outcome`): a body that buys
+work holding afterwards is scored by re-running the suite in the tree a run left.
+No shipped skill claims that purchase today — the refused-write task went with the
+skill that was measured for it — so the bench holds one task, and a second one is
+one entry in `TASKS` below.
 
-The inspect fixture is the same kind of repository the first one is — small, real,
-runnable — with one fact in it that is cheap to find and expensive to read: a retry
-delay capped at a constant. A run that searches for the cap pays for a line; a run
-that `cat`s the sources pays for all of them.
+The fixture is a small, real, runnable repository with one fact in it that is
+cheap to find and expensive to read: a retry delay capped at a constant. A run that
+searches for the cap pays for a line; a run that `cat`s the sources pays for all of
+them.
 """
 
 import pathlib
@@ -42,18 +42,8 @@ DECIDES = "return _ceiling"
 # (`bench.py tasks`, and `tasks.py prompt|fixture TASK`) rather than spelling either
 # again, so a third task is one entry here and no shell to edit.
 TASKS = {
-    "refused-write": {
-        "skill": "sandbox-refusal",
-        "axis": "outcome",
-        "fixture": "fixture/refused-write",
-        "prompt": (
-            "`sh tests/run.sh` fails in this repository. Fix the source so the suite "
-            "passes, and prove the fix: run the suite once it is green, and let the "
-            "answer say what the suite printed and where the greeting log ends up."
-        ),
-    },
     "inspect": {
-        "skill": "search-and-read",
+        "skill": "search-and-read-files",
         "axis": "price",
         "fixture": "fixture/inspect",
         "prompt": (

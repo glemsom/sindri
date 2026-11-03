@@ -166,17 +166,21 @@ fn the_description_says_nothing_a_result_or_another_tool_already_says() {
     let built = tool(&catalog);
     let skill = built.spec();
 
+    // `bash` is in every run, and it states the boundary: the paths, the
+    // timeout, the wall clock. Nothing of that belongs here, where it would be
+    // re-sent on every turn of every run that holds a skill to say the same thing
+    // twice.
     assert!(
-        bash.spec()
-            .description
-            .contains("sent again with every later turn"),
-        "the cost of a result is stated by the tool every run has"
+        bash.spec().description.contains("Writable paths:"),
+        "the boundary is the tool every run has, and it states it"
     );
     let description = &skill.description;
-    assert!(
-        !description.contains("sent again with every later turn"),
-        "so `skill` spends no word on it: {description}"
-    );
+    for duplicated in ["Writable paths:", "time-bounded"] {
+        assert!(
+            !description.contains(duplicated),
+            "so `skill` spends no word on `{duplicated}`: {description}"
+        );
+    }
     // The words that mean the shape of a load result has crept back in: a model
     // learns that shape by calling, once, and every word of it is re-sent on
     // every turn of every run that holds a skill. Asked of the doctrine, which

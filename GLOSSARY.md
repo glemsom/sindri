@@ -31,11 +31,21 @@ answer and exactly one newline, or nothing when the run failed or was cancelled.
 time or its output; `cancelled`, SIGINT with nothing on stdout; `error`, it could not
 deliver. A record writes `running` until one of them lands.
 
-**preamble** — the system message a run sends on every turn: Sindri's stance in its own voice,
-the Environment section whose one fact is the **workspace** the run stands in, and a
-repository's **instructions** when it has any (`crates/core/src/preamble.rs`). The module's
-own paragraph holds the split between its stance, a **skill**'s procedure and the
-**sandbox**'s boundary.
+**preamble** — the system message a run sends on every turn: the **stance** in its own
+voice, the **environment** section — this machine's habits, and the one path they resolve
+against — and a repository's **instructions** when it has any
+(`crates/core/src/preamble.rs`). The module's own paragraph holds the split between those,
+a **skill**'s procedure and the **sandbox**'s boundary.
+
+**stance** — the two sections that open the preamble: `## Persona`, who is answering, and
+`## Principles`, the handful of habits that shape an answer. Every word is re-sent on every
+turn, so a line here has to change what a run does; a procedure for a task is a **skill**
+body's, loaded once (`crates/core/src/preamble.rs`).
+
+**environment** — the preamble's second section: GNU/Linux and `bash` first, staged commands
+with `pipefail`, `$TMPDIR` for whatever a run makes, and the working directory the run
+stands in — the one path in it, derived per run rather than typed
+(`crates/core/src/preamble.rs`).
 
 ## The tools
 
@@ -49,8 +59,9 @@ match over it is exhaustive (`crates/core/src/provider/asked.rs`). A tool added 
 variant the loop, the record and the frame must each answer.
 
 **bash** — the one tool that runs things: search, fetch, patch and HTTP, all behind the
-sandbox. Its description is derived from the sandbox policy in force, so the boundary the
-model is told about is the boundary enforced.
+sandbox. Its description is derived from the sandbox policy and the limits in force — the
+writable paths, the timeout one call gets, the wall clock the run may spend — so the
+boundary the model is told about is the boundary enforced.
 
 **skill** — the second tool: instructions written for the model, loaded into the
 conversation once, frontmatter stripped and the skill's own files listed beside the body
@@ -110,10 +121,13 @@ is a skill that stops being found.
 **content ceiling** — how much a built-in skill's body and the files beside it may spend:
 `FILE_CEILING` for one file and `CONTENT_CEILING` for the whole, both `builtin.rs`'s, because
 one `skill` call inlines all of them at once and the files therefore multiply the cost of a
-load rather than adding to it (`crates/core/src/skills/builtin.rs`).
+load rather than adding to it (`crates/core/src/skills/builtin.rs`). Neither shipped skill
+carries a file today, so a load costs its body and no more; the ceiling bounds the seam, not
+a convention.
 
 **instructions** — a repository's own rules: the `AGENTS.md` at the repository root, read
-once at boot and appended to the preamble, after its Environment section. Never a nested
+once at boot and appended to the preamble after its environment section, under a heading
+naming the file and between the `<project_instructions>` tags. Never a nested
 file, never an ancestor's; capped at 8 KiB, a longer file arriving cut with a marker saying
 so; `Taken` is what the read produced — `Absent`, `Found` or `Unreadable` — and an
 unreadable file is a diagnostic that never stops the run

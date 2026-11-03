@@ -18,9 +18,16 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import bench  # noqa: E402
 import tasks  # noqa: E402
 
-# The skill the capability task ablates: the name every load in these tests has to
+# The skill the reading task ablates: the name every load in these tests has to
 # carry to be this task's activation, and the one the table's sentence says.
-SKILL = tasks.TASKS["refused-write"]["skill"]
+SKILL = tasks.TASKS["inspect"]["skill"]
+
+# The other axis is still the rule's code, so the task shape that scores it is
+# registered here and not shipped: no skill in the table claims that purchase
+# today, and a test of the axis is not a reason to invent one.
+CAPABILITY = "capability"
+tasks.TASKS[CAPABILITY] = dict(tasks.TASKS["inspect"], axis="outcome",
+                               skill="capability-fixture")
 
 # One tree per process, because a line's score is read out of the tree the run left
 # behind: `tests/run.sh` exits 0, so every line built here is a tree the change
@@ -61,7 +68,7 @@ class TheRecordLineCarriesTheFourFieldsTheAblationTurnsOn(unittest.TestCase):
             entries = [call(1, "sed -n '1,20p' src/greet.sh")]
             entries += skill_call(1, SKILL)
             entries += [call(2, "sh tests/run.sh"), result(2, 0)]
-        fields = dict(task="refused-write", arm="with", tag="a",
+        fields = dict(task="inspect", arm="with", tag="a",
                       repetition=1, attempt=1, model="m", run=run,
                       entries=entries, repo=_PASSING, answer="", elapsed_s=9)
         fields.update(overrides)
@@ -74,7 +81,7 @@ class TheRecordLineCarriesTheFourFieldsTheAblationTurnsOn(unittest.TestCase):
         # Absent is not zero: a run that never reached the model is not a
         # measurement, and a null is how the median drops it.
         run = {"turns": 0, "tool_calls": 0, "stopped": "error", "rc": 1}
-        line = bench.record(task="refused-write", arm="with", tag="a",
+        line = bench.record(task="inspect", arm="with", tag="a",
                             repetition=1,
                             attempt=1, model="m", run=run, entries=[],
                             repo=_PASSING, answer="", elapsed_s=1)
@@ -126,7 +133,7 @@ class TheRecordLineCarriesTheFourFieldsTheAblationTurnsOn(unittest.TestCase):
         # reached the model wrote no entry to read, so it is left out of the
         # rate instead of being counted as a run the sentence failed to reach.
         run = {"turns": 0, "tool_calls": 0, "stopped": "error", "rc": 1}
-        line = bench.record(task="refused-write", arm="with", tag="a",
+        line = bench.record(task="inspect", arm="with", tag="a",
                             repetition=1,
                             attempt=1, model="m", run=run, entries=[],
                             repo=_PASSING, answer="", elapsed_s=1)
@@ -148,12 +155,12 @@ class TheRecordLineCarriesTheFourFieldsTheAblationTurnsOn(unittest.TestCase):
                 with self.assertRaises(SystemExit) as refused:
                     self.line(**{field: value})
                 self.assertIn("sideways", str(refused.exception))
-                self.assertIn("refused-write, inspect" if field == "task"
+                self.assertIn(", ".join(tasks.TASKS) if field == "task"
                               else "with, without or no-trigger",
                               str(refused.exception))
 
     def test_the_score_is_the_rule_and_the_rule_is_written_down(self):
-        self.assertEqual(self.line()["checks"],
+        self.assertEqual(self.line(task=CAPABILITY)["checks"],
                          {"ok": True, "fixed": True, "proved": True})
 
 
@@ -238,7 +245,7 @@ class TheTableIsTheMeansOfOneArmAgainstTheOther(unittest.TestCase):
                     "checks": {"ok": False}},
                    {"arm": "without", "in_tokens": None, "activated": False,
                     "checks": {"ok": True}}]
-        one_sweep = [dict(line, model="mock", task="refused-write")
+        one_sweep = [dict(line, model="mock", task="inspect")
                      for line in with_right + without]
         return one_sweep
 
@@ -264,7 +271,7 @@ class TheTableIsTheMeansOfOneArmAgainstTheOther(unittest.TestCase):
     def test_two_sweeps_in_one_file_are_refused_rather_than_averaged(self):
         lines = self.file()
         lines.append({"arm": "with", "model": "another-model",
-                      "task": "refused-write", "in_tokens": 1,
+                      "task": "inspect", "in_tokens": 1,
                       "checks": {"ok": True}})
         with self.assertRaises(SystemExit):
             bench.report(lines)
@@ -280,17 +287,17 @@ class TheTableIsTheMeansOfOneArmAgainstTheOther(unittest.TestCase):
         self.assertIn("1/2", table)
 
 
-def sweep(with_=None, without=None):
+def sweep(with_=None, without=None, task="inspect"):
     """Six repetitions of both arms, since the rule states its thresholds over
     six: `with` is a list of (in_tokens, activated, right) and `without` of
     (in_tokens, right). One model and one task, so the file is one sweep."""
     lines = []
     for tokens, activated, right in with_ or [(1000, True, True)] * 6:
-        lines.append({"arm": "with", "model": "m", "task": "refused-write",
+        lines.append({"arm": "with", "model": "m", "task": task,
                       "in_tokens": tokens, "activated": activated,
                       "checks": {"ok": right}})
     for tokens, right in without or [(1000, False)] * 6:
-        lines.append({"arm": "without", "model": "m", "task": "refused-write",
+        lines.append({"arm": "without", "model": "m", "task": task,
                       "in_tokens": tokens, "activated": False,
                       "checks": {"ok": right}})
     return lines
@@ -305,7 +312,7 @@ class TheShippingRuleIsAppliedToTheTable(unittest.TestCase):
             with_=[(1000, True, True)] * 6,
             without=[(1200, False)] * 6,
         ))
-        self.assertIn("`sandbox-refusal` earns its catalog line.", report)
+        self.assertIn(f"`{SKILL}` earns its catalog line:", report)
 
     def test_a_body_never_loaded_is_unused_and_the_description_is_what_to_fix(self):
         # The page's first state: the line is a tax no run is reached by, and
@@ -324,6 +331,7 @@ class TheShippingRuleIsAppliedToTheTable(unittest.TestCase):
         report = bench.report(sweep(
             with_=[(1000, True, True)] * 6,
             without=[(1200, True)] * 6,
+            task=CAPABILITY,
         ))
         self.assertIn("useless", report)
         self.assertIn("drop it", report)
@@ -334,6 +342,7 @@ class TheShippingRuleIsAppliedToTheTable(unittest.TestCase):
         report = bench.report(sweep(
             with_=[(1000, True, True)] * 6,
             without=[(1200, True)] * 5 + [(1200, False)],
+            task=CAPABILITY,
         ))
         self.assertIn("cannot express", report)
         self.assertNotIn("earns its catalog line", report)
@@ -342,6 +351,7 @@ class TheShippingRuleIsAppliedToTheTable(unittest.TestCase):
         report = bench.report(sweep(
             with_=[(1300, True, True)] * 6,
             without=[(1000, False)] * 6,
+            task=CAPABILITY,
         ))
         self.assertIn("1.30x", report)
         self.assertIn("drop it", report)
@@ -375,7 +385,7 @@ class TheThirdArmMovesTheSentenceAndTheTableSaysSo(unittest.TestCase):
                                           ("no-trigger", 1040, quiet_first, True),
                                           ("without", 1200, 0, False)):
             for index in range(6):
-                lines.append({"arm": arm, "model": "m", "task": "refused-write",
+                lines.append({"arm": arm, "model": "m", "task": "inspect",
                               "in_tokens": tokens, "activated": arm != "without",
                               "loaded_before_bash": index < first,
                               "checks": {"ok": right}})
@@ -440,7 +450,7 @@ class TheThirdArmMovesTheSentenceAndTheTableSaysSo(unittest.TestCase):
             rundir = pathlib.Path(root)
             (rundir / "out.json").write_text('{"usage": {"input_tokens": 10}}')
             with contextlib.redirect_stdout(io.StringIO()) as printed:
-                bench.main(["record", str(rundir), "--task", "refused-write",
+                bench.main(["record", str(rundir), "--task", "inspect",
                             "--arm", "no-trigger"])
         self.assertEqual(json.loads(printed.getvalue())["arm"], "no-trigger")
 
@@ -465,7 +475,7 @@ class ATaskScoredOnPriceIsComparedByTheTokensItSpent(unittest.TestCase):
 
     def test_a_reading_skill_that_costs_less_earns_its_catalog_line(self):
         report = bench.report(self.sweep(600, 1400))
-        self.assertIn("`search-and-read` earns its catalog line", report)
+        self.assertIn("`search-and-read-files` earns its catalog line", report)
         self.assertIn("0.43x the mean input tokens without it", report)
 
     def test_a_reading_skill_a_quarter_dearer_has_bought_nothing(self):
@@ -474,7 +484,7 @@ class ATaskScoredOnPriceIsComparedByTheTokensItSpent(unittest.TestCase):
         # 1.20x is a loss the table has to read as one, and the rule's third check
         # is a floor of its own.
         report = bench.report(self.sweep(1200, 1000))
-        self.assertIn("`search-and-read` does not pay for itself", report)
+        self.assertIn("`search-and-read-files` does not pay for itself", report)
         self.assertIn("1.20x", report)
         self.assertIn("| price | 1.20x | under 1.00x | no |", report)
         self.assertNotIn("earns its catalog line", report)
@@ -484,7 +494,7 @@ class ATaskScoredOnPriceIsComparedByTheTokensItSpent(unittest.TestCase):
         # reading skill that costs more than the reads it replaces has bought
         # nothing, and the sentence says so rather than keeping it on outcome.
         report = bench.report(self.sweep(1400, 600))
-        self.assertIn("`search-and-read` does not pay for itself", report)
+        self.assertIn("`search-and-read-files` does not pay for itself", report)
         self.assertIn("2.33x", report)
         self.assertNotIn("earns its catalog line", report)
 
@@ -511,7 +521,7 @@ class ATaskScoredOnPriceIsComparedByTheTokensItSpent(unittest.TestCase):
         # Two tables of one bench are two questions: a reader told neither cannot
         # tell which numbers were the score.
         report = bench.report(self.sweep(600, 1400))
-        self.assertIn("`inspect` ablates `search-and-read`, scored on price", report)
+        self.assertIn("`inspect` ablates `search-and-read-files`, scored on price", report)
 
     def test_a_file_naming_a_task_the_bench_does_not_hold_is_refused(self):
         lines = self.sweep(600, 1400)

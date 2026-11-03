@@ -1,10 +1,11 @@
 """What the bench's tasks are: the skill each one ablates, the axis it is scored
 on, and the check the inspect-shaped one scores an answer with.
 
-The two tasks exist because a skill is worth two different things. A body that
-buys an outcome is scored by whether the work held afterwards; a body that buys a
-cheaper read is scored by the tokens the run spent to reach the same answer, and a
-reading skill that costs more than it saves is a line to drop whatever its outcome.
+The bench holds one task, because one shipped skill makes a claim it can settle: a
+body that buys a cheaper read is scored by the tokens the run spent to reach the
+same answer, and a reading skill that costs more than it saves is a line to drop
+whatever its answer. The other axis — whether the work held afterwards — is still
+the rule's, and a task that uses it is an entry in `TASKS`.
 """
 import io
 import contextlib
@@ -19,6 +20,16 @@ import bench  # noqa: E402
 import tasks  # noqa: E402
 
 BENCH = pathlib.Path(__file__).resolve().parents[1]
+
+
+def sindri_builtins():
+    """The skills the binary ships, read out of the `SKILL.md` files a build
+    compiles in: a name copied here would agree with a tree that stopped
+    shipping it."""
+    root = BENCH.parents[1] / "crates/core/src/skills/builtin"
+    return sorted(
+        path.parent.name for path in root.glob("*/SKILL.md")
+    )
 
 
 def inspect_repo():
@@ -38,25 +49,23 @@ def right_answer():
     )
 
 
-class TheBenchHoldsTwoTasksShapedDifferently(unittest.TestCase):
-    def test_the_two_tasks_ablate_the_two_built_ins_the_tree_ships_procedures_for(self):
-        self.assertEqual(tasks.TASKS["refused-write"]["skill"], "sandbox-refusal")
-        self.assertEqual(tasks.TASKS["inspect"]["skill"], "search-and-read")
+class TheBenchHoldsOneTaskAndItsAxis(unittest.TestCase):
+    def test_the_task_ablates_the_built_in_the_tree_ships_a_reading_procedure_for(self):
+        self.assertEqual(tasks.TASKS["inspect"]["skill"], "search-and-read-files")
+        # The name is the catalog's, so a body the binary ships under another name
+        # would make this a measurement of a skill nothing loads.
+        self.assertIn(tasks.TASKS["inspect"]["skill"], sindri_builtins())
 
-    def test_the_inspect_task_is_scored_on_price_and_the_capability_one_on_outcome(self):
+    def test_the_reading_task_is_scored_on_the_price_of_the_answer(self):
         self.assertEqual(tasks.axis("inspect"), "price")
-        self.assertEqual(tasks.axis("refused-write"), "outcome")
 
-    def test_each_task_stands_in_a_fixture_of_its_own(self):
-        one, other = (BENCH / tasks.TASKS[name]["fixture"] for name in tasks.TASKS)
-        self.assertTrue(one.is_dir(), f"{one} is not a repository")
-        self.assertTrue(other.is_dir(), f"{other} is not a repository")
-        self.assertNotEqual(one.resolve(), other.resolve())
+    def test_the_task_stands_in_a_fixture_that_is_a_repository(self):
+        fixture = BENCH / tasks.TASKS["inspect"]["fixture"]
+        self.assertTrue(fixture.is_dir(), f"{fixture} is not a repository")
 
     def test_an_unknown_task_is_refused_by_the_names_the_bench_holds(self):
         with self.assertRaises(SystemExit) as refused:
             tasks.task("sideways")
-        self.assertIn("refused-write", str(refused.exception))
         self.assertIn("inspect", str(refused.exception))
 
     def test_the_task_names_are_read_back_by_the_scripts_rather_than_spelled_again(self):

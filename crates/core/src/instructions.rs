@@ -93,18 +93,19 @@ impl Taken {
         }
     }
 
-    /// What the preamble carries after its stance, or nothing at all: the
-    /// file named in one line, then its words, exactly as the file holds them.
-    /// The line is short because it is re-sent on every turn, and the path is
-    /// the only part of it that grows.
+    /// What the preamble carries after its stance, or nothing at all: a heading
+    /// naming the file, then its words between the tags a reader can find them
+    /// by. The heading is one line because it is re-sent on every turn, and the
+    /// path is the only part of it that grows; the words are the file's own, with
+    /// the newline it ends on left to the block.
     pub fn block(&self) -> Option<String> {
         let Taken::Found(found) = self else {
             return None;
         };
         Some(format!(
-            "House rules for this repository ({}), more specific than the guidance above:\n\n{}",
+            "## Repository instructions ({})\n\n<project_instructions>\n{}\n</project_instructions>",
             found.path.display(),
-            found.text
+            found.text.trim_end()
         ))
     }
 

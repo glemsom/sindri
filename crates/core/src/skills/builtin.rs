@@ -9,17 +9,21 @@
 //! is not replaced, so a built-in is the lowest of the three and a nearer scope's
 //! skill takes its name.
 
-use super::catalog::{Content, File, Found, Refusal, Scope, Skill, Where};
+use super::catalog::{Content, Found, Refusal, Scope, Skill, Where};
 use super::frontmatter;
 
 /// The most one file a built-in ships may spend, and the most one built-in's
-/// whole content may: its body and every file beside it are inlined into the
-/// conversation by one `skill` call, so the files multiply what that call costs
+/// whole content may: a body and every file beside it are inlined into the
+/// conversation by one `skill` call, so a file multiplies what that call costs
 /// rather than adding to it, and a reference that grew past a body's size would
 /// be a second body paid for on every load. Eight KiB is a body and the one long
 /// procedure beside it; twelve is that plus the header and the room a second
 /// reference would need, which is a skill's whole worth and no more; nothing else
 /// bounds them.
+///
+/// Neither shipped skill carries a file today: both are a page of instructions
+/// and nothing beside them, so one load costs its body and no more. The table
+/// still admits files, because the seam is the ceiling and not the convention.
 pub const FILE_CEILING: usize = 8 * 1024;
 pub const CONTENT_CEILING: usize = 12 * 1024;
 
@@ -27,44 +31,19 @@ pub const CONTENT_CEILING: usize = 12 * 1024;
 /// — its whole `SKILL.md`, and every file its body may name, compiled in beside
 /// it. One table, no directory and no path: a scope is a place a skill is found,
 /// and a compiled one is found in the binary. Each entry is one directory under
-/// `builtin/`, so a skill's body and its own files are read from the same place a
-/// reader goes to change them, and a second skill is a second entry here.
+/// `builtin/`, so a skill's body is read from the place a reader goes to change
+/// it, and a second skill is a second entry here.
 ///
 /// A directory's copy cannot be written here even by mistake: a `PathBuf` is not
 /// a thing a `const` can hold, so every entry is by construction a compiled one.
 pub const BUILTINS: &[Content] = &[
     Content::Compiled {
-        source: include_str!("builtin/changing-files/SKILL.md"),
-        files: &[File {
-            path: "references/edit-plan.md",
-            text: include_str!("builtin/changing-files/references/edit-plan.md"),
-        }],
+        source: include_str!("builtin/edit-files/SKILL.md"),
+        files: &[],
     },
     Content::Compiled {
-        source: include_str!("builtin/sandbox-refusal/SKILL.md"),
-        files: &[
-            File {
-                path: "references/refusals.md",
-                text: include_str!("builtin/sandbox-refusal/references/refusals.md"),
-            },
-            File {
-                path: "references/worked-example.md",
-                text: include_str!("builtin/sandbox-refusal/references/worked-example.md"),
-            },
-        ],
-    },
-    Content::Compiled {
-        source: include_str!("builtin/search-and-read/SKILL.md"),
-        files: &[
-            File {
-                path: "references/recipes.md",
-                text: include_str!("builtin/search-and-read/references/recipes.md"),
-            },
-            File {
-                path: "references/many-files.md",
-                text: include_str!("builtin/search-and-read/references/many-files.md"),
-            },
-        ],
+        source: include_str!("builtin/search-and-read-files/SKILL.md"),
+        files: &[],
     },
 ];
 
@@ -109,7 +88,9 @@ mod tests {
         reason = "a panicking test is how a broken contract reports itself"
     )]
 
-    use super::{Content, File, Scope, Where, known};
+    use crate::skills::File;
+
+    use super::{Content, Scope, Where, known};
 
     /// One skill with no description, which is the reader's refusal to make.
     const BROKEN: &[Content] = &[Content::Compiled {

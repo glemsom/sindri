@@ -47,7 +47,9 @@ test_the_baseline_is_read_out_of_the_one_file_that_ships_the_stance() {
         || fail "the bench reads $(ask 'variants.SHIPPED') and the tree ships $files"
     base=$(ask 'variants.BASE')
     case "$base" in
-        "You are Sindri"*) ;;
+        # The stance opens on who is answering: the section heading, then the
+        # sentence naming Sindri. A baseline that lost either is another prompt.
+        "## Persona"*"You are Sindri"*) ;;
         *) fail "the baseline is not the stance the tree ships: $base" ;;
     esac
 }
@@ -69,7 +71,8 @@ test_the_prompt_the_tree_ships_is_a_variant_the_bench_holds() {
     with_variants 'print(any(text == variants.BASE for _, text in variants.VARIANTS.values()))' >found
     [ "$(cat found)" = True ] \
         || fail "the stance the tree ships is no variant the bench holds: pin it as a \
-new variant beside v15 (which stays the record of #416's wording) and measure that"
+new variant beside v15 and v16 (which stay the records of the wordings before it) \
+and measure that"
     with_variants 'print(variants.VARIANTS["v15"][1])' >pinned
     [ -s pinned ] || fail "the bench holds no pinned variant of the rewritten preamble"
 }

@@ -88,6 +88,25 @@ REWRITTEN = (
     "prose cannot."
 )
 
+# The stance the smith rewrite ships: `## Persona` and `## Principles`, written
+# down for the same reason as REWRITTEN — a sweep names the words it measured, and
+# the file moving under it cannot re-label that sweep. Pinned at the entry below
+# and left alone from then on, exactly as `v15` was.
+SMITH = (
+    "## Persona\nYou are Sindri, a dwarven smith made digital — an AI assistant that can "
+    "forge anything: code, prose, analysis, plans. You work in a GNU/Linux workspace "
+    "through `bash`.\n\n## Principles\n"
+    "- **Smith it:** one clean strike beats a flurry — but heat every bar in the forge at "
+    "once; full substance, no filler. Be concise.\n"
+    "- **Simplest correct solution:** focused edits over full rewrites; match the "
+    "surrounding code style.\n"
+    "- **Batch the independent, chain the dependent.** Overlap independent work — several "
+    "`bash` calls in one turn (they run concurrently) or `cmd & … & wait` in one call; use "
+    "`&&`/pipes only when a stage needs the prior output. Fewer turns = fewer tokens and "
+    "less waiting.\n"
+    "- Prefer command-line tools; write a script when state or control flow requires it."
+)
+
 TRIM = ("You are Sindri, an assistant answering a developer at a Unix terminal. Answer the "
         "question you were given, using the context after it when there is some. You have one "
         "tool, `bash`: run commands rather than guessing, and check the exit code before "
@@ -100,6 +119,10 @@ VARIANTS = {
     # The rewritten preamble of #416, pinned: the one variant that is a wording the
     # tree has shipped rather than a text proposed for it.
     "v15": ("shipped-416", REWRITTEN),
+
+    # The stance after the rewrite: pinned the day it shipped, and the text `v00`
+    # reads back out of the tree until the next one moves it.
+    "v16": ("shipped-smith", SMITH),
 
     "v01": ("trim", TRIM),
 

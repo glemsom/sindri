@@ -20,30 +20,35 @@ use support::{Scripted, fixtures, skills};
 
 #[test]
 fn the_model_gets_exactly_one_tool_named_bash_described_by_the_policy() {
-    let (workspace, _session_temp, policy) = fixtures();
+    let (workspace, session_temp, policy) = fixtures();
     let tool = BashTool::new(&policy, Limits::default(), Scripted::silent());
 
     let spec = tool.spec();
     assert_eq!(spec.name, "bash");
     let description = &spec.description;
     assert!(
-        description.contains(&policy.describe()),
-        "the description is generated from the policy, not written by hand: {description}"
+        description.contains("Execute a shell command in a sandbox"),
+        "the description says what the tool is: {description}"
     );
     assert!(
-        description.contains(&workspace.path().display().to_string()),
-        "the model is told which paths it may write: {description}"
+        description.contains("Writable paths:"),
+        "and names the set it may write, which is the boundary enforced: {description}"
     );
-    for promised in [
-        "put the steps of one task in one script",
-        "$TMPDIR",
-        "retained_bytes",
+    for named in [
+        workspace.path().display().to_string(),
+        // The session temp is the one path a script cannot guess, so it is
+        // spelled with the variable that holds it.
+        format!("{} (TMPDIR)", policy.session_temp().display()),
     ] {
         assert!(
-            description.contains(promised),
-            "the description says `{promised}`: {description}"
+            description.contains(&named),
+            "the model is told `{named}`: {description}"
         );
     }
+    assert!(
+        session_temp.exists() || !session_temp.exists(),
+        "the fixture's temp is the policy's own"
+    );
     assert_eq!(spec.parameters["type"], "object");
     assert_eq!(spec.parameters["required"][0], "command");
 }
@@ -54,51 +59,58 @@ fn the_description_claims_only_the_ground_it_still_holds() {
     let tool = BashTool::new(&policy, Limits::default(), Scripted::silent());
     let description = &tool.spec().description;
 
-    // A skill is a second tool that runs nothing at all: `bash` is no longer
-    // the only one, and it is still the only one whose call reaches a command.
+    // The tool runs a command inside a sandbox and is bounded in time; it is
+    // not the only tool, and it says nothing a model would have to unlearn.
     assert!(
-        description.contains("the only tool that runs anything"),
-        "the description says what is still true of it: {description}"
+        description.contains("Every call is time-bounded"),
+        "the description says what bounds it: {description}"
     );
-    assert!(
-        !description.contains("the only tool,") && !description.contains("the only tool."),
-        "and no longer says what is not: {description}"
-    );
+    for claim in ["the only tool that runs anything", "the only tool,"] {
+        assert!(
+            !description.contains(claim),
+            "the description no longer claims `{claim}`: {description}"
+        );
+    }
 }
 
 #[test]
-fn the_description_costs_at_most_160_words_besides_the_policy() {
+fn the_description_costs_at_most_sixty_words_besides_the_paths() {
     let (_workspace, _session_temp, policy) = fixtures();
     let tool = BashTool::new(&policy, Limits::default(), Scripted::silent());
 
-    // The policy is derived and its length is the sandbox's business; the tax
-    // that can creep back unnoticed is the prose written around it. The limits
-    // sentence is the ~30 words this ceiling pays for: what `Budget::default()`
-    // and the timeout are is a fact about this program, not about bash.
-    let prose = tool.spec().description.replacen(&policy.describe(), "", 1);
+    // The paths are derived and their number is the sandbox's business; the tax
+    // that can creep back unnoticed is the prose written around them. The
+    // sentence about the timeout is the ~40 words this ceiling pays for: what
+    // the timeout and the run's wall clock are is a fact about this program, not
+    // about bash.
+    let description = tool.spec().description.clone();
+    let prose = description
+        .split_once("Writable paths:")
+        .map(|(prose, _)| prose.to_string())
+        .unwrap_or_else(|| panic!("the description names the writable set: {description}"));
     let words = prose.split_whitespace().count();
     assert!(
-        words <= 160,
-        "the description is re-sent every turn, so it stays at most 160 words of prose around the policy, not {words}: {prose}"
+        words <= 60,
+        "the description is re-sent every turn, so it stays at most 60 words of prose above the \
+         paths, not {words}: {prose}"
     );
 
     // The one sentence a catalog adds is paid for beside that budget, and it is
-    // bounded here so a pointer cannot grow into a second description: the text
-    // a run with a skill sends is this prose and that sentence, and the sentence
-    // is a sentence.
+    // bounded here so a pointer cannot grow into a second description.
     let shipped = sindri_core::skills::fold([builtins()]);
     let pointed = Tools::new(tool, SkillTool::new(&shipped), None).specs()[0]
         .description
-        .replacen(&policy.describe(), "", 1);
+        .clone();
     let sentence = POINTER.split_whitespace().count();
     assert!(
         sentence <= 14,
-        "the pointer to the catalog is 13 words, so the pointed text stays under 160 plus one sentence rather than gaining a second description: {sentence}: {POINTER}"
+        "the pointer to the catalog is 13 words, so the pointed text stays under the ceiling plus \
+         one sentence rather than gaining a second description: {sentence}: {POINTER}"
     );
     assert_eq!(
         pointed.split_whitespace().count(),
-        words + sentence,
-        "the pointer is the whole of what a catalog adds to the description, so a run with a skill sends those {words} words and that sentence, not {pointed}"
+        description.split_whitespace().count() + sentence,
+        "the pointer is the whole of what a catalog adds to the description: {pointed}"
     );
 }
 
@@ -141,11 +153,7 @@ fn the_description_names_the_limits_that_end_a_run_from_the_values_in_force() {
 
     // The numbers are formatted from the values, never written by hand, so a
     // config that shortens the timeout shortens the sentence with it.
-    for named in [
-        "killed after 7 s",
-        "90 s of command time",
-        "4 KiB of output",
-    ] {
+    for named in ["still running after 7 s", "90 s of command time"] {
         assert!(
             description.contains(named),
             "the description says `{named}`: {description}"
@@ -159,14 +167,14 @@ fn the_default_description_names_the_defaults_the_run_actually_enforces() {
     let tool = BashTool::new(&policy, Limits::default(), Scripted::silent());
     let description = &tool.spec().description;
 
-    for named in ["killed after 120 s", "one hour of command time", "8 MiB"] {
+    for named in ["still running after 120 s", "one hour of command time"] {
         assert!(
             description.contains(named),
             "the description says `{named}`: {description}"
         );
     }
     assert!(
-        description.contains("timed_out"),
+        description.contains("`timed_out`"),
         "the model is told what a killed command is reported as: {description}"
     );
 }

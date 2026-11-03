@@ -10,9 +10,8 @@
 # else.
 #
 # The task is `BENCH_TASK`'s, and it is the question, the fixture and the skill
-# whose load counts: `refused-write` is a capability, scored on whether the work
-# held afterwards, and `inspect` is a read, scored on the tokens it took to reach
-# the same answer. Both stand in a repository of their own under `fixture/`.
+# whose load counts: `inspect` is a read, scored on the tokens it took to reach the
+# same answer, and it stands in a repository of its own under `fixture/`.
 #
 # A run never sees the developer's own skills: `HOME` points into the run
 # directory and holds no `.agents/skills`, so the only skills in the catalog are the
@@ -27,7 +26,7 @@ BIN=${BENCH_BIN:-$BENCH/bin-$arm}
 TAG=${TAG:-run}
 REPETITION=${REPETITION:-1}
 ATTEMPT=${ATTEMPT:-1}
-TASK=${BENCH_TASK:-refused-write}
+TASK=${BENCH_TASK:-inspect}
 : "${BENCH_MODEL:?set BENCH_MODEL to the model this arm is measured on}"
 
 # shellcheck source=arms.sh

@@ -1,21 +1,21 @@
 # A bench for a built-in skill
 
-Two tasks, each shaped like a capability a body is supposed to buy, run three ways —
-with the built-in table as it ships, with the table emptied, and with the built-in in
-place but the doctrine's trigger sentence gone — scored by a rule and reported as one
-table per task. The rule and its thresholds are `bench.py`'s, stated once there. It is
+One task, shaped like a capability a body is supposed to buy, run three ways — with
+the built-in table as it ships, with the table emptied, and with the built-in in place
+but the doctrine's trigger sentence gone — scored by a rule and reported as one table. The rule and its thresholds are `bench.py`'s, stated once there. It is
 read on the first two arms, because it asks whether a body earns its catalog line; the
 third arm is asked whether the words that ask for a load are what puts the load before
 the first command.
 
 | task | the skill it ablates | scored on |
 | --- | --- | --- |
-| `refused-write` | `sandbox-refusal` | **outcome** — the suite passes in the tree the run left, and the run showed it pass |
-| `inspect` | `search-and-read` | **price** — the same answer for fewer input tokens |
+| `inspect` | `search-and-read-files` | **price** — the same answer for fewer input tokens |
 
-One file holds one task: a sweep of `inspect` and a sweep of `refused-write` are two
-questions, and a report refuses a file that mixes them for the same reason it refuses
-one that mixes two models.
+One file holds one task, and a report refuses a file that mixes two for the same reason
+it refuses one that mixes two models. `bench.py` still knows the other axis — `outcome`,
+where a body is scored on the work holding afterwards — but no shipped skill claims that
+purchase today: it went with the skill it was measured for, so a task that uses it is one
+entry in `tasks.py` and no script to edit.
 
 No number here is on the gate: it would come from a model and a bill. The offline pass
 proves the pipeline, not a model, and the guard rails (an arm that is not a name, a task
@@ -32,15 +32,11 @@ export BENCH_MODEL=<the model the three arms are compared on>
 ./build_arm.sh without                 # the built-in table empty       → bin-without
 ./build_arm.sh no-trigger              # the doctrine a sentence short  → bin-no-trigger
 
-REPS=6 TAG=$BENCH_MODEL ./sweep.sh results/$BENCH_MODEL-refused-write.jsonl with without no-trigger
-REPS=6 TAG=$BENCH_MODEL BENCH_TASK=inspect \
-  ./sweep.sh results/$BENCH_MODEL-inspect.jsonl with without no-trigger
-
-python3 bench.py report results/$BENCH_MODEL-refused-write.jsonl
+REPS=6 TAG=$BENCH_MODEL ./sweep.sh results/$BENCH_MODEL-inspect.jsonl with without no-trigger
 python3 bench.py report results/$BENCH_MODEL-inspect.jsonl
 ```
 
-`BENCH_TASK` is the task's name and defaults to `refused-write`; `bench.py tasks` prints
+`BENCH_TASK` is the task's name and defaults to `inspect`; `bench.py tasks` prints
 the names, and `bench.py arms` the arms.
 
 ## The three arms are three builds, not a flag
@@ -78,15 +74,14 @@ and the catalog is asked of `doctor`. The record shape is the prompt bench's plu
 its `variant`, `task` for the question it answered, those three counters, and
 `loaded_before_bash`.
 
-    right  ⇔  fixed ∧ proved                       (task `refused-write`)
+    right  ⇔  fixed ∧ proved                       (the `outcome` axis)
     fixed  ⇔  `sh tests/run.sh`, run by the bench in the run's tree, exits 0
     proved ⇔  the last `bash` call in the record that invokes the suite exited 0
 
 `fixed` is the bench's own re-run, never the run's claim; `proved` separates a run that
-showed its work from one that asserted it. The `without` arm's conversation silences the
-writer, deletes the log assertion and calls the suite green without running it, scoring
-`{fixed: true, proved: false}`. The `with` arm hits the same `Read-only file system`
-refusal, moves the path into a writable root and runs the suite again.
+showed its work from one that asserted it. No task on this bench uses the axis today —
+it is what a body buying work-holding-afterwards would be scored on, and it is held here
+so the next such body is measured by the same rule rather than a new one.
 
 The `inspect` task is scored on the other axis, and its check is `tasks.py`'s because the
 file that asks a question is the file that says what counts as an answer to it: the line
@@ -117,8 +112,7 @@ what ships: a body a second one beside it would erase is a body with no claim to
 
 The fixture is `fixture/inspect/`, a small Python queue whose retry delay is capped at a
 constant: cheap to find with one `rg -n`, expensive to find by reading the sources whole.
-`fixture/refused-write/` is the capability task's, and neither is shared: a task's fixture
-is the repository its question is about.
+A task's fixture is the repository its question is about, and none is shared.
 
 ## The third arm is the sentence, and its number is a rate
 
@@ -148,15 +142,15 @@ rewrite of its neighbours.
 numbers, not a bill.
 
 ```sh
-./self-test.sh                      # unit tests, three arm builds, two offline sweeps
+./self-test.sh                      # unit tests, three arm builds, one offline sweep
 BENCH_SKIP_BUILD=1 ./self-test.sh   # reuse the three arm binaries
 ```
 
 `self-test.sh` asserts the arithmetic, that the three arms differ in the catalog and in the
-sentence, that a contradicted label is refused, that one sweep of each task writes the
-lines and the table — that the reading task's arms answer the same question and are told
-apart by what it cost, and that a run which never reached the model is tried once more,
-with a stubbed `run_one.sh`.
+sentence, that a contradicted label is refused, that a sweep of the task writes the lines
+and the table — that the reading task's arms answer the same question and are told apart by
+what it cost, and that a run which never reached the model is tried once more, with a
+stubbed `run_one.sh`.
 
 ## What the report will not do
 
