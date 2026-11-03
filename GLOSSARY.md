@@ -8,12 +8,11 @@ Sindri's vocabulary. Use these words exactly; do not drift to synonyms.
 feed back. Bounded by the **turn cap** (`max_turns`, default 250).
 
 **tool call** — one request from the model to run a tool — `bash`, `skill` or `open` —
-plus the structured **tool result** returned. One `bash` call may run a whole pipeline or script.
-The code's word for the request once its arguments are read is `Asked`: a variant per
-tool, so a third tool is a compile error wherever a call is dispatched or written down.
-
-**bash tool** — the one tool that runs anything. Runs a command string inside the
-sandbox; the model composes shell tools through it rather than being handed one per job.
+plus the structured **tool result** returned. `bash` is the one that runs anything: a
+command string inside the sandbox, one call running a whole pipeline or script, which the
+model composes rather than being handed one tool per job. The code's word for the request
+once its arguments are read is `Asked`: a variant per tool, so a third tool is a compile
+error wherever a call is dispatched or written down.
 
 **open** — the third tool: one **target** handed to the host's opener, for the human to look
 at. It runs nothing inside the sandbox — the core parses the target and refuses it, and the
@@ -79,9 +78,6 @@ plus **extras**.
 **session temp** — per-run writable scratch, mapped to `TMPDIR` in the sandbox, and
 mounted as `HOME` beneath it.
 
-**read-only root** — `--ro-bind / /`: the host filesystem inside the sandbox read-only.
-A boundary on writes, not on reads.
-
 **description** — the model-facing text derived from the sandbox policy, also printed by
 `sindri doctor`. One sentence may be appended to it that the policy does not derive: the
 **pointer** to the **catalog**, added only where the model may see one.
@@ -101,9 +97,9 @@ the description, and lists the **skill** **catalog**.
 
 ## Run
 
-**boot** — turning the flags and the process's own facts into a session ready to start,
-and the one line a front end says when it cannot. Not a synonym for **session**: a boot
-ends where a session begins.
+**boot** — turning the flags and the process's own facts into a session ready to start
+(`crates/cli/src/boot.rs`), and the one line a front end says when it cannot. Not a
+synonym for **session**: a boot ends where a session begins.
 
 **instructions** — a repository's own house rules: the `AGENTS.md` at its root, found
 through the workspace's git root — or the workspace itself where that is no repository —
@@ -130,7 +126,7 @@ session.
 **window** — the rows of the **transcript** the frame shows at once. It has a place in
 the thread rather than an offset from its tail: a reader on the **tail** follows what
 arrives, and a reader scrolled back keeps the row they are reading while a run appends
-below them, told how much by the **new-rows badge**. That place is an entry and the
+below them, told how much by the **badge**. That place is an entry and the
 rows into it, so a block that grows or folds above the window moves no row under the
 reader, and one the top row sits in moves the place back to that entry's own row — the
 row `Enter` was pressed on, and the only row of a folded call that is there both before
@@ -140,15 +136,14 @@ row, is a place too — the window stops following and that entry's own row beco
 of the column, so the output the fold opens grows beneath it — and a hold is the reader's
 until a key takes the tail, so a column the thread is too short to fill does not hand them
 back to it. `End` takes the tail again, `Home` the first turn, and nothing in the last
-column claims to say where the window sits: the **new-rows badge** is the frame's only
-word on it.
+column claims to say where the window sits: the **badge** is the frame's only word on it.
 
-**new-rows badge** — `↓ 4 new rows`, against the footer's right edge: how many rows
-arrived below a **window** that is off the **tail**. Only what arrived after the reader
-took their place counts: going back, reaching the first turn, opening a call and folding
-one all take the rows below the window as read, so the count starts again at what is below
-it then and never says that more arrived than is there. It says `1 new row` for one,
-clears the moment the window reaches the tail again, and its room is taken before the
+**badge** — the new-rows badge, `↓ 4 new rows`, against the footer's right edge: how many
+rows arrived below a **window** that is off the **tail**. Only what arrived after the
+reader took their place counts: going back, reaching the first turn, opening a call and
+folding one all take the rows below the window as read, so the count starts again at what
+is below it then and never says that more arrived than is there. It says `1 new row` for
+one, clears the moment the window reaches the tail again, and its room is taken before the
 footer's hints are chosen.
 
 **tail** — the newest row of the **transcript**, and the place a **window** follows
@@ -171,14 +166,15 @@ all: the frontmatter's `name` and `description`, the two flags that say who may 
 and the body beneath the fence that **activation** returns. A skill no version of the
 specification knows how to read is a **refusal**, never a silence.
 
-**description ceiling** — the character budget a **skill**'s `description` may spend, read
-as characters and not bytes: the catalog sits in the `skill` tool's description, so every
-description is paid for on every turn of every run that has a skill, and a description is a
-routing key — the task it covers and where the model's default is wrong — rather than a
-summary of the body. A description past it is a **refusal** naming the ceiling, what the
-description measured, and the line to cut, never a truncation: a truncated routing key is a
-skill that silently stops being found. The code's word for it is `DESCRIPTION_CEILING`, and
-every **built-in skill** is tested against it so none can refuse itself at runtime.
+**description ceiling** — the character budget a **skill**'s `description` may spend —
+`DESCRIPTION_CEILING`, 200 characters, read as characters and not bytes: the catalog sits
+in the `skill` tool's description, so every description is paid for on every turn of every
+run that has a skill, and a description is a routing key — the task it covers and where the
+model's default is wrong — rather than a summary of the body. A description past it is a
+**refusal** naming the ceiling, what the description measured, and the line to cut, never
+a truncation: a truncated routing key is a skill that silently stops being found. The
+code's word for it is `DESCRIPTION_CEILING`, and every **built-in skill** is tested
+against it so none can refuse itself at runtime.
 
 **skill scope** — one of the three places a **catalog** reads, and the three are ordered by
 nearness: `builtin`, compiled into the binary; `user`, under the home directory at
@@ -347,9 +343,9 @@ surely as a palette would. A code word in prose is drawn straight on it, with no
 since a wash is a patch and the canvas has nothing quieter than itself. Above it:
 **panel**, then **raised**.
 
-**panel** — the **surface** the frame draws on, one tier above the canvas: the
-composer, a fenced code block, the **queue panel**, the band a turn's **prompt**
-sits on. The rail is not one: it is chrome, drawn on the canvas.
+**panel** — the **surface** the frame draws on, one tier above the canvas: the composer,
+a fenced code block, the **queued prompts**' panel, the band a turn's **prompt** sits on.
+The rail is not one: it is chrome, drawn on the canvas.
 
 **raised** — the **surface** an overlay is drawn on, one tier above a panel; the frame
 is dimmed beneath it. The rail's sandbox **chip** sits on it too, a tier above the
@@ -393,12 +389,10 @@ spent any.
 
 **queued prompt** — a prompt sent while a run has the frame: it waits in the queue and
 runs when the run stops, in the order it was typed. `↑` takes the newest back into the
-**composer** above any draft typed since, `Ctrl-X` drops it. The footer carries no count
-it cannot fit; the **queue panel** states the size.
-
-**queue panel** — the **panel** above the **composer** that holds the **queued prompts**
-whole: titled `queued` when one waits and `3 queued` when more, cut at six rows with that
-count standing for the rest, and drawn only when the queue is not empty.
+**composer** above any draft typed since, `Ctrl-X` drops it. The **panel** above the
+composer holds them whole — titled `queued` when one waits and `3 queued` when more, cut
+at six rows with that count standing for the rest, and drawn only when one waits — and
+the footer carries no count it cannot fit.
 
 **thread** — the growing conversation of one TUI session; `/new` starts over. Laid
 out as a document: two blank rows between turns and none inside one, the **gutter** a
@@ -411,16 +405,6 @@ just above the **composer** rather than the top row of a screenful of blank ones
 block, the `│` down its left, which carries a tinted row's wash.
 
 **turn header** — the row that opens a turn: `YOU <hh:mm> <workspace>`.
-
-**expanded call** — a **tool call** shown whole in place of the five-line tail it
-collapses to: `Enter` on an empty composer toggles the call the frame last showed (the
-newest one it can open if the reader has touched none), and a click toggles the call
-whose row it landed on. The entry keeps a bounded tail of its whole output — 400 lines,
-the cap a **spill file** exists to lift — so a call that never spilled still opens, and
-the collapsed row says what is behind it (`✓ exit 0 · 1.4s · 400 lines`). The body is
-read through the transcript's own **window**, so a 400-line expansion is scrolled like any
-other rows. **reasoning** opens on the same key; collapsed, it stays one row
-(`⌁ reasoned`).
 
 **completion** — the offer the **composer** makes above itself, one column and one set of
 keys for two triggers. `@` offers workspace paths: a proximity-ranked background walk,
@@ -436,13 +420,10 @@ the marked offer, `↑`/`↓` walk it, `Esc` dismisses it and leaves the draft a
 taking one closes the box and never sends, and it is taken in the spelling the draft is
 already in.
 
-**block** — the rows a **picture** takes of an answer, and the one place a copy
-differs from the screen: its graphic's rows together with its **caption**, or with
-the `‹›` that says what it could not be drawn as. A drag that reaches any row of
-one takes it whole, and every row of it the **window** holds is marked, however
-deep in it the drag began or ended; its words are taken once, on the row the block
-starts at — the **caption**, or a **diagram**'s fence body (`Viewport::block` in
-`crates/tui/src/selection.rs`).
+**block** — the rows a **picture** takes of an answer: its graphic's rows together with
+its **caption**, or with the `‹›` that says what it could not be drawn as
+(`Viewport::block` in `crates/tui/src/selection.rs`). A drag that reaches one takes it
+whole, by **mark**'s rule, which is the one entry that tells it.
 
 **picture** — a markdown image the frame draws: a block of its own in the answer, drawn
 only where the terminal speaks Kitty graphics, from a file in the workspace and never from
@@ -473,7 +454,7 @@ its caption is the fence's own name, `‹mermaid›`. It is what the rows cost w
 drawn, and what a copy of an image's block yields. A **diagram**'s block copies as the
 fence body it was drawn from instead, because `‹mermaid›` is a name and not a diagram: a
 reader who pastes one out of the frame gets mermaid. The diagram does not open in place
-for it — an **expanded call** opens an entry, and a diagram is a block inside an answer's
+for it — `Enter` opens a **tool call**, and a diagram is a block inside an answer's
 (`crates/tui/src/expand.rs`) — so the block's source is what the frame owes a reader who
 wants it, and the copy is where they get it.
 
@@ -518,12 +499,3 @@ on the `api_key` row.
 check and the doctor's report whole: sized from the rows that report wrapped into, paged
 with `PgUp`/`PgDn` when the screen is shorter, and left only by a key — a resize lays it
 out again rather than dismissing it.
-
-**ablation** — one **built-in skill** measured against its own absence: two builds of the
-binary that differ only in the built-in table, one **arm** each — `with`, the built-in in the
-**catalog**, and `without`, the table emptied — run on one task shaped like the capability the
-body claims and scored by a rule rather than by eye. What the line costs is paid by every run
-and what the body costs is paid after a load, so an ablation decides whether the body changes
-the outcome for less than the line is worth; the `activated` field is what tells a built-in no
-run reached from one that was reached and did not help. The machine is
-`scripts/bench-skill-ablation`, the reading is `docs/skill-ablation.md`.

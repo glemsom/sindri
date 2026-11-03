@@ -1,7 +1,12 @@
-//! The vocabulary, kept true by `GLOSSARY.md`: it names *boot*, and the front
-//! ends in this crate use that word. Documents drift, so the entry an agent
-//! reads first is asserted here rather than trusted.
+//! The vocabulary, kept true by `GLOSSARY.md`: every entry names a word the
+//! code carries, and the defaults, closed sets and identifiers it points at are
+//! read from the code rather than trusted to keep up. An entry is pinned to its
+//! fact and not to a sentence, so the file can be rewritten without the test
+//! moving — and the test still fails when the fact drifts.
 
+use sindri_core::agent::Stopped;
+use sindri_core::config::DEFAULT_MAX_TURNS;
+use sindri_core::skills::{DESCRIPTION_CEILING, Scope};
 use sindri_tui::command::COMMANDS;
 
 /// The glossary, as committed: `include_str!` so the test cannot pass against a
@@ -24,126 +29,6 @@ const THIRD_TOOL: &str = include_str!("../../../docs/adr/0003-a-third-tool-open.
 /// The code's own record, as committed: each bullet points at the script that holds
 /// the rule it states, and a wrong pointer is a reader searching the wrong file.
 const CODE_RULES: &str = include_str!("../../../docs/adr/0001-llm-friendly-code.md");
-
-#[test]
-fn the_glossary_defines_boot_as_the_turn_from_flags_and_process_into_a_session() {
-    let entry = GLOSSARY
-        .split("\n\n")
-        .find(|entry| entry.starts_with("**boot**"))
-        .map(|entry| entry.replace('\n', " "))
-        .unwrap_or_else(|| {
-            panic!(
-                "GLOSSARY.md has no **boot** entry: boot names the module every \
-                 front end boots through (crates/cli/src/boot.rs)"
-            )
-        });
-
-    assert!(
-        entry.contains("turning the flags and the process's own facts into a session"),
-        "the entry defines the turn, in the issue's own words: {entry:?}"
-    );
-    assert!(
-        entry.contains("synonym for **session**"),
-        "boot ends where a session begins, and the glossary must say so: {entry:?}"
-    );
-}
-
-#[test]
-fn the_glossary_defines_mark_as_the_cells_a_drag_lights_and_the_words_that_leave() {
-    let entry = GLOSSARY
-        .split("\n\n")
-        .find(|entry| entry.starts_with("**mark**"))
-        .map(|entry| entry.replace('\n', " "))
-        .unwrap_or_else(|| {
-            panic!(
-                "GLOSSARY.md has no **mark** entry: mark names what a drag lights and \
-                 what the copy takes (crates/tui/src/mark.rs)"
-            )
-        });
-
-    assert!(
-        entry.contains("the cells a drag lights and the words that leave with them"),
-        "the entry defines both halves of the word, the wash and the copy: {entry:?}"
-    );
-    assert!(
-        entry.contains("replace it with a mark of their own"),
-        "`Shift`+`↑`/`↓` replace the drag's mark rather than lay a second one over it, \
-         and the entry must say so: {entry:?}"
-    );
-}
-
-#[test]
-fn the_glossary_defines_instructions_as_the_repositorys_own_rules() {
-    let entry = GLOSSARY
-        .split("\n\n")
-        .find(|entry| entry.starts_with("**instructions**"))
-        .map(|entry| entry.replace('\n', " "))
-        .unwrap_or_else(|| {
-            panic!(
-                "GLOSSARY.md has no **instructions** entry: instructions names the \
-                 repository's rules a run hands the model (crates/core/src/instructions.rs)"
-            )
-        });
-
-    assert!(
-        entry.contains("a repository's own house rules"),
-        "the entry says what they are: {entry:?}"
-    );
-    assert!(
-        entry.contains("never as a turn of their own"),
-        "they arrive beside the preamble and not as a user turn, and the entry must say \
-         so: {entry:?}"
-    );
-    assert!(
-        entry.contains("cut with a marker"),
-        "a file past the cap arrives cut with a marker rather than silently short: \
-         {entry:?}"
-    );
-    assert!(
-        entry.contains("`Taken`"),
-        "and the word the code uses is the one the glossary carries: {entry:?}"
-    );
-}
-
-#[test]
-fn the_glossary_names_running_as_the_records_word_for_a_run_still_going() {
-    let entry = GLOSSARY
-        .split("\n\n")
-        .find(|entry| entry.starts_with("**stopped**"))
-        .map(|entry| entry.replace('\n', " "))
-        .unwrap_or_else(|| {
-            panic!(
-                "GLOSSARY.md has no **stopped** entry: stopped names why a run ended \
-                 (crates/core/src/agent/report.rs)"
-            )
-        });
-
-    assert!(
-        entry.contains("`running`"),
-        "a record writes `stopped: running` until its run ends, so the entry must name \
-         the word a reader meets most often: {entry:?}"
-    );
-    assert!(
-        entry.contains("the record's word for a run still going"),
-        "`running` is the record's word for a run that has not ended, and the entry \
-         must say so in the record's own terms: {entry:?}"
-    );
-    assert!(
-        entry.contains("not a way the loop stops"),
-        "the loop's set is closed, so the entry cannot read as though it could stop \
-         at `running`: {entry:?}"
-    );
-
-    let loops = entry
-        .split('.')
-        .find(|sentence| sentence.contains("why the loop ended"))
-        .unwrap_or_default();
-    assert!(
-        loops.contains("`error`") && !loops.contains("`running`"),
-        "the five words are the loop's own, and `running` stands beside them rather \
-         than among them: {loops:?}"
-    );
-}
 
 #[test]
 fn the_readme_names_every_tool_and_points_at_the_records_that_decided_them() {
@@ -255,8 +140,8 @@ fn the_line_length_rule_names_the_script_that_holds_its_scope() {
     );
 }
 
-/// One glossary entry, its lines joined so an assertion reads a sentence
-/// rather than a wrap.
+/// One glossary entry, its lines joined so an assertion reads a claim rather
+/// than a wrap.
 fn entry(word: &str) -> String {
     GLOSSARY
         .split("\n\n")
@@ -265,45 +150,152 @@ fn entry(word: &str) -> String {
         .unwrap_or_else(|| panic!("GLOSSARY.md has no **{word}** entry"))
 }
 
+/// One word the loop can stop in, spelled by the code. The match carries no
+/// wildcard, so a sixth word stops every test that stops a run compiling until
+/// the glossary and this list carry it too.
+fn stop_word(stopped: Stopped) -> &'static str {
+    match stopped {
+        Stopped::Final
+        | Stopped::MaxTurns
+        | Stopped::Budget
+        | Stopped::Cancelled
+        | Stopped::Error => stopped.as_str(),
+    }
+}
+
 #[test]
-fn the_glossary_defines_open_target_and_started_as_the_records_do() {
-    let open = entry("open");
+fn the_glossary_carries_the_turn_cap_the_code_defaults_to() {
+    let turn = entry("turn");
     assert!(
-        open.contains("the third tool") && open.contains("host's opener"),
-        "`open` is the third tool and hands a target to the host's opener: {open:?}"
+        turn.contains("`max_turns`"),
+        "the cap is set by `max_turns`, and the entry must name it: {turn:?}"
     );
     assert!(
-        open.contains("an absence, not a refusal"),
-        "a batch run has no `open` in its schema, which is an absence and not a \
-         refusal: {open:?}"
+        turn.contains(&DEFAULT_MAX_TURNS.to_string()),
+        "the cap the code defaults to is {DEFAULT_MAX_TURNS}, and the entry must carry \
+         that number rather than one of its own: {turn:?}"
     );
+}
 
-    let target = entry("target");
-    for claim in ["exactly one of them", "`url`", "`path`", "`Target`"] {
+#[test]
+fn the_glossary_carries_every_word_the_loop_can_stop_in() {
+    let stopped = entry("stopped");
+    for word in [
+        stop_word(Stopped::Final),
+        stop_word(Stopped::MaxTurns),
+        stop_word(Stopped::Budget),
+        stop_word(Stopped::Cancelled),
+        stop_word(Stopped::Error),
+    ] {
         assert!(
-            target.contains(claim),
-            "`target` is what one `open` call names — {claim:?} — and the entry must \
-             say so: {target:?}"
+            stopped.contains(&format!("`{word}`")),
+            "`Stopped` spells the word `{word}`, and the entry that defines the closed \
+             set must carry it: {stopped:?}"
         );
     }
+    assert!(
+        stopped.contains("`running`"),
+        "a record writes `running` from the moment it starts, so the entry must name \
+         the word a reader meets most often: {stopped:?}"
+    );
+}
 
-    let started = entry("started");
-    assert!(
-        started.contains("the word an `open` result carries"),
-        "`started` is the result's word for the host being asked: {started:?}"
-    );
-    assert!(
-        started.contains("Neither says a human looked"),
-        "`started` never claims the human looked, and the entry must say so: \
-         {started:?}"
-    );
-    for synonym in ["launched", "displayed", "shown in the browser"] {
+#[test]
+fn the_glossary_orders_the_skill_scopes_as_the_scan_reads_them() {
+    let scope = entry("skill scope");
+    let mut after = 0;
+    for placed in [Scope::Builtin, Scope::User, Scope::Repo] {
+        let word = format!("`{}`", placed.as_str());
+        let at = scope.find(&word).unwrap_or_else(|| {
+            panic!(
+                "`Scope` spells a scope `{}`, and the entry must carry it: {scope:?}",
+                placed.as_str()
+            )
+        });
         assert!(
-            !started.contains(synonym),
-            "the result's word is `started` and not {synonym:?}, which would say more \
-             than the host can know: {started:?}"
+            at >= after,
+            "the scopes are ordered by nearness, {} first, and the entry must list them \
+             in that order: {scope:?}",
+            Scope::Builtin.as_str()
+        );
+        after = at + word.len();
+    }
+}
+
+#[test]
+fn the_glossary_carries_the_description_ceiling_the_refusal_names() {
+    let ceiling = entry("description ceiling");
+    assert!(
+        ceiling.contains("`DESCRIPTION_CEILING`"),
+        "the entry names the constant a refusal states: {ceiling:?}"
+    );
+    assert!(
+        ceiling.contains(&DESCRIPTION_CEILING.to_string()),
+        "the ceiling is {DESCRIPTION_CEILING}, and the entry must carry that number: \
+         {ceiling:?}"
+    );
+}
+
+/// Every entry that points at the tree: the word, the identifier it points
+/// with, and the file that identifier is declared in — read as `include_str!`,
+/// so an entry pointing at a deleted module stops this test compiling.
+const POINTED_AT: [(&str, &str, &str, &str); 4] = [
+    (
+        "boot",
+        "crates/cli/src/boot.rs",
+        include_str!("../src/boot.rs"),
+        "pub struct Boot",
+    ),
+    (
+        "mark",
+        "`mark::span`",
+        include_str!("../../../crates/tui/src/mark.rs"),
+        "pub fn span",
+    ),
+    (
+        "block",
+        "`Viewport::block`",
+        include_str!("../../../crates/tui/src/selection.rs"),
+        "pub fn block",
+    ),
+    (
+        "instructions",
+        "`Taken`",
+        include_str!("../../../crates/core/src/instructions.rs"),
+        "pub enum Taken",
+    ),
+];
+
+#[test]
+fn the_glossary_points_each_word_at_the_identifier_the_tree_carries() {
+    for (word, identifier, source, declared) in POINTED_AT {
+        let entry = entry(word);
+        assert!(
+            entry.contains(identifier),
+            "the entry for {word:?} must name {identifier:?}, the word the code uses \
+             for it: {entry:?}"
+        );
+        assert!(
+            source.contains(declared),
+            "the entry for {word:?} points at {identifier:?}, which must still be \
+             declared {declared:?} in the file it names"
         );
     }
+}
+
+#[test]
+fn the_glossary_tells_the_drag_and_copy_rule_in_one_entry_and_points_the_others_at_it() {
+    let mark = entry("mark");
+    assert!(
+        mark.contains("`mark::span`"),
+        "the one function the wash and the copy both read is the mark's own: {mark:?}"
+    );
+    let block = entry("block");
+    assert!(
+        block.contains("**mark**"),
+        "`block` is a **picture**'s rows, and what a copy takes from one is **mark**'s \
+         rule, told once there: {block:?}"
+    );
 }
 
 #[test]
