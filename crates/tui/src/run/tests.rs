@@ -7,17 +7,20 @@
     reason = "a panicking test is how a broken contract reports itself"
 )]
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
 use sindri_core::agent::{Report, Spent};
 use sindri_core::provider::Usage;
 
 use super::{Paint, heard, turn_of_the_loop, walk};
 use crate::app::App;
+use crate::copy::{Clipboard, Copied};
 use crate::driver::{Finished, Stop};
 use crate::msg::Msg;
 use crate::rail::Launch;
@@ -57,21 +60,25 @@ fn ended() -> Finished {
     }
 }
 
+fn launch() -> Launch {
+    Launch {
+        session: "4f1c8f2e".to_string(),
+        temp: "/tmp".to_string(),
+        branch: None,
+        sandbox: "bwrap".to_string(),
+        workspace: "~/git/sindri".to_string(),
+        skills: Vec::new(),
+        provider: "anthropic".to_string(),
+        model: "claude-sonnet-4-6".to_string(),
+        max_turns: 1,
+        context_limit: None,
+        status: true,
+    }
+}
+
 fn app() -> App {
     App::with_clipboard(
-        Launch {
-            session: "4f1c8f2e".to_string(),
-            temp: "/tmp".to_string(),
-            branch: None,
-            sandbox: "bwrap".to_string(),
-            workspace: "~/git/sindri".to_string(),
-            skills: Vec::new(),
-            provider: "anthropic".to_string(),
-            model: "claude-sonnet-4-6".to_string(),
-            max_turns: 1,
-            context_limit: None,
-            status: true,
-        },
+        launch(),
         None,
         Box::new(crate::copy::System::new(
             false,
@@ -79,6 +86,76 @@ fn app() -> App {
             Box::new(std::io::sink()),
         )),
     )
+}
+
+/// The loop's paint, with the frame on it: the loop's own draw, laid out into a
+/// test backend and counted, so a frame that should not have been drawn is
+/// caught with the rows a reader would have seen — and a drag has rows to
+/// reach, because the frame that put them there is the frame's own.
+struct Painted {
+    terminal: Terminal<TestBackend>,
+    draws: Arc<AtomicUsize>,
+}
+
+impl Painted {
+    fn new(draws: Arc<AtomicUsize>) -> Painted {
+        Painted {
+            terminal: Terminal::new(TestBackend::new(100, 20)).expect("a test terminal"),
+            draws,
+        }
+    }
+
+    fn drawn(&self) -> usize {
+        self.draws.load(Ordering::SeqCst)
+    }
+}
+
+impl Paint for Painted {
+    fn show(&mut self, app: &mut App) -> bool {
+        self.draws.fetch_add(1, Ordering::SeqCst);
+        self.terminal
+            .draw(|frame| crate::render::draw(app, frame))
+            .is_ok()
+    }
+
+    fn owes(&self, _: &App) -> bool {
+        false
+    }
+}
+
+/// One gesture the terminal reported, at a `column` and a `row` of the frame.
+fn gesture(kind: MouseEventKind, column: u16, row: u16) -> Msg {
+    Msg::Mouse(MouseEvent {
+        kind,
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    })
+}
+
+/// A clipboard that only records: what a drag took is asserted on, and the test
+/// never touches the user's own.
+#[derive(Clone, Default)]
+struct Taking {
+    seen: Arc<Mutex<Vec<String>>>,
+}
+
+impl Taking {
+    fn saw(&self) -> Vec<String> {
+        self.seen
+            .lock()
+            .expect("the record of what was copied")
+            .clone()
+    }
+}
+
+impl Clipboard for Taking {
+    fn copy(&self, text: &str) -> Copied {
+        if let Ok(mut seen) = self.seen.lock() {
+            seen.push(text.to_string());
+        }
+        Copied::Sent
+    }
 }
 
 #[test]
@@ -284,4 +361,139 @@ fn a_sequence_the_terminal_cannot_parse_does_not_end_the_frames_hearing() {
     drop(rx);
     let _ = feeds.send(key('y'));
     listener.join().expect("the listener ends with the frame");
+}
+
+#[test]
+fn motion_with_no_button_held_is_no_frame_drawn() {
+    let mut app = app();
+    let (jobs, _job_queue) = mpsc::channel();
+    let (tx, rx) = mpsc::channel::<Msg>();
+    let root = tempfile::tempdir().expect("a workspace");
+    let mut walking = false;
+    let mut surface = Painted::new(Arc::new(AtomicUsize::new(0)));
+
+    // The control: nothing is running and no thought is on its way in, so this
+    // is a still frame — one the clock does not draw, and the only thing that
+    // could draw it is what it hears.
+    assert!(!app.ticks(), "the frame is still");
+    // The pointer moving over it: the frame asks the terminal for any-event
+    // tracking, so this arrives once per sample, and nothing in the frame
+    // reads it.
+    let _ = tx.send(gesture(MouseEventKind::Moved, 10, 3));
+    assert!(turn_of_the_loop(
+        &mut app,
+        &rx,
+        &jobs,
+        &tx,
+        &mut walking,
+        root.path(),
+        &mut surface
+    ));
+    assert_eq!(surface.drawn(), 0, "a moving pointer draws nothing at all");
+}
+
+#[test]
+fn a_wheel_notch_still_draws_once() {
+    let mut app = app();
+    for turn in 1..=40 {
+        app.note_info(format!("note {turn}"));
+    }
+    let (jobs, _job_queue) = mpsc::channel();
+    let (tx, rx) = mpsc::channel::<Msg>();
+    let root = tempfile::tempdir().expect("a workspace");
+    let mut walking = false;
+    let mut surface = Painted::new(Arc::new(AtomicUsize::new(0)));
+    // A thread taller than the screen, laid out at the tail: a notch of the
+    // wheel is a gesture the frame reads, and it has rows to move.
+    surface.show(&mut app);
+    let drawn = surface.drawn();
+    assert_eq!(app.scroll(), 0, "the window starts at the tail");
+
+    let _ = tx.send(gesture(MouseEventKind::ScrollUp, 10, 3));
+    assert!(turn_of_the_loop(
+        &mut app,
+        &rx,
+        &jobs,
+        &tx,
+        &mut walking,
+        root.path(),
+        &mut surface
+    ));
+    assert_eq!(
+        surface.drawn() - drawn,
+        1,
+        "a wheel notch is drawn exactly once"
+    );
+    assert!(
+        app.scroll() > 0,
+        "and the notch scrolled the window the frame drew: {}",
+        app.scroll()
+    );
+}
+
+#[test]
+fn a_drag_copies_the_marked_rows_it_draws_for() {
+    let clipboard = Taking::default();
+    let mut app = App::with_clipboard(launch(), None, Box::new(clipboard.clone()));
+    app.note_info("alpha bravo charlie");
+    app.note_info("delta echo foxtrot");
+
+    let (jobs, _job_queue) = mpsc::channel();
+    let (tx, rx) = mpsc::channel::<Msg>();
+    let root = tempfile::tempdir().expect("a workspace");
+    let mut walking = false;
+    let mut surface = Painted::new(Arc::new(AtomicUsize::new(0)));
+    // The rows a drag reaches are the frame's own: one draw lays them out.
+    surface.show(&mut app);
+    let drawn = surface.drawn();
+    let area = app.viewport().area;
+    let rows = app.viewport().rows.clone();
+    let first = rows
+        .iter()
+        .position(|row| row.contains("alpha bravo"))
+        .expect("the first note is a row");
+    let last = rows
+        .iter()
+        .position(|row| row.contains("delta echo"))
+        .expect("the second note is a row");
+
+    let press = gesture(
+        MouseEventKind::Down(MouseButton::Left),
+        area.x,
+        area.y + first as u16,
+    );
+    let drag = gesture(
+        MouseEventKind::Drag(MouseButton::Left),
+        area.x + area.width - 1,
+        area.y + last as u16,
+    );
+    let release = gesture(
+        MouseEventKind::Up(MouseButton::Left),
+        area.x + area.width - 1,
+        area.y + last as u16,
+    );
+    for message in [press, drag, release] {
+        let _ = tx.send(message);
+        assert!(turn_of_the_loop(
+            &mut app,
+            &rx,
+            &jobs,
+            &tx,
+            &mut walking,
+            root.path(),
+            &mut surface
+        ));
+    }
+
+    assert_eq!(
+        surface.drawn() - drawn,
+        3,
+        "a press, a drag and a release are each a frame"
+    );
+    let copied = clipboard.saw();
+    assert_eq!(copied.len(), 1, "one drag is one copy: {copied:?}");
+    assert!(
+        copied[0].contains("alpha") && copied[0].contains("delta"),
+        "the marked rows are the ones copied: {copied:?}"
+    );
 }

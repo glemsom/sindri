@@ -11,11 +11,25 @@ use crate::app::App;
 use crate::selection::Selection;
 
 impl App {
-    /// One mouse event. `Shift` hands the gesture back to the terminal: the
-    /// frame never sees a drag it must not take.
-    pub fn mouse(&mut self, event: MouseEvent) {
+    /// One mouse event, and whether the pointer said anything the frame draws.
+    /// `Shift` hands the gesture back to the terminal: the frame never sees a
+    /// drag it must not take.
+    ///
+    /// Motion with no button held is the one report that says nothing. The
+    /// frame asks the terminal for any-event tracking, so the pointer moving
+    /// over a still frame arrives as one report per sample, and no part of the
+    /// frame reads it: a press, a drag and the wheel are told apart from it and
+    /// each does its own work. What a frame drawn for it would cost is the
+    /// cursor's blink — every draw ends by showing the terminal's cursor and
+    /// moving it back into the composer, and a terminal restarts a blink on
+    /// both — so a moving pointer leaves the composer's cursor blinking at the
+    /// pointer's sample rate, and a still one leaves it alone.
+    pub fn mouse(&mut self, event: MouseEvent) -> bool {
+        if event.kind == MouseEventKind::Moved {
+            return false;
+        }
         if event.modifiers.contains(KeyModifiers::SHIFT) {
-            return;
+            return true;
         }
         if self.overlay.is_some() {
             match event.kind {
@@ -23,7 +37,7 @@ impl App {
                 MouseEventKind::ScrollDown => self.scroll_page(false),
                 _ => {}
             }
-            return;
+            return true;
         }
         let at = Position::new(event.column, event.row);
         match event.kind {
@@ -53,6 +67,7 @@ impl App {
             }
             _ => {}
         }
+        true
     }
 
     /// A press: what a row is worth before it is a place in the text. A click

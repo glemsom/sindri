@@ -217,7 +217,8 @@ fn wait(rx: &Receiver<Msg>, live: bool) -> Wake {
 }
 
 /// One turn of the loop: wait, tell the frame what it heard, start whatever it
-/// asked for, and draw. Returns whether the terminal is still there.
+/// asked for, and draw — unless what it heard is something the frame says
+/// nothing with. Returns whether the terminal is still there.
 fn turn_of_the_loop(
     app: &mut App,
     rx: &Receiver<Msg>,
@@ -232,18 +233,28 @@ fn turn_of_the_loop(
     // a thought: the pane asks for ticks while one is live and stops asking the
     // moment it has folded, so a still frame is never drawn for its own sake.
     let live = app.ticks() || *walking || surface.owes(app);
-    match wait(rx, live) {
+    let draws = match wait(rx, live) {
         Wake::Said(message) => {
             if matches!(message, Msg::Paths(..)) {
                 *walking = false;
             }
-            apply(app, message);
+            apply(app, message)
         }
-        Wake::Pulse(delta) => app.pulse(delta),
+        Wake::Pulse(delta) => {
+            app.pulse(delta);
+            true
+        }
         Wake::Gone => return false,
-    }
+    };
     if app.wants_quit() {
         return false;
+    }
+    // What the frame says nothing with is never a frame drawn — a draw shows
+    // the cursor in the composer again and restarts its blink — and the work
+    // between a message and its frame goes with it: nothing is laid out twice
+    // for a report nothing reads.
+    if !draws {
+        return true;
     }
     tasks::begin(app, jobs);
     walk(app, tx, walking, root);
@@ -320,10 +331,16 @@ impl Paint for Screen<'_> {
     }
 }
 
-fn apply(app: &mut App, message: Msg) {
+/// Tells the frame what it heard, and answers whether the frame has anything to
+/// draw for it. Every kind of message answers here, so an event the frame says
+/// nothing with cannot drift back into a redraw in silence: the mouse is the
+/// first kind to say no — motion with no button held, a report per sample that
+/// no part of the frame reads — and the rest still answer `true` for what they
+/// do.
+fn apply(app: &mut App, message: Msg) -> bool {
     match message {
+        Msg::Mouse(mouse) => return app.mouse(mouse),
         Msg::Key(key) => app.key(key),
-        Msg::Mouse(mouse) => app.mouse(mouse),
         Msg::Paste(text) => app.paste(&text),
         Msg::Resize => {}
         Msg::Event(event) => app.event(event),
@@ -336,6 +353,7 @@ fn apply(app: &mut App, message: Msg) {
         Msg::Renewed(launch) => app.renewed(launch.map(|launch| *launch)),
         Msg::Reloaded(reloaded) => app.reloaded(reloaded.map(|launch| *launch)),
     }
+    true
 }
 
 /// Walks the workspace on a thread of its own for the completion that just
