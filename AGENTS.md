@@ -8,20 +8,19 @@ toolchain, then `sindri doctor`.
 
 - **Issues** live in this repository's GitHub Issues (`glemsom/sindri`), driven by the
   `gh` CLI: `docs/agents/issue-tracker.md`.
-- **Labels**: the five roles triage speaks in, and the one label string each has, are
+- **Labels**: the five roles triage speaks in, one label string each:
   `docs/agents/triage-labels.md`.
-- **Vocabulary**: `GLOSSARY.md` at the root. Use its words exactly; do not drift to the
-  synonyms it avoids.
-- **Decisions**: `docs/agents/domain.md` says which records hold them, and that a new
-  decision belongs in the tree rather than in a new record. The tool set's record is
-  `docs/adr/0002-three-tools.md`.
+- **Vocabulary**: `GLOSSARY.md` at the root. Use its words exactly; never its avoided
+  synonyms.
+- **Decisions**: a new decision belongs in the tree beside the code, not in a new record
+  (`docs/agents/domain.md`). The tool set's record is `docs/adr/0002-three-tools.md`.
 
 ## Proving a change
 
 `make check` is the gate: fmt, clippy with warnings denied, the four audits, the tests, the
-evals, the no-relink proof and the release scripts. `make audit` runs the four fast audits on
-their own, and `make hooks` puts them in front of every commit.
+evals, the no-relink proof and the release scripts. `make audit` runs the four fast audits
+alone, and `make hooks` puts them in front of every commit.
 
 A commit subject is a lowercase area prefix, a sentence saying what changed, and the ticket
-that asked for it — `(#123)`. `scripts/release-changelog.sh` derives the changelog from those
-subjects, so the convention is what a release note is made of.
+that asked for it — `(#123)`. `scripts/release-changelog.sh` derives the changelog from
+those subjects, so a release note is made of them.

@@ -6,36 +6,35 @@ An AI assistant for GNU/Linux: a Unix filter for scripts, a TUI for humans.
 $ git diff | sindri -b "summarise this"
 ```
 
-stdout is the answer and exactly one newline; stderr is silent unless `-v`, and stdout
-stays empty when a run fails or is cancelled.
+stdout is the answer and exactly one newline; it stays empty when a run fails or is
+cancelled. stderr is silent unless `-v`.
 
-**Three tools.** `bash` runs everything behind the sandbox: search, fetch, patch and HTTP
-all go through the shell, and pipelines or a short script do in one turn what a
-tool-per-task agent needs several. `skill` loads instructions the workspace ships —
-once per conversation, in a wrapper that lists the skill's own files — and it does not
-exist when there is nothing to load, so a run with no skills pays nothing for them.
-`open` hands the host one target — an `http://` or `https://` URL, or a file in the
-workspace — for the browser of the machine running sindri to show you, and its result
-says `started`, that the host was asked, or `failed:` with the opener's own reason,
-and never that you looked.
-No environment inside the sandbox has a display to open a page on, so the browser is the
-host's; batch mode, which has no one to look, is offered no `open` at all.
-Why a skill is not a file the model reads through `bash`, and why the browser is not
-a shell command either: [`docs/adr/0002-three-tools.md`](docs/adr/0002-three-tools.md).
+**Three tools.** `bash` runs everything behind the sandbox — search, fetch, patch and
+HTTP all go through the shell, so a pipeline or a short script does in one turn what a
+tool-per-task agent needs several for. `skill` loads instructions the workspace ships,
+once per conversation, in a wrapper that lists the skill's own files; it is absent when
+there is nothing to load, so a run with no skills pays nothing for them. `open` hands the
+host one target — an `http://` or `https://` URL, or a file in the workspace — for the
+browser of the machine running sindri to show you; its result says `started`, that the
+host was asked, or `failed:` with the opener's own reason, and never that you looked.
+No sandbox has a display to open a page on, so the browser is the host's; batch mode,
+which has no one to look, is offered no `open` at all. Why a skill is not a file read
+through `bash`, and the browser not a shell command either:
+[`docs/adr/0002-three-tools.md`](docs/adr/0002-three-tools.md).
 
 **Sandboxed by default.** Every `bash` call runs in unprivileged bubblewrap, host root
 read-only (a boundary on writes, not reads) plus a writable set you chose. The escape
-hatch is `--yolo-unsafe`: it runs one invocation's commands with your own privileges,
-outside bubblewrap, inheriting your environment and working directory — and it costs the
-boundary entirely, which is why the run's record, its JSON and its rail all say `unsafe`.
+hatch is `--yolo-unsafe`: one invocation's commands run with your own privileges, outside
+bubblewrap, inheriting your environment and working directory — and the record, the JSON
+and the rail all say `unsafe`.
 
-**Linux only.** `x86_64` and `aarch64` are the two targets, static musl for a release; an
-unprivileged `bwrap` that can build a namespace is the precondition for running at all.
+**Linux only.** `x86_64` and `aarch64`, static musl for a release; an unprivileged `bwrap`
+that can build a namespace is the precondition for running at all.
 
 ## Install
 
-**Nothing is released yet**: `git tag` is empty, so the installer has no release to fetch.
-Build it from a checkout with the pinned toolchain instead.
+**Nothing is released yet** — `git tag` is empty — so `install.sh` has nothing to fetch
+and a checkout is the path that installs.
 
 ```console
 $ git clone https://github.com/glemsom/sindri && cd sindri
@@ -43,15 +42,14 @@ $ devbox run -- cargo install --path crates/cli
 $ sindri doctor
 ```
 
-Any recent stable Rust builds the same binary as `cargo install --path crates/cli`, and
-either way it lands on your `PATH` (`~/.cargo/bin` without devbox). `doctor` proves
-`bwrap`, the binary set and the mount plan, and lists every skill it found with the scope
-that holds it: `builtin` for the ones compiled into the binary, `user` for
-`~/.agents/skills`, and `repo` for each `.agents/skills` from the workspace up to its
-repository root — a built-in has no directory to print, so it says `(compiled in)` where a
-path would go, and a nearer scope that displaced it is named beside it. The static,
-checksum-verified `curl … | sh` install into `~/.local/bin` is the plan for v0.1.0; the
-runbook and what is proven of it: [`docs/install.md`](docs/install.md).
+`cargo install --path crates/cli` without devbox builds the same binary and lands it in
+`~/.cargo/bin`. `doctor` proves `bwrap`, the binary set and the mount plan, then lists
+every skill it found with the scope holding it: `builtin` for the ones compiled into the
+binary, `user` for `~/.agents/skills`, and `repo` for each `.agents/skills` from the
+workspace up to its repository root — a built-in prints `(compiled in)` where a path
+would go, and a nearer scope that displaced it is named beside it. The checksum-verified
+`curl … | sh` install into `~/.local/bin` is the plan for v0.1.0; the runbook and what is
+proven of it: [`docs/install.md`](docs/install.md).
 
 ## Batch mode
 
@@ -63,11 +61,11 @@ $ cat notes.md | sindri -b
 Piped stdin is context appended after the prompt; with no prompt argument stdin is the
 prompt, and a pipe without `-b` is refused. `-v` puts the run on stderr.
 
-Where stderr is a terminal, a batch run also says what it is doing while it works: `OSC 7501`
-reports carrying `working` and then `done` — or `error`, or `idle` for an interrupt — with one
-coarse line of its own words, the turn count and the name of the workspace. They go to stderr
-and never to stdout, so a script reads the answer it always did, and a stderr that is a file or
-a pipe is written nothing at all. `status = false`, or `SINDRI_STATUS=off`, silences them.
+Where stderr is a terminal, a batch run also says what it is doing while it works:
+`OSC 7501` reports carrying `working` and then `done` — or `error`, or `idle` for an
+interrupt — each with one coarse line of its own words, the turn count and the workspace.
+They never go to stdout, so a script reads the answer it always did; a stderr that is a
+file or a pipe is written nothing. `status = false`, or `SINDRI_STATUS=off`, silences them.
 
 | Exit | Meaning | Exit | Meaning |
 | --- | --- | --- | --- |
@@ -90,8 +88,8 @@ $ sindri -b "summarise this diff" --format json | jq -r .session
 
 Field order is fixed and later fields only append; `stopped` is `final`, `max_turns`,
 `budget`, `cancelled` or `error`, and `enforcement` is `bubblewrap` or `unsafe` — the
-last field, after `command_ms` and `output_bytes`, which say what the commands spent.
-A field the run knows nothing about is left out, never `null`.
+last field, after `command_ms` and `output_bytes`, which say what the commands spent. A
+field the run knows nothing about is left out, never `null`.
 
 ## Commands
 
@@ -99,7 +97,7 @@ A field the run knows nothing about is left out, never `null`.
 | --- | --- |
 | `sindri` | the terminal UI, on a terminal |
 | `sindri -b PROMPT` | batch: ask the model, print the answer |
-| `sindri doctor` | prove the sandbox, print the description the model sees, and list the skills it found |
+| `sindri doctor` | prove the sandbox, print the description the model sees, list the skills it found |
 | `sindri sandbox exec [--timeout N] [--yolo-unsafe] -- CMD` | one command through the sandbox, no model, outcome as JSON |
 | `sindri sessions list [--limit N] [--json]` | the records, newest first, one row each |
 | `sindri sessions show [ID] [--json]` | one transcript: the newest record, or the one `ID` or a prefix names |
@@ -112,92 +110,86 @@ A field the run knows nothing about is left out, never `null`.
 Bare `sindri` on a terminal opens the frame — alternate screen, streaming markdown
 transcript, rail, composer; off a terminal it is a refusal at exit 2.
 
-- **First frame:** an empty thread is not a blank page — the wire, the model, the
-  workspace and the sandbox, one dim sentence of the contract, and two prompts that can
-  be typed as they read (with `/help` beside them). The composer holds
-  the placeholder `Ask, or drop a log here · @ path · / command` until there is a draft.
+- **First frame:** the wire, the model, the workspace and the sandbox, one dim sentence
+  of the contract, and two prompts that can be typed as they read, with `/help` beside
+  them. The composer holds the placeholder `Ask, or drop a log here · @ path · / command`
+  until there is a draft.
 - **Pulse:** while a run is live, a braille marker at the head of the newest answer
   carries the elapsed time (`⠸ 0.8s`) and settles on `✓` or `✗` with the duration it
-  stopped at; each call's duration counts up and freezes with the call; the rail's output
-  and context figures move on what streams and are trued up by the provider's report. The
-  tick exists only while something is moving — an idle frame is never drawn.
-- **Tool calls:** each call appears as it starts with the last five output lines, then
+  stopped at; each call's duration freezes with the call, and the rail's output and
+  context figures move on what streams, trued up by the provider's report. An idle frame
+  is never drawn.
+- **Tool calls:** each appears as it starts with the last five output lines, then
   collapses to `✓ exit 0`, `✗ exit N`, `✗ timed out`, `✗ cancelled` or `✗ sandbox: …` and
-  the count of what is behind it (`· 400 lines`). `Enter` on an empty composer, or a
-  click on the row, opens the call whole in place — a call that never spilled included;
-  `Ctrl-O`, or a click, opens a spill file.
-- **Queue:** a prompt typed during a run waits on a panel above the composer, whole and
-  in order, titled `3 queued` (`queued` for one); `↑` takes the newest back into the
-  composer, `Ctrl-X` drops it. `Ctrl-C` is answered at once — `cancelling…` in the footer, draft kept — and
-  the run stops when the request in flight does.
+  the count behind it (`· 400 lines`). `Enter` on an empty composer, or a click on the
+  row, opens the call whole in place — a call that never spilled included; `Ctrl-O`, or a
+  click, opens a spill file.
+- **Queue:** a prompt typed during a run waits above the composer, whole and in order,
+  titled `3 queued` (`queued` for one); `↑` takes the newest back into the composer,
+  `Ctrl-X` drops it. `Ctrl-C` is answered at once — `cancelling…` in the footer, draft
+  kept — and the run stops when the request in flight does.
 - **Rail:** 32 columns, always visible — cache hits, turns against the cap, tokens, a
   context meter, session GUID, temp path, branch, sandbox posture, why the last run
-  stopped — read as a ledger: labels in a nine-column field two cells in from the rail's
-  first column, so no word sits against the seam, dot leaders across the gap, every value
-  hanging off one edge and a `─` hairline between the blocks. Below 100 columns it becomes
-  one strip, inset the same two cells; the face takes the rows left over.
+  stopped. Read as a ledger: labels in a nine-column field two cells in from the rail's
+  first column, dot leaders across the gap, every value hanging off one edge, a `─`
+  hairline between blocks. Below 100 columns it becomes one strip, inset the same two
+  cells; the face takes the rows left over.
 - **Composer,** two to six rows: `Enter` sends, `Shift+Enter` or `Ctrl-J` breaks the line,
   `Ctrl-Q` leaves, `Ctrl-C` cancels a run and keeps the draft — or clears it when nothing
-  is running. A pasted prompt arrives as one draft with its line breaks kept, and waits
-  for the `Enter` you press.
-- **Scroll and copy:** `PgUp`/`PgDn` and the wheel move the transcript, `Home` goes to the
-  first turn and `End` back to the tail, which is followed again; a reader who is scrolled
-  back is told what arrived below them (`↓ 4 new rows`) and a thread longer than the
-  window marks its position in the last column. Only on-screen rows are laid out. A drag
-  marks what it will take: the cells it lights from press to release are the rows the copy
-  takes, styles stripped, and the mark stands after the button comes up, so `Ctrl-Y`
-  copies it again — or the last answer, when no mark does. `Shift`+`↑`/`↓` grow a mark a
-  row at a time up from the last row on screen, and shrink it back. A picture's block is
-  one thing and copies as its words; `Shift+drag` is handed to the terminal, whose own
-  selection it is. The words leave by OSC 52, falling back to `wl-copy` or `xclip`;
-  a copy the terminal cannot confirm says nothing, and one a tool took names the tool.
+  is running. A pasted prompt arrives as one draft with its line breaks kept.
+- **Scroll and copy:** `PgUp`/`PgDn` and the wheel move the transcript, `Home` goes to
+  the first turn and `End` back to the tail, which is followed again; a reader scrolled
+  back is told what arrived below (`↓ 4 new rows`), and a thread longer than the window
+  marks its position in the last column. Only on-screen rows are laid out. A drag marks
+  what it will take: the cells lit from press to release are the rows the copy takes,
+  styles stripped, and the mark stands after the button comes up, so `Ctrl-Y` copies it
+  again — or the last answer, when no mark does. `Shift`+`↑`/`↓` grow a mark a row at a
+  time up from the last row on screen, and shrink it back. A picture's block is one thing
+  and copies as its words; `Shift+drag` is the terminal's own selection. Words leave by
+  OSC 52, falling back to `wl-copy` or `xclip`.
 - **`@`** walks the workspace (`.git` skipped, `.gitignore` ignored), proximity-ranked,
-  capped at eight rows. `Tab`/`Enter` takes one; `Esc` dismisses, both while one is open.
+  capped at eight rows. `Tab`/`Enter` takes one; `Esc` dismisses.
 - **`/`** runs `/new` (fresh session GUID, empty transcript), `/export`, `/skill`,
   `/settings`, `/help` and `/quit`. `/skill` is the one name that takes an argument, and
   the one a colon may end — `/skill:house-style` and `/skill house-style` are the same
-  line — where the rest of it is the prompt the skill is put to work on and a bare name
+  line — where the rest of it is the prompt the skill is put to work on, and a bare name
   arms it without starting a turn; the names offered are the ones the catalog says you
   may invoke. `/export [path]` writes the thread as one markdown file, asking twice before
-  replacing a file; reading a record back is `sindri sessions show`, in the shell.
-  **`?` and `/help` list the same bindings**, each gesture beside its key.
+  replacing a file; reading a record back is `sindri sessions show`. `?` and `/help` list
+  the same bindings, each gesture beside its key.
 - **Chrome:** a narrow terminal shortens what the frame says and never cuts a key or a
-  fact in half. The footer states its seven hints from 120 columns up, five from 100 and
-  never fewer than `Enter send` and `? keys`; the rail gives facts up in one priority
-  order and keeps a row saying how many went (`+7 more`); the slim rail strip never
-  loses the posture, the model or the workspace.
+  fact in half. The footer states seven hints from 120 columns up, five from 100 and never
+  fewer than `Enter send` and `? keys`; the rail gives facts up in one priority order and
+  keeps a row saying how many went (`+7 more`); the slim strip never loses the posture,
+  the model or the workspace.
 - **One thread:** a second prompt builds on the first, `/new` starts over, and a model
-  changed in `/settings` answers the next turn on the same thread. **Boot runs `doctor`
-  first**: a sandbox that cannot be created is a card naming the failing check. A first
+  changed in `/settings` answers the next turn on the same thread. Boot runs `doctor`
+  first: a sandbox that cannot be created is a card naming the failing check, and a first
   run with no API key opens the modal below instead of failing.
-
-Each prompt is written to the session's record; the frame and the hands are this
-README's own description of the screen.
 
 ### Settings
 
-`/settings` edits the file everything else reads — one schema, one row per key below.
+`/settings` edits the one file everything else reads.
 
-- `↑`/`↓` or `Tab` move between keys, `Ctrl-U` empties the field, `Space` flips
-thinking, and an empty value unsets the key so the environment speaks. `Enter` writes at
-once and the next prompt runs on it; `Esc` discards, and only touched fields are
-written, once, atomically.
+- `↑`/`↓` or `Tab` move between keys, `Ctrl-U` empties the field, `Space` flips thinking,
+  and an empty value unsets the key so the environment speaks. `Enter` writes at once and
+  the next prompt runs on it; `Esc` discards, and only touched fields are written, once,
+  atomically.
 - **The API key** starts at *from environment*: nothing is written unless you type one,
-where typing warns and names the plaintext file it will land in. It is masked and never
-reaches the transcript or the record. The environment is read **above** the file, so an
-exported `SINDRI_API_KEY` wins over it.
-- **A first run needs no file.** Bare `sindri` with no key opens the frame with this
-modal on `api_key` — the row says where a key comes from (`SINDRI_API_KEY` or the
-provider's own variable), where it is written, that the file is `0600`, and that the
-value is never shown again. `Esc` leaves a frame that still reads, saying the missing
-key once and what the composer cannot send. `sindri -b` with no key is still exit 1, one
-line on stderr.
+  where typing warns and names the plaintext file it will land in. It is masked and never
+  reaches the transcript or the record. The environment is read **above** the file, so an
+  exported `SINDRI_API_KEY` wins.
+- **A first run needs no file.** Bare `sindri` with no key opens the frame with this modal
+  on `api_key` — the row says where a key comes from (`SINDRI_API_KEY` or the provider's
+  own variable), where it is written, that the file is `0600`, and that the value is never
+  shown again. `Esc` leaves a frame that still reads, saying the missing key once and what
+  the composer cannot send. `sindri -b` with no key is still exit 1, one line on stderr.
 
 ## Configuration
 
 One file, `$XDG_CONFIG_HOME/sindri/config.toml` (example:
-[`docs/config.example.toml`](docs/config.example.toml)). Precedence: file, then
-`SINDRI_*` environment, then flags.
+[`docs/config.example.toml`](docs/config.example.toml)). Precedence: file, then `SINDRI_*`
+environment, then flags.
 
 | Setting | File key | Environment | Flag |
 | --- | --- | --- | --- |
@@ -213,17 +205,16 @@ One file, `$XDG_CONFIG_HOME/sindri/config.toml` (example:
 | Terminal reports | `status` | `SINDRI_STATUS` | — |
 | ssh agent | `ssh_agent` | `SINDRI_SSH_AGENT` | `--ssh-agent`, `--no-ssh-agent` |
 
-`--yolo-unsafe` is the one flag with no file key and no environment variable: a run
-that leaves the sandbox is asked for in the invocation that makes it and dies with that
-invocation, because a persisted unsafe setting is the one a user forgets they turned on.
-Batch mode and `sandbox exec` say it once on stderr; the frame's rail says `unsafe · your
-own privileges`. Under the flag `--writable` is still validated, it simply is not what
-bounds the run.
+`--yolo-unsafe` is the one flag with no file key and no environment variable: a run that
+leaves the sandbox is asked for in the invocation that makes it and dies with it, because
+a persisted unsafe setting is the one a user forgets they turned on. Batch mode and
+`sandbox exec` say it once on stderr; the rail says `unsafe · your own privileges`. Under
+the flag `--writable` is still validated, it simply is not what bounds the run.
 
-`--writable` and `--header` are repeatable but **replace** the configured values rather
-than adding to them. An unknown key is an error naming key and file; a wrong value is
-exit 2. The credential also comes from `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or a
-matching `*_BASE_URL`, and is redacted everywhere; a file carrying one is `0600`.
+`--writable` and `--header` are repeatable but **replace** the configured values. An
+unknown key is an error naming key and file; a wrong value is exit 2. The credential also
+comes from `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or a matching `*_BASE_URL`, and is
+redacted everywhere; a file carrying one is `0600`.
 
 `.sindri.toml` in the working directory is **never** read: a checked-in config granting
 writable paths would turn every `git clone && sindri` into a privilege escalation.
@@ -231,96 +222,82 @@ writable paths would turn every `git clone && sindri` into a privilege escalatio
 A repository's own house rules are not a setting, and they arrive all the same: the
 `AGENTS.md` at the repository root — never a nested one, never an ancestor's — is read
 once at boot and travels beside the preamble rather than as a turn, so the transcript
-stays your words. The read is capped at **8 KiB**, a byte count rather than a line or
-word count because bytes are what the request pays for, and a longer file arrives cut
-with a marker naming the bytes left out. A repository without one adds nothing; one that
-cannot be read is a diagnostic naming the file and the reason, and the run still starts.
-`-v`, `sindri doctor` and the record's start block name the file and the bytes handed
-over in one sentence. [`GLOSSARY.md`](GLOSSARY.md) defines the word, under `instructions`.
+stays your words. The read is capped at **8 KiB**, a byte count rather than a line count
+because bytes are what the request pays for, and a longer file arrives cut with a marker
+naming the bytes left out. A repository without one adds nothing; one that cannot be read
+is a diagnostic naming the file and the reason, and the run still starts. `-v`,
+`sindri doctor` and the record's start block name the file and the bytes handed over.
+[`GLOSSARY.md`](GLOSSARY.md) defines the word, under `instructions`.
 
 ## Session records
 
-Every run leaves a record under `$XDG_STATE_HOME/sindri/sessions/<guid>/`, written as
-the run goes. `sindri sandbox exec` opens one too; `sindri doctor` writes none.
+Every run leaves a record under `$XDG_STATE_HOME/sindri/sessions/<guid>/`, written as the
+run goes. `sindri sandbox exec` opens one too; `sindri doctor` writes none.
 
 | file | what it holds |
 | --- | --- |
-| `session.json` | provider, model, enforcement (`bubblewrap`), the policy the model was handed, the workspace and its branch and commit, the dials the run obeyed, start, end, turns, usage, and why it stopped |
+| `session.json` | provider, model, enforcement, the policy the model was handed, the workspace and its branch and commit, the dials the run obeyed, start, end, turns, usage, and why it stopped |
 | `transcript.jsonl` | one entry per thing that happened — prompt, turns, tool calls, tool results — in order |
 | `status.json` | bubblewrap's own status documents, one per line, as they arrived |
-| `tmp/` | the session temp: a run's writable scratch, mapped to `TMPDIR`. `HOME` is the host's own, read-only, and nothing is created for it |
+| `tmp/` | the session temp: a run's writable scratch, mapped to `TMPDIR`. `HOME` is the host's own, read-only |
 
 The GUID is the `session` field of `--format json` and the last line of `-v`;
-`sindri sessions list` prints every record newest first, whole GUIDs and all, and
-`sindri sessions show` reads one back — the newest when no id is named, or the one a
-whole id or a leading prefix of one names, with an ambiguous prefix a usage error that
-lists the candidates. `show --json` prints the same record as one object of
-`meta`, `entries` and `status`: the files on disk in their own shape, so `jq` is the
-debugger and `cat transcript.jsonl` cannot disagree with it.
+`sindri sessions list` prints every record newest first, and `sessions show` reads one
+back — the newest when no id is named, or the one a whole id or a leading prefix names,
+an ambiguous prefix a usage error listing the candidates. `show --json` prints the files
+on disk in their own shape, so `jq` is the debugger and `cat transcript.jsonl` cannot
+disagree with it.
 
 Written incrementally, so a cancelled or `kill -9`ed run still reads; a session `/new`
-supersedes keeps saying `running`, because it did not stop, it was left.
-
-Fields are only ever appended, and every field added after a record was written is
-defaulted rather than required: a record from any earlier sindri still reads, and says
-nothing about what it never recorded. `version` is the build that wrote the run — per-run
-provenance, **not** a schema version; the record has none. The known gap:
-nothing is pruned, ever — every run keeps its transcript, spill files and session temp.
-Deliberate for v0.1; `sessions prune` is a later issue.
+supersedes keeps saying `running`, because it did not stop, it was left. Fields are only
+ever appended, and every field added after a record was written is defaulted rather than
+required, so a record from any earlier sindri still reads. `version` is the build that
+wrote the run — per-run provenance, **not** a schema version. Nothing is pruned, ever;
+deliberate for v0.1, and `sessions prune` is a later issue.
 
 ## Evals
 
 Four promises cannot be checked from a run's output: that the sandbox blocks what it
 claims, that the turn cap stops a loopy run, that a skill the workspace ships is loaded
-before the answer that needed it, and that a repository's own `AGENTS.md` changes what a
-run does. Ten scripted batch runs (`make eval`) prove them.
+before the answer that needed it, and that a repository's `AGENTS.md` changes what a run
+does. Ten scripted batch runs (`make eval`) prove them.
 
-Each eval runs the real binary in its own copy of a small fixture repository and asserts
-on exit codes, JSON fields, what the model was shown, the record it left and the files on
-disk — never on the model's prose, which drifts. CI replays recorded responses through
-the mock provider: no credential, no network, no bill. Eval 7 writes to paths the
-read-only root protects, so the suite **refuses to run** when the sandbox is not
-enforcing.
+Each runs the real binary in its own copy of a small fixture repository and asserts on
+exit codes, JSON fields, what the model was shown, the record it left and the files on
+disk — never on the model's prose, which drifts. CI replays recorded responses through the
+mock provider: no credential, no network, no bill. Eval 7 writes to paths the read-only
+root protects, so the suite **refuses to run** when the sandbox is not enforcing.
 
-Eval 9 is the one case that reads an answer: its rule (*the house marker on a script's
-second line*) lives in the fixture's one skill and nowhere else in the tree, so an answer
-that states it arrived through the catalog and could not have been guessed. The case
-fails on an answer without the skill call, on a first turn already carrying the rule, and
-on a script written without it.
+Two cases read an answer, because a rule that appears in no other file of the tree can
+only have arrived through the channel under test. Eval 9's rule lives in the fixture's one
+skill; it fails on an answer without the skill call, on a first turn already carrying the
+rule, and on a script written without it. Eval 10's lives in the fixture's `AGENTS.md`; it
+fails when that file is gone, when the block the model read arrived truncated at the
+instructions cap, and when the record shows the forbidden command was run.
 
-Eval 10 is the case that turns on the repository's own rules: its fixture carries an
-`AGENTS.md` whose answer heading and forbidden command appear in no other file of the
-tree, so a run that obeyed them was handed them. The check fails when that file is gone
-from the fixture, when the block the model read arrived truncated at the instructions cap,
-and when the record shows the forbidden command was run — the cap and the rules are held
-from the run's side, not from the answer's word for it.
-
-`make eval-live` runs the same ten prompts against your own provider and credential,
-at your own cost, skipping the assertions that need a recorded conversation. See
+`make eval-live` runs the same ten prompts against your own provider and credential, at
+your own cost, skipping the assertions that need a recorded conversation. See
 [`crates/evals/fixtures/README.md`](crates/evals/fixtures/README.md).
 
 ## Working on Sindri
 
 Everything goes through devbox, and `make check` is the definition of done.
 
-Run `make hooks` once per clone. It points `core.hooksPath` at `.githooks`, and every
-commit then runs `make audit` — the fast audits, in milliseconds — before it lands, so a
-broken commit is refused while it is still the only one. It needs no devbox; nothing is
-wired until you ask, so a fresh clone commits freely. `git commit --no-verify` skips it,
-and `make check` still is the gate: the hook moves the cheap part earlier, it does not
-narrow what is required.
+Run `make hooks` once per clone: it points `core.hooksPath` at `.githooks`, and every
+commit then runs `make audit` — the fast audits, in milliseconds — so a broken commit is
+refused while it is still the only one. `git commit --no-verify` skips it, and `make
+check` still is the gate.
 
 | Target | What it runs |
 | --- | --- |
 | `make check` | fmt, clippy, the four audits (800 lines, module docs, the module map, test names), tests, evals, the no-relink proof, the release scripts |
-| `make audit` | the four fast audits on their own, in milliseconds |
-| `make hooks` | enable the pre-commit hook: those audits, before every commit |
+| `make audit` | the four fast audits on their own |
+| `make eval` / `eval-live` | the evals, offline or against your provider |
 | `make build` / `install` / `clean` / `run ARGS=…` | release build / install the tree's binary / `cargo clean` / run it |
-| `make eval` / `eval-live` / `scripts-check` | the evals, offline or against your provider; the release scripts, offline |
-| `make release TAG=v0.1.0` | both static binaries, `SHA256SUMS`, changelog — inside the release image; devbox has no musl `std`, so this target fails on a dev machine (see [`docs/install.md`](docs/install.md)) |
+| `make release TAG=v0.1.0` | both static binaries, `SHA256SUMS`, changelog — inside the release image; devbox has no musl `std`, so this fails on a dev machine |
 
 A tag is the only thing a release needs, and the workflow builds, verifies and publishes
-it; none is cut yet, so every release path here is the plan rather than the state
-(see [`docs/install.md`](docs/install.md)). [`GLOSSARY.md`](GLOSSARY.md) has the
-vocabulary, [`docs/adr/0001-llm-friendly-code.md`](docs/adr/0001-llm-friendly-code.md)
-how the code is written.
+it; none is cut yet, so every release path here is the plan ([`docs/install.md`](docs/install.md)).
+[`GLOSSARY.md`](GLOSSARY.md) has the vocabulary and
+[`docs/adr/0001-llm-friendly-code.md`](docs/adr/0001-llm-friendly-code.md) how the code is
+written.

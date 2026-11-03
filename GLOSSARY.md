@@ -1,26 +1,23 @@
 # Glossary
 
-The vocabulary Sindri is written in. One entry per word, one meaning per entry: where
-the code says a word, that word is used here and its synonyms are not. Each entry
-points at the module that carries the thing, so the code is where the detail lives and
-this file is only what a reader needs to look in the right place. It holds the words a
-reader or an agent has to know to follow the tree; a word that is not here is a word the
-tree may still use, and only means that nobody has to hold two meanings of it.
+The vocabulary Sindri is written in. One entry per word, one meaning per entry: where the
+code says a word, that word is used here and its synonyms are not. Each entry points at the
+module that carries the thing, so the code holds the detail and this file only tells a
+reader where to look.
 
 ## The run and its loop
 
-**turn** — one request to the model and the calls it asks for in reply. The loop spends a
-turn per request, and `max_turns` caps them: the key is set in the config file and
-defaults to 250, so a run that never stops of its own accord still ends and says why.
+**turn** — one request to the model and the calls it asks for in reply. `max_turns` caps
+them, defaults to 250, so a run that never stops of its own accord still ends and says why.
 
-**wave** — the tool calls one turn emitted, run together because a model that emitted
-them declared them independent. Results come back in the order asked for, whatever order
-they finished in, and the wave is what carries the loaded-skill set from one turn to the
-next (`crates/core/src/agent/calls.rs`).
+**wave** — the tool calls one turn emitted, run together because the model declared them
+independent. Results come back in the order asked for, whatever order they finished in, and
+the wave carries the loaded-skill set from one turn to the next
+(`crates/core/src/agent/calls.rs`).
 
-**provider** — the model behind one seam: a call asks, and gets an answer or a failure
-that is safe to print (`crates/core/src/provider/mod.rs`). No part of the tree above that
-seam knows the client library exists — `rig_wire` is the one file that does.
+**provider** — the model behind one seam: a call asks, and gets an answer or a failure that
+is safe to print (`crates/core/src/provider/mod.rs`). Nothing above that seam knows the
+client library exists — `rig_wire` is the one file that does.
 
 **wire** — which provider API a run speaks, Anthropic Messages or OpenAI-compatible Chat
 Completions, and what each needs: its credential variable, its base URL variable and
@@ -32,31 +29,31 @@ answer and exactly one newline, or nothing when the run failed or was cancelled.
 **stopped** — why a run ended, the closed set of `Stopped` (`crates/core/src/agent/report.rs`):
 `final`, the run answered; `max_turns`, it spent the cap; `budget`, it spent its command
 time or its output; `cancelled`, SIGINT with nothing on stdout; `error`, it could not
-deliver. A record writes `running` from the moment it starts until one of them lands.
+deliver. A record writes `running` until one of them lands.
 
 ## The tools
 
-**tool set** — the tools a run holds: `bash` always, `skill` only when the workspace
-holds one the model may see, `open` only in a front end a human with a browser is sitting
-in front of (`crates/core/src/agent/tools.rs`). A tool a front end does not build is a
-tool the schema never mentions.
+**tool set** — the tools a run holds: `bash` always, `skill` only when the workspace holds
+one the model may see, `open` only in a front end a human with a browser sits in front of
+(`crates/core/src/agent/tools.rs`). A tool a front end does not build is a tool the schema
+never mentions.
 
 **call** — one tool call: the variant of `Asked` that names the tool, read once so every
-match over it is exhaustive (`crates/core/src/provider/asked.rs`). A tool added there is
-a variant the loop, the record and the frame must each answer.
+match over it is exhaustive (`crates/core/src/provider/asked.rs`). A tool added there is a
+variant the loop, the record and the frame must each answer.
 
 **bash** — the one tool that runs things: search, fetch, patch and HTTP, all behind the
-sandbox. Its description is derived from the sandbox policy and the limits in force, so
-the boundary the model is told about is the boundary enforced.
+sandbox. Its description is derived from the sandbox policy in force, so the boundary the
+model is told about is the boundary enforced.
 
 **skill** — the second tool: instructions written for the model, loaded into the
 conversation once, frontmatter stripped and the skill's own files listed beside the body
-(`crates/core/src/agent/skill.rs`). It is a tool and not a file read through `bash`,
-because a permission nobody enforces is a suggestion.
+(`crates/core/src/agent/skill.rs`). A tool and not a file read through `bash`, because a
+permission nobody enforces is a suggestion.
 
 **open** — the third tool: one target handed to the host's opener
 (`crates/core/src/agent/open.rs`). The core decides and refuses; the spawn belongs to the
-process that still holds a display, which the sandbox is the thing that takes away.
+process that still holds a display, which the sandbox is what takes away.
 
 ## Skills
 
@@ -65,66 +62,64 @@ compiled into the binary; `user`, `~/.agents/skills`; `repo`, every `.agents/ski
 the workspace up to its repository root, nearest first and never above it. A nearer scope
 takes a name from a further one.
 
-**built-in skill** — a `SKILL.md` compiled into the binary with `include_str!` and not a
+**built-in skill** — a `SKILL.md` compiled into the binary with `include_str!`, not a
 directory any scan walks (`crates/core/src/skills/builtin.rs`). It has no path, because a
-path is a thing that can be absent, stale or unwritable, and the instructions a run is
-given and the binary that enforces them ship in one artefact or neither does.
+path can be absent, stale or unwritable, and the instructions a run is given and the binary
+that enforces them ship in one artefact or neither does.
 
-**user-only skill** — a skill carrying `disable-model-invocation: true`: a human may put
-it in force, and it is absent from the schema and the catalog the model reads.
+**user-only skill** — a skill carrying `disable-model-invocation: true`: a human may put it
+in force, and it is absent from the schema and the catalog the model reads.
 
-**model-only skill** — a skill carrying `user-invocable: false`: the model may load it,
-and the frame's completion never offers it. Both flags are Claude-compatible extensions,
-read as plain booleans and ignored when spelled any other way.
+**model-only skill** — a skill carrying `user-invocable: false`: the model may load it, and
+the frame's completion never offers it. Both flags are Claude-compatible extensions, read
+as plain booleans and ignored when spelled any other way.
 
 **catalog** — every skill the scan found, one line per skill in the `skill` tool's own
-description. It is there and not in the preamble because it changes with the workspace,
-and it is paid only where it buys something: with no model-visible skill the tool is not
-registered at all.
+description. There and not in the preamble because it changes with the workspace, and paid
+only where it buys something: with no model-visible skill the tool is not registered at all.
 
 **description ceiling** — `DESCRIPTION_CEILING`, 200 characters, the most of a skill's
-description the catalog will carry (`crates/core/src/skills/frontmatter.rs`). It is about
-two sentences — the task covered, and where the model's default is wrong — and a longer
-description is a refusal said out loud, never a truncation, because a truncated routing
-key is a skill that stops being found.
+description the catalog will carry (`crates/core/src/skills/frontmatter.rs`). About two
+sentences — the task covered, and where the model's default is wrong — and a longer
+description is a refusal said out loud, never a truncation, because a truncated routing key
+is a skill that stops being found.
 
 **instructions** — a repository's own rules: the `AGENTS.md` at the repository root, read
 once at boot and handed to the model beside the preamble. Never a nested file, never an
-ancestor's; the read is capped at 8 KiB and a longer file arrives cut with a marker saying
-so; `Taken` is what the read produced — `Absent`, `Found` or `Unreadable` — and an
-unreadable file is a diagnostic that never stops the run
-(`crates/core/src/instructions.rs`).
+ancestor's; capped at 8 KiB, a longer file arriving cut with a marker saying so; `Taken` is
+what the read produced — `Absent`, `Found` or `Unreadable` — and an unreadable file is a
+diagnostic that never stops the run (`crates/core/src/instructions.rs`).
 
 ## The sandbox
 
 **sandbox** — unprivileged bubblewrap, host root read-only, plus a writable set the user
-chose. Read-only is a boundary on writes and not on reads, which is why a host socket the
-process already holds is reachable and why a tool that would route around a refusal is
-not the shape to build.
+chose. Read-only bounds writes and not reads, which is why a host socket the process
+already holds is reachable, and why a tool routing around a refusal is not the shape to
+build.
 
-**bubblewrap** — `bwrap`, the program the policy is enforced through. A word a run reports
-as its `enforcement` when it is in force; a `bwrap` that cannot start is a failure to
-report and never one to paper over.
+**bubblewrap** — `bwrap`, the program the policy is enforced through, and the word a run
+reports as its `enforcement` when it is in force. A `bwrap` that cannot start is a failure
+to report and never one to paper over.
 
 **session temp** — the writable scratch a run's own session directory carries, mapped to
 `TMPDIR`. `HOME` is the host's own, read-only, and nothing is created for it.
 
-**writable set** — the paths a run may write beyond its session temp, and it stays the
-user's sentence: a level that names one replaces the shipped floor rather than adding to
-it (`crates/core/src/sandbox/extras.rs`).
+**writable set** — the paths a run may write beyond its session temp. It stays the user's
+sentence: a level that names one replaces the shipped floor rather than adding to it
+(`crates/core/src/sandbox/extras.rs`).
 
 **unsafe** — what a run says of itself under `--yolo-unsafe`: commands run with the user's
 own privileges, outside bubblewrap, inheriting environment and working directory. The
-record, the JSON and the rail all say it; the flag is asked for in the invocation that
-makes it and dies with that invocation.
+record, the JSON and the rail all say it, and the flag dies with the invocation that asks
+for it.
 
 ## Status and records
 
 **status** — what a run tells its terminal it is doing: one `OSC 7501` report, written
 unqueried, carrying one of the specification's closed set of states — `idle`, `working`,
 `done`, `blocked`, `error` — a coarse line, the turn count and the workspace's name. The
-value is `sindri_core::status::State`, the encoder is the pure `status::report`
-(`crates/core/src/status.rs`), the identity is `app=sindri`, and the writing belongs to
+value is `sindri_core::status::State`, the encoder the pure `status::report`
+(`crates/core/src/status.rs`), the identity `app=sindri`, and the writing belongs to
 whoever owns the tty.
 
 **record** — the files a session leaves: `session.json`, `transcript.jsonl`, `status.json`
@@ -134,9 +129,9 @@ never a **status** report's meaning: what a terminal stores from one is the spec
 *record*, and `agent::Report` is what one run did — the answer, why it stopped and what it
 cost.
 
-**transcript** — `transcript.jsonl`: one entry per thing that happened, in order, prompt
-and turns and calls and results, written as it happens and read back by `sindri sessions
-show` and `/export` from the same `Entry` values so the two cannot disagree.
+**transcript** — `transcript.jsonl`: one entry per thing that happened, in order, written
+as it happens and read back by `sindri sessions show` and `/export` from the same `Entry`
+values, so the two cannot disagree.
 
 **session** — one run's value a front end holds to have a run: the session directory with
 its temp, the record, and the identity that names them (`crates/core/src/session.rs`).
@@ -144,59 +139,57 @@ its temp, the record, and the identity that names them (`crates/core/src/session
 
 ## The frame
 
-**frame** — the terminal UI: alternate screen, streaming markdown thread, rail and
-composer, launched by a bare `sindri` on a terminal (`crates/cli/src/frame.rs`). Off a
-terminal the same invocation is a refusal at exit 2.
+**frame** — the terminal UI: alternate screen, streaming markdown thread, rail and composer,
+launched by a bare `sindri` on a terminal (`crates/cli/src/frame.rs`). Off a terminal the
+same invocation is a refusal at exit 2.
 
 **rail** — the frame's ledger of facts, always visible: cache hits, turns against the cap,
 tokens, the context meter, the session id, the temp path, the branch, the sandbox posture
 and why the last run stopped.
 
 **thread** — the transcript as the frame holds it: the entries in order and the rows each
-one is worth at the width it was measured at, with a mutation the only way in so exactly
+one is worth at the width it was measured at, with a mutation the only way in, so exactly
 the heights a change invalidated are forgotten (`crates/tui/src/thread.rs`).
 
-**entry** — one row of the thread, and the state a call carries while it runs: the
-command, the output kept and the word its row ended on (`crates/tui/src/entry.rs`).
+**entry** — one row of the thread, and the state a call carries while it runs: the command,
+the output kept and the word its row ended on (`crates/tui/src/entry.rs`).
 
 **composer** — the prompt being typed, held as rows and a character-index cursor and
 reported in cells, because the terminal draws cells and a glyph may be two wide.
 
-**thought** — reasoning the run is having: the turn it belongs to, the text so far and
-when it began. Held beside the thread and never in it, because a thought is a state the
-run is in and not something that was said.
+**thought** — reasoning the run is having: the turn it belongs to, the text so far and when
+it began. Held beside the thread and never in it, because a thought is a state the run is
+in and not something that was said.
 
 **mark** — the wash a drag leaves on the transcript. `mark::span` computes the cells from
-press to release, and the copy reads the same function, so the mark cannot light a cell
-the copy does not take nor leave dark one it does (`crates/tui/src/mark.rs`).
+press to release and the copy reads the same function, so the mark cannot light a cell the
+copy does not take nor leave dark one it does (`crates/tui/src/mark.rs`).
 
 **block** — one **picture**'s rows taken as a single region: `Viewport::block` names the
-picture a row belongs to (`crates/tui/src/selection.rs`), its graphic's rows and caption
-are lit together, and its words are taken once. Which rows a copy takes is **mark**'s
-rule, told there and not here.
+picture a row belongs to (`crates/tui/src/selection.rs`), its graphic's rows and caption are
+lit together, and its words are taken once. Which rows a copy takes is **mark**'s rule.
 
 **picture** — an image the thread shows: a markdown `src` resolved to a file in the
-workspace, or a mermaid fence's body, measured without spending its pixels and refused
-with a reason the caption can print (`crates/tui/src/picture.rs`).
+workspace, or a mermaid fence's body, measured without spending its pixels and refused with
+a reason the caption can print (`crates/tui/src/picture.rs`).
 
 ## Front ends and surfaces
 
 **front end** — a way into the same core: the frame, batch mode, `sindri sandbox exec`,
-`sindri doctor` and `sindri sessions`. Each owns only what is its own, and none of them
-owns a decision the core could make.
+`sindri doctor` and `sindri sessions`. Each owns only what is its own, and none owns a
+decision the core could make.
 
-**batch mode** — the Unix filter front end (`sindri -b`), which reads the prompt and the
-stdin context, runs the agent to an answer and prints it plus exactly one newline. Exit
-codes, not prose, tell a script what happened, and the toolset it is offered carries no
-`open` because it has no one to look.
+**batch mode** — the Unix filter front end (`sindri -b`): reads the prompt and the stdin
+context, runs the agent to an answer, prints it plus exactly one newline. Exit codes, not
+prose, tell a script what happened, and its toolset carries no `open` because it has no one
+to look.
 
 **boot** — the one door a front end calls to turn flags and the process's own facts into a
 run ready to start (`crates/cli/src/boot.rs`, `Boot`). It probes nothing: the frame proves
-the sandbox and draws the card, batch prints the answer, `sandbox exec` prints the
-outcome.
+the sandbox and draws the card, batch prints the answer, `sandbox exec` prints the outcome.
 
 **failure** — the words that follow `sindri: ` and the exit code the shell reads, in one
-module, so a front end never learns its failure words from another front end
+module, so a front end never learns its failure words from another
 (`crates/cli/src/failure.rs`).
 
 **exit code** — what a script branches on: `0` an answer, `1` a model or provider error,
@@ -214,33 +207,33 @@ the contract, later fields only appended, and a field nobody reported left out r
 schema. A checked-in `.sindri.toml` is never read: a repository that could grant writable
 paths would turn every clone into a privilege escalation.
 
-**precedence** — one order for every setting, stated once: the config file, then
-`SINDRI_*` environment, then flags. A repeated flag replaces the configured value rather
-than adding to it, and an unknown key is an error naming the key and the file.
+**precedence** — one order for every setting, stated once: the config file, then `SINDRI_*`
+environment, then flags. A repeated flag replaces the configured value rather than adding
+to it, and an unknown key is an error naming the key and the file.
 
 ## The gate
 
 **gate** — `make check`, the whole of done: fmt, clippy with warnings denied, the four
-audits, the tests, the evals, proof that an unchanged tree does not relink, and the
-release scripts run as processes. Nothing lands on a subset.
+audits, the tests, the evals, proof that an unchanged tree does not relink, and the release
+scripts run as processes. Nothing lands on a subset.
 
 **audit** — the four fast checks `make audit` runs in milliseconds and the commit hook
 refuses a broken commit with: no `*.rs` over 800 lines, a `//!` paragraph opening every
 module, a clause beside every module declaration in a crate root, and a test name that
 states the behaviour it proves.
 
-**eval** — one scripted batch run in its own copy of a fixture repository, asserting on
-exit codes, JSON fields, the record left and the files on disk rather than on the model's
-prose. `make eval` replays recorded responses offline; `make eval-live` asks your own
-provider at your own cost.
+**eval** — one scripted batch run in its own copy of a fixture repository, asserting on exit
+codes, JSON fields, the record left and the files on disk rather than on the model's prose.
+`make eval` replays recorded responses offline; `make eval-live` asks your own provider at
+your own cost.
 
 **harness** — the seam a test runs the loop through, so the loop's tests need no provider
 and no bubblewrap (`crates/harness`).
 
 ## The workspace
 
-**workspace** — the tree a run stands in: the path the sandbox mounts, the repository root
-a repository scope stops at, and the directory the rail names
+**workspace** — the tree a run stands in: the path the sandbox mounts, the repository root a
+repository scope stops at, and the directory the rail names
 (`crates/core/src/workspace.rs`).
 
 **repository root** — the nearest ancestor of the workspace holding `.git`, the ceiling a

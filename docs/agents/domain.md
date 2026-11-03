@@ -1,21 +1,17 @@
 # Domain Docs
 
-How the engineering skills should consume this repo's domain documentation when exploring the
-codebase.
+How the engineering skills consume this repo's domain documentation.
 
 ## Before exploring, read this
 
-- **`GLOSSARY.md`** at the repo root: the vocabulary. Use its words exactly; do not drift to
-synonyms it explicitly avoids.
-
-If the file is missing, **proceed silently**. Don't flag the absence; don't suggest creating a
-replacement upfront.
+`GLOSSARY.md` at the repo root: the vocabulary. Use its words exactly; never its avoided
+synonyms. If the file is missing, proceed silently — don't flag it, don't propose a
+replacement.
 
 ## Decisions live in the tree
 
 A new decision goes where the code is — a module doc comment, a test name, a `GLOSSARY.md`
-entry — not in a new record. The records are the exception because they argue for the tree and
-not for one module: `docs/adr/0001-llm-friendly-code.md` says how the code is shaped so an
-agent can find it, `docs/adr/0002-three-tools.md` says why there are three tools,
-`docs/adr/0003-built-in-skills.md` says why one skill ships inside the binary, and
-`docs/adr/0004-program-status.md` says what a run tells the terminal it is doing.
+entry — not in a new record. The records are the exception because they argue for the tree
+and not for one module: `0001` how the code is shaped so an agent can find it, `0002` why
+there are three tools, `0003` why one skill ships inside the binary, `0004` what a run
+tells the terminal about what it is doing.

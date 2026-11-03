@@ -3,87 +3,68 @@
 # Two keys are required and the other nine have a default: a run cannot start
 # without `model`, nor without `api_key` on a wire that wants a credential —
 # `anthropic`, the default — where the provider's own environment variable will
-# do in its place. Every key, required or not, can be set without editing this
-# file: environment variables win over it, and flags win over them. An unknown
-# key is an error naming both the key and this file, so a typo never runs
-# silently on defaults.
+# do in its place. Every key can be set without editing this file: environment
+# variables win over it, flags win over them. An unknown key is an error naming
+# the key and this file, so a typo never runs silently on defaults.
 
 # Which wire to speak: "anthropic" (the default), or "openai" for OpenAI itself
 # and every server that speaks its shape (Ollama, vLLM, LM Studio, OpenRouter).
 provider = "anthropic"
 
-# The model to ask. Required: there is no default, so a missing model is an
-# explicit error rather than a guess.
+# The model to ask. Required: no default, so a missing model is an explicit error
+# rather than a guess.
 model = "claude-sonnet-4-6"
 
-# The credential. Required for `anthropic`, the wire that wants one — the wire
-# reached by `base_url` is often a local server with none to give, so there it
-# may be left out. Prefer the provider's own environment variable —
-# ANTHROPIC_API_KEY, or SINDRI_API_KEY for any provider — because a file is
-# plaintext. `sindri` writes this file only from `/settings`, readable by its
-# owner alone (0600) and replaced atomically; a secret typed there is announced
-# on screen before it lands. Either way it is redacted from all output and
-# records.
+# The credential. Required for `anthropic`, the wire that wants one — a local
+# server reached by `base_url` often has none to give. Prefer the provider's own
+# variable — ANTHROPIC_API_KEY, or SINDRI_API_KEY for any provider — because a
+# file is plaintext. `sindri` writes this file only from `/settings`, 0600 and
+# replaced atomically, and the value is redacted from all output and records.
 api_key = "sk-ant-…"
 
-# Another API root: a gateway, a proxy, or a local server. Optional, and left
-# out the provider's own default is used. ANTHROPIC_BASE_URL is read below this
-# file's value, so an already-exported variable needs no configuration at all.
+# Another API root: a gateway, a proxy, a local server. Optional; left out, the
+# provider's default is used. ANTHROPIC_BASE_URL is read below this value.
 base_url = "https://api.anthropic.com"
 
-# Whether to pay for the model's reasoning. Optional, and off by default,
-# because cheap tasks should stay cheap.
+# Whether to pay for the model's reasoning. Optional, off by default: cheap tasks
+# should stay cheap.
 thinking = false
 
-# Whether the run tells its terminal what it is doing, with one `OSC 7501`
-# report per moment: a state, a coarse line of our own words, and the name of the
-# workspace. On by default. Never stdout: batch mode's answer is the only thing
-# there, and a stderr that is not a terminal is written nothing at all.
+# Whether the run tells its terminal what it is doing, one `OSC 7501` report at a
+# time: a state, a coarse line of our own words, the workspace's name. On by
+# default. Never stdout, and a stderr that is not a terminal is written nothing.
 status = true
 
-# Extra directories mounted read-write inside the sandbox, besides the
-# workspace and the session temp. Optional: left out, a run mounts the shipped
-# floor — ~/.cache, ~/go, ~/.cargo and ~/.rustup, the caches a fresh checkout
-# builds with — so nothing has to be configured to start. A shipped path that
-# this host does not have, or that would nest with the workspace, is dropped
-# without a word. Name a list and it is the whole of the extras: the floor is
-# replaced, never added to, and `extra_writable_paths = []` is the explicit
-# spelling of none. A path you name is held to today's rules instead, so one
-# that is missing, nested, duplicated or not already canonical is exit 2.
-# This is the setting that makes a repository-local config dangerous, which is
-# why none is ever honoured.
+# Extra directories mounted read-write besides the workspace and the session
+# temp. Optional: left out, the shipped floor is mounted — ~/.cache, ~/go,
+# ~/.cargo, ~/.rustup. Name a list and it is the whole of the extras: the floor is
+# replaced, never added to, and `[]` is the explicit spelling of none. A path you
+# name must exist, be canonical, and not nest with the workspace, or it is exit 2.
+# This is why no repository-local config is ever honoured.
 extra_writable_paths = ["/home/you/go/pkg/mod"]
 
-# Whether the sandbox is handed the host's ssh agent socket, so `git push` over
-# ssh and `ssh-add -l` work inside it. Optional: on by default, because an
-# assistant that cannot use the credentials it was given cannot finish the job.
-# The socket needs no mount — connecting across the read-only root is already
-# permitted — so this only names the host's own `SSH_AUTH_SOCK` in the sandbox
-# environment. It is resolved once, when the run starts: turning the setting off,
-# or a host with no agent, leaves the variable absent rather than empty, and
-# `sindri doctor` prints the environment list it appears in.
+# Whether the sandbox gets the host's ssh agent socket, so `git push` over ssh and
+# `ssh-add -l` work inside it. Optional, on by default. The socket needs no mount
+# — connecting across the read-only root is permitted — so this only names the
+# host's SSH_AUTH_SOCK in the sandbox environment. A host with no agent leaves the
+# variable absent rather than empty.
 ssh_agent = true
 
-# How many turns one run may take before it stops with exit 100. Optional: 250
-# by default, and a cap of 1 to 10000.
+# How many turns one run may take before it stops with exit 100. Optional: 250 by
+# default, and a cap of 1 to 10000.
 max_turns = 250
 
-# How long one command may run inside the sandbox, in seconds (1–3600).
-# Optional: 120 by default.
+# How long one command may run inside the sandbox, in seconds (1–3600). Optional:
+# 120 by default.
 timeout = 120
 
-# Headers every provider request carries, for a gateway that routes on one of
-# its own — a session id, a referer, a routing hint. Optional: absent, no header
-# is added. A table of names to values; SINDRI_EXTRA_HEADERS takes the same
-# headers as `Name: value` lines, and --header takes one per flag. Names are
-# case-insensitive, and the level that names any replaces the rest rather than
-# adding to them. Never printed and never recorded, because a gateway's header
-# is as likely to be a secret as the credential is.
+# Headers every provider request carries, for a gateway that routes on one of its
+# own. Optional: absent, no header is added. SINDRI_EXTRA_HEADERS takes the same
+# headers as `Name: value` lines, `--header` one per flag, and the level that
+# names any replaces the rest. Never printed and never recorded.
 #
-# It is the one setting that is a table, so it comes last: in TOML every key
-# after a table header belongs to that table, and a table in the middle would
-# swallow the settings below it. The line below is a placeholder, like the
-# credential above: name your gateway's own header, or delete the table, whose
-# absence is the default.
+# It is the one setting that is a table, so it comes last: in TOML every key after
+# a table header belongs to that table. The line below is a placeholder: name your
+# gateway's own header, or delete the table, whose absence is the default.
 [extra_headers]
 x-gateway-hint = "replace this line, or delete this table"
