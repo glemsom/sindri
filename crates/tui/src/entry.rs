@@ -69,7 +69,7 @@ pub enum Entry {
     /// streams, and its rows stay where they are when it ends. `started` is the
     /// run's clock when the first fragment landed, which is what its marker
     /// counts from while it is still arriving.
-    Reasoning {
+    Thought {
         turn: u32,
         text: String,
         /// Whether the thought has ended: `done` is the marker's word — the run
@@ -79,8 +79,8 @@ pub enum Entry {
         started: Duration,
         /// How long the run spent on it, from the run's own clock, read through
         /// `pulse::said` on the marker row as an answer's is. `None` for a
-        /// thought nobody watched arrive: there is no clock to count from, and
-        /// the row says only that it was reasoned.
+        /// thought nobody watched arrive: there is no clock to count from, so
+        /// the marker carries no duration.
         took: Option<Duration>,
     },
     Call(Call),

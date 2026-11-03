@@ -182,7 +182,7 @@ impl App {
     fn think(&mut self, turn: u32, text: String) {
         let joins = matches!(
             self.thread.last(),
-            Some(Entry::Reasoning {
+            Some(Entry::Thought {
                 turn: open,
                 done: false,
                 ..
@@ -190,7 +190,7 @@ impl App {
         );
         if joins {
             self.thread.edit_last(|entry| {
-                if let Entry::Reasoning { text: streamed, .. } = entry {
+                if let Entry::Thought { text: streamed, .. } = entry {
                     streamed.push_str(&text);
                 }
             });
@@ -198,7 +198,7 @@ impl App {
         }
         self.close_thought();
         let started = self.now;
-        self.thread.push(Entry::Reasoning {
+        self.thread.push(Entry::Thought {
             turn,
             text,
             done: false,
@@ -207,10 +207,11 @@ impl App {
         });
     }
 
-    /// The final reasoning event, which carries the whole of the turn's
-    /// thinking: the deltas were that text arriving, never a second text, so an
-    /// open thought takes it as it stands and ends where it is. Its marker
-    /// stops counting at the moment the event landed.
+    /// The provider's final `Event::Reasoning`, which carries the whole of the
+    /// turn's thinking: the deltas were that text arriving, never a second
+    /// text, so an open thought takes it as it stands and ends where it is, by
+    /// `close_thought` as every other door ends one. Its marker stops counting
+    /// at the moment the event landed.
     ///
     /// A final event with no thought of its own in the thread — a provider that
     /// sent no fragment — opens one, done, at once: the reader is told what the
@@ -218,27 +219,18 @@ impl App {
     /// watched it arrive to count one.
     fn thought_done(&mut self, turn: u32, text: String) {
         let now = self.now;
-        let open =
-            matches!(self.thread.last(), Some(Entry::Reasoning { turn: t, .. }) if *t == turn);
+        let open = matches!(self.thread.last(), Some(Entry::Thought { turn: t, .. }) if *t == turn);
         if open {
             self.thread.edit_last(|entry| {
-                if let Entry::Reasoning {
-                    text: held,
-                    done,
-                    started,
-                    took,
-                    ..
-                } = entry
-                {
+                if let Entry::Thought { text: held, .. } = entry {
                     *held = text;
-                    *done = true;
-                    took.get_or_insert(now.saturating_sub(*started));
                 }
             });
+            self.close_thought();
             return;
         }
         self.close_thought();
-        self.thread.push(Entry::Reasoning {
+        self.thread.push(Entry::Thought {
             turn,
             text,
             done: true,
@@ -260,12 +252,12 @@ impl App {
         };
         if !matches!(
             self.thread.get(index),
-            Some(Entry::Reasoning { done: false, .. })
+            Some(Entry::Thought { done: false, .. })
         ) {
             return;
         }
         self.thread.edit(index, |entry| {
-            if let Entry::Reasoning {
+            if let Entry::Thought {
                 done,
                 started,
                 took,

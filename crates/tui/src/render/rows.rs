@@ -134,13 +134,13 @@ pub fn entry_rows(
             },
             want,
         ),
-        Entry::Reasoning {
+        Entry::Thought {
             text,
             done,
             started,
             took,
             ..
-        } => reasoning_rows(
+        } => thought_rows(
             text,
             *done,
             *started,
@@ -175,7 +175,7 @@ pub fn entry_rows(
     }
 }
 
-/// A turn's thought: its marker at the head and the reasoning beneath it,
+/// A turn's thought: its marker at the head and its text beneath it,
 /// hanging off the same gutter an answer does and written in the thought's own
 /// ink, so a reader tells what the run is thinking from what it said. The
 /// marker is the run's own clock — while the thought arrives it says what the
@@ -185,7 +185,7 @@ pub fn entry_rows(
 /// A thought is a row of the thread and not a surface beside it: its rows stay
 /// where they are when it ends, so nothing here folds, and the reader has been
 /// reading the text the whole time.
-fn reasoning_rows(
+fn thought_rows(
     text: &str,
     done: bool,
     started: Duration,

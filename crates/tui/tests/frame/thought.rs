@@ -49,8 +49,8 @@ fn fragments(count: usize) -> String {
     (1..=count).map(|n| format!("fragment {n}\n")).collect()
 }
 
-/// The final reasoning event of a thought of `count` fragments, carrying the
-/// whole of its text, as the provider sends it.
+/// The provider's final `Event::Reasoning` for a thought of `count` fragments,
+/// carrying the whole of its text, as the provider sends it.
 fn ended_thought(app: &mut App, turn: u32, count: usize) {
     app.event(Event::Reasoning {
         turn,
@@ -455,7 +455,7 @@ fn a_thought_is_one_entry_of_the_document_and_not_a_state_beside_it() {
     let thoughts = app
         .entries()
         .iter()
-        .filter(|entry| matches!(entry, Entry::Reasoning { .. }))
+        .filter(|entry| matches!(entry, Entry::Thought { .. }))
         .count();
     assert_eq!(
         thoughts, 3,
