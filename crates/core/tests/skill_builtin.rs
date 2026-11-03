@@ -67,6 +67,11 @@ fn a_builtin_activates_to_its_body_and_its_files_with_no_path_to_open() {
         "there is no directory, and a path that does not exist is not invented: {}",
         outcome.content
     );
+    assert!(
+        !outcome.content.contains("resolves from here"),
+        "no clause is invented for a path a built-in does not have: {}",
+        outcome.content
+    );
     // The files come with the body because there is no directory for the model
     // to open one out of, so a relative reference in the body reads where it
     // points rather than leading nowhere.

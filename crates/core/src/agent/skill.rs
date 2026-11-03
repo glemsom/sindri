@@ -5,6 +5,7 @@
 //! preamble stays exactly what it was.
 
 use std::collections::BTreeSet;
+use std::path::Path;
 use std::sync::Mutex;
 use std::time::Instant;
 
@@ -134,8 +135,8 @@ fn describe(skills: &[Skill]) -> ToolSpec {
     let mut description = String::from(
         "Loads one skill — instructions written for you — into this conversation. Call it \
          before acting when a task is one it covers: the result is the skill's body with its \
-         frontmatter stripped, with its files beside it — listed, and sent with the body when \
-         the skill has no directory — so a relative reference in the body resolves.\n\
+         frontmatter stripped, and its files beside it: listed, and sent with the body when \
+         the skill has no directory.\n\
          Loads once per conversation: a second call answers `already_loaded` with no body.\n\
          Skills:\n",
     );
@@ -170,7 +171,7 @@ fn activation(skill: &Skill, body: &str) -> String {
     let files = skill.listing();
     let mut out = format!("outcome: loaded\nskill: {}\n", skill.name);
     if let Some(dir) = skill.dir() {
-        out.push_str(&format!("dir: {}\n", dir.display()));
+        out.push_str(&dir_line(dir));
     }
     out.push_str("files:\n");
     for file in files.iter().take(LISTED) {
@@ -193,8 +194,22 @@ fn activation(skill: &Skill, body: &str) -> String {
     out
 }
 
+/// The one line that names the skill's directory, and with it the sentence the
+/// body cannot say for itself: a path written in it resolves from here. The
+/// sentence belongs on the line it qualifies, paid once per activation, rather
+/// than in the description, which every turn of every run that holds a skill
+/// re-sends — and a skill with no directory has no line to carry it.
+fn dir_line(dir: &Path) -> String {
+    format!(
+        "dir: {} — a path written in the body resolves from here\n",
+        dir.display()
+    )
+}
+
 /// A skill whose file could not be read: the call ran, so it is a result and
-/// not a refusal of the call, and the model is told which file and why.
+/// not a refusal of the call, and the model is told which file and why. The
+/// directory is named without the resolution clause, because the body it would
+/// resolve a path from is the one that could not be read.
 fn refused(call: &Call, skill: &Skill, problem: &str, started: Instant) -> ToolOutcome {
     let mut content = format!("outcome: unreadable\nskill: {}\n", skill.name);
     if let Some(dir) = skill.dir() {

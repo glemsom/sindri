@@ -6,9 +6,10 @@ use crossterm::event::{KeyCode, KeyModifiers};
 use sindri_core::provider::Asked;
 use sindri_tui::theme;
 
-/// The body one activation hands back: the wrapper, the directory and the words,
-/// as the `skill` tool renders them.
-const BODY: &str = "outcome: loaded\nskill: house-style\ndir: /w/.agents/skills/house-style\n<skill_content name=\"house-style\">\nAnswer in short sentences.\n</skill_content>\n";
+/// The body one activation hands back: the wrapper, the directory with the
+/// clause a path in the body resolves from, and the words, as the `skill` tool
+/// renders them.
+const BODY: &str = "outcome: loaded\nskill: house-style\ndir: /w/.agents/skills/house-style — a path written in the body resolves from here\n<skill_content name=\"house-style\">\nAnswer in short sentences.\n</skill_content>\n";
 
 /// A load as the loop reports one: the call that asked for it, and the result
 /// the conversation now carries.

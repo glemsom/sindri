@@ -144,6 +144,33 @@ fn the_skill_description_does_not_restate_the_rule_the_bash_description_states()
 }
 
 #[test]
+fn the_description_sends_no_word_on_where_a_body_path_resolves() {
+    let workspace = tempfile::TempDir::new().expect("workspace");
+    let catalog = alpha(workspace.path());
+    let built = tool(&catalog);
+    let description = &built.spec().description;
+
+    // A scanned skill's directory is in the result, and so is the sentence that
+    // says a path written in the body resolves from it: the description is
+    // re-sent on every turn of every run that holds a skill, and a fact about
+    // one activation is paid once, in the result of that activation.
+    assert!(
+        !description.contains("relative reference"),
+        "the description leaves the resolution clause to the result: {description}"
+    );
+
+    // And the result is where it is paid: the load says it beside the path.
+    let outcome = built.call(&load("call_1", "alpha"), "alpha", &Default::default());
+    assert!(
+        outcome
+            .content
+            .contains("a path written in the body resolves from here"),
+        "the result carries the clause the description dropped: {}",
+        outcome.content
+    );
+}
+
+#[test]
 fn a_user_only_skill_is_in_neither_the_schema_nor_the_catalog() {
     let workspace = tempfile::TempDir::new().expect("workspace");
     let mut catalog = alpha(workspace.path());
@@ -214,6 +241,21 @@ fn activation_returns_the_body_inside_a_named_wrapper_with_its_directory_and_fil
     assert!(
         outcome.content.contains(&dir) && outcome.content.contains("  references/api.md"),
         "the directory and the files beside the body come with it: {}",
+        outcome.content
+    );
+    // The sentence the tool's description used to carry: a path written in the
+    // body resolves from the directory beside it. It belongs here, where it is
+    // paid once per activation, on the one line that names that directory.
+    let clause = format!("dir: {dir} — a path written in the body resolves from here");
+    assert!(
+        outcome.content.lines().any(|line| line == clause),
+        "the directory is answered with the resolution clause on it, once: {}",
+        outcome.content
+    );
+    assert_eq!(
+        outcome.content.matches("resolves from here").count(),
+        1,
+        "one line, one place: {}",
         outcome.content
     );
     assert!(
