@@ -70,16 +70,6 @@ pub fn app() -> App {
     App::new(launch(), None)
 }
 
-/// Lets the frame's clock on until the pane has unfurled: a thought is its head
-/// alone on the tick it lands, and a row more a tick until it stands at the
-/// floor of its height. A test that reads the pane's words rather than its
-/// motion is drawn after this.
-pub fn unfurl(app: &mut App) {
-    for _ in 0..sindri_tui::render::pane::PANE_MIN.saturating_sub(1) {
-        app.pulse(sindri_tui::pulse::TICK);
-    }
-}
-
 /// A frame drawn at `width` by `height`, read back as its cells: the escape a
 /// picture leaves in a cell is kept, because a style or a mark is asserted on
 /// where a row alone cannot say it.

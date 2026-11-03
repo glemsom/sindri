@@ -191,43 +191,27 @@ fn a_shift_key_draws_a_selection_of_its_own_over_the_mark() {
 }
 
 #[test]
-fn a_drag_cannot_reach_the_panes_cells() {
+fn a_drag_marks_a_thoughts_rows_and_copies_its_words() {
+    // A thought is a row of the thread, so the gesture that marks an answer
+    // marks it too: nothing here is a special case for a thought, which is the
+    // whole reason it is an entry of the document.
     let clipboard = Fake::taking();
     let mut app = answered(clipboard.clone());
     app.event(Event::ReasoningDelta {
         turn: 2,
         text: "thinking about the answer".to_string(),
     });
-    unfurl(&mut app);
-    let rows = screen(&mut app, 100, 20);
-    let at = common::row_of(&rows, "thinking about the answer");
 
-    mouse(
-        &mut app,
-        MouseEventKind::Down(MouseButton::Left),
-        0,
-        at as u16,
-    );
-    mouse(
-        &mut app,
-        MouseEventKind::Drag(MouseButton::Left),
-        40,
-        at as u16,
-    );
-    mouse(
-        &mut app,
-        MouseEventKind::Up(MouseButton::Left),
-        40,
-        at as u16,
-    );
+    drag_over(&mut app, "thinking about the answer");
 
     assert!(
-        app.selection().is_empty(),
-        "no mark stands on a pane's cells: a drag that lands there is no gesture of the reader's"
+        !app.selection().is_empty(),
+        "a mark stands on the thought's rows: they are rows of the transcript"
     );
+    let copied = clipboard.saw();
+    assert_eq!(copied.len(), 1, "the release copied once: {copied:?}");
     assert!(
-        clipboard.saw().is_empty(),
-        "and no word of the thought leaves with a copy: {:?}",
-        clipboard.saw()
+        copied[0].contains("thinking about the answer"),
+        "and the words that left are the thought's own: {copied:?}"
     );
 }

@@ -1,4 +1,4 @@
-//! Opening a call, and the reasoning beside it, in place.
+//! Opening a call in place, and a thought over the frame.
 //! The frame has no cursor of its own: `Enter` on an empty composer means the
 //! entry the reader last touched — or, if they have touched none, the newest
 //! one they can open — and a click means the entry whose row it landed on.
@@ -6,18 +6,10 @@
 //! reading rather than watching: a toggle on a following window takes the
 //! reader's place at that entry, and `End` is the key that gives it back.
 //!
-//! A finished thought is read two ways from here, and `target` is the one rule
-//! both of them find it by: `Enter` opens it in place, as it opens a call, and
-//! `Ctrl-R` opens the whole of it over the frame, so the key is a shortcut and
-//! never the only way in. The two ways are the law the pane and the overlay
-//! point at:
-//!
-//! > The pane is the run's: it appears, it cannot be dismissed, and it takes no
-//! > key. The view of a finished thought is the reader's: it is an overlay, and
-//! > takes all of them.
-//!
-//! Which is why a thought is not an overlay while it lives: nothing on the
-//! glass because a run is thinking may take a key the composer needs.
+//! A thought is not one of them: the whole of it is a row of the thread, so
+//! `Enter` and a click have nothing to open in it and no row of it moves for a
+//! keystroke. What a thought has is the overlay `Ctrl-R` puts over the frame,
+//! which is the reader's view of text the frame already gave them.
 //!
 //! An entry is what this opens, and a diagram is not one: it is a block inside
 //! an answer's entry, one of however many that answer holds. Opening it in place
@@ -54,13 +46,13 @@ impl App {
         }
     }
 
-    /// `Ctrl-R`: the whole of a finished thought, opened over the frame rather
-    /// than in place — the text a scar is one row of, pageable and dimmed, which
-    /// is the reader's and takes every key the pane beside it never would. The
-    /// entry is `target`'s, so the key opens what `Enter` would have opened.
+    /// `Ctrl-R`: a thought's text, opened over the frame and pageable, which is
+    /// the reader's rather than the run's. The entry is `target`'s, so the key
+    /// opens the one the reader last touched where it can, and the newest one
+    /// otherwise.
     pub(crate) fn open_reasoning(&mut self) {
         let Some(index) = self.target(|entry| entry.thought().is_some()) else {
-            self.note_info("no finished thought in this session to open");
+            self.note_info("no thought in this session to open");
             return;
         };
         let Some(text) = self.thread.get(index).and_then(Entry::thought) else {

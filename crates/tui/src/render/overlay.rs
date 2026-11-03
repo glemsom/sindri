@@ -89,7 +89,7 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
             (area.height, title, More::default(), lines)
         }
         Overlay::Reasoning(reasoning) => {
-            // The whole of a finished thought: what the scar is one row of,
+            // The whole of a thought: the text whose rows the thread holds,
             // drawn in a box as tall as the thought and no taller than the
             // terminal. What does not fit is reached with the page keys, and the
             // box says which way there is more, as the help list does.

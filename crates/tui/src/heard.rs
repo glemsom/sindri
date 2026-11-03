@@ -11,7 +11,6 @@ use sindri_core::status::{Doing, State};
 use crate::app::{App, Renew};
 use crate::driver::{Finished, Job, Side, Stop};
 use crate::entry::{Call, CallOver, Entry, Note, Prompt, Skill};
-use crate::thought::Thought;
 
 impl App {
     pub(crate) fn submit(&mut self) -> bool {
@@ -84,11 +83,11 @@ impl App {
             self.rail.streamed(text.chars().count(), self.now);
         }
         match event {
-            // An answer beginning, a call announced and the final reasoning all
-            // end a thought, as a cancel and `/new` do: the pane's life is the
-            // run's, and one door closes it so no arm forgets one.
+            // An answer beginning and a call announced both end a thought, as
+            // a cancel and the run's end do: the thought's life is the run's,
+            // and one door closes it so no arm forgets one.
             Event::TextDelta { turn, text } => {
-                self.thought_over();
+                self.close_thought();
                 self.append(turn, text);
             }
             Event::ReasoningDelta { turn, text } => {
@@ -98,7 +97,7 @@ impl App {
                 self.thought_done(turn, text);
             }
             Event::ToolCall { turn, asked } => {
-                self.thought_over();
+                self.close_thought();
                 self.close_answers(false);
                 let mut call = Call::new(turn, requested(&asked), self.now);
                 // A load runs no command, so there is no exit to wait for: its
@@ -175,59 +174,108 @@ impl App {
         }
     }
 
-    /// A fragment of the run's thinking: the pane is the one surface it is
-    /// drawn on, so nothing of it is an entry of the thread. The first fragment
-    /// makes the thought and the ones after it are appended to it, and no
-    /// fragment moves a row of what has already been said — nor waits for a
-    /// tick, because the pane draws the thought the provider has sent.
+    /// A fragment of the run's thinking: a thought is a row of the thread, so
+    /// the fragment lands at the tail of the entry the thought already is and
+    /// no row above it moves. A fragment in a turn with no thought of its own
+    /// open — the first of them, or the first since an answer or a call ended
+    /// one — opens a thought, and the moment it began is the run's own clock.
     fn think(&mut self, turn: u32, text: String) {
-        match self.thought.as_mut() {
-            Some(thought) if thought.turn == turn => thought.push(&text),
-            _ => self.thought = Some(Thought::new(turn, text, self.now)),
-        }
-    }
-
-    /// The final reasoning event: a live pane begins its fold, which is the one
-    /// door that does not take the pane away at once — the fold is watched, and
-    /// the scar is written when the pane is down to one row. A final event with
-    /// no pane behind it, from a provider that sent no fragment, leaves the scar
-    /// at once: a thought nobody saw has no fold to watch.
-    fn thought_done(&mut self, turn: u32, text: String) {
-        let live = matches!(&self.thought, Some(thought) if thought.turn == turn);
-        if live {
-            let now = self.now;
-            if let Some(thought) = self.thought.as_mut() {
-                // The event carries the whole reasoning of the turn, which is
-                // what the scar opens: the deltas are that text arriving, never
-                // a second text, so closing a thought says what the pane is
-                // already drawing and gives the fold its clock.
-                thought.close(text, now);
-            }
+        let joins = matches!(
+            self.thread.last(),
+            Some(Entry::Reasoning {
+                turn: open,
+                done: false,
+                ..
+            }) if *open == turn
+        );
+        if joins {
+            self.thread.edit_last(|entry| {
+                if let Entry::Reasoning { text: streamed, .. } = entry {
+                    streamed.push_str(&text);
+                }
+            });
             return;
         }
-        self.thought = None;
+        self.close_thought();
+        let started = self.now;
         self.thread.push(Entry::Reasoning {
             turn,
             text,
-            done: true,
-            open: false,
-            // No pane ever stood for it, so nothing counted its clock: the row
-            // says it was reasoned and says no duration it cannot know.
+            done: false,
+            started,
             took: None,
         });
     }
 
-    /// A thought is over at once: the pane goes, and what the thread holds of it
-    /// is nothing. Every arm that ends one comes through here — a call, a text
-    /// delta, a cancel and `/new` — so none of them forgets it and the pane
-    /// cannot outlive the run's use for it. The final reasoning event does not
-    /// come through here: its pane folds, and `thought_done` is that door.
-    pub(crate) fn thought_over(&mut self) {
-        // A pane taken away mid-fold is still a thought that finished, and the
-        // scar it was folding into is owed: the fold is watched only where the
-        // frame has the ticks to watch it.
-        self.scar();
-        self.thought = None;
+    /// The final reasoning event, which carries the whole of the turn's
+    /// thinking: the deltas were that text arriving, never a second text, so an
+    /// open thought takes it as it stands and ends where it is. Its marker
+    /// stops counting at the moment the event landed.
+    ///
+    /// A final event with no thought of its own in the thread — a provider that
+    /// sent no fragment — opens one, done, at once: the reader is told what the
+    /// run was thinking, and the marker says no duration, because nothing
+    /// watched it arrive to count one.
+    fn thought_done(&mut self, turn: u32, text: String) {
+        let now = self.now;
+        let open =
+            matches!(self.thread.last(), Some(Entry::Reasoning { turn: t, .. }) if *t == turn);
+        if open {
+            self.thread.edit_last(|entry| {
+                if let Entry::Reasoning {
+                    text: held,
+                    done,
+                    started,
+                    took,
+                    ..
+                } = entry
+                {
+                    *held = text;
+                    *done = true;
+                    took.get_or_insert(now.saturating_sub(*started));
+                }
+            });
+            return;
+        }
+        self.close_thought();
+        self.thread.push(Entry::Reasoning {
+            turn,
+            text,
+            done: true,
+            started: now,
+            took: None,
+        });
+    }
+
+    /// The thought the run was having is over where it stands: its rows stay,
+    /// exactly where they were, and its marker row takes the word that it is
+    /// over and the clock the run spent on it. Every door a thought ends by
+    /// comes through here — a following answer, a call, a cancel, a new session
+    /// and the run's end — so none of them leaves a row saying the run is still
+    /// thinking, and none claims a duration the run did not spend.
+    pub(crate) fn close_thought(&mut self) {
+        let now = self.now;
+        let Some(index) = self.thread.last_index() else {
+            return;
+        };
+        if !matches!(
+            self.thread.get(index),
+            Some(Entry::Reasoning { done: false, .. })
+        ) {
+            return;
+        }
+        self.thread.edit(index, |entry| {
+            if let Entry::Reasoning {
+                done,
+                started,
+                took,
+                ..
+            } = entry
+            {
+                *done = true;
+                *took = Some(now.saturating_sub(*started));
+            }
+        });
     }
 
     fn append(&mut self, turn: u32, text: String) {
@@ -310,8 +358,8 @@ impl App {
     pub fn finished(&mut self, finished: Finished) -> bool {
         self.running = None;
         // A run that is over is not thinking, whatever door it left by: a
-        // thought has no pane once there is nothing left to think it.
-        self.thought_over();
+        // thought still arriving ends where it stands.
+        self.close_thought();
         // A run that failed before it had a report is the one shape `Report`
         // cannot hold: the failure in the frame's own words, no turn of it
         // counted, and nothing spent.

@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use sindri_core::agent::Event;
 use sindri_core::config::{KEYS, Key};
-use sindri_tui::overlay::{BINDINGS, help_rows};
+use sindri_tui::overlay::{BINDINGS, Overlay, help_rows};
 use sindri_tui::{App, Launch};
 use tempfile::TempDir;
 
@@ -352,9 +352,10 @@ fn ctrl_r_opens_the_newest_thought_whole_and_esc_closes_it() {
         turn: 2,
         text: a_long_thought(),
     });
+    let thread = screen(&mut app, 100, 24);
     assert!(
-        any(&screen(&mut app, 100, 24), "⌁ reasoned"),
-        "the thread holds one row of each of them"
+        any(&thread, "thought 40"),
+        "the newest thought is a row of the thread already: {thread:#?}"
     );
 
     press(&mut app, KeyCode::Char('r'), KeyModifiers::CONTROL);
@@ -394,20 +395,23 @@ fn ctrl_r_opens_the_newest_thought_whole_and_esc_closes_it() {
     assert!(app.overlay().is_none(), "Esc closes it");
     let back = screen(&mut app, 100, 24);
     assert!(
-        any(&back, "⌁ reasoned") && !any(&back, "thought 01"),
-        "and the frame beneath is the thread it was: {back:#?}"
+        any(&back, "thought 40") && !any(&back, "thought 01"),
+        "and the frame beneath is the thread it was, its thought still in it: {back:#?}"
     );
 
+    // `Ctrl-R` is a second way to read text the frame already gives, and never
+    // the only one: a thought is a row of the thread and has nothing to open,
+    // so `Enter` neither folds it nor takes a row away.
     press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+    let kept = screen(&mut app, 100, 24);
     assert!(
-        any(&screen(&mut app, 100, 24), "thought 01"),
-        "Enter on the scar opens the same text, so the key is a shortcut and \
-         never the only way in"
+        any(&kept, "thought 40"),
+        "Enter opens nothing and takes nothing away: {kept:#?}"
     );
 }
 
 #[test]
-fn ctrl_r_opens_the_thought_the_reader_last_touched() {
+fn a_click_on_a_thought_marks_it_and_ctrl_r_opens_the_newest() {
     let mut app = app();
     app.event(Event::Reasoning {
         turn: 1,
@@ -417,27 +421,40 @@ fn ctrl_r_opens_the_thought_the_reader_last_touched() {
         turn: 2,
         text: "the newer thought\n".to_string(),
     });
-    // The older scar is the entry the reader takes: a click on its row opens it
-    // in place and `Enter` folds it again, which leaves it the one they touched
-    // last — and `Ctrl-R` opens what `Enter` would have opened.
+    // A thought is a row of the thread, so a click on it starts a mark as one on
+    // an answer does: nothing folds, nothing is chosen, and `Ctrl-R` opens the
+    // newest thought there is rather than one the reader touched.
     let rows = screen(&mut app, 100, 24);
-    let older = row_of(&rows, "⌁ reasoned");
+    let older = row_of(&rows, "an older thought");
     app.mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
         column: 4,
         row: older as u16,
         modifiers: KeyModifiers::NONE,
     });
+    app.mouse(MouseEvent {
+        kind: MouseEventKind::Drag(MouseButton::Left),
+        column: 20,
+        row: older as u16,
+        modifiers: KeyModifiers::NONE,
+    });
     assert!(
-        any(&screen(&mut app, 100, 24), "an older thought"),
-        "the click opened the row it landed on"
+        !app.selection().is_empty(),
+        "a drag over the thought's own row marks it, as it marks an answer's"
     );
-    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+    let marked = screen(&mut app, 100, 24);
+    assert!(
+        any(&marked, "an older thought") && any(&marked, "the newer thought"),
+        "and both thoughts stay where they were: {marked:#?}"
+    );
 
     press(&mut app, KeyCode::Char('r'), KeyModifiers::CONTROL);
-    let rows = screen(&mut app, 100, 24);
-    assert!(
-        any(&rows, "an older thought") && !any(&rows, "the newer thought"),
-        "Ctrl-R opens the entry the reader last touched, as Enter chooses: {rows:#?}"
+    let Some(Overlay::Reasoning(boxed)) = app.overlay() else {
+        panic!("Ctrl-R opens a thought's box");
+    };
+    assert_eq!(
+        boxed.lines,
+        vec!["the newer thought".to_string()],
+        "Ctrl-R opens the newest thought whole, and never the one marked"
     );
 }

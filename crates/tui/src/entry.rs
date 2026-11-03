@@ -64,21 +64,21 @@ pub enum Entry {
         failed: bool,
         took: Option<Duration>,
     },
-    /// The scar a finished thought leaves: the one row the thread holds of it.
-    /// A thought still arriving is the run's **pane** and never a row, so this
-    /// entry is always done — there is no open thought in the thread for a
-    /// fragment to rewrite, and no `open` state but the reader's own.
+    /// A thought the run is having, as a row of the thread: a fragment is
+    /// appended to `text` as it lands, so no row above it moves while it
+    /// streams, and its rows stay where they are when it ends. `started` is the
+    /// run's clock when the first fragment landed, which is what its marker
+    /// counts from while it is still arriving.
     Reasoning {
         turn: u32,
         text: String,
-        /// The final event's own word: a thought is over by the time it is an
-        /// entry, and `close_answers` has nothing to close here.
+        /// Whether the thought has ended: `done` is the marker's word — the run
+        /// is thinking, or the thought is over — and `close_thought` is what
+        /// sets it.
         done: bool,
-        /// Whether the reader has the text open: closed, the scar is one row
-        /// and `Enter` is what opens the text it held.
-        open: bool,
+        started: Duration,
         /// How long the run spent on it, from the run's own clock, read through
-        /// `pulse::said` on the row as the answer's marker is. `None` for a
+        /// `pulse::said` on the marker row as an answer's is. `None` for a
         /// thought nobody watched arrive: there is no clock to count from, and
         /// the row says only that it was reasoned.
         took: Option<Duration>,
@@ -239,19 +239,20 @@ impl Call {
 }
 
 impl Entry {
-    /// Whether `Enter` and a click have anything to open here.
+    /// Whether `Enter` and a click have anything to open here. A thought has
+    /// not: the whole of it is a row of the thread already, so there is nothing
+    /// folded away to open.
     pub fn expandable(&self) -> bool {
         match self {
             Entry::Call(call) => call.expandable(),
-            Entry::Reasoning { .. } => self.thought().is_some(),
             _ => false,
         }
     }
 
-    /// The text of a finished thought, where this entry is one a reader can
-    /// open: what `Ctrl-R` hands the overlay, as `expandable` is what `Enter`
-    /// asks. It is `None` for every other entry, and for a thought whose text
-    /// is blank — there is nothing to read and nothing to open.
+    /// The text of a thought, where this entry is one a reader can open over
+    /// the frame: what `Ctrl-R` hands the overlay. It is `None` for every other
+    /// entry, and for a thought whose text is blank — there is nothing to
+    /// read.
     pub fn thought(&self) -> Option<&str> {
         match self {
             Entry::Reasoning { text, .. } if !text.trim().is_empty() => Some(text),
@@ -264,7 +265,6 @@ impl Entry {
     pub fn toggle(&mut self) -> bool {
         match self {
             Entry::Call(call) if call.expandable() => call.toggle(),
-            Entry::Reasoning { open, text, .. } if !text.trim().is_empty() => *open = !*open,
             _ => return false,
         }
         true

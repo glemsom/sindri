@@ -1,7 +1,7 @@
-//! Every call is openable, reasoning included: a call keeps
-//! a bounded tail of its whole output, `Enter` on a blank composer — or a click
-//! on its row — expands it in place, and the spill file is an optimisation on
-//! top of that rather than the way back in.
+//! Every call is openable: a call keeps a bounded tail of its whole output,
+//! `Enter` on a blank composer — or a click on its row — expands it in place,
+//! and the spill file is an optimisation on top of that rather than the way back
+//! in. A thought is not: the whole of it is already a row of the thread.
 
 use super::*;
 use sindri_core::provider::Asked;
@@ -157,48 +157,35 @@ fn a_single_line_says_one_line_not_one_lines() {
 }
 
 #[test]
-fn reasoning_expands_and_collapses_and_its_marker_stays_one_row() {
+fn a_thought_has_nothing_folded_away_so_no_key_moves_a_row_of_it() {
     let mut app = app();
     app.event(Event::Reasoning {
         turn: 1,
         text: "First I read the failing test.\nThen I changed the parser.".to_string(),
     });
-    let collapsed = screen(&mut app, 100, 20);
-    let markers = collapsed
-        .iter()
-        .filter(|row| row.contains('⌁'))
-        .collect::<Vec<_>>();
-    assert_eq!(
-        markers.len(),
-        1,
-        "the collapsed marker keeps its one-row form: {collapsed:#?}"
-    );
-    assert!(
-        !any(&collapsed, "Then I changed the parser"),
-        "and the thinking is folded away: {collapsed:#?}"
-    );
+    let written = screen(&mut app, 100, 20);
+    for said in [
+        "⌁ reasoned",
+        "First I read the failing test.",
+        "Then I changed the parser.",
+    ] {
+        assert!(
+            any(&written, said),
+            "the whole of the thought is in the thread the moment it lands, {said:?} \
+             included: {written:#?}"
+        );
+    }
 
     enter(&mut app);
-    let expanded = screen(&mut app, 100, 20);
-    assert!(
-        any(&expanded, "First I read the failing test"),
-        "the same key opens the reasoning: {expanded:#?}"
-    );
-    assert!(
-        any(&expanded, "Then I changed the parser"),
-        "to the text it held: {expanded:#?}"
-    );
-
-    enter(&mut app);
-    let folded = screen(&mut app, 100, 20);
-    assert!(
-        !any(&folded, "First I read the failing test"),
-        "and folds it again: {folded:#?}"
+    let after = screen(&mut app, 100, 20);
+    assert_eq!(
+        after, written,
+        "so `Enter` on it has nothing to open and moves no row: {after:#?}"
     );
     assert_eq!(
-        folded.iter().filter(|row| row.contains('⌁')).count(),
+        after.iter().filter(|row| row.contains('⌁')).count(),
         1,
-        "one row, as it was: {folded:#?}"
+        "and its marker is one row, as it was: {after:#?}"
     );
 }
 

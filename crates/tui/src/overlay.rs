@@ -1,13 +1,13 @@
 //! The overlays that take the screen while they are open: `?`'s list of every
 //! binding, the untruncated output a spill affordance offers, the settings
-//! modal, and the whole of a finished thought — the reader's view of the text a
-//! scar is one row of. All close with `Esc`, and none is the only way
+//! modal, and the whole of a thought — the reader's view of the text whose rows
+//! are already in the thread. All close with `Esc`, and none is the only way
 //! to do what it does. An open overlay owns its own space: the page keys and
 //! the wheel move it, never the frame beneath it.
 //!
-//! A finished thought's whole text is one of these and its pane never is: what
-//! is on the glass because a run is thinking takes no key, and this box is the
-//! reader's and takes all of them. `expand` states the law both point at.
+//! A thought's whole text is one of these and a call's is never: a call opens
+//! in place, and this box is the reader's and takes every key. `expand` states
+//! the rule both point at.
 
 use crate::command;
 use crate::scroll::Scroll;
@@ -162,11 +162,11 @@ pub(crate) fn step(chosen: usize, rows: usize, len: usize, up: bool) -> usize {
     }
 }
 
-/// A finished thought, opened whole over the frame: what a scar is one row of,
-/// read as the text it holds. It is the counterpart of the pane and not a second
-/// pane — the pane is the run's and takes no key, this is the reader's and takes
-/// them all — and a thought has no spill file, because it was never an answer:
-/// the entry holds every word of it, and that is what the box shows.
+/// A thought, opened whole over the frame: the text its own rows in the thread
+/// hold, read as one box. The box is the reader's and takes every key, which
+/// the thought's rows are not, and a thought has no spill file, because it was
+/// never an answer: the entry holds every word of it, and that is what the box
+/// shows.
 #[derive(Debug, Clone)]
 pub struct Reasoning {
     /// The thought's lines, whole: read once from the entry when the box opens,

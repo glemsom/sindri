@@ -170,8 +170,8 @@ fn the_drags_wash_keeps_every_ink_a_row_carries_at_the_body_text_floor() {
         ("DIFF_ADDED", theme::DIFF_ADDED),
         ("DIFF_REMOVED", theme::DIFF_REMOVED),
         ("DIFF_HUNK", theme::DIFF_HUNK),
-        // A finished thought's scar is a row of the thread like any other, so a
-        // drag can wash it and its ink is read through the wash as well.
+        // A thought's rows are rows of the thread like any other, so a drag
+        // can wash them and their ink is read through the wash as well.
         ("THOUGHT", theme::THOUGHT),
     ];
     for (role, ink) in inks {
@@ -234,8 +234,8 @@ fn plain_clears_four_and_a_half_to_one_on_the_fill_a_diagram_hands_a_renderer() 
 }
 
 /// A thought is read at the contrast the frame holds every other block to, on
-/// every surface one is drawn on: the canvas a finished thought's scar sits on,
-/// and the raised tier a live thought is written over. That is the law the
+/// every surface one is drawn on: the canvas its rows are written on, and the
+/// raised tier the frame raises a box over. That is the law the
 /// `FAINT` it used to be drawn in was held to, and the thought's ink inherits
 /// it rather than being eyeballed.
 #[test]
@@ -257,7 +257,8 @@ fn the_thoughts_ink_clears_four_and_a_half_to_one_wherever_a_thought_is_drawn() 
 /// The thought's ink is a hue of its own: a step off the body prose's hue and
 /// off every grey the frame already spends, so a block reads as thinking before
 /// a word of it is read — and the dimness that separates it from an answer is
-/// carried by the hue and the pane's edge rather than by luminance alone.
+/// carried by the hue and the gutter its rows hang off rather than by luminance
+/// alone.
 #[test]
 fn the_thoughts_ink_is_a_hue_apart_from_prose_and_every_grey_the_frame_spends() {
     let thought = hue(theme::THOUGHT);
@@ -330,7 +331,7 @@ fn ratio(fg: Color, bg: Color) -> f64 {
 #[test]
 fn faint_clears_four_and_a_half_to_one_on_the_surfaces_a_word_is_written_on() {
     // The canvas is the theme's own, filled before anything is drawn on it, and
-    // `RAISED` is where a thought is read as body text on the pane: faint is the
+    // `RAISED` is the tier an overlay raises over the frame: faint is the
     // quietest ink a word is read in, so it clears the floor on every tier a
     // word of the frame's own is written on.
     for surface in [theme::PANEL, theme::CANVAS, theme::RAISED] {

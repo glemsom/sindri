@@ -1,8 +1,9 @@
 //! One entry as rows: the shapes a turn takes in the transcript column — a
-//! prompt on its band, an answer under its marker, a call under its line, a
-//! note at the turn's own edge — and the gutter that says what belongs to
-//! what. A frame asks for the rows its window holds and is told how many the
-//! entry is worth: the rows of an answer nobody sees are counted and not built.
+//! prompt on its band, an answer under its marker, a thought under its own, a
+//! call under its line, a note at the turn's own edge — and the gutter that
+//! says what belongs to what. A frame asks for the rows its window holds and is
+//! told how many the entry is worth: the rows of an answer nobody sees are
+//! counted and not built.
 
 use std::time::Duration;
 
@@ -72,8 +73,8 @@ struct State {
 }
 
 impl Rows {
-    /// The rows of an entry that places no picture: a prompt, a call, a note, a
-    /// scar.
+    /// The rows of an entry that places no picture: a prompt, a thought, a
+    /// call, a note.
     fn plain(rows: Vec<Line<'static>>, want: Want) -> Rows {
         let total = rows.len();
         Rows {
@@ -85,7 +86,7 @@ impl Rows {
 }
 
 /// The rows of `rows` the ask holds, re-based to the first of them: an entry
-/// that lays its body out whole — a prompt, a call, a scar — cuts the window
+/// that lays its body out whole — a prompt, a thought, a call — cuts the window
 /// it was asked for here, because laying one out is cheap and laying it out
 /// twice is not the point.
 fn kept(rows: Vec<Line<'static>>, want: Want) -> Vec<Line<'static>> {
@@ -134,24 +135,23 @@ pub fn entry_rows(
             want,
         ),
         Entry::Reasoning {
-            text, open, took, ..
-        } => {
-            // A thought is over by the time it is an entry: the pane was the
-            // run's while it arrived, and what the thread holds of it is the
-            // scar — one row until the reader opens it, and then the text it
-            // held. A thought is one entry and not an answer, so it is laid
-            // out whole and cut here.
-            if !*open {
-                return Rows::plain(gutter(vec![scar(*took)]), want);
-            }
-            let written = markdown::lines(text, body, store);
-            let total = written.rows.len();
-            Rows {
-                pictures: laid(written.pictures, 0, 0, want),
-                rows: gutter(kept(written.rows, want)),
-                total,
-            }
-        }
+            text,
+            done,
+            started,
+            took,
+            ..
+        } => reasoning_rows(
+            text,
+            *done,
+            *started,
+            *took,
+            Body {
+                columns: body,
+                now,
+                store,
+            },
+            want,
+        ),
         Entry::Call(call) => Rows::plain(gutter(call::rows(call, body, now)), want),
         Entry::Note(note) => {
             let (marker, style) = match note.kind {
@@ -175,20 +175,44 @@ pub fn entry_rows(
     }
 }
 
-/// The scar: the one faint row a finished thought leaves, and how long the run
-/// spent on it — the duration read through `pulse::said`, as the answer's
-/// marker and a call's own duration are, so a minute of thinking is read the way
-/// a minute of anything else is. A thought nobody watched arrive has no clock to
-/// count from, so the row is the two words alone.
-fn scar(took: Option<Duration>) -> Line<'static> {
-    let mut spans = vec![Span::styled("⌁ reasoned", theme::thought())];
-    if let Some(took) = took {
+/// A turn's thought: its marker at the head and the reasoning beneath it,
+/// hanging off the same gutter an answer does and written in the thought's own
+/// ink, so a reader tells what the run is thinking from what it said. The
+/// marker is the run's own clock — while the thought arrives it says what the
+/// run is doing and for how long, and once it has ended it says so and how long
+/// it took, which is the answer that never moves again.
+///
+/// A thought is a row of the thread and not a surface beside it: its rows stay
+/// where they are when it ends, so nothing here folds, and the reader has been
+/// reading the text the whole time.
+fn reasoning_rows(
+    text: &str,
+    done: bool,
+    started: Duration,
+    took: Option<Duration>,
+    body: Body<'_>,
+    want: Want,
+) -> Rows {
+    let Body { columns, now, .. } = body;
+    let (word, elapsed) = match (done, took) {
+        (false, _) => ("thinking", Some(now.saturating_sub(started))),
+        (true, took) => ("reasoned", took),
+    };
+    let mut spans = vec![Span::styled(format!("⌁ {word}"), theme::thought())];
+    if let Some(elapsed) = elapsed {
         spans.push(Span::styled(
-            format!(" {}", pulse::said(took)),
+            format!(" {}", pulse::said(elapsed)),
             theme::thought(),
         ));
     }
-    Line::from(spans)
+    let mut rows = vec![Line::from(spans)];
+    rows.extend(markdown::text::wrap(
+        markdown::text::glyphs(&[Span::styled(text.to_string(), theme::thought())]),
+        "",
+        theme::thought(),
+        columns as usize,
+    ));
+    Rows::plain(gutter(rows), want)
 }
 
 /// The pictures a written body placed, re-based to the rows the window holds:

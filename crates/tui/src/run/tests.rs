@@ -260,15 +260,16 @@ fn the_loop_draws_for_the_clock_while_a_run_is_live_and_never_while_idle() {
 }
 
 #[test]
-fn a_thought_alone_keeps_the_frame_on_the_clock() {
+fn a_thought_alone_asks_the_frame_for_no_tick_of_its_own() {
     let mut app = app();
-    // No run in flight: the pane is the only thing the clock has to say, and a
-    // pane is enough — it unfurls a row a tick, and a frame drawn once would
-    // leave it at its head.
+    // A thought is a row of the thread and not a state beside it: with no run
+    // in flight the frame has nothing counting, so nothing is drawn for the
+    // clock however much of a thought has arrived.
     app.event(sindri_core::agent::Event::ReasoningDelta {
         turn: 1,
         text: "a thought".to_string(),
     });
+    assert!(!app.ticks(), "a still frame is not on the clock");
 
     let (jobs, _job_queue) = mpsc::channel();
     let (tx, rx) = mpsc::channel::<Msg>();
@@ -279,40 +280,15 @@ fn a_thought_alone_keeps_the_frame_on_the_clock() {
         draws: Arc::clone(&draws),
     };
 
-    let started = Instant::now();
-    while started.elapsed() < Duration::from_millis(400) {
-        assert!(turn_of_the_loop(
-            &mut app,
-            &rx,
-            &jobs,
-            &tx,
-            &mut walking,
-            root.path(),
-            &mut surface
-        ));
-    }
-    assert!(
-        draws.load(Ordering::SeqCst) >= 2,
-        "a thought keeps the frame on the clock: {} draws in 400ms",
-        draws.load(Ordering::SeqCst)
-    );
-
-    // The thought is over and its fold has run out: the frame asks for no tick
-    // at all, so an unchanged one is never drawn for its own sake.
-    app.event(sindri_core::agent::Event::Reasoning {
-        turn: 1,
-        text: "a thought".to_string(),
-    });
-    for _ in 0..5 {
-        app.pulse(crate::pulse::TICK);
-    }
-    assert!(app.thought().is_none(), "the pane has folded away");
-    let idle = draws.load(Ordering::SeqCst);
+    // The turn waits for a message instead of pulsing: a frame on the clock
+    // would have woken twice over in this wait and drawn both times, so one
+    // draw — the one the message earns — is the thought asking for no tick.
     let waking = tx.clone();
     let wake = std::thread::spawn(move || {
         std::thread::sleep(Duration::from_millis(300));
         let _ = waking.send(Msg::Resize);
     });
+    let started = Instant::now();
     assert!(turn_of_the_loop(
         &mut app,
         &rx,
@@ -323,15 +299,18 @@ fn a_thought_alone_keeps_the_frame_on_the_clock() {
         &mut surface
     ));
     wake.join().expect("the waker finishes");
+    assert!(
+        started.elapsed() >= Duration::from_millis(300),
+        "the frame waited for a message and never for its own clock: {:?}",
+        started.elapsed()
+    );
     assert_eq!(
         draws.load(Ordering::SeqCst),
-        idle + 1,
-        "a frame with no thought in it is drawn for a message and never for the clock"
+        1,
+        "one draw, for the message that landed, and none for a tick"
     );
 }
 
-/// The frame's hearing, fed by a test rather than by a terminal: what the loop
-/// does with an event, and what it does with bytes no event could be made of.
 #[test]
 fn a_sequence_the_terminal_cannot_parse_does_not_end_the_frames_hearing() {
     let (tx, rx) = mpsc::channel();

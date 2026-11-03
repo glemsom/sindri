@@ -209,9 +209,10 @@ impl App {
             return cleared || offered;
         };
         cancel.trigger();
-        // A cancel is answered the moment the key lands, so the thought goes
-        // with it: the run is not finished with it, but the reader is.
-        self.thought_over();
+        // A cancel is answered the moment the key lands, so the thought the run
+        // was having ends where it stands: its marker row stops saying the run
+        // is thinking, and it claims only the time the run spent.
+        self.close_thought();
         true
     }
 

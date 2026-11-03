@@ -24,11 +24,9 @@ use crate::graphics::Graphics;
 use crate::overlay::Overlay;
 use crate::picture::Store;
 use crate::rail::{Launch, Rail, RailView};
-use crate::render::pane;
 use crate::render::seam::Seam;
 use crate::selection::{Selection, Viewport};
 use crate::settings::Missing;
-use crate::thought::Thought;
 use crate::thread::Thread;
 use crate::window::Window;
 
@@ -50,10 +48,6 @@ pub(crate) const DEFAULT_PAGE: usize = 10;
 pub struct App {
     pub(crate) rail: Rail,
     pub(crate) thread: Thread,
-    /// The thought the run is having, held beside the thread and never in it:
-    /// a thought is a state the run is in, and the transcript is a document of
-    /// what was said. `render::pane` is the one surface it is drawn on.
-    pub(crate) thought: Option<Thought>,
     pub(crate) composer: Composer,
     pub(crate) queue: VecDeque<String>,
     pub(crate) running: Option<Cancel>,
@@ -145,7 +139,6 @@ impl App {
         App {
             rail: Rail::new(launch),
             thread: Thread::default(),
-            thought: None,
             composer: Composer::new(),
             queue: VecDeque::new(),
             running: None,
@@ -243,12 +236,6 @@ impl App {
         &self.thread
     }
 
-    /// The thought the run is having, while it is having one: the pane's whole
-    /// content, and never an entry of the thread.
-    pub fn thought(&self) -> Option<&Thought> {
-        self.thought.as_ref()
-    }
-
     /// How many rows entry `index` takes at `width`: the thread's answer, given
     /// the clock and the store a height depends on — read from the fields
     /// because the thread is borrowed mutably for the same call.
@@ -287,68 +274,18 @@ impl App {
         self.now
     }
 
-    /// Whether this frame asks for a tick: a run in flight, or a thought on its
-    /// way in or out. A still frame asks for none — an idle composer owes the
-    /// clock nothing, so the loop is not woken for it.
+    /// Whether this frame asks for a tick: a run in flight, and nothing else. A
+    /// still frame asks for none — an idle composer owes the clock nothing, and
+    /// a thought that has ended in place asks for nothing either.
     pub fn ticks(&self) -> bool {
-        self.running.is_some() || self.thought.is_some()
+        self.running.is_some()
     }
 
-    /// Lets the clock on by `delta` and steps a fold by it. Only a frame that
-    /// asked for a tick is told the time.
+    /// Lets the clock on by `delta`, and does nothing else with it. Only a frame
+    /// that asked for a tick is told the time, so a still frame's clock never
+    /// runs.
     pub fn pulse(&mut self, delta: Duration) {
-        if !self.ticks() {
-            return;
-        }
         self.now += delta;
-        self.step_closed_pane();
-    }
-
-    /// The pane closing, a tick at a time: the scar the thread keeps of a
-    /// thought is written on the tick the pane comes down to its last row, so
-    /// for one frame the two are on the glass together and the eye reads a
-    /// descent into the transcript rather than a disappearance and a separate
-    /// arrival. A pane that has closed away is no longer the frame's; a thought
-    /// still arriving has no closing to do.
-    fn step_closed_pane(&mut self) {
-        let Some(thought) = self.thought.as_ref() else {
-            return;
-        };
-        let Some(since) = thought.closed_for(self.now) else {
-            return;
-        };
-        let rows = pane::closing(since);
-        if rows <= 1 {
-            self.scar();
-        }
-        if rows == 0 {
-            self.thought = None;
-        }
-    }
-
-    /// The one row the thread holds of a closed thought, written the moment the
-    /// pane is down to a row — or the moment a door takes the pane away before
-    /// the fold got there, so a run that ends inside the fold still leaves its
-    /// scar. A thought that was still arriving leaves nothing: it never
-    /// finished, so it is no part of the document. The row carries the run's
-    /// clock as the duration it spent thinking, because that is the fact a
-    /// finished thought leaves that nothing else in the thread states.
-    pub(crate) fn scar(&mut self) {
-        let Some(thought) = self.thought.as_mut() else {
-            return;
-        };
-        if thought.closed.is_none() || thought.scarred {
-            return;
-        }
-        thought.scarred = true;
-        let (turn, text, took) = (thought.turn, thought.text.clone(), thought.took());
-        self.thread.push(Entry::Reasoning {
-            turn,
-            text,
-            done: true,
-            open: false,
-            took,
-        });
     }
 
     /// What this frame is doing, as the one thing a terminal is told: a run in
@@ -467,7 +404,6 @@ impl App {
                 let session = launch.session.clone();
                 self.loading = Loading::Idle;
                 self.armed = None;
-                self.thought_over();
                 self.thread.clear();
                 self.queue.clear();
                 self.early.clear();

@@ -157,9 +157,11 @@ the output kept and the word its row ended on (`crates/tui/src/entry.rs`).
 **composer** — the prompt being typed, held as rows and a character-index cursor and
 reported in cells, because the terminal draws cells and a glyph may be two wide.
 
-**thought** — reasoning the run is having: the turn it belongs to, the text so far and when
-it began. Held beside the thread and never in it, because a thought is a state the run is
-in and not something that was said.
+**thought** — reasoning the run is having, as a row of the thread: the turn it belongs to,
+the text streamed so far, when it began and — once it has ended — how long it took
+(`crates/tui/src/entry.rs`). A fragment is appended to its entry as it lands, so it streams
+in the way an answer does, off the same gutter and in the thought's own ink, and it ends in
+place: its marker row above its text, where it was, with nothing to fold and nothing to open.
 
 **mark** — the wash a drag leaves on the transcript. `mark::span` computes the cells from
 press to release and the copy reads the same function, so the mark cannot light a cell the
