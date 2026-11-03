@@ -1,403 +1,388 @@
 # Glossary
 
-Sindri's vocabulary. Use these words exactly; do not drift to synonyms.
+The vocabulary Sindri is written in. One entry per word, one meaning per entry: where
+the code says a word, that word is used here and its synonyms are not. Each entry
+points at the module that carries the thing, so the code is where the detail lives and
+this file is only what a reader needs to look in the right place.
 
-## Agent
+## The run and its loop
 
-**turn** — one round trip to the model: our request, its response, the tool results we feed
-back. Bounded by the turn cap (`max_turns`, default 250).
+**run** — one prompt carried through the turn loop to an answer, from the session that
+opens it to the report it leaves. `crates/core/src/agent/mod.rs` holds the loop;
+`crates/cli/src/stack.rs` composes the stack a run stands on, and a front end keeps only
+what is its own.
 
-**tool call** — one request from the model to run a tool — `bash`, `skill` or `open` — plus the
-structured tool result returned. `bash` is the one that runs anything: one call carrying a whole
-pipeline or script the model composed. The code's word once its arguments are read is `Asked`.
+**turn** — one request to the model and the calls it asks for in reply. The loop spends a
+turn per request, and `max_turns` caps them: the key is set in the config file and
+defaults to 250, so a run that never stops of its own accord still ends and says why.
 
-**open** — the third tool: one **target** handed to the host's opener, for the human to look at.
-It runs nothing inside the sandbox: the core parses the target and refuses it, and only a frame
-registers it — **batch mode**, having no window, has no `open` at all: an absence, not a refusal.
+**turn cap** — the bound `max_turns` puts on a run, and one of the two figures the `bash`
+description states. Spending it is not a failure: the answer is still the product, so the
+run reports `done` and `stopped: max_turns`.
 
-**target** — what one `open` call names, and exactly one of them: `url`, an `http://` or `https://`
-address, or `path`, a file (`Target`, whose two shapes are `Url` and `Path`). A `file:` URI is a
-second spelling of `path` and not a second door: it runs the same guard and is refused in the
-identical words. A `path` is guarded against the **sandbox policy**'s own sets and never a second
-list — inside the **writable set** or the **session temp**, as given and as resolved, a regular
-file, its extension read again on the resolved name so a link cannot promise one file and deliver
-another.
+**stopped** — why the loop stopped, a closed set of five words `Stopped` spells: `final`
+an answer was delivered, `max_turns` the cap was spent, `budget` the command time or output
+was, `cancelled` a signal raised the flag, `error` the run could not deliver. A record
+written from the moment it starts says `running` until one of them lands, which is what a
+session `/new` superseded still says: it did not stop, it was left
+(`crates/core/src/agent/report.rs`).
 
-**started** — the word an `open` result carries when the host was asked and the opener had not
-refused it when the quarter-second probe window closed; `failed:` with the opener's own reason
-when it exited non-zero inside that window. Neither says a human looked.
+**wave** — the tool calls one turn emitted, run together because a model that emitted
+them declared them independent. Results come back in the order asked for, whatever order
+they finished in, and the wave is what carries the loaded-skill set from one turn to the
+next (`crates/core/src/agent/calls.rs`).
 
-**answer** — the final assistant text of the last turn. The product. Markdown read into the
-frame: prose, fences drawn as panels, links that keep their destinations, and a **picture** with
-its **caption**.
+**budget** — what a run may spend inside one wave where the turn cap cannot see it: the
+wall clock its commands take and the bytes of their output fed back to the model
+(`crates/core/src/agent/budget.rs`). Spending it stops the run with `stopped: budget`,
+which still reports `done`.
 
-**stopped** — why the loop ended: `final`, `max_turns`, `budget`, `cancelled` or `error`. The set
-is the loop's and it is closed: `Stopped` holds those five and no sixth. The **record** writes one
-word more — `running` — and that is its word for a run still going, not a way the loop stops.
+**cancel** — the one flag a run checks to know it must stop now. A signal handler raises
+it, the loop reads it between turns and the executor kills the command's process group
+mid-flight, so a cancelled run leaves no orphan (`crates/core/src/cancel.rs`).
 
-**budget** — what one prompt's commands may spend before the run stops: an hour of command time
-and 8 MiB of output fed back, spent inside a script where the turn cap cannot count it. A tool
-result is re-sent every turn, so the bytes counted are the conversation's.
+**preamble** — the fixed system prompt, re-sent on every turn of every run
+(`crates/core/src/provider/rig_wire.rs`). Its words are a tax paid per request, which is
+why the catalog is in a tool description instead, and why `AGENTS.md` travels beside it
+rather than as a turn.
 
-**cancel** — Ctrl-C (SIGINT): one flag the loop and the executor share. The loop stops between
-turns, the command's process group is killed, stdout stays empty, exit is 130. In the **frame** a
-cancel is answered the moment the key lands, and the state clears when the run has stopped.
+**provider** — the model behind one seam: a call asks, and gets an answer or a failure
+that is safe to print (`crates/core/src/provider/mod.rs`). No part of the tree above that
+seam knows the client library exists — `rig_wire` is the one file that does.
 
-## Sandbox
+**wire** — which provider API a run speaks, Anthropic Messages or OpenAI-compatible Chat
+Completions, and what each needs: its credential variable, its base URL variable and
+whether it needs a credential at all (`crates/core/src/config/provider.rs`).
 
-**sandbox policy** — the value holding writable set and temp mapping: the only source
-of both enforcement and description.
+**usage** — what the provider reports it spent, in its own figures. It rides beside a
+turn and totals into the report; the rail's tokens and context meter are drawn from it.
 
-**writable set** — the paths mounted read-write besides the session temp: the workspace
-plus **extras**.
+**context window** — how much conversation a model family can hold. Only the adapter
+knows the family names, so only it can give the rail the denominator its meter needs
+(`crates/core/src/provider/window.rs`).
 
-**extras** — the writable paths beyond the workspace and the session temp, floor included: a
-run with nothing configured mounts a shipped floor — `~/.cache`, `~/go`, `~/.cargo` and
-`~/.rustup` — and a level that names a list replaces it wholesale, so an empty list means none
-and a shipped path this host does not have, or one that would nest with the workspace, is
-dropped without a word.
+**answer** — the text the model delivered, and the whole of stdout in batch mode: the
+answer and exactly one newline, or nothing when the run failed or was cancelled.
 
-**session temp** — per-run writable scratch, mapped to `TMPDIR` in the sandbox. It is not a
-home: `HOME` is the host's own, handed over unchanged, so `git` finds the identity in
-`~/.gitconfig` and `~/.ssh` reads at its real path. A write to `$HOME` fails with
-`Read-only file system` rather than landing in scratch nobody reads, and the temp stays
-writable where it sits inside that home only because its own bind comes after the read-only
-root — mount order, not accident. A host with no `HOME` passes none at all, never an empty
-one.
+## The tools
 
-**description** — the model-facing text derived from the sandbox policy, also printed by
-`sindri doctor`. One sentence may be appended to it that the policy does not derive: the
-**pointer** to the **catalog**, added only where the model may see one.
+**tool set** — the tools a run holds: `bash` always, `skill` only when the workspace
+holds one the model may see, `open` only in a front end a human with a browser is sitting
+in front of (`crates/core/src/agent/tools.rs`). A tool a front end does not build is a
+tool the schema never mentions.
 
-**pointer** — the one sentence appended to the **description** saying this environment's
-instructions are behind `skill`, so a model reading the schema it reaches for first learns the
-**catalog** is there. Not a **skill** body's, and not the preamble's: the preamble is re-sent every
-turn, and the pointer is paid for only where there is a catalog the model may see.
+**call** — one tool call: the variant of `Asked` that names the tool, read once so every
+match over it is exhaustive (`crates/core/src/provider/asked.rs`). A tool added there is
+a variant the loop, the record and the frame must each answer.
 
-**yolo-unsafe** — `--yolo-unsafe`: the policy whose enforcement is `none`, so commands run
-with the caller's own privileges, outside bubblewrap, inheriting its environment and
-working directory. Never persisted: asked for by the invocation that makes it.
+**bash** — the one tool that runs things: search, fetch, patch and HTTP, all behind the
+sandbox. Its description is derived from the sandbox policy and the limits in force, so
+the boundary the model is told about is the boundary enforced.
 
-**doctor** — `sindri doctor`: verifies bwrap, the binary set and the mount plan, prints
-the description, and lists the **skill** **catalog**.
+**skill** — the second tool: instructions written for the model, loaded into the
+conversation once, frontmatter stripped and the skill's own files listed beside the body
+(`crates/core/src/agent/skill.rs`). It is a tool and not a file read through `bash`,
+because a permission nobody enforces is a suggestion.
 
-## Run
+**open** — the third tool: one target handed to the host's opener
+(`crates/core/src/agent/open.rs`). The core decides and refuses; the spawn belongs to the
+process that still holds a display, which the sandbox is the thing that takes away.
 
-**boot** — turning the flags and the process's own facts into a **session** ready to start
-(`crates/cli/src/boot.rs`), and the one line a front end says when it cannot. Not a synonym for
-session: a boot ends where a session begins.
+**target** — the one thing `open` hands over: an `http` or `https` URL the host's browser
+fetches itself, or a path to a regular file inside what the run may write. Exactly one of
+the two, and a `file:` URI is a path in another spelling, refused in the path rules'
+words.
 
-**instructions** — a repository's own house rules: the `AGENTS.md` at its root, found through the
-workspace's git root — or the workspace itself where that is no repository — and read once at
-**boot**. They travel beside the preamble and never as a turn of their own, so the **transcript**
-stays the user's words; the read is capped by a byte count stated in one place, and a file past it
-arrives cut with a marker rather than silently short. A repository with no `AGENTS.md` says
-nothing. The code's word for the file is `Taken`: `Absent`, `Found` or `Unreadable`.
+**outcome** — what `bash` returns instead of a process: an exit, a timeout, a cancel or a
+sandbox error, with the two streams (`crates/core/src/exec/result.rs`). "The sandbox never
+started" and "the command failed" are different outcomes and are never the same word.
 
-**session** — one run, identified by a GUID, recorded under
-`$XDG_STATE_HOME/sindri/sessions/<guid>/`.
+**spill file** — where output too large to feed back is written in full, while the model
+is handed the head and the tail. The truncation is the cap; the file is how a reader
+recovers what the cap cut.
 
-**record** — the files one **session** leaves in its directory: what `sindri sessions show` and
-`/export` read, and what the frame never writes directly. A record is a session read back, added to
-and never rewritten. Two other things go by that word: the specification's *record* is what a
-terminal stores from a **status** report, and `agent::Report` is what one run did.
-
-**transcript** — the ordered history of messages, tool calls and tool results of a
-session.
-
-**window** — the rows of the **transcript** the frame shows at once. It has a place in the
-**thread** rather than an offset from its **tail**: a reader on the tail follows what arrives, and a
-reader scrolled back keeps the row they are reading while a run appends below them, told how much
-by the **badge**. That place is an entry and the rows into it, so a block that grows or folds above
-the window moves no row under the reader; `Enter` on a call is a place too.
-
-**badge** — the new-rows badge, `↓ 4 new rows`, against the footer's right edge: how many rows
-arrived below a **window** that is off the **tail**. Only what arrived after the reader took their
-place counts: going back, reaching the first turn and folding a call all take the rows below the
-window as read. It says `1 new row` for one, and clears at the tail.
-
-**tail** — the newest row of the **transcript**, and the place a **window** follows
-from unless a reader has scrolled back or engaged with a call; `End` is the key that
-takes it again.
-
-**spill file** — where an over-long tool result's full text is written when the
-model-facing copy is truncated head+tail.
-
-**batch mode** — `-b`: the Unix-filter front end. stdout is the answer only; stderr is
-silent unless `-v`, but for a fault the run cannot leave unsaid — a repository config it
-refused, an `AGENTS.md` it could not read; `--format json` changes the output shape.
-
-**reasoning** — provider-side thinking tokens, off by default, shown on stderr with `-v`. In the
-**frame** a thought is the run's own **pane** while it arrives and a **scar** in the **thread** once
-it is over; it is never an entry of the thread, because a thought is a state the run is in and the
-thread is a document of what was said.
-
-**pane** — the run's surface for a thought: the rows below the last row of the **thread**, in the
-transcript's column and hanging off the same **gutter** a turn's answer and its calls hang off, five
-rows at least once it has a line of text and eight at most. It unfurls from its head one row a tick
-and folds back down to it when the thought is over, and the **scar** is written on the tick it is
-one row. It takes its rows from the transcript's area rather than painting over prose, so the
-**window**'s row map is the thread's and a copy or a **mark** never reads a word of it. Its text
-fills from the bottom — the newest row on the pane's last row, so a fragment never moves the line
-the reader is on — a row that leaves the top is cut rather than dimmed, its left rule is a **walk**
-from `PROMPT` to `HEADING` and its head row is `⌁ thinking   0.8s`. It sits on the **raised** surface
-with no dim behind it, and it takes no key: the **overlay** is the reader's covering and takes them
-all, and only one of the two can be dismissed. Its text is a smoothing buffer: the fragments a
-provider bursts are queued as they land and released at a reading rate, so the words glide where
-rows in the flow could only jerk, and the pane is allowed to lag the model by a beat. It may not
-hold the frame open to catch up — when the run needs the rows, the remainder is dropped and the pane
-folds on the tick it would have folded anyway — and its queue is capped, the oldest fragments going
-past the cap, because a thought is not an answer and has no **spill file**: the **record** holds the
-whole text.
-
-**scar** — the one row a finished thought leaves in the **thread**, `⌁ reasoned 4.2s`: the words and
-how long the run spent on it, read through the **pulse** as the answer's marker and a call's
-duration are, and no duration where no **pane** stood to count one. `Enter` opens the text it held
-in place, and `Ctrl-R` opens the whole of it in an **overlay** — the view of a finished thought is
-the reader's and takes every key the **pane** never would. It is all of a thought the transcript
-ever holds, and its entry is never open while the thought is still arriving.
-
-**status** — what a run tells the terminal it is doing: one `OSC 7501` report holding one of five
-states — `idle`, `working`, `done`, `blocked`, `error` — one coarse line of our own words, and the
-run's identity, `app=sindri` with the workspace's own name as `title`. The code's word for the set
-is `sindri_core::status::State`, and one report is made by the pure encoder `status::report`, which
-returns the bytes or nothing at all: a report past a ceiling the specification sets is one a
-terminal discards whole, so it is not sent rather than shortened. The mapping is `Stopped`'s and it
-is closed — `final`, `max_turns` and `budget` report `done`, `error` reports `error`, and
-`cancelled` reports `idle`, which is what an interrupted program owes its terminal. `blocked` is no
-turn's word: a turn never waits on a human, so the frame alone sends it, with `kind=auth`, while
-the settings modal is asking for a key — a run with no credential cannot answer, and that is the
-one genuine blockage sindri has. There is no `progress`, since a turn is not a fraction of anything,
-and no `id=`, since several runs are several ptys and so several root records. `msg` is coarse —
-`Doing`'s five, thinking, running a command, loading a skill, opening a target and writing the
-answer, plus the turn count — and never the shell command, the prompt or the answer, because a
-report is a channel no redaction in the record guards. Which word a run's stream says is
-`Event::doing`'s: the one table both front ends read, turning an event into a turn and a `Doing`,
-so neither spells the mapping again. A frame that leaves its screen says `clear`
-first, which is not one of the five: `done` and `error` outlive a shell prompt by design, and the
-frame's own record must not outlive the frame. `status::clear` is that report, and `status::Channel` is
-the one channel both front ends speak through — the title, the writer and the gate together, the
-gate being `status::Told`: a state the terminal has already been told is not said again, and none
-is said twice in a second. One setting silences every report — `status` in the config,
-`SINDRI_STATUS` over it — and both front ends read it there: a courtesy is the human's to decline,
-once.
-
+**refusal** — a thing the tool declined to do, said in the call and before anything was
+attempted, naming the ground it stopped on. A refusal is a result the model can act on,
+where a failure is a fact about the machine.
 
 ## Skills
 
-**skill** — a directory holding a `SKILL.md`, or a **built-in skill** with none at all: the
-frontmatter's `name` and `description`, the two flags that say who may reach for it, and the body
-beneath the fence that **activation** returns. A skill no version of the specification knows how to
-read is a **refusal**, never a silence.
+**skill scope** — where the catalog looks, lowest precedence first: `builtin`, the skills
+compiled into the binary; `user`, `~/.agents/skills`; `repo`, every `.agents/skills` from
+the workspace up to its repository root, nearest first and never above it. A nearer scope
+takes a name from a further one.
 
-**description ceiling** — the character budget a **skill**'s `description` may spend —
-`DESCRIPTION_CEILING`, 200 characters, read as characters and not bytes. The catalog sits in the
-`skill` tool's description, so every description is paid for every turn, and one is a routing key
-rather than a summary of the body: past the ceiling it is a **refusal** naming the line to cut.
+**built-in skill** — a `SKILL.md` compiled into the binary with `include_str!` and not a
+directory any scan walks (`crates/core/src/skills/builtin.rs`). It has no path, because a
+path is a thing that can be absent, stale or unwritable, and the instructions a run is
+given and the binary that enforces them ship in one artefact or neither does.
 
-**skill scope** — one of the three places a **scan** reads, and the three are ordered by
-nearness: `builtin`, compiled into the binary; `user`, under the home directory at
-`~/.agents/skills`; and `repo`, at every `.agents/skills` between the workspace and its repository
-root. The specification governs what is inside a skill directory and says nothing about where one
-lives, so these paths are ours. The code's word for it is `Scope`: `Builtin`, `User`, `Repo`.
+**user-only skill** — a skill carrying `disable-model-invocation: true`: a human may put
+it in force, and it is absent from the schema and the catalog the model reads.
 
-**built-in skill** — a **skill** shipped inside the binary rather than installed to a path: its
-`SKILL.md` is compiled in, so there is no directory to be absent, stale or unwritable. It is the
-lowest **skill scope**, so a `user` skill of the same name shadows it and a `repo` skill shadows
-them both. Its scope is a field and not an inference, so `sindri doctor` prints it, with
-`(compiled in)` where a scanned skill's directory would go.
+**model-only skill** — a skill carrying `user-invocable: false`: the model may load it,
+and the frame's completion never offers it. Both flags are Claude-compatible extensions,
+read as plain booleans and ignored when spelled any other way.
 
-**activation** — one `skill` call's result: the body with the frontmatter stripped, in a named
-`<skill_content>` wrapper, with the skill's directory and its file listing beside it so a relative
-reference in the body resolves; a **built-in skill** has no directory, so its files are sent with
-the body instead. Once per **session** and no more: a second call is `already_loaded` with no body,
-because a tool result is sent again every turn. `/skill:name` asks for the same activation.
+**catalog** — every skill the scan found, one line per skill in the `skill` tool's own
+description. It is there and not in the preamble because it changes with the workspace,
+and it is paid only where it buys something: with no model-visible skill the tool is not
+registered at all.
 
-**loaded set** — the skills one conversation has been told, held with the history and cleared with
-it: a body is in force while the **transcript** still carries it. Two identical calls in one turn's
-wave are one load, and a load by hand claims the name as the tool's own call does. The code's word
-is `Loaded`, and a frame builds its ledger from the `SkillLoaded` event.
+**shadowing** — a name two scopes both carried, kept as a record rather than dropped, so
+`sindri doctor` prints the winner and the skill it displaced.
 
-**found** — what one **skill scope**'s scan hands back: its skills and its refusals, and no
-shadowed list, because a scope has no nearer one to lose a name to. The code's word is `Found`,
-and `skills::scan` is the function that returns one.
+**frontmatter** — the YAML fence that opens a `SKILL.md`, read as a value tree rather
+than a schema: the specification's required fields are taken, the two extensions are
+honoured, and everything else is ignored rather than refused
+(`crates/core/src/skills/frontmatter.rs`).
 
-**fold** — the one function that makes the **catalog** of every scope's **found**, in precedence
-order: a name already held is not replaced, and the skill that would have taken it is recorded as
-**shadowing**. It is the only place a shadow is made, and it reads each found once. The code's
-word is `fold`, and `skills::fold` is it.
+**description ceiling** — the limit `DESCRIPTION_CEILING` puts on a skill's description,
+200 characters, because that line is what the catalog carries on every turn and the
+refusal names the constant and the figure.
 
-**catalog** — what a **fold** makes: every **skill**, every **refusal**, and the shadowed names.
-Sorted by name, so two scans of one tree say the same thing.
+**instructions** — a repository's own rules: the `AGENTS.md` at the repository root, read
+once at boot and handed to the model beside the preamble. Never a nested file, never an
+ancestor's; the read is capped at 8 KiB and a longer file arrives cut with a marker saying
+so; `Taken` is what the read produced — `Absent`, `Found` or `Unreadable` — and an
+unreadable file is a diagnostic that never stops the run
+(`crates/core/src/instructions.rs`).
 
-**refusal** — a `SKILL.md` the scan or the built-in table would not load, held with where it came
-from and the line that broke it: no description, no YAML, a description past the **description
-ceiling**, a link to nothing. Where it came from is its file — or, a **built-in skill** being
-compiled in and having none, the **skill scope** that carries it, which is the word `sindri doctor`
-prints in place of a path. The code's word for the two is `Where`: `File` and `Scope`. A refusal is
-a diagnostic, not a failure — the rest of the **catalog** still holds.
+## The sandbox
 
-**user-only skill** — one the model may not see: `disable-model-invocation: true`. It is absent
-from the **catalog** the `skill` tool carries and from that tool's schema, and a human reaches it
-from the **composer** alone; `sindri doctor` still prints it, because a scan found it.
+**sandbox** — unprivileged bubblewrap, host root read-only, plus a writable set the user
+chose. Read-only is a boundary on writes and not on reads, which is why a host socket the
+process already holds is reachable and why a tool that would route around a refusal is
+not the shape to build.
 
-**model-only skill** — one a human may not type: `user-invocable: false`. It is in the catalog and
-callable, and absent from **completion**. A skill that says both is one nobody may run, and the
-report says `none` for it.
+**policy** — the one sandbox value: private fields, a validating constructor and the
+accessors the two derivations read (`crates/core/src/sandbox/policy.rs`). Nothing in the
+tree builds a bwrap invocation by hand.
 
-**shadowing** — one name two of the **skill scope**s carry. The nearer one's skill holds it and the
-farther one is recorded as shadowed, by its scope, its name and its directory where it has one, so
-a reader sees both what won and what it displaced. The **fold** makes them, so a repository's skill
-is recorded over the home directory's, and both over a built-in's.
+**bubblewrap** — `bwrap`, the program the policy is enforced through. A word a run reports
+as its `enforcement` when it is in force; a `bwrap` that cannot start is a failure to
+report and never one to paper over.
 
-## Terminal UI
+**writable set** — the paths a run may write beyond its session temp, and it stays the
+user's sentence: a level that names one replaces the shipped floor rather than adding to
+it (`crates/core/src/sandbox/extras.rs`).
 
-**frame** — bare `sindri` on a terminal: the alternate-screen interface as a whole.
+**session temp** — the writable scratch a run's own session directory carries, mapped to
+`TMPDIR`. `HOME` is the host's own, read-only, and nothing is created for it.
 
-**rail** — the right column: a ledger in two blocks, split by a hairline. Above the rule, what a run
-is spending — cache hit percentage, turns against the cap, tokens, context meter. Below it, what the
-run *is*: its model, workspace, git branch, session GUID and session temp path. Labels sit in a
-faint field and the value hangs off the last column, so every figure ends on one edge and is
-compared down it, and a value too long for its room is shortened rather than wrapped. It is chrome,
-not a **surface**: no fill, and what a row copies is the fact, never the leader that drew it.
+**unsafe** — what a run says of itself under `--yolo-unsafe`: commands run with the user's
+own privileges, outside bubblewrap, inheriting environment and working directory. The
+record, the JSON and the rail all say it; the flag is asked for in the invocation that
+makes it and dies with that invocation.
 
-**mark** — the cells a drag lights and the words that leave with them: a wash on the rows a copy
-takes, from the column the drag started on to the column it ended on, the rows between in full and
-a wide glyph at either edge whole, in one **ink** and only as a surface, so the ink under it still
-reads as itself. One function computes the spans and both the mark and the copy read it
-(`mark::span`), so the mark can never light a cell the copy does not take — but a **picture**'s
-**block** is marked whole, graphic and **caption** together, its words taken once on the row the
-block starts at. It stands on the rows it took until the reader's next gesture clears it.
+**enforcement** — the word the JSON's last-but-two field carries for how a run was held
+to the boundary: `bubblewrap` or `unsafe`.
 
-**pulse** — the frame's own clock, and the only thing drawn without being asked: a tick of ~120 ms
-while a run is live, a completion is walking or a **pane** is on the glass, and nothing at all while
-the frame is still. It puts a braille marker at the head of the newest answer with the run's elapsed
-time, settling on `✓` or `✗`, freezes each call's duration as it ends, and moves the rail's output
-and context figures.
+**description** — the published text of the sandbox, derived from the policy rather than
+written by hand, so the model's words and the mounts it runs under cannot disagree
+(`crates/core/src/sandbox/describe.rs`). `sindri doctor` prints the same text.
 
-**walk** — a rule lit from one end: the theme interpolates two named stops, one step per cell, and
-names the pairs a renderer may interpolate. It is how a border gets a gradient without a picture
-and without a colour a renderer wrote down. A picture's pixels are held the same way, one at a
-time.
+**doctor** — the environment probe behind `sindri doctor`: prove bubblewrap, the required
+binaries and the mount plan before any model is in the loop
+(`crates/core/src/doctor.rs`). It also prints the skill catalog and the rules a run stands
+in, and writes no record.
 
-**surface** — one of the three tiers of nearness the frame paints on: **canvas**, **panel**,
-**raised**, in that order. A renderer asks the theme for the tier it draws on, and the frame fills
-the canvas before the layout, so no renderer writes a background of its own: the theme names every
-colour the frame paints. A renderer that *places* a picture paints the canvas under it first.
+## Status and records
 
-**ink** — the foreground a word is drawn in, and the theme's as surely as a **surface** is: body
-ink is prose, a prompt, a call's command and a table's cells, and every other ink is a named colour
-or a **walk**. A cell emptied by `Clear` has no span to bring one, so the surface names the ink it
-asks for; nothing is left at the terminal's default foreground.
+**status** — what a run tells its terminal it is doing: one `OSC 7501` report, written
+unqueried, carrying one of the specification's closed set of states — `idle`, `working`,
+`done`, `blocked`, `error` — a coarse line, the turn count and the workspace's name. The
+value is `sindri_core::status::State`, the encoder is the pure `status::report`
+(`crates/core/src/status.rs`), the identity is `app=sindri`, and the writing belongs to
+whoever owns the tty.
 
-**canvas** — the lowest **surface**, and the theme's own: the frame fills the whole area with it
-before anything is drawn, so a resize, a scrolled region or a gap a picture's escape leaves behind
-is still the theme's and never the terminal's. A code word in prose is drawn straight on it.
+**blocked** — the one state no turn sends: nothing in a turn waits on a human. The frame
+sends it, with `kind=auth`, while the settings modal is asking for a key a run cannot
+answer without.
 
-**panel** — the **surface** the frame draws on, one tier above the canvas: the **composer**, a
-fenced code block, the **queued prompt** panel, the band a turn's prompt sits on. The **rail** is
-chrome on the canvas, not one.
+**record** — the files a session leaves: `session.json`, `transcript.jsonl`, `status.json`
+and the temp, written as the run goes, so a crashed run still reads
+(`crates/core/src/record/mod.rs`). Two other senses of the word live in the tree and are
+never a **status** report's meaning: what a terminal stores from one is the specification's
+*record*, and `agent::Report` is what one run did — the answer, why it stopped and what it
+cost.
 
-**raised** — the **surface** an overlay is drawn on, one tier above a panel; the frame
-is dimmed beneath it, because an overlay takes the reader's keys. The rail's sandbox **chip** and the
-**pane** sit on it too, undimmed: neither is the reader's, so neither has the screen.
+**transcript** — `transcript.jsonl`: one entry per thing that happened, in order, prompt
+and turns and calls and results, written as it happens and read back by `sindri sessions
+show` and `/export` from the same `Entry` values so the two cannot disagree.
 
-**role** — one of the seven inks a fence is painted in — `PLAIN`, `COMMENT`, `KEYWORD`, `FUNCTION`,
-`TYPE`, `NUMBER`, `STRING` — each a colour the theme names and each clearing 4.5:1 on the **panel**
-a fence sits on, because code is read as body text. Which scope is which role is a fact about
-languages; which colour a role is painted in is the theme's.
+**session** — one run's value a front end holds to have a run: the session directory with
+its temp, the record, and the identity that names them (`crates/core/src/session.rs`).
+`Session::open` is the only place the order a run is started in exists.
 
-**chip** — the rail's two statements that are not label-and-value pairs, drawn as **raised** boxes
-on the edge the values hang off: the sandbox posture, `⬢ bwrap · 1 writable`, and — only when there
-is one — the skills in force, `◆ house-style`. A chip is shortened to its head when its column
-runs out. The posture's ink is the boundary's state, `GOOD` inside `bwrap` and `BAD` outside it.
+**session id** — the GUID naming a session's directory, printed as the `session` field of
+`--format json`, as the last line of `-v`, and in the rail. A record may be named by a
+whole id or a leading prefix of one; an ambiguous prefix is a usage error listing the
+candidates.
 
-**composer** — the input at the bottom: 2–6 rows, `Shift+Enter` or `Ctrl-J` for a newline, `@` for
-a path **completion**, `/` for a **command**. A paste is the second way a newline gets there: the
-clipboard's text lands whole, at the cursor, its line breaks the rows it was copied in and never
-the `Enter` each of them would have been. With no text in it at all it carries the placeholder
-`Ask, or drop a log here · @ path · / command`, which a draft — a space is a draft — never sits
-behind. It is laid out in the **transcript**'s column and not across the terminal, so the panel ends
-where the prose does and no cell of the **rail**'s column is its own.
+**redaction** — the one value holding the secrets a run knows, through which every string
+the record writes passes first, so a new field cannot forget
+(`crates/core/src/record/redact.rs`).
 
-**first frame** — the frame before the first prompt: an empty **thread** is not a blank page, but
-the line naming the wire, the model, the workspace and the sandbox, one dim sentence of the
-contract, and two prompts that can be typed as they read. Nothing it says is a figure, because no
-run has spent any.
+## The frame
 
-**queued prompt** — a prompt sent while a run has the frame: it waits in the queue and runs when
-the run stops, in the order it was typed. `↑` takes the newest back into the **composer**, `Ctrl-X`
-drops it. The **panel** above the composer holds them whole, titled `queued` when one waits and
-`3 queued` when more, cut at six rows with that count standing for the rest. It stands in the
-composer's column and not across the terminal, so the two panels end on one column: it is
-measured at the width it is drawn at, and the seam's strip runs down its rows unbroken.
+**frame** — the terminal UI: alternate screen, streaming markdown thread, rail and
+composer, launched by a bare `sindri` on a terminal (`crates/cli/src/frame.rs`). Off a
+terminal the same invocation is a refusal at exit 2.
 
-**thread** — the growing conversation of one TUI session; `/new` starts over. Laid out as a
-document: two blank rows between turns and none inside one, the **gutter** a turn's answer and calls
-hang off, and the prompt at full strength on its own band. A thread shorter than the column is
-written on its floor, so the newest row is the one above the **composer**. The code's
-word for it is `Thread`, which holds the entries and the heights they were measured at.
+**rail** — the frame's ledger of facts, always visible: cache hits, turns against the cap,
+tokens, the context meter, the session id, the temp path, the branch, the sandbox posture
+and why the last run stopped.
 
-**gutter** — a left edge the frame draws beside a thing that hangs off it: in the **thread**, the
-two columns a turn's answer and its calls hang off; in a fenced code block, the `│` down its left.
+**thread** — the transcript as the frame holds it: the entries in order and the rows each
+one is worth at the width it was measured at, with a mutation the only way in so exactly
+the heights a change invalidated are forgotten (`crates/tui/src/thread.rs`).
 
-**turn header** — the row that opens a turn: `YOU <hh:mm> <workspace>`.
+**entry** — one row of the thread, and the state a call carries while it runs: the
+command, the output kept and the word its row ended on (`crates/tui/src/entry.rs`).
 
-**completion** — the offer the **composer** makes above itself, one column and one set of keys for
-two triggers. `@` offers workspace paths: a proximity-ranked background walk, eight rows, `.git`
-skipped and `.gitignore` deliberately not honoured. `/` offers the **command** catalogue in the one
-place a command can be sent, ranked by the name being typed with the names it starts first; once
-`/skill:` or `/skill ` is typed the offers are **skill** names. `Tab` and `Enter` take the marked
-offer, and `Esc` dismisses it and leaves the draft as typed.
+**composer** — the prompt being typed, held as rows and a character-index cursor and
+reported in cells, because the terminal draws cells and a glyph may be two wide.
 
-**block** — the rows a **picture** takes of an answer: its graphic's rows together with its
-**caption**, or with the `‹›` that says what it could not be drawn as (`Viewport::block`). A drag
-that reaches one takes it whole, by **mark**'s rule, which is the one entry that tells it.
+**queue** — the prompts typed while a run had the frame, oldest first, taken back or
+dropped by two keys and never drawn by the module that holds them.
 
-**picture** — a markdown image the frame draws: a **block** of its own in the answer, drawn only
-where the terminal speaks Kitty graphics, from a file in the workspace and never from a URL, at most
-twenty rows — the face's own allowance — and whole in the **window** or not at all. A diagram is a
-picture whose source is a fence's body, and twice that, forty, because it is drawn top to bottom.
-Where a picture is not a block — a table cell, a list item, a heading — a mermaid fence is the
-**panel** it was, and a fence that will not parse is that panel with the parser's own words under
-it. A fence the stream has not closed is that panel too, its body not yet one to draw.
+**pulse** — the clock a live run keeps: a braille marker at the head of the newest answer
+with the elapsed time, settling on `✓` or `✗`, drawn only while something is moving.
 
-**caption** — the words and `‹src›` a **picture** is drawn under, `a chart ‹plot.png›`: the alt
-text's words, the destination in `‹›` as a link keeps its own, and the reason in their place when
-there is no picture. A mermaid fence has no destination and its source is not printed, so its
-caption is `‹mermaid›`, and a diagram's **block** copies as the fence body instead, because that
-name is not a diagram.
+**thought** — reasoning the run is having: the turn it belongs to, the text so far and
+when it began. Held beside the thread and never in it, because a thought is a state the
+run is in and not something that was said.
 
-**export** — `/export [path]`: the **thread** as one markdown file, at the path named or
-`sindri-<guid>.md` in the workspace, read out of the record so it says what `sindri
-sessions show` prints. A file already there is not overwritten without a second ask.
+**pane** — the one surface a **thought** is drawn on (`render::pane`), unfolding and
+folding back into the scar the thread keeps of it.
 
-**settings modal** — the `/settings` overlay: one row per key of the config schema. `Enter` saves,
-`Esc` discards, `Ctrl-U` empties the field, `Space` flips a toggle. The rows scroll with the cursor
-while the `file` line, the warning, a refused save's message and the hints are pinned outside it,
-so the row a save failed on is never the one that fell off.
+**scar** — the one row a finished thought leaves in the thread, which the whole of that
+thought opens from as an overlay.
 
-**binding** — one row of the **help overlay**: the keys, and the mouse gesture that is their
-accelerator, that do one thing — and what that thing is. One list holds them all, and nothing on it
-is reachable only with a pointer. The one row that is not a binding is the **command** catalogue's:
-the commands share a row, because one name there is several.
+**mark** — the wash a drag leaves on the transcript. `mark::span` computes the cells from
+press to release, and the copy reads the same function, so the mark cannot light a cell
+the copy does not take nor leave dark one it does (`crates/tui/src/mark.rs`).
 
-**command** — one of the `/` names the **composer** sends: the name, the one line the **help
-overlay** says of it, and what it opens. One catalogue (`COMMANDS`) holds them all, in the order the
-frame says them; the parser, the refusal of an unknown name and the help's row all read it, so a
-seventh command is added there and nowhere else. `/skill` is the one name that takes an argument
-from a fixed set and the one a colon may end — `/skill:house-style` is `/skill house-style`.
+**block** — one **picture**'s rows taken as a single region: `Viewport::block` names the
+picture a row belongs to (`crates/tui/src/selection.rs`), its graphic's rows and caption
+are lit together, and its words are taken once. Which rows a copy takes is **mark**'s
+rule, told there and not here.
 
-**help overlay** — `?`'s list of every **binding**: the keys in their column, each description
-wrapped under them, the box sized from the wrapped rows. A list longer than the box scrolls by a
-screenful and says where it is (`3 of 12`) and which way there is more; `Esc` and `Enter` close it.
+**picture** — an image the thread shows: a markdown `src` resolved to a file in the
+workspace, or a mermaid fence's body, measured without spending its pixels and refused
+with a reason the caption can print (`crates/tui/src/picture.rs`).
 
-**from environment** — the API key field's default, and where emptying it returns: the
-credential comes from `SINDRI_API_KEY`, the provider's variable, and nothing is written.
+**selection** — the rows a copy takes: a pair of screen cells resolved against the rows
+the last frame drew, with every style dropped, so a copy is always of what the user saw.
 
-**door** — the frame's front door: the one place a run with no credential opens the interface
-instead of exiting, with the **settings modal** staged on the `api_key` row.
+**spill** — the box a file too large to show is opened in: read once, scrolled and
+windowed while it is up, closed with `Esc` (`crates/tui/src/spill.rs`).
 
-**card** — the failure drawn instead of a frame when a `doctor` check fails, holding the check and
-the report whole: sized from the rows that report wrapped into, paged with `PgUp`/`PgDn` when the
-screen is shorter, and left only by a key — a resize lays it out again rather than dismissing it.
+**overlay** — a surface that takes the screen while it is open: the binding list, a spill,
+the settings modal and a finished thought. An open overlay owns its own space, and none is
+the only way to do what it does.
+
+**card** — what a broken boot draws instead of a half-drawn interface: the doctor's own
+words, paged when the screen is shorter than they are, left only by a key.
+
+**window** — where the reader is in the thread: a row of an entry and not an offset from
+the tail, so neither a run that appends nor a call that opens above them moves the text
+under a reader who has scrolled back (`crates/tui/src/window.rs`).
+
+**tail** — the end of the thread, and a place the window takes again on `End`; a reader
+who is scrolled back is told what arrived below them instead of being moved.
+
+**seam** — the light strip between the thread and the composer, made once per reach and
+replaced on a resize (`crates/tui/src/seam.rs`).
+
+**face** — Sindri's face, drawn where the terminal speaks the Kitty graphics protocol and
+absent, with no gap left for it, where it does not.
+
+**completion** — the column just above the composer holding the eight nearest matches,
+from `@` paths or `/` commands, the chosen one marked.
+
+**theme** — one dark theme in truecolour, owning every colour the frame paints and the
+three surfaces that make nearness legible: canvas, panel, raised tier.
+
+## Front ends and surfaces
+
+**front end** — a way into the same core: the frame, batch mode, `sindri sandbox exec`,
+`sindri doctor` and `sindri sessions`. Each owns only what is its own, and none of them
+owns a decision the core could make.
+
+**batch mode** — the Unix filter front end (`sindri -b`), which reads the prompt and the
+stdin context, runs the agent to an answer and prints it plus exactly one newline. Exit
+codes, not prose, tell a script what happened, and the toolset it is offered carries no
+`open` because it has no one to look.
+
+**boot** — the one door a front end calls to turn flags and the process's own facts into a
+run ready to start (`crates/cli/src/boot.rs`, `Boot`). It probes nothing: the frame proves
+the sandbox and draws the card, batch prints the answer, `sandbox exec` prints the
+outcome.
+
+**stack** — a run's stack, composed once: the cancel flag, the executor over the sandbox,
+`bash` with the limits its description states, the tool set, the dials the loop is wired
+with and the channel its events travel on (`crates/cli/src/stack.rs`).
+
+**failure** — the words that follow `sindri: ` and the exit code the shell reads, in one
+module, so a front end never learns its failure words from another front end
+(`crates/cli/src/failure.rs`).
+
+**exit code** — what a script branches on: `0` an answer, `1` a model or provider error,
+`2` a usage error, `3` a sandbox or setup failure, `100` the turn cap, `101` the budget,
+`130` cancelled with nothing on stdout. `sindri sandbox exec` reports the sandbox instead,
+`3` only when the sandbox failed.
+
+**notice** — the one line a run that left the sandbox says on the way in: stderr, because
+stdout is the answer or the one object a script parses (`crates/cli/src/notice.rs`).
+
+**json output** — one run as exactly one compact JSON object on one line, its field order
+the contract, later fields only appended, and a field nobody reported left out rather than
+`null` (`crates/core/src/output.rs`).
+
+**verbose** — `-v`: what the run did and what it stood in, on stderr after it ran, leaving
+stdout untouched so a verbose run pipes exactly like a silent one.
+
+## Configuration
+
+**config file** — `$XDG_CONFIG_HOME/sindri/config.toml` and nowhere else, read by one
+schema. A checked-in `.sindri.toml` is never read: a repository that could grant writable
+paths would turn every clone into a privilege escalation.
+
+**precedence** — one order for every setting, stated once: the config file, then
+`SINDRI_*` environment, then flags. A repeated flag replaces the configured value rather
+than adding to it, and an unknown key is an error naming the key and the file.
+
+## The gate
+
+**gate** — `make check`, the whole of done: fmt, clippy with warnings denied, the four
+audits, the tests, the evals, proof that an unchanged tree does not relink, and the
+release scripts run as processes. Nothing lands on a subset.
+
+**audit** — the four fast checks `make audit` runs in milliseconds and the commit hook
+refuses a broken commit with: no `*.rs` over 800 lines, a `//!` paragraph opening every
+module, a clause beside every module declaration in a crate root, and a test name that
+states the behaviour it proves.
+
+**eval** — one scripted batch run in its own copy of a fixture repository, asserting on
+exit codes, JSON fields, the record left and the files on disk rather than on the model's
+prose. `make eval` replays recorded responses offline; `make eval-live` asks your own
+provider at your own cost.
+
+**fixture** — the small repository a case runs in, and the only place a fact a case turns
+on may live: a house marker in one skill, a heading in one `AGENTS.md`, so an answer that
+states it could not have been guessed.
+
+**harness** — the seam a test runs the loop through, so the loop's tests need no provider
+and no bubblewrap (`crates/harness`).
+
+**mock provider** — the recorded-response provider the evals replay through: no
+credential, no network, no bill.
+
+**workspace** — the tree a run stands in: the path the sandbox mounts, the repository root
+a repository scope stops at, and the directory the rail names
+(`crates/core/src/workspace.rs`).
+
+**repository root** — the nearest ancestor of the workspace holding `.git`, the ceiling a
+repository scope never rises above and the directory an `AGENTS.md` is read from.

@@ -1,9 +1,8 @@
 # A bench for the system prompt
 
-`docs/system-prompt.md` records what this measured and what it changed. This
-directory is the machine that produced the numbers: a fixture repo, four tasks
-with a pass rule each, the fourteen prompts tried, and two scripts that run one
-prompt or a sweep of them against a real provider.
+This directory is the machine that produced the numbers: a fixture repo, four
+tasks with a pass rule each, the fourteen prompts tried, and two scripts that run
+one prompt or a sweep of them against a real provider.
 
 Nothing here is on the gate — it needs a credential and a bill, and its numbers
 come from a model rather than from the tree.
@@ -58,8 +57,8 @@ jq -s -f median.jq results/deepseek-v4.1-flash-v00.jsonl
 
 A file holding two variants is refused, not averaged — that is a mistake in the
 file name, not a spread. The first table's per-task means come out of the same
-file; `docs/system-prompt.md` prints that `jq` beside the table it produces, so
-there is one copy of it to keep right.
+file; that command is the one the table beside it was produced with, so there is
+one copy of it to keep right.
 
 `results/README.md` says what belongs in `results/` and which sweeps are still
 missing.

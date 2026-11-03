@@ -1,9 +1,8 @@
 """The ablation bench's arithmetic: one run's line, the rule that scores it, and
 the table two arms make.
 
-`docs/skill-ablation.md` records what this measured; this file is the machine's
-own part of it, stated once so a reader can check the rule instead of trusting
-the table. Nothing here asks a model anything: a run's line is read out of what
+This file is the bench's own arithmetic, stated once so a reader can check the
+rule instead of trusting the table. Nothing here asks a model anything: a run's line is read out of what
 the binary already printed and what the record already wrote, and the score is
 computed from the tree the run left behind.
 
@@ -247,8 +246,8 @@ def unwarned(table):
     return notes
 
 
-# The shipping rule `docs/skill-ablation.md` states before any sweep arrives, as
-# the three thresholds a report applies: reached in at least five of six runs,
+# The shipping rule a report applies before any sweep arrives, as the three
+# thresholds it holds each sweep to: reached in at least five of six runs,
 # right in six of six with the built-in against at most four of six without, and
 # no more than a quarter again the mean input tokens without it. They live here,
 # as ratios, so a sweep of another length is read by the same rule.

@@ -1,10 +1,9 @@
 # A bench for a built-in skill
 
-`docs/skill-ablation.md` records what this measures, what it has not measured
-yet, and the shipping rule that comes out of the method. This directory is the
-machine: one task shaped like a capability, run twice — with the built-in in the
-catalog, and with the table that ships it emptied — scored by a rule, and
-reported as one table.
+This directory is the machine: one task shaped like a capability, run twice —
+with the built-in in the catalog, and with the table that ships it emptied —
+scored by a rule, and reported as one table. The rule, and the thresholds a
+report applies, are `bench.py`'s, stated once there.
 
 No number here is on the gate: it would come from a model and a bill, and
 the offline pass below proves the pipeline rather than a model. The guard rails —
@@ -83,10 +82,10 @@ the thing under test rather than a provider's mood.
 
 ## What the report will not do
 
-`bench.py report` ends with the shipping rule `docs/skill-ablation.md` states: the
-three checks — reached, outcome, price — with the sweep's own figures beside the
-threshold each is held to, and one sentence saying which of the page's states the
-built-in is in, or that the rule cannot express this sweep. Nothing is measured
+`bench.py report` ends with the shipping rule `bench.py` applies: the three
+checks — reached, outcome, price — with the sweep's own figures beside the
+threshold each is held to, and one sentence saying which of the built-in's
+states it is in, or that the rule cannot express this sweep. Nothing is measured
 there: the means, the activations and the rights are the table's, and the price of
 a sweep whose runs carried no token count reads `?` rather than a number, with a
 sentence saying there is no price to read. A file holding one arm has no comparison

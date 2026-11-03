@@ -17,8 +17,8 @@ number nobody can recompute is a claim.
 
 ## What is not here yet
 
-The sweeps behind `docs/system-prompt.md` were run before `sweep.sh` had a
-repetition loop: it truncated its output file once per variant, and no result
+The sweeps behind the prompt table were run before `sweep.sh` had a repetition
+loop: it truncated its output file once per variant, and no result
 file was ever committed, so the raw lines behind either table are gone. The
 tables stand as a record of what was observed and cannot yet be recomputed from
 the tree.

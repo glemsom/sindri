@@ -12,8 +12,7 @@ python3 bench.py report results/$BENCH_MODEL.jsonl
 
 ## What is not here yet
 
-**Every sweep.** No line of `docs/skill-ablation.md`'s results table has been
-measured: the environment the bench was built in had no credential, only network
+**Every sweep.** No line of the bench's results table has been measured: the environment the bench was built in had no credential, only network
 reachability, so the live numbers cannot be produced here. Nothing in that table
 is estimated, extrapolated or filled with a placeholder — a row that reads
 `not yet measured` is a row with no number, and the command above is what puts

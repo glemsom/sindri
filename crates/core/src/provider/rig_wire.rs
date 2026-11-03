@@ -44,8 +44,8 @@ const THINKING_EFFORT: Effort = Effort::Medium;
 ///
 /// The sentence about reading is not decoration: told to search and open ranges,
 /// a model spent 0.42x the input tokens of the same model told nothing, on the
-/// same four tasks and with the same answers right — measured by
-/// `docs/system-prompt.md`, reproducible with `scripts/bench-system-prompt`.
+/// same four tasks and with the same answers right — measured, and reproducible
+/// with `scripts/bench-system-prompt`.
 const PREAMBLE: &str = "You are Sindri, answering a developer at a Unix terminal. Reply with the answer \
     itself: no preamble, no closing offer of further help. Run commands rather than guessing. Read \
     the fewest bytes that answer: search first (`rg -n`), then open only the lines you need \
@@ -415,8 +415,8 @@ mod tests {
             together.starts_with(PREAMBLE) && together.ends_with(rules),
             "the rules follow the preamble, whole: {together}"
         );
-        // The measurement `docs/system-prompt.md` states is the preamble's own,
-        // and a file beside it is not folded into it: what follows is a
+        // The measurement is the preamble's own, and a file beside it is not
+        // folded into it: what follows is a
         // repository's words, measured against the cap and never this budget.
         assert_eq!(
             together[..PREAMBLE.len()].split_whitespace().count(),
