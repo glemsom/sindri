@@ -142,7 +142,13 @@ fills from the bottom — the newest row on the pane's last row, so a fragment n
 the reader is on — a row that leaves the top is cut rather than dimmed, its left rule is a **walk**
 from `PROMPT` to `HEADING` and its head row is `⌁ thinking   0.8s`. It sits on the **raised** surface
 with no dim behind it, and it takes no key: the **overlay** is the reader's covering and takes them
-all, and only one of the two can be dismissed.
+all, and only one of the two can be dismissed. Its text is a smoothing buffer: the fragments a
+provider bursts are queued as they land and released at a reading rate, so the words glide where
+rows in the flow could only jerk, and the pane is allowed to lag the model by a beat. It may not
+hold the frame open to catch up — when the run needs the rows, the remainder is dropped and the pane
+folds on the tick it would have folded anyway — and its queue is capped, the oldest fragments going
+past the cap, because a thought is not an answer and has no **spill file**: the **record** holds the
+whole text.
 
 **scar** — the one row a finished thought leaves in the **thread**, `⌁ reasoned`, until `Enter` opens
 the text it held. It is all of a thought the transcript ever holds, and its entry is never open while

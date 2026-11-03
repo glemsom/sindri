@@ -294,13 +294,17 @@ impl App {
         self.running.is_some() || self.thought.is_some()
     }
 
-    /// Lets the clock on by `delta`, and steps a fold by it. Only a frame that
-    /// asked for a tick is told the time.
+    /// Lets the clock on by `delta`, releases the thought's queue at the pane's
+    /// reading rate, and steps a fold by it. Only a frame that asked for a tick
+    /// is told the time.
     pub fn pulse(&mut self, delta: Duration) {
         if !self.ticks() {
             return;
         }
         self.now += delta;
+        if let Some(thought) = self.thought.as_mut() {
+            thought.drain(self.now);
+        }
         self.step_closed_pane();
     }
 

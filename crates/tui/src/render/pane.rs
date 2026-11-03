@@ -54,7 +54,7 @@ const KEPT_LINES: usize = 64;
 /// up to `PANE_MIN` and the text carries it from there. Pure in the clock, so a
 /// film of frames is asserted rather than a feeling about one.
 pub fn rows(elapsed: Duration) -> usize {
-    (1 + pulses(elapsed)).min(PANE_ROWS)
+    (1 + pulse::ticks(elapsed)).min(PANE_ROWS)
 }
 
 /// The height the pane closes through, `elapsed` since the final reasoning
@@ -63,13 +63,7 @@ pub fn rows(elapsed: Duration) -> usize {
 /// on that tick, so the two are on the glass together and the eye reads a
 /// descent into the transcript rather than a disappearance and an arrival.
 pub(crate) fn closing(elapsed: Duration) -> usize {
-    PANE_MIN.saturating_sub(pulses(elapsed))
-}
-
-/// The whole ticks of the pulse in `elapsed`: the pane's motion is measured in
-/// them, and nothing else about a frame is.
-fn pulses(elapsed: Duration) -> usize {
-    (elapsed.as_millis() / pulse::TICK.as_millis().max(1)) as usize
+    PANE_MIN.saturating_sub(pulse::ticks(elapsed))
 }
 
 /// The rows the pane takes at `width` and `now`: the lesser of what its text is
@@ -78,7 +72,7 @@ fn pulses(elapsed: Duration) -> usize {
 pub fn height(thought: &Thought, width: u16, now: Duration) -> usize {
     match thought.closed_for(now) {
         Some(since) => closing(since),
-        None => settled(written(&thought.text, width).len())
+        None => settled(written(thought.shown(), width).len())
             .min(rows(now.saturating_sub(thought.started))),
     }
 }
@@ -99,7 +93,7 @@ pub fn draw(app: &App, area: Rect, buf: &mut Buffer) {
     if area.height == 0 {
         return;
     }
-    let body = written(&thought.text, area.width);
+    let body = written(thought.shown(), area.width);
     let steps = settled(body.len());
     let rows = laid(thought, body, area.height as usize, app.now());
     let rows = ruled(rows, steps);
@@ -196,8 +190,12 @@ mod tests {
     use crate::thought::Thought;
     use std::time::Duration;
 
+    /// A thought whose glide has run: what the pane is worth once it has said
+    /// all it was given, which is what a height is measured against.
     fn thought(text: &str) -> Thought {
-        Thought::new(1, text.to_string(), Duration::ZERO)
+        let mut thought = Thought::new(1, text.to_string(), Duration::ZERO);
+        thought.drain(Duration::from_secs(60));
+        thought
     }
 
     /// The clock `nth` ticks of the pulse in, which is what a pane's motion is

@@ -8,6 +8,7 @@ use super::*;
 
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::buffer::Buffer;
+use sindri_tui::entry::Entry;
 use sindri_tui::pulse;
 use sindri_tui::render::pane;
 use sindri_tui::render::transcript;
@@ -176,7 +177,7 @@ fn a_thought_is_one_pane_at_the_tail_between_five_rows_and_eight() {
     );
 
     thought(&mut app, 2, 40);
-    tick(&mut app, 4);
+    tick(&mut app, 40);
     let tall = pane_rows(&mut app, 100, 30);
     assert_eq!(
         tall.len(),
@@ -203,7 +204,9 @@ fn the_panes_head_names_the_thought_and_the_newest_fragment_is_on_its_last_row()
     let mut app = app();
     turn_behind(&mut app);
     thought(&mut app, 2, 20);
-    tick(&mut app, 8);
+    // Twenty fragments of a dozen characters at twelve a tick: the pane has
+    // said the last of them after a score of ticks.
+    tick(&mut app, 20);
 
     let rows = screen(&mut app, 100, 30);
     let pane = pane_rows(&mut app, 100, 30);
@@ -214,7 +217,7 @@ fn the_panes_head_names_the_thought_and_the_newest_fragment_is_on_its_last_row()
         rows[head]
     );
     assert!(
-        rows[head].contains("0.9s"),
+        rows[head].contains("2.4s"),
         "with the time the thought has taken: {:?}",
         rows[head]
     );
@@ -263,6 +266,108 @@ fn a_folded_thought_leaves_one_scar_and_no_fragment_in_the_thread() {
     assert!(
         !any(&rows, "fragment 20"),
         "with nothing of the thought left in the thread: {rows:#?}"
+    );
+}
+
+#[test]
+fn a_thought_glides_and_the_pane_lags_the_model_by_a_beat() {
+    let mut app = app();
+    turn_behind(&mut app);
+    // Twenty fragments in one tick: what a provider that bursts sends at once.
+    let whole: String = (1..=20).map(|n| format!("fragment {n}\n")).collect();
+    thought(&mut app, 2, 20);
+
+    tick(&mut app, 2);
+    let early = app
+        .thought()
+        .expect("the run is thinking")
+        .shown()
+        .to_string();
+    assert!(
+        whole.starts_with(&early) && early.len() < whole.len(),
+        "the pane is given a proper prefix of the thought and never the burst: {early:?}"
+    );
+    let rows = shown(&screen(&mut app, 100, 30));
+    assert!(
+        rows.contains("fragment 2") && !rows.contains("fragment 20"),
+        "so the words on the glass are the first of them: {rows:#?}"
+    );
+
+    // Twenty fragments of a dozen characters at twelve a tick: the glide is
+    // longer than the burst was short, which is the whole of what a pane buys.
+    tick(&mut app, 20);
+    assert_eq!(
+        app.thought().expect("the run is thinking").shown(),
+        whole,
+        "the pane has caught up with the model"
+    );
+    let rows = shown(&screen(&mut app, 100, 30));
+    assert!(
+        rows.contains("fragment 20"),
+        "and the last fragment is on it: {rows:#?}"
+    );
+}
+
+#[test]
+fn an_answer_arriving_mid_glide_takes_the_pane_at_once() {
+    // The pane may lag the model by a beat, and it may not hold the rows the
+    // run needs: the answer is the thread's, and it is drawn on the tick it
+    // lands rather than after the thought has caught up.
+    let mut app = app();
+    turn_behind(&mut app);
+    thought(&mut app, 2, 20);
+    tick(&mut app, 1);
+
+    app.event(Event::TextDelta {
+        turn: 2,
+        text: "the answer starts".to_string(),
+    });
+
+    assert!(app.thought().is_none(), "the thought goes when it is over");
+    assert!(
+        pane_rows(&mut app, 100, 30).is_empty(),
+        "and takes no row the answer could be drawn on"
+    );
+    let rows = screen(&mut app, 100, 30);
+    assert!(
+        any(&rows, "the answer starts"),
+        "so the answer is on the glass on the tick it arrives: {rows:#?}"
+    );
+}
+
+#[test]
+fn a_finished_thought_folds_with_its_remainder_dropped() {
+    // A thought that closes mid-glide folds on the tick it would have folded
+    // anyway: a dropped fragment costs a word the reader never saw, and a pane
+    // that outlives its turn costs the reader the transcript.
+    let mut app = app();
+    turn_behind(&mut app);
+    thought(&mut app, 2, 20);
+    tick(&mut app, 1);
+    done(&mut app, 2, 20);
+
+    let mut seen = String::new();
+    for _ in 0..5 {
+        tick(&mut app, 1);
+        seen.push_str(&shown(&screen(&mut app, 100, 30)));
+    }
+    assert!(
+        !seen.contains("fragment 20"),
+        "the remainder is dropped where it stood, never shown on the way out: {seen:#?}"
+    );
+    assert!(app.thought().is_none(), "and the pane has folded away");
+
+    let scar = app
+        .entries()
+        .iter()
+        .find_map(|entry| match entry {
+            Entry::Reasoning { text, .. } => Some(text.clone()),
+            _ => None,
+        })
+        .expect("the finished thought leaves one row");
+    assert!(
+        scar.contains("fragment 20"),
+        "while the scar keeps every word of it, which is what `Enter` opens: {scar:?}"
     );
 }
 
@@ -414,8 +519,15 @@ fn a_pane_unfurls_one_row_a_tick_and_then_follows_its_text() {
 
     assert_eq!(
         heights,
-        vec![1, 2, 3, 4, 5, 5, 5, 6],
+        vec![1, 2, 3, 4, 5, 5, 5, 5],
         "the pane unfurls one row a tick to its floor and then follows its text"
+    );
+    tick(&mut app, 1);
+    assert_eq!(
+        standing(&mut app),
+        6,
+        "and a fragment reaches the pane on the tick after it lands, which is the \
+         beat the pane is allowed to lag the model by"
     );
 }
 
