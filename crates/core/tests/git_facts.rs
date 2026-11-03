@@ -1,6 +1,7 @@
 //! The git facts one probe reads — branch, commit and dirtiness — proven at
-//! `workspace::git`, the seam a record and the rail both hang off. Boot pays for
-//! these on every launch, so how many processes they cost is part of the spec.
+//! `workspace::probe`, the seam a record and the rail both hang off. Boot pays
+//! for these on every launch, so how many processes they cost is part of the
+//! spec.
 
 #![allow(
     clippy::expect_used,
@@ -13,8 +14,7 @@ use std::path::{Path, PathBuf};
 
 use sindri_core::instructions::Taken;
 use sindri_core::session::{Env, Session};
-use sindri_core::skills::Scope;
-use sindri_core::workspace::{Git, git};
+use sindri_core::workspace::{Git, probe};
 use support::config;
 use tempfile::TempDir;
 
@@ -40,7 +40,9 @@ fn run(dir: &Path, args: &[&str]) -> String {
 fn a_repository_records_its_branch_commit_and_an_untouched_tree() {
     let (root, head) = repository();
 
-    let facts = git(root.path()).expect("a repository is a repository");
+    let facts = probe(root.path())
+        .git
+        .expect("a repository is a repository");
 
     assert_eq!(
         facts.branch, "main",
@@ -55,7 +57,9 @@ fn an_untracked_file_makes_the_tree_dirty() {
     let (root, _) = repository();
     std::fs::write(root.path().join("uncommitted"), "wip\n").expect("an untracked file");
 
-    let facts = git(root.path()).expect("a repository is a repository");
+    let facts = probe(root.path())
+        .git
+        .expect("a repository is a repository");
 
     assert!(facts.dirty, "the status was read, so it is said: {facts:?}");
 }
@@ -65,7 +69,9 @@ fn a_detached_head_records_the_branch_named_head() {
     let (root, head) = repository();
     run(root.path(), &["checkout", "-q", "--detach"]);
 
-    let facts = git(root.path()).expect("a detached HEAD is still a repository");
+    let facts = probe(root.path())
+        .git
+        .expect("a detached HEAD is still a repository");
 
     assert_eq!(
         facts.branch, "HEAD",
@@ -85,7 +91,11 @@ fn a_repository_with_no_commit_records_no_git_block() {
     let root = TempDir::new().expect("host");
     run(root.path(), &["init", "-q", "--initial-branch=main"]);
 
-    assert_eq!(git(root.path()), None, "an unborn branch has no facts yet");
+    assert_eq!(
+        probe(root.path()).git,
+        None,
+        "an unborn branch has no facts yet"
+    );
 }
 
 /// Boot is a critical path, and `git status --porcelain=v2 --branch` already
@@ -105,7 +115,7 @@ fn a_probe_reads_the_git_facts_in_two_processes() {
     // probe runs; the shimmed path exists only for this test.
     unsafe { std::env::set_var("PATH", path) };
 
-    let facts = git(root.path());
+    let facts = probe(root.path()).git;
 
     let calls: Vec<String> = std::fs::read_to_string(&log)
         .unwrap_or_default()
@@ -205,24 +215,24 @@ fn a_launch_probes_the_repository_root_once_for_the_rules_and_the_skills() {
             .expect("the file"),
         "the rules are read from the root the same probe named"
     );
-    // The binary's own skill is in every catalog; this test is about the three
-    // scopes the one probe finds.
-    let scopes: Vec<(&str, Scope)> = session
-        .catalog()
-        .skills
+    // Each skill is planted in exactly one of the three scopes' directories and
+    // named for it, so the names a human may reach for say which scope the one
+    // probe reached. The binary's own skills are in every catalog and are not
+    // this test's, hence the suffix.
+    let offered = session.hand().names();
+    let probes: Vec<&str> = offered
         .iter()
-        .filter(|skill| skill.scope != Scope::Builtin)
-        .map(|skill| (skill.name.as_str(), skill.scope))
+        .map(String::as_str)
+        .filter(|name| name.ends_with("-probe"))
         .collect();
     assert_eq!(
-        scopes,
+        probes,
         vec![
-            ("root-scope-probe", Scope::Repo),
-            ("user-scope-probe", Scope::User),
-            ("workspace-scope-probe", Scope::Repo),
+            "root-scope-probe",
+            "user-scope-probe",
+            "workspace-scope-probe",
         ],
-        "the workspace's own skills, the root's above it, and the user's: {:?}",
-        session.catalog()
+        "the workspace's own skills, the root's above it, and the user's: {offered:?}"
     );
 }
 

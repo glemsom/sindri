@@ -147,7 +147,7 @@ const DOCUMENT: &str = "# A heading\n\nA paragraph that wraps more than once at 
 fn the_rows_a_window_asks_for_are_the_rows_the_whole_answer_has() {
     for width in [20, 40, 61, 120] {
         let whole = markdown::lines(DOCUMENT, width, None);
-        let total = markdown::height(DOCUMENT, width, None);
+        let total = markdown::counted(DOCUMENT, width, None, None).rows;
         assert_eq!(
             total,
             whole.rows.len(),

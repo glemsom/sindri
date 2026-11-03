@@ -94,7 +94,6 @@ fn a_mermaid_fence_reserves_the_rows_the_store_measured_and_captions_them() {
         shown[rows], "‹mermaid›",
         "the fence's own name is the caption"
     );
-    assert_eq!(picture.caption, "‹mermaid›");
     assert_eq!(picture.src, "mermaid", "a fence is its own source");
 }
 
@@ -335,12 +334,15 @@ fn a_diagram_copies_as_the_fence_body_it_was_drawn_from() {
         DIAGRAM.trim_end_matches('\n'),
         "a copy of the block is the mermaid that drew it"
     );
+    let shown = texts(&block.rows);
     assert_ne!(
-        picture.copy, picture.caption,
+        picture.copy,
+        shown[picture.at + picture.rows - 1],
         "and not the caption a copy of an image yields"
     );
     assert_eq!(
-        picture.caption, "‹mermaid›",
+        shown[picture.at + picture.rows - 1],
+        "‹mermaid›",
         "the caption it is drawn under is still the fence's own name"
     );
 }

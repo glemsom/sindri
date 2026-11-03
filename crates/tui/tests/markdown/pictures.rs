@@ -207,7 +207,6 @@ fn the_writer_says_where_a_pictures_block_starts_and_what_it_is_called() {
         "the first row of its block, after intro and its gap"
     );
     assert_eq!(picture.src, "wide.png", "the source as the model wrote it");
-    assert_eq!(picture.caption, "a chart ‹wide.png›");
     assert!(
         block.rows[picture.at]
             .spans
@@ -217,6 +216,12 @@ fn the_writer_says_where_a_pictures_block_starts_and_what_it_is_called() {
         texts(&block.rows)
     );
     let caption = &block.rows[picture.at + 9];
+    assert_eq!(
+        texts(&block.rows)[picture.at + 9],
+        "a chart ‹wide.png›",
+        "the block is called what the alt text and the target make: {:?}",
+        texts(&block.rows)
+    );
     assert!(
         caption
             .spans

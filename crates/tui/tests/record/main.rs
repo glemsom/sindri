@@ -71,11 +71,19 @@ fn record(state: &Path, model: &str, prompt: &str, answer: &str, stop: Option<St
     let session = SessionDir::create_in(state).expect("a session directory");
     let recorder = Recorder::start(
         &session,
-        Start::of(
-            "anthropic".to_string(),
-            model.to_string(),
-            Enforcement::Bubblewrap,
-        ),
+        Start {
+            provider: "anthropic".to_string(),
+            model: model.to_string(),
+            enforcement: Enforcement::Bubblewrap,
+            // The fields below are the ones only a live session can probe: this
+            // record is written by a test, not by a run.
+            policy: None,
+            workspace: String::new(),
+            git: None,
+            instructions: None,
+            max_turns: 0,
+            thinking: false,
+        },
         Redaction::new(Vec::<String>::new()),
     )
     .expect("the record starts");

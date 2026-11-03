@@ -18,9 +18,9 @@ use sindri_core::agent::{BashTool, Limits};
 use sindri_core::exec::{Outcome, ToolResult};
 use sindri_core::paths::SessionDir;
 use sindri_core::provider::{ToolOutcome, Usage};
-use sindri_core::record::{Cost, Entry, Recorder, Redaction, Start, Stored};
+use sindri_core::record::{Cost, Entry, Recorder, Redaction, Stored};
 use sindri_core::sandbox::Enforcement;
-use support::{Harness, Interrupt, Scripted, answer, call, calls, exited, fixtures};
+use support::{Harness, Interrupt, Scripted, answer, call, calls, exited, fixtures, start};
 use tempfile::TempDir;
 
 fn recording() -> (TempDir, SessionDir, Recorder) {
@@ -28,11 +28,7 @@ fn recording() -> (TempDir, SessionDir, Recorder) {
     let session = SessionDir::at(root.path().join("sessions/session-1"));
     let recorder = Recorder::start(
         &session,
-        Start::of(
-            "anthropic".to_string(),
-            "claude-mock".to_string(),
-            Enforcement::Bubblewrap,
-        ),
+        start("anthropic", "claude-mock", Enforcement::Bubblewrap),
         Redaction::default(),
     )
     .expect("the record starts");
@@ -404,11 +400,7 @@ fn attach(h: &mut Harness) -> (TempDir, SessionDir, Arc<Recorder>) {
     let recorder = Arc::new(
         Recorder::start(
             &session,
-            Start::of(
-                "anthropic".to_string(),
-                "claude-mock".to_string(),
-                Enforcement::Bubblewrap,
-            ),
+            start("anthropic", "claude-mock", Enforcement::Bubblewrap),
             Redaction::default(),
         )
         .expect("the record starts"),

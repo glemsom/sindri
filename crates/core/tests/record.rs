@@ -7,14 +7,17 @@
     reason = "a panicking test is how a broken record reports itself"
 )]
 
+mod support;
+
 use std::time::Duration;
 
 use sindri_core::agent::{Report, Spent, Stopped};
 use sindri_core::exec::StatusSink;
 use sindri_core::paths::SessionDir;
 use sindri_core::provider::{Asked, Call, ToolOutcome, Usage};
-use sindri_core::record::{Cost, Entry, Recorder, Redaction, ShowError, Start, Stored};
+use sindri_core::record::{Cost, Entry, Recorder, Redaction, ShowError, Stored};
 use sindri_core::sandbox::Enforcement;
+use support::start;
 use tempfile::TempDir;
 
 const KEY: &str = "sk-ant-test-not-a-real-key";
@@ -24,11 +27,7 @@ fn recording(enforcement: Enforcement) -> (TempDir, SessionDir, Recorder) {
     let session = SessionDir::at(root.path().join("sessions/session-1"));
     let recorder = Recorder::start(
         &session,
-        Start::of(
-            "anthropic".to_string(),
-            "claude-mock".to_string(),
-            enforcement,
-        ),
+        start("anthropic", "claude-mock", enforcement),
         Redaction::new([KEY.to_string()]),
     )
     .expect("start the record");
@@ -253,11 +252,7 @@ fn a_record_that_could_not_be_started_says_why() {
 
     let refused = Recorder::start(
         &SessionDir::at(file),
-        Start::of(
-            "anthropic".to_string(),
-            "claude-mock".to_string(),
-            Enforcement::Bubblewrap,
-        ),
+        start("anthropic", "claude-mock", Enforcement::Bubblewrap),
         Redaction::default(),
     );
     assert!(

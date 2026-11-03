@@ -42,17 +42,12 @@ pub struct Summary {
 }
 
 /// Every record under `sessions`, newest first, or why the directory could not
-/// be read. A directory that is not there is a state directory no run has
-/// written to yet, so it holds no records rather than being a failure. A
-/// directory inside it that is not a record is skipped rather than fatal: one
-/// unreadable run does not hide the rest, and a listing is a read of the state
-/// directory and nothing else.
-pub fn listing(sessions: &Path) -> io::Result<Vec<Summary>> {
-    listing_limited(sessions, None)
-}
-
-/// The newest `limit` rows of [`listing`], or every row when there is no limit:
-/// what a front end printing a slice of the list asks for.
+/// be read — the newest `limit` of them, or every row when there is no limit,
+/// which is what a front end printing a slice of the list asks for. A directory
+/// that is not there is a state directory no run has written to yet, so it holds
+/// no records rather than being a failure. A directory inside it that is not a
+/// record is skipped rather than fatal: one unreadable run does not hide the
+/// rest, and a listing is a read of the state directory and nothing else.
 ///
 /// The limit is what keeps a listing cheap. Every row's metadata is still read —
 /// the sort cannot know which runs are newest before it has them — but a

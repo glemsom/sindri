@@ -8,6 +8,7 @@
     reason = "each test binary uses a different slice of the fixtures"
 )]
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
@@ -18,7 +19,7 @@ use sindri_core::cancel::Cancel;
 use sindri_core::config::{Config, Provider};
 use sindri_core::exec::{BashExecutor, Outcome, ToolResult};
 use sindri_core::provider::{Call, Delta, DeltaSink, Error, Message, Model, ToolSpec, Turn, Usage};
-use sindri_core::record::Recorder;
+use sindri_core::record::{Recorder, Start};
 use sindri_core::sandbox::{Enforcement, SandboxPolicy, WritableSet};
 use sindri_core::session::Env;
 use sindri_core::skills::Catalog;
@@ -34,6 +35,22 @@ pub use replies::{ScriptedModel, answer, call, calls, usage};
 
 pub use batch::Echoing;
 pub use git::commit;
+
+/// A record's start block for a test that is not a run: the run's identity, and
+/// every field only a live session can probe left empty.
+pub fn start(provider: &str, model: &str, enforcement: Enforcement) -> Start {
+    Start {
+        provider: provider.to_string(),
+        model: model.to_string(),
+        enforcement,
+        policy: None,
+        workspace: String::new(),
+        git: None,
+        instructions: None,
+        max_turns: 0,
+        thinking: false,
+    }
+}
 
 pub fn fixtures() -> (TempDir, PathBuf, SandboxPolicy) {
     let workspace = TempDir::new().expect("workspace");
@@ -156,6 +173,13 @@ pub struct Harness {
     seen_scripts: Arc<Mutex<Vec<String>>>,
     pub thinking: Arc<Mutex<Vec<bool>>>,
     events: Receiver<Event>,
+    /// Every event taken off `events` so far, so a test that reads the run's
+    /// events and one that reads the loaded set see the same stream rather than
+    /// whichever of them drained it first.
+    heard: Mutex<Vec<Event>>,
+    /// The names this conversation has been told, kept beside the history it
+    /// belongs to and cleared with it, as a frame's ledger is.
+    loaded: Mutex<BTreeSet<String>>,
     _workspace: TempDir,
 }
 
@@ -276,6 +300,8 @@ impl Harness {
             seen_scripts,
             thinking: told,
             events,
+            heard: Mutex::new(Vec::new()),
+            loaded: Mutex::new(BTreeSet::new()),
             _workspace: workspace,
         }
     }
@@ -296,21 +322,65 @@ impl Harness {
 
     pub fn forget(&mut self) {
         self.agent.forget();
+        self.loaded.lock().expect("the loaded set").clear();
     }
 
     /// A skill loaded by hand, as the frame asks for one: no turn, and the body
     /// in the conversation from here on.
     pub fn activate(&mut self, name: &str) -> Activated {
-        self.agent.activate(name)
+        let activated = self.agent.activate(name);
+        // A load by hand runs no turn, so nothing is emitted for it: the call's
+        // own answer is where the frame reads it, and where this reads it too.
+        if activated.loaded {
+            self.loaded
+                .lock()
+                .expect("the loaded set")
+                .insert(activated.name.clone());
+        }
+        activated
     }
 
-    /// The skills the conversation has been told, as the agent holds them.
+    /// The skills this conversation has been told, in name order: a frame's
+    /// ledger, built as a frame builds one, from the `SkillLoaded` events a turn
+    /// emits and the answer a load by hand comes back with.
     pub fn loaded(&self) -> Vec<String> {
-        self.agent.loaded_skills()
+        self.drain();
+        self.loaded
+            .lock()
+            .expect("the loaded set")
+            .iter()
+            .cloned()
+            .collect()
     }
 
     pub fn events(&self) -> Vec<Event> {
-        self.events.try_iter().collect()
+        self.drain();
+        self.heard.lock().expect("events").clone()
+    }
+
+    /// Every event the agent has emitted so far, kept rather than dropped, so
+    /// `events` and `loaded` are two readings of one stream; and a name a turn
+    /// put in force accrues to the loaded set on the way past. Only the word
+    /// `loaded` counts, because a second call for a skill already in force is
+    /// answered `already_loaded` and adds nothing — the rail's chip reads the
+    /// same word.
+    fn drain(&self) {
+        let mut heard = self.heard.lock().expect("events");
+        for event in self.events.try_iter() {
+            if let Event::SkillLoaded {
+                name,
+                outcome: Some(outcome),
+                ..
+            } = &event
+                && outcome == "loaded"
+            {
+                self.loaded
+                    .lock()
+                    .expect("the loaded set")
+                    .insert(name.clone());
+            }
+            heard.push(event);
+        }
     }
 
     pub fn scripts(&self) -> Vec<String> {

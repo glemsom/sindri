@@ -35,6 +35,11 @@ impl Configured {
     }
 }
 
+/// The one door a front end that starts a run calls: the process read once, the
+/// config resolved once, the session opened once, in the one order. It is a name
+/// rather than a chained `prepare(overrides)?.start()` because its call site
+/// answers a `Failure` with an exit code instead of `?`, and spelling the chain
+/// there would put a second error arm where boot promises one door.
 pub fn open(overrides: Overrides) -> Result<Boot, Failure> {
     prepare(overrides)?.start()
 }

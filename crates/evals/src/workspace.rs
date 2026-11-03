@@ -80,10 +80,6 @@ impl Workspace {
     pub fn root(&self) -> &Path {
         self.root.path()
     }
-
-    pub fn path(&self, relative: &str) -> PathBuf {
-        self.repo.join(relative)
-    }
 }
 
 pub fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {

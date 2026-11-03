@@ -19,7 +19,7 @@ mod summary;
 pub use entry::{Entry, Meta};
 pub use redact::Redaction;
 pub use stored::{ShowError, Stored};
-pub use summary::{Summary, listing, listing_limited};
+pub use summary::{Summary, listing_limited};
 
 use std::fs::File;
 use std::io::{self, Write};
@@ -74,28 +74,6 @@ pub struct Start {
     pub thinking: bool,
 }
 
-impl Start {
-    /// A record started with nothing but the run's identity, for a caller that
-    /// is not a run: the fields only a live session can probe stay empty.
-    pub fn of(
-        provider: impl Into<String>,
-        model: impl Into<String>,
-        enforcement: Enforcement,
-    ) -> Start {
-        Start {
-            provider: provider.into(),
-            model: model.into(),
-            enforcement,
-            policy: None,
-            workspace: String::new(),
-            git: None,
-            instructions: None,
-            max_turns: 0,
-            thinking: false,
-        }
-    }
-}
-
 pub struct Recorder {
     root: PathBuf,
     redaction: Redaction,
@@ -148,10 +126,6 @@ impl Recorder {
             }),
         };
         Ok(recorder)
-    }
-
-    pub fn root(&self) -> &Path {
-        &self.root
     }
 
     pub fn user(&self, text: &str) {

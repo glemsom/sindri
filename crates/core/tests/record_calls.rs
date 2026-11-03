@@ -7,11 +7,14 @@
     reason = "a panicking test is how a broken record reports itself"
 )]
 
+mod support;
+
 use sindri_core::paths::SessionDir;
 use sindri_core::provider::Asked;
 use sindri_core::provider::Call;
-use sindri_core::record::{Entry, Recorder, Redaction, Start, Stored};
+use sindri_core::record::{Entry, Recorder, Redaction, Stored};
 use sindri_core::sandbox::Enforcement;
+use support::start;
 use tempfile::TempDir;
 
 fn recording() -> (TempDir, SessionDir, Recorder) {
@@ -19,11 +22,7 @@ fn recording() -> (TempDir, SessionDir, Recorder) {
     let session = SessionDir::at(root.path().join("sessions/session-1"));
     let recorder = Recorder::start(
         &session,
-        Start::of(
-            "anthropic".to_string(),
-            "claude-mock".to_string(),
-            Enforcement::Bubblewrap,
-        ),
+        start("anthropic", "claude-mock", Enforcement::Bubblewrap),
         Redaction::default(),
     )
     .expect("start the record");
@@ -113,11 +112,7 @@ fn an_open_target_is_redacted_in_the_record_as_a_command_is() {
     let session = SessionDir::at(root.path().join("sessions/session-1"));
     let recorder = Recorder::start(
         &session,
-        Start::of(
-            "anthropic".to_string(),
-            "claude-mock".to_string(),
-            Enforcement::Bubblewrap,
-        ),
+        start("anthropic", "claude-mock", Enforcement::Bubblewrap),
         Redaction::new([key.to_string()]),
     )
     .expect("start the record");

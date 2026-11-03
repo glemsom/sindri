@@ -23,8 +23,6 @@ fn main() {
         .unwrap_or_else(|| env("CARGO_PKG_VERSION"));
     let date = git(&["log", "-1", "--format=%cs"]).unwrap_or_else(|| "unknown".to_string());
 
-    println!("cargo:rustc-env=SINDRI_VERSION={version}");
-    println!("cargo:rustc-env=SINDRI_COMMIT_DATE={date}");
     println!("cargo:rustc-env=SINDRI_VERSION_LONG={version} ({date})");
 }
 

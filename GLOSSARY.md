@@ -214,7 +214,8 @@ name is `already_loaded`.
 cleared with it: a body is in force while the transcript still carries it. Two identical
 calls in one turn's wave are one load, because the wave is one turn, and a load by hand
 claims the name the same way the tool's own call does. The code's word for it is
-`Loaded`, and `Agent::loaded_skills` is how a frame reads it.
+`Loaded`, and a frame builds its ledger from the `SkillLoaded` event a turn emits and
+from the answer a load by hand comes back with, so the set is never asked for twice.
 
 **catalog** — everything one scan found: the **skills**, the **refusals**, and the
 **shadowed** names. Sorted by name, so two scans of one tree say the same thing.

@@ -1,10 +1,6 @@
 //! Shared values with no dependency on the rest of Sindri: the exit-code
 //! taxonomy that the batch contract promises, and the build version.
 
-/// The build version, derived from `git describe` at build time.
-pub const VERSION: &str = env!("SINDRI_VERSION");
-/// The commit date of the build, `YYYY-MM-DD`, never the wall clock.
-pub const COMMIT_DATE: &str = env!("SINDRI_COMMIT_DATE");
 /// `git describe` and the commit date as one line, `{version} ({date})`: the
 /// string `--version` prints, and so the one a user sees. Injected by
 /// `crates/types/build.rs`, which is where the two halves are cut.

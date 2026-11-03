@@ -36,9 +36,9 @@ pub struct Written {
 }
 
 /// A picture the writer placed: the row its block starts at, the source as the
-/// model wrote it, and the caption under it. The block is the rows the store
-/// measured followed by the caption; a source that cannot be drawn is the
-/// caption alone, so `at` is the caption's own row and `worth` says why.
+/// model wrote it, and the rows it takes — the graphic's, then the caption's
+/// under them. A source that cannot be drawn is the caption alone, so `at` is
+/// the caption's own row and `worth` says why.
 /// The renderer draws `worth` over those rows where the
 /// terminal can.
 pub struct Picture {
@@ -55,7 +55,6 @@ pub struct Picture {
     pub inset: u16,
     /// The source as the model wrote it — a target, or a fence's own name.
     pub src: String,
-    pub caption: String,
     /// What a copy of the block yields: the caption where the caption is the
     /// words, and the fence body where it is not. `‹mermaid›` is a name, and a
     /// block that copies as a name copies as nothing a reader can paste.
@@ -130,7 +129,6 @@ impl Writer<'_> {
             rows,
             inset: prefix.chars().count() as u16,
             src,
-            caption,
             copy,
             worth,
         });

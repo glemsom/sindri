@@ -313,13 +313,4 @@ impl Loaded {
             names.clear();
         }
     }
-
-    /// What is in force in this conversation, in name order: the frame's ledger
-    /// and a test read the same set the tool wrote.
-    pub fn names(&self) -> Vec<String> {
-        self.names
-            .lock()
-            .map(|names| names.iter().cloned().collect())
-            .unwrap_or_default()
-    }
 }

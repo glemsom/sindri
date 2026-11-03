@@ -28,14 +28,6 @@ impl Run {
         serde_json::from_str(self.stdout.trim()).ok()
     }
 
-    pub fn field(&self, name: &str) -> Option<String> {
-        let value = self.json()?;
-        match value.get(name)? {
-            Value::String(text) => Some(text.clone()),
-            other => Some(other.to_string()),
-        }
-    }
-
     pub fn request(&self, n: usize) -> Option<&str> {
         self.requests
             .get(n - 1)

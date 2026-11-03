@@ -75,6 +75,8 @@ impl Harness {
             seen_scripts,
             thinking: told,
             events,
+            heard: Mutex::new(Vec::new()),
+            loaded: Mutex::new(std::collections::BTreeSet::new()),
             _workspace: workspace,
         }
     }

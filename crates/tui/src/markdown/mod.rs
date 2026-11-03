@@ -40,13 +40,6 @@ pub fn lines_in(source: &str, width: u16, store: Option<&Store>, rows: Range<usi
     walk(source, width, store, rows, 0)
 }
 
-/// How many rows the answer is worth at `width`, counted and not built: what a
-/// frame places a window against, and the number a scroll-back, `End`, `Home`
-/// and the new-rows badge all land on.
-pub fn height(source: &str, width: u16, store: Option<&Store>) -> usize {
-    counted(source, width, store, None).rows
-}
-
 /// Where an answer's last block begins, and the rows it is worth above it: the
 /// two figures a streamed delta is counted from, so the answer above the block
 /// it landed in is counted once and never read again.

@@ -41,9 +41,6 @@ pub struct Completion {
     pub at: usize,
     pub typed: String,
     pub trigger: Trigger,
-    /// The spelling the offer is taken in: a colon keeps its colon, a space
-    /// keeps its space.
-    pub inline: bool,
     pub items: Vec<String>,
     pub chosen: usize,
     pub generation: u64,
@@ -56,7 +53,6 @@ impl Completion {
             at: query.at,
             typed: query.typed.clone(),
             trigger: query.trigger,
-            inline: query.inline,
             // A catalogue is in hand, so the commands and the skill names are
             // offered at once; a walk has to be asked for, and its paths arrive
             // later.

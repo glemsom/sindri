@@ -63,11 +63,6 @@ pub fn probe(dir: &Path) -> Probe {
     }
 }
 
-/// The git facts of `dir` alone, for a caller with no use for the root.
-pub fn git(dir: &Path) -> Option<Git> {
-    probe(dir).git
-}
-
 /// The repository `dir` stands in, as git names its top level, or `None` when
 /// it is no repository: the one root a run reads a repository's own files from.
 pub fn root(dir: &Path) -> Option<PathBuf> {

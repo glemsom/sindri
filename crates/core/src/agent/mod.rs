@@ -113,12 +113,6 @@ impl Agent {
         self.loaded.clear();
     }
 
-    /// The skills this conversation has been told, in name order: what a frame
-    /// says is in force, read from the set the tool wrote.
-    pub fn loaded_skills(&self) -> Vec<String> {
-        self.loaded.names()
-    }
-
     pub fn set_recorder(&mut self, recorder: Arc<Recorder>) {
         self.recorder = Some(recorder);
     }

@@ -273,10 +273,6 @@ impl Client {
         self.provider
     }
 
-    pub fn model(&self) -> &str {
-        &self.model
-    }
-
     fn redact(&self, error: Error) -> Error {
         if self.api_key.is_empty() {
             return error;
