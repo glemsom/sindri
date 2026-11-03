@@ -27,9 +27,20 @@ a failed build included. `v00` is not one of those texts: it is the tree's own `
 which `variants.py` reads out of that file. A variant replaces the stance and nothing else;
 the Environment section is composed per run and is the same in every arm.
 
-`scripts/tests/bench-prompt.sh` checks both halves on the gate — the baseline is read out of
-the file that ships the prompt, and the source comes back byte for byte — without a build or
-a bill.
+`v15` is the one variant that is not a proposal: it is the rewritten preamble as #416
+shipped it, pinned as a literal in `variants.py` rather than read out of the file. `v00`
+follows the file, so the next rewrite of the stance moves it; `v15` does not, so the sweep
+that measured the rewrite stays a measurement of the words it was run on. While the tree
+still ships those words the two are the same prompt, and the gate says so:
+
+```sh
+./build_variant.sh v15                   # the wording the tree ships today, pinned
+REPS=6 TAG=$BENCH_MODEL ./sweep.sh results/$BENCH_MODEL-v15.jsonl v15
+```
+
+`scripts/tests/bench-prompt.sh` checks all of it on the gate — the baseline is read out of
+the file that ships the prompt, `v15` is still that wording, and the source comes back byte
+for byte — without a build or a bill.
 
 ## Repetitions
 
@@ -55,7 +66,9 @@ jq -s -f median.jq results/deepseek-v4.1-flash-v00.jsonl
 A file holding two variants is refused, not averaged — that is a mistake in the file name,
 not a spread. The per-task means in the first table come out of the same file.
 
-`results/README.md` says what belongs there and which sweeps are still missing.
+`results/README.md` says what belongs there and which sweeps are still missing: the
+rewritten preamble's sweep is one of them, and it has a name of its own (`-v15`) so it can
+be recorded without waiting for the tree to stop moving.
 `bin-*/`, `fixture/` and `runs/` are build products and ignored; `results/` is committed,
 because a number nobody can recompute is a claim.
 

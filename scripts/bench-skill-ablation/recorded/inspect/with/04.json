@@ -1,0 +1,17 @@
+{
+  "id": "msg_ablation",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "`retry_delay(7)` computes `0.25 * 2 ** 7` = 32.0 and the cap holds it, so the delay is 8.0 seconds. The line that applies it is `src/backoff.py:55`:\n\n    return _ceiling\n\nEvery file in the repository mentioning `_ceiling`:\n- `README.md`\n- `src/backoff.py`\n- `tests/test_backoff.py`\n"
+    }
+  ],
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 1410,
+    "output_tokens": 120
+  }
+}

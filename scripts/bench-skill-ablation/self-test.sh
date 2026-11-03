@@ -3,11 +3,12 @@
 #
 # Two halves. The unit tests prove the arithmetic: how a transcript is read, what
 # the rule scores, what a record line carries, whether a load came before the
-# first command, what the table averages. The offline pass proves the pipeline:
-# the three arm binaries, a recorded conversation served on loopback, one sweep
-# through all three arms, and the report the numbers come out of. What it does NOT
-# prove is any model's behaviour — the replies are scripts, not captures, and the
-# token counts on those lines are the mock's.
+# first command, what the table averages, and what the second task's answer has to
+# name. The offline pass proves the pipeline: the three arm binaries, a recorded
+# conversation served on loopback, one sweep of each task through all three arms,
+# and the report the numbers come out of. What it does NOT prove is any model's
+# behaviour — the replies are scripts, not captures, and the token counts on those
+# lines are the mock's.
 #
 # `BENCH_SKIP_BUILD=1` reuses `bin-with`, `bin-without` and `bin-no-trigger`
 # instead of building them; without it the three arm builds run, which is a cargo
@@ -77,11 +78,24 @@ test_the_offline_sweep_writes_one_line_per_arm_per_repetition() {
         || note "the lines are not three arms of two repetitions: $(jq -s -c 'map([.arm,.repetition])' "$tmp/offline.jsonl")"
 }
 
+test_the_reading_task_is_a_sweep_of_its_own_file() {
+    REPS=2 BENCH_TASK=inspect BENCH_OFFLINE=1 BENCH_MODEL=mock TAG=selftest \
+        "$BENCH/sweep.sh" "$tmp/inspect.jsonl" with without no-trigger \
+        > /dev/null 2> "$tmp/inspect-sweep.txt" \
+        || { note "the reading sweep failed: $(tail -3 "$tmp/inspect-sweep.txt")"; return; }
+    [ "$(wc -l < "$tmp/inspect.jsonl")" -eq 6 ] \
+        || note "three arms x two repetitions wrote $(wc -l < "$tmp/inspect.jsonl") lines, not 6"
+    [ "$(jq -s -c 'map(.task) | unique' "$tmp/inspect.jsonl")" = '["inspect"]' ] \
+        || note "the reading sweep is not one task: $(jq -s -c 'map(.task)' "$tmp/inspect.jsonl")"
+}
+
 test_a_run_that_answered_carries_its_tokens_and_is_not_retried() {
     jq -s -e 'all(.[]; .in_tokens != null and .in_tokens > 0)' "$tmp/offline.jsonl" > /dev/null 2>&1 \
         || note "a line carries no summed input tokens: $(jq -s -c 'map(.in_tokens)' "$tmp/offline.jsonl")"
     [ "$(jq -s -c 'map(.attempt) | unique' "$tmp/offline.jsonl")" = '[1]' ] \
         || note "a run that answered was retried: $(jq -s -c 'map(.attempt)' "$tmp/offline.jsonl")"
+    [ "$(jq -s -c 'map(.attempt) | unique' "$tmp/inspect.jsonl")" = '[1]' ] \
+        || note "a reading run that answered was retried: $(jq -s -c 'map(.attempt)' "$tmp/inspect.jsonl")"
 }
 
 # A run that never reached the model is not a measurement, so it is tried once
@@ -90,7 +104,9 @@ test_a_run_that_answered_carries_its_tokens_and_is_not_retried() {
 # the loop is what is under test here, not the provider.
 test_a_run_that_never_reached_the_model_is_tried_once_more() {
     mkdir -p "$tmp/stub"
-    cp "$BENCH/sweep.sh" "$tmp/stub/sweep.sh"
+    # the task names are `bench.py`'s, and the sweep asks for them before it
+    # records anything, so the stub directory holds the two modules it reads
+    cp "$BENCH/sweep.sh" "$BENCH/bench.py" "$BENCH/tasks.py" "$tmp/stub/"
     cat > "$tmp/stub/run_one.sh" <<'STUB'
 #!/bin/sh
 # attempt 1 answers nothing; attempt 2 answers with a bill
@@ -116,6 +132,15 @@ test_the_same_repetition_twice_in_one_file_is_refused() {
     fi
     [ "$(wc -l < "$tmp/offline.jsonl")" -eq "$before" ] || note "the refused sweep still wrote a line"
     grep -q 'already holds' "$tmp/refused.txt" || note "the refusal did not say why"
+}
+
+test_the_reading_tasks_arms_are_told_apart_by_its_own_skill() {
+    # The activation field names the task's skill and no other: the catalog ships
+    # three bodies, and a load of one of the others is a load of something else.
+    [ "$(jq -s -c 'map(select(.arm == "with") | .activated) | unique' "$tmp/inspect.jsonl")" = '[true]' ] \
+        || note "the reading task's with arm did not load its own skill: $(jq -s -c 'map([.arm,.activated])' "$tmp/inspect.jsonl")"
+    [ "$(jq -s -c 'map(select(.arm == "without") | .activated) | unique' "$tmp/inspect.jsonl")" = '[false]' ] \
+        || note "the reading task's without arm activated a skill it does not have"
 }
 
 test_the_recorded_conversations_are_told_apart_by_the_activation_field() {
@@ -145,6 +170,21 @@ test_the_rule_scores_the_two_recorded_conversations_differently() {
         || note "the with arm was not scored fixed and proved: $(jq -s -c 'map(select(.arm=="with")|.checks)' "$tmp/offline.jsonl")"
     [ "$(jq -s -c 'map(select(.arm == "without") | [.checks.fixed, .checks.proved, .checks.ok]) | unique' "$tmp/offline.jsonl")" = '[[true,false,false]]' ] \
         || note "the without arm was not scored the way the rule reads: $(jq -s -c 'map(select(.arm=="without")|.checks)' "$tmp/offline.jsonl")"
+}
+
+test_the_reading_task_is_scored_on_the_tokens_the_same_answer_took() {
+    # Both arms answer the question — that is the premise of a reading task — and
+    # the recorded conversations differ only in what reaching it cost, so the table
+    # has to put one arm's mean below the other's and say the body earns its line.
+    ( cd "$BENCH" && python3 bench.py report "$tmp/inspect.jsonl" ) > "$tmp/inspect.md" 2>&1
+    grep -q '^| with | 2 | 2 |' "$tmp/inspect.md" \
+        || note "the reading report has no with row: $(cat "$tmp/inspect.md")"
+    grep -q 'scored on price' "$tmp/inspect.md" \
+        || note "the reading report did not say what it scored: $(cat "$tmp/inspect.md")"
+    grep -q '`search-and-read` earns its catalog line' "$tmp/inspect.md" \
+        || note "the reading report did not name the body's place: $(cat "$tmp/inspect.md")"
+    [ "$(jq -s -c 'map(.checks.ok) | unique' "$tmp/inspect.jsonl")" = '[true]' ] \
+        || note "a recorded conversation failed the task's own answer check: $(jq -s -c 'map([.arm,.checks])' "$tmp/inspect.jsonl")"
 }
 
 test_the_report_is_a_table_of_all_three_arms() {
@@ -190,12 +230,15 @@ test_the_units_of_the_bench_pass
 test_the_three_arms_differ_only_in_the_text_they_were_built_from
 test_a_run_label_its_binary_contradicts_is_refused
 test_the_offline_sweep_writes_one_line_per_arm_per_repetition
+test_the_reading_task_is_a_sweep_of_its_own_file
 test_a_run_that_answered_carries_its_tokens_and_is_not_retried
 test_a_run_that_never_reached_the_model_is_tried_once_more
 test_the_same_repetition_twice_in_one_file_is_refused
 test_the_recorded_conversations_are_told_apart_by_the_activation_field
+test_the_reading_tasks_arms_are_told_apart_by_its_own_skill
 test_the_third_arm_is_scored_on_whether_the_load_came_first
 test_the_rule_scores_the_two_recorded_conversations_differently
+test_the_reading_task_is_scored_on_the_tokens_the_same_answer_took
 test_the_report_is_a_table_of_all_three_arms
 test_the_report_says_what_the_trigger_sentence_came_to
 test_the_report_applies_the_shipping_rule_to_the_sweep

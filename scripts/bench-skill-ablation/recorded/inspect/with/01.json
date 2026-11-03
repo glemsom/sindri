@@ -1,0 +1,25 @@
+{
+  "id": "msg_ablation",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "The cap is a constant and the file is a hundred lines of it, so the cheapest read is a filtered one. Loading the built-in that covers that before I run anything."
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_skill",
+      "name": "skill",
+      "input": {
+        "name": "search-and-read"
+      }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 1210,
+    "output_tokens": 40
+  }
+}

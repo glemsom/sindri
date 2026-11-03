@@ -1,0 +1,25 @@
+{
+  "id": "msg_ablation",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "The applying line is the return under the comparison, so the range to read is the function it belongs to."
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_range",
+      "name": "bash",
+      "input": {
+        "command": "sed -n '38,48p' src/backoff.py"
+      }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 1300,
+    "output_tokens": 55
+  }
+}

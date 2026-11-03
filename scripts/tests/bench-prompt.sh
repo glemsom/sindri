@@ -59,6 +59,32 @@ test_v00_is_the_shipped_stance_and_patches_nothing() {
     [ "$patched" = "$(ask 'variants.BASE')" ] || fail "v00 is not the stance the tree ships"
 }
 
+# The rewritten preamble is a measured wording, so it is written down rather than
+# read out of the file: a sweep of `v15` names the text it measured, and the file
+# moving under it cannot re-label that sweep. The prompt the tree ships is always one
+# of the bench's own texts, which is what makes the wording a sweep was taken with
+# findable after the file moves — `v15` today, and a new variant beside it on the day
+# a ticket rewrites the stance, never `v15` overwritten.
+test_the_prompt_the_tree_ships_is_a_variant_the_bench_holds() {
+    with_variants 'print(any(text == variants.BASE for _, text in variants.VARIANTS.values()))' >found
+    [ "$(cat found)" = True ] \
+        || fail "the stance the tree ships is no variant the bench holds: pin it as a \
+new variant beside v15 (which stays the record of #416's wording) and measure that"
+    with_variants 'print(variants.VARIANTS["v15"][1])' >pinned
+    [ -s pinned ] || fail "the bench holds no pinned variant of the rewritten preamble"
+}
+
+test_the_pinned_wording_is_a_literal_a_sweep_can_be_built_from() {
+    # A `v15` computed from `shipped()` would follow the file and record nothing, so
+    # the literal is the point of the entry — and it still has to be patchable.
+    [ "$(grep -c '^REWRITTEN = (' "$BENCH/variants.py")" -eq 1 ] \
+        || fail "the rewritten preamble is not a literal in variants.py"
+    copy_shipped
+    with_variants 'variants.patch("v15", pathlib.Path(path))
+assert (variants.shipped(path) == variants.VARIANTS["v15"][1]
+        == variants.REWRITTEN), "v15 does not patch the stance"' source.rs
+}
+
 test_a_variant_is_written_into_the_stance_literal() {
     copy_shipped
     with_variants 'variants.patch("v13", pathlib.Path(path))

@@ -51,6 +51,30 @@ test_a_doctrine_that_lost_the_trigger_sentence_is_refused() {
     assert_contains_absent "$(cat out)" "Loads one skill"
 }
 
+# The second task is the reading skill's, and it is a different question in a
+# different repository: a name the bench does not hold would become a fixture path
+# and a prompt a run half-reads, so it is refused before a run happens.
+test_a_run_of_a_task_that_is_not_a_name_is_refused() {
+    detached env BENCH_MODEL=mock BENCH_TASK=sideways "$BENCH/run_one.sh" with "$PWD/run"
+    assert_status 2 "$status"
+    assert_contains "$ERR" "the bench holds no task 'sideways'"
+    assert_contains "$ERR" "refused-write inspect"
+}
+
+test_a_sweep_of_a_task_that_is_not_a_name_is_refused() {
+    detached env BENCH_TASK=sideways "$BENCH/sweep.sh" out.jsonl with
+    assert_status 2 "$status"
+    assert_contains "$ERR" "the bench holds no task 'sideways'"
+    assert_no_file out.jsonl
+}
+
+test_a_record_line_for_a_task_that_is_not_a_name_is_refused() {
+    mkdir -p run
+    detached python3 "$BENCH/bench.py" record run --task sideways --arm with
+    [ "$status" -ne 0 ] || fail "a line was recorded for a task that is not a name"
+    assert_contains "$ERR" "the bench holds no task 'sideways': refused-write, inspect"
+}
+
 # A run's label and its binary are two claims, and only the binary can be asked:
 # the sentence is in the text it ships, so the words are what the question reads.
 test_a_binary_is_asked_whether_it_carries_the_trigger_sentence() {
@@ -90,8 +114,8 @@ test_a_sweep_of_zero_repetitions_is_refused() {
 test_a_record_line_for_an_arm_that_is_not_a_name_is_refused() {
     mkdir -p run
     detached python3 "$BENCH/bench.py" record run --task refused-write --arm sideways
-    assert_status 2 "$status"
-    assert_contains "$ERR" "invalid choice"
+    [ "$status" -ne 0 ] || fail "a line was recorded for an arm that is not a name"
+    assert_contains "$ERR" "arm must be with, without or no-trigger"
 }
 
 # The third arm is a name a run is recorded under, and its line carries the fact
@@ -105,6 +129,15 @@ test_a_record_line_for_the_third_arm_carries_the_fact_it_is_scored_on() {
     assert_status 0 "$status"
     assert_contains "$(cat out)" '"arm": "no-trigger"'
     assert_contains "$(cat out)" '"loaded_before_bash": null'
+}
+
+# The bench's own arithmetic is tests/test_bench.py and tests/test_tasks.py, and
+# they cost nothing: no model, no binary, no build. They are on this gate rather
+# than only in the manual self-test because they are what a number is read with.
+test_the_benchs_arithmetic_passes_its_own_unit_tests() {
+    detached python3 -m unittest discover -s "$BENCH/tests"
+    assert_status 0 "$status"
+    assert_contains "$ERR" "OK"
 }
 
 test_a_report_over_a_file_no_sweep_wrote_claims_no_number() {
@@ -126,6 +159,35 @@ test_a_report_of_two_arms_applies_the_shipping_rule() {
     assert_contains "$(cat out)" "### The shipping rule"
     assert_contains "$(cat out)" "| outcome | 6/6 with, 0/6 without |"
     assert_contains "$(cat out)" '`sandbox-refusal` earns its catalog line.'
+}
+
+# The reading task's rule is the same three checks read on a second axis: a body
+# that answered the same question for fewer tokens earns its line, and one that
+# answered it for more does not — whatever its outcome was.
+test_a_report_of_the_reading_task_applies_the_rule_to_its_price() {
+    for rep in 1 2 3 4 5 6; do
+        printf '{"task":"inspect","arm":"with","model":"m","repetition":%s,"in_tokens":600,"activated":true,"checks":{"ok":true}}\n' "$rep"
+        printf '{"task":"inspect","arm":"without","model":"m","repetition":%s,"in_tokens":1400,"activated":false,"checks":{"ok":true}}\n' "$rep"
+    done > sweep.jsonl
+    detached python3 "$BENCH/bench.py" report sweep.jsonl
+    assert_status 0 "$status"
+    assert_contains "$(cat out)" "| outcome | 6/6 with, 6/6 without | every run with it right | yes |"
+    assert_contains "$(cat out)" '`search-and-read` earns its catalog line'
+    assert_contains "$(cat out)" "0.43x"
+}
+
+# A split that loses is a recorded verdict and not a silence: the reading task's
+# numbers read the other way say so in the same table, and the gate holds the words.
+test_a_reading_task_that_costs_more_says_so_in_the_table() {
+    for rep in 1 2 3 4 5 6; do
+        printf '{"task":"inspect","arm":"with","model":"m","repetition":%s,"in_tokens":1400,"activated":true,"checks":{"ok":true}}\n' "$rep"
+        printf '{"task":"inspect","arm":"without","model":"m","repetition":%s,"in_tokens":600,"activated":false,"checks":{"ok":true}}\n' "$rep"
+    done > sweep.jsonl
+    detached python3 "$BENCH/bench.py" report sweep.jsonl
+    assert_status 0 "$status"
+    assert_contains "$(cat out)" "| price | 2.33x | under 1.00x | no |"
+    assert_contains "$(cat out)" '`search-and-read` does not pay for itself'
+    assert_contains_absent "$(cat out)" "earns its catalog line"
 }
 
 test_the_mock_provider_refuses_a_directory_of_no_replies() {

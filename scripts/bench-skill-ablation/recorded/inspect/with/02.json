@@ -1,0 +1,25 @@
+{
+  "id": "msg_ablation",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "One search answers the first two thirds of the question: the cap's assignment, the line that applies it, and every file that names it."
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_find",
+      "name": "bash",
+      "input": {
+        "command": "rg -n '_ceiling' ."
+      }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 1240,
+    "output_tokens": 60
+  }
+}

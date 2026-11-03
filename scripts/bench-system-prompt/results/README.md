@@ -14,6 +14,20 @@ jq -s -f median.jq results/$BENCH_MODEL-v00.jsonl    # the median pass
 `runs/` are large. This directory is the exception: a number nobody can recompute is a
 claim.
 
+## The rewritten preamble's sweep
+
+`v00` is read out of `crates/core/src/preamble.rs` and moves with it, so it is not the
+name to record a measurement under: `v15` is the rewritten preamble of #416 pinned in
+`variants.py`, and a `-v15` file is a measurement of those words whatever the tree does
+next. Neither file exists yet — see below — and the command that writes this one is:
+
+```sh
+export BENCH_MODEL=<the model> REPS=6 TAG=<the model>
+./build_variant.sh v15
+./sweep.sh results/$BENCH_MODEL-v15.jsonl v15
+jq -s -f median.jq results/$BENCH_MODEL-v15.jsonl
+```
+
 ## What is not here yet
 
 The sweeps behind the prompt table predate `sweep.sh`'s repetition loop, which truncated
@@ -29,6 +43,11 @@ for v in v00 v02 v11 v13; do
   done
 done
 ```
+
+`-v15` is missing beside them: the prompt the tree ships now was measured before this
+bench could record a sweep, and the stance's own comment carries the figure it produced
+(0.42x the input tokens of the same model told nothing) — a figure this tree cannot
+recompute and does not pretend to. The three commands above are what turn it into one.
 
 It needs a credential and a bill, which is why the bench is not on `make check` and why
 this file is a note rather than a number.

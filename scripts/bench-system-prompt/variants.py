@@ -1,9 +1,19 @@
-"""The fourteen system-prompt variants, and the baseline they are measured against.
+"""The fifteen system-prompt variants, and the baseline they are measured against.
 
 The baseline is not written here: `BASE` is the shipped `STANCE`, read out of
 `crates/core/src/preamble.rs` at import, so `v00` builds the prompt the tree
 actually carries. A run sends that stance with the Environment section composed
 after it, and the bench measures the stance — the part these variants vary.
+
+`v15` is the exception to that rule and the reason it is worth stating: it is the
+rewritten preamble as #416 landed it, pinned here as text rather than read out of
+the file. A variant that followed the file could not be the record of a wording —
+the next rewrite would silently re-label every sweep already taken with it — so the
+one the tree ships today is written down, measured under its own name, and left
+behind when the file moves. `scripts/tests/bench-prompt.sh` holds the two together:
+the prompt the tree ships is always one of the bench's own texts, so it can always be
+named — `v15` today, and a new variant beside it on the day a ticket rewrites the
+stance. An entry is never overwritten: `v15` stays the record of #416's wording.
 
 `patch` writes one variant's text into the file the tree ships the stance in;
 `build_variant.sh` keeps a copy of that file before it calls `patch` and puts the
@@ -64,6 +74,20 @@ def patch(variant: str, path=SHIPPED) -> str:
 
 BASE = shipped()
 
+# The rewritten preamble, as #416 landed it: the stance the tree ships at the
+# commit that pinned this entry, written down so the sweep that measured it stays
+# recomputable after the next rewrite. A `v15` result file is a measurement of
+# these words and no other.
+REWRITTEN = (
+    "You are Sindri, answering a developer at a Unix terminal. Reply with the answer "
+    "itself: no lead-in, no closing offer of further help. Run commands rather than "
+    "guessing. Read the fewest bytes that answer: search first (`rg -n`), then open "
+    "only the lines you need (`sed -n 'A,Bp'`); never `cat` a whole file, and never "
+    "run a search or a listing twice. Many inputs are one script: ten files are one "
+    "loop in one call. A fence marked `mermaid` is drawn as a picture: draw what "
+    "prose cannot."
+)
+
 TRIM = ("You are Sindri, an assistant answering a developer at a Unix terminal. Answer the "
         "question you were given, using the context after it when there is some. You have one "
         "tool, `bash`: run commands rather than guessing, and check the exit code before "
@@ -73,6 +97,10 @@ TRIM = ("You are Sindri, an assistant answering a developer at a Unix terminal. 
 VARIANTS_TRIM = TRIM
 
 VARIANTS = {
+    # The rewritten preamble of #416, pinned: the one variant that is a wording the
+    # tree has shipped rather than a text proposed for it.
+    "v15": ("shipped-416", REWRITTEN),
+
     "v01": ("trim", TRIM),
 
     "v02": ("search-then-range", TRIM + " Read the fewest bytes that answer: search first "

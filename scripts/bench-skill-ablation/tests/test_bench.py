@@ -16,6 +16,18 @@ import unittest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 import bench  # noqa: E402
+import tasks  # noqa: E402
+
+# The skill the capability task ablates: the name every load in these tests has to
+# carry to be this task's activation, and the one the table's sentence says.
+SKILL = tasks.TASKS["refused-write"]["skill"]
+
+# One tree per process, because a line's score is read out of the tree the run left
+# behind: `tests/run.sh` exits 0, so every line built here is a tree the change
+# held in.
+_PASSING = pathlib.Path(tempfile.mkdtemp(prefix="bench-repo-"))
+(_PASSING / "tests").mkdir()
+(_PASSING / "tests/run.sh").write_text("#!/bin/sh\necho 'all tests pass'\n")
 
 
 def call(index, command):
@@ -47,11 +59,11 @@ class TheRecordLineCarriesTheFourFieldsTheAblationTurnsOn(unittest.TestCase):
                "usage": {"input_tokens": 1234, "output_tokens": 56}}
         if entries is None:
             entries = [call(1, "sed -n '1,20p' src/greet.sh")]
-            entries += skill_call(1, bench.SKILL)
+            entries += skill_call(1, SKILL)
             entries += [call(2, "sh tests/run.sh"), result(2, 0)]
         fields = dict(task="refused-write", arm="with", tag="a",
                       repetition=1, attempt=1, model="m", run=run,
-                      entries=entries, fixed=True, elapsed_s=9)
+                      entries=entries, repo=_PASSING, answer="", elapsed_s=9)
         fields.update(overrides)
         return bench.record(**fields)
 
@@ -62,26 +74,27 @@ class TheRecordLineCarriesTheFourFieldsTheAblationTurnsOn(unittest.TestCase):
         # Absent is not zero: a run that never reached the model is not a
         # measurement, and a null is how the median drops it.
         run = {"turns": 0, "tool_calls": 0, "stopped": "error", "rc": 1}
-        line = bench.record(task="t", arm="with", tag="a", repetition=1,
+        line = bench.record(task="refused-write", arm="with", tag="a",
+                            repetition=1,
                             attempt=1, model="m", run=run, entries=[],
-                            fixed=False, elapsed_s=1)
+                            repo=_PASSING, answer="", elapsed_s=1)
         self.assertIsNone(line["in_tokens"])
 
     def test_a_load_before_the_first_command_is_a_fact_of_the_record(self):
         # The arm the doctrine is moved by is scored on this and not on the
         # arm's own label: the transcript says whether a body entered the
         # conversation before anything was run.
-        before = skill_call(1, bench.SKILL) + [call(2, "sh tests/run.sh"),
+        before = skill_call(1, SKILL) + [call(2, "sh tests/run.sh"),
                                               result(2, 0)]
         after = [call(2, "sh tests/run.sh"), result(2, 0)] + \
-            skill_call(3, bench.SKILL)
+            skill_call(3, SKILL)
         self.assertTrue(self.line(entries=before)["loaded_before_bash"])
         self.assertFalse(self.line(entries=after)["loaded_before_bash"])
 
     def test_a_refused_second_call_is_not_a_body_loaded_before_the_command(self):
         # `already_loaded` is no body, so it is not the fact the third arm is
         # scored on, however early in the run it came.
-        entries = skill_call(1, bench.SKILL, outcome="already_loaded") + \
+        entries = skill_call(1, SKILL, outcome="already_loaded") + \
             [call(2, "sh tests/run.sh"), result(2, 0)]
         self.assertFalse(self.line(entries=entries)["loaded_before_bash"])
 
@@ -95,17 +108,17 @@ class TheRecordLineCarriesTheFourFieldsTheAblationTurnsOn(unittest.TestCase):
         # load carries arrives with them — so the command ran without it, and the
         # call before the command is not a load before the command.
         asked = {"type": "tool_call", "turn": 1, "call_id": "s1", "tool": "skill",
-                 "name": bench.SKILL}
+                 "name": SKILL}
         command = {"type": "tool_call", "turn": 1, "call_id": "c1", "tool": "bash",
                    "command": "sh tests/run.sh"}
-        entries = [asked, command, skill_call(1, bench.SKILL)[1], result(1, 2)]
+        entries = [asked, command, skill_call(1, SKILL)[1], result(1, 2)]
         self.assertFalse(self.line(entries=entries)["loaded_before_bash"])
 
     def test_a_run_that_ran_no_command_has_no_first_command_to_be_before(self):
         # The fact is undefined rather than false: a run that loaded the body and
         # answered without running anything is not evidence that the sentence
         # failed to reach it, and counting it as one deflates the shipped arm.
-        self.assertIsNone(self.line(entries=skill_call(1, bench.SKILL))
+        self.assertIsNone(self.line(entries=skill_call(1, SKILL))
                           ["loaded_before_bash"])
 
     def test_a_run_that_left_no_transcript_has_no_load_to_count(self):
@@ -113,9 +126,10 @@ class TheRecordLineCarriesTheFourFieldsTheAblationTurnsOn(unittest.TestCase):
         # reached the model wrote no entry to read, so it is left out of the
         # rate instead of being counted as a run the sentence failed to reach.
         run = {"turns": 0, "tool_calls": 0, "stopped": "error", "rc": 1}
-        line = bench.record(task="t", arm="with", tag="a", repetition=1,
+        line = bench.record(task="refused-write", arm="with", tag="a",
+                            repetition=1,
                             attempt=1, model="m", run=run, entries=[],
-                            fixed=False, elapsed_s=1)
+                            repo=_PASSING, answer="", elapsed_s=1)
         self.assertIsNone(line["loaded_before_bash"])
 
     def test_whether_the_skill_was_activated_is_a_field_of_its_own(self):
@@ -125,6 +139,18 @@ class TheRecordLineCarriesTheFourFieldsTheAblationTurnsOn(unittest.TestCase):
 
     def test_the_arm_is_on_the_line_because_two_arms_share_one_file(self):
         self.assertEqual(self.line()["arm"], "with")
+
+    def test_a_line_for_a_task_the_bench_does_not_hold_is_refused_by_name(self):
+        # The names are `tasks.py`'s, and the refusal says which ones there are: a
+        # table of a fixture nobody wrote is not a measurement of anything.
+        for field, value in (("task", "sideways"), ("arm", "sideways")):
+            with self.subTest(field=field):
+                with self.assertRaises(SystemExit) as refused:
+                    self.line(**{field: value})
+                self.assertIn("sideways", str(refused.exception))
+                self.assertIn("refused-write, inspect" if field == "task"
+                              else "with, without or no-trigger",
+                              str(refused.exception))
 
     def test_the_score_is_the_rule_and_the_rule_is_written_down(self):
         self.assertEqual(self.line()["checks"],
@@ -187,19 +213,19 @@ class TheRightOrWrongRuleIsMechanical(unittest.TestCase):
 
 class AnUnusedBuiltInIsToldFromAUselessOne(unittest.TestCase):
     def test_activation_is_a_skill_call_whose_result_says_loaded(self):
-        self.assertTrue(bench.activated(skill_call(1, bench.SKILL), bench.SKILL))
+        self.assertTrue(bench.activated(skill_call(1, SKILL), SKILL))
 
     def test_a_second_call_to_a_loaded_skill_is_not_a_second_activation(self):
-        entries = skill_call(1, bench.SKILL, outcome="already_loaded")
-        self.assertFalse(bench.activated(entries, bench.SKILL))
+        entries = skill_call(1, SKILL, outcome="already_loaded")
+        self.assertFalse(bench.activated(entries, SKILL))
 
     def test_another_skills_body_is_not_this_ones_activation(self):
-        self.assertFalse(bench.activated(skill_call(1, "house-style"), bench.SKILL))
+        self.assertFalse(bench.activated(skill_call(1, "house-style"), SKILL))
 
     def test_a_call_the_loop_refused_without_a_tool_counts_as_no_activation(self):
         entries = [{"type": "tool_call", "turn": 1, "call_id": "c1",
                     "tool": "refused", "named": "skill", "problem": "no such tool"}]
-        self.assertFalse(bench.activated(entries, bench.SKILL))
+        self.assertFalse(bench.activated(entries, SKILL))
 
 
 class TheTableIsTheMeansOfOneArmAgainstTheOther(unittest.TestCase):
@@ -417,6 +443,82 @@ class TheThirdArmMovesTheSentenceAndTheTableSaysSo(unittest.TestCase):
                 bench.main(["record", str(rundir), "--task", "refused-write",
                             "--arm", "no-trigger"])
         self.assertEqual(json.loads(printed.getvalue())["arm"], "no-trigger")
+
+
+class ATaskScoredOnPriceIsComparedByTheTokensItSpent(unittest.TestCase):
+    """The reading skill buys no outcome a model would not otherwise reach — it buys
+    the same answer for fewer tokens — so its arms are compared by the mean input
+    tokens and its rule's outcome check asks only that the answer was reached. A
+    sweep of the two arms over one task, six repetitions each, built here so the
+    arithmetic owes nothing to a fixture."""
+
+    def sweep(self, tokens, without_tokens, activated=6, right=6):
+        lines = []
+        for arm, spent in (("with", tokens), ("without", without_tokens)):
+            for index in range(6):
+                lines.append({"arm": arm, "model": "m", "task": "inspect",
+                              "in_tokens": spent,
+                              "activated": arm == "with" and index < activated,
+                              "loaded_before_bash": None,
+                              "checks": {"ok": index < right}})
+        return lines
+
+    def test_a_reading_skill_that_costs_less_earns_its_catalog_line(self):
+        report = bench.report(self.sweep(600, 1400))
+        self.assertIn("`search-and-read` earns its catalog line", report)
+        self.assertIn("0.43x the mean input tokens without it", report)
+
+    def test_a_reading_skill_a_quarter_dearer_has_bought_nothing(self):
+        # The outcome axis allows a body a quarter again in tokens to buy an
+        # outcome. The price axis cannot: there the tokens *are* the purchase, so
+        # 1.20x is a loss the table has to read as one, and the rule's third check
+        # is a floor of its own.
+        report = bench.report(self.sweep(1200, 1000))
+        self.assertIn("`search-and-read` does not pay for itself", report)
+        self.assertIn("1.20x", report)
+        self.assertIn("| price | 1.20x | under 1.00x | no |", report)
+        self.assertNotIn("earns its catalog line", report)
+
+    def test_a_reading_skill_that_costs_more_does_not_pay_for_itself(self):
+        # The one state the price axis adds: the same answer, bought dearer. A
+        # reading skill that costs more than the reads it replaces has bought
+        # nothing, and the sentence says so rather than keeping it on outcome.
+        report = bench.report(self.sweep(1400, 600))
+        self.assertIn("`search-and-read` does not pay for itself", report)
+        self.assertIn("2.33x", report)
+        self.assertNotIn("earns its catalog line", report)
+
+    def test_a_body_whose_answers_were_wrong_is_useless_however_cheap_it_was(self):
+        report = bench.report(self.sweep(600, 1400, right=4))
+        self.assertIn("**useless**", report)
+        self.assertNotIn("earns its catalog line", report)
+
+    def test_a_body_no_run_loaded_is_unused_and_the_description_is_what_to_fix(self):
+        report = bench.report(self.sweep(600, 1400, activated=0))
+        self.assertIn("**unused**", report)
+        self.assertIn("rewrite the description", report)
+
+    def test_the_outcome_row_asks_only_that_the_answer_was_reached(self):
+        # Both arms right is the premise of a reading task, so a rule reading it as
+        # the outcome axis would call the body useless for doing its job.
+        report = bench.report(self.sweep(600, 1400))
+        self.assertIn(
+            "| outcome | 6/6 with, 6/6 without | every run with it right | yes |",
+            report,
+        )
+
+    def test_the_report_says_which_task_and_axis_it_read(self):
+        # Two tables of one bench are two questions: a reader told neither cannot
+        # tell which numbers were the score.
+        report = bench.report(self.sweep(600, 1400))
+        self.assertIn("`inspect` ablates `search-and-read`, scored on price", report)
+
+    def test_a_file_naming_a_task_the_bench_does_not_hold_is_refused(self):
+        lines = self.sweep(600, 1400)
+        for line in lines:
+            line["task"] = "sideways"
+        with self.assertRaises(SystemExit):
+            bench.report(lines)
 
 
 if __name__ == "__main__":

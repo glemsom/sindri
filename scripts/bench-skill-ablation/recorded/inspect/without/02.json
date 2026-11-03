@@ -1,0 +1,25 @@
+{
+  "id": "msg_ablation",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "The cap is in `src/backoff.py` and the arithmetic is in `retry_delay`. One more read for the test that mentions it."
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_grep",
+      "name": "bash",
+      "input": {
+        "command": "grep -rn '_ceiling' tests README.md"
+      }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 5200,
+    "output_tokens": 50
+  }
+}

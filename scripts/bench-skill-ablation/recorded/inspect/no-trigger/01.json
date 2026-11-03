@@ -1,0 +1,25 @@
+{
+  "id": "msg_ablation",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "One search over the tree names the cap and every file that mentions it, so it is the first thing to run."
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_find",
+      "name": "bash",
+      "input": {
+        "command": "rg -n '_ceiling' ."
+      }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 1230,
+    "output_tokens": 55
+  }
+}

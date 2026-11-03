@@ -1,0 +1,25 @@
+{
+  "id": "msg_ablation",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "Three source files, so reading all of them is the quickest way to be sure nothing is missed."
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_cat",
+      "name": "bash",
+      "input": {
+        "command": "cat src/backoff.py src/registry.py src/dispatch.py README.md"
+      }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 1300,
+    "output_tokens": 45
+  }
+}

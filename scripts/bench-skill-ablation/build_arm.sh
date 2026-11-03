@@ -43,7 +43,7 @@ if re.search(r"pub const BUILTINS: &\[Content\] = &\[\];", source):
         "build_arm: the built-in table is already empty, so this tree cannot build "
         "any arm — restore it with `git checkout -- crates/core/src/skills/builtin.rs`"
     )
-if not re.search(r"pub const BUILTINS: &\[Content\] = &\[.*?\n\}\];", source, re.S):
+if not re.search(r"pub const BUILTINS: &\[Content\] = &\[.*?\n\];", source, re.S):
     raise SystemExit("build_arm: the built-in table is not where it was")
 PY
 
@@ -67,7 +67,7 @@ import pathlib, re, sys
 path = pathlib.Path(sys.argv[1])
 source = path.read_text()
 emptied, count = re.subn(
-    r"pub const BUILTINS: &\[Content\] = &\[.*?\n\}\];",
+    r"pub const BUILTINS: &\[Content\] = &\[.*?\n\];",
     "pub const BUILTINS: &[Content] = &[];",
     source,
     count=1,

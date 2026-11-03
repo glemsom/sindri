@@ -1,0 +1,25 @@
+{
+  "id": "msg_ablation",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "A filtered read is what the rest of this needs, and there is a built-in that covers exactly that \u2014 worth loading now that a search has been run."
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_skill",
+      "name": "skill",
+      "input": {
+        "name": "search-and-read"
+      }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 1310,
+    "output_tokens": 40
+  }
+}
