@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 
 use crate::workspace;
 
-pub use builtin::{BUILTINS, builtins};
+pub use builtin::{BUILTINS, CONTENT_CEILING, FILE_CEILING, builtins};
 pub use catalog::{Catalog, Content, File, Found, Origin, Refusal, Scope, Shadow, Skill, Where};
 pub use frontmatter::DESCRIPTION_CEILING;
 pub use scan::scan;

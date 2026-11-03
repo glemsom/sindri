@@ -41,8 +41,8 @@ const BLOCK_OFFSET: usize = 2;
 /// summary of what the body would say. The number is about two sentences — one
 /// for the task, one for where the default is wrong — which is the room both
 /// halves of a routing key need and no more: a dozen skills then cost a couple
-/// of kilobytes a turn, and the built-in this binary ships spends well under
-/// half of it, so a shipped skill keeps its headroom. A description past it is a
+/// of kilobytes a turn, and the skills this binary ships are held to the same
+/// number rather than given one of their own. A description past it is a
 /// refusal said out loud and never a truncation,
 /// because a truncated routing key is a skill that silently stops being found.
 /// `DESCRIPTION_CEILING` is the whole of the number; nothing else bounds it.

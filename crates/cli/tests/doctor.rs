@@ -478,7 +478,7 @@ fn write_skill(scope: &std::path::Path, name: &str, body: &str) -> std::path::Pa
 }
 
 #[test]
-fn doctor_lists_both_scopes_with_the_name_the_scope_and_who_may_invoke_it() {
+fn doctor_lists_every_scope_with_the_name_the_scope_and_who_may_invoke_it() {
     let env = Env::new();
     // A repository, so the repo scope has a root to stop at, with a skill
     // three directories down from it — which is where a run really boots.
@@ -504,24 +504,48 @@ fn doctor_lists_both_scopes_with_the_name_the_scope_and_who_may_invoke_it() {
         .expect("the catalog says how many it found")
         .1;
     let rows: Vec<&str> = report.lines().take(count).collect();
-    assert!(
-        rows[0].contains("repo") && rows[0].contains("house-style") && rows[0].contains("user"),
-        "a repo skill the model may not see: {rows:?}"
-    );
-    assert!(
-        rows[1].contains("user") && rows[1].contains("research") && rows[1].contains("model,user"),
-        "a user skill both may invoke: {rows:?}"
-    );
-    for row in &rows[2..] {
-        assert!(
-            row.contains("builtin") && row.contains("model,user"),
-            "and every skill the binary ships is the lowest of the three: {rows:?}"
-        );
-    }
     assert_eq!(
         rows.len(),
-        2 + shipped,
-        "every row is one of the three scopes: {rows:?}"
+        count,
+        "every row the catalog claims is one of the three scopes: {rows:?}"
+    );
+    // The catalog is sorted by name, so which row a skill lands on is the names'
+    // business and not the scopes'. What is each scope's is its own row, once:
+    // the report prints one per skill and the count above is that number.
+    let row = |name: &str| -> &str {
+        let found: Vec<&str> = rows
+            .iter()
+            .copied()
+            .filter(|row| row.contains(name))
+            .collect();
+        assert_eq!(found.len(), 1, "{name} is one row of the report: {rows:?}");
+        found[0]
+    };
+    let house = row("house-style");
+    assert!(
+        house.starts_with("  repo") && house.contains("user"),
+        "a repo skill the model may not see: {house}"
+    );
+    let research = row("research");
+    assert!(
+        research.starts_with("  user") && research.contains("model,user"),
+        "a user skill both may invoke: {research}"
+    );
+    // The binary's own are the lowest of the three, and every one of them is a
+    // row of its own with the invocation the flags left in place.
+    let builtins: Vec<&str> = rows
+        .iter()
+        .copied()
+        .filter(|row| row.starts_with("  builtin"))
+        .collect();
+    assert_eq!(
+        builtins.len(),
+        shipped,
+        "the binary's own are the lowest of the three: {rows:?}"
+    );
+    assert!(
+        builtins.iter().all(|row| row.contains("model,user")),
+        "and every one of them both may invoke: {rows:?}"
     );
 }
 

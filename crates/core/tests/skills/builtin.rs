@@ -4,7 +4,8 @@
 //! belongs to the binary or to the one directory the test wrote.
 
 use sindri_core::skills::{
-    BUILTINS, Catalog, DESCRIPTION_CEILING, Scope, Skill, builtins, discover,
+    BUILTINS, CONTENT_CEILING, Catalog, DESCRIPTION_CEILING, FILE_CEILING, Scope, Skill, builtins,
+    discover,
 };
 use tempfile::TempDir;
 
@@ -24,6 +25,24 @@ fn shipped_names() -> Vec<String> {
     shipped().into_iter().map(|skill| skill.name).collect()
 }
 
+/// The built-in that holds the procedure for changing a file, and the name the
+/// catalog routes a task to.
+const CHANGING: &str = "changing-files";
+
+/// One built-in by name.
+fn builtin_named(name: &str) -> Skill {
+    builtins()
+        .skills
+        .into_iter()
+        .find(|skill| skill.name == name)
+        .unwrap_or_else(|| panic!("the binary ships no `{name}`"))
+}
+
+/// The built-in that holds the procedure for changing a file.
+fn changing() -> Skill {
+    builtin_named(CHANGING)
+}
+
 #[test]
 fn a_builtin_skill_is_found_in_a_workspace_that_holds_no_skill_at_all() {
     let workspace = TempDir::new().expect("a workspace");
@@ -36,11 +55,14 @@ fn a_builtin_skill_is_found_in_a_workspace_that_holds_no_skill_at_all() {
         .iter()
         .map(|skill| skill.name.as_str())
         .collect();
-    let shipped_names: Vec<&str> = shipped
+    let mut shipped_names: Vec<&str> = shipped
         .skills
         .iter()
         .map(|skill| skill.name.as_str())
         .collect();
+    // The catalog is sorted by name and the table is in the order a reader of it
+    // wants, so the two are compared as the sets of names they are.
+    shipped_names.sort_unstable();
     assert_eq!(
         names, shipped_names,
         "the binary's own are in every catalog"
@@ -315,11 +337,7 @@ fn every_builtin_description_fits_the_ceiling_so_none_can_refuse_itself_at_runti
 /// The body of one shipped skill, by the name a task is matched on: a body a
 /// test wrote itself would be prose about something the binary does not ship.
 fn body_of(name: &str) -> String {
-    builtins()
-        .skills
-        .into_iter()
-        .find(|skill| skill.name == name)
-        .unwrap_or_else(|| panic!("the binary ships `{name}`"))
+    builtin_named(name)
         .body()
         .expect("a built-in's frontmatter parses")
 }
@@ -363,6 +381,62 @@ fn the_finding_skill_names_cat_repeated_greps_and_a_printed_whole_file() {
 }
 
 #[test]
+fn the_changing_skill_names_the_rewrite_the_half_edit_and_the_weakened_check() {
+    // The three failures the procedure exists to prevent, each in the words the
+    // model is handed: a whole-file rewrite that loses what surrounds the
+    // change, a tree left half-edited by a pass that failed midway, and an
+    // assertion weakened until it stopped noticing. A body that does not name
+    // what it prevents is read as advice beside a habit it never touches.
+    let body = body_of(CHANGING);
+
+    for (word, prevented) in [
+        (
+            "rewrite",
+            "the whole-file rewrite that loses what surrounds the change",
+        ),
+        (
+            "half-edited",
+            "a tree left half-edited by a pass that failed midway",
+        ),
+        ("weaken", "an assertion weakened until it stopped noticing"),
+        ("anchor", "the anchor the change is made at"),
+        ("exactly once", "the count an anchor must be found in"),
+    ] {
+        assert!(
+            body.contains(word),
+            "the body says nothing about {prevented}: {word:?} is not in it: {body}"
+        );
+    }
+}
+
+#[test]
+fn the_changing_skill_ends_by_reading_the_change_back_and_running_the_narrowest_check() {
+    // A write that printed nothing is not a change that happened, so the section
+    // a model reads last is the proof: the region read back, and the narrowest
+    // check that would have caught it. It is the last section rather than an
+    // early one for the same reason it is the last step of the procedure.
+    let body = body_of(CHANGING);
+    let last = body
+        .rsplit("\n## ")
+        .next()
+        .expect("the body carries sections");
+
+    assert!(
+        last.starts_with("Re-read the changed region"),
+        "the body ends on the step that proves the change: {last}"
+    );
+    for (word, step) in [
+        ("sed -n", "the region read back"),
+        ("--check", "the narrowest check run"),
+    ] {
+        assert!(
+            last.contains(word),
+            "the last section does not say where {step} is: {word:?} is not in it: {last}"
+        );
+    }
+}
+
+#[test]
 fn every_recipe_a_shipped_body_gives_is_one_call() {
     // The batching this skill teaches is a single `bash` call doing many things,
     // never several calls in a row: so a recipe is one command, and a block of
@@ -385,11 +459,7 @@ fn the_finding_skill_sends_the_many_file_loop_as_a_file_it_ships() {
     // The loop over many inputs is a script, and a script the body carried would
     // be a block of steps in a recipe's place: it ships as a file instead, and
     // the body says which file.
-    let found = builtins()
-        .skills
-        .into_iter()
-        .find(|skill| skill.name == "search-and-read")
-        .unwrap_or_else(|| panic!("the binary ships `search-and-read`"));
+    let found = builtin_named("search-and-read");
     let body = found.body().expect("a built-in's frontmatter parses");
     let named: Vec<&str> = body
         .split(|at: char| at.is_whitespace() || at == '`')
@@ -405,4 +475,162 @@ fn the_finding_skill_sends_the_many_file_loop_as_a_file_it_ships() {
         named.contains(&"references/recipes.md"),
         "and so does the table the body is too short to carry: {named:?}"
     );
+}
+
+#[test]
+fn the_changing_skill_ships_its_many_file_pass_as_a_program_its_body_names() {
+    // The pass over many files is a program, and a program the body carried
+    // would be a block of steps in a recipe's place: it ships as a file the body
+    // names, under its own name, so the file the pass is read from is not one
+    // another skill's body also points a reader at.
+    let found = changing();
+    let body = found.body().expect("a built-in's frontmatter parses");
+
+    assert!(
+        body.contains("references/edit-plan.md"),
+        "the pass over many files ships as a file the body names: {body}"
+    );
+    let pass = found
+        .files()
+        .iter()
+        .find(|file| file.path == "references/edit-plan.md")
+        .unwrap_or_else(|| panic!("the pass is one the table carries: {:?}", found.listing()));
+    assert!(
+        pass.text.contains("```python"),
+        "and it is a program a run can execute, not a recipe it reads: {}",
+        pass.text
+    );
+}
+
+/// The first fenced `python` program in a shipped Markdown file, which is how a
+/// reference can be run rather than read.
+fn python_fence(path: &str, text: &str) -> String {
+    let mut lines = text.lines();
+    lines
+        .find(|line| line.trim_end() == "```python")
+        .unwrap_or_else(|| panic!("{path} holds no program to run: {text}"));
+    let program: Vec<&str> = lines.by_ref().take_while(|line| *line != "```").collect();
+    assert!(
+        !program.is_empty(),
+        "{path} opens a fence and holds nothing: {text}"
+    );
+    program.join("\n")
+}
+
+#[test]
+fn the_many_file_procedure_checks_every_anchor_before_it_writes_any_file() {
+    // The procedure is a script a model can run, so it is run rather than read:
+    // one anchor that is there twice and one file that is not there, and the
+    // file whose anchor was good is left exactly as it was, with both bad ones
+    // named.
+    let found = changing();
+    let reference = found
+        .files()
+        .iter()
+        .find(|file| file.path == "references/edit-plan.md")
+        .expect("the pass over many files is a file beside the body");
+    let script = python_fence(reference.path, reference.text);
+
+    let tree = TempDir::new().expect("a tree");
+    let one = tree.path().join("one.txt");
+    let two = tree.path().join("two.txt");
+    let gone = tree.path().join("gone.txt");
+    std::fs::write(&one, "alpha = 1\n").expect("a file");
+    std::fs::write(&two, "beta = 2\nbeta = 2\n").expect("a file");
+    let program = tree.path().join("apply.py");
+    std::fs::write(&program, script).expect("the shipped program");
+
+    let plan = tree.path().join("plan.json");
+    std::fs::write(
+        &plan,
+        serde_json::json!([
+            {"file": one, "anchor": "alpha = 1", "replacement": "alpha = 3"},
+            {"file": two, "anchor": "beta = 2", "replacement": "beta = 3"},
+            {"file": gone, "anchor": "delta = 4", "replacement": "delta = 5"}
+        ])
+        .to_string(),
+    )
+    .expect("a plan");
+
+    let out = std::process::Command::new("python3")
+        .arg(&program)
+        .arg(&plan)
+        .output()
+        .expect("python3 runs");
+    let said = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    assert!(
+        !out.status.success(),
+        "a plan with an anchor that is not one is a failure: {said}"
+    );
+    assert!(
+        said.contains("two.txt: the anchor appears 2 times, not once"),
+        "the file whose anchor is there twice is named, with its count: {said}"
+    );
+    assert!(
+        said.contains("gone.txt: no such file"),
+        "and a file the tree does not hold is said to be missing, not counted zero: {said}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&one).expect("the file is still there"),
+        "alpha = 1\n",
+        "the good edit waited for the bad ones to be reported, so the tree is untouched"
+    );
+
+    // The same plan with the anchor that is there twice fixed, and the file that
+    // was missing written: every one of them is changed by the one pass.
+    std::fs::write(&two, "beta = 2\ngamma = 2\n").expect("a file");
+    std::fs::write(&gone, "delta = 4\n").expect("a file");
+    let out = std::process::Command::new("python3")
+        .arg(&program)
+        .arg(&plan)
+        .output()
+        .expect("python3 runs");
+    assert!(
+        out.status.success(),
+        "every anchor found once: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        std::fs::read_to_string(&one).expect("written"),
+        "alpha = 3\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&two).expect("written"),
+        "beta = 3\ngamma = 2\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&gone).expect("written"),
+        "delta = 5\n"
+    );
+}
+
+#[test]
+fn no_shipped_file_is_large_enough_to_multiply_the_cost_of_one_load() {
+    for found in builtins().skills {
+        let body = found.body().expect("the frontmatter parses");
+        let files: Vec<&str> = found.files().iter().map(|file| file.text).collect();
+        let total = body.len() + files.iter().map(|text| text.len()).sum::<usize>();
+
+        for text in std::iter::once(body.as_str()).chain(files) {
+            let measured = text.len();
+            assert!(
+                measured <= FILE_CEILING,
+                "`{}` ships a file of {measured} bytes, past the {FILE_CEILING} one file may \
+                 spend: every file is inlined beside the body, so one long reference is a \
+                 second body paid for on every load",
+                found.name
+            );
+        }
+        assert!(
+            total <= CONTENT_CEILING,
+            "`{}` spends {total} bytes on one load, past the {CONTENT_CEILING} a skill's whole \
+             content may: the files beside a body multiply the cost of loading it",
+            found.name
+        );
+    }
 }

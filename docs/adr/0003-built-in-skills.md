@@ -16,6 +16,12 @@ because a path is a thing that can be absent, stale or unwritable. A file writte
 leaves last release's instructions behind, so the model is told one boundary and the
 sandbox applies another, and nothing reports the disagreement.
 
+One directory per built-in under `builtin/`, named for the skill inside it, so the body, the
+files beside it and the tests written about it are all found by the name the catalog routes
+a task to, and a second skill is a second directory rather than a second file beside the
+first. What one of those directories may spend is a ceiling, and the ceilings are the
+module's own (`crates/core/src/skills/builtin.rs`): they bound one load, not the tree.
+
 ## 2. A body holds the procedure, never the boundary
 
 The `bash` description already holds the invariant, derived from the policy, so the words

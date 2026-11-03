@@ -81,11 +81,11 @@ fn every_builtin_activates_to_its_body_and_the_files_it_ships_with_no_path_to_op
         // model to open one out of, so a relative reference in the body reads
         // where it points rather than leading nowhere.
         for file in found.files() {
-            assert!(
-                outcome
-                    .content
-                    .contains(&format!("<skill_file path=\"{}\">", file.path)),
-                "{} comes with the body: {}",
+            let wrapper = format!("<skill_file path=\"{}\">", file.path);
+            assert_eq!(
+                outcome.content.matches(&wrapper).count(),
+                1,
+                "{} comes with the body once and not twice: {}",
                 file.path,
                 outcome.content
             );

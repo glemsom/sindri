@@ -107,6 +107,11 @@ sentences — the task covered, and where the model's default is wrong — and a
 description is a refusal said out loud, never a truncation, because a truncated routing key
 is a skill that stops being found.
 
+**content ceiling** — how much a built-in skill's body and the files beside it may spend:
+`FILE_CEILING` for one file and `CONTENT_CEILING` for the whole, both `builtin.rs`'s, because
+one `skill` call inlines all of them at once and the files therefore multiply the cost of a
+load rather than adding to it (`crates/core/src/skills/builtin.rs`).
+
 **instructions** — a repository's own rules: the `AGENTS.md` at the repository root, read
 once at boot and appended to the preamble, after its Environment section. Never a nested
 file, never an ancestor's; capped at 8 KiB, a longer file arriving cut with a marker saying

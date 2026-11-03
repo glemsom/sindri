@@ -12,6 +12,17 @@
 use super::catalog::{Content, File, Found, Refusal, Scope, Skill, Where};
 use super::frontmatter;
 
+/// The most one file a built-in ships may spend, and the most one built-in's
+/// whole content may: its body and every file beside it are inlined into the
+/// conversation by one `skill` call, so the files multiply what that call costs
+/// rather than adding to it, and a reference that grew past a body's size would
+/// be a second body paid for on every load. Eight KiB is a body and the one long
+/// procedure beside it; twelve is that plus the header and the room a second
+/// reference would need, which is a skill's whole worth and no more; nothing else
+/// bounds them.
+pub const FILE_CEILING: usize = 8 * 1024;
+pub const CONTENT_CEILING: usize = 12 * 1024;
+
 /// Every built-in skill: the one table, holding what a compiled skill already is
 /// — its whole `SKILL.md`, and every file its body may name, compiled in beside
 /// it. One table, no directory and no path: a scope is a place a skill is found,
@@ -22,6 +33,13 @@ use super::frontmatter;
 /// A directory's copy cannot be written here even by mistake: a `PathBuf` is not
 /// a thing a `const` can hold, so every entry is by construction a compiled one.
 pub const BUILTINS: &[Content] = &[
+    Content::Compiled {
+        source: include_str!("builtin/changing-files/SKILL.md"),
+        files: &[File {
+            path: "references/edit-plan.md",
+            text: include_str!("builtin/changing-files/references/edit-plan.md"),
+        }],
+    },
     Content::Compiled {
         source: include_str!("builtin/sandbox-refusal/SKILL.md"),
         files: &[

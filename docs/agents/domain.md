@@ -13,5 +13,5 @@ replacement.
 A new decision goes where the code is — a module doc comment, a test name, a `GLOSSARY.md`
 entry — not in a new record. The records are the exception because they argue for the tree
 and not for one module: `0001` how the code is shaped so an agent can find it, `0002` why
-there are three tools, `0003` why one skill ships inside the binary, `0004` what a run
+there are three tools, `0003` why built-in skills ship inside the binary, `0004` what a run
 tells the terminal about what it is doing.
