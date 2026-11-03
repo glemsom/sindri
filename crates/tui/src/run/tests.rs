@@ -50,6 +50,7 @@ fn app() -> App {
             model: "claude-sonnet-4-6".to_string(),
             max_turns: 1,
             context_limit: None,
+            status: true,
         },
         None,
         Box::new(crate::copy::System::new(

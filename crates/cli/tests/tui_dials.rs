@@ -139,7 +139,7 @@ fn a_saved_extra_path_is_in_force_for_the_very_next_command() {
     assert!(!opened.is_empty(), "the frame is drawing");
     type_command(&pty, "/settings");
     expect(&pty, &mut child, "extra_writable_paths");
-    set_field(&pty, 7, &scratch.display().to_string());
+    set_field(&pty, 8, &scratch.display().to_string());
     pty.type_key(ENTER);
     expect(&pty, &mut child, "settings saved");
 

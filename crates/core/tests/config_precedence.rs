@@ -78,3 +78,37 @@ fn a_toggle_spelling_the_file_accepts_is_one_the_environment_accepts() {
         "in the file's own words, behind the variable's name"
     );
 }
+
+#[test]
+fn the_status_reports_are_on_unless_the_file_or_the_environment_says_off() {
+    // A run tells its terminal what it is doing, and tells it nothing when
+    // either source silences it: the switch is one value, read by both front
+    // ends, and it defaults on because the feature is the point of it.
+    let home = config_home();
+    // SAFETY: this file holds one test and no other thread of this process
+    // reads either variable while it runs.
+    unsafe { std::env::set_var("XDG_CONFIG_HOME", home.path()) };
+    assert_eq!(
+        resolved().map(|config| config.status),
+        Ok(true),
+        "a run with nothing configured reports"
+    );
+
+    let mut file = document(&home);
+    file.set(Key::Status, "off")
+        .expect("the file takes a toggle");
+    file.save().expect("written");
+    assert_eq!(
+        resolved().map(|config| config.status),
+        Ok(false),
+        "the file silences every report"
+    );
+
+    // SAFETY: as above, and the loop sets only the variable under test.
+    unsafe { std::env::set_var("SINDRI_STATUS", "on") };
+    assert_eq!(
+        resolved().map(|config| config.status),
+        Ok(true),
+        "and the environment wins over the file"
+    );
+}

@@ -236,6 +236,7 @@ mod tests {
                 skills: Vec::new(),
                 max_turns: 250,
                 context_limit: None,
+                status: true,
             },
             None,
         );

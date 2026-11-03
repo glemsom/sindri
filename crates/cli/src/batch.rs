@@ -16,7 +16,7 @@ use sindri_core::provider::{Client, Error};
 use sindri_types::ExitCode;
 
 use crate::boot::{self, Boot};
-use crate::{failure, notice, signal, verbose};
+use crate::{failure, notice, signal, status, verbose};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
 pub enum OutputFormat {
@@ -86,12 +86,26 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
         },
         cancel.clone(),
     );
+    // The tap is unconditional: the reports are read from it, and `-v` reads
+    // what the same thread kept. A run whose stderr is no terminal still taps —
+    // the channel and the setting are decided in one place, and a second
+    // decision here would be a second answer.
     let (sender, events) = mpsc::channel::<Event>();
-    if verbose {
-        agent.set_events(sender);
-    }
+    agent.set_events(sender);
+    let reports = status::Reports::new(session.workspace(), config.status);
+    reports.begun();
+    let watching = reports.watch(events, verbose);
 
     let outcome = agent.run(&prompt);
+    // The channel closes here, so the thread reading it knows the run it was
+    // carrying is over — and the end report is written before the answer is
+    // printed, so a terminal and a stdout reader agree on the order.
+    agent.close_events();
+    let seen = watching.events();
+    match &outcome {
+        Ok(report) => reports.settled(report.stopped),
+        Err(_) => reports.failed(),
+    }
     // The record's end is written before anything is printed, so the session the
     // output names is already on disk and complete.
     if let Err(error) = session.finish(&outcome) {
@@ -120,7 +134,7 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
             }
             if verbose {
                 for line in verbose::lines(
-                    events.try_iter().collect(),
+                    seen,
                     session.dir().id(),
                     session.instructions().handed().map(|handed| handed.line()),
                 ) {

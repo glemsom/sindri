@@ -96,6 +96,9 @@ fn launch(boot: &Boot) -> Launch {
         // and a load by hand is read from the same set the scan found.
         skills: boot.session.hand().names(),
         max_turns: boot.config.max_turns,
+        // The one switch, read where both front ends read it: a run whose
+        // human asked for no reports says nothing and clears nothing.
+        status: boot.config.status,
         // The meter's denominator is the family's advertised window, where the
         // adapter knows it; where it does not, the rail counts up without one.
         context_limit: provider::context_window(&boot.config.model),

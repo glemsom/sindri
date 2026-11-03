@@ -40,6 +40,9 @@ pub struct Launch {
     pub skills: Vec<String>,
     pub max_turns: u32,
     pub context_limit: Option<u64>,
+    /// Whether this run tells its terminal what it is doing: the config's one
+    /// switch, which batch mode reads for its own reports.
+    pub status: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -171,10 +174,9 @@ impl Rail {
     /// identical ones. A workspace with no name of its own (`/`, `~`) is
     /// spelled as it is.
     pub fn title(&self) -> String {
-        std::path::Path::new(&self.launch.workspace)
-            .file_name()
-            .map(|name| name.to_string_lossy().to_string())
-            .unwrap_or_else(|| self.launch.workspace.clone())
+        // The rule is the encoder's, so batch mode's title and the frame's
+        // cannot come out differently for one workspace.
+        sindri_core::status::title(std::path::Path::new(&self.launch.workspace)).into_owned()
     }
 
     /// What the launch established: the facts the rail states and the first

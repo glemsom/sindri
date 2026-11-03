@@ -12,6 +12,7 @@ mod opener;
 mod sandbox;
 mod sessions;
 mod signal;
+mod status;
 mod verbose;
 
 use std::io::IsTerminal;

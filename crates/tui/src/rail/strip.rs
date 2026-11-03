@@ -162,6 +162,7 @@ mod tests {
             skills: Vec::new(),
             max_turns: 250,
             context_limit: Some(200_000),
+            status: true,
         })
         .facts(Duration::ZERO)
     }

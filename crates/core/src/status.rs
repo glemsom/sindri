@@ -16,6 +16,8 @@
 //! (`base64`), because a report's values and an OSC 52 copy's payload are the
 //! same spelling of the same fact and a second copy of it is the one that drifts.
 
+use std::borrow::Cow;
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use crate::agent::Stopped;
@@ -169,6 +171,18 @@ impl Doing {
             Doing::Open => "opening a target",
             Doing::Answer => "writing the answer",
         }
+    }
+}
+
+/// The `title` a run standing in `workspace` sends: the directory's own name
+/// and never its path, because a title is a label a terminal may put in a
+/// window border and a border has no room for `~/Documents/git/sindri`. A
+/// workspace with no name of its own (`/`, `~`) is spelled as it is: four runs in
+/// four workspaces are four labelled records rather than four identical ones.
+pub fn title(workspace: &Path) -> Cow<'_, str> {
+    match workspace.file_name() {
+        Some(name) => name.to_string_lossy(),
+        None => workspace.to_string_lossy(),
     }
 }
 

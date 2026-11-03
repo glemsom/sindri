@@ -184,13 +184,15 @@ fn value(settings: &Settings, field: &Field) -> (String, Style) {
             "•••• set in the file (values hidden)".to_string(),
             theme::faint(),
         ),
-        // A toggle the file does not name is the run's own default,
-        // which is off, and says so rather than pretending
-        // the file said it.
+        // A toggle the file does not name says so rather than pretending the
+        // file said it, and `thinking` names the default it falls back to: off.
         Key::Thinking if typed.is_empty() => {
             (format!("{} (default)", toggle_shown(typed)), theme::plain())
         }
-        Key::Thinking => (toggle_shown(typed).to_string(), theme::plain()),
+        // The reports are on unless something silences them, so the row states
+        // the default it is running on.
+        Key::Status if typed.is_empty() => ("on (default)".to_string(), theme::plain()),
+        Key::Thinking | Key::Status => (toggle_shown(typed).to_string(), theme::plain()),
         _ if field.key.secret() && !typed.is_empty() => (
             "•••• (will be written to the file)".to_string(),
             theme::faint(),

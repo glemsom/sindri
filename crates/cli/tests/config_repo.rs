@@ -21,7 +21,7 @@ use common::{Env, stderr, stdout};
 
 /// How many rows down the settings modal's `extra_writable_paths` field sits
 /// from where it opens: the schema's order, which the modal draws.
-const SETTINGS_EXTRAS_ROW: usize = 7;
+const SETTINGS_EXTRAS_ROW: usize = 8;
 
 fn extra(env: &Env) -> std::path::PathBuf {
     let dir = env.workspace.parent().expect("root").join("repo-grant");

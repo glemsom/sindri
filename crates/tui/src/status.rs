@@ -20,16 +20,18 @@ use sindri_core::status::{self, State, Told};
 /// the stdout the frame drew on.
 pub(crate) struct Channel {
     title: String,
-    told: Told,
+    /// The gate, or `None` where the setting silenced the reports: a run whose
+    /// human asked for none says nothing and clears nothing.
+    told: Option<Told>,
     out: Box<dyn Write + Send>,
 }
 
 impl Channel {
     /// The frame's own stdout: the screen the reports are about is on it.
-    pub(crate) fn stdout(title: String) -> Channel {
+    pub(crate) fn stdout(title: String, wanted: bool) -> Channel {
         Channel {
             title,
-            told: Told::new(),
+            told: wanted.then(Told::new),
             out: Box::new(std::io::stdout()),
         }
     }
@@ -38,7 +40,10 @@ impl Channel {
     /// changed since the last report: `state` is the frame's own reading of
     /// itself, made once per frame.
     pub(crate) fn say(&mut self, state: &State, now: Instant) {
-        if let Some(bytes) = self.told.next(state, &self.title, now) {
+        let Some(told) = &mut self.told else {
+            return;
+        };
+        if let Some(bytes) = told.next(state, &self.title, now) {
             self.write(&bytes);
         }
     }
@@ -48,13 +53,16 @@ impl Channel {
     /// the last report's second would never be said: this is what keeps the
     /// clock running for it.
     pub(crate) fn owes(&self, state: &State) -> bool {
-        self.told.owed(state)
+        self.told.as_ref().is_some_and(|told| told.owed(state))
     }
 
     /// Takes the frame's record away. `done` and `error` survive a shell prompt
     /// by design; the frame's own record must not outlive the frame in a tab
     /// that has moved on, so this goes out before the alternate screen is left.
     pub(crate) fn clear(&mut self) {
+        if self.told.is_none() {
+            return;
+        }
         if let Some(bytes) = status::clear(&self.title) {
             self.write(&bytes);
         }

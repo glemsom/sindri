@@ -310,7 +310,7 @@ impl Settings {
 
     pub fn flip(&mut self) -> bool {
         let on = match self.fields.get(self.chosen) {
-            Some(field) if field.key == Key::Thinking => toggle_shown(&field.text) == "on",
+            Some(field) if field.key.toggled() => toggle_shown(&field.text) == "on",
             _ => return false,
         };
         let text = if on { "false" } else { "true" }.to_string();

@@ -51,6 +51,7 @@ fn every_key_the_schema_names_is_written_and_reads_back() {
         (Key::MaxTurns, "40"),
         (Key::Timeout, "90"),
         (Key::Thinking, "true"),
+        (Key::Status, "true"),
         (Key::ExtraWritablePaths, "/usr/share"),
         (Key::ExtraHeaders, "x-session: gateway, x-route: other"),
     ];
@@ -273,13 +274,13 @@ fn every_key_the_form_offers_is_one_the_file_can_carry() {
             key.name()
         );
     }
-    assert_eq!(KEYS.len(), 9, "the schema's keys, and no more");
+    assert_eq!(KEYS.len(), 10, "the schema's keys, and no more");
 }
 
 #[test]
 fn every_key_can_be_set_shown_and_cleared() {
-    // One case per key, so a tenth key added to the schema without an arm in
-    // the document is a failure here rather than a field that does nothing.
+    // One case per key, so a key added to the schema without an arm in the
+    // document is a failure here rather than a field that does nothing.
     let (_dir, path, mut document) = document(None);
     let values = [
         (Key::Provider, "anthropic"),
@@ -289,6 +290,7 @@ fn every_key_can_be_set_shown_and_cleared() {
         (Key::MaxTurns, "2"),
         (Key::Timeout, "3"),
         (Key::Thinking, "true"),
+        (Key::Status, "true"),
         (Key::ExtraWritablePaths, "/usr/share"),
         (Key::ExtraHeaders, "x-one: 1"),
     ];
@@ -390,7 +392,7 @@ fn every_key_the_file_carries_is_a_key_the_form_offers() {
         .collect();
 
     assert!(
-        fields.len() >= 9,
+        fields.len() >= KEYS.len(),
         "the scan found the file's fields: {fields:?}"
     );
     for field in &fields {

@@ -95,6 +95,7 @@ pub fn config(extras: &[&Path]) -> Config {
         max_turns: 8,
         timeout: Duration::from_secs(30),
         thinking: false,
+        status: true,
         extra_writable: extras.iter().map(|path| path.to_path_buf()).collect(),
         enforcement: Enforcement::Bubblewrap,
         extra_headers: Vec::new(),

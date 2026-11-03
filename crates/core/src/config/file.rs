@@ -31,6 +31,8 @@ pub(super) struct FileConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) thinking: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) status: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) extra_writable_paths: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) extra_headers: Option<BTreeMap<String, String>>,

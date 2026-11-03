@@ -72,16 +72,33 @@ pub fn spawn_with_stderr(env: &Env, pty: &Pty, vars: &[(&str, &str)], file: &Pat
     opened(env, pty, vars, Some(file))
 }
 
-fn opened(env: &Env, pty: &Pty, vars: &[(&str, &str)], stderr: Option<&Path>) -> Child {
+/// The same, with the run's answer kept in a pipe and its stderr on the
+/// terminal: batch mode's stdout is a contract a test reads byte for byte, and
+/// its status reports go to the pty beside it.
+pub fn spawn_with_answer_piped(
+    env: &Env,
+    pty: &Pty,
+    args: &[&str],
+    vars: &[(&str, &str)],
+) -> Child {
+    let mut command = attached(env, args, vars);
+    command
+        .stdin(Stdio::from(pty.slave.try_clone().expect("a pty slave")))
+        .stdout(Stdio::piped())
+        .stderr(Stdio::from(pty.slave.try_clone().expect("a pty slave")));
+    command.spawn().expect("spawn sindri on a terminal")
+}
+
+/// A child of `env`, running `args`, about to become a process of a terminal:
+/// nothing of the host's environment, and a session of its own whose
+/// controlling terminal is the pty its stdin is.
+fn attached(env: &Env, args: &[&str], vars: &[(&str, &str)]) -> std::process::Command {
     let mut command = env.command();
-    let said = match stderr {
-        Some(file) => Stdio::from(File::create(file).expect("a file for the frame's stderr")),
-        None => Stdio::from(pty.slave.try_clone().expect("a pty slave")),
-    };
-    // The frame asks the terminal it is attached to how big it is, and a process
+    command.args(args);
+    // The run asks the terminal it is attached to how big it is, and a process
     // without a controlling terminal is told about whatever terminal the test
     // runner happens to have. A terminal emulator attaches its child to the pty
-    // it opened, so this does too: the pty's size is the frame's size.
+    // it opened, so this does too: the pty's size is the run's size.
     // SAFETY: `setsid` and `TIOCSCTTY` touch nothing but the child's own
     // session, and fd 0 is the pty's slave by the time they run.
     unsafe {
@@ -94,7 +111,17 @@ fn opened(env: &Env, pty: &Pty, vars: &[(&str, &str)], stderr: Option<&Path>) ->
     }
     command
         .env("TERM", "xterm-256color")
-        .envs(vars.iter().copied())
+        .envs(vars.iter().copied());
+    command
+}
+
+fn opened(env: &Env, pty: &Pty, vars: &[(&str, &str)], stderr: Option<&Path>) -> Child {
+    let said = match stderr {
+        Some(file) => Stdio::from(File::create(file).expect("a file for the frame's stderr")),
+        None => Stdio::from(pty.slave.try_clone().expect("a pty slave")),
+    };
+    let mut command = attached(env, &[], vars);
+    command
         .stdin(Stdio::from(pty.slave.try_clone().expect("a pty slave")))
         .stdout(Stdio::from(pty.slave.try_clone().expect("a pty slave")))
         .stderr(said);

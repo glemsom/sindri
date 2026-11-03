@@ -24,12 +24,13 @@ pub enum Key {
     MaxTurns,
     Timeout,
     Thinking,
+    Status,
     ExtraWritablePaths,
     ExtraHeaders,
 }
 
 /// How many keys there are: the table's length, and the modal's.
-const N_KEYS: usize = 9;
+const N_KEYS: usize = 10;
 
 pub const KEYS: [Key; N_KEYS] = keys();
 
@@ -46,13 +47,17 @@ const fn keys() -> [Key; N_KEYS] {
 }
 
 /// One key as the form sees it: what it is called, whether its value is a
-/// secret, what its field starts with, and how the file carries it.
+/// secret or a toggle, what its field starts with, and how the file carries it.
 struct Spec {
     key: Key,
     name: &'static str,
     /// A secret is never handed back to the reader, so no front end can print
     /// one by accident. Its `get` says only that the file holds one.
     secret: bool,
+    /// A toggle is a key whose value is one of two words, so the form offers
+    /// `Space` on it and says which of them the field means: the row and the
+    /// keypress read the one flag rather than a second list of the toggles.
+    toggled: bool,
     /// The text a field starts with, whatever the file says: the run's own
     /// default, which is nothing for every key.
     start: fn() -> String,
@@ -70,6 +75,7 @@ const SPECS: [Spec; N_KEYS] = [
         key: Key::Provider,
         name: "provider",
         secret: false,
+        toggled: false,
         start: || String::new(),
         get: |values| values.provider.clone(),
         clear: |values| values.provider = None,
@@ -82,6 +88,7 @@ const SPECS: [Spec; N_KEYS] = [
         key: Key::Model,
         name: "model",
         secret: false,
+        toggled: false,
         start: || String::new(),
         get: |values| values.model.clone(),
         clear: |values| values.model = None,
@@ -94,6 +101,7 @@ const SPECS: [Spec; N_KEYS] = [
         key: Key::BaseUrl,
         name: "base_url",
         secret: false,
+        toggled: false,
         start: || String::new(),
         get: |values| values.base_url.clone(),
         clear: |values| values.base_url = None,
@@ -106,6 +114,7 @@ const SPECS: [Spec; N_KEYS] = [
         key: Key::ApiKey,
         name: "api_key",
         secret: true,
+        toggled: false,
         start: || String::new(),
         get: |values| values.api_key.as_ref().map(|_| String::new()),
         clear: |values| values.api_key = None,
@@ -118,6 +127,7 @@ const SPECS: [Spec; N_KEYS] = [
         key: Key::MaxTurns,
         name: "max_turns",
         secret: false,
+        toggled: false,
         start: || String::new(),
         get: |values| values.max_turns.map(|turns| turns.to_string()),
         clear: |values| values.max_turns = None,
@@ -130,6 +140,7 @@ const SPECS: [Spec; N_KEYS] = [
         key: Key::Timeout,
         name: "timeout",
         secret: false,
+        toggled: false,
         start: || String::new(),
         get: |values| values.timeout.map(|seconds| seconds.to_string()),
         clear: |values| values.timeout = None,
@@ -142,6 +153,7 @@ const SPECS: [Spec; N_KEYS] = [
         key: Key::Thinking,
         name: "thinking",
         secret: false,
+        toggled: true,
         start: || String::new(),
         get: |values| values.thinking.map(|on| on.to_string()),
         clear: |values| values.thinking = None,
@@ -151,9 +163,23 @@ const SPECS: [Spec; N_KEYS] = [
         },
     },
     Spec {
+        key: Key::Status,
+        name: "status",
+        secret: false,
+        toggled: true,
+        start: || String::new(),
+        get: |values| values.status.map(|on| on.to_string()),
+        clear: |values| values.status = None,
+        put: |values, value| {
+            values.status = Some(toggle(value)?);
+            Ok(())
+        },
+    },
+    Spec {
         key: Key::ExtraWritablePaths,
         name: "extra_writable_paths",
         secret: false,
+        toggled: false,
         start: || String::new(),
         get: |values| {
             values
@@ -176,6 +202,7 @@ const SPECS: [Spec; N_KEYS] = [
         key: Key::ExtraHeaders,
         name: "extra_headers",
         secret: true,
+        toggled: false,
         start: || String::new(),
         get: |values| {
             values
@@ -222,6 +249,12 @@ impl Key {
     /// reader, so no front end can print one by accident.
     pub fn secret(self) -> bool {
         self.spec().secret
+    }
+
+    /// Whether the value is one of two words, so `Space` flips it and the form
+    /// says which of them the field means. The row is the only list of them.
+    pub fn toggled(self) -> bool {
+        self.spec().toggled
     }
 }
 

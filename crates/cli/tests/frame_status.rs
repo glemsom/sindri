@@ -374,3 +374,39 @@ fn a_report_is_never_said_twice_and_never_twice_inside_a_second() {
     );
     assert!(working >= 1, "the run said it was working: {bodies:?}");
 }
+
+#[test]
+fn the_setting_silences_every_report_a_frame_would_say() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: a silenced frame is not tested here");
+        return;
+    };
+    let env = Env::new();
+    let mock = MockProvider::start(vec![Reply::answer("the answer")]);
+    // One keyword in the file every front end reads, and the frame says nothing:
+    // not a report while it runs, and not a `clear` on the way out either.
+    write_config(&env, &format!("{}status = false\n", config_for(&mock)));
+    let base_url = mock.base_url();
+    let mut child = spawn(
+        &env,
+        &pty,
+        &[
+            ("SINDRI_API_KEY", TEST_KEY),
+            ("SINDRI_BASE_URL", base_url.as_str()),
+        ],
+    );
+
+    expect(&pty, &mut child, "cache");
+    type_line(&pty, "what changed?");
+    pty.wait_for(&mut child, "the answer");
+    pty.listening(&mut child, Duration::from_millis(1300));
+    let (code, _) = pty.quit(&mut child);
+
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+    assert_eq!(
+        states(&pty),
+        Vec::<String>::new(),
+        "the switch silences the frame as it silences batch mode: {:?}",
+        bodies(&pty)
+    );
+}

@@ -27,6 +27,9 @@ assert_cmd = "2"
 predicates = "3"
 tempfile = "3"
 sindri-harness.workspace = true
+# A report's message is base64 on the wire, so the test that reads its words
+# undoes the alphabet the encoder wrote it in rather than matching a encoding.
+base64.workspace = true
 # The listing tests measure a row in cells to prove one row is no wider than
 # the column: the column itself is cut by `sindri-tui`, so no line of the
 # binary's own measures one.

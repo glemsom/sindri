@@ -169,7 +169,7 @@ fn session(
     let title = app.rail.title();
     let mut screen = Screen {
         terminal,
-        reports: Channel::stdout(title),
+        reports: Channel::stdout(title, app.rail.launch().status),
     };
     let mut painted = screen.show(&mut app);
     while painted {

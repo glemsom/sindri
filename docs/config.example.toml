@@ -1,6 +1,6 @@
 # $XDG_CONFIG_HOME/sindri/config.toml — the one file Sindri reads.
 #
-# Two keys are required and the other seven have a default: a run cannot start
+# Two keys are required and the other eight have a default: a run cannot start
 # without `model`, nor without `api_key` on a wire that wants a credential —
 # `anthropic`, the default — where the provider's own environment variable will
 # do in its place. Every key, required or not, can be set without editing this
@@ -34,6 +34,12 @@ base_url = "https://api.anthropic.com"
 # Whether to pay for the model's reasoning. Optional, and off by default,
 # because cheap tasks should stay cheap.
 thinking = false
+
+# Whether the run tells its terminal what it is doing, with one `OSC 7501`
+# report per moment: a state, a coarse line of our own words, and the name of the
+# workspace. On by default. Never stdout: batch mode's answer is the only thing
+# there, and a stderr that is not a terminal is written nothing at all.
+status = true
 
 # Extra directories mounted read-write inside the sandbox, besides the
 # workspace and the session temp. Optional, since those two are already

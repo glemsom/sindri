@@ -138,7 +138,10 @@ report is a channel no redaction in the record guards. A frame that leaves its s
 first, which is not one of the five: `done` and `error` outlive a shell prompt by design, and the
 frame's own record must not outlive the frame. `status::clear` is that report, and `status::Told`
 is the gate both front ends share — a state the terminal has already been told is not said again,
-and none is said twice in a second.
+and none is said twice in a second. One setting silences every report — `status` in the config,
+`SINDRI_STATUS` over it — and both front ends read it there: a courtesy is the human's to decline,
+once.
+
 
 ## Skills
 

@@ -109,6 +109,7 @@ mod tests {
             max_turns: 3,
             timeout: Duration::from_secs(5),
             thinking: false,
+            status: true,
             extra_writable: Vec::new(),
             enforcement: Enforcement::Bubblewrap,
             extra_headers: Vec::new(),

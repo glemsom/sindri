@@ -54,6 +54,10 @@ pub struct Config {
     pub max_turns: u32,
     pub timeout: Duration,
     pub thinking: bool,
+    /// Whether a run tells its terminal what it is doing: on unless the file or
+    /// the environment silences it, because one switch has to reach both front
+    /// ends and a per-front-end flag would be two.
+    pub status: bool,
     pub extra_writable: Vec<PathBuf>,
     /// The policy the session starts with, and the one its record states.
     pub enforcement: Enforcement,
@@ -186,6 +190,8 @@ impl Config {
             .or(file.thinking)
             .unwrap_or(false);
 
+        let status = boolean("SINDRI_STATUS")?.or(file.status).unwrap_or(true);
+
         let extra_writable = extras(overrides.writable, file.extra_writable_paths)?;
         let extra_headers = headers::resolve(overrides.extra_headers, file.extra_headers)?;
 
@@ -204,6 +210,7 @@ impl Config {
             max_turns,
             timeout,
             thinking,
+            status,
             extra_writable,
             enforcement,
             extra_headers,

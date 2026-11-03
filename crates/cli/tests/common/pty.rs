@@ -26,7 +26,9 @@ mod spawn;
     unused_imports,
     reason = "each test binary uses a different slice of the harness"
 )]
-pub use spawn::{Said, exit, expect, spawn, spawn_with_stderr, type_command, type_line};
+pub use spawn::{
+    Said, exit, expect, spawn, spawn_with_answer_piped, spawn_with_stderr, type_command, type_line,
+};
 
 /// The escape sequence that enters the alternate screen: the frame's first act.
 pub const ALTERNATE_SCREEN: &str = "\u{1b}[?1049h";

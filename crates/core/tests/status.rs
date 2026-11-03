@@ -4,11 +4,12 @@
 //! past the specification's ceiling is a report that says nothing — proven here
 //! at the encoder, which is the only place the rule is enforced.
 
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use sindri_core::agent::Stopped;
 use sindri_core::provider::Asked;
-use sindri_core::status::{Doing, State, Told, base64, clear, report};
+use sindri_core::status::{Doing, State, Told, base64, clear, report, title};
 
 /// The workspace's own name, as the rail spells it: the report's `title`.
 const TITLE: &str = "sindri";
@@ -334,4 +335,18 @@ fn a_tool_call_is_what_the_run_says_it_is_doing() {
     }
     assert_eq!(Doing::Answer.as_str(), "writing the answer");
     assert_eq!(Doing::Thinking.as_str(), "thinking");
+}
+
+#[test]
+fn a_title_is_the_workspaces_own_name_and_never_its_path() {
+    assert_eq!(
+        title(Path::new("/home/glemsom/Documents/git/sindri")),
+        "sindri",
+        "a title is a label a terminal may put in a window border"
+    );
+    assert_eq!(
+        title(Path::new("/")),
+        "/",
+        "a workspace with no name of its own is spelled as it is"
+    );
 }

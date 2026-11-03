@@ -63,6 +63,12 @@ $ cat notes.md | sindri -b
 Piped stdin is context appended after the prompt; with no prompt argument stdin is the
 prompt, and a pipe without `-b` is refused. `-v` puts the run on stderr.
 
+Where stderr is a terminal, a batch run also says what it is doing while it works: `OSC 7501`
+reports carrying `working` and then `done` — or `error`, or `idle` for an interrupt — with one
+coarse line of its own words, the turn count and the name of the workspace. They go to stderr
+and never to stdout, so a script reads the answer it always did, and a stderr that is a file or
+a pipe is written nothing at all. `status = false`, or `SINDRI_STATUS=off`, silences them.
+
 | Exit | Meaning | Exit | Meaning |
 | --- | --- | --- | --- |
 | `0` | an answer | `100` | turn cap |
@@ -203,6 +209,7 @@ One file, `$XDG_CONFIG_HOME/sindri/config.toml` (example:
 | Extra request headers | `extra_headers` (table) | `SINDRI_EXTRA_HEADERS` (`Name: value` lines) | `--header` (repeatable) |
 | Turn cap | `max_turns` | `SINDRI_MAX_TURNS` | `--max-turns` |
 | Command timeout | `timeout` | `SINDRI_TIMEOUT` | `--timeout` |
+| Terminal reports | `status` | `SINDRI_STATUS` | — |
 
 `--yolo-unsafe` is the one flag with no file key and no environment variable: a run
 that leaves the sandbox is asked for in the invocation that makes it and dies with that

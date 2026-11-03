@@ -47,6 +47,7 @@ pub fn launch() -> Launch {
         model: "claude-sonnet-4-6".to_string(),
         max_turns: 250,
         context_limit: Some(200_000),
+        status: true,
     }
 }
 

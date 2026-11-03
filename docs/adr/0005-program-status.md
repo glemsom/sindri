@@ -146,6 +146,26 @@ not left to a front end: a state the terminal has already been told is not said 
 is said twice inside a second — a report the second withholds is one the loop is told it owes, so
 it is said late and never lost.
 
+## 8. One switch, read where both front ends read the config
+
+A report is a courtesy to a human, and a human may not want it: a terminal whose own title bar
+already names the repository, a capture a report would only litter, a machine whose scrollback is a
+log somebody greps. So there is one setting that silences every report, and it is the config's own
+— `status`, `SINDRI_STATUS` above the file, `true` unless either says otherwise. It is offered in
+`/settings` like every other key of the schema, and each front end reads it where it stands: batch
+mode's `Reports` takes it as the switch on its channel, and the frame carries it on its `Launch`,
+where a run's own facts already are, so `Channel` has no gate and writes nothing at all.
+
+Not a switch per front end. Batch mode's `-b` and the frame's bare invocation would then spell one
+decision twice, and the day they disagree is the day a user who silenced the reports finds one of
+them still talking. There is no flag either: a flag would be a third spelling, and the precedence
+the config already states — file, then environment, then flags — is a rule about the values a run
+cannot ask twice, not a place to put a courtesy.
+
+The setting does not decide the channel: stderr that is not a terminal is written nothing at all,
+whatever the setting says (§7), because the setting is a human's preference about what they see and
+a file is not a human.
+
 ## The alternative that lost
 
 Leave the terminal alone, since the frame already draws a **pulse**: a braille marker at the
