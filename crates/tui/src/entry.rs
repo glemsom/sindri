@@ -249,17 +249,6 @@ impl Entry {
         }
     }
 
-    /// The text of a thought, where this entry is one a reader can open over
-    /// the frame: what `Ctrl-R` hands the overlay. It is `None` for every other
-    /// entry, and for a thought whose text is blank — there is nothing to
-    /// read.
-    pub fn thought(&self) -> Option<&str> {
-        match self {
-            Entry::Reasoning { text, .. } if !text.trim().is_empty() => Some(text),
-            _ => None,
-        }
-    }
-
     /// Opens what is folded, folds what is open, and says whether it found
     /// anything to do it to.
     pub fn toggle(&mut self) -> bool {

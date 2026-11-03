@@ -50,10 +50,6 @@ impl App {
                 self.open_spill();
                 true
             }
-            KeyCode::Char('r') if ctrl => {
-                self.open_reasoning();
-                true
-            }
             KeyCode::Char('x') if ctrl => self.drop_queued(),
             KeyCode::Char('g') if ctrl => {
                 self.copy_session_id();
@@ -184,9 +180,6 @@ impl App {
             Some(Overlay::Help(help)) => help.page(self.window.page, up),
             Some(Overlay::Settings(settings)) => settings.page(self.window.page, up),
             Some(Overlay::Spill(spill)) => spill.scroll.page_by(self.window.page, up),
-            Some(Overlay::Reasoning(reasoning)) => {
-                reasoning.scroll.page_by(self.window.page, up);
-            }
             None => self.scroll_by(self.window.page, up),
         }
     }

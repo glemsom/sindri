@@ -1,4 +1,4 @@
-//! Opening a call in place, and a thought over the frame.
+//! Opening a call in place.
 //! The frame has no cursor of its own: `Enter` on an empty composer means the
 //! entry the reader last touched — or, if they have touched none, the newest
 //! one they can open — and a click means the entry whose row it landed on.
@@ -8,8 +8,7 @@
 //!
 //! A thought is not one of them: the whole of it is a row of the thread, so
 //! `Enter` and a click have nothing to open in it and no row of it moves for a
-//! keystroke. What a thought has is the overlay `Ctrl-R` puts over the frame,
-//! which is the reader's view of text the frame already gave them.
+//! keystroke.
 //!
 //! An entry is what this opens, and a diagram is not one: it is a block inside
 //! an answer's entry, one of however many that answer holds. Opening it in place
@@ -20,13 +19,12 @@
 
 use crate::app::App;
 use crate::entry::Entry;
-use crate::overlay::{Overlay, Reasoning};
 use crate::window::Ask;
 
 impl App {
     /// The entry a key that opens something means: the one the reader last
     /// touched, where there is something in it to open, or the newest one there
-    /// is. `Enter` and `Ctrl-R` both ask this and neither spells the rule again.
+    /// is.
     fn target(&self, openable: fn(&Entry) -> bool) -> Option<usize> {
         self.chosen
             .filter(|index| self.thread.get(*index).is_some_and(openable))
@@ -44,23 +42,6 @@ impl App {
             }
             None => false,
         }
-    }
-
-    /// `Ctrl-R`: a thought's text, opened over the frame and pageable, which is
-    /// the reader's rather than the run's. The entry is `target`'s, so the key
-    /// opens the one the reader last touched where it can, and the newest one
-    /// otherwise.
-    pub(crate) fn open_reasoning(&mut self) {
-        let Some(index) = self.target(|entry| entry.thought().is_some()) else {
-            self.note_info("no thought in this session to open");
-            return;
-        };
-        let Some(text) = self.thread.get(index).and_then(Entry::thought) else {
-            return;
-        };
-        let text = text.to_string();
-        self.chosen = Some(index);
-        self.show(Overlay::Reasoning(Reasoning::of(&text)));
     }
 
     /// A click on an entry's own row: that entry, open or folded, as the row

@@ -190,6 +190,41 @@ fn a_thought_has_nothing_folded_away_so_no_key_moves_a_row_of_it() {
 }
 
 #[test]
+fn a_click_on_a_thought_opens_nothing_and_takes_no_row_of_it() {
+    let mut app = app();
+    app.event(Event::Reasoning {
+        turn: 1,
+        text: "First I read the failing test.\nThen I changed the parser.".to_string(),
+    });
+    let written = screen(&mut app, 100, 20);
+    let row = written
+        .iter()
+        .position(|row| row.contains("Then I changed the parser."))
+        .expect("the thought's own rows are on screen");
+
+    click(&mut app, row);
+    app.mouse(MouseEvent {
+        kind: MouseEventKind::Up(MouseButton::Left),
+        column: 4,
+        row: row as u16,
+        modifiers: KeyModifiers::NONE,
+    });
+    let after = screen(&mut app, 100, 20);
+    assert_eq!(
+        after, written,
+        "a click on a thought opens nothing and moves no row: {after:#?}"
+    );
+    assert!(
+        app.selection().is_empty(),
+        "and a click that dragged nowhere leaves no mark"
+    );
+    assert!(
+        calls(&app).is_empty(),
+        "and it opens no call: the row it landed on is not one"
+    );
+}
+
+#[test]
 fn a_call_that_produced_no_spill_is_still_expandable() {
     let mut app = app();
     call_with(&mut app, 1, "cargo test", 3);

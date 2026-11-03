@@ -235,7 +235,7 @@ fn plain_clears_four_and_a_half_to_one_on_the_fill_a_diagram_hands_a_renderer() 
 
 /// A thought is read at the contrast the frame holds every other block to, on
 /// every surface one is drawn on: the canvas its rows are written on, and the
-/// raised tier the frame raises a box over. That is the law the
+/// panel and the wash a mark leaves over them. That is the law the
 /// `FAINT` it used to be drawn in was held to, and the thought's ink inherits
 /// it rather than being eyeballed.
 #[test]
@@ -244,7 +244,7 @@ fn the_thoughts_ink_clears_four_and_a_half_to_one_wherever_a_thought_is_drawn() 
         theme::PALETTE.contains(&theme::THOUGHT),
         "a thought is painted in a colour the theme names"
     );
-    for surface in [theme::CANVAS, theme::PANEL, theme::RAISED, theme::MARK] {
+    for surface in [theme::CANVAS, theme::PANEL, theme::MARK] {
         let cleared = ratio(theme::THOUGHT, surface);
         assert!(
             cleared >= 4.5,

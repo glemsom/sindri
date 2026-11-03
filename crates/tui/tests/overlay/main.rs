@@ -1,8 +1,7 @@
 //! The overlays own their space: the help list
 //! wraps a description, sizes its box from the wrapped rows and scrolls
-//! itself, the settings modal keeps its refusal and its keys on screen when the
-//! list of rows does not fit, and a finished thought's whole text is a box the
-//! frame's own page keys move. Every fixture points the frame at a temporary
+//! itself, and the settings modal keeps its refusal and its keys on screen when
+//! the list of rows does not fit. Every fixture points the frame at a temporary
 //! config path, or at a thread it built itself.
 
 #![allow(
@@ -13,13 +12,13 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-pub use common::{any, launch, press, row_of, screen, shown, type_text};
+pub use common::{any, launch, press, screen, shown, type_text};
 use std::path::PathBuf;
 
-use crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyCode, KeyModifiers, MouseEvent, MouseEventKind};
 use sindri_core::agent::Event;
 use sindri_core::config::{KEYS, Key};
-use sindri_tui::overlay::{BINDINGS, Overlay, help_rows};
+use sindri_tui::overlay::{BINDINGS, help_rows};
 use sindri_tui::{App, Launch};
 use tempfile::TempDir;
 
@@ -334,127 +333,34 @@ fn the_modal_scrolls_to_a_chosen_row_past_the_fold_and_keeps_it_on_screen() {
     );
 }
 
-/// A finished thought of forty numbered lines: longer than any box these tests
-/// draw, so a page key has somewhere to move to. The lines are numbered from
-/// one with a leading zero, so a test that names one cannot match another.
+/// A thought of forty numbered lines: more than the screen these tests draw, so
+/// a key that re-flowed the transcript would show it. The lines are numbered
+/// from one with a leading zero, so a test that names one cannot match another.
 fn a_long_thought() -> String {
     (1..=40).map(|n| format!("thought {n:02}\n")).collect()
 }
 
 #[test]
-fn ctrl_r_opens_the_newest_thought_whole_and_esc_closes_it() {
+fn ctrl_r_opens_nothing_and_the_thread_is_the_frame_it_was() {
     let mut app = app();
     app.event(Event::Reasoning {
         turn: 1,
-        text: "an older thought\n".to_string(),
-    });
-    app.event(Event::Reasoning {
-        turn: 2,
         text: a_long_thought(),
     });
     let thread = screen(&mut app, 100, 24);
     assert!(
         any(&thread, "thought 40"),
-        "the newest thought is a row of the thread already: {thread:#?}"
+        "the newest thought is a row of the thread: {thread:#?}"
     );
 
     press(&mut app, KeyCode::Char('r'), KeyModifiers::CONTROL);
     assert!(
-        app.overlay().is_some(),
-        "Ctrl-R opens the whole of a finished thought over the frame"
+        app.overlay().is_none(),
+        "Ctrl-R is a free key: it opens nothing over the frame"
     );
-    let rows = screen(&mut app, 100, 24);
-    assert!(
-        any(&rows, "thought 01"),
-        "on the newest thought's own text: {rows:#?}"
-    );
-    assert!(
-        !any(&rows, "an older thought"),
-        "and not the one before it: {rows:#?}"
-    );
-
-    press(&mut app, KeyCode::PageDown, KeyModifiers::NONE);
-    let down = screen(&mut app, 100, 24);
-    assert!(
-        any(&down, "thought 40") && !any(&down, "thought 01"),
-        "the page keys move the box by its screenful: {down:#?}"
-    );
-    press(&mut app, KeyCode::PageUp, KeyModifiers::NONE);
-    assert!(
-        any(&screen(&mut app, 100, 24), "thought 01"),
-        "and back to the head of the thought: {:#?}",
-        screen(&mut app, 100, 24)
-    );
-    wheel(&mut app, MouseEventKind::ScrollDown);
-    assert!(
-        !any(&screen(&mut app, 100, 24), "thought 01"),
-        "the wheel moves the same box the keys do"
-    );
-
-    press(&mut app, KeyCode::Esc, KeyModifiers::NONE);
-    assert!(app.overlay().is_none(), "Esc closes it");
-    let back = screen(&mut app, 100, 24);
-    assert!(
-        any(&back, "thought 40") && !any(&back, "thought 01"),
-        "and the frame beneath is the thread it was, its thought still in it: {back:#?}"
-    );
-
-    // `Ctrl-R` is a second way to read text the frame already gives, and never
-    // the only one: a thought is a row of the thread and has nothing to open,
-    // so `Enter` neither folds it nor takes a row away.
-    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
-    let kept = screen(&mut app, 100, 24);
-    assert!(
-        any(&kept, "thought 40"),
-        "Enter opens nothing and takes nothing away: {kept:#?}"
-    );
-}
-
-#[test]
-fn a_click_on_a_thought_marks_it_and_ctrl_r_opens_the_newest() {
-    let mut app = app();
-    app.event(Event::Reasoning {
-        turn: 1,
-        text: "an older thought\n".to_string(),
-    });
-    app.event(Event::Reasoning {
-        turn: 2,
-        text: "the newer thought\n".to_string(),
-    });
-    // A thought is a row of the thread, so a click on it starts a mark as one on
-    // an answer does: nothing folds, nothing is chosen, and `Ctrl-R` opens the
-    // newest thought there is rather than one the reader touched.
-    let rows = screen(&mut app, 100, 24);
-    let older = row_of(&rows, "an older thought");
-    app.mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: 4,
-        row: older as u16,
-        modifiers: KeyModifiers::NONE,
-    });
-    app.mouse(MouseEvent {
-        kind: MouseEventKind::Drag(MouseButton::Left),
-        column: 20,
-        row: older as u16,
-        modifiers: KeyModifiers::NONE,
-    });
-    assert!(
-        !app.selection().is_empty(),
-        "a drag over the thought's own row marks it, as it marks an answer's"
-    );
-    let marked = screen(&mut app, 100, 24);
-    assert!(
-        any(&marked, "an older thought") && any(&marked, "the newer thought"),
-        "and both thoughts stay where they were: {marked:#?}"
-    );
-
-    press(&mut app, KeyCode::Char('r'), KeyModifiers::CONTROL);
-    let Some(Overlay::Reasoning(boxed)) = app.overlay() else {
-        panic!("Ctrl-R opens a thought's box");
-    };
+    let after = screen(&mut app, 100, 24);
     assert_eq!(
-        boxed.lines,
-        vec!["the newer thought".to_string()],
-        "Ctrl-R opens the newest thought whole, and never the one marked"
+        after, thread,
+        "and no row of the transcript moved for it: {after:#?}"
     );
 }

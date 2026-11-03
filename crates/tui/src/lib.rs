@@ -11,7 +11,7 @@ pub mod composer; // the composer: the prompt being typed, as rows and a cursor
 pub mod copy; // copying text out of the frame
 pub mod driver; // the seam a front end implements
 pub mod entry; // one row of the transcript, and the state a tool call carries
-mod expand; // opening a call in place, and a thought over the frame
+mod expand; // opening a call in place
 pub mod export; // `/export`: the thread the frame is holding, written as markdown
 pub mod face; // the face of Sindri, where the terminal speaks Kitty
 pub mod graphics; // what this terminal can draw, and how big a cell it draws it in

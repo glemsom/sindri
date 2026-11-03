@@ -22,8 +22,8 @@ pub const PROMPT: Color = Color::Rgb(0x61, 0xaf, 0xef);
 /// A thought's ink: the one hue the frame spends on reasoning, and the ink a
 /// block of it is read in. The dimness that sets a thought below an answer is
 /// carried by this hue and by the gutter it hangs off, never by luminance
-/// alone: the body of a thought clears 5.7:1 on `RAISED` and 7.6:1 on the
-/// canvas its rows are written on, so it is read at the floor the frame holds
+/// alone: the body of a thought clears 7.6:1 on the canvas its rows are
+/// written on, so it is read at the floor the frame holds
 /// every other block to. It is a
 /// teal-grey — a hue of its own, a step off `PLAIN`'s and off every grey the
 /// frame already spends (`FAINT`, `COMMENT`, `LEADER`, `DIFF_FILE`, `SEAM`).
