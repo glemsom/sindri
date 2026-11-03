@@ -15,10 +15,11 @@ Single-context: `GLOSSARY.md` at the repo root. See `docs/agents/domain.md`.
 
 ## Ground rules for this POC
 
-Three records hold the decisions: `docs/adr/0001-llm-friendly-code.md` for how the code is
+Four records hold the decisions: `docs/adr/0001-llm-friendly-code.md` for how the code is
 written, `docs/adr/0002-two-tools.md` for the three tools and why neither `skill` nor `open`
-is a `bash` command, and `docs/adr/0004-built-in-skills.md` for the scope a skill is found
-in. `docs/adr/0003-a-third-tool-open.md` is superseded and points at 0002.
+is a `bash` command, `docs/adr/0004-built-in-skills.md` for the scope a skill is found in, and
+`docs/adr/0005-program-status.md` for what a run tells the terminal it is doing.
+`docs/adr/0003-a-third-tool-open.md` is superseded and points at 0002.
 
 - Linux only: Windows and macOS are never targets, so no cross-platform abstraction earns
   its keep.

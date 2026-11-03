@@ -491,3 +491,130 @@ fn the_readme_configuration_table_names_every_key_the_schema_holds() {
         );
     }
 }
+
+/// The program-status record, as committed: the mapping it states is
+/// `Stopped`'s, so the words it maps are read from the code rather than
+/// trusted to keep up.
+const PROGRAM_STATUS: &str = include_str!("../../../docs/adr/0005-program-status.md");
+
+/// The state one way of stopping reports, in the words the record uses.
+fn status_for(stopped: Stopped) -> &'static str {
+    match stopped {
+        Stopped::Final | Stopped::MaxTurns | Stopped::Budget => "done",
+        Stopped::Cancelled => "idle",
+        Stopped::Error => "error",
+    }
+}
+
+#[test]
+fn the_status_record_maps_every_word_the_loop_can_stop_in() {
+    for stopped in [
+        Stopped::Final,
+        Stopped::MaxTurns,
+        Stopped::Budget,
+        Stopped::Cancelled,
+        Stopped::Error,
+    ] {
+        let word = stop_word(stopped);
+        let state = status_for(stopped);
+        for quoted in [word, state] {
+            assert!(
+                PROGRAM_STATUS.contains(&format!("`{quoted}`")),
+                "`Stopped` spells `{word}`, which reports `{state}`, and the record \
+                 must carry both words: `{quoted}` is missing"
+            );
+        }
+    }
+    assert!(
+        PROGRAM_STATUS.contains("No `progress`"),
+        "the specification makes an absent `progress` mean indeterminate, and the \
+         record must refuse the key rather than leave a reader to add it"
+    );
+}
+
+#[test]
+fn the_status_record_names_the_encoder_and_the_file_each_front_end_writes_from() {
+    for named in [
+        "crates/core/src/status.rs",
+        "`status::report`",
+        "crates/tui/src/run.rs",
+        "crates/cli/src/batch.rs",
+        "`OSC 7501`",
+    ] {
+        assert!(
+            PROGRAM_STATUS.contains(named),
+            "the encoder and the two files that write from it are what a front end \
+             is handed, and the record must name {named:?}"
+        );
+    }
+    for refused in ["`OSC 7501 ; ?`", "`9;4`", "`blocked`", "`id=`"] {
+        assert!(
+            PROGRAM_STATUS.contains(refused),
+            "the report is unqueried, not `9;4`, never `blocked` and root-only, and \
+             the record must say so about {refused:?}"
+        );
+    }
+}
+
+#[test]
+fn the_glossary_carries_the_states_a_status_can_be() {
+    let status = entry("status");
+    for state in ["idle", "working", "done", "blocked", "error"] {
+        assert!(
+            status.contains(&format!("`{state}`")),
+            "the set of states is the specification's and it is closed, so the entry \
+             must carry `{state}`: {status:?}"
+        );
+    }
+    for named in [
+        "`sindri_core::status::State`",
+        "`status::report`",
+        "`app=sindri`",
+    ] {
+        assert!(
+            status.contains(named),
+            "the entry points at the word the code uses for it, so it must name \
+             {named:?}: {status:?}"
+        );
+    }
+}
+
+#[test]
+fn the_glossary_says_which_sense_of_record_is_which() {
+    let record = entry("record");
+    assert!(
+        record.contains("**status**") && record.contains("terminal"),
+        "the specification's *record* is what a terminal stores from a **status** \
+         report, and the entry for the older word must say so: {record:?}"
+    );
+    assert!(
+        record.contains("`agent::Report`"),
+        "`agent::Report` is the third sense of the word — what one run did — and the \
+         entry must name it: {record:?}"
+    );
+}
+
+#[test]
+fn a_glossary_entry_does_not_reuse_a_word_another_one_holds() {
+    let mut seen: Vec<String> = Vec::new();
+    for block in GLOSSARY.split("\n\n") {
+        let Some(rest) = block.strip_prefix("**") else {
+            continue;
+        };
+        let Some((word, _)) = rest.split_once("**") else {
+            continue;
+        };
+        assert!(
+            !seen.iter().any(|held| held == word),
+            "the glossary holds one entry per word, and `{word}` has two: a second \
+             meaning needs its own word, or the drift this file exists to stop"
+        );
+        seen.push(word.to_owned());
+    }
+    assert!(
+        seen.len() > 60,
+        "the scan reads the file it is pointed at, and `{}` entries is too few for \
+         that to be the glossary",
+        seen.len()
+    );
+}

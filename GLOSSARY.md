@@ -118,7 +118,9 @@ for the file is `Taken`, and its three answers are `Absent`, `Found` and `Unread
 **record** — the files one **session** leaves in that directory: what `sindri sessions
 show` and `/export` read, and what the frame never writes
 directly. A record is a session read back, not a second thing, and it is added to and
-never rewritten — except for the metadata it settles at its end.
+never rewritten — except for the metadata it settles at its end. Two other things go by that
+word and neither is this: the specification's *record* is what a terminal stores from a
+**status** report, and `agent::Report` is what one run did.
 
 **transcript** — the ordered history of messages, tool calls and tool results of a
 session.
@@ -158,6 +160,21 @@ silent unless `-v`, but for a fault the run cannot leave unsaid — a repository
 refused, an `AGENTS.md` it could not read; `--format json` changes the output shape.
 
 **reasoning** — provider-side thinking tokens, off by default, shown on stderr with `-v`.
+
+**status** — what a run tells the terminal it is doing: one `OSC 7501` report holding one of
+five states — `idle`, `working`, `done`, `blocked`, `error` — one coarse line of our own
+words, and the run's identity, `app=sindri` with the workspace's own name as `title`. The
+code's word for the set is `sindri_core::status::State`, and one report is made by the pure
+encoder `status::report`, which returns bytes and writes none: the writing belongs to whoever
+owns the tty, which is `crates/tui/src/run.rs` for the **frame** and `crates/cli/src/batch.rs`
+for batch mode's stderr, and never the core. The mapping is `Stopped`'s and it is closed —
+`final`, `max_turns` and `budget` report `done`, `error` reports `error`, and `cancelled`
+reports `idle`, which is what an interrupted program owes its terminal — and `blocked` is
+never sent, because nothing in a turn waits on a human. There is no `progress`, since a turn
+is not a fraction of anything, and no `id=`, since several runs are several ptys and so
+several root records. `msg` is coarse and never the shell command, the prompt or the answer,
+because a report is a channel `record/redact.rs` cannot guard. The decision is
+`docs/adr/0005-program-status.md`.
 
 ## Skills
 
