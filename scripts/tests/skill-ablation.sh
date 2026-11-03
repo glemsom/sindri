@@ -65,6 +65,21 @@ test_a_report_over_a_file_no_sweep_wrote_claims_no_number() {
     assert_contains "$(cat out)" "not yet measured"
 }
 
+# The rule the page states is applied by the report, so a sweep arrives as a
+# verdict rather than as a table a reader scores by hand — and it is scored from
+# the lines, which is what makes six repetitions of each arm the whole argument.
+test_a_report_of_two_arms_applies_the_shipping_rule() {
+    for rep in 1 2 3 4 5 6; do
+        printf '{"task":"refused-write","arm":"with","model":"m","repetition":%s,"in_tokens":1000,"activated":true,"checks":{"ok":true}}\n' "$rep"
+        printf '{"task":"refused-write","arm":"without","model":"m","repetition":%s,"in_tokens":1200,"activated":false,"checks":{"ok":false}}\n' "$rep"
+    done > sweep.jsonl
+    detached python3 "$BENCH/bench.py" report sweep.jsonl
+    assert_status 0 "$status"
+    assert_contains "$(cat out)" "### The shipping rule"
+    assert_contains "$(cat out)" "| outcome | 6/6 with, 0/6 without |"
+    assert_contains "$(cat out)" '`sandbox-refusal` earns its catalog line.'
+}
+
 test_the_mock_provider_refuses_a_directory_of_no_replies() {
     mkdir -p empty
     detached python3 "$BENCH/mock_provider.py" empty

@@ -132,6 +132,17 @@ test_the_report_is_a_table_of_both_arms() {
     grep -q '2/2' "$tmp/table.md" || note "the report does not count the rights: $(cat "$tmp/table.md")"
 }
 
+# The rule the page states is applied by the report, so a sweep arrives as a
+# verdict and not as a table somebody reads by hand — offline, on the scripted
+# conversations, which is all an arm of two repetitions can be shown to do.
+test_the_report_applies_the_shipping_rule_to_the_sweep() {
+    grep -q '^### The shipping rule$' "$tmp/table.md" || note "the report printed no rule: $(cat "$tmp/table.md")"
+    for check in reached outcome price; do
+        grep -q "^| $check |" "$tmp/table.md" || note "the rule has no $check row: $(cat "$tmp/table.md")"
+    done
+    grep -q '`sandbox-refusal`' "$tmp/table.md" || note "the rule named no skill: $(cat "$tmp/table.md")"
+}
+
 test_an_empty_file_has_measured_nothing() {
     ( cd "$BENCH" && python3 bench.py report "$tmp/never-written.jsonl" ) > "$tmp/empty.md" 2>&1
     grep -q 'not yet measured' "$tmp/empty.md" || note "an empty report claimed a number: $(cat "$tmp/empty.md")"
@@ -149,6 +160,7 @@ test_the_same_repetition_twice_in_one_file_is_refused
 test_the_recorded_conversations_are_told_apart_by_the_activation_field
 test_the_rule_scores_the_two_recorded_conversations_differently
 test_the_report_is_a_table_of_both_arms
+test_the_report_applies_the_shipping_rule_to_the_sweep
 test_an_empty_file_has_measured_nothing
 
 [ "$failed" -eq 0 ] && printf 'self-test: the ablation bench runs end to end, offline\n'

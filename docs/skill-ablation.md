@@ -111,6 +111,13 @@ own because it is not `runs`: a run that never reached the model carries no toke
 count, is left out of the arithmetic, and would otherwise make an arm of six runs
 look like an arm of two.
 
+Under its table the report applies the rule above: each of the three conditions
+with what the sweep measured against what it asks, and then one sentence — the
+state the built-in is in, or the note that this sweep is one the rule cannot
+express. So the reading is not a second opinion on the same numbers: the checks
+are counted from the lines, and the sentence is the rule's, which is also why a
+sweep the thresholds do not fit says so instead of being stretched to a verdict.
+
 `sandbox-refusal` is shipped on the argument ADR 0004 §2 makes for the split —
 procedure in the body, the enforced boundary in the `bash` description — and
 **not** on a measurement, which this page refuses to invent in its place. Until a

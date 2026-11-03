@@ -197,5 +197,84 @@ class TheTableIsTheMeansOfOneArmAgainstTheOther(unittest.TestCase):
         self.assertIn("1/2", table)
 
 
+def sweep(with_=None, without=None):
+    """Six repetitions of both arms, since the rule states its thresholds over
+    six: `with` is a list of (in_tokens, activated, right) and `without` of
+    (in_tokens, right). One model and one task, so the file is one sweep."""
+    lines = []
+    for tokens, activated, right in with_ or [(1000, True, True)] * 6:
+        lines.append({"arm": "with", "model": "m", "task": "refused-write",
+                      "in_tokens": tokens, "activated": activated,
+                      "checks": {"ok": right}})
+    for tokens, right in without or [(1000, False)] * 6:
+        lines.append({"arm": "without", "model": "m", "task": "refused-write",
+                      "in_tokens": tokens, "activated": False,
+                      "checks": {"ok": right}})
+    return lines
+
+
+class TheShippingRuleIsAppliedToTheTable(unittest.TestCase):
+    def test_a_built_in_reached_and_decisive_and_cheap_enough_earns_its_line(self):
+        # The page states the three checks before any number arrives:
+        # loaded in at least five of six, six of six right against at most four
+        # of six, and no more than 1.25x the mean input tokens without it.
+        report = bench.report(sweep(
+            with_=[(1000, True, True)] * 6,
+            without=[(1200, False)] * 6,
+        ))
+        self.assertIn("`sandbox-refusal` earns its catalog line.", report)
+
+    def test_a_body_never_loaded_is_unused_and_the_description_is_what_to_fix(self):
+        # The page's first state: the line is a tax no run is reached by, and
+        # shipping the body again would not fix a catalog entry nobody opens.
+        report = bench.report(sweep(
+            with_=[(1000, False, True)] * 6,
+            without=[(1200, False)] * 6,
+        ))
+        self.assertIn("unused", report)
+        self.assertIn("rewrite the description", report)
+        self.assertNotIn("earns its catalog line", report)
+
+    def test_a_body_loaded_to_no_effect_is_useless_and_is_dropped(self):
+        # The page's second state: the body changed the conversation and not the
+        # outcome, so the run paid for it twice.
+        report = bench.report(sweep(
+            with_=[(1000, True, True)] * 6,
+            without=[(1200, True)] * 6,
+        ))
+        self.assertIn("useless", report)
+        self.assertIn("drop it", report)
+
+    def test_a_gap_of_exactly_one_run_is_said_to_be_one_the_rule_cannot_express(self):
+        # Five of six without the skill is the spread of six repetitions, so the
+        # page says the rule is the thing to revise rather than a verdict.
+        report = bench.report(sweep(
+            with_=[(1000, True, True)] * 6,
+            without=[(1200, True)] * 5 + [(1200, False)],
+        ))
+        self.assertIn("cannot express", report)
+        self.assertNotIn("earns its catalog line", report)
+
+    def test_a_body_that_costs_more_than_a_quarter_again_does_not_pay_for_itself(self):
+        report = bench.report(sweep(
+            with_=[(1300, True, True)] * 6,
+            without=[(1000, False)] * 6,
+        ))
+        self.assertIn("1.30x", report)
+        self.assertIn("drop it", report)
+
+    def test_a_sweep_with_no_billed_run_has_no_price_to_read(self):
+        report = bench.report(sweep(
+            with_=[(None, True, True)] * 6,
+            without=[(None, False)] * 6,
+        ))
+        self.assertIn("no mean without a billed run", report)
+        self.assertNotIn("earns its catalog line", report)
+
+    def test_a_file_holding_one_arm_has_no_comparison_to_make(self):
+        report = bench.report(sweep()[:6])
+        self.assertIn("needs both arms", report)
+
+
 if __name__ == "__main__":
     unittest.main()

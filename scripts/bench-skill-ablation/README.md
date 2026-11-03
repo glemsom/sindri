@@ -83,6 +83,15 @@ the thing under test rather than a provider's mood.
 
 ## What the report will not do
 
+`bench.py report` ends with the shipping rule `docs/skill-ablation.md` states: the
+three checks — reached, outcome, price — with the sweep's own figures beside the
+threshold each is held to, and one sentence saying which of the page's states the
+built-in is in, or that the rule cannot express this sweep. Nothing is measured
+there: the means, the activations and the rights are the table's, and the price of
+a sweep whose runs carried no token count reads `?` rather than a number, with a
+sentence saying there is no price to read. A file holding one arm has no comparison
+to make at all, so it says that instead of scoring half of one.
+
 `bench.py report` counts `runs` and `billed` apart, because a line with no
 `in_tokens` is left out of the mean and a row of six runs over two billed runs
 would otherwise read as a mean of six. Different counts across the two arms get

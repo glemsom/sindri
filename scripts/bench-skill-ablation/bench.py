@@ -247,6 +247,100 @@ def unwarned(table):
     return notes
 
 
+# The shipping rule `docs/skill-ablation.md` states before any sweep arrives, as
+# the three thresholds a report applies: reached in at least five of six runs,
+# right in six of six with the built-in against at most four of six without, and
+# no more than a quarter again the mean input tokens without it. They live here,
+# as ratios, so a sweep of another length is read by the same rule.
+REACHED = 5 / 6
+DECISIVE = 4 / 6
+PRICE = 1.25
+
+
+def shipping(table):
+    """The shipping rule applied to one sweep's table: what the three states of a
+    built-in come to as a sentence a reader acts on, rather than a paragraph they
+    apply by hand to the numbers.
+
+    Nothing here is measured and nothing is invented: every figure is the table's,
+    and a sweep a check cannot be computed from says so — a mean over no billed
+    run is not a price, and a table holding one arm has no comparison."""
+    mine, theirs = table.get("with"), table.get("without")
+    if not mine or not theirs:
+        return (f"the rule needs both arms in one file; this holds "
+                f"{', '.join(sorted(table)) or 'none'}.")
+    reached = mine["activated"] / mine["runs"]
+    right_with = mine["right"] / mine["runs"]
+    right_without = theirs["right"] / theirs["runs"]
+    if mine["mean"] is None or theirs["mean"] is None or not theirs["mean"]:
+        price = None
+        ratio = None
+    else:
+        ratio = mine["mean"] / theirs["mean"]
+        price = ratio <= PRICE
+    checks = [
+        ("reached", f"{mine['activated']}/{mine['runs']}",
+         "at least 5/6", reached >= REACHED),
+        ("outcome", f"{mine['right']}/{mine['runs']} with, "
+                    f"{theirs['right']}/{theirs['runs']} without",
+         "6/6 with, at most 4/6 without",
+         right_with == 1 and right_without <= DECISIVE),
+        ("price", "no mean without a billed run" if ratio is None else f"{ratio:.2f}x",
+         "at most 1.25x", price),
+    ]
+    rows = ["### The shipping rule", "",
+            "| check | measured | needs | holds |",
+            "| --- | --- | --- | --- |"]
+    for name, measured, needs, holds in checks:
+        rows.append(f"| {name} | {measured} | {needs} | "
+                    f"{'yes' if holds else ('no' if holds is not None else '?')} |")
+    rows += ["", verdict(mine, theirs, ratio)]
+    return "\n".join(rows)
+
+
+def verdict(mine, theirs, ratio):
+    """The sentence the rule comes to: one of the page's three states, or the
+    page's own note that this sweep is one the rule cannot express.
+
+    The states are not shades of the same number — an unused catalog line is a
+    description to rewrite, a useless body is one to drop, and a useful one is
+    kept at almost any price under the ratio — so the sentence says which."""
+    runs, without_runs = mine["runs"], theirs["runs"]
+    reached = mine["activated"] / runs
+    right_with = mine["right"] / runs
+    right_without = theirs["right"] / without_runs
+    if reached < REACHED:
+        return (f"`{SKILL}` is **unused**: loaded in {mine['activated']} of "
+                f"{runs} runs, under the five of six the rule asks for. The line "
+                f"is a tax no run is reached by, so the thing to fix is the "
+                f"catalog entry — rewrite the description, not the body.")
+    if right_with < 1:
+        return (f"`{SKILL}` is **useless**: {mine['right']} of {runs} runs with it "
+                f"were right, so the body buys no outcome to weigh against the "
+                f"line it costs. Not worth a catalog line: drop it or fold it into "
+                f"a skill a task triggers.")
+    if ratio is not None and DECISIVE < right_without < 1:
+        return (f"the rule cannot express this sweep: {theirs['right']} of "
+                f"{without_runs} runs without the skill is one run from six of six, "
+                f"which is the spread of six repetitions rather than a gap the "
+                f"rule can hold. The rule is the thing to revise, and the revision "
+                f"is where the argument goes.")
+    if ratio is not None and ratio > PRICE:
+        return (f"`{SKILL}` does not pay for itself: {ratio:.2f}x the mean input "
+                f"tokens without it, past the 1.25x the rule allows. Not worth a "
+                f"catalog line: drop it.")
+    if right_without > DECISIVE:
+        return (f"`{SKILL}` is **useless**: right in {theirs['right']} of "
+                f"{without_runs} runs without it, against every run with it, so the "
+                f"body changed the conversation and not the outcome. Not worth a "
+                f"catalog line: drop it or fold it into a skill a task triggers.")
+    if ratio is None:
+        return (f"`{SKILL}` has no price to read: no run of either arm carried a "
+                f"token count, so nothing says what the line costs. Measure again "
+                f"before believing anything here.")
+    return f"`{SKILL}` earns its catalog line."
+
+
 def report(lines):
     """The table: the arm with the built-in in the catalog beside the arm
     without it, so a shipped line is measured against its own absence."""
@@ -272,6 +366,7 @@ def report(lines):
     notes = unwarned(table)
     if notes:
         rows += ["", *[f"* {note}" for note in notes]]
+    rows += ["", shipping(table)]
     return "\n".join(rows)
 
 
