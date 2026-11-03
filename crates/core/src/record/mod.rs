@@ -167,6 +167,12 @@ impl Recorder {
             content: self.redaction.apply(&outcome.content).into_owned(),
             is_error: outcome.is_error,
             outcome: facts.outcome.clone(),
+            // Redacted like the content it is also written in, so the two
+            // spellings of one reason cannot disagree either.
+            reason: facts
+                .reason
+                .as_deref()
+                .map(|reason| self.redaction.apply(reason).into_owned()),
             exit_code: facts.exit_code,
             duration_ms: facts.duration_ms,
             truncated: facts.truncated,

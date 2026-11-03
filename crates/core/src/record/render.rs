@@ -123,6 +123,10 @@ impl Stored {
                     duration_ms,
                     truncated,
                     spill,
+                    // Not given a line of its own: `content` opens with the
+                    // reason already, and a refusal said twice on two
+                    // neighbouring lines is one too many.
+                    reason: _,
                 } => {
                     let failed = if *is_error { " (failed)" } else { "" };
                     out.push_str(&format!(

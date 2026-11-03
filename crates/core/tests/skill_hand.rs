@@ -161,5 +161,10 @@ fn a_model_only_skill_cannot_be_loaded_by_hand() {
         "{}",
         activated.content
     );
+    assert_eq!(
+        activated.problem.as_deref(),
+        Some("there is no skill called `hidden`: `skill` takes one of `alpha`"),
+        "the reason a frame says is the fact the result carries, in its own words"
+    );
     assert!(h.loaded().is_empty(), "nothing was put in force");
 }

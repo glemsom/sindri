@@ -5,7 +5,7 @@
 //! whoever put it there.
 
 use super::{Activated, Agent};
-use crate::provider::{Call, MALFORMED, Message, ToolOutcome};
+use crate::provider::{Call, Message};
 
 impl Agent {
     /// A skill a human asked for, loaded without a turn: the same call the
@@ -46,21 +46,13 @@ impl Agent {
         }
         Activated {
             name: name.to_string(),
-            problem: reason(&outcome),
+            // The reason the result carries, not one cut back off its text: the
+            // words the model reads and the words a frame says are one string.
+            problem: outcome.facts.reason.clone(),
             content: outcome.content,
             is_error: outcome.is_error,
             loaded,
             outcome: outcome.facts.outcome,
         }
     }
-}
-
-/// The reason a call no tool could answer was not run, read off the line the
-/// result opens with: the prefix is `provider`'s, so a front end says the same
-/// words the model would have read without cutting them out of the result.
-fn reason(outcome: &ToolOutcome) -> Option<String> {
-    outcome
-        .content
-        .strip_prefix(MALFORMED)
-        .map(|reason| reason.trim_end().to_string())
 }

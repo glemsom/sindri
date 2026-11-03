@@ -18,9 +18,10 @@ use crate::config::Config;
 const MAX_ATTEMPTS: u32 = 3;
 const BASE_BACKOFF: Duration = Duration::from_millis(200);
 pub const REDACTED: &str = "[redacted]";
-/// What a call no tool could answer is answered with. One spelling, because a
-/// front end that has to say the reason in its own words reads it off the line
-/// it was written on rather than parsing prose it guessed at.
+/// The words a call no tool could answer opens with, for the model to read. The
+/// reason after them is a fact as well — [`ToolFacts::reason`] — so a front end
+/// that says one in its own words reads it as a value rather than cutting this
+/// prefix back off the prose.
 pub const MALFORMED: &str = "tool_error: the call was not run: ";
 
 #[derive(Debug, Clone)]
@@ -90,13 +91,19 @@ impl ToolOutcome {
         }
     }
 
+    /// A call no tool answered: the reason is written into the text the model
+    /// reads and kept beside it as a fact, from the one string, so the two
+    /// spellings of it cannot disagree.
     pub fn malformed(call: &Call, reason: &str) -> Self {
         ToolOutcome {
             call_id: call.id.clone(),
             name: call.name.clone(),
             content: format!("{MALFORMED}{reason}"),
             is_error: true,
-            facts: ToolFacts::default(),
+            facts: ToolFacts {
+                reason: Some(reason.to_string()),
+                ..ToolFacts::default()
+            },
         }
     }
 
@@ -114,6 +121,11 @@ impl ToolOutcome {
 pub struct ToolFacts {
     /// `exited`, `timed_out` or `sandbox_error`; absent when no command ran.
     pub outcome: Option<String>,
+    /// Why a refused call never ran — a name no tool answers, arguments no tool
+    /// takes, a target the guard refuses — in the words the content was written
+    /// with. Absent when a tool answered the call, so it is never a recovered
+    /// prefix but the reason itself.
+    pub reason: Option<String>,
     pub exit_code: Option<i32>,
     pub duration_ms: Option<u64>,
     pub truncated: bool,

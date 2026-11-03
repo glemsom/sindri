@@ -1,6 +1,7 @@
 //! What a turn and a call cost, kept as fields beside the text the model was
 //! shown: per-turn usage and duration on an `Assistant` entry, and a call's
-//! outcome, exit code, duration, truncation and spill paths on a `ToolResult`.
+//! outcome, exit code, duration, truncation and spill paths on a `ToolResult`,
+//! and the reason a refused call never ran.
 //! `content` never changes — the fields are a second copy, not a replacement —
 //! and a record written before they existed still reads.
 
@@ -17,7 +18,7 @@ use std::time::Duration;
 use sindri_core::agent::{BashTool, Limits};
 use sindri_core::exec::{Outcome, ToolResult};
 use sindri_core::paths::SessionDir;
-use sindri_core::provider::{ToolOutcome, Usage};
+use sindri_core::provider::{Call, MALFORMED, ToolOutcome, Usage};
 use sindri_core::record::{Cost, Entry, Recorder, Redaction, Stored};
 use sindri_core::sandbox::Enforcement;
 use support::{Harness, Interrupt, Scripted, answer, call, calls, exited, fixtures, start};
@@ -112,6 +113,46 @@ fn a_tool_result_entry_carries_the_facts_its_content_states() {
             spill.display()
         ),
         "the text the model reads is byte for byte what it read before the fields existed"
+    );
+}
+
+#[test]
+fn a_refused_call_carries_its_reason_as_a_field_beside_the_text() {
+    let (_root, session, recorder) = recording();
+    let call = Call::new("call_1", "fetch", Ok(serde_json::Map::new()));
+    let reason = "there is no tool called `fetch` in this run";
+    let outcome = ToolOutcome::malformed(&call, reason);
+    recorder.tool_call(1, &call);
+    recorder.tool_result(1, &outcome);
+
+    let stored = Stored::load_in(&session).expect("the record reads back");
+    let Some(Entry::ToolResult {
+        content,
+        is_error,
+        outcome: word,
+        reason: why,
+        ..
+    }) = stored.entries.last()
+    else {
+        panic!(
+            "the result is the last thing on the record: {:?}",
+            stored.entries
+        );
+    };
+    assert_eq!(
+        why.as_deref(),
+        Some(reason),
+        "a reader is handed the reason as a value, not left to parse the text"
+    );
+    assert_eq!(
+        content,
+        &format!("{MALFORMED}{reason}"),
+        "and the text the model reads is still the prefix and the same reason"
+    );
+    assert!(*is_error, "a refusal is an error");
+    assert_eq!(
+        word, &None,
+        "no tool answered it, so there is no outcome word: {word:?}"
     );
 }
 

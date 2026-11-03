@@ -83,6 +83,7 @@ fn result(turn: u32, call_id: &str, content: &str) -> Entry {
         content: content.to_string(),
         is_error: false,
         outcome: None,
+        reason: None,
         exit_code: None,
         duration_ms: None,
         truncated: false,

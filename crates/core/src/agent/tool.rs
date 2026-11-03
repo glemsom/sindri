@@ -139,6 +139,8 @@ fn facts(result: &ToolResult) -> ToolFacts {
     let (outcome, exit_code) = spelled(&result.outcome);
     ToolFacts {
         outcome: Some(outcome.to_string()),
+        // A command ran, so nothing was refused: the tool answered the call.
+        reason: None,
         exit_code,
         duration_ms: Some(result.duration_ms),
         truncated: result.truncated,

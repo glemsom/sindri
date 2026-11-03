@@ -114,6 +114,10 @@ pub enum Entry {
         /// [`Entry::ToolCall`] beside it says, carrying that call's `problem`.
         #[serde(default)]
         outcome: Option<String>,
+        /// Why a refused call never ran, in the words `content` was written
+        /// with: absent when a tool answered the call.
+        #[serde(default)]
+        reason: Option<String>,
         #[serde(default)]
         exit_code: Option<i32>,
         #[serde(default)]
