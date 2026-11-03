@@ -6,7 +6,8 @@ Issues live in this repo's GitHub Issues (`glemsom/sindri`), driven by the `gh` 
 
 ### Triage labels
 
-Default five-role vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+This repository's five triage labels, and what each means, are stated once: see
+`docs/agents/triage-labels.md`.
 
 ### Domain docs
 
