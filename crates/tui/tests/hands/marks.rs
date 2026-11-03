@@ -198,6 +198,7 @@ fn a_drag_cannot_reach_the_panes_cells() {
         turn: 2,
         text: "thinking about the answer".to_string(),
     });
+    unfurl(&mut app);
     let rows = screen(&mut app, 100, 20);
     let at = common::row_of(&rows, "thinking about the answer");
 

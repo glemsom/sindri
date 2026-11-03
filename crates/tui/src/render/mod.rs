@@ -119,9 +119,10 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
     // the column the pane leaves, so a reader on the tail sees the newest row
     // immediately above the pane, and one scrolled back keeps the row they are
     // reading and is told what arrived by the badge.
+    let now = app.now();
     let pane_rows = app
         .thought()
-        .map(|thought| pane::height(thought, transcript.width) as u16)
+        .map(|thought| pane::height(thought, transcript.width, now) as u16)
         .map(|rows| rows.min(transcript.height.saturating_sub(1)))
         .filter(|rows| *rows > 0);
     let (transcript, thought_pane) = match pane_rows {

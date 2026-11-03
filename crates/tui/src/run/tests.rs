@@ -182,6 +182,77 @@ fn the_loop_draws_for_the_clock_while_a_run_is_live_and_never_while_idle() {
     );
 }
 
+#[test]
+fn a_thought_alone_keeps_the_frame_on_the_clock() {
+    let mut app = app();
+    // No run in flight: the pane is the only thing the clock has to say, and a
+    // pane is enough — it unfurls a row a tick, and a frame drawn once would
+    // leave it at its head.
+    app.event(sindri_core::agent::Event::ReasoningDelta {
+        turn: 1,
+        text: "a thought".to_string(),
+    });
+
+    let (jobs, _job_queue) = mpsc::channel();
+    let (tx, rx) = mpsc::channel::<Msg>();
+    let root = tempfile::tempdir().expect("a workspace");
+    let mut walking = false;
+    let draws = Arc::new(AtomicUsize::new(0));
+    let mut surface = Counted {
+        draws: Arc::clone(&draws),
+    };
+
+    let started = Instant::now();
+    while started.elapsed() < Duration::from_millis(400) {
+        assert!(turn_of_the_loop(
+            &mut app,
+            &rx,
+            &jobs,
+            &tx,
+            &mut walking,
+            root.path(),
+            &mut surface
+        ));
+    }
+    assert!(
+        draws.load(Ordering::SeqCst) >= 2,
+        "a thought keeps the frame on the clock: {} draws in 400ms",
+        draws.load(Ordering::SeqCst)
+    );
+
+    // The thought is over and its fold has run out: the frame asks for no tick
+    // at all, so an unchanged one is never drawn for its own sake.
+    app.event(sindri_core::agent::Event::Reasoning {
+        turn: 1,
+        text: "a thought".to_string(),
+    });
+    for _ in 0..5 {
+        app.pulse(crate::pulse::TICK);
+    }
+    assert!(app.thought().is_none(), "the pane has folded away");
+    let idle = draws.load(Ordering::SeqCst);
+    let waking = tx.clone();
+    let wake = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(300));
+        let _ = waking.send(Msg::Resize);
+    });
+    assert!(turn_of_the_loop(
+        &mut app,
+        &rx,
+        &jobs,
+        &tx,
+        &mut walking,
+        root.path(),
+        &mut surface
+    ));
+    wake.join().expect("the waker finishes");
+    assert_eq!(
+        draws.load(Ordering::SeqCst),
+        idle + 1,
+        "a frame with no thought in it is drawn for a message and never for the clock"
+    );
+}
+
 /// The frame's hearing, fed by a test rather than by a terminal: what the loop
 /// does with an event, and what it does with bytes no event could be made of.
 #[test]

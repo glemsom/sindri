@@ -134,13 +134,15 @@ thread is a document of what was said.
 
 **pane** — the run's surface for a thought: the rows below the last row of the **thread**, in the
 transcript's column and hanging off the same **gutter** a turn's answer and its calls hang off, five
-rows at least once it has a line of text and eight at most. It takes its rows from the transcript's
-area rather than painting over prose, so the **window**'s row map is the thread's and a copy or a
-**mark** never reads a word of it. Its text fills from the bottom — the newest row on the pane's last
-row, so a fragment never moves the line the reader is on — a row that leaves the top is cut rather
-than dimmed, its left rule is a **walk** from `PROMPT` to `HEADING` and its head row is
-`⌁ thinking   0.8s`. It sits on the **raised** surface with no dim behind it, and it takes no key:
-the **overlay** is the reader's covering and takes them all, and only one of the two can be dismissed.
+rows at least once it has a line of text and eight at most. It unfurls from its head one row a tick
+and folds back down to it when the thought is over, and the **scar** is written on the tick it is
+one row. It takes its rows from the transcript's area rather than painting over prose, so the
+**window**'s row map is the thread's and a copy or a **mark** never reads a word of it. Its text
+fills from the bottom — the newest row on the pane's last row, so a fragment never moves the line
+the reader is on — a row that leaves the top is cut rather than dimmed, its left rule is a **walk**
+from `PROMPT` to `HEADING` and its head row is `⌁ thinking   0.8s`. It sits on the **raised** surface
+with no dim behind it, and it takes no key: the **overlay** is the reader's covering and takes them
+all, and only one of the two can be dismissed.
 
 **scar** — the one row a finished thought leaves in the **thread**, `⌁ reasoned`, until `Enter` opens
 the text it held. It is all of a thought the transcript ever holds, and its entry is never open while
@@ -259,9 +261,10 @@ reads as itself. One function computes the spans and both the mark and the copy 
 block starts at. It stands on the rows it took until the reader's next gesture clears it.
 
 **pulse** — the frame's own clock, and the only thing drawn without being asked: a tick of ~120 ms
-while a run is live or a completion is walking, and nothing at all while the frame is still. It puts
-a braille marker at the head of the newest answer with the run's elapsed time, settling on `✓` or
-`✗`, freezes each call's duration as it ends, and moves the rail's output and context figures.
+while a run is live, a completion is walking or a **pane** is on the glass, and nothing at all while
+the frame is still. It puts a braille marker at the head of the newest answer with the run's elapsed
+time, settling on `✓` or `✗`, freezes each call's duration as it ends, and moves the rail's output
+and context figures.
 
 **walk** — a rule lit from one end: the theme interpolates two named stops, one step per cell, and
 names the pairs a renderer may interpolate. It is how a border gets a gradient without a picture

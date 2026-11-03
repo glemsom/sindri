@@ -91,13 +91,7 @@ impl App {
                 self.think(turn, text);
             }
             Event::Reasoning { turn, text } => {
-                self.thought_over();
-                self.thread.push(Entry::Reasoning {
-                    turn,
-                    text,
-                    done: true,
-                    open: false,
-                });
+                self.thought_done(turn, text);
             }
             Event::ToolCall { turn, asked } => {
                 self.thought_over();
@@ -183,21 +177,47 @@ impl App {
     fn think(&mut self, turn: u32, text: String) {
         match self.thought.as_mut() {
             Some(thought) if thought.turn == turn => thought.text.push_str(&text),
-            _ => {
-                self.thought = Some(Thought {
-                    turn,
-                    text,
-                    started: self.now,
-                })
-            }
+            _ => self.thought = Some(Thought::new(turn, text, self.now)),
         }
     }
 
-    /// A thought is over: the pane goes, and what the thread holds of it is the
-    /// scar a finished thought leaves. Every arm that ends one comes through
-    /// here — the final event, a call, a text delta, a cancel and `/new` — so
-    /// none of them forgets it and the pane cannot outlive the run's use for it.
+    /// The final reasoning event: a live pane begins its fold, which is the one
+    /// door that does not take the pane away at once — the fold is watched, and
+    /// the scar is written when the pane is down to one row. A final event with
+    /// no pane behind it, from a provider that sent no fragment, leaves the scar
+    /// at once: a thought nobody saw has no fold to watch.
+    fn thought_done(&mut self, turn: u32, text: String) {
+        let live = matches!(&self.thought, Some(thought) if thought.turn == turn);
+        if live {
+            let now = self.now;
+            if let Some(thought) = self.thought.as_mut() {
+                // The event carries the whole reasoning of the turn, which is
+                // what the scar opens and what the pane has been showing: the
+                // deltas are that text arriving, never a second text.
+                thought.text = text;
+                thought.closed.get_or_insert(now);
+            }
+            return;
+        }
+        self.thought = None;
+        self.thread.push(Entry::Reasoning {
+            turn,
+            text,
+            done: true,
+            open: false,
+        });
+    }
+
+    /// A thought is over at once: the pane goes, and what the thread holds of it
+    /// is nothing. Every arm that ends one comes through here — a call, a text
+    /// delta, a cancel and `/new` — so none of them forgets it and the pane
+    /// cannot outlive the run's use for it. The final reasoning event does not
+    /// come through here: its pane folds, and `thought_done` is that door.
     pub(crate) fn thought_over(&mut self) {
+        // A pane taken away mid-fold is still a thought that finished, and the
+        // scar it was folding into is owed: the fold is watched only where the
+        // frame has the ticks to watch it.
+        self.scar();
         self.thought = None;
     }
 

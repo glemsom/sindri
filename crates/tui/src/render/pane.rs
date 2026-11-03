@@ -5,6 +5,12 @@
 //! run, and the reader may well be reading an earlier answer while the run
 //! thinks. Its text fills from the bottom, so a fragment never moves the line
 //! the reader is on, and a row that leaves the top is cut and never dimmed.
+//!
+//! It has a motion, and the motion is a function of the clock: it unfurls from
+//! its head one row a tick until it stands at `PANE_MIN`, follows its text from
+//! there, and folds back down to its head a row a tick when the thought is over.
+//! `rows` and `closing` are pure in the clock, so a frame is drawn at a moment
+//! and a film of frames is asserted without knowing when any of them was drawn.
 
 use std::time::Duration;
 
@@ -41,10 +47,46 @@ const RULE_COLUMNS: usize = 2;
 /// every tick, and a fragment costs the words it landed with.
 const KEPT_LINES: usize = 64;
 
-/// The rows the pane takes at `width`: the head row and the thought's own rows,
-/// never past `PANE_ROWS` and never short of `PANE_MIN`.
-pub fn height(thought: &Thought, width: u16) -> usize {
-    (1 + written(&thought.text, width).len()).clamp(PANE_MIN, PANE_ROWS)
+/// The height the clock has unfurled the pane to, `elapsed` since the thought
+/// began: one row on the tick the first fragment lands — the head, and nothing
+/// else — and one more a tick, never past the most a thought costs. The pane is
+/// the lesser of this and what its text is worth, so the clock alone carries it
+/// up to `PANE_MIN` and the text carries it from there. Pure in the clock, so a
+/// film of frames is asserted rather than a feeling about one.
+pub fn rows(elapsed: Duration) -> usize {
+    (1 + pulses(elapsed)).min(PANE_ROWS)
+}
+
+/// The height the pane closes through, `elapsed` since the final reasoning
+/// event: one tick of hold at the floor it settles at, then a row a tick until
+/// none is left. The row it reaches one at is its last, and the scar is written
+/// on that tick, so the two are on the glass together and the eye reads a
+/// descent into the transcript rather than a disappearance and an arrival.
+pub(crate) fn closing(elapsed: Duration) -> usize {
+    PANE_MIN.saturating_sub(pulses(elapsed))
+}
+
+/// The whole ticks of the pulse in `elapsed`: the pane's motion is measured in
+/// them, and nothing else about a frame is.
+fn pulses(elapsed: Duration) -> usize {
+    (elapsed.as_millis() / pulse::TICK.as_millis().max(1)) as usize
+}
+
+/// The rows the pane takes at `width` and `now`: the lesser of what its text is
+/// worth and what the clock has unfurled it to, or the fold's own height once
+/// the thought is over.
+pub fn height(thought: &Thought, width: u16, now: Duration) -> usize {
+    match thought.closed_for(now) {
+        Some(since) => closing(since),
+        None => settled(written(&thought.text, width).len())
+            .min(rows(now.saturating_sub(thought.started))),
+    }
+}
+
+/// What the pane stands at once its text has its say, `rows` of it written: the
+/// head row and those, never past `PANE_ROWS` and never short of `PANE_MIN`.
+fn settled(rows: usize) -> usize {
+    (1 + rows).clamp(PANE_MIN, PANE_ROWS)
 }
 
 /// The pane, drawn on the raised surface of the rows the layout gave it. The
@@ -58,18 +100,31 @@ pub fn draw(app: &App, area: Rect, buf: &mut Buffer) {
         return;
     }
     let body = written(&thought.text, area.width);
-    let rows_of_text = body.len();
-    // The text fills from the bottom: the newest row sits on the pane's last
-    // row, the rows above it are blank while the thought is shorter than the
-    // pane, and the rows that no longer fit leave from the top.
-    let room = (area.height as usize).saturating_sub(1);
-    let kept = rows_of_text.min(room);
-    let mut rows = vec![head(thought, app.now())];
-    rows.extend((0..room - kept).map(|_| Line::default()));
-    rows.extend(body.into_iter().skip(rows_of_text - kept));
-    let rows = ruled(rows);
+    let steps = settled(body.len());
+    let rows = laid(thought, body, area.height as usize, app.now());
+    let rows = ruled(rows, steps);
     buf.set_style(area, theme::raised());
     Paragraph::new(rows).render(area, buf);
+}
+
+/// The pane's rows: its head, then the text hung off the floor of the block —
+/// the newest row on the pane's last row, the rows above it blank while the
+/// thought is shorter than the pane, and the ones that no longer fit leaving
+/// from the top. A folding pane is the same rows with fewer of them: the floor
+/// never moves, so the rows the pane gives up are its oldest words and the head
+/// above them, and no fragment ever moves the line the reader is on.
+fn laid(
+    thought: &Thought,
+    body: Vec<Line<'static>>,
+    room: usize,
+    now: Duration,
+) -> Vec<Line<'static>> {
+    let rows_of_text = body.len();
+    let kept = rows_of_text.min(room.saturating_sub(1));
+    let mut rows = vec![head(thought, now)];
+    rows.extend((0..room.saturating_sub(1) - kept).map(|_| Line::default()));
+    rows.extend(body.into_iter().skip(rows_of_text - kept));
+    rows
 }
 
 /// The thought's words at the bottom of the pane, oldest first: its tail,
@@ -111,8 +166,13 @@ fn head(thought: &Thought, now: Duration) -> Line<'static> {
 /// The pane's rows with the left rule in front of them: a walk from `PROMPT` to
 /// `HEADING`, one cell per row, so a border gets a gradient without a renderer
 /// writing a colour down.
-fn ruled(rows: Vec<Line<'static>>) -> Vec<Line<'static>> {
-    let steps = rows.len().saturating_sub(1).max(1) as f32;
+///
+/// The walk is stepped over the height the pane settles at and not over the
+/// rows it happens to have: each row gained lights one more cell of it, so the
+/// rule finishes lighting exactly as the pane reaches its height, and a fold
+/// gives the light back a row at a time.
+fn ruled(rows: Vec<Line<'static>>, steps: usize) -> Vec<Line<'static>> {
+    let steps = steps.saturating_sub(1).max(1) as f32;
     let pad = " ".repeat(GUTTER as usize);
     rows.into_iter()
         .enumerate()
@@ -131,16 +191,19 @@ fn ruled(rows: Vec<Line<'static>>) -> Vec<Line<'static>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{KEPT_LINES, height, tail};
+    use super::{KEPT_LINES, closing, height, rows, tail};
+    use crate::pulse;
     use crate::thought::Thought;
     use std::time::Duration;
 
     fn thought(text: &str) -> Thought {
-        Thought {
-            turn: 1,
-            text: text.to_string(),
-            started: Duration::ZERO,
-        }
+        Thought::new(1, text.to_string(), Duration::ZERO)
+    }
+
+    /// The clock `nth` ticks of the pulse in, which is what a pane's motion is
+    /// counted in.
+    fn ticks(nth: u64) -> Duration {
+        pulse::TICK * nth as u32
     }
 
     #[test]
@@ -152,11 +215,48 @@ mod tests {
             ("a\nb\nc\nd\ne\nf\ng\nh\ni\n", 8),
         ] {
             assert_eq!(
-                height(&thought(text), 80),
+                height(&thought(text), 80, ticks(9)),
                 rows,
                 "a thought of {text:?} costs the thread {rows} rows"
             );
         }
+    }
+
+    #[test]
+    fn the_unfurl_gains_a_row_a_tick_up_to_the_most_a_thought_costs() {
+        let unfurled: Vec<usize> = (0..9).map(|nth| rows(ticks(nth))).collect();
+        assert_eq!(
+            unfurled,
+            vec![1, 2, 3, 4, 5, 6, 7, 8, 8],
+            "the pane's clock is its head on the first tick and a row more a tick, \
+             never past the most a thought costs"
+        );
+    }
+
+    #[test]
+    fn the_fold_holds_a_tick_and_then_gives_a_row_back() {
+        let folded: Vec<usize> = (0..6).map(|nth| closing(ticks(nth))).collect();
+        assert_eq!(
+            folded,
+            vec![5, 4, 3, 2, 1, 0],
+            "a finished thought holds its height for a tick and then folds away"
+        );
+    }
+
+    #[test]
+    fn a_closing_pane_is_as_tall_as_the_clock_says_and_no_taller() {
+        let mut closed = thought("a\nb\nc\nd\ne\nf\ng\n");
+        closed.closed = Some(ticks(2));
+        assert_eq!(
+            height(&closed, 80, ticks(2)),
+            5,
+            "the hold is the floor a pane settles at"
+        );
+        assert_eq!(
+            height(&closed, 80, ticks(4)),
+            3,
+            "and the fold is the clock's, whatever the text is worth"
+        );
     }
 
     #[test]

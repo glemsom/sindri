@@ -228,8 +228,10 @@ fn turn_of_the_loop(
     surface: &mut impl Paint,
 ) -> bool {
     // A report the last second is withholding is a reason to keep the clock
-    // running, or the word a settled run owes would wait for a keystroke.
-    let live = app.is_running() || *walking || surface.owes(app);
+    // running, or the word a settled run owes would wait for a keystroke. So is
+    // a thought: the pane asks for ticks while one is live and stops asking the
+    // moment it has folded, so a still frame is never drawn for its own sake.
+    let live = app.ticks() || *walking || surface.owes(app);
     match wait(rx, live) {
         Wake::Said(message) => {
             if matches!(message, Msg::Paths(..)) {

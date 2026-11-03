@@ -348,6 +348,7 @@ fn ctrl_y_copies_the_last_answer_and_never_a_live_thought() {
         turn: 2,
         text: "thinking about the answer".to_string(),
     });
+    unfurl(&mut app);
     assert!(
         screen(&mut app, 100, 20)
             .iter()

@@ -24,6 +24,7 @@ use crate::graphics::Graphics;
 use crate::overlay::Overlay;
 use crate::picture::Store;
 use crate::rail::{Launch, Rail, RailView};
+use crate::render::pane;
 use crate::render::seam::Seam;
 use crate::selection::{Selection, Viewport};
 use crate::settings::Missing;
@@ -286,12 +287,65 @@ impl App {
         self.now
     }
 
-    /// Lets the clock on by `delta`. Only a live run is told the time: an
-    /// idle frame owes the clock nothing, so the loop is not woken for it.
+    /// Whether this frame asks for a tick: a run in flight, or a thought on its
+    /// way in or out. A still frame asks for none — an idle composer owes the
+    /// clock nothing, so the loop is not woken for it.
+    pub fn ticks(&self) -> bool {
+        self.running.is_some() || self.thought.is_some()
+    }
+
+    /// Lets the clock on by `delta`, and steps a fold by it. Only a frame that
+    /// asked for a tick is told the time.
     pub fn pulse(&mut self, delta: Duration) {
-        if self.is_running() {
-            self.now += delta;
+        if !self.ticks() {
+            return;
         }
+        self.now += delta;
+        self.step_closed_pane();
+    }
+
+    /// The pane closing, a tick at a time: the scar the thread keeps of a
+    /// thought is written on the tick the pane comes down to its last row, so
+    /// for one frame the two are on the glass together and the eye reads a
+    /// descent into the transcript rather than a disappearance and a separate
+    /// arrival. A pane that has closed away is no longer the frame's; a thought
+    /// still arriving has no closing to do.
+    fn step_closed_pane(&mut self) {
+        let Some(thought) = self.thought.as_ref() else {
+            return;
+        };
+        let Some(since) = thought.closed_for(self.now) else {
+            return;
+        };
+        let rows = pane::closing(since);
+        if rows <= 1 {
+            self.scar();
+        }
+        if rows == 0 {
+            self.thought = None;
+        }
+    }
+
+    /// The one row the thread holds of a closed thought, written the moment the
+    /// pane is down to a row — or the moment a door takes the pane away before
+    /// the fold got there, so a run that ends inside the fold still leaves its
+    /// scar. A thought that was still arriving leaves nothing: it never
+    /// finished, so it is no part of the document.
+    pub(crate) fn scar(&mut self) {
+        let Some(thought) = self.thought.as_mut() else {
+            return;
+        };
+        if thought.closed.is_none() || thought.scarred {
+            return;
+        }
+        thought.scarred = true;
+        let (turn, text) = (thought.turn, thought.text.clone());
+        self.thread.push(Entry::Reasoning {
+            turn,
+            text,
+            done: true,
+            open: false,
+        });
     }
 
     /// What this frame is doing, as the one thing a terminal is told: a run in

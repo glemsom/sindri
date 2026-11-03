@@ -8,6 +8,7 @@ use super::*;
 
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::buffer::Buffer;
+use sindri_tui::pulse;
 use sindri_tui::render::pane;
 use sindri_tui::render::transcript;
 use sindri_tui::theme;
@@ -50,6 +51,28 @@ fn thought(app: &mut App, turn: u32, count: usize) {
             text: format!("fragment {fragment}\n"),
         });
     }
+}
+
+/// Lets the frame's clock on by `ticks` of the pulse, as the loop does while a
+/// run is live: the pane's height is a reading of the clock and of nothing
+/// else, so this is the whole of what drives it.
+fn tick(app: &mut App, ticks: usize) {
+    for _ in 0..ticks {
+        app.pulse(pulse::TICK);
+    }
+}
+
+/// The pane's height, read off the frame the clock has just drawn: one number a
+/// tick, which is what a film is made of.
+fn standing(app: &mut App) -> usize {
+    pane_rows(app, 100, 30).len()
+}
+
+/// The final reasoning event of a thought of `count` fragments, carrying the
+/// text the pane was given: the whole of it, as the provider sends it.
+fn done(app: &mut App, turn: u32, count: usize) {
+    let text: String = (1..=count).map(|n| format!("fragment {n}\n")).collect();
+    app.event(Event::Reasoning { turn, text });
 }
 
 #[test]
@@ -144,6 +167,7 @@ fn a_thought_is_one_pane_at_the_tail_between_five_rows_and_eight() {
     let mut app = app();
     turn_behind(&mut app);
     thought(&mut app, 2, 1);
+    tick(&mut app, 4);
     let short = pane_rows(&mut app, 100, 30);
     assert_eq!(
         short.len(),
@@ -152,6 +176,7 @@ fn a_thought_is_one_pane_at_the_tail_between_five_rows_and_eight() {
     );
 
     thought(&mut app, 2, 40);
+    tick(&mut app, 4);
     let tall = pane_rows(&mut app, 100, 30);
     assert_eq!(
         tall.len(),
@@ -178,6 +203,7 @@ fn the_panes_head_names_the_thought_and_the_newest_fragment_is_on_its_last_row()
     let mut app = app();
     turn_behind(&mut app);
     thought(&mut app, 2, 20);
+    tick(&mut app, 8);
 
     let rows = screen(&mut app, 100, 30);
     let pane = pane_rows(&mut app, 100, 30);
@@ -188,7 +214,7 @@ fn the_panes_head_names_the_thought_and_the_newest_fragment_is_on_its_last_row()
         rows[head]
     );
     assert!(
-        rows[head].contains("0.0s"),
+        rows[head].contains("0.9s"),
         "with the time the thought has taken: {:?}",
         rows[head]
     );
@@ -205,20 +231,23 @@ fn the_panes_head_names_the_thought_and_the_newest_fragment_is_on_its_last_row()
 }
 
 #[test]
-fn after_the_final_event_the_pane_is_gone_and_one_reasoned_row_stands_in_the_thread() {
+fn a_folded_thought_leaves_one_scar_and_no_fragment_in_the_thread() {
     let mut app = app();
     turn_behind(&mut app);
     thought(&mut app, 2, 20);
+    tick(&mut app, 8);
     app.event(Event::Reasoning {
         turn: 2,
         text: "fragment 1\nfragment 20\n".to_string(),
     });
+    // One tick of hold and four of the fold: the pane is gone on the fifth.
+    tick(&mut app, 5);
 
     assert!(app.thought().is_none(), "the thought is over");
     let rows = screen(&mut app, 100, 30);
     assert!(
         pane_rows(&mut app, 100, 30).is_empty(),
-        "the pane is gone the moment the thought is: {rows:#?}"
+        "the pane has folded away: {rows:#?}"
     );
     let scars: Vec<&String> = rows.iter().filter(|row| row.contains('⌁')).collect();
     assert_eq!(
@@ -250,6 +279,7 @@ fn a_thought_costs_the_pane_and_never_a_remeasure_of_the_thread() {
     let rows = pane::height(
         thinking.thought().expect("the run is thinking"),
         column(100),
+        thinking.now(),
     );
 
     let height = 27;
@@ -274,6 +304,7 @@ fn the_pane_draws_at_a_hundred_columns_and_where_the_rail_is_a_strip() {
         let mut app = app();
         turn_behind(&mut app);
         thought(&mut app, 2, 20);
+        tick(&mut app, 8);
         let rows = screen(&mut app, width, 30);
         let pane = pane_rows(&mut app, width, 30);
         assert_eq!(
@@ -357,5 +388,154 @@ fn the_pane_takes_no_key_and_the_composer_keeps_them() {
         app.composer().text(),
         "hi",
         "and the keys go to the composer, as they always did"
+    );
+}
+
+#[test]
+fn a_pane_unfurls_one_row_a_tick_and_then_follows_its_text() {
+    let mut app = app();
+    turn_behind(&mut app);
+    // Four fragments are the five rows a pane settles at — its head and four of
+    // text — so for the first ticks the clock is the only thing that moves.
+    thought(&mut app, 2, 4);
+
+    let mut heights = vec![standing(&mut app)];
+    for nth in 1..8 {
+        tick(&mut app, 1);
+        if nth == 7 {
+            // A fifth fragment: the pane is past its floor and follows its text.
+            app.event(Event::ReasoningDelta {
+                turn: 2,
+                text: "fragment 5\n".to_string(),
+            });
+        }
+        heights.push(standing(&mut app));
+    }
+
+    assert_eq!(
+        heights,
+        vec![1, 2, 3, 4, 5, 5, 5, 6],
+        "the pane unfurls one row a tick to its floor and then follows its text"
+    );
+}
+
+#[test]
+fn the_pane_folds_down_to_one_row_and_then_is_gone() {
+    let mut app = app();
+    turn_behind(&mut app);
+    thought(&mut app, 2, 4);
+    tick(&mut app, 4);
+    assert_eq!(standing(&mut app), 5, "the pane has unfurled to its floor");
+
+    done(&mut app, 2, 4);
+
+    let mut heights = vec![standing(&mut app)];
+    for _ in 0..4 {
+        tick(&mut app, 1);
+        heights.push(standing(&mut app));
+    }
+    assert_eq!(
+        heights,
+        vec![5, 4, 3, 2, 1],
+        "the fold holds for one tick and then gives up a row a tick"
+    );
+
+    tick(&mut app, 1);
+    assert!(app.thought().is_none(), "and the thought is over with it");
+    assert!(
+        pane_rows(&mut app, 100, 30).is_empty(),
+        "so the raised rows at the pane's floor are the thread's again"
+    );
+}
+
+#[test]
+fn the_scar_is_drawn_on_the_tick_the_pane_is_one_row() {
+    let mut app = app();
+    turn_behind(&mut app);
+    thought(&mut app, 2, 4);
+    tick(&mut app, 4);
+    done(&mut app, 2, 4);
+    // The hold and three rows of the fold: the pane is one row on the fourth.
+    tick(&mut app, 4);
+
+    let pane = pane_rows(&mut app, 100, 30);
+    assert_eq!(pane.len(), 1, "the pane has folded down to its last row");
+    let rows = screen(&mut app, 100, 30);
+    let scar = row_of(&rows, "⌁ reasoned");
+    assert_eq!(
+        scar as u16 + 1,
+        pane[0],
+        "the scar stands on the row the pane's own descent ends at — directly \
+         above its last one — so the eye reads one movement and not a \
+         disappearance and a separate arrival: {rows:#?}"
+    );
+    assert!(
+        rows[pane[0] as usize].contains("⌁ thinking"),
+        "with the pane's head still on its last row: {:?}",
+        rows[pane[0] as usize]
+    );
+}
+
+#[test]
+fn a_frame_asks_for_no_tick_once_the_thought_has_folded() {
+    let mut app = app();
+    assert!(!app.ticks(), "a still frame is not on the clock");
+    thought(&mut app, 2, 4);
+    assert!(app.ticks(), "a thought is something for the clock to say");
+
+    done(&mut app, 2, 4);
+    tick(&mut app, 5);
+
+    assert!(app.thought().is_none(), "the pane has folded away");
+    assert!(
+        !app.ticks(),
+        "and a frame with no thought on it asks for no tick at all"
+    );
+}
+
+#[test]
+fn a_run_that_ends_inside_the_fold_still_leaves_one_scar() {
+    // The fold is watched only while the frame has the ticks to watch it, and a
+    // run can end inside it: the thought finished, so its scar is owed.
+    let mut app = app();
+    turn_behind(&mut app);
+    thought(&mut app, 2, 4);
+    tick(&mut app, 4);
+    done(&mut app, 2, 4);
+    app.finished(ended(Stop::Final, 2, usage(0, 0, 0)));
+
+    assert!(app.thought().is_none(), "the pane goes with the run");
+    let rows = screen(&mut app, 100, 30);
+    let scars: Vec<&String> = rows.iter().filter(|row| row.contains('⌁')).collect();
+    assert_eq!(
+        scars.len(),
+        1,
+        "and the one row the thought is worth is in the thread: {scars:#?}"
+    );
+    assert!(
+        scars[0].contains("⌁ reasoned"),
+        "the scar a finished thought leaves: {:?}",
+        scars[0]
+    );
+}
+
+#[test]
+fn a_thought_that_never_finished_leaves_no_scar() {
+    // A cancel is answered the moment the key lands: nothing said the thought
+    // was done, so the thread holds no word of it and a caught fold is not
+    // invented for it.
+    let mut app = app();
+    turn_behind(&mut app);
+    type_text(&mut app, "think about it");
+    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+    app.start().expect("a prompt starts a run");
+    thought(&mut app, 2, 4);
+    tick(&mut app, 4);
+    press(&mut app, KeyCode::Char('c'), KeyModifiers::CONTROL);
+
+    assert!(app.thought().is_none(), "the pane goes with the cancel");
+    assert!(
+        !any(&screen(&mut app, 100, 30), "⌁ reasoned"),
+        "and no scar is written for a thought that never finished"
     );
 }
