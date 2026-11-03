@@ -68,12 +68,18 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
     // Before the layout, so a region the frame draws nothing into is still the
     // theme's.
     canvas(area, frame.buffer_mut());
+    // The words' column is known before the vertical layout because the queue's
+    // own height is measured at the width its panel is drawn at: narrowing the
+    // rect alone would leave the panel a row short, its text wrapped at the
+    // terminal's width and its last rows dropped without the count that stands
+    // in for them.
+    let words = words(area.width);
     // The queue is a row the layout gives up only when something is waiting
     // in it: an empty panel would be a row stolen from the transcript. It
     // never takes the room the composer and the footer need, because a queue
     // drawn over what is being typed answers the wrong question.
     let queued =
-        queue::height(app, area.width).min(area.height.saturating_sub(app.composer().height() + 2));
+        queue::height(app, words).min(area.height.saturating_sub(app.composer().height() + 2));
     let mut rows = vec![Constraint::Min(1)];
     if queued > 0 {
         rows.push(Constraint::Length(queued));
@@ -101,7 +107,7 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
         // `seam.rs` fills the gap, from the top of the body down to the
         // composer's last row.
         let [left, margin, right] = Layout::horizontal([
-            Constraint::Min(1),
+            Constraint::Length(words),
             Constraint::Length(GAP_COLUMNS),
             Constraint::Length(RAIL_COLUMNS),
         ])
@@ -141,7 +147,7 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
     // last fact already is — and the footer, a strip of hints rather than a
     // panel, keeps the whole width.
     let panel = Rect {
-        width: transcript.width,
+        width: words,
         ..input
     };
     if let Some(completions) = completions {
@@ -168,12 +174,32 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
         (None, None) => {}
     }
     if queued > 0 {
-        queue::draw(app, regions[1], frame.buffer_mut());
+        // The queue takes the row above the composer, and only as wide as the
+        // words: the two panels end on one column, so the seam's strip runs from
+        // the top of the body to the composer's last row unbroken through it.
+        let band = Rect {
+            width: words,
+            ..regions[1]
+        };
+        queue::draw(app, band, frame.buffer_mut());
     }
     let cursor = composer::draw(app, panel, frame.buffer_mut());
     frame.set_cursor_position(cursor);
     footer_rows(app, footer, frame.buffer_mut());
     overlay::draw(app, area, frame.buffer_mut());
+}
+
+/// Where the words end: the columns left of the canvas between the words and the
+/// rail, and the one width every panel in that column is measured and drawn at,
+/// so the queue and the composer cannot disagree about where the frame ends.
+/// Below `RAIL_MIN_WIDTH` the rail is a strip inside the body and the words have
+/// the whole of it, which is what those panels drew at there.
+fn words(width: u16) -> u16 {
+    if width >= RAIL_MIN_WIDTH {
+        width.saturating_sub(GAP_COLUMNS + RAIL_COLUMNS)
+    } else {
+        width
+    }
 }
 
 pub fn draw_card(card: &Card, view: &mut crate::card::View, frame: &mut Frame) {

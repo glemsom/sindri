@@ -6,6 +6,8 @@
 use super::*;
 
 use crossterm::event::{KeyCode, KeyModifiers};
+use ratatui::buffer::Buffer;
+use sindri_tui::theme;
 
 fn send(app: &mut App, text: &str) {
     type_text(app, text);
@@ -236,5 +238,126 @@ fn a_short_terminal_keeps_the_composer_and_the_count_rather_than_the_whole_queue
     assert!(
         any(&rows, "3 queued"),
         "and what it cannot show, it counts: {rows:#?}"
+    );
+}
+
+/// The queued panel's own rectangle, found by its corner: a frame with a run in
+/// flight and nothing open has no box above it but this one.
+fn queue_box(buf: &Buffer) -> Rect {
+    let corner = |row: u16| (0..buf.area.width).find(|column| buf[(*column, row)].symbol() == "╭");
+    let top = (0..buf.area.height)
+        .find(|row| corner(*row).is_some())
+        .expect("the queue's corner is rounded");
+    let left = corner(top).expect("the queue opens on its left");
+    let right = (left..buf.area.width)
+        .find(|column| buf[(*column, top)].symbol() == "╮")
+        .expect("the queue closes on its right");
+    let bottom = (top..buf.area.height)
+        .find(|row| buf[(left, *row)].symbol() == "╰")
+        .expect("the queue closes at the bottom");
+    Rect {
+        x: left,
+        y: top,
+        width: right - left + 1,
+        height: bottom - top + 1,
+    }
+}
+
+/// The words the panel holds, read off its own rows: the text inside its border,
+/// joined the way a paragraph reads, with the `›` each row is marked by taken
+/// away.
+fn queued_words(buf: &Buffer, panel: Rect) -> Vec<String> {
+    (panel.top() + 1..panel.bottom() - 1)
+        .map(|y| {
+            (panel.left() + 1..panel.right() - 1)
+                .map(|x| buf[(x, y)].symbol())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+        .split_whitespace()
+        .filter(|word| *word != "›")
+        .map(str::to_string)
+        .collect()
+}
+
+#[test]
+fn the_queue_ends_where_the_words_end() {
+    // At a hundred columns the body splits into the words' 66, the seam's two
+    // and the rail's 32; at a hundred and forty the words hold 106. The queue is
+    // drawn in the first of them, as the composer is, so the two panels end on
+    // one column and no cell of the rail's or the margin's is painted.
+    let mut app = running();
+    send(&mut app, "and then summarise them");
+
+    for width in [100u16, 140] {
+        let words = width - render::GAP_COLUMNS - RAIL as u16;
+        let buf = buffer(&mut app, width, 24);
+        let panel = queue_box(&buf);
+        assert_eq!(
+            panel.width, words,
+            "the panel is as wide as the words at {width} columns: {panel:?}"
+        );
+        assert_eq!(
+            panel.right(),
+            words,
+            "and its corner lands on the column the strip's light reaches"
+        );
+        for y in panel.top()..panel.bottom() {
+            for x in panel.right()..width {
+                assert_eq!(
+                    buf[(x, y)].bg,
+                    theme::CANVAS,
+                    "({x}, {y}) is beside the queue, and the canvas the theme names is under it"
+                );
+                assert_eq!(
+                    buf[(x, y)].symbol(),
+                    " ",
+                    "({x}, {y}) is canvas, as the rail's column below its last fact is"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn a_queued_prompt_longer_than_the_panel_wraps_inside_it() {
+    let mut app = running();
+    let prompt =
+        "summarise every file the failing test touched and say which of them the fix rewrites";
+    send(&mut app, prompt);
+    let buf = buffer(&mut app, 100, 30);
+    let panel = queue_box(&buf);
+
+    assert_eq!(
+        panel.width, MARGIN as u16,
+        "a long prompt does not widen the panel: {panel:?}"
+    );
+    assert_eq!(
+        panel.right(),
+        MARGIN as u16,
+        "and its corner lands on the column the strip's light reaches"
+    );
+    assert!(
+        panel.height > 3,
+        "it is wrapped over more than one row rather than cut: {panel:?}"
+    );
+    assert_eq!(
+        queued_words(&buf, panel),
+        prompt.split_whitespace().collect::<Vec<_>>(),
+        "every word is inside the panel, at the width it was measured at"
+    );
+}
+
+#[test]
+fn below_the_rail_min_width_the_queue_keeps_the_whole_body() {
+    let mut app = running();
+    send(&mut app, "a queued sentence");
+    let buf = buffer(&mut app, 90, 24);
+    let panel = queue_box(&buf);
+
+    assert_eq!(
+        panel.width, 90,
+        "the rail is a strip inside the body, so the words have all of it: {panel:?}"
     );
 }

@@ -328,7 +328,9 @@ run has spent any.
 **queued prompt** — a prompt sent while a run has the frame: it waits in the queue and runs when
 the run stops, in the order it was typed. `↑` takes the newest back into the **composer**, `Ctrl-X`
 drops it. The **panel** above the composer holds them whole, titled `queued` when one waits and
-`3 queued` when more, cut at six rows with that count standing for the rest.
+`3 queued` when more, cut at six rows with that count standing for the rest. It stands in the
+composer's column and not across the terminal, so the two panels end on one column: it is
+measured at the width it is drawn at, and the seam's strip runs down its rows unbroken.
 
 **thread** — the growing conversation of one TUI session; `/new` starts over. Laid out as a
 document: two blank rows between turns and none inside one, the **gutter** a turn's answer and calls

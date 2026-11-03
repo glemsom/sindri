@@ -1,6 +1,10 @@
 //! The queue: what was typed while a run had the composer, drawn whole on a
 //! panel of its own above it, with the count the footer could not fit.
 //! `↑` takes the newest one back, `Ctrl-X` drops it.
+//!
+//! The panel stands in the composer's column, so it is measured at the words'
+//! width and drawn at that same width: a panel laid out for one width and
+//! wrapped at another is a row short and a line long.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
