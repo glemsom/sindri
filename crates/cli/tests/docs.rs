@@ -5,9 +5,10 @@
 //! moving — and the test still fails when the fact drifts.
 
 use sindri_core::agent::Stopped;
-use sindri_core::config::DEFAULT_MAX_TURNS;
+use sindri_core::config::{DEFAULT_MAX_TURNS, KEYS};
 use sindri_core::skills::{DESCRIPTION_CEILING, Scope};
 use sindri_tui::command::COMMANDS;
+use sindri_types::ExitCode;
 
 /// The glossary, as committed: `include_str!` so the test cannot pass against a
 /// file it read from the wrong directory.
@@ -381,4 +382,112 @@ fn the_readme_states_that_a_repositorys_agents_md_reaches_the_model() {
         "the glossary defines the word, and the paragraph must link its `instructions` \
          entry: {paragraph:?}"
     );
+}
+
+/// The place the README must name a **skill scope** by, beside the word `doctor`
+/// prints for it. The match carries no wildcard, so a fourth scope fails this
+/// test's build until the paragraph is given somewhere to say it lives.
+fn scope_place(scope: Scope) -> &'static str {
+    match scope {
+        Scope::Builtin => "compiled into the binary",
+        Scope::User => "`~/.agents/skills`",
+        Scope::Repo => "each `.agents/skills` from the workspace up to its repository root",
+    }
+}
+
+#[test]
+fn the_readme_names_every_scope_the_catalog_reads() {
+    let install = README
+        .split("\n## ")
+        .find(|section| section.starts_with("Install"))
+        .unwrap_or_else(|| panic!("README.md has no `## Install` section"));
+    let paragraph = install
+        .split("\n\n")
+        .find(|paragraph| paragraph.contains("`doctor`") && paragraph.contains("skill"))
+        .map(|paragraph| paragraph.replace('\n', " "))
+        .unwrap_or_else(|| {
+            panic!("the Install section never says what `doctor` lists: {install:?}")
+        });
+
+    // A reader deciding whether a skill compiled into the binary exists is who
+    // opens this file, so the lowest scope is named beside the two a reader can
+    // find on disk rather than left for `sindri doctor` to spring on them.
+    for scope in [Scope::Builtin, Scope::User, Scope::Repo] {
+        let word = format!("`{}`", scope.as_str());
+        assert!(
+            paragraph.contains(&word),
+            "the catalog reads the `{}` scope and `doctor` prints that word for it, so \
+             the paragraph must name it: {paragraph:?}",
+            scope.as_str()
+        );
+        assert!(
+            paragraph.contains(scope_place(scope)),
+            "the `{}` scope is found where the paragraph must say, at {:?}: \
+             {paragraph:?}",
+            scope.as_str(),
+            scope_place(scope)
+        );
+    }
+}
+
+/// The words the README's exit table gives one code. Exhaustive for the reason
+/// `scope_place` is: a code the table has not learned stops this test compiling.
+fn exit_meaning(code: ExitCode) -> &'static str {
+    match code {
+        ExitCode::Success => "an answer",
+        ExitCode::ModelError => "model or provider error",
+        ExitCode::UsageError => "usage error",
+        ExitCode::EnvironmentFailure => "sandbox or setup failure",
+        ExitCode::TurnCap => "turn cap",
+        ExitCode::Budget => "spent its command time or its output",
+        ExitCode::Cancelled => "cancelled, nothing on stdout",
+    }
+}
+
+#[test]
+fn the_readme_exit_table_carries_every_code_a_run_can_leave_with() {
+    let batch = README
+        .split("\n## ")
+        .find(|section| section.starts_with("Batch mode"))
+        .unwrap_or_else(|| panic!("README.md has no `## Batch mode` section"));
+    let table = batch
+        .split("\n\n")
+        .find(|block| block.starts_with("| Exit |"))
+        .unwrap_or_else(|| panic!("the Batch mode section has no exit table: {batch:?}"));
+
+    for code in [
+        ExitCode::Success,
+        ExitCode::ModelError,
+        ExitCode::UsageError,
+        ExitCode::EnvironmentFailure,
+        ExitCode::TurnCap,
+        ExitCode::Budget,
+        ExitCode::Cancelled,
+    ] {
+        let row = format!("| `{}` | {} ", code.code(), exit_meaning(code));
+        assert!(
+            table.contains(&row),
+            "the run leaves with `{}` for {:?}, and a script branching on it must read \
+             that in the table: {table:?}",
+            code.code(),
+            exit_meaning(code)
+        );
+    }
+}
+
+#[test]
+fn the_readme_configuration_table_names_every_key_the_schema_holds() {
+    let configuration = README
+        .split("\n## ")
+        .find(|section| section.starts_with("Configuration"))
+        .unwrap_or_else(|| panic!("README.md has no `## Configuration` section"));
+
+    for key in KEYS {
+        let named = format!("`{}`", key.name());
+        assert!(
+            configuration.contains(&named),
+            "`KEYS` holds a key the file carries, and the table must name it or a \
+             setting exists that no reader can set: {named} in {configuration:?}"
+        );
+    }
 }
