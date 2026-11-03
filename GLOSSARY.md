@@ -283,11 +283,13 @@ on the edge the values hang off: the sandbox posture, `⬢ bwrap · 1 writable`,
 is one — the skills in force, `◆ house-style`. A chip is shortened to its head when its column
 runs out. The posture's ink is the boundary's state, `GOOD` inside `bwrap` and `BAD` outside it.
 
-**composer** — the input at the bottom: 2–6 rows, `Shift+Enter` for a newline, `@` for a path
-**completion**, `/` for a **command**. With no text in it at all it carries the placeholder `Ask, or
-drop a log here · @ path · / command`, which a draft — a space is a draft — never sits behind. It is
-laid out in the **transcript**'s column and not across the terminal, so the panel ends where the
-prose does and no cell of the **rail**'s column is its own.
+**composer** — the input at the bottom: 2–6 rows, `Shift+Enter` or `Ctrl-J` for a newline, `@` for
+a path **completion**, `/` for a **command**. A paste is the second way a newline gets there: the
+clipboard's text lands whole, at the cursor, its line breaks the rows it was copied in and never
+the `Enter` each of them would have been. With no text in it at all it carries the placeholder
+`Ask, or drop a log here · @ path · / command`, which a draft — a space is a draft — never sits
+behind. It is laid out in the **transcript**'s column and not across the terminal, so the panel ends
+where the prose does and no cell of the **rail**'s column is its own.
 
 **first frame** — the frame before the first prompt: an empty **thread** is not a blank page, but
 the line naming the wire, the model, the workspace and the sandbox, one dim sentence of the

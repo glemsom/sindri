@@ -136,9 +136,10 @@ transcript, rail, composer; off a terminal it is a refusal at exit 2.
   first column, so no word sits against the seam, dot leaders across the gap, every value
   hanging off one edge and a `─` hairline between the blocks. Below 100 columns it becomes
   one strip, inset the same two cells; the face takes the rows left over.
-- **Composer,** two to six rows: `Enter` sends, `Shift+Enter` breaks the line, `Ctrl-Q`
-  leaves, `Ctrl-C` cancels a run and keeps the draft — or clears it when nothing is
-  running.
+- **Composer,** two to six rows: `Enter` sends, `Shift+Enter` or `Ctrl-J` breaks the line,
+  `Ctrl-Q` leaves, `Ctrl-C` cancels a run and keeps the draft — or clears it when nothing
+  is running. A pasted prompt arrives as one draft with its line breaks kept, and waits
+  for the `Enter` you press.
 - **Scroll and copy:** `PgUp`/`PgDn` and the wheel move the transcript, `Home` goes to the
   first turn and `End` back to the tail, which is followed again; a reader who is scrolled
   back is told what arrived below them (`↓ 4 new rows`) and a thread longer than the

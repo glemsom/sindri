@@ -103,6 +103,7 @@ mod commands;
 mod completion;
 mod copy;
 mod marks;
+mod paste;
 mod prompts;
 mod screen;
 mod skill;

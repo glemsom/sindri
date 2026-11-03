@@ -16,7 +16,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use sindri_core::agent::{Report, Spent};
 use sindri_core::provider::Usage;
 
-use super::{Paint, turn_of_the_loop, walk};
+use super::{Paint, heard, turn_of_the_loop, walk};
 use crate::app::App;
 use crate::driver::{Finished, Stop};
 use crate::msg::Msg;
@@ -180,4 +180,37 @@ fn the_loop_draws_for_the_clock_while_a_run_is_live_and_never_while_idle() {
         idle + 1,
         "an idle frame is drawn for a message and never for the clock"
     );
+}
+
+/// The frame's hearing, fed by a test rather than by a terminal: what the loop
+/// does with an event, and what it does with bytes no event could be made of.
+#[test]
+fn a_sequence_the_terminal_cannot_parse_does_not_end_the_frames_hearing() {
+    let (tx, rx) = mpsc::channel();
+    let (feeds, read) = mpsc::channel::<std::io::Result<crossterm::event::Event>>();
+    let listener =
+        std::thread::spawn(move || heard(tx, move || read.recv().expect("a read the test feeds")));
+    let key = |ch: char| {
+        Ok(crossterm::event::Event::Key(KeyEvent::new(
+            KeyCode::Char(ch),
+            KeyModifiers::NONE,
+        )))
+    };
+
+    // Bytes the frame has no event for: dropped, and the next key is still
+    // heard. A frame that stopped hearing here could not be typed at again.
+    let _ = feeds.send(Err(std::io::Error::other("no event in those bytes")));
+    let _ = feeds.send(key('x'));
+    let said = rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("the frame is still hearing after a sequence it cannot parse");
+    assert!(
+        matches!(said, Msg::Key(pressed) if pressed.code == KeyCode::Char('x')),
+        "the key after the stray sequence is the one heard"
+    );
+
+    // The loop ends where the frame does: nothing is listening any more.
+    drop(rx);
+    let _ = feeds.send(key('y'));
+    listener.join().expect("the listener ends with the frame");
 }

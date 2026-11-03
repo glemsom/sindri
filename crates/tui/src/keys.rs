@@ -56,6 +56,13 @@ impl App {
                 self.composer.newline();
                 self.refresh_completion();
             }
+            // `0x0a` is `Ctrl-J` in raw mode, which is how a newline inside a
+            // paste arrives at a terminal that sends off the clipboard without
+            // asking: it breaks the row here, as `Shift+Enter` does.
+            KeyCode::Char('j') if ctrl => {
+                self.composer.newline();
+                self.refresh_completion();
+            }
             KeyCode::Enter => self.enter(),
             KeyCode::Backspace => {
                 self.composer.backspace();
@@ -79,6 +86,21 @@ impl App {
             }
             _ => {}
         }
+    }
+
+    /// A paste is one draft and never a keystroke: the text lands at the cursor
+    /// as its own rows, and nothing is sent or queued — the reader presses
+    /// `Enter` when they are ready, and that key is the only one that sends.
+    /// A run in flight changes nothing, because the queue is `Enter`'s. An open
+    /// overlay owns the screen, so a paste under one is ignored like every
+    /// other event that is not a key.
+    pub fn paste(&mut self, text: &str) {
+        if self.overlay.is_some() {
+            return;
+        }
+        self.clear_mark();
+        self.composer.insert_str(text);
+        self.refresh_completion();
     }
 
     /// The keys an open overlay takes. It owns them: nothing behind it moves

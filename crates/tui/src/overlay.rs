@@ -30,7 +30,7 @@ pub const BINDINGS: &[Binding] = &[
         what: "send the prompt, accept a completion, or open a call and fold it again",
     },
     Binding {
-        keys: "Shift+Enter",
+        keys: "Shift+Enter, Ctrl-J",
         mouse: None,
         what: "a newline in the prompt",
     },
@@ -195,7 +195,7 @@ mod tests {
     /// a failure, not a tautology.
     const REQUIRED: &[&str] = &[
         "Enter",
-        "Shift+Enter",
+        "Shift+Enter, Ctrl-J",
         "Tab",
         "Esc",
         "PgUp, PgDn",

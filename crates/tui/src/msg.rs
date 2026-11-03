@@ -14,6 +14,9 @@ use crate::rail::Launch;
 pub enum Msg {
     Key(KeyEvent),
     Mouse(MouseEvent),
+    /// A paste, whole and unasked for: a draft and never a keystroke, so no
+    /// line break in it is an `Enter`.
+    Paste(String),
     /// The terminal changed size. Nothing in the frame changes: the next
     /// frame asks the terminal the new one, and this message is what asks
     /// for that frame.

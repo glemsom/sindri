@@ -81,17 +81,23 @@ fn alternate_screen() -> Option<DefaultTerminal> {
     // The frame takes the mouse because it draws its own selection: a drag
     // copies rendered rows, and Shift hands the gesture back.
     let _ = crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture,);
+    // And it asks for bracketed paste, because a prompt copied from elsewhere
+    // is one draft: without the mode a terminal sends the clipboard raw, and
+    // every line break in it arrives as an `Enter` that runs a prompt of its
+    // own. Asked for where the mouse is, and given back where the mouse is.
+    let _ = crossterm::execute!(std::io::stdout(), crossterm::event::EnableBracketedPaste);
     take_keys();
     Some(terminal)
 }
 
 /// What the frame asked the terminal for, and gives back when it closes: the
-/// mouse, and keys it can tell apart.
+/// mouse, bracketed paste, and keys it can tell apart.
 fn release_terminal() {
     let _ = crossterm::execute!(
         std::io::stdout(),
         crossterm::event::PopKeyboardEnhancementFlags,
         crossterm::event::DisableMouseCapture,
+        crossterm::event::DisableBracketedPaste,
     );
 }
 
@@ -316,6 +322,7 @@ fn apply(app: &mut App, message: Msg) {
     match message {
         Msg::Key(key) => app.key(key),
         Msg::Mouse(mouse) => app.mouse(mouse),
+        Msg::Paste(text) => app.paste(&text),
         Msg::Resize => {}
         Msg::Event(event) => app.event(event),
         Msg::Output(side, text) => app.output(side, &text),
@@ -370,32 +377,36 @@ fn draw_off_thread(app: &mut App, tx: &Sender<Msg>) {
 }
 
 fn listen_for_keys(tx: Sender<Msg>) {
-    std::thread::spawn(move || {
-        loop {
-            match event::read() {
-                Ok(TerminalEvent::Key(key)) => {
-                    if tx.send(Msg::Key(key)).is_err() {
-                        return;
-                    }
-                }
-                Ok(TerminalEvent::Mouse(mouse)) => {
-                    if tx.send(Msg::Mouse(mouse)).is_err() {
-                        return;
-                    }
-                }
-                // A resize has nothing to change in the frame, but it is the
-                // one thing that asks for a frame: the draw reads the
-                // terminal's new size.
-                Ok(TerminalEvent::Resize(..)) => {
-                    if tx.send(Msg::Resize).is_err() {
-                        return;
-                    }
-                }
-                Ok(_) => {}
-                Err(_) => return,
-            }
+    std::thread::spawn(move || heard(tx, event::read));
+}
+
+/// The loop that hears the terminal, over whatever `read` is: the terminal's
+/// own, or a test's. A frame that has stopped hearing cannot be typed at again,
+/// so nothing it reads ends the loop — a sequence it cannot make an event of is
+/// bytes dropped and a frame still listening, and a paste arriving in some
+/// shape it does not know is dropped the same way. The loop ends where the
+/// frame does: when the channel it speaks on has no listener left.
+fn heard(tx: Sender<Msg>, mut read: impl FnMut() -> std::io::Result<TerminalEvent>) {
+    loop {
+        let message = match read() {
+            Ok(TerminalEvent::Key(key)) => Msg::Key(key),
+            Ok(TerminalEvent::Mouse(mouse)) => Msg::Mouse(mouse),
+            // A resize has nothing to change in the frame, but it is the one
+            // thing that asks for a frame: the draw reads the terminal's new
+            // size.
+            Ok(TerminalEvent::Resize(..)) => Msg::Resize,
+            // A paste arrives whole, and is a draft rather than a keystroke:
+            // its line breaks are the composer's rows and never an `Enter`.
+            Ok(TerminalEvent::Paste(text)) => Msg::Paste(text),
+            // Focus gained or lost is a fact the frame draws nothing with.
+            Ok(_) => continue,
+            // Bytes no event could be made of: dropped, never the hearing.
+            Err(_) => continue,
+        };
+        if tx.send(message).is_err() {
+            return;
         }
-    });
+    }
 }
 
 mod tasks;

@@ -1,10 +1,11 @@
 //! The dependencies the frame is built on, as the workspace manifest declares
-//! them: crossterm is asked for a Linux terminal's events and never for its
-//! `default` set, whose `windows` member pins Win32 bindings nothing here can
-//! compile, and `image` is asked for exactly the formats the picture store
-//! draws. The manifest is the only place those requests are written down, so
-//! they are asserted rather than trusted — the reader who wants a feature back
-//! reads the line with the comment above it, and is meant to be stopped there.
+//! them: crossterm is asked for a Linux terminal's events and the paste it sends
+//! once it has been asked, and never for its `default` set, whose `windows`
+//! member pins Win32 bindings nothing here can compile, and `image` is asked for
+//! exactly the formats the picture store draws. The manifest is the only place
+//! those requests are written down, so they are asserted rather than trusted —
+//! the reader who wants a feature back reads the line with the comment above it,
+//! and is meant to be stopped there.
 
 /// The manifest, as committed: `include_str!` so the test cannot pass against a
 /// file it read from the wrong directory.
@@ -32,11 +33,14 @@ fn declaration(name: &str) -> (String, String) {
 }
 
 #[test]
-fn the_manifest_asks_crossterm_for_events_and_never_for_windows() {
+fn the_manifest_asks_crossterm_for_events_and_paste_and_never_for_windows() {
     let (comment, line) = declaration("crossterm");
 
-    // `windows` is the feature that names the Win32 bindings — `crossterm_winapi`
-    // and `winapi` — and no crate here holds a Windows conditional.
+    // What this test refuses is `windows`, the feature that names the Win32
+    // bindings — `crossterm_winapi` and `winapi` — because no crate here holds
+    // a Windows conditional. Paste is not refused: a pasted prompt arrives as
+    // one event and must not arrive as a keystroke per line break, so the
+    // feature is asked for beside `events`.
     assert!(
         !line.contains("windows"),
         "the `windows` feature asks for Win32 bindings nothing here compiles: {line:?}"
@@ -47,19 +51,20 @@ fn the_manifest_asks_crossterm_for_events_and_never_for_windows() {
         line.contains("default-features = false"),
         "crossterm's defaults are not the set the frame wants: {line:?}"
     );
-    // Keys, mouse and resize reach the frame through `events`; it is what the
-    // frame's key and mouse tests would miss.
+    // Keys, mouse and resize reach the frame through `events`, and a paste
+    // through `bracketed-paste`: both are what the frame's tests would miss.
     assert_eq!(
         features(&line),
-        ["events"],
-        "the frame is fed by `events` and by no other feature: {line:?}"
+        ["events", "bracketed-paste"],
+        "the frame is fed by `events` and by the paste the terminal sends once it \
+         is asked, and by no other feature: {line:?}"
     );
     // The reason, in the words the next reader needs before they add it back.
-    for word in ["linux", "windows"] {
+    for word in ["linux", "windows", "paste"] {
         assert!(
             comment.to_lowercase().contains(word),
-            "the comment above the dependency says what the feature set is and \
-             what `windows` would fetch: {comment:?}"
+            "the comment above the dependency says what the feature set is, what \
+             `windows` would fetch and why paste is in it: {comment:?}"
         );
     }
 }

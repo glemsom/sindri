@@ -1,8 +1,9 @@
 //! The composer: the prompt being typed, as rows and a cursor. Enter
-//! sends, Shift+Enter breaks the line, and a cancel leaves the draft where
-//! it was. The cursor is held as a character index, because an edit is
-//! expressed in characters, and reported in cells, because the terminal
-//! draws cells and a glyph may be two of them wide.
+//! sends, Shift+Enter and Ctrl-J break the line, a paste arrives as the rows it
+//! was copied in, and a cancel leaves the draft where it was. The cursor is held
+//! as a character index, because an edit is expressed in characters, and
+//! reported in cells, because the terminal draws cells and a glyph may be two of
+//! them wide.
 
 use unicode_width::UnicodeWidthStr;
 
@@ -99,6 +100,24 @@ impl Composer {
             let at = byte_index(row, column);
             row.insert(at, ch);
             self.column = column + 1;
+        }
+    }
+
+    /// A paste, inserted at the cursor as the rows it holds rather than as the
+    /// characters a key would have sent: `insert` and `newline` are one
+    /// character's doors, and a clipboard arrives with hundreds at once. A line
+    /// break is sent three ways — `\n`, `\r\n` and a lone `\r` — and each is
+    /// one row, so a pasted prompt keeps the shape it was copied in.
+    pub fn insert_str(&mut self, text: &str) {
+        self.ensure_row();
+        let lines = text.replace("\r\n", "\n").replace('\r', "\n");
+        for (index, line) in lines.split('\n').enumerate() {
+            if index > 0 {
+                self.newline();
+            }
+            for ch in line.chars() {
+                self.insert(ch);
+            }
         }
     }
 
