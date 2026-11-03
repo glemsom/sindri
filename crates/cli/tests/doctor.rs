@@ -113,6 +113,14 @@ fn doctor_prints_the_description_and_the_catalog_and_nothing_else() {
         "one row per skill and nothing after them: {stdout}"
     );
 
+    // The `skill` tool's own description is a request's, and what doctor prints
+    // of a skill is its row in the catalog: the doctrine is re-sent on every
+    // turn, and a diagnostic is not a turn.
+    assert!(
+        !stdout.contains(sindri_core::agent::DOCTRINE),
+        "doctor prints the catalog, not the skill tool's description: {stdout}"
+    );
+
     // Nothing but the description and the catalog: every line is a known part
     // of one, so prose that is neither cannot leak onto stdout.
     for line in stdout.lines() {

@@ -145,7 +145,10 @@ impl SkillTool {
 
 /// The doctrine and the catalog, in the one place a model reads while it is
 /// choosing a tool. Every word is paid for on every turn of every run that has
-/// a skill, so it says only what the schema and the result cannot.
+/// a skill, so it says only what the schema and the result cannot: the key a
+/// task is matched on, which is the catalog below, the brake on over-triggering
+/// and the fact that a load happens once. The shape of a result is the result's
+/// to say, because a model learns it by calling.
 fn describe(skills: &[Skill]) -> ToolSpec {
     let mut description = format!("{DOCTRINE}Skills:\n");
     for skill in skills {
@@ -160,7 +163,6 @@ fn describe(skills: &[Skill]) -> ToolSpec {
                 "name": {
                     "type": "string",
                     "enum": skills.iter().map(|skill| skill.name.clone()).collect::<Vec<_>>(),
-                    "description": "The skill to load, from the catalog above.",
                 },
             },
             "required": ["name"],

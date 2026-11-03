@@ -87,19 +87,23 @@ fn the_catalog_and_the_doctrine_are_in_the_tool_it_describes() {
 
     let spec = tool.spec();
     assert_eq!(spec.name, "skill");
-    // Not the cost of a result: `bash` states it in the same request, and a
-    // sentence paid on every turn to repeat it buys nothing.
-    for promised in [
-        "already_loaded",
-        "frontmatter stripped",
-        "- alpha: what alpha is for",
-    ] {
+    // What a model cannot read off the schema or learn from calling: the key a
+    // task is matched on, the brake on over-triggering and the
+    // once-per-conversation answer.
+    for promised in ["a line below", "and not otherwise", "already_loaded"] {
         assert!(
             spec.description.contains(promised),
             "the description says `{promised}`: {}",
             spec.description
         );
     }
+    assert!(
+        spec.parameters["properties"]["name"]
+            .get("description")
+            .is_none(),
+        "the enum is the contract, and the catalog is beside this field: {}",
+        spec.parameters["properties"]["name"]
+    );
     assert_eq!(spec.parameters["type"], "object");
     assert_eq!(spec.parameters["required"][0], "name");
     assert_eq!(
@@ -146,11 +150,11 @@ fn the_description_opens_with_the_doctrine_compiled_in_beside_this_module() {
 }
 
 /// The sentence a run is asked to load a skill by, and the one the bench's third
-/// arm removes: one line, so the arm differs by that line alone.
-const TRIGGER: &str = "Call it before acting when a task is one it covers.";
+/// arm removes: one line, so the arm differs by that line alone, brake included.
+const TRIGGER: &str = "Call it before acting when a task is one it covers, and not otherwise.";
 
 #[test]
-fn the_skill_description_does_not_restate_the_rule_the_bash_description_states() {
+fn the_description_says_nothing_a_result_or_another_tool_already_says() {
     let workspace = tempfile::TempDir::new().expect("workspace");
     let catalog = alpha(workspace.path());
     // `bash` is in every run, and it already says what a result costs: it is
@@ -173,15 +177,78 @@ fn the_skill_description_does_not_restate_the_rule_the_bash_description_states()
         !description.contains("sent again with every later turn"),
         "so `skill` spends no word on it: {description}"
     );
-    assert!(
-        !description.contains("budget"),
-        "nor on the cost of a body, which is a result like any other: {description}"
-    );
+    // The words that mean the shape of a load result has crept back in: a model
+    // learns that shape by calling, once, and every word of it is re-sent on
+    // every turn of every run that holds a skill. Asked of the doctrine, which
+    // is the tool's own prose — a catalog line is a skill's description, and
+    // whatever words a workspace puts there are that skill's to spend.
+    for crept in ["frontmatter", "files", "directory", "budget"] {
+        assert!(
+            !DOCTRINE.contains(crept),
+            "the doctrine says nothing of `{crept}`, which the result says: {DOCTRINE}"
+        );
+    }
     assert!(
         description.contains("already_loaded"),
         "what the schema cannot carry is still said: {description}"
     );
+    assert!(
+        description.contains("- alpha: what alpha is for"),
+        "and the catalog is where the schema's names are matched: {description}"
+    );
 }
+
+#[test]
+fn the_doctrine_is_two_sentences_and_then_the_catalog_in_its_own_order() {
+    let workspace = tempfile::TempDir::new().expect("workspace");
+    let mut catalog = alpha(workspace.path());
+    let mut second = catalog.skills[0].clone();
+    second.name = "beta".to_string();
+    second.description = "what beta is for".to_string();
+    catalog.skills.push(second);
+    let built = tool(&catalog);
+    let description = &built.spec().description;
+
+    // Two sentences and no more: what the tool loads and the line to match a
+    // task on, in one; when to call it, in the other. A sentence is what ends a
+    // line here, so the third one would be the line that bought nothing.
+    assert_eq!(
+        DOCTRINE.matches(".\n").count(),
+        2,
+        "the doctrine is two sentences, each ending its line: {DOCTRINE}"
+    );
+    assert!(
+        DOCTRINE.len() <= DOCTRINE_CHARS,
+        "and spends no more than the {DOCTRINE_CHARS} characters it was cut to, not {}: \
+         {DOCTRINE}",
+        DOCTRINE.len()
+    );
+
+    // The catalog is the doctrine's second half and nothing else: one heading,
+    // then the skills in the order the scan found them, which is the order the
+    // schema's enum offers them in.
+    let listed: String = catalog
+        .skills
+        .iter()
+        .map(|skill| format!("- {}: {}\n", skill.name, skill.description))
+        .collect();
+    assert_eq!(
+        description.strip_prefix(DOCTRINE),
+        Some(format!("Skills:\n{listed}").as_str()),
+        "the catalog follows the doctrine in its own order: {description}"
+    );
+    assert_eq!(
+        built.spec().parameters["properties"]["name"]["enum"],
+        serde_json::json!(["alpha", "beta"]),
+        "and the enum is that catalog's order, unchanged"
+    );
+}
+
+/// The most characters the doctrine may spend, the newline that ends its last
+/// sentence included: the figure it was cut to when the sentence narrating a
+/// result's shape left, kept here so the prose cannot creep back one clause at a
+/// time on a text every turn of every run that holds a skill pays for.
+const DOCTRINE_CHARS: usize = 227;
 
 #[test]
 fn the_description_sends_no_word_on_where_a_body_path_resolves() {

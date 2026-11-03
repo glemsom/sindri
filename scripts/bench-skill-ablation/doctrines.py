@@ -25,10 +25,10 @@ import pathlib
 import sys
 
 # The sentence the third arm removes: the doctrine's trigger sentence, with the
-# clause that limits it to a task the skill covers. The line saying a load
-# happens once is a sentence of its own and stays, so the arm differs by this one
-# line and nothing else.
-TRIGGER = "Call it before acting when a task is one it covers."
+# clause that limits it to a task the skill covers and the brake that keeps it
+# off the tasks the skill does not. The words saying a load happens once are left
+# in place, so the arm differs by this one line and nothing else.
+TRIGGER = "Call it before acting when a task is one it covers, and not otherwise."
 
 USAGE = ("usage: doctrines.py without-trigger FILE | carries BINARY | sentence")
 

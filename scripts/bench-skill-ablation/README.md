@@ -29,11 +29,12 @@ python3 bench.py report results/$BENCH_MODEL.jsonl
 `build_arm.sh without` empties `BUILTINS` in `crates/core/src/skills/builtin.rs`.
 `build_arm.sh no-trigger` writes the shipped doctrine one sentence shorter into
 `crates/core/src/agent/skill/doctrine.md` — the line that asks for a load before a task is
-touched, `Call it before acting when a task is one it covers.`, and nothing else. Both put
-every file back byte for byte: no run can forget to set them, and no product code carries a
-switch that exists only for a bench. With the table empty the catalog holds no skill at all
-— the fixture ships none and `run_one.sh` points `HOME` at an empty directory — so the
-`skill` tool is not registered and the run pays for neither the catalog line nor a body.
+touched, `Call it before acting when a task is one it covers, and not otherwise.`, and
+nothing else. Both put every file back byte for byte: no run can forget to set them, and no
+product code carries a switch that exists only for a bench. With the table empty the catalog
+holds no skill at all — the fixture ships none and `run_one.sh` points `HOME` at an empty
+directory — so the `skill` tool is not registered and the run pays for neither the catalog
+line nor a body.
 
 The doctrine's removal is `doctrines.py`'s, and it refuses a text that no longer carries
 the sentence: an arm that is the shipped arm under another name would report one wording
