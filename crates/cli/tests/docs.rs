@@ -1,6 +1,7 @@
-//! The vocabulary, kept true by `GLOSSARY.md`: every entry names a word the
-//! code carries, and the defaults, closed sets and identifiers it points at are
-//! read from the code rather than trusted to keep up. An entry is pinned to its
+//! The documents a reader reaches first — the brief, the vocabulary, the README
+//! and two of the records — kept true: every claim names a word, a default, a
+//! closed set or a version the code carries, read from the code rather than
+//! trusted to keep up. An entry is pinned to its
 //! fact and not to a sentence, so the file can be rewritten without the test
 //! moving — and the test still fails when the fact drifts.
 
@@ -18,6 +19,115 @@ const GLOSSARY: &str = include_str!("../../../GLOSSARY.md");
 /// reader deciding whether to write a skill reads, so it is asserted rather than
 /// trusted to keep up with the run.
 const README: &str = include_str!("../../../README.md");
+
+/// The brief an agent reads before it reads anything else: `include_str!` for the
+/// reason the glossary is, and because a claim about the project's status or its
+/// gate is worth more as a test than as a promise.
+const AGENT_BRIEF: &str = include_str!("../../../AGENTS.md");
+
+/// The workspace manifest, as committed: the status line an agent reads names the
+/// version the tree is actually at, so it is read here rather than trusted.
+const WORKSPACE_MANIFEST: &str = include_str!("../../../Cargo.toml");
+
+/// The version the workspace holds, read from `[workspace.package]` — the one place
+/// every crate's `version.workspace = true` resolves to.
+fn workspace_version() -> &'static str {
+    WORKSPACE_MANIFEST
+        .split("[workspace.package]")
+        .nth(1)
+        .and_then(|block| {
+            block
+                .lines()
+                .find(|line| line.trim_start().starts_with("version = "))
+        })
+        .and_then(|line| line.split('"').nth(1))
+        .unwrap_or_else(|| {
+            panic!("[workspace.package] states one version, and every crate resolves to it")
+        })
+}
+
+#[test]
+fn the_agent_brief_does_not_call_this_a_prototype() {
+    // The brief is where an agent learns whether its work is throwaway, and this
+    // project is a released crate workspace, not a proof of concept. One word is
+    // the whole of the difference, so it is the one thing checked first.
+    for disowned in [
+        "POC",
+        "proof of concept",
+        "Proof of concept",
+        "provisional",
+        "throwaway",
+        "prototype",
+    ] {
+        assert!(
+            !AGENT_BRIEF.contains(disowned),
+            "the tree ships a release pipeline, an installer, ten evals and a triaged \
+             backlog, so the brief cannot call it {disowned:?}"
+        );
+    }
+}
+
+#[test]
+fn the_agent_brief_states_the_definition_of_done_and_the_commit() {
+    for named in ["`make check`", "`make hooks`", "`make audit`"] {
+        assert!(
+            AGENT_BRIEF.contains(named),
+            "{named} is part of how a change is proven, and nothing else in the tree \
+             states it for an agent: {AGENT_BRIEF:?}"
+        );
+    }
+    // The subject a commit carries is a convention and not a fact any file states:
+    // the prefix names the area, the sentence says what changed, the number names
+    // the ticket.
+    for named in ["lowercase area prefix", "sentence", "(#"] {
+        assert!(
+            AGENT_BRIEF.contains(named),
+            "the commit convention is the brief's to state and no other file's, and \
+             {named:?} is part of it: {AGENT_BRIEF:?}"
+        );
+    }
+    assert!(
+        AGENT_BRIEF.contains("scripts/release-changelog.sh"),
+        "a changelog is derived from those subjects, and the brief must name the script \
+         that does it: {AGENT_BRIEF:?}"
+    );
+}
+
+#[test]
+fn the_agent_brief_points_at_the_files_an_agent_reads_first() {
+    for named in [
+        "GLOSSARY.md",
+        "docs/agents/issue-tracker.md",
+        "docs/agents/triage-labels.md",
+        "docs/agents/domain.md",
+    ] {
+        assert!(
+            AGENT_BRIEF.contains(named),
+            "an agent that has read the brief and nothing else reaches {named}, so the \
+             brief must send it there: {AGENT_BRIEF:?}"
+        );
+    }
+    assert!(
+        AGENT_BRIEF.contains("docs/adr/0002-two-tools.md"),
+        "the one invariant worth a sentence is the one whose record argues it, and the \
+         tool set's record is `docs/adr/0002-two-tools.md`: {AGENT_BRIEF:?}"
+    );
+    assert!(
+        !AGENT_BRIEF.contains("docs/adr/0003-a-third-tool-open.md"),
+        "ADR 0003 is superseded, so pointing an agent at it costs a search: \
+         {AGENT_BRIEF:?}"
+    );
+}
+
+#[test]
+fn the_agent_brief_carries_the_version_the_workspace_is_at() {
+    let version = workspace_version();
+    assert!(
+        AGENT_BRIEF.contains(&format!("v{version}")),
+        "the workspace is at {version}, and the brief's status line must say so \
+         rather than a version of its own: {AGENT_BRIEF:?}"
+    );
+}
 
 /// The tool set's record, as committed: the one argument for `bash` against the two
 /// tools the shell cannot carry, since ADR 0003 was folded into it.
