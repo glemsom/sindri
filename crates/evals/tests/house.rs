@@ -80,14 +80,10 @@ fn obeyed() -> (tempfile::TempDir, Run) {
             "{{\"answer\":\"{ANSWER}\",\"turns\":3,\"stopped\":\"final\",\"tool_calls\":2}}\n"
         ),
         stderr: String::new(),
-        requests: vec![Request::literal(
-            "POST",
-            "/v1/messages",
-            &format!(
-                "{}\n\n{text}",
-                "You are Sindri, answering a developer at a Unix terminal."
-            ),
-        )],
+        // The one request this check reads, carrying the rules and nothing else:
+        // the stance a run also sends is not this check's subject, and a copy of
+        // it here could only drift from the message the tree composes.
+        requests: vec![Request::literal("POST", "/v1/messages", &text)],
         workspace: repo,
         state,
         live: false,

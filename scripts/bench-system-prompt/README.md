@@ -20,10 +20,16 @@ REPS=6 TAG=$BENCH_MODEL ./sweep.sh results/$BENCH_MODEL-v02.jsonl v02
 answer, the task's verdict and what the run cost — input tokens summed over the turns,
 output tokens, turns, and the bytes of tool output the model read.
 
-The variants are the texts in `variants.py`; `build_variant.sh` writes one into
-`crates/core/src/provider/rig_wire.rs`, builds and copies the binary, so `git checkout
-crates/core/src/provider/rig_wire.rs` restores the tree. `v00` is not one of those texts:
-it is the tree's own `PREAMBLE`, which `variants.py` reads out of that file.
+The variants are the texts in `variants.py`; `build_variant.sh` writes one into the
+`STANCE` literal of `crates/core/src/preamble.rs` — the one file the tree ships its prompt
+in — builds and copies the binary, and puts that file back byte for byte on every way out,
+a failed build included. `v00` is not one of those texts: it is the tree's own `STANCE`,
+which `variants.py` reads out of that file. A variant replaces the stance and nothing else;
+the Environment section is composed per run and is the same in every arm.
+
+`scripts/tests/bench-prompt.sh` checks both halves on the gate — the baseline is read out of
+the file that ships the prompt, and the source comes back byte for byte — without a build or
+a bill.
 
 ## Repetitions
 

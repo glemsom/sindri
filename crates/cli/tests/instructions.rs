@@ -12,7 +12,7 @@ mod common;
 use std::path::{Path, PathBuf};
 
 use common::provider::{MockProvider, Reply};
-use common::{Env, stderr, stdout};
+use common::{Env, stderr, stdout, system_text};
 
 /// The rule a run must be working to: distinctive enough that no other text in
 /// a request could hold it.
@@ -65,21 +65,6 @@ fn two_turns() -> MockProvider {
         Reply::tool_call("call-1", "echo one", ""),
         Reply::answer("done"),
     ])
-}
-
-/// The system message one request carried, as the model reads it: the blocks
-/// the wire sends, joined back into the text they were written as.
-fn system_text(request: &common::provider::Request) -> String {
-    request.json()["system"]
-        .as_array()
-        .map(|blocks| {
-            blocks
-                .iter()
-                .filter_map(|block| block["text"].as_str())
-                .collect::<Vec<_>>()
-                .join("")
-        })
-        .unwrap_or_default()
 }
 
 fn id_of(output: &std::process::Output) -> String {
@@ -180,41 +165,47 @@ fn verbose_and_doctor_name_the_file_in_the_same_words() {
 }
 
 #[test]
-fn no_agents_md_leaves_the_request_alone() {
+fn a_repository_with_no_instructions_adds_nothing_and_one_with_instructions_appends_them() {
     let env = Env::new();
     let mock = MockProvider::start(vec![Reply::answer("done")]);
-    let bare = run(&env, &mock, &env.workspace.clone(), &[]);
-    assert_eq!(bare.status.code(), Some(0), "stderr: {}", stderr(&bare));
+    let bare_run = run(&env, &mock, &env.workspace.clone(), &[]);
+    assert_eq!(
+        bare_run.status.code(),
+        Some(0),
+        "stderr: {}",
+        stderr(&bare_run)
+    );
 
     let deep = checkout(&env, RULES);
     let other = MockProvider::start(vec![Reply::answer("done")]);
-    let with_rules = run(&env, &other, &deep, &[]);
+    let ruled_run = run(&env, &other, &deep, &[]);
     assert_eq!(
-        with_rules.status.code(),
+        ruled_run.status.code(),
         Some(0),
         "stderr: {}",
-        stderr(&with_rules)
+        stderr(&ruled_run)
     );
 
     let before = system_text(&mock.requests()[0]);
     let after = system_text(&other.requests()[0]);
+
+    // What follows the preamble, written out here as the contract rather than
+    // read back off the message: nothing at all where the repository has none,
+    // and their one lead-in line — naming the file at the repository's root, not
+    // the workspace three directories in — then the file's own bytes where it has
+    // them. What the preamble's own facts say is `tests/preamble.rs`'s business,
+    // and this file copies none of it.
     assert!(
-        !before.is_empty() && !before.contains("make audit"),
+        before.contains("Environment\n") && !before.contains("make audit"),
         "a workspace with no rules sends the preamble alone: {before}"
     );
-    assert!(
-        after.contains("make audit"),
-        "a run with rules carries them: {after}"
+    let rules = format!(
+        "House rules for this repository ({}), more specific than the guidance above:\n\n{RULES}",
+        env.canonical_workspace().join("AGENTS.md").display()
     );
     assert!(
-        after.starts_with(&before),
-        "and the preamble it follows is the one every run sends, byte for byte: \
-         {before} vs {after}"
-    );
-    assert_eq!(
-        after[before.len()..].trim_start().lines().count(),
-        3,
-        "what follows it is our one line, the file's own, and nothing else"
+        after.contains("Environment\n") && after.ends_with(&format!("\n\n{rules}")),
+        "and a run with rules carries them after the preamble, unchanged: {after}"
     );
 }
 

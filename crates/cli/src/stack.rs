@@ -89,10 +89,9 @@ impl Stack<'_> {
             self.executor.dress(executor),
         );
         Dials {
-            model: Box::new(Client::new(
-                self.config,
-                self.session.instructions().block(),
-            )),
+            // The preamble is composed from the session rather than handed in:
+            // the workspace a request names is the one the policy mounted.
+            model: Box::new(Client::new(self.config, self.session.preamble())),
             // The tool set decides whether `bash` carries the pointer to the
             // catalog, because it is the one place that knows whether `skill` is
             // registered at all.

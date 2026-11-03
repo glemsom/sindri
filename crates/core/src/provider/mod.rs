@@ -277,26 +277,28 @@ pub struct Client {
     base_url: Option<String>,
     model: String,
     extra_headers: Vec<(String, String)>,
-    /// The repository's own rules as the model receives them, beside the
-    /// preamble. Settled when the client is built, because a file read once at
-    /// boot is not read again on every turn.
-    instructions: Option<String>,
+    /// The preamble every turn carries, composed once by the session
+    /// (`crate::preamble`): the stance, the workspace this run stands in — a
+    /// fact only the run has — and the repository's instructions after them.
+    /// Settled when the client is built, because neither a file read once at
+    /// boot nor a path the run started from changes on a later turn.
+    preamble: crate::preamble::Preamble,
 }
 
 impl Client {
-    pub fn new(config: &Config, instructions: Option<String>) -> Client {
+    pub fn new(config: &Config, preamble: crate::preamble::Preamble) -> Client {
         Client {
             provider: config.provider,
             api_key: config.api_key.clone(),
             base_url: config.base_url.clone(),
             model: config.model.clone(),
             extra_headers: config.extra_headers.clone(),
-            instructions,
+            preamble,
         }
     }
 
-    pub(crate) fn instructions(&self) -> Option<&str> {
-        self.instructions.as_deref()
+    pub(crate) fn preamble(&self) -> &str {
+        self.preamble.as_str()
     }
 
     pub fn provider(&self) -> crate::config::Provider {

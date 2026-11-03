@@ -10,6 +10,7 @@ pub mod exec; // the bash executor: one port, two implementations
 pub mod instructions; // a repository's own rules, read once at boot
 pub mod output; // the machine-readable output contract
 pub mod paths; // where Sindri keeps its state
+pub mod preamble; // the preamble every turn carries: stance, environment, instructions
 pub mod provider; // the model, behind one seam
 pub mod record; // the record every run leaves
 pub mod sandbox; // one policy value, and the only two things derived from it

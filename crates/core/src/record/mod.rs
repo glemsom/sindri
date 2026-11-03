@@ -67,7 +67,7 @@ pub struct Start {
     /// The tree the run stands in, and its git facts where it is a repository.
     pub workspace: String,
     pub git: Option<Git>,
-    /// The repository's own rules handed to the model beside the preamble.
+    /// The repository's own rules, appended to the preamble the model reads.
     pub instructions: Option<crate::instructions::Handed>,
     /// The dials the run obeys.
     pub max_turns: u32,

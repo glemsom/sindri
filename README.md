@@ -221,7 +221,7 @@ writable paths would turn every `git clone && sindri` into a privilege escalatio
 
 A repository's own house rules are not a setting, and they arrive all the same: the
 `AGENTS.md` at the repository root — never a nested one, never an ancestor's — is read
-once at boot and travels beside the preamble rather than as a turn, so the transcript
+once at boot and is appended to the preamble rather than sent as a turn, so the transcript
 stays your words. The read is capped at **8 KiB**, a byte count rather than a line count
 because bytes are what the request pays for, and a longer file arrives cut with a marker
 naming the bytes left out. A repository without one adds nothing; one that cannot be read

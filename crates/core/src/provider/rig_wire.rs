@@ -3,7 +3,6 @@
 //! own HTTP client with explicit timeouts, and the translation of the
 //! library's vocabulary into ours.
 
-use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -37,21 +36,6 @@ const THINKING_BUDGET: u32 = 4096;
 /// The effort an OpenAI-compatible server is asked for when the run pays for
 /// reasoning: that wire names a level, not a budget.
 const THINKING_EFFORT: Effort = Effort::Medium;
-/// The instructions every batch turn carries. The sandbox's own description
-/// arrives with the `bash` tool's definition, and so does the batching rule:
-/// what a result costs the conversation is only legible beside the result, so
-/// this prompt states it once, there, and never here.
-///
-/// The sentence about reading is not decoration: told to search and open ranges,
-/// a model spent 0.42x the input tokens of the same model told nothing, on the
-/// same four tasks and with the same answers right — measured, and reproducible
-/// with `scripts/bench-system-prompt`.
-const PREAMBLE: &str = "You are Sindri, answering a developer at a Unix terminal. Reply with the answer \
-    itself: no preamble, no closing offer of further help. Run commands rather than guessing. Read \
-    the fewest bytes that answer: search first (`rg -n`), then open only the lines you need \
-    (`sed -n 'A,Bp'`); never `cat` a whole file, and never run a search or a listing twice. A fence \
-    marked `mermaid` is drawn as a picture: draw what prose cannot.";
-
 pub(super) fn turn(
     client: &Client,
     history: &[Message],
@@ -68,7 +52,7 @@ pub(super) fn turn(
         tools,
         thinking,
         client.provider(),
-        client.instructions(),
+        client.preamble(),
     )?;
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -194,16 +178,15 @@ fn request(
     tools: &[ToolSpec],
     thinking: bool,
     provider: Provider,
-    instructions: Option<&str>,
+    preamble: &str,
 ) -> Result<CompletionRequest, Error> {
     let mut request = CompletionRequest::new(WireMessage::user(String::new()));
     request.chat_history = history
         .iter()
         .map(|message| wire_message(message).map(Arc::new))
         .collect::<Result<Vec<_>, Error>>()?;
-    let preamble = preamble(instructions);
     let mut request = request
-        .preamble(preamble.as_ref())
+        .preamble(preamble)
         .max_tokens(MAX_OUTPUT_TOKENS)
         .tools(
             tools
@@ -221,20 +204,6 @@ fn request(
         request.options = GenerationOptions::default().reasoning(reasoning);
     }
     Ok(request)
-}
-
-/// The system message every turn carries: the preamble, and the repository's
-/// own rules after it when the run stands in a repository that has any.
-///
-/// They are one message rather than a turn of their own, so the transcript the
-/// user reads is their own words and the preamble's measured words are the
-/// preamble's: what follows is a file, and its size is the cap's business, never
-/// the budget's.
-fn preamble(instructions: Option<&str>) -> Cow<'_, str> {
-    match instructions {
-        None => Cow::Borrowed(PREAMBLE),
-        Some(text) => Cow::Owned(format!("{PREAMBLE}\n\n{text}")),
-    }
 }
 
 fn tool_definition(spec: &ToolSpec) -> Result<ToolDefinition, Error> {
@@ -344,86 +313,8 @@ fn refuses_capability(message: &str) -> bool {
 mod tests {
     use std::sync::Arc;
 
-    use super::PREAMBLE;
-    use crate::agent::{BashTool, Limits};
-    use crate::exec::{BashExecutor, ToolResult};
-    use crate::sandbox::{Enforcement, SandboxPolicy, WritableSet};
-
-    /// The two sentences the preamble keeps whatever else it sheds: the reading
-    /// rule, measured at 0.42x the tokens of the same model told nothing, and the
-    /// renderer fact no model can know — quoted from the shipped text.
-    const READING_RULE: &str = "Read the fewest bytes that answer: search first (`rg -n`), then open \
-        only the lines you need (`sed -n 'A,Bp'`); never `cat` a whole file, and never run a search \
-        or a listing twice.";
-    const MERMAID: &str = "A fence marked `mermaid` is drawn as a picture: draw what prose cannot.";
-
-    /// No command is run to read a description.
-    struct Silent;
-
-    impl BashExecutor for Silent {
-        fn execute(&self, _script: &str) -> Option<ToolResult> {
-            None
-        }
-    }
-
-    #[test]
-    fn the_script_sentence_is_stated_once_and_in_the_tool_description() {
-        // Every phrase below was paid for twice while both copies shipped: the
-        // preamble and the tool description are re-sent on every turn of every
-        // run, so the doctrine belongs in the one that sits beside the cost.
-        for moved in [
-            "put the steps of one task",
-            "$TMPDIR",
-            "using the context after it",
-            "check the exit code",
-        ] {
-            assert!(
-                !PREAMBLE.contains(moved),
-                "the preamble no longer carries `{moved}`: {PREAMBLE}"
-            );
-        }
-        let words = PREAMBLE.split_whitespace().count();
-        assert!(
-            words <= 80,
-            "the preamble stays at or under 80 words, not {words}: {PREAMBLE}"
-        );
-
-        let description = tool_description();
-        for carried in ["put the steps of one task in one script", "$TMPDIR"] {
-            assert!(
-                description.contains(carried),
-                "the tool description carries `{carried}`: {description}"
-            );
-        }
-        for kept in [READING_RULE, MERMAID] {
-            assert!(
-                PREAMBLE.contains(kept),
-                "the preamble still carries `{kept}`: {PREAMBLE}"
-            );
-        }
-    }
-
-    #[test]
-    fn rules_beside_the_preamble_leave_its_words_alone() {
-        let rules = "The repository you are working in carries its house rules.\n\nBe brief.\n";
-
-        let alone = super::preamble(None);
-        let together = super::preamble(Some(rules));
-
-        assert_eq!(alone, PREAMBLE, "no rules is the preamble and no more");
-        assert!(
-            together.starts_with(PREAMBLE) && together.ends_with(rules),
-            "the rules follow the preamble, whole: {together}"
-        );
-        // The measurement is the preamble's own, and a file beside it is not
-        // folded into it: what follows is a
-        // repository's words, measured against the cap and never this budget.
-        assert_eq!(
-            together[..PREAMBLE.len()].split_whitespace().count(),
-            PREAMBLE.split_whitespace().count(),
-            "the preamble's own words are unchanged by what follows it"
-        );
-    }
+    use crate::agent::{BashTool, Limits, Silent};
+    use crate::sandbox::SandboxPolicy;
 
     /// The one sentence the bash description carries about the catalog, spelled
     /// out here rather than quoted from the source: this test exists to show
@@ -441,24 +332,16 @@ mod tests {
     ) -> (Vec<(String, String)>, String) {
         // One root for both requests, so the policy's own words are the same
         // words and the difference read below is the catalog's alone.
-        let writable = WritableSet::new([root.to_path_buf()]).expect("writable set");
-        let policy = SandboxPolicy::new(
-            writable,
-            root.join("session/tmp"),
-            crate::paths::home(),
-            None,
-            "/usr/bin:/bin".to_string(),
-            Enforcement::Bubblewrap,
-        )
-        .expect("policy");
+        let policy = SandboxPolicy::fixture(root);
         let bash = BashTool::new(&policy, Limits::default(), Arc::new(Silent));
         let tools = crate::agent::Tools::new(bash, crate::agent::SkillTool::new(catalog), None);
+        let preamble = crate::preamble::of(root, None);
         let request = super::request(
             &[],
             &tools.specs(),
             false,
             crate::config::Provider::Anthropic,
-            None,
+            preamble.as_str(),
         )
         .expect("a request");
         (
@@ -506,26 +389,13 @@ mod tests {
         );
         assert_eq!(
             preamble_without,
-            format!("{:?}", super::WireMessage::system(PREAMBLE.to_string())),
+            format!(
+                "{:?}",
+                super::WireMessage::system(
+                    crate::preamble::of(root.path(), None).as_str().to_string()
+                )
+            ),
             "the message is the preamble and nothing else: {preamble_without}"
         );
-    }
-
-    /// The description as the model receives it: a policy refuses a writable path
-    /// that is not there, so the test makes one.
-    fn tool_description() -> String {
-        let workspace = tempfile::TempDir::new().expect("workspace");
-        let writable = WritableSet::new([workspace.path().to_path_buf()]).expect("writable set");
-        let policy = SandboxPolicy::new(
-            writable,
-            workspace.path().join("session/tmp"),
-            crate::paths::home(),
-            None,
-            "/usr/bin:/bin".to_string(),
-            Enforcement::Bubblewrap,
-        )
-        .expect("policy");
-        let tool = BashTool::new(&policy, Limits::default(), Arc::new(Silent));
-        tool.spec().description.clone()
     }
 }

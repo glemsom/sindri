@@ -125,8 +125,8 @@ pub struct Session {
     /// The half of the catalog a human may reach for, built once from the same
     /// scan: the composer's names, and the skills a load by hand is read from.
     hand: UserSkills,
-    /// The repository's own rules, read once here and handed to the model
-    /// beside the preamble on every turn of the thread.
+    /// The repository's own rules, read once here and carried in the
+    /// preamble on every turn of the thread.
     instructions: Taken,
 }
 
@@ -270,10 +270,18 @@ impl Session {
         &self.hand
     }
 
-    /// The repository's own rules: what the model is handed beside the preamble,
+    /// The repository's own rules: what the preamble carries after its stance,
     /// and what `-v` and `sindri doctor` name.
     pub fn instructions(&self) -> &Taken {
         &self.instructions
+    }
+
+    /// The preamble every turn of this session carries: the stance, the
+    /// workspace this run stands in, and the repository's instructions after
+    /// them. Composed from the session's own facts, so the path a request names
+    /// is the workspace the sandbox mounted rather than one a front end typed.
+    pub fn preamble(&self) -> crate::preamble::Preamble {
+        crate::preamble::of(self.workspace(), self.instructions.block().as_deref())
     }
 }
 

@@ -225,3 +225,24 @@ impl SandboxPolicy {
 }
 
 pub const FALLBACK_PATH: &str = "/usr/local/bin:/usr/bin:/bin";
+
+#[cfg(test)]
+impl SandboxPolicy {
+    /// A policy over one writable workspace, for the tests that read what the
+    /// two derivations say: the session temp under it, the host's own home, the
+    /// fallback `PATH` and bubblewrap in force. One fixture, so a test that
+    /// compares a derivation with the preamble cannot be comparing it with a
+    /// policy no other test has.
+    pub(crate) fn fixture(workspace: &Path) -> SandboxPolicy {
+        let writable = WritableSet::new([workspace.to_path_buf()]).expect("writable set");
+        SandboxPolicy::new(
+            writable,
+            workspace.join("session/tmp"),
+            crate::paths::home(),
+            None,
+            "/usr/bin:/bin".to_string(),
+            Enforcement::Bubblewrap,
+        )
+        .expect("policy")
+    }
+}

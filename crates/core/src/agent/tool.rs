@@ -163,3 +163,16 @@ fn spelled(outcome: &Outcome) -> (&'static str, Option<i32>) {
         Outcome::SandboxError { .. } => ("sandbox_error", None),
     }
 }
+
+/// No command is run to read a description: the executor a test hands `bash`
+/// when all it wants is the words the schema carries. One stub, so two tests
+/// reading the description are reading the same tool's.
+#[cfg(test)]
+pub(crate) struct Silent;
+
+#[cfg(test)]
+impl BashExecutor for Silent {
+    fn execute(&self, _script: &str) -> Option<ToolResult> {
+        None
+    }
+}

@@ -240,6 +240,36 @@ pub fn everything_written(dir: &Path) -> String {
     all
 }
 
+/// The system message one request carried, as the model reads it: the blocks the
+/// wire sends, joined back into the text they were written as.
+pub fn system_text(request: &provider::Request) -> String {
+    request.json()["system"]
+        .as_array()
+        .map(|blocks| {
+            blocks
+                .iter()
+                .filter_map(|block| block["text"].as_str())
+                .collect::<Vec<_>>()
+                .join("")
+        })
+        .unwrap_or_default()
+}
+
+/// Every tool description one request carried, joined: where a front end's words
+/// about the tools must be, and the place a test looks for them.
+pub fn tool_text(request: &provider::Request) -> String {
+    request.json()["tools"]
+        .as_array()
+        .map(|tools| {
+            tools
+                .iter()
+                .filter_map(|tool| tool["description"].as_str())
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+        .unwrap_or_default()
+}
+
 /// The session directories a run left under this environment's state root,
 /// sorted: one directory per record, and the name is the session id.
 pub fn sessions(env: &Env) -> Vec<PathBuf> {

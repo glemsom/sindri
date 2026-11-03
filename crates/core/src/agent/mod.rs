@@ -21,6 +21,8 @@ pub use open::{OpenTool, Opened, Opener};
 pub use report::{Report, Stopped};
 pub use skill::{DOCTRINE, Loaded, SkillTool, UserSkills};
 pub use tool::BashTool;
+#[cfg(test)]
+pub(crate) use tool::Silent;
 pub use tools::Tools;
 
 use std::sync::Arc;

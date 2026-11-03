@@ -31,6 +31,12 @@ answer and exactly one newline, or nothing when the run failed or was cancelled.
 time or its output; `cancelled`, SIGINT with nothing on stdout; `error`, it could not
 deliver. A record writes `running` until one of them lands.
 
+**preamble** — the system message a run sends on every turn: Sindri's stance in its own voice,
+the Environment section whose one fact is the **workspace** the run stands in, and a
+repository's **instructions** when it has any (`crates/core/src/preamble.rs`). The module's
+own paragraph holds the split between its stance, a **skill**'s procedure and the
+**sandbox**'s boundary.
+
 ## The tools
 
 **tool set** — the tools a run holds: `bash` always, `skill` only when the workspace holds
@@ -101,10 +107,11 @@ description is a refusal said out loud, never a truncation, because a truncated 
 is a skill that stops being found.
 
 **instructions** — a repository's own rules: the `AGENTS.md` at the repository root, read
-once at boot and handed to the model beside the preamble. Never a nested file, never an
-ancestor's; capped at 8 KiB, a longer file arriving cut with a marker saying so; `Taken` is
-what the read produced — `Absent`, `Found` or `Unreadable` — and an unreadable file is a
-diagnostic that never stops the run (`crates/core/src/instructions.rs`).
+once at boot and appended to the preamble, after its Environment section. Never a nested
+file, never an ancestor's; capped at 8 KiB, a longer file arriving cut with a marker saying
+so; `Taken` is what the read produced — `Absent`, `Found` or `Unreadable` — and an
+unreadable file is a diagnostic that never stops the run
+(`crates/core/src/instructions.rs`).
 
 ## The sandbox
 

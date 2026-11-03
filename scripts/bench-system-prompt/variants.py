@@ -1,22 +1,28 @@
 """The fourteen system-prompt variants, and the baseline they are measured against.
 
-The baseline is not written here: `BASE` is the shipped `PREAMBLE`, read out of
-`rig_wire.rs` at import, so `v00` builds the prompt the tree actually carries.
+The baseline is not written here: `BASE` is the shipped `STANCE`, read out of
+`crates/core/src/preamble.rs` at import, so `v00` builds the prompt the tree
+actually carries. A run sends that stance with the Environment section composed
+after it, and the bench measures the stance — the part these variants vary.
+
+`patch` writes one variant's text into the file the tree ships the stance in;
+`build_variant.sh` keeps a copy of that file before it calls `patch` and puts the
+copy back on every way out, a failed build included, so the source it leaves is
+the source it found.
 """
 
 import pathlib
 
-SHIPPED = pathlib.Path(__file__).resolve().parents[2] / "crates/core/src/provider/rig_wire.rs"
+SHIPPED = pathlib.Path(__file__).resolve().parents[2] / "crates/core/src/preamble.rs"
 
-MARK = 'const PREAMBLE: &str = "'
+MARK = 'const STANCE: &str = "'
 
 
-def shipped() -> str:
-    """`PREAMBLE` as `rig_wire.rs` spells it: its literal with the line
-    continuations and escapes resolved. A copy kept here would drift from the
-    prompt the tree ships, and a bench measuring a prompt no run carries
-    measures nothing."""
-    source = SHIPPED.read_text()
+def shipped(path=SHIPPED) -> str:
+    """`STANCE` as the tree spells it: its literal with the line continuations
+    and escapes resolved. A copy kept here would drift from the prompt the tree
+    ships, and a bench measuring a prompt no run carries measures nothing."""
+    source = pathlib.Path(path).read_text()
     start = source.index(MARK) + len(MARK)
     text, at = [], start
     while source[at] != '"':
@@ -33,6 +39,27 @@ def shipped() -> str:
         text.append({"n": "\n", "t": "\t"}.get(escape, escape))
         at += 2
     return "".join(text)
+
+
+def patch(variant: str, path=SHIPPED) -> str:
+    """Write `variant`'s text into the `STANCE` literal of `path`, and answer
+    the text that went in. `v00` is the tree's own prompt: it writes nothing and
+    answers what the tree ships. A variant the bench does not hold is refused
+    before a byte is written, because a typo is not a prompt."""
+    source = pathlib.Path(path).read_text()
+    if variant == "v00":
+        return shipped(path)
+    try:
+        text = VARIANTS[variant][1]
+    except KeyError:
+        raise SystemExit(
+            f"variants: the bench holds no variant {variant!r}: {sorted(VARIANTS)}"
+        ) from None
+    start = source.index(MARK) + len(MARK)
+    end = source.index('";', start)
+    escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+    pathlib.Path(path).write_text(source[:start] + escaped + source[end:])
+    return text
 
 
 BASE = shipped()

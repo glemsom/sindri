@@ -1,6 +1,7 @@
 //! A repository's own rules: its `AGENTS.md`, read once at boot from the
-//! repository root — never an ancestor's, never a nested one — and handed to
-//! the model beside the preamble, so the transcript stays the user's words.
+//! repository root — never an ancestor's, never a nested one — and carried in
+//! the preamble rather than sent as a turn, so the transcript stays the user's
+//! words.
 //!
 //! The read is capped and the cap is stated here and nowhere else: the preamble
 //! is re-sent on every turn, so a file with no limit is a bill with no limit,
@@ -92,7 +93,7 @@ impl Taken {
         }
     }
 
-    /// What the model is handed beside the preamble, or nothing at all: the
+    /// What the preamble carries after its stance, or nothing at all: the
     /// file named in one line, then its words, exactly as the file holds them.
     /// The line is short because it is re-sent on every turn, and the path is
     /// the only part of it that grows.
