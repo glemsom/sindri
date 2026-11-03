@@ -50,7 +50,7 @@ impl App {
             return;
         };
         store.keep(&body, drawing);
-        self.dirty();
+        self.thread.forget();
         // The rows below a reader's window were counted from heights that changed.
         self.window.forget();
     }

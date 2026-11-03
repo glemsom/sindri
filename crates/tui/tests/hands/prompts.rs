@@ -13,7 +13,7 @@ fn command(app: &mut App, line: &str) {
 #[test]
 fn new_command_empties_the_transcript_and_asks_for_a_fresh_session() {
     let mut app = answered(Fake::taking());
-    assert!(!app.entries().is_empty());
+    assert!(!app.thread().entries().is_empty());
     let old = app.rail_guid();
 
     command(&mut app, "/new");
@@ -37,11 +37,12 @@ fn new_command_empties_the_transcript_and_asks_for_a_fresh_session() {
         "a fresh session GUID is on the rail"
     );
     assert!(
-        app.entries()
+        app.thread()
+            .entries()
             .iter()
             .all(|entry| matches!(entry, Entry::Note(_))),
         "the transcript is emptied once the new session exists: {:?}",
-        app.entries()
+        app.thread().entries()
     );
     assert!(
         notes(&app).contains("new session 9a1e0c33"),

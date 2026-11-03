@@ -41,7 +41,8 @@ fn click(app: &mut App, row: usize) {
 }
 
 fn calls(app: &App) -> Vec<&Call> {
-    app.entries()
+    app.thread()
+        .entries()
         .iter()
         .filter_map(|entry| match entry {
             Entry::Call(call) => Some(call),
@@ -206,7 +207,7 @@ fn a_call_that_produced_no_spill_is_still_expandable() {
     let mut app = app();
     call_with(&mut app, 1, "cargo test", 3);
     assert!(
-        app.entries().iter().any(|entry| match entry {
+        app.thread().entries().iter().any(|entry| match entry {
             Entry::Call(call) => call.spill_file().is_none() && call.expandable(),
             _ => false,
         }),

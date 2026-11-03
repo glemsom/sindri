@@ -248,10 +248,15 @@ impl App {
             self.copy_selection();
             return;
         }
-        let answer = self.entries.iter().rev().find_map(|entry| match entry {
-            Entry::Answer { text, .. } if !text.trim().is_empty() => Some(text.clone()),
-            _ => None,
-        });
+        let answer = self
+            .thread
+            .entries()
+            .iter()
+            .rev()
+            .find_map(|entry| match entry {
+                Entry::Answer { text, .. } if !text.trim().is_empty() => Some(text.clone()),
+                _ => None,
+            });
         match answer {
             Some(text) => self.copy(&text),
             None => self.note_info("nothing to copy yet"),
@@ -299,10 +304,15 @@ impl App {
     }
 
     fn open_spill(&mut self) {
-        let path = self.entries.iter().rev().find_map(|entry| match entry {
-            Entry::Call(call) => call.spill_file().map(std::path::Path::to_path_buf),
-            _ => None,
-        });
+        let path = self
+            .thread
+            .entries()
+            .iter()
+            .rev()
+            .find_map(|entry| match entry {
+                Entry::Call(call) => call.spill_file().map(std::path::Path::to_path_buf),
+                _ => None,
+            });
         match path {
             Some(path) => self.show_spill(&path),
             None => self.note_info("no output in this session was too large to show"),

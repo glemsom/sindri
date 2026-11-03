@@ -256,7 +256,8 @@ pub fn call(app: &mut App, turn: u32, lines: usize) {
 
 /// Every note the frame has taken, oldest first, as one string.
 pub fn notes(app: &App) -> String {
-    app.entries()
+    app.thread()
+        .entries()
         .iter()
         .filter_map(|entry| match entry {
             Entry::Note(note) => Some(note.text.clone()),

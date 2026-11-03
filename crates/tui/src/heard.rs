@@ -55,12 +55,11 @@ impl App {
         // the terminal is told what this run does, not what the last one did.
         self.doing = Doing::Thinking;
         self.settled = None;
-        self.entries.push(Entry::Prompt(Prompt {
+        self.thread.push(Entry::Prompt(Prompt {
             text: prompt.clone(),
             at: sindri_core::clock::now(),
             cwd: self.rail.workspace(),
         }));
-        self.dirty_tail();
         Some(Job { prompt, cancel })
     }
 
@@ -80,16 +79,15 @@ impl App {
                 self.append(turn, text, true);
             }
             Event::Reasoning { turn, text } => {
-                self.entries.retain(
+                self.thread.keep(
                     |entry| !matches!(entry, Entry::Reasoning { turn: open, .. } if *open == turn),
                 );
-                self.entries.push(Entry::Reasoning {
+                self.thread.push(Entry::Reasoning {
                     turn,
                     text,
                     done: true,
                     open: false,
                 });
-                self.dirty();
             }
             Event::ToolCall { turn, asked } => {
                 self.close_answers(false);
@@ -121,8 +119,7 @@ impl App {
                 for (side, line) in self.early.drain(..) {
                     call.push(side, line);
                 }
-                self.entries.push(Entry::Call(call));
-                self.dirty();
+                self.thread.push(Entry::Call(call));
             }
             Event::SkillLoaded {
                 turn,
@@ -140,7 +137,7 @@ impl App {
     /// The body is kept behind that row: the thread says what is in force, and
     /// `Enter` is what opens the text.
     fn skill_loaded(&mut self, turn: u32, name: &str, outcome: Option<&str>, body: &str) {
-        let announcing = self.entries.iter().rposition(|entry| {
+        let announcing = self.thread.position(|entry| {
             matches!(entry, Entry::Call(call) if call
                 .skill
                 .as_ref()
@@ -153,58 +150,62 @@ impl App {
                 call.skill = Some(Skill::new(name));
                 call.over = Some(CallOver::Exited(0));
                 call.took = Some(std::time::Duration::ZERO);
-                self.entries.push(Entry::Call(call));
-                self.entries.len() - 1
+                self.thread.push(Entry::Call(call));
+                self.thread.len() - 1
             }
         };
-        if let Some(Entry::Call(call)) = self.entries.get_mut(index) {
+        self.thread.edit(index, |entry| {
+            let Entry::Call(call) = entry else {
+                return;
+            };
             if let Some(skill) = call.skill.as_mut() {
                 skill.outcome = outcome.map(str::to_string);
             }
             for line in body.lines() {
                 call.push(Side::Stdout, line.to_string());
             }
-        }
+        });
         if outcome == Some("loaded") {
             self.rail.skill_loaded(name);
         }
-        self.dirty();
     }
 
     fn append(&mut self, turn: u32, text: String, reasoning: bool) {
         // What has streamed is what the run has spent so far: the meters move
         // on it now, and the report overrules them when the run ends.
         self.rail.streamed(text.chars().count(), self.now);
-        let open = match self.entries.last_mut() {
+        let joins = match self.thread.last() {
             Some(Entry::Reasoning {
                 turn: open,
-                text: streamed,
                 done: false,
                 ..
-            }) if reasoning && *open == turn => Some(streamed),
+            }) => reasoning && *open == turn,
             Some(Entry::Answer {
                 turn: open,
-                text: streamed,
                 done: false,
                 ..
-            }) if !reasoning && *open == turn => Some(streamed),
-            _ => None,
+            }) => !reasoning && *open == turn,
+            _ => false,
         };
-        if let Some(streamed) = open {
-            streamed.push_str(&text);
-            self.dirty_tail();
+        if joins {
+            self.thread.edit_last(|entry| match entry {
+                Entry::Reasoning { text: streamed, .. } | Entry::Answer { text: streamed, .. } => {
+                    streamed.push_str(&text)
+                }
+                _ => {}
+            });
             return;
         }
         self.close_answers(false);
         if reasoning {
-            self.entries.push(Entry::Reasoning {
+            self.thread.push(Entry::Reasoning {
                 turn,
                 text,
                 done: false,
                 open: false,
             });
         } else {
-            self.entries.push(Entry::Answer {
+            self.thread.push(Entry::Answer {
                 turn,
                 text,
                 done: false,
@@ -212,38 +213,45 @@ impl App {
                 took: None,
             });
         }
-        self.dirty_tail();
     }
 
     pub fn output(&mut self, side: Side, text: &str) {
-        match self.entries.last_mut() {
-            Some(Entry::Call(call)) if call.running() => {
-                call.push(side, text.to_string());
-                // The line joined the newest entry, so nothing above it moved.
-                self.dirty_tail();
-            }
-            // Output can arrive a moment before the call that produced it was
-            // announced, because the two travel different threads. It is held
-            // for that call and no entry has changed yet.
-            _ => self.early.push((side, text.to_string())),
+        // Output can arrive a moment before the call that produced it was
+        // announced, because the two travel different threads. It is held for
+        // that call and no entry has changed yet.
+        let running = self
+            .thread
+            .last()
+            .is_some_and(|entry| matches!(entry, Entry::Call(call) if call.running()));
+        if !running {
+            self.early.push((side, text.to_string()));
+            return;
         }
+        // The line joined the newest entry, so nothing above it moved.
+        self.thread.edit_last(|entry| {
+            if let Entry::Call(call) = entry {
+                call.push(side, text.to_string());
+            }
+        });
     }
 
     pub fn over(&mut self, over: CallOver, spilled: Spilled) {
         let ended = self
-            .entries
-            .iter()
-            .rposition(|entry| matches!(entry, Entry::Call(call) if call.running()));
-        if let Some(index) = ended
-            && let Some(Entry::Call(call)) = self.entries.get_mut(index)
-        {
-            // The duration freezes where the call ended: a finished call is
-            // not still counting.
-            call.took = Some(self.now.saturating_sub(call.started));
-            call.over = Some(over);
-            call.truncated = spilled.truncated;
-            call.spill = spilled.files;
-            self.dirty_from(index);
+            .thread
+            .position(|entry| matches!(entry, Entry::Call(call) if call.running()));
+        if let Some(index) = ended {
+            let now = self.now;
+            self.thread.edit(index, |entry| {
+                let Entry::Call(call) = entry else {
+                    return;
+                };
+                // The duration freezes where the call ended: a finished call is
+                // not still counting.
+                call.took = Some(now.saturating_sub(call.started));
+                call.over = Some(over);
+                call.truncated = spilled.truncated;
+                call.spill = spilled.files;
+            });
         }
     }
 
@@ -260,17 +268,16 @@ impl App {
         self.early.clear();
         self.close_answers(finished.stopped == Stop::Error);
         if let Some(error) = finished.error {
-            self.entries.push(Entry::Note(Note::error(error)));
+            self.thread.push(Entry::Note(Note::error(error)));
         }
         if let Some(note) = finished.note {
-            self.entries.push(Entry::Note(Note::error(note)));
+            self.thread.push(Entry::Note(Note::error(note)));
         }
         if finished.stopped == Stop::Cancelled {
-            self.entries.push(Entry::Note(Note::info(
+            self.thread.push(Entry::Note(Note::info(
                 "cancelled — the draft is kept, and a prompt typed now queues",
             )));
         }
-        self.dirty();
     }
 
     /// The newest answer is over — because a call followed it, or because the
@@ -278,23 +285,31 @@ impl App {
     /// belonged to failed.
     fn close_answers(&mut self, failed: bool) {
         let now = self.now;
-        for entry in &mut self.entries {
-            match entry {
+        for index in 0..self.thread.len() {
+            // Only the entry still open changed: the one already closed is
+            // worth the rows it was, and forgetting it would cost a layout.
+            let open = matches!(
+                self.thread.get(index),
+                Some(Entry::Answer { done: false, .. } | Entry::Reasoning { done: false, .. })
+            );
+            if !open {
+                continue;
+            }
+            self.thread.edit(index, |entry| match entry {
                 Entry::Answer {
                     done,
                     failed: bad,
                     took,
                     ..
-                } if !*done => {
+                } => {
                     *done = true;
                     *bad = failed;
                     *took = Some(now);
                 }
                 Entry::Reasoning { done, .. } => *done = true,
                 _ => {}
-            }
+            });
         }
-        self.dirty();
     }
 }
 

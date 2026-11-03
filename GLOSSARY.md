@@ -293,7 +293,8 @@ drops it. The **panel** above the composer holds them whole, titled `queued` whe
 **thread** — the growing conversation of one TUI session; `/new` starts over. Laid out as a
 document: two blank rows between turns and none inside one, the **gutter** a turn's answer and calls
 hang off, and the prompt at full strength on its own band. A thread shorter than the column is
-written on its floor, so the newest row is the one above the **composer**.
+written on its floor, so the newest row is the one above the **composer**. The code's
+word for it is `Thread`, which holds the entries and the heights they were measured at.
 
 **gutter** — a left edge the frame draws beside a thing that hangs off it: in the **thread**, the
 two columns a turn's answer and its calls hang off; in a fenced code block, the `│` down its left.

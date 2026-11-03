@@ -26,7 +26,7 @@ fn answered(app: &mut App, text: &str) -> usize {
         turn: 1,
         text: text.to_string(),
     });
-    app.entries().len() - 1
+    app.thread().entries().len() - 1
 }
 
 /// The transcript column's own characters, above the composer: the rail keeps

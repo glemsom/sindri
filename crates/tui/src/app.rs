@@ -21,13 +21,13 @@ use crate::driver::Side;
 use crate::entry::{Entry, Note};
 use crate::face::Face;
 use crate::graphics::Graphics;
-use crate::heights::Heights;
 use crate::overlay::Overlay;
 use crate::picture::Store;
 use crate::rail::{Launch, Rail, RailView};
 use crate::render::seam::Seam;
 use crate::selection::{Selection, Viewport};
 use crate::settings::Missing;
+use crate::thread::Thread;
 use crate::window::Window;
 
 pub use self::skill::Loading;
@@ -47,7 +47,7 @@ pub(crate) const DEFAULT_PAGE: usize = 10;
 
 pub struct App {
     pub(crate) rail: Rail,
-    pub(crate) entries: Vec<Entry>,
+    pub(crate) thread: Thread,
     pub(crate) composer: Composer,
     pub(crate) queue: VecDeque<String>,
     pub(crate) running: Option<Cancel>,
@@ -78,10 +78,6 @@ pub struct App {
     /// an empty composer toggles: a frame with no cursor of its own has one
     /// honest answer to "which call?", and it is the one just touched.
     pub(crate) chosen: Option<usize>,
-    /// One row count per entry at the width it was measured at, dropped for the
-    /// entries that change, so the window never lays out a row it does not
-    /// show.
-    pub(crate) heights: Heights,
     pub(crate) width: Option<u16>,
     pub(crate) selection: Selection,
     /// The window's place the mark's rows were last read against: the mark
@@ -142,7 +138,7 @@ impl App {
     ) -> Self {
         App {
             rail: Rail::new(launch),
-            entries: Vec::new(),
+            thread: Thread::default(),
             composer: Composer::new(),
             queue: VecDeque::new(),
             running: None,
@@ -157,7 +153,6 @@ impl App {
             window: Window::default(),
             viewport: Viewport::default(),
             chosen: None,
-            heights: Heights::default(),
             width: None,
             selection: Selection::default(),
             mark_at: None,
@@ -231,8 +226,35 @@ impl App {
         self.rail.session()
     }
 
+    /// The entries the thread is holding, oldest first.
     pub fn entries(&self) -> &[Entry] {
-        &self.entries
+        self.thread.entries()
+    }
+
+    /// The thread itself: its entries, and the heights they were measured at.
+    pub fn thread(&self) -> &Thread {
+        &self.thread
+    }
+
+    /// How many rows entry `index` takes at `width`: the thread's answer, given
+    /// the clock and the store a height depends on — read from the fields
+    /// because the thread is borrowed mutably for the same call.
+    pub fn measure(&mut self, index: usize, width: u16) -> usize {
+        let now = self.now;
+        let pictures = self.pictures.as_ref();
+        self.thread.measure(index, width, now, pictures)
+    }
+
+    /// How many heights have been measured from scratch over the frame's whole
+    /// life: a frame reports the difference as its own.
+    pub(crate) fn measured(&self) -> usize {
+        self.thread.measured()
+    }
+
+    /// How many rows have been read to place the thread so far: the frame
+    /// reports the difference as the rows a delta cost it.
+    pub(crate) fn counted(&self) -> usize {
+        self.thread.counted()
     }
 
     pub fn rail(&self) -> &Rail {
@@ -365,10 +387,9 @@ impl App {
                 let session = launch.session.clone();
                 self.loading = Loading::Idle;
                 self.armed = None;
-                self.entries.clear();
+                self.thread.clear();
                 self.queue.clear();
                 self.early.clear();
-                self.heights = Heights::default();
                 self.chosen = None;
                 self.walking = None;
                 self.window = Window::default();
@@ -376,7 +397,6 @@ impl App {
                 // A refused export was a refusal about the thread that asked:
                 // a new thread must ask again before it replaces that file.
                 self.export_pending = None;
-                self.dirty();
                 self.note_info(format!("new session {session}"));
             }
             Err(error) => {
@@ -387,19 +407,17 @@ impl App {
     }
 
     pub fn note_info(&mut self, text: impl Into<String>) {
-        self.entries.push(Entry::Note(Note::info(text)));
-        self.dirty();
+        self.thread.push(Entry::Note(Note::info(text)));
     }
 
     pub fn note_error(&mut self, text: impl Into<String>) {
-        self.entries.push(Entry::Note(Note::error(text)));
-        self.dirty();
+        self.thread.push(Entry::Note(Note::error(text)));
     }
 
     pub(crate) fn note_width(&mut self, width: u16) {
         if self.width != Some(width) {
             self.width = Some(width);
-            self.dirty();
+            self.thread.forget();
         }
     }
 

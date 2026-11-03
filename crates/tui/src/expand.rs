@@ -23,8 +23,8 @@ impl App {
     pub(crate) fn reveal(&mut self) -> bool {
         let chosen = self
             .chosen
-            .filter(|index| self.entries.get(*index).is_some_and(Entry::expandable))
-            .or_else(|| self.entries.iter().rposition(Entry::expandable));
+            .filter(|index| self.thread.get(*index).is_some_and(Entry::expandable))
+            .or_else(|| self.thread.position(Entry::expandable));
         match chosen {
             Some(index) => {
                 self.chosen = Some(index);
@@ -39,12 +39,16 @@ impl App {
     /// says. The window is corrected here rather than re-placed by every frame,
     /// because the delta is known at the one gesture that causes it.
     pub(crate) fn toggle(&mut self, index: usize) {
-        if !self.entries.get_mut(index).is_some_and(Entry::toggle) {
+        // An entry with nothing to open is not mutated at all: a toggle that
+        // toggled nothing would forget a height that did not change.
+        if !self.thread.get(index).is_some_and(Entry::expandable) {
             return;
         }
+        self.thread.edit(index, |entry| {
+            entry.toggle();
+        });
         let (entry, row) = self.window.at;
         let held = !self.window.follow;
-        self.dirty();
         // A reader who opens a call while the column is following is reading
         // rather than watching: the entry becomes the top row of the column and
         // what arrives below it is counted, not followed. `End` takes the tail
