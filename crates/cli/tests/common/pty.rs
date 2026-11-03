@@ -15,7 +15,7 @@ use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::process::Child;
 use std::time::{Duration, Instant};
 
-use super::screen::{Screen, Status};
+use super::screen::{self, Screen, Status};
 
 mod frames;
 mod spawn;
@@ -239,6 +239,16 @@ impl Pty {
         self.screen
             .lock()
             .map(|screen| screen.text())
+            .unwrap_or_default()
+    }
+
+    /// The rows of the screen drawn in `ink`, and what each of them says: an ink
+    /// is a colour and no glyph, so the rows it is on are the only way a test
+    /// can prove what a block was written in on a real terminal.
+    pub fn inked(&self, ink: screen::Ink) -> Vec<(u16, String)> {
+        self.screen
+            .lock()
+            .map(|screen| screen.inked(ink))
             .unwrap_or_default()
     }
 

@@ -12,7 +12,10 @@
 
 #[derive(Debug)]
 pub struct Screen {
-    cells: std::collections::BTreeMap<(u16, u16), char>,
+    cells: std::collections::BTreeMap<(u16, u16), Cell>,
+    /// The ink the next character is drawn in: the SGR in force, which is the
+    /// only thing a colour is on a real terminal.
+    ink: Option<Ink>,
     row: u16,
     col: u16,
     visible: bool,
@@ -33,6 +36,17 @@ pub struct Screen {
 /// What a status report's body follows inside the escape: `OSC 7501 ;` says
 /// the sequence is one, and everything after it is the run's.
 const REPORT: &str = "7501;";
+
+/// One cell a frame drew: the glyph, and the ink the SGR in force gave it.
+#[derive(Debug, Clone)]
+struct Cell {
+    glyph: char,
+    ink: Option<Ink>,
+}
+
+/// A foreground colour as a terminal was told it: red, green and blue, the
+/// three numbers of `SGR 38;2`.
+pub type Ink = (u8, u8, u8);
 
 /// One **status**, as the run sent it: the body of one `OSC 7501` report,
 /// between the introducer and the terminator, and nothing read out of it.
@@ -64,6 +78,7 @@ impl Default for Screen {
     fn default() -> Self {
         Screen {
             cells: std::collections::BTreeMap::new(),
+            ink: None,
             row: 0,
             col: 0,
             // Nothing has hidden it yet: a terminal starts with the cursor in
@@ -111,7 +126,13 @@ impl Screen {
                     if self.visible {
                         self.seen_while_visible.push((self.row, self.col));
                     }
-                    self.cells.insert((self.row, self.col), ch);
+                    self.cells.insert(
+                        (self.row, self.col),
+                        Cell {
+                            glyph: ch,
+                            ink: self.ink,
+                        },
+                    );
                     self.col = self.col.saturating_add(1);
                 }
                 _ => {}
@@ -225,7 +246,41 @@ impl Screen {
             'h' | 'l' if params.starts_with('?') && first == 25 => {
                 self.visible = action == 'h';
             }
+            // The ink a row is written in: `38;2` names a colour in three
+            // numbers, and the two codes that carry no colour at all end it.
+            'm' => self.painted(&numbers),
             _ => {}
+        }
+    }
+
+    /// The ink in force after one `SGR`: a truecolour foreground is kept, and a
+    /// reset, or the default foreground, ends it. Every other code — a weight,
+    /// an underline, a background — is not a foreground, and leaves the ink as
+    /// it was.
+    fn painted(&mut self, numbers: &[u16]) {
+        let mut index = 0;
+        while let Some(&number) = numbers.get(index) {
+            index += 1;
+            match number {
+                0 | 39 => self.ink = None,
+                38 if numbers.get(index) == Some(&2) => {
+                    match numbers.get(index + 1..index + 4) {
+                        Some([red, green, blue]) => {
+                            let ink = (*red as u8, *green as u8, *blue as u8);
+                            self.ink = Some(ink);
+                        }
+                        _ => self.ink = None,
+                    }
+                    index += 4;
+                }
+                // An indexed colour names no three numbers: the ink a test reads
+                // is the frame's own RGB, so this says only that it has ended.
+                38 if numbers.get(index) == Some(&5) => {
+                    self.ink = None;
+                    index += 2;
+                }
+                _ => {}
+            }
         }
     }
 
@@ -234,20 +289,46 @@ impl Screen {
     }
 
     pub fn text(&self) -> String {
-        let mut rows: std::collections::BTreeMap<u16, Vec<char>> =
-            std::collections::BTreeMap::new();
-        for ((row, col), ch) in &self.cells {
-            let line = rows.entry(*row).or_default();
-            while line.len() < usize::from(*col) {
-                line.push(' ');
-            }
-            line.push(*ch);
-        }
-        rows.values()
+        rows(&self.cells)
+            .into_values()
             .map(|line| line.iter().collect::<String>())
             .collect::<Vec<_>>()
             .join("\n")
     }
+
+    /// The rows that carry `ink` in the cell of any of their words, and what
+    /// each of them says: a colour is not a glyph, so a screen that keeps only
+    /// the glyphs cannot say what a block was written in. A glyph that is no
+    /// word at all — a border, a space — does not put a row in this list.
+    pub fn inked(&self, ink: Ink) -> Vec<(u16, String)> {
+        rows(&self.cells)
+            .into_iter()
+            .filter(|(row, _)| self.carries(*row, ink))
+            .map(|(row, line)| (row, line.iter().collect::<String>()))
+            .collect()
+    }
+
+    fn carries(&self, row: u16, ink: Ink) -> bool {
+        self.cells.iter().any(|((at, _), cell)| {
+            *at == row && cell.ink == Some(ink) && cell.glyph.is_alphanumeric()
+        })
+    }
+}
+
+/// The cells as rows of glyphs, top to bottom: where a row was drawn, the line
+/// it says, with the columns between its words left as spaces.
+fn rows(
+    cells: &std::collections::BTreeMap<(u16, u16), Cell>,
+) -> std::collections::BTreeMap<u16, Vec<char>> {
+    let mut rows: std::collections::BTreeMap<u16, Vec<char>> = std::collections::BTreeMap::new();
+    for ((row, col), cell) in cells {
+        let line = rows.entry(*row).or_default();
+        while line.len() < usize::from(*col) {
+            line.push(' ');
+        }
+        line.push(cell.glyph);
+    }
+    rows
 }
 
 /// What is text in `read`, and what waits for a character's own tail. Bytes no
@@ -402,6 +483,48 @@ mod tests {
     #[test]
     fn a_screen_that_sent_no_report_holds_an_empty_list_and_not_nothing() {
         assert!(read_in(&[b"just words"]).status().is_empty());
+    }
+
+    /// A row written in one ink and then the page's own: the frame sets a
+    /// colour, writes, and takes it back, and what a terminal keeps of that is
+    /// which cell was written in which.
+    const INKED: &str = "\u{1b}[38;2;122;171;150ma thought\u{1b}[39mplain prose";
+
+    #[test]
+    fn the_ink_a_row_was_written_in_is_kept_beside_its_words() {
+        let screen = read_in(&[INKED.as_bytes()]);
+        let inked = screen.inked((122, 171, 150));
+        assert_eq!(
+            inked,
+            [(0, "a thoughtplain prose".to_string())],
+            "the row the colour was in force on is the row it is kept for: {inked:?}"
+        );
+        assert_eq!(
+            screen.text(),
+            "a thoughtplain prose",
+            "and the words are drawn without the sequence that coloured them"
+        );
+    }
+
+    #[test]
+    fn a_reset_ends_the_ink_and_the_default_foreground_ends_it_too() {
+        let screen = read_in(&[format!("{INKED}\u{1b}[1mbold\u{1b}[mreset").as_bytes()]);
+        let inked = screen.inked((122, 171, 150));
+        assert_eq!(
+            inked.len(),
+            1,
+            "the ink is one row, whatever is written after it: {inked:?}"
+        );
+        assert_eq!(
+            screen.inked((0, 0, 0)),
+            Vec::<(u16, String)>::new(),
+            "and a colour nobody wrote in is on no row at all"
+        );
+        assert_eq!(
+            screen.text(),
+            "a thoughtplain proseboldreset",
+            "and every word of the stream is still drawn after the ink ends"
+        );
     }
 
     #[test]

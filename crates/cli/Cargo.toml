@@ -34,3 +34,6 @@ base64.workspace = true
 # the column: the column itself is cut by `sindri-tui`, so no line of the
 # binary's own measures one.
 unicode-width.workspace = true
+# The frame test that proves a thought's ink reads the colour the theme names,
+# so it needs the colour type every role of that theme is written in.
+ratatui.workspace = true
