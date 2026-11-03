@@ -3,6 +3,7 @@
 //! reimplementing the loop.
 
 use crate::provider::Asked;
+use crate::status::Doing;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
@@ -43,4 +44,22 @@ pub enum Event {
         /// the files beside the body.
         body: String,
     },
+}
+
+impl Event {
+    /// What this event says the run is doing, and in which turn: the stream read
+    /// as `Doing`'s words, made here because both front ends read the same stream
+    /// and neither may spell it again. A variant added to `Event` is a missing
+    /// arm here, where the match is exhaustive, rather than a word a frame
+    /// silently stops saying.
+    pub fn doing(&self) -> (u32, Doing) {
+        match self {
+            Event::TextDelta { turn, .. } => (*turn, Doing::Answer),
+            Event::ReasoningDelta { turn, .. } | Event::Reasoning { turn, .. } => {
+                (*turn, Doing::Thinking)
+            }
+            Event::ToolCall { turn, asked } => (*turn, Doing::of(asked)),
+            Event::SkillLoaded { turn, .. } => (*turn, Doing::Skill),
+        }
+    }
 }

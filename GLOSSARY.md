@@ -134,11 +134,14 @@ one genuine blockage sindri has. There is no `progress`, since a turn is not a f
 and no `id=`, since several runs are several ptys and so several root records. `msg` is coarse —
 `Doing`'s five, thinking, running a command, loading a skill, opening a target and writing the
 answer, plus the turn count — and never the shell command, the prompt or the answer, because a
-report is a channel no redaction in the record guards. A frame that leaves its screen says `clear`
+report is a channel no redaction in the record guards. Which word a run's stream says is
+`Event::doing`'s: the one table both front ends read, turning an event into a turn and a `Doing`,
+so neither spells the mapping again. A frame that leaves its screen says `clear`
 first, which is not one of the five: `done` and `error` outlive a shell prompt by design, and the
-frame's own record must not outlive the frame. `status::clear` is that report, and `status::Told`
-is the gate both front ends share — a state the terminal has already been told is not said again,
-and none is said twice in a second. One setting silences every report — `status` in the config,
+frame's own record must not outlive the frame. `status::clear` is that report, and `status::Channel` is
+the one channel both front ends speak through — the title, the writer and the gate together, the
+gate being `status::Told`: a state the terminal has already been told is not said again, and none
+is said twice in a second. One setting silences every report — `status` in the config,
 `SINDRI_STATUS` over it — and both front ends read it there: a courtesy is the human's to decline,
 once.
 

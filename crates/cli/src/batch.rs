@@ -79,7 +79,7 @@ pub fn run(prompt: Option<String>, flags: Flags) -> i32 {
     // what the same thread kept. A run whose stderr is no terminal still taps —
     // the channel and the setting are decided in one place, and a second
     // decision here would be a second answer.
-    let reports = status::Reports::new(session.workspace(), config.status);
+    let mut reports = status::Reports::new(session.workspace(), config.status);
     reports.begun();
     let watching = reports.watch(events, verbose);
 

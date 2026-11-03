@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use crossterm::event::{self, Event as TerminalEvent};
 use ratatui::DefaultTerminal;
 use sindri_core::cancel::Cancel;
+use sindri_core::status::Channel;
 
 use crate::app::App;
 use crate::driver::{Driver, Task};
@@ -20,7 +21,6 @@ use crate::pulse;
 use crate::rail::Launch;
 use crate::render;
 use crate::settings::Missing;
-use crate::status::Channel;
 
 pub use crate::render::Card;
 
@@ -169,7 +169,7 @@ fn session(
     let title = app.rail.title();
     let mut screen = Screen {
         terminal,
-        reports: Channel::stdout(title, app.rail.launch().status),
+        reports: Channel::new(title, app.rail.launch().status, Box::new(std::io::stdout())),
     };
     let mut painted = screen.show(&mut app);
     while painted {
@@ -308,7 +308,7 @@ impl Paint for Screen<'_> {
     }
 
     fn owes(&self, app: &App) -> bool {
-        self.reports.owes(&app.status())
+        self.reports.owe(&app.status())
     }
 }
 

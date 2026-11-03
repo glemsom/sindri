@@ -65,17 +65,18 @@ impl App {
     }
 
     pub fn event(&mut self, event: Event) {
+        // What the run is doing is the stream's own reading, made once here and
+        // in no arm: the table is `Event::doing`'s, because a batch run reads
+        // the same stream and neither front end may spell it again. The arms
+        // below keep only what the *frame* does with the event.
+        let (turn, doing) = event.doing();
+        self.rail.turn(turn, self.now);
+        self.doing = doing;
         match event {
             Event::TextDelta { turn, text } => {
-                self.rail.turn(turn, self.now);
-                // The model call has come back and the answer is arriving: the
-                // one point of a turn that is neither a tool nor a thought.
-                self.doing = Doing::Answer;
                 self.append(turn, text, false);
             }
             Event::ReasoningDelta { turn, text } => {
-                self.rail.turn(turn, self.now);
-                self.doing = Doing::Thinking;
                 self.append(turn, text, true);
             }
             Event::Reasoning { turn, text } => {
@@ -91,10 +92,6 @@ impl App {
                 self.dirty();
             }
             Event::ToolCall { turn, asked } => {
-                self.rail.turn(turn, self.now);
-                // What the run is doing is the call's own word, which is what
-                // the terminal is owed: a command is not a thought.
-                self.doing = Doing::of(&asked);
                 self.close_answers(false);
                 let mut call = Call::new(turn, requested(&asked), self.now);
                 // A load runs no command, so there is no exit to wait for: its

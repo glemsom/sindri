@@ -4,6 +4,12 @@
 //! the writing belongs to whoever does hold one: the frame's run and batch
 //! mode's stderr.
 //!
+//! Around the encoder is the channel a run speaks through ([`Channel`]): the
+//! title, the gate ([`Told`]) and the writer together, so "not twice, and not
+//! twice in a second" is held end to end in one module rather than re-guarded at
+//! each end. The channel takes its writer and never asks what it is; whether it
+//! is a tty is a fact about a front end, decided where the writer is chosen.
+//!
 //! A report is a second output channel, and one `record/redact.rs` cannot guard:
 //! it is written to a tty while the run happens, into whatever that terminal
 //! logs. So nothing worth redacting is ever put in it — the message is our own
@@ -17,6 +23,7 @@
 //! same spelling of the same fact and a second copy of it is the one that drifts.
 
 use std::borrow::Cow;
+use std::io::Write;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -304,6 +311,86 @@ impl Told {
             None => !matches!(state, State::Idle),
             Some(sent) => sent != still(state),
         }
+    }
+}
+
+/// One channel a run tells its terminal through, the three things that make a
+/// report an end-to-end rule rather than three pieces two front ends hold
+/// separately: the title every report carries, the gate on saying one
+/// ([`Told`]), and the writer the bytes reach — batch mode's stderr, the frame's
+/// stdout.
+///
+/// The writer is taken as it is, so the core never asks whether it is a tty:
+/// that is a front end's fact and it is decided where the writer is chosen. A
+/// write that fails is a terminal that has gone — a report is a courtesy to a
+/// screen and the run is not — so it is swallowed here and never handed back as
+/// a value, and a report past a ceiling is not sent rather than shortened,
+/// because a terminal discards the whole sequence and a run that shortened one
+/// would think it had spoken.
+pub struct Channel {
+    title: String,
+    /// The gate, or `None` where the setting silenced the reports: a run whose
+    /// human asked for none says nothing and clears nothing.
+    told: Option<Told>,
+    out: Box<dyn Write + Send>,
+}
+
+impl Channel {
+    pub fn new(title: impl Into<String>, wanted: bool, out: Box<dyn Write + Send>) -> Channel {
+        Channel {
+            title: title.into(),
+            told: wanted.then(Told::new),
+            out,
+        }
+    }
+
+    /// Says what the run is doing at `now`, or nothing where nothing changed.
+    pub fn say(&mut self, state: &State, now: Instant) {
+        let Some(told) = &mut self.told else {
+            return;
+        };
+        if let Some(bytes) = told.next(state, &self.title, now) {
+            self.write(&bytes);
+        }
+    }
+
+    /// Whether a report is owed and only the second is withholding it: a state
+    /// that settled inside the last report's second would never be said.
+    pub fn owe(&self, state: &State) -> bool {
+        self.told.as_ref().is_some_and(|told| told.owed(state))
+    }
+
+    /// The last report a run makes, past the gate: the terminal states are not
+    /// repeats, and a run that has stopped owes its word whatever the second
+    /// says.
+    pub fn last(&mut self, state: &State) {
+        if self.told.is_none() {
+            return;
+        }
+        if let Some(bytes) = report(state, &self.title) {
+            self.write(&bytes);
+        }
+    }
+
+    /// The frame's record taken away before it leaves the screen. Nothing where
+    /// the setting silenced the reports.
+    pub fn clear(&mut self) {
+        if self.told.is_none() {
+            return;
+        }
+        if let Some(bytes) = self::clear(&self.title) {
+            self.write(&bytes);
+        }
+    }
+
+    /// One report, written whole in one write: a terminal parses every byte it
+    /// is handed, and half a sequence is a sequence it discards. The one place
+    /// the channel writes, so nothing said can bypass it.
+    fn write(&mut self, bytes: &[u8]) {
+        // A failure to write is a terminal that has gone: the report is a
+        // courtesy and the run is not, so neither is the run's failure.
+        let _ = self.out.write_all(bytes);
+        let _ = self.out.flush();
     }
 }
 

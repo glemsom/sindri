@@ -141,10 +141,10 @@ In the frame that means two places and no third. A report goes out after `termin
 returned, from the loop, and never from inside a draw closure, or ratatui's diff repaints cells
 around a sequence the emulator has already consumed; and `state=clear` goes out where the frame is
 leaving, before `ratatui::restore()`, because `done` and `error` are meant to outlive a shell
-prompt and the frame's own record is not. How often either may be said is `status::Told`'s and is
-not left to a front end: a state the terminal has already been told is not said again, and nothing
-is said twice inside a second — a report the second withholds is one the loop is told it owes, so
-it is said late and never lost.
+prompt and the frame's own record is not. How often either may be said is the channel's and is
+not left to a front end — `status::Channel`, whose gate is `status::Told`: a state the terminal
+has already been told is not said again, and nothing is said twice inside a second — a report the
+second withholds is one the loop is told it owes, so it is said late and never lost.
 
 ## 8. One switch, read where both front ends read the config
 
@@ -154,7 +154,8 @@ log somebody greps. So there is one setting that silences every report, and it i
 — `status`, `SINDRI_STATUS` above the file, `true` unless either says otherwise. It is offered in
 `/settings` like every other key of the schema, and each front end reads it where it stands: batch
 mode's `Reports` takes it as the switch on its channel, and the frame carries it on its `Launch`,
-where a run's own facts already are, so `Channel` has no gate and writes nothing at all.
+where a run's own facts already are, so a `Channel` the switch silences holds no gate and says
+nothing and clears nothing.
 
 Not a switch per front end. Batch mode's `-b` and the frame's bare invocation would then spell one
 decision twice, and the day they disagree is the day a user who silenced the reports finds one of

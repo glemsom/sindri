@@ -4,12 +4,14 @@
 //! past the specification's ceiling is a report that says nothing — proven here
 //! at the encoder, which is the only place the rule is enforced.
 
+use std::io::Write;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use sindri_core::agent::Stopped;
+use sindri_core::agent::{Event, Stopped};
 use sindri_core::provider::Asked;
-use sindri_core::status::{Doing, State, Told, base64, clear, report, title};
+use sindri_core::status::{Channel, Doing, State, Told, base64, clear, report, title};
 
 /// The workspace's own name, as the rail spells it: the report's `title`.
 const TITLE: &str = "sindri";
@@ -348,5 +350,240 @@ fn a_title_is_the_workspaces_own_name_and_never_its_path() {
         title(Path::new("/")),
         "/",
         "a workspace with no name of its own is spelled as it is"
+    );
+}
+
+/// A terminal that keeps every byte it is handed, so a test can read what a
+/// report said without a process or a pty: the channel is a value, and a value
+/// is proven where it is made.
+#[derive(Clone, Default)]
+struct Captured(Arc<Mutex<Vec<u8>>>);
+
+impl Captured {
+    /// Everything written so far, as the bytes arrived. A writer nothing else
+    /// holds a lock on cannot be poisoned by a test that panicked elsewhere, and
+    /// a poisoned lock still holds the bytes.
+    fn bytes(&self) -> Vec<u8> {
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+    }
+}
+
+impl Write for Captured {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// A terminal that has gone: every write fails the way a closed pty does.
+struct Gone;
+
+impl Write for Gone {
+    fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
+        Err(std::io::Error::other("the terminal has gone"))
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Err(std::io::Error::other("the terminal has gone"))
+    }
+}
+
+#[test]
+fn a_channel_says_nothing_twice_and_nothing_twice_in_a_second() {
+    let out = Captured::default();
+    let mut channel = Channel::new(TITLE, true, Box::new(out.clone()));
+    let at = Instant::now();
+    let working = State::Working {
+        doing: Doing::Command,
+        turn: 1,
+        elapsing: Duration::ZERO,
+    };
+    channel.say(&working, at);
+    let once = out.bytes();
+    assert!(
+        !once.is_empty(),
+        "the first state is a terminal owed a word"
+    );
+    assert!(
+        !channel.owe(&working),
+        "a state the terminal has been told is not owed again"
+    );
+    // The same state again, and a different one inside the second: neither is
+    // a report, and the second is one the frame is told it owes.
+    channel.say(&working, at + Duration::from_millis(200));
+    assert_eq!(out.bytes(), once, "no state is said twice for being asked");
+    let thinking = State::Working {
+        doing: Doing::Thinking,
+        turn: 1,
+        elapsing: Duration::ZERO,
+    };
+    channel.say(&thinking, at + Duration::from_millis(400));
+    assert_eq!(
+        out.bytes(),
+        once,
+        "two reports inside one second is a terminal told more often than it asked"
+    );
+    assert!(
+        channel.owe(&thinking),
+        "a state held by the second is a report late and never one lost"
+    );
+    channel.say(&thinking, at + Duration::from_secs(1));
+    let twice = out.bytes();
+    assert!(
+        twice.len() > once.len() && twice.starts_with(&once),
+        "past the second the held report goes out, after the first: {:?}",
+        String::from_utf8_lossy(&twice)
+    );
+}
+
+#[test]
+fn the_last_report_a_run_makes_is_written_whatever_the_second_says() {
+    let out = Captured::default();
+    let mut channel = Channel::new(TITLE, true, Box::new(out.clone()));
+    let at = Instant::now();
+    let working = State::Working {
+        doing: Doing::Answer,
+        turn: 1,
+        elapsing: Duration::ZERO,
+    };
+    channel.say(&working, at);
+    // A run that stops inside the second the last report went in: the gate
+    // would hold it, and a terminal left `working` for a run that has stopped
+    // is a terminal lying about the machine.
+    let done = State::settled(Stopped::Final);
+    channel.last(&done);
+    let said = out.bytes();
+    let last = report(&done, TITLE).expect("a done report is inside every ceiling");
+    assert!(
+        said.ends_with(&last),
+        "the run's last word is written past the gate: {:?}",
+        String::from_utf8_lossy(&said)
+    );
+}
+
+#[test]
+fn a_silenced_channel_says_nothing_and_clears_nothing() {
+    // One setting silences every report, and the channel is where that becomes
+    // one decision: a run whose human asked for none says nothing and clears
+    // nothing, `last` and `clear` included.
+    let out = Captured::default();
+    let mut channel = Channel::new(TITLE, false, Box::new(out.clone()));
+    let at = Instant::now();
+    channel.say(
+        &State::Working {
+            doing: Doing::Thinking,
+            turn: 1,
+            elapsing: Duration::ZERO,
+        },
+        at,
+    );
+    assert!(
+        !channel.owe(&State::settled(Stopped::Final)),
+        "a silenced channel owes a terminal nothing"
+    );
+    channel.last(&State::settled(Stopped::Final));
+    channel.clear();
+    assert!(
+        out.bytes().is_empty(),
+        "the setting said nothing: {:?}",
+        String::from_utf8_lossy(&out.bytes())
+    );
+}
+
+#[test]
+fn a_clear_takes_the_records_away_and_asks_the_gate_nothing() {
+    let out = Captured::default();
+    let mut channel = Channel::new(TITLE, true, Box::new(out.clone()));
+    channel.clear();
+    assert_eq!(
+        out.bytes(),
+        clear(TITLE).expect("a clear is inside every ceiling"),
+        "leaving the screen is not a state the gate has an opinion about"
+    );
+}
+
+#[test]
+fn a_terminal_that_has_gone_is_not_a_panic_and_not_a_run_failure() {
+    // A report is a courtesy to a screen: a write that fails is a terminal that
+    // has gone, never the run's failure and never a value.
+    let mut channel = Channel::new(TITLE, true, Box::new(Gone));
+    let state = State::Working {
+        doing: Doing::Thinking,
+        turn: 1,
+        elapsing: Duration::ZERO,
+    };
+    channel.say(&state, Instant::now());
+    channel.last(&State::settled(Stopped::Final));
+    channel.clear();
+}
+
+#[test]
+fn a_text_delta_says_the_answer_is_arriving_in_its_turn() {
+    assert_eq!(
+        Event::TextDelta {
+            turn: 3,
+            text: "two files".into(),
+        }
+        .doing(),
+        (3, Doing::Answer)
+    );
+}
+
+#[test]
+fn a_reasoning_delta_says_the_run_is_thinking_in_its_turn() {
+    assert_eq!(
+        Event::ReasoningDelta {
+            turn: 2,
+            text: "hmm".into(),
+        }
+        .doing(),
+        (2, Doing::Thinking)
+    );
+}
+
+#[test]
+fn a_reasoning_block_says_the_run_is_thinking_in_its_turn() {
+    assert_eq!(
+        Event::Reasoning {
+            turn: 2,
+            text: "hmm".into(),
+        }
+        .doing(),
+        (2, Doing::Thinking)
+    );
+}
+
+#[test]
+fn a_tool_call_says_what_the_call_itself_says_in_its_turn() {
+    let asked = Asked::Bash {
+        command: "cargo test".into(),
+    };
+    assert_eq!(
+        Event::ToolCall { turn: 4, asked }.doing(),
+        (4, Doing::Command)
+    );
+}
+
+#[test]
+fn a_skill_loaded_says_the_run_is_loading_a_skill_in_its_turn() {
+    assert_eq!(
+        Event::SkillLoaded {
+            turn: 1,
+            name: "tdd".into(),
+            outcome: Some("loaded".into()),
+            body: "the body".into(),
+        }
+        .doing(),
+        (1, Doing::Skill)
     );
 }
