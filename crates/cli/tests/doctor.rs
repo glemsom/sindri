@@ -386,6 +386,42 @@ fn doctor_lists_both_scopes_with_the_name_the_scope_and_who_may_invoke_it() {
 }
 
 #[test]
+fn doctor_prints_a_builtin_displaced_by_a_user_skill_of_its_name() {
+    // Provenance is a field the doctor prints: the built-in holds its name in
+    // every tree that carries no skill, and the moment a user drops one of the
+    // same name in their home directory the row says `user` and the built-in is
+    // named as the skill that lost — by its origin, since it has no path.
+    let env = Env::new();
+    env.repository();
+    let builtin = sindri_core::skills::builtins()
+        .skills
+        .first()
+        .map(|skill| skill.name.clone())
+        .expect("the binary ships a built-in skill");
+    write_skill(
+        &env.home,
+        &builtin,
+        &format!("---\nname: {builtin}\ndescription: Ours, not the binary's.\n---\n"),
+    );
+
+    let assert = env.cmd().arg("doctor").assert().success();
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
+
+    let row = stdout
+        .lines()
+        .find(|line| line.contains(&builtin) && line.trim_start().starts_with("user"))
+        .unwrap_or_else(|| panic!("the user's skill holds the name: {stdout}"));
+    assert!(
+        !row.contains("(compiled in)"),
+        "the nearer scope's copy is the one listed: {row}"
+    );
+    assert!(
+        stdout.contains(&format!("{builtin}: ")) && stdout.contains("shadows builtin"),
+        "the built-in it displaced is named by its scope, not by a path it has not: {stdout}"
+    );
+}
+
+#[test]
 fn a_skill_that_will_not_load_is_named_with_its_file_and_line_and_is_not_a_failure() {
     let env = Env::new();
     env.repository();

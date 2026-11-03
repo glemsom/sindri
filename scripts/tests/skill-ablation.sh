@@ -54,7 +54,7 @@ test_a_sweep_of_zero_repetitions_is_refused() {
 
 test_a_record_line_for_an_arm_that_is_not_a_name_is_refused() {
     mkdir -p run
-    detached python3 "$BENCH/bench.py" record run --task prove-your-change --arm sideways
+    detached python3 "$BENCH/bench.py" record run --task refused-write --arm sideways
     assert_status 2 "$status"
     assert_contains "$ERR" "invalid choice"
 }

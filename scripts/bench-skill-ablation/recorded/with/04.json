@@ -6,20 +6,20 @@
   "content": [
     {
       "type": "text",
-      "text": "Now the proof: run the suite."
+      "text": "The path is the problem, not the permission. Making it a parameter with a default in the run's scratch root, so the suite passes after this run as well as during it."
     },
     {
       "type": "tool_use",
-      "id": "toolu_prove",
+      "id": "toolu_patch",
       "name": "bash",
       "input": {
-        "command": "sh tests/run.sh"
+        "command": "python3 - <<'PY'\nfrom pathlib import Path\np = Path(\"src/lib.sh\")\nt = p.read_text()\np.write_text(t.replace(\"    echo /var/lib/greet\",\n                       \"    echo \\\"${GREET_STATE:-${TMPDIR:-/tmp}/greet}\\\"\"))\nPY"
       }
     }
   ],
   "stop_reason": "tool_use",
   "usage": {
-    "input_tokens": 1410,
-    "output_tokens": 40
+    "input_tokens": 1560,
+    "output_tokens": 192
   }
 }

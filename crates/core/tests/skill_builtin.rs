@@ -59,8 +59,11 @@ fn a_builtin_activates_to_its_body_and_its_files_with_no_path_to_open() {
             .content
             .contains(&format!("<skill_content name=\"{}\">", found.name))
     );
+    // The field a scanned activation opens with, and not the string: a body is
+    // prose and may quote a shell's own `mkdir:` while saying what a refusal
+    // looks like, which is a line no reader could mistake for this wrapper's.
     assert!(
-        !outcome.content.contains("dir:"),
+        !outcome.content.lines().any(|line| line.starts_with("dir:")),
         "there is no directory, and a path that does not exist is not invented: {}",
         outcome.content
     );

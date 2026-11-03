@@ -7,10 +7,12 @@ description on every turn of every run, plus a body paid once if it is loaded at
 all — and the question it raises is the one ADR 0004 §4 names and does not
 answer: *is this worth its catalog line?*
 
-So: one task shaped like the capability the built-in claims — **prove your
-change** — run twice on the same model, the same repetitions and the same
-fixture repository, with the built-in in the catalog and with the table that
-ships it emptied. Every run is scored by a rule, and every line carries what the
+The built-in this bench ablates is `sandbox-refusal`: what a run does when the
+environment refuses a command — a write denied, a fetch with no credential. So:
+one task shaped like the capability it claims — **recover from a refused
+write** — run twice on the same model, the same repetitions and the same fixture
+repository, with the built-in in the catalog and with the table that ships it
+emptied. Every run is scored by a rule, and every line carries what the
 run cost and whether the body was ever loaded. The machine is in
 `scripts/bench-skill-ablation`; **the numbers below are not yet measured**, and
 this document says which parts are proven and which are not.
@@ -73,18 +75,26 @@ ships nothing. A run whose arm was taken on trust is a line in the wrong row.
 
 ## The task
 
-A five-file POSIX-shell repository whose suite fails (`say_hello` drops the name
-it is given), and one prompt:
+A five-file POSIX-shell repository whose suite fails because `src/lib.sh` names
+the greeting log's directory as `/var/lib/greet`, which the read-only host root
+refuses — and one prompt:
 
 > `sh tests/run.sh` fails in this repository. Fix the source so the suite passes,
 > and prove the fix: run the suite once it is green, and let the answer say what
-> the suite printed.
+> the suite printed and where the greeting log ends up.
 
-The built-in's body is a doctrine of order — read before you write, read the
-result of the command you just ran, say what you did and what you did not — and
-this is the capability that doctrine is supposed to buy. The task is
-deliberately winnable without it, because a bench whose task is unwinnable
-measures the task and not the skill.
+The built-in's body is what to do about a refusal — read the message rather than
+the exit code, move the artefact into a writable root, make the path a parameter
+with a writable default, prove it with the same command that failed — and this is
+the capability it is supposed to buy. The three defaults its body forbids are the
+`without` arm's recorded conversation: escalate, silence the writer, delete the
+assertion.
+
+The task is deliberately winnable without the skill — a competent run finds
+`/var/lib/greet` and moves it — because a bench whose task is unwinnable measures
+the task and not the skill. What the skill is supposed to change is how quickly
+the run stops escalating and how often it leaves a path behind that outlives the
+run, and that is what the two arms are compared on.
 
 ## The results
 
@@ -98,6 +108,16 @@ table is a cell with no measurement behind it.
 | --- | --- | --- | --- | --- | --- | --- |
 | with | not yet measured | not yet measured | not yet measured | not yet measured | not yet measured | not yet measured |
 | without | not yet measured | not yet measured | not yet measured | not yet measured | not yet measured | not yet measured |
+
+Every number the shipping rule below compares is one of those twelve cells, and
+none of them has been measured: `sandbox-refusal` is shipped on the argument ADR
+0004 §3 makes for the split — procedure in the body, the enforced boundary in the
+`bash` description — and **not** on a measurement, which this document refuses to
+invent in its place. The command that produces the numbers is under
+*Reproducibility*, and the file it lands in is named in
+`scripts/bench-skill-ablation/results/README.md`. Until a sweep has written that
+file, the criterion "the bench shows it earning its line" is **unmet**, and this
+is the paragraph that says so.
 
 `billed` is the count the mean and the median are over, and it is a column of its
 own because it is not `runs`: a run that never reached the model carries no token
@@ -124,9 +144,11 @@ runs the whole pipeline and asserts it: the unit tests of the record line, the
 rule, the activation field and the table; the two arm builds and the fact that
 the second really ships no built-in; one sweep through both arms against
 recorded conversations served on loopback; and the report those lines make. The
-recorded `with` conversation loads the skill, reads the file, patches it, runs
-the suite and answers; the `without` one patches the same file and claims the
-suite is green without running it. The rule scores them `{fixed, proved, ok} =
+recorded `with` conversation loads the skill, runs the suite, reads the
+`Read-only file system` refusal, makes the log's path a parameter with a
+writable default, runs the suite again and answers; the `without` one reaches
+for `sudo`, silences the writer, deletes the log assertion and claims the suite
+is green without running it. The rule scores them `{fixed, proved, ok} =
 {true, true, true}` and `{true, false, false}` — which is the rule discriminating
 on a difference a reader can see, and it is the only claim the offline pass
 makes.
@@ -196,12 +218,27 @@ argument.
 
 ## What this does not prove
 
-One task, one fixture repository of five files, one capability. A bench that
-measures whether a body makes a change be proven, not a benchmark of coding
-ability, and a built-in that helps here may still be useless on the tasks it
-claims to cover — a task it does not help passed this one, and six repetitions
-on one model is a narrow window. The token sums are the provider's accounting,
-with the ±20% spread that implies. And an ablation measures the built-in against
+One task, one fixture repository of five files, and one half of the capability
+the built-in claims. The task is a denied write; the body's second half — a fetch
+with no credential — has no task here, because a task needing a credential to be
+*absent* is a task whose fixture would have to fail differently on every machine
+that runs it, and a bench that cannot be re-run is not a measurement. A built-in
+that helps with the refusal it was measured on may still be useless on the one it
+was not.
+
+The rule reads an exit code, so it cannot tell a suite that was fixed from a suite
+that was weakened: the `without` arm deletes an assertion and the bench's own
+re-run passes it. That is `fixed` meaning what it says — the tree the run left
+does pass its own suite — and `proved`, which the run loses, is the only half that
+notices. A body that spends its line on the difference between those two is
+reading the rule correctly, and a rule that could not be fooled this way would
+have to read the diff, which is a different bench.
+
+A bench that measures whether a body makes a refused command be recovered from,
+not a benchmark of coding ability, and a built-in that helps here may still be
+useless on the tasks it claims to cover — six repetitions on one model is a
+narrow window. The token sums are the provider's accounting, with the ±20% spread
+that implies. And an ablation measures the built-in against
 its absence, never against a better one: nothing here says the description could
 not route better, which is why a failure of (1) sends a reader to the catalog
 entry rather than to the body.

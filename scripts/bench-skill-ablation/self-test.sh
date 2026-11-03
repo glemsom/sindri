@@ -33,7 +33,7 @@ test_the_two_arms_differ_only_in_the_catalog() {
         fi
         [ -x "$BENCH/bin-$arm" ] || { note "bin-$arm is not built"; return; }
     done
-    "$BENCH/bin-with" doctor | grep -q '^  builtin  sindri ' \
+    "$BENCH/bin-with" doctor | grep -q '^  builtin  sandbox-refusal ' \
         || note "the with arm does not ship the built-in"
     ! "$BENCH/bin-without" doctor | grep -q '^  builtin ' \
         || note "the without arm still ships a built-in, so it is not an ablation"
@@ -84,7 +84,7 @@ test_a_run_that_never_reached_the_model_is_tried_once_more() {
 # attempt 1 answers nothing; attempt 2 answers with a bill
 tokens=null
 [ "$ATTEMPT" = 2 ] && tokens=500
-printf '{"task":"prove-your-change","arm":"%s","tag":"%s","repetition":%s,"attempt":%s,"in_tokens":%s,"checks":{"ok":false}}\n' \
+printf '{"task":"refused-write","arm":"%s","tag":"%s","repetition":%s,"attempt":%s,"in_tokens":%s,"checks":{"ok":false}}\n' \
     "$1" "$TAG" "$REPETITION" "$ATTEMPT" "$tokens"
 STUB
     chmod +x "$tmp/stub/run_one.sh"

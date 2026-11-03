@@ -56,8 +56,10 @@ The rule is in `bench.py`, stated once and tested in `tests/`:
 
 `fixed` is the bench's own re-run, never the run's claim. `proved` is the half
 that separates a run that showed its work from one that asserted it: the
-recorded conversation of the `without` arm patches the same file and says the
-suite is green without running it, and scores `fixed: true, proved: false`.
+recorded conversation of the `without` arm silences the writer, deletes the log
+assertion and says the suite is green without running it, and scores `fixed:
+true, proved: false`. The `with` arm hits the same `Read-only file system`
+refusal, moves the path into a writable root and runs the suite again.
 
 ## Offline: the pipeline, with no key and no bill
 

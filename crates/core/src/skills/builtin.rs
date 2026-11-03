@@ -27,10 +27,16 @@ pub struct Builtin {
 /// a skill is found, and a compiled one is found in the binary.
 pub const BUILTINS: &[Builtin] = &[Builtin {
     source: include_str!("builtin/SKILL.md"),
-    files: &[File {
-        path: "references/working.md",
-        text: include_str!("builtin/references/working.md"),
-    }],
+    files: &[
+        File {
+            path: "references/refusals.md",
+            text: include_str!("builtin/references/refusals.md"),
+        },
+        File {
+            path: "references/worked-example.md",
+            text: include_str!("builtin/references/worked-example.md"),
+        },
+    ],
 }];
 
 /// The built-in scope as a catalog, folded in after the two scopes a scan

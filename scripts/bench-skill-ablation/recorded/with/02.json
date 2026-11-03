@@ -6,20 +6,20 @@
   "content": [
     {
       "type": "text",
-      "text": "Reading the suite and the file it exercises."
+      "text": "Reading the refusal itself."
     },
     {
       "type": "tool_use",
-      "id": "toolu_read",
+      "id": "toolu_refuse",
       "name": "bash",
       "input": {
-        "command": "sed -n '1,40p' tests/run.sh src/greet.sh"
+        "command": "sh tests/run.sh"
       }
     }
   ],
   "stop_reason": "tool_use",
   "usage": {
-    "input_tokens": 980,
-    "output_tokens": 60
+    "input_tokens": 1290,
+    "output_tokens": 54
   }
 }

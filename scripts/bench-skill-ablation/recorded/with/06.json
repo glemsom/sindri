@@ -1,0 +1,17 @@
+{
+  "id": "msg_ablation",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-mock",
+  "content": [
+    {
+      "type": "text",
+      "text": "`/var/lib/greet` was refused by the read-only host root, so the greeting log now lives in `${GREET_STATE:-${TMPDIR:-/tmp}/greet}` \u2014 two lines in `src/lib.sh` and nothing else. `sh tests/run.sh` prints `all tests pass`."
+    }
+  ],
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 1840,
+    "output_tokens": 72
+  }
+}

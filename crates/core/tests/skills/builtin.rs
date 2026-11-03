@@ -109,6 +109,35 @@ fn every_builtin_skill_parses_and_names_a_file_its_body_points_at() {
 }
 
 #[test]
+fn every_reference_a_builtin_body_names_is_a_file_it_ships() {
+    // The other direction of the same rule: a body whose `references/…` is not
+    // in the table reads as a file the model may open, and a built-in has no
+    // directory for one to be in.
+    for found in builtins().skills {
+        let body = found.body().expect("a built-in's frontmatter parses");
+        let shipped: Vec<&str> = found.files().iter().map(|file| file.path).collect();
+        let named: Vec<&str> = body
+            .split(|at: char| at.is_whitespace() || at == '`')
+            .map(|word| word.trim_end_matches([',', '.', ':', ';', ')']))
+            .filter(|word| word.starts_with("references/"))
+            .collect();
+        assert!(
+            !named.is_empty(),
+            "{} names no reference at all, so its long form is a body nobody can \
+             read further from: {body}",
+            found.name
+        );
+        for reference in named {
+            assert!(
+                shipped.contains(&reference),
+                "{reference} is named by {} and is not a file it ships ({shipped:?})",
+                found.name
+            );
+        }
+    }
+}
+
+#[test]
 fn two_builtins_never_ship_one_name_because_neither_can_shadow_the_other() {
     let shipped = builtins().skills;
     let mut names: Vec<&str> = shipped.iter().map(|skill| skill.name.as_str()).collect();

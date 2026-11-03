@@ -31,7 +31,7 @@ import sys
 
 # The built-in this bench ablates: the one the binary ships, and the only skill
 # a run in the bare fixture repository can see.
-SKILL = "sindri"
+SKILL = "sandbox-refusal"
 
 # The suite the fixture repository ships, and the proof the task asks for. An
 # invocation is recognised where a shell would start one — at the start of the

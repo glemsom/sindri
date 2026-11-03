@@ -47,7 +47,7 @@ class TheRecordLineCarriesTheFourFieldsTheAblationTurnsOn(unittest.TestCase):
             entries = [call(1, "sed -n '1,20p' src/greet.sh")]
             entries += skill_call(1, bench.SKILL)
             entries += [call(2, "sh tests/run.sh"), result(2, 0)]
-        fields = dict(task="prove-your-change", arm="with", tag="a",
+        fields = dict(task="refused-write", arm="with", tag="a",
                       repetition=1, attempt=1, model="m", run=run,
                       entries=entries, fixed=True, elapsed_s=9)
         fields.update(overrides)
@@ -159,7 +159,7 @@ class TheTableIsTheMeansOfOneArmAgainstTheOther(unittest.TestCase):
                     "checks": {"ok": False}},
                    {"arm": "without", "in_tokens": None, "activated": False,
                     "checks": {"ok": True}}]
-        one_sweep = [dict(line, model="mock", task="prove-your-change")
+        one_sweep = [dict(line, model="mock", task="refused-write")
                      for line in with_right + without]
         return one_sweep
 
@@ -181,7 +181,7 @@ class TheTableIsTheMeansOfOneArmAgainstTheOther(unittest.TestCase):
     def test_two_sweeps_in_one_file_are_refused_rather_than_averaged(self):
         lines = self.file()
         lines.append({"arm": "with", "model": "another-model",
-                      "task": "prove-your-change", "in_tokens": 1,
+                      "task": "refused-write", "in_tokens": 1,
                       "checks": {"ok": True}})
         with self.assertRaises(SystemExit):
             bench.report(lines)
