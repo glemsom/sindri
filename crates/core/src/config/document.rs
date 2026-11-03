@@ -11,14 +11,13 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use super::file::{self, FileConfig};
-use super::{ConfigError, MAX_TURNS, Provider, Theme, extra_paths};
+use super::{ConfigError, MAX_TURNS, Provider, extra_paths};
 use crate::exec::MAX_TIMEOUT_SECS;
 
 #[repr(usize)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Key {
     Provider,
-    Theme,
     Model,
     BaseUrl,
     ApiKey,
@@ -30,7 +29,7 @@ pub enum Key {
 }
 
 /// How many keys there are: the table's length, and the modal's.
-const N_KEYS: usize = 10;
+const N_KEYS: usize = 9;
 
 pub const KEYS: [Key; N_KEYS] = keys();
 
@@ -55,7 +54,7 @@ struct Spec {
     /// one by accident. Its `get` says only that the file holds one.
     secret: bool,
     /// The text a field starts with, whatever the file says: the run's own
-    /// default, which is nothing for every key but the theme's name.
+    /// default, which is nothing for every key.
     start: fn() -> String,
     get: fn(&FileConfig) -> Option<String>,
     clear: fn(&mut FileConfig),
@@ -76,18 +75,6 @@ const SPECS: [Spec; N_KEYS] = [
         clear: |values| values.provider = None,
         put: |values, value| {
             values.provider = Some(Provider::parse(value)?.as_str().to_string());
-            Ok(())
-        },
-    },
-    Spec {
-        key: Key::Theme,
-        name: "theme",
-        secret: false,
-        start: || Theme::default().as_str().to_string(),
-        get: |values| values.theme.clone(),
-        clear: |values| values.theme = None,
-        put: |values, value| {
-            values.theme = Some(Theme::parse(value)?.as_str().to_string());
             Ok(())
         },
     },

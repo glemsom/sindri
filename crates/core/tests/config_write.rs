@@ -45,7 +45,6 @@ fn every_key_the_schema_names_is_written_and_reads_back() {
     let (_dir, path, mut document) = document(None);
     let values = [
         (Key::Provider, "openai"),
-        (Key::Theme, "anvil"),
         (Key::Model, "qwen3-32b"),
         (Key::BaseUrl, "http://127.0.0.1:11434/v1"),
         (Key::ApiKey, "sk-written-by-the-modal"),
@@ -83,20 +82,13 @@ fn every_key_the_schema_names_is_written_and_reads_back() {
 
 #[test]
 fn a_key_the_document_does_not_touch_survives_a_save() {
-    let (_dir, path, mut document) = document(Some(
-        "model = \"from-file\"\ntheme = \"anvil\"\nmax_turns = 9\ntimeout = 7\n",
-    ));
+    let (_dir, path, mut document) =
+        document(Some("model = \"from-file\"\nmax_turns = 9\ntimeout = 7\n"));
     document.set(Key::Model, "changed").expect("accepted");
     document.save().expect("written");
 
     let reread = Document::load_at(&path).expect("the file parses");
     assert_eq!(reread.editable(Key::Model), "changed");
-    assert_eq!(
-        reread.editable(Key::Theme),
-        "anvil",
-        "a key the form never touched is not lost: {}",
-        text(&path)
-    );
     assert_eq!(
         reread.editable(Key::MaxTurns),
         "9",
@@ -129,7 +121,6 @@ fn a_value_the_schema_refuses_changes_nothing_and_writes_nothing() {
 
     for (key, value) in [
         (Key::Provider, "gemini"),
-        (Key::Theme, "forge"),
         (Key::MaxTurns, "0"),
         (Key::MaxTurns, "many"),
         (Key::Timeout, "0"),
@@ -282,7 +273,7 @@ fn every_key_the_form_offers_is_one_the_file_can_carry() {
             key.name()
         );
     }
-    assert_eq!(KEYS.len(), 10, "the schema's keys, and no more");
+    assert_eq!(KEYS.len(), 9, "the schema's keys, and no more");
 }
 
 #[test]
@@ -292,7 +283,6 @@ fn every_key_can_be_set_shown_and_cleared() {
     let (_dir, path, mut document) = document(None);
     let values = [
         (Key::Provider, "anthropic"),
-        (Key::Theme, "anvil"),
         (Key::Model, "m"),
         (Key::BaseUrl, "http://127.0.0.1:1"),
         (Key::ApiKey, "sk-one"),
@@ -389,8 +379,8 @@ fn every_key_the_form_offers_is_one_row_of_the_table() {
 fn every_key_the_file_carries_is_a_key_the_form_offers() {
     // The file's struct is private, so the committed source is the fact: a
     // field added there and not to `KEYS` is a key with no row in `/settings`,
-    // which is how `theme` sat uneditable while the glossary promised a row
-    // per key of the schema.
+    // which is how a key sat uneditable while the glossary promised a row per
+    // key of the schema.
     const FILE: &str = include_str!("../src/config/file.rs");
     let fields: Vec<&str> = FILE
         .lines()
@@ -400,7 +390,7 @@ fn every_key_the_file_carries_is_a_key_the_form_offers() {
         .collect();
 
     assert!(
-        fields.len() >= 10,
+        fields.len() >= 9,
         "the scan found the file's fields: {fields:?}"
     );
     for field in &fields {

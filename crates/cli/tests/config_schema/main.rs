@@ -9,7 +9,6 @@
 
 #[path = "../common/mod.rs"]
 mod common;
-mod theme;
 
 use std::process::Output;
 

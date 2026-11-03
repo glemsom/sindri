@@ -1,5 +1,7 @@
-//! The surface `--help` prints: the flag that leaves the sandbox is on it,
-//! carrying the warning, and no spelling a script already uses moved.
+//! The command-line surface: what `--help` prints, and what a spelling that left
+//! it is answered with. The flag that leaves the sandbox is on it, carrying the
+//! warning; no spelling a script already uses moved; and a flag the parser no
+//! longer takes is refused by name rather than accepted and ignored.
 
 #![allow(
     clippy::expect_used,
@@ -85,4 +87,25 @@ fn every_flag_that_printed_bare_says_what_it_is_for() {
             "`{phrase}` is missing from:\n{text}"
         );
     }
+}
+
+#[test]
+fn a_flag_that_left_the_surface_is_refused_by_name() {
+    let env = Env::new();
+    let output = env
+        .cmd()
+        .args(["--theme", "anvil"])
+        .output()
+        .expect("run sindri");
+
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "a flag the parser does not take is a usage error, not a silent no-op"
+    );
+    let said = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        said.contains("--theme"),
+        "the refusal names the flag: {said}"
+    );
 }

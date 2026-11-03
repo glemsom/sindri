@@ -11,7 +11,7 @@
 
 use std::path::PathBuf;
 
-use sindri_core::config::{Document, KEYS, Key, Theme};
+use sindri_core::config::{Document, KEYS};
 use tempfile::TempDir;
 
 /// The example, as committed: `include_str!` so the test cannot pass against a
@@ -59,23 +59,5 @@ fn the_example_sets_every_key_the_schema_names() {
             key.name()
         );
     }
-    assert_eq!(KEYS.len(), 10, "the schema's keys, and no more");
-}
-
-#[test]
-fn the_examples_theme_is_a_name_the_schema_accepts() {
-    let (_dir, _path, document) = loaded();
-    let named = document.editable(Key::Theme);
-
-    let theme = Theme::parse(&named).unwrap_or_else(|error| {
-        panic!(
-            "docs/config.example.toml names a theme the run refuses: {}",
-            error.message()
-        )
-    });
-    assert_eq!(
-        theme.as_str(),
-        named,
-        "and reads back as the name it was given"
-    );
+    assert_eq!(KEYS.len(), 9, "the schema's keys, and no more");
 }

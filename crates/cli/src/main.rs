@@ -30,10 +30,6 @@ struct Cli {
     /// servers that speak its shape — Ollama, vLLM, LM Studio, OpenRouter.
     #[arg(long, value_name = "NAME")]
     provider: Option<String>,
-    /// Which palette to draw with: `anvil`, the one there is. `SINDRI_THEME`
-    /// names the same key, and the flag wins over the environment.
-    #[arg(long, value_name = "NAME")]
-    theme: Option<String>,
     /// The model to ask. There is no default, so a run without one is an error
     /// naming the wire it is missing a model for.
     #[arg(long, value_name = "NAME")]
@@ -181,7 +177,6 @@ impl Cli {
     fn overrides(&self) -> Overrides {
         Overrides {
             provider: self.provider.clone(),
-            theme: self.theme.clone(),
             model: self.model.clone(),
             base_url: self.base_url.clone(),
             max_turns: self.max_turns,
@@ -206,7 +201,6 @@ impl Cli {
 fn policy_only(overrides: &Overrides) -> Overrides {
     Overrides {
         provider: None,
-        theme: None,
         model: None,
         base_url: None,
         max_turns: None,
@@ -248,8 +242,6 @@ mod tests {
         let overrides = cli(&[
             "--provider",
             "anthropic",
-            "--theme",
-            "anvil",
             "--model",
             "claude-sonnet-4-6",
             "--base-url",
@@ -269,7 +261,6 @@ mod tests {
         .overrides();
 
         assert_eq!(overrides.provider.as_deref(), Some("anthropic"));
-        assert_eq!(overrides.theme.as_deref(), Some("anvil"));
         assert_eq!(overrides.model.as_deref(), Some("claude-sonnet-4-6"));
         assert_eq!(overrides.base_url.as_deref(), Some("http://gateway"));
         assert_eq!(overrides.max_turns, Some(7));
@@ -290,7 +281,6 @@ mod tests {
         let overrides = cli(&[]).overrides();
 
         assert_eq!(overrides.provider, None);
-        assert_eq!(overrides.theme, None);
         assert_eq!(overrides.model, None);
         assert_eq!(overrides.base_url, None);
         assert_eq!(overrides.max_turns, None);
@@ -322,8 +312,6 @@ mod tests {
             &cli(&[
                 "--provider",
                 "gemini",
-                "--theme",
-                "anvil",
                 "--model",
                 "m",
                 "--base-url",
@@ -345,7 +333,6 @@ mod tests {
         assert_eq!(overrides.writable, Some(vec!["/granted".to_string()]));
         assert!(overrides.yolo_unsafe);
         assert_eq!(overrides.provider, None);
-        assert_eq!(overrides.theme, None);
         assert_eq!(overrides.model, None);
         assert_eq!(overrides.base_url, None);
         assert_eq!(overrides.max_turns, None);
