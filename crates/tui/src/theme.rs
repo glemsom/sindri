@@ -76,8 +76,9 @@ pub const LEADER: Color = Color::Rgb(0x5b, 0x65, 0x78);
 /// edge the rail's facts hold.
 pub const SEAM: Color = Color::Rgb(0xa8, 0xb3, 0xc6);
 
-/// Every colour the frame may paint. A renderer names one of these or nothing;
-/// `tests/theme.rs` holds the frame to it.
+/// Every colour the frame may paint. A renderer names one of these or nothing:
+/// [`owns`] admits a palette entry or a step on a ramp, and `tests/theme/main.rs`
+/// holds the renderers to it.
 pub const PALETTE: &[Color] = &[
     HEADING,
     FAINT,

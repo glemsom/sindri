@@ -183,8 +183,9 @@ impl Error {
         matches!(self.status, Some(429) | Some(500..=599))
     }
 
-    /// A transport failure: no reply, so no status. Public because a [`Model`]
-    /// implementation outside this crate has to be able to report one.
+    /// A transport failure: no reply, so no status. Public because the one
+    /// [`Model`] implementation outside this crate — the scripted double in
+    /// `tests/support` — has to report one.
     pub fn transport(message: impl Into<String>) -> Self {
         Error {
             message: message.into(),

@@ -268,8 +268,8 @@ impl StatusSink for Recorder {
 }
 
 /// A request as the record may keep it: every word the model wrote passes the
-/// run's redaction, and the variant is matched rather than copied, so a third
-/// tool is a compile error here too.
+/// run's redaction, and the variant is matched rather than copied, so a request
+/// this function has not been taught cannot reach the file as it was written.
 fn asked(asked: &Asked, redaction: &Redaction) -> Asked {
     let clean = |text: &str| redaction.apply(text).into_owned();
     match asked {

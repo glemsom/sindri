@@ -91,9 +91,6 @@ impl App {
                 // did arrives with the load's own event, together with the body
                 // the reader can open.
                 match &asked {
-                    // A load runs no command, so there is no exit to wait for:
-                    // the row is over the moment it was announced, and what it
-                    // read arrives with the load's own event.
                     Asked::Skill { name } => {
                         call.skill = Some(Skill::new(name));
                         call.over = Some(CallOver::Exited(0));

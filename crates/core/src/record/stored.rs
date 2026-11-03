@@ -1,7 +1,7 @@
-//! Reading a record back: `sindri sessions show` and, later, a TUI's session
-//! restore, from the same files the run wrote. A reader may name a record by a
-//! whole id or by a leading prefix of one, and either way it is the same guard
-//! that decides a name can be a record at all.
+//! Reading a record back — what `sindri sessions show` does — from the same
+//! files the run wrote. A reader may name a record by a whole id or by a leading
+//! prefix of one, and either way it is the same guard that decides a name can be
+//! a record at all.
 
 use std::fmt;
 use std::io;

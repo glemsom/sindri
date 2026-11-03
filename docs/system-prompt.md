@@ -45,7 +45,7 @@ under one number. The variants differ only in the prompt.
 
 | variant | what it adds to the shipped prompt | words |
 | --- | --- | --- |
-| v00 | nothing — the prompt as it was | 94 |
+| v00 | nothing — the shipped `PREAMBLE`, which `variants.py` reads out of `rig_wire.rs` | — |
 | v01 | the mermaid sentence cut, the rest tightened | 59 |
 | v02 | "Read the fewest bytes that answer: search first (`rg -n`), then open only the lines you need (`sed -n 'A,Bp'`); never `cat` a whole file, and never run a search or a listing twice." | 93 |
 | v03 | "Orient once: one command that lists and searches is enough. Never repeat a lookup you have already run." | 77 |
@@ -60,6 +60,12 @@ under one number. The variants differ only in the prompt.
 | v12 | v11, plus "match a name whole so a longer name starting with it is left alone" | 136 |
 | v13 | v02, plus "A fence marked `mermaid` is drawn as a picture: draw what prose cannot." — this one landed | 106 |
 | v14 | v13, plus "Put the steps of one task in one script: filter there, print only what you concluded, and keep intermediates in `$TMPDIR`, which outlives the call." — written and not shipped, see below | 131 |
+
+v00 has no word count of its own: `variants.BASE` is read out of the tree, and
+`the_bench_baseline_is_the_preamble_the_tree_ships` holds the two together. The
+two tables below were measured while v00 was an earlier, 94-word baseline that
+the tree no longer ships, so a fresh sweep from `v00` starts from a shorter
+prompt than they were measured against.
 
 ## The ranking, `deepseek-v4.1-flash`, two repetitions each
 
@@ -131,7 +137,7 @@ not cheaper because they answer less.
 ## What the numbers say
 
 - **The lever is the reading instruction, not the prompt's length.** v02 is 93
-  words against the shipped 94 and spends half the tokens; v10, 97 words to v02's
+  words against the baseline's 94 and spends half the tokens; v10, 97 words to v02's
   93, spends 125,346 against the baseline's 121,885. What changes is the shape of
   the first command: the baseline opens `wc -l src/ledger.py; grep -n ""
   src/ledger.py` — the whole file, with line numbers — where v13 runs

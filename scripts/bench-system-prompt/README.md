@@ -21,9 +21,12 @@ REPS=6 TAG=$BENCH_MODEL ./sweep.sh results/$BENCH_MODEL-v02.jsonl v02
 the answer, the task's verdict and what the run cost — input tokens summed over
 the turns, output tokens, turns, and the bytes of tool output the model read.
 
-The prompt under test lives in `variants.py`; `build_variant.sh` writes it into
+The variants are the texts in `variants.py`; `build_variant.sh` writes one into
 `crates/core/src/provider/rig_wire.rs`, builds, and copies the binary, so
 `git checkout crates/core/src/provider/rig_wire.rs` afterwards restores the tree.
+`v00` is not one of those texts: it is the tree's own `PREAMBLE`, which
+`variants.py` reads out of that file, so v00 patches nothing and builds the
+prompt the tree ships.
 
 ## Repetitions
 

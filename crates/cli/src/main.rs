@@ -1,5 +1,6 @@
-//! The `sindri` binary: the batch front end. Argument parsing and output only;
-//! every decision lives in `sindri-core`.
+//! The `sindri` binary: the front end — a filter reading stdin in batch mode,
+//! the frame on a terminal. Argument parsing and dispatch only; every decision
+//! lives in `sindri-core`.
 
 mod batch;
 mod boot;

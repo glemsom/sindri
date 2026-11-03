@@ -87,9 +87,8 @@ pub enum Entry {
         duration_ms: Option<u64>,
     },
     /// The call as it was read: the tool, and what it was asked. The request is
-    /// flattened into the line, so `bash` and `skill` calls share one entry and
-    /// a third tool is a compile error in every reader rather than a fact the
-    /// record quietly stops carrying.
+    /// flattened into the line, so every tool shares one entry, and no reader
+    /// can quietly stop carrying a fact the others still carry.
     ToolCall {
         turn: u32,
         call_id: String,
@@ -111,8 +110,8 @@ pub enum Entry {
         content: String,
         is_error: bool,
         /// The word the tool result was rendered with; absent when the call
-        /// never ran because its arguments were unusable, which
-        /// `ToolCall.problem` already says.
+        /// never ran because its arguments were unusable, which the
+        /// [`Entry::ToolCall`] beside it says, carrying that call's `problem`.
         #[serde(default)]
         outcome: Option<String>,
         #[serde(default)]

@@ -9,10 +9,6 @@ use crate::app::{App, Loading, Renew};
 use crate::command::SkillAsk;
 
 impl App {
-    /// `/skill`: a name loaded by hand, or — with no name — a question about the
-    /// catalog. A bare name arms the skill and starts no turn: the body is in
-    /// the conversation from here on, and a transcript row says so. A tail
-    /// becomes the prompt the run answers once the load has landed.
     pub(super) fn skill_command(&mut self, ask: Option<SkillAsk>) {
         let Some(ask) = ask else {
             return self.skill_question();

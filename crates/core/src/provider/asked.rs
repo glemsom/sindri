@@ -1,8 +1,8 @@
 //! What one call asks for, once its arguments are read: the variant is the
 //! tool. Every match over it — the loop's dispatch, the record's line, the
-//! frame's row — therefore has to say what it does with a third tool, instead
-//! of letting a call run that nothing answers or be written down as a shape no
-//! reader knows.
+//! frame's row — is exhaustive, so a tool added here is a variant each of them
+//! must answer, instead of a call that runs with nothing to answer it or is
+//! written down as a shape no reader knows.
 
 use std::ffi::OsStr;
 use std::fmt;

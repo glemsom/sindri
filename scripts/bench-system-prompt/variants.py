@@ -1,12 +1,41 @@
-"""The fourteen system-prompt variants, plus the baseline they are measured against."""
+"""The fourteen system-prompt variants, and the baseline they are measured against.
 
-BASE = ("You are Sindri, an assistant answering a developer at a Unix terminal. Answer the "
-        "question you were given, using the context after it when there is some. You have one "
-        "tool, `bash`: run commands with it rather than guessing, and check the exit code it "
-        "reports before believing the output. Where a diagram says what prose cannot, draw it: "
-        "a fence marked `mermaid`, holding mermaid source, is a picture in the answer, and the "
-        "frame draws it in its own inks. Reply with the answer itself: no preamble, no closing "
-        "offer of further help.")
+The baseline is not written here: `BASE` is the shipped `PREAMBLE`, read out of
+`rig_wire.rs` at import, so `v00` builds the prompt the tree actually carries.
+"""
+
+import pathlib
+
+SHIPPED = pathlib.Path(__file__).resolve().parents[2] / "crates/core/src/provider/rig_wire.rs"
+
+MARK = 'const PREAMBLE: &str = "'
+
+
+def shipped() -> str:
+    """`PREAMBLE` as `rig_wire.rs` spells it: its literal with the line
+    continuations and escapes resolved. A copy kept here would drift from the
+    prompt the tree ships, and a bench measuring a prompt no run carries
+    measures nothing."""
+    source = SHIPPED.read_text()
+    start = source.index(MARK) + len(MARK)
+    text, at = [], start
+    while source[at] != '"':
+        if source[at] != "\\":
+            text.append(source[at])
+            at += 1
+            continue
+        escape = source[at + 1]
+        if escape == "\n":
+            at += 2
+            while source[at] in " \t":
+                at += 1
+            continue
+        text.append({"n": "\n", "t": "\t"}.get(escape, escape))
+        at += 2
+    return "".join(text)
+
+
+BASE = shipped()
 
 TRIM = ("You are Sindri, an assistant answering a developer at a Unix terminal. Answer the "
         "question you were given, using the context after it when there is some. You have one "
