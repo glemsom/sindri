@@ -13,4 +13,15 @@ toolchain, then `sindri doctor`.
 - **Vocabulary**: `GLOSSARY.md` at the root. Use its words exactly; do not drift to the
   synonyms it avoids.
 - **Decisions**: `docs/agents/domain.md` says which records hold them, and that a new
-  decision belongs in the tree rather than in a new record.
+  decision belongs in the tree rather than in a new record. The tool set's record is
+  `docs/adr/0002-three-tools.md`.
+
+## Proving a change
+
+`make check` is the gate: fmt, clippy with warnings denied, the four audits, the tests, the
+evals, the no-relink proof and the release scripts. `make audit` runs the four fast audits on
+their own, and `make hooks` puts them in front of every commit.
+
+A commit subject is a lowercase area prefix, a sentence saying what changed, and the ticket
+that asked for it — `(#123)`. `scripts/release-changelog.sh` derives the changelog from those
+subjects, so the convention is what a release note is made of.

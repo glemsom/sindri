@@ -1,9 +1,9 @@
 //! The documents a reader reaches first — the brief, the vocabulary, the README
-//! and two of the records — kept true: every claim names a word, a default, a
-//! closed set or a version the code carries, read from the code rather than
-//! trusted to keep up. An entry is pinned to its
-//! fact and not to a sentence, so the file can be rewritten without the test
-//! moving — and the test still fails when the fact drifts.
+//! and the records — kept true: every claim names a word, a default, a closed
+//! set or a version the code carries, read from the code rather than trusted to
+//! keep up. An entry is pinned to its fact and not to a sentence, so the file can
+//! be rewritten without the test moving — and the test still fails when the fact
+//! drifts.
 
 use sindri_core::agent::Stopped;
 use sindri_core::config::{DEFAULT_MAX_TURNS, KEYS};
@@ -108,14 +108,9 @@ fn the_agent_brief_points_at_the_files_an_agent_reads_first() {
         );
     }
     assert!(
-        AGENT_BRIEF.contains("docs/adr/0002-two-tools.md"),
+        AGENT_BRIEF.contains("docs/adr/0002-three-tools.md"),
         "the one invariant worth a sentence is the one whose record argues it, and the \
-         tool set's record is `docs/adr/0002-two-tools.md`: {AGENT_BRIEF:?}"
-    );
-    assert!(
-        !AGENT_BRIEF.contains("docs/adr/0003-a-third-tool-open.md"),
-        "ADR 0003 is superseded, so pointing an agent at it costs a search: \
-         {AGENT_BRIEF:?}"
+         tool set's record is `docs/adr/0002-three-tools.md`: {AGENT_BRIEF:?}"
     );
 }
 
@@ -130,12 +125,8 @@ fn the_agent_brief_carries_the_version_the_workspace_is_at() {
 }
 
 /// The tool set's record, as committed: the one argument for `bash` against the two
-/// tools the shell cannot carry, since ADR 0003 was folded into it.
-const TOOLS: &str = include_str!("../../../docs/adr/0002-two-tools.md");
-
-/// ADR 0003, as committed: superseded, so it stays for the links that point at it
-/// and is a pointer to the section that replaced it — never a second copy.
-const THIRD_TOOL: &str = include_str!("../../../docs/adr/0003-a-third-tool-open.md");
+/// tools the shell cannot carry, `skill` and `open`.
+const TOOLS: &str = include_str!("../../../docs/adr/0002-three-tools.md");
 
 /// The code's own record, as committed: each bullet points at the script that holds
 /// the rule it states, and a wrong pointer is a reader searching the wrong file.
@@ -165,16 +156,11 @@ fn the_readme_names_every_tool_and_points_at_the_records_that_decided_them() {
         opening.contains("`open`"),
         "the frame registers a third tool, and the opening list must name it: {opening:?}"
     );
-    let record = "docs/adr/0002-two-tools.md";
+    let record = "docs/adr/0002-three-tools.md";
     assert!(
         opening.contains(record),
         "the decision lives in `{record}`, and the opening list must point a reader \
          at it: {opening:?}"
-    );
-    assert!(
-        !opening.contains("docs/adr/0003-a-third-tool-open.md"),
-        "ADR 0003 is superseded and folded into `{record}`, so the opening list sends a \
-         reader to the record that holds the argument and not to the pointer: {opening:?}"
     );
     assert!(
         !opening.contains("get `bash` and nothing else"),
@@ -205,27 +191,12 @@ fn the_readme_names_every_tool_and_points_at_the_records_that_decided_them() {
 }
 
 #[test]
-fn the_superseded_record_points_at_the_one_that_replaced_it() {
-    assert!(
-        THIRD_TOOL.starts_with("---\nstatus: superseded\n"),
-        "ADR 0003 was folded into ADR 0002, so its status says so at the top of the \
-         file: {:?}",
-        THIRD_TOOL.lines().take(4).collect::<Vec<_>>()
-    );
-    assert!(
-        THIRD_TOOL.contains("docs/adr/0002-two-tools.md"),
-        "a superseded record is a pointer, so it names the record it was folded into"
-    );
+fn the_tool_set_record_carries_the_browser_argument() {
     assert!(
         TOOLS.contains("xdg-open") && TOOLS.contains("`started`") && TOOLS.contains("https"),
-        "the argument 0003 made is the one 0002 must now carry: the browser is not a \
-         `bash` command, and the result says `started` and never that a human looked"
-    );
-    let lines = THIRD_TOOL.lines().count();
-    assert!(
-        lines <= 20,
-        "a pointer and not a copy — the failure ADR 0004's duplication rule forbids — is \
-         a few lines, and this one is {lines}"
+        "the browser is not a `bash` command, and the record must argue it: the measured \
+         `xdg-open` that exits 0 in the sandbox, the result that says `started` and never \
+         that a human looked, and the `http`/`https` schemes `open` accepts"
     );
 }
 
@@ -605,7 +576,7 @@ fn the_readme_configuration_table_names_every_key_the_schema_holds() {
 /// The program-status record, as committed: the mapping it states is
 /// `Stopped`'s, so the words it maps are read from the code rather than
 /// trusted to keep up.
-const PROGRAM_STATUS: &str = include_str!("../../../docs/adr/0005-program-status.md");
+const PROGRAM_STATUS: &str = include_str!("../../../docs/adr/0004-program-status.md");
 
 /// The state one way of stopping reports, in the words the record uses.
 fn status_for(stopped: Stopped) -> &'static str {
@@ -722,7 +693,7 @@ fn a_glossary_entry_does_not_reuse_a_word_another_one_holds() {
         seen.push(word.to_owned());
     }
     assert!(
-        seen.len() > 60,
+        seen.len() >= 50,
         "the scan reads the file it is pointed at, and `{}` entries is too few for \
          that to be the glossary",
         seen.len()
