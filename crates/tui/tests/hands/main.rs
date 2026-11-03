@@ -12,13 +12,14 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-pub use common::{any, drained, notes, press, screen, shown, type_text};
+pub use common::{any, drained, ended, notes, press, screen, shown, type_text, with_spill};
 use std::sync::{Arc, Mutex};
 
 use crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use sindri_core::agent::Event;
+use sindri_core::provider::Usage;
 use sindri_tui::copy::{Clipboard, Copied};
-use sindri_tui::driver::{CallOver, Finished, Spilled, Stop};
+use sindri_tui::driver::Stop;
 use sindri_tui::entry::Entry;
 use sindri_tui::overlay::help_rows;
 use sindri_tui::render;
@@ -85,11 +86,7 @@ fn answered(clipboard: Fake) -> App {
         turn: 1,
         text: "the answer, in full".to_string(),
     });
-    app.finished(Finished {
-        stopped: Stop::Final,
-        turns: 1,
-        ..Finished::default()
-    });
+    app.finished(ended(Stop::Final, 1, Usage::default()));
     app
 }
 

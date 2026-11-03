@@ -110,7 +110,7 @@ fn a_running_call_and_the_same_call_collapsed_agree_on_every_column() {
     let live_command = column_of(&running, live, "cargo build");
     let live_status = column_of(&running, live, "running");
 
-    app.over(CallOver::Exited(0), Spilled::default());
+    app.over(Some(ran(0)));
     let collapsed = screen(&mut app, 100, 20);
     let done = row_of(&collapsed, "cargo build");
     let done_command = column_of(&collapsed, done, "cargo build");

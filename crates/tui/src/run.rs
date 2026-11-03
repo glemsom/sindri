@@ -319,7 +319,7 @@ fn apply(app: &mut App, message: Msg) {
         Msg::Resize => {}
         Msg::Event(event) => app.event(event),
         Msg::Output(side, text) => app.output(side, &text),
-        Msg::Over(over, spilled) => app.over(over, spilled),
+        Msg::Over(result) => app.over(result),
         Msg::Finished(finished) => app.finished(finished),
         Msg::Paths(generation, paths, capped) => app.paths(generation, paths, capped),
         Msg::Drawn(body, drawn) => app.drawn(body, drawn),

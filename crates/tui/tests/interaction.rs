@@ -9,15 +9,15 @@
 
 mod common;
 
-pub use common::{any, app, buffer, press, screen, type_text};
+pub use common::{any, app, buffer, ended, press, ran, screen, timed_out, type_text, usage};
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use sindri_core::cancel::Cancel;
-use sindri_core::provider::Asked;
+use sindri_core::provider::{Asked, Usage};
 use sindri_tui::Card;
 use sindri_tui::card::View;
-use sindri_tui::driver::{CallOver, Finished, Spilled, Stop, Tokens};
+use sindri_tui::driver::Stop;
 use sindri_tui::render;
 
 #[test]
@@ -58,13 +58,7 @@ fn a_cancelled_run_reports_cancelled_and_the_composer_stays_usable() {
     press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     app.start().expect("a run starts");
     press(&mut app, KeyCode::Char('c'), KeyModifiers::CONTROL);
-    app.finished(Finished {
-        stopped: Stop::Cancelled,
-        turns: 1,
-        tokens: Tokens::default(),
-        error: None,
-        note: None,
-    });
+    app.finished(ended(Stop::Cancelled, 1, Usage::default()));
 
     let rows = screen(&mut app, 100, 22);
     assert!(
@@ -94,11 +88,7 @@ fn a_cancel_between_prompts_ends_that_run_and_not_the_next() {
         job.cancel.is_triggered(),
         "the frame's flag is the run's flag"
     );
-    app.finished(Finished {
-        stopped: Stop::Cancelled,
-        turns: 1,
-        ..Finished::default()
-    });
+    app.finished(ended(Stop::Cancelled, 1, Usage::default()));
 
     type_text(&mut app, "the next question");
     press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
@@ -126,17 +116,7 @@ fn a_prompt_typed_during_a_run_queues_and_is_sent_when_the_run_ends() {
         "nothing new starts while the first run is in flight"
     );
 
-    app.finished(Finished {
-        stopped: Stop::Final,
-        turns: 1,
-        tokens: Tokens {
-            input: 900,
-            output: 120,
-            cached: 0,
-        },
-        error: None,
-        note: None,
-    });
+    app.finished(ended(Stop::Final, 1, usage(900, 120, 0)));
     let next = app.start().expect("the queue is drained, in order");
     assert_eq!(next.prompt, "second question");
     assert_eq!(app.queued(), 0, "the queue keeps nothing after it is sent");
@@ -181,7 +161,7 @@ fn a_killed_command_and_a_timeout_each_say_so_where_they_happened() {
             command: "sleep 600".to_string(),
         },
     });
-    app.over(CallOver::Cancelled, Spilled::default());
+    app.over(None);
     let rows = screen(&mut app, 100, 20);
     assert!(
         any(&rows, "✗ cancelled"),
@@ -198,7 +178,7 @@ fn a_killed_command_and_a_timeout_each_say_so_where_they_happened() {
             command: "cargo build".to_string(),
         },
     });
-    app.over(CallOver::TimedOut, Spilled::default());
+    app.over(Some(timed_out()));
     let rows = screen(&mut app, 100, 20);
     assert!(
         any(&rows, "✗ timed out"),

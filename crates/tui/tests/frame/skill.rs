@@ -31,11 +31,7 @@ fn loaded(app: &mut App, turn: u32, name: &str) {
 fn a_load_is_one_row_that_says_the_skill_is_in_force() {
     let mut app = app();
     loaded(&mut app, 1, "house-style");
-    app.finished(Finished {
-        stopped: Stop::Final,
-        turns: 1,
-        ..Finished::default()
-    });
+    app.finished(ended(Stop::Final, 1, Usage::default()));
     let rows = screen(&mut app, 100, 30);
 
     let at = row_of(&rows, "skill house-style");
@@ -58,11 +54,7 @@ fn the_body_is_behind_the_row_and_enter_opens_it() {
         text: "the answer".to_string(),
     });
     loaded(&mut app, 1, "house-style");
-    app.finished(Finished {
-        stopped: Stop::Final,
-        turns: 1,
-        ..Finished::default()
-    });
+    app.finished(ended(Stop::Final, 1, Usage::default()));
     let collapsed = screen(&mut app, 100, 30);
     assert!(
         row(&collapsed, "skill house-style").contains("lines"),

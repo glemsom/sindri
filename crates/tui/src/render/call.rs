@@ -8,8 +8,8 @@ use std::time::Duration;
 
 use ratatui::text::{Line, Span};
 
-use crate::driver::{CallOver, Side};
-use crate::entry::Call;
+use crate::driver::Side;
+use crate::entry::{Call, CallOver};
 use crate::markdown;
 use crate::pulse;
 use crate::theme;

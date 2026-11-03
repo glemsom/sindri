@@ -13,10 +13,12 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use sindri_core::agent::{Report, Spent};
+use sindri_core::provider::Usage;
 
 use super::{Paint, turn_of_the_loop, walk};
 use crate::app::App;
-use crate::driver::Finished;
+use crate::driver::{Finished, Stop};
 use crate::msg::Msg;
 use crate::rail::Launch;
 
@@ -34,6 +36,24 @@ impl Paint for Counted {
 
     fn owes(&self, _: &App) -> bool {
         false
+    }
+}
+
+/// A run that ended, in the core's own report: the loop only asks whether one
+/// is still in flight, so the report it carries says nothing beyond that.
+fn ended() -> Finished {
+    Finished {
+        run: Ok(Report {
+            answer: String::new(),
+            turns: 0,
+            stopped: Stop::Final,
+            model: None,
+            tool_calls: 0,
+            spent: Spent::default(),
+            usage: Usage::default(),
+            duration: Duration::ZERO,
+        }),
+        note: None,
     }
 }
 
@@ -137,7 +157,7 @@ fn the_loop_draws_for_the_clock_while_a_run_is_live_and_never_while_idle() {
 
     // The run ends, and with it the clock: the frame waits for something to
     // say and draws nothing at all in the meantime.
-    app.finished(Finished::default());
+    app.finished(ended());
     assert!(!app.is_running(), "the run is over");
     let idle = draws.load(Ordering::SeqCst);
     let waking = tx.clone();

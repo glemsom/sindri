@@ -8,12 +8,12 @@ use ratatui::buffer::Buffer;
 use ratatui::style::Color;
 use sindri_core::agent::Event;
 use sindri_core::provider::Asked;
-use sindri_tui::driver::{CallOver, Finished, Side, Spilled, Stop};
+use sindri_tui::driver::Side;
 use sindri_tui::graphics::Graphics;
 use sindri_tui::theme;
 use sindri_tui::{App, Face, Launch};
 
-use crate::common;
+use crate::common::{self, failed, ran};
 
 fn launch() -> Launch {
     Launch {
@@ -74,13 +74,8 @@ fn fill(app: &mut App) {
     });
     app.output(Side::Stdout, "compiling");
     app.output(Side::Stderr, "warning: unused import");
-    app.over(CallOver::Exited(1), Spilled::default());
-    app.finished(Finished {
-        stopped: Stop::Error,
-        turns: 1,
-        error: Some("provider error (HTTP 529): overloaded".to_string()),
-        ..Finished::default()
-    });
+    app.over(Some(ran(1)));
+    app.finished(failed("provider error (HTTP 529): overloaded".to_string()));
 }
 
 #[test]

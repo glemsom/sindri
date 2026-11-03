@@ -146,13 +146,7 @@ fn a_spill_overlay_dims_the_transcript_it_covers() {
             command: "seq 500".to_string(),
         },
     });
-    app.over(
-        CallOver::Exited(0),
-        Spilled {
-            truncated: true,
-            files: vec![path],
-        },
-    );
+    app.over(Some(with_spill(vec![path])));
     app.key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL));
     assert!(
         matches!(app.overlay(), Some(sindri_tui::overlay::Overlay::Spill(_))),

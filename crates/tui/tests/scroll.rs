@@ -11,12 +11,13 @@
 
 mod common;
 
-pub use common::{any, badge, press, reading, screen, shown};
+pub use common::{any, badge, ended, press, reading, screen, shown};
 use crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use sindri_core::agent::Event;
+use sindri_core::provider::Usage;
 use sindri_tui::App;
 use sindri_tui::copy::{Clipboard, Copied};
-use sindri_tui::driver::{Finished, Stop};
+use sindri_tui::driver::Stop;
 use sindri_tui::render::transcript;
 use sindri_tui::selection::Selection;
 
@@ -41,11 +42,7 @@ fn thread(turns: u32) -> App {
             text: format!("answer {turn}"),
         });
     }
-    app.finished(Finished {
-        stopped: Stop::Final,
-        turns,
-        ..Finished::default()
-    });
+    app.finished(ended(Stop::Final, turns, Usage::default()));
     app
 }
 

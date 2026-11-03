@@ -57,11 +57,7 @@ fn answered(clipboard: Taking, text: &str) -> App {
         turn: 1,
         text: text.to_string(),
     });
-    app.finished(Finished {
-        stopped: Stop::Final,
-        turns: 1,
-        ..Finished::default()
-    });
+    app.finished(ended(Stop::Final, 1, Usage::default()));
     app
 }
 

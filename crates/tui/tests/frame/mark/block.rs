@@ -24,11 +24,7 @@ fn pictured(text: &str, clipboard: Taking) -> App {
         turn: 1,
         text: text.to_string(),
     });
-    app.finished(Finished {
-        stopped: Stop::Final,
-        turns: 1,
-        ..Finished::default()
-    });
+    app.finished(ended(Stop::Final, 1, Usage::default()));
     app
 }
 
@@ -200,13 +196,7 @@ fn a_click_that_opens_a_spill_row_starts_no_mark_and_lights_nothing() {
             command: "seq 500".to_string(),
         },
     });
-    app.over(
-        CallOver::Exited(0),
-        Spilled {
-            truncated: true,
-            files: vec![path],
-        },
-    );
+    app.over(Some(with_spill(vec![path])));
     let rows = screen(&mut app, 100, 20);
     let row = row_of(&rows, "output too large") as u16;
     mouse(&mut app, MouseEventKind::Down(MouseButton::Left), 4, row);
@@ -236,7 +226,7 @@ fn a_click_that_opens_a_spill_row_starts_no_mark_and_lights_nothing() {
     for line in 1..=20 {
         app.output(Side::Stdout, &format!("line {line}"));
     }
-    app.over(CallOver::Exited(0), Spilled::default());
+    app.over(Some(ran(0)));
     let rows = screen(&mut app, 100, 20);
     let row = row_of(&rows, "exit 0") as u16;
     mouse(&mut app, MouseEventKind::Down(MouseButton::Left), 4, row);

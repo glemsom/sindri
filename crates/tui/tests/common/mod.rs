@@ -14,15 +14,19 @@
     reason = "a panicking harness is how a broken fixture reports itself"
 )]
 
+use std::path::PathBuf;
+use std::time::Duration;
+
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::Color;
-use sindri_core::agent::Event;
-use sindri_core::provider::Asked;
-use sindri_tui::driver::{CallOver, Finished, Side, Spilled, Stop};
+use sindri_core::agent::{Event, Report, Spent};
+use sindri_core::exec::{Outcome, ToolResult};
+use sindri_core::provider::{Asked, Usage};
+use sindri_tui::driver::{Finished, Side, Stop};
 use sindri_tui::entry::Entry;
 use sindri_tui::render;
 use sindri_tui::{App, Launch, theme};
@@ -216,6 +220,76 @@ pub fn reading(app: &mut App) -> Vec<String> {
     app.viewport().rows.clone()
 }
 
+/// The counters a test names, as the core's own record holds them. The two it
+/// does not name stay unreported rather than being sent as zero.
+pub fn usage(input: u64, output: u64, cached: u64) -> Usage {
+    Usage {
+        input_tokens: Some(input),
+        output_tokens: Some(output),
+        cached_input_tokens: Some(cached),
+        ..Usage::default()
+    }
+}
+
+/// A run that ended: the core's own report, made here so a test names the two
+/// facts it asserts on and the rest comes from the one place that builds a
+/// report rather than from a second spelling of it.
+pub fn ended(stopped: Stop, turns: u32, usage: Usage) -> Finished {
+    Finished {
+        run: Ok(Report {
+            answer: String::new(),
+            turns,
+            stopped,
+            model: None,
+            tool_calls: 0,
+            spent: Spent::default(),
+            usage,
+            duration: Duration::ZERO,
+        }),
+        note: None,
+    }
+}
+
+/// A run that failed before it had a report to hand over: the failure in the
+/// frame's own words, no turn counted and nothing spent.
+pub fn failed(reason: impl Into<String>) -> Finished {
+    Finished {
+        run: Err(reason.into()),
+        note: None,
+    }
+}
+
+/// The result a command that exited leaves the executor holding, with nothing
+/// spilled and nothing on either stream.
+pub fn ran(exit_code: i32) -> ToolResult {
+    ToolResult {
+        outcome: Outcome::Exited { exit_code },
+        stdout: String::new(),
+        stderr: String::new(),
+        truncated: false,
+        spill: Vec::new(),
+        duration_ms: 1,
+    }
+}
+
+/// The result of a command the clock cut short.
+pub fn timed_out() -> ToolResult {
+    ToolResult {
+        outcome: Outcome::TimedOut,
+        ..ran(0)
+    }
+}
+
+/// The result of a command whose streams were cut down, with the untruncated
+/// bytes in these files.
+pub fn with_spill(files: Vec<PathBuf>) -> ToolResult {
+    ToolResult {
+        truncated: true,
+        spill: files,
+        ..ran(0)
+    }
+}
+
 /// One turn as the loop runs it: the prompt is sent, an answer streams, a
 /// call is announced with a line of output, and the run ends.
 pub fn turn(app: &mut App, prompt: &str, turn: u32, command: &str) {
@@ -233,11 +307,7 @@ pub fn turn(app: &mut App, prompt: &str, turn: u32, command: &str) {
         },
     });
     app.output(Side::Stdout, "out 1");
-    app.finished(Finished {
-        stopped: Stop::Final,
-        turns: turn,
-        ..Finished::default()
-    });
+    app.finished(ended(Stop::Final, turn, Usage::default()));
 }
 
 /// A finished call that ran `lines` lines of output, collapsed to its own row.
@@ -251,7 +321,7 @@ pub fn call(app: &mut App, turn: u32, lines: usize) {
     for line in 1..=lines {
         app.output(Side::Stdout, &format!("line {line}"));
     }
-    app.over(CallOver::Exited(0), Spilled::default());
+    app.over(Some(ran(0)));
 }
 
 /// Every note the frame has taken, oldest first, as one string.

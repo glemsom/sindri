@@ -4,12 +4,13 @@
 use std::time::Duration;
 
 use sindri_core::agent::Event;
-use sindri_core::provider::Asked;
+use sindri_core::exec::ToolResult;
+use sindri_core::provider::{Asked, Usage};
 use sindri_core::status::{Doing, State};
 
 use crate::app::{App, Renew};
-use crate::driver::{CallOver, Finished, Job, Side, Spilled, Stop};
-use crate::entry::{Call, Entry, Note, Prompt, Skill};
+use crate::driver::{Finished, Job, Side, Stop};
+use crate::entry::{Call, CallOver, Entry, Note, Prompt, Skill};
 
 impl App {
     pub(crate) fn submit(&mut self) {
@@ -100,20 +101,16 @@ impl App {
                 match &asked {
                     Asked::Skill { name } => {
                         call.skill = Some(Skill::new(name));
-                        call.over = Some(CallOver::Exited(0));
-                        call.took = Some(std::time::Duration::ZERO);
+                        call.announced();
                     }
                     Asked::Bash { .. } => {}
                     // An `open` spawns nothing this process watches: the row
                     // prints the target and is over the moment it is announced,
                     // because there is no exit for the human to wait for.
-                    Asked::Open { .. } => {
-                        call.over = Some(CallOver::Announced);
-                        call.took = Some(std::time::Duration::ZERO);
-                    }
+                    Asked::Open { .. } => call.announced(),
                     Asked::Refused { .. } => {
                         call.over = Some(CallOver::Exited(0));
-                        call.took = Some(std::time::Duration::ZERO);
+                        call.took = Some(Duration::ZERO);
                     }
                 }
                 for (side, line) in self.early.drain(..) {
@@ -148,8 +145,7 @@ impl App {
             None => {
                 let mut call = Call::new(turn, Some(format!("skill {name}")), self.now);
                 call.skill = Some(Skill::new(name));
-                call.over = Some(CallOver::Exited(0));
-                call.took = Some(std::time::Duration::ZERO);
+                call.announced();
                 self.thread.push(Entry::Call(call));
                 self.thread.len() - 1
             }
@@ -235,7 +231,7 @@ impl App {
         });
     }
 
-    pub fn over(&mut self, over: CallOver, spilled: Spilled) {
+    pub fn over(&mut self, result: Option<ToolResult>) {
         let ended = self
             .thread
             .position(|entry| matches!(entry, Entry::Call(call) if call.running()));
@@ -245,35 +241,41 @@ impl App {
                 let Entry::Call(call) = entry else {
                     return;
                 };
-                // The duration freezes where the call ended: a finished call is
-                // not still counting.
-                call.took = Some(now.saturating_sub(call.started));
-                call.over = Some(over);
-                call.truncated = spilled.truncated;
-                call.spill = spilled.files;
+                // One result freezes a row's four facts about it, or the one
+                // word a call stopped under carries instead.
+                match &result {
+                    Some(result) => call.ended(result, now),
+                    None => call.cancelled(now),
+                }
             });
         }
     }
 
     pub fn finished(&mut self, finished: Finished) {
         self.running = None;
+        // A run that failed before it had a report is the one shape `Report`
+        // cannot hold: the failure in the frame's own words, no turn of it
+        // counted, and nothing spent.
+        let (stopped, turns, usage) = match &finished.run {
+            Ok(report) => (report.stopped, report.turns, report.usage.clone()),
+            Err(_) => (Stop::Error, 0, Usage::default()),
+        };
         // Why the run ended, in the word the terminal reads: `Stopped`'s own
         // mapping, so a cancelled run leaves the terminal `idle` and a cap or a
         // budget is a run that delivered an answer.
-        self.settled = Some(State::settled(finished.stopped));
-        self.rail
-            .settled(finished.turns, finished.tokens, finished.stopped, self.now);
+        self.settled = Some(State::settled(stopped));
+        self.rail.settled(turns, &usage, stopped, self.now);
         // A line that never found the call it belonged to belongs to no
         // later call either.
         self.early.clear();
-        self.close_answers(finished.stopped == Stop::Error);
-        if let Some(error) = finished.error {
+        self.close_answers(stopped == Stop::Error);
+        if let Err(error) = finished.run {
             self.thread.push(Entry::Note(Note::error(error)));
         }
         if let Some(note) = finished.note {
             self.thread.push(Entry::Note(Note::error(note)));
         }
-        if finished.stopped == Stop::Cancelled {
+        if stopped == Stop::Cancelled {
             self.thread.push(Entry::Note(Note::info(
                 "cancelled — the draft is kept, and a prompt typed now queues",
             )));

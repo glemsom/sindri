@@ -70,13 +70,7 @@ fn an_output_too_large_to_show_offers_its_spill_file_and_opens_untruncated() {
             command: "seq 500".to_string(),
         },
     });
-    app.over(
-        CallOver::Exited(0),
-        Spilled {
-            truncated: true,
-            files: vec![path.clone()],
-        },
-    );
+    app.over(Some(with_spill(vec![path.clone()])));
 
     let rows = shown(&screen(&mut app, 100, 20));
     assert!(
@@ -113,13 +107,7 @@ fn a_click_on_the_spill_row_opens_it_like_ctrl_o() {
             command: "seq 3".to_string(),
         },
     });
-    app.over(
-        CallOver::Exited(0),
-        Spilled {
-            truncated: true,
-            files: vec![path],
-        },
-    );
+    app.over(Some(with_spill(vec![path])));
     let rows = screen(&mut app, 100, 20);
     let row = rows
         .iter()
@@ -153,13 +141,7 @@ fn a_click_on_an_older_affordance_opens_that_rows_file() {
                 command: "seq 500".to_string(),
             },
         });
-        app.over(
-            CallOver::Exited(0),
-            Spilled {
-                truncated: true,
-                files: vec![path.to_path_buf()],
-            },
-        );
+        app.over(Some(with_spill(vec![path.to_path_buf()])));
     }
     let rows = screen(&mut app, 100, 20);
     let first = rows

@@ -20,7 +20,7 @@ fn call_with(app: &mut App, turn: u32, command: &str, lines: usize) {
     for line in 1..=lines {
         app.output(Side::Stdout, &format!("line {line}"));
     }
-    app.over(CallOver::Exited(0), Spilled::default());
+    app.over(Some(ran(0)));
 }
 
 fn enter(app: &mut App) {
@@ -131,7 +131,7 @@ fn a_collapsed_call_says_its_status_its_duration_and_its_line_count() {
     for line in 1..=14 {
         app.output(Side::Stdout, &format!("out {line}"));
     }
-    app.over(CallOver::Exited(0), Spilled::default());
+    app.over(Some(ran(0)));
     let rows = screen(&mut app, 100, 20);
     let row = rows
         .iter()
@@ -291,13 +291,7 @@ fn ctrl_o_still_opens_the_untruncated_stream_and_nothing_alarming_without_one() 
             command: "seq 500".to_string(),
         },
     });
-    app.over(
-        CallOver::Exited(0),
-        Spilled {
-            truncated: true,
-            files: vec![path],
-        },
-    );
+    app.over(Some(with_spill(vec![path])));
     app.key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL));
     assert!(app.overlay().is_some(), "Ctrl-O opens the whole stream");
     app.key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
@@ -329,7 +323,7 @@ fn five_hundred_calls_keep_a_bounded_tail_each() {
         for line in 1..=1000 {
             app.output(Side::Stdout, &format!("turn {turn} line {line}"));
         }
-        app.over(CallOver::Exited(0), Spilled::default());
+        app.over(Some(ran(0)));
     }
     let calls = calls(&app);
     assert_eq!(calls.len(), 500);

@@ -162,6 +162,23 @@ impl Usage {
         self.reasoning_tokens = add(self.reasoning_tokens, turn.reasoning_tokens);
         self.total_tokens = add(self.total_tokens, turn.total_tokens);
     }
+
+    /// A counter nobody reported, as the zero a figure is drawn with. A report
+    /// that says nothing is not a report of nothing: `is_empty` is the question
+    /// the record asks, and this is the question a meter asks.
+    pub fn input(&self) -> u64 {
+        self.input_tokens.unwrap_or_default()
+    }
+
+    /// See [`Usage::input`]: the output figure a meter draws.
+    pub fn output(&self) -> u64 {
+        self.output_tokens.unwrap_or_default()
+    }
+
+    /// See [`Usage::input`]: the cached figure a cache hit is a share of.
+    pub fn cached(&self) -> u64 {
+        self.cached_input_tokens.unwrap_or_default()
+    }
 }
 
 /// Two counters summed, with absence never standing in for zero.

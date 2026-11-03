@@ -13,15 +13,15 @@
 mod common;
 
 pub use common::{
-    any, badge, buffer, call, cursor, frame_cells, posture_ink, press, row, row_of, screen, shown,
-    turn, type_text, unsafe_launch,
+    any, badge, buffer, call, cursor, ended, failed, frame_cells, posture_ink, press, ran, row,
+    row_of, screen, shown, turn, type_text, unsafe_launch, usage, with_spill,
 };
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use sindri_core::agent::Event;
-use sindri_core::provider::Asked;
-use sindri_tui::driver::{CallOver, Finished, Side, Spilled, Stop, Tokens};
+use sindri_core::provider::{Asked, Usage};
+use sindri_tui::driver::{Finished, Side, Stop};
 use sindri_tui::render;
 use sindri_tui::{App, Face, Launch};
 
@@ -52,17 +52,7 @@ fn spent() -> App {
         turn: 1,
         text: "Two files changed.".to_string(),
     });
-    app.finished(Finished {
-        stopped: Stop::Final,
-        turns: 1,
-        tokens: Tokens {
-            input: 12_400,
-            output: 2_100,
-            cached: 10_168,
-        },
-        error: None,
-        note: None,
-    });
+    app.finished(ended(Stop::Final, 1, usage(12_400, 2_100, 10_168)));
     app
 }
 
@@ -148,7 +138,7 @@ fn a_collapsed_call_shows_its_exit_status_and_its_tail_is_gone() {
         },
     });
     app.output(Side::Stdout, "running 12 tests");
-    app.over(CallOver::Exited(0), Spilled::default());
+    app.over(Some(ran(0)));
     let rows = screen(&mut app, 100, 20);
     assert!(
         any(&rows, "✓ exit 0"),
@@ -166,7 +156,7 @@ fn a_collapsed_call_shows_its_exit_status_and_its_tail_is_gone() {
             command: "cargo test".to_string(),
         },
     });
-    app.over(CallOver::Exited(3), Spilled::default());
+    app.over(Some(ran(3)));
     let rows = screen(&mut app, 100, 20);
     assert!(any(&rows, "✗ exit 3"), "a failed call says so: {rows:#?}");
 }
@@ -178,17 +168,7 @@ fn the_rail_is_a_column_at_a_hundred_columns() {
         turn: 1,
         text: "Two files changed.".to_string(),
     });
-    app.finished(Finished {
-        stopped: Stop::Final,
-        turns: 1,
-        tokens: Tokens {
-            input: 12_400,
-            output: 2_100,
-            cached: 10_168,
-        },
-        error: None,
-        note: None,
-    });
+    app.finished(ended(Stop::Final, 1, usage(12_400, 2_100, 10_168)));
     let rows = screen(&mut app, 100, 26);
     let rails = rails(&rows, 100);
 
@@ -281,13 +261,7 @@ fn a_provider_error_appears_in_the_transcript_where_it_happened() {
         turn: 1,
         text: "Looking at the test.".to_string(),
     });
-    app.finished(Finished {
-        stopped: Stop::Error,
-        turns: 1,
-        tokens: Tokens::default(),
-        error: Some("provider error (HTTP 529): overloaded".to_string()),
-        note: None,
-    });
+    app.finished(failed("provider error (HTTP 529): overloaded".to_string()));
     let rows = screen(&mut app, 100, 24);
     assert!(
         any(&rows, "provider error (HTTP 529): overloaded"),
@@ -304,13 +278,11 @@ fn a_provider_error_appears_in_the_transcript_where_it_happened() {
 fn a_record_that_could_not_be_closed_is_said_in_the_transcript() {
     let mut app = app();
     app.finished(Finished {
-        stopped: Stop::Final,
-        turns: 1,
         note: Some(
             "session 4f1c8f2e: the record could not be finished: no space left on device"
                 .to_string(),
         ),
-        ..Finished::default()
+        ..ended(Stop::Final, 1, Usage::default())
     });
     let rows = screen(&mut app, 100, 24);
     assert!(

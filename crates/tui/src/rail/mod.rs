@@ -10,7 +10,9 @@ mod view;
 
 use std::time::Duration;
 
-use crate::driver::{Stop, Tokens};
+use sindri_core::provider::Usage;
+
+use crate::driver::Stop;
 use crate::pulse;
 
 pub use self::fact::{Block, Fact, Fit};
@@ -49,7 +51,10 @@ pub struct Launch {
 pub struct Rail {
     launch: Launch,
     turns: u32,
-    tokens: Tokens,
+    /// What the run has spent, accumulated as the provider reports it: a
+    /// counter nobody reported stays unreported through the sum, so the rail
+    /// reads the same value the record does.
+    usage: Usage,
     /// The size of the conversation as the provider last counted it: the
     /// whole history goes in every turn, so this is the last input
     /// count, not a sum.
@@ -82,7 +87,7 @@ impl Rail {
         Rail {
             launch,
             turns: 0,
-            tokens: Tokens::default(),
+            usage: Usage::default(),
             context: 0,
             stop: None,
             streamed: 0,
@@ -138,19 +143,15 @@ impl Rail {
         self.launch = launch;
     }
 
-    pub fn settled(&mut self, turns: u32, tokens: Tokens, stop: Stop, now: Duration) {
+    pub fn settled(&mut self, turns: u32, usage: &Usage, stop: Stop, now: Duration) {
         // The report replaces the estimate: what streamed was only ever a
         // stand-in for what the provider says it spent.
         self.streamed = 0;
         self.moved("tokens", now);
         self.moved("context", now);
         self.turns = self.turns.max(turns);
-        self.tokens = Tokens {
-            input: self.tokens.input.saturating_add(tokens.input),
-            output: self.tokens.output.saturating_add(tokens.output),
-            cached: self.tokens.cached.saturating_add(tokens.cached),
-        };
-        self.context = tokens.input;
+        self.usage.accumulate(usage);
+        self.context = usage.input();
         self.stop = Some(stop);
     }
 
@@ -219,8 +220,8 @@ impl Rail {
                 "tokens",
                 format!(
                     "{} in · {} out",
-                    compact(self.tokens.input),
-                    compact(self.tokens.output + self.estimate())
+                    compact(self.usage.input()),
+                    compact(self.usage.output() + self.estimate())
                 ),
             ),
             Fact::spend("context", self.meter()),
@@ -282,10 +283,10 @@ impl Rail {
     }
 
     fn cache(&self) -> String {
-        if self.tokens.input == 0 {
+        if self.usage.input() == 0 {
             return "—".to_string();
         }
-        let share = self.tokens.cached.saturating_mul(100) / self.tokens.input;
+        let share = self.usage.cached().saturating_mul(100) / self.usage.input();
         format!("{share}%")
     }
 

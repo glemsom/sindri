@@ -191,11 +191,7 @@ fn ctrl_c_says_cancelling_at_once_and_clears_when_the_run_stops() {
         "the draft stays in the composer"
     );
 
-    app.finished(Finished {
-        stopped: Stop::Cancelled,
-        turns: 1,
-        ..Finished::default()
-    });
+    app.finished(ended(Stop::Cancelled, 1, Usage::default()));
     let after = screen(&mut app, 100, 24);
     assert!(
         !any(&after, "cancelling…"),

@@ -4,8 +4,9 @@
 
 use crossterm::event::{KeyEvent, MouseEvent};
 use sindri_core::agent::Event;
+use sindri_core::exec::ToolResult;
 
-use crate::driver::{CallOver, Finished, Invoked, Side, Spilled};
+use crate::driver::{Finished, Invoked, Side};
 use crate::picture::{Drawing, Refusal};
 use crate::rail::Launch;
 
@@ -19,7 +20,9 @@ pub enum Msg {
     Resize,
     Event(Event),
     Output(Side, String),
-    Over(CallOver, Spilled),
+    /// One call's end: the result the executor produced, or nothing where the
+    /// run was stopped under it.
+    Over(Option<ToolResult>),
     Finished(Finished),
     Paths(u64, Vec<String>, bool),
     /// A fence's body drawn, or the parser's reason there is none: a layout is

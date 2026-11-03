@@ -1,13 +1,15 @@
 //! The seam a front end implements: how to run one prompt, and the live line
-//! back into the frame while it runs. No provider type crosses it, and why a run
-//! ended crosses as the core's own closed set, re-exported as [`Stop`] rather
-//! than spelled a second time.
+//! back into the frame while it runs. Nothing of the frame's own crosses it:
+//! what a run ended on crosses as the core's own report, its stop reason
+//! re-exported as [`Stop`], and a call's end as the result the executor
+//! produced, so no fact of the core's is spelled twice. The client does not
+//! cross it at all — `rig_wire` stays the one file that knows it.
 
-use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 
-use sindri_core::agent::Event;
+use sindri_core::agent::{Event, Report};
 use sindri_core::cancel::Cancel;
+use sindri_core::exec::ToolResult;
 
 use crate::msg::Msg;
 use crate::rail::Launch;
@@ -15,41 +17,14 @@ use crate::rail::Launch;
 pub use sindri_core::agent::Stopped as Stop;
 pub use sindri_core::exec::Side;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CallOver {
-    Exited(i32),
-    TimedOut,
-    Cancelled,
-    Refused(String),
-    /// A call with no exit to watch: `open` hands one target to the host's
-    /// opener and the loop is already past it, so the row is over the moment it
-    /// was announced. What the opener answered is the model's to read, never
-    /// something this column can say.
-    Announced,
-}
-
-/// What a command's output had to leave behind: the streams the model
-/// was given were cut down, and the untruncated bytes went to these
-/// files.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Spilled {
-    pub truncated: bool,
-    pub files: Vec<PathBuf>,
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Tokens {
-    pub input: u64,
-    pub output: u64,
-    pub cached: u64,
-}
-
-#[derive(Debug, Clone, Default)]
+/// A run that ended, and everything it did: the core's own report, handed on
+/// as it is. The one shape a report cannot hold is a run that failed before it
+/// had one, so that crosses as the failure in the frame's own words.
+#[derive(Debug, Clone)]
 pub struct Finished {
-    pub stopped: Stop,
-    pub turns: u32,
-    pub tokens: Tokens,
-    pub error: Option<String>,
+    /// Why the run ended and what it cost. `Err` is the failure in the frame's
+    /// own words: a run that asked no model has no report to hand over.
+    pub run: Result<Report, String>,
     /// Something the run could not do after it ended, in the frame's words: a
     /// record that could not be closed is evidence lost, and evidence nobody
     /// is told about is evidence dropped.
@@ -134,7 +109,10 @@ impl Tap {
         let _ = self.tx.send(Msg::Output(side, text.to_string()));
     }
 
-    pub fn over(&self, over: CallOver, spilled: Spilled) {
-        let _ = self.tx.send(Msg::Over(over, spilled));
+    /// One call's end: the result the executor produced, or nothing at all
+    /// where the run was stopped under it. One value saying what ran, what it
+    /// left behind and where the untruncated bytes went.
+    pub fn over(&self, result: Option<ToolResult>) {
+        let _ = self.tx.send(Msg::Over(result));
     }
 }

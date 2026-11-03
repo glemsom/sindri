@@ -12,11 +12,11 @@
 
 mod common;
 
-pub use common::{any, app, call, press, reading, screen};
+pub use common::{any, app, call, press, ran, reading, screen};
 use crossterm::event::{KeyCode, KeyModifiers};
 use sindri_core::agent::Event;
 use sindri_core::provider::Asked;
-use sindri_tui::driver::{CallOver, Side, Spilled};
+use sindri_tui::driver::Side;
 
 /// The reader opens a call, pages deep into its output and folds it again: the
 /// window stays in that call, on a row that exists, and the column the fold
@@ -227,7 +227,7 @@ fn a_call_finishing_above_the_window_while_following_moves_nothing() {
         "the call that is still running is above the window: {reading:#?}"
     );
 
-    app.over(CallOver::Exited(0), Spilled::default());
+    app.over(Some(ran(0)));
     let rows = screen(&mut app, 100, 12);
     assert_eq!(
         self::reading(&mut app),
@@ -256,7 +256,7 @@ fn a_call_finishing_at_the_tail_still_shows_its_rows_and_settles_its_duration() 
         "the call's own rows are on the tail while it runs: {running:#?}"
     );
 
-    app.over(CallOver::Exited(0), Spilled::default());
+    app.over(Some(ran(0)));
     let rows = screen(&mut app, 100, 20);
     let row = rows
         .iter()

@@ -23,11 +23,7 @@ fn an_open_call_prints_its_target_and_closes_on_the_announcement() {
         turn: 1,
         text: "I put the report in front of you.".to_string(),
     });
-    app.finished(Finished {
-        stopped: Stop::Final,
-        turns: 1,
-        ..Finished::default()
-    });
+    app.finished(ended(Stop::Final, 1, Usage::default()));
     let rows = screen(&mut app, 100, 30);
 
     let at = row_of(&rows, "https://example.com/report.html");

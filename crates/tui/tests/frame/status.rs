@@ -81,11 +81,7 @@ fn a_run_is_working_on_the_word_its_last_event_spoke() {
 fn a_settled_run_keeps_its_word_until_the_next_prompt() {
     let mut app = app();
     sent(&mut app, "read the policy");
-    app.finished(Finished {
-        stopped: Stop::Final,
-        turns: 1,
-        ..Finished::default()
-    });
+    app.finished(ended(Stop::Final, 1, Usage::default()));
     assert_eq!(
         app.status(),
         State::settled(Stop::Final),
@@ -100,10 +96,7 @@ fn a_settled_run_keeps_its_word_until_the_next_prompt() {
         "a prompt is a run again: {:?}",
         app.status()
     );
-    app.finished(Finished {
-        stopped: Stop::Cancelled,
-        ..Finished::default()
-    });
+    app.finished(ended(Stop::Cancelled, 0, Usage::default()));
     assert_eq!(
         app.status(),
         State::Idle,

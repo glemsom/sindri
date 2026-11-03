@@ -10,11 +10,11 @@ use sindri_core::agent::{Agent, Event, Report};
 use sindri_core::cancel::Cancel;
 use sindri_core::config::{Config, ConfigError, Overrides};
 use sindri_core::doctor::{self, DoctorError};
-use sindri_core::exec::{BashExecutor, Outcome, OutputSink, SandboxExecutor, Side, ToolResult};
-use sindri_core::provider::{self, Usage};
+use sindri_core::exec::{BashExecutor, OutputSink, SandboxExecutor, Side, ToolResult};
+use sindri_core::provider;
 use sindri_core::sandbox::{Enforcement, SandboxPolicy};
 use sindri_core::session::{LoopError, Session};
-use sindri_tui::driver::{CallOver, Driver, Finished, Invoked, Spilled, Stop, Tap, Tokens};
+use sindri_tui::driver::{Driver, Finished, Invoked, Tap};
 use sindri_tui::run::{self, Ending};
 use sindri_tui::settings::Missing;
 use sindri_tui::{Card, Launch};
@@ -160,21 +160,11 @@ impl Driver for Front {
         // The record's end is written here, and a failure to write it is said in
         // the transcript rather than dropped.
         let note = closing_note(&self.boot.session, &outcome);
-        match outcome {
-            Ok(report) => Finished {
-                stopped: report.stopped,
-                turns: report.turns,
-                tokens: tokens(&report.usage),
-                error: None,
-                note,
-            },
-            Err(error) => Finished {
-                stopped: Stop::Error,
-                turns: 0,
-                tokens: Tokens::default(),
-                error: Some(failure::provider_message(&error)),
-                note,
-            },
+        Finished {
+            // What the run did crosses as the report it made; a run that asked
+            // no model has none, and its failure is the frame's to say.
+            run: outcome.map_err(|error| failure::provider_message(&error)),
+            note,
         }
     }
 
@@ -282,38 +272,10 @@ struct Watched {
 impl BashExecutor for Watched {
     fn execute(&self, script: &str) -> Option<ToolResult> {
         let result = self.inner.execute(script);
-        self.tap.over(
-            over(result.as_ref().map(|result| &result.outcome)),
-            spilled(result.as_ref()),
-        );
+        // The one value the row needs: what ran, what it left behind and where
+        // the untruncated bytes went. Nothing here projects it.
+        self.tap.over(result.clone());
         result
-    }
-}
-
-fn spilled(result: Option<&ToolResult>) -> Spilled {
-    match result {
-        Some(result) => Spilled {
-            truncated: result.truncated,
-            files: result.spill.clone(),
-        },
-        None => Spilled::default(),
-    }
-}
-
-fn over(outcome: Option<&Outcome>) -> CallOver {
-    match outcome {
-        None => CallOver::Cancelled,
-        Some(Outcome::Exited { exit_code }) => CallOver::Exited(*exit_code),
-        Some(Outcome::TimedOut) => CallOver::TimedOut,
-        Some(Outcome::SandboxError { detail }) => CallOver::Refused(detail.clone()),
-    }
-}
-
-fn tokens(usage: &Usage) -> Tokens {
-    Tokens {
-        input: usage.input_tokens.unwrap_or_default(),
-        output: usage.output_tokens.unwrap_or_default(),
-        cached: usage.cached_input_tokens.unwrap_or_default(),
     }
 }
 

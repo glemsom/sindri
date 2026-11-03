@@ -56,11 +56,7 @@ fn a_streaming_answer_spins_and_its_elapsed_time_settles_when_the_turn_ends() {
 
     // The turn ends: the marker settles on what happened, and the time it
     // settled at does not move again.
-    app.finished(Finished {
-        stopped: Stop::Final,
-        turns: 1,
-        ..Finished::default()
-    });
+    app.finished(ended(Stop::Final, 1, Usage::default()));
     let rows = screen(&mut app, 100, 24);
     let settled = marker_of(&rows, "reading the policy");
     assert!(
@@ -101,12 +97,7 @@ fn a_narrow_frame_carries_the_same_marker_time_and_glyph() {
         "seventy columns say the same thing as a hundred: {marker:?} {rows:#?}"
     );
 
-    app.finished(Finished {
-        stopped: Stop::Error,
-        turns: 1,
-        error: Some("provider error (HTTP 529): overloaded".to_string()),
-        ..Finished::default()
-    });
+    app.finished(failed("provider error (HTTP 529): overloaded".to_string()));
     let rows = screen(&mut app, 70, 24);
     let marker = marker_of(&rows, "reading the policy");
     assert!(
@@ -146,7 +137,7 @@ fn a_running_call_counts_up_and_freezes_at_the_duration_it_ended_on() {
         "and counts up while it runs: {rows:#?}"
     );
 
-    app.over(CallOver::Exited(0), Spilled::default());
+    app.over(Some(ran(0)));
     app.pulse(Duration::from_secs(10));
     let rows = screen(&mut app, 100, 24);
     let call = row_of(&rows, "cargo test");
@@ -181,17 +172,7 @@ fn tokens_and_context_move_while_the_run_is_still_running() {
         "and so does the context meter: {rail:#?}"
     );
 
-    app.finished(Finished {
-        stopped: Stop::Final,
-        turns: 1,
-        tokens: Tokens {
-            input: 12_400,
-            output: 2_100,
-            cached: 10_168,
-        },
-        error: None,
-        note: None,
-    });
+    app.finished(ended(Stop::Final, 1, usage(12_400, 2_100, 10_168)));
     let rows = screen(&mut app, 100, 20);
     let rail: String = rows.iter().map(|row| rail_of(row)).collect();
     assert!(

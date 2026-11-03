@@ -266,17 +266,7 @@ fn the_rule_separates_the_numbers_from_what_the_run_is() {
 fn the_rail_never_drops_a_fact_to_keep_the_face() {
     let face = Face::kitty().expect("the embedded face decodes");
     let mut app = App::new(launch(), Some(face));
-    app.finished(Finished {
-        stopped: Stop::Final,
-        turns: 1,
-        tokens: Tokens {
-            input: 12_400,
-            output: 2_100,
-            cached: 10_168,
-        },
-        error: None,
-        note: None,
-    });
+    app.finished(ended(Stop::Final, 1, usage(12_400, 2_100, 10_168)));
     let rows = rails(&screen(&mut app, 100, 26), 100);
     for label in LABELS {
         assert!(
@@ -320,17 +310,7 @@ fn the_facts_start_the_row_after_the_face_and_not_one_row_lower() {
 fn the_context_meter_fills_as_the_conversation_takes_the_window() {
     for width in [100u16, 160] {
         let mut app = app();
-        app.finished(Finished {
-            stopped: Stop::Final,
-            turns: 1,
-            tokens: Tokens {
-                input: 100_000,
-                output: 500,
-                cached: 30_000,
-            },
-            error: None,
-            note: None,
-        });
+        app.finished(ended(Stop::Final, 1, usage(100_000, 500, 30_000)));
         let rows = rails(&screen(&mut app, width, 26), width);
         assert_eq!(
             value(&rows, "context"),
