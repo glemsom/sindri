@@ -107,8 +107,12 @@ fn every_run_leaves_a_record_naming_its_sandbox() {
     );
 
     assert!(
-        session.join("tmp/home").is_dir(),
-        "the session temp, with the sandbox HOME beneath it"
+        session.join("tmp").is_dir(),
+        "the session temp, where a run's scratch lives"
+    );
+    assert!(
+        !session.join("tmp/home").exists(),
+        "and no home beneath it: HOME is the host's own"
     );
     let status = std::fs::read_to_string(session.join("status.json")).expect("status.json");
     assert!(

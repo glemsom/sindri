@@ -63,14 +63,20 @@ impl SandboxPolicy {
     /// boundary the model is told is the boundary it runs in.
     pub(super) fn environment(&self) -> Vec<(&'static str, String)> {
         let temp = self.session_temp().display().to_string();
-        let home = self.session_temp().join("home").display().to_string();
-        vec![
-            ("HOME", home),
+        let mut environment: Vec<(&'static str, String)> = Vec::with_capacity(5);
+        // A host with no home directory passes none: the variable is absent, not
+        // empty, so a shell can tell `HOME not set` from `HOME=` and nothing
+        // that expands `~` mistakes the root for somebody's home.
+        if let Some(home) = self.home() {
+            environment.push(("HOME", home.display().to_string()));
+        }
+        environment.extend([
             ("TMPDIR", temp),
             ("PATH", self.search_path().to_string()),
             ("LANG", LOCALE.to_string()),
             ("LC_ALL", LOCALE.to_string()),
-        ]
+        ]);
+        environment
     }
 }
 

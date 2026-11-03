@@ -57,8 +57,13 @@ run with nothing configured mounts a shipped floor — `~/.cache`, `~/go`, `~/.c
 and a shipped path this host does not have, or one that would nest with the workspace, is
 dropped without a word.
 
-**session temp** — per-run writable scratch, mapped to `TMPDIR` in the sandbox, and
-mounted as `HOME` beneath it.
+**session temp** — per-run writable scratch, mapped to `TMPDIR` in the sandbox. It is not a
+home: `HOME` is the host's own, handed over unchanged, so `git` finds the identity in
+`~/.gitconfig` and `~/.ssh` reads at its real path. A write to `$HOME` fails with
+`Read-only file system` rather than landing in scratch nobody reads, and the temp stays
+writable where it sits inside that home only because its own bind comes after the read-only
+root — mount order, not accident. A host with no `HOME` passes none at all, never an empty
+one.
 
 **description** — the model-facing text derived from the sandbox policy, also printed by
 `sindri doctor`. One sentence may be appended to it that the policy does not derive: the

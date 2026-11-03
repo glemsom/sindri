@@ -102,7 +102,7 @@ pub fn probe(env: &Env, extras: &Extras, enforcement: Enforcement) -> Result<Rep
         .join("sindri-doctor")
         .join(paths::new_session_id().map_err(DoctorError::Setup)?);
     let session_temp = scratch.join("tmp");
-    std::fs::create_dir_all(session_temp.join("home")).map_err(DoctorError::Setup)?;
+    std::fs::create_dir_all(&session_temp).map_err(DoctorError::Setup)?;
 
     let probed = run_probe(&bash, env, extras, &session_temp);
     let _ = std::fs::remove_dir_all(&scratch);

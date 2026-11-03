@@ -97,11 +97,16 @@ fn a_new_session_is_opened_in_the_same_run_environment() {
         "and leaves the superseded session where it was: {after:?}"
     );
     for id in &after {
-        let home = sessions(&env).join(id).join("tmp/home");
+        let temp = sessions(&env).join(id).join("tmp");
         assert!(
-            home.is_dir(),
-            "the session {id} has the sandbox HOME its environment names: {}",
-            home.display()
+            temp.is_dir(),
+            "the session {id} has the scratch its environment names: {}",
+            temp.display()
+        );
+        assert!(
+            !temp.join("home").exists(),
+            "and no home is created for it: {}",
+            temp.join("home").display()
         );
     }
 }

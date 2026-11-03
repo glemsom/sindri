@@ -46,17 +46,25 @@ impl SandboxPolicy {
         // and all of them read the one list the argv enforces.
         let environment = self.environment();
         let names: Vec<&str> = environment.iter().map(|(name, _)| *name).collect();
-        let temp = self.session_temp();
-        let temp_path = temp.display().to_string();
-        let home_path = temp.join("home").display().to_string();
+        let temp_path = self.session_temp().display().to_string();
         out.push_str(&format!(
             "  session temp: {temp_path} ({})\n",
             and_list(&variables_holding(&environment, &temp_path))
         ));
-        out.push_str(&format!(
-            "  home: {home_path} ({} — writable and empty, created for the run)\n",
-            and_list(&variables_holding(&environment, &home_path))
-        ));
+        match self.home() {
+            Some(home) => {
+                let home_path = home.display().to_string();
+                out.push_str(&format!(
+                    "  home: {home_path} ({} — the host's own, read-only; write to $TMPDIR instead)\n",
+                    and_list(&variables_holding(&environment, &home_path))
+                ));
+            }
+            // The absence is the host's, so it is said about the host: nothing
+            // was taken away by this policy and nothing is remapped in its place.
+            None => out.push_str(
+                "  home: none — the host has no HOME, so none is set; write to $TMPDIR instead\n",
+            ),
+        }
         out.push_str(&format!(
             "  environment: cleared, then {} set explicitly; the locale is {LOCALE}\n",
             and_list(&names),

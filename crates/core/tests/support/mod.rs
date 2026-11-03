@@ -55,7 +55,7 @@ pub fn start(provider: &str, model: &str, enforcement: Enforcement) -> Start {
 pub fn fixtures() -> (TempDir, PathBuf, SandboxPolicy) {
     let workspace = TempDir::new().expect("workspace");
     let session_temp = workspace.path().join("session/tmp");
-    std::fs::create_dir_all(session_temp.join("home")).expect("session temp");
+    std::fs::create_dir_all(&session_temp).expect("session temp");
     let policy = policy(&workspace, &session_temp);
     (workspace, session_temp, policy)
 }
@@ -65,6 +65,7 @@ pub fn policy(workspace: &TempDir, session_temp: &Path) -> SandboxPolicy {
     SandboxPolicy::new(
         writable,
         session_temp.to_path_buf(),
+        sindri_core::paths::home(),
         "/usr/bin:/bin".to_string(),
         Enforcement::Bubblewrap,
     )

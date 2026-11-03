@@ -49,8 +49,12 @@ fn doctor_prints_the_sandbox_description_and_exits_zero() {
         "the temp mapping is stated: {stdout}"
     );
     assert!(
-        stdout.contains("home: "),
-        "the sandbox HOME is stated: {stdout}"
+        stdout.contains(&format!("home: {} (", env.home.display())),
+        "the sandbox HOME is the host's own, named: {stdout}"
+    );
+    assert!(
+        stdout.contains("the host's own, read-only; write to $TMPDIR instead"),
+        "and stated read-only, with where to write instead: {stdout}"
     );
     assert!(
         stdout.contains(
@@ -60,8 +64,33 @@ fn doctor_prints_the_sandbox_description_and_exits_zero() {
     );
     assert_eq!(
         stdout.matches("read-only").count(),
-        1,
-        "the read-only boundary is stated once: {stdout}"
+        2,
+        "the read-only boundary is stated once for the root and once for the home: {stdout}"
+    );
+}
+
+#[test]
+fn a_host_with_no_home_is_described_as_a_fact_about_the_host() {
+    let env = Env::new();
+    let assert = env
+        .cmd()
+        .env_remove("HOME")
+        .arg("doctor")
+        .assert()
+        .success();
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
+
+    let line = stdout
+        .lines()
+        .find(|line| line.trim_start().starts_with("home:"))
+        .unwrap_or_else(|| panic!("the home is stated: {stdout}"));
+    assert!(
+        line.contains("the host has no HOME"),
+        "the absence is the host's: {line}"
+    );
+    assert!(
+        line.contains("$TMPDIR"),
+        "and the description says where to write instead: {line}"
     );
 }
 

@@ -40,6 +40,36 @@ fn a_command_runs_inside_the_sandbox_and_reports_its_streams() {
 }
 
 #[test]
+fn a_host_with_no_home_hands_the_sandbox_no_home_at_all() {
+    let env = Env::new();
+    let assert = env
+        .cmd()
+        .env_remove("HOME")
+        .args(["sandbox", "exec", "--"])
+        .args(["bash", "-c", "echo \"home:[${HOME-unset}]\""])
+        .assert()
+        .success();
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
+    let out: Value =
+        serde_json::from_str(&stdout).unwrap_or_else(|error| panic!("not JSON: {error}"));
+    assert_eq!(
+        out["stdout"], "home:[unset]\n",
+        "an absent home is absent, never an empty one: {}",
+        out["stdout"]
+    );
+
+    let session = the_session(&env);
+    assert!(
+        session.join("tmp").is_dir(),
+        "the session temp is still made, because `--bind` names it"
+    );
+    assert!(
+        !session.join("tmp/home").exists(),
+        "and no home is created under it, because there is none to map"
+    );
+}
+
+#[test]
 fn the_command_cannot_see_processes_outside_its_namespace() {
     let env = Env::new();
     let mut outsider = std::process::Command::new("sleep")

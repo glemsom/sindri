@@ -139,14 +139,20 @@ impl std::error::Error for PolicyError {}
 pub struct SandboxPolicy {
     writable: WritableSet,
     session_temp: PathBuf,
+    home: Option<PathBuf>,
     search_path: String,
     enforcement: Enforcement,
 }
 
 impl SandboxPolicy {
+    /// The home is the host's own and is never mounted: the read-only root
+    /// already carries it. `None` is a real answer — a service or a container
+    /// has no home directory — so the sandbox is given no `HOME` at all rather
+    /// than an empty one, and the description says which of the two it is.
     pub fn new(
         writable: WritableSet,
         session_temp: PathBuf,
+        home: Option<PathBuf>,
         search_path: String,
         enforcement: Enforcement,
     ) -> Result<Self, PolicyError> {
@@ -156,6 +162,7 @@ impl SandboxPolicy {
         Ok(SandboxPolicy {
             writable,
             session_temp,
+            home,
             search_path,
             enforcement,
         })
@@ -180,6 +187,12 @@ impl SandboxPolicy {
 
     pub fn session_temp(&self) -> &Path {
         &self.session_temp
+    }
+
+    /// The host's home directory, handed over unchanged and mounted by nothing:
+    /// what a tool that looks in `~` finds is the host's own files, read-only.
+    pub fn home(&self) -> Option<&Path> {
+        self.home.as_deref()
     }
 
     pub fn search_path(&self) -> &str {

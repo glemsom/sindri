@@ -41,7 +41,7 @@ fn recorded(env: &Env, session: &Session) -> PathBuf {
 }
 
 #[test]
-fn open_creates_the_session_directory_its_record_and_its_home() {
+fn open_creates_the_session_directory_its_record_and_its_temp() {
     let (_root, env) = host();
     let session = Session::open(&env, &config(&[])).expect("a session opens");
 
@@ -56,8 +56,17 @@ fn open_creates_the_session_directory_its_record_and_its_home() {
         "the record was started"
     );
     assert!(
-        root.join("tmp").join("home").is_dir(),
-        "the session temp has the sandbox HOME a run needs"
+        root.join("tmp").is_dir(),
+        "the session temp exists, because `--bind` names it"
+    );
+    assert!(
+        !root.join("tmp").join("home").exists(),
+        "and nothing is created for the home, which is the host's"
+    );
+    assert_eq!(
+        session.policy().home(),
+        sindri_core::paths::home().as_deref(),
+        "the sandbox HOME is the host's own"
     );
     assert!(!session.dir().id().is_empty(), "the session has a GUID");
     assert_eq!(

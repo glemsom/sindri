@@ -445,6 +445,7 @@ mod tests {
         let policy = SandboxPolicy::new(
             writable,
             root.join("session/tmp"),
+            crate::paths::home(),
             "/usr/bin:/bin".to_string(),
             Enforcement::Bubblewrap,
         )
@@ -517,6 +518,7 @@ mod tests {
         let policy = SandboxPolicy::new(
             writable,
             workspace.path().join("session/tmp"),
+            crate::paths::home(),
             "/usr/bin:/bin".to_string(),
             Enforcement::Bubblewrap,
         )

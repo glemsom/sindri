@@ -69,7 +69,10 @@ impl SessionDir {
         Ok(SessionDir { root })
     }
 
-    /// The session temp: writable scratch, and the parent of the sandbox HOME.
+    /// The session temp: writable scratch, and nothing else. A state root that
+    /// usually sits inside the home leaves this path inside a directory the
+    /// sandbox has read-only, so the writable bind over it is mount order rather
+    /// than accident.
     pub fn temp(&self) -> PathBuf {
         self.root.join("tmp")
     }

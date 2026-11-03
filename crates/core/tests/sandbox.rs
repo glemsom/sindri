@@ -12,11 +12,20 @@ use sindri_core::sandbox::{Enforcement, Extras, FLOOR, PolicyError, SandboxPolic
 use sindri_core::session::policy_for;
 use tempfile::TempDir;
 
+/// The home directory a policy is given: the host's own, as a value. Nothing is
+/// mounted for it, so it need not be a directory here.
+const HOST_HOME: &str = "/home/tester";
+
 fn policy(workspace: &TempDir, session_temp: &Path) -> SandboxPolicy {
+    policy_homed(workspace, session_temp, Some(Path::new(HOST_HOME)))
+}
+
+fn policy_homed(workspace: &TempDir, session_temp: &Path, home: Option<&Path>) -> SandboxPolicy {
     let writable = WritableSet::new([workspace.path().to_path_buf()]).expect("writable set");
     SandboxPolicy::new(
         writable,
         session_temp.to_path_buf(),
+        home.map(Path::to_path_buf),
         "/usr/bin:/bin".to_string(),
         Enforcement::Bubblewrap,
     )
@@ -26,9 +35,28 @@ fn policy(workspace: &TempDir, session_temp: &Path) -> SandboxPolicy {
 fn fixtures() -> (TempDir, PathBuf, SandboxPolicy) {
     let workspace = TempDir::new().expect("workspace");
     let session_temp = workspace.path().join("session/tmp");
-    std::fs::create_dir_all(session_temp.join("home")).expect("session temp");
+    std::fs::create_dir_all(&session_temp).expect("session temp");
     let policy = policy(&workspace, &session_temp);
     (workspace, session_temp, policy)
+}
+
+/// The value the argv hands `key`, which the caller knows is set at all.
+fn value_of(argv: &[String], key: &str) -> String {
+    let at = argv
+        .iter()
+        .position(|arg| arg == key)
+        .unwrap_or_else(|| panic!("{key} is set: {argv:?}"));
+    argv[at + 1].clone()
+}
+
+/// The one line of the description that opens with `prefix`.
+fn described_line(policy: &SandboxPolicy, prefix: &str) -> String {
+    policy
+        .describe()
+        .lines()
+        .find(|line| line.trim_start().starts_with(prefix))
+        .map(str::to_string)
+        .unwrap_or_else(|| panic!("{prefix} is stated: {}", policy.describe()))
 }
 
 #[test]
@@ -284,27 +312,19 @@ fn the_argv_never_skips_a_bind_silently() {
 }
 
 #[test]
-fn the_argv_redirects_the_temp_variables_and_a_writable_home_into_the_session_temp() {
+fn the_argv_maps_the_temp_and_hands_over_the_host_home_unchanged() {
     let (_workspace, session_temp, policy) = fixtures();
     let argv = policy.to_argv(&["true".to_string()], None);
-    let value = |key: &str| -> String {
-        let at = argv
-            .iter()
-            .position(|arg| arg == key)
-            .unwrap_or_else(|| panic!("{key} is set"));
-        argv[at + 1].clone()
-    };
 
-    let temp = session_temp.display().to_string();
-    assert_eq!(value("TMPDIR"), temp, "TMPDIR is the session temp");
     assert_eq!(
-        value("HOME"),
-        format!("{temp}/home"),
-        "HOME lives beneath it"
+        value_of(&argv, "TMPDIR"),
+        session_temp.display().to_string(),
+        "TMPDIR is the session temp"
     );
-    assert!(
-        session_temp.join("home").is_dir(),
-        "HOME exists and is writable"
+    assert_eq!(
+        value_of(&argv, "HOME"),
+        HOST_HOME,
+        "HOME is the host's own, unchanged"
     );
 
     let cleared = argv
@@ -313,9 +333,70 @@ fn the_argv_redirects_the_temp_variables_and_a_writable_home_into_the_session_te
         .expect("--clearenv");
     let home = argv.iter().position(|a| a == "HOME").expect("HOME");
     assert!(cleared < home, "the inherited environment is dropped first");
+
+    // Nothing is made or mounted for the home: the read-only root already
+    // carries it, so a write to `$HOME` fails loudly instead of landing in a
+    // scratch directory nobody reads.
+    for path in binds(&argv) {
+        assert!(
+            !Path::new(path).starts_with(HOST_HOME),
+            "no bind is made for the home: {path}"
+        );
+    }
     assert!(
-        session_temp.join("home").starts_with(&session_temp),
-        "HOME is created inside the session temp, never the user's own"
+        !session_temp.join("home").exists(),
+        "and no directory is created for it"
+    );
+}
+
+#[test]
+fn a_host_with_no_home_sets_no_home_variable_at_all() {
+    let workspace = TempDir::new().expect("workspace");
+    let session_temp = workspace.path().join("session/tmp");
+    std::fs::create_dir_all(&session_temp).expect("session temp");
+    let policy = policy_homed(&workspace, &session_temp, None);
+    let argv = policy.to_argv(&["true".to_string()], None);
+
+    assert!(
+        !argv.iter().any(|arg| arg == "HOME"),
+        "an absent home is absent, never an empty one: {argv:?}"
+    );
+    assert_eq!(
+        value_of(&argv, "TMPDIR"),
+        session_temp.display().to_string(),
+        "the temp is mapped either way"
+    );
+}
+
+#[test]
+fn the_session_temp_bind_comes_after_the_read_only_root_so_scratch_stays_writable() {
+    // With no `XDG_STATE_HOME` the session temp sits under the home, which is
+    // read-only. The bind is what makes that scratch writable and mount order is
+    // the whole of why it wins, so the order is pinned here rather than left to
+    // be "fixed" by moving scratch out of the state directory.
+    let workspace = TempDir::new().expect("workspace");
+    let home = TempDir::new().expect("home");
+    let session_temp = home.path().join("state/sindri/sessions/guid/tmp");
+    std::fs::create_dir_all(&session_temp).expect("session temp");
+    let policy = policy_homed(&workspace, &session_temp, Some(home.path()));
+    let argv = policy.to_argv(&["true".to_string()], None);
+
+    let root = argv
+        .iter()
+        .position(|arg| arg == "--ro-bind")
+        .expect("the read-only root is mounted");
+    let temp = session_temp.display().to_string();
+    let scratch = argv
+        .iter()
+        .position(|arg| arg == &temp)
+        .expect("the session temp is bound");
+    assert!(
+        root < scratch,
+        "the writable bind must come after the read-only root: {argv:?}"
+    );
+    assert!(
+        session_temp.starts_with(home.path()),
+        "the temp this pins is the one nested inside the home"
     );
 }
 
@@ -357,6 +438,41 @@ fn the_description_names_every_variable_the_argv_sets() {
 }
 
 #[test]
+fn the_description_says_the_home_is_the_hosts_own_and_read_only() {
+    let (_, _, policy) = fixtures();
+    let line = described_line(&policy, "home:");
+
+    assert!(line.contains(HOST_HOME), "the home is named: {line}");
+    assert!(line.contains("read-only"), "and stated unwritable: {line}");
+    assert!(
+        line.contains("$TMPDIR"),
+        "and says where to write instead: {line}"
+    );
+}
+
+#[test]
+fn a_host_with_no_home_is_stated_as_a_fact_about_the_host() {
+    let workspace = TempDir::new().expect("workspace");
+    let session_temp = workspace.path().join("session/tmp");
+    std::fs::create_dir_all(&session_temp).expect("session temp");
+    let policy = policy_homed(&workspace, &session_temp, None);
+    let line = described_line(&policy, "home:");
+
+    assert!(
+        line.contains("the host has no HOME"),
+        "the absence is the host's: {line}"
+    );
+    assert!(
+        !line.contains("sandbox"),
+        "and the sandbox is not blamed for it: {line}"
+    );
+    assert!(
+        line.contains("$TMPDIR"),
+        "and says where to write instead: {line}"
+    );
+}
+
+#[test]
 fn the_argv_unshares_the_namespaces_that_matter_and_keeps_the_network() {
     let (_, _, policy) = fixtures();
     let argv = policy.to_argv(&["true".to_string()], None);
@@ -388,6 +504,7 @@ fn the_argv_parsed_back_into_a_writable_set_describes_the_same_sandbox() {
     let round_tripped = SandboxPolicy::new(
         WritableSet::new(parsed).expect("the argv names a legal writable set"),
         session_temp.clone(),
+        policy.home().map(Path::to_path_buf),
         policy.search_path().to_string(),
         policy.enforcement(),
     )
@@ -404,10 +521,12 @@ fn the_argv_parsed_back_into_a_writable_set_describes_the_same_sandbox() {
 fn the_description_names_the_read_only_boundary_once() {
     let (_, _, policy) = fixtures();
     let description = policy.describe();
+    // Two and no more: the host root, and the home that sits inside it. Any
+    // third is the boundary said again in different words.
     let stated = description.matches("read-only").count();
     assert_eq!(
-        stated, 1,
-        "the read-only host root is stated once, not repeated: {description}"
+        stated, 2,
+        "the read-only host root and the home are each stated once: {description}"
     );
     assert!(
         description.contains(
@@ -425,6 +544,7 @@ fn an_unsafe_policy_wraps_nothing_and_says_so() {
     let unsafe_policy = SandboxPolicy::new(
         writable,
         session_temp,
+        Some(PathBuf::from(HOST_HOME)),
         "/usr/bin:/bin".to_string(),
         Enforcement::YoloUnsafe,
     )

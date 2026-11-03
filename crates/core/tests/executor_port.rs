@@ -95,7 +95,7 @@ fn the_real_executor_honours_the_unsafe_enforcement() {
 
     let scratch = tempfile::TempDir::new().expect("scratch");
     let session_temp = scratch.path().join("tmp");
-    std::fs::create_dir_all(session_temp.join("home")).expect("session temp");
+    std::fs::create_dir_all(&session_temp).expect("session temp");
     let workspace = scratch.path().canonicalize().expect("canonical");
     let policy = sindri_core::session::policy_for(
         &workspace,
@@ -131,7 +131,7 @@ fn a_cancelled_executor_kills_its_command_group_and_reports_no_result() {
 
     let scratch = tempfile::TempDir::new().expect("scratch");
     let session_temp = scratch.path().join("tmp");
-    std::fs::create_dir_all(session_temp.join("home")).expect("session temp");
+    std::fs::create_dir_all(&session_temp).expect("session temp");
     let workspace = scratch.path().canonicalize().expect("canonical");
     let policy = sindri_core::session::policy_for(
         &workspace,
@@ -196,7 +196,7 @@ fn executor_for(
 ) -> (tempfile::TempDir, sindri_core::exec::SandboxExecutor) {
     let scratch = tempfile::TempDir::new().expect("scratch");
     let session_temp = scratch.path().join("tmp");
-    std::fs::create_dir_all(session_temp.join("home")).expect("session temp");
+    std::fs::create_dir_all(&session_temp).expect("session temp");
     let workspace = scratch.path().canonicalize().expect("canonical");
     let policy = sindri_core::session::policy_for(
         &workspace,
@@ -245,22 +245,34 @@ fn an_unsafe_child_inherits_the_ambient_home_and_working_directory() {
 }
 
 #[test]
-fn a_sandboxed_child_still_sees_the_session_home_and_not_the_hosts() {
+fn a_sandboxed_child_sees_the_host_home_and_cannot_write_to_it() {
     let (_scratch, executor) = executor_for(sindri_core::sandbox::Enforcement::Bubblewrap);
     let result = executor
         .execute(AMBIENT)
         .expect("the run was not cancelled");
 
     let home = result.stdout.lines().next().unwrap_or_default();
-    assert_ne!(
+    assert_eq!(
         Some(home),
         std::env::var("HOME").ok().as_deref(),
-        "the sandbox remaps HOME to its own: {}",
+        "HOME is the host's own, unchanged: {}",
         result.stdout
     );
+
+    // Readable where `git` looks, and read-only where a write would land: the
+    // kernel refuses it instead of the write going somewhere nobody reads.
+    let probe = executor
+        .execute("echo probe > \"$HOME/sindri-home-probe\"")
+        .expect("the run was not cancelled");
+    assert_ne!(
+        probe.outcome,
+        Outcome::Exited { exit_code: 0 },
+        "a write to $HOME must fail: {}",
+        probe.stderr
+    );
     assert!(
-        home.ends_with("/tmp/home"),
-        "HOME is the session temp's home: {}",
-        result.stdout
+        probe.stderr.contains("Read-only file system"),
+        "in the kernel's own words: {}",
+        probe.stderr
     );
 }

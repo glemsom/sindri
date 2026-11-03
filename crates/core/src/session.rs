@@ -1,7 +1,7 @@
 //! One run's session: the value a front end holds to have a run.
 //!
 //! `Session::open` is the only place in the core where the order a run is
-//! started in exists — the session directory with its `HOME`, the record, the
+//! started in exists — the session directory with its temp, the record, the
 //! sandbox policy — and the per-prompt parts are built from it rather than
 //! owned by it: a policy can change between prompts, and a front end keeps one
 //! agent for a whole thread.
@@ -262,9 +262,11 @@ fn directory(env: &Env) -> Result<SessionDir, StartError> {
         path: env.state.join("sessions"),
         source,
     })?;
-    let home = dir.temp().join("home");
-    std::fs::create_dir_all(&home).map_err(|source| StartError::Directory {
-        path: home.clone(),
+    // The temp alone: `HOME` is the host's own and is created for nobody, while
+    // the temp is a mount source and has to exist before `--bind` names it.
+    let temp = dir.temp();
+    std::fs::create_dir_all(&temp).map_err(|source| StartError::Directory {
+        path: temp.clone(),
         source,
     })?;
     Ok(dir)
@@ -296,9 +298,12 @@ pub fn policy_for(
     search_path: String,
     enforcement: Enforcement,
 ) -> Result<SandboxPolicy, PolicyError> {
-    let resolved = extras.resolve(paths::home().as_deref(), workspace);
+    // One read of the host's home answers both questions it is asked: where the
+    // shipped floor comes from, and what `HOME` the sandbox is given.
+    let home = paths::home();
+    let resolved = extras.resolve(home.as_deref(), workspace);
     let writable = WritableSet::new(std::iter::once(workspace.to_path_buf()).chain(resolved))?;
-    SandboxPolicy::new(writable, session_temp, search_path, enforcement)
+    SandboxPolicy::new(writable, session_temp, home, search_path, enforcement)
 }
 
 pub fn search_path() -> String {
