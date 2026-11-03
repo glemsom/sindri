@@ -337,3 +337,28 @@ fn a_diagrams_block_copies_as_its_mermaid_source_and_never_as_its_caption() {
         "a diagram pasted somewhere is mermaid, not a pair of guillemets: {copied:?}"
     );
 }
+
+#[test]
+fn ctrl_y_copies_the_last_answer_and_never_a_live_thought() {
+    let clipboard = Fake::taking();
+    let mut app = answered(clipboard.clone());
+    // A thought is the run's own surface at the tail of the transcript, and no
+    // entry of the thread: what `Ctrl-Y` falls back to is the answer.
+    app.event(Event::ReasoningDelta {
+        turn: 2,
+        text: "thinking about the answer".to_string(),
+    });
+    assert!(
+        screen(&mut app, 100, 20)
+            .iter()
+            .any(|row| row.contains("thinking about the answer")),
+        "the thought is on screen"
+    );
+
+    press(&mut app, KeyCode::Char('y'), KeyModifiers::CONTROL);
+    assert_eq!(
+        clipboard.saw(),
+        vec!["the answer, in full".to_string()],
+        "the last answer's words leave with the copy, and no word of the pane"
+    );
+}

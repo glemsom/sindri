@@ -127,7 +127,24 @@ model-facing copy is truncated head+tail.
 silent unless `-v`, but for a fault the run cannot leave unsaid — a repository config it
 refused, an `AGENTS.md` it could not read; `--format json` changes the output shape.
 
-**reasoning** — provider-side thinking tokens, off by default, shown on stderr with `-v`.
+**reasoning** — provider-side thinking tokens, off by default, shown on stderr with `-v`. In the
+**frame** a thought is the run's own **pane** while it arrives and a **scar** in the **thread** once
+it is over; it is never an entry of the thread, because a thought is a state the run is in and the
+thread is a document of what was said.
+
+**pane** — the run's surface for a thought: the rows below the last row of the **thread**, in the
+transcript's column and hanging off the same **gutter** a turn's answer and its calls hang off, five
+rows at least once it has a line of text and eight at most. It takes its rows from the transcript's
+area rather than painting over prose, so the **window**'s row map is the thread's and a copy or a
+**mark** never reads a word of it. Its text fills from the bottom — the newest row on the pane's last
+row, so a fragment never moves the line the reader is on — a row that leaves the top is cut rather
+than dimmed, its left rule is a **walk** from `PROMPT` to `HEADING` and its head row is
+`⌁ thinking   0.8s`. It sits on the **raised** surface with no dim behind it, and it takes no key:
+the **overlay** is the reader's covering and takes them all, and only one of the two can be dismissed.
+
+**scar** — the one row a finished thought leaves in the **thread**, `⌁ reasoned`, until `Enter` opens
+the text it held. It is all of a thought the transcript ever holds, and its entry is never open while
+the thought is still arriving.
 
 **status** — what a run tells the terminal it is doing: one `OSC 7501` report holding one of five
 states — `idle`, `working`, `done`, `blocked`, `error` — one coarse line of our own words, and the
@@ -270,8 +287,8 @@ fenced code block, the **queued prompt** panel, the band a turn's prompt sits on
 chrome on the canvas, not one.
 
 **raised** — the **surface** an overlay is drawn on, one tier above a panel; the frame
-is dimmed beneath it. The rail's sandbox **chip** sits on it too, a tier above the
-canvas the rest of the rail is drawn on.
+is dimmed beneath it, because an overlay takes the reader's keys. The rail's sandbox **chip** and the
+**pane** sit on it too, undimmed: neither is the reader's, so neither has the screen.
 
 **role** — one of the seven inks a fence is painted in — `PLAIN`, `COMMENT`, `KEYWORD`, `FUNCTION`,
 `TYPE`, `NUMBER`, `STRING` — each a colour the theme names and each clearing 4.5:1 on the **panel**

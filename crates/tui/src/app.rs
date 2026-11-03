@@ -27,6 +27,7 @@ use crate::rail::{Launch, Rail, RailView};
 use crate::render::seam::Seam;
 use crate::selection::{Selection, Viewport};
 use crate::settings::Missing;
+use crate::thought::Thought;
 use crate::thread::Thread;
 use crate::window::Window;
 
@@ -48,6 +49,10 @@ pub(crate) const DEFAULT_PAGE: usize = 10;
 pub struct App {
     pub(crate) rail: Rail,
     pub(crate) thread: Thread,
+    /// The thought the run is having, held beside the thread and never in it:
+    /// a thought is a state the run is in, and the transcript is a document of
+    /// what was said. `render::pane` is the one surface it is drawn on.
+    pub(crate) thought: Option<Thought>,
     pub(crate) composer: Composer,
     pub(crate) queue: VecDeque<String>,
     pub(crate) running: Option<Cancel>,
@@ -139,6 +144,7 @@ impl App {
         App {
             rail: Rail::new(launch),
             thread: Thread::default(),
+            thought: None,
             composer: Composer::new(),
             queue: VecDeque::new(),
             running: None,
@@ -234,6 +240,12 @@ impl App {
     /// The thread itself: its entries, and the heights they were measured at.
     pub fn thread(&self) -> &Thread {
         &self.thread
+    }
+
+    /// The thought the run is having, while it is having one: the pane's whole
+    /// content, and never an entry of the thread.
+    pub fn thought(&self) -> Option<&Thought> {
+        self.thought.as_ref()
     }
 
     /// How many rows entry `index` takes at `width`: the thread's answer, given
@@ -387,6 +399,7 @@ impl App {
                 let session = launch.session.clone();
                 self.loading = Loading::Idle;
                 self.armed = None;
+                self.thought_over();
                 self.thread.clear();
                 self.queue.clear();
                 self.early.clear();

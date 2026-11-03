@@ -64,12 +64,18 @@ pub enum Entry {
         failed: bool,
         took: Option<Duration>,
     },
+    /// The scar a finished thought leaves: the one row the thread holds of it.
+    /// A thought still arriving is the run's **pane** and never a row, so this
+    /// entry is always done — there is no open thought in the thread for a
+    /// fragment to rewrite, and no `open` state but the reader's own.
     Reasoning {
         turn: u32,
         text: String,
+        /// The final event's own word: a thought is over by the time it is an
+        /// entry, and `close_answers` has nothing to close here.
         done: bool,
-        /// Whether the reader has it open: a streamed thought shows its tail,
-        /// a finished one collapses to one row, and the key opens either.
+        /// Whether the reader has the text open: closed, the scar is one row
+        /// and `Enter` is what opens the text it held.
         open: bool,
     },
     Call(Call),

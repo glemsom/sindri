@@ -13,6 +13,7 @@ pub mod hello;
 pub(crate) mod layout;
 pub(crate) mod mark;
 mod overlay;
+pub mod pane;
 pub(crate) mod pictures;
 mod queue;
 mod rail;
@@ -111,6 +112,26 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
             Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).areas(body);
         (above, None, None, Some(below))
     };
+    // The pane hangs at the floor of the transcript's column and takes its rows
+    // from it, so a thought is laid out beside the thread rather than painted
+    // over prose: what `Ctrl-Y` and the mark read is the window's row map, and a
+    // pane drawn across rows would hand them the wrong words. The thread keeps
+    // the column the pane leaves, so a reader on the tail sees the newest row
+    // immediately above the pane, and one scrolled back keeps the row they are
+    // reading and is told what arrived by the badge.
+    let pane_rows = app
+        .thought()
+        .map(|thought| pane::height(thought, transcript.width) as u16)
+        .map(|rows| rows.min(transcript.height.saturating_sub(1)))
+        .filter(|rows| *rows > 0);
+    let (transcript, thought_pane) = match pane_rows {
+        Some(rows) => {
+            let [above, below] =
+                Layout::vertical([Constraint::Min(1), Constraint::Length(rows)]).areas(transcript);
+            (above, Some(below))
+        }
+        None => (transcript, None),
+    };
     // The composer is laid out in the words' column, not across the terminal:
     // its right border stops one column short of the margin the seam's strip
     // runs in, so the light the border walks toward is beside the corner that
@@ -127,6 +148,11 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
     }
 
     transcript::draw(app, transcript, frame.buffer_mut());
+    // The pane is drawn after the words it sits below, and never over them: its
+    // rows are the layout's and the window's row map is untouched by it.
+    if let Some(area) = thought_pane {
+        pane::draw(app, area, frame.buffer_mut());
+    }
     // The glow is drawn beside the rail and never over it: the margin has its
     // own rect, and `set_rail_view` is given the rail's. It is carried down to
     // the composer's last row, so the panel is lit for its whole height and the

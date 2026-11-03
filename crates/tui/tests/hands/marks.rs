@@ -189,3 +189,44 @@ fn a_shift_key_draws_a_selection_of_its_own_over_the_mark() {
         "and a new selection stands in its place"
     );
 }
+
+#[test]
+fn a_drag_cannot_reach_the_panes_cells() {
+    let clipboard = Fake::taking();
+    let mut app = answered(clipboard.clone());
+    app.event(Event::ReasoningDelta {
+        turn: 2,
+        text: "thinking about the answer".to_string(),
+    });
+    let rows = screen(&mut app, 100, 20);
+    let at = common::row_of(&rows, "thinking about the answer");
+
+    mouse(
+        &mut app,
+        MouseEventKind::Down(MouseButton::Left),
+        0,
+        at as u16,
+    );
+    mouse(
+        &mut app,
+        MouseEventKind::Drag(MouseButton::Left),
+        40,
+        at as u16,
+    );
+    mouse(
+        &mut app,
+        MouseEventKind::Up(MouseButton::Left),
+        40,
+        at as u16,
+    );
+
+    assert!(
+        app.selection().is_empty(),
+        "no mark stands on a pane's cells: a drag that lands there is no gesture of the reader's"
+    );
+    assert!(
+        clipboard.saw().is_empty(),
+        "and no word of the thought leaves with a copy: {:?}",
+        clipboard.saw()
+    );
+}

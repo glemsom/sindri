@@ -33,6 +33,7 @@ pub mod selection; // selecting rendered rows with the mouse
 pub mod settings; // `/settings`: the one config file, edited through the one schema
 pub mod spill; // the box a file too large to show is opened in
 pub mod theme; // one dark theme, in truecolour
+pub mod thought; // a thought the run is having, beside the thread and never in it
 mod thread; // the transcript as the frame holds it
 pub mod window; // the window onto the transcript
 

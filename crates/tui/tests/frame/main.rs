@@ -341,6 +341,7 @@ mod hold;
 mod ledger;
 mod mark;
 mod open;
+mod pane;
 mod pictures;
 mod prose;
 mod pulse;

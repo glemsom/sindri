@@ -11,6 +11,7 @@ use sindri_core::status::{Doing, State};
 use crate::app::{App, Renew};
 use crate::driver::{Finished, Job, Side, Stop};
 use crate::entry::{Call, CallOver, Entry, Note, Prompt, Skill};
+use crate::thought::Thought;
 
 impl App {
     pub(crate) fn submit(&mut self) {
@@ -72,17 +73,25 @@ impl App {
         let (turn, doing) = event.doing();
         self.rail.turn(turn, self.now);
         self.doing = doing;
+        // What has streamed is what the run has spent so far: the meters move on
+        // it now, and the report overrules them when the run ends. Both streams
+        // pay it, so it is paid once above the arms rather than once in each.
+        if let Event::TextDelta { text, .. } | Event::ReasoningDelta { text, .. } = &event {
+            self.rail.streamed(text.chars().count(), self.now);
+        }
         match event {
+            // An answer beginning, a call announced and the final reasoning all
+            // end a thought, as a cancel and `/new` do: the pane's life is the
+            // run's, and one door closes it so no arm forgets one.
             Event::TextDelta { turn, text } => {
-                self.append(turn, text, false);
+                self.thought_over();
+                self.append(turn, text);
             }
             Event::ReasoningDelta { turn, text } => {
-                self.append(turn, text, true);
+                self.think(turn, text);
             }
             Event::Reasoning { turn, text } => {
-                self.thread.keep(
-                    |entry| !matches!(entry, Entry::Reasoning { turn: open, .. } if *open == turn),
-                );
+                self.thought_over();
                 self.thread.push(Entry::Reasoning {
                     turn,
                     text,
@@ -91,6 +100,7 @@ impl App {
                 });
             }
             Event::ToolCall { turn, asked } => {
+                self.thought_over();
                 self.close_answers(false);
                 let mut call = Call::new(turn, requested(&asked), self.now);
                 // A load runs no command, so there is no exit to wait for: its
@@ -166,49 +176,56 @@ impl App {
         }
     }
 
-    fn append(&mut self, turn: u32, text: String, reasoning: bool) {
-        // What has streamed is what the run has spent so far: the meters move
-        // on it now, and the report overrules them when the run ends.
-        self.rail.streamed(text.chars().count(), self.now);
-        let joins = match self.thread.last() {
-            Some(Entry::Reasoning {
-                turn: open,
-                done: false,
-                ..
-            }) => reasoning && *open == turn,
+    /// A fragment of the run's thinking: the pane is the one surface it is
+    /// drawn on, so nothing of it is an entry of the thread. The first fragment
+    /// makes the thought and the ones after it grow it, and no fragment moves a
+    /// row of what has already been said.
+    fn think(&mut self, turn: u32, text: String) {
+        match self.thought.as_mut() {
+            Some(thought) if thought.turn == turn => thought.text.push_str(&text),
+            _ => {
+                self.thought = Some(Thought {
+                    turn,
+                    text,
+                    started: self.now,
+                })
+            }
+        }
+    }
+
+    /// A thought is over: the pane goes, and what the thread holds of it is the
+    /// scar a finished thought leaves. Every arm that ends one comes through
+    /// here — the final event, a call, a text delta, a cancel and `/new` — so
+    /// none of them forgets it and the pane cannot outlive the run's use for it.
+    pub(crate) fn thought_over(&mut self) {
+        self.thought = None;
+    }
+
+    fn append(&mut self, turn: u32, text: String) {
+        let joins = matches!(
+            self.thread.last(),
             Some(Entry::Answer {
                 turn: open,
                 done: false,
                 ..
-            }) => !reasoning && *open == turn,
-            _ => false,
-        };
+            }) if *open == turn
+        );
         if joins {
-            self.thread.edit_last(|entry| match entry {
-                Entry::Reasoning { text: streamed, .. } | Entry::Answer { text: streamed, .. } => {
-                    streamed.push_str(&text)
+            self.thread.edit_last(|entry| {
+                if let Entry::Answer { text: streamed, .. } = entry {
+                    streamed.push_str(&text);
                 }
-                _ => {}
             });
             return;
         }
         self.close_answers(false);
-        if reasoning {
-            self.thread.push(Entry::Reasoning {
-                turn,
-                text,
-                done: false,
-                open: false,
-            });
-        } else {
-            self.thread.push(Entry::Answer {
-                turn,
-                text,
-                done: false,
-                failed: false,
-                took: None,
-            });
-        }
+        self.thread.push(Entry::Answer {
+            turn,
+            text,
+            done: false,
+            failed: false,
+            took: None,
+        });
     }
 
     pub fn output(&mut self, side: Side, text: &str) {
@@ -253,6 +270,9 @@ impl App {
 
     pub fn finished(&mut self, finished: Finished) {
         self.running = None;
+        // A run that is over is not thinking, whatever door it left by: a
+        // thought has no pane once there is nothing left to think it.
+        self.thought_over();
         // A run that failed before it had a report is the one shape `Report`
         // cannot hold: the failure in the frame's own words, no turn of it
         // counted, and nothing spent.
@@ -292,24 +312,23 @@ impl App {
             // worth the rows it was, and forgetting it would cost a layout.
             let open = matches!(
                 self.thread.get(index),
-                Some(Entry::Answer { done: false, .. } | Entry::Reasoning { done: false, .. })
+                Some(Entry::Answer { done: false, .. })
             );
             if !open {
                 continue;
             }
-            self.thread.edit(index, |entry| match entry {
-                Entry::Answer {
+            self.thread.edit(index, |entry| {
+                if let Entry::Answer {
                     done,
                     failed: bad,
                     took,
                     ..
-                } => {
+                } = entry
+                {
                     *done = true;
                     *bad = failed;
                     *took = Some(now);
                 }
-                Entry::Reasoning { done, .. } => *done = true,
-                _ => {}
             });
         }
     }

@@ -256,9 +256,12 @@ fn ratio(fg: Color, bg: Color) -> f64 {
 }
 
 #[test]
-fn faint_clears_four_and_a_half_to_one_on_the_panel_and_on_the_canvas() {
-    // The canvas is the theme's own, filled before anything is drawn on it.
-    for surface in [theme::PANEL, theme::CANVAS] {
+fn faint_clears_four_and_a_half_to_one_on_the_surfaces_a_word_is_written_on() {
+    // The canvas is the theme's own, filled before anything is drawn on it, and
+    // `RAISED` is where a thought is read as body text on the pane: faint is the
+    // quietest ink a word is read in, so it clears the floor on every tier a
+    // word of the frame's own is written on.
+    for surface in [theme::PANEL, theme::CANVAS, theme::RAISED] {
         let cleared = ratio(theme::FAINT, surface);
         assert!(
             cleared >= 4.5,

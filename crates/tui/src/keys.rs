@@ -146,13 +146,15 @@ impl App {
     }
 
     pub(crate) fn cancel_or_clear(&mut self) {
-        match &self.running {
-            Some(cancel) => cancel.trigger(),
-            None => {
-                self.composer.clear();
-                self.completion = None;
-            }
-        }
+        let Some(cancel) = self.running.clone() else {
+            self.composer.clear();
+            self.completion = None;
+            return;
+        };
+        cancel.trigger();
+        // A cancel is answered the moment the key lands, so the thought goes
+        // with it: the run is not finished with it, but the reader is.
+        self.thought_over();
     }
 
     fn enter(&mut self) {

@@ -47,10 +47,17 @@ fn pictured(width: u16, height: u16) -> Buffer {
 }
 
 /// A frame with one of everything that paints, `app`'s to fill: prose and inline
-/// code, a highlighted fence and a diff fence, a call's two sides, an error
-/// note, the rail, the composer, and a modal on the raised tier above them.
+/// code, a highlighted fence and a diff fence, a call's two sides, a thought on
+/// the pane at the tail, an error note, the rail, the composer, and a modal on
+/// the raised tier above them.
 fn busy(app: &mut App, width: u16, height: u16) -> Buffer {
     fill(app);
+    // A thought is the run's and not the thread's, so it paints without being
+    // an entry: the pane is the fourth thing that draws on the raised tier.
+    app.event(Event::ReasoningDelta {
+        turn: 1,
+        text: "a thought the run is having".to_string(),
+    });
     app.key(crossterm::event::KeyEvent::new(
         crossterm::event::KeyCode::Char('?'),
         crossterm::event::KeyModifiers::NONE,

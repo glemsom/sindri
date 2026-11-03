@@ -73,7 +73,7 @@ struct State {
 
 impl Rows {
     /// The rows of an entry that places no picture: a prompt, a call, a note, a
-    /// thought folded away.
+    /// scar.
     fn plain(rows: Vec<Line<'static>>, want: Want) -> Rows {
         let total = rows.len();
         Rows {
@@ -85,7 +85,7 @@ impl Rows {
 }
 
 /// The rows of `rows` the ask holds, re-based to the first of them: an entry
-/// that lays its body out whole — a prompt, a call, a thought — cuts the window
+/// that lays its body out whole — a prompt, a call, a scar — cuts the window
 /// it was asked for here, because laying one out is cheap and laying it out
 /// twice is not the point.
 fn kept(rows: Vec<Line<'static>>, want: Want) -> Vec<Line<'static>> {
@@ -133,33 +133,23 @@ pub fn entry_rows(
             },
             want,
         ),
-        Entry::Reasoning {
-            text, done, open, ..
-        } => {
-            // A thought that is over is one row until the reader opens it,
-            // and then it is the text it held.
-            if *done && !*open {
+        Entry::Reasoning { text, open, .. } => {
+            // A thought is over by the time it is an entry: the pane was the
+            // run's while it arrived, and what the thread holds of it is the
+            // scar — one row until the reader opens it, and then the text it
+            // held. A thought is one entry and not an answer, so it is laid
+            // out whole and cut here.
+            if !*open {
                 return Rows::plain(
                     gutter(vec![Line::from(Span::styled("⌁ reasoned", theme::faint()))]),
                     want,
                 );
             }
             let written = markdown::lines(text, body, store);
-            let mut rows = written.rows;
-            // A thought still being thought is shown as its last rows, and a
-            // picture above them is not on screen to be drawn. A thought is one
-            // entry and not an answer, so it is laid out whole and cut here.
-            let mut dropped = 0;
-            if !*done && !*open {
-                dropped = rows.len().saturating_sub(3);
-                rows = rows.split_off(dropped);
-            }
-            // What the entry is worth is the rows it draws: a thought still
-            // arriving is the three at its end, whatever it will be worth whole.
-            let total = rows.len();
+            let total = written.rows.len();
             Rows {
-                pictures: laid(written.pictures, 0, dropped, want),
-                rows: gutter(kept(rows, want)),
+                pictures: laid(written.pictures, 0, 0, want),
+                rows: gutter(kept(written.rows, want)),
                 total,
             }
         }
