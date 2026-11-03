@@ -36,6 +36,9 @@ pub const ALTERNATE_SCREEN: &str = "\u{1b}[?1049h";
 pub const QUIT: u8 = 0x11;
 /// Ctrl-U, which empties the field the settings modal has the cursor in.
 pub const CLEAR_FIELD: u8 = 0x15;
+/// Ctrl-C, the key that cancels the run in flight — and, in a **frame**, the one
+/// that takes the thought's pane with it.
+pub const CANCEL: u8 = 0x03;
 /// Enter, as a terminal sends it.
 pub const ENTER: u8 = 0x0d;
 /// Down, as a terminal sends it.

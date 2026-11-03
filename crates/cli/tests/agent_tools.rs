@@ -128,6 +128,13 @@ fn reasoning_is_sent_only_when_the_flag_asks_and_shown_only_with_verbose() {
         complaints.contains("The diff shows a rename."),
         "-v shows the reasoning: {complaints}"
     );
+    // The frame's pane is the reasoning's other reader, and neither front end
+    // may move the line the other says: batch mode's one reasoning line is the
+    // one it has always been.
+    assert!(
+        complaints.contains("sindri: reasoning (turn 1): The diff shows a rename."),
+        "-v says reasoning in the one line it always has: {complaints}"
+    );
 }
 
 #[test]
