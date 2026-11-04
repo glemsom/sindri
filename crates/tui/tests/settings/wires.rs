@@ -6,8 +6,9 @@
 //! sentence and never a new one from the modal.
 
 use super::*;
-use sindri_core::config::Provider;
+use sindri_core::config::{Key, Provider};
 use sindri_tui::overlay::Overlay;
+use sindri_tui::{App, Launch};
 
 /// The names the modal is offering under the row with the cursor: the fold's
 /// own list, read off the modal rather than guessed at from the screen.
@@ -154,5 +155,62 @@ fn a_word_the_run_refuses_is_refused_in_the_run_s_own_words() {
         written(&f.path),
         "provider = \"anthropic\"\nmodel = \"m\"\n",
         "the file is exactly as it was"
+    );
+}
+
+/// The address row is half of what the names under the model row answer for:
+/// the listing is asked at the address the row states — the launch's while
+/// nobody has typed in it, the typed text once someone has — and a row `Ctrl-U`
+/// emptied states no address at all, which is the wire's own default rather than
+/// the address the run came in with.
+#[test]
+fn the_base_url_row_states_the_address_the_names_are_asked_at() {
+    let mut f = fixture(Some("provider = \"openai\"\nmodel = \"m\"\n"));
+    let launch = Launch {
+        base_url: Some("http://localhost:1234".to_string()),
+        ..common::launch()
+    };
+    f.app = App::new(launch, None).with_config(&f.path);
+
+    open(&mut f.app);
+    let first = f.app.take_ask().expect("opening the modal asks the wire");
+    assert_eq!(
+        first.base_url(),
+        Some("http://localhost:1234"),
+        "a row nobody has typed in leaves the launch's address speaking"
+    );
+
+    down_to(&mut f.app, Key::BaseUrl);
+    type_text(&mut f.app, "http://localhost:8080");
+    assert!(
+        f.app.take_ask().is_none(),
+        "an address still being typed is a draft, and a draft is asked nothing"
+    );
+
+    down(&mut f.app);
+    let typed = f
+        .app
+        .take_ask()
+        .expect("leaving the row asks the address it now states");
+    assert_eq!(typed.wire(), "openai", "on the wire the provider row names");
+    assert_eq!(
+        typed.base_url(),
+        Some("http://localhost:8080"),
+        "at the address typed in the row, not the one the launch holds"
+    );
+
+    // Back onto the address row, emptied: no address is a state of its own.
+    press(&mut f.app, KeyCode::Up, KeyModifiers::NONE);
+    press(&mut f.app, KeyCode::Char('u'), KeyModifiers::CONTROL);
+    down(&mut f.app);
+    let emptied = f
+        .app
+        .take_ask()
+        .expect("an emptied row is another address, and it is asked");
+    assert_eq!(
+        emptied.base_url(),
+        None,
+        "`Ctrl-U` states no address, so the wire's own default answers rather \
+         than the address the launch left behind"
     );
 }

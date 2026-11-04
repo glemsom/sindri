@@ -74,12 +74,14 @@ pub trait Driver: Send {
         Err("this front end cannot read the config again".to_string())
     }
 
-    /// The names the wire this front end would ask serves: asked on the thread
-    /// the tasks run on rather than the frame's, so the modal draws and takes
-    /// every key while it is out. `Err` is why the wire would not say — a hint
-    /// the modal states in three words, never a refusal, because the run this
-    /// front end cannot ask is the one with no key yet.
-    fn models(&mut self) -> Result<Vec<String>, String> {
+    /// The names the wire `serving` names serves: asked on the thread the tasks
+    /// run on rather than the frame's, so the modal draws and takes every key
+    /// while it is out. The ask carries the wire and the address together
+    /// because a listing answers for one of each — the row a human has just
+    /// moved, not the one the launch was built on. `Err` is why the wire would
+    /// not say — a hint the modal states in three words, never a refusal,
+    /// because the run this front end cannot ask is the one with no key yet.
+    fn models(&mut self, _serving: &Serving) -> Result<Vec<String>, String> {
         Err("this front end cannot ask the wire".to_string())
     }
 }

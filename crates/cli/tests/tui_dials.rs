@@ -67,6 +67,13 @@ fn expect_on_screen(pty: &Pty, child: &mut std::process::Child, want: &str) -> S
     drawn
 }
 
+/// One cursor move down. It is written whole: a `DOWN` split across reads is an
+/// `Esc` and then two typed characters, and the modal is gone.
+fn step_down(pty: &Pty) {
+    let mut port = pty.port();
+    port.write_all(DOWN).expect("a cursor move");
+}
+
 /// The model row states what the wire serves: the listing the mock answers,
 /// and the wire that named it. It costs the frame nothing to have asked — no
 /// prompt was sent to learn it — and the row is still the field it was.
@@ -406,4 +413,117 @@ fn untimed(line: &str) -> String {
         None if cost.ends_with(" ms") => "turn cost:".to_string(),
         _ => line.to_string(),
     }
+}
+
+/// The wire the provider row names is the wire the names are asked of. Choosing
+/// `openai` in the modal asks the OpenAI wire — its route and its credential —
+/// where the listing on hand answers for the Anthropic wire the launch came in
+/// with, so the row is never labelled with a list some other wire made.
+#[test]
+fn a_wire_chosen_in_the_modal_is_the_wire_asked_for_its_names() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: the provider row is not tested here");
+        return;
+    };
+    let env = Env::new();
+    let mock = MockProvider::start(vec![Reply::answer("never asked")]);
+    write_config(&env, &config_for(&mock, "model-one", None));
+    let mut child = spawn_with(&env, &pty, &mock);
+
+    expect(&pty, &mut child, "cache");
+    type_command(&pty, "/settings");
+    expect_on_screen(
+        &pty,
+        &mut child,
+        &format!("{} names · anthropic", common::provider::LISTED.len()),
+    );
+
+    // The provider row is the schema's first row, which is where the cursor
+    // opens: `Enter` offers the wires, `Down` walks to `openai`, `Enter` takes
+    // it — and a wire taken is a wire asked.
+    pty.type_key(ENTER);
+    step_down(&pty);
+    pty.type_key(ENTER);
+    expect_on_screen(
+        &pty,
+        &mut child,
+        &format!("{} names · openai", common::provider::LISTED.len()),
+    );
+
+    let (code, _) = pty.quit(&mut child);
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+
+    let asks = mock.asks();
+    assert_eq!(asks.len(), 2, "one modal, two wires: {asks:?}");
+    assert!(
+        asks[0].path.ends_with("/v1/models"),
+        "the launch's Anthropic route asked first: {}",
+        asks[0].path
+    );
+    assert_eq!(
+        asks[0].header("x-api-key"),
+        Some(TEST_KEY),
+        "on the credential the launch holds"
+    );
+    assert_eq!(
+        asks[1].path, "/models",
+        "and the OpenAI wire's own route after the row moved, never the one left"
+    );
+    assert_eq!(
+        asks[1].header("authorization"),
+        Some(format!("Bearer {TEST_KEY}").as_str()),
+        "asked with the credential a turn asks with: {}",
+        asks[1].body
+    );
+}
+
+/// The address row is half of what a listing answers for: the address typed
+/// into it is asked once the row is whole — not per keystroke, and not the
+/// address the launch came in with — so the count under the model row stops
+/// stating a server the human has moved away from.
+#[test]
+fn an_address_typed_in_the_modal_is_the_address_asked() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: the address row is not tested here");
+        return;
+    };
+    let env = Env::new();
+    let mock = MockProvider::start(vec![Reply::answer("never asked")]);
+    write_config(&env, &config_for(&mock, "model-one", None));
+    let mut child = spawn_with(&env, &pty, &mock);
+
+    expect(&pty, &mut child, "cache");
+    type_command(&pty, "/settings");
+    expect_on_screen(
+        &pty,
+        &mut child,
+        &format!("{} names · anthropic", common::provider::LISTED.len()),
+    );
+
+    // A port nothing answers on: the address the row is given names no server,
+    // so where the count under the model row goes says which address was asked.
+    let unanswered = {
+        let port = std::net::TcpListener::bind("127.0.0.1:0").expect("a port of our own");
+        let address = port.local_addr().expect("an address");
+        drop(port);
+        format!("http://{address}")
+    };
+    set_field(
+        &pty,
+        rows_to(sindri_core::config::Key::BaseUrl),
+        &unanswered,
+    );
+    // The row is whole when the cursor leaves it, and that is when it is asked.
+    step_down(&pty);
+    expect_on_screen(&pty, &mut child, "no list · type a name");
+
+    let (code, _) = pty.quit(&mut child);
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+
+    let asks = mock.asks();
+    assert_eq!(
+        asks.len(),
+        1,
+        "the address that answers was asked once, and the draft asked nothing: {asks:?}"
+    );
 }

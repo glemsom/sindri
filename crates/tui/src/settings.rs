@@ -17,7 +17,11 @@
 //! run itself parses — `Provider::ALL`, so the modal cannot name a wire the run
 //! would refuse — and the one taken is what a save writes. A wire chosen is a
 //! new `Serving`, so the names under the model row are asked for again, and the
-//! listing for the wire the user has left is dropped where it lands.
+//! listing for the wire the user has left is dropped where it lands. The address
+//! row moves the same `Serving`: the names are asked for the address typed in
+//! it, once the row is whole — a keystroke there is a draft and asks nothing —
+//! so the list a human is offered and the list a run at that address would be
+//! served are one answer.
 
 mod list;
 mod served;
@@ -501,8 +505,13 @@ impl Settings {
     }
 
     /// The key of the row with the cursor.
-    fn chosen_key(&self) -> Option<Key> {
+    pub(crate) fn chosen_key(&self) -> Option<Key> {
         self.fields.get(self.chosen).map(|field| field.key)
+    }
+
+    /// The field of a key's row.
+    fn field(&self, key: Key) -> Option<&Field> {
+        self.fields.iter().find(|field| field.key == key)
     }
 
     /// The wire the provider row names, where it names one the run accepts:
@@ -510,11 +519,24 @@ impl Settings {
     /// write. `None` while the row is empty or holds a word the run refuses,
     /// which is a word no listing is asked for.
     fn wire(&self) -> Option<Provider> {
-        let field = self
-            .fields
-            .iter()
-            .find(|field| field.key == Key::Provider)?;
-        Provider::parse(&field.text).ok()
+        Provider::parse(&self.field(Key::Provider)?.text).ok()
+    }
+
+    /// The address this modal's rows state, where they state one: the address
+    /// the names under the model row are asked at, and the one a save would
+    /// write. A row nobody has typed in leaves `launch` speaking — the address
+    /// a run would use comes from the file or the environment, and a value in
+    /// the environment is no row of this modal's — a row typed in states the
+    /// text in it, and a row `Ctrl-U` emptied states no address at all, which
+    /// is the wire's own default rather than the one the launch left behind.
+    pub(crate) fn address(&self, launch: Option<String>) -> Option<String> {
+        match self.field(Key::BaseUrl) {
+            Some(field) if field.edit != Edit::Untouched => {
+                let text = field.text.trim();
+                (!text.is_empty()).then(|| text.to_string())
+            }
+            _ => launch,
+        }
     }
 
     pub fn focus(&mut self, down: bool) {
@@ -600,6 +622,14 @@ impl Settings {
     }
 }
 
+/// Whether this keystroke only drafts the address: a character typed into the
+/// base URL row, taken back, or the row emptied. A draft asks nothing, and the
+/// listing on hand stands until the cursor leaves the row it belongs to.
+fn drafting(settings: &Settings, key: KeyEvent) -> bool {
+    let typing = matches!(key.code, KeyCode::Char(_) | KeyCode::Backspace);
+    typing && settings.chosen_key() == Some(Key::BaseUrl)
+}
+
 /// The fragment typed in a row: the list under a row is ranked off that row's
 /// own text and never off another row's, because the fragment is what a `Tab`
 /// there would take.
@@ -630,12 +660,15 @@ impl crate::app::App {
             return false;
         };
         let outcome = settings.key(key, &self.served);
-        // The wire the provider row names is the one the names under the model
-        // row answer for, so a key that moved that row asks again: an ask is a
-        // `Serving`, the wire and the address together, and the listing for the
-        // wire the user has left is dropped by the rule already in place.
+        // The wire the provider row names and the address the base URL row
+        // states are what the names under the model row answer for, so a key
+        // that moved either asks again: an ask is a `Serving`, the wire and the
+        // address together, and the listing for the pair the user has left is
+        // dropped by the rule already in place. An address still being typed is
+        // asked once it is whole, because one request per letter of a draft is a
+        // request for an address nobody has finished.
         let serving = serving_of(settings, self.rail.launch());
-        if self.served.want(serving) {
+        if !drafting(settings, key) && self.served.want(serving) {
             settings.refresh(&self.served);
         }
         match outcome {
@@ -714,11 +747,12 @@ impl crate::app::App {
 
 /// The ask a modal makes: the wire its provider row names — or the wire the
 /// launch speaks while the row is empty or holds a word the run refuses — at
-/// the address the launch holds, because a listing answers for one wire at one
-/// address and the two travel as one `Serving`.
+/// the address its base URL row states, or the launch's while that row is one
+/// nobody has typed in, because a listing answers for one wire at one address
+/// and the two travel as one `Serving`.
 fn serving_of(settings: &Settings, launch: &Launch) -> Serving {
     let wire = settings
         .wire()
         .map_or_else(|| launch.provider.clone(), |wire| wire.as_str().to_string());
-    Serving::of(wire, launch.base_url.clone())
+    Serving::of(wire, settings.address(launch.base_url.clone()))
 }

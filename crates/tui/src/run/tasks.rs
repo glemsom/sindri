@@ -51,7 +51,14 @@ pub(super) fn drive(mut driver: Box<dyn Driver>, tx: Sender<Msg>) -> Sender<Task
                     let loaded = driver.load(&skill, Tap::new(tx.clone()));
                     tx.send(Msg::Loaded(loaded))
                 }
-                Task::Ask(serving) => tx.send(Msg::Listed(serving, driver.models().ok())),
+                Task::Ask(serving) => {
+                    // The ask is made of the `Serving` it states, and the
+                    // answer travels back labelled with the same pair: a
+                    // listing that lands after the row has moved is dropped
+                    // where it lands.
+                    let names = driver.models(&serving);
+                    tx.send(Msg::Listed(serving, names.ok()))
+                }
                 Task::Renew => tx.send(Msg::Renewed(driver.renew().map(Box::new))),
                 Task::Reload => tx.send(Msg::Reloaded(driver.reload().map(Box::new))),
             };

@@ -8,7 +8,7 @@ use std::sync::mpsc::Receiver;
 
 use sindri_core::agent::{Agent, Event, Report};
 use sindri_core::cancel::Cancel;
-use sindri_core::config::{Config, ConfigError, Overrides};
+use sindri_core::config::{Config, ConfigError, Overrides, Provider};
 use sindri_core::doctor::{self, DoctorError};
 use sindri_core::exec::{BashExecutor, OutputSink, SandboxExecutor, Side, ToolResult};
 use sindri_core::provider;
@@ -16,7 +16,7 @@ use sindri_core::sandbox::{Enforcement, SandboxPolicy};
 use sindri_core::session::{LoopError, Session};
 use sindri_tui::driver::{Driver, Finished, Invoked, Tap};
 use sindri_tui::run::{self, Ending};
-use sindri_tui::settings::Missing;
+use sindri_tui::settings::{Missing, Serving};
 use sindri_tui::{Card, Launch};
 use sindri_types::ExitCode;
 
@@ -141,6 +141,23 @@ struct Front {
     agent: Option<Agent>,
 }
 
+impl Front {
+    /// The config an ask about the listing is made with: the launch's, on the
+    /// wire and the address the serving names. Nothing else moves — a listing
+    /// is a read that runs nothing — and the credential stays the launch's,
+    /// because no secret of the modal's rows crosses this seam: a key typed
+    /// into the modal is written to the file, and the ask after the save is
+    /// asked with it.
+    fn asked(&self, serving: &Serving) -> Config {
+        let mut config = self.boot.config.clone();
+        if let Ok(wire) = Provider::parse(serving.wire()) {
+            config.provider = wire;
+        }
+        config.base_url = serving.base_url().map(str::to_string);
+        config
+    }
+}
+
 impl Driver for Front {
     fn run(&mut self, prompt: &str, cancel: Cancel, tap: Tap) -> Finished {
         let dressed = Dressed(tap.clone());
@@ -223,12 +240,15 @@ impl Driver for Front {
         Ok(launch(&self.boot))
     }
 
-    /// The names the wire serves, asked of the model a prompt asks: nothing of
-    /// the modal's is handed in, so the list a human is offered and the model a
-    /// run uses are one answer. No tap and no cancel — an ask runs nothing and
+    /// The names the wire serves, asked of the wire and the address the modal
+    /// states: the `Serving` the ask carries is what is asked, so a wire chosen
+    /// in the provider row — or an address typed in the base URL row — is the
+    /// wire the names came from, and a row cannot be labelled with a listing
+    /// some other address made. No tap and no cancel — an ask runs nothing and
     /// reads no key it was not already given.
-    fn models(&mut self) -> Result<Vec<String>, String> {
-        stack::models(&self.boot.session, &self.boot.config)
+    fn models(&mut self, serving: &Serving) -> Result<Vec<String>, String> {
+        let config = self.asked(serving);
+        stack::models(&self.boot.session, &config)
             .map_err(|error| failure::provider_message(&error))
     }
 
