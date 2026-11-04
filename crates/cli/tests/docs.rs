@@ -434,10 +434,7 @@ fn the_readme_names_every_command_the_composer_can_send() {
 
 #[test]
 fn the_readme_states_that_a_repositorys_agents_md_reaches_the_model() {
-    let configuration = README
-        .split("\n## ")
-        .find(|section| section.starts_with("Configuration"))
-        .unwrap_or_else(|| panic!("README.md has no `## Configuration` section"));
+    let configuration = configuration_section();
     let paragraph = configuration
         .split("\n\n")
         .find(|paragraph| paragraph.contains("`AGENTS.md`"))
@@ -556,12 +553,18 @@ fn the_readme_exit_table_carries_every_code_a_run_can_leave_with() {
     }
 }
 
-#[test]
-fn the_readme_configuration_table_names_every_key_the_schema_holds() {
-    let configuration = README
+/// The README's `## Configuration` section, where the config's own table sits
+/// and, beside it, the worked example for a gateway.
+fn configuration_section() -> &'static str {
+    README
         .split("\n## ")
         .find(|section| section.starts_with("Configuration"))
-        .unwrap_or_else(|| panic!("README.md has no `## Configuration` section"));
+        .unwrap_or_else(|| panic!("README.md has no `## Configuration` section"))
+}
+
+#[test]
+fn the_readme_configuration_table_names_every_key_the_schema_holds() {
+    let configuration = configuration_section();
 
     for key in KEYS {
         let named = format!("`{}`", key.name());

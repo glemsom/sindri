@@ -209,7 +209,7 @@ environment, then flags.
 | Credential | `api_key` | `SINDRI_API_KEY` | — |
 | Reasoning | `thinking` | `SINDRI_THINKING` | `--thinking`, `--no-thinking` |
 | Extra writable paths | `extra_writable_paths` | `SINDRI_EXTRA_WRITABLE_PATHS` (`:`-separated) | `--writable` (repeatable) |
-| Extra request headers | `extra_headers` (table) | `SINDRI_EXTRA_HEADERS` (`Name: value` lines) | `--header` (repeatable) |
+| Extra request headers | [`extra_headers`](#opencode-go) (table) | `SINDRI_EXTRA_HEADERS` (`Name: value` lines) | `--header` (repeatable) |
 | Turn cap | `max_turns` | `SINDRI_MAX_TURNS` | `--max-turns` |
 | Command timeout | `timeout` | `SINDRI_TIMEOUT` | `--timeout` |
 | Terminal reports | `status` | `SINDRI_STATUS` | — |
@@ -222,10 +222,10 @@ a persisted unsafe setting is the one a user forgets they turned on. Batch mode 
 the flag `--writable` is still validated, it simply is not what bounds the run.
 
 `--writable` and `--header` are repeatable but **replace** the configured values. A
-header value may hold `{session}`, which is sent as the id of the session the run writes —
-the same id `sindri sessions show` names — so a gateway that caches per session follows
-`/new`; a value with no token is sent as written. An unknown key is an error naming key
-and file; a wrong value is exit 2. The credential also
+header value may hold `{session}`, sent as the id of the session the run writes, so a
+gateway that caches per session follows `/new`, and a value with no token is sent as
+written — [OpenCode Go](#opencode-go) is the worked one. An unknown key is an error naming
+key and file; a wrong value is exit 2. The credential also
 comes from `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or a matching `*_BASE_URL`, and is
 redacted everywhere; a file carrying one is `0600`. Copilot’s OAuth token store is
 separate from `config.toml` and is not an API key.
@@ -242,6 +242,35 @@ naming the bytes left out. A repository without one adds nothing; one that canno
 is a diagnostic naming the file and the reason, and the run still starts. `-v`,
 `sindri doctor` and the record's start block name the file and the bytes handed over.
 [`GLOSSARY.md`](GLOSSARY.md) defines the word, under `instructions`.
+
+### OpenCode Go
+
+OpenCode Go is a gateway that speaks the `openai` wire and routes on a header of its own: a
+request without it is answered `400`, however right the model and the address are. Name the
+wire, point `base_url` at the gateway's API root — the address it prints beside the key,
+ending in `/v1`, where the run asks `chat/completions` — keep the key it issued in
+`SINDRI_API_KEY`, and carry the header:
+
+```toml
+provider = "openai"
+base_url = "https://<gateway>/v1"
+model = "<a model the gateway serves>"
+
+[extra_headers]
+x-opencode-session = "{session}"
+```
+
+In the frame, `/settings`'s model row lists the names the gateway serves once the wire and
+that address are in it, so the model is one of those rather than a guess; its extra headers
+row draws the table the file holds and takes those `Name: value` lines back. Without the
+file the header is set at either of the two levels that win over it:
+`SINDRI_EXTRA_HEADERS` takes the line `x-opencode-session: {session}` for a shell, and
+`--header` takes it for one invocation.
+
+The gateway caches per session, so `{session}` in a value is sent as the id of the session
+the run writes — one record, one temp, one id naming them — and a prompt after `/new`
+arrives under the id of the session it opened rather than the one it replaced.
+`sindri sessions show` prints that id back.
 
 ## Session records
 
