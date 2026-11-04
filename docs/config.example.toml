@@ -56,7 +56,8 @@ ssh_agent = true
 max_turns = 250
 
 # How long one command may run inside the sandbox, in seconds (1–3600). Optional:
-# 120 by default.
+# 120 by default. `sindri sandbox exec` runs under the same timeout; its own
+# `--timeout` wins where it is written.
 timeout = 120
 
 # Headers every provider request carries, for a gateway that routes on one of its

@@ -10,18 +10,32 @@ use common::{Env, the_session};
 use serde_json::Value;
 
 fn exec(env: &Env, command: &[&str]) -> Value {
-    exec_with(env, &[], command)
+    outcome(env, &[], &[], command)
 }
 
 fn exec_with(env: &Env, flags: &[&str], command: &[&str]) -> Value {
+    outcome(env, &[], flags, command)
+}
+
+/// One invocation, in the three parts `precedence` reads: the words before the
+/// subcommand, the words after it, and the command itself. Every test here asks
+/// which level set what, so every one of them is built here.
+fn outcome(env: &Env, before: &[&str], after: &[&str], command: &[&str]) -> Value {
     let assert = env
         .cmd()
+        .args(before)
         .args(["sandbox", "exec"])
-        .args(flags)
+        .args(after)
         .arg("--")
         .args(command)
         .assert()
         .success();
+    read(assert)
+}
+
+/// The one JSON object an invocation printed, so a test says what it asserts on
+/// rather than how the line is read.
+fn read(assert: assert_cmd::assert::Assert) -> Value {
     let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
     serde_json::from_str(&stdout).unwrap_or_else(|error| panic!("not JSON: {error}\n{stdout}"))
 }
@@ -156,6 +170,74 @@ fn the_default_deadline_is_generous_but_present() {
 }
 
 #[test]
+fn the_config_files_deadline_bounds_the_command_not_a_number_of_its_own() {
+    let env = Env::new();
+    common::write_config(&env, "timeout = 1\n");
+
+    let started = std::time::Instant::now();
+    let out = exec(&env, &["sleep", "3"]);
+
+    assert_eq!(out["outcome"], "timed_out", "{out}");
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(3),
+        "the file's deadline fired rather than the built-in one: took {:?}",
+        started.elapsed()
+    );
+}
+
+#[test]
+fn the_environments_deadline_bounds_the_command_too() {
+    let env = Env::new();
+    let assert = env
+        .cmd()
+        .env("SINDRI_TIMEOUT", "1")
+        .args(["sandbox", "exec", "--", "sleep", "3"])
+        .assert()
+        .success();
+
+    assert_eq!(read(assert)["outcome"], "timed_out");
+}
+
+#[test]
+fn a_deadline_written_before_the_subcommand_bounds_the_command() {
+    let out = outcome(&Env::new(), &["--timeout", "1"], &[], &["sleep", "3"]);
+
+    assert_eq!(
+        out["outcome"], "timed_out",
+        "a flag the subcommand does not repeat is still the invocation's: {out}"
+    );
+}
+
+#[test]
+fn a_deadline_written_after_the_subcommand_wins_where_it_is_written() {
+    let env = Env::new();
+    // The one before the subcommand is the invocation's; the one after it is
+    // the nearer of the two, and a repeated flag replaces rather than adds.
+    let out = outcome(
+        &env,
+        &["--timeout", "1"],
+        &["--timeout", "30"],
+        &["bash", "-c", "sleep 2; echo done"],
+    );
+    assert_eq!(
+        out["outcome"], "exited",
+        "the nearer deadline ran it: {out}"
+    );
+    assert_eq!(out["stdout"], "done\n");
+
+    let out = outcome(
+        &env,
+        &["--timeout", "30"],
+        &["--timeout", "1"],
+        &["sleep", "3"],
+    );
+    assert_eq!(
+        out["outcome"], "timed_out",
+        "and it wins the other way round as well: {out}"
+    );
+}
+
+#[test]
 fn a_missing_binary_is_a_command_failure_not_a_sandbox_failure() {
     let env = Env::new();
     let out = exec(&env, &["bash", "-c", "sindri-no-such-binary"]);
@@ -286,6 +368,50 @@ fn a_deadline_beyond_the_cap_is_a_usage_error() {
         .code(2)
         .stdout(predicates::str::is_empty())
         .stderr(predicates::str::contains("3600"));
+}
+
+#[test]
+fn a_deadline_out_of_range_is_refused_whichever_place_named_it() {
+    // The one line a run prints for the same value, and one exit code: a shell
+    // that branches on it must not have to know which front end it asked.
+    let want = "sindri: timeout must be between 1 and 3600 seconds, got 0\n";
+
+    let from_file = Env::new();
+    common::write_config(&from_file, "timeout = 0\n");
+    from_file
+        .cmd()
+        .args(["sandbox", "exec", "--", "echo", "hi"])
+        .assert()
+        .code(2)
+        .stdout(predicates::str::is_empty())
+        .stderr(want);
+
+    Env::new()
+        .cmd()
+        .env("SINDRI_TIMEOUT", "0")
+        .args(["sandbox", "exec", "--", "echo", "hi"])
+        .assert()
+        .code(2)
+        .stdout(predicates::str::is_empty())
+        .stderr(want);
+
+    Env::new()
+        .cmd()
+        .args(["--timeout", "0", "sandbox", "exec", "--", "echo", "hi"])
+        .assert()
+        .code(2)
+        .stdout(predicates::str::is_empty())
+        .stderr(want);
+
+    // The spelling the issue keeps working, and the fourth place a value can
+    // come from: refused in the run's own words as well.
+    Env::new()
+        .cmd()
+        .args(["sandbox", "exec", "--timeout", "0", "--", "echo", "hi"])
+        .assert()
+        .code(2)
+        .stdout(predicates::str::is_empty())
+        .stderr(want);
 }
 
 #[test]

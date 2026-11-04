@@ -75,7 +75,9 @@ file or a pipe is written nothing. `status = false`, or `SINDRI_STATUS=off`, sil
 | `3` | sandbox or setup failure | | |
 
 `sindri sandbox exec` reports the *sandbox* instead: `0` for any outcome, `3` when the
-sandbox failed, the command's own status only in the JSON.
+sandbox failed, the command's own status only in the JSON. Its command runs under the same
+command timeout a run gives a call — the file, then `SINDRI_TIMEOUT`, then `--timeout` — and
+a `--timeout` written after `exec` wins where it is written.
 
 ## JSON for scripts
 

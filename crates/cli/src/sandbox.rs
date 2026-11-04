@@ -4,6 +4,8 @@
 //! Its exit status reports whether the *sandbox* worked: 0 whenever an outcome
 //! was produced, 3 when the sandbox itself failed. The command's own status is
 //! in the JSON, and only there — that is the whole point of the outcome.
+//! The timeout it runs under is the resolved setting and never a number of this
+//! front end's own, so the command is bounded by the one a run would be given.
 
 use std::time::{Duration, Instant};
 
@@ -21,21 +23,22 @@ use crate::{failure, notice, signal};
 /// Runs the command and prints one JSON object describing what happened. A
 /// session is opened the one way a run opens one, so a diagnostic cannot probe a
 /// different sandbox than the run it is diagnosing.
-pub fn exec(timeout: Duration, overrides: Overrides, command: &[String]) -> i32 {
+pub fn exec(overrides: Overrides, command: &[String]) -> i32 {
     let configured = match boot::configure(overrides) {
         Ok(configured) => configured,
         Err(failure) => return failure.report(),
     };
     notice::unsafe_run(configured.config.enforcement);
-    let session = match configured.start() {
-        Ok(boot) => boot.session,
+    let boot = match configured.start() {
+        Ok(boot) => boot,
         Err(failure) => return failure.report(),
     };
+    let session = boot.session;
 
     let script = shell_join(command);
     let cancel = Cancel::new();
     signal::install(cancel.clone());
-    let executor = session.executor(timeout, cancel);
+    let executor = session.executor(boot.config.timeout, cancel);
     let started = Instant::now();
     let result = executor.execute(&script);
     // The session ends whatever the command did: a record left saying `running`

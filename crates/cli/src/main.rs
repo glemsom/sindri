@@ -148,9 +148,11 @@ enum SessionsCommand {
 enum SandboxCommand {
     /// Run a command inside the sandbox and print what it wrote.
     Exec {
-        /// How long the command may run, in seconds (1–3600).
-        #[arg(long, default_value_t = sindri_core::exec::DEFAULT_TIMEOUT_SECS)]
-        timeout: u64,
+        /// How long the command may run, in seconds (1–3600). Left out, the
+        /// resolved setting decides: the config file, then the environment,
+        /// then a `--timeout` written before the subcommand.
+        #[arg(long, value_name = "SECONDS")]
+        timeout: Option<u64>,
         /// The command and its arguments, after `--`: everything that follows
         /// belongs to the command.
         #[arg(last = true, required = true, num_args = 1..)]
@@ -179,10 +181,7 @@ fn main() {
         },
         Some(Command::Sandbox {
             command: SandboxCommand::Exec { timeout, command },
-        }) => match sindri_core::exec::timeout_from_secs(timeout) {
-            Ok(timeout) => sandbox::exec(timeout, policy_only(&overrides), &command),
-            Err(message) => failure::usage_error(&message),
-        },
+        }) => sandbox::exec(exec_overrides(&overrides, timeout), &command),
         None => match cli.batch {
             Some(prompt) => batch::run(
                 prompt,
@@ -245,6 +244,18 @@ fn policy_only(overrides: &Overrides) -> Overrides {
         writable: overrides.writable.clone(),
         extra_headers: None,
         yolo_unsafe: overrides.yolo_unsafe,
+    }
+}
+
+/// `sandbox exec`'s narrowing: the policy-only set with the one dial this front
+/// end owns folded back in. A `--timeout` written after the subcommand is the
+/// nearer of the two, so it wins over the same flag written before it;
+/// otherwise the resolved setting decides in `precedence`'s order. `doctor`
+/// takes no timeout, which is why the fold is here and not in `policy_only`.
+fn exec_overrides(overrides: &Overrides, after: Option<u64>) -> Overrides {
+    Overrides {
+        timeout: after.or(overrides.timeout),
+        ..policy_only(overrides)
     }
 }
 
@@ -396,8 +407,32 @@ mod tests {
         assert_eq!(overrides.model, None);
         assert_eq!(overrides.base_url, None);
         assert_eq!(overrides.max_turns, None);
-        assert_eq!(overrides.timeout, None);
+        assert_eq!(
+            overrides.timeout, None,
+            "`doctor` takes no timeout; `sandbox exec` folds its own back in"
+        );
         assert_eq!(overrides.thinking, None);
         assert_eq!(overrides.extra_headers, None);
+    }
+
+    #[test]
+    fn the_exec_front_end_takes_the_deadline_written_nearest_to_it() {
+        let before = cli(&["--timeout", "9"]).overrides();
+
+        assert_eq!(
+            exec_overrides(&before, None).timeout,
+            Some(9),
+            "the flag written before the subcommand is the invocation's"
+        );
+        assert_eq!(
+            exec_overrides(&before, Some(1)).timeout,
+            Some(1),
+            "and the one written after it is nearer still"
+        );
+        assert_eq!(
+            exec_overrides(&Overrides::default(), None).timeout,
+            None,
+            "with neither written, nothing is overridden: the setting decides"
+        );
     }
 }
