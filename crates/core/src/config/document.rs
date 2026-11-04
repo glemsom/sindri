@@ -61,6 +61,11 @@ struct Spec {
     /// `Space` on it and says which of them the field means: the row and the
     /// keypress read the one flag rather than a second list of the toggles.
     toggled: bool,
+    /// A key of lines is a value that is a list rather than one word — the
+    /// headers, one `Name: value` per line — so the row is as tall as the list
+    /// it holds and a paste of the clipboard's lines is the list and not one
+    /// run of them.
+    lines: bool,
     /// The text a field starts with, whatever the file says: the run's own
     /// default, which is nothing for every key but the writable paths — a key
     /// whose default is a value the form must show rather than one it may
@@ -86,6 +91,7 @@ const SPECS: [Spec; N_KEYS] = [
         name: "provider",
         secret: false,
         toggled: false,
+        lines: false,
         start: || String::new(),
         empty_is_a_value: false,
         get: |values| values.provider.clone(),
@@ -100,6 +106,7 @@ const SPECS: [Spec; N_KEYS] = [
         name: "model",
         secret: false,
         toggled: false,
+        lines: false,
         start: || String::new(),
         empty_is_a_value: false,
         get: |values| values.model.clone(),
@@ -114,6 +121,7 @@ const SPECS: [Spec; N_KEYS] = [
         name: "base_url",
         secret: false,
         toggled: false,
+        lines: false,
         start: || String::new(),
         empty_is_a_value: false,
         get: |values| values.base_url.clone(),
@@ -128,6 +136,7 @@ const SPECS: [Spec; N_KEYS] = [
         name: "api_key",
         secret: true,
         toggled: false,
+        lines: false,
         start: || String::new(),
         empty_is_a_value: false,
         get: |values| values.api_key.as_ref().map(|_| String::new()),
@@ -142,6 +151,7 @@ const SPECS: [Spec; N_KEYS] = [
         name: "max_turns",
         secret: false,
         toggled: false,
+        lines: false,
         start: || String::new(),
         empty_is_a_value: false,
         get: |values| values.max_turns.map(|turns| turns.to_string()),
@@ -156,6 +166,7 @@ const SPECS: [Spec; N_KEYS] = [
         name: "timeout",
         secret: false,
         toggled: false,
+        lines: false,
         start: || String::new(),
         empty_is_a_value: false,
         get: |values| values.timeout.map(|seconds| seconds.to_string()),
@@ -170,6 +181,7 @@ const SPECS: [Spec; N_KEYS] = [
         name: "thinking",
         secret: false,
         toggled: true,
+        lines: false,
         start: || String::new(),
         empty_is_a_value: false,
         get: |values| values.thinking.map(|on| on.to_string()),
@@ -184,6 +196,7 @@ const SPECS: [Spec; N_KEYS] = [
         name: "status",
         secret: false,
         toggled: true,
+        lines: false,
         start: || String::new(),
         empty_is_a_value: false,
         get: |values| values.status.map(|on| on.to_string()),
@@ -198,6 +211,7 @@ const SPECS: [Spec; N_KEYS] = [
         name: "ssh_agent",
         secret: false,
         toggled: true,
+        lines: false,
         start: || String::new(),
         empty_is_a_value: false,
         get: |values| values.ssh_agent.map(|on| on.to_string()),
@@ -212,6 +226,7 @@ const SPECS: [Spec; N_KEYS] = [
         name: "extra_writable_paths",
         secret: false,
         toggled: false,
+        lines: false,
         // The row starts at the floor, so a blank row never stands for the
         // four mounts a run with nothing configured would really make.
         start: floor_text,
@@ -236,8 +251,12 @@ const SPECS: [Spec; N_KEYS] = [
     Spec {
         key: Key::ExtraHeaders,
         name: "extra_headers",
-        secret: true,
+        // A header is not a credential: the row shows the table the file holds,
+        // one `Name: value` per line, and the values are handed back like any
+        // other row's — the file is where they live either way.
+        secret: false,
         toggled: false,
+        lines: true,
         start: || String::new(),
         empty_is_a_value: false,
         get: |values| {
@@ -245,7 +264,13 @@ const SPECS: [Spec; N_KEYS] = [
                 .extra_headers
                 .as_ref()
                 .filter(|headers| !headers.is_empty())
-                .map(|_| String::new())
+                .map(|headers| {
+                    headers
+                        .iter()
+                        .map(|(name, value)| format!("{name}: {value}"))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                })
         },
         clear: |values| values.extra_headers = None,
         put: |values, value| {
@@ -291,6 +316,13 @@ impl Key {
     /// says which of them the field means. The row is the only list of them.
     pub fn toggled(self) -> bool {
         self.spec().toggled
+    }
+
+    /// Whether the value is a list of lines rather than one word: the headers,
+    /// one `Name: value` each. A row of lines is as tall as the list it holds,
+    /// and a paste into it keeps the clipboard's breaks.
+    pub fn lines(self) -> bool {
+        self.spec().lines
     }
 }
 
@@ -424,8 +456,8 @@ fn paths(value: &str) -> Result<Vec<PathBuf>, ConfigError> {
 
 /// Headers, as `Name: value` entries, one per line. A `;` is not a separator:
 /// it is legal inside a value (`Cookie: a=1; b=2`), and a value the table in
-/// the file carries whole is not cut in two here. The values are secrets: an
-/// error names the position, never the text.
+/// the file carries whole is not cut in two here. An error names the entry's
+/// position and never the line, which may still be one worth keeping quiet.
 fn headers(value: &str) -> Result<BTreeMap<String, String>, ConfigError> {
     let lines: Vec<String> = value
         .split('\n')

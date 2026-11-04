@@ -563,9 +563,14 @@ impl Settings {
     /// that a run would be asked on is a value typed one letter at a time and
     /// not a key a row holds nothing for. It is ranked again once it has
     /// landed, so the names under the model row are the fragment's the frame
-    /// after it, exactly as `key` leaves them.
+    /// after it, exactly as `key` leaves them. A row of lines keeps the
+    /// clipboard's breaks, because there one line is one header and dropping
+    /// them would paste two headers as one value.
     pub fn paste(&mut self, text: &str, served: &Served) -> bool {
-        let text = one_line(text);
+        let text = match self.chosen_key().is_some_and(Key::lines) {
+            true => whole(text),
+            false => one_line(text),
+        };
         if text.is_empty() {
             return false;
         }
@@ -654,6 +659,14 @@ pub(crate) fn one_line(text: &str) -> String {
     text.chars()
         .filter(|ch| *ch != '\n' && *ch != '\r')
         .collect()
+}
+
+/// What a paste is on a row that holds a list of lines: the breaks kept, since
+/// one line is one entry there, and the trailing whitespace a copied block
+/// carries dropped, so a buffer ending in a line ending is its lines and
+/// nothing else. `\r` goes with it: a row and a file carry one line ending.
+pub(crate) fn whole(text: &str) -> String {
+    text.trim_end().replace('\r', "")
 }
 
 /// The fragment typed in a row: the list under a row is ranked off that row's

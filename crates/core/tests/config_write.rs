@@ -63,10 +63,16 @@ fn every_key_the_schema_names_is_written_and_reads_back() {
 
     let written = text(&path);
     for (key, value) in values {
-        assert!(
-            key.secret() || written.contains(value),
-            "{key:?} is in the file: {written}"
-        );
+        // A key of lines is a table, so the row's `Name: value` is not one
+        // string in the file: TOML writes the name on the left of its own
+        // line and the value on the right, and both halves are what it holds.
+        let held = match key {
+            Key::ExtraHeaders => value.split_once(':').is_some_and(|(name, rest)| {
+                written.contains(name.trim()) && written.contains(rest.trim())
+            }),
+            _ => written.contains(value),
+        };
+        assert!(key.secret() || held, "{key:?} is in the file: {written}");
         assert!(
             written.contains(key.name()),
             "{} is named: {written}",
@@ -80,6 +86,44 @@ fn every_key_the_schema_names_is_written_and_reads_back() {
     assert_eq!(reread.editable(Key::Thinking), "true");
     assert_eq!(reread.editable(Key::ExtraWritablePaths), "/usr/share");
     assert_eq!(reread.editable(Key::MaxTurns), "40");
+    assert_eq!(
+        reread.editable(Key::ExtraHeaders),
+        "x-session: gateway, x-route: other"
+    );
+}
+
+#[test]
+fn a_header_is_no_secret_and_the_row_holds_the_table_one_line_at_a_time() {
+    // A gateway's header is not a credential: the row the modal draws hands
+    // back what the file holds, as the `Name: value` lines the environment
+    // spells them by, so a reader can see which headers a run would send.
+    let (_dir, path, mut document) = document(None);
+
+    assert!(
+        !Key::ExtraHeaders.secret(),
+        "a header's value is not a credential and is never masked"
+    );
+    assert!(
+        Key::ExtraHeaders.lines(),
+        "one header is one line of the row"
+    );
+    assert_eq!(
+        document.editable(Key::ExtraHeaders),
+        "",
+        "an unset table sets no header, so the row says nothing"
+    );
+
+    document
+        .set(Key::ExtraHeaders, "x-route: beta\nx-session: a-session")
+        .expect("the form accepts two headers, one per line");
+    document.save().expect("the file is written");
+
+    let reread = Document::load_at(&path).expect("the file parses");
+    assert_eq!(
+        reread.editable(Key::ExtraHeaders),
+        "x-route: beta\nx-session: a-session",
+        "the row holds the headers the file holds, one per line"
+    );
 }
 
 #[test]

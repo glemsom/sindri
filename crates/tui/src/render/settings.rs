@@ -134,6 +134,9 @@ pub fn draw(settings: &Settings, served: &Served, area: Rect, buf: &mut Buffer) 
     // wraps and the modal grows, and when it still does not fit, it grows no
     // further than the terminal and the list scrolls instead.
     let rows = settings.fields().len();
+    // A row is as tall as the value it holds: the headers row is one line per
+    // header, and every other row is the one line it always was.
+    let value_lines: usize = settings.fields().iter().map(tall).sum();
     // The list stands under the row that offers words — the model row's names,
     // the provider row's wires — and only there: the box is sized for it, so the
     // keys below are never the rows a list pushes off.
@@ -141,7 +144,7 @@ pub fn draw(settings: &Settings, served: &Served, area: Rect, buf: &mut Buffer) 
         true => settings.list().len(),
         false => 0,
     };
-    let wanted = head.len() + rows + list_rows + foot.len() + 2;
+    let wanted = head.len() + value_lines + list_rows + foot.len() + 2;
     let height = (wanted as u16).min(area.height);
     // The refusal and the keys are never the rows that fall off: when the
     // pinned rows need more room than the box has, the head is what gives way
@@ -168,18 +171,25 @@ pub fn draw(settings: &Settings, served: &Served, area: Rect, buf: &mut Buffer) 
             .saturating_sub(listed),
     };
     let to = (from + listed).min(list_rows);
-    let fielded = body.saturating_sub(listed);
-    let first = settings.chosen().saturating_add(1).saturating_sub(fielded);
-    let last = rows.min(first + fielded);
+    let (first, last) = window(
+        settings.fields(),
+        settings.chosen(),
+        body.saturating_sub(listed),
+    );
 
     let mut lines = head;
     for (offset, field) in settings.fields()[first..last].iter().enumerate() {
         let chosen = first + offset == settings.chosen();
-        let line = row(settings, served, field, columns);
-        lines.push(match chosen {
-            true => line.patch_style(Style::new().add_modifier(Modifier::REVERSED)),
-            false => line,
-        });
+        // A row is one line per line of its value, so the reverse that marks
+        // the row with the cursor covers every line of it.
+        lines.extend(
+            row(settings, served, field, columns)
+                .into_iter()
+                .map(|line| match chosen {
+                    true => line.patch_style(Style::new().add_modifier(Modifier::REVERSED)),
+                    false => line,
+                }),
+        );
         if chosen {
             lines.extend(list_lines(settings.list(), columns, from, to));
         }
@@ -249,10 +259,14 @@ fn cells(text: &str) -> usize {
         .sum()
 }
 
-fn row(settings: &Settings, served: &Served, field: &Field, columns: usize) -> Line<'static> {
+fn row(settings: &Settings, served: &Served, field: &Field, columns: usize) -> Vec<Line<'static>> {
     let label = format!("{:<LABEL$}", clip(field.key.name(), LABEL));
-    let (shown, style) = value(settings, field);
-    let shown = clip(&shown, columns.saturating_sub(LABEL));
+    let (held, style) = value(settings, field);
+    let mut held = held.lines();
+    let shown = clip(
+        held.next().unwrap_or_default(),
+        columns.saturating_sub(LABEL),
+    );
     let mut spans = vec![Span::styled(label, theme::faint())];
     // What the wire said about its own names, on the row of the name this run
     // holds and after it: faint, because it is a hint about the wire and not a
@@ -276,7 +290,47 @@ fn row(settings: &Settings, served: &Served, field: &Field, columns: usize) -> L
     if !note.is_empty() {
         spans.push(Span::styled(note, theme::faint()));
     }
-    Line::from(spans)
+    // The rest of a value that is a list of lines — the headers, one per line —
+    // under the row and in the value's own column, so the list reads as one
+    // list rather than as a row and a second row's name.
+    let mut lines = vec![Line::from(spans)];
+    lines.extend(held.map(|line| {
+        let said = format!(
+            "{}{}",
+            " ".repeat(LABEL),
+            clip(line, columns.saturating_sub(LABEL))
+        );
+        Line::from(Span::styled(said, style))
+    }));
+    lines
+}
+
+/// The lines a row takes: one per line of the value it holds. Only the headers
+/// hold more than one, and a row that holds nothing is still a row.
+fn tall(field: &Field) -> usize {
+    field.text.lines().count().max(1)
+}
+
+/// The rows a body of `room` lines shows: the row with the cursor and as many
+/// of its neighbours as fit, walked back first so the chosen row is on screen
+/// however far past the fold it is. The count is in lines and the answer is
+/// still a range of rows, because a row is as tall as the value it holds.
+fn window(fields: &[Field], chosen: usize, room: usize) -> (usize, usize) {
+    if room == 0 {
+        return (chosen + 1, chosen + 1);
+    }
+    let mut used = tall(&fields[chosen]);
+    let mut first = chosen;
+    while first > 0 && used + tall(&fields[first - 1]) <= room {
+        first -= 1;
+        used += tall(&fields[first]);
+    }
+    let mut last = chosen + 1;
+    while last < fields.len() && used + tall(&fields[last]) <= room {
+        used += tall(&fields[last]);
+        last += 1;
+    }
+    (first, last)
 }
 
 /// The list under the model row: the names the fragment reaches, nearest first,
@@ -325,10 +379,6 @@ fn value(settings: &Settings, field: &Field) -> (String, Style) {
             )
         }
         Key::ApiKey if typed.is_empty() => ("from environment".to_string(), theme::faint()),
-        Key::ExtraHeaders if typed.is_empty() && settings.document().is_set(field.key) => (
-            "•••• set in the file (values hidden)".to_string(),
-            theme::faint(),
-        ),
         // A toggle the file does not name says so rather than pretending the
         // file said it, and `thinking` names the default it falls back to: off.
         Key::Thinking if typed.is_empty() => {

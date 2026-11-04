@@ -62,7 +62,9 @@ timeout = 120
 # Headers every provider request carries, for a gateway that routes on one of its
 # own. Optional: absent, no header is added. SINDRI_EXTRA_HEADERS takes the same
 # headers as `Name: value` lines, `--header` one per flag, and the level that
-# names any replaces the rest. Never printed and never recorded.
+# names any replaces the rest. The values are no secret: `/settings` draws the
+# table one `Name: value` per line, and a paste there takes the same lines back.
+# Nothing else prints them and they are never recorded.
 #
 # It is the one setting that is a table, so it comes last: in TOML every key after
 # a table header belongs to that table. The line below is a placeholder: name your
