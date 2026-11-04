@@ -1,8 +1,8 @@
 //! The composer's border as a terminal is sent it: rounded glyphs, four sides,
-//! walked from the panel's ink at the left to the seam's at the right. The
-//! assertions are on the cells a reader sees — the corners that close the frame,
-//! the step each column takes, and the ink at either end — and never on a
-//! screenshot.
+//! walked from the panel's ink at the left to the seam's at the right, with the
+//! ` prompt ` title spliced into the top rule as the word it is. The assertions
+//! are on the cells a reader sees — the corners that close the border, the step
+//! each column takes, and the ink at either end — and never on a screenshot.
 
 use super::*;
 
@@ -45,7 +45,7 @@ fn channel(colour: Color, at: usize) -> i16 {
     }
 }
 
-/// Every side of the frame walked from `from` at its left-hand end to the
+/// Every side of the border walked from `from` at its left-hand end to the
 /// seam's at its right-hand one, one small step at a time: what the effect is,
 /// asserted where a reader would see it.
 fn walked(buf: &Buffer, from: Color) {
@@ -74,19 +74,19 @@ fn walked(buf: &Buffer, from: Color) {
             "and the right vertical is the far end on row {y}"
         );
     }
-    // The top rule walked one step a column, and slowly: the red channel is the
-    // one the two stops are furthest apart in, and a column that jumped a tenth
-    // of the way would read as two borders rather than as one light.
+    // The walk's law is read where the rule is drawn whole: the bottom rule,
+    // one cell a column from the near end to the far one, and slowly. The red
+    // channel is the one the two stops are furthest apart in, so a column that
+    // jumped a tenth of the way would read as two borders rather than as one
+    // light — and a column that is no rule at all is a hole in the border.
     let mut previous = channel(from, 0);
-    for x in area.x..area.right() {
-        let cell = &buf[(x, area.y)];
-        if !matches!(cell.symbol(), "─" | "╭" | "╮") {
-            continue;
-        }
+    for x in area.x + 1..area.right() - 1 {
+        let cell = &buf[(x, area.bottom() - 1)];
+        assert_eq!(cell.symbol(), "─", "the bottom rule holds at column {x}");
         assert!(
             theme::owns(cell.fg),
             "({x}, {}) is walked off the theme's segments: {:?}",
-            area.y,
+            area.bottom() - 1,
             cell.fg
         );
         let step = channel(cell.fg, 0) - previous;
@@ -96,17 +96,37 @@ fn walked(buf: &Buffer, from: Color) {
         );
         previous = channel(cell.fg, 0);
     }
-    // The bottom rule is the same walk: a frame lit on one side only is a frame
-    // with a shadow under it.
+    // The top rule is that same walk, so the two rules meet cell for cell — a
+    // border lit on one side only is a border with a shadow under it — apart
+    // from the columns the ` prompt ` title takes, which are the word's own and
+    // are drawn in the panel's ink rather than as a step of the walk.
+    for x in area.x + 1..area.right() - 1 {
+        let cell = &buf[(x, area.y)];
+        if cell.symbol() != "─" {
+            assert_eq!(
+                cell.fg, from,
+                "({x}, {}) leaves the top rule for the panel's ink, and the title is the only thing that leaves it",
+                area.y
+            );
+            continue;
+        }
+        assert_eq!(
+            cell.fg,
+            buf[(x, area.bottom() - 1)].fg,
+            "the top rule steps with the bottom one at column {x}"
+        );
+    }
+    // And both corners of the bottom rule close on the walk's two ends: a
+    // bottom rule that kept one ink would be the shadow this is looking for.
     assert_eq!(
-        buf[(area.x + 1, area.bottom() - 1)].fg,
-        buf[(area.x + 1, area.y)].fg,
-        "the bottom rule steps with the top one"
+        buf[(area.x, area.bottom() - 1)].fg,
+        from,
+        "the bottom left corner closes in the ink the walk left from"
     );
     assert_eq!(
-        buf[(area.right() - 2, area.bottom() - 1)].fg,
-        buf[(area.right() - 2, area.y)].fg,
-        "at both ends, and every column between"
+        buf[(area.right() - 1, area.bottom() - 1)].fg,
+        theme::SEAM,
+        "and the bottom right corner in the seam's"
     );
 }
 
