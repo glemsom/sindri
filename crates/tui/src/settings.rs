@@ -22,8 +22,19 @@
 //! it, once the row is whole — a keystroke there is a draft and asks nothing —
 //! so the list a human is offered and the list a run at that address would be
 //! served are one answer.
+//!
+//! Every row is one field (`row`): a value, a cursor in it and what a save makes
+//! of it, so a keystroke means the same thing in the address, the model name,
+//! the header table and a secret. `←→`, `Home` and `End` move that cursor inside
+//! the row, a typed character lands at it, `Backspace` and `Delete` take the
+//! cells either side of it and a paste lands there; `↑↓`, `Tab` and `BackTab`
+//! walk the rows, and a row nobody has typed in still writes nothing. A narrow
+//! row is scrolled to the cursor when it is drawn, so the field holds no
+//! scroll of its own.
 
 mod list;
+mod missing;
+mod row;
 mod served;
 
 use std::path::Path;
@@ -35,6 +46,9 @@ use crate::overlay::Overlay;
 use crate::rail::Launch;
 
 pub use list::List;
+pub use missing::Missing;
+pub use row::{Edit, Field};
+pub(crate) use row::{one_line, whole};
 pub use served::{Served, Serving};
 
 /// What one key did to the modal: the four things it can ask for, and the two
@@ -49,160 +63,6 @@ pub enum Outcome {
     Save,
     Quit,
     CancelRun,
-}
-
-#[derive(Debug, Clone)]
-pub struct Field {
-    pub key: Key,
-    pub text: String,
-    /// What a save makes of this field. An untouched field is written as
-    /// nothing — a secret the file holds is never handed back, so writing one
-    /// empty would erase it — and an empty field is two things rather than
-    /// one: the value it does not hold, and the absence `Ctrl-U` makes of it.
-    pub edit: Edit,
-}
-
-/// What one save does with one field, so two flags cannot disagree about it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Edit {
-    /// No keystroke has been in this field: the file keeps what it had.
-    Untouched,
-    /// The field's text is the value, the empty one included — which for the
-    /// writable paths is the explicit `[]`, and not the floor.
-    Value,
-    /// `Ctrl-U`: the key leaves the file, so the environment or the run's
-    /// default speaks instead — the shipped floor, for the writable paths.
-    Unset,
-}
-
-/// What the front door found absent when it opened the frame itself: the run
-/// has no credential, or no model, or neither — and the words for that absence,
-/// which the transcript, the composer and a refused prompt each read. It holds
-/// no value: the modal says where a key comes from, never what one is.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Missing {
-    /// The wire the run speaks: its variable is where the credential comes
-    /// from, and a local server needs none.
-    provider: Provider,
-    /// Whether the credential is one of the absent rows.
-    key: bool,
-    /// Whether the model is.
-    model: bool,
-    /// What the transcript has the reader type: the row, and every variable
-    /// that sets it.
-    ways: String,
-    /// The same variables in the room the composer has, one row: it leaves the
-    /// model to `/settings`.
-    composer: String,
-    /// What `/settings` does for it: `saves one`, `names one`, `sets both`.
-    acted: &'static str,
-}
-
-impl Missing {
-    /// What a resolved config could not find, when it found all of it: `None`
-    /// is a run that can send a prompt, and there is nothing to say. The two
-    /// flags are the one `match` on an absence, and they are kept, so the words
-    /// a reader sees and the rows they describe are read off the same pair.
-    pub fn of(provider: Provider, key: bool, model: bool) -> Option<Missing> {
-        if !key && !model {
-            return None;
-        }
-        let key_vars = Self::key_vars_for(provider);
-        let (ways, composer, acted) = match (key, model) {
-            (true, false) => (
-                format!("one in the settings modal, or set {key_vars}"),
-                key_vars,
-                "saves one",
-            ),
-            (false, true) => (
-                "one in the settings modal, or set SINDRI_MODEL".to_string(),
-                "SINDRI_MODEL".to_string(),
-                "names one",
-            ),
-            _ => (
-                format!("them in the settings modal, or set {key_vars} and SINDRI_MODEL"),
-                key_vars,
-                "sets both",
-            ),
-        };
-        Some(Missing {
-            provider,
-            key,
-            model,
-            ways,
-            composer,
-            acted,
-        })
-    }
-
-    /// The credential's two variables, in the wire's own terms: the one fact
-    /// every sentence about a missing key has to say, spelled once.
-    pub fn key_vars(&self) -> String {
-        Self::key_vars_for(self.provider)
-    }
-
-    fn key_vars_for(provider: Provider) -> String {
-        format!("SINDRI_API_KEY or {}", provider.api_key_env())
-    }
-
-    /// The absence in words: `no key`, `no model`, `no key and no model` —
-    /// read off the two flags rather than stored beside them, so the words and
-    /// the rows they describe cannot drift apart. `of` never builds the pair
-    /// with neither, which is why the last arm is the both-absent one.
-    fn what(&self) -> &'static str {
-        match (self.key, self.model) {
-            (true, false) => "no key",
-            (false, true) => "no model",
-            _ => "no key and no model",
-        }
-    }
-
-    /// Whether the credential is one of the absent rows: what the modal's key
-    /// row says, and what the composer cannot do.
-    pub fn wants_key(&self) -> bool {
-        self.key
-    }
-
-    /// The row the modal opens on: the key when there is none, because a run
-    /// with no credential is the failure a frame answers with a field.
-    pub fn row(&self) -> Key {
-        if self.key { Key::ApiKey } else { Key::Model }
-    }
-
-    /// The transcript's one line: what is absent and every way to set it —
-    /// said once, when the frame opens, and never on a frame.
-    pub fn said(&self) -> String {
-        format!("{}: type {}", self.what(), self.ways)
-    }
-
-    /// What the composer says where the prompt would be: a run with no key
-    /// cannot send one, and the frame says why rather than pretending.
-    pub fn composer(&self) -> String {
-        format!(
-            "{} · a prompt cannot be sent · /settings, or set {}",
-            self.what(),
-            self.composer
-        )
-    }
-
-    /// A prompt sent anyway: the draft stays where it was, and this is the one
-    /// line the transcript gets for the keystroke.
-    pub fn refused(&self) -> String {
-        format!(
-            "not sent: this run has {} — /settings {}",
-            self.what(),
-            self.acted
-        )
-    }
-
-    /// What is still absent once a save has landed: a row the file now carries
-    /// is filled in, and the rest is not. A key in the environment is not this
-    /// frame's to see, so the file is what a save can answer for.
-    pub fn satisfied(&self, document: &Document) -> Option<Missing> {
-        let key = self.key && !document.is_set(Key::ApiKey);
-        let model = self.model && !document.is_set(Key::Model);
-        Missing::of(self.provider, key, model)
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -267,11 +127,7 @@ impl Settings {
     pub fn at(document: Document) -> Settings {
         let fields = KEYS
             .iter()
-            .map(|key| Field {
-                key: *key,
-                text: document.editable(*key),
-                edit: Edit::Untouched,
-            })
+            .map(|key| Field::new(*key, document.editable(*key)))
             .collect();
         Settings {
             document,
@@ -357,7 +213,12 @@ impl Settings {
             },
             KeyCode::Up | KeyCode::BackTab if self.step_match(true) => Outcome::Staying,
             KeyCode::Down if self.step_match(false) => Outcome::Staying,
-            KeyCode::Tab | KeyCode::Right if self.take_match(served) => Outcome::Staying,
+            KeyCode::Tab if self.take_match(served) => Outcome::Staying,
+            KeyCode::Left | KeyCode::Right | KeyCode::Home | KeyCode::End
+                if self.slide(key.code) =>
+            {
+                Outcome::Staying
+            }
             KeyCode::Up | KeyCode::BackTab => {
                 self.focus(false);
                 Outcome::Staying
@@ -374,6 +235,10 @@ impl Settings {
             }
             KeyCode::Backspace => {
                 self.backspace();
+                Outcome::Staying
+            }
+            KeyCode::Delete => {
+                self.delete();
                 Outcome::Staying
             }
             KeyCode::Char(' ') if self.flip() => Outcome::Staying,
@@ -468,7 +333,7 @@ impl Settings {
             return false;
         };
         self.list.close();
-        self.edit(Edit::Value, |field| field.text = name);
+        self.edit(Edit::Value, |field| field.set(name));
         true
     }
 
@@ -480,9 +345,10 @@ impl Settings {
         self.offering() && self.list.step(up)
     }
 
-    /// `Tab` or `→`: the match the list is on, in the field. It is written on
-    /// save like a typed name, because the row's text is the value and the list
-    /// is only what the fragment reaches.
+    /// `Tab`: the match the list is on, in the field. It is written on save
+    /// like a typed name, because the row's text is the value and the list is
+    /// only what the fragment reaches. `→` is the cursor's, so a row with names
+    /// under it keeps its way to the cell the next character lands on.
     fn take_match(&mut self, served: &Served) -> bool {
         if !self.offering() {
             return false;
@@ -491,7 +357,7 @@ impl Settings {
             return false;
         };
         self.list.close();
-        self.edit(Edit::Value, |field| field.text = name);
+        self.edit(Edit::Value, |field| field.set(name));
         self.refresh(served);
         true
     }
@@ -555,7 +421,36 @@ impl Settings {
     }
 
     pub fn insert(&mut self, ch: char) {
-        self.edit(Edit::Value, |field| field.text.push(ch));
+        self.edit(Edit::Value, |field| field.insert(ch));
+    }
+
+    /// The cursor keys: `←→`, `Home` and `End` move the cursor inside the row
+    /// it is on and never between rows, because `↑↓`, `Tab` and `BackTab` are
+    /// what walk those. A move is no edit — a row nobody has typed in still
+    /// writes nothing on save — so the field's own `Edit` is left as it was.
+    /// The answer is whether the key was one of the four.
+    pub fn slide(&mut self, code: KeyCode) -> bool {
+        let Some(field) = self.fields.get_mut(self.chosen) else {
+            return false;
+        };
+        match code {
+            KeyCode::Left => field.left(),
+            KeyCode::Right => field.right(),
+            KeyCode::Home => field.home(),
+            KeyCode::End => field.end(),
+            _ => return false,
+        }
+        true
+    }
+
+    /// `Delete`: the character the cursor stands on, removed and the value
+    /// closed over it. The cursor stays on the cell it was on, which now holds
+    /// what followed — the mirror of `Backspace`, which leaves it on the cell
+    /// the removed one stood on.
+    pub fn delete(&mut self) {
+        self.edit(Edit::Value, |field| {
+            field.delete();
+        });
     }
 
     /// A paste into the row with the cursor: the clipboard's text as one edit
@@ -567,21 +462,22 @@ impl Settings {
     /// clipboard's breaks, because there one line is one header and dropping
     /// them would paste two headers as one value.
     pub fn paste(&mut self, text: &str, served: &Served) -> bool {
+        let at_end = self.fields.get(self.chosen).is_some_and(Field::at_end);
         let text = match self.chosen_key().is_some_and(Key::lines) {
-            true => whole(text),
+            true => whole(text, at_end),
             false => one_line(text),
         };
         if text.is_empty() {
             return false;
         }
-        self.edit(Edit::Value, |field| field.text.push_str(&text));
+        self.edit(Edit::Value, |field| field.insert_str(&text));
         self.refresh(served);
         true
     }
 
     pub fn backspace(&mut self) {
         self.edit(Edit::Value, |field| {
-            field.text.pop();
+            field.backspace();
         });
     }
 
@@ -590,7 +486,7 @@ impl Settings {
     /// default is the shipped floor; the other way to empty the field, one
     /// character at a time, writes the empty list, which is a value.
     pub fn clear(&mut self) {
-        self.edit(Edit::Unset, |field| field.text.clear());
+        self.edit(Edit::Unset, |field| field.clear());
     }
 
     /// A keystroke in the field with the cursor, and what a save makes of it.
@@ -608,7 +504,7 @@ impl Settings {
             _ => return false,
         };
         let text = if on { "false" } else { "true" }.to_string();
-        self.edit(Edit::Value, |field| field.text = text);
+        self.edit(Edit::Value, |field| field.set(text));
         true
     }
 
@@ -644,29 +540,15 @@ impl Settings {
 }
 
 /// Whether this keystroke only drafts the address: a character typed into the
-/// base URL row, taken back, or the row emptied. A draft asks nothing, and the
-/// listing on hand stands until the cursor leaves the row it belongs to.
+/// base URL row, taken back on either side of the cursor, or the row emptied.
+/// A draft asks nothing, and the listing on hand stands until the cursor leaves
+/// the row it belongs to.
 fn drafting(settings: &Settings, key: KeyEvent) -> bool {
-    let typing = matches!(key.code, KeyCode::Char(_) | KeyCode::Backspace);
+    let typing = matches!(
+        key.code,
+        KeyCode::Char(_) | KeyCode::Backspace | KeyCode::Delete
+    );
     typing && settings.chosen_key() == Some(Key::BaseUrl)
-}
-
-/// What a paste is on a row rather than in the composer: one line. A row of
-/// the modal is a single value — the address a wire is asked at, the credential
-/// it is asked with — so the line breaks a clipboard carries are dropped, and a
-/// buffer copied with its trailing newline is the address and nothing else.
-pub(crate) fn one_line(text: &str) -> String {
-    text.chars()
-        .filter(|ch| *ch != '\n' && *ch != '\r')
-        .collect()
-}
-
-/// What a paste is on a row that holds a list of lines: the breaks kept, since
-/// one line is one entry there, and the trailing whitespace a copied block
-/// carries dropped, so a buffer ending in a line ending is its lines and
-/// nothing else. `\r` goes with it: a row and a file carry one line ending.
-pub(crate) fn whole(text: &str) -> String {
-    text.trim_end().replace('\r', "")
 }
 
 /// The fragment typed in a row: the list under a row is ranked off that row's

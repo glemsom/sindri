@@ -9,7 +9,7 @@
 //! it offers the wires the run parses under it, the one it is on marked.
 
 use ratatui::buffer::Buffer;
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph, Widget};
@@ -29,8 +29,12 @@ const MARGIN: u16 = 4;
 const NARROW: u16 = 30;
 const WIDE: u16 = 110;
 
+/// The keys the row with the cursor takes: the arrows and the two ends of it
+/// move the cursor, the two keys either side of it erase, and `Ctrl-U` is still
+/// the one way to unsay a value. `↑↓`, `Tab` and `BackTab` walk the rows rather
+/// than the row, which is what the line says they do.
 const HINTS: &str =
-    "↑↓ move or match · Tab/→ take · PgUp/PgDn page · Ctrl-U clear · Enter save · Esc discard";
+    "←→ Home/End move · ↑↓ Tab rows · Bksp/Del erase · Ctrl-U clear · Enter save · Esc discard";
 
 /// The keys while the names stand open under the model row: the fold has taken
 /// the arrows, `Enter` and `Esc` while it stands, so the line says what they do
@@ -39,8 +43,14 @@ const FOLD_HINTS: &str =
     "↑↓ move the names · Enter take one and close · Esc close and keep the draft";
 
 /// Draws the modal and answers with the field rows its box showed, which is
-/// what a page moves the cursor by.
-pub fn draw(settings: &Settings, served: &Served, area: Rect, buf: &mut Buffer) -> usize {
+/// what a page moves the cursor by, and with the cell the cursor stands on —
+/// `None` where the row under it draws no value of its own to point at.
+pub fn draw(
+    settings: &Settings,
+    served: &Served,
+    area: Rect,
+    buf: &mut Buffer,
+) -> (usize, Option<Position>) {
     // The box is sized to what it has to say, not to a guess: the file's path
     // is the one fact it cannot shorten and still state, so a frame too narrow
     // for it at the margin the box would like gives the margin up rather than
@@ -177,32 +187,12 @@ pub fn draw(settings: &Settings, served: &Served, area: Rect, buf: &mut Buffer) 
         body.saturating_sub(listed),
     );
 
-    let mut lines = head;
-    for (offset, field) in settings.fields()[first..last].iter().enumerate() {
-        let chosen = first + offset == settings.chosen();
-        // A row is one line per line of its value, so the reverse that marks
-        // the row with the cursor covers every line of it.
-        lines.extend(
-            row(settings, served, field, columns)
-                .into_iter()
-                .map(|line| match chosen {
-                    true => line.patch_style(Style::new().add_modifier(Modifier::REVERSED)),
-                    false => line,
-                }),
-        );
-        if chosen {
-            lines.extend(list_lines(settings.list(), columns, from, to));
-        }
-    }
-    lines.extend(foot);
-
     let boxed = Rect {
         x: area.x + (area.width.saturating_sub(width)) / 2,
         y: area.y + (area.height.saturating_sub(height)) / 2,
         width,
         height,
     };
-    Clear.render(boxed, buf);
     let block = super::overlay::paged(
         "settings",
         super::overlay::More {
@@ -211,11 +201,51 @@ pub fn draw(settings: &Settings, served: &Served, area: Rect, buf: &mut Buffer) 
         },
     );
     let inner = block.inner(boxed);
+
+    let mut lines = head;
+    // Where the row being typed in stands: a cell of the box's own inside, so
+    // the terminal's cursor is drawn where the next character lands rather than
+    // hidden behind a modal that covers the composer's.
+    let mut cursor: Option<Position> = None;
+    for (offset, field) in settings.fields()[first..last].iter().enumerate() {
+        let chosen = first + offset == settings.chosen();
+        let top = lines.len();
+        let (drawn, at) = row(settings, served, field, chosen, columns);
+        // A row is one line per line of its value, so the reverse that marks
+        // the row with the cursor covers every line of it.
+        lines.extend(drawn.into_iter().map(|line| match chosen {
+            true => line.patch_style(Style::new().add_modifier(Modifier::REVERSED)),
+            false => line,
+        }));
+        if let Some(at) = at {
+            let cell = Position::new(
+                inner.x + at.column,
+                inner.y + u16::try_from(top + at.line).unwrap_or(u16::MAX),
+            );
+            // Only a cell the box actually draws: a row taller than the room it
+            // has is not a place the cursor can be put.
+            cursor = inside(inner, cell).then_some(cell);
+        }
+        if chosen {
+            lines.extend(list_lines(settings.list(), columns, from, to));
+        }
+    }
+    lines.extend(foot);
+    Clear.render(boxed, buf);
     Paragraph::new(lines)
         .style(theme::raised())
         .render(inner, buf);
     block.render(boxed, buf);
-    last - first
+    (last - first, cursor)
+}
+
+/// Whether a cell is one the box draws: the cursor is never placed on a corner
+/// or past the edge the paragraph falls off.
+fn inside(inner: Rect, at: Position) -> bool {
+    at.x >= inner.x
+        && at.x < inner.x + inner.width
+        && at.y >= inner.y
+        && at.y < inner.y + inner.height
 }
 
 /// A path is a token with places to break — its separators — and one too long
@@ -259,50 +289,168 @@ fn cells(text: &str) -> usize {
         .sum()
 }
 
-fn row(settings: &Settings, served: &Served, field: &Field, columns: usize) -> Vec<Line<'static>> {
-    let label = format!("{:<LABEL$}", clip(field.key.name(), LABEL));
-    let (held, style) = value(settings, field);
-    let mut held = held.lines();
-    let shown = clip(
-        held.next().unwrap_or_default(),
-        columns.saturating_sub(LABEL),
-    );
-    let mut spans = vec![Span::styled(label, theme::faint())];
-    // What the wire said about its own names, on the row of the name this run
-    // holds and after it: faint, because it is a hint about the wire and not a
-    // value the file carries.
-    let note = match field.key {
-        Key::Model => served.note(),
-        _ => None,
-    };
-    let room = columns.saturating_sub(LABEL + cells(&shown));
-    let note = match note {
-        Some(note) if shown.is_empty() => clip(&note, room),
-        // The separator is drawn only where something follows it: a row with no
-        // cells left for a hint ends at the value.
-        Some(note) => match clip(&note, room.saturating_sub(3)) {
-            clipped if clipped.is_empty() => String::new(),
-            clipped => format!(" · {clipped}"),
-        },
-        None => String::new(),
-    };
-    spans.push(Span::styled(shown, style));
-    if !note.is_empty() {
-        spans.push(Span::styled(note, theme::faint()));
+/// Where a row's cursor is drawn: which of the row's own lines, and which cell
+/// of the value's column — a cell of the row and never of the frame, so a box
+/// that has moved costs the cursor a move and not a recount.
+struct Cursor {
+    line: usize,
+    column: u16,
+}
+
+/// What a row draws for the field it edits: the text, the ink it is written in,
+/// and whether that text is the field's own value. A secret is drawn as a mask
+/// and a toggle as one of its two words, so neither can point at a character of
+/// the value it holds — and neither pretends to.
+struct Drawn {
+    text: String,
+    style: Style,
+    own: bool,
+}
+
+impl Drawn {
+    /// A row drawn as the value it holds, character for character.
+    fn own(text: String) -> Drawn {
+        Drawn {
+            text,
+            style: theme::plain(),
+            own: true,
+        }
     }
-    // The rest of a value that is a list of lines — the headers, one per line —
-    // under the row and in the value's own column, so the list reads as one
-    // list rather than as a row and a second row's name.
-    let mut lines = vec![Line::from(spans)];
-    lines.extend(held.map(|line| {
-        let said = format!(
-            "{}{}",
-            " ".repeat(LABEL),
-            clip(line, columns.saturating_sub(LABEL))
-        );
-        Line::from(Span::styled(said, style))
-    }));
-    lines
+
+    /// A row drawn as words of its own: a mask, a default, a toggle's two names.
+    fn said(text: impl Into<String>, style: Style) -> Drawn {
+        Drawn {
+            text: text.into(),
+            style,
+            own: false,
+        }
+    }
+}
+
+/// One field as the rows it draws, and where its cursor stands among them when
+/// the row is the one the keys are typing in.
+fn row(
+    settings: &Settings,
+    served: &Served,
+    field: &Field,
+    chosen: bool,
+    columns: usize,
+) -> (Vec<Line<'static>>, Option<Cursor>) {
+    let label = format!("{:<LABEL$}", clip(field.key.name(), LABEL));
+    let drawn = value(settings, field);
+    // The cells of the row the value has: what the label and the box's own edge
+    // leave of it, and one column of the box at each side.
+    let room = columns.saturating_sub(LABEL);
+    // The line of the value the cursor is on and the cells that line spends
+    // before it, which is what the row scrolls to rather than cutting off.
+    let (line, cell) = match chosen && drawn.own {
+        true => place(&drawn.text, field.cursor()),
+        false => (0, 0),
+    };
+    let mut lines = Vec::new();
+    let mut cursor = None;
+    // The value's own lines: a row is as tall as the value it holds, and a line
+    // of it wider than the row is a window onto it rather than a cut.
+    let held: Vec<&str> = match drawn.text.is_empty() {
+        true => vec![""],
+        false => drawn.text.lines().collect(),
+    };
+    for (index, text) in held.iter().enumerate() {
+        let here = index == line;
+        let offset = match here && drawn.own && chosen {
+            true => scroll(room, cell),
+            false => 0,
+        };
+        let shown = visible(text, offset, room);
+        if index == 0 {
+            // What the wire said about its own names, on the row of the name
+            // this run holds and after it: faint, because it is a hint about the
+            // wire and not a value the file carries. A value scrolled to its
+            // cursor has no columns left for a hint, and the hint is what goes.
+            let note = match field.key {
+                Key::Model => served.note(),
+                _ => None,
+            };
+            let left = room.saturating_sub(cells(&shown));
+            let note = match note {
+                Some(note) if shown.is_empty() => clip(&note, left),
+                Some(note) => match clip(&note, left.saturating_sub(3)) {
+                    clipped if clipped.is_empty() => String::new(),
+                    clipped => format!(" · {clipped}"),
+                },
+                None => String::new(),
+            };
+            let mut spans = vec![
+                Span::styled(label.clone(), theme::faint()),
+                Span::styled(shown, drawn.style),
+            ];
+            if !note.is_empty() {
+                spans.push(Span::styled(note, theme::faint()));
+            }
+            lines.push(Line::from(spans));
+        } else {
+            // The rest of a value that is a list of lines — the headers, one per
+            // line — under the row and in the value's own column, so the list
+            // reads as one list rather than as a row and a second row's name.
+            let said = format!("{}{shown}", " ".repeat(LABEL));
+            lines.push(Line::from(Span::styled(said, drawn.style)));
+        }
+        if here && drawn.own && chosen {
+            cursor = Some(Cursor {
+                line: index,
+                column: u16::try_from(LABEL + cell.saturating_sub(offset)).unwrap_or(u16::MAX),
+            });
+        }
+    }
+    (lines, cursor)
+}
+
+/// Where a character index of a value lands among the cells it is drawn in: the
+/// line of the value, and the cells that line spends before the cursor. A glyph
+/// two cells wide spends both, because the terminal draws both.
+fn place(text: &str, at: usize) -> (usize, usize) {
+    let mut line = 0;
+    let mut cell = 0;
+    for ch in text.chars().take(at) {
+        match ch {
+            '\n' => {
+                line += 1;
+                cell = 0;
+            }
+            ch => cell += UnicodeWidthChar::width(ch).unwrap_or(0),
+        }
+    }
+    (line, cell)
+}
+
+/// The cells a row gives up on the left of a value too wide for it: none while
+/// the cursor's cell fits, and otherwise just enough that the cursor is the
+/// row's last cell rather than one past it — a field too narrow for its value
+/// is scrolled, never a cursor hidden behind the row's edge.
+fn scroll(room: usize, cursor: usize) -> usize {
+    cursor.saturating_sub(room.saturating_sub(1))
+}
+
+/// The cells of one line of a value from `offset` cells in, as many as the row
+/// has room for: the line itself while nothing is given up, and never a glyph
+/// cut in half.
+fn visible(line: &str, offset: usize, room: usize) -> String {
+    let mut dropped = 0;
+    let mut used = 0;
+    let mut shown = String::new();
+    for ch in line.chars() {
+        let wide = UnicodeWidthChar::width(ch).unwrap_or(0);
+        if dropped < offset {
+            dropped += wide;
+            continue;
+        }
+        if used + wide > room {
+            break;
+        }
+        used += wide;
+        shown.push(ch);
+    }
+    shown
 }
 
 /// The lines a row takes: one per line of the value it holds. Only the headers
@@ -359,11 +507,14 @@ fn list_lines(list: &List, columns: usize, from: usize, to: usize) -> Vec<Line<'
         .collect()
 }
 
-fn value(settings: &Settings, field: &Field) -> (String, Style) {
+/// What a row says for its field: the value it holds where the value is the
+/// row's to draw, and words of the modal's own where it is not — a secret's
+/// mask, a toggle's two names, the default a row nobody has set is running on.
+fn value(settings: &Settings, field: &Field) -> Drawn {
     let typed = field.text.trim();
     match field.key {
         Key::ApiKey if typed.is_empty() && settings.document().is_set(field.key) => {
-            ("•••• set in the file (hidden)".to_string(), theme::faint())
+            Drawn::said("•••• set in the file (hidden)", theme::faint())
         }
         // The door's modal: the environment was read and had nothing in it,
         // so the row says where the value would come from and that it did not.
@@ -373,29 +524,25 @@ fn value(settings: &Settings, field: &Field) -> (String, Style) {
                     .missing()
                     .is_some_and(|missing| missing.wants_key()) =>
         {
-            (
-                "from environment (not set — type it here)".to_string(),
-                theme::bad(),
-            )
+            Drawn::said("from environment (not set — type it here)", theme::bad())
         }
-        Key::ApiKey if typed.is_empty() => ("from environment".to_string(), theme::faint()),
+        Key::ApiKey if typed.is_empty() => Drawn::said("from environment", theme::faint()),
         // A toggle the file does not name says so rather than pretending the
         // file said it, and `thinking` names the default it falls back to: off.
         Key::Thinking if typed.is_empty() => {
-            (format!("{} (default)", toggle_shown(typed)), theme::plain())
+            Drawn::said(format!("{} (default)", toggle_shown(typed)), theme::plain())
         }
         // The reports and the agent's socket are on unless something silences
         // them, so the row states the default it is running on.
         Key::Status | Key::SshAgent if typed.is_empty() => {
-            ("on (default)".to_string(), theme::plain())
+            Drawn::said("on (default)", theme::plain())
         }
         Key::Thinking | Key::Status | Key::SshAgent => {
-            (toggle_shown(typed).to_string(), theme::plain())
+            Drawn::said(toggle_shown(typed), theme::plain())
         }
-        _ if field.key.secret() && !typed.is_empty() => (
-            "•••• (will be written to the file)".to_string(),
-            theme::faint(),
-        ),
-        _ => (field.text.clone(), theme::plain()),
+        _ if field.key.secret() && !typed.is_empty() => {
+            Drawn::said("•••• (will be written to the file)", theme::faint())
+        }
+        _ => Drawn::own(field.text.clone()),
     }
 }

@@ -296,7 +296,7 @@ fn a_page_off_the_model_row_shuts_the_fold_it_stood_on() {
 #[test]
 fn the_hint_line_states_the_keys_the_fold_takes() {
     let mut f = offered(None, &["gpt-5"]);
-    let shut = row(&screen(&mut f.app, 100, 30), "Tab/→");
+    let shut = row(&screen(&mut f.app, 100, 30), "Ctrl-U");
     assert!(
         shut.contains("Enter save") && shut.contains("Esc discard"),
         "shut, the line is the modal's own: {shut}"

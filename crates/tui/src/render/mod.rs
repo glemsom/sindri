@@ -160,7 +160,13 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
     let cursor = composer::draw(app, panel, frame.buffer_mut());
     frame.set_cursor_position(cursor);
     footer_rows(app, footer, frame.buffer_mut());
-    overlay::draw(app, area, frame.buffer_mut());
+    // An overlay that a reader types into says where the terminal's cursor
+    // belongs, and it is the overlay that has the screen: the modal's row is a
+    // field, so the cursor is drawn in it rather than left behind the box on a
+    // composer the reader cannot see.
+    if let Some(at) = overlay::draw(app, area, frame.buffer_mut()) {
+        frame.set_cursor_position(at);
+    }
 }
 
 /// Where the words end: the columns left of the canvas between the words and the

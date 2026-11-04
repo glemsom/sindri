@@ -5,7 +5,7 @@
 //! and the modal and the screen size themselves to what they have to say.
 
 use ratatui::buffer::Buffer;
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Widget};
@@ -28,11 +28,11 @@ pub(super) struct More {
 
 /// Draws the overlay that has the screen, over everything else. The overlay
 /// is borrowed rather than cloned: a spill of a megabyte is a window per
-/// frame, never a copy of itself.
-pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
-    let Some(overlay) = app.overlay.as_mut() else {
-        return;
-    };
+/// frame, never a copy of itself. The answer is the cell the terminal's cursor
+/// belongs in when the overlay is one a reader types into — the settings
+/// modal's row — and `None` for every overlay drawn read-only.
+pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) -> Option<Position> {
+    let overlay = app.overlay.as_mut()?;
     // A modal is a modal: everything it leaves uncovered recedes, so what
     // covers and what is covered read as one frame and not a hole in it.
     // The overlay's own rows are drawn after `Clear`, at full
@@ -52,14 +52,15 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
         Overlay::Settings(settings) => {
             // A page moves the modal by what its box shows, not by what the
             // transcript it covers happens to be showing.
-            app.window.page = settings::draw(settings, &app.served, area, buf).max(1);
-            return;
+            let (page, cursor) = settings::draw(settings, &app.served, area, buf);
+            app.window.page = page.max(1);
+            return cursor;
         }
         Overlay::Model(model) => {
             // The screen sizes itself and says which way its list runs past the
             // box, so a page moves it by the names its box showed.
             app.window.page = model::draw(model, &app.served, area, buf).max(1);
-            return;
+            return None;
         }
         Overlay::Help(help) => {
             // The box is as tall as the rows the list wrapped into, and no
@@ -102,6 +103,7 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
     };
     let inner = Block::bordered().inner(boxed);
     render(buf, boxed, inner, &title, marks, lines);
+    None
 }
 
 /// One pass of `DIM` over every cell of the frame, glyphs and surfaces

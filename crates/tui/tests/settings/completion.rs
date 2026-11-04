@@ -1,8 +1,8 @@
 //! The model row completes: the fragment typed in it filters the names the wire
 //! offered, by the ranking the composer offers commands and skills with and in
-//! the order the wire named them — `Tab` and `→` take a match, `↑↓` step the
-//! matches without leaving the row, and a name nothing offered is a name the
-//! field keeps and saves.
+//! the order the wire named them — `Tab` takes a match, `↑↓` step the matches
+//! without leaving the row, `←→` are the row's cursor and never a match, and a
+//! name nothing offered is a name the field keeps and saves.
 
 use super::*;
 use sindri_tui::overlay::Overlay;
@@ -101,24 +101,42 @@ fn names_the_fragment_reaches_alike_keep_the_order_the_wire_named_them_in() {
 }
 
 #[test]
-fn tab_and_the_right_arrow_put_the_top_match_in_the_field() {
-    for key in [KeyCode::Tab, KeyCode::Right] {
-        let mut f = offered(Some("model = \"from-file\"\n"), &["big-gpt", "gpt-5"]);
-        type_model(&mut f, "gpt");
-        press(&mut f.app, key, KeyModifiers::NONE);
+fn tab_puts_the_top_match_in_the_field() {
+    let mut f = offered(Some("model = \"from-file\"\n"), &["big-gpt", "gpt-5"]);
+    type_model(&mut f, "gpt");
+    press(&mut f.app, KeyCode::Tab, KeyModifiers::NONE);
 
-        assert_eq!(
-            field(&f),
-            "gpt-5",
-            "{key:?} takes the nearest match, not the one merely holding the fragment"
-        );
-        let rows = screen(&mut f.app, 100, 30);
-        assert!(
-            rows[model_row(&rows)].contains("gpt-5"),
-            "{key:?} leaves the taken name in the row: {}",
-            shown(&rows)
-        );
-    }
+    assert_eq!(
+        field(&f),
+        "gpt-5",
+        "Tab takes the nearest match, not the one merely holding the fragment"
+    );
+    let rows = screen(&mut f.app, 100, 30);
+    assert!(
+        rows[model_row(&rows)].contains("gpt-5"),
+        "and leaves the taken name in the row: {}",
+        shown(&rows)
+    );
+}
+
+#[test]
+fn the_side_arrows_move_the_cursor_and_take_no_name_the_list_holds() {
+    let mut f = offered(Some("model = \"from-file\"\n"), &["big-gpt", "gpt-5"]);
+    type_model(&mut f, "gpt");
+
+    press(&mut f.app, KeyCode::Right, KeyModifiers::NONE);
+    assert_eq!(
+        field(&f),
+        "gpt",
+        "→ is the cursor's, so the row keeps the fragment it was typed with"
+    );
+    press(&mut f.app, KeyCode::Left, KeyModifiers::NONE);
+    type_text(&mut f.app, "X");
+    assert_eq!(
+        field(&f),
+        "gpXt",
+        "and it moved: the character lands before the cell the cursor left"
+    );
 }
 
 #[test]
@@ -200,15 +218,22 @@ fn a_name_nothing_offered_is_kept_in_the_field_and_written_on_save() {
 }
 
 #[test]
-fn the_hint_line_states_the_keys_the_modal_now_takes() {
+fn the_hint_line_states_the_cursor_keys_every_row_takes() {
     let mut f = offered(None, &["gpt-5"]);
     let rows = screen(&mut f.app, 100, 30);
     let hints = rows
         .iter()
-        .find(|row| row.contains('│') && row.contains("Tab/→"))
+        .find(|row| row.contains('│') && row.contains("Ctrl-U"))
         .unwrap_or_else(|| panic!("no row states the keys: {}", shown(&rows)));
 
-    for key in ["↑↓", "Tab/→ take", "Enter save", "Esc discard"] {
+    for key in [
+        "←→ Home/End move",
+        "↑↓ Tab rows",
+        "Bksp/Del erase",
+        "Ctrl-U clear",
+        "Enter save",
+        "Esc discard",
+    ] {
         assert!(hints.contains(key), "the hint line states {key:?}: {hints}");
     }
 }
