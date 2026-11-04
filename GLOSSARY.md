@@ -21,7 +21,10 @@ client library exists — `rig_wire` is the one file that does.
 
 **wire** — which provider API a run speaks, Anthropic Messages or OpenAI-compatible Chat
 Completions, and what each needs: its credential variable, its base URL variable and
-whether it needs a credential at all (`crates/core/src/config/provider.rs`).
+whether it needs a credential at all (`crates/core/src/config/provider.rs`). The settings
+modal's provider row chooses among them — it offers exactly the words `Provider::parse`
+accepts, so a fourth wire is not a word the modal can invent — and the wire chosen asks the
+**served names** again, because a listing is one wire at one address.
 
 **served names** — what a wire says it can be asked for, read off the wire and never
 invented: the listing a settings modal states on its model row, kept beside the `Serving`

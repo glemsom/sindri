@@ -12,6 +12,12 @@
 //! in it asks to choose from the names the wire offered, and on the fold it
 //! takes the name it is on; a row someone has typed in is their draft, so `Enter`
 //! writes it, exactly as it does on every other row.
+//!
+//! The provider row is a choice the same way: `Enter` on it offers the wires the
+//! run itself parses — `Provider::ALL`, so the modal cannot name a wire the run
+//! would refuse — and the one taken is what a save writes. A wire chosen is a
+//! new `Serving`, so the names under the model row are asked for again, and the
+//! listing for the wire the user has left is dropped where it lands.
 
 mod list;
 mod served;
@@ -22,6 +28,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use sindri_core::config::{Document, KEYS, Key, Provider, toggle_shown};
 
 use crate::overlay::Overlay;
+use crate::rail::Launch;
 
 pub use list::List;
 pub use served::{Served, Serving};
@@ -198,10 +205,15 @@ impl Missing {
 pub struct Settings {
     document: Document,
     fields: Vec<Field>,
+    /// The words the provider row chooses from: the wires the run itself
+    /// parses, read off `Provider::ALL` so a fourth wire is one word here and
+    /// the same word there, never a list the modal keeps of its own.
+    wires: Vec<String>,
     chosen: usize,
-    /// The model row's completion: the served names the fragment typed there
-    /// reaches, and the one a `Tab` takes. Empty while the row is, because the
-    /// row is a field before it is ever a list.
+    /// The completion of the row that offers words: the served names a
+    /// fragment in the model row reaches, the wires a fragment in the provider
+    /// row reaches, and the one a `Tab` takes. Empty while the row is, because
+    /// the row is a field before it is ever a list.
     list: List,
     error: Option<String>,
     missing: Option<Missing>,
@@ -233,6 +245,10 @@ impl Settings {
         Settings {
             document,
             fields,
+            wires: Provider::ALL
+                .iter()
+                .map(|wire| wire.as_str().to_string())
+                .collect(),
             chosen: 0,
             list: List::default(),
             error: None,
@@ -345,21 +361,25 @@ impl Settings {
         &self.list
     }
 
-    /// The list the fragment names now, ranked off the names the frame holds.
-    /// The frame calls it when its facts change — a listing landing, the modal
-    /// opening — and `key` calls it before every keystroke, so what is drawn and
-    /// what a `Tab` takes are read off the same names.
+    /// The list the fragment names now, ranked off the words the row with the
+    /// cursor offers. The frame calls it when its facts change — a listing
+    /// landing, the modal opening, a wire chosen — and `key` calls it before
+    /// every keystroke, so what is drawn and what a `Tab` takes are read off the
+    /// same words.
     pub(crate) fn refresh(&mut self, served: &Served) {
-        self.list.refresh(served.names(), model_text(&self.fields));
+        let key = self.chosen_key();
+        let typed = text_of(&self.fields, key);
+        let offered = offered(key, served, &self.wires);
+        self.list.refresh(offered, typed);
     }
 
-    /// A key while the names stand open under the model row: `↑↓` move inside
-    /// them, `Enter` takes the name the fold is on and shuts it, and `Esc` shuts
-    /// it and keeps the draft — the discarding `Esc` is the modal's, and it is
-    /// the one after this. `None` is every other key, which the modal takes as it
-    /// always did.
+    /// A key while the words stand open under the row with the cursor: `↑↓` move
+    /// inside them, `Enter` takes the word the fold is on and shuts it, and `Esc`
+    /// shuts it and keeps the draft — the discarding `Esc` is the modal's, and it
+    /// is the one after this. `None` is every other key, which the modal takes as
+    /// it always did.
     fn fold_key(&mut self, code: KeyCode) -> Option<Outcome> {
-        if !self.list.folded() || !self.chosen_is_model() {
+        if !self.list.folded() || !self.offering() {
             return None;
         }
         match code {
@@ -385,21 +405,28 @@ impl Settings {
         }
     }
 
-    /// `Enter` on the model row while the names stand shut: the file's own value
-    /// in a row nobody has typed in asks to be chosen from, so the names open
-    /// under it. A row someone has typed in is their draft and `Enter` writes it,
-    /// and a wire that offered no name leaves the row the field it has always
-    /// been — there is nothing to fold out, and nothing to open on.
+    /// `Enter` on a row that offers words while they stand shut: the file's own
+    /// value in a row nobody has typed in asks to be chosen from, so the words
+    /// open under it — the names the wire serves under the model row, the wires
+    /// the run parses under the provider row. A row someone has typed in is
+    /// their draft and `Enter` writes it, and a row whose offer is empty — a
+    /// wire that named nothing — is left the field it has always been: there is
+    /// nothing to fold out, and nothing to open on.
     fn open_fold(&mut self, served: &Served) -> bool {
         let untouched = self
             .fields
             .get(self.chosen)
-            .is_some_and(|field| field.key == Key::Model && field.edit == Edit::Untouched);
-        if !untouched || served.names().is_empty() {
+            .is_some_and(|field| field.edit == Edit::Untouched);
+        if !untouched {
             return false;
         }
-        let current = model_text(&self.fields).to_string();
-        self.list.open(served.names(), &current);
+        let key = self.chosen_key();
+        let offered = offered(key, served, &self.wires);
+        if offered.is_empty() {
+            return false;
+        }
+        let current = text_of(&self.fields, key).to_string();
+        self.list.open(offered, &current);
         true
     }
 
@@ -419,14 +446,14 @@ impl Settings {
     /// a row holding a list is still a row the arrows walk past — and a fragment
     /// nothing reaches has no list at all.
     fn step_match(&mut self, up: bool) -> bool {
-        self.chosen_is_model() && self.list.step(up)
+        self.offering() && self.list.step(up)
     }
 
     /// `Tab` or `→`: the match the list is on, in the field. It is written on
     /// save like a typed name, because the row's text is the value and the list
     /// is only what the fragment reaches.
     fn take_match(&mut self, served: &Served) -> bool {
-        if !self.chosen_is_model() {
+        if !self.offering() {
             return false;
         }
         let Some(name) = self.list.take().map(str::to_owned) else {
@@ -438,12 +465,29 @@ impl Settings {
         true
     }
 
-    /// Whether the cursor is on the row that completes, which is the one row a
-    /// list is ranked for.
-    fn chosen_is_model(&self) -> bool {
-        self.fields
-            .get(self.chosen)
-            .is_some_and(|field| field.key == Key::Model)
+    /// Whether the row with the cursor offers words to choose from: the model
+    /// row the names the wire serves, the provider row the wires the run
+    /// parses. The list stands under that row, the keys walk it there, and the
+    /// arrows are the list's only while it holds something.
+    pub(crate) fn offering(&self) -> bool {
+        matches!(self.chosen_key(), Some(Key::Model | Key::Provider))
+    }
+
+    /// The key of the row with the cursor.
+    fn chosen_key(&self) -> Option<Key> {
+        self.fields.get(self.chosen).map(|field| field.key)
+    }
+
+    /// The wire the provider row names, where it names one the run accepts:
+    /// what the names under the model row answer for, and what a save would
+    /// write. `None` while the row is empty or holds a word the run refuses,
+    /// which is a word no listing is asked for.
+    fn wire(&self) -> Option<Provider> {
+        let field = self
+            .fields
+            .iter()
+            .find(|field| field.key == Key::Provider)?;
+        Provider::parse(&field.text).ok()
     }
 
     pub fn focus(&mut self, down: bool) {
@@ -451,12 +495,12 @@ impl Settings {
     }
 
     /// A screenful at a time: what `PgUp`/`PgDn` and the wheel move the cursor
-    /// by in a modal whose rows do not all fit. A page off the model row shuts
-    /// the fold it stands on: the names are that row's, and a page is a key the
-    /// fold never took.
+    /// by in a modal whose rows do not all fit. A page off a row that offers
+    /// words shuts the fold it stands on: the words are that row's, and a page
+    /// is a key the fold never took.
     pub fn page(&mut self, rows: usize, up: bool) {
         self.chosen = crate::overlay::step(self.chosen, rows, self.fields.len(), up);
-        if !self.chosen_is_model() {
+        if !self.offering() {
             self.list.close();
         }
     }
@@ -530,13 +574,25 @@ impl Settings {
     }
 }
 
-/// The fragment typed in the model row, wherever the cursor is: the list is
-/// ranked off the row's own text and never off whichever row is chosen.
-fn model_text(fields: &[Field]) -> &str {
+/// The fragment typed in a row: the list under a row is ranked off that row's
+/// own text and never off another row's, because the fragment is what a `Tab`
+/// there would take.
+fn text_of(fields: &[Field], key: Option<Key>) -> &str {
     fields
         .iter()
-        .find(|field| field.key == Key::Model)
+        .find(|field| Some(field.key) == key)
         .map_or("", |field| field.text.as_str())
+}
+
+/// The words a row offers when it is asked to choose: the names the wire serves
+/// on the model row, the wires the run parses on the provider row, and nothing
+/// at all on a row that is a field and nothing else.
+fn offered<'a>(key: Option<Key>, served: &'a Served, wires: &'a [String]) -> &'a [String] {
+    match key {
+        Some(Key::Model) => served.names(),
+        Some(Key::Provider) => wires,
+        _ => &[],
+    }
 }
 
 impl crate::app::App {
@@ -547,7 +603,16 @@ impl crate::app::App {
         let Some(Overlay::Settings(settings)) = self.overlay.as_mut() else {
             return false;
         };
-        match settings.key(key, &self.served) {
+        let outcome = settings.key(key, &self.served);
+        // The wire the provider row names is the one the names under the model
+        // row answer for, so a key that moved that row asks again: an ask is a
+        // `Serving`, the wire and the address together, and the listing for the
+        // wire the user has left is dropped by the rule already in place.
+        let serving = serving_of(settings, self.rail.launch());
+        if self.served.want(serving) {
+            settings.refresh(&self.served);
+        }
+        match outcome {
             Outcome::Staying => true,
             Outcome::Held => false,
             Outcome::Discard => {
@@ -604,7 +669,7 @@ impl crate::app::App {
                     Some(missing) => settings.staged(missing),
                     None => settings,
                 };
-                self.ask_wire();
+                self.ask_wire(&settings);
                 settings.refresh(&self.served);
                 self.show(Overlay::Settings(Box::new(settings)));
             }
@@ -612,15 +677,22 @@ impl crate::app::App {
         }
     }
 
-    /// The ask the modal makes as it opens: the names the wire this launch
-    /// speaks serves. A modal reopened on the same wire and base URL keeps the
+    /// The ask the modal makes as it opens: the names the wire its provider row
+    /// names serves. A modal reopened on the same wire and base URL keeps the
     /// answer it already has — asking again is a keystroke of its own — and one
     /// reopened on another drops it and asks for the wire it now speaks.
-    fn ask_wire(&mut self) {
-        let launch = self.rail.launch();
-        let serving = Serving::of(launch.provider.clone(), launch.base_url.clone());
-        if self.served.serving() != Some(&serving) {
-            self.served.ask(serving);
-        }
+    fn ask_wire(&mut self, settings: &Settings) {
+        self.served.want(serving_of(settings, self.rail.launch()));
     }
+}
+
+/// The ask a modal makes: the wire its provider row names — or the wire the
+/// launch speaks while the row is empty or holds a word the run refuses — at
+/// the address the launch holds, because a listing answers for one wire at one
+/// address and the two travel as one `Serving`.
+fn serving_of(settings: &Settings, launch: &Launch) -> Serving {
+    let wire = settings
+        .wire()
+        .map_or_else(|| launch.provider.clone(), |wire| wire.as_str().to_string());
+    Serving::of(wire, launch.base_url.clone())
 }

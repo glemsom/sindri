@@ -185,3 +185,4 @@ mod listed;
 mod modal;
 mod secrets;
 mod sentences;
+mod wires;

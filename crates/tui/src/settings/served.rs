@@ -72,6 +72,17 @@ impl Served {
         self.serving = Some(serving);
     }
 
+    /// An ask the frame is not already stating, and whether one was made: a
+    /// `Serving` this frame holds is not asked for again, because asking again
+    /// is a keystroke of its own — a wire chosen, a modal reopened on another.
+    pub fn want(&mut self, serving: Serving) -> bool {
+        if self.serving.as_ref() == Some(&serving) {
+            return false;
+        }
+        self.ask(serving);
+        true
+    }
+
     /// The ask a thread is to take, once: the frame asks, the loop carries it.
     pub fn take(&mut self) -> Option<Serving> {
         self.wanted.take()
@@ -167,6 +178,28 @@ mod tests {
             !served.asking(),
             "the listing that landed is the ask on hand's"
         );
+    }
+
+    #[test]
+    fn the_wire_the_frame_is_already_stating_is_not_asked_for_again() {
+        let mut served = Served::default();
+        assert!(served.want(one()), "no wire is being stated yet");
+
+        served.landed(one(), Some(vec!["claude-sonnet-4-6".to_string()]));
+        assert!(
+            !served.want(one()),
+            "the names on hand answer for this wire already"
+        );
+        assert_eq!(
+            served.names(),
+            ["claude-sonnet-4-6".to_string()],
+            "so the listing is left standing rather than dropped"
+        );
+
+        let elsewhere = Serving::of("openai", None);
+        assert!(served.want(elsewhere), "another wire is another ask");
+        assert!(served.asking(), "and it is out");
+        assert!(served.names().is_empty(), "with the old names gone");
     }
 
     #[test]

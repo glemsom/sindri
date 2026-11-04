@@ -4,7 +4,9 @@
 //! model row carries the one fact the modal did not have before — how many
 //! names the wire serves, and which wire named them — as faint text beside the
 //! name this run holds, and, under the row while a fragment is being typed in
-//! it, the names that fragment reaches with the one a `Tab` would take.
+//! it, the names that fragment reaches with the one a `Tab` would take. The
+//! provider row is a choice the same way and drawn by the same list: `Enter` on
+//! it offers the wires the run parses under it, the one it is on marked.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -132,13 +134,10 @@ pub fn draw(settings: &Settings, served: &Served, area: Rect, buf: &mut Buffer) 
     // wraps and the modal grows, and when it still does not fit, it grows no
     // further than the terminal and the list scrolls instead.
     let rows = settings.fields().len();
-    // The list stands under the model row, and only there: the box is sized for
-    // it, so the keys below are never the rows a list pushes off.
-    let filtering = settings
-        .fields()
-        .get(settings.chosen())
-        .is_some_and(|field| field.key == Key::Model);
-    let list_rows = match filtering {
+    // The list stands under the row that offers words — the model row's names,
+    // the provider row's wires — and only there: the box is sized for it, so the
+    // keys below are never the rows a list pushes off.
+    let list_rows = match settings.offering() {
         true => settings.list().len(),
         false => 0,
     };
