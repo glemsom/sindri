@@ -1,6 +1,11 @@
 //! The headers every provider request carries: where they come from, and what
 //! the wire would refuse. One file, because a header's precedence and its
 //! validity are one decision, and the config is where both are made.
+//!
+//! `{session}` in a value is checked here as the text it is: it is a value's
+//! business, not a key's, and it becomes the run's session id where the request
+//! is built, since no config can know which session reads it
+//! (`crate::provider::SESSION_TOKEN`).
 
 use std::collections::BTreeMap;
 

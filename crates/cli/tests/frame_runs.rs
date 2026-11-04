@@ -44,7 +44,13 @@ fn config_for(mock: &MockProvider) -> String {
 }
 
 fn frame_on(env: &Env, pty: &Pty, mock: &MockProvider) -> std::process::Child {
-    write_config(env, &config_for(mock));
+    frame_with(env, pty, mock, &config_for(mock))
+}
+
+/// The frame on a config of the test's own, so a test can state a setting the
+/// one every other frame test shares does not carry.
+fn frame_with(env: &Env, pty: &Pty, mock: &MockProvider, config: &str) -> std::process::Child {
+    write_config(env, config);
     let base_url = mock.base_url();
     spawn(
         env,
@@ -369,5 +375,58 @@ fn a_note_that_wrapped_is_found_by_its_words_not_by_a_rows_substring() {
     assert!(
         !screen::says(&another_note, "the record could not be finished"),
         "a screen that says something else does not say this: {another_note:?}"
+    );
+}
+
+#[test]
+fn a_prompt_after_a_new_session_carries_the_id_of_the_session_it_opened() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: `/new`'s next session id is not tested here");
+        return;
+    };
+    let env = Env::new();
+    let mock = MockProvider::start(vec![
+        Reply::answer("the first answer"),
+        Reply::answer("the second answer"),
+    ]);
+    let config = format!(
+        "{}[extra_headers]\nx-opencode-session = \"{{session}}\"\n",
+        config_for(&mock)
+    );
+    let mut child = frame_with(&env, &pty, &mock, &config);
+
+    expect(&pty, &mut child, "cache");
+    type_line(&pty, "what changed?");
+    expect(&pty, &mut child, "the first answer");
+    let before = recorded(&env);
+    assert_eq!(before.len(), 1, "one launch, one record: {before:?}");
+    type_command(&pty, "/new");
+    type_line(&pty, "and now?");
+    expect(&pty, &mut child, "the second answer");
+    let (code, _) = pty.quit(&mut child);
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+
+    let after = recorded(&env);
+    assert_eq!(after.len(), 2, "`/new` opens a session: {after:?}");
+    let opened: Vec<&String> = after
+        .iter()
+        .filter(|id| transcript(&env, id).contains("and now?"))
+        .collect();
+    assert_eq!(
+        opened.len(),
+        1,
+        "one record holds the second prompt: {after:?}"
+    );
+    let requests = mock.requests();
+    assert_eq!(requests.len(), 2, "two prompts, two requests");
+    assert_eq!(
+        requests[0].header("x-opencode-session"),
+        Some(before[0].as_str()),
+        "the first prompt is sent with the id of the session it was written to"
+    );
+    assert_eq!(
+        requests[1].header("x-opencode-session"),
+        Some(opened[0].as_str()),
+        "and the prompt after `/new` with the id of the record it opened, not the one it replaced"
     );
 }

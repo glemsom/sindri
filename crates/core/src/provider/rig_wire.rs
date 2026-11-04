@@ -3,6 +3,7 @@
 //! own HTTP client with explicit timeouts, and the translation of the
 //! library's vocabulary into ours.
 
+use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -28,7 +29,7 @@ use rig_reqwest::reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
 use crate::config::Provider;
 
-use super::{Call, Client, Delta, DeltaSink, Error, Message, ToolSpec, Turn, Usage};
+use super::{Call, Client, Delta, DeltaSink, Error, Message, SESSION_TOKEN, ToolSpec, Turn, Usage};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(180);
@@ -49,7 +50,7 @@ pub(super) fn turn(
 ) -> Result<Turn, Error> {
     let (api_key, base_url, model) = client.parts();
 
-    let http = http(client)?;
+    let http = http(client, Ask::Turn(client.session()))?;
 
     let request = request(
         history,
@@ -93,7 +94,7 @@ pub(super) fn turn(
 /// than an empty list, so an empty list is never read as an answer.
 pub(super) fn models(client: &Client) -> Result<Vec<String>, Error> {
     let (api_key, base_url, _) = client.parts();
-    let http = http(client)?;
+    let http = http(client, Ask::Listing)?;
     let runtime = runtime()?;
 
     let listed = match client.provider() {
@@ -240,16 +241,28 @@ fn stopped() -> Error {
     Error::transport("the stream was stopped before it finished")
 }
 
-/// The HTTP client one run speaks through: the deadlines, and the headers the
-/// config asked for. A gateway that routes on a header of its own — a session
-/// id, a referer — has no other way to be told, and the request cannot be
-/// routed without it.
-fn http(client: &Client) -> Result<reqwest::Client, Error> {
+/// The HTTP client one request speaks through: the deadlines, and the headers
+/// the config asked for. A gateway that routes on a header of its own — a
+/// session id, a referer — has no other way to be told, and the request cannot
+/// be routed without it.
+///
+/// This is where a header value's [`SESSION_TOKEN`] becomes the run's session
+/// id: resolved once, at the one place the client is built and the session is at
+/// hand, so the file's table, `SINDRI_EXTRA_HEADERS` and `--header` all get it
+/// and none of them has to be rewritten. Whether it is resolved at all is
+/// [`Ask`]'s to say, and a listing's answer is that it is not: a value carrying
+/// the token is left off that request whole, whatever else it holds, because
+/// half a value is not one a gateway can route on and a placeholder it might
+/// route on is worse than a header it does not see.
+fn http(client: &Client, ask: Ask<'_>) -> Result<reqwest::Client, Error> {
     let mut headers = HeaderMap::with_capacity(client.extra_headers().len());
     for (name, value) in client.extra_headers() {
+        let Some(value) = header_value(value, ask) else {
+            continue;
+        };
         let name = HeaderName::from_bytes(name.as_bytes())
             .map_err(|_| Error::transport(format!("`{name}` is not an HTTP header name")))?;
-        let value = HeaderValue::from_str(value).map_err(|_| {
+        let value = HeaderValue::from_str(&value).map_err(|_| {
             Error::transport(format!("the value of `{name}` is not a header value"))
         })?;
         headers.insert(name, value);
@@ -260,6 +273,30 @@ fn http(client: &Client) -> Result<reqwest::Client, Error> {
         .default_headers(headers)
         .build()
         .map_err(|error| Error::transport(format!("could not build the HTTP client: {error}")))
+}
+
+/// What one request to the wire is, which is what decides whether a header
+/// value's [`SESSION_TOKEN`] has anything to become. A turn is one request of the
+/// run and has the run's session; a listing is not a turn — it writes nothing to
+/// a record and belongs to no turn of the run — so it names no session.
+#[derive(Clone, Copy)]
+enum Ask<'a> {
+    Turn(&'a str),
+    Listing,
+}
+
+/// One configured header value as the request sends it: [`SESSION_TOKEN`]
+/// replaced by the run's session id, a value with no token verbatim. `None` when
+/// the value carries the token and there is no session to put in its place,
+/// which is the listing's answer and never a turn's.
+fn header_value<'a>(value: &'a str, ask: Ask<'_>) -> Option<Cow<'a, str>> {
+    if !value.contains(SESSION_TOKEN) {
+        return Some(Cow::Borrowed(value));
+    }
+    match ask {
+        Ask::Turn(session) => Some(Cow::Owned(value.replace(SESSION_TOKEN, session))),
+        Ask::Listing => None,
+    }
 }
 
 fn finish(response: CompletionResponse) -> Turn {

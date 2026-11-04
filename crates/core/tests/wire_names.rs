@@ -129,9 +129,21 @@ fn names(wire: &Wire, provider: Provider, api_key: &str) -> Vec<String> {
 }
 
 fn client(wire: &Wire, provider: Provider, api_key: &str) -> Client {
+    composed(&wire.config(provider, api_key), SESSION)
+}
+
+/// The id of the session the clients here are composed for. A listing is asked
+/// with it in hand and does not send it, which one test here proves.
+const SESSION: &str = "8f14e45f-a-session";
+
+/// A client composed from a config and a session's id, the way a run composes
+/// one: the preamble of a workspace with nothing in it, and the id a header
+/// value's `{session}` would become.
+fn composed(config: &Config, session: &str) -> Client {
     Client::new(
-        &wire.config(provider, api_key),
+        config,
         sindri_core::preamble::of(Path::new("/workspace"), None),
+        session,
     )
 }
 
@@ -256,9 +268,9 @@ struct Store {
     _state: TempDir,
 }
 
-/// The session token the stored record carries: a signed-in Copilot's key, and
-/// the string no configured gateway may ever be sent.
-const SESSION_TOKEN: &str = "tid=session-token-7734";
+/// The credential the stored record carries: a signed-in Copilot's key, and the
+/// string no configured gateway may ever be sent.
+const COPILOT_KEY: &str = "tid=session-token-7734";
 
 static ENV: Mutex<()> = Mutex::new(());
 
@@ -267,7 +279,7 @@ impl Store {
     /// `endpoint`, the base a signed-in Copilot names.
     fn signed_in(endpoint: &str) -> Store {
         Store::holding(Some(&format!(
-            r#"{{"token":"{SESSION_TOKEN}","expires_at":{},"endpoints":{{"api":"{endpoint}"}}}}"#,
+            r#"{{"token":"{COPILOT_KEY}","expires_at":{},"endpoints":{{"api":"{endpoint}"}}}}"#,
             expires_at()
         )))
     }
@@ -325,10 +337,7 @@ impl DeltaSink for Silent {
 /// with and whatever base URL the human configured. The `Store` the caller
 /// holds is what the call is signed in with, so it must outlive it.
 fn copilot(base_url: Option<String>) -> Client {
-    Client::new(
-        &config(Provider::Copilot, "", base_url),
-        sindri_core::preamble::of(Path::new("/workspace"), None),
-    )
+    composed(&config(Provider::Copilot, "", base_url), SESSION)
 }
 
 #[test]
@@ -365,7 +374,7 @@ fn a_configured_gateway_is_never_asked_nor_handed_the_session_token() {
     );
     let asked = session.requests().remove(0);
     assert!(
-        asked.contains(&format!("Bearer {SESSION_TOKEN}")),
+        asked.contains(&format!("Bearer {COPILOT_KEY}")),
         "the list is asked with the session a turn is asked with: {asked}"
     );
 }
@@ -389,5 +398,31 @@ fn with_no_session_the_list_fails_in_the_sentence_a_turn_fails_in() {
         listed.message(),
         turned.message(),
         "one sentence for a missing session, whichever call asked"
+    );
+}
+
+#[test]
+fn a_listing_is_asked_without_a_header_value_that_names_the_session() {
+    let wire = Wire::answering("200 OK", r#"{"object":"list","data":[{"id":"alpha"}]}"#, 1);
+    let mut config = wire.config(Provider::Openai, "");
+    config.extra_headers = vec![
+        ("x-opencode-session".to_string(), "{session}".to_string()),
+        ("x-gateway-hint".to_string(), "hint".to_string()),
+    ];
+
+    let names = composed(&config, SESSION)
+        .models()
+        .expect("the wire named its models");
+
+    assert_eq!(names, ["alpha"]);
+    let request = wire.requests().remove(0).to_ascii_lowercase();
+    assert!(
+        !request.contains("x-opencode-session"),
+        "a listing is not a turn, so a value naming the run's session is left off it \
+         rather than sent as a placeholder: {request}"
+    );
+    assert!(
+        request.contains("x-gateway-hint: hint"),
+        "and a value with no token goes on every request, the listing's included: {request}"
     );
 }

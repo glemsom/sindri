@@ -221,8 +221,11 @@ a persisted unsafe setting is the one a user forgets they turned on. Batch mode 
 `sandbox exec` say it once on stderr; the rail says `unsafe · your own privileges`. Under
 the flag `--writable` is still validated, it simply is not what bounds the run.
 
-`--writable` and `--header` are repeatable but **replace** the configured values. An
-unknown key is an error naming key and file; a wrong value is exit 2. The credential also
+`--writable` and `--header` are repeatable but **replace** the configured values. A
+header value may hold `{session}`, which is sent as the id of the session the run writes —
+the same id `sindri sessions show` names — so a gateway that caches per session follows
+`/new`; a value with no token is sent as written. An unknown key is an error naming key
+and file; a wrong value is exit 2. The credential also
 comes from `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or a matching `*_BASE_URL`, and is
 redacted everywhere; a file carrying one is `0600`. Copilot’s OAuth token store is
 separate from `config.toml` and is not an API key.

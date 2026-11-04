@@ -35,16 +35,18 @@ impl Dress for Bare {
 
 /// The names the wire a run speaks serves: asked of the model a prompt asks —
 /// the same client, composed the same way — so the list a human is shown and the
-/// model a run sends to cannot be two answers. Nothing of a run is composed for
-/// it: a listing is not a turn.
+/// model a run sends to cannot be two answers. Nothing of a turn is composed for
+/// it: a listing is not a turn, and a header value carrying `{session}` is the
+/// run's id on a turn and left off a listing (`provider::rig_wire::http`).
 pub fn models(session: &Session, config: &Config) -> Result<Vec<String>, Error> {
     model(session, config).models()
 }
 
 /// The model one prompt asks: the client the wire is spoken through, built from
-/// the run's config and the preamble the session settled.
+/// the run's config, the preamble the session settled and the id of the session
+/// the run writes — the three facts a request is composed from.
 fn model(session: &Session, config: &Config) -> Box<dyn Model> {
-    Box::new(Client::new(config, session.preamble()))
+    Box::new(Client::new(config, session.preamble(), session.dir().id()))
 }
 
 /// Everything that differs between one front end's stack and the next, and

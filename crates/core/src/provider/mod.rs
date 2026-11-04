@@ -1,6 +1,12 @@
 //! The model, behind one seam: ask, and get an answer or a failure that is
 //! safe to print. Retries and redaction live here; the provider library lives
 //! only in [`rig_wire`], so a library rewrite is one file's problem.
+//!
+//! A client is composed from the run's config and the session it asks for, and
+//! that session is what [`SESSION_TOKEN`] in a header value becomes — resolved
+//! where the request is built, because the config cannot know it. A listing is
+//! not a turn, so a value naming the session is left off a listing's request and
+//! goes on every turn's; a value with no token goes on all of them.
 
 mod asked;
 mod rig_wire;
@@ -23,6 +29,12 @@ pub const REDACTED: &str = "[redacted]";
 /// that says one in its own words reads it as a value rather than cutting this
 /// prefix back off the prose.
 pub const MALFORMED: &str = "tool_error: the call was not run: ";
+/// What a header value writes where it wants the run's session id: the id of
+/// the session whose record the run writes, which is the one `sindri sessions
+/// show` names, `/export` writes and Ctrl-G copies. A value, not a key: the
+/// config, `SINDRI_EXTRA_HEADERS` and `--header` all carry it, and a turn is
+/// where it becomes an id.
+pub const SESSION_TOKEN: &str = "{session}";
 
 #[derive(Debug, Clone)]
 pub struct ToolSpec {
@@ -283,6 +295,11 @@ pub struct Client {
     base_url: Option<String>,
     model: String,
     extra_headers: Vec<(String, String)>,
+    /// The id of the session this client asks for: a header value carrying
+    /// [`SESSION_TOKEN`] is sent with it. Held here rather than written into the
+    /// config, because a thread's `/new` mints a session and the config outlives
+    /// it.
+    session: String,
     /// The preamble every turn carries, composed once by the session
     /// (`crate::preamble`): the stance, the workspace this run stands in — a
     /// fact only the run has — and the repository's instructions after them.
@@ -292,13 +309,20 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(config: &Config, preamble: crate::preamble::Preamble) -> Client {
+    /// The client a run asks with: the config's settings, the preamble the
+    /// session settled, and the id of the session whose record the run writes.
+    pub fn new(
+        config: &Config,
+        preamble: crate::preamble::Preamble,
+        session: impl Into<String>,
+    ) -> Client {
         Client {
             provider: config.provider,
             api_key: config.api_key.clone(),
             base_url: config.base_url.clone(),
             model: config.model.clone(),
             extra_headers: config.extra_headers.clone(),
+            session: session.into(),
             preamble,
         }
     }
@@ -327,6 +351,11 @@ impl Client {
 
     pub(crate) fn extra_headers(&self) -> &[(String, String)] {
         &self.extra_headers
+    }
+
+    /// The id a header value's [`SESSION_TOKEN`] becomes: this run's session.
+    pub(crate) fn session(&self) -> &str {
+        &self.session
     }
 }
 
