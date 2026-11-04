@@ -215,6 +215,14 @@ the output kept and the word its row ended on (`crates/tui/src/entry.rs`).
 **composer** — the prompt being typed, held as rows and a character-index cursor and
 reported in cells, because the terminal draws cells and a glyph may be two wide.
 
+**footer** — the frame's one row under the composer, a strip rather than a panel: the
+run's word while it works or waits on a cancel, then as many whole hints as the row holds,
+then the badge that counts the rows arrived below a reader who is not on the tail, drawn
+against the right edge and given its cells first (`crates/tui/src/render/mod.rs`). A word
+is whole or it is not drawn, so what gives way as the row narrows is the hints: the badge
+never covers part of one, and only a terminal too narrow to hold the badge at all goes
+without it.
+
 **thought** — reasoning the run is having, as a row of the thread: the turn it belongs to,
 the text streamed so far, when it began and — once it has ended — how long it took
 (`crates/tui/src/entry.rs`). A fragment is appended to its entry as it lands, so it streams

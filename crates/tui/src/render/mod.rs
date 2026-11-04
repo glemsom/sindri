@@ -60,8 +60,9 @@ const HINTS: [&str; 7] = [
     "PgUp/PgDn scroll",
 ];
 
-/// What separates one hint from the next.
-const HINT_GAP: &str = " · ";
+/// What separates one word of the footer from the next: the run's word from
+/// the first hint, and each hint from the one after it.
+const WORD_GAP: &str = " · ";
 
 pub fn draw(app: &mut App, frame: &mut Frame) {
     let area = frame.area();
@@ -200,32 +201,26 @@ fn canvas(area: Rect, buf: &mut Buffer) {
 }
 
 fn footer_rows(app: &App, area: Rect, buf: &mut Buffer) {
-    let mut prefix = String::new();
-    // A cancel is answered where the "working" was: the request in flight is
-    // not interrupted, so the frame says what it is waiting for instead of
-    // going quiet until it lands. The queue states its own size.
-    if app.is_cancelling() {
-        prefix.push_str("cancelling… · ");
-    } else if app.is_running() {
-        prefix.push_str("working · ");
-    }
     // Rows that arrived below a reader who is not on the tail: the frame says
-    // so, and stops saying it the moment they come back to it. It
-    // is drawn against the right edge, so the hints are given only what is
-    // left of the row: a hint is never the thing that gets cut.
+    // so, and stops saying it the moment they come back to it. The badge is
+    // drawn against the right edge, and its cells are given to it first — so
+    // the words are given only what is left of the row, and a hint is never
+    // the thing that gets cut. Only a terminal too narrow to hold the badge at
+    // all goes without one.
     let new = app.window.new_rows();
     let rows = if new == 1 { "row" } else { "rows" };
     let badge = (new > 0).then(|| format!("↓ {new} new {rows}"));
-    let badge = badge.filter(|badge| badge.chars().count() < area.width as usize);
-    let room = (area.width as usize)
-        .saturating_sub(prefix.chars().count())
-        .saturating_sub(badge.as_ref().map_or(0, |badge| badge.chars().count() + 1));
-    let line = format!("{prefix}{}", hints(area.width as usize, room));
+    let badge = badge.filter(|badge| badge.chars().count() <= area.width as usize);
+    // The cells left of the badge, less the one that keeps a word off it.
+    let room = badge.as_ref().map_or(area.width as usize, |badge| {
+        (area.width as usize).saturating_sub(badge.chars().count() + 1)
+    });
+    let line = footer_words(app, area.width as usize, room);
     Paragraph::new(Line::from(Span::styled(line, theme::faint()))).render(area, buf);
     if let Some(badge) = badge {
         let columns = badge.chars().count() as u16;
-        // Only the badge's own cells: a hint it sits beside is never drawn
-        // under it, because it was given the room first.
+        // Only the badge's own cells: the words end before them, because the
+        // badge was given its cells first.
         let at = Rect {
             x: area.x + area.width - columns,
             width: columns,
@@ -235,23 +230,50 @@ fn footer_rows(app: &App, area: Rect, buf: &mut Buffer) {
     }
 }
 
-/// The hint line for a terminal `width` columns wide with `room` cells to
-/// spare: all seven hints from 120 columns up, five from 100, three from 60
-/// and never fewer than the two that send and open the list. A hint is a
-/// whole thing or it is not there at all — the set shrinks rather than the
-/// word being cut.
-fn hints(width: usize, room: usize) -> String {
-    let mut count = match width {
+/// The footer's words left of the badge: the run's own word while it works or
+/// waits on a cancel, then the hints, in the one order they are worth saying —
+/// as many whole ones as `room` cells hold with the gap between them. A word is
+/// a whole thing or it is not drawn, so what a row too narrow for even the
+/// first says is nothing at all.
+fn footer_words(app: &App, width: usize, room: usize) -> String {
+    // A cancel is answered where the "working" was: the request in flight is
+    // not interrupted, so the frame says what it is waiting for instead of
+    // going quiet until it lands. The queue states its own size.
+    let run = if app.is_cancelling() {
+        Some("cancelling…")
+    } else if app.is_running() {
+        Some("working")
+    } else {
+        None
+    };
+    let gap = WORD_GAP.chars().count();
+    let mut line = String::new();
+    let mut left = room;
+    for word in run.into_iter().chain(hints_at(width).iter().copied()) {
+        // A word spends its own cells and, once the line holds one, the gap
+        // before it. Both are counted in cells the terminal draws.
+        let need = word.chars().count() + if line.is_empty() { 0 } else { gap };
+        if need > left {
+            break;
+        }
+        if !line.is_empty() {
+            line.push_str(WORD_GAP);
+        }
+        line.push_str(word);
+        left -= need;
+    }
+    line
+}
+
+/// The hints a terminal `width` columns wide is worth stating, before the
+/// badge and a narrow row shorten the set: all seven from 120 columns up, five
+/// from 100 and three from 60.
+fn hints_at(width: usize) -> &'static [&'static str] {
+    let count = match width {
         w if w >= 120 => HINTS.len(),
         w if w >= 100 => 5,
         w if w >= 60 => 3,
         _ => 2,
     };
-    loop {
-        let line = HINTS[..count].join(HINT_GAP);
-        if line.chars().count() <= room || count == 1 {
-            return line;
-        }
-        count -= 1;
-    }
+    &HINTS[..count]
 }
