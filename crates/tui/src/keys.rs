@@ -127,16 +127,22 @@ impl App {
     /// as its own rows, and nothing is sent or queued — the reader presses
     /// `Enter` when they are ready, and that key is the only one that sends.
     /// A run in flight changes nothing, because the queue is `Enter`'s. An open
-    /// overlay owns the screen, so a paste under one is ignored like every
-    /// other event that is not a key.
+    /// overlay owns the screen, so the paste is the overlay's: the two that
+    /// carry a field take it as one edit of the field they are on — `/settings`'
+    /// row and `/model`'s fragment — and the ones that carry none, the bindings'
+    /// list and a spill, ignore it like every other event that is not a key.
     pub fn paste(&mut self, text: &str) -> bool {
-        if self.overlay.is_some() {
-            return false;
+        match self.overlay.as_mut() {
+            Some(Overlay::Settings(settings)) => settings.paste(text, &self.served),
+            Some(Overlay::Model(model)) => model.paste(text, &self.served),
+            Some(Overlay::Help(_) | Overlay::Spill(_)) => false,
+            None => {
+                // A mark goes with the draft it stood over, so a paste of
+                // nothing that spends one has still taken a row of the frame.
+                let spent = self.clear_mark();
+                self.composer.insert_str(text) || spent
+            }
         }
-        // A mark goes with the draft it stood over, so a paste of nothing that
-        // spends one has still taken a row of the frame with it.
-        let spent = self.clear_mark();
-        self.composer.insert_str(text) || spent
     }
 
     /// The keys an open overlay takes. It owns them: nothing behind it moves

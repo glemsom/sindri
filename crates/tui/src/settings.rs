@@ -558,6 +558,22 @@ impl Settings {
         self.edit(Edit::Value, |field| field.text.push(ch));
     }
 
+    /// A paste into the row with the cursor: the clipboard's text as one edit
+    /// of that field, and never a keystroke — the row is the field, so a paste
+    /// that a run would be asked on is a value typed one letter at a time and
+    /// not a key a row holds nothing for. It is ranked again once it has
+    /// landed, so the names under the model row are the fragment's the frame
+    /// after it, exactly as `key` leaves them.
+    pub fn paste(&mut self, text: &str, served: &Served) -> bool {
+        let text = one_line(text);
+        if text.is_empty() {
+            return false;
+        }
+        self.edit(Edit::Value, |field| field.text.push_str(&text));
+        self.refresh(served);
+        true
+    }
+
     pub fn backspace(&mut self) {
         self.edit(Edit::Value, |field| {
             field.text.pop();
@@ -628,6 +644,16 @@ impl Settings {
 fn drafting(settings: &Settings, key: KeyEvent) -> bool {
     let typing = matches!(key.code, KeyCode::Char(_) | KeyCode::Backspace);
     typing && settings.chosen_key() == Some(Key::BaseUrl)
+}
+
+/// What a paste is on a row rather than in the composer: one line. A row of
+/// the modal is a single value — the address a wire is asked at, the credential
+/// it is asked with — so the line breaks a clipboard carries are dropped, and a
+/// buffer copied with its trailing newline is the address and nothing else.
+pub(crate) fn one_line(text: &str) -> String {
+    text.chars()
+        .filter(|ch| *ch != '\n' && *ch != '\r')
+        .collect()
 }
 
 /// The fragment typed in a row: the list under a row is ranked off that row's

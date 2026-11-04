@@ -183,6 +183,7 @@ mod door;
 mod fold;
 mod listed;
 mod modal;
+mod paste;
 mod secrets;
 mod sentences;
 mod wires;

@@ -14,8 +14,13 @@ mod common;
 use std::io::Write;
 
 use common::provider::{MockProvider, Reply};
-use common::pty::{ENTER, Pty, expect, spawn, type_line};
-use common::{Env, TEST_KEY, write_config};
+use common::pty::{DOWN, ENTER, Pty, expect, spawn, type_command, type_line};
+use common::{Env, TEST_KEY, rows_to, write_config};
+use sindri_core::config::Key;
+
+/// `Ctrl-U`: the row with the cursor emptied, so a paste into it is the whole
+/// of what the row holds.
+const CTRL_U: u8 = 0x15;
 
 /// The sequence that asks the terminal to wrap a paste, and the one that gives
 /// the request back.
@@ -135,4 +140,46 @@ fn the_frame_keeps_hearing_after_a_sequence_it_cannot_parse() {
         "and it is the prompt that was typed: {}",
         requests[0].body
     );
+}
+
+/// A paste into `/settings`: a row of the modal is a field, so the clipboard's
+/// text is the value a save writes — typed one letter at a time is the only way
+/// in without this, and an address is the row a human has in their buffer.
+#[test]
+fn a_pasted_address_reaches_the_settings_row_and_the_file_it_writes() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: a pasted address is not tested here");
+        return;
+    };
+    let env = Env::new();
+    let mock = MockProvider::start(Vec::new());
+    let mut child = frame_on(&env, &pty, &mock);
+    expect(&pty, &mut child, "@ paths");
+
+    type_command(&pty, "/settings");
+    expect(&pty, &mut child, "config.toml");
+    for _ in 0..rows_to(Key::BaseUrl) {
+        let _ = pty.port().write_all(DOWN);
+    }
+    // The row holds the address the run was launched at, so it is emptied
+    // first: what lands in it is the clipboard's and nothing else.
+    pty.type_key(CTRL_U);
+    let _ = pty
+        .port()
+        .write_all(bracketed("http://localhost:7777/v1").as_bytes());
+    let pasted = pty.wait_for_screen(&mut child, "http://localhost:7777/v1");
+    assert!(
+        pasted.contains("http://localhost:7777/v1"),
+        "the pasted address is the row's: {pasted:?}"
+    );
+
+    pty.type_key(ENTER);
+    expect(&pty, &mut child, "settings saved");
+    let file = std::fs::read_to_string(env.config.join("sindri/config.toml"))
+        .expect("the file the modal saved");
+    assert!(
+        file.contains("base_url = \"http://localhost:7777/v1\""),
+        "and the pasted address is what was written: {file}"
+    );
+    let _ = pty.quit(&mut child);
 }

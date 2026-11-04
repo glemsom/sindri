@@ -143,6 +143,20 @@ impl Model {
         }
     }
 
+    /// A paste into the fragment: the screen's one field is what it filters by,
+    /// so a name copied from elsewhere is typed there rather than a key the
+    /// screen holds nothing for. The names are ranked again on the frame the
+    /// paste lands, as they are after a letter.
+    pub fn paste(&mut self, text: &str, served: &Served) -> bool {
+        let text = crate::settings::one_line(text);
+        if text.is_empty() {
+            return false;
+        }
+        self.filter.push_str(&text);
+        self.refresh(served);
+        true
+    }
+
     /// A screenful at a time: `PgUp`/`PgDn` walk the cursor by the rows the
     /// screen showed, because the list windows itself around the name it is on.
     pub fn page(&mut self, rows: usize, up: bool) {

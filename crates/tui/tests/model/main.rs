@@ -87,4 +87,5 @@ fn marked(f: &mut Fixture) -> String {
 }
 
 mod names;
+mod paste;
 mod write;
