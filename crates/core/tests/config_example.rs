@@ -164,6 +164,28 @@ fn prose_for(name: &str) -> String {
 }
 
 #[test]
+fn the_api_key_prose_names_both_commands_that_write_the_file() {
+    // `/settings` and `/model` are the two commands that write the file,
+    // through one document and one owner-only atomic save
+    // (`crates/tui/src/settings.rs`, `crates/tui/src/model.rs`), so a reader
+    // working out where a credential can land is told of both rather than one.
+    let prose = prose_for("api_key");
+
+    for command in ["/settings", "/model"] {
+        assert!(
+            prose.contains(command),
+            "the `api_key` prose names `{command}`, since it is one of the two \
+             commands that write this file: {prose}"
+        );
+    }
+    assert!(
+        prose.contains("0600") && prose.contains("replaced atomically"),
+        "the `api_key` prose says the file a value lands in is `0600` and \
+         replaced atomically, whatever wrote it: {prose}"
+    );
+}
+
+#[test]
 fn the_example_says_which_keys_a_run_cannot_start_without() {
     let required = required_keys();
     let opening: String = EXAMPLE

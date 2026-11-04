@@ -19,8 +19,10 @@ model = "claude-sonnet-4-6"
 # The credential. Required for `anthropic`, the wire that wants one — a local
 # server reached by `base_url` often has none to give. Prefer the provider's own
 # variable — ANTHROPIC_API_KEY, or SINDRI_API_KEY for API-key providers — because a
-# file is plaintext. Copilot uses `sindri auth login copilot` instead. `sindri` writes this
-# file only from `/settings`, 0600 and replaced atomically; values are redacted.
+# file is plaintext. Copilot uses `sindri auth login copilot` instead. `sindri`
+# writes this file from two commands — `/settings`, whose api_key row warns as you
+# type, and `/model`, which saves its one name through the same document — always
+# 0600 and replaced atomically; values are redacted.
 api_key = "sk-ant-…"
 
 # Another API root: a gateway, a proxy, a local server. Optional; left out, the

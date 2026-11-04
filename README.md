@@ -157,24 +157,26 @@ transcript, rail, composer; off a terminal it is a refusal at exit 2.
   `/skill:house-style` and `/skill house-style` are the same line — where the rest of it
   is the prompt the skill is put to work on, and a bare name arms it without starting a
   turn; the names offered are the ones the catalog says you may invoke. `/model` opens a
-  screen of the names the wire serves, ranked as you type, with `Enter` writing the one
-  you take to the config file the next prompt reads; `/model <name>` sets a name the wire
-  never offered. `/export [path]` writes the thread as one markdown file, asking twice
-  before replacing a file; reading a record back is `sindri sessions show`. `?` and
-  `/help` list the same bindings, each gesture beside its key.
+  screen of the names the wire serves, ranked as you type, with `Enter` writing the one you
+  take to the config file the next prompt reads — the file and schema `/settings` writes,
+  through the same owner-only atomic save — and `/model <name>` sets a name the wire never
+  offered, by the same write. `/export [path]` writes the thread as one markdown file,
+  asking twice before replacing a file; reading a record back is `sindri sessions show`.
+  `?` and `/help` list the same bindings, each gesture beside its key.
 - **Chrome:** a narrow terminal shortens what the frame says and never cuts a key or a
   fact in half. The footer states seven hints from 120 columns up, five from 100 and never
   fewer than `Enter send` and `? keys`; the rail gives facts up in one priority order and
   keeps a row saying how many went (`+7 more`); the slim strip never loses the posture,
   the model or the workspace.
 - **One thread:** a second prompt builds on the first, `/new` starts over, and a model
-  changed in `/settings` answers the next turn on the same thread. Boot runs `doctor`
-  first: a sandbox that cannot be created is a card naming the failing check, and a first
-  run with no API key opens the modal below instead of failing.
+  changed in `/settings` or `/model` answers the next turn on the same thread. Boot runs
+  `doctor` first: a sandbox that cannot be created is a card naming the failing check, and
+  a first run with no API key opens the modal below instead of failing.
 
 ### Settings
 
-`/settings` edits the one file everything else reads.
+`/settings` and `/model` write the one file everything else reads: one schema, one
+owner-only atomic save, and no other command writes it.
 
 - `↑`/`↓` or `Tab` move between keys, `Ctrl-U` empties the field, `Space` flips thinking,
   and an empty value unsets the key so the environment speaks. `Enter` writes at once and
