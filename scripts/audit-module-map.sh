@@ -7,9 +7,12 @@
 # paragraph and holds the clause to words it carries, in the order it carries
 # them. A clause no paragraph holds is reported with the word that was not found.
 #
-# The set it walks is what `git status` sees, as the other audits do, and only a
-# `crates/*/src/lib.rs`: a module below the root is found by opening the root.
+# It walks the crate roots and nothing else: only a `crates/*/src/lib.rs`, because a
+# module below the root is found by opening the root.
 set -euo pipefail
+
+# The tree it walks, from the one place the four audits agree on it.
+. "${BASH_SOURCE[0]%/*}/tree-listing.sh"
 
 min_words=3
 failed=0
@@ -48,6 +51,8 @@ missing_word() { # module file, then the clause's words
         at=$((at + 1))
     done
 }
+
+listing=$(tree_listing '^crates/[^/]+/src/lib\.rs$')
 
 while IFS= read -r root; do
     [ -f "$root" ] || continue
@@ -89,7 +94,7 @@ while IFS= read -r root; do
             failed=1
         fi
     done <"$root"
-done < <({ git ls-files; git ls-files --others --exclude-standard; } | grep -E '^crates/[^/]+/src/lib\.rs$')
+done <<<"$listing"
 
 if [ "$failed" -ne 0 ]; then
     echo "audit: trail each declaration with a clause cut from the module's own paragraph" >&2

@@ -27,6 +27,10 @@ assert_no_file() { # path
     [ ! -e "$1" ] || fail "unexpected file at $1"
 }
 
+assert_empty() { # text
+    [ -z "$1" ] || fail "output is not empty: $1"
+}
+
 assert_executable() { # path
     [ -x "$1" ] || fail "$1 is not executable"
 }

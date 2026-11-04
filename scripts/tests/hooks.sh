@@ -30,7 +30,7 @@ repo() {
     git config core.hooksPath .githooks
     cp -R "$SINDRI_ROOT/.githooks" .githooks
     mkdir -p scripts
-    cp "$SINDRI_ROOT"/scripts/audit-*.sh scripts/
+    cp "$SINDRI_ROOT"/scripts/audit-*.sh "$SINDRI_ROOT"/scripts/tree-listing.sh scripts/
     cp "$SINDRI_ROOT/Makefile" .
     printf 'target\n' >.gitignore
 }

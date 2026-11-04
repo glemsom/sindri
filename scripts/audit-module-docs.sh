@@ -6,9 +6,10 @@
 # the first line is the line that gets scanned; boilerplate there costs exactly
 # the read the rule exists to save.
 #
-# The set it walks is what `git status` sees: an unstaged file is checked
-# too, and a gitignored tree stays out.
 set -euo pipefail
+
+# The tree it walks, from the one place the four audits agree on it.
+. "${BASH_SOURCE[0]%/*}/tree-listing.sh"
 
 min_words=8
 failed=0
@@ -27,6 +28,8 @@ paragraph_words() { # file
     ' "$1"
 }
 
+listing=$(tree_listing '\.rs$')
+
 while IFS= read -r file; do
     [ -f "$file" ] || continue
     checked=$((checked + 1))
@@ -43,7 +46,7 @@ while IFS= read -r file; do
     esac
     printf 'audit: %s %s\n' "$file" "$what" >&2
     failed=1
-done < <({ git ls-files; git ls-files --others --exclude-standard; } | grep '\.rs$')
+done <<<"$listing"
 
 if [ "$failed" -ne 0 ]; then
     echo "audit: open the module with a //! paragraph saying what it is for, above any inner attribute" >&2

@@ -12,9 +12,10 @@
 # below it. Every one of those gaps is stepped over, because a test the scan
 # loses is a name nothing reports.
 #
-# The set it walks is what `git status` sees: an unstaged file is read
-# too, and a gitignored tree stays out.
 set -euo pipefail
+
+# The tree it walks, from the one place the four audits agree on it.
+. "${BASH_SOURCE[0]%/*}/tree-listing.sh"
 
 min_words=4
 failed=0
@@ -54,6 +55,8 @@ test_names() { # file
     ' "$1"
 }
 
+listing=$(tree_listing '\.rs$')
+
 while IFS= read -r file; do
     [ -f "$file" ] || continue
     files=$((files + 1))
@@ -74,7 +77,7 @@ while IFS= read -r file; do
         printf 'audit: %s `%s` %s\n' "$file" "$name" "$what" >&2
         failed=1
     done < <(test_names "$file")
-done < <({ git ls-files; git ls-files --others --exclude-standard; } | grep '\.rs$')
+done <<<"$listing"
 
 if [ "$failed" -ne 0 ]; then
     echo "audit: name the behaviour the test proves rather than the function, so the fix reads as sentence_name_the_case" >&2
