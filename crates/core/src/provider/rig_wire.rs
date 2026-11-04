@@ -58,17 +58,11 @@ pub(super) fn turn(
         client.provider(),
         client.preamble(),
     )?;
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map_err(|error| Error::transport(format!("could not start the runtime: {error}")))?;
+    let runtime = runtime()?;
 
     let response = match client.provider() {
         Provider::Anthropic => {
-            let mut config = AnthropicConfig::new(api_key);
-            if let Some(base_url) = base_url {
-                config = config.with_base_url(base_url);
-            }
+            let config = anthropic_config(api_key, base_url);
             let model = config.connect(ReqwestClient::from(http)).completion(model);
             let stream = model.stream(request).map_err(convert)?;
             consume(&runtime, stream, deltas)?
@@ -76,49 +70,13 @@ pub(super) fn turn(
         // Every OpenAI-shaped server serves Chat Completions, and only some
         // serve `/responses`, so the wire is named rather than inferred.
         Provider::Copilot => {
-            let authenticator = Authenticator::new(
-                AuthSource::OAuth,
-                FileTokenStore::new(
-                    crate::paths::state_dir()
-                        .map_err(|error| {
-                            Error::transport(format!(
-                                "could not locate Copilot credentials: {error}"
-                            ))
-                        })?
-                        .join("copilot"),
-                ),
-                DeviceCodeHandler::default(),
-                false,
-            );
-            let api_client = ReqwestClient::from(http.clone());
-            let auth = runtime
-                .block_on(authenticator.auth_context(&api_client))
-                .map_err(|error| {
-                    Error::transport(format!(
-                        "GitHub Copilot authentication failed: {error}; run `sindri auth login copilot`"
-                    ))
-                })?;
-            let mut config = OpenAIConfig::with_key(&copilot::DIALECT, auth.api_key.expose());
-            // Copilot's session token is scoped to the endpoint Rig derives
-            // from its auth response; never route it to a configured gateway.
-            if let Some(base_url) = auth.api_base.as_deref() {
-                config = config.with_base_url(base_url);
-            }
-            let config = match copilot_route(model) {
-                Some(route) => config.with_route(route),
-                None => config,
-            };
+            let config = copilot_config(&runtime, &http, Some(model))?;
             let model = config.connect(ReqwestClient::from(http)).completion(model);
             let stream = model.stream(request).map_err(convert)?;
             consume(&runtime, stream, deltas).map_err(refused_tools)?
         }
         Provider::Openai => {
-            let mut config = OpenAIConfig::new(api_key).with_route(Route::Chat);
-            // A server that wants no credential must not be sent a blank one.
-            config.auth = Auth::OptionalBearer;
-            if let Some(base_url) = base_url {
-                config = config.with_base_url(base_url);
-            }
+            let config = openai_config(api_key, base_url);
             let model = config.connect(ReqwestClient::from(http)).completion(model);
             let stream = model.stream(request).map_err(convert)?;
             consume(&runtime, stream, deltas).map_err(refused_tools)?
@@ -126,6 +84,115 @@ pub(super) fn turn(
     };
 
     Ok(finish(response))
+}
+
+/// The names the wire says it serves, in the order it named them, asked with
+/// the credential a turn is asked with. Nothing here is invented and nothing is
+/// renamed: a name is the identifier the wire wrote, because that is the string
+/// a later turn must send back. A wire that named nothing is a failure rather
+/// than an empty list, so an empty list is never read as an answer.
+pub(super) fn models(client: &Client) -> Result<Vec<String>, Error> {
+    let (api_key, base_url, _) = client.parts();
+    let http = http(client)?;
+    let runtime = runtime()?;
+
+    let listed = match client.provider() {
+        Provider::Anthropic => {
+            let config = anthropic_config(api_key, base_url);
+            let wire = config.connect(ReqwestClient::from(http));
+            runtime.block_on(wire.list_models()).map_err(convert)?
+        }
+        // The signed-in wire, asked with the session a turn is asked with. No
+        // route is named: a listing is the wire's, not a model's.
+        Provider::Copilot => {
+            let config = copilot_config(&runtime, &http, None)?;
+            let wire = config.connect(ReqwestClient::from(http));
+            runtime.block_on(wire.list_models()).map_err(convert)?
+        }
+        Provider::Openai => {
+            let config = openai_config(api_key, base_url);
+            let wire = config.connect(ReqwestClient::from(http));
+            runtime.block_on(wire.list_models()).map_err(convert)?
+        }
+    };
+
+    let names: Vec<String> = listed.into_iter().map(|model| model.id).collect();
+    if names.is_empty() {
+        return Err(Error::answered(
+            None,
+            format!("the {} wire named no models", client.provider().as_str()),
+        ));
+    }
+    Ok(names)
+}
+
+/// The runtime one call to the wire needs, on this thread and no other.
+fn runtime() -> Result<tokio::runtime::Runtime, Error> {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|error| Error::transport(format!("could not start the runtime: {error}")))
+}
+
+/// The Messages wire, on the credential and the endpoint the run speaks to.
+fn anthropic_config(api_key: &str, base_url: Option<&str>) -> AnthropicConfig {
+    let mut config = AnthropicConfig::new(api_key);
+    if let Some(base_url) = base_url {
+        config = config.with_base_url(base_url);
+    }
+    config
+}
+
+/// The OpenAI-shaped wire as a turn speaks it: Chat Completions named rather
+/// than inferred, and an optional bearer, so a server that wants no credential
+/// is asked without one and is never sent a blank one.
+fn openai_config(api_key: &str, base_url: Option<&str>) -> OpenAIConfig {
+    let mut config = OpenAIConfig::new(api_key).with_route(Route::Chat);
+    config.auth = Auth::OptionalBearer;
+    if let Some(base_url) = base_url {
+        config = config.with_base_url(base_url);
+    }
+    config
+}
+
+/// The Copilot wire, signed in from the stored session. The model is named when
+/// a turn is what is wanted, because its identifier is what picks the route;
+/// a listing names none.
+fn copilot_config(
+    runtime: &tokio::runtime::Runtime,
+    http: &reqwest::Client,
+    model: Option<&str>,
+) -> Result<OpenAIConfig, Error> {
+    let authenticator = Authenticator::new(
+        AuthSource::OAuth,
+        FileTokenStore::new(
+            crate::paths::state_dir()
+                .map_err(|error| {
+                    Error::transport(format!("could not locate Copilot credentials: {error}"))
+                })?
+                .join("copilot"),
+        ),
+        DeviceCodeHandler::default(),
+        false,
+    );
+    let api_client = ReqwestClient::from(http.clone());
+    let auth = runtime
+        .block_on(authenticator.auth_context(&api_client))
+        .map_err(|error| {
+            Error::transport(format!(
+                "GitHub Copilot authentication failed: {error}; run `sindri auth login copilot`"
+            ))
+        })?;
+    let mut config = OpenAIConfig::with_key(&copilot::DIALECT, auth.api_key.expose());
+    // Copilot's session token is scoped to the endpoint Rig derives from its
+    // auth response; never route it to a configured gateway.
+    if let Some(base_url) = auth.api_base.as_deref() {
+        config = config.with_base_url(base_url);
+    }
+    Ok(match model.and_then(copilot_route) {
+        Some(route) => config.with_route(route),
+        None => config,
+    })
 }
 
 /// Copilot's GPT-6 models use Responses even though their identifiers do not

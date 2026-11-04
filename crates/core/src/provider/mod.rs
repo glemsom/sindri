@@ -268,6 +268,12 @@ pub trait Model: Send {
         thinking: bool,
         deltas: &mut dyn DeltaSink,
     ) -> Result<Turn, Error>;
+
+    /// The names the wire says it serves, in the order it named them: what a
+    /// front end offers a human, read from the wire rather than invented. A
+    /// wire that names nothing is a failure, never an empty list that reads as
+    /// an answer.
+    fn models(&self) -> Result<Vec<String>, Error>;
 }
 
 #[derive(Debug, Clone)]
@@ -339,6 +345,10 @@ impl DeltaSink for RetryGuard<'_> {
 }
 
 impl Model for Client {
+    fn models(&self) -> Result<Vec<String>, Error> {
+        rig_wire::models(self).map_err(|error| self.redact(error))
+    }
+
     fn turn(
         &self,
         history: &[Message],

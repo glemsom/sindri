@@ -52,6 +52,13 @@ fn fragmented(text: &str) -> Vec<String> {
 }
 
 impl Model for ScriptedModel {
+    /// No names, said as a failure rather than as an empty list: a double
+    /// serves the turns it was handed, and the list a front end offers is a
+    /// wire's own, which a double has none of.
+    fn models(&self) -> Result<Vec<String>, Error> {
+        Err(Error::transport("a scripted model names no models"))
+    }
+
     fn turn(
         &self,
         history: &[Message],
