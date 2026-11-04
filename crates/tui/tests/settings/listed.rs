@@ -37,7 +37,7 @@ fn opening_settings_asks_the_wire_and_states_the_count_once_it_lands() {
     );
 
     f.app
-        .listed(serving, Some(vec!["qwen3-32b".into(), "llama3-8b".into()]));
+        .listed(serving, Ok(vec!["qwen3-32b".into(), "llama3-8b".into()]));
 
     let model = model_row(&screen(&mut f.app, 100, 30));
     assert!(
@@ -61,7 +61,7 @@ fn the_modal_takes_every_key_while_the_ask_is_out_and_after_it_fails() {
     );
 
     assert!(
-        f.app.listed(serving, None),
+        f.app.listed(serving, Err("HTTP 404".to_string())),
         "the ask failing is news the modal draws"
     );
     let rows = shown(&screen(&mut f.app, 100, 30));
@@ -96,7 +96,7 @@ fn a_listing_for_a_wire_the_launch_has_left_is_dropped_where_it_lands() {
     open(&mut f.app);
 
     assert!(
-        !f.app.listed(stale, Some(vec!["qwen3-32b".to_string()])),
+        !f.app.listed(stale, Ok(vec!["qwen3-32b".to_string()])),
         "a listing for the wire the run has left draws nothing at all"
     );
     let rows = shown(&screen(&mut f.app, 100, 30));
@@ -122,13 +122,13 @@ fn a_wire_with_no_list_says_so_and_the_refusal_row_stays_empty() {
     let mut f = fixture(None);
     open(&mut f.app);
     let serving = f.app.take_ask().expect("an ask is out");
-    f.app.listed(serving, None);
+    f.app.listed(serving, Err("HTTP 404".to_string()));
 
     let rows = screen(&mut f.app, 100, 30);
     let model = model_row(&rows);
     assert!(
-        model.contains("no list · type a name"),
-        "the row says where the count would be: {model}"
+        model.contains("no list · HTTP 404 · type a name"),
+        "the row says where the count would be, and what the wire said: {model}"
     );
     assert!(
         !shown(&rows).contains("not saved"),
@@ -141,7 +141,7 @@ fn a_name_no_list_holds_saves_exactly_as_it_did_before() {
     let mut f = fixture(Some("model = \"m\"\n"));
     open(&mut f.app);
     let serving = f.app.take_ask().expect("an ask is out");
-    f.app.listed(serving, Some(vec!["offered-one".to_string()]));
+    f.app.listed(serving, Ok(vec!["offered-one".to_string()]));
 
     down_to(&mut f.app, Key::Model);
     press(&mut f.app, KeyCode::Char('u'), KeyModifiers::CONTROL);
@@ -160,7 +160,7 @@ fn the_count_is_the_model_row_and_the_key_hints_name_the_keys_it_takes() {
     let mut f = fixture(Some("model = \"qwen3-32b\"\n"));
     open(&mut f.app);
     let serving = f.app.take_ask().expect("an ask is out");
-    f.app.listed(serving, Some(vec!["qwen3-32b".to_string()]));
+    f.app.listed(serving, Ok(vec!["qwen3-32b".to_string()]));
 
     let rows = screen(&mut f.app, 100, 30);
     let model = model_row(&rows);

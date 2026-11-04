@@ -515,7 +515,10 @@ fn an_address_typed_in_the_modal_is_the_address_asked() {
     );
     // The row is whole when the cursor leaves it, and that is when it is asked.
     step_down(&pty);
-    expect_on_screen(&pty, &mut child, "no list · type a name");
+    // The row says why: a port nothing answers on has no status to name, and
+    // the three words a row is left with when a wire cannot be reached is the
+    // fact that sends a human to the address rather than to the key.
+    expect_on_screen(&pty, &mut child, "no list · no answer · type a name");
 
     let (code, _) = pty.quit(&mut child);
     assert_eq!(code, Some(0), "leaving the frame is not a failure");

@@ -67,7 +67,7 @@ fn offered(file: Option<&str>, names: &[&str]) -> Fixture {
         .expect("opening the screen asks the wire for its names");
     f.app.listed(
         serving,
-        Some(names.iter().map(|name| name.to_string()).collect()),
+        Ok(names.iter().map(|name| name.to_string()).collect()),
     );
     f
 }

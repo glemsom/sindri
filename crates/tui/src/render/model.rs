@@ -147,9 +147,12 @@ fn empty(model: &Model, served: &Served, columns: usize) -> Vec<Line<'static>> {
     let said = match (served.asking(), model.filter().is_empty()) {
         (true, _) => format!("asking {wire} for its names — this screen takes every key meanwhile"),
         (false, false) => format!("no name reaches {}", model.filter()),
-        (false, true) => {
-            format!("{wire} could not be asked for its names · /model <name> sets one")
-        }
+        (false, true) => match served.reason() {
+            Some(why) => {
+                format!("{wire} could not be asked for its names ({why}) · /model <name> sets one")
+            }
+            None => format!("{wire} could not be asked for its names · /model <name> sets one"),
+        },
     };
     vec![Line::from(Span::styled(
         clip(&said, columns),

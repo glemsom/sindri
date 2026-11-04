@@ -57,7 +57,7 @@ pub(super) fn drive(mut driver: Box<dyn Driver>, tx: Sender<Msg>) -> Sender<Task
                     // listing that lands after the row has moved is dropped
                     // where it lands.
                     let names = driver.models(&serving);
-                    tx.send(Msg::Listed(serving, names.ok()))
+                    tx.send(Msg::Listed(serving, names))
                 }
                 Task::Renew => tx.send(Msg::Renewed(driver.renew().map(Box::new))),
                 Task::Reload => tx.send(Msg::Reloaded(driver.reload().map(Box::new))),

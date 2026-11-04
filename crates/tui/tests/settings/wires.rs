@@ -64,7 +64,7 @@ fn choosing_a_wire_asks_the_wire_again_and_the_row_beneath_stops_naming_the_one_
     let first = f.app.take_ask().expect("opening the modal asks the wire");
     f.app.listed(
         first,
-        Some(vec!["qwen3-32b".to_string(), "llama3-8b".to_string()]),
+        Ok(vec!["qwen3-32b".to_string(), "llama3-8b".to_string()]),
     );
     assert!(
         model_row(&screen(&mut f.app, 100, 30)).contains("2 names · anthropic"),
@@ -95,7 +95,7 @@ fn choosing_a_wire_asks_the_wire_again_and_the_row_beneath_stops_naming_the_one_
         "the row beneath stops describing the wire the user has left: {model}"
     );
 
-    f.app.listed(asked, Some(vec!["gpt-5".to_string()]));
+    f.app.listed(asked, Ok(vec!["gpt-5".to_string()]));
     let model = model_row(&screen(&mut f.app, 100, 30));
     assert!(
         model.contains("1 name · openai"),

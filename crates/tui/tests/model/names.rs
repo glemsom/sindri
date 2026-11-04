@@ -74,7 +74,7 @@ fn a_wire_with_no_list_still_opens_the_screen_and_says_why_it_is_empty() {
     );
 
     assert!(
-        f.app.listed(serving, None),
+        f.app.listed(serving, Err("HTTP 404".to_string())),
         "a wire that refused is news the screen draws"
     );
     let rows = shown(&screen(&mut f.app, 100, 30));

@@ -44,10 +44,12 @@ impl Serving {
 enum Listing {
     /// The names the wire said it serves, in the order it named them.
     Named(Vec<String>),
-    /// The wire could not be asked, or named nothing it could be asked. A hint
-    /// and never a refusal: the modal this row sits in is the front door for a
-    /// run with no key, which is exactly the run that cannot be asked.
-    Absent,
+    /// The wire could not be asked, or named nothing it could be asked, and
+    /// the few words the ask failed with. A hint and never a refusal: the modal
+    /// this row sits in is the front door for a run with no key, which is
+    /// exactly the run that cannot be asked — and the words are what tells a
+    /// human a gateway was at the wrong address rather than out of names.
+    Absent(String),
 }
 
 /// The names a wire serves, what they answer for, and whether the ask is still
@@ -104,34 +106,46 @@ impl Served {
     pub fn names(&self) -> &[String] {
         match &self.listing {
             Some(Listing::Named(names)) => names,
-            Some(Listing::Absent) | None => &[],
+            Some(Listing::Absent(_)) | None => &[],
+        }
+    }
+
+    /// The words an ask failed with, where it failed: what the model screen
+    /// says beside the wire it could not ask, and none once a listing landed.
+    pub fn reason(&self) -> Option<&str> {
+        match &self.listing {
+            Some(Listing::Absent(why)) => Some(why.as_str()),
+            Some(Listing::Named(_)) | None => None,
         }
     }
 
     /// A listing landing, and whether the frame was still asking it: one for a
     /// wire or base URL that has changed since is dropped here, and the row it
     /// would have said something on is left exactly as it was.
-    pub fn landed(&mut self, serving: Serving, names: Option<Vec<String>>) -> bool {
+    pub fn landed(&mut self, serving: Serving, listed: Result<Vec<String>, String>) -> bool {
         if self.serving.as_ref() != Some(&serving) {
             return false;
         }
         self.wanted = None;
-        self.listing = Some(match names {
-            Some(names) => Listing::Named(names),
-            None => Listing::Absent,
+        self.listing = Some(match listed {
+            Ok(names) => Listing::Named(names),
+            Err(why) => Listing::Absent(why),
         });
         true
     }
 
     /// What the model row says beside the name it holds: how many the wire
     /// offered and which wire named them, or — where there is no list to state
-    /// — that there is none. `None` while the ask is out, because a count
-    /// nothing has answered for is a count the frame would be inventing.
+    /// — that there is none and the words the ask failed with, because a run
+    /// whose gateway is at the wrong address and a run whose wire keeps no
+    /// catalogue are two facts and three words cannot carry both. `None` while
+    /// the ask is out, because a count nothing has answered for is a count the
+    /// frame would be inventing.
     pub fn note(&self) -> Option<String> {
         let serving = self.serving.as_ref()?;
         Some(match self.listing.as_ref()? {
             Listing::Named(names) => format!("{} · {}", counted(names.len()), serving.wire()),
-            Listing::Absent => "no list · type a name".to_string(),
+            Listing::Absent(why) => format!("no list · {why} · type a name"),
         })
     }
 }
@@ -166,13 +180,13 @@ mod tests {
         served.ask(elsewhere.clone());
 
         assert!(
-            !served.landed(one(), Some(vec!["claude-sonnet-4-6".to_string()])),
+            !served.landed(one(), Ok(vec!["claude-sonnet-4-6".to_string()])),
             "the ask on hand is another wire's, so this listing is nobody's"
         );
         assert!(served.names().is_empty(), "and no name reached the frame");
         assert!(served.asking(), "the later ask is still out");
 
-        assert!(served.landed(elsewhere, Some(vec!["gpt-5".to_string()])));
+        assert!(served.landed(elsewhere, Ok(vec!["gpt-5".to_string()])));
         assert_eq!(served.names(), ["gpt-5".to_string()]);
         assert!(
             !served.asking(),
@@ -185,7 +199,7 @@ mod tests {
         let mut served = Served::default();
         assert!(served.want(one()), "no wire is being stated yet");
 
-        served.landed(one(), Some(vec!["claude-sonnet-4-6".to_string()]));
+        served.landed(one(), Ok(vec!["claude-sonnet-4-6".to_string()]));
         assert!(
             !served.want(one()),
             "the names on hand answer for this wire already"
@@ -211,12 +225,12 @@ mod tests {
         assert!(
             !served.landed(
                 Serving::of("openai", Some("http://localhost:9090".to_string())),
-                Some(vec!["gpt-5".to_string()])
+                Ok(vec!["gpt-5".to_string()])
             ),
             "the same wire at another address names whatever that server names"
         );
         assert!(served.asking());
-        assert!(served.landed(at_one, None));
+        assert!(served.landed(at_one, Err("HTTP 404".to_string())));
         assert!(served.names().is_empty(), "a wire with no list offers none");
     }
 
@@ -226,15 +240,20 @@ mod tests {
         served.ask(one());
         assert_eq!(served.note(), None, "an ask in flight states no count");
 
-        assert!(served.landed(one(), Some(vec!["one".to_string()])));
+        assert!(served.landed(one(), Ok(vec!["one".to_string()])));
         assert_eq!(served.note(), Some("1 name · anthropic".to_string()));
 
         served.ask(one());
-        assert!(served.landed(one(), Some(vec!["one".to_string(), "two".to_string()])));
+        assert!(served.landed(one(), Ok(vec!["one".to_string(), "two".to_string()])));
         assert_eq!(served.note(), Some("2 names · anthropic".to_string()));
 
         served.ask(one());
-        assert!(served.landed(one(), None));
-        assert_eq!(served.note(), Some("no list · type a name".to_string()));
+        assert!(served.landed(one(), Err("HTTP 401".to_string())));
+        assert_eq!(
+            served.note(),
+            Some("no list · HTTP 401 · type a name".to_string()),
+            "a row that cannot say why sends a human to the wrong fix"
+        );
+        assert_eq!(served.reason(), Some("HTTP 401"));
     }
 }

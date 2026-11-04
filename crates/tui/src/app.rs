@@ -371,8 +371,8 @@ impl App {
     /// What a thread made of the ask, and whether it drew anything: a listing
     /// for a wire or base URL the launch has left is dropped where it lands,
     /// and the row it would have said something on says what it said before.
-    pub fn listed(&mut self, serving: Serving, names: Option<Vec<String>>) -> bool {
-        if !self.served.landed(serving, names) {
+    pub fn listed(&mut self, serving: Serving, listed: Result<Vec<String>, String>) -> bool {
+        if !self.served.landed(serving, listed) {
             return false;
         }
         // The two places a listing is drawn are the modal's model row and the

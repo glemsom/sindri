@@ -18,7 +18,7 @@ fn offered(file: Option<&str>, names: &[&str]) -> Fixture {
     let serving = f.app.take_ask().expect("opening the modal asks the wire");
     f.app.listed(
         serving,
-        Some(names.iter().map(|name| name.to_string()).collect()),
+        Ok(names.iter().map(|name| name.to_string()).collect()),
     );
     f
 }

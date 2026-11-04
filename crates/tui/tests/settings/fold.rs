@@ -19,7 +19,7 @@ fn offered(file: Option<&str>, names: &[&str]) -> Fixture {
     let serving = f.app.take_ask().expect("opening the modal asks the wire");
     f.app.listed(
         serving,
-        Some(names.iter().map(|name| name.to_string()).collect()),
+        Ok(names.iter().map(|name| name.to_string()).collect()),
     );
     f
 }
@@ -214,7 +214,7 @@ fn a_long_fold_under_a_refusal_keeps_both_pinned_rows_on_screen() {
     let mut f = fixture(None);
     open(&mut f.app);
     let serving = f.app.take_ask().expect("an ask is out");
-    f.app.listed(serving, Some(many(40)));
+    f.app.listed(serving, Ok(many(40)));
 
     // A save the schema refuses, so the foot carries the refusal and the keys.
     down_to(&mut f.app, Key::MaxTurns);

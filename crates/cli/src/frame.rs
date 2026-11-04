@@ -248,8 +248,11 @@ impl Driver for Front {
     /// reads no key it was not already given.
     fn models(&mut self, serving: &Serving) -> Result<Vec<String>, String> {
         let config = self.asked(serving);
+        // A listing is stated in a row and not in a transcript, so what a
+        // failure is worth here is its status: the wire's own words are as
+        // likely as not a page of HTML, and the row has a handful of cells.
         stack::models(&self.boot.session, &config)
-            .map_err(|error| failure::provider_message(&error))
+            .map_err(|error| failure::listing_reason(error.status()))
     }
 
     fn reload(&mut self) -> Result<Launch, String> {

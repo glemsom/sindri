@@ -34,10 +34,12 @@ pub enum Msg {
     /// here like a line of output — the frame that laid its panel out waited
     /// for nothing.
     Drawn(String, Result<Drawing, Refusal>),
-    /// What a thread made of an ask about the wire: the names it serves, or
-    /// nothing where it could not be asked. The ask travels with the listing, so
-    /// one made for a wire the frame has since left is dropped where it lands.
-    Listed(Serving, Option<Vec<String>>),
+    /// What a thread made of an ask about the wire: the names it serves, or the
+    /// words it failed with — never nothing, because a row that cannot say why
+    /// sends a human to check a key when the address was wrong. The ask travels
+    /// with the listing, so one made for a wire the frame has since left is
+    /// dropped where it lands.
+    Listed(Serving, Result<Vec<String>, String>),
     /// What a skill the frame asked for came to: the load itself arrived as the
     /// `Event::SkillLoaded` before it, and this is the frame's answer that the
     /// task is done.

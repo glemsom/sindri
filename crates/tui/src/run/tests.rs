@@ -723,7 +723,7 @@ fn the_modal_asks_the_wire_as_it_opens_and_only_its_own_answer_draws() {
 
     let _ = tx.send(Msg::Listed(
         serving,
-        Some(vec!["claude-sonnet-4-6".to_string()]),
+        Ok(vec!["claude-sonnet-4-6".to_string()]),
     ));
     assert!(turn_of_the_loop(
         &mut app,
@@ -743,7 +743,7 @@ fn the_modal_asks_the_wire_as_it_opens_and_only_its_own_answer_draws() {
 
     let _ = tx.send(Msg::Listed(
         Serving::of("openai", None),
-        Some(vec!["gpt-5".to_string()]),
+        Ok(vec!["gpt-5".to_string()]),
     ));
     assert!(turn_of_the_loop(
         &mut app,

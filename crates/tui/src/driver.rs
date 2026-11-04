@@ -79,8 +79,10 @@ pub trait Driver: Send {
     /// while it is out. The ask carries the wire and the address together
     /// because a listing answers for one of each — the row a human has just
     /// moved, not the one the launch was built on. `Err` is why the wire would
-    /// not say — a hint the modal states in three words, never a refusal,
-    /// because the run this front end cannot ask is the one with no key yet.
+    /// not say — a hint the modal and the model screen state, never a refusal,
+    /// because the run this front end cannot ask is the one with no key yet —
+    /// and it is read in a row, so it is a handful of words and never a
+    /// server's body.
     fn models(&mut self, _serving: &Serving) -> Result<Vec<String>, String> {
         Err("this front end cannot ask the wire".to_string())
     }

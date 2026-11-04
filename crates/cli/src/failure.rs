@@ -87,6 +87,19 @@ pub(crate) fn provider_message(error: &Error) -> String {
     }
 }
 
+/// The same failure in the cells a settings row has: the status the wire
+/// answered with, and never its body — a gateway that answers an unknown route
+/// with a page of HTML would spend the whole row saying `<!DOCTYPE` — or the
+/// one word a wire that said nothing at all earns, because a number is what a
+/// refusal has and a timeout has none. The row is the room; the transcript is
+/// where a run says a provider's own words.
+pub(crate) fn listing_reason(status: Option<u16>) -> String {
+    match status {
+        Some(status) => format!("HTTP {status}"),
+        None => "no answer".to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(
@@ -103,6 +116,19 @@ mod tests {
 
     fn io_error(why: &str) -> io::Error {
         io::Error::other(why)
+    }
+
+    #[test]
+    fn a_failed_listing_is_a_status_and_never_a_body() {
+        assert_eq!(
+            listing_reason(None),
+            "no answer",
+            "a wire that said nothing at all is not a wire that said no"
+        );
+        // A gateway's unknown route answers with a page: the status is the
+        // whole of it that fits the row a human reads.
+        assert_eq!(listing_reason(Some(404)), "HTTP 404");
+        assert_eq!(listing_reason(Some(401)), "HTTP 401");
     }
 
     #[test]
