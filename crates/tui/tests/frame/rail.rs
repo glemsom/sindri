@@ -15,7 +15,6 @@ use sindri_tui::theme;
 const LABELS: &[&str] = &[
     "cache",
     "turns",
-    "tokens",
     "context",
     "model",
     "workspace",
@@ -41,7 +40,6 @@ fn the_rail_is_complete_without_the_face_at_a_hundred_and_at_a_hundred_and_sixty
         for (label, said) in [
             ("cache", "82%"),
             ("turns", "1/250"),
-            ("tokens", "12.4k in · 2.1k out"),
             ("context", "░░░░░░░░ 12.4k/200k"),
             ("stop", "final"),
             ("model", "claude-sonnet-4-6"),

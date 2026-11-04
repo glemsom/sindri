@@ -191,13 +191,7 @@ fn the_first_frame_claims_nothing_the_launch_did_not_say() {
     let rows = screen(&mut app, 100, 24);
     let column = body(&rows).join(" ");
 
-    for invented in [
-        "00000000-1111",
-        "/nowhere/sindri/tmp",
-        "tokens",
-        "branch",
-        "1 in",
-    ] {
+    for invented in ["00000000-1111", "/nowhere/sindri/tmp", "tokens", "branch"] {
         assert!(
             !column.contains(invented),
             "the first frame claims no {invented:?} the run has not established: {rows:#?}"
@@ -205,10 +199,14 @@ fn the_first_frame_claims_nothing_the_launch_did_not_say() {
     }
 
     // The rest of the empty frame is the rail, and it says only what a launch
-    // and no run establish: nothing spent, no cache to be a share of, and the
-    // branch as the dash of one that is not there.
+    // and no run establish: an empty context window, no cache to be a share
+    // of, and the branch as the dash of one that is not there.
     let rails = rails(&rows, 100);
-    for (label, said) in [("tokens", "0 in · 0 out"), ("cache", "—"), ("branch", "—")] {
+    for (label, said) in [
+        ("context", "░░░░░░░░ 0/200k"),
+        ("cache", "—"),
+        ("branch", "—"),
+    ] {
         assert_eq!(
             value(&rails, label),
             said,

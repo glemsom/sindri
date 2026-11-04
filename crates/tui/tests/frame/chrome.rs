@@ -196,7 +196,6 @@ fn a_rail_with_the_room_for_its_facts_leaves_none_of_them_out() {
     for label in [
         "cache",
         "turns",
-        "tokens",
         "context",
         "model",
         "workspace",

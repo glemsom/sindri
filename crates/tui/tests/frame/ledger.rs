@@ -23,7 +23,6 @@ fn every_value_hangs_off_the_rails_last_column() {
         for (label, said) in [
             ("cache", "82%"),
             ("turns", "1/250"),
-            ("tokens", "12.4k in · 2.1k out"),
             ("context", "░░░░░░░░ 12.4k/200k"),
             ("stop", "final"),
             ("model", "claude-sonnet-4-6"),

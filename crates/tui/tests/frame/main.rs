@@ -177,7 +177,6 @@ fn the_rail_is_a_column_at_a_hundred_columns() {
         // the rail's last column.
         ("cache", "82%"),
         ("turns", "1/250"),
-        ("tokens", "12.4k in · 2.1k out"),
         ("context", "░░░░░░░░ 12.4k/200k"),
         // The two facts the rail used to lack, and what the run is.
         ("model", "claude-sonnet-4-6"),

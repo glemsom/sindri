@@ -152,7 +152,7 @@ fn a_running_call_counts_up_and_freezes_at_the_duration_it_ended_on() {
 }
 
 #[test]
-fn tokens_and_context_move_while_the_run_is_still_running() {
+fn the_context_window_moves_while_the_run_is_still_running() {
     let mut app = app();
     asked(&mut app, "read the policy");
     // Four hundred characters of answer is a hundred tokens at the rate the
@@ -164,19 +164,15 @@ fn tokens_and_context_move_while_the_run_is_still_running() {
     let rows = screen(&mut app, 100, 20);
     let rail: String = rows.iter().map(|row| rail_of(row)).collect();
     assert!(
-        rail.contains("100 out"),
-        "the output figure moves as the answer streams: {rail:#?}"
-    );
-    assert!(
         rail.contains("100/200k"),
-        "and so does the context meter: {rail:#?}"
+        "the context meter moves as the answer streams: {rail:#?}"
     );
 
     app.finished(ended(Stop::Final, 1, usage(12_400, 2_100, 10_168)));
     let rows = screen(&mut app, 100, 20);
     let rail: String = rows.iter().map(|row| rail_of(row)).collect();
     assert!(
-        rail.contains("12.4k in · 2.1k out") && rail.contains("12.4k/200k"),
+        rail.contains("12.4k/200k"),
         "the report replaces the guess when it lands: {rail:#?}"
     );
 }

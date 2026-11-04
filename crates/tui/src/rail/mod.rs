@@ -1,6 +1,6 @@
-//! The rail: the facts a user must never lose sight of — what a run has cost,
-//! how close it is to the context limit, which model and workspace are in
-//! play, which sandbox is on, and where the record lives. One
+//! The rail: the facts a user must never lose sight of — how full the context
+//! window is, what a run has spent, which model and workspace are in play,
+//! which sandbox is on, and where the record lives. One
 //! ordered list of facts feeds both the column and the one-line strip, so the
 //! two can never disagree.
 
@@ -126,16 +126,14 @@ impl Rail {
         self.fresh.clear();
     }
 
-    /// `chars` more characters of the answer have arrived: the output figure
-    /// and the context meter both move on it, now rather than at the end of
-    /// the run they describe.
+    /// `chars` more characters of the answer have arrived: the context meter
+    /// moves on them, now rather than at the end of the run it describes.
     pub fn streamed(&mut self, chars: usize, now: Duration) {
         let chars = chars as u64;
         if chars == 0 {
             return;
         }
         self.streamed = self.streamed.saturating_add(chars);
-        self.moved("tokens", now);
         self.moved("context", now);
     }
 
@@ -147,7 +145,6 @@ impl Rail {
         // The report replaces the estimate: what streamed was only ever a
         // stand-in for what the provider says it spent.
         self.streamed = 0;
-        self.moved("tokens", now);
         self.moved("context", now);
         self.turns = self.turns.max(turns);
         self.usage.accumulate(usage);
@@ -216,14 +213,6 @@ impl Rail {
         let mut facts = vec![
             Fact::spend("cache", self.cache()),
             Fact::spend("turns", format!("{}/{}", self.turns, self.launch.max_turns)),
-            Fact::spend(
-                "tokens",
-                format!(
-                    "{} in · {} out",
-                    compact(self.usage.input()),
-                    compact(self.usage.output() + self.estimate())
-                ),
-            ),
             Fact::spend("context", self.meter()),
         ];
         if let Some(stop) = self.stop {

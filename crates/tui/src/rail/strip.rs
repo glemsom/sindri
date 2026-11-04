@@ -51,8 +51,7 @@ pub fn priority(fact: &Fact) -> u8 {
         // nothing on the screen stands in for either.
         "skills" => 10,
         "context" => 9,
-        "tokens" => 8,
-        "turns" => 7,
+        "turns" => 8,
         "cache" => 6,
         "stop" => 5,
         "model" => 4,
@@ -223,8 +222,7 @@ mod tests {
         assert_eq!(ranked(&facts, "temp"), *order.first().expect("a first"));
         // The numbers outrank the identity, because the first frame already
         // names the run, and the meter outranks the rest of the numbers.
-        assert!(ranked(&facts, "context") > ranked(&facts, "tokens"));
-        assert!(ranked(&facts, "tokens") > ranked(&facts, "turns"));
+        assert!(ranked(&facts, "context") > ranked(&facts, "turns"));
         assert!(ranked(&facts, "turns") > ranked(&facts, "cache"));
         assert!(ranked(&facts, "cache") > ranked(&facts, "model"));
         assert!(ranked(&facts, "model") > ranked(&facts, "branch"));

@@ -128,12 +128,12 @@ transcript, rail, composer; off a terminal it is a refusal at exit 2.
   titled `3 queued` (`queued` for one); `↑` takes the newest back into the composer,
   `Ctrl-X` drops it. `Ctrl-C` is answered at once — `cancelling…` in the footer, draft
   kept — and the run stops when the request in flight does.
-- **Rail:** 32 columns, always visible — cache hits, turns against the cap, tokens, a
-  context meter, session GUID, temp path, branch, sandbox posture, why the last run
-  stopped. Read as a ledger: labels in a nine-column field two cells in from the rail's
-  first column, dot leaders across the gap, every value hanging off one edge, a `─`
-  hairline between blocks. Below 100 columns it becomes one strip, inset the same two
-  cells; the face takes the rows left over.
+- **Rail:** 32 columns, always visible — cache hits, turns against the cap, a context
+  meter, session GUID, temp path, branch, sandbox posture, why the last run stopped.
+  Read as a ledger: labels in a nine-column field two cells in from the rail's first
+  column, dot leaders across the gap, every value hanging off one edge, a `─` hairline
+  between blocks. Below 100 columns it becomes one strip, inset the same two cells; the
+  face takes the rows left over.
 - **Composer,** two to six rows: `Enter` sends, `Shift+Enter` or `Ctrl-J` breaks the line,
   `Ctrl-Q` leaves, `Ctrl-C` cancels a run and keeps the draft — or clears it when nothing
   is running. A pasted prompt arrives as one draft with its line breaks kept.

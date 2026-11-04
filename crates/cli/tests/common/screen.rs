@@ -367,7 +367,7 @@ pub fn says(text: &str, phrase: &str) -> bool {
         }
         // Every row starts the phrase afresh as well: a row that carries
         // nothing on must not leave the reader looking for a phrase that began
-        // somewhere it did not — a rail's `tokens 0 in` is not a phrase's `in`.
+        // somewhere it did not — a rail's `cache 82%` is not a phrase's `82%`.
         for start in 0..row.len() {
             carried = carried.max(matched(&row, start, &want));
         }
