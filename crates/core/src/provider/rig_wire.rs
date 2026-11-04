@@ -132,8 +132,7 @@ pub(super) fn turn(
 /// carry the `codex` marker Rig's dialect uses for route selection.
 fn copilot_route(model: &str) -> Option<Route> {
     let model = model.to_ascii_lowercase();
-    (model.starts_with("gpt-6-") || model.starts_with("gpt-6."))
-        .then_some(Route::Responses)
+    (model.starts_with("gpt-6-") || model.starts_with("gpt-6.")).then_some(Route::Responses)
 }
 
 /// Reads the reply to its end, handing every fragment to `deltas` as it
@@ -370,7 +369,11 @@ mod tests {
         use rig_core::providers::openai::Route;
 
         for model in ["gpt-6-luna", "gpt-6-astra", "gpt-6-sol", "gpt-6.1-sol"] {
-            assert_eq!(super::copilot_route(model), Some(Route::Responses), "{model}");
+            assert_eq!(
+                super::copilot_route(model),
+                Some(Route::Responses),
+                "{model}"
+            );
         }
         assert_eq!(super::copilot_route("gpt-5.3-codex"), None);
         assert_eq!(super::copilot_route("gpt-4o"), None);
