@@ -34,8 +34,6 @@ TASK=${BENCH_TASK:-inspect}
 if ! arm_is_a_name "$arm"; then
   echo "run_one: arm must be $(arms_words), not '$arm'" >&2; exit 2
 fi
-[ -x "$BIN" ] || { echo "run_one: $BIN is not built — run ./build_arm.sh $arm" >&2; exit 2; }
-
 # The task is a name the bench holds, and asking `tasks.py` is what keeps a typo
 # from becoming a fixture path a run half-reads: the question, the repository and
 # the skill are all that task's, and a name nothing answers to is refused here.
@@ -45,6 +43,8 @@ if ! fixture=$(ask_task fixture) 2>/dev/null; then
   exit 2
 fi
 PROMPT=$(ask_task prompt)
+
+[ -x "$BIN" ] || { echo "run_one: $BIN is not built — run ./build_arm.sh $arm" >&2; exit 2; }
 
 # The arm is what the binary carries, not the word on the command line: a run
 # labelled `with` on another arm's binary would land in the with row with the
