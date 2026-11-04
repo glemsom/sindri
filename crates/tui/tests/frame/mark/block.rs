@@ -200,6 +200,7 @@ fn a_click_that_opens_a_spill_row_starts_no_mark_and_lights_nothing() {
     let rows = screen(&mut app, 100, 20);
     let row = row_of(&rows, "output too large") as u16;
     mouse(&mut app, MouseEventKind::Down(MouseButton::Left), 4, row);
+    spilled(&mut app);
     assert!(
         app.overlay().is_some(),
         "the click opened the untruncated output"

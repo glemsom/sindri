@@ -14,7 +14,8 @@ mod common;
 
 pub use common::{
     SHIPPED, any, badge, buffer, call, cursor, draft, ended, failed, frame_cells, posture_ink,
-    press, ran, row, row_of, screen, shown, turn, type_text, unsafe_launch, usage, with_spill,
+    press, ran, row, row_of, screen, shown, spilled, turn, type_text, unsafe_launch, usage,
+    with_spill,
 };
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;

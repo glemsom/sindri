@@ -254,6 +254,9 @@ fn turn_of_the_loop(
     // reads — so a draft that moved on is still answered for, whichever
     // generation's paths arrive first.
     walk(app, tx, walking, root);
+    // The file a spill was asked for is read whether or not this message draws:
+    // the ask puts no row on screen, and the box opens with the words.
+    spill_off_thread(app, tx);
     // What the frame says nothing with is never a frame drawn — a draw shows
     // the cursor in the composer again and restarts its blink — and the work
     // between a message and its frame goes with it: nothing is laid out twice
@@ -358,6 +361,7 @@ fn apply(app: &mut App, message: Msg) -> bool {
         Msg::Finished(finished) => app.finished(finished),
         Msg::Paths(generation, paths, capped) => app.paths(generation, paths, capped),
         Msg::Drawn(body, drawn) => app.drawn(body, drawn),
+        Msg::Spilled(path, read) => app.spilled(path, read),
         Msg::Listed(serving, names) => app.listed(serving, names),
         Msg::Loaded(loaded) => app.loaded(loaded),
         Msg::Renewed(launch) => app.renewed(launch.map(|launch| *launch)),
@@ -385,6 +389,24 @@ fn walk(app: &mut App, tx: &Sender<Msg>, walking: &mut bool, root: &std::path::P
             .filter(|path| crate::completion::walk::visible(path, &typed))
             .collect();
         let _ = tx.send(Msg::Paths(generation, paths, found.capped));
+    });
+}
+
+/// Reads the spill file the frame asked for on a thread of its own, and hands
+/// the words back on the loop's own channel: a spill exists because the output
+/// was too big to show, so the bigger the reason to open it, the longer the
+/// frame would be frozen — and while a run is live that is also the frame that
+/// would have shown the command's next line. Nothing is joined, and the answer
+/// names the file it was made of, so a box opened after the thread's session has
+/// gone is dropped where it lands.
+fn spill_off_thread(app: &mut App, tx: &Sender<Msg>) {
+    let Some(path) = app.take_spill() else {
+        return;
+    };
+    let tx = tx.clone();
+    std::thread::spawn(move || {
+        let read = crate::spill::Spill::open(&path);
+        let _ = tx.send(Msg::Spilled(path, read));
     });
 }
 

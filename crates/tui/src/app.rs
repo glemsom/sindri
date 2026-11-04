@@ -13,6 +13,7 @@ use sindri_core::status::{Doing, State};
 mod marks;
 mod pictures;
 mod skill;
+mod spill;
 
 use crate::completion::Completion;
 use crate::composer::Composer;
@@ -31,6 +32,8 @@ use crate::thread::Thread;
 use crate::window::Window;
 
 pub use self::skill::Loading;
+
+use self::spill::Spilling;
 
 /// Where `/new` has got to. Two states would not do: the frame marks the
 /// request, the loop hands it to the front end once, and nothing may run
@@ -95,6 +98,9 @@ pub struct App {
     /// what runs once the answer lands.
     pub(crate) loading: Loading,
     pub(crate) armed: Option<String>,
+    /// Where the spill the reader asked for has got to: the file a thread is
+    /// reading, so a key pressed while it is out is the same ask.
+    spilling: Spilling,
     pub(crate) selecting: usize,
     pub(crate) generation: u64,
     pub(crate) config: Option<PathBuf>,
@@ -167,6 +173,7 @@ impl App {
             renew: Renew::Idle,
             loading: Loading::Idle,
             armed: None,
+            spilling: Spilling::default(),
             selecting: 0,
             generation: 0,
             config: None,
@@ -443,6 +450,7 @@ impl App {
                 let session = launch.session.clone();
                 self.loading = Loading::Idle;
                 self.armed = None;
+                self.spilling = Spilling::default();
                 self.thread.clear();
                 self.queue.clear();
                 self.early.clear();

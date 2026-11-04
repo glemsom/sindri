@@ -18,13 +18,15 @@ use ratatui::backend::TestBackend;
 use sindri_core::agent::{Report, Spent};
 use sindri_core::provider::Usage;
 
-use super::{Paint, heard, turn_of_the_loop, walk};
+use super::{Paint, heard, turn_of_the_loop};
 use crate::app::App;
 use crate::copy::{Clipboard, Copied};
 use crate::driver::{Finished, Stop, Task};
 use crate::msg::Msg;
 use crate::rail::Launch;
 use crate::settings::Serving;
+
+mod asks;
 
 /// The frame's own draw, counted: the loop asks what it is painting and this
 /// answers without a terminal, so the clock is proven and nothing is drawn.
@@ -158,42 +160,6 @@ impl Clipboard for Taking {
         }
         Copied::Sent
     }
-}
-
-#[test]
-fn a_keystroke_starts_one_walk_and_its_answer_names_the_completion() {
-    let root = tempfile::tempdir().expect("a workspace");
-    std::fs::create_dir_all(root.path().join(".git")).expect("a git directory");
-    std::fs::write(root.path().join("main.rs"), "").expect("a file");
-    std::fs::write(root.path().join(".hidden"), "").expect("a dotfile");
-
-    let mut app = app();
-    for ch in "@ma".chars() {
-        app.key(crossterm::event::KeyEvent::new(
-            crossterm::event::KeyCode::Char(ch),
-            crossterm::event::KeyModifiers::NONE,
-        ));
-    }
-    let (tx, rx) = mpsc::channel();
-    let mut walking = false;
-    walk(&mut app, &tx, &mut walking, root.path());
-    assert!(walking, "a walk is in flight");
-    walk(&mut app, &tx, &mut walking, root.path());
-    assert!(
-        rx.try_recv().is_err(),
-        "a second keystroke does not start a second walk"
-    );
-
-    let Ok(Msg::Paths(generation, paths, capped)) = rx.recv() else {
-        panic!("the walk answered with paths");
-    };
-    assert_eq!(Some(generation), app.completion().map(|c| c.generation));
-    assert!(paths.contains(&"main.rs".to_string()), "found: {paths:?}");
-    assert!(
-        !paths.iter().any(|path| path.starts_with('.')),
-        "dotfiles need a dot: {paths:?}"
-    );
-    assert!(!capped, "a small tree is walked whole");
 }
 
 #[test]

@@ -148,6 +148,7 @@ fn a_spill_overlay_dims_the_transcript_it_covers() {
     });
     app.over(Some(with_spill(vec![path])));
     app.key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL));
+    spilled(&mut app);
     assert!(
         matches!(app.overlay(), Some(sindri_tui::overlay::Overlay::Spill(_))),
         "Ctrl-O opens the spill file"

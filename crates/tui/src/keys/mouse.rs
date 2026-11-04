@@ -117,8 +117,11 @@ impl App {
             .and_then(|row| self.viewport.spilled(row))
             .cloned();
         if let Some(path) = offered {
-            self.show_spill(&path);
-            return true;
+            // A click on the affordance asks for the file the way `Ctrl-O` does:
+            // the box opens where the words arrive, and the click itself puts no
+            // row on screen — only the mark going is a row of the frame changing.
+            self.ask_spill(path);
+            return spent;
         }
         // A click on an expandable entry's own row opens that entry, and is
         // never a selection: the row a reader points at is the one they mean.

@@ -2,6 +2,8 @@
 //! the run's own end. One channel, so nothing overtakes anything else by more
 //! than the thread that carried it.
 
+use std::path::PathBuf;
+
 use crossterm::event::{KeyEvent, MouseEvent};
 use sindri_core::agent::Event;
 use sindri_core::exec::ToolResult;
@@ -10,6 +12,7 @@ use crate::driver::{Finished, Invoked, Side};
 use crate::picture::{Drawing, Refusal};
 use crate::rail::Launch;
 use crate::settings::Serving;
+use crate::spill::Spill;
 
 #[derive(Debug)]
 pub enum Msg {
@@ -34,6 +37,10 @@ pub enum Msg {
     /// here like a line of output — the frame that laid its panel out waited
     /// for nothing.
     Drawn(String, Result<Drawing, Refusal>),
+    /// What a thread made of the spill file the frame asked for: the box it
+    /// opens, or why the file could not be read — never silence, because the
+    /// key that asked is owed the line that names what it could not open.
+    Spilled(PathBuf, std::io::Result<Spill>),
     /// What a thread made of an ask about the wire: the names it serves, or the
     /// words it failed with — never nothing, because a row that cannot say why
     /// sends a human to check a key when the address was wrong. The ask travels

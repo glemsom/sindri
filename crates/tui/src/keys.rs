@@ -12,7 +12,6 @@ use crate::completion::{self, Completion};
 use crate::entry::Entry;
 use crate::overlay::{Help, Overlay};
 use crate::selection::Selection;
-use crate::spill::Spill;
 use crate::window::Ask;
 
 /// The rows one notch of the wheel is worth.
@@ -46,10 +45,7 @@ impl App {
                 self.copy_last_answer();
                 true
             }
-            KeyCode::Char('o') if ctrl => {
-                self.open_spill();
-                true
-            }
+            KeyCode::Char('o') if ctrl => self.open_spill(),
             KeyCode::Char('x') if ctrl => self.drop_queued(),
             KeyCode::Char('w') if ctrl => {
                 let taken = self.composer.delete_word();
@@ -411,7 +407,15 @@ impl App {
         true
     }
 
-    fn open_spill(&mut self) {
+    /// Asks a thread for the newest call's untruncated output. Nothing is read
+    /// here: the box opens when the words arrive, so the frame keeps drawing and
+    /// taking every key while a large file is read — and a key pressed while one
+    /// is already being read is the same ask, not a second one. A key that asks
+    /// puts no row on screen, so it says nothing either.
+    fn open_spill(&mut self) -> bool {
+        if self.is_spilling() {
+            return false;
+        }
         let path = self
             .thread
             .entries()
@@ -422,15 +426,14 @@ impl App {
                 _ => None,
             });
         match path {
-            Some(path) => self.show_spill(&path),
-            None => self.note_info("no output in this session was too large to show"),
-        }
-    }
-
-    fn show_spill(&mut self, path: &std::path::Path) {
-        match Spill::open(path) {
-            Ok(spill) => self.show(Overlay::Spill(spill)),
-            Err(error) => self.note_error(format!("cannot open {}: {error}", path.display())),
+            Some(path) => {
+                self.ask_spill(path);
+                false
+            }
+            None => {
+                self.note_info("no output in this session was too large to show");
+                true
+            }
         }
     }
 }

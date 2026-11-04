@@ -232,6 +232,17 @@ pub fn drained(app: &mut App) {
     }
 }
 
+/// The spill file the frame has asked for, read here as the loop reads it off
+/// the frame's own thread: the frame asks, a thread reads the file, and the
+/// answer is handed back where the box opens. A test has no loop, so it is the
+/// loop — and a box takes two of these to see, the ask and the answer.
+pub fn spilled(app: &mut App) {
+    if let Some(path) = app.take_spill() {
+        let read = sindri_tui::spill::Spill::open(&path);
+        app.spilled(path, read);
+    }
+}
+
 /// What the reader's window is showing, without drawing it again.
 pub fn reading(app: &mut App) -> Vec<String> {
     app.viewport().rows.clone()

@@ -15,7 +15,7 @@
 mod common;
 
 pub use common::{
-    SHIPPED, any, drained, ended, notes, press, screen, shown, type_text, with_spill,
+    SHIPPED, any, drained, ended, notes, press, screen, shown, spilled, type_text, with_spill,
 };
 use std::sync::{Arc, Mutex};
 
@@ -27,6 +27,7 @@ use sindri_tui::driver::Stop;
 use sindri_tui::entry::Entry;
 use sindri_tui::overlay::help_rows;
 use sindri_tui::render;
+use sindri_tui::spill::Spill;
 use sindri_tui::{App, Launch};
 
 #[derive(Clone)]

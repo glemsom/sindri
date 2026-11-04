@@ -315,6 +315,7 @@ fn ctrl_o_still_opens_the_untruncated_stream_and_nothing_alarming_without_one() 
     });
     app.over(Some(with_spill(vec![path])));
     app.key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL));
+    spilled(&mut app);
     assert!(app.overlay().is_some(), "Ctrl-O opens the whole stream");
     app.key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 

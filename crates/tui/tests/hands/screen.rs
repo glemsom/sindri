@@ -84,6 +84,7 @@ fn an_output_too_large_to_show_offers_its_spill_file_and_opens_untruncated() {
     );
 
     press(&mut app, KeyCode::Char('o'), KeyModifiers::CONTROL);
+    spilled(&mut app);
     let opened = shown(&screen(&mut app, 100, 30));
     assert!(
         opened.contains("full line 0"),
@@ -93,6 +94,150 @@ fn an_output_too_large_to_show_offers_its_spill_file_and_opens_untruncated() {
     press(&mut app, KeyCode::PageUp, KeyModifiers::NONE);
     press(&mut app, KeyCode::Esc, KeyModifiers::NONE);
     assert!(app.overlay().is_none(), "Esc closes the spill");
+}
+
+#[test]
+fn a_spill_is_read_off_the_frame_and_opens_when_the_words_arrive() {
+    let spills = tempfile::tempdir().expect("a temp directory");
+    let path = spills.path().join("stdout");
+    let full: String = (0..500).map(|line| format!("full line {line}\n")).collect();
+    std::fs::write(&path, full).expect("write the spill file");
+
+    let mut app = app_with(Fake::taking());
+    app.event(Event::ToolCall {
+        turn: 1,
+        asked: Asked::Bash {
+            command: "seq 500".to_string(),
+        },
+    });
+    app.over(Some(with_spill(vec![path.clone()])));
+    press(&mut app, KeyCode::Char('o'), KeyModifiers::CONTROL);
+    assert!(
+        app.overlay().is_none(),
+        "the frame asks a thread for the file and reads none of it itself"
+    );
+    assert!(
+        app.is_spilling(),
+        "the ask is out: the file the row offered, handed to a thread"
+    );
+    // The read is out, and the frame is the reader's while it is: a key taken
+    // now is a key the box did not freeze out.
+    type_text(&mut app, "still typing");
+    assert_eq!(
+        app.composer().text(),
+        "still typing",
+        "every key is still taken while a file is being read"
+    );
+
+    spilled(&mut app);
+    let opened = shown(&screen(&mut app, 100, 30));
+    assert!(
+        opened.contains("full line 0"),
+        "the box opens on the words the thread brought: {opened}"
+    );
+}
+
+#[test]
+fn a_key_that_asks_for_a_spill_while_one_is_being_read_asks_once() {
+    let spills = tempfile::tempdir().expect("a temp directory");
+    let path = spills.path().join("stdout");
+    std::fs::write(&path, "one\ntwo\n").expect("write the spill file");
+
+    let mut app = app_with(Fake::taking());
+    app.event(Event::ToolCall {
+        turn: 1,
+        asked: Asked::Bash {
+            command: "seq 500".to_string(),
+        },
+    });
+    app.over(Some(with_spill(vec![path.clone()])));
+    press(&mut app, KeyCode::Char('o'), KeyModifiers::CONTROL);
+    assert_eq!(
+        app.take_spill().as_deref(),
+        Some(path.as_path()),
+        "the first key asks for the file the row offered"
+    );
+    // The read is out now, and four more keys are still the one ask the frame
+    // already made: a spill exists because the output was too big to show, so a
+    // held key must not buy a read of the same file per keystroke.
+    for _ in 0..4 {
+        press(&mut app, KeyCode::Char('o'), KeyModifiers::CONTROL);
+    }
+    assert!(
+        app.take_spill().is_none(),
+        "and no second read is asked for while one is being read"
+    );
+    assert!(
+        app.overlay().is_none(),
+        "no box opens before the words have arrived"
+    );
+}
+
+#[test]
+fn an_answer_made_of_another_file_opens_no_box() {
+    let spills = tempfile::tempdir().expect("a temp directory");
+    let path = spills.path().join("stdout");
+    let other = spills.path().join("other");
+    std::fs::write(&path, "the asked-for output\n").expect("write the spill file");
+    std::fs::write(&other, "another file's output\n").expect("write the other file");
+
+    let mut app = app_with(Fake::taking());
+    app.event(Event::ToolCall {
+        turn: 1,
+        asked: Asked::Bash {
+            command: "seq 500".to_string(),
+        },
+    });
+    app.over(Some(with_spill(vec![path.clone()])));
+    press(&mut app, KeyCode::Char('o'), KeyModifiers::CONTROL);
+    assert!(
+        !app.spilled(other.clone(), Spill::open(&other)),
+        "an answer made of a file the frame is not reading draws nothing"
+    );
+    assert!(
+        app.overlay().is_none(),
+        "no box opens on words the reader did not ask for"
+    );
+    assert!(
+        app.is_spilling(),
+        "and the read the frame did ask for is still the one it waits on"
+    );
+}
+
+#[test]
+fn a_spill_file_that_cannot_be_read_is_said_naming_the_file() {
+    let spills = tempfile::tempdir().expect("a temp directory");
+    let path = spills.path().join("gone");
+
+    let mut app = app_with(Fake::taking());
+    app.event(Event::ToolCall {
+        turn: 1,
+        asked: Asked::Bash {
+            command: "seq 500".to_string(),
+        },
+    });
+    app.over(Some(with_spill(vec![path.clone()])));
+
+    press(&mut app, KeyCode::Char('o'), KeyModifiers::CONTROL);
+    spilled(&mut app);
+    assert!(
+        app.overlay().is_none(),
+        "a file that could not be read opens no box"
+    );
+    let rows = screen(&mut app, 100, 20);
+    assert!(
+        any(&rows, "cannot open"),
+        "the transcript says the file could not be opened: {rows:#?}"
+    );
+    let said = notes(&app);
+    assert!(
+        said.contains(&format!("cannot open {}", path.display())),
+        "and names the file it could not open: {said}"
+    );
+    assert!(
+        !app.is_spilling(),
+        "and the ask is over, so the next key asks again"
+    );
 }
 
 #[test]
@@ -120,6 +265,7 @@ fn a_click_on_the_spill_row_opens_it_like_ctrl_o() {
         2,
         row as u16,
     );
+    spilled(&mut app);
     assert!(
         app.overlay().is_some(),
         "a click on the affordance opens what Ctrl-O opens"
@@ -161,6 +307,7 @@ fn a_click_on_an_older_affordance_opens_that_rows_file() {
         2,
         first as u16,
     );
+    spilled(&mut app);
     let opened = shown(&screen(&mut app, 100, 30));
     assert!(
         opened.contains("the older output"),
