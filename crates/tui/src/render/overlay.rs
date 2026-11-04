@@ -1,8 +1,8 @@
 //! What covers the transcript when something has to: the list of every
-//! binding `?` opens, a command's untruncated output, and the settings modal.
-//! Each is a box in the middle of the frame on the raised tier,
-//! over a frame dimmed so what it covers recedes; it closes with
-//! `Esc`, and the modal sizes itself to what it has to say.
+//! binding `?` opens, a command's untruncated output, the settings modal, and
+//! `/model`'s screen. Each is a box in the middle of the frame on the raised
+//! tier, over a frame dimmed so what it covers recedes; it closes with `Esc`,
+//! and the modal and the screen size themselves to what they have to say.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -13,7 +13,7 @@ use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Widget};
 use crate::app::App;
 use crate::markdown::text;
 use crate::overlay::{Overlay, help_rows};
-use crate::render::settings;
+use crate::render::{model, settings};
 use crate::theme;
 
 const KEYS: usize = 20;
@@ -53,6 +53,12 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
             // A page moves the modal by what its box shows, not by what the
             // transcript it covers happens to be showing.
             app.window.page = settings::draw(settings, &app.served, area, buf).max(1);
+            return;
+        }
+        Overlay::Model(model) => {
+            // The screen sizes itself and says which way its list runs past the
+            // box, so a page moves it by the names its box showed.
+            app.window.page = model::draw(model, &app.served, area, buf).max(1);
             return;
         }
         Overlay::Help(help) => {

@@ -110,7 +110,7 @@ pub fn command(draft: &str) -> Option<Query> {
 /// The commands a fragment names, nearest first: the names it starts, then
 /// the ones it sits inside, then the ones it is a subsequence of — each tier in
 /// the catalogue's order, because that is the order the frame says them in. The
-/// catalogue is the whole of what is offered, so a seventh command is
+/// catalogue is the whole of what is offered, so an eighth command is
 /// completable the moment it is added to it.
 pub fn commands(typed: &str) -> Vec<String> {
     ranked(COMMANDS.iter().map(|spec| spec.name), typed)

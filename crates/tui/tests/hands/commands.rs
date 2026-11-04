@@ -180,19 +180,19 @@ fn a_command_the_catalogue_dropped_is_refused_and_the_slash_never_offers_it() {
     let said = notes(&app);
     assert!(
         said.contains(
-            "/sessions: no such command — /new, /export, /skill, /settings, /help, /quit"
+            "/sessions: no such command — /new, /export, /skill, /model, /settings, /help, /quit"
         ),
-        "the refusal names the six commands there are: {said}"
+        "the refusal names the seven commands there are: {said}"
     );
     assert!(app.overlay().is_none(), "and it opens nothing: {said}");
 }
 
 #[test]
-fn the_six_commands_the_catalogue_names_still_do_what_they_say() {
+fn the_seven_commands_the_catalogue_names_still_do_what_they_say() {
     assert_eq!(
         COMMANDS.len(),
-        6,
-        "? says six commands, and it says all of them"
+        7,
+        "? says seven commands, and it says all of them"
     );
 
     let mut new = app_with(Fake::taking());

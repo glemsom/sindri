@@ -1,8 +1,8 @@
 //! The `/` commands and the one catalogue of them: a name, the
 //! one line it is said in, and the command it opens. The parser, the line an
 //! unknown name is refused with and `?`'s command row all read it, so a
-//! seventh command is added in one place. `/settings` is one of
-//! the two that write the user's disk, and it writes through the schema the run
+//! seventh command is added in one place. `/settings` and `/model` are the two
+//! that write the user's disk, and they write through the one schema the run
 //! reads; `/export` writes one markdown file, where it is told to; `/skill` is
 //! the one name that takes an argument from a fixed set, and the only one a
 //! colon may end — `/skill:house-style` is `/skill house-style`.
@@ -10,6 +10,10 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
     New,
+    /// The model this run asks: `/model` is the screen of the names the wire
+    /// offers, and `/model <name>` a name the wire never offered, which needs no
+    /// screen to be written.
+    Model(Option<String>),
     Settings,
     Help,
     Quit,
@@ -64,14 +68,14 @@ pub struct Spec {
     /// is not a path and never was: only the one command whose argument is a
     /// name from a fixed set takes the colon spelling.
     inline: bool,
-    /// What the name opens, given the rest of the line. Only `/export` and
-    /// `/skill` read it: a path is the rest of the line, spaces and all, and so
-    /// is a prompt.
+    /// What the name opens, given the rest of the line. Only `/export`,
+    /// `/skill` and `/model` read it: a path is the rest of the line, spaces and
+    /// all, and so are a prompt and a model's name.
     open: fn(Option<String>) -> Command,
 }
 
 /// Every `/` command, in the order the frame says them. This is the one list
-/// of names: a sixth command is added here and nowhere else.
+/// of names: a seventh command is added here and nowhere else.
 pub const COMMANDS: &[Spec] = &[
     Spec {
         name: "new",
@@ -90,6 +94,12 @@ pub const COMMANDS: &[Spec] = &[
         summary: "load a skill",
         inline: true,
         open: |argument| Command::Skill(argument.map(|line| SkillAsk::parse(&line))),
+    },
+    Spec {
+        name: "model",
+        summary: "choose the model",
+        inline: false,
+        open: Command::Model,
     },
     Spec {
         name: "settings",
@@ -198,6 +208,7 @@ mod tests {
         ("new", Command::New),
         ("export", Command::Export(None)),
         (SKILL, Command::Skill(None)),
+        ("model", Command::Model(None)),
         ("settings", Command::Settings),
         ("help", Command::Help),
         ("quit", Command::Quit),

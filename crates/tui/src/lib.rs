@@ -19,6 +19,7 @@ mod heard; // what the run says to the frame
 mod keys; // the hands: what one key does to the frame
 mod mark; // the mark a drag leaves on the transcript
 pub mod markdown; // the answer as a reader sees it
+pub mod model; // `/model`: the names the wire offers, on a screen of their own
 mod msg; // what reaches the frame from outside it
 pub mod overlay; // the overlays that take the screen while they are open
 pub mod picture; // the store that knows what a picture's source is worth

@@ -12,6 +12,7 @@ pub mod composer;
 pub mod hello;
 pub(crate) mod layout;
 pub(crate) mod mark;
+mod model;
 mod overlay;
 pub(crate) mod pictures;
 mod queue;

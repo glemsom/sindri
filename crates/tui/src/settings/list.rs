@@ -129,12 +129,24 @@ impl List {
     /// The names opened under the row: every one the wire offered, in the order
     /// it named them, and the cursor on the name the row holds when the wire
     /// named it and on the first name when it did not — a name no list holds is
-    /// no place to open on.
+    /// no place to open on. The row's own text is the fragment the fold stands
+    /// on, so a keystroke in the field narrows it.
     pub fn open(&mut self, offered: &[String], current: &str) {
         let current = current.trim();
-        self.fold = true;
+        self.choice(offered, current);
         self.typed = current.to_string();
         self.opened = current.to_string();
+    }
+
+    /// The same names on a screen of their own, where there is no field to be
+    /// the fragment: the screen stands on the whole list with its cursor on the
+    /// name the run holds, and stays there until the reader types. Every name
+    /// rather than none, because a screen is a choice before it is a filter.
+    pub fn choice(&mut self, offered: &[String], current: &str) {
+        let current = current.trim();
+        self.fold = true;
+        self.typed = String::new();
+        self.opened = String::new();
         self.names = offered.to_vec();
         self.chosen = self
             .names

@@ -219,18 +219,45 @@ pub struct Settings {
     missing: Option<Missing>,
 }
 
+/// The config file's document: at the path the frame was pointed at where it was
+/// pointed at one, and in the schema's own place otherwise. `/settings` and
+/// `/model` read the file through it, so the file one of them saves is the file
+/// it read.
+pub(crate) fn document(path: Option<&Path>) -> Result<Document, String> {
+    let loaded = match path {
+        Some(path) => Document::load_at(path),
+        None => Document::load(),
+    };
+    loaded.map_err(|error| error.message().to_string())
+}
+
+/// The one writer of the config file: a document staged with one key's value and
+/// saved atomically, or the run's own words for why it refused — staged on a
+/// copy, so a value the schema refuses leaves the file exactly as it was. The
+/// model screen's one name goes through it, and the modal's whole form is saved
+/// by [`commit`] beside it.
+pub(crate) fn write(document: &Document, key: Key, value: &str) -> Result<Document, String> {
+    let mut staged = document.clone();
+    staged
+        .set(key, value)
+        .map_err(|error| format!("{}: {}", key.name(), error.message()))?;
+    commit(staged)
+}
+
+/// The save itself: the one place the frame hands a document to the disk, so the
+/// file is written by one writer whatever settled the values in it.
+fn commit(staged: Document) -> Result<Document, String> {
+    staged.save().map_err(|error| error.message().to_string())?;
+    Ok(staged)
+}
+
 impl Settings {
     pub fn open() -> Result<Settings, String> {
-        match Document::load() {
-            Ok(document) => Ok(Settings::at(document)),
-            Err(error) => Err(error.message().to_string()),
-        }
+        document(None).map(Settings::at)
     }
 
     pub fn at_path(path: &Path) -> Result<Settings, String> {
-        Document::load_at(path)
-            .map(Settings::at)
-            .map_err(|error| error.message().to_string())
+        document(Some(path)).map(Settings::at)
     }
 
     pub fn at(document: Document) -> Settings {
@@ -559,8 +586,7 @@ impl Settings {
                 .set(field.key, &field.text)
                 .map_err(|error| format!("{}: {}", field.key.name(), error.message()))?;
         }
-        staged.save().map_err(|error| error.message().to_string())?;
-        self.document = staged;
+        self.document = commit(staged)?;
         self.error = None;
         Ok(())
     }

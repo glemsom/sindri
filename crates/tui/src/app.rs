@@ -105,7 +105,7 @@ pub struct App {
     pub(crate) missing: Option<Missing>,
     /// The names the wire serves, what they answer for and whether the ask is
     /// still out: a fact about the wire rather than a draft of the modal, so it
-    /// outlives the modal that states it.
+    /// outlives the modal and the screen that state it.
     pub(crate) served: Served,
     pub(crate) rail_view: RailView,
     /// Where the records live: `/export` reads this directory and writes
@@ -361,8 +361,9 @@ impl App {
         self.walking.take()
     }
 
-    /// The ask the settings modal made, for the loop to carry to a thread: the
-    /// row is a field while it is out, because the modal waits for nothing.
+    /// The ask the modal or the model screen made, for the loop to carry to a
+    /// thread: the row and the screen are fields while it is out, because
+    /// neither waits for anything.
     pub fn take_ask(&mut self) -> Option<Serving> {
         self.served.take()
     }
@@ -374,19 +375,22 @@ impl App {
         if !self.served.landed(serving, names) {
             return false;
         }
-        // The one row a listing is drawn on is the modal's: with no modal open
-        // nothing on screen moved, and nothing is laid out again for it. Open,
-        // the row completes against the names that just landed, so a fragment
-        // already typed there draws its list without waiting for a keystroke.
-        let Some(Overlay::Settings(settings)) = self.overlay.as_mut() else {
-            return false;
-        };
-        settings.refresh(&self.served);
+        // The two places a listing is drawn are the modal's model row and the
+        // model screen: with neither open nothing on screen moved, and nothing
+        // is laid out again for it. Open, each ranks the names that just landed
+        // against the fragment it already holds, so a fragment typed while the
+        // ask was out draws its list without waiting for a keystroke.
+        match self.overlay.as_mut() {
+            Some(Overlay::Settings(settings)) => settings.refresh(&self.served),
+            Some(Overlay::Model(model)) => model.refresh(&self.served),
+            _ => return false,
+        }
         true
     }
 
     /// The names the wire serves, what they answer for and whether the ask is
-    /// still out: what the model row states, and what a completion offers.
+    /// still out: what the model row states, what the `/model` screen lists, and
+    /// what a completion offers.
     pub fn served(&self) -> &Served {
         &self.served
     }

@@ -1,13 +1,14 @@
 //! The overlays that take the screen while they are open: `?`'s list of every
-//! binding, the untruncated output a spill affordance offers, and the settings
-//! modal. All close with `Esc`, and none is the only way to do what it does. An
-//! open overlay owns its own space: the page keys and the wheel move it, never
-//! the frame beneath it.
+//! binding, the untruncated output a spill affordance offers, the settings
+//! modal, and `/model`'s screen of the names the wire offers. All close with
+//! `Esc`, and none is the only way to do what it does. An open overlay owns its
+//! own space: the page keys and the wheel move it, never the frame beneath it.
 //!
 //! A call is never one of these: it opens in place, and this box is the
 //! reader's and takes every key. `expand` states the rule both point at.
 
 use crate::command;
+use crate::model::Model;
 use crate::scroll::Scroll;
 use crate::settings::Settings;
 use crate::spill::Spill;
@@ -162,6 +163,9 @@ pub enum Overlay {
     /// Boxed: the modal is the largest thing the frame can overlay, and the
     /// enum is carried in every match on an overlay.
     Settings(Box<Settings>),
+    /// `/model`'s screen: the names the wire offers, boxed for the same reason —
+    /// it is carried in every match on an overlay too.
+    Model(Box<Model>),
 }
 
 /// The rows `?` lists: the keys in their column and what they do. The one row
@@ -212,7 +216,7 @@ mod tests {
         "Ctrl-Q",
         "?",
         "@",
-        "/new, /export, /skill, /settings, /help, /quit",
+        "/new, /export, /skill, /model, /settings, /help, /quit",
         "Ctrl-G",
     ];
 
@@ -220,8 +224,9 @@ mod tests {
     /// back out of the catalogue, so a command the row does not say is a
     /// failure.
     const COMMANDS_ROW: (&str, &str) = (
-        "/new, /export, /skill, /settings, /help, /quit",
-        "start a session, export this one, load a skill, edit the config, show this, leave",
+        "/new, /export, /skill, /model, /settings, /help, /quit",
+        "start a session, export this one, load a skill, choose the model, edit the config, \
+         show this, leave",
     );
 
     /// The one row that names commands rather than keys.
@@ -233,7 +238,7 @@ mod tests {
     }
 
     #[test]
-    fn the_command_row_is_the_catalogue_and_a_sixth_command_cannot_miss_it() {
+    fn the_command_row_is_the_catalogue_and_a_seventh_command_cannot_miss_it() {
         let (keys, what) = command_row(&help_rows());
         assert_eq!(keys, COMMANDS_ROW.0, "the row names every command");
         assert_eq!(what, COMMANDS_ROW.1, "and says what each of them does");

@@ -158,6 +158,9 @@ impl App {
         if matches!(self.overlay, Some(Overlay::Settings(_))) {
             return self.settings_key(key);
         }
+        if matches!(self.overlay, Some(Overlay::Model(_))) {
+            return self.model_key(key);
+        }
         match key.code {
             KeyCode::Esc | KeyCode::Enter => {
                 self.overlay = None;
@@ -179,6 +182,7 @@ impl App {
         match self.overlay.as_mut() {
             Some(Overlay::Help(help)) => help.page(self.window.page, up),
             Some(Overlay::Settings(settings)) => settings.page(self.window.page, up),
+            Some(Overlay::Model(model)) => model.page(self.window.page, up),
             Some(Overlay::Spill(spill)) => spill.scroll.page_by(self.window.page, up),
             None => self.scroll_by(self.window.page, up),
         }
@@ -236,6 +240,10 @@ impl App {
     fn run(&mut self, named: Command) {
         match named {
             Command::New => self.new_session(),
+            Command::Model(name) => match name {
+                Some(name) => self.set_model(&name),
+                None => self.open_model(),
+            },
             Command::Settings => self.open_settings(None),
             Command::Help => self.show(Overlay::Help(Help::default())),
             Command::Quit => self.quit = true,

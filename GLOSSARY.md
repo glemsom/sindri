@@ -27,8 +27,8 @@ accepts, so a fourth wire is not a word the modal can invent — and the wire ch
 **served names** again, because a listing is one wire at one address.
 
 **served names** — what a wire says it can be asked for, read off the wire and never
-invented: the listing a settings modal states on its model row, kept beside the `Serving`
-it answers for — the wire and the base URL together, because a list read at one address
+invented: the listing `/settings`'s model row and `/model`'s screen state, kept beside the
+`Serving` it answers for — the wire and the base URL together, because a list read at one address
 says nothing about another — so a listing that lands after the wire has changed is dropped
 where it lands (`crates/tui/src/settings/served.rs`). The ask is off the frame's thread,
 so the row is a field and the modal takes every key while it is out; a wire that cannot
