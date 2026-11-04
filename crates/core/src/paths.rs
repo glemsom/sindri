@@ -81,6 +81,34 @@ impl SessionDir {
         self.temp().join("spill")
     }
 
+    /// The session temp emptied of the scratch a run left in it. Called when the
+    /// session ends and never between calls: several `bash` calls of one session
+    /// read what an earlier one wrote, and no call of the next session should
+    /// read what this one did.
+    ///
+    /// `spill/` stays. It holds the output a truncated result names by path, and
+    /// the record that names it outlives the run — a reader who follows that path
+    /// finds the file the record promised. A failure to remove anything is not
+    /// reported: a session that has ended can keep a file rather than gain a line
+    /// no one could act on.
+    pub fn clear_temp(&self) {
+        let Ok(entries) = std::fs::read_dir(self.temp()) else {
+            return;
+        };
+        let spill = self.spill();
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path == spill {
+                continue;
+            }
+            let removed = match entry.file_type() {
+                Ok(kind) if kind.is_dir() => std::fs::remove_dir_all(&path),
+                _ => std::fs::remove_file(&path),
+            };
+            let _ = removed;
+        }
+    }
+
     pub fn at(root: PathBuf) -> Self {
         SessionDir { root }
     }

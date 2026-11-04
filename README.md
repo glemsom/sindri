@@ -239,7 +239,7 @@ run goes. `sindri sandbox exec` opens one too; `sindri doctor` writes none.
 | `session.json` | provider, model, enforcement, the policy the model was handed, the workspace and its branch and commit, the dials the run obeyed, start, end, turns, usage, and why it stopped |
 | `transcript.jsonl` | one entry per thing that happened — prompt, turns, tool calls, tool results — in order |
 | `status.json` | bubblewrap's own status documents, one per line, as they arrived |
-| `tmp/` | the session temp: a run's writable scratch, mapped to `TMPDIR`. `HOME` is the host's own, read-only |
+| `tmp/` | the session temp: a run's writable scratch, mapped to `TMPDIR`, removed when the session ends. `spill/` inside it keeps the output a truncated result names by path, and `HOME` is the host's own, read-only |
 
 The GUID is the `session` field of `--format json` and the last line of `-v`;
 `sindri sessions list` prints every record newest first, and `sessions show` reads one

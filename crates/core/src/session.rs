@@ -285,6 +285,17 @@ impl Session {
     }
 }
 
+/// The temp goes when the session does: every `bash` call of one session reads
+/// what an earlier one wrote, and the scratch of a run is no use to the run after
+/// it. The record is what outlives a session, and the spilled output it names
+/// stays with it. A failure to remove anything is silent, because there is no
+/// reader left to tell.
+impl Drop for Session {
+    fn drop(&mut self) {
+        self.dir.clear_temp();
+    }
+}
+
 fn directory(env: &Env) -> Result<SessionDir, StartError> {
     let dir = SessionDir::create_in(&env.state).map_err(|source| StartError::Directory {
         path: env.state.join("sessions"),

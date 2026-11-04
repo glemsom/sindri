@@ -66,7 +66,8 @@ impl BashTool {
 /// model can read off a result it has already seen is not here.
 fn describe(policy: &SandboxPolicy, limits: Limits) -> ToolSpec {
     let description = format!(
-        "Execute a shell command in a sandbox. {}\n\nWritable paths:\n{}",
+        "Execute a shell command in a sandbox. {} `$TMPDIR` needs no cleanup: it is emptied \
+         when the session ends.\n\nWritable paths:\n{}",
         limits.describe(),
         writable(policy)
     );

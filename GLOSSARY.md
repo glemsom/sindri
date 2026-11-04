@@ -145,7 +145,10 @@ reports as its `enforcement` when it is in force. A `bwrap` that cannot start is
 to report and never one to paper over.
 
 **session temp** — the writable scratch a run's own session directory carries, mapped to
-`TMPDIR`. `HOME` is the host's own, read-only, and nothing is created for it.
+`TMPDIR`. It lives as long as the session does and is emptied when the session ends, so
+several calls of one run read what an earlier one wrote and no run reads another's;
+`spill/` inside it outlives the run, because the record names the output kept there.
+`HOME` is the host's own, read-only, and nothing is created for it.
 
 **writable set** — the paths a run may write beyond its session temp. It stays the user's
 sentence: a level that names one replaces the shipped floor rather than adding to it

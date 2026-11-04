@@ -65,6 +65,13 @@ fn the_description_claims_only_the_ground_it_still_holds() {
         description.contains("Every call is time-bounded"),
         "the description says what bounds it: {description}"
     );
+    // The temp outlives a call, and one that a model cleaned up would take what
+    // its next call reads with it, so the note that it needs no cleanup is the
+    // description's to carry.
+    assert!(
+        description.contains("`$TMPDIR` needs no cleanup"),
+        "the description tells the model to leave the temp alone: {description}"
+    );
     for claim in ["the only tool that runs anything", "the only tool,"] {
         assert!(
             !description.contains(claim),

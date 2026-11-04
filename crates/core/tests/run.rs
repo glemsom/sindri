@@ -178,6 +178,45 @@ fn a_conversation_taken_onto_a_second_session_is_recorded_in_that_session() {
 }
 
 #[test]
+fn a_session_that_ends_leaves_its_record_and_its_spill_and_no_scratch() {
+    let (_root, env) = host();
+    let session = Session::open(&env, &config(&[])).expect("a session opens");
+    let root = session.dir().root().to_path_buf();
+    let temp = session.dir().temp();
+    let spill = session.dir().spill();
+
+    // A run's own leftovers: a file and a tree a command wrote, and the output a
+    // truncated result spilled where the record names it.
+    std::fs::create_dir_all(&spill).expect("the spill directory");
+    std::fs::write(temp.join("notes.md"), "what a command wrote").expect("a command's file");
+    std::fs::create_dir_all(temp.join("build/out")).expect("a command's tree");
+    std::fs::write(
+        spill.join("bash-1-stdout.txt"),
+        "the output the record names",
+    )
+    .expect("a spilled output");
+
+    drop(session);
+
+    assert!(
+        !temp.join("notes.md").exists() && !temp.join("build").exists(),
+        "the scratch a run left in its temp goes when the session does"
+    );
+    assert!(
+        spill.join("bash-1-stdout.txt").is_file(),
+        "and the output the record names by path is still where the record says"
+    );
+    assert!(
+        temp.is_dir(),
+        "the temp itself stays: it is the path a policy names"
+    );
+    assert!(
+        root.join("session.json").is_file() && root.join("transcript.jsonl").is_file(),
+        "the record outlives the scratch, because that is what a run leaves behind"
+    );
+}
+
+#[test]
 fn a_record_that_cannot_be_written_is_reported_to_the_caller() {
     let (_root, env) = host();
     let session = Session::open(&env, &config(&[])).expect("a session opens");
