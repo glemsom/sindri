@@ -375,8 +375,14 @@ impl App {
             return false;
         }
         // The one row a listing is drawn on is the modal's: with no modal open
-        // nothing on screen moved, and nothing is laid out again for it.
-        matches!(self.overlay, Some(Overlay::Settings(_)))
+        // nothing on screen moved, and nothing is laid out again for it. Open,
+        // the row completes against the names that just landed, so a fragment
+        // already typed there draws its list without waiting for a keystroke.
+        let Some(Overlay::Settings(settings)) = self.overlay.as_mut() else {
+            return false;
+        };
+        settings.refresh(&self.served);
+        true
     }
 
     /// The names the wire serves, what they answer for and whether the ask is

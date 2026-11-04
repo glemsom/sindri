@@ -156,7 +156,7 @@ fn a_name_no_list_holds_saves_exactly_as_it_did_before() {
 }
 
 #[test]
-fn the_count_is_the_model_row_and_the_key_hints_are_the_ones_it_had() {
+fn the_count_is_the_model_row_and_the_key_hints_name_the_keys_it_takes() {
     let mut f = fixture(Some("model = \"qwen3-32b\"\n"));
     open(&mut f.app);
     let serving = f.app.take_ask().expect("an ask is out");
@@ -171,7 +171,7 @@ fn the_count_is_the_model_row_and_the_key_hints_are_the_ones_it_had() {
     let hints = &rows[row_of(&rows, "move")];
     assert_eq!(
         hints.trim_matches(|ch| ch == '│' || ch == ' '),
-        "↑↓/Tab move · PgUp/PgDn page · Ctrl-U clear · Enter save · Esc discard",
-        "the one key table the modal had is the one it still has"
+        "↑↓ move or match · Tab/→ take · PgUp/PgDn page · Ctrl-U clear · Enter save · Esc discard",
+        "the one key table the modal has is the one it states"
     );
 }

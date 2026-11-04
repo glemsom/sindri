@@ -3,7 +3,8 @@
 //! never drawn; the row says where the value comes from and nothing more. The
 //! model row carries the one fact the modal did not have before — how many
 //! names the wire serves, and which wire named them — as faint text beside the
-//! name this run holds.
+//! name this run holds, and, under the row while a fragment is being typed in
+//! it, the names that fragment reaches with the one a `Tab` would take.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -16,7 +17,7 @@ use sindri_core::config::toggle_shown;
 use unicode_width::UnicodeWidthChar;
 
 use crate::markdown::text::{self, clip};
-use crate::settings::{Field, Served, Settings};
+use crate::settings::{Field, List, Served, Settings};
 use crate::theme;
 
 const LABEL: usize = 20;
@@ -26,7 +27,8 @@ const MARGIN: u16 = 4;
 const NARROW: u16 = 30;
 const WIDE: u16 = 110;
 
-const HINTS: &str = "↑↓/Tab move · PgUp/PgDn page · Ctrl-U clear · Enter save · Esc discard";
+const HINTS: &str =
+    "↑↓ move or match · Tab/→ take · PgUp/PgDn page · Ctrl-U clear · Enter save · Esc discard";
 
 /// Draws the modal and answers with the field rows its box showed, which is
 /// what a page moves the cursor by.
@@ -120,7 +122,18 @@ pub fn draw(settings: &Settings, served: &Served, area: Rect, buf: &mut Buffer) 
     // wraps and the modal grows, and when it still does not fit, it grows no
     // further than the terminal and the list scrolls instead.
     let rows = settings.fields().len();
-    let wanted = head.len() + rows + foot.len() + 2;
+    // The list stands under the row it filters, and only while that row is the
+    // one being typed in: the box is sized for it, so the keys below are never
+    // the rows a list pushes off.
+    let filtering = settings
+        .fields()
+        .get(settings.chosen())
+        .is_some_and(|field| field.key == Key::Model);
+    let list_rows = match filtering {
+        true => settings.list().len(),
+        false => 0,
+    };
+    let wanted = head.len() + rows + list_rows + foot.len() + 2;
     let height = (wanted as u16).min(area.height);
     // The refusal and the keys are never the rows that fall off: when the
     // pinned rows need more room than the box has, the head is what gives way
@@ -132,17 +145,24 @@ pub fn draw(settings: &Settings, served: &Served, area: Rect, buf: &mut Buffer) 
     // The list shows a window around the row the cursor is on, so the chosen
     // row is on screen however far past the fold it is.
     let body = room.saturating_sub(head.len() + foot.len());
-    let first = settings.chosen().saturating_add(1).saturating_sub(body);
-    let last = rows.min(first + body);
+    // What the row being typed in has to say is never what falls off: the list's
+    // rows come out of the same room the field rows do, the chosen one included.
+    let listed = list_rows.min(body.saturating_sub(1));
+    let fielded = body.saturating_sub(listed);
+    let first = settings.chosen().saturating_add(1).saturating_sub(fielded);
+    let last = rows.min(first + fielded);
 
     let mut lines = head;
     for (offset, field) in settings.fields()[first..last].iter().enumerate() {
+        let chosen = first + offset == settings.chosen();
         let line = row(settings, served, field, columns);
-        lines.push(if first + offset == settings.chosen() {
-            line.patch_style(Style::new().add_modifier(Modifier::REVERSED))
-        } else {
-            line
+        lines.push(match chosen {
+            true => line.patch_style(Style::new().add_modifier(Modifier::REVERSED)),
+            false => line,
         });
+        if chosen {
+            lines.extend(list_lines(settings.list(), columns, listed));
+        }
     }
     lines.extend(foot);
 
@@ -237,6 +257,31 @@ fn row(settings: &Settings, served: &Served, field: &Field, columns: usize) -> L
         spans.push(Span::styled(note, theme::faint()));
     }
     Line::from(spans)
+}
+
+/// The list under the model row: the names the fragment reaches, nearest first,
+/// the one a `Tab` would take marked and drawn in the row's own ink. Faint, and
+/// under the value's column, because a list is what the row would say and not
+/// what the file holds.
+fn list_lines(list: &List, columns: usize, rows: usize) -> Vec<Line<'static>> {
+    list.names()
+        .iter()
+        .take(rows)
+        .enumerate()
+        .map(|(at, name)| {
+            let marked = at == list.chosen();
+            let mark = match marked {
+                true => "▸ ",
+                false => "  ",
+            };
+            let said = format!("{}{mark}{name}", " ".repeat(LABEL));
+            let style = match marked {
+                true => theme::plain(),
+                false => theme::faint(),
+            };
+            Line::from(Span::styled(clip(&said, columns), style))
+        })
+        .collect()
 }
 
 fn value(settings: &Settings, field: &Field) -> (String, Style) {

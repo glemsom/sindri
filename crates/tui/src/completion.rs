@@ -121,8 +121,11 @@ pub fn commands(typed: &str) -> Vec<String> {
 
 /// The names a fragment names, nearest first: the ones it starts, then the ones
 /// it sits inside, then the ones it is a subsequence of — each tier in the order
-/// the list holds them, which is the order the frame says them in.
-fn ranked<'a>(names: impl Iterator<Item = &'a str>, typed: &str) -> Vec<&'a str> {
+/// the list holds them, which is the order the frame says them in. One ranking
+/// for every catalogue the frame offers — the commands, the skill names and the
+/// served names a settings row completes against — so a fragment reads alike
+/// wherever it is typed.
+pub(crate) fn ranked<'a>(names: impl Iterator<Item = &'a str>, typed: &str) -> Vec<&'a str> {
     let typed = typed.to_lowercase();
     let mut scored: Vec<(usize, usize, &str)> = names
         .enumerate()

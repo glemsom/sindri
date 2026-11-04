@@ -4,8 +4,11 @@
 //! so no field can show one and no frame can leak one. It is also the modal the
 //! front door opens by itself when the run has no key, which is why `Missing` —
 //! what is absent, in the words the transcript and the composer use — lives
-//! here rather than in a second module both would have to know.
+//! here rather than in a second module both would have to know. The model row
+//! completes against the names the wire serves, ranked by the composer's own
+//! ranking, and it is a field first: a name nothing offered is kept and saved.
 
+mod list;
 mod served;
 
 use std::path::Path;
@@ -15,6 +18,7 @@ use sindri_core::config::{Document, KEYS, Key, Provider, toggle_shown};
 
 use crate::overlay::Overlay;
 
+pub use list::List;
 pub use served::{Served, Serving};
 
 /// What one key did to the modal: the four things it can ask for, and the two
@@ -190,6 +194,10 @@ pub struct Settings {
     document: Document,
     fields: Vec<Field>,
     chosen: usize,
+    /// The model row's completion: the served names the fragment typed there
+    /// reaches, and the one a `Tab` takes. Empty while the row is, because the
+    /// row is a field before it is ever a list.
+    list: List,
     error: Option<String>,
     missing: Option<Missing>,
 }
@@ -221,6 +229,7 @@ impl Settings {
             document,
             fields,
             chosen: 0,
+            list: List::default(),
             error: None,
             missing: None,
         }
@@ -266,11 +275,19 @@ impl Settings {
             .any(|field| field.key.secret() && !field.text.is_empty())
     }
 
-    pub fn key(&mut self, key: KeyEvent) -> Outcome {
+    /// One key, and what it did. The model row's list is ranked before the key
+    /// is read, so what `Tab` takes and what `↑↓` steps are the names the field
+    /// holds at that keystroke — and a row with no list under it is the plain
+    /// field it always was.
+    pub fn key(&mut self, key: KeyEvent, served: &Served) -> Outcome {
+        self.refresh(served);
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         match key.code {
             KeyCode::Esc => Outcome::Discard,
             KeyCode::Enter => Outcome::Save,
+            KeyCode::Up | KeyCode::BackTab if self.step_match(true) => Outcome::Staying,
+            KeyCode::Down if self.step_match(false) => Outcome::Staying,
+            KeyCode::Tab | KeyCode::Right if self.take_match(served) => Outcome::Staying,
             KeyCode::Up | KeyCode::BackTab => {
                 self.focus(false);
                 Outcome::Staying
@@ -298,6 +315,50 @@ impl Settings {
             // frame moved with it.
             _ => Outcome::Held,
         }
+    }
+
+    /// The model row's completion: the names the fragment typed there reaches.
+    pub fn list(&self) -> &List {
+        &self.list
+    }
+
+    /// The list the fragment names now, ranked off the names the frame holds.
+    /// The frame calls it when its facts change — a listing landing, the modal
+    /// opening — and `key` calls it before every keystroke, so what is drawn and
+    /// what a `Tab` takes are read off the same names.
+    pub(crate) fn refresh(&mut self, served: &Served) {
+        self.list.refresh(served.names(), model_text(&self.fields));
+    }
+
+    /// `↑` or `↓`: the matches step, and the cursor stays on the row whose field
+    /// is being typed. A step with no match left to move to is the cursor's, so
+    /// a row holding a list is still a row the arrows walk past — and a fragment
+    /// nothing reaches has no list at all.
+    fn step_match(&mut self, up: bool) -> bool {
+        self.chosen_is_model() && self.list.step(up)
+    }
+
+    /// `Tab` or `→`: the match the list is on, in the field. It is written on
+    /// save like a typed name, because the row's text is the value and the list
+    /// is only what the fragment reaches.
+    fn take_match(&mut self, served: &Served) -> bool {
+        if !self.chosen_is_model() {
+            return false;
+        }
+        let Some(name) = self.list.take().map(str::to_owned) else {
+            return false;
+        };
+        self.edit(Edit::Value, |field| field.text = name);
+        self.refresh(served);
+        true
+    }
+
+    /// Whether the cursor is on the row that completes, which is the one row a
+    /// list is ranked for.
+    fn chosen_is_model(&self) -> bool {
+        self.fields
+            .get(self.chosen)
+            .is_some_and(|field| field.key == Key::Model)
     }
 
     pub fn focus(&mut self, down: bool) {
@@ -379,6 +440,15 @@ impl Settings {
     }
 }
 
+/// The fragment typed in the model row, wherever the cursor is: the list is
+/// ranked off the row's own text and never off whichever row is chosen.
+fn model_text(fields: &[Field]) -> &str {
+    fields
+        .iter()
+        .find(|field| field.key == Key::Model)
+        .map_or("", |field| field.text.as_str())
+}
+
 impl crate::app::App {
     /// A key while the settings modal has the screen, and whether the modal
     /// took it: a key it stays on and does nothing with leaves the frame as it
@@ -387,7 +457,7 @@ impl crate::app::App {
         let Some(Overlay::Settings(settings)) = self.overlay.as_mut() else {
             return false;
         };
-        match settings.key(key) {
+        match settings.key(key, &self.served) {
             Outcome::Staying => true,
             Outcome::Held => false,
             Outcome::Discard => {
@@ -440,12 +510,13 @@ impl crate::app::App {
         };
         match opened {
             Ok(settings) => {
-                let settings = match missing {
+                let mut settings = match missing {
                     Some(missing) => settings.staged(missing),
                     None => settings,
                 };
-                self.show(Overlay::Settings(Box::new(settings)));
                 self.ask_wire();
+                settings.refresh(&self.served);
+                self.show(Overlay::Settings(Box::new(settings)));
             }
             Err(message) => self.note_error(format!("settings: {message}")),
         }
