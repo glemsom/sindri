@@ -459,11 +459,13 @@ fn paths(value: &str) -> Result<Vec<PathBuf>, ConfigError> {
 /// the file carries whole is not cut in two here. An error names the entry's
 /// position and never the line, which may still be one worth keeping quiet.
 fn headers(value: &str) -> Result<BTreeMap<String, String>, ConfigError> {
-    let lines: Vec<String> = value
-        .split('\n')
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(str::to_string)
+    // The lines a save reads, which is the same reading a pane's refusal is
+    // judged by: one rule for which lines a table holds and where each of them
+    // stands, so a row and a file never disagree about the entry a sentence
+    // names.
+    let lines: Vec<&str> = super::headers::held(value)
+        .into_iter()
+        .map(|(_, line)| line)
         .collect();
     let pairs = super::headers::pairs_from_lines(&lines)?;
     Ok(super::headers::header_pairs(&pairs)?.into_iter().collect())

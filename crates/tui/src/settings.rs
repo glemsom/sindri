@@ -29,7 +29,9 @@
 //! it, `Enter` hands that line its own keys, and `Esc` shuts the fold with the
 //! draft beside it. What the fold draws is the file's text and never a resolved
 //! one, and the save is the row's own: a table built this way is written by the
-//! one path a pasted table already was.
+//! one path a pasted table already was. A line a save would refuse is refused
+//! while it is typed, in the run's own sentence (`table_refusal`), so the table's
+//! check is one check asked early rather than a second opinion.
 //!
 //! Every row is one field (`row`): a value, a cursor in it and what a save makes
 //! of it, so a keystroke means the same thing in the address, the model name,
@@ -49,7 +51,7 @@ mod served;
 use std::path::Path;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use sindri_core::config::{Document, KEYS, Key, Provider, toggle_shown};
+use sindri_core::config::{Document, KEYS, Key, Provider, refusal, toggle_shown};
 
 use crate::overlay::Overlay;
 use crate::rail::Launch;
@@ -61,6 +63,18 @@ pub use missing::Missing;
 pub use row::{Edit, Field};
 pub(crate) use row::{one_line, whole};
 pub use served::{Served, Serving};
+
+/// A table the run would refuse, and the line it refuses: the sentence a save
+/// would state, word for word, and the line of the headers row's value it is
+/// about — counted the way the fold draws its lines. One value, so the sentence
+/// in the foot and the line drawn as refused cannot point at two places.
+#[derive(Debug, Clone)]
+pub struct Refused {
+    /// The line the sentence is about, as the fold numbers its lines.
+    pub line: usize,
+    /// The run's own sentence for it.
+    pub said: String,
+}
 
 /// What one key did to the modal: the four things it can ask for, and the two
 /// ways of asking for nothing. `Staying` is the modal taking the key and staying
@@ -198,6 +212,24 @@ impl Settings {
     /// Why the modal opened without being asked, when it did.
     pub fn missing(&self) -> Option<&Missing> {
         self.missing.as_ref()
+    }
+
+    /// What the run makes of the headers table as it stands, while that row is
+    /// the one the keys are typing in: the sentence the line a save would refuse
+    /// earns, with the line it belongs to. It is the save's own check —
+    /// `refusal` is the one the file is judged by — asked on every frame rather
+    /// than latched on a keystroke, so a line corrected is a line cleared and a
+    /// line broken is a line refused without the row ever being left. `None` on
+    /// every other row, because a refusal belongs to the row being typed and
+    /// never follows the cursor around the modal, and `None` once a save has
+    /// spoken until the next keystroke, because the foot has one sentence at a
+    /// time.
+    pub fn table_refusal(&self) -> Option<Refused> {
+        if self.chosen_key() != Some(Key::ExtraHeaders) || self.error.is_some() {
+            return None;
+        }
+        let (line, said) = refusal(&self.field(Key::ExtraHeaders)?.text)?;
+        Some(Refused { line, said })
     }
 
     pub fn staged_secret(&self) -> bool {
@@ -551,8 +583,9 @@ impl Settings {
     /// One line of the table changed, and the row a draft from the moment the
     /// text moved and not before: a fold opened and shut again writes nothing,
     /// and neither does a blank line added to a table that already ended in one.
-    /// A line's own check hangs here — `Field::line_text` at the line that moved
-    /// is the one line a save would judge, and its sentence is the foot's.
+    /// A line's own check is not remembered here: `table_refusal` asks the run's
+    /// check of the text as it stands on the frame that draws it, so a refusal
+    /// cannot outlive the line that earned it.
     fn table_edit(&mut self, change: impl FnOnce(&mut Field)) {
         let Some(field) = self.fields.get_mut(self.chosen) else {
             return;

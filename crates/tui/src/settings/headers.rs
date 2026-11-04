@@ -6,14 +6,14 @@
 //! path the row already had: the fold is a way into a value, never a second one.
 //!
 //! The line under the cursor is the field's own cursor, so the mark the fold
-//! draws and the cell the terminal's cursor stands on are one place, and a line
-//! a reader is in is a line a check can be run on — the sentence one line earns
-//! is a sentence about `Field::line_text` at `Field::line`. What the fold holds
-//! is whose the keys are. `Choosing` is the fold's: a list a reader walks, adds
-//! to and removes from. `Writing` is the line's, because a header's value may
-//! hold the `a` and the `d` the fold takes, and a fold that kept the keys would
-//! eat two letters out of every value. `Enter` is the rung between them, which
-//! is the rung `Enter` already climbs on the model and provider rows.
+//! draws and the cell the terminal's cursor stands on are one place, and the
+//! line a reader is in is the line the run's check is asked about while it is
+//! typed (`Settings::table_refusal`). What the fold holds is whose the keys are.
+//! `Choosing` is the fold's: a list a reader walks, adds to and removes from.
+//! `Writing` is the line's, because a header's value may hold the `a` and the
+//! `d` the fold takes, and a fold that kept the keys would eat two letters out
+//! of every value. `Enter` is the rung between them, which is the rung `Enter`
+//! already climbs on the model and provider rows.
 //!
 //! What the fold draws is the file's text, unresolved: a `{session}` in a value
 //! is shown as written and never run, because a screen is not where a value

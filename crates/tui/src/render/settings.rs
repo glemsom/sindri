@@ -11,7 +11,9 @@
 //! `Name: value` line per header with the fold's cursor marked and the offer to
 //! add a header under the last, the way a list of names stands under the model
 //! row. The count of headers is a faint note on the row, in the place the model
-//! row says what the wire named.
+//! row says what the wire named. A line a save would refuse is drawn in the ink
+//! a refusal wears, and the sentence it earns stands in the pinned foot while
+//! the line is still being typed.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
@@ -151,6 +153,19 @@ pub fn draw(
             columns,
         ));
     }
+    // And what the table's own check makes of it while a line of it is typed:
+    // the run's sentence for the line a save would refuse, in the place a
+    // refusal stands, and gone the keystroke the line is legal. Read once here,
+    // because the line it names is the line the row below is drawn refused in.
+    let refused = settings.table_refusal();
+    if let Some(refused) = &refused {
+        foot.extend(text::wrap(
+            text::glyphs(&[Span::styled(refused.said.clone(), theme::bad())]),
+            "",
+            theme::bad(),
+            columns,
+        ));
+    }
     // The keys the row with the cursor takes, said by the fold that has them:
     // the headers table's, the names under the model row's, or the modal's own.
     let hints = match settings.headers() {
@@ -233,10 +248,13 @@ pub fn draw(
     // the terminal's cursor is drawn where the next character lands rather than
     // hidden behind a modal that covers the composer's.
     let mut cursor: Option<Position> = None;
+    // The line a save would refuse, if the table on screen is one: the rows below
+    // are drawn knowing which line of the headers row it is.
+    let refused_line = refused.as_ref().map(|refused| refused.line);
     for (offset, field) in settings.fields()[first..last].iter().enumerate() {
         let chosen = first + offset == settings.chosen();
         let top = lines.len();
-        let (drawn, at) = row(settings, served, field, chosen, columns);
+        let (drawn, at) = row(settings, served, field, chosen, columns, refused_line);
         // A row is one line per line of its value, so the reverse that marks
         // the row with the cursor covers every line of it.
         lines.extend(drawn.into_iter().map(|line| match chosen {
@@ -366,11 +384,16 @@ fn row(
     field: &Field,
     chosen: bool,
     columns: usize,
+    refused_line: Option<usize>,
 ) -> (Vec<Line<'static>>, Option<Cursor>) {
+    // Only the headers row holds a table, so only its lines can be the refused
+    // ones: a line number read beside another row's value would mark a cell no
+    // save ever looked at.
+    let refused_line = refused_line.filter(|_| field.key == Key::ExtraHeaders);
     // The headers row with its table open is drawn as the list of lines it is:
     // a mark, the table's own text, and the offer under it.
     if folded(settings, field) {
-        return table(served, field, chosen, columns);
+        return table(served, field, chosen, columns, refused_line);
     }
     let label = format!("{:<LABEL$}", clip(field.key.name(), LABEL));
     let drawn = value(settings, field);
@@ -398,11 +421,17 @@ fn row(
             false => 0,
         };
         let shown = visible(text, offset, room);
+        // A table shut is the same table drawn as one value, so the line a save
+        // would refuse wears the refusal's ink here too.
+        let ink = match refused_line == Some(index) {
+            true => theme::bad(),
+            false => drawn.style,
+        };
         if index == 0 {
             let note = note(field, served, &shown, room);
             let mut spans = vec![
                 Span::styled(label.clone(), theme::faint()),
-                Span::styled(shown, drawn.style),
+                Span::styled(shown, ink),
             ];
             if !note.is_empty() {
                 spans.push(Span::styled(note, theme::faint()));
@@ -413,7 +442,7 @@ fn row(
             // line — under the row and in the value's own column, so the list
             // reads as one list rather than as a row and a second row's name.
             let said = format!("{}{shown}", " ".repeat(LABEL));
-            lines.push(Line::from(Span::styled(said, drawn.style)));
+            lines.push(Line::from(Span::styled(said, ink)));
         }
         if here && drawn.own && chosen {
             cursor = Some(Cursor {
@@ -452,12 +481,15 @@ fn note(field: &Field, served: &Served, shown: &str, room: usize) -> String {
 /// and the offer to add a header under the last of them. The text is the value's
 /// own and unresolved, so a `{session}` in it is drawn as written; the mark is
 /// the row's own cursor, so the line it stands on is the line the next keystroke
-/// is a keystroke of.
+/// is a keystroke of. `refused_line` is the line of the table a save would not
+/// take, drawn in the ink a refusal wears while the sentence it earns stands in
+/// the foot.
 fn table(
     served: &Served,
     field: &Field,
     chosen: bool,
     columns: usize,
+    refused_line: Option<usize>,
 ) -> (Vec<Line<'static>>, Option<Cursor>) {
     let label = format!("{:<LABEL$}", clip(field.key.name(), LABEL));
     let room = columns.saturating_sub(LABEL + MARK);
@@ -490,7 +522,8 @@ fn table(
             _ => String::new(),
         };
         // The line's mark is the row's own ink where it stands and faint where
-        // it does not, so the fold's cursor is read before the table is.
+        // it does not, so the fold's cursor is read before the table is — and
+        // the line itself is the refusal's ink where a save would refuse it.
         let mut spans = vec![
             Span::styled(lead, theme::faint()),
             Span::styled(
@@ -500,7 +533,13 @@ fn table(
                     false => theme::faint(),
                 },
             ),
-            Span::styled(shown, theme::plain()),
+            Span::styled(
+                shown,
+                match refused_line == Some(index) {
+                    true => theme::bad(),
+                    false => theme::plain(),
+                },
+            ),
         ];
         if !after.is_empty() {
             spans.push(Span::styled(after, theme::faint()));

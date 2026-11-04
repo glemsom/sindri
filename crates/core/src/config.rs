@@ -28,6 +28,7 @@ mod headers;
 mod provider;
 
 pub use document::{Document, KEYS, Key, toggle, toggle_shown};
+pub use headers::refusal;
 pub use provider::Provider;
 
 #[derive(Debug, Default, Clone)]

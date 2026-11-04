@@ -475,3 +475,184 @@ fn a_page_off_the_headers_row_shuts_the_fold() {
         "and the draft is kept"
     );
 }
+
+/// The ink of the cell `needle` starts on, in the row that says it: what a
+/// reader sees rather than what the row was built with. One frame, drawn once,
+/// so the row and the ink are the same frame's cells — and a column counted in
+/// cells, because the box draws glyphs that are more than one byte.
+fn ink_at(f: &mut Fixture, needle: &str) -> ratatui::style::Color {
+    let cells = common::frame_cells(&mut f.app, 100, 30);
+    let rows: Vec<String> = (0..cells.area.height)
+        .map(|y| {
+            (0..cells.area.width)
+                .map(|x| cells[(x, y)].symbol())
+                .collect()
+        })
+        .collect();
+    let at = row_of(&rows, needle);
+    let byte = rows[at]
+        .find(needle)
+        .unwrap_or_else(|| panic!("{needle:?} is on the row: {}", rows[at]));
+    let column = u16::try_from(rows[at][..byte].chars().count()).expect("a column of the frame");
+    let row = u16::try_from(at).expect("a row of the frame");
+    cells[(column, row)].fg
+}
+
+#[test]
+fn a_line_a_save_would_refuse_is_drawn_as_one_and_says_so_in_the_foot() {
+    let mut f = opened(Some("model = \"m\"\n"));
+    folded(&mut f);
+    press(&mut f.app, KeyCode::Char('a'), KeyModifiers::NONE);
+    type_text(&mut f.app, "x-1 1");
+
+    let rows = shown(&screen(&mut f.app, 100, 30));
+    assert!(
+        rows.contains("extra_headers: entry 1 is not `Name: value`"),
+        "the run's sentence for the line is in the pinned foot: {rows}"
+    );
+    assert_eq!(
+        ink_at(&mut f, "x-1 1"),
+        theme::BAD,
+        "and the line that is wrong is drawn as a refusal: {rows}"
+    );
+    assert!(
+        rows.contains("+ add a header"),
+        "while the fold stands open and the keys are still the line's: {rows}"
+    );
+}
+
+#[test]
+fn a_refusal_is_cleared_the_keystroke_the_line_is_legal_without_leaving_the_row() {
+    let mut f = opened(Some("model = \"m\"\n"));
+    folded(&mut f);
+    press(&mut f.app, KeyCode::Char('a'), KeyModifiers::NONE);
+    type_text(&mut f.app, "x-11");
+    assert!(
+        shown(&screen(&mut f.app, 100, 30)).contains("extra_headers: entry 1 is not `Name: value`"),
+        "the colon the line is missing is refused while it is being typed"
+    );
+
+    // The colon, where it belongs: one key left of the value's last character.
+    press(&mut f.app, KeyCode::Left, KeyModifiers::NONE);
+    type_text(&mut f.app, ":");
+
+    let rows = shown(&screen(&mut f.app, 100, 30));
+    assert!(
+        !rows.contains("not `Name: value`"),
+        "the refusal is gone the keystroke the line is legal: {rows}"
+    );
+    assert_eq!(
+        ink_at(&mut f, "x-1:1"),
+        theme::PLAIN,
+        "and the line is the row's own ink again: {rows}"
+    );
+    assert!(
+        rows.contains("+ add a header") && rows.contains("Enter done"),
+        "the reader is still in the line they were typing: {rows}"
+    );
+    assert_eq!(
+        field(&f, Key::ExtraHeaders),
+        "x-1:1",
+        "and the line holds what was typed into it"
+    );
+}
+
+#[test]
+fn saving_a_table_with_a_refused_line_still_refuses_it_and_says_what_it_said() {
+    let mut f = opened(Some("model = \"m\"\n"));
+    let before = written(&f.path);
+    type_text(&mut f.app, "x-1 1");
+    enter(&mut f);
+
+    assert!(
+        f.app.overlay().is_some(),
+        "the modal stays open on a table a save refuses"
+    );
+    let rows = shown(&screen(&mut f.app, 100, 30));
+    assert!(
+        rows.contains("not saved") && rows.contains("extra_headers: entry 1 is not `Name: value`"),
+        "and the foot says what a save says about it: {rows}"
+    );
+    assert_eq!(
+        written(&f.path),
+        before,
+        "the file is exactly as it was, as it was before this ticket"
+    );
+}
+
+#[test]
+fn a_refused_line_typed_on_the_shut_row_is_refused_where_it_is_typed() {
+    let mut f = opened(Some("model = \"m\"\n"));
+    type_text(&mut f.app, "x-1 1");
+
+    let rows = shown(&screen(&mut f.app, 100, 30));
+    assert!(
+        rows.contains("extra_headers: entry 1 is not `Name: value`"),
+        "the row is a table whether or not it is folded open, so it says the \
+         sentence there too: {rows}"
+    );
+    assert_eq!(
+        ink_at(&mut f, "x-1 1"),
+        theme::BAD,
+        "and the line it is about is drawn as a refusal: {rows}"
+    );
+}
+
+#[test]
+fn the_refused_line_is_the_one_drawn_as_one_and_the_lines_above_it_are_not() {
+    // A table of two headers: the refusal is the second line, so the ink is a
+    // property of the line a save stops on and not of the row it stands in.
+    let mut f = opened(Some("model = \"m\"\n"));
+    folded(&mut f);
+    press(&mut f.app, KeyCode::Char('a'), KeyModifiers::NONE);
+    type_text(&mut f.app, "x-1: 1");
+    // `a` is a line of the table only while the fold holds the keys; a line
+    // being written keeps its own, so `Enter` gives them back first.
+    enter(&mut f);
+    press(&mut f.app, KeyCode::Char('a'), KeyModifiers::NONE);
+    type_text(&mut f.app, "X-1: 2");
+
+    let rows = shown(&screen(&mut f.app, 100, 30));
+    assert!(
+        rows.contains("extra_headers: `x-1` is set twice"),
+        "the run's sentence for the repeat is in the pinned foot: {rows}"
+    );
+    assert_eq!(
+        ink_at(&mut f, "x-1: 1"),
+        theme::PLAIN,
+        "the first spelling of a name is the header, drawn as it was: {rows}"
+    );
+    assert_eq!(
+        ink_at(&mut f, "X-1: 2"),
+        theme::BAD,
+        "and the line that repeats it is the one drawn as a refusal: {rows}"
+    );
+}
+
+#[test]
+fn a_refusal_is_the_row_being_typed_and_not_a_sentence_that_follows_the_cursor() {
+    let mut f = opened(Some("model = \"m\"\n"));
+    folded(&mut f);
+    press(&mut f.app, KeyCode::Char('a'), KeyModifiers::NONE);
+    type_text(&mut f.app, "x-1 1");
+    assert!(
+        shown(&screen(&mut f.app, 100, 30)).contains("not `Name: value`"),
+        "the line is refused while it is the one being typed"
+    );
+
+    // `Esc` shuts the fold with the draft beside it, and `↑` walks off the row —
+    // up, because the headers row is the last one the schema has.
+    press(&mut f.app, KeyCode::Esc, KeyModifiers::NONE);
+    press(&mut f.app, KeyCode::Up, KeyModifiers::NONE);
+
+    let rows = shown(&screen(&mut f.app, 100, 30));
+    assert!(
+        !rows.contains("not `Name: value`"),
+        "another row is another row's check, so the sentence is gone: {rows}"
+    );
+    assert_eq!(
+        field(&f, Key::ExtraHeaders),
+        "x-1 1",
+        "and the refused line is still the table's, unsaved"
+    );
+}
