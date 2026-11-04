@@ -180,6 +180,7 @@ fn a_value_the_schema_refuses_keeps_the_modal_open_and_writes_nothing() {
 
 mod completion;
 mod door;
+mod fold;
 mod listed;
 mod modal;
 mod secrets;

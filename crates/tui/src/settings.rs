@@ -7,6 +7,11 @@
 //! here rather than in a second module both would have to know. The model row
 //! completes against the names the wire serves, ranked by the composer's own
 //! ranking, and it is a field first: a name nothing offered is kept and saved.
+//! That row also folds the names open under itself, which is the one place the
+//! modal's `Enter` means something other than save: on a row nobody has typed
+//! in it asks to choose from the names the wire offered, and on the fold it
+//! takes the name it is on; a row someone has typed in is their draft, so `Enter`
+//! writes it, exactly as it does on every other row.
 
 mod list;
 mod served;
@@ -278,13 +283,31 @@ impl Settings {
     /// One key, and what it did. The model row's list is ranked before the key
     /// is read, so what `Tab` takes and what `↑↓` steps are the names the field
     /// holds at that keystroke — and a row with no list under it is the plain
-    /// field it always was.
+    /// field it always was. A fold standing open under the model row takes its
+    /// own keys first, so no other row and no other key learns that it is there.
     pub fn key(&mut self, key: KeyEvent, served: &Served) -> Outcome {
         self.refresh(served);
+        let outcome = self.pressed(key, served);
+        // And ranked again once the key has landed, so a fold typed into is the
+        // names the fragment reaches on the frame it is drawn on rather than one
+        // keystroke later.
+        self.refresh(served);
+        outcome
+    }
+
+    /// The key itself, already ranked against the names the frame holds: what
+    /// the frame sees once `key` has put the list back in step with the row.
+    fn pressed(&mut self, key: KeyEvent, served: &Served) -> Outcome {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        if !ctrl && let Some(outcome) = self.fold_key(key.code) {
+            return outcome;
+        }
         match key.code {
             KeyCode::Esc => Outcome::Discard,
-            KeyCode::Enter => Outcome::Save,
+            KeyCode::Enter => match self.open_fold(served) {
+                true => Outcome::Staying,
+                false => Outcome::Save,
+            },
             KeyCode::Up | KeyCode::BackTab if self.step_match(true) => Outcome::Staying,
             KeyCode::Down if self.step_match(false) => Outcome::Staying,
             KeyCode::Tab | KeyCode::Right if self.take_match(served) => Outcome::Staying,
@@ -330,6 +353,67 @@ impl Settings {
         self.list.refresh(served.names(), model_text(&self.fields));
     }
 
+    /// A key while the names stand open under the model row: `↑↓` move inside
+    /// them, `Enter` takes the name the fold is on and shuts it, and `Esc` shuts
+    /// it and keeps the draft — the discarding `Esc` is the modal's, and it is
+    /// the one after this. `None` is every other key, which the modal takes as it
+    /// always did.
+    fn fold_key(&mut self, code: KeyCode) -> Option<Outcome> {
+        if !self.list.folded() || !self.chosen_is_model() {
+            return None;
+        }
+        match code {
+            KeyCode::Esc => {
+                self.list.close();
+                Some(Outcome::Staying)
+            }
+            // A fold nothing stands under holds no name to take, so this is the
+            // row's own save again: a name the list does not hold still saves.
+            KeyCode::Enter => Some(match self.take_folded() {
+                true => Outcome::Staying,
+                false => Outcome::Save,
+            }),
+            KeyCode::Up | KeyCode::BackTab => {
+                self.list.step(true);
+                Some(Outcome::Staying)
+            }
+            KeyCode::Down => {
+                self.list.step(false);
+                Some(Outcome::Staying)
+            }
+            _ => None,
+        }
+    }
+
+    /// `Enter` on the model row while the names stand shut: the file's own value
+    /// in a row nobody has typed in asks to be chosen from, so the names open
+    /// under it. A row someone has typed in is their draft and `Enter` writes it,
+    /// and a wire that offered no name leaves the row the field it has always
+    /// been — there is nothing to fold out, and nothing to open on.
+    fn open_fold(&mut self, served: &Served) -> bool {
+        let untouched = self
+            .fields
+            .get(self.chosen)
+            .is_some_and(|field| field.key == Key::Model && field.edit == Edit::Untouched);
+        if !untouched || served.names().is_empty() {
+            return false;
+        }
+        let current = model_text(&self.fields).to_string();
+        self.list.open(served.names(), &current);
+        true
+    }
+
+    /// `Enter` while the names stand open: the one the fold is on, in the field,
+    /// and the fold shut — the row is the draft the save writes from then on.
+    fn take_folded(&mut self) -> bool {
+        let Some(name) = self.list.take().map(str::to_owned) else {
+            return false;
+        };
+        self.list.close();
+        self.edit(Edit::Value, |field| field.text = name);
+        true
+    }
+
     /// `↑` or `↓`: the matches step, and the cursor stays on the row whose field
     /// is being typed. A step with no match left to move to is the cursor's, so
     /// a row holding a list is still a row the arrows walk past — and a fragment
@@ -348,6 +432,7 @@ impl Settings {
         let Some(name) = self.list.take().map(str::to_owned) else {
             return false;
         };
+        self.list.close();
         self.edit(Edit::Value, |field| field.text = name);
         self.refresh(served);
         true
@@ -366,9 +451,14 @@ impl Settings {
     }
 
     /// A screenful at a time: what `PgUp`/`PgDn` and the wheel move the cursor
-    /// by in a modal whose rows do not all fit.
+    /// by in a modal whose rows do not all fit. A page off the model row shuts
+    /// the fold it stands on: the names are that row's, and a page is a key the
+    /// fold never took.
     pub fn page(&mut self, rows: usize, up: bool) {
         self.chosen = crate::overlay::step(self.chosen, rows, self.fields.len(), up);
+        if !self.chosen_is_model() {
+            self.list.close();
+        }
     }
 
     pub fn insert(&mut self, ch: char) {

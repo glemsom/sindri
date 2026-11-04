@@ -30,6 +30,12 @@ const WIDE: u16 = 110;
 const HINTS: &str =
     "↑↓ move or match · Tab/→ take · PgUp/PgDn page · Ctrl-U clear · Enter save · Esc discard";
 
+/// The keys while the names stand open under the model row: the fold has taken
+/// the arrows, `Enter` and `Esc` while it stands, so the line says what they do
+/// there rather than what they do outside it.
+const FOLD_HINTS: &str =
+    "↑↓ move the names · Enter take one and close · Esc close and keep the draft";
+
 /// Draws the modal and answers with the field rows its box showed, which is
 /// what a page moves the cursor by.
 pub fn draw(settings: &Settings, served: &Served, area: Rect, buf: &mut Buffer) -> usize {
@@ -113,8 +119,12 @@ pub fn draw(settings: &Settings, served: &Served, area: Rect, buf: &mut Buffer) 
             columns,
         ));
     }
+    let hints = match settings.list().folded() {
+        true => FOLD_HINTS,
+        false => HINTS,
+    };
     foot.push(Line::from(Span::styled(
-        clip(HINTS, columns),
+        clip(hints, columns),
         theme::faint(),
     )));
 
@@ -122,9 +132,8 @@ pub fn draw(settings: &Settings, served: &Served, area: Rect, buf: &mut Buffer) 
     // wraps and the modal grows, and when it still does not fit, it grows no
     // further than the terminal and the list scrolls instead.
     let rows = settings.fields().len();
-    // The list stands under the row it filters, and only while that row is the
-    // one being typed in: the box is sized for it, so the keys below are never
-    // the rows a list pushes off.
+    // The list stands under the model row, and only there: the box is sized for
+    // it, so the keys below are never the rows a list pushes off.
     let filtering = settings
         .fields()
         .get(settings.chosen())
@@ -148,6 +157,18 @@ pub fn draw(settings: &Settings, served: &Served, area: Rect, buf: &mut Buffer) 
     // What the row being typed in has to say is never what falls off: the list's
     // rows come out of the same room the field rows do, the chosen one included.
     let listed = list_rows.min(body.saturating_sub(1));
+    // A fold taller than the room it has is scrolled rather than cut at the top:
+    // the window stands around the name the cursor is on, so the row it is on is
+    // the row that is drawn.
+    let from = match listed {
+        0 => 0,
+        listed => settings
+            .list()
+            .chosen()
+            .saturating_add(1)
+            .saturating_sub(listed),
+    };
+    let to = (from + listed).min(list_rows);
     let fielded = body.saturating_sub(listed);
     let first = settings.chosen().saturating_add(1).saturating_sub(fielded);
     let last = rows.min(first + fielded);
@@ -161,7 +182,7 @@ pub fn draw(settings: &Settings, served: &Served, area: Rect, buf: &mut Buffer) 
             false => line,
         });
         if chosen {
-            lines.extend(list_lines(settings.list(), columns, listed));
+            lines.extend(list_lines(settings.list(), columns, from, to));
         }
     }
     lines.extend(foot);
@@ -260,15 +281,16 @@ fn row(settings: &Settings, served: &Served, field: &Field, columns: usize) -> L
 }
 
 /// The list under the model row: the names the fragment reaches, nearest first,
-/// the one a `Tab` would take marked and drawn in the row's own ink. Faint, and
-/// under the value's column, because a list is what the row would say and not
-/// what the file holds.
-fn list_lines(list: &List, columns: usize, rows: usize) -> Vec<Line<'static>> {
-    list.names()
+/// or every name the wire offered while the fold stands open, the one a `Tab`
+/// would take marked and drawn in the row's own ink. Faint, and under the
+/// value's column, because a list is what the row would say and not what the
+/// file holds. `from..to` is the window of it the box has room for.
+fn list_lines(list: &List, columns: usize, from: usize, to: usize) -> Vec<Line<'static>> {
+    list.names()[from.min(to)..to]
         .iter()
-        .take(rows)
         .enumerate()
-        .map(|(at, name)| {
+        .map(|(offset, name)| {
+            let at = from + offset;
             let marked = at == list.chosen();
             let mark = match marked {
                 true => "▸ ",

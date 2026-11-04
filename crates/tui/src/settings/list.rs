@@ -4,6 +4,12 @@
 //! within a tier in the order the wire named them, because that is the order the
 //! row states them in. A name nothing offered is still a name the field keeps:
 //! the list ranks what is offered and never narrows what is allowed.
+//!
+//! The same names fold open under the row when it is asked to choose: a fold is
+//! every name the wire offered, with the cursor on the one the row holds, until
+//! the fragment under it changes and narrows it to what the fragment reaches
+//! again. Open or shut is the one thing `Enter` on that row reads, so it is held
+//! here beside the cursor the fold takes a name from.
 
 use crate::completion::ranked;
 
@@ -19,6 +25,12 @@ pub struct List {
     names: Vec<String>,
     /// The match a `Tab` would take.
     chosen: usize,
+    /// Whether the names stand open under the row, as the row asked for them.
+    fold: bool,
+    /// The fragment the fold opened on: the fold stands on every name the wire
+    /// offered for as long as the fragment is the one it opened with, and is
+    /// the list the fragment reaches from the first keystroke that moves it.
+    opened: String,
 }
 
 impl List {
@@ -38,6 +50,8 @@ impl List {
             },
             typed: typed.to_string(),
             chosen: 0,
+            fold: false,
+            opened: String::new(),
         }
     }
 
@@ -47,6 +61,25 @@ impl List {
     /// while the modal is open is the same rule, so a list under a typed
     /// fragment appears without throwing the cursor to the top of it.
     pub fn refresh(&mut self, offered: &[String], typed: &str) {
+        if self.fold {
+            // A fold stands on every name the wire offered while the fragment is
+            // the one it opened on, and is the list that fragment reaches once a
+            // keystroke moves it — backspaced to where it started, the whole
+            // choice is the fold's again. A listing that lands meanwhile is the
+            // wire's, so a fold standing still draws the names it just named.
+            let typed = typed.trim();
+            let moved = typed != self.typed;
+            self.names = match typed == self.opened {
+                true => offered.to_vec(),
+                false => List::of(offered, typed).names,
+            };
+            if moved {
+                self.chosen = 0;
+            }
+            self.chosen = self.chosen.min(self.names.len().saturating_sub(1));
+            self.typed = typed.to_string();
+            return;
+        }
         let fresh = List::of(offered, typed);
         let kept = fresh.typed == self.typed && fresh.names == self.names;
         self.chosen = match kept {
@@ -65,6 +98,15 @@ impl List {
         let Some(last) = self.names.len().checked_sub(1) else {
             return false;
         };
+        if self.fold {
+            // The fold holds the cursor: a step past either end of it stays on
+            // the row, because the row's own arrows are what the fold has taken.
+            self.chosen = match up {
+                true => self.chosen.saturating_sub(1),
+                false => (self.chosen + 1).min(last),
+            };
+            return true;
+        }
         let at = match up {
             true => self.chosen.checked_sub(1),
             false => (self.chosen < last).then(|| self.chosen + 1),
@@ -78,9 +120,38 @@ impl List {
         }
     }
 
-    /// The name a `Tab` takes: the match the list is on.
+    /// The name a `Tab` takes, and the one `Enter` takes while the fold is
+    /// open: the match the list is on.
     pub fn take(&self) -> Option<&str> {
         self.names.get(self.chosen).map(String::as_str)
+    }
+
+    /// The names opened under the row: every one the wire offered, in the order
+    /// it named them, and the cursor on the name the row holds when the wire
+    /// named it and on the first name when it did not — a name no list holds is
+    /// no place to open on.
+    pub fn open(&mut self, offered: &[String], current: &str) {
+        let current = current.trim();
+        self.fold = true;
+        self.typed = current.to_string();
+        self.opened = current.to_string();
+        self.names = offered.to_vec();
+        self.chosen = self
+            .names
+            .iter()
+            .position(|name| name == current)
+            .unwrap_or(0);
+    }
+
+    /// The fold shut again, with the draft beside it exactly as it was.
+    pub fn close(&mut self) {
+        self.fold = false;
+    }
+
+    /// Whether the names stand open under the row: the one fact `Enter` on that
+    /// row reads before it decides what it means.
+    pub fn folded(&self) -> bool {
+        self.fold
     }
 
     /// The names the fragment reaches, in the order they are drawn.
@@ -167,6 +238,74 @@ mod tests {
             Some("gpt-5"),
             "a fragment that changed starts again at the nearest name"
         );
+    }
+
+    #[test]
+    fn a_fold_stands_on_every_name_and_opens_on_the_one_the_row_holds() {
+        let offered = names(&["qwen3-32b", "llama3-8b", "gpt-5"]);
+        let mut list = List::default();
+        list.open(&offered, "llama3-8b");
+        assert!(list.folded(), "the fold is open");
+        assert_eq!(
+            list.names(),
+            offered,
+            "a fold is every name the wire offered, not the ones a fragment reaches"
+        );
+        assert_eq!(
+            list.take(),
+            Some("llama3-8b"),
+            "the cursor opens on the row's own name"
+        );
+
+        let mut elsewhere = List::default();
+        elsewhere.open(&offered, "hand-typed");
+        assert_eq!(
+            elsewhere.take(),
+            Some("qwen3-32b"),
+            "a name no list holds is no place to open on, so the fold opens on the first"
+        );
+    }
+
+    #[test]
+    fn a_fold_typed_into_narrows_to_the_names_the_fragment_reaches() {
+        let offered = names(&["qwen3-32b", "qwen2-8b", "gpt-5"]);
+        let mut list = List::default();
+        list.open(&offered, "");
+        assert_eq!(list.len(), 3, "the fold stands on every name");
+
+        list.refresh(&offered, "qwen");
+        assert_eq!(
+            list.names(),
+            names(&["qwen3-32b", "qwen2-8b"]),
+            "a fragment typed under the fold narrows it as it always did"
+        );
+        assert!(list.folded(), "and the fold stays open to take one");
+
+        list.refresh(&offered, "");
+        assert_eq!(
+            list.len(),
+            3,
+            "a fragment emptied is the whole choice again"
+        );
+    }
+
+    #[test]
+    fn the_fold_holds_its_cursor_at_either_end_of_itself() {
+        let mut list = List::default();
+        list.open(&names(&["one", "two"]), "");
+        assert!(
+            list.step(true),
+            "the fold takes the arrow, so the row keeps its cursor"
+        );
+        assert_eq!(
+            list.take(),
+            Some("one"),
+            "and the first name is as far as it goes"
+        );
+        assert!(list.step(false));
+        assert_eq!(list.take(), Some("two"));
+        assert!(list.step(false), "the last name holds it too");
+        assert_eq!(list.take(), Some("two"), "so the cursor stays on it");
     }
 
     #[test]
