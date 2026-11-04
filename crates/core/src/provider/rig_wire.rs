@@ -104,6 +104,10 @@ pub(super) fn turn(
             if let Some(base_url) = auth.api_base.as_deref() {
                 config = config.with_base_url(base_url);
             }
+            let config = match copilot_route(model) {
+                Some(route) => config.with_route(route),
+                None => config,
+            };
             let model = config.connect(ReqwestClient::from(http)).completion(model);
             let stream = model.stream(request).map_err(convert)?;
             consume(&runtime, stream, deltas).map_err(refused_tools)?
@@ -122,6 +126,14 @@ pub(super) fn turn(
     };
 
     Ok(finish(response))
+}
+
+/// Copilot's GPT-6 models use Responses even though their identifiers do not
+/// carry the `codex` marker Rig's dialect uses for route selection.
+fn copilot_route(model: &str) -> Option<Route> {
+    let model = model.to_ascii_lowercase();
+    (model.starts_with("gpt-6-") || model.starts_with("gpt-6."))
+        .then_some(Route::Responses)
 }
 
 /// Reads the reply to its end, handing every fragment to `deltas` as it
@@ -352,6 +364,18 @@ mod tests {
 
     use crate::agent::{BashTool, Limits, Silent};
     use crate::sandbox::SandboxPolicy;
+
+    #[test]
+    fn copilot_gpt_six_models_use_the_responses_route() {
+        use rig_core::providers::openai::Route;
+
+        for model in ["gpt-6-luna", "gpt-6-astra", "gpt-6-sol", "gpt-6.1-sol"] {
+            assert_eq!(super::copilot_route(model), Some(Route::Responses), "{model}");
+        }
+        assert_eq!(super::copilot_route("gpt-5.3-codex"), None);
+        assert_eq!(super::copilot_route("gpt-4o"), None);
+        assert_eq!(super::copilot_route("gpt-60-preview"), None);
+    }
 
     /// The one sentence the bash description carries about the catalog, spelled
     /// out here rather than quoted from the source: this test exists to show
