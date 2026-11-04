@@ -6,12 +6,16 @@
 //! what is absent, in the words the transcript and the composer use — lives
 //! here rather than in a second module both would have to know.
 
+mod served;
+
 use std::path::Path;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use sindri_core::config::{Document, KEYS, Key, Provider, toggle_shown};
 
 use crate::overlay::Overlay;
+
+pub use served::{Served, Serving};
 
 /// What one key did to the modal: the four things it can ask for, and the two
 /// ways of asking for nothing. `Staying` is the modal taking the key and staying
@@ -441,8 +445,21 @@ impl crate::app::App {
                     None => settings,
                 };
                 self.show(Overlay::Settings(Box::new(settings)));
+                self.ask_wire();
             }
             Err(message) => self.note_error(format!("settings: {message}")),
+        }
+    }
+
+    /// The ask the modal makes as it opens: the names the wire this launch
+    /// speaks serves. A modal reopened on the same wire and base URL keeps the
+    /// answer it already has — asking again is a keystroke of its own — and one
+    /// reopened on another drops it and asks for the wire it now speaks.
+    fn ask_wire(&mut self) {
+        let launch = self.rail.launch();
+        let serving = Serving::of(launch.provider.clone(), launch.base_url.clone());
+        if self.served.serving() != Some(&serving) {
+            self.served.ask(serving);
         }
     }
 }

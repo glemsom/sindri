@@ -92,6 +92,9 @@ fn launch(boot: &Boot) -> Launch {
         sandbox: posture(boot.session.policy()),
         provider: boot.config.provider.as_str().to_string(),
         model: boot.config.model.clone(),
+        // Where the wire is spoken, where the run says: what the names the wire
+        // serves answer for, as much as the wire itself does.
+        base_url: boot.config.base_url.clone(),
         workspace: workspace(&boot.env.workspace),
         // The half of the catalog a human may reach for: `/skill` offers these,
         // and a load by hand is read from the same catalog the fold built.
@@ -218,6 +221,15 @@ impl Driver for Front {
             agent.forget();
         }
         Ok(launch(&self.boot))
+    }
+
+    /// The names the wire serves, asked of the model a prompt asks: nothing of
+    /// the modal's is handed in, so the list a human is offered and the model a
+    /// run uses are one answer. No tap and no cancel — an ask runs nothing and
+    /// reads no key it was not already given.
+    fn models(&mut self) -> Result<Vec<String>, String> {
+        stack::models(&self.boot.session, &self.boot.config)
+            .map_err(|error| failure::provider_message(&error))
     }
 
     fn reload(&mut self) -> Result<Launch, String> {

@@ -13,6 +13,7 @@ use sindri_core::exec::ToolResult;
 
 use crate::msg::Msg;
 use crate::rail::Launch;
+use crate::settings::Serving;
 
 pub use sindri_core::agent::Stopped as Stop;
 pub use sindri_core::exec::Side;
@@ -72,6 +73,15 @@ pub trait Driver: Send {
     fn reload(&mut self) -> Result<Launch, String> {
         Err("this front end cannot read the config again".to_string())
     }
+
+    /// The names the wire this front end would ask serves: asked on the thread
+    /// the tasks run on rather than the frame's, so the modal draws and takes
+    /// every key while it is out. `Err` is why the wire would not say — a hint
+    /// the modal states in three words, never a refusal, because the run this
+    /// front end cannot ask is the one with no key yet.
+    fn models(&mut self) -> Result<Vec<String>, String> {
+        Err("this front end cannot ask the wire".to_string())
+    }
 }
 
 #[derive(Debug)]
@@ -79,6 +89,10 @@ pub enum Task {
     Run(Job),
     Renew,
     Reload,
+    /// One ask about the names the wire serves, and what they answer for:
+    /// nothing waits on it, so it is the queue's like any other task and the
+    /// frame draws while a thread is out with it.
+    Ask(Serving),
     /// One skill, loaded by hand. It runs before any prompt behind it in the
     /// queue, because the driver's thread is one thread and its tasks are
     /// answered in the order they were sent.

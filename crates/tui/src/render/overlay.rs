@@ -52,7 +52,7 @@ pub fn draw(app: &mut App, area: Rect, buf: &mut Buffer) {
         Overlay::Settings(settings) => {
             // A page moves the modal by what its box shows, not by what the
             // transcript it covers happens to be showing.
-            app.window.page = settings::draw(settings, area, buf).max(1);
+            app.window.page = settings::draw(settings, &app.served, area, buf).max(1);
             return;
         }
         Overlay::Help(help) => {

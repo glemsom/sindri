@@ -237,6 +237,7 @@ mod tests {
                 max_turns: 250,
                 context_limit: None,
                 status: true,
+                base_url: None,
             },
             None,
         );

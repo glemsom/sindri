@@ -162,6 +162,7 @@ mod tests {
             max_turns: 250,
             context_limit: Some(200_000),
             status: true,
+            base_url: None,
         })
         .facts(Duration::ZERO)
     }

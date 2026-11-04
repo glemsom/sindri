@@ -358,6 +358,7 @@ fn apply(app: &mut App, message: Msg) -> bool {
         Msg::Finished(finished) => app.finished(finished),
         Msg::Paths(generation, paths, capped) => app.paths(generation, paths, capped),
         Msg::Drawn(body, drawn) => app.drawn(body, drawn),
+        Msg::Listed(serving, names) => app.listed(serving, names),
         Msg::Loaded(loaded) => app.loaded(loaded),
         Msg::Renewed(launch) => app.renewed(launch.map(|launch| *launch)),
         Msg::Reloaded(reloaded) => app.reloaded(reloaded.map(|launch| *launch)),

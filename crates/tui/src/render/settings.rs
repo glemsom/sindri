@@ -1,6 +1,9 @@
 //! The settings modal: one row per key of the config file, the path saving
 //! writes to, and the warning a secret earns. A secret's value is
-//! never drawn; the row says where the value comes from and nothing more.
+//! never drawn; the row says where the value comes from and nothing more. The
+//! model row carries the one fact the modal did not have before — how many
+//! names the wire serves, and which wire named them — as faint text beside the
+//! name this run holds.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -13,7 +16,7 @@ use sindri_core::config::toggle_shown;
 use unicode_width::UnicodeWidthChar;
 
 use crate::markdown::text::{self, clip};
-use crate::settings::{Field, Settings};
+use crate::settings::{Field, Served, Settings};
 use crate::theme;
 
 const LABEL: usize = 20;
@@ -27,7 +30,7 @@ const HINTS: &str = "↑↓/Tab move · PgUp/PgDn page · Ctrl-U clear · Enter 
 
 /// Draws the modal and answers with the field rows its box showed, which is
 /// what a page moves the cursor by.
-pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) -> usize {
+pub fn draw(settings: &Settings, served: &Served, area: Rect, buf: &mut Buffer) -> usize {
     // The box is sized to what it has to say, not to a guess: the file's path
     // is the one fact it cannot shorten and still state, so a frame too narrow
     // for it at the margin the box would like gives the margin up rather than
@@ -134,7 +137,7 @@ pub fn draw(settings: &Settings, area: Rect, buf: &mut Buffer) -> usize {
 
     let mut lines = head;
     for (offset, field) in settings.fields()[first..last].iter().enumerate() {
-        let line = row(settings, field, columns);
+        let line = row(settings, served, field, columns);
         lines.push(if first + offset == settings.chosen() {
             line.patch_style(Style::new().add_modifier(Modifier::REVERSED))
         } else {
@@ -206,13 +209,34 @@ fn cells(text: &str) -> usize {
         .sum()
 }
 
-fn row(settings: &Settings, field: &Field, columns: usize) -> Line<'static> {
+fn row(settings: &Settings, served: &Served, field: &Field, columns: usize) -> Line<'static> {
     let label = format!("{:<LABEL$}", clip(field.key.name(), LABEL));
     let (shown, style) = value(settings, field);
-    Line::from(vec![
-        Span::styled(label, theme::faint()),
-        Span::styled(clip(&shown, columns.saturating_sub(LABEL)), style),
-    ])
+    let shown = clip(&shown, columns.saturating_sub(LABEL));
+    let mut spans = vec![Span::styled(label, theme::faint())];
+    // What the wire said about its own names, on the row of the name this run
+    // holds and after it: faint, because it is a hint about the wire and not a
+    // value the file carries.
+    let note = match field.key {
+        Key::Model => served.note(),
+        _ => None,
+    };
+    let room = columns.saturating_sub(LABEL + cells(&shown));
+    let note = match note {
+        Some(note) if shown.is_empty() => clip(&note, room),
+        // The separator is drawn only where something follows it: a row with no
+        // cells left for a hint ends at the value.
+        Some(note) => match clip(&note, room.saturating_sub(3)) {
+            clipped if clipped.is_empty() => String::new(),
+            clipped => format!(" · {clipped}"),
+        },
+        None => String::new(),
+    };
+    spans.push(Span::styled(shown, style));
+    if !note.is_empty() {
+        spans.push(Span::styled(note, theme::faint()));
+    }
+    Line::from(spans)
 }
 
 fn value(settings: &Settings, field: &Field) -> (String, Style) {

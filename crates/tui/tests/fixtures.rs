@@ -16,8 +16,18 @@ use std::path::{Path, PathBuf};
 /// that names anything else has copied the shared literal instead of taking the
 /// rest from it, whatever field `Launch` grows next. The catalog is one of them
 /// because a test about what the frame offers is a test about which skills the
-/// boot found.
-const RENAMED: [&str; 5] = ["session", "temp", "branch", "workspace", "skills"];
+/// boot found, and the base URL is one because a test about where a wire is
+/// spoken names it beside the wire itself, and the wire is one because a test
+/// about which wire the names answer for names that too.
+const RENAMED: [&str; 7] = [
+    "session",
+    "temp",
+    "branch",
+    "workspace",
+    "skills",
+    "base_url",
+    "provider",
+];
 
 /// Every test source but the two the walk leaves out: the shared fixture is the
 /// one file that names the whole launch, and this one is the law rather than a

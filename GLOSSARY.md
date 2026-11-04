@@ -23,6 +23,14 @@ client library exists — `rig_wire` is the one file that does.
 Completions, and what each needs: its credential variable, its base URL variable and
 whether it needs a credential at all (`crates/core/src/config/provider.rs`).
 
+**served names** — what a wire says it can be asked for, read off the wire and never
+invented: the listing a settings modal states on its model row, kept beside the `Serving`
+it answers for — the wire and the base URL together, because a list read at one address
+says nothing about another — so a listing that lands after the wire has changed is dropped
+where it lands (`crates/tui/src/settings/served.rs`). The ask is off the frame's thread,
+so the row is a field and the modal takes every key while it is out; a wire that cannot
+answer has no list, and that is a hint beside the row, never a refusal.
+
 **answer** — the text the model delivered, and the whole of stdout in batch mode: the
 answer and exactly one newline, or nothing when the run failed or was cancelled.
 

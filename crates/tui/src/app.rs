@@ -26,7 +26,7 @@ use crate::picture::Store;
 use crate::rail::{Launch, Rail, RailView};
 use crate::render::seam::Seam;
 use crate::selection::{Selection, Viewport};
-use crate::settings::Missing;
+use crate::settings::{Missing, Served, Serving};
 use crate::thread::Thread;
 use crate::window::Window;
 
@@ -103,6 +103,10 @@ pub struct App {
     /// run it opened for cannot send a prompt until it is filled in, and the
     /// composer says so rather than pretending.
     pub(crate) missing: Option<Missing>,
+    /// The names the wire serves, what they answer for and whether the ask is
+    /// still out: a fact about the wire rather than a draft of the modal, so it
+    /// outlives the modal that states it.
+    pub(crate) served: Served,
     pub(crate) rail_view: RailView,
     /// Where the records live: `/export` reads this directory and writes
     /// nothing into it.
@@ -168,6 +172,7 @@ impl App {
             config: None,
             reload: false,
             missing: None,
+            served: Served::default(),
             rail_view: RailView::default(),
             sessions: None,
             workspace: None,
@@ -354,6 +359,30 @@ impl App {
 
     pub fn take_walk(&mut self) -> Option<(u64, String)> {
         self.walking.take()
+    }
+
+    /// The ask the settings modal made, for the loop to carry to a thread: the
+    /// row is a field while it is out, because the modal waits for nothing.
+    pub fn take_ask(&mut self) -> Option<Serving> {
+        self.served.take()
+    }
+
+    /// What a thread made of the ask, and whether it drew anything: a listing
+    /// for a wire or base URL the launch has left is dropped where it lands,
+    /// and the row it would have said something on says what it said before.
+    pub fn listed(&mut self, serving: Serving, names: Option<Vec<String>>) -> bool {
+        if !self.served.landed(serving, names) {
+            return false;
+        }
+        // The one row a listing is drawn on is the modal's: with no modal open
+        // nothing on screen moved, and nothing is laid out again for it.
+        matches!(self.overlay, Some(Overlay::Settings(_)))
+    }
+
+    /// The names the wire serves, what they answer for and whether the ask is
+    /// still out: what the model row states, and what a completion offers.
+    pub fn served(&self) -> &Served {
+        &self.served
     }
 
     pub fn take_renew(&mut self) -> bool {

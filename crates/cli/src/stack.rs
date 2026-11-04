@@ -12,7 +12,7 @@ use sindri_core::agent::{Agent, BashTool, Dials, Event, Limits, OpenTool, Opener
 use sindri_core::cancel::Cancel;
 use sindri_core::config::Config;
 use sindri_core::exec::{BashExecutor, SandboxExecutor};
-use sindri_core::provider::Client;
+use sindri_core::provider::{Client, Error, Model};
 use sindri_core::session::Session;
 
 /// How a front end dresses the executor the session builds: what a command's
@@ -31,6 +31,20 @@ impl Dress for Bare {
     fn dress(&self, executor: SandboxExecutor) -> Arc<dyn BashExecutor> {
         Arc::new(executor)
     }
+}
+
+/// The names the wire a run speaks serves: asked of the model a prompt asks —
+/// the same client, composed the same way — so the list a human is shown and the
+/// model a run sends to cannot be two answers. Nothing of a run is composed for
+/// it: a listing is not a turn.
+pub fn models(session: &Session, config: &Config) -> Result<Vec<String>, Error> {
+    model(session, config).models()
+}
+
+/// The model one prompt asks: the client the wire is spoken through, built from
+/// the run's config and the preamble the session settled.
+fn model(session: &Session, config: &Config) -> Box<dyn Model> {
+    Box::new(Client::new(config, session.preamble()))
 }
 
 /// Everything that differs between one front end's stack and the next, and
@@ -91,7 +105,7 @@ impl Stack<'_> {
         Dials {
             // The preamble is composed from the session rather than handed in:
             // the workspace a request names is the one the policy mounted.
-            model: Box::new(Client::new(self.config, self.session.preamble())),
+            model: model(self.session, self.config),
             // The tool set decides whether `bash` carries the pointer to the
             // catalog, because it is the one place that knows whether `skill` is
             // registered at all.

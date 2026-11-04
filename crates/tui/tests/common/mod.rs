@@ -49,6 +49,9 @@ pub fn launch() -> Launch {
         skills: vec!["house-style".to_string(), "release-checks".to_string()],
         provider: "anthropic".to_string(),
         model: "claude-sonnet-4-6".to_string(),
+        // The wire is spoken at the address the wire chooses, so a test that
+        // renames one renames nothing else.
+        base_url: None,
         max_turns: 250,
         context_limit: Some(200_000),
         status: true,

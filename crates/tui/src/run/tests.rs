@@ -21,9 +21,10 @@ use sindri_core::provider::Usage;
 use super::{Paint, heard, turn_of_the_loop, walk};
 use crate::app::App;
 use crate::copy::{Clipboard, Copied};
-use crate::driver::{Finished, Stop};
+use crate::driver::{Finished, Stop, Task};
 use crate::msg::Msg;
 use crate::rail::Launch;
+use crate::settings::Serving;
 
 /// The frame's own draw, counted: the loop asks what it is painting and this
 /// answers without a terminal, so the clock is proven and nothing is drawn.
@@ -73,6 +74,7 @@ fn launch() -> Launch {
         max_turns: 1,
         context_limit: None,
         status: true,
+        base_url: None,
     }
 }
 
@@ -677,5 +679,84 @@ fn a_key_the_settings_modal_takes_draws_a_frame_and_one_it_holds_nothing_for_dra
         surface.drawn(),
         drawn + 1,
         "a key the modal holds nothing for draws nothing"
+    );
+}
+
+/// The settings modal asks the wire as it opens, and the ask is a task on the
+/// queue beside the prompts rather than a wait on the loop's thread: the frame
+/// draws and takes every key meanwhile, and the answer that lands is exactly one
+/// more frame — unless the ask it answers for is one the frame has left, which
+/// draws nothing at all.
+#[test]
+fn the_modal_asks_the_wire_as_it_opens_and_only_its_own_answer_draws() {
+    let config = tempfile::tempdir().expect("a config directory");
+    let mut app = app().with_config(config.path().join("config.toml"));
+    app.open_settings(None);
+    let (jobs, queue) = mpsc::channel();
+    let (tx, rx) = mpsc::channel::<Msg>();
+    let root = tempfile::tempdir().expect("a workspace");
+    let mut walking = false;
+    let mut surface = Painted::new(Arc::new(AtomicUsize::new(0)));
+    surface.show(&mut app);
+    let drawn = surface.drawn();
+
+    // The frame is woken by something else entirely, and the ask goes out with
+    // the rest of what the loop starts.
+    let _ = tx.send(Msg::Resize);
+    assert!(turn_of_the_loop(
+        &mut app,
+        &rx,
+        &jobs,
+        &tx,
+        &mut walking,
+        root.path(),
+        &mut surface
+    ));
+    let Ok(Task::Ask(serving)) = queue.try_recv() else {
+        panic!("the modal asked the wire for its names");
+    };
+    assert_eq!(
+        serving.wire(),
+        "anthropic",
+        "for the wire the launch this frame was given speaks"
+    );
+
+    let _ = tx.send(Msg::Listed(
+        serving,
+        Some(vec!["claude-sonnet-4-6".to_string()]),
+    ));
+    assert!(turn_of_the_loop(
+        &mut app,
+        &rx,
+        &jobs,
+        &tx,
+        &mut walking,
+        root.path(),
+        &mut surface
+    ));
+    assert_eq!(
+        surface.drawn(),
+        drawn + 2,
+        "the answer is the one frame the count is stated on"
+    );
+    assert_eq!(app.served().names(), ["claude-sonnet-4-6".to_string()]);
+
+    let _ = tx.send(Msg::Listed(
+        Serving::of("openai", None),
+        Some(vec!["gpt-5".to_string()]),
+    ));
+    assert!(turn_of_the_loop(
+        &mut app,
+        &rx,
+        &jobs,
+        &tx,
+        &mut walking,
+        root.path(),
+        &mut surface
+    ));
+    assert_eq!(
+        surface.drawn(),
+        drawn + 2,
+        "a listing for a wire the frame is not holding draws nothing"
     );
 }

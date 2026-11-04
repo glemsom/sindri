@@ -1,5 +1,8 @@
 //! A mock provider on loopback: canned replies in order, and every request
-//! recorded, so a process test can prove what the binary actually sent. No
+//! recorded, so a process test can prove what the binary actually sent. The one
+//! route it answers itself is the model listing — `GET …/models` — because a
+//! frame asks a wire what it serves before it has sent anything, and a listing
+//! is not a turn: the ask is recorded apart and consumes no canned reply. No
 //! network, no credential, no live model.
 
 #![allow(
@@ -39,6 +42,20 @@ pub const PROVIDER_ENV: &[&str] = &[
 
 pub const HARNESS_FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/openai");
 
+/// The names the mock's listing serves, in the order it serves them: what a
+/// frame states because the wire said so.
+pub const LISTED: [&str; 2] = ["model-one", "model-two"];
+
+/// The listing as both wires read it: Anthropic wants the display name, OpenAI
+/// the bare identifier, and neither minds the other's field.
+fn listing() -> String {
+    let data: Vec<Value> = LISTED
+        .iter()
+        .map(|name| serde_json::json!({"id": name, "display_name": name, "name": name}))
+        .collect();
+    serde_json::json!({"object": "list", "has_more": false, "data": data}).to_string()
+}
+
 #[derive(Debug, Clone)]
 pub struct Request {
     pub method: String,
@@ -72,6 +89,7 @@ impl Request {
 pub struct MockProvider {
     url: String,
     requests: Arc<Mutex<Vec<Request>>>,
+    asks: Arc<Mutex<Vec<Request>>>,
     stopped: Arc<Mutex<bool>>,
 }
 
@@ -83,9 +101,11 @@ impl MockProvider {
             .set_nonblocking(true)
             .expect("non-blocking listener");
         let requests: Arc<Mutex<Vec<Request>>> = Arc::new(Mutex::new(Vec::new()));
+        let asks: Arc<Mutex<Vec<Request>>> = Arc::new(Mutex::new(Vec::new()));
         let stopped = Arc::new(Mutex::new(false));
 
         let recorded = Arc::clone(&requests);
+        let catalogued = Arc::clone(&asks);
         let stop = Arc::clone(&stopped);
         std::thread::spawn(move || {
             let mut served = 0;
@@ -101,7 +121,7 @@ impl MockProvider {
                             .expect("at least one canned reply")
                             .clone();
                         served += 1;
-                        serve(stream, &reply, &recorded);
+                        serve(stream, &reply, &recorded, &catalogued);
                     }
                     Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                         std::thread::sleep(Duration::from_millis(5));
@@ -114,6 +134,7 @@ impl MockProvider {
         MockProvider {
             url: format!("http://127.0.0.1:{port}"),
             requests,
+            asks,
             stopped,
         }
     }
@@ -122,8 +143,16 @@ impl MockProvider {
         self.url.clone()
     }
 
+    /// The turns asked of this provider, in the order they arrived: every
+    /// request but an ask about its listing.
     pub fn requests(&self) -> Vec<Request> {
         self.requests.lock().expect("requests").clone()
+    }
+
+    /// The asks about the listing, in the order they arrived: what a frame
+    /// wanted to know before it sent anything.
+    pub fn asks(&self) -> Vec<Request> {
+        self.asks.lock().expect("asks").clone()
     }
 }
 
@@ -136,7 +165,12 @@ impl Drop for MockProvider {
 /// Reads one request off `stream`, records it, and writes `reply`. The request
 /// is recorded before the reply finishes, so a test can act while a paced
 /// stream is still open.
-fn serve(mut stream: TcpStream, reply: &Reply, recorded: &Arc<Mutex<Vec<Request>>>) {
+fn serve(
+    mut stream: TcpStream,
+    reply: &Reply,
+    recorded: &Arc<Mutex<Vec<Request>>>,
+    asks: &Arc<Mutex<Vec<Request>>>,
+) {
     stream
         .set_read_timeout(Some(Duration::from_secs(10)))
         .expect("read timeout");
@@ -183,6 +217,19 @@ fn serve(mut stream: TcpStream, reply: &Reply, recorded: &Arc<Mutex<Vec<Request>
         headers,
         body,
     };
+    // The listing is the harness's own answer: what a wire serves is not a turn,
+    // so it is recorded apart and consumes no reply.
+    if request
+        .path
+        .split('?')
+        .next()
+        .unwrap_or_default()
+        .ends_with("/models")
+    {
+        asks.lock().expect("record ask").push(request);
+        write_whole(&mut stream, &Reply::whole(200, listing()));
+        return;
+    }
     let streaming = streams(reply, &request.body);
     recorded.lock().expect("record request").push(request);
     if streaming {

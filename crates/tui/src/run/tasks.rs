@@ -16,6 +16,13 @@ pub(super) fn begin(app: &mut App, jobs: &Sender<Task>) {
     if app.take_reload() && jobs.send(Task::Reload).is_err() {
         return;
     }
+    // The names the wire serves, asked beside the modal that states them: the
+    // frame draws and takes every key while the thread is out with it.
+    if let Some(serving) = app.take_ask()
+        && jobs.send(Task::Ask(serving)).is_err()
+    {
+        return;
+    }
     // The load goes first, and the prompt that waits on it is not started until
     // the front end has answered: a turn with a skill the reader asked for left
     // out is a turn they did not ask for.
@@ -44,6 +51,7 @@ pub(super) fn drive(mut driver: Box<dyn Driver>, tx: Sender<Msg>) -> Sender<Task
                     let loaded = driver.load(&skill, Tap::new(tx.clone()));
                     tx.send(Msg::Loaded(loaded))
                 }
+                Task::Ask(serving) => tx.send(Msg::Listed(serving, driver.models().ok())),
                 Task::Renew => tx.send(Msg::Renewed(driver.renew().map(Box::new))),
                 Task::Reload => tx.send(Msg::Reloaded(driver.reload().map(Box::new))),
             };

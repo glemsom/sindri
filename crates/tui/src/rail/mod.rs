@@ -31,6 +31,10 @@ pub struct Launch {
     /// The model this run asks: the one fact that says what the user is
     /// talking to.
     pub model: String,
+    /// Where that wire is spoken, where the run names an address of its own:
+    /// the second of the two facts the names a wire serves answer for, so a
+    /// list read at one address is never drawn for another.
+    pub base_url: Option<String>,
     /// The directory the frame was launched in — and the one the sandbox
     /// mounts — shortened to `~` under the home: the header of every turn
     /// names it, and the rail states it.

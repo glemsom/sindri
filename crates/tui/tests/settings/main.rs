@@ -11,7 +11,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-pub use common::{buffer, launch, notes, press, row, screen, shown, type_text};
+pub use common::{buffer, launch, notes, press, row, row_of, screen, shown, type_text};
 use std::path::{Path, PathBuf};
 
 use crossterm::event::{KeyCode, KeyModifiers};
@@ -179,6 +179,7 @@ fn a_value_the_schema_refuses_keeps_the_modal_open_and_writes_nothing() {
 }
 
 mod door;
+mod listed;
 mod modal;
 mod secrets;
 mod sentences;

@@ -67,6 +67,54 @@ fn expect_on_screen(pty: &Pty, child: &mut std::process::Child, want: &str) -> S
     drawn
 }
 
+/// The model row states what the wire serves: the listing the mock answers,
+/// and the wire that named it. It costs the frame nothing to have asked — no
+/// prompt was sent to learn it — and the row is still the field it was.
+#[test]
+fn the_settings_modal_states_the_names_the_wire_serves() {
+    let Some(pty) = Pty::new() else {
+        eprintln!("no pty on this machine: the model row is not tested here");
+        return;
+    };
+    let env = Env::new();
+    let mock = MockProvider::start(vec![Reply::answer("never asked")]);
+    write_config(&env, &config_for(&mock, "model-one", None));
+    let mut child = spawn_with(&env, &pty, &mock);
+
+    expect(&pty, &mut child, "cache");
+    type_command(&pty, "/settings");
+    expect_on_screen(
+        &pty,
+        &mut child,
+        &format!("{} names · anthropic", common::provider::LISTED.len()),
+    );
+
+    // A keystroke is still the field's while the count sits beside it.
+    set_field(
+        &pty,
+        rows_to(sindri_core::config::Key::Model),
+        "typed-by-hand",
+    );
+    expect_on_screen(&pty, &mut child, "typed-by-hand");
+    pty.type_key(ENTER);
+    expect(&pty, &mut child, "settings saved");
+
+    let (code, _) = pty.quit(&mut child);
+    assert_eq!(code, Some(0), "leaving the frame is not a failure");
+
+    assert!(
+        mock.requests().is_empty(),
+        "asking the wire what it serves sends no prompt"
+    );
+    let asks = mock.asks();
+    assert_eq!(asks.len(), 1, "one modal, one ask: {asks:?}");
+    assert!(
+        asks[0].path.ends_with("/models"),
+        "the listing route: {}",
+        asks[0].path
+    );
+}
+
 #[test]
 fn a_model_changed_in_settings_answers_the_next_prompt_on_the_same_thread() {
     let Some(pty) = Pty::new() else {

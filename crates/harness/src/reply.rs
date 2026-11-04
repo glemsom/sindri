@@ -25,7 +25,7 @@ pub struct Reply {
 }
 
 impl Reply {
-    fn whole(status: u16, body: String) -> Self {
+    pub(crate) fn whole(status: u16, body: String) -> Self {
         Reply {
             status,
             body,

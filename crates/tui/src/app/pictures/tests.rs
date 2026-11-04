@@ -37,6 +37,7 @@ fn launch() -> Launch {
         max_turns: 250,
         context_limit: None,
         status: true,
+        base_url: None,
     }
 }
 
