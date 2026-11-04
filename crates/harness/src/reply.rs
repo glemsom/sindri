@@ -1,6 +1,7 @@
-//! One canned reply: a unary body the wire folds whole, or a streamed one the
-//! mock writes chunk by chunk. The constructors are the vocabulary a test
-//! states its provider answer in.
+//! One canned reply: a unary body the wire folds whole, a streamed one the mock
+//! writes chunk by chunk, or none at all — a connection that closes with nothing
+//! to say, which is the flaky link a retry exists for. The constructors are the
+//! vocabulary a test states its provider answer in.
 
 use std::time::Duration;
 
@@ -22,6 +23,9 @@ pub struct Reply {
     /// How long the server waits after writing each chunk, so a cancel can
     /// land mid-stream.
     pub pause: Duration,
+    /// The server closes the connection without writing a byte: no status, no
+    /// body, and a request that never got a reply.
+    pub hang_up: bool,
 }
 
 impl Reply {
@@ -31,6 +35,17 @@ impl Reply {
             body,
             chunks: Vec::new(),
             pause: Duration::ZERO,
+            hang_up: false,
+        }
+    }
+
+    /// A link that drops the request: the connection closes with no status and
+    /// no body, so the failure a run reports is the transport's rather than a
+    /// reply's.
+    pub fn hang_up() -> Self {
+        Reply {
+            hang_up: true,
+            ..Reply::whole(0, String::new())
         }
     }
 
@@ -174,6 +189,7 @@ impl Reply {
             body: String::new(),
             chunks,
             pause: Duration::ZERO,
+            hang_up: false,
         }
     }
 

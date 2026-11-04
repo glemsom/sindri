@@ -1,6 +1,10 @@
 //! The model, behind one seam: ask, and get an answer or a failure that is
 //! safe to print. Retries and redaction live here; the provider library lives
-//! only in [`rig_wire`], so a library rewrite is one file's problem.
+//! only in [`rig_wire`], so a library rewrite is one file's problem. Which
+//! failures are worth a second attempt is the wire's verdict, carried over by
+//! [`rig_wire`] rather than re-derived from the status; what this module decides
+//! is how many attempts that verdict buys and what a fragment already printed
+//! rules out.
 //!
 //! A client is composed from the run's config and the session it asks for, and
 //! that session is what [`SESSION_TOKEN`] in a header value becomes — resolved
@@ -207,6 +211,10 @@ fn add(total: Option<u64>, turn: Option<u64>) -> Option<u64> {
 pub struct Error {
     message: String,
     status: Option<u16>,
+    /// Whether asking again could answer, as whoever made the failure decided
+    /// it: a wire classifies its own replies, and a failure this run caused is
+    /// never one to repeat.
+    retryable: bool,
 }
 
 impl Error {
@@ -218,26 +226,43 @@ impl Error {
         self.status
     }
 
-    /// Whether another attempt could succeed. Only rate limits and server
-    /// faults qualify: a client error repeats identically forever.
+    /// Whether another attempt could succeed, as the failure was classified when
+    /// it was made rather than re-read off its status here.
     fn retryable(&self) -> bool {
-        matches!(self.status, Some(429) | Some(500..=599))
+        self.retryable
     }
 
-    /// A transport failure: no reply, so no status. Public because the one
-    /// [`Model`] implementation outside this crate — the scripted double in
-    /// `tests/support` — has to report one.
-    pub fn transport(message: impl Into<String>) -> Self {
-        Error {
-            message: message.into(),
-            status: None,
-        }
-    }
-
-    fn answered(status: Option<u16>, message: impl Into<String>) -> Self {
+    /// The one shape an [`Error`] is built in: the words a front end prints, the
+    /// status when the failure had one, and whether asking again could answer.
+    fn classified(status: Option<u16>, retryable: bool, message: impl Into<String>) -> Self {
         Error {
             message: message.into(),
             status,
+            retryable,
+        }
+    }
+
+    /// A failure with no verdict from the wire behind it: one this run caused, a
+    /// stream it stopped, or one a scripted [`Model`] reports. Nothing a second
+    /// attempt would meet differently. Public because that last one lives outside
+    /// this crate, in `tests/support`.
+    pub fn transport(message: impl Into<String>) -> Self {
+        Error::classified(None, false, message)
+    }
+
+    /// A failure this run states in its own words — a wire that named no models
+    /// — which a second attempt would meet again.
+    fn answered(message: impl Into<String>) -> Self {
+        Error::classified(None, false, message)
+    }
+
+    /// The same failure said in other words — the credential taken out of it, a
+    /// refusal spelled out: what a front end prints changes, and what decided
+    /// the attempt does not.
+    fn restated(self, message: impl Into<String>) -> Self {
+        Error {
+            message: message.into(),
+            ..self
         }
     }
 }
@@ -339,10 +364,8 @@ impl Client {
         if self.api_key.is_empty() {
             return error;
         }
-        Error {
-            message: error.message.replace(&self.api_key, REDACTED),
-            status: error.status,
-        }
+        let message = error.message.replace(&self.api_key, REDACTED);
+        error.restated(message)
     }
 
     pub(crate) fn parts(&self) -> (&str, Option<&str>, &str) {

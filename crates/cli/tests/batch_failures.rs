@@ -41,6 +41,57 @@ fn a_rejected_request_exits_one_with_the_provider_message() {
 }
 
 #[test]
+fn a_request_timeout_is_retried_until_it_answers() {
+    let env = Env::new();
+    let mock = MockProvider::start(vec![
+        Reply::error(408, "request_timeout", "the request timed out"),
+        Reply::answer("Two files changed."),
+    ]);
+    let output = batch(&env, &mock, &["-b", "summarise this"], "");
+
+    assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
+    assert_eq!(stdout(&output), "Two files changed.\n");
+    assert_eq!(
+        mock.requests().len(),
+        2,
+        "a timed-out request is a reply the wire calls retryable, and a second attempt answers"
+    );
+}
+
+#[test]
+fn a_request_that_arrived_too_early_is_retried_until_it_answers() {
+    let env = Env::new();
+    let mock = MockProvider::start(vec![
+        Reply::error(425, "too_early", "the request arrived too early"),
+        Reply::answer("Two files changed."),
+    ]);
+    let output = batch(&env, &mock, &["-b", "summarise this"], "");
+
+    assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
+    assert_eq!(stdout(&output), "Two files changed.\n");
+    assert_eq!(
+        mock.requests().len(),
+        2,
+        "a reply the wire calls retryable is retried whatever its status"
+    );
+}
+
+#[test]
+fn a_connection_reset_is_retried_until_it_answers() {
+    let env = Env::new();
+    let mock = MockProvider::start(vec![Reply::hang_up(), Reply::answer("Two files changed.")]);
+    let output = batch(&env, &mock, &["-b", "summarise this"], "");
+
+    assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
+    assert_eq!(stdout(&output), "Two files changed.\n");
+    assert_eq!(
+        mock.requests().len(),
+        2,
+        "a request that never got a reply carries no status, and the wire calls it retryable"
+    );
+}
+
+#[test]
 fn an_unauthenticated_request_is_not_retried_and_the_credential_is_redacted() {
     let env = Env::new();
     let mock = MockProvider::start(vec![Reply::error(

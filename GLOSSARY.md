@@ -19,6 +19,15 @@ the wave carries the loaded-skill set from one turn to the next
 is safe to print (`crates/core/src/provider/mod.rs`). Nothing above that seam knows the
 client library exists — `rig_wire` is the one file that does.
 
+**retry verdict** — whether another attempt could answer, as the wire classified the
+failure and not as its status reads: a request timeout, a request that arrived too early, a
+rate limit, a server fault and a transport that never got a reply are retried, and a client
+error is not. The verdict is carried from the one module that reads the library rather than
+re-derived from the status, because the library answers a wider question than the status does
+(`crates/core/src/provider/mod.rs`). What three attempts buy, and the 200 ms between them
+that doubles, is the run's; a reply that already streamed text and a stream the run stopped
+for a cancel are never sent again, whatever the verdict says.
+
 **wire** — which provider API a run speaks, Anthropic Messages or OpenAI-compatible Chat
 Completions, and what each needs: its credential variable, its base URL variable and
 whether it needs a credential at all (`crates/core/src/config/provider.rs`). The settings

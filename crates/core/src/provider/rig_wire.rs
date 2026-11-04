@@ -119,10 +119,10 @@ pub(super) fn models(client: &Client) -> Result<Vec<String>, Error> {
 
     let names: Vec<String> = listed.into_iter().map(|model| model.id).collect();
     if names.is_empty() {
-        return Err(Error::answered(
-            None,
-            format!("the {} wire named no models", client.provider().as_str()),
-        ));
+        return Err(Error::answered(format!(
+            "the {} wire named no models",
+            client.provider().as_str()
+        )));
     }
     Ok(names)
 }
@@ -419,9 +419,14 @@ fn arguments(
     }
 }
 
+/// The wire's own verdict, carried over: it decides whether asking again could
+/// answer, and it decides it from what happened rather than from the status
+/// alone — a request timeout, a request that arrived too early, a rate limit, a
+/// server fault, a transport that never got a reply. Reading the status here
+/// instead would answer a narrower question and lose the rest.
 fn convert(error: ProviderError) -> Error {
     let report = error.report();
-    Error::answered(report.http_status, report.message)
+    Error::classified(report.http_status, report.retryable, report.message)
 }
 
 /// A failure, said plainly when what the server refused was the `bash` tool.
@@ -434,14 +439,12 @@ fn refused_tools(error: Error) -> Error {
     if !status_refused || !refuses_capability(error.message()) {
         return error;
     }
-    Error::answered(
-        error.status(),
-        format!(
-            "the model server does not support tool calling, which `bash` needs: {} \
-             (use a model or server that serves function calls)",
-            error.message()
-        ),
-    )
+    let said = format!(
+        "the model server does not support tool calling, which `bash` needs: {} \
+         (use a model or server that serves function calls)",
+        error.message()
+    );
+    error.restated(said)
 }
 
 /// What a server says when the capability, not the request, is what it lacks.
@@ -467,6 +470,21 @@ mod tests {
 
     use crate::agent::{BashTool, Limits, Silent};
     use crate::sandbox::SandboxPolicy;
+
+    #[test]
+    fn a_failure_the_run_caused_is_never_sent_again() {
+        let unsent = super::Error::transport("`x-bad header` is not an HTTP header name");
+        let unresolved = super::Error::transport("GitHub Copilot authentication failed");
+
+        assert!(
+            !unsent.retryable() && !unresolved.retryable(),
+            "a header this run could not send and a credential it could not resolve repeat"
+        );
+        assert!(
+            !super::stopped().retryable(),
+            "a stream the run stopped for a cancel is not a failure to send again"
+        );
+    }
 
     #[test]
     fn copilot_gpt_six_models_use_the_responses_route() {

@@ -108,6 +108,11 @@ fn a_mid_stream_error_is_reported_where_it_happened() {
         "the provider's own failure survives: {}",
         stderr(&output)
     );
+    assert_eq!(
+        mock.requests().len(),
+        1,
+        "a reply that already streamed its text is not sent again, whatever the wire calls it"
+    );
 }
 
 #[test]

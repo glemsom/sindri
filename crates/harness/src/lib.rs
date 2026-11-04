@@ -11,7 +11,7 @@
 )]
 
 pub mod frames; // the event-stream frames a streamed reply is made of
-mod reply; // one canned reply: a unary body or a streamed one
+mod reply; // one canned reply: a unary body, a streamed one, or a connection that closes with nothing
 
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -232,6 +232,11 @@ fn serve(
     }
     let streaming = streams(reply, &request.body);
     recorded.lock().expect("record request").push(request);
+    // A reply the server never makes: the connection is dropped with nothing
+    // written, so the run sees the transport fail rather than a status.
+    if reply.hang_up {
+        return;
+    }
     if streaming {
         write_stream(&mut stream, reply);
     } else {
