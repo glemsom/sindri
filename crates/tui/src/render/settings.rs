@@ -18,9 +18,8 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph, Widget};
-use sindri_core::config::Key;
-
-use sindri_core::config::toggle_shown;
+use sindri_core::config::{DEFAULT_MAX_TURNS, Key, toggle_shown};
+use sindri_core::exec::DEFAULT_TIMEOUT_SECS;
 use unicode_width::UnicodeWidthChar;
 
 use crate::markdown::text::{self, clip};
@@ -667,6 +666,18 @@ fn value(settings: &Settings, field: &Field) -> Drawn {
         }
         Key::Thinking | Key::Status | Key::SshAgent => {
             Drawn::said(toggle_shown(typed), theme::plain())
+        }
+        // The two counts are rows of the same shape: a file that names neither
+        // is still a run with both, so the row states the number a run falls
+        // back to — read from the constant `Config` itself reads, never typed
+        // beside the row, so the two cannot state different numbers. The words
+        // are the row's and not the field's, which is what keeps a save of a row
+        // nobody typed in writing nothing.
+        Key::MaxTurns if typed.is_empty() => {
+            Drawn::said(format!("{DEFAULT_MAX_TURNS} (default)"), theme::plain())
+        }
+        Key::Timeout if typed.is_empty() => {
+            Drawn::said(format!("{DEFAULT_TIMEOUT_SECS} (default)"), theme::plain())
         }
         _ if field.key.secret() && !typed.is_empty() => {
             Drawn::said("•••• (will be written to the file)", theme::faint())
