@@ -190,6 +190,15 @@ pub fn any(rows: &[String], needle: &str) -> bool {
     rows.iter().any(|row| row.contains(needle))
 }
 
+/// A draft of `rows` rows, `row 01` to `row NN`: more rows than the composer's
+/// panel has, and each named so a test can say which of them is drawn.
+pub fn draft(rows: usize) -> String {
+    (1..=rows)
+        .map(|n| format!("row {n:02}"))
+        .collect::<Vec<String>>()
+        .join("\n")
+}
+
 /// The first row that says `needle`.
 pub fn row_of(rows: &[String], needle: &str) -> usize {
     rows.iter()

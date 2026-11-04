@@ -89,9 +89,12 @@ pub fn draw(app: &App, area: Rect, buf: &mut Buffer) -> Position {
             PLACEHOLDER,
             theme::faint(),
         ))],
+        // The rows the panel has are the window the cursor is in, so a draft
+        // taller than the panel is read under the cursor rather than clipped
+        // above it.
         _ => app
             .composer()
-            .rows()
+            .visible()
             .iter()
             .map(|row| Line::from(row.clone()))
             .collect(),
@@ -101,6 +104,11 @@ pub fn draw(app: &App, area: Rect, buf: &mut Buffer) -> Position {
         .render(inner, buf);
     block.render(area, buf);
     lit(area, buf, ink);
+    // The composer draws the rows the cursor is in, so this row is one of them
+    // — unless the terminal is too short to give the panel the height it asked
+    // for, which the layout resolves by taking a row from the panel. The cursor
+    // is held inside the panel then, because the panel is drawn from that row
+    // down and a cell below it belongs to the border.
     let (column, row) = app.composer().cursor();
     Position::new(
         inner.x.saturating_add(column),

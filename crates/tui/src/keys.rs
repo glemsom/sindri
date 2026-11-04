@@ -198,7 +198,10 @@ impl App {
     /// the draft has no row above: the queue is reached from the top of the
     /// composer, never instead of it.
     fn up(&mut self) -> bool {
-        if self.composer.cursor().1 > 0 || !self.take_back() {
+        // The draft's own row, not the panel's: a panel scrolled under a long
+        // draft draws the cursor at its top row with the draft's rows still
+        // above it, and those are the rows this key is walking towards.
+        if self.composer.draft_row() > 0 || !self.take_back() {
             return self.composer.up();
         }
         true

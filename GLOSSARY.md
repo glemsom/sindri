@@ -222,7 +222,11 @@ the heights a change invalidated are forgotten (`crates/tui/src/thread.rs`).
 the output kept and the word its row ended on (`crates/tui/src/entry.rs`).
 
 **composer** — the prompt being typed, held as rows and a character-index cursor and
-reported in cells, because the terminal draws cells and a glyph may be two wide.
+reported in cells, because the terminal draws cells and a glyph may be two wide
+(`crates/tui/src/composer.rs`). The panel it is drawn in has at most six rows, so a taller
+draft is seen through a window that follows the cursor: the rows drawn are the ones the
+cursor is in, and the row the cursor is reported on is the panel's, while the keys that
+walk the draft count the draft's own.
 
 **footer** — the frame's one row under the composer, a strip rather than a panel: the
 run's word while it works or waits on a cancel, then as many whole hints as the row holds,

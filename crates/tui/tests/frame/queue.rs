@@ -140,6 +140,31 @@ fn up_returns_the_newest_queued_prompt_to_the_composer() {
 }
 
 #[test]
+fn up_at_the_top_of_a_scrolled_draft_walks_the_draft_and_leaves_the_queue() {
+    let mut app = running();
+    send(&mut app, "the older question");
+    app.paste(&draft(20));
+    // Five rows up puts the cursor on the top row the panel draws while the
+    // draft still has rows above it: the pool `↑` draws from is the draft's,
+    // not the panel's.
+    for _ in 0..5 {
+        press(&mut app, KeyCode::Up, KeyModifiers::NONE);
+    }
+    press(&mut app, KeyCode::Up, KeyModifiers::NONE);
+
+    assert_eq!(
+        app.queued(),
+        1,
+        "a cursor at the panel's top row still has the draft above it, so `↑` walks and takes nothing back"
+    );
+    assert_eq!(
+        app.composer().text().lines().count(),
+        20,
+        "and the draft is the twenty rows it was"
+    );
+}
+
+#[test]
 fn a_taken_back_prompt_lands_above_the_draft_rather_than_replacing_it() {
     let mut app = running();
     send(&mut app, "the queued question");
