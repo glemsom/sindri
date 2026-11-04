@@ -8,6 +8,13 @@
 //! draft is seen through a window that follows the cursor: the rows drawn are the
 //! ones the cursor is in, and the row the cursor is reported on is the panel's,
 //! never the draft's when the two differ.
+//!
+//! A word is a run of characters that are not whitespace, because the frame does
+//! not read the language it is editing. The rows are the breaks in that one
+//! text, so the whitespace a word key crosses is a break where the cursor stands
+//! at a row's head or its end: the word before the head of a row is the one the
+//! row above ends with. `backspace` and its mirror `delete` are the pair that
+//! takes a character, or joins the rows either side of a break.
 
 use unicode_width::UnicodeWidthStr;
 
@@ -173,28 +180,30 @@ impl Composer {
         true
     }
 
-    /// One character back, or a row joined to the one above it. At the head of
-    /// an empty draft there is nothing behind the cursor to take.
+    /// One character back, taken, or the row above joined to this one: at the
+    /// head of the draft there is nothing behind the cursor to take.
     pub fn backspace(&mut self) -> bool {
-        if self.column > 0 {
-            if let Some(row) = self.rows.get_mut(self.row) {
-                let at = byte_index(row, self.column - 1);
-                row.remove(at);
-                self.column -= 1;
-            }
-            return true;
-        }
-        if self.row > 0 {
-            let rest = self.rows.remove(self.row);
-            self.row -= 1;
-            if let Some(row) = self.rows.get_mut(self.row) {
-                self.column = row.chars().count();
-                row.push_str(&rest);
-            }
-            self.settle();
-            return true;
-        }
-        false
+        let at = self.place();
+        let Some((before, _)) = self.before(at) else {
+            return false;
+        };
+        self.cut(before, at);
+        self.stand(before);
+        self.settle();
+        true
+    }
+
+    /// The character the cursor stands on, taken, or the row below joined onto
+    /// this one: `backspace`'s mirror, and at the end of the draft there is
+    /// nothing after the cursor to take.
+    pub fn delete(&mut self) -> bool {
+        let at = self.place();
+        let Some((after, _)) = self.after(at) else {
+            return false;
+        };
+        self.cut(at, after);
+        self.settle();
+        true
     }
 
     /// The cursor one cell back, and whether it moved: the frame draws where the
@@ -208,12 +217,54 @@ impl Composer {
     }
 
     pub fn right(&mut self) -> bool {
-        let end = self.rows.get(self.row).map_or(0, |row| row.chars().count());
-        if self.column < end {
+        if self.column < self.len_of(self.row) {
             self.column += 1;
             return true;
         }
         false
+    }
+
+    /// The cursor to the start of the word before it, and whether it moved: the
+    /// whitespace behind the cursor is crossed first and then the run of
+    /// characters that are not whitespace, which stops at a break because a
+    /// break is whitespace too.
+    pub fn word_left(&mut self) -> bool {
+        let at = self.place();
+        let start = self.word_before(at);
+        if start == at {
+            return false;
+        }
+        self.stand(start);
+        self.settle();
+        true
+    }
+
+    /// The cursor to the start of the word after it, and whether it moved.
+    pub fn word_right(&mut self) -> bool {
+        let at = self.place();
+        let start = self.word_after(at);
+        if start == at {
+            return false;
+        }
+        self.stand(start);
+        self.settle();
+        true
+    }
+
+    /// `Ctrl-W`: the word before the cursor taken back, and the spaces between
+    /// it and the cursor with it — a break among them, so the rows either side
+    /// of it join as `delete`'s join does. At the head of the draft there is
+    /// nothing behind the cursor to take.
+    pub fn delete_word(&mut self) -> bool {
+        let at = self.place();
+        let start = self.word_before(at);
+        if start == at {
+            return false;
+        }
+        self.cut(start, at);
+        self.stand(start);
+        self.settle();
+        true
     }
 
     pub fn up(&mut self) -> bool {
@@ -237,8 +288,122 @@ impl Composer {
     }
 
     fn clamp_column(&mut self) {
-        let end = self.rows.get(self.row).map_or(0, |row| row.chars().count());
-        self.column = self.column.min(end);
+        self.column = self.column.min(self.len_of(self.row));
+    }
+
+    /// Where the cursor is: the draft's row and the character index in it that an
+    /// edit is written against.
+    fn place(&self) -> Place {
+        (self.row, self.column)
+    }
+
+    /// The cursor put at the place an edit has already made room for.
+    fn stand(&mut self, at: Place) {
+        self.row = at.0;
+        self.column = at.1;
+    }
+
+    /// How many characters the row holds, and none for a row the draft does not
+    /// have: that is how a walk that has left the draft reads it.
+    fn len_of(&self, row: usize) -> usize {
+        self.rows.get(row).map_or(0, |row| row.chars().count())
+    }
+
+    /// The character a place holds, and nothing for a place past the row's last
+    /// character.
+    fn char_at(&self, (row, at): Place) -> Option<char> {
+        self.rows.get(row)?.chars().nth(at)
+    }
+
+    /// The place before `at` and whether what stands there is whitespace: `None`
+    /// at the head of the draft, and the break at the head of a row, which is
+    /// whitespace because the rows are one text.
+    fn before(&self, at: Place) -> Option<(Place, bool)> {
+        if at.1 > 0 {
+            let ch = self.char_at((at.0, at.1 - 1))?;
+            return Some(((at.0, at.1 - 1), ch.is_whitespace()));
+        }
+        if at.0 == 0 {
+            return None;
+        }
+        Some(((at.0 - 1, self.len_of(at.0 - 1)), true))
+    }
+
+    /// The place after `at` and whether what stands there is whitespace, the
+    /// break at the end of a row among it, and `None` at the end of the draft.
+    fn after(&self, at: Place) -> Option<(Place, bool)> {
+        if at.1 < self.len_of(at.0) {
+            let ch = self.char_at((at.0, at.1))?;
+            return Some(((at.0, at.1 + 1), ch.is_whitespace()));
+        }
+        if at.0 + 1 >= self.rows.len() {
+            return None;
+        }
+        Some(((at.0 + 1, 0), true))
+    }
+
+    /// Where the word before `at` starts: the whitespace behind it crossed, and
+    /// then the run of characters that are not whitespace.
+    fn word_before(&self, at: Place) -> Place {
+        let mut at = at;
+        while let Some((before, space)) = self.before(at) {
+            if !space {
+                break;
+            }
+            at = before;
+        }
+        while let Some((before, space)) = self.before(at) {
+            if space {
+                break;
+            }
+            at = before;
+        }
+        at
+    }
+
+    /// Where the word after `at` starts: the whitespace after it crossed alone
+    /// when it stands on whitespace, and otherwise the word it stands in and the
+    /// whitespace after that — so the word after a cursor between words is the
+    /// next one, never the one it has just left behind.
+    fn word_after(&self, at: Place) -> Place {
+        let mut at = at;
+        let on_space = self.after(at).is_some_and(|(_, space)| space);
+        while let Some((after, space)) = self.after(at) {
+            if space != on_space {
+                break;
+            }
+            at = after;
+        }
+        if on_space {
+            return at;
+        }
+        while let Some((after, space)) = self.after(at) {
+            if !space {
+                break;
+            }
+            at = after;
+        }
+        at
+    }
+
+    /// The characters from `from` to `to` taken out, the breaks between them
+    /// with them: the rows in between go, and the row `from` is on takes what
+    /// the row `to` is on holds after `to`. `to` is never before `from`.
+    fn cut(&mut self, from: Place, to: Place) {
+        let (from_row, from_at) = from;
+        let (to_row, to_at) = to;
+        let tail = self
+            .rows
+            .get(to_row)
+            .map_or("", |row| &row[byte_index(row, to_at)..])
+            .to_string();
+        if let Some(row) = self.rows.get_mut(from_row) {
+            row.truncate(byte_index(row, from_at));
+            row.push_str(&tail);
+        }
+        if to_row > from_row {
+            self.rows.drain(from_row + 1..=to_row);
+        }
     }
 
     /// How many rows the panel has: the draft's own count, never fewer than
@@ -286,6 +451,11 @@ impl Composer {
         }
     }
 }
+
+/// A place in the draft: the row it is on and the character index the cursor
+/// holds in that row, because an edit is written in characters while a break
+/// belongs to the rows and not to a row's text.
+type Place = (usize, usize);
 
 fn byte_index(row: &str, column: usize) -> usize {
     row.char_indices()
@@ -346,6 +516,143 @@ mod tests {
     }
 
     #[test]
+    fn ctrl_left_stops_at_the_start_of_the_word_before_the_cursor() {
+        let mut composer = Composer::new();
+        composer.insert_str("the quick  brown");
+        assert!(composer.word_left());
+        assert_eq!(composer.cursor(), (11, 0), "past the word the cursor ended");
+        assert!(composer.word_left());
+        assert_eq!(
+            composer.cursor(),
+            (4, 0),
+            "the whole run of spaces between the words is crossed"
+        );
+    }
+
+    #[test]
+    fn ctrl_right_stops_at_the_start_of_the_word_after_the_cursor() {
+        let mut composer = Composer::new();
+        composer.insert_str("the quick  brown");
+        composer.word_left();
+        composer.word_left();
+        composer.word_left();
+        assert_eq!(composer.cursor(), (0, 0), "home is the head of the row");
+        assert!(composer.word_right());
+        assert_eq!(composer.cursor(), (4, 0), "the word after the one at home");
+        assert!(composer.word_right());
+        assert_eq!(
+            composer.cursor(),
+            (11, 0),
+            "the spaces before the word are crossed, and not counted as one"
+        );
+    }
+
+    #[test]
+    fn ctrl_left_crosses_a_break_to_the_word_the_row_above_ends_with() {
+        let mut composer = Composer::new();
+        composer.insert_str("one two\nthree");
+        assert!(composer.word_left());
+        assert_eq!(composer.cursor(), (0, 1), "the head of the word it ended");
+        assert!(composer.word_left());
+        assert_eq!(
+            composer.cursor(),
+            (4, 0),
+            "the break is whitespace, so the word before a row's head is the one above"
+        );
+    }
+
+    #[test]
+    fn ctrl_right_crosses_a_break_to_the_word_the_row_below_starts_with() {
+        let mut composer = Composer::new();
+        composer.insert_str("one\ntwo");
+        composer.word_left();
+        composer.word_left();
+        assert_eq!(composer.cursor(), (0, 0), "the head of the draft");
+        assert!(composer.word_right());
+        assert_eq!(
+            composer.cursor(),
+            (0, 1),
+            "the word after the last of a row is the first of the row below"
+        );
+    }
+
+    #[test]
+    fn a_delete_at_the_end_of_a_row_joins_the_row_below_onto_it() {
+        let mut composer = Composer::new();
+        composer.insert_str("one\ntwo");
+        composer.up();
+        assert!(composer.delete());
+        assert_eq!(composer.text(), "onetwo", "the break goes with the join");
+        assert_eq!(composer.cursor(), (3, 0), "the cursor keeps its place");
+    }
+
+    #[test]
+    fn delete_takes_the_character_the_cursor_stands_on() {
+        let mut composer = Composer::new();
+        for ch in "ab".chars() {
+            composer.insert(ch);
+        }
+        composer.left();
+        assert!(composer.delete());
+        assert_eq!(composer.text(), "a");
+        assert_eq!(
+            composer.cursor(),
+            (1, 0),
+            "the cursor stays where the character stood, holding what followed it"
+        );
+    }
+
+    #[test]
+    fn ctrl_w_takes_the_word_before_the_cursor_and_the_spaces_before_it() {
+        let mut composer = Composer::new();
+        composer.insert_str("edit the middle  word");
+        assert!(composer.delete_word());
+        assert_eq!(composer.text(), "edit the middle  ");
+        assert_eq!(
+            composer.cursor(),
+            (17, 0),
+            "the cursor is where the word began"
+        );
+        assert!(composer.delete_word());
+        assert_eq!(
+            composer.text(),
+            "edit the ",
+            "the spaces between the word and the cursor go with it"
+        );
+        assert_eq!(composer.cursor(), (9, 0));
+    }
+
+    #[test]
+    fn ctrl_w_at_the_head_of_a_row_takes_the_word_the_row_above_ends_with() {
+        let mut composer = Composer::new();
+        composer.insert_str("one two\nthree");
+        assert!(composer.word_left());
+        assert!(composer.delete_word());
+        assert_eq!(
+            composer.text(),
+            "one three",
+            "the word goes with the break it stood behind"
+        );
+        assert_eq!(
+            composer.cursor(),
+            (4, 0),
+            "the cursor is where the word began"
+        );
+    }
+
+    #[test]
+    fn ctrl_w_at_the_head_of_the_draft_takes_nothing() {
+        let mut composer = Composer::new();
+        composer.insert_str("one");
+        assert!(composer.word_left());
+        assert!(
+            !composer.delete_word(),
+            "there is no word behind the head of the draft"
+        );
+        assert_eq!(composer.text(), "one");
+    }
+
+    #[test]
     fn a_draft_taller_than_the_panel_is_drawn_from_the_row_the_cursor_is_in() {
         // Twenty rows through a panel of six: the window is the six that end
         // at the cursor's row, so the row the cursor is drawn on is the draft's
@@ -400,6 +707,28 @@ mod tests {
             "the row above the window takes the panel's top with it, by one"
         );
         assert_eq!(composer.cursor(), (6, 0), "the cursor stays on the top row");
+    }
+
+    #[test]
+    fn a_word_move_up_a_long_draft_takes_the_window_with_it() {
+        let mut composer = drafted(20);
+        for _ in 0..13 {
+            assert!(
+                composer.word_left(),
+                "a word of the draft is behind the cursor"
+            );
+        }
+
+        assert_eq!(
+            composer.visible(),
+            ["row 14", "row 15", "row 16", "row 17", "row 18", "row 19"],
+            "the window came up to the row the cursor reached"
+        );
+        assert_eq!(
+            composer.cursor(),
+            (4, 0),
+            "the cursor is drawn on the panel's top row, past the word it starts"
+        );
     }
 
     #[test]

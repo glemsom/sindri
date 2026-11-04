@@ -51,6 +51,11 @@ impl App {
                 true
             }
             KeyCode::Char('x') if ctrl => self.drop_queued(),
+            KeyCode::Char('w') if ctrl => {
+                let taken = self.composer.delete_word();
+                self.refresh_completion();
+                taken
+            }
             KeyCode::Char('g') if ctrl => {
                 self.copy_session_id();
                 true
@@ -100,6 +105,15 @@ impl App {
                 self.refresh_completion();
                 erased
             }
+            KeyCode::Delete => {
+                let taken = self.composer.delete();
+                self.refresh_completion();
+                taken
+            }
+            // `Ctrl` is the word's step and not the row's: `Home` and `End`
+            // are still the thread's first turn and its tail.
+            KeyCode::Left if ctrl => self.composer.word_left(),
+            KeyCode::Right if ctrl => self.composer.word_right(),
             KeyCode::Left => self.composer.left(),
             KeyCode::Right => self.composer.right(),
             KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => {

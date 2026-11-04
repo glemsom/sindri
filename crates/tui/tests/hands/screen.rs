@@ -15,6 +15,7 @@ fn question_mark_lists_every_binding_and_esc_closes_it() {
     for wanted in [
         "Enter",
         "Shift+Enter",
+        "Ctrl-W",
         "Tab",
         "Esc",
         "PgUp, PgDn",
@@ -49,7 +50,7 @@ fn question_mark_lists_every_binding_and_esc_closes_it() {
     }
     assert_eq!(
         help_rows().len(),
-        18,
+        19,
         "every binding is listed exactly once, and the commands are one row"
     );
     press(&mut app, KeyCode::Esc, KeyModifiers::NONE);

@@ -1,8 +1,10 @@
 //! The hands, driven the way a user drives them: a drag that copies, the mark
 //! it leaves and what spends it, a refusal that says it refused, `@`
-//! completion, the `/` offer, the `/` commands, `?`'s list of bindings, and the
-//! spill file of an output too large to show. Every copy goes to a clipboard
-//! the test owns: nothing here touches the user's real clipboard.
+//! completion, the `/` offer, the `/` commands, `?`'s list of bindings, the
+//! draft's own edits — the character taken, the row joined, the word moved over
+//! and taken back — and the spill file of an output too large to show. Every
+//! copy goes to a clipboard the test owns: nothing here touches the user's real
+//! clipboard.
 
 #![allow(
     clippy::expect_used,
@@ -104,6 +106,7 @@ fn mouse(app: &mut App, kind: MouseEventKind, column: u16, row: u16) {
 mod commands;
 mod completion;
 mod copy;
+mod edit;
 mod marks;
 mod paste;
 mod prompts;

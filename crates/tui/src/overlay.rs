@@ -39,6 +39,12 @@ pub const BINDINGS: &[Binding] = &[
         what: "a newline in the prompt",
     },
     Binding {
+        keys: "Backspace, Delete, Ctrl-Left, Ctrl-Right, Ctrl-W",
+        mouse: None,
+        what: "take the character behind or under the prompt's cursor, move it a word either \
+               way, or take a word back",
+    },
+    Binding {
         keys: "Tab",
         mouse: None,
         what: "accept the completion that is offered",
@@ -203,6 +209,7 @@ mod tests {
     const REQUIRED: &[&str] = &[
         "Enter",
         "Shift+Enter, Ctrl-J",
+        "Backspace, Delete, Ctrl-Left, Ctrl-Right, Ctrl-W",
         "Tab",
         "Esc",
         "PgUp, PgDn",
