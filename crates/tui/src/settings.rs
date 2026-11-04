@@ -23,6 +23,14 @@
 //! so the list a human is offered and the list a run at that address would be
 //! served are one answer.
 //!
+//! The extra headers row folds the same way, into the table itself: `Enter` on
+//! it opens one `Name: value` line per header with `+ add a header` under the
+//! last, `a` adds a line, `d` removes the one under the cursor, `Ctrl-U` empties
+//! it, `Enter` hands that line its own keys, and `Esc` shuts the fold with the
+//! draft beside it. What the fold draws is the file's text and never a resolved
+//! one, and the save is the row's own: a table built this way is written by the
+//! one path a pasted table already was.
+//!
 //! Every row is one field (`row`): a value, a cursor in it and what a save makes
 //! of it, so a keystroke means the same thing in the address, the model name,
 //! the header table and a secret. `←→`, `Home` and `End` move that cursor inside
@@ -32,6 +40,7 @@
 //! row is scrolled to the cursor when it is drawn, so the field holds no
 //! scroll of its own.
 
+mod headers;
 mod list;
 mod missing;
 mod row;
@@ -45,6 +54,8 @@ use sindri_core::config::{Document, KEYS, Key, Provider, toggle_shown};
 use crate::overlay::Overlay;
 use crate::rail::Launch;
 
+pub use headers::Fold;
+pub(crate) use headers::counted;
 pub use list::List;
 pub use missing::Missing;
 pub use row::{Edit, Field};
@@ -79,6 +90,11 @@ pub struct Settings {
     /// row reaches, and the one a `Tab` takes. Empty while the row is, because
     /// the row is a field before it is ever a list.
     list: List,
+    /// Where the headers row's table stands: shut, or open on one of its lines
+    /// with the keys the fold's or that line's. The fold holds no cursor of its
+    /// own — the line under it is the field's cursor — so it is only ever a
+    /// statement of whose the keys are.
+    headers: Fold,
     error: Option<String>,
     missing: Option<Missing>,
 }
@@ -138,6 +154,7 @@ impl Settings {
                 .collect(),
             chosen: 0,
             list: List::default(),
+            headers: Fold::Shut,
             error: None,
             missing: None,
         }
@@ -162,6 +179,12 @@ impl Settings {
 
     pub fn fields(&self) -> &[Field] {
         &self.fields
+    }
+
+    /// Where the extra headers row's fold stands: what the row draws and what
+    /// the hint line says the keys do.
+    pub fn headers(&self) -> Fold {
+        self.headers
     }
 
     pub fn chosen(&self) -> usize {
@@ -203,6 +226,12 @@ impl Settings {
     fn pressed(&mut self, key: KeyEvent, served: &Served) -> Outcome {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         if !ctrl && let Some(outcome) = self.fold_key(key.code) {
+            return outcome;
+        }
+        // The headers row's own fold takes its keys before the modal sees one: a
+        // table is a list of lines, and `a`, `d` and `Ctrl-U` there are a line's
+        // business rather than a character's.
+        if let Some(outcome) = headers::key(self, key) {
             return outcome;
         }
         match key.code {
@@ -316,6 +345,16 @@ impl Settings {
         if !untouched {
             return false;
         }
+        // The headers row folds the table itself open rather than words: there
+        // is always something to open, because a table holding nothing still has
+        // the blank line the first header is typed on.
+        if self.chosen_key() == Some(Key::ExtraHeaders) {
+            if let Some(field) = self.fields.get_mut(self.chosen) {
+                field.onto(0);
+            }
+            self.headers = Fold::Choosing;
+            return true;
+        }
         let key = self.chosen_key();
         let offered = offered(key, served, &self.wires);
         if offered.is_empty() {
@@ -407,6 +446,11 @@ impl Settings {
 
     pub fn focus(&mut self, down: bool) {
         self.chosen = crate::overlay::step(self.chosen, 1, self.fields.len(), !down);
+        // The table is the headers row's, so walking off it shuts the fold and
+        // keeps the draft: the keys the row has outside it are the modal's again.
+        if self.chosen_key() != Some(Key::ExtraHeaders) {
+            self.headers = Fold::Shut;
+        }
     }
 
     /// A screenful at a time: what `PgUp`/`PgDn` and the wheel move the cursor
@@ -417,6 +461,9 @@ impl Settings {
         self.chosen = crate::overlay::step(self.chosen, rows, self.fields.len(), up);
         if !self.offering() {
             self.list.close();
+        }
+        if self.chosen_key() != Some(Key::ExtraHeaders) {
+            self.headers = Fold::Shut;
         }
     }
 
@@ -487,6 +534,36 @@ impl Settings {
     /// character at a time, writes the empty list, which is a value.
     pub fn clear(&mut self) {
         self.edit(Edit::Unset, |field| field.clear());
+    }
+
+    /// The table the extra headers row's fold draws: the row with the cursor,
+    /// because the fold only ever stands open on that one.
+    fn table(&mut self) -> Option<&mut Field> {
+        self.fields.get_mut(self.chosen)
+    }
+
+    /// The line of that row the fold's cursor is on: the row's own cursor, read
+    /// where the fold is about to move it.
+    fn table_line(&self) -> Option<usize> {
+        self.fields.get(self.chosen).map(Field::line)
+    }
+
+    /// One line of the table changed, and the row a draft from the moment the
+    /// text moved and not before: a fold opened and shut again writes nothing,
+    /// and neither does a blank line added to a table that already ended in one.
+    /// A line's own check hangs here — `Field::line_text` at the line that moved
+    /// is the one line a save would judge, and its sentence is the foot's.
+    fn table_edit(&mut self, change: impl FnOnce(&mut Field)) {
+        let Some(field) = self.fields.get_mut(self.chosen) else {
+            return;
+        };
+        let before = field.text.clone();
+        change(field);
+        if field.text == before {
+            return;
+        }
+        field.edit = Edit::Value;
+        self.error = None;
     }
 
     /// A keystroke in the field with the cursor, and what a save makes of it.

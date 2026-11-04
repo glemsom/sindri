@@ -188,4 +188,5 @@ mod modal;
 mod paste;
 mod secrets;
 mod sentences;
+mod table;
 mod wires;

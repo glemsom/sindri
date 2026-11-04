@@ -15,7 +15,12 @@
 //! The breaks of a row of lines are characters like any other, so editing one
 //! line of the header table is already a cursor moved to the start of that line
 //! and a key taken there: what a line-level edit needs is a cursor that knows
-//! its line, not a second kind of row.
+//! its line, not a second kind of row. So a row of lines knows its own: `line`
+//! is the line the cursor is in, and the four edits a table is built with — add
+//! a blank line, remove one, empty one, stand at the end of one — are the
+//! characters moved rather than a second buffer beside the value. The fold that
+//! draws the table holds no cursor of its own, which is why the mark it draws
+//! and the cell the terminal's cursor stands on cannot disagree.
 
 use sindri_core::config::Key;
 
@@ -147,6 +152,95 @@ impl Field {
     /// that ends the value from one dropped inside it.
     pub fn at_end(&self) -> bool {
         self.at >= self.chars()
+    }
+
+    /// The line the cursor is in: what the fold's mark stands on, what a key
+    /// typed into a line is a key of that line, and where a line's own check
+    /// hangs — one line's sentence is the sentence for the line the reader is
+    /// in.
+    pub fn line(&self) -> usize {
+        let at = self.offset();
+        self.spans()
+            .iter()
+            .position(|(_, end)| at <= *end)
+            .unwrap_or_default()
+    }
+
+    /// How many lines the value holds: one per break in it, so a value holding
+    /// nothing is the one blank line a header is typed on, and a break at the
+    /// end of the value is the blank line it ends with.
+    pub fn line_count(&self) -> usize {
+        self.spans().len()
+    }
+
+    /// A line of the value as it is written, which is the line a check is run on
+    /// and the line a reader is typing. A line past the last of them is no text.
+    pub fn line_text(&self, line: usize) -> &str {
+        let Some((start, end)) = self.spans().get(line).copied() else {
+            return "";
+        };
+        &self.text[start..end]
+    }
+
+    /// The cursor to the end of a line: a line taken for writing is typed on
+    /// from its end, exactly as a value nobody has typed is.
+    pub fn onto(&mut self, line: usize) {
+        let Some((_, end)) = self.spans().get(line).copied() else {
+            return;
+        };
+        self.at = self.text[..end].chars().count();
+    }
+
+    /// A blank line at the end of the value, for a header not yet written, and
+    /// its number. A table already ending in a blank line stands on that one
+    /// rather than stacking them: one silent line to type on is enough.
+    pub fn add_line(&mut self) -> usize {
+        let last = self.line_count() - 1;
+        if self.line_text(last).is_empty() {
+            self.onto(last);
+            return last;
+        }
+        self.text.push('\n');
+        self.onto(last + 1);
+        last + 1
+    }
+
+    /// A line removed whole, the break that carries it with it, so the lines
+    /// either side keep the characters they had — and the cursor onto the line
+    /// that took its place.
+    pub fn remove_line(&mut self, line: usize) {
+        let Some((start, end)) = self.spans().get(line).copied() else {
+            return;
+        };
+        let (from, to) = match self.text[end..].starts_with('\n') {
+            true => (start, end + 1),
+            false => (start.saturating_sub(1), end),
+        };
+        self.text.replace_range(from..to, "");
+        self.onto(line.min(self.line_count() - 1));
+    }
+
+    /// A line's characters taken and its break kept, so the line is blank rather
+    /// than gone: what `Ctrl-U` makes of one line of a table.
+    pub fn empty_line(&mut self, line: usize) {
+        let Some((start, end)) = self.spans().get(line).copied() else {
+            return;
+        };
+        self.text.replace_range(start..end, "");
+        self.at = self.text[..start].chars().count();
+    }
+
+    /// The byte span of each line of the value — where its characters start and
+    /// where they end — the break after a line belonging to neither.
+    fn spans(&self) -> Vec<(usize, usize)> {
+        let mut spans = Vec::new();
+        let mut start = 0;
+        for line in self.text.split('\n') {
+            let end = start + line.len();
+            spans.push((start, end));
+            start = end + 1;
+        }
+        spans
     }
 
     /// How many characters the value holds.

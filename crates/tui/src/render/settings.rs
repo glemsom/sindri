@@ -7,6 +7,11 @@
 //! it, the names that fragment reaches with the one a `Tab` would take. The
 //! provider row is a choice the same way and drawn by the same list: `Enter` on
 //! it offers the wires the run parses under it, the one it is on marked.
+//! The extra headers row draws the table itself while its fold stands open: one
+//! `Name: value` line per header with the fold's cursor marked and the offer to
+//! add a header under the last, the way a list of names stands under the model
+//! row. The count of headers is a faint note on the row, in the place the model
+//! row says what the wire named.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
@@ -19,10 +24,14 @@ use sindri_core::config::toggle_shown;
 use unicode_width::UnicodeWidthChar;
 
 use crate::markdown::text::{self, clip};
-use crate::settings::{Field, List, Served, Settings};
+use crate::settings::{Field, Fold, List, Served, Settings, counted};
 use crate::theme;
 
 const LABEL: usize = 20;
+/// The cells a line of an open table spends on the fold's mark: the value's
+/// column moves right of it for as long as the table stands open, so every line
+/// of a table is drawn from one column.
+const MARK: usize = 2;
 const MARGIN: u16 = 4;
 /// The narrowest a modal still reads at, and the widest: past the wide one a
 /// row of setting and value grows no easier to read for the columns it costs.
@@ -41,6 +50,18 @@ const HINTS: &str =
 /// there rather than what they do outside it.
 const FOLD_HINTS: &str =
     "↑↓ move the names · Enter take one and close · Esc close and keep the draft";
+
+/// The keys while the headers row's table stands open and the keys are the
+/// fold's: the arrows walk its lines, `a` and `d` add and remove one, and
+/// `Enter` is the rung that hands the line its own keys — which is where the two
+/// letters become characters of a header.
+const TABLE_HINTS: &str =
+    "↑↓ move the lines · a add · d delete · Ctrl-U empty · Enter edit · Esc close";
+
+/// And the keys while one line is being written: the fold has handed it the
+/// keyboard, so what the line says is the row's own and what is left of the fold
+/// is `Enter`, `Ctrl-U` and `Esc`.
+const WRITE_HINTS: &str = "Enter done · Ctrl-U empty the line · Esc close and keep the draft";
 
 /// Draws the modal and answers with the field rows its box showed, which is
 /// what a page moves the cursor by, and with the cell the cursor stands on —
@@ -131,9 +152,13 @@ pub fn draw(
             columns,
         ));
     }
-    let hints = match settings.list().folded() {
-        true => FOLD_HINTS,
-        false => HINTS,
+    // The keys the row with the cursor takes, said by the fold that has them:
+    // the headers table's, the names under the model row's, or the modal's own.
+    let hints = match settings.headers() {
+        Fold::Writing => WRITE_HINTS,
+        Fold::Choosing => TABLE_HINTS,
+        Fold::Shut if settings.list().folded() => FOLD_HINTS,
+        Fold::Shut => HINTS,
     };
     foot.push(Line::from(Span::styled(
         clip(hints, columns),
@@ -145,8 +170,14 @@ pub fn draw(
     // further than the terminal and the list scrolls instead.
     let rows = settings.fields().len();
     // A row is as tall as the value it holds: the headers row is one line per
-    // header, and every other row is the one line it always was.
-    let value_lines: usize = settings.fields().iter().map(tall).sum();
+    // header, and every other row is the one line it always was. A table folded
+    // open is one line taller for the offer under it.
+    let heights: Vec<usize> = settings
+        .fields()
+        .iter()
+        .map(|field| tall(settings, field))
+        .collect();
+    let value_lines: usize = heights.iter().sum();
     // The list stands under the row that offers words — the model row's names,
     // the provider row's wires — and only there: the box is sized for it, so the
     // keys below are never the rows a list pushes off.
@@ -181,11 +212,7 @@ pub fn draw(
             .saturating_sub(listed),
     };
     let to = (from + listed).min(list_rows);
-    let (first, last) = window(
-        settings.fields(),
-        settings.chosen(),
-        body.saturating_sub(listed),
-    );
+    let (first, last) = window(&heights, settings.chosen(), body.saturating_sub(listed));
 
     let boxed = Rect {
         x: area.x + (area.width.saturating_sub(width)) / 2,
@@ -231,11 +258,16 @@ pub fn draw(
         }
     }
     lines.extend(foot);
+    // The box is drawn under the rows and not over them: a block paints its
+    // style across the whole of itself, the inside included, so a box drawn last
+    // washes every row's ink — the faint of a label, the count beside it — into
+    // the surface's own. The rows are drawn after it, inside it, so the inks the
+    // rows were built with are the inks a reader sees.
     Clear.render(boxed, buf);
+    block.render(boxed, buf);
     Paragraph::new(lines)
         .style(theme::raised())
         .render(inner, buf);
-    block.render(boxed, buf);
     (last - first, cursor)
 }
 
@@ -336,6 +368,11 @@ fn row(
     chosen: bool,
     columns: usize,
 ) -> (Vec<Line<'static>>, Option<Cursor>) {
+    // The headers row with its table open is drawn as the list of lines it is:
+    // a mark, the table's own text, and the offer under it.
+    if folded(settings, field) {
+        return table(served, field, chosen, columns);
+    }
     let label = format!("{:<LABEL$}", clip(field.key.name(), LABEL));
     let drawn = value(settings, field);
     // The cells of the row the value has: what the label and the box's own edge
@@ -363,23 +400,7 @@ fn row(
         };
         let shown = visible(text, offset, room);
         if index == 0 {
-            // What the wire said about its own names, on the row of the name
-            // this run holds and after it: faint, because it is a hint about the
-            // wire and not a value the file carries. A value scrolled to its
-            // cursor has no columns left for a hint, and the hint is what goes.
-            let note = match field.key {
-                Key::Model => served.note(),
-                _ => None,
-            };
-            let left = room.saturating_sub(cells(&shown));
-            let note = match note {
-                Some(note) if shown.is_empty() => clip(&note, left),
-                Some(note) => match clip(&note, left.saturating_sub(3)) {
-                    clipped if clipped.is_empty() => String::new(),
-                    clipped => format!(" · {clipped}"),
-                },
-                None => String::new(),
-            };
+            let note = note(field, served, &shown, room);
             let mut spans = vec![
                 Span::styled(label.clone(), theme::faint()),
                 Span::styled(shown, drawn.style),
@@ -402,6 +423,104 @@ fn row(
             });
         }
     }
+    (lines, cursor)
+}
+
+/// What a row says about its own value after the value on its first line: the
+/// names the wire offered on the model row, the count of headers the headers row
+/// holds — faint, because it is a fact about where the value comes from and not
+/// a value the file carries. A value scrolled to its cursor has no columns left
+/// for a note, and the note is what goes.
+fn note(field: &Field, served: &Served, shown: &str, room: usize) -> String {
+    let note = match field.key {
+        Key::Model => served.note(),
+        Key::ExtraHeaders => Some(counted(&field.text)),
+        _ => None,
+    };
+    let left = room.saturating_sub(cells(shown));
+    match note {
+        Some(note) if shown.is_empty() => clip(&note, left),
+        Some(note) => match clip(&note, left.saturating_sub(3)) {
+            clipped if clipped.is_empty() => String::new(),
+            clipped => format!(" · {clipped}"),
+        },
+        None => String::new(),
+    }
+}
+
+/// The headers row with its table folded open: the row's name, then one line per
+/// header in the file's own `Name: value` spelling with the fold's cursor marked,
+/// and the offer to add a header under the last of them. The text is the value's
+/// own and unresolved, so a `{session}` in it is drawn as written; the mark is
+/// the row's own cursor, so the line it stands on is the line the next keystroke
+/// is a keystroke of.
+fn table(
+    served: &Served,
+    field: &Field,
+    chosen: bool,
+    columns: usize,
+) -> (Vec<Line<'static>>, Option<Cursor>) {
+    let label = format!("{:<LABEL$}", clip(field.key.name(), LABEL));
+    let room = columns.saturating_sub(LABEL + MARK);
+    // The line the cursor is in and the cells it spends before itself on that
+    // line: a table too narrow for a line is scrolled to the cursor there, and
+    // every other line of it is drawn from its own start.
+    let (line, cell) = match chosen {
+        true => place(&field.text, field.cursor()),
+        false => (0, 0),
+    };
+    let offset = match chosen {
+        true => scroll(room, cell),
+        false => 0,
+    };
+    let mut lines = Vec::new();
+    let mut cursor = None;
+    for (index, text) in field.text.split('\n').enumerate() {
+        let here = index == line;
+        let mark = match here {
+            true => "▸ ",
+            false => "  ",
+        };
+        let lead = match index {
+            0 => label.clone(),
+            _ => " ".repeat(LABEL),
+        };
+        let shown = visible(text, if here { offset } else { 0 }, room);
+        let after = match index {
+            0 => note(field, served, &shown, room),
+            _ => String::new(),
+        };
+        // The line's mark is the row's own ink where it stands and faint where
+        // it does not, so the fold's cursor is read before the table is.
+        let mut spans = vec![
+            Span::styled(lead, theme::faint()),
+            Span::styled(
+                mark,
+                match here {
+                    true => theme::plain(),
+                    false => theme::faint(),
+                },
+            ),
+            Span::styled(shown, theme::plain()),
+        ];
+        if !after.is_empty() {
+            spans.push(Span::styled(after, theme::faint()));
+        }
+        lines.push(Line::from(spans));
+        if here && chosen {
+            cursor = Some(Cursor {
+                line: index,
+                column: u16::try_from(LABEL + MARK + cell.saturating_sub(offset))
+                    .unwrap_or(u16::MAX),
+            });
+        }
+    }
+    // The offer the fold draws under the last line: the line `a` adds a header
+    // on, and faint, because it is a thing the row would do and not a header.
+    lines.push(Line::from(Span::styled(
+        format!("{}+ add a header", " ".repeat(LABEL + MARK)),
+        theme::faint(),
+    )));
     (lines, cursor)
 }
 
@@ -453,29 +572,38 @@ fn visible(line: &str, offset: usize, room: usize) -> String {
     shown
 }
 
-/// The lines a row takes: one per line of the value it holds. Only the headers
-/// hold more than one, and a row that holds nothing is still a row.
-fn tall(field: &Field) -> usize {
-    field.text.lines().count().max(1)
+/// The lines a row takes: one per line of the value it holds, and — while the
+/// headers row's table stands open — the offer to add a header under them. Only
+/// the headers hold more than one, and a row that holds nothing is still a row.
+fn tall(settings: &Settings, field: &Field) -> usize {
+    match folded(settings, field) {
+        true => field.text.split('\n').count() + 1,
+        false => field.text.lines().count().max(1),
+    }
+}
+
+/// Whether this row is the headers row with its table standing open under it.
+fn folded(settings: &Settings, field: &Field) -> bool {
+    field.key == Key::ExtraHeaders && settings.headers().folded()
 }
 
 /// The rows a body of `room` lines shows: the row with the cursor and as many
 /// of its neighbours as fit, walked back first so the chosen row is on screen
 /// however far past the fold it is. The count is in lines and the answer is
 /// still a range of rows, because a row is as tall as the value it holds.
-fn window(fields: &[Field], chosen: usize, room: usize) -> (usize, usize) {
+fn window(heights: &[usize], chosen: usize, room: usize) -> (usize, usize) {
     if room == 0 {
         return (chosen + 1, chosen + 1);
     }
-    let mut used = tall(&fields[chosen]);
+    let mut used = heights[chosen];
     let mut first = chosen;
-    while first > 0 && used + tall(&fields[first - 1]) <= room {
+    while first > 0 && used + heights[first - 1] <= room {
         first -= 1;
-        used += tall(&fields[first]);
+        used += heights[first];
     }
     let mut last = chosen + 1;
-    while last < fields.len() && used + tall(&fields[last]) <= room {
-        used += tall(&fields[last]);
+    while last < heights.len() && used + heights[last] <= room {
+        used += heights[last];
         last += 1;
     }
     (first, last)
