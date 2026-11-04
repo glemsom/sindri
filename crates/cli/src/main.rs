@@ -2,6 +2,7 @@
 //! the frame on a terminal. Argument parsing and dispatch only; every decision
 //! lives in `sindri-core`.
 
+mod auth;
 mod batch;
 mod boot;
 mod doctor;
@@ -29,8 +30,8 @@ struct Cli {
     /// argument, stdin is the prompt.
     #[arg(short = 'b', long = "batch", value_name = "PROMPT", num_args = 0..=1)]
     batch: Option<Option<String>>,
-    /// Which wire to speak: `anthropic`, or `openai` for OpenAI itself and the
-    /// servers that speak its shape — Ollama, vLLM, LM Studio, OpenRouter.
+    /// Which wire to speak: `anthropic`, `openai`, or `copilot` (sign in with
+    /// `sindri auth login copilot` first).
     #[arg(long, value_name = "NAME")]
     provider: Option<String>,
     /// The model to ask. There is no default, so a run without one is an error
@@ -90,6 +91,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Sign in to GitHub Copilot using the device-code flow.
+    Auth {
+        #[command(subcommand)]
+        command: AuthCommand,
+    },
     /// Check the sandbox before a run: bubblewrap, the binaries it needs and
     /// the mount plan, and print the description the model reads.
     Doctor,
@@ -103,6 +109,16 @@ enum Command {
     Sessions {
         #[command(subcommand)]
         command: SessionsCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum AuthCommand {
+    /// Sign in and store Copilot credentials for later runs.
+    Login {
+        /// The provider to authenticate: `copilot`.
+        #[arg(value_name = "PROVIDER")]
+        provider: String,
     },
 }
 
@@ -153,6 +169,9 @@ fn main() {
     // narrowing the flags its own way.
     let overrides = cli.overrides();
     let code = match cli.command {
+        Some(Command::Auth { command }) => match command {
+            AuthCommand::Login { provider } => auth::login(&provider),
+        },
         Some(Command::Doctor) => doctor::run(policy_only(&overrides)),
         Some(Command::Sessions { command }) => match command {
             SessionsCommand::List { limit, json } => sessions::list(limit, json),

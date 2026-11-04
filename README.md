@@ -97,6 +97,7 @@ field the run knows nothing about is left out, never `null`.
 | --- | --- |
 | `sindri` | the terminal UI, on a terminal |
 | `sindri -b PROMPT` | batch: ask the model, print the answer |
+| `sindri auth login copilot` | sign in to GitHub Copilot using a device code |
 | `sindri doctor` | prove the sandbox, print the description the model sees, list the skills it found |
 | `sindri sandbox exec [--timeout N] [--yolo-unsafe] -- CMD` | one command through the sandbox, no model, outcome as JSON |
 | `sindri sessions list [--limit N] [--json]` | the records, newest first, one row each |
@@ -187,6 +188,10 @@ transcript, rail, composer; off a terminal it is a refusal at exit 2.
 
 ## Configuration
 
+GitHub Copilot uses Rig’s OAuth device flow and stores credentials with owner-only permissions
+under the Sindri state directory. Sign in with `sindri auth login copilot`, then select
+`provider = "copilot"`; Copilot does not use a configured API key.
+
 One file, `$XDG_CONFIG_HOME/sindri/config.toml` (example:
 [`docs/config.example.toml`](docs/config.example.toml)). Precedence: file, then `SINDRI_*`
 environment, then flags.
@@ -214,7 +219,8 @@ the flag `--writable` is still validated, it simply is not what bounds the run.
 `--writable` and `--header` are repeatable but **replace** the configured values. An
 unknown key is an error naming key and file; a wrong value is exit 2. The credential also
 comes from `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or a matching `*_BASE_URL`, and is
-redacted everywhere; a file carrying one is `0600`.
+redacted everywhere; a file carrying one is `0600`. Copilot’s OAuth token store is
+separate from `config.toml` and is not an API key.
 
 `.sindri.toml` in the working directory is **never** read: a checked-in config granting
 writable paths would turn every `git clone && sindri` into a privilege escalation.

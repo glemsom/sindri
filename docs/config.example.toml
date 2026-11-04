@@ -8,7 +8,8 @@
 # the key and this file, so a typo never runs silently on defaults.
 
 # Which wire to speak: "anthropic" (the default), or "openai" for OpenAI itself
-# and every server that speaks its shape (Ollama, vLLM, LM Studio, OpenRouter).
+# and every server that speaks its shape (Ollama, vLLM, LM Studio, OpenRouter),
+# or "copilot" for GitHub Copilot (sign in with `sindri auth login copilot`).
 provider = "anthropic"
 
 # The model to ask. Required: no default, so a missing model is an explicit error
@@ -17,9 +18,9 @@ model = "claude-sonnet-4-6"
 
 # The credential. Required for `anthropic`, the wire that wants one — a local
 # server reached by `base_url` often has none to give. Prefer the provider's own
-# variable — ANTHROPIC_API_KEY, or SINDRI_API_KEY for any provider — because a
-# file is plaintext. `sindri` writes this file only from `/settings`, 0600 and
-# replaced atomically, and the value is redacted from all output and records.
+# variable — ANTHROPIC_API_KEY, or SINDRI_API_KEY for API-key providers — because a
+# file is plaintext. Copilot uses `sindri auth login copilot` instead. `sindri` writes this
+# file only from `/settings`, 0600 and replaced atomically; values are redacted.
 api_key = "sk-ant-…"
 
 # Another API root: a gateway, a proxy, a local server. Optional; left out, the

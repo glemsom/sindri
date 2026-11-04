@@ -16,6 +16,10 @@ use rig_core::completion::{
 };
 use rig_core::error::ProviderError;
 use rig_core::providers::anthropic::AnthropicConfig;
+use rig_core::providers::copilot::{
+    self,
+    auth::{AuthSource, Authenticator, DeviceCodeHandler, FileTokenStore},
+};
 use rig_core::providers::openai::{OpenAIConfig, Route, wire::Auth};
 use rig_core::streaming::{CompletionStream, Item, StreamEvent};
 use rig_reqwest::ReqwestClient;
@@ -71,6 +75,39 @@ pub(super) fn turn(
         }
         // Every OpenAI-shaped server serves Chat Completions, and only some
         // serve `/responses`, so the wire is named rather than inferred.
+        Provider::Copilot => {
+            let authenticator = Authenticator::new(
+                AuthSource::OAuth,
+                FileTokenStore::new(
+                    crate::paths::state_dir()
+                        .map_err(|error| {
+                            Error::transport(format!(
+                                "could not locate Copilot credentials: {error}"
+                            ))
+                        })?
+                        .join("copilot"),
+                ),
+                DeviceCodeHandler::default(),
+                false,
+            );
+            let api_client = ReqwestClient::from(http.clone());
+            let auth = runtime
+                .block_on(authenticator.auth_context(&api_client))
+                .map_err(|error| {
+                    Error::transport(format!(
+                        "GitHub Copilot authentication failed: {error}; run `sindri auth login copilot`"
+                    ))
+                })?;
+            let mut config = OpenAIConfig::with_key(&copilot::DIALECT, auth.api_key.expose());
+            // Copilot's session token is scoped to the endpoint Rig derives
+            // from its auth response; never route it to a configured gateway.
+            if let Some(base_url) = auth.api_base.as_deref() {
+                config = config.with_base_url(base_url);
+            }
+            let model = config.connect(ReqwestClient::from(http)).completion(model);
+            let stream = model.stream(request).map_err(convert)?;
+            consume(&runtime, stream, deltas).map_err(refused_tools)?
+        }
         Provider::Openai => {
             let mut config = OpenAIConfig::new(api_key).with_route(Route::Chat);
             // A server that wants no credential must not be sent a blank one.
@@ -199,7 +236,7 @@ fn request(
             Provider::Anthropic => Reasoning::Budget {
                 tokens: THINKING_BUDGET,
             },
-            Provider::Openai => Reasoning::Effort(THINKING_EFFORT),
+            Provider::Openai | Provider::Copilot => Reasoning::Effort(THINKING_EFFORT),
         };
         request.options = GenerationOptions::default().reasoning(reasoning);
     }

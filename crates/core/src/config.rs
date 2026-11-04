@@ -178,12 +178,25 @@ impl Config {
             }
         };
 
-        let api_key = env("SINDRI_API_KEY")
-            .or_else(|| env(provider.api_key_env()))
-            .or(file.api_key)
-            .filter(|key| !key.trim().is_empty());
+        let api_key = if provider == Provider::Copilot {
+            None
+        } else {
+            env("SINDRI_API_KEY")
+                .or_else(|| env(provider.api_key_env()))
+                .or(file.api_key)
+                .filter(|key| !key.trim().is_empty())
+        };
         let api_key = match api_key {
             Some(key) => key,
+            None if provider == Provider::Copilot => {
+                if asked == Model::Required {
+                    return Err(ConfigError::Missing(
+                        "GitHub Copilot sign-in required: run `sindri auth login copilot`"
+                            .to_string(),
+                    ));
+                }
+                String::new()
+            }
             None if !provider.needs_credential() || asked == Model::Optional => String::new(),
             None => {
                 return Err(ConfigError::Missing(format!(

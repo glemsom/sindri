@@ -3104,12 +3104,15 @@ dependencies = [
  "libc",
  "predicates",
  "ratatui",
+ "rig-core",
+ "rig-reqwest",
  "serde_json",
  "sindri-core",
  "sindri-harness",
  "sindri-tui",
  "sindri-types",
  "tempfile",
+ "tokio",
  "unicode-width 0.2.0",
 ]
 

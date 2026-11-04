@@ -286,3 +286,11 @@ repository scope stops at, and the directory the rail names
 
 **repository root** — the nearest ancestor of the workspace holding `.git`, the ceiling a
 repository scope never rises above and the directory an `AGENTS.md` is read from.
+
+## Provider authentication
+
+**Copilot sign-in** — GitHub's OAuth device flow, started explicitly by
+`sindri auth login copilot`; Rig keeps the GitHub credential and exchanged Copilot
+session in the owner-only file token store under the Sindri state directory. A run uses
+that stored session with Rig's Copilot dialect and never treats it as an API key
+(`crates/cli/src/auth.rs`, `crates/core/src/provider/rig_wire.rs`).

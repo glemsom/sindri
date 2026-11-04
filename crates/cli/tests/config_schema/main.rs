@@ -371,3 +371,13 @@ fn a_syntax_error_in_the_file_never_echoes_a_credential() {
         "the error still locates the problem: {message}"
     );
 }
+
+#[test]
+fn copilot_without_a_saved_login_names_the_login_command() {
+    let env = Env::new();
+    write_config(&env, "provider = \"copilot\"\nmodel = \"gpt-4o\"\n");
+    let output = common::run_with(&env, &["-b", "hello"], &[]);
+    assert_eq!(output.status.code(), Some(1), "stderr: {}", stderr(&output));
+    assert!(stderr(&output).contains("sindri auth login copilot"));
+    assert_eq!(stdout(&output), "");
+}
