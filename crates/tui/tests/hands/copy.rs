@@ -237,6 +237,41 @@ fn clicking_a_rail_row_copies_the_fact_and_none_of_its_typography() {
 }
 
 #[test]
+fn a_shortened_skills_chip_copies_the_skills_in_force_whole() {
+    // The rail has thirty-two columns and the two skills this tree ships are
+    // wider than that, so the chip is drawn shortened. The row a reader clicks
+    // is still the fact: what is copied is every skill in force, not the cells
+    // the rail had room for.
+    let clipboard = Fake::taking();
+    let mut app = app_with(clipboard.clone());
+    for (turn, name) in SHIPPED.iter().enumerate() {
+        app.event(Event::SkillLoaded {
+            turn: turn as u32 + 1,
+            name: name.to_string(),
+            outcome: Some("loaded".to_string()),
+            body: String::new(),
+        });
+    }
+    let rows = screen(&mut app, 100, 20);
+    let chip = rows
+        .iter()
+        .position(|row| rail_of(row).contains('◆'))
+        .unwrap_or_else(|| panic!("the rail wears the skills' chip: {rows:#?}"));
+
+    mouse(
+        &mut app,
+        MouseEventKind::Down(MouseButton::Left),
+        100 - RAIL as u16 + 5,
+        chip as u16,
+    );
+    assert_eq!(
+        clipboard.saw(),
+        vec!["◆ edit-files · search-and-read-files".to_string()],
+        "a click copies what is in force, and none of the shortening"
+    );
+}
+
+#[test]
 fn a_rail_row_copies_the_same_fact_with_a_glow_in_the_margin() {
     // The seam is additive: what a row copies is the fact, and a terminal that
     // draws the light strip changes nothing about the text.

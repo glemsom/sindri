@@ -137,3 +137,40 @@ fn the_skills_chip_is_one_run_of_the_accents_ink_on_the_raised_tier() {
         "the chip is one raised run of one ink: {chip:?}"
     );
 }
+
+#[test]
+fn a_skills_chip_wider_than_the_rail_is_shortened_and_ends_in_an_ellipsis() {
+    let mut app = app();
+    for (turn, name) in SHIPPED.iter().enumerate() {
+        loaded(&mut app, turn as u32 + 1, name);
+    }
+    let rows = screen(&mut app, 100, 30);
+    let chip = row_of(&rows, "◆");
+    let rail = rail_of(&rows[chip]);
+
+    // The chip's raised run reaches the rail's last column — at a hundred
+    // columns, the frame's own last: a value drawn whole would run out of the
+    // frame mid-name with nothing said about it.
+    let cells = frame_cells(&mut app, 100, 30);
+    let last = 100 - 1;
+    assert_eq!(
+        cells[(last, chip as u16)].bg,
+        theme::RAISED,
+        "the chip's tier runs to the rail's last column: {rail:?}"
+    );
+
+    // What is in force is longer than the rail can draw, so the value is cut in
+    // cells and says so: the head of the fact, and an ellipsis where the rest
+    // went.
+    let drawn = rail.trim();
+    assert!(
+        drawn.ends_with('…'),
+        "a chip too wide for the rail says more is in force: {rail:?}"
+    );
+    let said = "◆ edit-files · search-and-read-files";
+    assert!(
+        said.starts_with(drawn.trim_end_matches('…')),
+        "the chip draws the head of what is in force and no word it invented: \
+         {rail:?}"
+    );
+}

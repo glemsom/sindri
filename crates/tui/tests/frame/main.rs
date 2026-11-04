@@ -13,8 +13,8 @@
 mod common;
 
 pub use common::{
-    any, badge, buffer, call, cursor, ended, failed, frame_cells, posture_ink, press, ran, row,
-    row_of, screen, shown, turn, type_text, unsafe_launch, usage, with_spill,
+    SHIPPED, any, badge, buffer, call, cursor, ended, failed, frame_cells, posture_ink, press, ran,
+    row, row_of, screen, shown, turn, type_text, unsafe_launch, usage, with_spill,
 };
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;

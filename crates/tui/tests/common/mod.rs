@@ -34,6 +34,11 @@ use sindri_tui::{App, Launch, theme};
 /// The session the shared fixture names; a test that needs another says so.
 const SESSION: &str = "4f1c8f2e-8a24-4b93-9c0e-0d3f0e5c1a77";
 
+/// The two skills this tree ships, in name order: the pair a rail carries the
+/// moment both are in force, and together wider than its thirty-two columns, so
+/// a test that has to see a shortened chip needs nothing invented.
+pub const SHIPPED: [&str; 2] = ["edit-files", "search-and-read-files"];
+
 /// A launch the frame can draw a first frame from: the facts it names are the
 /// ones a test asserts on, so they are written once. A test that needs a
 /// different branch or session says so and takes the rest from here.

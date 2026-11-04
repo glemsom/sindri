@@ -199,7 +199,10 @@ fn row(fact: &Fact, width: usize) -> Row {
         // the skills in force are the two facts the frame says this way.
         Block::Posture | Block::Skills => {
             let glyph = fact.glyph();
-            let said = format!(" {glyph} {} ", fact.value());
+            // The space either side of the glyph and the one the chip ends on
+            // are the row's; what is left of the width is the value's room.
+            let room = width.saturating_sub(glyph.width() + 3);
+            let said = format!(" {glyph} {} ", shortened(fact.value(), room));
             let pad = width.saturating_sub(said.width());
             let ink = if fact.block() == Block::Skills {
                 skills_chip()
@@ -241,6 +244,20 @@ fn row(fact: &Fact, width: usize) -> Row {
             )
         }
     }
+}
+
+/// A chip's value in the `room` cells its row has for one: whole where it
+/// fits, and otherwise cut at its end with a `…`, so a reader sees that more is
+/// in force than is drawn rather than a name the rail's edge ran through. The
+/// cells are counted, never the chars, because the row it fills is cells.
+fn shortened(value: &str, room: usize) -> String {
+    if value.width() <= room {
+        return value.to_string();
+    }
+    if room == 0 {
+        return String::new();
+    }
+    format!("{}…", text::clip(value, room - 1))
 }
 
 /// What bridges the label's field to the value: dots across the whole gap
@@ -310,6 +327,8 @@ pub fn strip(app: &App, area: Rect, buf: &mut Buffer) {
 mod tests {
     use super::*;
     use crate::Launch;
+    use crate::rail::Rail;
+    use std::time::Duration;
 
     fn launch() -> Launch {
         Launch {
@@ -353,6 +372,79 @@ mod tests {
                 drawn.line
             );
         }
+    }
+
+    /// What a chip states at `width`, without the raised pad to its left.
+    fn said(chip: &Fact, width: usize) -> String {
+        row(chip, width)
+            .line
+            .spans
+            .last()
+            .map(|span| span.content.to_string())
+            .unwrap_or_default()
+    }
+
+    /// The skills chip among a rail's facts.
+    fn chip(facts: &[Fact]) -> &Fact {
+        facts
+            .iter()
+            .find(|fact| fact.block() == Block::Skills)
+            .expect("the skills are in force")
+    }
+
+    #[test]
+    fn a_chip_wider_than_the_rail_is_shortened_in_cells_and_ends_in_an_ellipsis() {
+        // The chip is the one row drawn from the rail's first column to its
+        // last: a value drawn whole outgrows the column and is cut at its edge
+        // mid-name, with no cell saying there is more in force. The two skills
+        // this tree ships are already wider than the rail.
+        let mut rail = Rail::new(launch());
+        rail.skill_loaded("edit-files");
+        rail.skill_loaded("search-and-read-files");
+        let facts = rail.facts(Duration::ZERO);
+        let skills = chip(&facts);
+        for width in [32, 24, 16, 12] {
+            for fact in &facts {
+                let drawn = row(fact, width);
+                assert_eq!(
+                    drawn.line.width(),
+                    width,
+                    "{:?} fills the rail's {width} columns: {}",
+                    fact.label(),
+                    drawn.line
+                );
+            }
+            assert!(
+                said(skills, width).trim_end().ends_with('…'),
+                "{width} columns: the chip says there is more in force"
+            );
+        }
+        // And a rail wide enough for both draws the fact whole: the shortening
+        // is the room's, never the chip's habit.
+        assert_eq!(
+            said(skills, 40).trim(),
+            "◆ edit-files · search-and-read-files"
+        );
+
+        // The room is counted in cells, two to a glyph: a cut counted in chars
+        // would hand back a chip wider than the rail it fills.
+        let mut rail = Rail::new(launch());
+        rail.skill_loaded("東京都のスキル");
+        rail.skill_loaded("レポジトリのスキル");
+        let facts = rail.facts(Duration::ZERO);
+        let skills = chip(&facts);
+        let drawn = row(skills, 32);
+        assert_eq!(
+            drawn.line.width(),
+            32,
+            "a chip of wide glyphs fills the rail: {}",
+            drawn.line
+        );
+        assert!(
+            said(skills, 32).trim_end().ends_with('…'),
+            "and says there is more in force: {:?}",
+            said(skills, 32)
+        );
     }
 
     #[test]
