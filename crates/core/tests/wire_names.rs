@@ -3,6 +3,9 @@
 //! with a failure safe to print, holding no credential and never an empty list
 //! dressed as an answer. Every test here speaks to a wire on a port of its own,
 //! so what is proven is what a server said rather than what our code believes.
+//! Copilot is asked where its stored session points and nowhere a human's
+//! configured gateway does, so the last tests here stand on a state root of
+//! their own rather than on a base URL the test chose.
 
 #![allow(
     clippy::expect_used,
@@ -12,12 +15,13 @@
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use sindri_core::config::{Config, Provider};
-use sindri_core::provider::{Client, Model};
+use sindri_core::provider::{Client, Delta, DeltaSink, Model};
 use sindri_core::sandbox::{Enforcement, Extras};
+use tempfile::TempDir;
 
 /// A wire on an ephemeral port: it answers each request with the status and
 /// body it was given, and keeps every request it read so a test can ask what
@@ -63,22 +67,29 @@ impl Wire {
         self.seen.lock().expect("seen").clone()
     }
 
+    /// The config a run would have been given, pointed at this wire.
     fn config(&self, provider: Provider, api_key: &str) -> Config {
-        Config {
-            provider,
-            model: "model-one".to_string(),
-            api_key: api_key.to_string(),
-            base_url: Some(self.base_url.clone()),
-            max_turns: 8,
-            timeout: Duration::from_secs(10),
-            thinking: false,
-            status: false,
-            ssh_agent: false,
-            extras: Extras::Named(Vec::new()),
-            enforcement: Enforcement::Bubblewrap,
-            extra_headers: Vec::new(),
-            refused_repo_config: None,
-        }
+        config(provider, api_key, Some(self.base_url.clone()))
+    }
+}
+
+/// The config a run would have been given: `base_url` as the human configured
+/// it, which for Copilot is not necessarily where the run is asked.
+fn config(provider: Provider, api_key: &str, base_url: Option<String>) -> Config {
+    Config {
+        provider,
+        model: "model-one".to_string(),
+        api_key: api_key.to_string(),
+        base_url,
+        max_turns: 8,
+        timeout: Duration::from_secs(10),
+        thinking: false,
+        status: false,
+        ssh_agent: false,
+        extras: Extras::Named(Vec::new()),
+        enforcement: Enforcement::Bubblewrap,
+        extra_headers: Vec::new(),
+        refused_repo_config: None,
     }
 }
 
@@ -232,5 +243,151 @@ fn the_anthropic_wire_names_its_models_in_the_order_it_listed_them() {
     assert_eq!(
         names(&wire, Provider::Anthropic, "sk-ant-test"),
         ["claude-zulu", "claude-alpha"]
+    );
+}
+
+/// The state root a Copilot test signs in against, and the lock that keeps two
+/// of them from writing the process's `XDG_STATE_HOME` at once: the Copilot
+/// wire reads its session through the process, so one test at a time owns the
+/// variable. The root is gone when the store is dropped, and the next test
+/// points the variable at its own.
+struct Store {
+    _lock: MutexGuard<'static, ()>,
+    _state: TempDir,
+}
+
+/// The session token the stored record carries: a signed-in Copilot's key, and
+/// the string no configured gateway may ever be sent.
+const SESSION_TOKEN: &str = "tid=session-token-7734";
+
+static ENV: Mutex<()> = Mutex::new(());
+
+impl Store {
+    /// A state root whose only Copilot record is a live session scoped to
+    /// `endpoint`, the base a signed-in Copilot names.
+    fn signed_in(endpoint: &str) -> Store {
+        Store::holding(Some(&format!(
+            r#"{{"token":"{SESSION_TOKEN}","expires_at":{},"endpoints":{{"api":"{endpoint}"}}}}"#,
+            expires_at()
+        )))
+    }
+
+    /// A state root with no Copilot record at all: nobody has signed in.
+    fn signed_out() -> Store {
+        Store::holding(None)
+    }
+
+    /// A state root of this test's own, `record` written where Rig keeps a
+    /// Copilot session when there is one. The lock is held for the store's
+    /// whole life, because the path is read from the process's environment.
+    fn holding(record: Option<&str>) -> Store {
+        let store = Store {
+            _lock: ENV
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+            _state: TempDir::new().expect("state directory"),
+        };
+        // SAFETY: this test is run alone against the process environment: the
+        // lock above is held while the variable names this test's own state
+        // root, and no other test in this binary reads or writes it.
+        unsafe {
+            std::env::set_var("XDG_STATE_HOME", store._state.path());
+        }
+        if let Some(record) = record {
+            let dir = store._state.path().join("sindri/copilot");
+            std::fs::create_dir_all(&dir).expect("the Copilot store's directory");
+            std::fs::write(dir.join("copilot.json"), record).expect("the stored session");
+        }
+        store
+    }
+}
+
+/// A session's expiry, an hour from now: live, so reading it never asks GitHub
+/// to exchange a token, and no test reaches a network it did not open.
+fn expires_at() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("a clock after the epoch")
+        .as_secs() as i64
+        + 3600
+}
+
+/// A sink no fragment reaches: a Copilot test fails before the stream opens.
+struct Silent;
+
+impl DeltaSink for Silent {
+    fn delta(&mut self, _delta: Delta) -> bool {
+        true
+    }
+}
+
+/// The one Copilot client a test asks, over the config a run would be built
+/// with and whatever base URL the human configured. The `Store` the caller
+/// holds is what the call is signed in with, so it must outlive it.
+fn copilot(base_url: Option<String>) -> Client {
+    Client::new(
+        &config(Provider::Copilot, "", base_url),
+        sindri_core::preamble::of(Path::new("/workspace"), None),
+    )
+}
+
+#[test]
+fn a_stored_session_names_the_models_the_endpoint_it_names_serves() {
+    let wire = Wire::answering(
+        "200 OK",
+        r#"{"data":[{"id":"gpt-4o"},{"id":"claude-sonnet-4.6"}]}"#,
+        1,
+    );
+    let _store = Store::signed_in(&wire.base_url);
+
+    let names = copilot(None).models().expect("the session's wire listed");
+
+    assert_eq!(names, ["gpt-4o", "claude-sonnet-4.6"]);
+}
+
+#[test]
+fn a_configured_gateway_is_never_asked_nor_handed_the_session_token() {
+    // A gateway on a port that is open to nobody: routing the session there
+    // would fail the call rather than pass unnoticed.
+    let gateway = Wire::answering("200 OK", r#"{"data":[{"id":"gateway-model"}]}"#, 0);
+    let session = Wire::answering("200 OK", r#"{"data":[{"id":"gpt-4o"}]}"#, 1);
+    let _store = Store::signed_in(&session.base_url);
+
+    let names = copilot(Some(gateway.base_url.clone()))
+        .models()
+        .expect("the session's own endpoint listed");
+
+    assert_eq!(names, ["gpt-4o"]);
+    assert!(
+        gateway.requests().is_empty(),
+        "the configured gateway was asked: {:?}",
+        gateway.requests()
+    );
+    let asked = session.requests().remove(0);
+    assert!(
+        asked.contains(&format!("Bearer {SESSION_TOKEN}")),
+        "the list is asked with the session a turn is asked with: {asked}"
+    );
+}
+
+#[test]
+fn with_no_session_the_list_fails_in_the_sentence_a_turn_fails_in() {
+    let _store = Store::signed_out();
+    let client = copilot(None);
+
+    let listed = client.models().expect_err("no session, no list");
+    let turned = client
+        .turn(&[], &[], false, &mut Silent)
+        .expect_err("no session, no turn");
+
+    assert!(
+        listed.message().contains("sindri auth login copilot"),
+        "the failure names the command that signs in: {}",
+        listed.message()
+    );
+    assert_eq!(
+        listed.message(),
+        turned.message(),
+        "one sentence for a missing session, whichever call asked"
     );
 }
