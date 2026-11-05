@@ -77,8 +77,8 @@ pub struct Config {
     pub extras: Extras,
     /// The policy the session starts with, and the one its record states.
     pub enforcement: Enforcement,
-    /// Never printed or recorded: a gateway's header may be as secret as the
-    /// credential.
+    /// Drawn by `/settings` and sent with every provider request, but never
+    /// written to the record. These are visible settings, not credentials.
     pub extra_headers: Vec<(String, String)>,
     /// A repository-local config that was found and refused, for the front end
     /// to note once. It is never read.
