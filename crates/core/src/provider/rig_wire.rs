@@ -1,7 +1,8 @@
-//! The only module that knows the provider library exists: the
-//! Anthropic Messages wire, the OpenAI-compatible Chat Completions wire, our
-//! own HTTP client with explicit timeouts, and the translation of the
-//! library's vocabulary into ours.
+//! The only module that knows the provider library exists. A turn is sent over
+//! one of three dialects — Anthropic Messages, OpenAI-compatible Chat
+//! Completions, and Responses, which a Copilot GPT-6 model is routed to by its
+//! own name — and the rest is ours: an HTTP client with explicit timeouts, and
+//! the translation of the library's vocabulary into ours.
 
 use std::borrow::Cow;
 use std::sync::Arc;

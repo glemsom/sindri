@@ -28,10 +28,13 @@ re-derived from the status, because the library answers a wider question than th
 that doubles, is the run's; a reply that already streamed text and a stream the run stopped
 for a cancel are never sent again, whatever the verdict says.
 
-**wire** — which provider API a run speaks, Anthropic Messages or OpenAI-compatible Chat
-Completions, and what each needs: its credential variable, its base URL variable and
-whether it needs a credential at all (`crates/core/src/config/provider.rs`). The settings
-modal's provider row chooses among them — it offers exactly the words `Provider::parse`
+**wire** — which provider API a run speaks, and what each wire needs: its credential
+variable, its base URL variable and whether it needs a credential at all
+(`crates/core/src/config/provider.rs`). Three dialects are spoken across them — Anthropic
+Messages, OpenAI-compatible Chat Completions and Responses — and the third is chosen by
+model name: a Copilot GPT-6 model may be asked over Responses rather than Chat Completions,
+because its identifier carries no `codex` marker to infer the dialect from. The settings
+modal's provider row chooses among the wires — it offers exactly the words `Provider::parse`
 accepts, so a fourth wire is not a word the modal can invent — and the wire chosen asks the
 **served names** again, because a listing is one wire at one address: the address row moves
 the same ask, at the address typed in it, rather than the one the run was launched on.
