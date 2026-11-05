@@ -10,8 +10,10 @@
 
 use std::path::PathBuf;
 
+use serde_json::json;
 use sindri_evals::run::Run;
 use sindri_harness::Request;
+use sindri_harness::record::{Record, write};
 
 fn run(exit_code: i32, stdout: &str, bodies: &[&str]) -> Run {
     let root = tempfile::TempDir::new().expect("temp dir");
@@ -137,19 +139,29 @@ fn a_load_whose_rule_never_reaches_the_answer_is_reported() {
             ),
         ],
     );
-    let session = root.path().join("state/sindri/sessions/one");
-    std::fs::create_dir_all(&session).expect("the session directory");
-    std::fs::write(
-        session.join("session.json"),
-        "{\"enforcement\":\"bubblewrap\"}",
-    )
-    .expect("the session record");
-    std::fs::write(
-        session.join("transcript.jsonl"),
-        "{\"type\":\"tool_call\",\"turn\":1,\"call_id\":\"c1\",\"tool\":\"skill\",\"name\":\"house-style\"}\n\
-         {\"type\":\"tool_result\",\"turn\":1,\"call_id\":\"c1\",\"content\":\"outcome: loaded\",\"is_error\":false,\"outcome\":\"loaded\"}\n",
-    )
-    .expect("the transcript");
+    write(
+        &root.path().join("state/sindri/sessions"),
+        &Record {
+            entries: vec![
+                json!({
+                    "type": "tool_call",
+                    "turn": 1,
+                    "call_id": "c1",
+                    "tool": "skill",
+                    "name": "house-style",
+                }),
+                json!({
+                    "type": "tool_result",
+                    "turn": 1,
+                    "call_id": "c1",
+                    "content": "outcome: loaded",
+                    "is_error": false,
+                    "outcome": "loaded",
+                }),
+            ],
+            ..Record::new("one", "claude-mock", "final")
+        },
+    );
     let problems = sindri_evals::catalog::the_catalog_triggers(&quiet);
     assert_eq!(
         problems,

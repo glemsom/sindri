@@ -310,7 +310,8 @@ codes, JSON fields, the record left and the files on disk rather than on the mod
 your own cost.
 
 **harness** — the seam a test runs the loop through, so the loop's tests need no provider
-and no bubblewrap (`crates/harness`).
+and no bubblewrap, and the one fixture a record a test writes is built by
+(`crates/harness`).
 
 ## The workspace
 

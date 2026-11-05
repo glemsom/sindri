@@ -9,8 +9,9 @@
 
 mod common;
 
-use common::records::{NEWEST, Record, root, three, write};
+use common::records::{NEWEST, root, three};
 use common::{Env, stderr, stdout};
+use sindri_harness::record::{Record, write};
 use unicode_width::UnicodeWidthStr;
 
 fn objects(env: &Env) -> Vec<serde_json::Value> {
@@ -80,13 +81,9 @@ fn a_record_with_no_prompt_says_so_and_leaves_the_field_out_of_json() {
     write(
         &root(&env),
         &Record {
-            id: NEWEST,
             started_ms: 1_700_000_120_000,
-            model: "claude-new",
             turns: Some(1),
-            stopped: "final",
-            usage: None,
-            prompt: None,
+            ..Record::new(NEWEST, "claude-new", "final")
         },
     );
 
@@ -110,13 +107,10 @@ fn a_long_prompt_is_clipped_to_one_column_and_json_holds_it_whole() {
     write(
         &root(&env),
         &Record {
-            id: NEWEST,
             started_ms: 1_700_000_120_000,
-            model: "claude-new",
             turns: Some(1),
-            stopped: "final",
-            usage: None,
-            prompt: Some(LONG),
+            prompt: Some(LONG.to_string()),
+            ..Record::new(NEWEST, "claude-new", "final")
         },
     );
 

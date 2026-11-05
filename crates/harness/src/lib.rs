@@ -11,6 +11,7 @@
 )]
 
 pub mod frames; // the event-stream frames a streamed reply is made of
+pub mod record; // the record a test writes
 mod reply; // one canned reply: a unary body, a streamed one, or a connection that closes with nothing
 
 use std::io::{Read, Write};

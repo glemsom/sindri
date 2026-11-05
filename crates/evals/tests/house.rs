@@ -11,8 +11,10 @@
 
 use std::path::Path;
 
+use serde_json::json;
 use sindri_evals::run::Run;
 use sindri_harness::Request;
+use sindri_harness::record::{Record, write};
 
 /// The rules the case's repository carries, read from the fixture itself: a copy
 /// written here could drift from the file the run is handed.
@@ -26,25 +28,40 @@ fn rules() -> String {
 const ANSWER: &str =
     "## house report\\n\\n`bin/status` prints `Hello!`, the line `sh bin/greet Ada` prints.";
 
-/// The one record a run leaves, with the instructions its start block names.
+/// The one record a run leaves, with the instructions its start block names and
+/// the calls the task took.
 fn record(repo: &Path, state: &Path, bytes: usize) {
-    let session = state.join("sindri/sessions/one");
-    std::fs::create_dir_all(&session).expect("the session directory");
-    std::fs::write(
-        session.join("session.json"),
-        format!(
-            "{{\"enforcement\":\"bubblewrap\",\"instructions\":{{\"path\":\"{}\",\"bytes\":{bytes}}}}}",
-            repo.join("AGENTS.md").display()
-        ),
-    )
-    .expect("the session record");
-    std::fs::write(
-        session.join("transcript.jsonl"),
-        "{\"type\":\"tool_call\",\"turn\":1,\"call_id\":\"c1\",\"tool\":\"bash\",\"command\":\"sh bin/greet Ada\"}\n\
-         {\"type\":\"tool_result\",\"turn\":1,\"call_id\":\"c1\",\"content\":\"Hello!\",\"is_error\":false,\"outcome\":\"exit 0\"}\n\
-         {\"type\":\"tool_call\",\"turn\":2,\"call_id\":\"c2\",\"tool\":\"bash\",\"command\":\"sh bin/status\"}\n",
-    )
-    .expect("the transcript");
+    write(
+        &state.join("sindri/sessions"),
+        &Record {
+            instructions: Some((repo.join("AGENTS.md"), bytes)),
+            entries: vec![
+                json!({
+                    "type": "tool_call",
+                    "turn": 1,
+                    "call_id": "c1",
+                    "tool": "bash",
+                    "command": "sh bin/greet Ada",
+                }),
+                json!({
+                    "type": "tool_result",
+                    "turn": 1,
+                    "call_id": "c1",
+                    "content": "Hello!",
+                    "is_error": false,
+                    "outcome": "exit 0",
+                }),
+                json!({
+                    "type": "tool_call",
+                    "turn": 2,
+                    "call_id": "c2",
+                    "tool": "bash",
+                    "command": "sh bin/status",
+                }),
+            ],
+            ..Record::new("one", "claude-mock", "final")
+        },
+    );
 }
 
 /// A run that obeyed every rule, so a test can take one thing away and watch the

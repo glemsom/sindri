@@ -9,8 +9,9 @@
 
 mod common;
 
-use common::records::{MIDDLE, NEWEST, OLDEST, Record, root, three, write};
+use common::records::{MIDDLE, NEWEST, OLDEST, root, three};
 use common::{Env, stderr, stdout};
+use sindri_harness::record::{Record, write};
 use unicode_width::UnicodeWidthStr;
 
 /// The date a row carries, in the one format a record is dated in: proven to be
@@ -96,13 +97,10 @@ fn a_row_counts_one_turn_and_invents_no_zero() {
     write(
         &root(&env),
         &Record {
-            id: NEWEST,
             started_ms: 1_700_000_120_000,
-            model: "claude-new",
             turns: Some(1),
-            stopped: "final",
-            usage: None,
-            prompt: Some("how many files?"),
+            prompt: Some("how many files?".to_string()),
+            ..Record::new(NEWEST, "claude-new", "final")
         },
     );
 
@@ -223,13 +221,10 @@ fn a_prompt_of_wide_glyphs_is_cut_to_the_column_it_was_given() {
     write(
         &sessions,
         &Record {
-            id: NEWEST,
             started_ms: 1_700_000_120_000,
-            model: "claude-new",
             turns: Some(1),
-            stopped: "final",
-            usage: None,
-            prompt: Some(wide),
+            prompt: Some(wide.to_string()),
+            ..Record::new(NEWEST, "claude-new", "final")
         },
     );
     // The same column, filled to its last cell by a prompt of narrow glyphs: the
@@ -238,13 +233,10 @@ fn a_prompt_of_wide_glyphs_is_cut_to_the_column_it_was_given() {
     write(
         &sessions,
         &Record {
-            id: OLDEST,
             started_ms: 1_700_000_000_000,
-            model: "claude-old",
             turns: Some(1),
-            stopped: "final",
-            usage: None,
-            prompt: Some(narrow),
+            prompt: Some(narrow.to_string()),
+            ..Record::new(OLDEST, "claude-old", "final")
         },
     );
 
