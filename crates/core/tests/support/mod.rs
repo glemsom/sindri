@@ -26,7 +26,6 @@ use sindri_core::skills::Catalog;
 use tempfile::TempDir;
 
 mod batch;
-mod git;
 pub mod open;
 mod replies;
 pub mod skills;
@@ -34,7 +33,6 @@ pub mod skills;
 pub use replies::{ScriptedModel, answer, call, calls, usage};
 
 pub use batch::Echoing;
-pub use git::commit;
 
 /// A record's start block for a test that is not a run: the run's identity, and
 /// every field only a live session can probe left empty.

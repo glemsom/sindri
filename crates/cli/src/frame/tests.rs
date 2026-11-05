@@ -11,6 +11,7 @@ use std::time::Duration;
 use sindri_core::config::Provider;
 use sindri_core::sandbox::Extras;
 use sindri_core::session::Env as RunEnv;
+use sindri_harness::git;
 use tempfile::TempDir;
 
 use super::*;
@@ -151,25 +152,9 @@ fn a_record_that_cannot_be_finished_is_drawn_in_the_sentence_the_run_writes() {
 fn the_rail_and_the_record_share_one_git_lookup() {
     let root = TempDir::new().expect("temp root");
     let mut env = env(&root);
-    let git = |args: &[&str]| {
-        let out = std::process::Command::new("git")
-            .args([
-                "-c",
-                "user.name=sindri",
-                "-c",
-                "user.email=sindri@example.invalid",
-            ])
-            .args(args)
-            .current_dir(&env.workspace)
-            .output()
-            .expect("git runs");
-        assert!(out.status.success(), "git {args:?}: {out:?}");
-        String::from_utf8_lossy(&out.stdout).trim().to_string()
-    };
-    git(&["init", "-q", "--initial-branch=the-branch"]);
+    git::init_on(&env.workspace, "the-branch");
     std::fs::write(env.workspace.join("readme"), "one line\n").expect("a file to commit");
-    git(&["add", "readme"]);
-    git(&["commit", "-q", "-m", "the first commit"]);
+    git::commit(&env.workspace, "the first commit");
     env.workspace = env.workspace.canonicalize().expect("canonical workspace");
 
     let boot = boot::Configured {

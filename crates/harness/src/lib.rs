@@ -12,6 +12,7 @@
 )]
 
 pub mod frames; // the event-stream frames a streamed reply is made of
+pub mod git; // a repository a test builds, read with none of the developer's own configuration
 pub mod record; // the record a test writes
 mod reply; // one canned reply: a unary body, a streamed one, or a connection that closes with nothing
 

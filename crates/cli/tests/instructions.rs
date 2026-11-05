@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 
 use common::provider::{MockProvider, Reply};
 use common::{Env, stderr, stdout, system_text};
+use sindri_harness::git;
 
 /// The rule a run must be working to: distinctive enough that no other text in
 /// a request could hold it.
@@ -21,24 +22,9 @@ const RULES: &str = "Always run `make audit` before you commit anything.\n";
 /// A checkout with the rules at its root, and a workspace three directories
 /// deep inside it — where the run stands and where the file must be found.
 fn checkout(env: &Env, rules: &str) -> PathBuf {
-    let git = |args: &[&str]| {
-        let out = std::process::Command::new("git")
-            .args([
-                "-c",
-                "user.name=sindri",
-                "-c",
-                "user.email=sindri@example.invalid",
-            ])
-            .args(args)
-            .current_dir(&env.workspace)
-            .output()
-            .expect("git runs");
-        assert!(out.status.success(), "git {args:?}: {out:?}");
-    };
-    git(&["init", "-q", "--initial-branch=main"]);
+    git::init(&env.workspace);
     std::fs::write(env.workspace.join("AGENTS.md"), rules).expect("the repository's rules");
-    git(&["add", "."]);
-    git(&["commit", "-q", "-m", "the rules"]);
+    git::commit(&env.workspace, "the rules");
     let deep = env.workspace.join("crates/deep/inner");
     std::fs::create_dir_all(&deep).expect("a workspace three directories in");
     deep

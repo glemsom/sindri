@@ -211,7 +211,7 @@ fn the_repo_scope_never_reaches_above_the_repository_root() {
     let above = TempDir::new().expect("a directory above the repository");
     let root = above.path().join("repo");
     std::fs::create_dir_all(&root).expect("a repository");
-    crate::fixtures::init(&root);
+    sindri_harness::git::init(&root);
     let workspace = root.join("a/b/c");
     std::fs::create_dir_all(&workspace).expect("a workspace");
     skill(

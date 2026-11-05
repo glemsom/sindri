@@ -15,25 +15,16 @@ use std::path::{Path, PathBuf};
 use sindri_core::instructions::Taken;
 use sindri_core::session::{Env, Session};
 use sindri_core::workspace::{Git, probe};
+use sindri_harness::git;
 use support::config;
 use tempfile::TempDir;
 
 /// A repository with one commit, and the commit it planted.
 fn repository() -> (TempDir, String) {
     let root = TempDir::new().expect("host");
-    let head = support::commit(root.path());
+    git::init(root.path());
+    let head = git::commit(root.path(), "the first commit");
     (root, head)
-}
-
-/// One `git` invocation in `dir`, its trimmed stdout.
-fn run(dir: &Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("git runs");
-    assert!(out.status.success(), "git {args:?}: {out:?}");
-    String::from_utf8_lossy(&out.stdout).trim().to_string()
 }
 
 #[test]
@@ -67,7 +58,7 @@ fn an_untracked_file_makes_the_tree_dirty() {
 #[test]
 fn a_detached_head_records_the_branch_named_head() {
     let (root, head) = repository();
-    run(root.path(), &["checkout", "-q", "--detach"]);
+    git::run(root.path(), &["checkout", "-q", "--detach"]);
 
     let facts = probe(root.path())
         .git
@@ -89,7 +80,7 @@ fn a_detached_head_records_the_branch_named_head() {
 #[test]
 fn a_repository_with_no_commit_records_no_git_block() {
     let root = TempDir::new().expect("host");
-    run(root.path(), &["init", "-q", "--initial-branch=main"]);
+    git::init(root.path());
 
     assert_eq!(
         probe(root.path()).git,

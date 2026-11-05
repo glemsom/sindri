@@ -4,7 +4,6 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use tempfile::TempDir;
 
@@ -41,21 +40,11 @@ impl Workspace {
         copy_dir(Path::new(FIXTURES).join("repo").as_path(), &repo)?;
         // The repo skill scope is walked from the repository root and from
         // nowhere else, so a copy that is not a repository has no catalog at all
-        // and eval 9 would have no skill to trigger. `git init` leaves an unborn
-        // branch, which is no commit: the record still carries no git block,
-        // exactly as the fixture carried none before.
-        let init = Command::new("git")
-            .arg("init")
-            .arg("--quiet")
-            .current_dir(&repo)
-            .output()
-            .map_err(|error| format!("git init the fixture copy: {error}"))?;
-        if !init.status.success() {
-            return Err(format!(
-                "git init the fixture copy: {}",
-                String::from_utf8_lossy(&init.stderr).trim()
-            ));
-        }
+        // and eval 9 would have no skill to trigger. The fixture's `git init`
+        // leaves an unborn branch, which is no commit: the record still carries
+        // no git block, exactly as the fixture carried none before.
+        sindri_harness::git::try_init(&repo)
+            .map_err(|error| format!("the fixture copy: {error}"))?;
         let state = root.path().join("state");
         let config = root.path().join("config");
         let settings = config.join(SETTINGS);

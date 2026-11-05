@@ -11,14 +11,16 @@ mod support;
 
 use sindri_core::record::{Entry, Stored};
 use sindri_core::session::Session;
-use support::{commit, config, host};
+use sindri_harness::git;
+use support::{config, host};
 
 /// The three questions a post-mortem opens with — could it write there, which
 /// commit was that, why did it differ — answered before the first prompt.
 #[test]
 fn an_open_session_records_the_boundary_the_tree_and_the_dials() {
     let (_root, env) = host();
-    let head = commit(&env.workspace);
+    git::init(&env.workspace);
+    let head = git::commit(&env.workspace, "the first commit");
     let session = Session::open(&env, &config(&[])).expect("a session opens");
 
     let stored = Stored::load_in(session.dir()).expect("the record reads back");
@@ -43,7 +45,8 @@ fn an_open_session_records_the_boundary_the_tree_and_the_dials() {
 #[test]
 fn a_run_in_a_tree_with_changes_records_it_dirty() {
     let (_root, env) = host();
-    commit(&env.workspace);
+    git::init(&env.workspace);
+    git::commit(&env.workspace, "the first commit");
     std::fs::write(env.workspace.join("uncommitted"), "wip\n").expect("an untracked file");
     let session = Session::open(&env, &config(&[])).expect("a session opens");
 

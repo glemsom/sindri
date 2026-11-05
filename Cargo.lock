@@ -3129,6 +3129,7 @@ dependencies = [
  "rig-reqwest",
  "serde",
  "serde_json",
+ "sindri-harness",
  "sindri-types",
  "tempfile",
  "tokio",
@@ -3152,6 +3153,7 @@ name = "sindri-harness"
 version = "0.1.0"
 dependencies = [
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

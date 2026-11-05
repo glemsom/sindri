@@ -14,6 +14,7 @@ use std::path::Path;
 
 use common::provider::{MockProvider, Reply};
 use common::{Env, batch, stderr, stdout, the_session};
+use sindri_harness::git;
 
 fn metadata(session: &Path) -> serde_json::Value {
     let text = std::fs::read_to_string(session.join("session.json")).expect("session.json");
@@ -22,30 +23,10 @@ fn metadata(session: &Path) -> serde_json::Value {
 
 /// A repository with one commit, so a record has a branch and a commit to name.
 fn repository(dir: &Path) -> (String, String) {
-    let author = [
-        "-c",
-        "user.name=sindri",
-        "-c",
-        "user.email=sindri@example.invalid",
-    ];
-    let git = |args: &[&str]| {
-        let out = std::process::Command::new("git")
-            .args(author)
-            .args(args)
-            .current_dir(dir)
-            .output()
-            .expect("git runs");
-        assert!(out.status.success(), "git {args:?}: {out:?}");
-        String::from_utf8_lossy(&out.stdout).trim().to_string()
-    };
-    git(&["init", "-q", "--initial-branch=main"]);
+    git::init(dir);
     std::fs::write(dir.join("readme"), "one line\n").expect("a file to commit");
-    git(&["add", "readme"]);
-    git(&["commit", "-q", "-m", "the first commit"]);
-    (
-        git(&["rev-parse", "--abbrev-ref", "HEAD"]),
-        git(&["rev-parse", "HEAD"]),
-    )
+    let head = git::commit(dir, "the first commit");
+    (git::run(dir, &["rev-parse", "--abbrev-ref", "HEAD"]), head)
 }
 
 /// The record a post-mortem opens with: the boundary, the tree and the dials —

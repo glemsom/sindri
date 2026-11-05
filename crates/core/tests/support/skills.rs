@@ -11,7 +11,7 @@ pub fn write(workspace: &Path, name: &str, fields: &str, body: &str) -> PathBuf 
     // The repository root is where a scan stops, so a workspace with skills in
     // it is a workspace inside a repository — and one git will answer for, since
     // the root a scan stops at is the root git names.
-    super::git::init(workspace);
+    sindri_harness::git::init(workspace);
     let dir = workspace.join(".agents/skills").join(name);
     std::fs::create_dir_all(&dir).expect("skill directory");
     std::fs::write(

@@ -12,6 +12,7 @@
 )]
 
 pub use sindri_harness as provider;
+use sindri_harness::git;
 
 pub mod pty;
 pub mod records;
@@ -55,12 +56,7 @@ impl Env {
     /// own files are read from is the root git names, so a directory called
     /// `.git` is not one.
     pub fn repository(&self) {
-        let out = std::process::Command::new("git")
-            .args(["init", "-q", "--initial-branch=main"])
-            .current_dir(&self.workspace)
-            .output()
-            .expect("git runs");
-        assert!(out.status.success(), "git init: {out:?}");
+        git::init(&self.workspace);
     }
 
     pub fn command(&self) -> std::process::Command {

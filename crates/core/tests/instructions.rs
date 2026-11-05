@@ -10,6 +10,7 @@
 mod support;
 
 use sindri_core::instructions::{CAP, Taken, read};
+use sindri_harness::git;
 use tempfile::TempDir;
 
 /// A workspace three directories deep in a checkout, and the root's
@@ -17,7 +18,8 @@ use tempfile::TempDir;
 fn checkout() -> (TempDir, std::path::PathBuf, &'static str) {
     const RULES: &str = "# House rules\n\nRun `make check` before you commit.\n";
     let root = TempDir::new().expect("host");
-    support::commit(root.path());
+    git::init(root.path());
+    git::commit(root.path(), "the first commit");
     std::fs::write(root.path().join("AGENTS.md"), RULES).expect("the repository's rules");
     let deep = root.path().join("crates/deep/inner");
     std::fs::create_dir_all(&deep).expect("a workspace three directories in");
@@ -65,7 +67,8 @@ fn a_directory_that_is_no_repository_finds_its_own() {
 #[test]
 fn no_agents_md_adds_nothing_and_says_nothing() {
     let root = TempDir::new().expect("host");
-    support::commit(root.path());
+    git::init(root.path());
+    git::commit(root.path(), "the first commit");
 
     let taken = read(root.path());
 
@@ -161,7 +164,8 @@ fn a_nested_agents_md_is_never_read() {
 #[test]
 fn a_claude_md_is_no_fallback() {
     let root = TempDir::new().expect("host");
-    support::commit(root.path());
+    git::init(root.path());
+    git::commit(root.path(), "the first commit");
     std::fs::write(root.path().join("CLAUDE.md"), "another tool's file\n").expect("a file");
 
     let taken = read(root.path());
