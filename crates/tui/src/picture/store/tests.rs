@@ -12,7 +12,7 @@ use crate::picture::{DIAGRAM_ROWS, MAX_ROWS, draw as drawn};
 /// The store a test asks: the made-up Kitty answer a layout test uses. A fence
 /// needs no workspace, so none is offered.
 fn store() -> Store {
-    Store::new(Some(&Graphics::kitty()), ".").expect("a Kitty answer is a store")
+    Store::new(Some(&Graphics::kitty()), Some(".".into())).expect("a Kitty answer is a store")
 }
 
 /// A diagram the crate draws: flat and wide, so the block is its own width.

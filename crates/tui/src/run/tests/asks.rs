@@ -31,9 +31,9 @@ fn a_keystroke_starts_one_walk_and_its_answer_names_the_completion() {
     }
     let (tx, rx) = mpsc::channel();
     let mut walking = false;
-    walk(&mut app, &tx, &mut walking, root.path());
+    walk(&mut app, &tx, &mut walking, Some(root.path()));
     assert!(walking, "a walk is in flight");
-    walk(&mut app, &tx, &mut walking, root.path());
+    walk(&mut app, &tx, &mut walking, Some(root.path()));
     assert!(
         rx.try_recv().is_err(),
         "a second keystroke does not start a second walk"

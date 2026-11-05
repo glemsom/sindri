@@ -208,13 +208,11 @@ impl App {
         self.store()
     }
 
-    /// The workspace, asked of the process only when the frame was never told
-    /// one: an export must land somewhere it can name.
-    pub(crate) fn workspace_dir(&self) -> PathBuf {
-        self.workspace
-            .clone()
-            .or_else(|| std::env::current_dir().ok())
-            .unwrap_or_else(|| PathBuf::from("."))
+    /// The workspace, where the frame was told one: the directory it stands in,
+    /// read once at the door. A frame that could not read it has none, and no
+    /// path the frame offers is ever built from nothing in its place.
+    pub(crate) fn workspace_dir(&self) -> Option<PathBuf> {
+        self.workspace.clone()
     }
 
     pub fn with_config(mut self, path: impl Into<PathBuf>) -> Self {

@@ -154,11 +154,10 @@ fn session(
     // and the picture draws from the same one.
     let graphics = Graphics::detect();
     let face = graphics.as_ref().and_then(Face::new);
-    let mut app = recorded(
-        App::new(launch, face)
-            .with_graphics(graphics)
-            .with_cancel(cancel),
-    );
+    // The facts about where the frame is are read before the picture store is
+    // built: a relative `src` resolves against the directory the frame stands
+    // in, so the store is made once, from the answer.
+    let mut app = recorded(App::new(launch, face).with_cancel(cancel)).with_graphics(graphics);
     if let Some(missing) = missing {
         app = app.with_missing(missing);
     }
@@ -170,8 +169,10 @@ fn session(
     // lands. Typing never queues ten walks.
     let mut walking = false;
 
-    // Nothing has been said yet, so the first frame is drawn here.
-    let root = std::env::current_dir().unwrap_or_default();
+    // Nothing has been said yet, so the first frame is drawn here. The walk is
+    // rooted at the directory the frame stands in, and rooted nowhere at all
+    // when it could not read one.
+    let root = app.workspace_dir();
     let title = app.rail.title();
     let mut screen = Screen {
         terminal,
@@ -179,7 +180,15 @@ fn session(
     };
     let mut painted = screen.show(&mut app);
     while painted {
-        painted = turn_of_the_loop(&mut app, &rx, &jobs, &tx, &mut walking, &root, &mut screen);
+        painted = turn_of_the_loop(
+            &mut app,
+            &rx,
+            &jobs,
+            &tx,
+            &mut walking,
+            root.as_deref(),
+            &mut screen,
+        );
     }
     // `done` and `error` are meant to survive a shell prompt; the frame's own
     // record is not, and a tab that has moved on should not hold one for a run
@@ -225,7 +234,7 @@ fn turn_of_the_loop(
     jobs: &Sender<Task>,
     tx: &Sender<Msg>,
     walking: &mut bool,
-    root: &Path,
+    root: Option<&Path>,
     surface: &mut impl Paint,
 ) -> bool {
     // A report the last second is withholding is a reason to keep the clock
@@ -275,16 +284,24 @@ fn turn_of_the_loop(
 
 /// Where the records live and where a default `/export` lands: the state
 /// directory is read and never written by the frame, and the workspace is the
-/// directory the frame was launched in.
-fn recorded(app: App) -> App {
-    let app = match std::env::current_dir() {
-        Ok(workspace) => app.with_workspace(workspace),
-        Err(_) => app,
-    };
-    match sindri_core::paths::state_dir() {
-        Ok(state) => app.with_sessions(state.join("sessions")),
-        Err(_) => app,
+/// directory the frame was launched in. A read that fails is said once in the
+/// transcript, naming what could not be read and why — the frame is then one
+/// that stands nowhere and reads no record, and the reader is told so rather
+/// than handed a frame that quietly does less.
+fn recorded(mut app: App) -> App {
+    match std::env::current_dir() {
+        Ok(workspace) => app = app.with_workspace(workspace),
+        Err(error) => app.note_error(format!(
+            "workspace: the directory this frame stands in cannot be read: {error}"
+        )),
     }
+    match sindri_core::paths::state_dir() {
+        Ok(state) => app = app.with_sessions(state.join("sessions")),
+        Err(error) => app.note_error(format!(
+            "records: the directory the records live in cannot be read: {error}"
+        )),
+    }
+    app
 }
 
 /// What the loop paints on: the terminal this crate owns, and — in a test — a
@@ -371,11 +388,18 @@ fn apply(app: &mut App, message: Msg) -> bool {
 
 /// Walks the workspace on a thread of its own for the completion that just
 /// asked for it: the composer never waits for a filesystem.
-fn walk(app: &mut App, tx: &Sender<Msg>, walking: &mut bool, root: &std::path::Path) {
+fn walk(app: &mut App, tx: &Sender<Msg>, walking: &mut bool, root: Option<&Path>) {
     if *walking {
         return;
     }
     let Some((generation, typed)) = app.take_walk() else {
+        return;
+    };
+    // A frame that cannot name the directory it stands in has nowhere to walk:
+    // the ask is answered with nothing found, and the `@` walk is never rooted
+    // at nothing.
+    let Some(root) = root else {
+        let _ = tx.send(Msg::Paths(generation, Vec::new(), false));
         return;
     };
     *walking = true;

@@ -30,7 +30,11 @@ impl App {
                 ));
             }
         };
-        let path = self.export_path(named);
+        let Some(path) = self.export_path(named) else {
+            return self.note_error(
+                "export: the directory this frame stands in is unknown, so there is nowhere to write it",
+            );
+        };
         if path.exists() && self.export_pending.as_deref() != Some(path.as_path()) {
             self.note_error(format!(
                 "export: {} already exists — /export again to overwrite it",
@@ -56,19 +60,21 @@ impl App {
     }
 
     /// Where the file goes: the path that was named, relative to the workspace,
-    /// or the workspace's own `sindri-<guid>.md`.
-    fn export_path(&self, named: Option<&str>) -> PathBuf {
+    /// or the workspace's own `sindri-<guid>.md` — and nowhere at all for a
+    /// frame that could not read the directory it stands in, because a path the
+    /// frame offers is never built from nothing.
+    fn export_path(&self, named: Option<&str>) -> Option<PathBuf> {
         let workspace = self.workspace_dir();
         match named.map(str::trim).filter(|named| !named.is_empty()) {
             Some(named) => {
                 let path = PathBuf::from(named);
                 if path.is_absolute() {
-                    path
+                    Some(path)
                 } else {
-                    workspace.join(path)
+                    Some(workspace?.join(path))
                 }
             }
-            None => workspace.join(format!("sindri-{}.md", self.rail.session())),
+            None => Some(workspace?.join(format!("sindri-{}.md", self.rail.session()))),
         }
     }
 }

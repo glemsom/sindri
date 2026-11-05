@@ -52,7 +52,7 @@ impl Source {
     /// fetched. `~` is a name like any other — the frame expands nothing, and a
     /// shell is not in the loop. A path the frame cannot afford to read is
     /// refused here, before a decoder sees it.
-    pub(super) fn of(workspace: &Path, src: &str) -> Result<Source, Refusal> {
+    pub(super) fn of(workspace: Option<&Path>, src: &str) -> Result<Source, Refusal> {
         if let Some(scheme) = scheme(src) {
             return Err(Refusal::Scheme(scheme.to_owned()));
         }
@@ -60,7 +60,14 @@ impl Source {
         let path = if path.is_absolute() {
             path.to_path_buf()
         } else {
-            workspace.join(path)
+            // A relative `src` needs the directory the frame stands in, and a
+            // frame that could not read it resolves nothing rather than
+            // resolving against nothing.
+            workspace
+                .ok_or_else(|| {
+                    Refusal::Unreadable("the directory this frame stands in is unknown".to_string())
+                })?
+                .join(path)
         };
         guard(&path)?;
         Ok(Source::File(path))

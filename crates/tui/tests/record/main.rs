@@ -149,6 +149,17 @@ impl Fixture {
             clipboard,
         }
     }
+
+    /// The same records in a frame that could not read the directory it stands
+    /// in: where the records live is known, and there is nowhere to write a
+    /// file.
+    fn nowhere_to_write() -> Fixture {
+        let mut f = Fixture::three_records();
+        let session = f.app.rail_guid();
+        f.app = App::with_clipboard(launch(&session), None, Box::new(f.clipboard.clone()))
+            .with_sessions(f.sessions.clone());
+        f
+    }
 }
 
 /// Sends a command the way a user sends one now: a bare name opens the offer

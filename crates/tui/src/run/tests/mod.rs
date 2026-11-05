@@ -27,6 +27,7 @@ use crate::rail::Launch;
 use crate::settings::Serving;
 
 mod asks;
+mod standing;
 
 /// The frame's own draw, counted: the loop asks what it is painting and this
 /// answers without a terminal, so the clock is proven and nothing is drawn.
@@ -190,7 +191,7 @@ fn the_loop_draws_for_the_clock_while_a_run_is_live_and_never_while_idle() {
             &jobs,
             &tx,
             &mut walking,
-            root.path(),
+            Some(root.path()),
             &mut surface
         ));
     }
@@ -216,7 +217,7 @@ fn the_loop_draws_for_the_clock_while_a_run_is_live_and_never_while_idle() {
         &jobs,
         &tx,
         &mut walking,
-        root.path(),
+        Some(root.path()),
         &mut surface
     ));
     wake.join().expect("the waker finishes");
@@ -263,7 +264,7 @@ fn a_thought_alone_asks_the_frame_for_no_tick_of_its_own() {
         &jobs,
         &tx,
         &mut walking,
-        root.path(),
+        Some(root.path()),
         &mut surface
     ));
     wake.join().expect("the waker finishes");
@@ -333,7 +334,7 @@ fn motion_with_no_button_held_is_no_frame_drawn() {
         &jobs,
         &tx,
         &mut walking,
-        root.path(),
+        Some(root.path()),
         &mut surface
     ));
     assert_eq!(surface.drawn(), 0, "a moving pointer draws nothing at all");
@@ -363,7 +364,7 @@ fn a_wheel_notch_still_draws_once() {
         &jobs,
         &tx,
         &mut walking,
-        root.path(),
+        Some(root.path()),
         &mut surface
     ));
     assert_eq!(
@@ -427,7 +428,7 @@ fn a_drag_copies_the_marked_rows_it_draws_for() {
             &jobs,
             &tx,
             &mut walking,
-            root.path(),
+            Some(root.path()),
             &mut surface
         ));
     }
@@ -475,7 +476,7 @@ fn a_pointer_report_that_changed_no_row_draws_no_frame_and_a_press_that_marks_dr
             &jobs,
             &tx,
             &mut walking,
-            root.path(),
+            Some(root.path()),
             &mut surface
         ));
         assert_eq!(
@@ -503,7 +504,7 @@ fn a_pointer_report_that_changed_no_row_draws_no_frame_and_a_press_that_marks_dr
         &jobs,
         &tx,
         &mut walking,
-        root.path(),
+        Some(root.path()),
         &mut surface
     ));
     assert_eq!(
@@ -533,7 +534,7 @@ fn a_key_the_frame_binds_to_nothing_draws_no_frame_and_a_typed_one_draws_once() 
         &jobs,
         &tx,
         &mut walking,
-        root.path(),
+        Some(root.path()),
         &mut surface
     ));
     assert_eq!(surface.drawn(), drawn, "an unbound key draws nothing");
@@ -549,7 +550,7 @@ fn a_key_the_frame_binds_to_nothing_draws_no_frame_and_a_typed_one_draws_once() 
         &jobs,
         &tx,
         &mut walking,
-        root.path(),
+        Some(root.path()),
         &mut surface
     ));
     assert_eq!(
@@ -581,7 +582,7 @@ fn an_answer_to_a_walk_the_frame_asked_nothing_of_draws_no_frame() {
         &jobs,
         &tx,
         &mut walking,
-        root.path(),
+        Some(root.path()),
         &mut surface
     ));
     assert_eq!(
@@ -621,7 +622,7 @@ fn a_key_the_settings_modal_takes_draws_a_frame_and_one_it_holds_nothing_for_dra
         &jobs,
         &tx,
         &mut walking,
-        root.path(),
+        Some(root.path()),
         &mut surface
     ));
     assert_eq!(
@@ -638,7 +639,7 @@ fn a_key_the_settings_modal_takes_draws_a_frame_and_one_it_holds_nothing_for_dra
         &jobs,
         &tx,
         &mut walking,
-        root.path(),
+        Some(root.path()),
         &mut surface
     ));
     assert_eq!(
@@ -675,7 +676,7 @@ fn the_modal_asks_the_wire_as_it_opens_and_only_its_own_answer_draws() {
         &jobs,
         &tx,
         &mut walking,
-        root.path(),
+        Some(root.path()),
         &mut surface
     ));
     let Ok(Task::Ask(serving)) = queue.try_recv() else {
@@ -697,7 +698,7 @@ fn the_modal_asks_the_wire_as_it_opens_and_only_its_own_answer_draws() {
         &jobs,
         &tx,
         &mut walking,
-        root.path(),
+        Some(root.path()),
         &mut surface
     ));
     assert_eq!(
@@ -717,7 +718,7 @@ fn the_modal_asks_the_wire_as_it_opens_and_only_its_own_answer_draws() {
         &jobs,
         &tx,
         &mut walking,
-        root.path(),
+        Some(root.path()),
         &mut surface
     ));
     assert_eq!(

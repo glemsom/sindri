@@ -13,7 +13,7 @@ use sindri_tui::picture::{self, Refusal, Store, Worth};
 /// The store a test measures with: the made-up Kitty answer the other picture
 /// tests use. No workspace is needed — a fence is its own source.
 fn store() -> Store {
-    Store::new(Some(&Graphics::kitty()), ".").expect("a Kitty answer is a store")
+    Store::new(Some(&Graphics::kitty()), Some(".".into())).expect("a Kitty answer is a store")
 }
 
 /// The rows an answer is written as once the drawings it asks for have been

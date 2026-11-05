@@ -23,8 +23,10 @@ use crate::picture::{PIXELS, Refusal, Worth};
 pub(super) const LIVE: usize = 8;
 
 pub struct Store {
-    /// Where a relative `src` resolves: the workspace the frame was launched in.
-    workspace: PathBuf,
+    /// Where a relative `src` resolves: the workspace the frame was launched in,
+    /// absent for a frame that could not read it — a relative `src` is then
+    /// refused rather than resolved against nothing.
+    workspace: Option<PathBuf>,
     /// The answer a protocol is built from. It speaks Kitty, or there is no
     /// store: no sixel, no half-blocks, no fallback.
     picker: Picker,
@@ -94,14 +96,16 @@ impl Key {
 
 impl Store {
     /// The store, or nothing where the terminal cannot draw: a frame without a
-    /// Kitty-capable answer has no pictures to hold.
-    pub fn new(graphics: Option<&Graphics>, workspace: impl Into<PathBuf>) -> Option<Store> {
+    /// Kitty-capable answer has no pictures to hold. The workspace is where a
+    /// relative `src` resolves, and a frame that could not read it hands none —
+    /// the store still draws a fence, and refuses a relative `src` by name.
+    pub fn new(graphics: Option<&Graphics>, workspace: Option<PathBuf>) -> Option<Store> {
         let picker = graphics?.picker().clone();
         if picker.protocol_type() != ProtocolType::Kitty {
             return None;
         }
         Some(Store {
-            workspace: workspace.into(),
+            workspace,
             picker,
             svgs: Svgs::default(),
             live: Vec::new(),
@@ -112,7 +116,7 @@ impl Store {
     /// What a markdown `src` is worth at `columns`: the rows it takes, read from
     /// its header and never from its pixels.
     pub fn measure(&self, src: &str, columns: u16) -> Worth {
-        match Source::of(&self.workspace, src) {
+        match Source::of(self.workspace.as_deref(), src) {
             Ok(source) => self.weigh(source, columns),
             Err(refusal) => Worth::Refused(refusal),
         }

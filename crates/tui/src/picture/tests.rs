@@ -27,7 +27,7 @@ fn store() -> Store {
 
 /// The same store over a workspace a test made for itself.
 fn store_here(workspace: impl Into<PathBuf>) -> Store {
-    Store::new(Some(&Graphics::kitty()), workspace).expect("a Kitty answer is a store")
+    Store::new(Some(&Graphics::kitty()), Some(workspace.into())).expect("a Kitty answer is a store")
 }
 
 /// The block a source takes at a column width, or a panic that says why it took
@@ -50,6 +50,27 @@ fn refused(src: &str) -> (Refusal, u16) {
         Worth::Drawn { rows, .. } => panic!("{src} was drawn in {rows} rows"),
         Worth::Pending => panic!("a file is measured from its header and never pending"),
     }
+}
+
+#[test]
+fn a_relative_source_with_no_workspace_is_refused_rather_than_resolved_against_nothing() {
+    let nowhere = Store::new(Some(&Graphics::kitty()), None).expect("a Kitty answer is a store");
+    match nowhere.measure("wide.png", 60) {
+        Worth::Refused(Refusal::Unreadable(reason)) => assert!(
+            reason.contains("the directory this frame stands in is unknown"),
+            "the refusal names what is absent: {reason}"
+        ),
+        other => panic!("a relative src needs a workspace to resolve against: {other:?}"),
+    }
+    // An absolute source needs none: a frame that cannot name its own directory
+    // still draws a picture it was given the whole path of.
+    assert!(
+        matches!(
+            nowhere.measure(&format!("{FIXTURES}/wide.png"), 60),
+            Worth::Drawn { .. }
+        ),
+        "an absolute src resolves on its own"
+    );
 }
 
 #[test]
@@ -316,13 +337,13 @@ fn a_picture_in_any_format_the_decoders_link_is_measured() {
 #[test]
 fn there_is_no_store_without_a_kitty_answer() {
     assert!(
-        Store::new(None, FIXTURES).is_none(),
+        Store::new(None, Some(FIXTURES.into())).is_none(),
         "a frame that asked nothing has no picture to hold"
     );
     let mut coarse = Picker::from_fontsize(CELL);
     coarse.set_protocol_type(ProtocolType::Halfblocks);
     assert!(
-        Store::new(Some(&Graphics::from_picker(coarse)), FIXTURES).is_none(),
+        Store::new(Some(&Graphics::from_picker(coarse)), Some(FIXTURES.into())).is_none(),
         "no sixel, no half-blocks, no 256-colour fallback"
     );
 }

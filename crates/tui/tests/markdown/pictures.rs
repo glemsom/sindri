@@ -14,7 +14,7 @@ const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/pictures")
 /// The store a test measures with: the made-up Kitty answer the layout tests
 /// use, over the fixtures as the workspace.
 fn store() -> Store {
-    Store::new(Some(&Graphics::kitty()), FIXTURES).expect("a Kitty answer is a store")
+    Store::new(Some(&Graphics::kitty()), Some(FIXTURES.into())).expect("a Kitty answer is a store")
 }
 
 #[test]

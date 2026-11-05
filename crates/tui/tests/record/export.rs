@@ -32,6 +32,22 @@ fn an_export_writes_the_thread_as_markdown_and_says_where_it_went() {
 }
 
 #[test]
+fn an_export_with_no_workspace_says_there_is_nowhere_to_write_it() {
+    let mut f = Fixture::nowhere_to_write();
+    command(&mut f.app, "/export");
+
+    let said = notes(&f.app);
+    assert!(
+        said.contains("export: the directory this frame stands in is unknown"),
+        "the refusal names what the frame could not read: {said}"
+    );
+    assert!(
+        !said.contains("sindri-"),
+        "and no path is offered that was built from nothing: {said}"
+    );
+}
+
+#[test]
 fn an_export_goes_to_a_path_that_is_named() {
     let mut f = Fixture::three_records();
     let named = f.workspace.join("notes/gate.md");
