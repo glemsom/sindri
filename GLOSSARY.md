@@ -214,8 +214,8 @@ launched by a bare `sindri` on a terminal (`crates/cli/src/frame.rs`). Off a ter
 same invocation is a refusal at exit 2.
 
 **rail** — the frame's ledger of facts, always visible: cache hits, turns against the cap,
-the context meter, the session id, the temp path, the branch, the sandbox posture and why
-the last run stopped.
+the context meter, why the last run stopped, the model, the workspace, the branch, the
+session id, the temp path, the skills in force and the sandbox posture.
 
 **thread** — the transcript as the frame holds it: the entries in order and the rows each
 one is worth at the width it was measured at, with a mutation the only way in, so exactly

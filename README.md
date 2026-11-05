@@ -119,9 +119,8 @@ transcript, rail, composer; off a terminal it is a refusal at exit 2.
   until there is a draft.
 - **Pulse:** while a run is live, a braille marker at the head of the newest answer
   carries the elapsed time (`⠸ 0.8s`) and settles on `✓` or `✗` with the duration it
-  stopped at; each call's duration freezes with the call, and the rail's output and
-  context figures move on what streams, trued up by the provider's report. An idle frame
-  is never drawn.
+  stopped at; each call's duration freezes with the call, and the rail's context meter
+  moves on what streams, trued up by the provider's report. An idle frame is never drawn.
 - **Tool calls:** each appears as it starts with the last five output lines, then
   collapses to `✓ exit 0`, `✗ exit N`, `✗ timed out`, `✗ cancelled` or `✗ sandbox: …` and
   the count behind it (`· 400 lines`). `Enter` on an empty composer, or a click on the
@@ -132,7 +131,8 @@ transcript, rail, composer; off a terminal it is a refusal at exit 2.
   `Ctrl-X` drops it. `Ctrl-C` is answered at once — `cancelling…` in the footer, draft
   kept — and the run stops when the request in flight does.
 - **Rail:** 32 columns, always visible — cache hits, turns against the cap, a context
-  meter, session GUID, temp path, branch, sandbox posture, why the last run stopped.
+  meter, why the last run stopped, the model, the workspace, the branch, session GUID,
+  temp path, the skills in force, sandbox posture.
   Read as a ledger: labels in a nine-column field two cells in from the rail's first
   column, dot leaders across the gap, every value hanging off one edge, a `─` hairline
   between blocks. Below 100 columns it becomes one strip, inset the same two cells; the
