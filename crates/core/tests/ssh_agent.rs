@@ -130,6 +130,11 @@ fn the_ssh_agent_is_on_unless_the_file_or_the_environment_says_off() {
     // SAFETY: this file's tests name the variables each one sets, and this one
     // speaks only for the agent.
     unsafe { std::env::set_var("XDG_CONFIG_HOME", home.path()) };
+    // The host's own shell may have spoken before this test did, and a run
+    // nothing configured hands the socket over: the variable is stated absent
+    // rather than assumed to be.
+    // SAFETY: as above.
+    unsafe { std::env::remove_var("SINDRI_SSH_AGENT") };
     assert_eq!(
         setting().map(|config| config.ssh_agent),
         Ok(true),

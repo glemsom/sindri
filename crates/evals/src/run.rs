@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
 use serde_json::Value;
-use sindri_harness::{MockProvider, PROVIDER_ENV, Reply, Request};
+use sindri_harness::{MockProvider, Reply, Request, SETTINGS};
 
 use crate::case::Case;
 use crate::workspace::Workspace;
@@ -125,7 +125,7 @@ pub fn execute(bin: &Path, ws: &Workspace, case: &Case, live: bool) -> Result<Ru
     }
     // A recorded run names its own provider and credential; a live one keeps the
     // developer's, which is the whole point of it, and drops only the limits.
-    let scrubbed: &[&str] = if live { HOST_LIMITS } else { PROVIDER_ENV };
+    let scrubbed: &[&str] = if live { HOST_LIMITS } else { SETTINGS };
     for name in scrubbed {
         command.env_remove(name);
     }

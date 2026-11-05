@@ -24,9 +24,16 @@ use serde_json::Value;
 
 pub use reply::Reply;
 
-/// Every variable that can point a run at a provider, or set its limits, so a
-/// test or an eval states its own rather than inheriting the host's.
-pub const PROVIDER_ENV: &[&str] = &[
+/// Every variable a run resolves a setting from, so a test or an eval states
+/// its own rather than inheriting the host's shell: the environment is read
+/// above the config file, so a variable left here decides what a run a test
+/// starts does, and the test then proves the shell rather than the tree.
+///
+/// The settings module is the truth and `tests/scrub.rs` holds this list to
+/// it: a setting `sindri_core::config` grows is a test that fails until it is
+/// scrubbed here. The four names after the settings are the provider's own,
+/// which a wire carries without a `SINDRI_` in front of it.
+pub const SETTINGS: &[&str] = &[
     "SINDRI_PROVIDER",
     "SINDRI_MODEL",
     "SINDRI_API_KEY",
@@ -34,6 +41,8 @@ pub const PROVIDER_ENV: &[&str] = &[
     "SINDRI_MAX_TURNS",
     "SINDRI_TIMEOUT",
     "SINDRI_THINKING",
+    "SINDRI_STATUS",
+    "SINDRI_SSH_AGENT",
     "SINDRI_EXTRA_WRITABLE_PATHS",
     "SINDRI_EXTRA_HEADERS",
     "ANTHROPIC_API_KEY",

@@ -88,6 +88,11 @@ fn the_status_reports_are_on_unless_the_file_or_the_environment_says_off() {
     // SAFETY: this file holds one test and no other thread of this process
     // reads either variable while it runs.
     unsafe { std::env::set_var("XDG_CONFIG_HOME", home.path()) };
+    // The host's own shell may have spoken before this test did, and a run
+    // nothing configured is a run nothing silenced: the variable is stated
+    // absent rather than assumed to be.
+    // SAFETY: as above.
+    unsafe { std::env::remove_var("SINDRI_STATUS") };
     assert_eq!(
         resolved().map(|config| config.status),
         Ok(true),

@@ -73,7 +73,7 @@ impl Env {
         // includes what it says about its terminal: a frame that hears a
         // Kitty-capable terminal asks it a question, and the answer it gets is
         // not the pty's.
-        for name in provider::PROVIDER_ENV {
+        for name in provider::SETTINGS {
             cmd.env_remove(name);
         }
         for name in TERMINAL_ENV {
