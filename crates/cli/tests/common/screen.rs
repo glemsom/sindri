@@ -235,13 +235,28 @@ impl Screen {
             'C' => self.col = self.col.saturating_add(first),
             'D' => self.col = self.col.saturating_sub(first),
             'G' => self.col = first - 1,
-            // What it erases: `2J` is the whole screen, `J` is this row, and
-            // `K` is the rest of it.
-            'J' if first == 2 => self.cells.clear(),
-            'J' => self.cells.retain(|(row, _), _| *row != self.row),
-            'K' => self
-                .cells
-                .retain(|(row, col), _| *row != self.row || *col < self.col),
+            // What it erases, by the parameter it names: `0J` from the cursor
+            // to the end of the screen, `1J` from the start of the screen to
+            // the cursor, `2J` the whole screen; and `0K`, `1K`, `2K` the same
+            // three halves of the one row the cursor is on. A parameter nobody
+            // names is the zero one, which is the terminal's own default.
+            'J' | 'K' => {
+                let parameter = numbers.first().copied().unwrap_or(0);
+                // A `K` erases the cursor's row alone, a `J` every row the
+                // parameter reaches.
+                let row_only = action == 'K';
+                self.cells.retain(|&(row, col), _| {
+                    if row_only && row != self.row {
+                        return true;
+                    }
+                    match parameter {
+                        // The cursor's own cell goes with the half.
+                        0 => row < self.row || (row == self.row && col < self.col),
+                        1 => row > self.row || (row == self.row && col > self.col),
+                        _ => false,
+                    }
+                })
+            }
             // The cursor's own visibility: `?25h` shows it and `?25l` hides it.
             'h' | 'l' if params.starts_with('?') && first == 25 => {
                 self.visible = action == 'h';
@@ -525,6 +540,78 @@ mod tests {
             "a thoughtplain proseboldreset",
             "and every word of the stream is still drawn after the ink ends"
         );
+    }
+
+    /// Two rows drawn and the cursor left on the second: a `J` or a `K` is
+    /// read off what it leaves of them, so the rows are the same in every case
+    /// and only the erase differs.
+    const TWO_ROWS: &str = "abcd\u{1b}[2;1Hwxyz";
+
+    /// What the screen says once `sequence` — a cursor move and one erase —
+    /// has been applied to `TWO_ROWS`.
+    fn erased(sequence: &str) -> String {
+        read_in(&[format!("{TWO_ROWS}{sequence}").as_bytes()]).text()
+    }
+
+    #[test]
+    fn zero_k_erases_from_the_cursor_to_the_end_of_the_row() {
+        let said = erased("\u{1b}[1;3H\u{1b}[0K");
+        assert_eq!(
+            said, "ab\nwxyz",
+            "the cursor's own cell and the rest of its row are gone: {said:?}"
+        );
+        assert_eq!(
+            erased("\u{1b}[1;3H\u{1b}[K"),
+            said,
+            "and a `K` that names no parameter is the zero one, as a terminal reads it"
+        );
+    }
+
+    #[test]
+    fn one_k_erases_from_the_start_of_the_row_to_the_cursor() {
+        let said = erased("\u{1b}[1;3H\u{1b}[1K");
+        assert_eq!(
+            said, "   d\nwxyz",
+            "the row is erased up to and including the cursor's cell, and the row below is not: {said:?}"
+        );
+    }
+
+    #[test]
+    fn two_k_erases_the_whole_row() {
+        let said = erased("\u{1b}[1;3H\u{1b}[2K");
+        assert_eq!(
+            said, "wxyz",
+            "the whole row the cursor is on is gone, and the row below is not: {said:?}"
+        );
+    }
+
+    #[test]
+    fn zero_j_erases_from_the_cursor_to_the_end_of_the_screen() {
+        let said = erased("\u{1b}[1;3H\u{1b}[0J");
+        assert_eq!(
+            said, "ab",
+            "the cursor's own cell, the rest of its row and every row below are gone: {said:?}"
+        );
+        assert_eq!(
+            erased("\u{1b}[1;3H\u{1b}[J"),
+            said,
+            "and a `J` that names no parameter is the zero one, as a terminal reads it"
+        );
+    }
+
+    #[test]
+    fn one_j_erases_from_the_start_of_the_screen_to_the_cursor() {
+        let said = erased("\u{1b}[2;3H\u{1b}[1J");
+        assert_eq!(
+            said, "   z",
+            "every row above the cursor is gone, and its own row up to and including its cell: {said:?}"
+        );
+    }
+
+    #[test]
+    fn two_j_erases_the_whole_screen() {
+        let said = erased("\u{1b}[2;3H\u{1b}[2J");
+        assert_eq!(said, "", "no cell the frame drew is left: {said:?}");
     }
 
     #[test]
