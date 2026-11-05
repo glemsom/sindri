@@ -74,9 +74,11 @@ adds a third below both, compiled into the binary. The Agent Skills specificatio
 what is inside a skill directory and says nothing about where one lives, so these paths are
 ours. A name that lost is recorded as **shadowing**, so `sindri doctor` prints the winner
 and what it displaced. A directory holding a `SKILL.md` is a skill; links to directories
-are followed, because that is how people share one, and a link to nothing is a refusal
-naming the path and line. A file the scan will not load is a diagnostic, never a silence
-and never a failure of the whole catalog.
+are followed, because that is how people share one. A link that resolves to nothing is
+refused where the scan finds it, by its path alone. Only a `SKILL.md` whose frontmatter
+was parsed has a line to name, so a `SKILL.md` that will not parse is refused by its path
+and the line that broke it. A file the scan will not load is a diagnostic, never a
+silence and never a failure of the whole catalog.
 
 ## 4. The catalog lives in the tool's description
 

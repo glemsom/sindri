@@ -200,6 +200,56 @@ fn the_tool_set_record_carries_the_browser_argument() {
     );
 }
 
+/// Section 3 of the tool set's record, its wrap undone and split into the claims
+/// it makes: a claim that crosses a line break is one claim, and what one refusal
+/// carries is read without the one argued beside it.
+fn tool_set_claims() -> Vec<String> {
+    TOOLS
+        .split("\n## ")
+        .find(|section| section.starts_with("3. Skill scopes"))
+        .unwrap_or_else(|| {
+            panic!("the record has a section 3, where a refusal is argued beside the scan")
+        })
+        .replace('\n', " ")
+        .split(". ")
+        .map(|claim| claim.to_string())
+        .collect()
+}
+
+/// The claim that says what `needle` is. One refusal is argued once, because a
+/// second place saying it is a second place to keep true.
+fn claim<'a>(claims: &'a [String], needle: &str) -> &'a str {
+    claims
+        .iter()
+        .find(|claim| claim.contains(needle))
+        .map(String::as_str)
+        .unwrap_or_else(|| panic!("the record says what {needle} is: {claims:?}"))
+}
+
+#[test]
+fn the_tool_set_record_refuses_a_link_by_its_path_and_a_skill_md_by_its_path_and_line() {
+    let claims = tool_set_claims();
+
+    // A link that resolves to nothing is refused where the scan found it: there
+    // is no frontmatter that was parsed, so there is no line, and an implementer
+    // reading that the refusal names one reaches for a field it has not got.
+    let link = claim(&claims, "link that resolves to nothing");
+    assert!(
+        link.contains("path") && !link.contains("line"),
+        "a link that resolves to nothing is refused by its path alone, and the claim \
+         cannot name a line the refusal does not carry: {link:?}"
+    );
+
+    // The one refusal with a line is the `SKILL.md` the parser reached and stopped
+    // in, which `sindri doctor` prints beside the path it was read from.
+    let unparsed = claim(&claims, "`SKILL.md` that will not parse");
+    assert!(
+        unparsed.contains("path") && unparsed.contains("line"),
+        "a `SKILL.md` that will not parse is refused by its path and the line that broke \
+         it: {unparsed:?}"
+    );
+}
+
 #[test]
 fn the_line_length_rule_names_the_script_that_holds_its_scope() {
     let bullet = CODE_RULES
