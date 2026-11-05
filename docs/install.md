@@ -20,10 +20,12 @@ $ sindri doctor
 Without devbox, `cargo install --path crates/cli` installs to `~/.cargo/bin`, which has to
 be on your `PATH`.
 
-The binary reports `git describe --tags --always` and the commit date, injected at build
-time by `crates/types/build.rs` — never the wall clock, so an unchanged tree does not
+The binary reports `git describe --tags --always --dirty` and the commit date, injected at
+build time by `crates/types/build.rs` — never the wall clock, so an unchanged tree does not
 relink (`make relink` proves it). A build from a commit rather than a tag says the short
-hash: `sindri 9be47ec (2026-11-03)`.
+hash: `sindri 9be47ec (2026-11-03)`. A `-dirty` suffix after it says the tree had
+uncommitted changes when the binary was built — the line to quote in a bug report, because
+it names the tree you were actually running.
 
 **Run `doctor` on a fresh install.** It proves bubblewrap, the binary set and the mount plan
 on *your* machine, and prints one actionable line if your distribution blocks unprivileged
