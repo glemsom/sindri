@@ -48,6 +48,30 @@ test_refuses_a_kernel_that_is_not_linux() {
     assert_contains "$ERR" "Linux"
 }
 
+test_refuses_an_unserved_machine_before_it_asks_for_sha256sum() {
+    # The Mac story: a host with no GNU sha256sum must read the refusal the
+    # install page promises, not a missing-tool line. A PATH holding the shell
+    # alone stands in for a host carrying neither tool, so a `command -v` that
+    # runs before the refusal is the failure this test names. `cat` is there
+    # because the harness reads the stderr it captured with it.
+    make_release "$PWD/releases" 0.1.0 x86_64-unknown-linux-musl >/dev/null
+    tools=$PWD/no-tools
+    mkdir -p "$tools"
+    for tool in sh cat; do ln -s "$(command -v "$tool")" "$tools/$tool"; done
+
+    PATH="$tools" SINDRI_UNAME_S=Darwin run_installer --dir "$PWD/bin"
+    assert_status 2 "$STATUS"
+    assert_contains "$ERR" "Linux"
+    assert_contains_absent "$ERR" "sha256sum"
+
+    PATH="$tools" SINDRI_UNAME_S=Linux SINDRI_UNAME_M=riscv64 \
+        run_installer --dir "$PWD/bin"
+    assert_status 2 "$STATUS"
+    assert_contains "$ERR" "riscv64"
+    assert_contains_absent "$ERR" "curl"
+    assert_no_file "$PWD/bin"
+}
+
 test_resolves_the_latest_release_when_no_version_is_given() {
     make_release "$PWD/releases" 0.2.0 x86_64-unknown-linux-musl >/dev/null
     printf '{"tag_name": "v0.2.0"}\n' >"$PWD/latest.json"

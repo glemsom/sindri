@@ -67,9 +67,6 @@ die() {
     exit 1
 }
 
-command -v curl >/dev/null 2>&1 || die "curl is needed to download the release"
-command -v sha256sum >/dev/null 2>&1 || die "sha256sum is needed to verify the release"
-
 # The kernel first: a static Linux binary is the only thing a release carries.
 kernel=${SINDRI_UNAME_S:-$(uname -s)}
 if [ "$kernel" != "Linux" ]; then
@@ -88,6 +85,12 @@ case "$machine" in
         exit 2
         ;;
 esac
+
+# Only a machine a release serves goes on to download, so the two tools the
+# download needs are asked for here: a host this installer serves nothing to
+# reads that refusal rather than a missing-tool line (docs/install.md).
+command -v curl >/dev/null 2>&1 || die "curl is needed to download the release"
+command -v sha256sum >/dev/null 2>&1 || die "sha256sum is needed to verify the release"
 
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/sindri-install.XXXXXX")
 trap 'rm -rf "$tmp"' 0 1 2 15

@@ -43,11 +43,12 @@ $ curl -fsSL https://raw.githubusercontent.com/glemsom/sindri/main/install.sh | 
 $ curl -fsSL …/install.sh | sh -s -- --version 0.1.0 --dir "$HOME/bin"
 ```
 
-It refuses a kernel that is not Linux and a machine it has no binary for; resolves the
-release you name, or asks `SINDRI_LATEST_URL` for the newest `tag_name`; downloads the
-binary **and** `SHA256SUMS` and installs nothing unless the checksum matches; installs to
-`~/.local/bin/sindri`, replacing an earlier copy atomically; then prints the installed
-version and sends you to `sindri doctor`.
+It refuses a kernel that is not Linux and a machine it has no binary for, before it asks
+for `curl` or `sha256sum`, so a host it serves nothing to is told that rather than which
+tool it lacks. Then it resolves the release you name, or asks `SINDRI_LATEST_URL` for the
+newest `tag_name`; downloads the binary **and** `SHA256SUMS` and installs nothing unless the
+checksum matches; installs to `~/.local/bin/sindri`, replacing an earlier copy atomically;
+then prints the installed version and sends you to `sindri doctor`.
 
 | Flag | Environment | Default |
 | --- | --- | --- |
