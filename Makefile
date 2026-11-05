@@ -21,8 +21,9 @@ clippy:
 	$(CARGO) clippy --workspace --all-targets -- -D warnings
 
 ## audit: Rust modules stay at or under 800 lines, every module opens with its
-## own `//!` paragraph, every crate root places its modules on one line each, and
-## every test's name states the behaviour it proves.
+## own `//!` paragraph, every crate root places its modules on one line each,
+## every module file under a tests tree is named by a declaration, and every
+## test's name states the behaviour it proves.
 audit:
 	@scripts/audit-line-length.sh
 	@scripts/audit-module-docs.sh

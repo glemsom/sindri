@@ -19,7 +19,9 @@ slice of it: find the module, read its first paragraph, change it, run the gate.
 - **A crate root places its modules.** Every `mod` in a `crates/*/src/lib.rs` is trailed by
   one clause cut from that module's paragraph, so "which file?" is answered where the
   search starts. `scripts/audit-module-map.sh` reports a missing clause and a clause the
-  paragraph does not carry.
+  paragraph does not carry, and reads the other way too: a `.rs` file under a crate's
+  tests tree that no declaration names is one nothing compiles, so it is reported where it
+  lies rather than proving tests nobody runs.
 - **Comments say what the code cannot** — the rule behind it, the trap it avoids. A
   comment that repeats the line beneath it is noise.
 - **Tests hold the spec.** A test name states the behaviour, not the function:

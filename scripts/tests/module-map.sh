@@ -1,7 +1,8 @@
 # The module map, driven as a process against a git tree of its own: a crate root
 # is where the search starts, so the audit is proven on the shapes a reader meets
 # there — a declaration trailed by a clause cut from the module's paragraph, and
-# the four ways it stops being one.
+# the four ways it stops being one. It reads the other way too, so it is proven
+# on the file nothing declares as well as the declaration nothing holds.
 
 audit() { # the script under test, in this test's own tree
     set +e
@@ -185,4 +186,81 @@ RS
     audit
     assert_status 1 "$STATUS"
     assert_contains "$ERR" "crates/core/src/sandbox.rs does not say 'policy'"
+}
+
+test_a_test_module_nothing_declares_is_reported_by_path() {
+    # A module nothing declares is a module nothing compiles, so the map reads
+    # both ways: a file under a crate's tests tree with no declaration in front
+    # of it is reported where it lies, and the message names the fix.
+    module crates/tui/tests/common/mod.rs <<'RS'
+//! Fixtures shared by the frame's tests.
+RS
+    module crates/tui/tests/frame/main.rs <<'RS'
+//! The frame seam.
+
+#[path = "../common/mod.rs"]
+mod common;
+RS
+    module crates/tui/tests/frame/border.rs <<'RS'
+//! The composer's border as a terminal is sent it.
+RS
+    track
+    audit
+    assert_status 1 "$STATUS"
+    assert_contains "$ERR" "crates/tui/tests/frame/border.rs is a module nothing declares"
+    assert_contains "$ERR" "declare it in the module that owns it, or delete it"
+}
+
+test_a_module_reached_through_a_path_attribute_is_named() {
+    # The shared harness is included by path, under a name the file does not
+    # carry: a declaration names wherever its attribute points, so a file
+    # reached that way is as named as one beside a `mod` of its own name.
+    module crates/cli/tests/common/harness.rs <<'RS'
+//! The harness every test binary of the crate shares.
+RS
+    module crates/cli/tests/frame.rs <<'RS'
+//! The frame, at its door.
+
+#[path = "common/harness.rs"]
+mod harness;
+RS
+    track
+    audit
+    assert_status 0 "$STATUS"
+    assert_contains "$OUT" "1 test files, every one is named by a declaration"
+}
+
+test_a_test_binary_cargo_names_is_not_reported() {
+    # Cargo names the test binaries: `tests/foo.rs` is an entry point with no
+    # declaration in front of it, so the map reads it as named and says so.
+    module crates/core/tests/run.rs <<'RS'
+//! One agent run, from the prompt to the record it leaves.
+RS
+    track
+    audit
+    assert_status 0 "$STATUS"
+    assert_contains "$OUT" "0 test files"
+}
+
+test_a_module_below_a_module_is_named_by_its_owners_directory() {
+    # A module below a root takes its files into a directory named after
+    # itself: `mark.rs` holds `mark/block.rs`, so the declaration in `mark.rs`
+    # is the one that names it and the root is not asked again.
+    module crates/tui/tests/frame/main.rs <<'RS'
+//! The frame seam.
+
+mod mark;
+RS
+    module crates/tui/tests/frame/mark.rs <<'RS'
+//! The mark a drag leaves.
+
+mod block;
+RS
+    module crates/tui/tests/frame/mark/block.rs <<'RS'
+//! The mark over the one block whose copy differs from the screen.
+RS
+    track
+    audit
+    assert_status 0 "$STATUS"
+    assert_contains "$OUT" "2 test files, every one is named by a declaration"
 }

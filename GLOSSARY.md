@@ -300,8 +300,9 @@ scripts run as processes. Nothing lands on a subset.
 
 **audit** — the four fast checks `make audit` runs in milliseconds and the commit hook
 refuses a broken commit with: no `*.rs` over 800 lines, a `//!` paragraph opening every
-module, a clause beside every module declaration in a crate root, and a test name that
-states the behaviour it proves.
+module, a clause beside every module declaration in a crate root, a declaration in front
+of every module file under a tests tree, and a test name that states the behaviour it
+proves.
 
 **eval** — one scripted batch run in its own copy of a fixture repository, asserting on exit
 codes, JSON fields, the record left and the files on disk rather than on the model's prose.
