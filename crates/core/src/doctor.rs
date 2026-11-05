@@ -68,7 +68,22 @@ impl fmt::Display for DoctorError {
     }
 }
 
-impl std::error::Error for DoctorError {}
+impl std::error::Error for DoctorError {
+    /// What stopped the probe, handed back as the cause it is. `Display` keeps
+    /// naming the binary, the mount or the policy and the reason in one sentence
+    /// for a reader; a caller that acts on the failure reads it here instead of
+    /// parsing it out of those words. A policy is handed back whole rather than
+    /// flattened, so the walk goes on through it to the `io::Error` beneath.
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            DoctorError::Setup(source) => Some(source),
+            DoctorError::Policy(source) => Some(source),
+            DoctorError::BwrapMissing
+            | DoctorError::SandboxNotStarting { .. }
+            | DoctorError::BinariesMissing { .. } => None,
+        }
+    }
+}
 
 /// Proving the sandbox must not depend on the record being writable: a probe
 /// whose scratch lived under the state root would blame a broken sandbox for a

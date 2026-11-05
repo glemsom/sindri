@@ -60,7 +60,23 @@ impl fmt::Display for ShowError {
     }
 }
 
-impl std::error::Error for ShowError {}
+impl std::error::Error for ShowError {
+    /// The read or the listing that failed, handed back as the cause it is.
+    /// `Display` keeps naming the file and the reason in one sentence for a
+    /// reader; a caller that acts on the failure — a record that is gone is not
+    /// one that cannot be read — reads the kind here instead of parsing it out of
+    /// those words. Every variant is answered rather than wildcarded, so a variant
+    /// that starts holding an error cannot quietly answer `None`.
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ShowError::Unreadable { source, .. } => Some(source),
+            ShowError::BadId { .. }
+            | ShowError::Ambiguous { .. }
+            | ShowError::Missing { .. }
+            | ShowError::Corrupt { .. } => None,
+        }
+    }
+}
 
 pub struct Stored {
     pub meta: Meta,

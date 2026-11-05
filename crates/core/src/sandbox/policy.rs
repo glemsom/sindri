@@ -132,7 +132,25 @@ impl fmt::Display for PolicyError {
     }
 }
 
-impl std::error::Error for PolicyError {}
+impl std::error::Error for PolicyError {
+    /// The `canonicalize` a writable path failed, handed back as the cause it is.
+    /// `Display` keeps naming the path and the reason in one sentence for a
+    /// reader; a caller that acts on the failure reads the kind here instead of
+    /// parsing it out of those words. Every variant is answered rather than
+    /// wildcarded, so a variant that starts holding an error cannot quietly
+    /// answer `None`.
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            PolicyError::Unreadable { source, .. } => Some(source),
+            PolicyError::Root
+            | PolicyError::NotAbsolute { .. }
+            | PolicyError::NotCanonical { .. }
+            | PolicyError::Duplicate { .. }
+            | PolicyError::Nested { .. }
+            | PolicyError::InvalidSessionTemp { .. } => None,
+        }
+    }
+}
 
 /// The single source of both enforcement and description.
 #[derive(Debug, Clone)]
