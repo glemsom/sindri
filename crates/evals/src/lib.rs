@@ -8,4 +8,5 @@ pub mod guard; // the suite refuses to run when the sandbox is not enforcing
 pub mod house; // eval 10's check, where the repository's own rules reached the model whole
 pub mod report; // the pass/fail table: one line per eval
 pub mod run; // one eval's run, as an eval checks it
+pub mod select; // which eval `--only` names, and the refusal a selector earns
 pub mod workspace; // one eval's isolated host

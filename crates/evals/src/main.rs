@@ -16,6 +16,7 @@ use std::process::ExitCode;
 use clap::Parser;
 use sindri_evals::case::{Case, all};
 use sindri_evals::report::{Verdict, exit_code, line};
+use sindri_evals::select::{self, Named, Refused};
 use sindri_evals::workspace::Workspace;
 use sindri_evals::{guard, run};
 
@@ -35,14 +36,15 @@ struct Args {
 
 fn main() -> ExitCode {
     let args = Args::parse();
-    let selected = select(&args);
-    if selected.is_empty() {
-        eprintln!(
-            "sindri-evals: no eval matches `{}`",
-            args.only.as_deref().unwrap_or_default()
-        );
-        return ExitCode::from(2);
-    }
+    let selected = match chosen(&args) {
+        Ok(selected) => selected,
+        // A selector that names none or several is a usage error, said before a
+        // workspace is built or a process is spawned, so stdout stays empty.
+        Err(refused) => {
+            eprintln!("{}", refused.message());
+            return ExitCode::from(2);
+        }
+    };
     match suite(&args, &selected) {
         Ok(failed) => ExitCode::from(failed),
         // 3, not 1: the suite could not run, or the sandbox is not enforcing —
@@ -54,14 +56,15 @@ fn main() -> ExitCode {
     }
 }
 
-fn select(args: &Args) -> Vec<Case> {
-    all()
-        .into_iter()
-        .filter(|case| match &args.only {
-            Some(text) => case.name.contains(text.as_str()),
-            None => true,
-        })
-        .collect()
+/// The evals this invocation asked for: the whole suite, or the one eval the
+/// selector names — the one, never a second whose name contains it.
+fn chosen(args: &Args) -> Result<Vec<Case>, Refused<'_>> {
+    let cases = all();
+    let names: Vec<&str> = cases.iter().map(|case| case.name).collect();
+    match select::named(args.only.as_deref(), &names)? {
+        Named::Every => Ok(cases),
+        Named::One(name) => Ok(cases.into_iter().filter(|case| case.name == name).collect()),
+    }
 }
 
 fn suite(args: &Args, selected: &[Case]) -> Result<u8, String> {
