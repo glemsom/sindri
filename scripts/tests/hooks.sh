@@ -35,16 +35,6 @@ repo() {
     printf 'target\n' >.gitignore
 }
 
-module() { # path, then the file's lines on stdin
-    mkdir -p "$(dirname "$1")"
-    cat >"$1"
-}
-
-long_file() { # path lines
-    mkdir -p "$(dirname "$1")"
-    for _ in $(seq "$2"); do echo '// a line'; done >"$1"
-}
-
 commit() { # args to `git commit`
     set +e
     OUT=$(git commit "$@" 2>&1)
@@ -108,6 +98,21 @@ RS
     assert_no_commit
     assert_contains "$OUT" "src/bare.rs opens with"
     assert_contains "$OUT" "open the module with a //! paragraph"
+}
+
+test_a_commit_that_breaks_two_audits_is_told_of_both() {
+    isolate
+    repo
+    long_file src/long.rs 801
+    module src/bare.rs <<'RS'
+pub fn bare() {}
+RS
+    git add -A
+    commit -m 'two rules in one commit, and one round trip to hear about them'
+    assert_status 1 "$STATUS"
+    assert_no_commit
+    assert_contains "$OUT" "src/long.rs has 801 lines, over the 800-line limit"
+    assert_contains "$OUT" "src/bare.rs opens with"
 }
 
 test_a_commit_that_trips_the_test_name_audit_is_refused_with_that_message() {

@@ -20,15 +20,20 @@ fmt:
 clippy:
 	$(CARGO) clippy --workspace --all-targets -- -D warnings
 
-## audit: Rust modules stay at or under 800 lines, every module opens with its
-## own `//!` paragraph, every crate root places its modules on one line each,
-## every module file under a tests tree is named by a declaration, and every
-## test's name states the behaviour it proves.
+## audit: every `scripts/audit-*.sh` the tree holds, each run to its own end —
+## Rust modules at or under 800 lines, every module opening with its own `//!`
+## paragraph, every crate root placing its modules on one line each, every
+## module file under a tests tree named by a declaration, every test's name
+## stating the behaviour it proves. A directory listing and not a list of
+## scripts, so an audit added under `scripts/` is an audit the commit hook and
+## the gate both run, and a tree that breaks two rules hears about both in one
+## pass rather than one per round trip.
 audit:
-	@scripts/audit-line-length.sh
-	@scripts/audit-module-docs.sh
-	@scripts/audit-module-map.sh
-	@scripts/audit-test-names.sh
+	@failed=0; \
+	for audit in scripts/audit-*.sh; do \
+		"$$audit" || failed=1; \
+	done; \
+	exit $$failed
 
 ## hooks: put the fast audits in front of the commit rather than the push — a
 ## local `core.hooksPath`, opt-in, so a fresh clone commits freely until it asks

@@ -1,7 +1,19 @@
 # Both halves of a release-script test: the assertions, and the fixtures that
 # stand in for a release (a `file://` directory of assets and checksums) and for
-# the user (the installer run through `sh`). A failed assertion is a non-zero
-# exit status, which the runner reports and counts; there is no other channel.
+# the user (the installer run through `sh`) — and for a tree the audits walk, a
+# module of the test's own words and a file that has outgrown the limit. A
+# failed assertion is a non-zero exit status, which the runner reports and
+# counts; there is no other channel.
+
+module() { # path, then the file's lines on stdin
+    mkdir -p "$(dirname "$1")"
+    cat >"$1"
+}
+
+long_file() { # path lines
+    mkdir -p "$(dirname "$1")"
+    for _ in $(seq "$2"); do echo '// a line'; done >"$1"
+}
 
 fail() {
     printf '  %s\n' "$*" >&2
