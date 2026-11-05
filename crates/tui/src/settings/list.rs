@@ -120,6 +120,23 @@ impl List {
         }
     }
 
+    /// One end of the list, as `Home` and `End` ask for them: the first name
+    /// the list reaches when `first`, and the last otherwise — of the names the
+    /// fragment reaches rather than of every name the wire offered, because a
+    /// fragment narrows what the two ends mean. A list holding no name has no
+    /// end to stand on, so the key is not the list's and the screen holds
+    /// nothing for it.
+    pub fn end(&mut self, first: bool) -> bool {
+        let Some(last) = self.names.len().checked_sub(1) else {
+            return false;
+        };
+        self.chosen = match first {
+            true => 0,
+            false => last,
+        };
+        true
+    }
+
     /// The name a `Tab` takes, and the one `Enter` takes while the fold is
     /// open: the match the list is on.
     pub fn take(&self) -> Option<&str> {

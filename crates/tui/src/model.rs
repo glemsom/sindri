@@ -107,8 +107,9 @@ impl Model {
     }
 
     /// One key: a letter is the fragment the names are ranked from, `↑↓` walks
-    /// them, `Enter` takes the one the cursor is on, and `Esc` closes the screen
-    /// with the file exactly as it was.
+    /// them, `Home` and `End` are the first name and the last of the ones the
+    /// screen shows, `Enter` takes the one the cursor is on, and `Esc` closes
+    /// the screen with the file exactly as it was.
     pub fn key(&mut self, key: KeyEvent, served: &Served) -> Answer {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         match key.code {
@@ -127,6 +128,12 @@ impl Model {
                 self.list.step(false);
                 Answer::Staying
             }
+            // The two ends of what the screen shows: `Home` is the first name
+            // on it and `End` the last, on the names a fragment reaches.
+            KeyCode::Home | KeyCode::End => match self.list.end(key.code == KeyCode::Home) {
+                true => Answer::Staying,
+                false => Answer::Held,
+            },
             KeyCode::Char('q') if ctrl => Answer::Quit,
             KeyCode::Char('c') if ctrl => Answer::CancelRun,
             KeyCode::Backspace => {

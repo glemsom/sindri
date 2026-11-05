@@ -24,7 +24,8 @@ const MARGIN: u16 = 4;
 const NARROW: u16 = 30;
 const WIDE: u16 = 110;
 
-const HINTS: &str = "↑↓ move · type to filter · PgUp/PgDn page · Enter set · Esc close";
+const HINTS: &str =
+    "↑↓ move · type to filter · PgUp/PgDn page · Home/End first/last · Enter set · Esc close";
 
 /// Draws the screen, and answers with the rows of names it showed, which is what
 /// a page moves the cursor by.

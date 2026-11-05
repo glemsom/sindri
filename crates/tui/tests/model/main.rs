@@ -20,7 +20,7 @@ mod common;
 pub use common::{launch, notes, press, row_of, screen, shown, type_text};
 use std::path::{Path, PathBuf};
 
-use crossterm::event::{KeyCode, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use sindri_tui::App;
 use tempfile::TempDir;
 

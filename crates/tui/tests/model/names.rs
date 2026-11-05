@@ -170,3 +170,70 @@ fn a_page_key_walks_the_screen_by_the_names_it_showed() {
         "and a page back is the same distance the other way"
     );
 }
+
+#[test]
+fn home_and_end_are_the_first_and_the_last_name_the_screen_shows() {
+    let names = many(40);
+    let mut f = offered(None, &names.iter().map(String::as_str).collect::<Vec<_>>());
+
+    press(&mut f.app, KeyCode::End, KeyModifiers::NONE);
+    assert_eq!(
+        marked(&mut f),
+        "model-39",
+        "End is the last name the wire named, not a page towards it"
+    );
+    press(&mut f.app, KeyCode::Home, KeyModifiers::NONE);
+    assert_eq!(
+        marked(&mut f),
+        "model-00",
+        "and Home is the first, whatever the screen was showing"
+    );
+}
+
+#[test]
+fn a_fragment_narrows_what_the_two_ends_mean() {
+    let mut f = offered(None, &["gpt-5", "qwen3-32b", "big-gpt"]);
+    type_text(&mut f.app, "gpt");
+
+    press(&mut f.app, KeyCode::End, KeyModifiers::NONE);
+    assert_eq!(
+        marked(&mut f),
+        "big-gpt",
+        "End is the last name the fragment reaches, not the last name the wire named"
+    );
+    press(&mut f.app, KeyCode::Home, KeyModifiers::NONE);
+    assert_eq!(
+        marked(&mut f),
+        "gpt-5",
+        "and Home is the first name it reaches"
+    );
+}
+
+#[test]
+fn the_key_line_names_the_two_end_keys_beside_the_page_keys() {
+    let mut f = offered(None, &["gpt-5", "qwen3-32b"]);
+    let text = shown(&screen(&mut f.app, 100, 30));
+    assert!(
+        text.contains("Home/End") && text.contains("PgUp/PgDn"),
+        "the keys are one line, and the ends stand beside the pages: {text}"
+    );
+}
+
+#[test]
+fn an_end_key_with_no_name_on_the_screen_leaves_the_frame_as_it_was() {
+    let mut f = fixture(Some("model = \"gpt-5\"\n"));
+    open(&mut f.app);
+    f.app
+        .take_ask()
+        .expect("opening the screen asks the wire for its names");
+    for code in [KeyCode::Home, KeyCode::End] {
+        assert!(
+            !f.app.key(KeyEvent::new(code, KeyModifiers::NONE)),
+            "{code:?} has no name to stand on, so the frame has nothing new to draw"
+        );
+    }
+    assert!(
+        f.app.overlay().is_some(),
+        "and the screen is still there to read"
+    );
+}
