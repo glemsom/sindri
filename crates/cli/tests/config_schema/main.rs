@@ -304,6 +304,110 @@ fn an_extra_path_that_could_not_be_mounted_is_a_usage_error() {
 }
 
 #[test]
+fn a_writable_list_typed_with_spaces_and_empty_entries_names_only_its_paths() {
+    // A list of paths is usually typed with a space after each colon, and a
+    // trailing colon is how a shell's reader leaves one empty. Neither is part
+    // of a path: the variable reads the list the way the settings row does, so
+    // what a reader typed is granted rather than refused.
+    let env = Env::new();
+    let first = extra_dir(&env, "first");
+    let second = extra_dir(&env, "second");
+
+    for typed in [
+        format!(" {} : {} ", first.display(), second.display()),
+        format!("{}::{}:", first.display(), second.display()),
+    ] {
+        let mock = MockProvider::start(vec![Reply::answer("ok")]);
+        let output = run(
+            &env,
+            &mock,
+            &["-b", "summarise this"],
+            &[
+                ("SINDRI_API_KEY", TEST_KEY),
+                ("SINDRI_MODEL", "claude-sonnet-4-6"),
+                ("SINDRI_EXTRA_WRITABLE_PATHS", &typed),
+            ],
+        );
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "`{typed}` is a list of two paths: {}",
+            stderr(&output)
+        );
+        let body = only_request(&mock).json().to_string();
+        assert!(
+            body.contains(&first.display().to_string())
+                && body.contains(&second.display().to_string()),
+            "the model is told both paths of `{typed}` are writable: {body}"
+        );
+    }
+}
+
+/// A run that names one path, refused, and the words it is refused with. The
+/// path is written with a space either side of it, which is not part of it: the
+/// refusal prints the path as it was meant.
+fn refused(env: &Env, mock: &MockProvider, args: &[&str], vars: &[(&str, &str)]) -> String {
+    let mut all = vec![
+        ("SINDRI_API_KEY", TEST_KEY),
+        ("SINDRI_MODEL", "claude-sonnet-4-6"),
+    ];
+    all.extend(vars.iter().copied());
+    let output = run(env, mock, args, &all);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "a path that is not absolute is a usage error: {}",
+        stderr(&output)
+    );
+    stderr(&output)
+}
+
+#[test]
+fn a_writable_path_that_is_not_absolute_is_refused_by_the_level_that_named_it() {
+    // A reader can have a flag, a variable and a file each naming a list, so a
+    // refusal names the level to fix. The path is printed as it was written and
+    // not with the space that was around it, because a space a reader cannot
+    // see is a path they cannot find.
+    let env = Env::new();
+    let mock = MockProvider::start(vec![Reply::answer("ok")]);
+    let named = "writable path relative/dir is not absolute";
+
+    let message = refused(
+        &env,
+        &mock,
+        &["-b", "summarise this", "--writable", " relative/dir "],
+        &[],
+    );
+    assert!(
+        message.contains("--writable") && message.contains(named),
+        "the refusal names the flag and the path as it was written: {message}"
+    );
+
+    let message = refused(
+        &env,
+        &mock,
+        &["-b", "summarise this"],
+        &[("SINDRI_EXTRA_WRITABLE_PATHS", " relative/dir ")],
+    );
+    assert!(
+        message.contains("SINDRI_EXTRA_WRITABLE_PATHS") && message.contains(named),
+        "the refusal names the variable and the path as it was written: {message}"
+    );
+
+    write_config(
+        &env,
+        "model = \"claude-from-file\"\nextra_writable_paths = [\" relative/dir \"]\n",
+    );
+    let message = refused(&env, &mock, &["-b", "summarise this"], &[]);
+    assert!(
+        message.contains("extra_writable_paths") && message.contains(named),
+        "the refusal names the file's key and the path as it was written: {message}"
+    );
+
+    assert_eq!(mock.requests().len(), 0, "no run leaves the machine");
+}
+
+#[test]
 fn a_credential_from_the_file_is_redacted_from_errors() {
     const FROM_FILE: &str = "sk-ant-from-the-config-file";
     let env = Env::new();

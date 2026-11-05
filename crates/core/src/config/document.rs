@@ -444,13 +444,11 @@ pub fn toggle_shown(value: &str) -> &'static str {
     }
 }
 
+/// The row's list, read as the variable's is: one entry per `:` and the
+/// trimming and the dropping of an empty entry left to `extra_paths`, so the
+/// two ways into the writable set cannot disagree about what an entry is.
 fn paths(value: &str) -> Result<Vec<PathBuf>, ConfigError> {
-    let items: Vec<String> = value
-        .split(':')
-        .map(str::trim)
-        .filter(|item| !item.is_empty())
-        .map(str::to_string)
-        .collect();
+    let items: Vec<String> = value.split(':').map(str::to_string).collect();
     extra_paths(&items)
 }
 

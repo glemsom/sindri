@@ -22,6 +22,10 @@ pub const DEFAULT_MAX_TURNS: u32 = 250;
 /// reader can act on rather than the width of the type it was parsed into.
 pub const MAX_TURNS: u32 = 10_000;
 
+/// The variable that names the extras, so the refusal a reader gets names the
+/// same word they set.
+const WRITABLE_PATHS: &str = "SINDRI_EXTRA_WRITABLE_PATHS";
+
 mod document;
 mod file;
 mod headers;
@@ -253,16 +257,21 @@ impl Config {
 /// The extras that win: a flag, then the environment, then the file. The
 /// highest level that names any replaces the rest rather than adding to them,
 /// so a pipeline can grant exactly what it means — and a level that names none
-/// means the shipped floor, which is the one thing no level has to say.
+/// means the shipped floor, which is the one thing no level has to say. A
+/// refusal is the winning level's own, because a reader can have two of them
+/// naming paths and only one to fix.
 fn extras(
     flag: Option<Vec<String>>,
     from_file: Option<Vec<String>>,
 ) -> Result<Extras, ConfigError> {
-    match flag
-        .or_else(|| list("SINDRI_EXTRA_WRITABLE_PATHS"))
-        .or(from_file)
-    {
-        Some(paths) => extra_paths(&paths).map(Extras::Named),
+    if let Some(paths) = flag {
+        return extra_paths_from("--writable", &paths).map(Extras::Named);
+    }
+    if let Some(paths) = list(WRITABLE_PATHS) {
+        return extra_paths_from(WRITABLE_PATHS, &paths).map(Extras::Named);
+    }
+    match from_file {
+        Some(paths) => extra_paths_from("extra_writable_paths", &paths).map(Extras::Named),
         None => Ok(Extras::Floor),
     }
 }
@@ -289,23 +298,29 @@ pub(super) fn env(name: &str) -> Option<String> {
 }
 
 fn list(name: &str) -> Option<Vec<String>> {
-    env(name).map(|value| {
-        value
-            .split(':')
-            .filter(|item| !item.trim().is_empty())
-            .map(str::to_string)
-            .collect()
-    })
+    env(name).map(|value| value.split(':').map(str::to_string).collect())
 }
 
 /// The extras, checked before the sandbox is built so a bad path is a value
-/// error (exit 2) rather than a mystery setup failure. The rules are the
-/// writable set's own — absolute, canonical, not `/`, no duplicate, no nesting —
-/// asked once, here, so the two can never disagree.
+/// error (exit 2) rather than a mystery setup failure. A space either side of
+/// an entry is not part of the path and an entry left empty is dropped, because
+/// that is how a list of paths is typed; what is left must then pass the rules
+/// that are the writable set's own — absolute, canonical, not `/`, no
+/// duplicate, no nesting — asked once, here, so the two can never disagree.
 fn extra_paths(given: &[String]) -> Result<Vec<PathBuf>, ConfigError> {
-    WritableSet::new(given.iter().map(PathBuf::from))
+    let entries = given
+        .iter()
+        .map(|entry| entry.trim())
+        .filter(|entry| !entry.is_empty());
+    WritableSet::new(entries.map(PathBuf::from))
         .map(|set| set.paths().to_vec())
-        .map_err(|error| ConfigError::Usage(format!("extra_writable_paths: {error}")))
+        .map_err(|error| ConfigError::Usage(error.to_string()))
+}
+
+/// The same rules for a list one level named, refused in that level's name: the
+/// flag, the variable or the file's key, so the sentence says which one to fix.
+fn extra_paths_from(level: &str, given: &[String]) -> Result<Vec<PathBuf>, ConfigError> {
+    extra_paths(given).map_err(|error| ConfigError::Usage(format!("{level}: {}", error.message())))
 }
 
 /// A toggle from the environment, read by the file's own list of the words that
