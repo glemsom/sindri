@@ -9,10 +9,11 @@ which is the bug eval 5 asks the model to fix; eval 4 therefore proves a rename 
 front end by the run still working, not by the suite.
 
 **`repo/.agents/skills/house-style/`** — the one skill it ships, including the
-`# house: spindle-4411` marker the release script greps for. Eval 9 turns on it: the
-marker is in that body and no other file of the tree, so an answer stating it came
-through the catalog. Each copy is `git init`ed, so the repo scope is walked from the
-copy's root and nothing above it is read.
+`# house: spindle-4411` marker. Eval 9's check requires the answer to state the rule
+and fails it if the answer does so without a prior `skill` call. The marker is in that
+skill body and no other file of the tree, which is what makes it proof of the channel.
+Each copy is `git init`ed, so the repo scope is walked from the copy's root and nothing
+above it is read.
 
 **`10-house-rules/AGENTS.md`** — eval 10's rules, copied to the root of that case alone:
 every answer opens with `## house report`, and `sh tests/run.sh` is never run. Neither
