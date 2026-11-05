@@ -2,7 +2,7 @@
 //! Environment section whose one derived fact is the workspace the run stands
 //! in, and a repository's instructions when it has any.
 //!
-//! Three layers carry what the model is told, and each holds only its own kind
+//! Four layers carry what the model is told, and each holds only its own kind
 //! of fact. The **stance** is here: who is answering and the principles it works
 //! by. The **environment** is here too, because the habits that keep a run cheap
 //! — staged commands, one call for one question, `$TMPDIR` for whatever it makes
@@ -98,6 +98,16 @@ mod tests {
     /// A workspace path as a run holds one: absolute, and nothing this file
     /// could have known before the run started.
     const WORKSPACE: &str = "/home/dev/checkout/sindri";
+
+    #[test]
+    fn the_module_names_all_four_layers_with_glossary_words() {
+        let source = include_str!("preamble.rs");
+        let opening = source.split("//! Both shipped texts").next().unwrap();
+        assert!(opening.contains("Four layers carry what the model is told"));
+        for layer in ["**stance**", "**environment**", "**procedure**", "**boundary**"] {
+            assert!(opening.contains(layer), "missing glossary layer {layer}");
+        }
+    }
 
     #[test]
     fn the_stance_opens_the_preamble_and_the_environment_follows_it() {
