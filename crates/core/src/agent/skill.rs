@@ -177,18 +177,25 @@ fn describe(skills: &[Skill]) -> ToolSpec {
 /// A built-in has no directory, so none is named: it is the one skill a path
 /// would have to be invented for, and the binary's files are sent with the body
 /// instead of being left as references to a tree that is not on disk.
+///
+/// No list opens where the skill has nothing beside its body: the outcome, the
+/// skill and then the body, because a `files:` heading with nothing under it
+/// names no file and reads as one gone missing. A built-in carries no file
+/// today, so that is the shape of most loads.
 fn activation(skill: &Skill, body: &str) -> String {
     let files = skill.listing();
     let mut out = format!("outcome: loaded\nskill: {}\n", skill.name);
     if let Some(dir) = skill.dir() {
         out.push_str(&dir_line(dir));
     }
-    out.push_str("files:\n");
-    for file in files.iter().take(LISTED) {
-        out.push_str(&format!("  {file}\n"));
-    }
-    if let Some(more) = files.len().checked_sub(LISTED).filter(|more| *more > 0) {
-        out.push_str(&format!("  ({more} more)\n"));
+    if !files.is_empty() {
+        out.push_str("files:\n");
+        for file in files.iter().take(LISTED) {
+            out.push_str(&format!("  {file}\n"));
+        }
+        if let Some(more) = files.len().checked_sub(LISTED).filter(|more| *more > 0) {
+            out.push_str(&format!("  ({more} more)\n"));
+        }
     }
     out.push_str(&format!(
         "<skill_content name=\"{}\">\n{body}\n</skill_content>\n",

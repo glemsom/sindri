@@ -354,6 +354,16 @@ fn activation_returns_the_body_inside_a_named_wrapper_with_its_directory_and_fil
         "the directory and the files beside the body come with it: {}",
         outcome.content
     );
+    // A load that does carry files still lists them, under the heading and in
+    // the scan's own order, one line each: the heading is absent where there is
+    // nothing to name and never a list with nothing under it.
+    assert!(
+        outcome
+            .content
+            .contains("files:\n  SKILL.md\n  references/\n  references/api.md\n"),
+        "the listing opens with its heading where there is a file to name: {}",
+        outcome.content
+    );
     // The sentence the tool's description used to carry: a path written in the
     // body resolves from the directory beside it. It belongs here, where it is
     // paid once per activation, on the one line that names that directory.
@@ -375,6 +385,48 @@ fn activation_returns_the_body_inside_a_named_wrapper_with_its_directory_and_fil
             .contains("references/api.md` for the shape of a note.\n</skill_content>"),
         "the body ends where the wrapper does: {}",
         outcome.content
+    );
+}
+
+#[test]
+fn a_listing_past_the_most_one_load_shows_ends_with_the_count_it_left_out() {
+    let workspace = tempfile::TempDir::new().expect("workspace");
+    let catalog = alpha(workspace.path());
+    let dir = catalog.skills[0]
+        .dir()
+        .expect("a scanned skill has a directory");
+    // Past the 200 one activation lists, so the listing has more to name than
+    // the result spends.
+    for index in 0..203 {
+        skills::reference(dir, &format!("references/note-{index:03}.md"), "# a note\n");
+    }
+    let listing = catalog.skills[0].listing();
+    assert_eq!(
+        listing.len(),
+        203 + 3,
+        "the walk found them all: {listing:?}"
+    );
+    let tool = tool(&catalog);
+
+    let outcome = tool.call(&load("call_1", "alpha"), "alpha", &Default::default());
+
+    let shown: Vec<&str> = outcome
+        .content
+        .lines()
+        .skip_while(|line| *line != "files:")
+        .skip(1)
+        .take_while(|line| line.starts_with("  "))
+        .collect();
+    let counted = format!("  ({} more)", listing.len() - 200);
+    assert_eq!(
+        shown.len(),
+        201,
+        "the 200 files one load lists and the line that counts the rest: {shown:?}"
+    );
+    assert_eq!(
+        shown.last(),
+        Some(&counted.as_str()),
+        "a long listing ends with what it left out: {shown:?}"
     );
 }
 

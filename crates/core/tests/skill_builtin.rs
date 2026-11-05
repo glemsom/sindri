@@ -99,6 +99,46 @@ fn every_builtin_activates_to_its_body_and_the_files_it_ships_with_no_path_to_op
 }
 
 #[test]
+fn a_builtin_with_nothing_beside_its_body_opens_no_file_list() {
+    let catalog: Catalog = fold([builtins()]);
+    let built = tool(&catalog);
+
+    for found in shipped() {
+        let outcome = built.call(
+            &load("call_1", &found.name),
+            &found.name,
+            &Default::default(),
+        );
+
+        // The shape a body with no file beside it is read in: the outcome, the
+        // skill, its directory where it has one, and then the body. A heading
+        // with nothing under it names no file and reads as one gone missing.
+        let Some((header, _)) = outcome.content.split_once("<skill_content") else {
+            panic!(
+                "`{}` is loaded in its named wrapper: {}",
+                found.name, outcome.content
+            );
+        };
+        if found.listing().is_empty() {
+            assert_eq!(
+                header,
+                format!("outcome: loaded\nskill: {}\n", found.name),
+                "`{}` opens with the outcome and its name alone: {}",
+                found.name,
+                outcome.content
+            );
+        } else {
+            assert!(
+                header.contains("\nfiles:\n  "),
+                "`{}` ships a file, so the list names it: {}",
+                found.name,
+                outcome.content
+            );
+        }
+    }
+}
+
+#[test]
 fn two_calls_for_a_builtin_in_one_wave_leave_one_body() {
     for found in shipped() {
         let catalog: Catalog = fold([builtins()]);
