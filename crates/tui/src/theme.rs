@@ -271,6 +271,10 @@ fn on_ramp(colour: Color, from: Color, to: Color) -> bool {
 /// truecolour is a module that panics rather than a gradient nobody can see.
 /// `seam` reads its own rows through this, so "a stop is a truecolour" is
 /// stated once for every renderer that walks one.
+#[allow(
+    clippy::panic,
+    reason = "a stop that is not truecolour is a palette's bug, not a run's report"
+)]
 pub(crate) const fn channels(colour: Color) -> [u8; 3] {
     match colour {
         Color::Rgb(r, g, b) => [r, g, b],

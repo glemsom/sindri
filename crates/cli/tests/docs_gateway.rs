@@ -4,6 +4,11 @@
 //! that sets its header are read here — and the tree's own words for the token
 //! a header may carry, so a rename fails this file rather than a reader's run.
 
+#![allow(
+    clippy::panic,
+    reason = "a panicking test is how a broken contract reports itself"
+)]
+
 use sindri_core::config::Provider;
 use sindri_core::provider::SESSION_TOKEN;
 use sindri_tui::command::COMMANDS;

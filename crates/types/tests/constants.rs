@@ -3,6 +3,11 @@
 //! is the seam: `include_str!` rather than a build, so the test cannot pass
 //! against a file it read from the wrong directory.
 
+#![allow(
+    clippy::panic,
+    reason = "a panicking test is how a broken contract reports itself"
+)]
+
 /// The crate root, as committed.
 const LIB: &str = include_str!("../src/lib.rs");
 

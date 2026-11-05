@@ -11,6 +11,7 @@
 )]
 #![allow(
     clippy::expect_used,
+    clippy::panic,
     reason = "a panicking harness is how a broken fixture reports itself"
 )]
 

@@ -5,6 +5,11 @@
 //! be rewritten without the test moving — and the test still fails when the fact
 //! drifts.
 
+#![allow(
+    clippy::panic,
+    reason = "a panicking test is how a broken contract reports itself"
+)]
+
 use sindri_core::agent::Stopped;
 use sindri_core::config::{DEFAULT_MAX_TURNS, KEYS};
 use sindri_core::skills::{DESCRIPTION_CEILING, Scope};

@@ -7,6 +7,11 @@
 //! the reader who wants a feature back reads the line with the comment above it,
 //! and is meant to be stopped there.
 
+#![allow(
+    clippy::panic,
+    reason = "a panicking test is how a broken contract reports itself"
+)]
+
 /// The manifest, as committed: `include_str!` so the test cannot pass against a
 /// file it read from the wrong directory.
 const MANIFEST: &str = include_str!("../../../Cargo.toml");

@@ -4,6 +4,11 @@
 //! JSON shape is a snapshot's business, and this subcommand's shape is not that
 //! contract.
 
+#![allow(
+    clippy::panic,
+    reason = "a panicking harness is how a process test reports a setup failure"
+)]
+
 mod common;
 
 use common::{Env, the_session};

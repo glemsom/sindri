@@ -1,3 +1,8 @@
-# Tests may unwrap and expect: a panic there is the assertion.
+# Tests may unwrap, expect and panic: a panic there is the assertion, and
+# reaching one on purpose is the assertion too. The exemption is read off the
+# `#[test]` attribute and the `#[cfg(test)]` module, so it reaches every test
+# body and not the helper beside it: a test root whose helpers panic for a broken
+# fixture carries one reasoned allow of its own, beside these.
 allow-unwrap-in-tests = true
 allow-expect-in-tests = true
+allow-panic-in-tests = true

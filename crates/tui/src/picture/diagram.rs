@@ -197,6 +197,10 @@ fn diagnostic(error: impl std::fmt::Display) -> Refusal {
 
 /// The `#rrggbb` the renderer parses, out of a colour the frame names: the
 /// digits are `theme.rs`'s and never a literal.
+#[allow(
+    clippy::panic,
+    reason = "the renderer draws `#rrggbb` alone, so a colour with no bytes draws nothing"
+)]
 fn ink(colour: Color) -> String {
     let Color::Rgb(r, g, b) = colour else {
         panic!("a diagram is drawn in the theme's truecolour");
@@ -205,6 +209,10 @@ fn ink(colour: Color) -> String {
 }
 
 /// The same colour, as the ground a pixmap is filled with.
+#[allow(
+    clippy::panic,
+    reason = "the ground is those same bytes, so a colour with none fills nothing"
+)]
 fn colour(named: Color) -> tiny_skia::Color {
     let Color::Rgb(r, g, b) = named else {
         panic!("a diagram is drawn in the theme's truecolour");

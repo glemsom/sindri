@@ -4,6 +4,11 @@
 //! claim that the tests need something the binary does not. The manifest is the
 //! only place that claim is written, so it is asserted rather than trusted.
 
+#![allow(
+    clippy::panic,
+    reason = "a panicking harness is how a process test reports a setup failure"
+)]
+
 /// The manifest, as committed: `include_str!` so the test cannot pass against a
 /// file it read from the wrong directory.
 const MANIFEST: &str = include_str!("../Cargo.toml");

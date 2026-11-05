@@ -6,6 +6,7 @@
 
 #![allow(
     clippy::expect_used,
+    clippy::panic,
     reason = "a panicking test is how a broken contract reports itself"
 )]
 

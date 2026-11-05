@@ -5,6 +5,7 @@
 
 #![allow(
     clippy::expect_used,
+    clippy::panic,
     reason = "a panicking harness is how a process test reports a setup failure"
 )]
 
