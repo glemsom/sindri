@@ -150,8 +150,9 @@ transcript, rail, composer; off a terminal it is a refusal at exit 2.
   time up from the last row on screen, and shrink it back. A picture's block is one thing
   and copies as its words; `Shift+drag` is the terminal's own selection. Words leave by
   OSC 52, falling back to `wl-copy` or `xclip`.
-- **`@`** walks the workspace (`.git` skipped, `.gitignore` ignored), proximity-ranked,
-  capped at eight rows. `Tab`/`Enter` takes one; `Esc` dismisses.
+- **`@`** walks the workspace, skipping `.git` and honouring no ignore file: a file the
+  run can read is a file the reader can point at. Paths are proximity-ranked, capped at
+  eight rows. `Tab`/`Enter` takes one; `Esc` dismisses.
 - **`/`** runs `/new` (fresh session GUID, empty transcript), `/export`, `/skill`,
   `/model`, `/settings`, `/help` and `/quit`. `/skill` is the one name a colon may end —
   `/skill:house-style` and `/skill house-style` are the same line — where the rest of it
