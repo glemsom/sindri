@@ -1,0 +1,334 @@
+//! The terminal UI's contract with a terminal, measured where a person's eyes are:
+//! a pseudo-terminal is opened here, the binary is spawned on its slave, and the
+//! bytes it draws — and the bytes typing a key makes it give back — are read off
+//! the master as the sequences they are.
+//!
+//! Every child gets `env_clear` and homes of its own holding a key, so no launch
+//! stops to paste one and nothing of this process's environment — least of all a
+//! real key — can reach the binary.
+
+use std::fs::File;
+use std::io::{Read, Write};
+use std::path::PathBuf;
+use std::process::{Child, Command, Stdio};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::{Duration, Instant};
+
+use rustix::fs::{Mode, OFlags, open};
+use rustix::pty::{OpenptFlags, grantpt, openpt, ptsname, unlockpt};
+use rustix::termios::{InputModes, LocalModes, Termios, tcgetattr};
+use tempfile::TempDir;
+
+/// How long a frame is given to arrive before a test calls it absent: generous,
+/// because a test that is merely slow must not read as a program that never drew.
+const PATIENCE: Duration = Duration::from_secs(10);
+
+/// A workspace, a config home and a state home, all of the test's own.
+struct Ground {
+    /// Held so the directories outlive the paths that name them.
+    _root: TempDir,
+    /// The one directory a launch stands in.
+    workspace: PathBuf,
+    /// The config home, which holds no file: the key comes from the environment.
+    config: PathBuf,
+    /// The state home, which holds no session.
+    state: PathBuf,
+}
+
+impl Ground {
+    /// A ground with an empty workspace and empty homes.
+    fn new() -> Ground {
+        let root = tempfile::tempdir().expect("a temp ground");
+        let ground = Ground {
+            workspace: root.path().join("workspace"),
+            config: root.path().join("config"),
+            state: root.path().join("state"),
+            _root: root,
+        };
+        for path in [&ground.workspace, &ground.config, &ground.state] {
+            std::fs::create_dir_all(path).expect("a directory");
+        }
+        ground
+    }
+
+    /// A child pointed at this ground and at nothing else: a key it never has to
+    /// ask for, and no environment of ours to inherit.
+    fn command(&self) -> Command {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_sindri"));
+        command
+            .env_clear()
+            .env("XDG_CONFIG_HOME", &self.config)
+            .env("XDG_STATE_HOME", &self.state)
+            .env("HOME", &self.config)
+            .current_dir(&self.workspace)
+            .env("SINDRI_PROVIDER", "anthropic")
+            .env("SINDRI_MODEL", "claude-sonnet-4-6")
+            .env("ANTHROPIC_API_KEY", "sk-ant-the-recorded-one");
+        command
+    }
+}
+
+/// A pseudo-terminal: the slave is the terminal a child is handed, and the master
+/// is where its screen comes back and where a test types.
+struct Pty {
+    /// The end a test reads frames off and writes keys to.
+    master: File,
+    /// The end a child reads keys from and draws its frames on.
+    slave: File,
+}
+
+impl Pty {
+    /// A fresh pseudo-terminal, nobody's controlling terminal.
+    fn open() -> Pty {
+        let master = openpt(OpenptFlags::RDWR | OpenptFlags::NOCTTY).expect("a pseudoterminal");
+        grantpt(&master).expect("the slave is granted");
+        unlockpt(&master).expect("the slave is unlocked");
+        let name = ptsname(&master, Vec::new()).expect("the slave has a name");
+        let path = PathBuf::from(name.to_str().expect("a printable name"));
+        let slave = open(path.as_path(), OFlags::RDWR | OFlags::NOCTTY, Mode::empty())
+            .expect("the slave opens");
+        Pty {
+            master: File::from(master),
+            slave: File::from(slave),
+        }
+    }
+
+    /// The slave, as one of a child's standard streams.
+    fn child_end(&self) -> File {
+        self.slave
+            .try_clone()
+            .expect("a second handle on the slave")
+    }
+
+    /// The terminal's state, as the program left it: the flags are the terminal's,
+    /// not a fd's, so the parent reads what the child installed.
+    fn attrs(&self) -> Termios {
+        tcgetattr(&self.slave).expect("the terminal's state")
+    }
+
+    /// A key, typed: the bytes a keyboard would put on the wire.
+    fn type_bytes(&mut self, keys: &[u8]) {
+        self.master.write_all(keys).expect("the key");
+        self.master.flush().expect("the key");
+    }
+}
+
+/// What a child has drawn so far, read off the master by a thread of its own so a
+/// test never blocks on a frame that may never come.
+struct Drawn {
+    /// Every byte the child has written to its terminal, in order.
+    seen: Arc<Mutex<Vec<u8>>>,
+}
+
+impl Drawn {
+    /// Watches `master` until the terminal closes.
+    fn watch(master: File) -> Drawn {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let landing = Arc::clone(&seen);
+        thread::spawn(move || {
+            let mut master = master;
+            let mut buffer = [0u8; 4096];
+            loop {
+                // A closed terminal — or one whose child has gone — is the end of
+                // the frame, not a failure: nothing more will ever be drawn.
+                match master.read(&mut buffer) {
+                    Ok(0) | Err(_) => return,
+                    Ok(count) => landing
+                        .lock()
+                        .expect("the frame")
+                        .extend_from_slice(&buffer[..count]),
+                }
+            }
+        });
+        Drawn { seen }
+    }
+
+    /// Everything drawn so far, byte for byte.
+    fn bytes(&self) -> Vec<u8> {
+        self.seen.lock().expect("the frame").clone()
+    }
+
+    /// Everything drawn so far, as a reader sees it.
+    fn text(&self) -> String {
+        text(&self.bytes())
+    }
+
+    /// Waits until `needle` has been drawn, and says whether it ever was.
+    fn wait_for(&self, needle: &[u8]) -> bool {
+        let deadline = Instant::now() + PATIENCE;
+        while Instant::now() < deadline {
+            if contains(&self.bytes(), needle) {
+                return true;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        false
+    }
+}
+
+/// A launch on a terminal, held so a test that fails early still ends it: a child
+/// left holding a pseudo-terminal would keep the harness waiting for a frame.
+struct Session {
+    /// The launch under test.
+    child: Child,
+}
+
+impl Session {
+    /// A launch of the binary on its own pseudo-terminal.
+    fn open(ground: &Ground) -> (Session, Pty, Drawn) {
+        let pty = Pty::open();
+        let child = ground
+            .command()
+            .stdin(Stdio::from(pty.child_end()))
+            .stdout(Stdio::from(pty.child_end()))
+            .stderr(Stdio::from(pty.child_end()))
+            .spawn()
+            .expect("the binary should start");
+        let drawn = Drawn::watch(
+            pty.master
+                .try_clone()
+                .expect("a second handle on the master"),
+        );
+        (Session { child }, pty, drawn)
+    }
+
+    /// Waits for the launch to end and reports what it ended as.
+    fn wait(mut self) -> std::process::ExitStatus {
+        self.child.wait().expect("the launch should end")
+    }
+}
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+/// A stream as a reader sees it.
+fn text(bytes: &[u8]) -> String {
+    String::from_utf8_lossy(bytes).into_owned()
+}
+
+/// Whether `haystack` holds `needle`, as bytes rather than as glyphs.
+fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+    haystack
+        .windows(needle.len())
+        .any(|window| window == needle)
+}
+
+#[test]
+fn ctrl_q_quits_and_the_screen_it_took_is_given_back() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(b"\x1b[?1049h"),
+        "the alternate screen is taken: {:?}",
+        drawn.text()
+    );
+    pty.type_bytes(&[0x11]);
+    let status = session.wait();
+
+    assert_eq!(
+        status.code(),
+        Some(0),
+        "Ctrl-Q quits a launch with no run to stop: {:?}",
+        drawn.text()
+    );
+    assert!(
+        drawn.wait_for(b"\x1b[?1049l"),
+        "and the screen it took is given back: {:?}",
+        drawn.text()
+    );
+}
+
+#[test]
+fn the_terminal_it_installs_cannot_eat_ctrl_q() {
+    let ground = Ground::new();
+    let (_session, pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(b"\x1b[?1049h"),
+        "the screen is taken before its state is read: {:?}",
+        drawn.text()
+    );
+    let installed = pty.attrs();
+
+    assert!(
+        !installed.input_modes.contains(InputModes::IXON),
+        "flow control is off, so ^Q arrives as a key rather than vanishing as XON"
+    );
+    assert!(
+        !installed.local_modes.contains(LocalModes::ICANON),
+        "raw mode: a key arrives without waiting for a newline"
+    );
+    assert!(
+        !installed.local_modes.contains(LocalModes::ECHO),
+        "raw mode: nothing typed is echoed back over the frame"
+    );
+}
+
+#[test]
+fn an_idle_terminal_is_written_no_frame_at_all() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(b"\x1b[?1049h"),
+        "the screen is taken: {:?}",
+        drawn.text()
+    );
+    // What the launch drew before the keyboard was touched is the screen being
+    // taken, not a frame: everything after it is a repaint nobody asked for.
+    thread::sleep(Duration::from_millis(200));
+    let quiet = drawn.bytes().len();
+    thread::sleep(Duration::from_millis(600));
+    assert_eq!(
+        drawn.bytes().len(),
+        quiet,
+        "an idle launch writes no byte at all: {}",
+        drawn.text()
+    );
+
+    // And it was waiting rather than gone: the same launch still answers a key.
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "the silent launch was asleep in read, not dead: {}",
+        drawn.text()
+    );
+}
+
+#[test]
+fn a_launch_with_no_screen_is_refused_at_exit_two() {
+    let ground = Ground::new();
+    let pty = Pty::open();
+
+    let output = ground
+        .command()
+        .stdin(Stdio::from(pty.child_end()))
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .expect("the binary should run");
+
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "a terminal UI with no terminal to draw on is a usage error (§3): {}",
+        text(&output.stderr)
+    );
+    assert!(
+        output.stdout.is_empty(),
+        "nothing reaches a stdout that is no screen: {}",
+        text(&output.stdout)
+    );
+    assert!(
+        text(&output.stderr).contains("terminal"),
+        "the refusal says what is missing: {}",
+        text(&output.stderr)
+    );
+}
