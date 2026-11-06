@@ -5,8 +5,13 @@
 //! What a first run needs is the credential; everything else the run will take as
 //! a flag — a prompt, `--format`'s meaning, `-v`'s — belongs to the tickets that
 //! own the run loop and the batch front end (#17, #19).
+//!
+//! `auth login` is a subcommand rather than a flag because it is the one thing
+//! this binary does that runs nothing (§3): it signs in and exits. The words it
+//! offers are the words the core accepts, so a wire that cannot sign in has no
+//! word here to be typed.
 
-use clap::Parser;
+use clap::{Parser, Subcommand, ValueEnum};
 use sindri_core::config::Flags;
 
 /// The one command line both front ends share.
@@ -47,6 +52,41 @@ pub struct Cli {
         action = clap::ArgAction::Count
     )]
     pub verbose: u8,
+
+    /// What to do instead of running. Today, that is one thing: sign in.
+    #[command(subcommand)]
+    pub command: Option<Command>,
+}
+
+/// The one command that signs in rather than runs (§3).
+#[derive(Debug, Subcommand)]
+pub enum Command {
+    /// Sign in to a provider rather than run one.
+    Auth {
+        /// What to do with the sign-in.
+        #[command(subcommand)]
+        action: AuthAction,
+    },
+}
+
+/// What `sindri auth` can do. Signing out arrives with the ticket that needs it.
+#[derive(Debug, Subcommand)]
+pub enum AuthAction {
+    /// Sign in, showing the code the device flow asks a person to type.
+    Login {
+        /// The wire to sign in to: `copilot` is the only one that signs in.
+        #[arg(value_name = "WIRE", value_enum)]
+        wire: LoginWire,
+    },
+}
+
+/// The wires that sign in. `anthropic` and `openai` are asked with a key, which
+/// is set rather than signed in for (§10), so the parser has no word for them
+/// and cannot be handed one.
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum LoginWire {
+    /// GitHub Copilot, behind its own OAuth session.
+    Copilot,
 }
 
 impl Cli {

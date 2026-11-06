@@ -1,0 +1,59 @@
+//! Proves the sign-in command's own edges without a socket: the parser offers one
+//! wire to sign in to and refuses the two that are asked with a key, and a launch
+//! with nowhere to keep a session refuses before it ever reaches GitHub.
+//!
+//! Every child gets `env_clear`, so no real `$HOME` — and no session already kept
+//! in one — can reach the binary from the test process.
+
+use std::process::{Command, Output};
+
+/// A stream as a reader sees it, for asserting on `contains`.
+fn text(bytes: &[u8]) -> String {
+    String::from_utf8_lossy(bytes).into_owned()
+}
+
+/// A binary invocation with no environment inherited.
+fn sindri(args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_sindri"))
+        .env_clear()
+        .args(args)
+        .output()
+        .expect("the binary runs")
+}
+
+#[test]
+fn the_sign_in_command_offers_only_the_wire_that_signs_in() {
+    let refused = sindri(&["auth", "login", "anthropic"]);
+
+    assert_eq!(
+        refused.status.code(),
+        Some(2),
+        "a wire that holds a key instead of signing in is a usage error (§15)"
+    );
+    let said = text(&refused.stderr);
+    assert!(
+        said.contains("copilot"),
+        "the refusal names the one word the command accepts: {said}"
+    );
+}
+
+#[test]
+fn a_sign_in_with_nowhere_to_keep_a_session_refuses_before_it_sends() {
+    let refused = sindri(&["auth", "login", "copilot"]);
+
+    assert_eq!(
+        refused.status.code(),
+        Some(2),
+        "with neither XDG_CONFIG_HOME nor HOME there is no file to keep it in"
+    );
+    let said = text(&refused.stderr);
+    assert!(
+        said.contains("XDG_CONFIG_HOME"),
+        "the refusal names what is missing: {said}"
+    );
+    assert!(
+        refused.stdout.is_empty(),
+        "and nothing at all reaches stdout (§15): {:?}",
+        text(&refused.stdout)
+    );
+}

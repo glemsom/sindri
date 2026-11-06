@@ -8,6 +8,7 @@
 //! end (#19); until then a configured first run says so rather than pretending to
 //! have answered.
 
+mod auth; // the one command that signs in rather than runs
 mod batch; // a prompt in, the answer and one newline out
 mod cli; // the command line as clap sees it
 // The host spawns the opener and this binary does not open a tool call yet: #19's
@@ -25,7 +26,7 @@ use clap::Parser;
 use sindri_core::config::{Config, Flags, Process};
 use sindri_core::first_run::FirstRun;
 
-use crate::cli::Cli;
+use crate::cli::{Cli, Command};
 
 /// Spec §15's setup failure: the front end is configured and has nothing to run
 /// with, and a zero here would claim an answer nobody produced.
@@ -39,6 +40,14 @@ fn main() -> ExitCode {
     // `--format` and `-v` are global so one launch of either front end accepts
     // them (§3). There is nothing for either to change until a run exists.
     let _ = (&cli.format, cli.verbose);
+
+    // A command that runs nothing is answered here, before a config is resolved
+    // or a key is asked for: a sign-in needs neither.
+    if let Some(command) = cli.command {
+        return match command {
+            Command::Auth { action } => auth::run(action),
+        };
+    }
 
     let mut first_run = match FirstRun::resolve(&Process, cli.flags()) {
         Ok(first_run) => first_run,
@@ -96,7 +105,7 @@ fn short_of(first_run: &FirstRun) -> String {
 
 /// The one way this front end says no: the reason on stderr, the code spec §15
 /// gives it, and nothing at all on stdout.
-fn refuse(message: &str, code: u8) -> ExitCode {
+pub(crate) fn refuse(message: &str, code: u8) -> ExitCode {
     eprintln!("sindri: {message}");
     ExitCode::from(code)
 }

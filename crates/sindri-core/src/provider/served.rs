@@ -216,10 +216,10 @@ impl Client {
 /// Why there is no list, in words a human reads: the wire's credential source
 /// when it was never asked, and otherwise the phrase its verdict earns. The
 /// wire's own reply is never repeated here — a hint is one line, not a body.
-fn reason(at: &Where, failure: &Failure) -> &'static str {
+fn reason(at: &Where, failure: &Failure) -> String {
     match failure.verdict {
         Verdict::Unconfigured => credential_source(at.wire()),
-        verdict => verdict.phrase(),
+        verdict => verdict.phrase().to_owned(),
     }
 }
 
