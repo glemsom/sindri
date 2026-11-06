@@ -30,6 +30,7 @@ use std::str::FromStr;
 use serde::Deserialize;
 use toml_edit::{DocumentMut, Item, Value};
 
+use crate::provider::Route;
 use crate::redact::{MASK, SecretSet};
 use crate::wire::Wire;
 
@@ -47,6 +48,9 @@ pub struct Config {
     pub provider: Option<Wire>,
     /// The model a run asks for, named rather than invented.
     pub model: Option<String>,
+    /// The completion endpoint a run takes, for a wire that serves two, so a
+    /// route that misbehaves can be got round by name (Appendix A10).
+    pub route: Option<Route>,
     /// Where the wire's endpoint is, when it is not the dialect's own.
     pub base_url: Option<String>,
     /// The credential, which is a secret and is never printed.
@@ -73,9 +77,10 @@ pub struct Config {
 
 impl Config {
     /// Every key the schema has, in the order the settings modal walks them.
-    pub const KEYS: [&'static str; 13] = [
+    pub const KEYS: [&'static str; 14] = [
         "provider",
         "model",
+        "route",
         "base_url",
         "api_key",
         "thinking",
@@ -186,6 +191,7 @@ impl Config {
         Config {
             provider: self.provider.or(lower.provider),
             model: self.model.or(lower.model),
+            route: self.route.or(lower.route),
             base_url: self.base_url.or(lower.base_url),
             api_key: self.api_key.or(lower.api_key),
             thinking: self.thinking.or(lower.thinking),
@@ -208,6 +214,7 @@ impl Config {
         Ok(Config {
             provider: spoken_wire(environment, "SINDRI_PROVIDER")?,
             model: spoken(environment, "SINDRI_MODEL"),
+            route: spoken_route(environment, "SINDRI_ROUTE")?,
             base_url: spoken(environment, "SINDRI_BASE_URL"),
             api_key: spoken(environment, "SINDRI_API_KEY"),
             thinking: spoken_parsed(environment, "SINDRI_THINKING")?,
@@ -258,6 +265,7 @@ impl fmt::Debug for Config {
             .debug_struct("Config")
             .field("provider", &self.provider)
             .field("model", &self.model)
+            .field("route", &self.route)
             .field("base_url", &self.base_url)
             .field("api_key", &self.api_key.as_ref().map(|_| MASK))
             .field("thinking", &self.thinking)
@@ -284,6 +292,8 @@ pub struct Flags {
     pub provider: Option<Wire>,
     /// The model a run asks for, named rather than invented.
     pub model: Option<String>,
+    /// The completion endpoint a run takes, replacing the configured one.
+    pub route: Option<Route>,
     /// Where the wire's endpoint is, when it is not the dialect's own.
     pub base_url: Option<String>,
     /// The credential, which is a secret and is never printed.
@@ -318,6 +328,9 @@ impl Flags {
         }
         if let Some(value) = &self.model {
             write_string(document, "model", value);
+        }
+        if let Some(route) = self.route {
+            write_key(document, "route", Value::from(route.word()));
         }
         if let Some(value) = &self.base_url {
             write_string(document, "base_url", value);
@@ -373,6 +386,7 @@ impl From<Flags> for Config {
         Config {
             provider: flags.provider,
             model: flags.model,
+            route: flags.route,
             base_url: flags.base_url,
             api_key: flags.api_key,
             thinking: flags.thinking,
@@ -394,6 +408,7 @@ impl fmt::Debug for Flags {
             .debug_struct("Flags")
             .field("provider", &self.provider)
             .field("model", &self.model)
+            .field("route", &self.route)
             .field("base_url", &self.base_url)
             .field("api_key", &self.api_key.as_ref().map(|_| MASK))
             .field("thinking", &self.thinking)
@@ -568,6 +583,22 @@ where
             .map_err(|error| ConfigError::BadValue {
                 origin: name.to_owned(),
                 reason: format!("`{value}` will not parse: {error}"),
+            }),
+    }
+}
+
+/// A variable read as a route, which accepts exactly the two words.
+fn spoken_route(environment: &impl Environment, name: &str) -> Result<Option<Route>, ConfigError> {
+    match spoken(environment, name) {
+        None => Ok(None),
+        Some(word) => Route::from_word(&word)
+            .map(Some)
+            .ok_or_else(|| ConfigError::BadValue {
+                origin: name.to_owned(),
+                reason: format!(
+                    "`{word}` is not a route; expected one of {}",
+                    Route::WORDS.join(", ")
+                ),
             }),
     }
 }

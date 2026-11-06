@@ -7,6 +7,10 @@
 //! else: a third spelling would be a format no run can honour, so the parser is
 //! where it is refused, at exit 2.
 //!
+//! `--route` names the completion endpoint a wire that serves two is sent on,
+//! in the two words the core accepts, so a misbehaving route can be got round
+//! without renaming the model (Appendix A10).
+//!
 //! `auth login` is a subcommand rather than a flag because it is the one thing
 //! this binary does that runs nothing (§3): it signs in and exits. The words it
 //! offers are the words the core accepts, so a wire that cannot sign in has no
@@ -14,6 +18,7 @@
 
 use clap::{Parser, Subcommand, ValueEnum};
 use sindri_core::config::Flags;
+use sindri_core::provider::Route;
 
 /// What `--version` reports: the `git describe` of the commit this binary was
 /// built at and that commit's own date, both fixed at compile time by `build.rs`
@@ -58,6 +63,12 @@ pub struct Cli {
     /// arguments, so the environment and a pasted key are the quieter two ways in.
     #[arg(long, value_name = "KEY")]
     pub api_key: Option<String>,
+
+    /// The completion endpoint to take, for a wire that serves two: `chat` or
+    /// `responses`, so a route that misbehaves can be got round by name (A10).
+    /// Replaces a `route` the config file holds, as a repeated flag does.
+    #[arg(long, value_name = "ROUTE", value_enum)]
+    pub route: Option<RouteWord>,
 
     /// The output format, global so either front end accepts it (§3, A5).
     #[arg(long, global = true, value_name = "FORMAT", default_value = "text")]
@@ -108,12 +119,34 @@ pub enum LoginWire {
     Copilot,
 }
 
+/// The routes a launch may name, as clap sees them: the two words the core
+/// accepts, so no third spelling can be typed, and nothing here decides which
+/// endpoint a name is served by — that is rig's (Appendix A10).
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum RouteWord {
+    /// `POST /chat/completions`.
+    Chat,
+    /// `POST /responses`.
+    Responses,
+}
+
+impl RouteWord {
+    /// The core's route this word names.
+    pub fn route(self) -> Route {
+        match self {
+            RouteWord::Chat => Route::Chat,
+            RouteWord::Responses => Route::Responses,
+        }
+    }
+}
+
 impl Cli {
     /// The flag layer the core layers above the file and the environment: only
-    /// what a first run can be given, which today is the key.
+    /// what this front end parses, which is the key and the route.
     pub fn flags(&self) -> Flags {
         Flags {
             api_key: self.api_key.clone(),
+            route: self.route.map(RouteWord::route),
             ..Flags::default()
         }
     }

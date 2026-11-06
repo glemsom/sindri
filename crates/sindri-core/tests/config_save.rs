@@ -7,6 +7,7 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 use sindri_core::config::{Config, Flags};
+use sindri_core::provider::Route;
 use sindri_core::wire::Wire;
 use tempfile::TempDir;
 
@@ -391,6 +392,7 @@ fn every_key_touched() -> Flags {
     Flags {
         provider: Some(Wire::Anthropic),
         model: Some(String::from("claude-sonnet-4-5")),
+        route: Some(Route::Responses),
         base_url: Some(String::from("https://gateway.test/v1")),
         api_key: Some(String::from("sk-not-a-real-key")),
         thinking: Some(true),

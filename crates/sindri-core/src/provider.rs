@@ -28,6 +28,7 @@
 
 pub mod copilot; // the owner-only file the session it keeps is written to
 pub mod retry; // §4's retry policy in one place: an ask is tried three times
+pub mod route; // which completion endpoint an OpenAI-shaped wire serves
 pub mod served; // what a wire says it serves, read off the wire and kept beside the (wire, base_url) pair that produced them
 pub mod transport; // how a request's bytes travel, and the fake a test substitutes
 
@@ -48,6 +49,7 @@ use rig_core::streaming::{Item, StreamEvent};
 use rig_core::wire::{Encoded, Wire as RigWire, WireFrame};
 
 use self::retry::{Backoff, Sleep, until_final};
+pub use self::route::Route;
 use self::transport::Http;
 use crate::redact::{MASK, Redacted, SecretSet};
 use crate::wire::Wire;
@@ -101,6 +103,9 @@ pub struct Ask {
     prompt: String,
     /// Whether the model should reason before it answers.
     thinking: bool,
+    /// The route a person named for a wire that serves two, when one of them
+    /// misbehaves (Appendix A10).
+    route: Option<Route>,
 }
 
 impl Ask {
@@ -114,6 +119,7 @@ impl Ask {
             preamble: None,
             prompt: String::new(),
             thinking: false,
+            route: None,
         }
     }
 
@@ -152,6 +158,32 @@ impl Ask {
     pub fn thinking(mut self, thinking: bool) -> Self {
         self.thinking = thinking;
         self
+    }
+
+    /// Send the ask on `route` whatever the model's own name asks for, so a
+    /// route that misbehaves can be got round without renaming the model
+    /// (Appendix A10). A dialect that serves one endpoint ignores it.
+    pub fn route(mut self, route: Route) -> Self {
+        self.route = Some(route);
+        self
+    }
+
+    /// The OpenAI-shaped endpoint this ask is sent on with `key` as its
+    /// credential: the dialect, the endpoint the config named, and the route a
+    /// person overrode. One place builds it, so the route
+    /// [`route_of`](Ask::route_of) reads off it is the route the request takes.
+    fn endpoint(&self, key: &str) -> OpenAIConfig {
+        let mut endpoint = match self.wire {
+            Wire::Copilot => OpenAIConfig::with_key(&rig_core::providers::copilot::DIALECT, key),
+            Wire::Anthropic | Wire::Openai => OpenAIConfig::new(key),
+        };
+        if let Some(base_url) = &self.base_url {
+            endpoint = endpoint.with_base_url(base_url);
+        }
+        if let Some(route) = self.route {
+            endpoint = endpoint.with_route(route.chosen());
+        }
+        endpoint
     }
 
     /// The request this ask is, in the wording the wire's encoders take.
@@ -488,29 +520,15 @@ impl Client {
                     .completion(ask.model.clone());
                 self.drive(model, request, deltas, &secrets)
             }
-            Wire::Openai => {
+            // Both OpenAI-shaped dialects are one configuration apart — the
+            // dialect, the endpoint and the route are `Ask::endpoint` — so the
+            // two arms are one, and a third such wire would change neither.
+            Wire::Openai | Wire::Copilot => {
                 let Some(key) = credential else {
-                    return Err(Failure::unconfigured(Wire::Openai));
+                    return Err(Failure::unconfigured(ask.wire));
                 };
-                let mut endpoint = OpenAIConfig::new(key);
-                if let Some(base_url) = &ask.base_url {
-                    endpoint = endpoint.with_base_url(base_url);
-                }
-                let model = endpoint
-                    .connect(self.transport.clone())
-                    .completion(ask.model.clone());
-                self.drive(model, request, deltas, &secrets)
-            }
-            Wire::Copilot => {
-                let Some(key) = credential else {
-                    return Err(Failure::unconfigured(Wire::Copilot));
-                };
-                let mut endpoint =
-                    OpenAIConfig::with_key(&rig_core::providers::copilot::DIALECT, key);
-                if let Some(base_url) = &ask.base_url {
-                    endpoint = endpoint.with_base_url(base_url);
-                }
-                let model = endpoint
+                let model = ask
+                    .endpoint(key)
                     .connect(self.transport.clone())
                     .completion(ask.model.clone());
                 self.drive(model, request, deltas, &secrets)

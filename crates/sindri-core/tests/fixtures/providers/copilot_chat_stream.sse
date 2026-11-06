@@ -1,0 +1,12 @@
+data: {"id":"chatcmpl-recorded","object":"chat.completion.chunk","created":1760000000,"model":"gpt-4o-2024-11-20","system_fingerprint":"fp_recorded","choices":[{"index":0,"delta":{"role":"assistant","content":"","refusal":null},"logprobs":null,"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-recorded","object":"chat.completion.chunk","created":1760000000,"model":"gpt-4o-2024-11-20","system_fingerprint":"fp_recorded","choices":[{"index":0,"delta":{"content":"Hello"},"logprobs":null,"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-recorded","object":"chat.completion.chunk","created":1760000000,"model":"gpt-4o-2024-11-20","system_fingerprint":"fp_recorded","choices":[{"index":0,"delta":{"content":" from Copilot"},"logprobs":null,"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-recorded","object":"chat.completion.chunk","created":1760000000,"model":"gpt-4o-2024-11-20","system_fingerprint":"fp_recorded","choices":[{"index":0,"delta":{},"logprobs":null,"finish_reason":"stop"}],"usage":null}
+
+data: {"id":"chatcmpl-recorded","object":"chat.completion.chunk","created":1760000000,"model":"gpt-4o-2024-11-20","system_fingerprint":"fp_recorded","choices":[],"usage":{"prompt_tokens":12,"completion_tokens":5,"total_tokens":17,"prompt_tokens_details":{"cached_tokens":4,"audio_tokens":0},"completion_tokens_details":{"reasoning_tokens":0,"audio_tokens":0}}}
+
+data: [DONE]
+

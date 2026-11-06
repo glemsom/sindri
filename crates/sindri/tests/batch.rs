@@ -23,6 +23,22 @@ use tempfile::TempDir;
 const ANTHROPIC: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_stream.sse");
 
+/// A Copilot Chat Completions reply, as the dialect streamed it for a name that
+/// asks for no other route: two text fragments and a usage report.
+const COPILOT_CHAT: &str =
+    include_str!("../../sindri-core/tests/fixtures/providers/copilot_chat_stream.sse");
+
+/// The same dialect's Responses reply, for a route a person named.
+const COPILOT_RESPONSES: &str =
+    include_str!("../../sindri-core/tests/fixtures/providers/openai_responses_stream.sse");
+
+/// The answer the Chat Completions fixture carries.
+const COPILOT_ANSWER: &str = "Hello from Copilot";
+
+/// The Copilot session a signed-in store holds, which is never an api key (§10)
+/// and never printed anywhere a run writes.
+const SESSION: &str = "tid=recorded_copilot_session";
+
 /// What a wire says when the request itself was wrong, so no retry can help.
 const BAD_REQUEST: &str = r#"{"error":{"message":"unknown model","type":"invalid_request_error"}}"#;
 
@@ -266,6 +282,39 @@ impl Ground {
             .unwrap_or_default();
         found.sort();
         found
+    }
+
+    /// This ground with a Copilot sign-in on file, as `sindri auth login
+    /// copilot` leaves one: owner-only, in its own directory beside the config
+    /// file, holding a session that does not expire.
+    fn signed_in(&self) -> &Ground {
+        let directory = self.config.join("sindri").join("auth");
+        std::fs::create_dir_all(&directory).expect("the auth directory");
+        let record = format!(
+            r#"{{"token":"{SESSION}","expires_at":4000000000,"endpoints":{{"api":"https://api.githubcopilot.com"}}}}"#
+        );
+        let path = directory.join("copilot.json");
+        std::fs::write(&path, record).expect("the sign-in record");
+        std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(0o600))
+            .expect("an owner-only record");
+        self
+    }
+
+    /// A child asking `wire` as a signed-in Copilot run: no api key anywhere in
+    /// its environment, and the endpoint pointed at the loopback wire.
+    fn copilot(&self, wire: &Wire, prompt: &str) -> Command {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_sindri"));
+        command
+            .env_clear()
+            .env("XDG_CONFIG_HOME", &self.config)
+            .env("XDG_STATE_HOME", &self.state)
+            .env("HOME", &self.config)
+            .current_dir(&self.workspace)
+            .env("SINDRI_PROVIDER", "copilot")
+            .env("SINDRI_MODEL", "gpt-4o")
+            .env("SINDRI_BASE_URL", wire.base_url())
+            .args(["-b", prompt]);
+        command
     }
 
     /// The one session this ground holds, which is the one a test's run wrote.
@@ -790,4 +839,135 @@ fn signal(child: &Child) {
         .status()
         .expect("`kill` should run");
     assert!(status.success(), "the signal should be delivered");
+}
+
+#[test]
+fn a_signed_in_copilot_answers_a_prompt_on_the_chat_route() {
+    let ground = Ground::new();
+    ground.signed_in();
+    let wire = Wire::answering(vec![Reply::stream(COPILOT_CHAT)]);
+
+    let output = ground
+        .copilot(&wire, "say hello")
+        .output()
+        .expect("the binary should run");
+
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    assert_eq!(text(&output.stdout), format!("{COPILOT_ANSWER}\n"));
+
+    let request = &wire.requests()[0];
+    assert!(
+        request.starts_with("POST /chat/completions "),
+        "a name that asks for no other route is served by Chat Completions: {request}"
+    );
+    let head = request.to_lowercase();
+    assert!(
+        head.contains(&format!("authorization: bearer {}", SESSION.to_lowercase())),
+        "the session the store holds is what the wire is asked with: {request}"
+    );
+    for name in ["editor-version", "copilot-integration-id", "user-agent"] {
+        assert!(
+            head.contains(name),
+            "the editor identity rig stamps rides along: {request}"
+        );
+    }
+
+    let document = std::fs::read_to_string(ground.session().join("session.json"))
+        .expect("the session document");
+    assert!(
+        document.contains(r#""route": "chat""#),
+        "the route the run answered on is kept, so a mystery is debuggable: {document}"
+    );
+    assert!(
+        document.contains(r#""provider": "copilot""#),
+        "and the wire it answered on: {document}"
+    );
+}
+
+#[test]
+fn a_named_route_takes_a_signed_in_copilot_to_the_other_endpoint() {
+    let ground = Ground::new();
+    ground.signed_in();
+    let wire = Wire::answering(vec![Reply::stream(COPILOT_RESPONSES)]);
+
+    let output = ground
+        .copilot(&wire, "say hello")
+        .args(["--route", "responses"])
+        .output()
+        .expect("the binary should run");
+
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    let request = &wire.requests()[0];
+    assert!(
+        request.starts_with("POST /responses "),
+        "the route a person named is the route the run takes: {request}"
+    );
+    let document = std::fs::read_to_string(ground.session().join("session.json"))
+        .expect("the session document");
+    assert!(
+        document.contains(r#""route": "responses""#),
+        "and the record says which endpoint answered it: {document}"
+    );
+}
+
+#[test]
+fn a_copilot_session_reaches_no_window_a_run_writes() {
+    let ground = Ground::new();
+    ground.signed_in();
+    let wire = Wire::answering(vec![Reply::stream(COPILOT_CHAT)]);
+
+    let output = ground
+        .copilot(&wire, "say hello")
+        .args(["--format", "json"])
+        .output()
+        .expect("the binary should run");
+
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    let stdout = text(&output.stdout);
+    let (report, line) = object(&stdout);
+    assert_eq!(
+        report["usage"]["input"],
+        serde_json::json!(12),
+        "the usage the wire reported is in the object: {line}"
+    );
+
+    let session = ground.session();
+    let record = std::fs::read_to_string(session.join("session.json")).expect("the document");
+    let transcript =
+        std::fs::read_to_string(session.join("transcript.jsonl")).expect("the transcript");
+    for (window, written) in [
+        ("stdout", line.to_owned()),
+        ("stderr", text(&output.stderr)),
+        ("session.json", record),
+        ("transcript.jsonl", transcript),
+    ] {
+        assert!(
+            !written.contains(SESSION),
+            "a copilot session is a secret and never rides {window}: {written}"
+        );
+    }
+}
+
+#[test]
+fn a_copilot_run_with_no_sign_in_names_the_command_that_signs_in() {
+    let ground = Ground::new();
+    let wire = Wire::answering(vec![Reply::stream(COPILOT_CHAT)]);
+
+    let output = ground
+        .copilot(&wire, "say hello")
+        .output()
+        .expect("the binary should run");
+
+    assert_eq!(output.status.code(), Some(1), "a provider error (§15)");
+    assert!(output.stdout.is_empty(), "{}", text(&output.stdout));
+    assert!(
+        text(&output.stderr).contains("sindri auth login copilot"),
+        "the failure names the one command that fixes it: {}",
+        text(&output.stderr)
+    );
+    assert!(
+        wire.requests().is_empty(),
+        "and nothing was sent without a session: {:?}",
+        wire.requests()
+    );
 }
