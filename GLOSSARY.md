@@ -130,6 +130,16 @@ _Avoid_: UI, client, interface
 A colour role the interface asks for by name — dim, muted, accent, ok, err — never a literal colour.
 _Avoid_: Colour, style, RGB
 
+**Mode**:
+A screen that answers keys, one of the explicit stack the frame is in: the composer at the
+base and a modal opened over it. The mode on top answers every key.
+_Avoid_: State, layer, screen (too general), view
+
+**Key table**:
+The keys one mode answers, as data — the key, how the `?` screen spells it, what it does —
+so the screen that explains the keymap is painted from the rows that are the keymap.
+_Avoid_: Keymap (one word for the whole frame's), binding list, hotkeys
+
 **Frame fixture**:
 A frame rendered at a fixed size and checked into the tests as the accepted picture of it.
 _Avoid_: Snapshot (too general), screenshot, golden image

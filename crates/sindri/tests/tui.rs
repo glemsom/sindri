@@ -461,6 +461,13 @@ fn composer_rows(drawn: &str) -> Option<u16> {
     Some(footer? - hairline?)
 }
 
+/// Where `needle` was last drawn in `drawn`, or nothing when it never was: a frame paints
+/// the cells that changed and leaves the rest, so what a test reads back is a stream of
+/// every frame that has been painted, and the last one is the end of it.
+fn last(drawn: &str, needle: &str) -> Option<usize> {
+    drawn.rfind(needle)
+}
+
 /// The cell the last frame left the caret on: typing paints one glyph per frame, so where
 /// the caret waits is how a test knows the last glyph of a draft landed.
 fn caret_at(drawn: &str) -> Option<(u16, u16)> {
@@ -641,5 +648,45 @@ fn ctrl_c_when_idle_clears_the_draft_and_leaves_the_launch_running() {
         session.wait().code(),
         Some(0),
         "Ctrl-C cancelled no run, and did not quit"
+    );
+}
+
+#[test]
+fn question_mark_opens_the_keys_screen_and_escape_gives_the_frame_back() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    // `?` is the key the footer names, and with an empty draft it is a key rather than a
+    // glyph: one screen listing the keys in force, over the whole frame. A frame paints
+    // the cells that changed and skips the blanks between runs of words, so a word the
+    // screen says and the draft never does is what is looked for.
+    pty.type_bytes(b"?");
+    assert!(
+        drawn.wait_until(|frame| frame.contains("Backspace")),
+        "the keys screen lists the draft's keys, Backspace among them: {:?}",
+        drawn.text()
+    );
+
+    // Esc gives the frame back: the hints the screen covered are painted again, and
+    // painted after the screen's own words rather than left over from before it.
+    pty.type_bytes(b"\x1b");
+    assert!(
+        drawn.wait_until(|frame| last(frame, "Enter send") > last(frame, "Backspace")),
+        "Esc closed the screen and the composer's footer is back under it: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "and the launch is still there to quit once the screen is closed: {:?}",
+        drawn.text()
     );
 }

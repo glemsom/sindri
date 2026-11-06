@@ -26,6 +26,11 @@ fn transcript_scrolled_120x40_cuts_the_top_entry_mid_row() {
 }
 
 #[test]
+fn keys_120x40_lists_the_keys_of_the_stack_it_sits_on() {
+    fixture::assert_frame("keys", 120, 40);
+}
+
+#[test]
 fn typing_120x40_is_a_composer_at_its_two_row_floor() {
     fixture::assert_frame("typing", 120, 40);
 }
