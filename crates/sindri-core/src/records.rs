@@ -343,6 +343,14 @@ impl Record {
         self.write_document()
     }
 
+    /// The tokens the run's asks spent in total, written once when the run stops
+    /// by whoever holds the sum: an ask's worth at a time would be the same
+    /// arithmetic twice.
+    pub fn spent(&mut self, usage: Usage) -> Result<(), RecordError> {
+        self.document.usage = usage;
+        self.write_document()
+    }
+
     /// Charges one ask's tokens to the run, so the document's usage is what the
     /// run spent and not what its last ask spent.
     pub fn charged(&mut self, ask: &Ask) -> Result<(), RecordError> {

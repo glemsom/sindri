@@ -1,18 +1,20 @@
 //! The Sindri front ends: the terminal UI and batch mode, both driving one core
 //! that owns every decision either of them makes.
 //!
-//! Today the front end reaches one path and no other: a first run. It resolves the
-//! config with no assumption of a file, prints the API-key row that says where a
-//! key comes from and where it will be written, and asks for the key when nothing
-//! supplied one. The run itself arrives with the run loop (#17) and the batch front
-//! end (#19); until then a configured first run says so rather than pretending to
-//! have answered.
+//! Two paths leave this function. A launch with no prompt is the terminal UI's,
+//! and off a terminal it is a refusal rather than a guess (§3); the frame itself
+//! arrives with #36, so what a configured launch says today is that it is
+//! configured. A launch with `-b` is batch mode (§3), which resolves the same
+//! first run — an API-key row that says where a key comes from and where it will
+//! be written, a key pasted from a terminal when none was supplied — and then
+//! hands the prompt to the core and writes the answer, the JSON object or the
+//! exit code that §15 gives the run's stop reason.
 
-mod batch; // a prompt in, the answer and one newline out
+mod batch; // is the Unix filter: a prompt in, the answer and one newline out
 mod cli; // the command line as clap sees it
-// The host spawns the opener and this binary does not open a tool call yet: #19's
-// executor and #40's tool-call rows are what will call it, so until one lands the
-// module is complete and unreached.
+// The host spawns the opener and this binary does not open a tool call yet: #40's
+// tool-call rows are what will call it, so until one lands the module is complete
+// and unreached.
 #[allow(dead_code)]
 mod open; // the host spawns the opener, because the sandbox has no display
 mod osc; // sequences that carry words out of the terminal
@@ -27,18 +29,19 @@ use sindri_core::first_run::FirstRun;
 
 use crate::cli::Cli;
 
-/// Spec §15's setup failure: the front end is configured and has nothing to run
-/// with, and a zero here would claim an answer nobody produced.
+/// What a configured launch says while the terminal UI is not yet built: the
+/// front end has everything a run needs and no run to give it to.
 const NOTHING_TO_RUN: u8 = 3;
 
-/// Spec §15's usage error: a command line or an answer that cannot be used.
+/// Spec §15's usage error: a command line, a prompt or an answer that cannot be
+/// used.
 const USAGE: u8 = 2;
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    // `--format` and `-v` are global so one launch of either front end accepts
-    // them (§3). There is nothing for either to change until a run exists.
-    let _ = (&cli.format, cli.verbose);
+    // A prompt on the command line is batch mode; a launch with none is the
+    // terminal UI's, which is asked for its own reasons below.
+    let asked = batch::Job::asked(&cli);
 
     let mut first_run = match FirstRun::resolve(&Process, cli.flags()) {
         Ok(first_run) => first_run,
@@ -46,10 +49,19 @@ fn main() -> ExitCode {
     };
 
     // The row goes to stderr, not stdout: stdout is the answer's alone (§15), and
-    // a fact about where a secret will live is not part of an answer.
-    eprintln!("{}", first_run.api_key_row());
+    // a fact about where a secret will live is not part of an answer. A batch run
+    // that is already configured keeps it for `-v`, because a filter's stderr is
+    // the only thing a person reads when something goes wrong.
+    if asked.is_none() || !first_run.is_ready() || cli.is_verbose() {
+        eprintln!("{}", first_run.api_key_row());
+    }
 
     if first_run.missing().contains(&"api_key") {
+        // In batch mode a pipe is words to ask and never a credential, so a key is
+        // only pasted when there is a terminal to paste it at.
+        if asked.is_some() && !batch::stdin_is_terminal() {
+            return refuse(&short_of(&first_run), USAGE);
+        }
         let pasted = match paste::ask() {
             Ok(pasted) => pasted,
             Err(error) => return refuse(&format!("cannot read a pasted api key: {error}"), USAGE),
@@ -76,10 +88,19 @@ fn main() -> ExitCode {
         return refuse(&short_of(&first_run), USAGE);
     }
 
-    // #17 and #19 own the run and the batch front end. Naming them is the honest
-    // answer, and this line goes the day either lands.
-    eprintln!("sindri: configured; the run itself arrives with tickets #17 and #19");
-    ExitCode::from(NOTHING_TO_RUN)
+    match asked {
+        Some(job) => batch::run(job, &cli, first_run.config()),
+        None if !batch::stdin_is_terminal() => refuse(
+            "a pipe is context for a prompt, and a prompt is what -b is for",
+            USAGE,
+        ),
+        // #36 owns the frame. Naming it is the honest answer, and this line goes
+        // the day the terminal UI lands.
+        None => {
+            eprintln!("sindri: configured; the terminal UI arrives with ticket #36");
+            ExitCode::from(NOTHING_TO_RUN)
+        }
+    }
 }
 
 /// What a first run is still short of, said as the config keys it wants and the
