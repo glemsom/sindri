@@ -2,6 +2,10 @@
 //! a complete answer stops it as `final`, the turn cap and the two run-scoped
 //! budgets stop it as their own reason, and the reason is one of five words.
 //!
+//! The `skill` tool is proved here too, at the seam the loop hands a call to:
+//! one load per conversation, the files beside the body in the wrapper, and
+//! `already_loaded` and no body after that, whichever door loaded it.
+//!
 //! Nothing here reaches a network or spends a second: the model is a script of
 //! replies and the tools are a script of costs, so a run of two hundred and
 //! fifty turns and a run that exhausts an hour of wall clock both finish inside
@@ -20,8 +24,8 @@ use sindri_core::policy::{
 use sindri_core::provider::{Deltas, Failure};
 use sindri_core::redact::{Redacted, SecretSet};
 use sindri_core::run::{
-    Acted, Budget, Call, Cancel, Executor, Limits, Load, Reply, Request, Responder, Run, Shell,
-    State, Stop,
+    Acted, Budget, Call, Cancel, Executor, Limits, Load, Loaded, Reply, Request, Responder, Run,
+    Shell, State, Stop,
 };
 use sindri_core::skills::Catalog;
 use sindri_core::tools::ToolSet;
@@ -156,7 +160,7 @@ fn calls(ledger: &Arc<Mutex<Vec<Call>>>) -> Vec<Call> {
 }
 
 impl Executor for Tools {
-    fn execute(&self, call: &Call) -> Result<Acted, Redacted> {
+    fn execute(&self, call: &Call, _loaded: &mut Loaded) -> Result<Acted, Redacted> {
         self.seen
             .lock()
             .expect("the log is not poisoned")
@@ -672,10 +676,13 @@ fn the_request_names_the_tools_the_front_end_registered() {
 #[test]
 fn the_bash_executor_counts_the_bytes_its_command_wrote() {
     let (_root, workspace, boundary) = ground();
-    let shell = Shell::new(boundary, &workspace);
+    let shell = Shell::new(boundary, &workspace, Catalog::default());
 
     let acted = shell
-        .execute(&Call::new("bash", r#"{"command":"printf hi"}"#))
+        .execute(
+            &Call::new("bash", r#"{"command":"printf hi"}"#),
+            &mut Loaded::default(),
+        )
         .expect("the command runs");
 
     assert_eq!(acted.bytes, 2, "two bytes of output were fed back");
@@ -686,10 +693,10 @@ fn the_bash_executor_counts_the_bytes_its_command_wrote() {
 #[test]
 fn a_bash_call_that_names_no_command_is_an_error() {
     let (_root, workspace, boundary) = ground();
-    let shell = Shell::new(boundary, &workspace);
+    let shell = Shell::new(boundary, &workspace, Catalog::default());
 
     let missing = shell
-        .execute(&Call::new("bash", "{}"))
+        .execute(&Call::new("bash", "{}"), &mut Loaded::default())
         .expect_err("no command was written, so nothing can run");
     assert!(
         missing.to_string().contains("command"),
@@ -697,10 +704,318 @@ fn a_bash_call_that_names_no_command_is_an_error() {
     );
 
     let unimplemented = shell
-        .execute(&Call::new("skill", r#"{"name":"code-review"}"#))
-        .expect_err("this executor runs bash and nothing else");
+        .execute(&Call::new("open", "{}"), &mut Loaded::default())
+        .expect_err("this executor answers bash and skill and nothing else");
     assert!(
-        unimplemented.to_string().contains("skill"),
+        unimplemented.to_string().contains("open"),
         "the refusal names the tool it cannot run: {unimplemented}"
+    );
+}
+
+/// A workspace that holds one skill on disk, with files beside its `SKILL.md`,
+/// so a load can be checked for the body it hands back and the neighbours it
+/// names. The skill is in the repository scope, one directory above the
+/// workspace, which is where discovery has to find it.
+struct SkillGround {
+    /// Keeps the tree alive for as long as the test.
+    _root: tempfile::TempDir,
+    /// The directory the run stands in.
+    workspace: PathBuf,
+    /// The boundary in force over that workspace.
+    boundary: Boundary,
+    /// The session temp a sandboxed command sees.
+    temp: PathBuf,
+}
+
+impl SkillGround {
+    /// A tree with one skill named `deploy`, whose body refers to two files
+    /// beside it: one at its top and one in a subdirectory.
+    fn new() -> SkillGround {
+        let root = tempfile::tempdir().expect("a temp ground");
+        let repo = root.path().join("repo");
+        std::fs::create_dir_all(repo.join(".git")).expect("the git marker");
+        let workspace = repo.join("work");
+        std::fs::create_dir_all(&workspace).expect("the workspace");
+        let temp = root.path().join("temp");
+        std::fs::create_dir_all(&temp).expect("the session temp");
+
+        let skill = repo.join(".agents/skills/deploy");
+        std::fs::create_dir_all(skill.join("scripts")).expect("the skill's scripts");
+        std::fs::write(
+            skill.join("SKILL.md"),
+            "---\nname: deploy\ndescription: ship the branch\n---\n\n\
+             Run `scripts/release.sh`, then follow `checklist.md`.\n",
+        )
+        .expect("the skill file");
+        std::fs::write(skill.join("scripts/release.sh"), "#!/bin/sh\n").expect("a script");
+        std::fs::write(skill.join("checklist.md"), "- [ ] tag the branch\n").expect("a page");
+
+        let workspace = std::fs::canonicalize(&workspace).expect("the ground resolves");
+        let boundary = Boundary::from_config(&Config::default(), &workspace, Enforcement::Unsafe)
+            .expect("the boundary holds");
+        SkillGround {
+            _root: root,
+            workspace,
+            boundary,
+            temp,
+        }
+    }
+
+    /// The catalog a run standing in this workspace discovers.
+    fn catalog(&self) -> Catalog {
+        Catalog::discover_with_builtin(&self.workspace, None, &[])
+    }
+
+    /// The `skill` tool over this ground's catalog.
+    fn shell(&self) -> Shell {
+        Shell::new(self.boundary.clone(), &self.temp, self.catalog())
+    }
+
+    /// A `skill` call naming `name`.
+    fn load(&self, name: &str) -> Call {
+        Call::new("skill", format!(r#"{{"name":"{name}"}}"#))
+    }
+
+    /// The `skill` tool with a recorder around it, so a test can read what the
+    /// model was told and not only what it asked for: the loop keeps the calls,
+    /// and the answer is what this ticket is about.
+    fn recorded(&self) -> (Recorded, Arc<Mutex<Vec<String>>>) {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        (
+            Recorded {
+                shell: self.shell(),
+                seen: Arc::clone(&seen),
+            },
+            seen,
+        )
+    }
+}
+
+/// The `skill` tool, with every answer it gave kept in a log the test reads
+/// afterwards.
+struct Recorded {
+    /// The tool itself, which is the seam under test.
+    shell: Shell,
+    /// What each call answered, in order.
+    seen: Arc<Mutex<Vec<String>>>,
+}
+
+impl Executor for Recorded {
+    fn execute(&self, call: &Call, loaded: &mut Loaded) -> Result<Acted, Redacted> {
+        let acted = self.shell.execute(call, loaded)?;
+        self.seen
+            .lock()
+            .expect("the log is not poisoned")
+            .push(acted.text.clone());
+        Ok(acted)
+    }
+}
+
+/// Every answer the skill tool gave, in order.
+fn answers(log: &Arc<Mutex<Vec<String>>>) -> Vec<String> {
+    log.lock().expect("the log is not poisoned").clone()
+}
+
+#[test]
+fn a_first_load_hands_back_the_body_with_the_files_beside_it() {
+    let ground = SkillGround::new();
+    let shell = ground.shell();
+    let mut loaded = Loaded::default();
+
+    let acted = shell
+        .execute(&ground.load("deploy"), &mut loaded)
+        .expect("the skill is in the catalog");
+
+    assert!(
+        acted
+            .text
+            .contains("Run `scripts/release.sh`, then follow `checklist.md`."),
+        "the body is handed back: {}",
+        acted.text
+    );
+    assert!(
+        !acted.text.contains("ship the branch") && !acted.text.contains("name: deploy"),
+        "the frontmatter is stripped rather than echoed: {}",
+        acted.text
+    );
+    assert!(
+        acted.text.contains("`scripts/release.sh`") && acted.text.contains("`checklist.md`"),
+        "the files beside the SKILL.md are listed, so a relative reference resolves: {}",
+        acted.text
+    );
+}
+
+#[test]
+fn a_second_load_answers_already_loaded_and_carries_no_body() {
+    let ground = SkillGround::new();
+    let shell = ground.shell();
+    let mut loaded = Loaded::default();
+
+    shell
+        .execute(&ground.load("deploy"), &mut loaded)
+        .expect("the first load");
+    let acted = shell
+        .execute(&ground.load("deploy"), &mut loaded)
+        .expect("the second load is answered, not refused");
+
+    assert!(
+        acted.text.contains("already_loaded"),
+        "the second load says why it carries nothing: {}",
+        acted.text
+    );
+    assert!(
+        !acted.text.contains("Run `scripts/release.sh`"),
+        "and carries no body, because a tool result is re-sent every turn: {}",
+        acted.text
+    );
+    assert!(
+        !acted.text.contains("checklist.md"),
+        "nor the file listing the body was wrapped with: {}",
+        acted.text
+    );
+}
+
+#[test]
+fn an_unknown_skill_name_is_refused_by_naming_the_catalog() {
+    let ground = SkillGround::new();
+    let shell = ground.shell();
+    let mut loaded = Loaded::default();
+
+    let refused = shell
+        .execute(&ground.load("deployy"), &mut loaded)
+        .expect_err("the catalog does not hold that name");
+
+    assert!(
+        refused.to_string().contains("deployy"),
+        "the refusal names what was asked for: {refused}"
+    );
+    assert!(
+        refused.to_string().contains("deploy"),
+        "and the catalog it could have named instead: {refused}"
+    );
+    assert!(
+        !loaded.contains("deployy"),
+        "a refused name is not loaded, so a later call is not already_loaded"
+    );
+}
+
+#[test]
+fn two_identical_loads_in_one_turn_are_one_load() {
+    let ground = SkillGround::new();
+    let (tools, log) = ground.recorded();
+    let model = Scripted::answering([
+        Reply::asking("loading", [ground.load("deploy"), ground.load("deploy")]),
+        Reply::answer("done"),
+    ]);
+    let mut run = Run::new("deploy it", model, tools);
+
+    run.drive(&mut Transcript::default());
+
+    let answers = answers(&log);
+    assert_eq!(answers.len(), 2, "both calls are answered");
+    assert!(
+        answers[0].contains("Run `scripts/release.sh`"),
+        "the first call loads the body: {}",
+        answers[0]
+    );
+    assert!(
+        answers[1].contains("already_loaded") && !answers[1].contains("Run `scripts/release.sh`"),
+        "the second is one load too, and carries no body: {}",
+        answers[1]
+    );
+    assert_eq!(
+        run.skills(),
+        ["deploy".to_owned()],
+        "the set holds the name once"
+    );
+}
+
+#[test]
+fn a_human_load_makes_the_next_model_load_already_loaded() {
+    let ground = SkillGround::new();
+    let (tools, log) = ground.recorded();
+    let model = Scripted::answering([
+        Reply::asking("loading", [ground.load("deploy")]),
+        Reply::answer("done"),
+    ]);
+    let mut run = Run::new("deploy it", model, tools);
+
+    assert_eq!(
+        run.load_skill("deploy"),
+        Load::Loaded,
+        "the human loads it first, with `/skill:deploy`"
+    );
+    run.drive(&mut Transcript::default());
+
+    let answers = answers(&log);
+    assert_eq!(answers.len(), 1);
+    assert!(
+        answers[0].contains("already_loaded") && !answers[0].contains("Run `scripts/release.sh`"),
+        "the model's later load is the same conversation's load, so it carries no body: {}",
+        answers[0]
+    );
+}
+
+#[test]
+fn clearing_the_history_allows_a_fresh_load() {
+    let ground = SkillGround::new();
+    let (tools, log) = ground.recorded();
+    let model = Scripted::answering([
+        Reply::asking("loading", [ground.load("deploy")]),
+        Reply::asking("loading again", [ground.load("deploy")]),
+        Reply::answer("done"),
+    ]);
+    let mut run = Run::new("deploy it", model, tools);
+
+    run.turn(&mut Transcript::default());
+    run.clear_history();
+    run.drive(&mut Transcript::default());
+
+    let answers = answers(&log);
+    assert_eq!(answers.len(), 2, "one load before `/new` and one after it");
+    assert!(
+        answers[1].contains("Run `scripts/release.sh`"),
+        "a cleared history is a new conversation, so the body is handed over again: {}",
+        answers[1]
+    );
+}
+
+#[test]
+fn a_builtin_skill_loads_from_the_binary_and_lists_no_files_beside_it() {
+    let root = tempfile::tempdir().expect("a temp ground");
+    let workspace = std::fs::canonicalize(root.path()).expect("the ground resolves");
+    let boundary = Boundary::from_config(&Config::default(), &workspace, Enforcement::Unsafe)
+        .expect("the boundary holds");
+    let shell = Shell::new(boundary, &workspace, Catalog::discover(&workspace, None));
+    let mut loaded = Loaded::default();
+
+    let acted = shell
+        .execute(
+            &Call::new("skill", r#"{"name":"commit-message"}"#),
+            &mut loaded,
+        )
+        .expect("the binary carries this skill");
+
+    assert!(
+        acted
+            .text
+            .contains("Write from the diff, never from memory"),
+        "the body is handed back: {}",
+        acted.text
+    );
+    assert!(
+        !acted.text.contains("description:") && !acted.text.contains("name: commit-message"),
+        "the frontmatter is stripped rather than echoed: {}",
+        acted.text
+    );
+    assert!(
+        acted.text.contains("compiled into the binary"),
+        "a skill with no directory says there is nothing beside it: {}",
+        acted.text
+    );
+    assert!(
+        !acted.text.contains("Files in this skill's directory"),
+        "and does not list a directory it does not have: {}",
+        acted.text
     );
 }

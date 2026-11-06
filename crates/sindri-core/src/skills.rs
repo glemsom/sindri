@@ -70,6 +70,83 @@ pub struct Skill {
     pub body: String,
 }
 
+impl Skill {
+    /// Every file beside this skill's `SKILL.md`, as a path relative to its
+    /// directory, in path order: what a load lists so a relative reference in
+    /// the body resolves.
+    ///
+    /// The walk starts at the directory discovery found the skill in, so the
+    /// list and the skill cannot disagree about which `SKILL.md` was read. A
+    /// directory is descended; a link is listed and never followed, because a
+    /// link to a parent would walk for ever, while a link to a file is exactly
+    /// what listing one is for. A builtin has no directory and so no files.
+    pub fn files(&self) -> Vec<String> {
+        let Some(directory) = &self.directory else {
+            return Vec::new();
+        };
+
+        let mut files = Vec::new();
+        let mut pending = vec![directory.clone()];
+        while let Some(next) = pending.pop() {
+            let entries = match std::fs::read_dir(&next) {
+                Ok(entries) => entries,
+                Err(_) => continue,
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let relative = path
+                    .strip_prefix(directory)
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .into_owned();
+                match entry.file_type() {
+                    Ok(kind) if kind.is_dir() => pending.push(path),
+                    Ok(_) => files.push(relative),
+                    Err(_) => continue,
+                }
+            }
+        }
+        files.sort();
+        files
+    }
+
+    /// The wrapper a load hands the model: the body with its frontmatter
+    /// stripped, inside a tag naming the skill, and the files beside its
+    /// `SKILL.md` listed so a relative reference in the body resolves (§5).
+    ///
+    /// The body is handed over once and never again: a tool result is re-sent
+    /// with every later turn, so a second load answers `already_loaded` instead
+    /// of repeating what the model already has (§5).
+    pub fn wrapper(&self) -> String {
+        let mut text = format!(
+            "The `{}` skill was loaded, from the {} scope.\n\n<skill name=\"{}\">\n{}\n</skill>\n",
+            self.name,
+            self.scope,
+            self.name,
+            self.body.trim_end()
+        );
+        match &self.directory {
+            Some(directory) => {
+                text.push_str(&format!(
+                    "\nFiles in this skill's directory, `{}`, so a relative reference in the \
+                     body above resolves from there:\n",
+                    directory.display()
+                ));
+                for file in self.files() {
+                    text.push_str("- `");
+                    text.push_str(&file);
+                    text.push_str("`\n");
+                }
+            }
+            None => text.push_str(
+                "\nThis skill is compiled into the binary, so it has no files beside its \
+                 `SKILL.md`.\n",
+            ),
+        }
+        text
+    }
+}
+
 /// A name two skills offer, and which of them the catalog kept.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Shadowing {

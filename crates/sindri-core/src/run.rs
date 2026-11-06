@@ -43,7 +43,8 @@ use crate::config::Config;
 use crate::policy::{Boundary, DEFAULT_COMMAND_BUDGET_MS, DEFAULT_OUTPUT_BUDGET_BYTES};
 use crate::provider::{Deltas, Failure};
 use crate::redact::{Redacted, SecretSet};
-use crate::tools::{BASH, ToolSet};
+use crate::skills::Catalog;
+use crate::tools::{BASH, SKILL, ToolSet};
 
 /// The turn cap a run gets when the config names none (§4).
 pub const DEFAULT_MAX_TURNS: u32 = 250;
@@ -493,9 +494,15 @@ pub trait Responder {
 
 /// The tools, as the loop needs them: one call in, what it did out, or the
 /// failure that stops the run as `error`.
+///
+/// The loaded-skill set rides on the call rather than on the executor, because
+/// it is the run's bookkeeping and not a tool's: a `skill` call is answered by
+/// the tool that holds the catalog, and what has been loaded is decided in one
+/// place for both doors into it (§5, A14).
 pub trait Executor {
-    /// Run `call` and say what it cost the run.
-    fn execute(&self, call: &Call) -> Result<Acted, Redacted>;
+    /// Run `call`, offering a skill it loads to `loaded`, and say what it cost
+    /// the run.
+    fn execute(&self, call: &Call, loaded: &mut Loaded) -> Result<Acted, Redacted>;
 }
 
 /// The answer §5 gives a second load of one skill: the body, or the word
@@ -506,6 +513,48 @@ pub enum Load {
     Loaded,
     /// The skill was already loaded this run, so this call returns no body.
     AlreadyLoaded,
+}
+
+/// The skills loaded so far in a run's history, in the order they were loaded:
+/// the one set every load consults, and the one clearing the history empties.
+///
+/// Both doors into it write here and neither keeps a set of its own — the
+/// human's `/skill:name` and the model's `skill` call — which is what makes a
+/// human load answer a later model load with `already_loaded` (A14).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Loaded {
+    /// The names, in load order, which is the order a request carries them in.
+    names: Vec<String>,
+}
+
+impl Loaded {
+    /// The names loaded so far, in load order.
+    pub fn names(&self) -> &[String] {
+        &self.names
+    }
+
+    /// Whether `name` has been loaded already.
+    pub fn contains(&self, name: &str) -> bool {
+        self.names.iter().any(|loaded| loaded == name)
+    }
+
+    /// Offer `name` to the set, once per conversation: a name already in it is
+    /// `already_loaded` and carries no body (§5). Two identical loads in one
+    /// turn land here one after the other, so the second is one load too.
+    pub fn load(&mut self, name: impl Into<String>) -> Load {
+        let name = name.into();
+        if self.contains(&name) {
+            return Load::AlreadyLoaded;
+        }
+        self.names.push(name);
+        Load::Loaded
+    }
+
+    /// Forget every name, because the history was cleared and the conversation
+    /// is the history (§4, A14).
+    pub fn clear(&mut self) {
+        self.names.clear();
+    }
 }
 
 /// One run: the loop that makes a turn of each request, holds the history and
@@ -532,8 +581,8 @@ pub struct Run<R, A> {
     spent: Spent,
     /// Turns started so far.
     turns: u32,
-    /// The skills loaded this run, in the order they were loaded.
-    skills: Vec<String>,
+    /// The skills loaded in this history, in the order they were loaded.
+    skills: Loaded,
     /// What has been asked and answered, oldest first.
     history: Vec<Exchange>,
     /// The text of the turn that produced a complete answer.
@@ -555,7 +604,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
             cancel: Cancel::new(),
             spent: Spent::default(),
             turns: 0,
-            skills: Vec::new(),
+            skills: Loaded::default(),
             history: Vec::new(),
             answer: None,
             state: State::Running,
@@ -612,9 +661,9 @@ impl<R: Responder, A: Executor> Run<R, A> {
         &self.history
     }
 
-    /// The skills loaded this run, in the order they were loaded.
+    /// The skills loaded in this history, in the order they were loaded.
     pub fn skills(&self) -> &[String] {
-        &self.skills
+        self.skills.names()
     }
 
     /// The answer a front end may print: the text of the turn that produced a
@@ -630,12 +679,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
     /// Offer `name` to the loaded-skill set, once per conversation: a name
     /// already loaded this run is `already_loaded` and carries no body (§5).
     pub fn load_skill(&mut self, name: impl Into<String>) -> Load {
-        let name = name.into();
-        if self.skills.contains(&name) {
-            return Load::AlreadyLoaded;
-        }
-        self.skills.push(name);
-        Load::Loaded
+        self.skills.load(name)
     }
 
     /// Clear the history, and the loaded-skill set with it: a load is once per
@@ -688,7 +732,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
         // as it lands: no further call is run once the budget is spent, and no
         // further turn is started either.
         for call in &reply.calls {
-            let acted = match self.executor.execute(call) {
+            let acted = match self.executor.execute(call, &mut self.skills) {
                 Ok(acted) => acted,
                 Err(message) => {
                     self.settle(Stop::Error(message));
@@ -728,7 +772,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
             turn: self.turns,
             prompt: self.prompt.clone(),
             history: self.history.clone(),
-            skills: self.skills.clone(),
+            skills: self.skills.names().to_vec(),
             tools: self.tools.clone(),
         }
     }
@@ -747,14 +791,20 @@ impl<R: Responder, A: Executor> Run<R, A> {
     }
 }
 
-/// The `bash` tool, as the loop needs it: one command string, run under the
-/// boundary in force and in the session temp handed in, timed and counted as it
-/// is handed back.
+/// The tools a run really has, as the loop needs them: `bash`, one command
+/// string run under the boundary in force and in the session temp handed in,
+/// timed and counted as it is handed back; and `skill`, one name answered out of
+/// the catalog discovery built.
 ///
 /// The session temp is an input: nothing here creates, adopts or clears it away,
 /// and nothing here writes a spill file either. What a command cost is decided
 /// here; where an overflow of it goes is the session temp's (#16), so the two
 /// never own the same fact.
+///
+/// The catalog is an input for the same reason: the skill tool names what
+/// discovery found, so the description the model reads, the name a call may use
+/// and the files a load lists are one catalog rather than three readings of a
+/// directory.
 #[derive(Clone, Debug)]
 pub struct Shell {
     /// The boundary in force, which the argv is rendered from and from nowhere
@@ -762,30 +812,25 @@ pub struct Shell {
     boundary: Boundary,
     /// The session temp a sandboxed command sees as `TMPDIR`.
     temp: PathBuf,
+    /// The catalog in force, which is what a `skill` call names a value from.
+    catalog: Catalog,
 }
 
 impl Shell {
-    /// The `bash` tool over `boundary`, with `temp` as the session temp.
-    pub fn new(boundary: Boundary, temp: impl Into<PathBuf>) -> Shell {
+    /// The tools over `boundary` and `catalog`, with `temp` as the session temp.
+    pub fn new(boundary: Boundary, temp: impl Into<PathBuf>, catalog: Catalog) -> Shell {
         Shell {
             boundary,
             temp: temp.into(),
+            catalog,
         }
     }
-}
 
-impl Executor for Shell {
-    fn execute(&self, call: &Call) -> Result<Acted, Redacted> {
-        if call.name != BASH {
-            return Err(SecretSet::default().redact(format!(
-                "this run cannot run `{}`: only `{BASH}` is implemented",
-                call.name
-            )));
-        }
-        let command = command_of(&call.arguments).ok_or_else(|| {
+    /// The `bash` half: one command, run under the boundary and in the temp.
+    fn bash(&self, arguments: &str) -> Result<Acted, Redacted> {
+        let command = command_of(arguments).ok_or_else(|| {
             SecretSet::default().redact(format!(
-                "a `{BASH}` call names its command as {{\"command\": \"...\"}}, and this one was {}",
-                call.arguments
+                "a `{BASH}` call names its command as {{\"command\": \"...\"}}, and this one was {arguments}"
             ))
         })?;
 
@@ -798,6 +843,74 @@ impl Executor for Shell {
             elapsed: started.elapsed(),
         })
     }
+
+    /// The `skill` half: a name from the catalog, answered once per conversation
+    /// with the body in its wrapper and no second time with the body at all.
+    ///
+    /// A name the catalog does not hold is a refusal, not `already_loaded`: the
+    /// two are different failures and each says which one it is. A load runs no
+    /// command, so it spends neither of the run's budgets.
+    fn skill(&self, arguments: &str, loaded: &mut Loaded) -> Result<Acted, Redacted> {
+        let name = name_of(arguments).ok_or_else(|| {
+            SecretSet::default().redact(format!(
+                "a `{SKILL}` call names its skill as {{\"name\": \"...\"}}, and this one was {arguments}"
+            ))
+        })?;
+
+        let skill = self.catalog.get(&name).ok_or_else(|| {
+            SecretSet::default().redact(format!(
+                "no skill is named `{name}` in the catalog in force; it holds {}",
+                held(&self.catalog)
+            ))
+        })?;
+
+        let text = match loaded.load(&name) {
+            Load::Loaded => skill.wrapper(),
+            Load::AlreadyLoaded => format!(
+                "already_loaded: `{name}` was loaded earlier in this conversation, so its \
+                 instructions are already in hand and are not repeated here."
+            ),
+        };
+        Ok(Acted {
+            text,
+            bytes: 0,
+            elapsed: Duration::ZERO,
+        })
+    }
+}
+
+impl Executor for Shell {
+    fn execute(&self, call: &Call, loaded: &mut Loaded) -> Result<Acted, Redacted> {
+        match call.name.as_str() {
+            BASH => self.bash(&call.arguments),
+            SKILL => self.skill(&call.arguments, loaded),
+            other => Err(SecretSet::default().redact(format!(
+                "this run cannot run `{other}`: its tools are `{BASH}` and `{SKILL}`"
+            ))),
+        }
+    }
+}
+
+/// The names a catalog holds, as a refusal writes them, so a call that invented
+/// a name is answered with the values it could have used instead.
+fn held(catalog: &Catalog) -> String {
+    let names: Vec<String> = catalog
+        .skills()
+        .iter()
+        .map(|skill| format!("`{}`", skill.name))
+        .collect();
+    if names.is_empty() {
+        return String::from("no skill at all");
+    }
+    names.join(", ")
+}
+
+/// The skill name a `skill` call wrote, out of the arguments the wire handed
+/// over: `{"name": "..."}`, and nothing else.
+fn name_of(arguments: &str) -> Option<String> {
+    let arguments: Value = serde_json::from_str(arguments).ok()?;
+    let name = arguments.get("name")?.as_str()?;
+    Some(name.to_owned())
 }
 
 /// The command string a `bash` call wrote, out of the arguments the wire handed

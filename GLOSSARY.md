@@ -84,6 +84,10 @@ _Avoid_: Event, log line, message
 A directory holding a `SKILL.md` whose body the model can load by name, in one of three scopes.
 _Avoid_: Prompt, plugin, recipe, tool
 
+**Loaded-skill set**:
+The names loaded so far, in load order — one set, which the human's `/skill:name` and the model's `skill` call both write to, and which clearing the history empties. The conversation *is* the run's history (A14).
+_Avoid_: Conversation state, skill cache, loaded prompt
+
 **Scope**:
 Where a skill came from, lowest precedence first: `builtin`, `user`, `repo`.
 _Avoid_: Source, origin, level
