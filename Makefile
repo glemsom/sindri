@@ -10,8 +10,8 @@
 #     make check      every stage, in order (the definition of done)
 #     make audit      only the four fast audits (spec §16; the commit hook's entry)
 #     make sandbox    only the sandbox tier, and the test of its own verdicts
-#     make <stage>    one stage alone — fmt, clippy, audit, test, toolchain,
-#                     sandbox
+#     make <stage>    one stage alone — fmt, clippy, audit, test, bench,
+#                     toolchain, sandbox
 #
 # A stage line reads `check: <stage> ... ok` or `... FAIL`, printed after the
 # stage's own output so the verdict is the last thing the eye lands on. Nothing
@@ -39,7 +39,7 @@ SHELL := /bin/bash
 
 # The definition of done, in order: cheap and fast first, so the slow stages run
 # only on a tree that already passes the quick ones.
-STAGES := fmt clippy audit test toolchain sandbox evals no-relink
+STAGES := fmt clippy audit test bench toolchain sandbox evals no-relink
 
 .PHONY: check $(STAGES) sandbox-tier
 
@@ -99,6 +99,17 @@ audit:
 
 test:
 	$(call stage,test,cargo test --workspace)
+
+# The wording bench of spec §9 and §16, landed by ticket #60: the preamble is
+# re-sent every turn, so every word is a tax, and the bench prices each section
+# and each tool description by token cost against the budget it states — a
+# wording over that budget stops the run here. It sits after `test` on purpose:
+# `cargo test --workspace` has already built this target, so all this stage pays
+# is running it, not compiling it, and `--nocapture` is what lets the table out.
+# The estimator is printed with the table, because it is an estimate of a token
+# count and not one.
+bench:
+	$(call stage,bench,cargo test -p sindri-core --test wording_bench -- --nocapture)
 
 # Proves the devbox shell supplies the pinned Rust 1.99 and the musl target
 # (ADR 0001, ticket #4 wired here by #5).
