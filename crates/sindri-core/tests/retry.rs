@@ -9,6 +9,7 @@ use std::time::Duration;
 use sindri_core::provider::retry::{BACKOFF, Backoff, until_final};
 use sindri_core::provider::transport::{Canned, Http, Replay};
 use sindri_core::provider::{Ask, Client, Deltas, Failure, Verdict};
+use sindri_core::redact::SecretSet;
 use sindri_core::wire::Wire;
 
 /// An Anthropic Messages reply, as the wire streamed it.
@@ -53,7 +54,7 @@ fn failure(verdict: Verdict, retryable: bool, streamed: bool) -> Failure {
         verdict,
         retryable,
         streamed,
-        message: format!("{verdict:?} as the wire told it"),
+        message: SecretSet::default().redact(format!("{verdict:?} as the wire told it")),
     }
 }
 
@@ -112,7 +113,7 @@ fn a_rate_limited_reply_and_a_server_fault_are_retried_until_the_wire_answers() 
         Canned::stream(ANTHROPIC),
     ]);
     let pause = Recorded::default();
-    let client = Client::over(replay.clone()).waits(pause.clone());
+    let client = Client::over(replay.clone(), SecretSet::default()).waits(pause.clone());
 
     let answer = client
         .ask(&anthropic_ask(), &mut Transcript::default())
@@ -131,7 +132,7 @@ fn a_rate_limited_reply_and_a_server_fault_are_retried_until_the_wire_answers() 
 fn a_client_error_reaches_the_wire_once() {
     let replay = Replay::new([Canned::reply(400, BAD_REQUEST), Canned::stream(ANTHROPIC)]);
     let pause = Recorded::default();
-    let client = Client::over(replay.clone()).waits(pause.clone());
+    let client = Client::over(replay.clone(), SecretSet::default()).waits(pause.clone());
 
     let failure = client
         .ask(&anthropic_ask(), &mut Transcript::default())
@@ -153,7 +154,7 @@ fn a_reply_that_streamed_a_delta_is_tried_once() {
         Canned::stream(ANTHROPIC),
     ]);
     let pause = Recorded::default();
-    let client = Client::over(replay.clone()).waits(pause.clone());
+    let client = Client::over(replay.clone(), SecretSet::default()).waits(pause.clone());
     let mut transcript = Transcript::default();
 
     let failure = client
@@ -174,7 +175,7 @@ fn a_reply_that_streamed_a_delta_is_tried_once() {
 fn a_transport_failure_is_tried_three_times_and_then_given_up() {
     let replay = Replay::new(std::iter::empty::<Canned>());
     let pause = Recorded::default();
-    let client = Client::over(replay.clone()).waits(pause.clone());
+    let client = Client::over(replay.clone(), SecretSet::default()).waits(pause.clone());
 
     let failure = client
         .ask(&anthropic_ask(), &mut Transcript::default())
@@ -245,7 +246,10 @@ fn an_extra_header_reaches_the_wire_with_the_session_expanded() {
             "cache-per-session-{session}".to_owned(),
         ),
     ];
-    let client = Client::over(Http::new(headers).session("7f3c-a1").over(replay.clone()));
+    let client = Client::over(
+        Http::new(headers).session("7f3c-a1").over(replay.clone()),
+        SecretSet::default(),
+    );
 
     client
         .ask(&anthropic_ask(), &mut Transcript::default())

@@ -15,3 +15,12 @@ message is built from an enum of permitted facts, never from a formatted string.
 
 The test that keeps it honest walks every `Entry` variant with a known secret planted in each
 field and asserts the serialized bytes never contain it.
+
+## As built
+
+`Redacted` carries the `SecretSet` it scrubs through, rather than a bare `String` handed its
+set at every print: a value that has to be given a set is a value that can be printed
+without one. `Debug` scrubs alongside `Display` and `Serialize`, because the verbose stream
+is one of the four windows. The set is a constructor argument of the provider seam's client,
+so a client that knows no secrets says `SecretSet::default()` where it is built instead of
+inheriting that state by omission, and a wire's refusal is scrubbed where its text is born.

@@ -6,6 +6,7 @@
 
 use sindri_core::provider::transport::{Canned, Http, Replay};
 use sindri_core::provider::{Ask, Client, Credential, Deltas, Verdict};
+use sindri_core::redact::SecretSet;
 use sindri_core::wire::Wire;
 
 /// An Anthropic Messages reply, reasoning block first, as the wire streamed it.
@@ -46,7 +47,7 @@ fn anthropic_ask() -> Ask {
 }
 
 fn client_over(replay: &Replay) -> Client {
-    Client::over(replay.clone())
+    Client::over(replay.clone(), SecretSet::default())
 }
 
 #[test]
@@ -128,7 +129,10 @@ fn the_wire_is_addressed_by_its_own_endpoint_and_sends_the_ask() {
 fn the_transport_carries_the_runs_extra_headers_to_the_wire() {
     let replay = Replay::new([Canned::stream(ANTHROPIC)]);
     let headers = vec![("x-sindri-session".to_owned(), "s-1".to_owned())];
-    let client = Client::over(Http::new(headers).over(replay.clone()));
+    let client = Client::over(
+        Http::new(headers).over(replay.clone()),
+        SecretSet::default(),
+    );
 
     client
         .ask(&anthropic_ask(), &mut Transcript::default())
@@ -180,9 +184,8 @@ fn a_client_error_comes_back_with_a_verdict_that_forbids_retrying() {
     assert!(!failure.retryable, "a client error retries nowhere");
     assert!(!failure.streamed, "nothing had streamed");
     assert!(
-        failure.message.contains("400"),
-        "the failure names what the wire said: {}",
-        failure.message
+        failure.to_string().contains("400"),
+        "the failure names what the wire said: {failure}"
     );
 }
 
@@ -190,7 +193,7 @@ fn a_client_error_comes_back_with_a_verdict_that_forbids_retrying() {
 fn a_rate_limited_ask_is_reported_as_retryable() {
     let replay = Replay::new(std::iter::repeat_n(Canned::reply(429, BAD_REQUEST), 3));
 
-    let failure = Client::over(replay.clone())
+    let failure = Client::over(replay.clone(), SecretSet::default())
         .waits(|_| {})
         .ask(&anthropic_ask(), &mut Transcript::default())
         .expect_err("a 429 is not an answer");

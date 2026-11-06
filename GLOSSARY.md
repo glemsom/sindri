@@ -92,6 +92,20 @@ _Avoid_: Source, origin, level
 A nearer scope taking a name from a further one, which is reported rather than resolved silently.
 _Avoid_: Override, collision, duplicate
 
+## Secrets
+
+**Secret**:
+A literal string a run was trusted with — the credential, an extra header's value — that nothing the run writes may contain.
+_Avoid_: Key, token, password, environment value
+
+**Redacted**:
+A string that scrubs itself wherever it leaves the core, so a window prints a safe value without remembering to. It carries the `SecretSet` it scrubs through.
+_Avoid_: Masked, sanitised, filtered
+
+**Secret set**:
+Every literal a run must never let out, matched longest first, so a secret that contains another cannot leave a tail behind.
+_Avoid_: Denylist, pattern list, filter
+
 ## The shape
 
 **Core**:
