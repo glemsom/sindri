@@ -86,12 +86,17 @@ SH
 
 # A make whose run goes on past the stage that failed: the FAIL line is there and
 # the gate still did not stop, so the defect was seen and the run continued.
+#
+# It is `/bin/sh` and POSIX on purpose, like every stand-in below: on a machine
+# whose `sh` is dash — the runner this CI uses — a `[[` would fail to be found,
+# the canary line would never be printed, and this case would read as a probe that
+# missed a run going on rather than as a stand-in that never drew the line.
 cat >"$scratch/machine-runon/make" <<'SH'
 #!/bin/sh
 for arg in "$@"; do case $arg in STAGES=*) stages=${arg#STAGES=} ;; esac; done
 set -- $stages
 printf 'check: %s ... FAIL\n' "${1:-fmt}"
-[[ -n ${2:-} ]] && printf 'check: %s ... ok\n' "$2"
+[ -n "${2:-}" ] && printf 'check: %s ... ok\n' "$2"
 exit 2
 SH
 
