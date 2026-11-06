@@ -4,11 +4,13 @@
 use std::fmt;
 
 use serde::Deserialize;
+use serde::Serialize;
 use serde::de::Error as _;
 
 /// A provider dialect, from the closed set the parser accepts. A fourth wire
 /// cannot be invented in the interface, because there is no word for it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Wire {
     /// Anthropic Messages.
     Anthropic,

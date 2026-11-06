@@ -34,6 +34,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
+use serde::Serialize;
+use serde::Serializer;
 use serde_json::Value;
 
 use crate::bash::{self, Outcome};
@@ -236,6 +238,14 @@ impl State {
     /// Whether a turn may still start.
     pub fn is_running(&self) -> bool {
         matches!(self, State::Running)
+    }
+}
+
+impl Serialize for State {
+    /// The word a record writes: `running` until a stop reason lands, and the
+    /// stop reason's own word after that.
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.word())
     }
 }
 
