@@ -165,6 +165,33 @@ impl Catalog {
         self.skills.iter().find(|skill| skill.name == name)
     }
 
+    /// The `skill` tool's description: the catalog in force, rendered from
+    /// `listing()` — the very value `doctor` prints — so the words the model's
+    /// schema carries and the lines a person reads cannot drift apart.
+    ///
+    /// `None` when the catalog holds no skill: a tool with nothing to name is not
+    /// registered at all, rather than registered to say it has nothing.
+    pub fn tool_description(&self) -> Option<String> {
+        let listing = self.listing();
+        if listing.is_empty() {
+            return None;
+        }
+
+        let mut lines = vec![
+            String::from(
+                "Load a skill's instructions by name. A call names one value from the catalog \
+                 below, and the load returns those instructions with their frontmatter stripped.",
+            ),
+            String::new(),
+            String::from("Skills in force:"),
+        ];
+        for entry in &listing {
+            lines.push(String::new());
+            lines.push(format!("- `{}` — {}", entry.name, entry.description));
+        }
+        Some(lines.join("\n"))
+    }
+
     /// The catalog as lines, in name order: the shape `doctor` prints, so the
     /// command owns the printing and this owns what is printed. A builtin has no
     /// path to show, which is why `scope` is the word that names it.
@@ -286,7 +313,10 @@ fn sources(
 /// `.git`, which is a file in a worktree and a directory in a clone. A workspace
 /// in no repository at all is its own root, because walking to the filesystem
 /// root would hand a project the skills of whatever it happens to sit inside.
-fn repository_root(workspace: &Path) -> PathBuf {
+///
+/// The preamble reads the repository's `AGENTS.md` at this same root, so §7's
+/// scopes and §8's instructions stop at one directory rather than two.
+pub(crate) fn repository_root(workspace: &Path) -> PathBuf {
     let mut cursor = Some(workspace);
     while let Some(directory) = cursor {
         if directory.join(".git").exists() {
