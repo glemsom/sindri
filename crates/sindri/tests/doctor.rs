@@ -14,6 +14,13 @@
 //! stand-in `bwrap` first on `PATH`, the way `scripts/sandbox-probe-test.sh`
 //! fakes a machine: one that refuses to unshare, and one that records the argv it
 //! was handed so the proof can be shown to be a real invocation.
+//!
+//! The tests that read the report off this machine's own `PATH` do not require it
+//! to be able to make a sandbox: `doctor` prints the whole report either way and
+//! ends `0` over a sandbox it proved and `3` over one the kernel refused (§15, A1),
+//! and that a host may forbid the second is a fact about the host rather than a
+//! verdict on the report. What is not relaxed is the description's bytes — nor the
+//! card, which a faked machine proves where this one may not.
 
 use std::fs::Permissions;
 use std::os::unix::fs::PermissionsExt;
@@ -158,6 +165,23 @@ fn run(command: &mut Command) -> Output {
     command.output().expect("the binary should run")
 }
 
+/// Asserts that `doctor` answered with a report rather than a refusal of its own:
+/// `0` over a sandbox this machine proved, and `3` over one its kernel would not
+/// let it make — the report is whole in both, with the card printed under a
+/// `sandbox failed` row (§15, A1). Which of the two this host is, is the host's
+/// fact; the card itself is read in
+/// `a_sandbox_check_that_fails_is_named_in_a_card_and_exits_three`, from a machine
+/// that refuses on demand.
+fn a_report_was_made(output: &Output) {
+    assert!(
+        matches!(output.status.code(), Some(0) | Some(3)),
+        "doctor ended {:?} instead of reporting: stdout:\n{}\nstderr:\n{}",
+        output.status.code(),
+        text(&output.stdout),
+        text(&output.stderr)
+    );
+}
+
 /// The description doctor printed, cut out by the heading it is printed under and
 /// the heading that follows it.
 fn printed_description(stdout: &str) -> &str {
@@ -205,7 +229,7 @@ fn every_skill_found_is_listed_with_the_scope_it_came_from() {
     let output = run(ground.command(&path).args(["doctor"]));
 
     let out = text(&output.stdout);
-    assert_eq!(output.status.code(), Some(0), "stdout:\n{out}");
+    a_report_was_made(&output);
 
     // One builtin is compiled in, so three skills are found: one per scope.
     assert!(
@@ -253,7 +277,7 @@ fn a_shadowed_name_reports_both_sides_and_the_nearer_scope_wins() {
     let output = run(ground.command(&path).args(["doctor"]));
 
     let out = text(&output.stdout);
-    assert_eq!(output.status.code(), Some(0), "stdout:\n{out}");
+    a_report_was_made(&output);
 
     // One name, one row: the nearer scope's skill is the one in force.
     let winner = row(&out, "greet");
@@ -389,11 +413,7 @@ fn a_skill_file_that_will_not_parse_is_reported_where_it_lies() {
     let output = run(ground.command(&path).args(["doctor"]));
 
     let out = text(&output.stdout);
-    assert_eq!(
-        output.status.code(),
-        Some(0),
-        "a skill that will not parse is a diagnostic and not a failed diagnostic: stdout:\n{out}"
-    );
+    a_report_was_made(&output);
     assert!(
         out.contains(&format!(
             "{}:1",
@@ -420,7 +440,7 @@ fn a_builtin_shadowed_by_a_nearer_scope_is_named_by_the_scope_alone() {
     let output = run(ground.command(&path).args(["doctor"]));
 
     let out = text(&output.stdout);
-    assert_eq!(output.status.code(), Some(0), "stdout:\n{out}");
+    a_report_was_made(&output);
     assert!(
         row(&out, "commit-message").trim_start().starts_with("repo"),
         "a repository skill may take a compiled-in name:\n{out}"
@@ -442,11 +462,7 @@ fn the_printed_description_is_the_bash_description_the_model_is_given_byte_for_b
 
     let out = text(&output.stdout);
     let err = text(&output.stderr);
-    assert_eq!(
-        output.status.code(),
-        Some(0),
-        "stdout:\n{out}\nstderr:\n{err}"
-    );
+    a_report_was_made(&output);
     assert!(
         err.is_empty(),
         "a diagnostic that answered wrote no chatter on stderr: {err}"

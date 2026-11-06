@@ -15,6 +15,16 @@
 # `check: sandbox ... SKIPPED`, never `... ok`, plus a job-summary block and a
 # warning annotation — rather than dropped or quietly ticked green.
 #
+# The suites whose subject is not the sandbox do not stop at that wall either.
+# Where a run cannot be confined, the batch contract is proved with every child
+# handed `--yolo-unsafe` — the one route past a sandbox that cannot be created —
+# and the suite prints `skip batch: ...`, naming the tier that run left uncovered,
+# so the contract is still checked byte for byte while the gap stays on the page.
+# Doctor's report is read either way: it prints the whole report and ends 0 over a
+# sandbox it proved, 3 over one the kernel refused. A runner that forbids a
+# sandbox must neither redden a job over code it did check nor green a sandbox
+# nothing made.
+#
 # Why 24.04 and not 22.04, where the tier would actually run: 22.04 is the older
 # image and is on its way out of the hosted fleet, so coverage bought there
 # would vanish without a word the day it retires. Written this way, the tier
@@ -119,7 +129,7 @@ jobs:
             echo '### `make check` stage verdicts'
             echo
             echo '```'
-            grep -E '^(check:|sandbox tier:|audit: )' "$log" || echo 'no verdict lines: the run stopped before a stage reported one'
+            grep -E '^(check:|sandbox tier:|audit: |skip batch:)' "$log" || echo 'no verdict lines: the run stopped before a stage reported one'
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           if grep -q 'sandbox tier: skipped' "$log"; then
