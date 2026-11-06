@@ -27,6 +27,7 @@
 //! (ADR-0011). Nothing here writes a record: that is ticket #17.
 
 pub mod retry; // §4's retry policy in one place: an ask is tried three times
+pub mod served; // what a wire says it serves, read off the wire and kept beside the (wire, base_url) pair that produced them
 pub mod transport; // how a request's bytes travel, and the fake a test substitutes
 
 use std::fmt;
@@ -256,6 +257,34 @@ pub enum Verdict {
     Broken,
 }
 
+impl Verdict {
+    /// One phrase naming this verdict, short enough to show where a list would
+    /// have gone and carrying no reply's own words.
+    fn phrase(self) -> &'static str {
+        match self {
+            Verdict::Unconfigured => "nothing was sent: the wire needs a credential",
+            Verdict::Timeout => "the reply outlived its deadline",
+            Verdict::RateLimited => "it asked for fewer requests in flight",
+            Verdict::ServerFault => "it faulted on its own side",
+            Verdict::Transport => "the reply never arrived",
+            Verdict::Client => "it does not offer a listing here",
+            Verdict::Refused => "it declined in words of its own",
+            Verdict::Cancelled => "the asking was cancelled",
+            Verdict::Broken => "what arrived was not a listing",
+        }
+    }
+}
+
+/// Where a wire's credential comes from, as §11 has the user set it: the one
+/// wording a failure and a listing's hint both print.
+fn credential_source(wire: Wire) -> &'static str {
+    match wire {
+        Wire::Anthropic => "set ANTHROPIC_API_KEY",
+        Wire::Openai => "set OPENAI_API_KEY",
+        Wire::Copilot => "run `sindri auth login copilot`",
+    }
+}
+
 /// One failure, carrying as much as a caller needs to print it and to decide
 /// whether a second attempt is allowed. The policy itself is #13's; this is
 /// only the evidence it reads.
@@ -276,13 +305,16 @@ pub struct Failure {
 impl Failure {
     /// A failure that never reached a wire, naming the wire and where its
     /// credential comes from (§11).
-    pub fn unconfigured(wire: Wire, source: &str) -> Self {
+    pub fn unconfigured(wire: Wire) -> Self {
         Self {
             verdict: Verdict::Unconfigured,
             retryable: false,
             streamed: false,
-            message: SecretSet::default()
-                .redact(format!("{} needs a credential: {source}", wire.word())),
+            message: SecretSet::default().redact(format!(
+                "{} needs a credential: {}",
+                wire.word(),
+                credential_source(wire)
+            )),
         }
     }
 
@@ -406,10 +438,7 @@ impl Client {
         match ask.wire {
             Wire::Anthropic => {
                 let Some(key) = credential else {
-                    return Err(Failure::unconfigured(
-                        Wire::Anthropic,
-                        "set ANTHROPIC_API_KEY",
-                    ));
+                    return Err(Failure::unconfigured(Wire::Anthropic));
                 };
                 let mut endpoint = AnthropicConfig::new(key);
                 if let Some(base_url) = &ask.base_url {
@@ -422,7 +451,7 @@ impl Client {
             }
             Wire::Openai => {
                 let Some(key) = credential else {
-                    return Err(Failure::unconfigured(Wire::Openai, "set OPENAI_API_KEY"));
+                    return Err(Failure::unconfigured(Wire::Openai));
                 };
                 let mut endpoint = OpenAIConfig::new(key);
                 if let Some(base_url) = &ask.base_url {
@@ -435,10 +464,7 @@ impl Client {
             }
             Wire::Copilot => {
                 let Some(key) = credential else {
-                    return Err(Failure::unconfigured(
-                        Wire::Copilot,
-                        "run `sindri auth login copilot`",
-                    ));
+                    return Err(Failure::unconfigured(Wire::Copilot));
                 };
                 let mut endpoint =
                     OpenAIConfig::with_key(&rig_core::providers::copilot::DIALECT, key);
