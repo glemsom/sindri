@@ -4,6 +4,7 @@
 
 pub mod bash; // the only way a run acts
 pub mod config; // read and written whole and patched in place
+pub mod first_run; // no file at all
 pub mod policy; // the boundary in force, and every tool description derived from it
 pub mod preamble; // the persona, the principles, the environment the run stands in, and the project's own instructions
 pub mod provider; // an ask goes out in Sindri's own words and a reply comes back

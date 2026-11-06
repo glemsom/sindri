@@ -33,6 +33,11 @@ use toml_edit::{DocumentMut, Item, Value};
 use crate::redact::{MASK, SecretSet};
 use crate::wire::Wire;
 
+/// The one mode the config file is written with: owner-only, because one of the
+/// keys it can hold is a secret. `MASK` comes from `redact`, so the four
+/// windows share one spelling (ADR-0011).
+pub const MODE: u32 = 0o600;
+
 /// The one config schema and the one resolved config: every key optional, so
 /// "unset" survives all the way down to whoever decides the default.
 #[derive(Clone, Default, PartialEq, Eq, Deserialize)]
@@ -486,7 +491,7 @@ fn write_atomically(path: &Path, text: &str) -> Result<(), ConfigError> {
     // else even for the instant the temp file exists.
     staged
         .as_file()
-        .set_permissions(std::fs::Permissions::from_mode(0o600))
+        .set_permissions(std::fs::Permissions::from_mode(MODE))
         .map_err(|error| unwritable(error.to_string()))?;
     staged
         .write_all(text.as_bytes())
@@ -545,7 +550,7 @@ pub fn config_path(environment: &impl Environment) -> Result<PathBuf, ConfigErro
 
 /// A variable's value, with an exported nothing read as silence rather than as
 /// a value that would blank the key.
-fn spoken(environment: &impl Environment, name: &str) -> Option<String> {
+pub(crate) fn spoken(environment: &impl Environment, name: &str) -> Option<String> {
     environment.var(name).filter(|value| !value.is_empty())
 }
 
