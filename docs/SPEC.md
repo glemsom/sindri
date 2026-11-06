@@ -341,3 +341,11 @@ only once the dialect's decoder has folded them, one layer higher.
 `HttpClientExt` (the trait every rig `Transport` is built from), and whether a reply had
 already streamed is reported by the provider seam's fold as `Failure::streamed`, beside the
 wire's own `Failure::retryable` — see ADR-0013.
+
+**A16 — Where the attempts live (§4, A13 vs ADR-0013).** A13 and ADR-0013 put "attempts and
+headers" in rig-core's `HttpClientExt` transport. A 429 and a 503 reach a transport as a
+`Response` carrying a status, not as an error, and the verdict that says whether to resend
+lives in the body the dialect decodes above it; a transport that retried would decide from a
+status code, which §4 forbids. **Resolved:** the transport dresses the request (extra
+headers, `{session}` expanded) and the fold above it decides — one function reading
+`retryable && !streamed` and refusing a cancel — see ADR-0015.

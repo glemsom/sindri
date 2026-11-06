@@ -3,10 +3,11 @@
 //! that really sends, while the replay hands back bytes a fixture recorded and
 //! keeps whatever it was asked, so a test exercises the seam with no network.
 //!
-//! A transport is also where §4's retry rule will live (#13): it is the only
-//! place that sees every request go out and every reply come back, so it is the
-//! place that can tell an attempt from a resend. Nothing here retries yet; it
-//! keeps the shape that makes retrying expressible.
+//! A transport dresses a request; it does not decide whether to send it again.
+//! §4's retry reads a verdict that only the fold above can classify, so a
+//! resend never starts here (ADR-0015). What is decided here is what rides
+//! along: the run's extra request headers, `{session}` expanded to the session
+//! id as the request is dressed.
 //!
 //! The replay is not a test-only fixture behind a feature: it is small, it sends
 //! nothing, and it is how a front end, `doctor` and any later conformance check
@@ -30,20 +31,41 @@ use rig_core::http_client::{
 /// event stream exercises is the framing a fixture exercises.
 const CHUNK: usize = 64;
 
+/// What an extra header's value writes where the session id goes, so a gateway
+/// that caches per session follows `/new`.
+const SESSION: &str = "{session}";
+
 /// A transport that adds `headers` to every request and gives it to the client
-/// underneath to send.
+/// underneath to send, expanding `{session}` to the session id it was given.
 #[derive(Clone)]
 pub struct Http<C> {
     /// The client that really sends.
     inner: C,
     /// The run's extra request headers, as name and value.
     headers: Vec<(String, String)>,
+    /// The session those headers name, when one is known.
+    session: Option<String>,
 }
 
 impl Http<()> {
     /// A header set, waiting for the client it dresses.
     pub fn new(headers: Vec<(String, String)>) -> Http<()> {
-        Http { inner: (), headers }
+        Http {
+            inner: (),
+            headers,
+            session: None,
+        }
+    }
+
+    /// This header set with `{session}` standing for `session`, expanded as the
+    /// request is dressed. Without it the placeholder is left as it was
+    /// written, which is visible rather than silently empty.
+    pub fn session(self, session: impl Into<String>) -> Http<()> {
+        Http {
+            inner: self.inner,
+            headers: self.headers,
+            session: Some(session.into()),
+        }
     }
 }
 
@@ -53,6 +75,7 @@ impl<C> Http<C> {
         Http {
             inner,
             headers: self.headers,
+            session: self.session,
         }
     }
 
@@ -61,10 +84,19 @@ impl<C> Http<C> {
     fn dress<T>(&self, mut request: Request<T>) -> Result<Request<T>, Error> {
         for (name, value) in &self.headers {
             let name = http::HeaderName::try_from(name.as_str()).map_err(Error::instance)?;
-            let value = HeaderValue::from_str(value)?;
+            let value = HeaderValue::from_str(&self.expanded(value))?;
             request.headers_mut().append(name, value);
         }
         Ok(request)
+    }
+
+    /// `value` with every `{session}` replaced by the session id, which is the
+    /// only place a session is known when a request goes out.
+    fn expanded(&self, value: &str) -> String {
+        match &self.session {
+            Some(session) => value.replace(SESSION, session),
+            None => value.to_owned(),
+        }
     }
 }
 
@@ -73,6 +105,7 @@ impl<C> fmt::Debug for Http<C> {
         formatter
             .debug_struct("Http")
             .field("headers", &self.headers.len())
+            .field("session", &self.session.is_some())
             .finish_non_exhaustive()
     }
 }

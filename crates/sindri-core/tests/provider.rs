@@ -188,15 +188,21 @@ fn a_client_error_comes_back_with_a_verdict_that_forbids_retrying() {
 
 #[test]
 fn a_rate_limited_ask_is_reported_as_retryable() {
-    let replay = Replay::new([Canned::reply(429, BAD_REQUEST)]);
+    let replay = Replay::new(std::iter::repeat_n(Canned::reply(429, BAD_REQUEST), 3));
 
-    let failure = client_over(&replay)
+    let failure = Client::over(replay.clone())
+        .waits(|_| {})
         .ask(&anthropic_ask(), &mut Transcript::default())
         .expect_err("a 429 is not an answer");
 
     assert_eq!(failure.verdict, Verdict::RateLimited);
     assert!(failure.retryable, "a rate limit is worth another attempt");
     assert!(!failure.streamed);
+    assert_eq!(
+        replay.requests().len(),
+        3,
+        "every attempt was rate limited, so all three were spent"
+    );
 }
 
 #[test]
