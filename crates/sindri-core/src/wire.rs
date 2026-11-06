@@ -31,6 +31,16 @@ impl Wire {
         }
     }
 
+    /// The variable this dialect's own key is read from, for the dialect that has
+    /// one: a Copilot session is never an API key, it is a sign-in (§10).
+    pub fn credential_variable(self) -> Option<&'static str> {
+        match self {
+            Wire::Anthropic => Some("ANTHROPIC_API_KEY"),
+            Wire::Openai => Some("OPENAI_API_KEY"),
+            Wire::Copilot => None,
+        }
+    }
+
     /// The dialect a word names, or `None` when the word is not one of the three.
     pub fn from_word(word: &str) -> Option<Wire> {
         match word {
