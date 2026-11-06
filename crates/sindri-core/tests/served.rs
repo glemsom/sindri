@@ -9,10 +9,10 @@ use std::sync::{Arc, Mutex};
 use rig_core::http_client::{
     Bytes, Error, HttpClientExt, LazyBody, MultipartForm, Request, Response, StreamingResponse,
 };
-use sindri_core::redact::SecretSet;
 use sindri_core::provider::served::{Listing, Where};
 use sindri_core::provider::transport::{Canned, Replay};
 use sindri_core::provider::{Ask, Client, Credential};
+use sindri_core::redact::SecretSet;
 use sindri_core::wire::Wire;
 
 /// An Anthropic `GET /v1/models` catalogue, cursor-paged fields and all.
