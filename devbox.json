@@ -1,0 +1,22 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.19.0/.schema/devbox.schema.json",
+  "packages": [
+    "rustup@1.29.2",
+    "bubblewrap@latest",
+    "pkg-config@latest"
+  ],
+  "shell": {
+    "init_hook": [
+      ": \"${RUSTUP_HOME:=${XDG_CACHE_HOME:-$HOME/.cache}/sindri/rustup}\"",
+      ": \"${CARGO_HOME:=${XDG_CACHE_HOME:-$HOME/.cache}/sindri/cargo}\"",
+      "export RUSTUP_HOME CARGO_HOME",
+      "export PATH=\"$CARGO_HOME/bin:$PATH\"",
+      "rustup default 1.99.0 >/dev/null",
+      "rustup component add rustfmt clippy --toolchain 1.99.0",
+      "rustup target add x86_64-unknown-linux-musl --toolchain 1.99.0"
+    ],
+    "scripts": {
+      "probe": "bash scripts/toolchain-probe.sh"
+    }
+  }
+}
