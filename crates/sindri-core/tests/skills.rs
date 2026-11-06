@@ -57,6 +57,18 @@ impl Tree {
         write(&directory.join("SKILL.md"), &skill_md(name, description));
         directory
     }
+
+    /// A skill directory named `name` under `scope_dir`, whose frontmatter also
+    /// carries `flag`: one of §5's permission lines, written as a skill author
+    /// would write it.
+    fn flagged(&self, scope_dir: &Path, name: &str, description: &str, flag: &str) -> PathBuf {
+        let directory = scope_dir.join(name);
+        write(
+            &directory.join("SKILL.md"),
+            &flagged_skill_md(name, description, flag),
+        );
+        directory
+    }
 }
 
 /// A symlink at `link` pointing at `target`, with every directory above the link
@@ -76,6 +88,12 @@ fn write(path: &Path, text: &str) {
 /// describing it, then a body that is the instructions.
 fn skill_md(name: &str, description: &str) -> String {
     format!("---\nname: {name}\ndescription: {description}\n---\n\nBody of {name}.\n")
+}
+
+/// A `SKILL.md` carrying one permission line besides the two every skill needs,
+/// so a test states the flag rather than the whole file.
+fn flagged_skill_md(name: &str, description: &str, flag: &str) -> String {
+    format!("---\nname: {name}\ndescription: {description}\n{flag}\n---\n\nBody of {name}.\n")
 }
 
 /// The catalog a workspace and a home offer on their own, with no built-in
@@ -431,4 +449,109 @@ fn the_builtin_scope_is_the_lowest_precedence() {
         }],
         "a builtin that loses is reported too, with no path to name"
     );
+}
+
+#[test]
+fn a_disable_model_invocation_skill_is_still_discovered_and_the_model_cannot_call_it() {
+    let tree = Tree::new();
+    let repo = tree.repo().join(".agents/skills");
+    tree.flagged(
+        &repo,
+        "handover",
+        "the person's own notes",
+        "disable-model-invocation: true",
+    );
+    tree.skill(&repo, "deploy", "ship it");
+
+    let catalog = disk_only(&tree.workspace(), &tree.home());
+
+    let handover = catalog
+        .get("handover")
+        .expect("a user-only skill is discovered like any other");
+    assert!(
+        !handover.model_invocable(),
+        "the model may not call a skill that says disable-model-invocation"
+    );
+    assert!(
+        handover.human_invocable(),
+        "user-only means the person still may, so the other door stays open"
+    );
+    assert!(
+        catalog
+            .get("deploy")
+            .expect("the unflagged skill")
+            .model_invocable(),
+        "a skill that says nothing about the flags is the model's to call"
+    );
+}
+
+#[test]
+fn the_completion_list_holds_only_the_skills_a_person_may_invoke() {
+    let tree = Tree::new();
+    let repo = tree.repo().join(".agents/skills");
+    tree.flagged(&repo, "sweeper", "tidy the ledger", "user-invocable: false");
+    tree.skill(&repo, "deploy", "ship it");
+
+    let catalog = disk_only(&tree.workspace(), &tree.home());
+
+    let offered = catalog.invocable_by_human();
+    let offered: Vec<&str> = offered.iter().map(|row| row.name.as_str()).collect();
+    assert_eq!(
+        offered,
+        vec!["deploy"],
+        "the frame is handed a decided list, not the flags to decide with"
+    );
+    let sweeper = catalog
+        .get("sweeper")
+        .expect("a model-only skill is discovered like any other");
+    assert!(
+        sweeper.model_invocable() && !sweeper.human_invocable(),
+        "model-only means the model still calls it and the person cannot"
+    );
+    assert!(
+        catalog
+            .tool_description()
+            .expect("the model has skills to name")
+            .contains("sweeper"),
+        "so its name is in the schema the model reads"
+    );
+}
+
+#[test]
+fn a_flag_written_as_a_string_is_a_diagnostic_rather_than_a_default() {
+    let tree = Tree::new();
+    let repo = tree.repo().join(".agents/skills");
+    tree.flagged(
+        &repo,
+        "handover",
+        "the person's own notes",
+        "disable-model-invocation: \"yes\"",
+    );
+    tree.flagged(&repo, "sweeper", "tidy the ledger", "user-invocable: yes");
+    tree.skill(&repo, "deploy", "ship it");
+
+    let catalog = disk_only(&tree.workspace(), &tree.home());
+
+    assert_eq!(
+        described(&catalog),
+        vec![(String::from("deploy"), String::from("ship it"))],
+        "a flag that is not a plain boolean refuses the skill rather than guessing at one"
+    );
+    let lines: Vec<usize> = catalog
+        .diagnostics()
+        .iter()
+        .map(|refusal| refusal.line)
+        .collect();
+    assert_eq!(
+        lines,
+        vec![4, 4],
+        "each refusal names the line the flag is written on, and the rest of the catalog loads"
+    );
+    for refusal in catalog.diagnostics() {
+        assert!(
+            refusal.message.contains("boolean") && refusal.message.contains("string"),
+            "the diagnostic says what it wanted and what it found: {}",
+            refusal.message
+        );
+    }
 }

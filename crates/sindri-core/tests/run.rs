@@ -876,6 +876,58 @@ fn a_second_load_answers_already_loaded_and_carries_no_body() {
 }
 
 #[test]
+fn a_user_only_skill_is_refused_when_the_model_names_it_anyway() {
+    let root = tempfile::tempdir().expect("a temp ground");
+    let workspace = std::fs::canonicalize(root.path()).expect("the ground resolves");
+    let skills = workspace.join(".agents/skills");
+    let skill = |name: &str, description: &str, flag: &str| {
+        std::fs::create_dir_all(skills.join(name)).expect("the skill directory");
+        std::fs::write(
+            skills.join(name).join("SKILL.md"),
+            format!("---\nname: {name}\ndescription: {description}\n{flag}\n---\n\n{name} body.\n"),
+        )
+        .expect("the skill file");
+    };
+    skill("deploy", "ship the branch", "");
+    skill(
+        "handover",
+        "the person's own notes",
+        "disable-model-invocation: true",
+    );
+    skill(
+        "journal",
+        "the person's own diary",
+        "disable-model-invocation: true",
+    );
+
+    let boundary = Boundary::from_config(&Config::default(), &workspace, Enforcement::Unsafe)
+        .expect("the boundary holds");
+    let shell = Shell::new(boundary, &workspace, Catalog::discover(&workspace, None));
+    let mut loaded = Loaded::default();
+
+    let refused = shell
+        .execute(&Call::new("skill", r#"{"name":"handover"}"#), &mut loaded)
+        .expect_err("the model may not load a skill its frontmatter withholds");
+
+    assert!(
+        refused.to_string().contains("`deploy`"),
+        "the refusal offers the names the model could have used: {refused}"
+    );
+    assert!(
+        !refused.to_string().contains("journal"),
+        "and not one of the names it may not use, which would be a way around the flag: {refused}"
+    );
+    assert!(
+        !refused.to_string().contains("handover body."),
+        "no instructions are handed back: {refused}"
+    );
+    assert!(
+        !loaded.contains("handover"),
+        "and a refused load is not marked loaded, so it stays refused"
+    );
+}
+
+#[test]
 fn an_unknown_skill_name_is_refused_by_naming_the_catalog() {
     let ground = SkillGround::new();
     let shell = ground.shell();
