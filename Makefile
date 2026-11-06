@@ -15,8 +15,12 @@
 #                     to prove the loop stops at a stage that failed without ever
 #                     running the stage that proves it: a gate that rang itself
 #                     would never end
-#     make <stage>    one stage alone — fmt, clippy, audit, test, bench, gate,
-#                     toolchain, sandbox, release
+#     make <stage>    one stage alone — fmt, clippy, audit, test, frames, bench,
+#                     gate, toolchain, sandbox, release
+#     make frame F=boot-120x40
+#                     print one golden frame as the code draws it now, to eyeball it
+#     make frame-update F=boot-120x40
+#                     bless a deliberate change to that frame (ADR 0012)
 #
 # A stage line reads `check: <stage> ... ok` or `... FAIL`, printed after the
 # stage's own output so the verdict is the last thing the eye lands on. Nothing
@@ -47,9 +51,9 @@ SHELL := /bin/bash
 # The definition of done, in order: cheap and fast first, so the slow stages run
 # only on a tree that already passes the quick ones. `release` is last because it
 # is the only stage that compiles anything for a target nobody else builds.
-STAGES := fmt clippy audit test bench gate toolchain sandbox evals no-relink release
+STAGES := fmt clippy audit test frames bench gate toolchain sandbox evals no-relink release
 
-.PHONY: check $(STAGES) sandbox-tier release-tier gate-tier
+.PHONY: check $(STAGES) frame frame-update sandbox-tier release-tier gate-tier
 
 check:
 	@for stage in $(STAGES); do \
@@ -107,6 +111,39 @@ audit:
 
 test:
 	$(call stage,test,cargo test --workspace)
+
+# The golden frames of spec §12 and ADR 0012, landed by ticket #63: every look this
+# terminal can wear is a fixture under crates/sindri/tests/fixtures, rendered at a fixed
+# size and compared cell by cell, ink names and all. The harness prints one
+# `check: frame <frame>-<cols>x<rows> ... ok` line per fixture, which is why this stage
+# runs with `--nocapture` — those lines are the stage's summary beneath its own verdict
+# — and on one thread, so two runs read in the same order.
+#
+# It sits after `test` because `cargo test --workspace` has already built this target, so
+# all the stage pays is running it. A frame that no longer matches stops the run here: a
+# picture that changed without its fixture changing in the same commit is the change
+# ADR 0012 exists to catch.
+frames:
+	$(call stage,frames,cargo test -p sindri --test frames -- --nocapture --test-threads=1)
+
+# A frame nobody can see is a frame nobody approves (ADR 0012). `frame` prints one
+# fixture's frame as the code draws it now, for eyeballing; `frame-update` rewrites the
+# fixture with that frame, which is the only way a golden ever moves: deliberately, in
+# the commit that changed the look. Both take the frame from F, `<frame>-<cols>x<rows>`;
+# a frame no test holds yet prints nothing, because there is no picture to print.
+#
+# `SINDRI_FRAME` names the frame to print and never changes what is compared, so a stray
+# variable in a shell cannot make a test report a picture it did not check.
+# `INSTA_UPDATE=force` is insta's own blessing switch, because `cargo insta` is not
+# installed here — and every frame test is named after its fixture with the dashes
+# underscored, so the test filter names exactly one frame.
+frame:
+	$(if $(F),,$(error make frame needs F=<frame>-<cols>x<rows>, e.g. F=boot-120x40))
+	@SINDRI_FRAME=$(F) cargo test -q -p sindri --test frames -- --nocapture $(subst -,_,$(F))
+
+frame-update:
+	$(if $(F),,$(error make frame-update needs F=<frame>-<cols>x<rows>, e.g. F=boot-120x40))
+	INSTA_UPDATE=force cargo test -q -p sindri --test frames -- $(subst -,_,$(F))
 
 # The wording bench of spec §9 and §16, landed by ticket #60: the preamble is
 # re-sent every turn, so every word is a tax, and the bench prices each section

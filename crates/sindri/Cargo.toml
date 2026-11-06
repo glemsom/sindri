@@ -7,10 +7,17 @@ rust-version.workspace = true
 
 [dependencies]
 clap = { version = "4.6.7", features = ["derive"] }
+# The frame: what a look is drawn with, and the same code a fixture renders through
+# ratatui's headless backend, so a golden frame and a reader's screen are one picture.
+ratatui = "0.29"
 rustix = { version = "1.1.6", features = ["termios"] }
 sindri-core = { path = "../sindri-core" }
 
 [dev-dependencies]
+# The golden frames of ADR 0012: `insta` compares a rendered frame against the fixture
+# that holds it and blesses a deliberate change. It hard-codes the `.snap` extension,
+# which is why a fixture's file is one, whatever the ADR first named.
+insta = "1.49"
 # The tests open a pseudo-terminal to prove what a launch draws and gives back:
 # rustix already binds this crate's terminal, so a second binding to the same
 # termios would be two ways to talk to one tty.

@@ -8,9 +8,11 @@
 //! sequences written back to it all live in this module, and what a frame holds is
 //! the core's business rather than the terminal's.
 //!
-//! The loop is a loop that waits. A key arrives as a byte from `read`, so a launch
-//! with nobody at the keyboard writes nothing at all — there is no timer, no tick
-//! and no repaint, which is what §12's "an idle frame is never drawn" means as code.
+//! The loop is a loop that waits. One frame is painted when the screen is taken — the
+//! boot frame, empty transcript and all (§12) — and after it a key arrives as a byte
+//! from `read`, so a launch with nobody at the keyboard writes nothing further: there
+//! is no timer, no tick and no repaint, which is what §12's "an idle frame is never
+//! drawn" means as code.
 
 use std::fs::File;
 use std::io::{self, IsTerminal, Read, Write};
@@ -19,7 +21,9 @@ use std::panic::{self, PanicHookInfo};
 use std::process::ExitCode;
 use std::sync::{Mutex, MutexGuard, Once, OnceLock};
 
+use ratatui::backend::CrosstermBackend;
 use rustix::termios::{InputModes, OptionalActions, Termios, tcgetattr, tcsetattr};
+use sindri::view::View;
 
 /// Spec §15's usage error: a launch that cannot be a run, a screen a launch cannot
 /// draw on.
@@ -58,6 +62,9 @@ pub fn run() -> ExitCode {
             return crate::refuse(&format!("the terminal would not go raw: {error}"), SETUP);
         }
     };
+    if let Err(error) = paint(&terminal) {
+        return crate::refuse(&format!("the frame could not be painted: {error}"), SETUP);
+    }
     let keys = keys(&terminal);
     drop(screen);
     match keys {
@@ -149,6 +156,20 @@ impl Drop for Screen {
     fn drop(&mut self) {
         give_back();
     }
+}
+
+/// Paints the frame a launch owes, and only that one: the boot frame.
+///
+/// It goes through `View::paint` — the seam the fixture harness renders through
+/// (ADR-0012) — onto this terminal's own output side, so what a reader sees at launch
+/// and what a golden frame holds are one picture and not two. After this the loop
+/// blocks in `read`, and nothing is painted until a key or a fact asks for it, because
+/// §12's idle frame is never drawn at all.
+fn paint(terminal: &Terminal) -> io::Result<()> {
+    let view = View::boot();
+    let mut canvas = ratatui::Terminal::new(CrosstermBackend::new(&terminal.screen))?;
+    canvas.draw(|frame| view.paint(frame.area(), frame.buffer_mut()))?;
+    Ok(())
 }
 
 /// Reads the terminal a key at a time until `Ctrl-Q`.

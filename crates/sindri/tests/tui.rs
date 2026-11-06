@@ -283,7 +283,7 @@ fn the_terminal_it_installs_cannot_eat_ctrl_q() {
 }
 
 #[test]
-fn an_idle_terminal_is_written_no_frame_at_all() {
+fn an_idle_terminal_is_painted_once_and_then_left_alone() {
     let ground = Ground::new();
     let (session, mut pty, drawn) = Session::open(&ground);
 
@@ -292,15 +292,23 @@ fn an_idle_terminal_is_written_no_frame_at_all() {
         "the screen is taken: {:?}",
         drawn.text()
     );
-    // What the launch drew before the keyboard was touched is the screen being
-    // taken, not a frame: everything after it is a repaint nobody asked for.
-    thread::sleep(Duration::from_millis(200));
-    let quiet = drawn.bytes().len();
+    // §12's one frame a launch owes: the boot frame, whose footer carries the two
+    // hints no width takes away. Nothing has been typed and no fact has arrived, so
+    // once this is on the screen there is nothing left to draw.
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn once: {:?}",
+        drawn.text()
+    );
+
+    // Everything after it is a repaint nobody asked for: no timer, no tick, no
+    // idle frame — the loop is asleep in `read` until a key or a fact arrives.
+    let painted = drawn.bytes().len();
     thread::sleep(Duration::from_millis(600));
     assert_eq!(
         drawn.bytes().len(),
-        quiet,
-        "an idle launch writes no byte at all: {}",
+        painted,
+        "an idle launch writes no further byte: {}",
         drawn.text()
     );
 
@@ -309,7 +317,7 @@ fn an_idle_terminal_is_written_no_frame_at_all() {
     assert_eq!(
         session.wait().code(),
         Some(0),
-        "the silent launch was asleep in read, not dead: {}",
+        "the quiet launch was asleep in read, not dead: {}",
         drawn.text()
     );
 }
