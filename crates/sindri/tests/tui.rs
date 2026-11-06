@@ -193,9 +193,21 @@ impl Session {
         (Session { child }, pty, drawn)
     }
 
-    /// Waits for the launch to end and reports what it ended as.
+    /// Waits for the launch to end, and reports what it ended as. A child that never
+    /// ends is a test that never finishes, which reads as a broken harness rather
+    /// than as a program that failed to quit, so the wait is bounded.
     fn wait(mut self) -> std::process::ExitStatus {
-        self.child.wait().expect("the launch should end")
+        let deadline = Instant::now() + PATIENCE;
+        loop {
+            if let Some(status) = self.child.try_wait().expect("the launch's state") {
+                return status;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the launch should have quit by now, and did not"
+            );
+            thread::sleep(Duration::from_millis(10));
+        }
     }
 }
 
