@@ -62,6 +62,14 @@ _Avoid_: Model list, catalog, available models
 The system message, re-sent every turn, so every word in it is a tax.
 _Avoid_: System prompt, instructions
 
+**Verdict**:
+What kind of failure a wire classified, from a closed set — timeout, rate limit, server fault, transport, client, refusal, cancel, broken — never the status code that carried it.
+_Avoid_: Error code, status, reason
+
+**Attempt**:
+One send of one ask. Three at most, waiting 200 ms and then twice that between them, and only for a failure the wire called retryable that streamed no text.
+_Avoid_: Try, retry, resend
+
 ## Sessions and skills
 
 **Session**:

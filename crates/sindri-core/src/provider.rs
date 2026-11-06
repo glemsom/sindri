@@ -11,19 +11,22 @@
 //! A failure is [`Failure`], never a client library's error type: it carries the
 //! verdict the wire classified (§4), whether the wire says another attempt could
 //! succeed, and whether text or reasoning had already streamed when it failed.
-//! The retry policy of §4 belongs to whoever reads those three fields — a reply
-//! that already streamed is never retried, however retryable its verdict — so
-//! this module reports and never decides.
+//! Those three fields are all §4's retry policy reads, and [`retry`] reads them:
+//! a reply that already streamed is never retried, however retryable its verdict.
 //!
 //! How a request's bytes travel is [`transport`], and a test replaces it with
-//! recorded bytes, which is what keeps this seam testable with no network.
+//! recorded bytes, which is what keeps this seam testable with no network. The
+//! one place a request leaves the process is also the one place it is sent
+//! again: [`retry`] tries it at most three times, on the verdict and never on a
+//! status code.
 //!
-//! Nothing here retries, redacts or writes a record: those are tickets #13,
-//! #11 and #17's run loop.
+//! Nothing here redacts or writes a record: those are tickets #11 and #17.
 
+pub mod retry; // §4's retry policy in one place: an ask is tried three times
 pub mod transport; // how a request's bytes travel, and the fake a test substitutes
 
 use std::fmt;
+use std::sync::Arc;
 
 use futures::StreamExt as _;
 use rig_core::Model;
@@ -38,6 +41,7 @@ use rig_core::providers::openai::OpenAIConfig;
 use rig_core::streaming::{Item, StreamEvent};
 use rig_core::wire::{Encoded, Wire as RigWire, WireFrame};
 
+use self::retry::{Backoff, Sleep, until_final};
 use self::transport::Http;
 use crate::wire::Wire;
 
@@ -323,11 +327,23 @@ fn verdict_of(error: &ProviderError) -> Verdict {
 }
 
 /// One way to reach every wire: the seam the rest of core asks through, holding
-/// a transport and nothing else, so a fake transport replaces the network.
-#[derive(Clone, Debug)]
+/// a transport and the wait between attempts, so a fake transport replaces the
+/// network and a fake backoff replaces the clock.
+#[derive(Clone)]
 pub struct Client {
     /// How a request's bytes travel.
     transport: DynHttpClient,
+    /// How long to wait before each attempt (§4), injectable for tests.
+    backoff: Arc<dyn Backoff + Send + Sync>,
+}
+
+impl fmt::Debug for Client {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("Client")
+            .field("transport", &self.transport)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Client {
@@ -336,18 +352,30 @@ impl Client {
     pub fn over(transport: impl HttpClientExt + Clone + 'static) -> Self {
         Self {
             transport: DynHttpClient::new(transport),
+            backoff: Arc::new(Sleep),
         }
     }
 
-    /// A client that reaches the dialects' own endpoints, sending `headers` —
-    /// a run's extra request headers, with `{session}` already expanded — on
-    /// every request.
-    pub fn http(headers: Vec<(String, String)>) -> Self {
-        Self::over(Http::new(headers).over(rig_reqwest::ReqwestClient::default()))
+    /// Wait through `backoff` between attempts, so a test proves the delays of
+    /// §4's 200 ms doubling without spending them.
+    pub fn waits(mut self, backoff: impl Backoff + Send + Sync + 'static) -> Self {
+        self.backoff = Arc::new(backoff);
+        self
+    }
+
+    /// A client that reaches the dialects' own endpoints, sending `headers` on
+    /// every request with `{session}` expanded to `session`.
+    pub fn http(headers: Vec<(String, String)>, session: impl Into<String>) -> Self {
+        Self::over(
+            Http::new(headers)
+                .session(session)
+                .over(rig_reqwest::ReqwestClient::default()),
+        )
     }
 
     /// Ask `ask`, handing every fragment to `deltas` as it lands, and fold the
-    /// finished reply into an [`Answer`] or a [`Failure`].
+    /// finished reply into an [`Answer`] or a [`Failure`]. A failure §4 allows
+    /// another attempt for is tried again, as [`retry`] decides.
     ///
     /// The call blocks until the reply ends: the loop above owns turns, budgets
     /// and cancellation (#17), so a single ask is one bounded piece of work and
@@ -405,8 +433,8 @@ impl Client {
         }
     }
 
-    /// One wire bound to one transport, streamed to its end: the one place the
-    /// deltas, the fold and the verdict are read out of a dialect.
+    /// One wire bound to one transport, tried as §4 allows: the one place a
+    /// request leaves the process, and so the one place it is sent again.
     fn drive<W>(
         &self,
         model: Model<W, DynHttpClient>,
@@ -416,9 +444,25 @@ impl Client {
     where
         W: RigWire<Op = rig_core::operation::Completion, Payload = Encoded, Frame = WireFrame>,
     {
+        until_final(self.backoff.as_ref(), || {
+            self.attempt(&model, &request, deltas)
+        })
+    }
+
+    /// One attempt: the reply streamed to its end and folded, or the failure it
+    /// was and whether anything had streamed by then.
+    fn attempt<W>(
+        &self,
+        model: &Model<W, DynHttpClient>,
+        request: &CompletionRequest,
+        deltas: &mut dyn Deltas,
+    ) -> Result<Answer, Failure>
+    where
+        W: RigWire<Op = rig_core::operation::Completion, Payload = Encoded, Frame = WireFrame>,
+    {
         futures::executor::block_on(async move {
             let mut streaming = model
-                .stream(request)
+                .stream(request.clone())
                 .map_err(|error| Failure::from_wire(error, false))?;
             let mut streamed = false;
             while let Some(item) = streaming.next().await {
