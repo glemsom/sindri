@@ -349,3 +349,18 @@ lives in the body the dialect decodes above it; a transport that retried would d
 status code, which §4 forbids. **Resolved:** the transport dresses the request (extra
 headers, `{session}` expanded) and the fold above it decides — one function reading
 `retryable && !streamed` and refusing a cancel — see ADR-0015.
+
+**A17 — `rig_agent::AgentRunner` is not in rig-core 0.46 (§4 vs ADR-0004).** ADR-0004 makes the
+run loop a driver over `rig_agent::AgentRunner`, whose hook slots are supposed to carry every
+lifecycle rule §4 states. rig-core 0.46 ships no agent module — it is the release that dissolved
+the run vocabulary into `rig-core` — and no `rig-agent` crate is in this build's registry at all:
+`cargo metadata --offline` resolves `rig-core`, `rig-http`, `rig-reqwest`, `rig-tungstenite` and
+`rig-derive` and nothing else of the family, and a build with no network cannot fetch a name its
+lockfile does not hold. What 0.46 does offer is one `Model` that streams one reply, and a
+`Local` pass-through wire: no turn state, no tool-call batching, no hook. There is nothing to
+drive.
+**Resolved:** the fallback ADR-0004 itself named — a driver of our own — is taken, and it stops
+at our own two seams rather than at rig's: `Responder` (one request, one reply or one failure) and
+`Executor` (one call, what it cost). Every §4 rule is then decided in our code and proved with
+fakes, no network and no clock, and the wire stays behind the provider seam where A15 and A16 left
+it — see ADR-0016.
