@@ -209,7 +209,7 @@ impl Client {
         };
         asked
             .map(names_of)
-            .map_err(|error| Failure::from_wire(error, false))
+            .map_err(|error| Failure::from_wire(error, false, &self.secrets))
     }
 }
 

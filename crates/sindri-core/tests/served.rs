@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 use rig_core::http_client::{
     Bytes, Error, HttpClientExt, LazyBody, MultipartForm, Request, Response, StreamingResponse,
 };
+use sindri_core::redact::SecretSet;
 use sindri_core::provider::served::{Listing, Where};
 use sindri_core::provider::transport::{Canned, Replay};
 use sindri_core::provider::{Ask, Client, Credential};
@@ -35,7 +36,7 @@ const GPT_5: &str = "gpt-5";
 
 /// A client over `replay`, waiting for nothing.
 fn client_over(replay: &Replay) -> Client {
-    Client::over(replay.clone()).waits(|_| {})
+    Client::over(replay.clone(), SecretSet::default()).waits(|_| {})
 }
 
 #[test]
@@ -169,10 +170,13 @@ impl Cell {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             *held = moved.clone();
         };
-        Client::over(Moving {
-            inner: replay.clone(),
-            meanwhile: Arc::new(meanwhile),
-        })
+        Client::over(
+            Moving {
+                inner: replay.clone(),
+                meanwhile: Arc::new(meanwhile),
+            },
+            SecretSet::default(),
+        )
         .waits(|_| {})
     }
 }
