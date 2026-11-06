@@ -13,4 +13,5 @@
 //! untouched by a library target beside the binary.
 
 pub mod ink; // the ink a cell is drawn in, asked for by name
+pub mod rows; // the transcript's rows: one entry of the core's records laid out as the rows it is
 pub mod view; // what one frame holds and where each part of it goes

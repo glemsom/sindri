@@ -166,7 +166,7 @@ impl Drop for Screen {
 /// blocks in `read`, and nothing is painted until a key or a fact asks for it, because
 /// §12's idle frame is never drawn at all.
 fn paint(terminal: &Terminal) -> io::Result<()> {
-    let view = View::boot();
+    let mut view = View::boot();
     let mut canvas = ratatui::Terminal::new(CrosstermBackend::new(&terminal.screen))?;
     canvas.draw(|frame| view.paint(frame.area(), frame.buffer_mut()))?;
     Ok(())

@@ -35,7 +35,10 @@ use ratatui::backend::TestBackend;
 use ratatui::buffer::{Buffer, Cell};
 
 use sindri::ink::Ink;
+use sindri::rows::Scroll;
 use sindri::view::View;
+use sindri_core::records::Entry;
+use sindri_core::redact::SecretSet;
 
 /// Where the accepted pictures live: beside the tests that compare them, one file
 /// per frame and size (ADR-0012).
@@ -79,6 +82,8 @@ pub fn assert_frame(name: &str, cols: u16, rows: u16) {
 fn named(name: &str) -> View {
     match name {
         "boot" => View::boot(),
+        "transcript" => View::of(transcript(), Scroll::Tail),
+        "transcript-scrolled" => View::of(transcript(), Scroll::Back(4)),
         unknown => panic!(
             "no frame is named {unknown}: `named` lists the frames this front end \
              paints, and a fixture under any other name is a picture of nothing"
@@ -86,11 +91,119 @@ fn named(name: &str) -> View {
     }
 }
 
+/// The entries a transcript frame is painted from: three turns of a run, each with the
+/// call it asked for, what that call answered and the answer the turn ended with — so a
+/// frame holds every shape a row takes, and enough of them to run past the foot of the
+/// band and be scrolled.
+///
+/// The facts are the ones this ticket's own module header states, because a fixture is
+/// a picture of a real frame rather than a grid of sample text.
+fn transcript() -> Vec<Entry> {
+    let secrets = SecretSet::default();
+    let call = |turn, name: &str, arguments: &str| Entry::Call {
+        turn,
+        name: String::from(name),
+        arguments: secrets.redact(arguments),
+    };
+    let result = |turn, name: &str, text: &str, bytes, elapsed_ms| Entry::Result {
+        turn,
+        name: String::from(name),
+        text: secrets.redact(text),
+        bytes,
+        elapsed_ms,
+    };
+    let answer = |turn, text: &str| Entry::Assistant {
+        turn,
+        text: secrets.redact(text),
+    };
+    vec![
+        Entry::Turn { turn: 1 },
+        call(1, "bash", r#"{"command": "rg -n 'fence' src"}"#),
+        result(
+            1,
+            "bash",
+            "src/rows.rs: the glyph a turn opens with\nsrc/rows.rs: a word longer than a row is broken",
+            412,
+            23,
+        ),
+        answer(
+            1,
+            "Rendering lives in the front end and not in the core, because an entry is a \
+             fact and never a rendering: the TUI and any reader draw one run from one \
+             value, and the core may not name a terminal at all.",
+        ),
+        Entry::Turn { turn: 2 },
+        call(
+            2,
+            "bash",
+            r#"{"command": "cargo test -p sindri --test rows"}"#,
+        ),
+        result(
+            2,
+            "bash",
+            "running 4 tests\ntest result: ok. 4 passed; 0 failed",
+            208,
+            97,
+        ),
+        answer(
+            2,
+            "A width change drops what the cache held and reflows on the next paint, once, \
+             because a paint lays an entry out to draw it and then keeps the answer. The \
+             cache is one width deep, which is what a resize being a reflow and not a \
+             lookup means.",
+        ),
+        Entry::Turn { turn: 3 },
+        call(3, "bash", r#"{"command": "make check STAGES=rows"}"#),
+        result(3, "bash", "check: test ... ok", 64, 41),
+        answer(
+            3,
+            "The window is measured from the tail backwards, so following the newest row \
+             never asks how tall the history is: it lays out the entries it shows and \
+             stops at the first row that fills the band. Only the rows a band reaches are \
+             laid out, so a 250-turn history on a 40-row terminal pays for what it shows \
+             and no more.",
+        ),
+        Entry::Turn { turn: 4 },
+        call(4, "bash", r#"{"command": "make check"}"#),
+        result(
+            4,
+            "bash",
+            "check: fmt ... ok\ncheck: clippy ... ok\ncheck: test ... ok\ncheck: frames ... ok",
+            96,
+            118,
+        ),
+        answer(
+            4,
+            "What that buys is the plain case and what it costs is the scrolled one: a \
+             window is a row offset from the tail, so resolving one walks the entries \
+             between the tail and the window and lays out every one of them on the way. \
+             Each is laid out once and kept, so the whole history scrolled through costs \
+             one layout per entry and scrolling it again costs none.",
+        ),
+        Entry::Turn { turn: 5 },
+        call(5, "bash", r#"{"command": "git diff --stat"}"#),
+        result(
+            5,
+            "bash",
+            "crates/sindri/src/rows.rs | 412 +++++++++++++\ncrates/sindri/tests/rows.rs | 198 +++++++++",
+            128,
+            9,
+        ),
+        answer(
+            5,
+            "The transcript's unit is the entry. An entry never carries a formatted line, \
+             so the same run is drawn the same way by the TUI, by a reader of the \
+             transcript and by whatever front end comes next, and a streaming tick that \
+             changes one entry re-lays that entry alone.",
+        ),
+    ]
+}
+
 /// The frame `name` at `cols` by `rows`, as the text a fixture holds: painted through
 /// a headless backend, because a look that cannot be rendered without a terminal
 /// cannot be a test (ADR-0012).
 fn drawn(name: &str, cols: u16, rows: u16) -> String {
-    let view = named(name);
+    let mut view = named(name);
     let mut terminal =
         Terminal::new(TestBackend::new(cols, rows)).expect("a headless screen of that size");
     let completed = terminal
