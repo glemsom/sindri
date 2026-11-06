@@ -1,7 +1,7 @@
 //! Proves rig is confined to one module tree by reading the source rather than
 //! trusting a convention: every file under `src/` is scanned for the name, and
-//! only the provider seam and the runtime module that will drive rig's runner
-//! (ticket #17) may carry it.
+//! only the provider seam may carry it — the run loop is Sindri's own driver
+//! over its own two seams (ADR-0016), so it needs no allowance at all.
 //!
 //! A name is read in code, not in prose: a line's `//` comment is dropped before
 //! the scan, so a module may explain rig in words while never calling it. The
@@ -15,8 +15,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// The module tree allowed to name rig, as the path of its file and of its
-/// directory, and the one runtime file §10 and ADR-0004 also allow.
-const ALLOWED: [&str; 3] = ["src/provider.rs", "src/provider/", "src/run.rs"];
+/// directory: the provider seam, and nothing else (§10, ADR-0016).
+const ALLOWED: [&str; 2] = ["src/provider.rs", "src/provider/"];
 
 /// Whether `word` is rig's name: the bare crate or any crate of its family.
 fn names_rig(word: &str) -> bool {
