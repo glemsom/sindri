@@ -2,6 +2,7 @@
 //! records, the skills and the config. Every decision a run makes lives here,
 //! and nothing that knows what a terminal is does.
 
+pub mod bash; // the only way a run acts
 pub mod config; // read and written whole and patched in place
 pub mod policy; // the boundary in force, and every tool description derived from it
 pub mod provider; // an ask goes out in Sindri's own words and a reply comes back
