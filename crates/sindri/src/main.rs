@@ -13,6 +13,7 @@
 mod auth; // the one command that signs in rather than runs
 mod batch; // is the Unix filter: a prompt in, the answer and one newline out
 mod cli; // the command line as clap sees it
+mod doctor; // the honest window: it proves the sandbox
 // The host spawns the opener and this binary does not open a tool call yet: #40's
 // tool-call rows are what will call it, so until one lands the module is complete
 // and unreached.
@@ -40,16 +41,18 @@ const NOTHING_TO_RUN: u8 = 3;
 const USAGE: u8 = 2;
 
 fn main() -> ExitCode {
-    let cli = Cli::parse();
+    let mut cli = Cli::parse();
     // A prompt on the command line is batch mode; a launch with none is the
     // terminal UI's, which is asked for its own reasons below.
     let asked = batch::Job::asked(&cli);
 
     // A command that runs nothing is answered here, before a config is resolved
-    // or a key is asked for: neither a sign-in nor a read of past runs needs one.
-    if let Some(command) = cli.command {
+    // or a key is asked for: none of a sign-in, a diagnostic or a read of past
+    // runs needs one.
+    if let Some(command) = cli.command.take() {
         return match command {
             Command::Auth { action } => auth::run(action),
+            Command::Doctor => doctor::run(&cli),
             Command::Sessions { action } => sessions::run(action),
         };
     }
