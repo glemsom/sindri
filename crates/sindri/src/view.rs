@@ -8,17 +8,21 @@
 //! sees are produced by the same code — the point of ADR-0012, and the reason a
 //! visual decision can be graded by an agent at all.
 //!
-//! What is here is the skeleton and not the picture's contents. The transcript's rows
-//! are the core's to lay out (§12, ADR-0008), the rail's ledger and its 32 columns are
-//! ticket #46's, the composer's key map and its two-to-six rows are #41's, and the
-//! pulse is #39's. Each of them paints into the band below — or, in the rail's case,
-//! into the split this file does not yet make — and changes its fixture deliberately
-//! in the commit that changes it.
+//! The transcript's rows are `rows`' to lay out and this file's to draw: a frame is
+//! handed the entries a run has written and where the reader is scrolled to, and the
+//! band paints the window of them the frame reaches, which is §12's rule that only
+//! on-screen rows are laid out (ADR-0008). The rail's ledger and its 32 columns are
+//! ticket #46's, the composer's key map and its two-to-six rows are #41's, the pulse is
+//! #39's, and marking and copy are #50's. Each paints into the band below — or, in the
+//! rail's case, into the split this file does not yet make — and changes its fixture
+//! deliberately in the commit that changes it.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use sindri_core::records::Entry;
 
 use crate::ink::Ink;
+use crate::rows::{Rows, Scroll};
 
 /// The composer's rows at their floor. §12 gives it two to six, and a frame nobody has
 /// typed into shows the two — the hairline a draft sits under and one row of it — so
@@ -39,10 +43,17 @@ const HAIRLINE: char = '─';
 
 /// One frame's worth of facts, in the shape the terminal draws them. Boot knows none
 /// of them — no run, no prompt, no transcript row, nothing loaded — so the frame is
-/// its chrome and nothing else, and this type is where the tickets after this one put
+/// its chrome and nothing else; a run hands over the entries it has written and where
+/// the transcript is scrolled to, and this type is where the tickets after this one put
 /// the facts they do have.
 #[derive(Debug, Default, Clone)]
-pub struct View {}
+pub struct View {
+    /// The transcript's rows, one entry at a time, at the width the band is drawn at.
+    rows: Rows,
+    /// Where the transcript's window sits: on the newest row, or held some rows above
+    /// it while facts land below (#50's arrivals count from here).
+    scroll: Scroll,
+}
 
 impl View {
     /// The frame a launch opens on: the screen has just been taken, no run has started
@@ -52,21 +63,54 @@ impl View {
         View::default()
     }
 
+    /// The frame a run is in: the entries it has written, in order, and where the
+    /// reader is standing in them. What a row of an entry looks like is `rows`'
+    /// business, so a caller says what happened and never how wide or in which ink.
+    pub fn of(entries: impl IntoIterator<Item = Entry>, scroll: Scroll) -> View {
+        let mut rows = Rows::new();
+        for entry in entries {
+            rows.push(entry);
+        }
+        View { rows, scroll }
+    }
+
     /// Paints this frame into `area`: every band of it, in the ink each band is drawn
     /// in, from the top of the screen to the bottom edge.
-    pub fn paint(&self, area: Rect, buffer: &mut Buffer) {
+    ///
+    /// Painting is what tells the row cache how wide the transcript is, so a resize
+    /// invalidates it here and the same pass reflows: the width a row was laid out at is
+    /// the width a band drew it at, and no caller gets to say otherwise (ADR-0008).
+    pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) {
         let bands = bands(area);
         self.transcript(bands.transcript, buffer);
         self.composer(bands.composer, buffer);
         self.footer(bands.footer, buffer);
     }
 
-    /// The transcript: what the run has said so far, newest last, and where a reader
-    /// scrolled back is told what arrived below. A row of it is the core's to lay out
-    /// on the width it is drawn at (ADR-0008), so this file paints the band's ink and
-    /// leaves its rows to the ticket that has them: at boot there is nothing to say.
-    fn transcript(&self, area: Rect, buffer: &mut Buffer) {
+    /// The transcript: what the run has said so far, newest last, painted from the rows
+    /// the cache holds for the window this band reaches and for no other entry. Where a
+    /// reader scrolled back is told what arrived below by #50; the pulse at the head of
+    /// the newest answer is #39's.
+    fn transcript(&mut self, area: Rect, buffer: &mut Buffer) {
         buffer.set_style(area, Ink::Plain.style());
+        self.rows.resize(area.width);
+        let window = self.rows.window(self.scroll, area.height);
+        let mut y = area.y;
+        for piece in window.pieces() {
+            let rows = self.rows.rows(piece.entry);
+            let first = usize::from(piece.skip);
+            for row in &rows[first..first + usize::from(piece.rows)] {
+                row.paint(
+                    Rect {
+                        height: 1,
+                        y,
+                        ..area
+                    },
+                    buffer,
+                );
+                y += 1;
+            }
+        }
     }
 
     /// The composer: the hairline, and the row of draft below it. `Enter` sending and

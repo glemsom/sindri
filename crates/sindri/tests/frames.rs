@@ -14,3 +14,13 @@ mod fixture; // one frame rendered at a fixed size into the text a fixture holds
 fn boot_120x40_is_the_frame_a_launch_opens_on() {
     fixture::assert_frame("boot", 120, 40);
 }
+
+#[test]
+fn transcript_120x40_is_a_run_laid_out_at_the_tail() {
+    fixture::assert_frame("transcript", 120, 40);
+}
+
+#[test]
+fn transcript_scrolled_120x40_cuts_the_top_entry_mid_row() {
+    fixture::assert_frame("transcript-scrolled", 120, 40);
+}
