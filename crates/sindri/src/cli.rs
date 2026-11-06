@@ -11,11 +11,12 @@
 //! in the two words the core accepts, so a misbehaving route can be got round
 //! without renaming the model (Appendix A10).
 //!
-//! `auth login` and `sessions` are subcommands rather than flags because they are
-//! the two things this binary does that run nothing (§3, §13): a sign-in signs in
-//! and exits, and a read of past runs answers from the state home. The words they
-//! offer are the words the core accepts, so a wire that cannot sign in has no
-//! word here to be typed, and an id that names no session is refused by the core.
+//! `auth login`, `doctor` and `sessions` are subcommands rather than flags because
+//! they are the three things this binary does that run nothing (§3, §13): a
+//! sign-in signs in and exits, a diagnostic proves the sandbox and exits, and a
+//! read of past runs answers from the state home. The words they offer are the
+//! words the core accepts, so a wire that cannot sign in has no word here to be
+//! typed, and an id that names no session is refused by the core.
 
 use clap::{Parser, Subcommand, ValueEnum};
 use sindri_core::config::Flags;
@@ -100,8 +101,8 @@ pub struct Cli {
     pub command: Option<Command>,
 }
 
-/// The commands that run nothing rather than run: a sign-in (§3) and a read of
-/// past runs (§13). Both are answered before a first run is resolved.
+/// The commands that run nothing rather than run: a sign-in (§3), a diagnostic
+/// (§3) and a read of past runs (§13). Each is answered before a run is made.
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Sign in to a provider rather than run one.
@@ -110,6 +111,8 @@ pub enum Command {
         #[command(subcommand)]
         action: AuthAction,
     },
+    /// Prove the sandbox and say what the model is given, rather than run.
+    Doctor,
     /// Read past runs back rather than start one.
     Sessions {
         /// What to do with the recorded sessions.
