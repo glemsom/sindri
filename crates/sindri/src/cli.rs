@@ -86,6 +86,29 @@ pub enum Command {
         #[command(subcommand)]
         action: AuthAction,
     },
+    /// Read past runs back rather than start one.
+    Sessions {
+        /// What to do with the recorded sessions.
+        #[command(subcommand)]
+        action: SessionsAction,
+    },
+}
+
+/// What `sindri sessions` can do: name every run the state home holds, or read
+/// one of them back. Both read only, and both answer on stdout (§13).
+#[derive(Debug, Subcommand)]
+pub enum SessionsAction {
+    /// List every recorded session, newest first.
+    List,
+    /// Read one recorded session back: the newest when no id is given.
+    Show {
+        /// The session to read: a whole GUID, or a prefix of exactly one.
+        #[arg(value_name = "ID")]
+        id: Option<String>,
+        /// Print the session's files in their own shape, for `jq`.
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 /// What `sindri auth` can do. Signing out arrives with the ticket that needs it.

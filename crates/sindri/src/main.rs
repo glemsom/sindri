@@ -20,6 +20,7 @@ mod cli; // the command line as clap sees it
 mod open; // the host spawns the opener, because the sandbox has no display
 mod osc; // sequences that carry words out of the terminal
 mod paste; // the terminal's echo is off while the key is typed
+mod sessions; // reads past runs back
 mod tui; // the frame, the rail, the composer and the queue
 
 use std::process::ExitCode;
@@ -49,6 +50,7 @@ fn main() -> ExitCode {
     if let Some(command) = cli.command {
         return match command {
             Command::Auth { action } => auth::run(action),
+            Command::Sessions { action } => sessions::run(action),
         };
     }
 
