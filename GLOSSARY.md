@@ -93,3 +93,11 @@ _Avoid_: Engine, library, backend
 **Front end**:
 A way of driving the core — the TUI or batch mode. Owns no decision the core could make.
 _Avoid_: UI, client, interface
+
+**Ink**:
+A colour role the interface asks for by name — dim, muted, accent, ok, err — never a literal colour.
+_Avoid_: Colour, style, RGB
+
+**Frame fixture**:
+A frame rendered at a fixed size and checked into the tests as the accepted picture of it.
+_Avoid_: Snapshot (too general), screenshot, golden image
