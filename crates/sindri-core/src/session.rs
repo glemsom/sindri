@@ -42,19 +42,27 @@ const TEMP: &str = "tmp";
 /// Where command output a budget could not hold is written, beside the temp.
 const SPILL: &str = "spill";
 
-/// `$XDG_STATE_HOME/sindri/sessions`, falling back to `$HOME/.local/state`.
+/// `$XDG_STATE_HOME`, falling back to `$HOME/.local/state`: the directory
+/// [`Session::create`] is handed, so a run and a reader name one home and not two
+/// spellings of it.
 ///
 /// The variables are handed in rather than read, so a test holds them as data
 /// and never touches a real state home.
-pub fn sessions_root(environment: &impl Environment) -> Result<PathBuf, SessionError> {
-    let base = match spoken(environment, "XDG_STATE_HOME") {
-        Some(state) => PathBuf::from(state),
+pub fn state_home(environment: &impl Environment) -> Result<PathBuf, SessionError> {
+    match spoken(environment, "XDG_STATE_HOME") {
+        Some(state) => Ok(PathBuf::from(state)),
         None => match spoken(environment, "HOME") {
-            Some(home) => PathBuf::from(home).join(".local").join("state"),
-            None => return Err(SessionError::NoStateHome),
+            Some(home) => Ok(PathBuf::from(home).join(".local").join("state")),
+            None => Err(SessionError::NoStateHome),
         },
-    };
-    Ok(base.join(APPLICATION).join(SESSIONS))
+    }
+}
+
+/// `$XDG_STATE_HOME/sindri/sessions`, falling back to `$HOME/.local/state`: where
+/// every session's directory lives, which is what a reader lists rather than what
+/// a run is created in.
+pub fn sessions_root(environment: &impl Environment) -> Result<PathBuf, SessionError> {
+    Ok(state_home(environment)?.join(APPLICATION).join(SESSIONS))
 }
 
 /// One session's directory: the GUID that names it, the temp inside it and the
