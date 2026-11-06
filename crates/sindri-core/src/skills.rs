@@ -15,6 +15,12 @@
 //! diagnostic naming the line, never a failed catalog and never silence: the rest
 //! of the catalog still loads.
 //!
+//! Who may reach a skill is two YAML booleans in its frontmatter, `§5`'s
+//! `disable-model-invocation` and `user-invocable`, and both are read as plain
+//! `true`/`false`: a flag written as a string is a diagnostic, never a default.
+//! The catalog keeps every skill; the model's view of it and the person's view
+//! are derived from those flags, so neither view decides again.
+//!
 //! The catalog is data, not a printed line: `doctor` and the rail both read it.
 //! It is empty rather than absent when nothing is found, and a skill with no path
 //! is one that was compiled in.
@@ -53,6 +59,17 @@ impl std::fmt::Display for Scope {
     }
 }
 
+/// Who may reach one skill, read from §5's two Claude-compatible YAML booleans
+/// and kept positive: the frontmatter states what a door is closed to, and the
+/// rest of the catalog asks what a door is open to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Invocation {
+    /// The model may call it: `disable-model-invocation` absent or false.
+    model: bool,
+    /// A person may ask for it: `user-invocable` absent or true.
+    human: bool,
+}
+
 /// One skill the catalog holds: what a call names, what it is for, where it came
 /// from, and the instructions a load hands back.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -68,9 +85,28 @@ pub struct Skill {
     pub directory: Option<PathBuf>,
     /// The instructions: the `SKILL.md` with its frontmatter stripped.
     pub body: String,
+    /// Who may reach this skill, decided once when the frontmatter was read and
+    /// readable only through [`Skill::model_invocable`] and
+    /// [`Skill::human_invocable`], so no caller reads the YAML's negations.
+    invocation: Invocation,
 }
 
 impl Skill {
+    /// Whether the model may call this skill: `disable-model-invocation: true`
+    /// takes it off the model's side, and the tool's description — which is the
+    /// schema — is then built without it (§5, §2's absence over refusal).
+    pub fn model_invocable(&self) -> bool {
+        self.invocation.model
+    }
+
+    /// Whether a person may ask for this skill by name: `user-invocable: false`
+    /// keeps it out of what the frame offers for completion, while the model
+    /// still calls it. This is where that answer is decided, so the frame reads
+    /// a decision instead of making one.
+    pub fn human_invocable(&self) -> bool {
+        self.invocation.human
+    }
+
     /// Every file beside this skill's `SKILL.md`, as a path relative to its
     /// directory, in path order: what a load lists so a relative reference in
     /// the body resolves.
@@ -231,8 +267,8 @@ impl Catalog {
         &self.diagnostics
     }
 
-    /// Whether the catalog holds no skill at all, which is when no skill tool
-    /// exists.
+    /// Whether the catalog holds no skill at all, for either door: an empty
+    /// catalog is what `doctor` prints as none found.
     pub fn is_empty(&self) -> bool {
         self.skills.is_empty()
     }
@@ -242,14 +278,21 @@ impl Catalog {
         self.skills.iter().find(|skill| skill.name == name)
     }
 
-    /// The `skill` tool's description: the catalog in force, rendered from
-    /// `listing()` — the very value `doctor` prints — so the words the model's
-    /// schema carries and the lines a person reads cannot drift apart.
+    /// The `skill` tool's description: the catalog in force as the model may name
+    /// it, rendered from `listing()` — the very value `doctor` prints — so the two
+    /// renderings differ by the rows a flag withholds and never by a word of
+    /// wording.
     ///
-    /// `None` when the catalog holds no skill: a tool with nothing to name is not
-    /// registered at all, rather than registered to say it has nothing.
+    /// A skill whose frontmatter says `disable-model-invocation: true` is not
+    /// here at all, because the description *is* the schema (§5, §2). `None` when
+    /// no skill is left to name: a tool with nothing to name is not registered at
+    /// all, rather than registered to say it has nothing.
     pub fn tool_description(&self) -> Option<String> {
-        let listing = self.listing();
+        let listing: Vec<Listing> = self
+            .listing()
+            .into_iter()
+            .filter(|entry| entry.model_invocable)
+            .collect();
         if listing.is_empty() {
             return None;
         }
@@ -279,6 +322,8 @@ impl Catalog {
                 name: skill.name.clone(),
                 description: skill.description.clone(),
                 scope: skill.scope,
+                model_invocable: skill.model_invocable(),
+                human_invocable: skill.human_invocable(),
                 shadows: self
                     .shadowing
                     .iter()
@@ -286,6 +331,17 @@ impl Catalog {
                     .cloned()
                     .collect(),
             })
+            .collect()
+    }
+
+    /// The rows a person may ask for by name, in name order: what the frame
+    /// offers for `/` completion and what `/skill:name` accepts, decided here from
+    /// `user-invocable: false` so the frame is handed a decision rather than the
+    /// flags to decide with.
+    pub fn invocable_by_human(&self) -> Vec<Listing> {
+        self.listing()
+            .into_iter()
+            .filter(|entry| entry.human_invocable)
             .collect()
     }
 }
@@ -301,6 +357,11 @@ pub struct Listing {
     pub description: String,
     /// Where the skill in force came from.
     pub scope: Scope,
+    /// Whether the model may call this skill, so a row says which door it is
+    /// behind without the reader going back to the frontmatter.
+    pub model_invocable: bool,
+    /// Whether a person may ask for this skill by name.
+    pub human_invocable: bool,
     /// Every skill this one took the name from, in the order discovery reported
     /// them, each naming the scope and the path that lost.
     pub shadows: Vec<Shadowing>,
@@ -501,12 +562,34 @@ fn child_skill(child: &Path, scope: Scope, catalog: &mut Catalog) -> Option<Skil
 
 /// The frontmatter a `SKILL.md` must carry. Unknown keys are left alone: a skill
 /// is free to hold keys this build has no use for.
+///
+/// The two permission flags are typed as the booleans §5 says they are, so a
+/// value written as a string — `"yes"`, `"true"` — is a diagnostic naming the
+/// line rather than a flag silently read as absent. Absent is the permissive
+/// default: a `SKILL.md` that says nothing about them is both doors open.
 #[derive(Deserialize)]
 struct Frontmatter {
     /// The name a call uses.
     name: String,
     /// The one line the catalog shows beside the name.
     description: String,
+    /// §5's user-only flag, taken away from the model when it is `true`.
+    #[serde(default, rename = "disable-model-invocation")]
+    disable_model_invocation: Option<bool>,
+    /// §5's model-only flag, taken away from the person when it is `false`.
+    #[serde(default, rename = "user-invocable")]
+    user_invocable: Option<bool>,
+}
+
+impl Frontmatter {
+    /// Who may reach the skill this frontmatter describes: an absent flag leaves
+    /// its door open, and only a plain boolean moves it.
+    fn invocation(&self) -> Invocation {
+        Invocation {
+            model: !self.disable_model_invocation.unwrap_or(false),
+            human: self.user_invocable.unwrap_or(true),
+        }
+    }
 }
 
 /// A `SKILL.md` discovery would not read, and the line to open it at.
@@ -576,6 +659,7 @@ fn parse(text: &str, directory: Option<PathBuf>, scope: Scope) -> Result<Skill, 
         .to_owned();
 
     Ok(Skill {
+        invocation: frontmatter.invocation(),
         name: frontmatter.name,
         description: frontmatter.description,
         scope,

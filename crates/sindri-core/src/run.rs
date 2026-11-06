@@ -850,6 +850,11 @@ impl Shell {
     /// A name the catalog does not hold is a refusal, not `already_loaded`: the
     /// two are different failures and each says which one it is. A load runs no
     /// command, so it spends neither of the run's budgets.
+    ///
+    /// A name the catalog holds but the model may not invoke — a skill saying
+    /// `disable-model-invocation: true` — is refused the same way and answered
+    /// with the names this door does open, because the schema's absence is §2's
+    /// first line and a call that reaches past it is §2's second.
     fn skill(&self, arguments: &str, loaded: &mut Loaded) -> Result<Acted, Redacted> {
         let name = name_of(arguments).ok_or_else(|| {
             SecretSet::default().redact(format!(
@@ -857,12 +862,16 @@ impl Shell {
             ))
         })?;
 
-        let skill = self.catalog.get(&name).ok_or_else(|| {
-            SecretSet::default().redact(format!(
-                "no skill is named `{name}` in the catalog in force; it holds {}",
-                held(&self.catalog)
-            ))
-        })?;
+        let skill = self
+            .catalog
+            .get(&name)
+            .filter(|skill| skill.model_invocable())
+            .ok_or_else(|| {
+                SecretSet::default().redact(format!(
+                    "no skill is named `{name}` in the catalog in force; it holds {}",
+                    held(&self.catalog)
+                ))
+            })?;
 
         let text = match loaded.load(&name) {
             Load::Loaded => skill.wrapper(),
@@ -891,12 +900,15 @@ impl Executor for Shell {
     }
 }
 
-/// The names a catalog holds, as a refusal writes them, so a call that invented
-/// a name is answered with the values it could have used instead.
+/// The names the model may call, as a refusal writes them, so a call that
+/// invented a name is answered with the values it could have used instead. A
+/// skill the frontmatter withholds is left out: a refusal that named it would be
+/// the way around the flag.
 fn held(catalog: &Catalog) -> String {
     let names: Vec<String> = catalog
         .skills()
         .iter()
+        .filter(|skill| skill.model_invocable())
         .map(|skill| format!("`{}`", skill.name))
         .collect();
     if names.is_empty() {

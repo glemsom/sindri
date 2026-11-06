@@ -1,6 +1,7 @@
 //! The tools a run registers, and the ones it drops when there is nothing to name:
 //! `bash` always, because a shell is the only way to act, `skill` only when the
-//! catalog holds a skill worth naming, and `open` only where somebody is looking.
+//! catalog holds a skill the model may name, and `open` only where somebody is
+//! looking.
 //!
 //! Absence is total rather than a refusal. A tool the front end cannot honour is
 //! not in the list at all, so the model's schema never mentions it and no turn is
@@ -74,8 +75,9 @@ pub struct ToolSet {
 
 impl ToolSet {
     /// The tool set a run registers: `bash` described by the boundary in force,
-    /// the skill tool described by the catalog when the catalog has a skill to
-    /// name, and `open` when the front end is a terminal somebody is watching.
+    /// the skill tool described by the catalog when the catalog holds a skill the
+    /// model may call, and `open` when the front end is a terminal somebody is
+    /// watching.
     pub fn new(boundary: &Boundary, catalog: &Catalog, front_end: FrontEnd) -> ToolSet {
         let mut tools = vec![Tool {
             name: BASH,

@@ -61,6 +61,20 @@ impl Tree {
         .expect("the skill file");
     }
 
+    /// A skill named `name` under `scope_dir`'s `.agents`, whose frontmatter also
+    /// carries one of §5's permission flags.
+    fn flagged(&self, scope_dir: &Path, name: &str, description: &str, flag: &str) {
+        let directory = scope_dir.join(".agents/skills").join(name);
+        std::fs::create_dir_all(&directory).expect("the skill directory");
+        std::fs::write(
+            directory.join("SKILL.md"),
+            format!(
+                "---\nname: {name}\ndescription: {description}\n{flag}\n---\n\nBody of {name}.\n"
+            ),
+        )
+        .expect("the skill file");
+    }
+
     /// What the binary's own build offers here: the disk, and no built-in, so
     /// every skill a test sees is one it wrote.
     fn catalog(&self) -> Catalog {
@@ -273,5 +287,90 @@ fn the_open_tool_names_every_extension_and_every_scheme_it_accepts() {
     assert!(
         description.contains(&boundary.writable().paths()[0].display().to_string()),
         "the description is derived from the boundary in force, as `bash`'s is: {description}"
+    );
+}
+
+#[test]
+fn a_user_only_skill_is_out_of_the_tool_schema_and_still_in_the_doctor_listing() {
+    let tree = Tree::new();
+    tree.skill(&tree.repo(), "deploy", "ship the branch");
+    tree.flagged(
+        &tree.repo(),
+        "handover",
+        "the person's own notes",
+        "disable-model-invocation: true",
+    );
+    let catalog = tree.catalog();
+
+    let skill = ToolSet::new(&boundary(&tree.workspace()), &catalog, FrontEnd::Terminal)
+        .get(SKILL)
+        .expect("one skill is still the model's to call")
+        .description()
+        .to_owned();
+
+    assert_eq!(
+        entries(&skill),
+        vec![(String::from("deploy"), String::from("ship the branch"))],
+        "the schema names only the skills the model may call"
+    );
+    assert!(
+        !skill.contains("handover"),
+        "a user-only skill is absent from the schema rather than listed and refused: {skill}"
+    );
+    assert!(
+        catalog.get("handover").is_some()
+            && catalog.listing().iter().any(|row| row.name == "handover"),
+        "the catalog still holds it, so `doctor` can list it and the person can ask for it"
+    );
+}
+
+#[test]
+fn a_catalog_of_only_user_only_skills_registers_no_skill_tool() {
+    let tree = Tree::new();
+    tree.flagged(
+        &tree.repo(),
+        "handover",
+        "the person's own notes",
+        "disable-model-invocation: true",
+    );
+
+    let tools = ToolSet::new(
+        &boundary(&tree.workspace()),
+        &tree.catalog(),
+        FrontEnd::Terminal,
+    );
+
+    assert_eq!(
+        tools
+            .tools()
+            .iter()
+            .map(|tool| tool.name())
+            .collect::<Vec<_>>(),
+        vec![BASH, OPEN],
+        "nothing the model may call means no skill tool, not one that names nothing"
+    );
+}
+
+#[test]
+fn a_model_only_skill_still_registers_the_skill_tool() {
+    let tree = Tree::new();
+    tree.flagged(
+        &tree.repo(),
+        "sweeper",
+        "tidy the ledger",
+        "user-invocable: false",
+    );
+
+    let catalog = tree.catalog();
+    let tools = ToolSet::new(&boundary(&tree.workspace()), &catalog, FrontEnd::Terminal);
+    let skill = tools
+        .get(SKILL)
+        .expect("a skill only the model may call still needs the tool that calls it")
+        .description();
+
+    assert_eq!(
+        entries(skill),
+        vec![(String::from("sweeper"), String::from("tidy the ledger"))],
+        "the only door this skill is behind is the model's, so the schema names it"
     );
 }
