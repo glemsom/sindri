@@ -22,8 +22,9 @@
 //! it kills the command and the outcome says `timed_out` — `--die-with-parent`
 //! being what takes the whole sandbox with it.
 //!
-//! The session temp is an input and not a thing this module makes: whoever owns
-//! the session creates it, and nothing here creates, adopts or clears it away.
+//! The session temp is an input and not a thing this module makes:
+//! [`crate::session`] creates it, adopts it and clears it away, and nothing here
+//! creates, adopts or clears it a second time.
 //! The run's budgets and the record are not here either — an outcome is what a
 //! budget is spent from and what a record is written about.
 
