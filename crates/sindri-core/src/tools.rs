@@ -1,13 +1,20 @@
-//! The tools a run registers, and the one it drops when there is nothing to name:
-//! `bash` always, because a shell is the only way to act, and `skill` only when
-//! the catalog holds a skill worth naming.
+//! The tools a run registers, and the ones it drops when there is nothing to name:
+//! `bash` always, because a shell is the only way to act, `skill` only when the
+//! catalog holds a skill worth naming, and `open` only where somebody is looking.
 //!
 //! Absence is total rather than a refusal. A tool the front end cannot honour is
 //! not in the list at all, so the model's schema never mentions it and no turn is
 //! spent finding out it is there. That is why the skill tool's description is
 //! derived from the catalog rather than the preamble: skills are paid for where
-//! they exist, and a run without one pays nothing.
+//! they exist, and a run without one pays nothing. `open` follows the same rule
+//! for the other reason a tool can be absent — there is no browser to reach in
+//! batch mode, so a batch run has two tools and its schema says two.
+//!
+//! [`FrontEnd`] is that fact and no other: a front end registers what it honours,
+//! which is Appendix A2's answer to a spec that counts three tools and a batch
+//! mode that can only honour two.
 
+use crate::open;
 use crate::policy::Boundary;
 use crate::skills::Catalog;
 
@@ -16,6 +23,20 @@ pub const BASH: &str = "bash";
 
 /// The name of the tool a run registers only when the catalog offers a skill.
 pub const SKILL: &str = "skill";
+
+/// The name of the tool a run registers only where somebody is looking at a
+/// terminal: the host's browser is not reachable from a batch run.
+pub const OPEN: &str = "open";
+
+/// Which front end is registering, because §5's third tool is absent where there
+/// is nobody to look: three tools is the ceiling and not the count (A2).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FrontEnd {
+    /// A terminal with somebody in front of it, so `open` is registered.
+    Terminal,
+    /// Batch mode: no one to look, so `open` is not in the set at all.
+    Batch,
+}
 
 /// One tool a run registers: the name a call uses, and the words the model is
 /// given about it.
@@ -53,9 +74,9 @@ pub struct ToolSet {
 
 impl ToolSet {
     /// The tool set a run registers: `bash` described by the boundary in force,
-    /// and the skill tool described by the catalog when the catalog has a skill
-    /// to name.
-    pub fn new(boundary: &Boundary, catalog: &Catalog) -> ToolSet {
+    /// the skill tool described by the catalog when the catalog has a skill to
+    /// name, and `open` when the front end is a terminal somebody is watching.
+    pub fn new(boundary: &Boundary, catalog: &Catalog, front_end: FrontEnd) -> ToolSet {
         let mut tools = vec![Tool {
             name: BASH,
             description: boundary.description(),
@@ -64,6 +85,12 @@ impl ToolSet {
             tools.push(Tool {
                 name: SKILL,
                 description,
+            });
+        }
+        if front_end == FrontEnd::Terminal {
+            tools.push(Tool {
+                name: OPEN,
+                description: open::description(boundary),
             });
         }
         ToolSet { tools }

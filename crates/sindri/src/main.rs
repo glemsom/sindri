@@ -10,6 +10,11 @@
 
 mod batch; // a prompt in, the answer and one newline out
 mod cli; // the command line as clap sees it
+// The host spawns the opener and this binary does not open a tool call yet: #19's
+// executor and #40's tool-call rows are what will call it, so until one lands the
+// module is complete and unreached.
+#[allow(dead_code)]
+mod open; // the host spawns the opener, because the sandbox has no display
 mod osc; // sequences that carry words out of the terminal
 mod paste; // the terminal's echo is off while the key is typed
 mod tui; // the frame, the rail, the composer and the queue
