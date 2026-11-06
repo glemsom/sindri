@@ -20,7 +20,11 @@
 //! again: [`retry`] tries it at most three times, on the verdict and never on a
 //! status code.
 //!
-//! Nothing here redacts or writes a record: those are tickets #11 and #17.
+//! A failure's one line is a [`Redacted`], built through the client's
+//! [`SecretSet`]: a provider that refuses a key by quoting it back is the one
+//! place a secret would otherwise ride a diagnostic into a transcript, so the
+//! text is scrubbed where it is born rather than by every window after it
+//! (ADR-0011). Nothing here writes a record: that is ticket #17.
 
 pub mod retry; // §4's retry policy in one place: an ask is tried three times
 pub mod transport; // how a request's bytes travel, and the fake a test substitutes
@@ -43,11 +47,8 @@ use rig_core::wire::{Encoded, Wire as RigWire, WireFrame};
 
 use self::retry::{Backoff, Sleep, until_final};
 use self::transport::Http;
+use crate::redact::{MASK, Redacted, SecretSet};
 use crate::wire::Wire;
-
-/// What `Debug` prints in place of a credential, so a key cannot leak through a
-/// diagnostic, a log line or a test failure (ADR-0011).
-const MASK: &str = "«redacted»";
 
 /// The credential a wire is asked with, kept opaque so every printed form of it
 /// is masked rather than trusted.
@@ -267,8 +268,9 @@ pub struct Failure {
     /// Whether text or reasoning had already streamed when this failed. §4
     /// forbids retrying such a reply however retryable its verdict.
     pub streamed: bool,
-    /// One line, safe to print.
-    pub message: String,
+    /// One line, safe to print: a `Redacted`, so a wire's refusal cannot carry
+    /// a key back into a diagnostic, a verbose line or a record.
+    pub message: Redacted,
 }
 
 impl Failure {
@@ -279,24 +281,26 @@ impl Failure {
             verdict: Verdict::Unconfigured,
             retryable: false,
             streamed: false,
-            message: format!("{} needs a credential: {source}", wire.word()),
+            message: SecretSet::default()
+                .redact(format!("{} needs a credential: {source}", wire.word())),
         }
     }
 
-    /// The failure `error` is, given whether anything had streamed by then.
-    fn from_wire(error: ProviderError, streamed: bool) -> Self {
+    /// The failure `error` is, given whether anything had streamed by then and
+    /// the secrets to scrub out of what it says.
+    fn from_wire(error: ProviderError, streamed: bool, secrets: &SecretSet) -> Self {
         Self {
             verdict: verdict_of(&error),
             retryable: error.is_retryable(),
             streamed,
-            message: error.to_string(),
+            message: secrets.redact(error.to_string()),
         }
     }
 }
 
 impl fmt::Display for Failure {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.message)
+        formatter.write_str(&self.message.to_string())
     }
 }
 
@@ -335,6 +339,8 @@ pub struct Client {
     transport: DynHttpClient,
     /// How long to wait before each attempt (§4), injectable for tests.
     backoff: Arc<dyn Backoff + Send + Sync>,
+    /// The secrets a wire's own words are scrubbed of before they are kept.
+    secrets: SecretSet,
 }
 
 impl fmt::Debug for Client {
@@ -342,6 +348,7 @@ impl fmt::Debug for Client {
         formatter
             .debug_struct("Client")
             .field("transport", &self.transport)
+            .field("secrets", &self.secrets.len())
             .finish_non_exhaustive()
     }
 }
@@ -349,10 +356,17 @@ impl fmt::Debug for Client {
 impl Client {
     /// A client over `transport`, whatever sends it: the real network, or a
     /// fixture replaying recorded replies.
-    pub fn over(transport: impl HttpClientExt + Clone + 'static) -> Self {
+    ///
+    /// `secrets` is not optional, and that is the point: a client cannot be
+    /// built without deciding what a wire's own words are scrubbed of, so the
+    /// choice to know nothing is written down as `SecretSet::default()` at the
+    /// one call site that made it rather than being the default everywhere
+    /// (ADR-0011).
+    pub fn over(transport: impl HttpClientExt + Clone + 'static, secrets: SecretSet) -> Self {
         Self {
             transport: DynHttpClient::new(transport),
             backoff: Arc::new(Sleep),
+            secrets,
         }
     }
 
@@ -364,12 +378,18 @@ impl Client {
     }
 
     /// A client that reaches the dialects' own endpoints, sending `headers` on
-    /// every request with `{session}` expanded to `session`.
-    pub fn http(headers: Vec<(String, String)>, session: impl Into<String>) -> Self {
+    /// every request with `{session}` expanded to `session`, scrubbing
+    /// `secrets` out of whatever a failed ask says.
+    pub fn http(
+        headers: Vec<(String, String)>,
+        session: impl Into<String>,
+        secrets: SecretSet,
+    ) -> Self {
         Self::over(
             Http::new(headers)
                 .session(session)
                 .over(rig_reqwest::ReqwestClient::default()),
+            secrets,
         )
     }
 
@@ -463,7 +483,7 @@ impl Client {
         futures::executor::block_on(async move {
             let mut streaming = model
                 .stream(request.clone())
-                .map_err(|error| Failure::from_wire(error, false))?;
+                .map_err(|error| Failure::from_wire(error, false, &self.secrets))?;
             let mut streamed = false;
             while let Some(item) = streaming.next().await {
                 match item {
@@ -476,13 +496,15 @@ impl Client {
                         deltas.reasoning(&text);
                     }
                     Ok(_) => {}
-                    Err(error) => return Err(Failure::from_wire(error, streamed)),
+                    Err(error) => {
+                        return Err(Failure::from_wire(error, streamed, &self.secrets));
+                    }
                 }
             }
             let finished = streaming
                 .finish()
                 .await
-                .map_err(|error| Failure::from_wire(error, streamed))?;
+                .map_err(|error| Failure::from_wire(error, streamed, &self.secrets))?;
             Ok(Answer::from(&finished))
         })
     }

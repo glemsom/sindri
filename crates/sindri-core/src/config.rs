@@ -30,11 +30,8 @@ use std::str::FromStr;
 use serde::Deserialize;
 use toml_edit::{DocumentMut, Item, Value};
 
+use crate::redact::{MASK, SecretSet};
 use crate::wire::Wire;
-
-/// What `Debug` prints in place of a secret, so a value cannot leak through a
-/// diagnostic, a record or a verbose line (ADR-0011).
-const MASK: &str = "«redacted»";
 
 /// The one config schema and the one resolved config: every key optional, so
 /// "unset" survives all the way down to whoever decides the default.
@@ -219,6 +216,27 @@ impl Config {
             status: spoken_parsed(environment, "SINDRI_STATUS")?,
             ssh_agent: spoken_parsed(environment, "SINDRI_SSH_AGENT")?,
         })
+    }
+
+    /// The secrets this layer holds, as the set every `Redacted` scrubs through.
+    ///
+    /// There are exactly two doors here, and both are values a wire would echo
+    /// back in its own refusal: the credential, and every `extra_headers`
+    /// value. A header line is a secret whole and its value is a secret on its
+    /// own, so both are kept: a provider that answers with the value alone is
+    /// as loud as one that quotes the line (ADR-0011).
+    pub fn secrets(&self) -> SecretSet {
+        let mut secrets = SecretSet::default();
+        for secret in self.api_key.iter() {
+            secrets.add(secret.as_str());
+        }
+        for header in self.extra_headers.iter().flatten() {
+            secrets.add(header.as_str());
+            if let Some((_, value)) = header.split_once(':') {
+                secrets.add(value.trim());
+            }
+        }
+        secrets
     }
 
     /// The whole precedence in one call: file, then environment, then flags.
