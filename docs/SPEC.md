@@ -331,3 +331,13 @@ core — see ADR-0004.
 §5 says a load is once per conversation. That requires conversation and history to be
 **Resolved:** conversation *is* the run's history. `/new` clears the set, and a `/skill:name`
 load by the human counts, so a later model load returns `already_loaded`.
+
+**A15 — The retry seam sits below the point where text exists (§4, A13 vs rig-core 0.46).**
+A13 said the "never retry a reply that already streamed text" rule is observed at rig-core's
+`Transport` trait. In rig-core 0.46 that trait is generic over a wire and its `send` hands
+back the *wire's own frames*, so a transport sees framed events and never text: text exists
+only once the dialect's decoder has folded them, one layer higher.
+**Resolved:** the seam splits — attempts and headers live in the transport, which implements
+`HttpClientExt` (the trait every rig `Transport` is built from), and whether a reply had
+already streamed is reported by the provider seam's fold as `Failure::streamed`, beside the
+wire's own `Failure::retryable` — see ADR-0013.
