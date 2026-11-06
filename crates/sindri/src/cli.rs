@@ -11,10 +11,11 @@
 //! in the two words the core accepts, so a misbehaving route can be got round
 //! without renaming the model (Appendix A10).
 //!
-//! `auth login` is a subcommand rather than a flag because it is the one thing
-//! this binary does that runs nothing (§3): it signs in and exits. The words it
-//! offers are the words the core accepts, so a wire that cannot sign in has no
-//! word here to be typed.
+//! `auth login` and `sessions` are subcommands rather than flags because they are
+//! the two things this binary does that run nothing (§3, §13): a sign-in signs in
+//! and exits, and a read of past runs answers from the state home. The words they
+//! offer are the words the core accepts, so a wire that cannot sign in has no
+//! word here to be typed, and an id that names no session is refused by the core.
 
 use clap::{Parser, Subcommand, ValueEnum};
 use sindri_core::config::Flags;
@@ -93,12 +94,14 @@ pub struct Cli {
     )]
     pub verbose: u8,
 
-    /// What to do instead of running. Today, that is one thing: sign in.
+    /// What to do instead of running. Today, two things: sign in, or read a past
+    /// run back.
     #[command(subcommand)]
     pub command: Option<Command>,
 }
 
-/// The one command that signs in rather than runs (§3).
+/// The commands that run nothing rather than run: a sign-in (§3) and a read of
+/// past runs (§13). Both are answered before a first run is resolved.
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Sign in to a provider rather than run one.
@@ -106,6 +109,29 @@ pub enum Command {
         /// What to do with the sign-in.
         #[command(subcommand)]
         action: AuthAction,
+    },
+    /// Read past runs back rather than start one.
+    Sessions {
+        /// What to do with the recorded sessions.
+        #[command(subcommand)]
+        action: SessionsAction,
+    },
+}
+
+/// What `sindri sessions` can do: name every run the state home holds, or read
+/// one of them back. Both read only, and both answer on stdout (§13).
+#[derive(Debug, Subcommand)]
+pub enum SessionsAction {
+    /// List every recorded session, newest first.
+    List,
+    /// Read one recorded session back: the newest when no id is given.
+    Show {
+        /// The session to read: a whole GUID, or a prefix of exactly one.
+        #[arg(value_name = "ID")]
+        id: Option<String>,
+        /// Print the session's files in their own shape, for `jq`.
+        #[arg(long)]
+        json: bool,
     },
 }
 

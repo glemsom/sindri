@@ -20,6 +20,7 @@ use std::error::Error;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use serde::Deserialize;
 use serde::Serialize;
 
 use crate::config::Config;
@@ -40,7 +41,7 @@ pub const DEFAULT_OUTPUT_BUDGET_BYTES: u64 = 8 * 1024 * 1024;
 
 /// How a run's commands are confined, as the two-valued fact it is: there is no
 /// third state, so no surface can report one and the model cannot be told one.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Enforcement {
     /// Unprivileged bubblewrap, with the writable set mapped writable.
