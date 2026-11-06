@@ -164,6 +164,42 @@ impl Catalog {
     pub fn get(&self, name: &str) -> Option<&Skill> {
         self.skills.iter().find(|skill| skill.name == name)
     }
+
+    /// The catalog as lines, in name order: the shape `doctor` prints, so the
+    /// command owns the printing and this owns what is printed. A builtin has no
+    /// path to show, which is why `scope` is the word that names it.
+    pub fn listing(&self) -> Vec<Listing> {
+        self.skills
+            .iter()
+            .map(|skill| Listing {
+                name: skill.name.clone(),
+                description: skill.description.clone(),
+                scope: skill.scope,
+                shadows: self
+                    .shadowing
+                    .iter()
+                    .filter(|shadow| shadow.name == skill.name)
+                    .cloned()
+                    .collect(),
+            })
+            .collect()
+    }
+}
+
+/// One line of the catalog as `doctor` prints it: what a call names, the line
+/// shown beside it, the scope it came from, and every skill it took the name
+/// from, so a displaced skill is visible rather than merely gone.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Listing {
+    /// The name a call uses.
+    pub name: String,
+    /// The one line shown beside the name.
+    pub description: String,
+    /// Where the skill in force came from.
+    pub scope: Scope,
+    /// Every skill this one took the name from, in the order discovery reported
+    /// them, each naming the scope and the path that lost.
+    pub shadows: Vec<Shadowing>,
 }
 
 /// The map a resolution is built in, kept in one place so every scope inserts the
@@ -172,7 +208,13 @@ type ByName = BTreeMap<String, Skill>;
 
 /// The `SKILL.md` texts compiled into the binary, and the only way a builtin
 /// skill exists: no path, because a path can be absent, stale or unwritable.
-const BUILTIN_SKILLS: &[&str] = &[];
+/// The directory each one is written in is where it is edited, never where it is
+/// read: `include_str!` bakes the text in, so deleting the directory afterwards
+/// changes nothing about the skills this build offers.
+const BUILTIN_SKILLS: &[&str] = &[
+    // One commit message, written from the diff in the repository's own style.
+    include_str!("../skills/commit-message/SKILL.md"),
+];
 
 /// One place discovery reads skills from, as the precedence order visits it:
 /// lowest first, so a later skill takes a name from an earlier one.

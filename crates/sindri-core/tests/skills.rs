@@ -78,6 +78,13 @@ fn skill_md(name: &str, description: &str) -> String {
     format!("---\nname: {name}\ndescription: {description}\n---\n\nBody of {name}.\n")
 }
 
+/// The catalog a workspace and a home offer on their own, with no built-in
+/// handed in. Everything here is about what disk offers, so the binary's own
+/// skills would only be noise; `builtin_skills.rs` proves that scope.
+fn disk_only(workspace: &Path, home: &Path) -> Catalog {
+    Catalog::discover_with_builtin(workspace, Some(home), &[])
+}
+
 /// The descriptions in a catalog, by name, so a test can say which skill of a
 /// shared name won.
 fn described(catalog: &Catalog) -> Vec<(String, String)> {
@@ -92,7 +99,7 @@ fn described(catalog: &Catalog) -> Vec<(String, String)> {
 fn nothing_found_is_an_empty_catalog_rather_than_no_catalog() {
     let tree = Tree::new();
 
-    let catalog = Catalog::discover(&tree.workspace(), Some(&tree.home()));
+    let catalog = disk_only(&tree.workspace(), &tree.home());
 
     assert!(catalog.skills().is_empty(), "no scope holds a skill here");
     assert!(catalog.shadowing().is_empty(), "nothing to shadow");
@@ -109,7 +116,7 @@ fn a_directory_holding_a_skill_md_is_a_skill_in_its_scope() {
     tree.skill(&tree.home().join(".agents/skills"), "pdf", "fill in a form");
     tree.skill(&tree.repo().join(".agents/skills"), "deploy", "ship it");
 
-    let catalog = Catalog::discover(&tree.workspace(), Some(&tree.home()));
+    let catalog = disk_only(&tree.workspace(), &tree.home());
 
     assert_eq!(
         described(&catalog),
@@ -146,7 +153,7 @@ fn a_nearer_scope_takes_the_name_and_the_loser_is_reported() {
         "the repo's way",
     );
 
-    let catalog = Catalog::discover(&tree.workspace(), Some(&tree.home()));
+    let catalog = disk_only(&tree.workspace(), &tree.home());
 
     assert_eq!(
         described(&catalog),
@@ -177,7 +184,7 @@ fn discovery_never_walks_above_the_repository_root() {
         "this repository's",
     );
 
-    let catalog = Catalog::discover(&tree.workspace(), Some(&tree.home()));
+    let catalog = disk_only(&tree.workspace(), &tree.home());
 
     assert_eq!(
         described(&catalog),
@@ -205,7 +212,7 @@ fn the_nearest_repo_directory_takes_the_name_from_a_further_one() {
         "the middle one's",
     );
 
-    let catalog = Catalog::discover(&tree.workspace(), Some(&tree.home()));
+    let catalog = disk_only(&tree.workspace(), &tree.home());
 
     assert_eq!(
         described(&catalog),
@@ -239,7 +246,7 @@ fn a_symlinked_skill_directory_is_followed() {
     let link = tree.repo().join(".agents/skills/greet");
     symlink(&shared, &link);
 
-    let catalog = Catalog::discover(&tree.workspace(), Some(&tree.home()));
+    let catalog = disk_only(&tree.workspace(), &tree.home());
 
     assert_eq!(
         described(&catalog),
@@ -269,7 +276,7 @@ fn a_dangling_link_is_refused_by_its_own_path() {
     let dangling = scope.join("broken");
     symlink(&tree.at("gone"), &dangling);
 
-    let catalog = Catalog::discover(&tree.workspace(), Some(&tree.home()));
+    let catalog = disk_only(&tree.workspace(), &tree.home());
 
     assert_eq!(
         described(&catalog),
@@ -299,7 +306,7 @@ fn a_malformed_skill_md_is_a_diagnostic_naming_its_line() {
         "---\nname: broken\n\tdescription: tabbed\n---\n\nBody.\n",
     );
 
-    let catalog = Catalog::discover(&tree.workspace(), Some(&tree.home()));
+    let catalog = disk_only(&tree.workspace(), &tree.home());
 
     assert_eq!(
         described(&catalog),
@@ -329,7 +336,7 @@ fn a_skill_md_with_no_frontmatter_is_refused_at_its_first_line() {
     let bare = scope.join("bare/SKILL.md");
     write(&bare, "Just instructions, and nothing that names them.\n");
 
-    let catalog = Catalog::discover(&tree.workspace(), Some(&tree.home()));
+    let catalog = disk_only(&tree.workspace(), &tree.home());
 
     assert_eq!(
         described(&catalog),
@@ -354,7 +361,7 @@ fn a_frontmatter_without_a_description_is_refused_at_the_frontmatter() {
     let nameless = scope.join("nameless/SKILL.md");
     write(&nameless, "---\nname: nameless\n---\n\nBody.\n");
 
-    let catalog = Catalog::discover(&tree.workspace(), Some(&tree.home()));
+    let catalog = disk_only(&tree.workspace(), &tree.home());
 
     assert!(
         catalog.skills().is_empty(),
