@@ -21,7 +21,7 @@ use sindri_core::provider::Route;
 use sindri_core::provider::Usage as Ask;
 use sindri_core::records::{Entry, Facts, Phase, Record, read_transcript, timestamp};
 use sindri_core::redact::{MASK, SecretSet};
-use sindri_core::run::{Acted, Budget, Call, Limits, State, Stop};
+use sindri_core::run::{Acted, Budget, Call, Exit, Limits, State, Stop};
 use sindri_core::session::Session;
 use sindri_core::wire::Wire;
 use tempfile::TempDir;
@@ -317,6 +317,7 @@ fn a_tool_call_and_its_result_are_two_entries_of_their_own_facts() {
                 text: String::from("exit 0\na.txt\n"),
                 bytes: 6,
                 elapsed: Duration::from_millis(12),
+                exit: Exit::Code(0),
             },
         )
         .expect("a result is recorded");
@@ -333,9 +334,97 @@ fn a_tool_call_and_its_result_are_two_entries_of_their_own_facts() {
                 "text": "exit 0\na.txt\n",
                 "bytes": 6,
                 "elapsed_ms": 12,
+                "exit": {"code": 0},
             }),
         ],
         "a call and what it did are facts, in the order they happened"
+    );
+}
+
+/// How a call ended is a fact of its result and not a sentence a reader of the text
+/// beside it works out (ADR-0007): the row that says `✗ exit 1` reads this field, so
+/// §12's four states are four values the run wrote down rather than four ways of
+/// wording the same prose.
+#[test]
+fn a_result_writes_the_verdict_its_call_settled_with() {
+    let ground = Ground::new();
+    let session = ground.session();
+    let mut record = ground.record(&session);
+    let call = Call::new("bash", r#"{"command": "ls"}"#);
+
+    for (turn, exit) in [
+        (1, Exit::Code(0)),
+        (2, Exit::Code(1)),
+        (3, Exit::TimedOut),
+        (4, Exit::Cancelled),
+    ] {
+        record
+            .resulted(
+                turn,
+                &call,
+                &Acted {
+                    text: String::from("exit 0\n"),
+                    bytes: 7,
+                    elapsed: Duration::from_millis(2),
+                    exit,
+                },
+            )
+            .expect("a result is recorded");
+    }
+
+    let written = std::fs::read_to_string(session.directory().join("transcript.jsonl"))
+        .expect("the transcript");
+    let verdicts: Vec<Value> = written
+        .lines()
+        .map(|line| {
+            let entry: Value = serde_json::from_str(line).expect("every line is JSON");
+            entry["exit"].clone()
+        })
+        .collect();
+    assert_eq!(
+        verdicts,
+        vec![
+            json!({"code": 0}),
+            json!({"code": 1}),
+            json!("timed_out"),
+            json!("cancelled"),
+        ],
+        "four states are four values: {written}"
+    );
+    assert!(
+        !written.contains("null"),
+        "a field with nothing in it is left out rather than written as `null` (§15): {written}"
+    );
+}
+
+/// A newer build may always write what an older one reads past (ADR-0007): a result
+/// line written before the verdict existed still reads, and reads as a result with no
+/// verdict rather than as a result that finished well.
+#[test]
+fn a_result_line_written_before_the_verdict_existed_still_reads() {
+    let ground = Ground::new();
+    let session = ground.session();
+    let directory = session.directory();
+    std::fs::write(
+        directory.join("transcript.jsonl"),
+        "{\"kind\": \"result\", \"turn\": 1, \"name\": \"bash\", \"text\": \"exit 0\\n\", \"bytes\": 7, \"elapsed_ms\": 2}\n",
+    )
+    .expect("an older transcript");
+
+    let transcript = read_transcript(directory).expect("an older transcript reads");
+
+    assert_eq!(transcript.skipped(), 0, "the line is an entry, not a skip");
+    assert_eq!(
+        transcript.entries(),
+        [Entry::Result {
+            turn: 1,
+            name: String::from("bash"),
+            text: SecretSet::default().redact("exit 0\n"),
+            bytes: 7,
+            elapsed_ms: 2,
+            exit: None,
+        }],
+        "a result nobody recorded a verdict for says nothing it does not know"
     );
 }
 
@@ -389,6 +478,7 @@ fn no_line_of_the_record_carries_a_secret() {
                 text: String::from("hunter2\n"),
                 bytes: 8,
                 elapsed: Duration::from_millis(1),
+                exit: Exit::Code(0),
             },
         )
         .expect("a result is recorded");
@@ -722,6 +812,7 @@ fn child_writes_entries_until_it_is_killed() {
         text: String::from("exit 0\nhello\n"),
         bytes: 12,
         elapsed: Duration::from_millis(3),
+        exit: Exit::Code(0),
     };
 
     println!("guid {}", session.guid());
@@ -817,6 +908,7 @@ fn a_killed_run_still_reads() {
                 text: SecretSet::default().redact("exit 0\nhello\n"),
                 bytes: 12,
                 elapsed_ms: 3,
+                exit: Some(Exit::Code(0)),
             },
             Entry::Assistant {
                 turn,

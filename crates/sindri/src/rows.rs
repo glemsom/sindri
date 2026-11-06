@@ -28,15 +28,23 @@
 //! measuring a whole transcript, it lays out every entry the cache has never seen, and
 //! #50's marking and `↓ 4 new rows` are what will spend it. The window never does.
 //!
-//! `Call` and `Result` rows are deliberately plain here. What a tool row says — `✓ exit
-//! 0`, `✗ exit N`, `✗ timed out`, `✗ cancelled` — and the faded ink §12 paints tool
-//! calls in are ticket #40's contract: it changes these two shapes and their golden
-//! frame in the same commit, and nothing else has to move with it.
+//! A call is one row. It opens naming the call in the faded ink §12 paints tool calls
+//! in, and it settles saying what happened to it — `✓ exit 0`, `✗ exit N`, `✗ timed out`,
+//! `✗ cancelled` — the check or the cross in `ok`/`err` and the call's name beside it.
+//! The verdict is a fact the core carries (ADR-0007), never a sentence this file reads
+//! back out of the text, so the picture cannot say a call succeeded because the words
+//! under it happened to begin with `exit 0`.
+//!
+//! The record keeps two entries, a call and its result, and the picture keeps one row:
+//! a result settles the row the call it answers opened rather than opening a line under
+//! it, which is why [`Rows::settle`] exists — the row is laid again, alone, and the
+//! history above and below it keeps what it was drawn as (ADR-0008).
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::text::Span;
 use sindri_core::records::Entry;
+use sindri_core::run::Exit;
 
 use crate::ink::Ink;
 
@@ -44,6 +52,17 @@ use crate::ink::Ink;
 /// read back with too, so a call and what it answered read as one thing said in two
 /// rows rather than as two entries that happened to follow each other.
 const INDENT: &str = "  ";
+
+/// The glyph a call opens with, before anything has happened to it: a row that claims
+/// nothing and is drawn all the same, because a call in flight is a row of the
+/// transcript and not a gap in it.
+const PENDING: char = '…';
+
+/// The glyph a call that finished well settles on, and the one a call that did not: the
+/// whole difference between §12's four states is this pair, the words beside them and
+/// the ink they are drawn in.
+const CHECK: char = '✓';
+const CROSS: char = '✗';
 
 /// The glyph a turn opens with, repeated to the right edge: the transcript's own
 /// hairline, one column wide, so a long history reads as a ledger with dividers in it
@@ -106,27 +125,15 @@ pub fn layout(entry: &Entry, cols: u16) -> Vec<Row> {
         Entry::Turn { turn } => vec![rule(&format!("turn {turn} "), cols)],
         Entry::Call {
             name, arguments, ..
-        } => {
-            let mut rows = vec![naming("call ", name, "", cols)];
-            rows.extend(body(&arguments.to_string(), cols));
-            rows
-        }
+        } => opening(name, &arguments.to_string(), cols),
         Entry::Result {
             name,
             text,
             bytes,
             elapsed_ms,
+            exit,
             ..
-        } => {
-            let mut rows = vec![naming(
-                "result ",
-                name,
-                &format!(" {bytes} bytes · {elapsed_ms} ms"),
-                cols,
-            )];
-            rows.extend(body(&text.to_string(), cols));
-            rows
-        }
+        } => settled(name, *exit, &text.to_string(), *bytes, *elapsed_ms, cols),
         Entry::Assistant { text, .. } => wrap(&text.to_string(), cols)
             .into_iter()
             .map(|line| Row::of([(line, Ink::Plain)]))
@@ -134,13 +141,77 @@ pub fn layout(entry: &Entry, cols: u16) -> Vec<Row> {
     }
 }
 
-/// The row that names a tool call: what it was, said in the ink secondary prose is read
-/// in, and the facts §12 keeps beside it, clipped at the band's width when a name and
-/// its numbers are wider than the row they are the whole of. Deliberately plain: what a
-/// tool row says, and the faded ink §12 paints it in, are #40's to decide and this is
-/// only the shape it will be decided inside.
-fn naming(lead: &str, name: &str, facts: &str, cols: u16) -> Row {
-    Row::of([(clip(&format!("{lead}{name}{facts}"), cols), Ink::Muted)])
+/// The row a call opens: the name in the faded ink a tool row is painted in, and the
+/// arguments one step in under it — so a call that has not settled yet names itself and
+/// claims nothing about how it will end.
+fn opening(name: &str, arguments: &str, cols: u16) -> Vec<Row> {
+    let mut rows = vec![fitted(vec![(format!("{PENDING} {name}"), Ink::Dim)], cols)];
+    rows.extend(body(arguments, cols));
+    rows
+}
+
+/// The row a call settles into: what happened to it — the check or the cross in the ink
+/// a finished thing is read in, and its words faded beside it — the call's name, and the
+/// two numbers the run paid for it. §12's row says the exit code and not the command:
+/// what a finished call has to say is how it ended, and a reader who wants the command
+/// has the row above it, where the model asked for it.
+///
+/// A result with no verdict is a line a build wrote before the verdict was a fact
+/// (ADR-0007): the row says the name and the numbers and claims nothing it does not
+/// know, rather than guessing `✓ exit 0` from the text beside it.
+fn settled(
+    name: &str,
+    exit: Option<Exit>,
+    text: &str,
+    bytes: u64,
+    elapsed_ms: u64,
+    cols: u16,
+) -> Vec<Row> {
+    let named = format!("{name}  {bytes} bytes · {elapsed_ms} ms");
+    let header = match exit {
+        Some(exit) => fitted(
+            vec![
+                (mark(exit).to_string(), ink_of(exit)),
+                (format!(" {}  {named}", exit.word()), Ink::Dim),
+            ],
+            cols,
+        ),
+        None => fitted(vec![(named, Ink::Dim)], cols),
+    };
+    let mut rows = vec![header];
+    rows.extend(body(text, cols));
+    rows
+}
+
+/// The glyph a verdict settles on: a check for the one that finished well, a cross for
+/// every other way a call can end.
+fn mark(exit: Exit) -> char {
+    if exit.is_ok() { CHECK } else { CROSS }
+}
+
+/// The ink a verdict's glyph is drawn in. Two inks and four states: what tells `✗ exit N`
+/// from `✗ timed out` is the words, which are the record's own, and not a shade of red.
+fn ink_of(exit: Exit) -> Ink {
+    if exit.is_ok() { Ink::Ok } else { Ink::Err }
+}
+
+/// One row of `spans`, cut at `cols` columns: a row is laid out at a width and never runs
+/// over it, so the run of glyphs the width ends in is cut where the width ends.
+fn fitted(spans: Vec<(String, Ink)>, cols: u16) -> Row {
+    let mut room = usize::from(cols.max(1));
+    let mut kept = Vec::new();
+    for (text, ink) in spans {
+        if room == 0 {
+            break;
+        }
+        let (head, rest) = split_at(&text, room);
+        room = room.saturating_sub(glyphs(&head));
+        kept.push((head, ink));
+        if !rest.is_empty() {
+            break;
+        }
+    }
+    Row::of(kept)
 }
 
 /// `text` clipped to `room` columns: what a row keeps when what it says is one run of
@@ -156,6 +227,9 @@ fn clip(text: &str, room: u16) -> String {
 /// step in from the left edge leaves of `cols`, and set one step in from the name that
 /// introduced them.
 fn body(text: &str, cols: u16) -> Vec<Row> {
+    if text.is_empty() {
+        return Vec::new();
+    }
     let step = u16::try_from(glyphs(INDENT)).unwrap_or(cols);
     let room = cols.saturating_sub(step).max(1);
     wrap(text, room)
@@ -287,6 +361,11 @@ struct Held {
     /// The fact, as the run wrote it: kept here so an entry and its rows cannot be told
     /// apart by a caller handing in one where the other was expected.
     entry: Entry,
+    /// What came back, when `entry` is a call whose result has landed: the fact that
+    /// settles the row the call opened. Kept rather than layered over the rows, so a
+    /// width change re-lays the settled row and not the one the call was drawn as while
+    /// it ran.
+    result: Option<Entry>,
     /// The rows it is drawn as, once they exist at this width.
     rows: Option<Vec<Row>>,
 }
@@ -300,11 +379,49 @@ impl Rows {
 
     /// Holds one more entry, unlaid: a fact the run has just written, appended where
     /// the run wrote it.
+    ///
+    /// A result does not open a row of its own — it settles the row the call it answers
+    /// opened, because one call is one row (§12) and a finished call is not a second
+    /// line under the one it started. A result whose call this cache never held, which
+    /// is an older transcript's entry read on its own, has nothing to settle and opens
+    /// a row like any other fact.
     pub fn push(&mut self, entry: Entry) {
-        self.held.push(Held { entry, rows: None });
+        if let Entry::Result { turn, .. } = &entry
+            && let Some(at) = self.pending(*turn)
+        {
+            self.settle(at, entry);
+            return;
+        }
+        self.held.push(Held {
+            entry,
+            result: None,
+            rows: None,
+        });
     }
 
-    /// How many entries this cache holds.
+    /// The entry a result for `turn` settles: the oldest call of that turn whose own
+    /// result has not landed. Oldest and not newest, because the run writes a call and
+    /// then its result or a wave of calls and then their results, and the two orders
+    /// have to pair up the same way.
+    fn pending(&self, turn: u32) -> Option<usize> {
+        self.held.iter().position(|held| {
+            held.result.is_none()
+                && matches!(&held.entry, Entry::Call { turn: at, .. } if *at == turn)
+        })
+    }
+
+    /// Settles the call at `at` with the result that answered it: the row the call
+    /// opened says what happened to it now, and this entry alone is laid out again —
+    /// everything above and below it keeps what it was drawn as (ADR-0008). `at` is an
+    /// index this cache handed out, so a cache that does not hold it has been read wrong.
+    pub fn settle(&mut self, at: usize, result: Entry) {
+        let held = &mut self.held[at];
+        held.result = Some(result);
+        held.rows = None;
+    }
+
+    /// How many rows this cache holds: one per entry, less the results that settled a
+    /// call's row instead of opening one of their own.
     pub fn len(&self) -> usize {
         self.held.len()
     }
@@ -348,7 +465,7 @@ impl Rows {
         let cols = self.cols;
         let held = &mut self.held[at];
         if held.rows.is_none() {
-            let rows = layout(&held.entry, cols);
+            let rows = layout(held.result.as_ref().unwrap_or(&held.entry), cols);
             held.rows = Some(rows);
             self.lays += 1;
         }

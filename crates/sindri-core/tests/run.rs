@@ -24,8 +24,8 @@ use sindri_core::policy::{
 use sindri_core::provider::{Deltas, Failure};
 use sindri_core::redact::{Redacted, SecretSet};
 use sindri_core::run::{
-    Acted, Budget, Call, Cancel, Executor, Limits, Load, Loaded, Reply, Request, Responder, Run,
-    Shell, State, Stop,
+    Acted, Budget, Call, Cancel, Executor, Exit, Limits, Load, Loaded, Reply, Request, Responder,
+    Run, Shell, State, Stop,
 };
 use sindri_core::skills::Catalog;
 use sindri_core::tools::{FrontEnd, ToolSet};
@@ -175,6 +175,7 @@ impl Executor for Tools {
             text: String::from("exit 0\n"),
             bytes: self.bytes,
             elapsed: self.elapsed,
+            exit: Exit::Code(0),
         })
     }
 }
@@ -686,8 +687,58 @@ fn the_bash_executor_counts_the_bytes_its_command_wrote() {
         .expect("the command runs");
 
     assert_eq!(acted.bytes, 2, "two bytes of output were fed back");
-    assert_eq!(acted.text, "exit 0\nhi");
+    assert_eq!(acted.text, "hi", "the text is what the command printed");
+    assert_eq!(acted.exit, Exit::Code(0), "and the verdict is its own fact");
     assert!(acted.elapsed > Duration::ZERO, "a command took some time");
+}
+
+/// The executor knows how a call ended, so the verdict is a value the run hands on and
+/// never a sentence a front end reads back out of the text: the command's own code, a
+/// code that is not zero, a signal that leaves no code at all, and the timeout that
+/// killed the command it names (§4, §12).
+#[test]
+fn the_bash_executor_says_how_the_call_ended() {
+    let (_root, workspace, boundary) = ground();
+    let shell = Shell::new(boundary.clone(), &workspace, Catalog::default());
+    let mut loaded = Loaded::default();
+    let mut run = |command: &str| {
+        shell
+            .execute(
+                &Call::new("bash", format!(r#"{{"command":"{command}"}}"#)),
+                &mut loaded,
+            )
+            .expect("the command runs")
+            .exit
+    };
+
+    assert_eq!(run("true"), Exit::Code(0), "a command that finished well");
+    assert_eq!(
+        run("exit 3"),
+        Exit::Code(3),
+        "and one that did not, as it said"
+    );
+    assert_eq!(
+        run("kill -KILL $$"),
+        Exit::Signalled,
+        "a signal leaves no code to report"
+    );
+
+    // One second is the shortest per-call timeout a policy allows, and a command that
+    // outlives it is killed rather than waited out.
+    let impatient = Boundary::from_config(
+        &Config {
+            timeout: Some(1),
+            ..Config::default()
+        },
+        &workspace,
+        Enforcement::Unsafe,
+    )
+    .expect("the boundary holds");
+    let killed = Shell::new(impatient, &workspace, Catalog::default())
+        .execute(&Call::new("bash", r#"{"command":"sleep 30"}"#), &mut loaded)
+        .expect("the command runs");
+
+    assert_eq!(killed.exit, Exit::TimedOut, "the timeout says so");
 }
 
 #[test]
