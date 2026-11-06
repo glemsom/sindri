@@ -11,5 +11,9 @@ rustix = { version = "1.1.6", features = ["termios"] }
 sindri-core = { path = "../sindri-core" }
 
 [dev-dependencies]
+# The tests open a pseudo-terminal to prove what a launch draws and gives back:
+# rustix already binds this crate's terminal, so a second binding to the same
+# termios would be two ways to talk to one tty.
+rustix = { version = "1.1.6", features = ["pty"] }
 serde_json = "1.0"
 tempfile = "3"

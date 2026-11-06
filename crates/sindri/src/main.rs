@@ -1,10 +1,9 @@
 //! The Sindri front ends: the terminal UI and batch mode, both driving one core
 //! that owns every decision either of them makes.
 //!
-//! Two paths leave this function. A launch with no prompt is the terminal UI's,
-//! and off a terminal it is a refusal rather than a guess (§3); the frame itself
-//! arrives with #36, so what a configured launch says today is that it is
-//! configured. A launch with `-b` is batch mode (§3), which resolves the same
+//! Two paths leave this function. A launch with no prompt is the terminal UI's:
+//! on a terminal it takes the screen, and off one it is a refusal rather than a
+//! guess (§3). A launch with `-b` is batch mode (§3), which resolves the same
 //! first run — an API-key row that says where a key comes from and where it will
 //! be written, a key pasted from a terminal when none was supplied — and then
 //! hands the prompt to the core and writes the answer, the JSON object or the
@@ -22,7 +21,7 @@ mod open; // the host spawns the opener, because the sandbox has no display
 mod osc; // sequences that carry words out of the terminal
 mod paste; // the terminal's echo is off while the key is typed
 mod sessions; // reads past runs back
-mod tui; // the frame, the rail, the composer and the queue
+mod tui; // the alternate screen it takes and gives back
 
 use std::process::ExitCode;
 
@@ -31,10 +30,6 @@ use sindri_core::config::{Config, Flags, Process};
 use sindri_core::first_run::FirstRun;
 
 use crate::cli::{Cli, Command};
-
-/// What a configured launch says while the terminal UI is not yet built: the
-/// front end has everything a run needs and no run to give it to.
-const NOTHING_TO_RUN: u8 = 3;
 
 /// Spec §15's usage error: a command line, a prompt or an answer that cannot be
 /// used.
@@ -108,12 +103,9 @@ fn main() -> ExitCode {
             "a pipe is context for a prompt, and a prompt is what -b is for",
             USAGE,
         ),
-        // #36 owns the frame. Naming it is the honest answer, and this line goes
-        // the day the terminal UI lands.
-        None => {
-            eprintln!("sindri: configured; the terminal UI arrives with ticket #36");
-            ExitCode::from(NOTHING_TO_RUN)
-        }
+        // No prompt and a terminal to draw on: the terminal UI takes the screen
+        // and owes a frame, which this front end does not paint yet.
+        None => tui::run(),
     }
 }
 
