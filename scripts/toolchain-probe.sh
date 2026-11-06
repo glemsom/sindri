@@ -96,7 +96,12 @@ fn main() {
     println!("musl-ok");
 }
 RS
-if out=$(cargo build --quiet --release --target "$MUSL_TARGET" --manifest-path "$crate/Cargo.toml" 2>&1); then
+# The throwaway crate builds into its own target directory, named here rather than
+# inherited: an exported CARGO_TARGET_DIR — which is how a worktree shares a target
+# directory with the rest of the tree — would otherwise put the artefact somewhere
+# this probe does not look, and a passing toolchain would be reported as broken.
+if out=$(CARGO_TARGET_DIR="$crate/target" cargo build --quiet --release --target "$MUSL_TARGET" \
+  --manifest-path "$crate/Cargo.toml" 2>&1); then
   ok "cargo build --target $MUSL_TARGET: succeeded"
   bin="$crate/target/$MUSL_TARGET/release/probe"
   # A dynamically linked binary carries PT_INTERP, hence the interpreter's
