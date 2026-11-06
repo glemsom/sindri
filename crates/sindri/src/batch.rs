@@ -12,6 +12,11 @@
 //! terminal UI off a terminal is a refusal and not a guess (§3). A pipe is never
 //! read as a credential: in batch mode a key is pasted from a terminal or refused.
 //!
+//! Boot proves the sandbox once, before a turn or a record (§6): a sandbox that
+//! cannot be created is a card on stderr naming the failing check, the code §15
+//! gives it, and nothing on stdout. `--yolo-unsafe` is the one route past that
+//! card, and it has to be on this command line to be on this line of code.
+//!
 //! The run stands where the process does: the session is created under the state
 //! home, the boundary grants the workspace, the catalog is what the workspace and
 //! the home offer, the preamble is the workspace's, the tools are a batch run's
@@ -27,12 +32,13 @@ use std::time::Instant;
 use sindri_core::asking::Asking;
 use sindri_core::config::{Config, Process};
 use sindri_core::outcome::{Facts as Reported, Outcome};
-use sindri_core::policy::{Boundary, Enforcement};
+use sindri_core::policy::Boundary;
 use sindri_core::preamble::Preamble;
 use sindri_core::provider::Deltas;
 use sindri_core::provider::{Ask, Client, Credential};
 use sindri_core::records::{Facts, Record};
 use sindri_core::run::{Cancel, Limits, Run, Shell, Stop};
+use sindri_core::sandbox;
 use sindri_core::session::{self, Session};
 use sindri_core::skills::Catalog;
 use sindri_core::tools::{FrontEnd, ToolSet};
@@ -144,9 +150,16 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
         Ok(session) => session,
         Err(error) => return refuse(&error.to_string(), error.exit_code()),
     };
-    let boundary = match Boundary::from_config(config, &workspace, Enforcement::Bubblewrap) {
+    let boundary = match Boundary::from_config(config, &workspace, cli.enforcement()) {
         Ok(boundary) => boundary,
         Err(error) => return refuse(&error.to_string(), SETUP),
+    };
+    // Boot proves the sandbox once, with a real bubblewrap invocation, before a
+    // turn or a record: a sandbox that cannot be created stops the run here as a
+    // card, because the alternative is running unconfined without being asked to.
+    let proof = match sandbox::prove(&boundary, session.temp()) {
+        Ok(proof) => proof,
+        Err(card) => return refuse(&card.to_string(), card.exit_code()),
     };
     let limits = Limits::from_config(config, &boundary);
     let catalog = Catalog::discover(&workspace, home().as_deref());
@@ -181,6 +194,7 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
     );
     narrate(cli, &format!("workspace {}", workspace.display()));
     narrate(cli, &format!("session {}", session.directory().display()));
+    narrate(cli, &proof.to_string());
 
     let mut run = Run::new(prompt, asking.clone(), executor)
         .limits(limits)

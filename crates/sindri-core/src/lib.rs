@@ -14,6 +14,7 @@ pub mod provider; // an ask goes out in Sindri's own words and a reply comes bac
 pub mod records; // the session directory, and the entries written into it
 pub mod redact; // every string that leaves the core is a `Redacted`, whose
 pub mod run; // the agent loop, its turns and the stop reason that ended it
+pub mod sandbox; // boot proves it once, and a card names the failing check
 pub mod session; // the temp a run's calls share and the spill a budget emptied
 pub mod skills; // reported rather than silently resolved
 pub mod tools; // the tools a run registers, and the ones it drops when there is nothing to name

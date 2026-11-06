@@ -14,6 +14,7 @@
 
 use clap::{Parser, Subcommand, ValueEnum};
 use sindri_core::config::Flags;
+use sindri_core::policy::Enforcement;
 
 /// What `--version` reports: the `git describe` of the commit this binary was
 /// built at and that commit's own date, both fixed at compile time by `build.rs`
@@ -58,6 +59,15 @@ pub struct Cli {
     /// arguments, so the environment and a pasted key are the quieter two ways in.
     #[arg(long, value_name = "KEY")]
     pub api_key: Option<String>,
+
+    /// Run without a sandbox at all: the one escape hatch (§6).
+    ///
+    /// It has no config key and no environment variable, so it dies with the
+    /// invocation that asked for it: a persisted unsafe setting is one the user
+    /// forgets. Nothing it enables is persisted either — the record, the JSON and
+    /// the rail say `unsafe` and a later run says `bubblewrap` again.
+    #[arg(long = "yolo-unsafe")]
+    pub yolo_unsafe: bool,
 
     /// The output format, global so either front end accepts it (§3, A5).
     #[arg(long, global = true, value_name = "FORMAT", default_value = "text")]
@@ -121,5 +131,20 @@ impl Cli {
     /// Whether the run is to be narrated on stderr.
     pub fn is_verbose(&self) -> bool {
         self.verbose > 0
+    }
+
+    /// How this launch's commands are confined, as the two-valued fact it is.
+    ///
+    /// This is the only route to `unsafe` there is: the flag is this parser's,
+    /// the boundary is built from this value, and no other file in this crate
+    /// names that variant at all — the core names it only where the fact is
+    /// defined, enforced and proved, and nowhere a file or a variable could
+    /// reach it. `tests/sandbox.rs` scans the tree and holds that sentence.
+    pub fn enforcement(&self) -> Enforcement {
+        if self.yolo_unsafe {
+            Enforcement::Unsafe
+        } else {
+            Enforcement::Bubblewrap
+        }
     }
 }
