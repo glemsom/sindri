@@ -30,25 +30,30 @@ use sindri_core::config::Config;
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::preamble::Preamble;
 use sindri_core::skills::Catalog;
-use sindri_core::tools::ToolSet;
+use sindri_core::tools::{FrontEnd, ToolSet};
 use tiktoken_rs::CoreBPE;
 
 /// The ceiling on the words a run pays every turn, in cl100k_base tokens: §9's
 /// three sections plus every tool description, summed.
 ///
 /// THE NUMBER IS THE TABLE'S, NOT A WISH. When this bench landed the rows it
-/// budgets summed to 376. The budget is that plus about a tenth — thirty-four
-/// tokens, a sentence or two of real prose — and no more, so a sentence that
-/// earns its place fits and a paragraph that does not, does not. Raising it is
-/// allowed; raising it without saying in this comment what bought the tokens is
-/// exactly what the budget exists to prevent.
+/// budgets summed to 376, and the budget was that plus about a tenth — thirty-four
+/// tokens, a sentence or two of real prose. The `open` tool then landed (#34) at
+/// 157 tokens, the dearest single row, so the rows sum to 528 and the budget is
+/// that plus about a tenth again: fifty-three tokens, and no more. A sentence
+/// that earns its place fits and a paragraph that does not, does not. Raising it
+/// is allowed; raising it without saying in this comment what bought the tokens
+/// is exactly what the budget exists to prevent. Trimming `open`'s prose — which
+/// names every extension and every scheme it accepts, so a refusal is a reminder
+/// rather than a surprise (§5) — is what would buy them back, a wording decision
+/// this table exists to inform and not to make.
 ///
 /// Outside the number, deliberately: the project's own `AGENTS.md`, which §8
 /// puts in the message but no sentence of Sindri's cuts. It is measured and
 /// printed so nobody has to guess what it costs, and left out of the total so a
 /// repository with more house rules than this one does not fail a bench about
 /// wording.
-const BUDGET_TOKENS: usize = 410;
+const BUDGET_TOKENS: usize = 581;
 
 /// The markers the priced sections of the preamble open with, in render order:
 /// §9's three, then the fence §8 wraps the project's own words in — which is
@@ -162,7 +167,7 @@ impl Measure {
             Counted::RepeatOfRows,
         ));
 
-        let tools = ToolSet::new(&boundary, &catalog)
+        let tools = ToolSet::new(&boundary, &catalog, FrontEnd::Terminal)
             .tools()
             .iter()
             .map(|tool| {
@@ -323,7 +328,11 @@ fn every_registered_tool_is_priced_by_name() {
     let root = repo_root();
     let boundary = Boundary::from_config(&Config::default(), &root, Enforcement::Bubblewrap)
         .expect("the boundary of a tree whose config names no exception holds");
-    let tools = ToolSet::new(&boundary, &Catalog::discover(&root, None));
+    let tools = ToolSet::new(
+        &boundary,
+        &Catalog::discover(&root, None),
+        FrontEnd::Terminal,
+    );
     let priced = Measure::take();
 
     for tool in tools.tools() {
