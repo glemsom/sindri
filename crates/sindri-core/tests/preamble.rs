@@ -11,7 +11,7 @@ use sindri_core::config::Config;
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::preamble::Preamble;
 use sindri_core::skills::Catalog;
-use sindri_core::tools::ToolSet;
+use sindri_core::tools::{FrontEnd, ToolSet};
 use tempfile::TempDir;
 
 /// A tree a preamble, a catalog and a boundary are all read from: a repository
@@ -71,7 +71,7 @@ fn boundary(workspace: &Path) -> Boundary {
 fn assembled(workspace: &Path, catalog: &Catalog) -> (String, ToolSet) {
     (
         Preamble::for_workspace(workspace).render(),
-        ToolSet::new(&boundary(workspace), catalog),
+        ToolSet::new(&boundary(workspace), catalog, FrontEnd::Terminal),
     )
 }
 

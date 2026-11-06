@@ -6,9 +6,10 @@
 use std::path::{Path, PathBuf};
 
 use sindri_core::config::Config;
+use sindri_core::open::{EXTENSIONS, SCHEMES};
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::skills::{Catalog, Listing};
-use sindri_core::tools::{BASH, SKILL, ToolSet};
+use sindri_core::tools::{BASH, FrontEnd, OPEN, SKILL, ToolSet};
 use tempfile::TempDir;
 
 /// A tree of the shape discovery reads: a repository root holding `.git`, a
@@ -104,7 +105,11 @@ fn a_workspace_with_skills_lists_them_and_their_descriptions_in_the_tool_descrip
     tree.skill(&tree.repo(), "deploy", "ship the branch");
     tree.skill(&tree.home(), "pdf", "fill in a form");
 
-    let tools = ToolSet::new(&boundary(&tree.workspace()), &tree.catalog());
+    let tools = ToolSet::new(
+        &boundary(&tree.workspace()),
+        &tree.catalog(),
+        FrontEnd::Terminal,
+    );
 
     let skill = tools
         .get(SKILL)
@@ -141,7 +146,11 @@ fn the_tool_description_and_the_doctor_listing_read_the_same_catalog() {
 fn a_catalog_with_no_skill_registers_bash_and_no_skill_tool() {
     let tree = Tree::new();
 
-    let tools = ToolSet::new(&boundary(&tree.workspace()), &tree.catalog());
+    let tools = ToolSet::new(
+        &boundary(&tree.workspace()),
+        &tree.catalog(),
+        FrontEnd::Terminal,
+    );
 
     assert!(
         tools.get(SKILL).is_none(),
@@ -153,8 +162,8 @@ fn a_catalog_with_no_skill_registers_bash_and_no_skill_tool() {
             .iter()
             .map(|tool| tool.name())
             .collect::<Vec<_>>(),
-        vec![BASH],
-        "the shell is the one tool a run cannot do without"
+        vec![BASH, OPEN],
+        "a terminal registers the shell and the browser, and no skill tool at all"
     );
 }
 
@@ -163,7 +172,7 @@ fn the_bash_tool_carries_the_description_the_boundary_renders() {
     let tree = Tree::new();
     let boundary = boundary(&tree.workspace());
 
-    let tools = ToolSet::new(&boundary, &tree.catalog());
+    let tools = ToolSet::new(&boundary, &tree.catalog(), FrontEnd::Terminal);
 
     assert_eq!(
         tools
@@ -172,5 +181,97 @@ fn the_bash_tool_carries_the_description_the_boundary_renders() {
             .description(),
         boundary.description(),
         "the description is derived from the boundary in force, never written beside it"
+    );
+}
+
+/// The words of a description, with punctuation and case folded away, so
+/// "mentions `open`" is a question about the model's vocabulary and not about
+/// where a backtick fell.
+fn words(description: &str) -> Vec<String> {
+    description
+        .split(|character: char| !character.is_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .map(str::to_ascii_lowercase)
+        .collect()
+}
+
+#[test]
+fn a_batch_tool_set_has_no_open_and_its_schema_never_mentions_it() {
+    let tree = Tree::new();
+
+    let tools = ToolSet::new(
+        &boundary(&tree.workspace()),
+        &tree.catalog(),
+        FrontEnd::Batch,
+    );
+
+    assert!(
+        tools.get(OPEN).is_none(),
+        "a batch run has nobody to look, so the tool is absent rather than refused"
+    );
+    for tool in tools.tools() {
+        assert_ne!(
+            tool.name(),
+            OPEN,
+            "no tool of that name is registered at all"
+        );
+        assert!(
+            !words(tool.description()).contains(&String::from("open")),
+            "`{}` never says the word, so a turn is never spent finding out: {}",
+            tool.name(),
+            tool.description()
+        );
+    }
+}
+
+#[test]
+fn a_terminal_tool_set_registers_open_after_bash_and_the_skill_tool() {
+    let tree = Tree::new();
+    tree.skill(&tree.repo(), "deploy", "ship the branch");
+
+    let tools = ToolSet::new(
+        &boundary(&tree.workspace()),
+        &tree.catalog(),
+        FrontEnd::Terminal,
+    );
+
+    assert_eq!(
+        tools
+            .tools()
+            .iter()
+            .map(|tool| tool.name())
+            .collect::<Vec<_>>(),
+        vec![BASH, SKILL, OPEN],
+        "three is the ceiling, and the order is the order a front end registers"
+    );
+}
+
+#[test]
+fn the_open_tool_names_every_extension_and_every_scheme_it_accepts() {
+    let tree = Tree::new();
+    let boundary = boundary(&tree.workspace());
+
+    let tools = ToolSet::new(&boundary, &tree.catalog(), FrontEnd::Terminal);
+
+    let description = tools
+        .get(OPEN)
+        .expect("a terminal registers the open tool")
+        .description();
+    for extension in EXTENSIONS {
+        assert!(
+            description.contains(extension),
+            "the model reads `{extension}` in the description, so a refusal is a reminder and not \
+             a surprise: {description}"
+        );
+    }
+    for scheme in SCHEMES {
+        assert!(
+            description.contains(scheme),
+            "and `{scheme}`, for the same reason: {description}"
+        );
+    }
+    assert!(
+        description.contains(&boundary.writable().paths()[0].display().to_string()),
+        "the description is derived from the boundary in force, as `bash`'s is: {description}"
     );
 }

@@ -24,7 +24,7 @@ use sindri_core::run::{
     State, Stop,
 };
 use sindri_core::skills::Catalog;
-use sindri_core::tools::ToolSet;
+use sindri_core::tools::{FrontEnd, ToolSet};
 use sindri_core::wire::Wire;
 
 /// A sink that keeps what streamed, so a test can see the fragments a front end
@@ -655,7 +655,7 @@ fn the_config_names_the_turn_cap_and_the_boundary_names_the_budgets() {
 #[test]
 fn the_request_names_the_tools_the_front_end_registered() {
     let (_root, _workspace, boundary) = ground();
-    let registered = ToolSet::new(&boundary, &Catalog::default());
+    let registered = ToolSet::new(&boundary, &Catalog::default(), FrontEnd::Terminal);
     let model = Scripted::answering([Reply::answer("hello")]);
     let log = model.log();
     let mut run = Run::new("hi", model, Tools::cheap()).tools(&registered);
@@ -664,7 +664,7 @@ fn the_request_names_the_tools_the_front_end_registered() {
 
     assert_eq!(
         requests(&log)[0].tools(),
-        ["bash".to_owned()],
+        ["bash".to_owned(), "open".to_owned()],
         "an empty catalog registers no skill tool, and the names come from the set"
     );
 }
