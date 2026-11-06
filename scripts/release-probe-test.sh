@@ -177,19 +177,28 @@ refute() { # substring desc -- no line may carry it
 
 # 1. A good artefact on this machine. The last check is the one that needs a
 #    kernel that will unshare, so a machine that refuses skips it — loudly, at 77,
-#    which is the probe's own convention and never a green line.
+#    which is the probe's own convention and never a green line. Which of the two
+#    this machine is, is a fact about the machine, so it is read from the probe's
+#    own verdict here and the stage line below is asserted against it rather than
+#    against a guess: a hosted runner refuses the unshare, and a case that assumed
+#    otherwise would fail there for a reason that has nothing to do with the tree.
 use_artefact "$scratch/good"
 run_probe "$scratch/cargo-ok:$PATH"
+can_confine=
 if [[ $CODE == 0 ]]; then
+  can_confine=yes
   assert_line 'release: ok (5 checks)' 'good artefact'
   assert_has 'artefact is a static ELF' 'good artefact'
   assert_has 'artefact is musl, not glibc' 'good artefact'
   assert_has 'no OpenSSL symbol or string' 'good artefact'
   assert_has 'runs with no devbox, no Nix and no fonts' 'good artefact'
 elif [[ $CODE == 77 ]]; then
+  can_confine=no
   assert_line 'release: skipped (bwrap unavailable)' 'good artefact, machine that will not unshare'
-  assert_line 'release: FAIL' 'good artefact, machine that will not unshare'
   assert_has 'artefact is a static ELF' 'good artefact, machine that will not unshare'
+  assert_has 'bwrap cannot create an unprivileged sandbox' \
+    'good artefact, machine that will not unshare: names what it could not do'
+  refute 'release: ok' 'good artefact, machine that will not unshare, no green tick'
 else
   bad "good artefact: exit $CODE, want 0 or 77"; printf '  output:\n%s\n' "$OUT"
 fi
@@ -279,7 +288,13 @@ assert_has 'bwrap cannot create an unprivileged sandbox' 'restricted kernel'
 #     verdict relayed, and the broken script stopping the run where it stands.
 run_stage "$scratch/cargo-ok:$PATH"
 assert_code 0 'make release-tier, good artefact'
-assert_line 'check: release ... ok' 'make release-tier, good artefact'
+if [[ $can_confine == no ]]; then
+  assert_line 'check: release ... SKIPPED' \
+    'make release-tier, good artefact, machine that will not unshare'
+  refute 'check: release ... ok' 'make release-tier, good artefact, machine that will not unshare'
+else
+  assert_line 'check: release ... ok' 'make release-tier, good artefact'
+fi
 
 run_stage "$scratch/cargo-ok:$tools"
 assert_code 0 'make release-tier, no bwrap'
