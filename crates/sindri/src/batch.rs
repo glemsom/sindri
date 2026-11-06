@@ -35,6 +35,7 @@ use sindri_core::outcome::{Facts as Reported, Outcome};
 use sindri_core::policy::Boundary;
 use sindri_core::preamble::Preamble;
 use sindri_core::provider::Deltas;
+use sindri_core::provider::copilot::Store;
 use sindri_core::provider::{Ask, Client, Credential};
 use sindri_core::records::{Facts, Record};
 use sindri_core::run::{Cancel, Limits, Run, Shell, Stop};
@@ -164,9 +165,31 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
     let limits = Limits::from_config(config, &boundary);
     let catalog = Catalog::discover(&workspace, home().as_deref());
     let tools = ToolSet::new(&boundary, &catalog, FrontEnd::Batch);
-    let secrets = config.secrets();
-    let client = Client::http(headers(config), session.guid(), secrets.clone());
-    let asking = Asking::new(client, ask(config, wire, model.clone(), &workspace));
+    // A wire that signs in is asked with the session its store holds, and the
+    // store's own literals join the run's secrets, so nothing it holds can reach
+    // a record, the JSON or a line of chatter (ADR-0011). The store is resolved
+    // here rather than by the seam, because a run has no one to show a code to
+    // and a store that cannot be opened is a setup failure and not a reply.
+    let store = match wire {
+        Wire::Copilot => match Store::resolve(&Process) {
+            Ok(store) => Some(store),
+            Err(error) => return refuse(&error.to_string(), error.exit_code()),
+        },
+        Wire::Anthropic | Wire::Openai => None,
+    };
+    let mut secrets = config.secrets();
+    if let Some(store) = &store {
+        secrets = secrets.union(store.secrets());
+    }
+    let mut client = Client::http(headers(config), session.guid(), secrets.clone());
+    if let Some(store) = store {
+        client = client.store(store);
+    }
+    let ask = ask(config, wire, model.clone(), &workspace);
+    // Which endpoint the run answers on is read before the first request leaves,
+    // so a run that dies on its first ask still says where it was (A10).
+    let route = ask.route_of();
+    let asking = Asking::new(client, ask);
     let executor = Shell::new(boundary.clone(), session.temp(), catalog);
 
     let mut record = match Record::open(
@@ -174,6 +197,7 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
         Facts {
             wire,
             model: &model,
+            route,
             boundary: &boundary,
             limits: &limits,
             workspace: &workspace,
@@ -192,6 +216,11 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
             boundary.enforcement().word()
         ),
     );
+    // A wire that serves one endpoint has no route to name, and says nothing
+    // rather than naming a shape it does not have.
+    if let Some(route) = route {
+        narrate(cli, &format!("route {route}"));
+    }
     narrate(cli, &format!("workspace {}", workspace.display()));
     narrate(cli, &format!("session {}", session.directory().display()));
     narrate(cli, &proof.to_string());
@@ -276,6 +305,9 @@ fn ask(config: &Config, wire: Wire, model: String, workspace: &Path) -> Ask {
     let mut ask = Ask::new(wire, model).preamble(Preamble::for_workspace(workspace).render());
     if let Some(base_url) = &config.base_url {
         ask = ask.base_url(base_url);
+    }
+    if let Some(route) = config.route {
+        ask = ask.route(route);
     }
     ask = match &config.api_key {
         Some(key) => ask.credential(Credential::new(key)),

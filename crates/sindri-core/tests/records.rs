@@ -17,6 +17,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use serde_json::{Value, json};
 use sindri_core::config::Config;
 use sindri_core::policy::{Boundary, Enforcement};
+use sindri_core::provider::Route;
 use sindri_core::provider::Usage as Ask;
 use sindri_core::records::{Entry, Facts, Phase, Record, read_transcript, timestamp};
 use sindri_core::redact::{MASK, SecretSet};
@@ -79,6 +80,7 @@ impl Ground {
         Facts {
             wire: Wire::Anthropic,
             model: "claude-sonnet-4",
+            route: None,
             boundary,
             limits: &self.limits,
             workspace: &self.workspace,
@@ -155,6 +157,45 @@ fn a_new_session_document_says_running_and_names_its_guid() {
             .as_str()
             .is_some_and(|text| text.len() == 20 && text.ends_with('Z')),
         "the start is an RFC 3339 instant in UTC: {document}"
+    );
+}
+
+#[test]
+fn a_session_document_says_which_route_answered_it() {
+    let ground = Ground::new();
+    let session = ground.session();
+    let boundary = ground.boundary();
+    let facts = Facts {
+        wire: Wire::Copilot,
+        model: "gpt-4o",
+        route: Some(Route::Chat),
+        boundary: &boundary,
+        limits: &ground.limits,
+        workspace: &ground.workspace,
+        secrets: &ground.secrets,
+    };
+    let record = Record::open(&session, facts).expect("a record");
+    drop(record);
+
+    let document = json(&session.directory().join("session.json"));
+    assert_eq!(
+        document["route"],
+        json!("chat"),
+        "the endpoint the wire answered on is kept, so a mystery is debuggable: {document}"
+    );
+}
+
+#[test]
+fn a_document_of_a_wire_with_one_endpoint_names_no_route() {
+    let ground = Ground::new();
+    let session = ground.session();
+    let record = ground.record(&session);
+    drop(record);
+
+    let document = json(&session.directory().join("session.json"));
+    assert!(
+        document.get("route").is_none(),
+        "a field the run knows nothing about is left out, never null: {document}"
     );
 }
 
@@ -668,6 +709,7 @@ fn child_writes_entries_until_it_is_killed() {
         Facts {
             wire: Wire::Anthropic,
             model: "a-model-the-wire-serves",
+            route: None,
             boundary: &boundary,
             limits: &limits,
             workspace: &workspace,

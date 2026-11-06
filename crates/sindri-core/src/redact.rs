@@ -75,6 +75,16 @@ impl SecretSet {
         keep(Arc::make_mut(&mut self.secrets), secret.into());
     }
 
+    /// This set with every secret `other` holds, for the doors a run opens at
+    /// once: the config's own key and headers, and the sign-in store's records.
+    pub fn union(self, other: SecretSet) -> Self {
+        let mut set = self;
+        for secret in other.iter() {
+            set.add(secret.clone());
+        }
+        set
+    }
+
     /// Whether this set knows no secret at all, in which case redacting a value
     /// leaves it exactly as it was.
     pub fn is_empty(&self) -> bool {

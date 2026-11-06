@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use sindri_core::config::{Config, ConfigError, Flags, config_path};
+use sindri_core::provider::Route;
 use sindri_core::wire::Wire;
 use tempfile::TempDir;
 
@@ -36,9 +37,10 @@ fn resolved(home: &Path, vars: &[(&str, &str)], flags: Flags) -> Result<Config, 
 ///
 /// This is the independent source of truth for the key list: if the schema grows
 /// a key and this table does not, the drift test below says so.
-const EXAMPLES: [(&str, &str); 13] = [
+const EXAMPLES: [(&str, &str); 14] = [
     ("provider", "\"openai\""),
     ("model", "\"claude-sonnet-4-5\""),
+    ("route", "\"responses\""),
     ("base_url", "\"https://gateway.test/v1\""),
     ("api_key", "\"sk-not-a-real-key\""),
     ("thinking", "true"),
@@ -102,6 +104,7 @@ fn every_key_in_the_schema_is_accepted() {
 
     assert_eq!(config.provider, Some(Wire::Openai));
     assert_eq!(config.model.as_deref(), Some("claude-sonnet-4-5"));
+    assert_eq!(config.route, Some(Route::Responses));
     assert_eq!(config.base_url.as_deref(), Some("https://gateway.test/v1"));
     assert_eq!(
         config.extra_writable_paths,
@@ -188,6 +191,65 @@ fn a_flag_beats_both_the_file_and_the_environment() {
     .expect("the config loads");
 
     assert_eq!(config.model.as_deref(), Some("from-the-flag"));
+}
+
+#[test]
+fn the_route_a_run_takes_layers_file_then_environment_then_flag() {
+    let home = config_home("route = \"responses\"\n");
+    let flag = Flags {
+        route: Some(Route::Chat),
+        ..Flags::default()
+    };
+
+    let from_file = resolved(home.path(), &[], Flags::default()).expect("the config loads");
+    let from_environment = resolved(home.path(), &[("SINDRI_ROUTE", "chat")], Flags::default())
+        .expect("the config loads");
+    let from_flag =
+        resolved(home.path(), &[("SINDRI_ROUTE", "chat")], flag).expect("the config loads");
+
+    assert_eq!(from_file.route, Some(Route::Responses), "the file speaks");
+    assert_eq!(
+        from_environment.route,
+        Some(Route::Chat),
+        "an exported route wins over the file"
+    );
+    assert_eq!(
+        from_flag.route,
+        Some(Route::Chat),
+        "the flag is read above both, and replaces rather than adds"
+    );
+}
+
+#[test]
+fn a_route_no_wire_serves_is_a_usage_error_naming_the_key() {
+    let home = config_home("route = \"completions\"\n");
+
+    let error = resolved(home.path(), &[], Flags::default()).expect_err("a bad route");
+
+    assert_eq!(error.exit_code(), 2);
+    let message = error.to_string();
+    assert!(
+        message.contains("completions") && message.contains("chat, responses"),
+        "the error names what was written and the two routes that exist: {message}"
+    );
+}
+
+#[test]
+fn a_route_in_the_environment_is_read_as_a_route() {
+    let home = config_home("");
+
+    let error = resolved(
+        home.path(),
+        &[("SINDRI_ROUTE", "complete")],
+        Flags::default(),
+    )
+    .expect_err("a bad route is an error");
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error.to_string().contains("SINDRI_ROUTE"),
+        "the error names the variable a person has to fix: {error}"
+    );
 }
 
 #[test]

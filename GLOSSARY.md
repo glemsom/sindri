@@ -58,6 +58,12 @@ _Avoid_: Provider, backend, API
 A model identifier read off the wire, never invented, kept beside the `(wire, base_url)` that produced it.
 _Avoid_: Model list, catalog, available models
 
+**Route**:
+Which completion endpoint an OpenAI-shaped wire serves — `chat` (`POST /chat/completions`) or
+`responses` (`POST /responses`) — chosen by rig from the served name, overridable per run when a
+route misbehaves, and kept in the session document.
+_Avoid_: Endpoint, API, mode, protocol
+
 **Preamble**:
 The system message, re-sent every turn, so every word in it is a tax.
 _Avoid_: System prompt, instructions

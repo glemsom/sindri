@@ -34,6 +34,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 
 use crate::policy::{Boundary, Enforcement, PolicyRecord};
+use crate::provider::Route;
 use crate::provider::Usage as Ask;
 use crate::redact::{Redacted, SecretSet};
 use crate::run::{Acted, Call, Limits, State};
@@ -114,6 +115,9 @@ pub struct Facts<'a> {
     pub wire: Wire,
     /// The model it asks for, named rather than invented.
     pub model: &'a str,
+    /// The completion endpoint the wire answered on, for a wire that serves two
+    /// of them (Appendix A10), and nothing for one that serves a single shape.
+    pub route: Option<Route>,
     /// The boundary the model was told about and every command is held to.
     pub boundary: &'a Boundary,
     /// The dials the run obeys.
@@ -191,10 +195,11 @@ fn added(total: Option<u64>, ask: Option<u64>) -> Option<u64> {
     }
 }
 
-/// The session document: provider, model, enforcement, the policy handed to the
-/// model, the workspace, the branch and commit it stood on, the dials obeyed,
-/// when it started and ended, how many turns it started, what it spent, and why
-/// it stopped — `running` until a stop reason lands (§13).
+/// The session document: provider, model, the route it answered on where the
+/// wire serves two, enforcement, the policy handed to the model, the workspace,
+/// the branch and commit it stood on, the dials obeyed, when it started and
+/// ended, how many turns it started, what it spent, and why it stopped —
+/// `running` until a stop reason lands (§13, Appendix A10).
 ///
 /// Field order is fixed and later fields only append, and a field the run knows
 /// nothing about is left out rather than written as `null` (§15), so the JSON of
@@ -233,6 +238,13 @@ pub struct SessionDocument {
     pub usage: Usage,
     /// Why it stopped: `running` until a stop reason lands, then §4's word.
     pub stopped: State,
+    /// The completion endpoint the wire answered on, when it serves more than
+    /// one: `chat` or `responses`, so a run that answered oddly says where its
+    /// reply came from (Appendix A10). Left out for a dialect that serves a
+    /// single endpoint, because a field the run knows nothing about is never
+    /// written (§15).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub route: Option<Route>,
 }
 
 /// One session's records: the three files, the document held in memory and
@@ -270,6 +282,7 @@ impl Record {
             turns: 0,
             usage: Usage::default(),
             stopped: State::Running,
+            route: facts.route,
         };
         let transcript = appending(&session.directory().join(TRANSCRIPT))?;
         let statuses = appending(&session.directory().join(STATUS))?;
