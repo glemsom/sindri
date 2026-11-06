@@ -18,10 +18,9 @@
 # is printed for a stage that did not run. Two kinds of stage end without an `ok`,
 # and neither ever prints one:
 #
-#   ... MISSING (note)  work that has not landed yet — today ticket #58's evals
-#                       and no-relink proof. `make check` still exits 0, with the
-#                       gaps printed on its last lines where a reader cannot miss
-#                       them.
+#   ... MISSING (note)  work that has not landed yet — today ticket #58's evals.
+#                       `make check` still exits 0, with the gap printed on its
+#                       last lines where a reader cannot miss it.
 #   ... SKIPPED         a stage the machine would not let run — today only the
 #                       sandbox tier, when the kernel forbids unprivileged user
 #                       namespaces, which is the case ticket #7 exists for. The
@@ -120,9 +119,15 @@ sandbox:
 sandbox-tier:
 	$(call skippable,sandbox,bash scripts/sandbox-probe.sh)
 
-# Ticket #58 owns both of these. Placeholders until it lands.
+# Ticket #58 owns this one. A placeholder until it lands.
 evals:
 	$(call missing,evals,evals are not yet present - ticket #58)
 
+# The provenance proof of spec §16, and the stage ticket #61 landed: the binary
+# embeds git describe and the commit date and never the wall clock, so a tree
+# nobody changed builds to the same bytes twice and relinks nothing. The script
+# is the proof — build twice, touch a doc, re-run the provenance script, read the
+# version back out of the binary — and prints `no-relink: ok (N checks)` of its
+# own before this stage's verdict.
 no-relink:
-	$(call missing,no-relink,the no-relink proof is not yet present - ticket #58)
+	$(call stage,no-relink,bash scripts/no-relink-proof.sh)

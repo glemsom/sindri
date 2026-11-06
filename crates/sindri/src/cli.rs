@@ -10,10 +10,21 @@ use clap::Parser;
 use sindri_core::config::Flags;
 
 /// The one command line both front ends share.
+/// What `--version` reports: the `git describe` of the commit this binary was
+/// built at and that commit's own date, both fixed at compile time by `build.rs`
+/// and never read from a clock. A build standing on no commit — a source
+/// tarball — reports the package version and says it knows no date.
+pub const VERSION: &str = concat!(
+    env!("SINDRI_DESCRIBE"),
+    " (",
+    env!("SINDRI_COMMIT_DATE"),
+    ")"
+);
+
 #[derive(Debug, Parser)]
 #[command(
     name = "sindri",
-    version,
+    version = VERSION,
     about = "An agent that is a Unix filter and a terminal UI"
 )]
 pub struct Cli {
