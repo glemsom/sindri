@@ -24,3 +24,18 @@ fn transcript_120x40_is_a_run_laid_out_at_the_tail() {
 fn transcript_scrolled_120x40_cuts_the_top_entry_mid_row() {
     fixture::assert_frame("transcript-scrolled", 120, 40);
 }
+
+#[test]
+fn typing_120x40_is_a_composer_at_its_two_row_floor() {
+    fixture::assert_frame("typing", 120, 40);
+}
+
+#[test]
+fn grown_120x40_is_a_composer_at_its_six_row_ceiling() {
+    fixture::assert_frame("grown", 120, 40);
+}
+
+#[test]
+fn scrolled_120x40_is_a_composer_showing_the_last_five_rows_of_a_taller_draft() {
+    fixture::assert_frame("scrolled", 120, 40);
+}

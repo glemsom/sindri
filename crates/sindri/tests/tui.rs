@@ -154,6 +154,20 @@ impl Drawn {
         text(&self.bytes())
     }
 
+    /// Waits until what has been drawn says `ready`, and says whether it ever did: a
+    /// frame is only as caught up as the bytes that reached the terminal, so a test waits
+    /// for the fact it needs rather than for a sleep and a hope.
+    fn wait_until(&self, mut ready: impl FnMut(&str) -> bool) -> bool {
+        let deadline = Instant::now() + PATIENCE;
+        while Instant::now() < deadline {
+            if ready(&self.text()) {
+                return true;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        false
+    }
+
     /// Waits until `needle` has been drawn, and says whether it ever was.
     fn wait_for(&self, needle: &[u8]) -> bool {
         let deadline = Instant::now() + PATIENCE;
@@ -350,5 +364,282 @@ fn a_launch_with_no_screen_is_refused_at_exit_two() {
         text(&output.stderr).contains("terminal"),
         "the refusal says what is missing: {}",
         text(&output.stderr)
+    );
+}
+
+/// A frame's bytes, read the way a terminal reads them: where the cursor was moved to,
+/// and which glyph was painted there.
+///
+/// A frame writes its own geometry down nowhere but its escape sequences, so this is how
+/// a test reads a row of it back — and a test that reads rows needs no terminal size, of
+/// which a bare pseudo-terminal has none worth guessing at.
+enum Painted {
+    /// The cursor moved to a row and a column, counted from one as a terminal counts.
+    Moved(u16, u16),
+    /// A glyph was painted where the cursor was.
+    Glyph(char),
+}
+
+/// Everything drawn so far, as a terminal would read it.
+fn painted(drawn: &str) -> Vec<Painted> {
+    let mut painted = Vec::new();
+    let mut rest = drawn;
+    while let Some(glyph) = rest.chars().next() {
+        if glyph == '\u{1b}'
+            && let Some(sequence) = sequence(rest)
+        {
+            if let Some((row, column)) = sequence.move_to {
+                painted.push(Painted::Moved(row, column));
+            }
+            rest = &rest[sequence.taken..];
+            continue;
+        }
+        painted.push(Painted::Glyph(glyph));
+        rest = &rest[glyph.len_utf8()..];
+    }
+    painted
+}
+
+/// One escape sequence at the front of the bytes: the cell it moved the cursor to, when
+/// it moved one, and the bytes it took up.
+struct Sequence {
+    /// The row and column the move named, counted from one, or nothing for a sequence
+    /// that is not a move — a colour, a mode, a key the frame answers with a repaint.
+    move_to: Option<(u16, u16)>,
+    /// How many bytes the sequence took up.
+    taken: usize,
+}
+
+/// The escape sequence at the front of `drawn`, or nothing when the bytes there are not
+/// one.
+fn sequence(drawn: &str) -> Option<Sequence> {
+    let rest = drawn.strip_prefix('\u{1b}')?;
+    let Some(params) = rest.strip_prefix('[') else {
+        // `ESC O A` and the single-shift keys: no move, and as long as its last byte.
+        let taken = 1 + rest.chars().next().map_or(0, char::len_utf8);
+        return Some(Sequence {
+            move_to: None,
+            taken,
+        });
+    };
+    let end = params.find(|glyph: char| ('\u{40}'..='\u{7e}').contains(&glyph))?;
+    let last = params[end..].chars().next()?;
+    let taken = 2 + end + last.len_utf8();
+    let move_to = (last == 'H')
+        .then(|| {
+            let (row, column) = params[..end].split_once(';')?;
+            Some((row.parse().ok()?, column.parse().ok()?))
+        })
+        .flatten();
+    Some(Sequence { move_to, taken })
+}
+
+/// The rows the composer's band took in the last frame that painted it: the gap between
+/// the row of its hairline and the row of the footer's first hint, which is the box's
+/// height (§12).
+fn composer_rows(drawn: &str) -> Option<u16> {
+    let mut row = 0u16;
+    let (mut hairline, mut footer) = (None, None);
+    let mut painted_here = String::new();
+    for mark in painted(drawn) {
+        match mark {
+            Painted::Moved(at, _) => {
+                row = at;
+                painted_here.clear();
+            }
+            Painted::Glyph(glyph) => {
+                painted_here.push(glyph);
+                if glyph == '─' {
+                    hairline = Some(row);
+                }
+                if painted_here.ends_with("Enter send") {
+                    footer = Some(row);
+                }
+            }
+        }
+    }
+    Some(footer? - hairline?)
+}
+
+/// The cell the last frame left the caret on: typing paints one glyph per frame, so where
+/// the caret waits is how a test knows the last glyph of a draft landed.
+fn caret_at(drawn: &str) -> Option<(u16, u16)> {
+    painted(drawn)
+        .into_iter()
+        .filter_map(|mark| match mark {
+            Painted::Moved(at, column) => Some((at, column)),
+            Painted::Glyph(_) => None,
+        })
+        .next_back()
+}
+
+#[test]
+fn a_bracketed_paste_arrives_as_one_draft_with_its_line_breaks_kept() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    assert_eq!(
+        composer_rows(&drawn.text()),
+        Some(2),
+        "the composer starts at its two-row floor: {:?}",
+        drawn.text()
+    );
+
+    // One paste, the way a terminal that offers a bracketed paste sends it: the line
+    // breaks are the clipboard's, and not one of them is a pressed Enter.
+    pty.type_bytes(b"\x1b[200~first line\rsecond line\r\nthird line\x1b[201~");
+
+    // A frame paints the cells that changed and no others, so a blank a line already had
+    // is skipped and a line of words arrives in runs: the words are what is looked for.
+    assert!(
+        drawn.wait_until(|frame| frame.contains("third")),
+        "the paste reached the frame: {:?}",
+        drawn.text()
+    );
+    let frame = drawn.text();
+    for word in ["first", "line", "second", "third"] {
+        assert!(
+            frame.contains(word),
+            "the draft holds {word:?}, as the clipboard wrote it"
+        );
+    }
+    // One draft and not three prompts: a box that had sent on a line break would be back
+    // at its two-row floor, and this one is a row taller for each line it kept.
+    assert_eq!(
+        composer_rows(&frame),
+        Some(4),
+        "three lines make a four-row composer: {frame:?}"
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "and the launch is still there to quit"
+    );
+}
+
+#[test]
+fn a_paste_that_arrives_as_a_burst_is_one_draft_too() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    // A terminal with no bracketed paste sends the whole prompt as the bytes a typist
+    // would have made, carriage return and all.
+    pty.type_bytes(b"one\rtwo");
+
+    assert!(
+        drawn.wait_until(|frame| composer_rows(frame) == Some(3)),
+        "two lines in one draft: the box grew a row for the break a paste kept rather \
+         than sent: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0));
+}
+
+#[test]
+fn shift_enter_from_the_kitty_protocol_breaks_the_line_rather_than_sending() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(b"one");
+    pty.type_bytes(b"\x1b[13;2u");
+    pty.type_bytes(b"two");
+
+    assert!(
+        drawn.wait_until(|frame| composer_rows(frame) == Some(3)),
+        "Shift+Enter is a newline and not the key that sends: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0));
+}
+
+#[test]
+fn enter_takes_the_draft_out_of_the_composer() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    pty.type_bytes(b"one");
+    pty.type_bytes(b"\x1b[13;2u");
+    pty.type_bytes(b"two");
+    assert!(
+        drawn.wait_until(|frame| composer_rows(frame) == Some(3)),
+        "two lines of draft: {:?}",
+        drawn.text()
+    );
+
+    // Enter sends. There is no run wired into this launch yet (#43), so the prompt is
+    // dropped; what a reader sees is the box back at its floor, the draft gone from it.
+    pty.type_bytes(b"\r");
+
+    assert!(
+        drawn.wait_until(|frame| composer_rows(frame) == Some(2)),
+        "the draft left the composer and the band is back at its floor: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0));
+}
+
+#[test]
+fn ctrl_c_when_idle_clears_the_draft_and_leaves_the_launch_running() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    pty.type_bytes(b"a draft nobody sent");
+    assert!(
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == 20)),
+        "nineteen glyphs typed, so the caret waits one column past the last: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x03]);
+
+    // No run is wired into this launch yet (#43), so `Ctrl-C` is the idle key and clears
+    // the draft. The caret going home is the proof: a draft kept would leave it in the
+    // nineteenth column and paint nothing at all.
+    assert!(
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == 1)),
+        "Ctrl-C cleared the draft: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "Ctrl-C cancelled no run, and did not quit"
     );
 }

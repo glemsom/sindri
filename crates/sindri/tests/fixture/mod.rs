@@ -34,6 +34,7 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::{Buffer, Cell};
 
+use sindri::composer::{Composer, Key};
 use sindri::ink::Ink;
 use sindri::rows::Scroll;
 use sindri::view::View;
@@ -84,6 +85,27 @@ fn named(name: &str) -> View {
         "boot" => View::boot(),
         "transcript" => View::of(transcript(), Scroll::Tail),
         "transcript-scrolled" => View::of(transcript(), Scroll::Back(4)),
+        // The composer's floor and its ceiling, and the window it scrolls to when the
+        // draft outgrows the ceiling: the growth of §12 as three pictures rather than
+        // as an opinion (ticket #41).
+        "typing" => View::typing(draft(&["why does the retry test fail"])),
+        "grown" => View::typing(draft(&[
+            "read the transcript, then the failing test,",
+            "then the patch, and say which line of the",
+            "patch the test disagrees with. Keep it to",
+            "one sentence and quote the line you mean,",
+            "the way the report does.",
+        ])),
+        "scrolled" => View::typing(draft(&[
+            "one: the test that fails",
+            "two: the line it fails on",
+            "three: the patch that moved it",
+            "four: the retry that hid it",
+            "five: the budget it spent",
+            "six: the stop reason",
+            "seven: the session it left",
+            "eight: the question to ask",
+        ])),
         unknown => panic!(
             "no frame is named {unknown}: `named` lists the frames this front end \
              paints, and a fixture under any other name is a picture of nothing"
@@ -197,6 +219,20 @@ fn transcript() -> Vec<Entry> {
              changes one entry re-lays that entry alone.",
         ),
     ]
+}
+
+/// A composer holding `lines`, typed a line at a time: a fixture's draft is built
+/// through the same keys a reader's fingers send, so a picture of the composer cannot
+/// be made a way the product cannot.
+fn draft(lines: &[&str]) -> Composer {
+    let mut composer = Composer::new();
+    for (index, line) in lines.iter().enumerate() {
+        if index > 0 {
+            composer.key(Key::Newline);
+        }
+        composer.paste(line);
+    }
+    composer
 }
 
 /// The frame `name` at `cols` by `rows`, as the text a fixture holds: painted through
