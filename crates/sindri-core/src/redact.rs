@@ -23,8 +23,10 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::sync::Arc;
 
+use serde::Deserialize;
 use serde::Serialize;
 use serde::Serializer;
+use serde::de::Deserializer;
 
 /// What `Display`, `Debug` and `Serialize` write in place of a secret, so the
 /// config, the provider seam and every window after them share one mask.
@@ -140,6 +142,19 @@ impl fmt::Debug for Redacted {
 impl Serialize for Redacted {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(&self.scrubbed())
+    }
+}
+
+impl<'de> Deserialize<'de> for Redacted {
+    /// Reads back a string that has already left the core scrubbed — a line of a
+    /// record, an answer from a wire — and holds it with no secrets at all, which
+    /// is the honest set: the set that scrubbed it belonged to the writer, and
+    /// what it left behind is what it is safe to say.
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Redacted, D::Error> {
+        Ok(Redacted {
+            text: String::deserialize(deserializer)?,
+            secrets: SecretSet::default(),
+        })
     }
 }
 
