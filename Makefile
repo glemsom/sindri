@@ -10,7 +10,12 @@
 #     make check      every stage, in order (the definition of done)
 #     make audit      only the four fast audits (spec §16; the commit hook's entry)
 #     make sandbox    only the sandbox tier, and the test of its own verdicts
-#     make <stage>    one stage alone — fmt, clippy, audit, test, bench,
+#     make check STAGES='fmt clippy'
+#                     a subset, in order — the switch scripts/check-probe.sh uses
+#                     to prove the loop stops at a stage that failed without ever
+#                     running the stage that proves it: a gate that rang itself
+#                     would never end
+#     make <stage>    one stage alone — fmt, clippy, audit, test, bench, gate,
 #                     toolchain, sandbox, release
 #
 # A stage line reads `check: <stage> ... ok` or `... FAIL`, printed after the
@@ -21,9 +26,11 @@
 #   ... MISSING (note)  work that has not landed yet — today ticket #58's evals.
 #                       `make check` still exits 0, with the gap printed on its
 #                       last lines where a reader cannot miss it.
-#   ... SKIPPED         a stage the machine would not let run — today only the
-#                       sandbox tier, when the kernel forbids unprivileged user
-#                       namespaces, which is the case ticket #7 exists for. The
+#   ... SKIPPED         a stage the machine would not let run — the sandbox tier
+#                       when the kernel forbids unprivileged user namespaces,
+#                       which is the case ticket #7 exists for; the release path
+#                       when there is no bwrap or no musl C compiler; the gate
+#                       when there is no cargo on PATH. The
 #                       reason is the line above the verdict, the exit stays 0,
 #                       and the verdict is deliberately not `ok`: a green line
 #                       over code nothing covered is the one lie this target
@@ -40,7 +47,7 @@ SHELL := /bin/bash
 # The definition of done, in order: cheap and fast first, so the slow stages run
 # only on a tree that already passes the quick ones. `release` is last because it
 # is the only stage that compiles anything for a target nobody else builds.
-STAGES := fmt clippy audit test bench toolchain sandbox evals no-relink release
+STAGES := fmt clippy audit test bench gate toolchain sandbox evals no-relink release
 
 .PHONY: check $(STAGES) sandbox-tier release-tier
 
@@ -111,6 +118,29 @@ test:
 # count and not one.
 bench:
 	$(call stage,bench,cargo test -p sindri-core --test wording_bench -- --nocapture)
+
+# The stage that proves this gate has teeth (spec §16, ticket #5): `make check` is
+# the definition of done, so a run of it must be able to say no. scripts/check-
+# probe.sh writes one defect at a time into the tree — an unformatted file, a
+# clippy warning, a panicking `#[test]` — drives this file's own loop over a
+# stage subset, and requires the owning stage to print `... FAIL` and the run to
+# stop behind it; then it takes the defect back out and compares the tree against
+# the `git status --porcelain` it took first. Split in two the way the sandbox
+# tier is split, and for the same reason: `gate` runs the probe's contract test
+# first, and `gate-tier` is the probe alone, which is what that test drives. A
+# test that rang the gate would ring itself.
+#
+# It sits after `test` and `bench` on purpose: the defects are test targets, so
+# the workspace is already built and each case costs one fragment and one suite
+# run, not a build. And it is `skippable` because a machine with no cargo on PATH
+# cannot drive the gate at all: outside the devbox shell it says so at 77 and
+# prints SKIPPED, never the `ok` a probe that ran has earned.
+gate:
+	$(call stage,gate-test,bash scripts/check-probe-test.sh)
+	$(call skippable,gate,bash scripts/check-probe.sh)
+
+gate-tier:
+	$(call skippable,gate,bash scripts/check-probe.sh)
 
 # Proves the devbox shell supplies the pinned Rust 1.99 and the musl target
 # (ADR 0001, ticket #4 wired here by #5).
