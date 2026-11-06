@@ -1,0 +1,12 @@
+[package]
+name = "sindri"
+description = "The Sindri front ends: the terminal UI and batch mode."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+sindri-core = { path = "../sindri-core" }
+
+[dev-dependencies]
+serde_json = "1.0"
