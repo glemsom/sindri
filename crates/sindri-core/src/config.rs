@@ -12,15 +12,23 @@
 //! The file is `$XDG_CONFIG_HOME/sindri/config.toml`, and it is the only one: a
 //! `.sindri.toml` in the working directory would let a repository grant itself
 //! writable paths, so nothing here can even ask for one.
+//!
+//! A save patches only the keys it is handed, through a temp file in the same
+//! directory renamed into place, so a reader never sees a half-written file and
+//! a crash mid-save leaves the file that was already there. It is owner-only,
+//! because one of the keys it can hold is a secret.
 
 use std::collections::BTreeMap;
 use std::env;
 use std::error::Error;
 use std::fmt;
+use std::io::Write;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use serde::Deserialize;
+use toml_edit::{DocumentMut, Item, Value};
 
 use crate::wire::Wire;
 
@@ -124,6 +132,51 @@ impl Config {
     /// Reads the file the environment points at.
     pub fn load(environment: &impl Environment) -> Result<Config, ConfigError> {
         Config::load_from(&config_path(environment)?)
+    }
+
+    /// Writes the keys `touched` names into the one file at `path`, patching each
+    /// in place so every key the save was not handed keeps its value, its
+    /// comments and its place in the file.
+    ///
+    /// A key given as an empty string is a key a person emptied, and an emptied
+    /// key is removed rather than blanked: that is what hands it back to the
+    /// environment below it. A key the file never had is appended, in the order
+    /// the schema names keys, so a file written from nothing reads in that order.
+    ///
+    /// The write is a temp file in the same directory, `fsync`, `rename`, mode
+    /// `0600`. The rename is what makes it atomic: a reader of `path` sees the
+    /// whole file it had or the whole file the save wrote, and a crash between
+    /// the two leaves the file that was there (ADR-0009).
+    pub fn save_to(path: &Path, touched: &Flags) -> Result<(), ConfigError> {
+        let existing = match std::fs::read_to_string(path) {
+            Ok(text) => text,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+            Err(error) => {
+                return Err(ConfigError::Unreadable {
+                    path: path.to_path_buf(),
+                    reason: error.to_string(),
+                });
+            }
+        };
+
+        // A file this cannot parse is a file a patch would turn into nonsense, so
+        // it is refused rather than rewritten: a save never clobbers what it could
+        // not read.
+        let mut document =
+            existing
+                .parse::<DocumentMut>()
+                .map_err(|error| ConfigError::BadValue {
+                    origin: path.display().to_string(),
+                    reason: error.to_string(),
+                })?;
+
+        touched.patch_into(&mut document)?;
+        write_atomically(path, &document.to_string())
+    }
+
+    /// Writes into the one file the environment points at.
+    pub fn save(environment: &impl Environment, touched: &Flags) -> Result<(), ConfigError> {
+        Config::save_to(&config_path(environment)?, touched)
     }
 
     /// This layer, with every key it leaves unset taken from the layer below it.
@@ -232,6 +285,66 @@ pub struct Flags {
     pub ssh_agent: Option<bool>,
 }
 
+impl Flags {
+    /// Patches this touched-key set into a document, key by key in the order the
+    /// schema names them. A key left unset here is a key no one touched, so the
+    /// file keeps whatever it already said about it.
+    fn patch_into(&self, document: &mut DocumentMut) -> Result<(), ConfigError> {
+        if let Some(wire) = self.provider {
+            write_key(document, "provider", Value::from(wire.word()));
+        }
+        if let Some(value) = &self.model {
+            write_string(document, "model", value);
+        }
+        if let Some(value) = &self.base_url {
+            write_string(document, "base_url", value);
+        }
+        if let Some(value) = &self.api_key {
+            write_string(document, "api_key", value);
+        }
+        if let Some(value) = self.thinking {
+            write_key(document, "thinking", Value::from(value));
+        }
+        if let Some(paths) = &self.extra_writable_paths {
+            let strings: Vec<String> = paths
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect();
+            write_key(document, "extra_writable_paths", array(strings));
+        }
+        if let Some(headers) = &self.extra_headers {
+            write_key(document, "extra_headers", array(headers.clone()));
+        }
+        if let Some(turns) = self.max_turns {
+            write_key(document, "max_turns", Value::from(i64::from(turns)));
+        }
+        if let Some(seconds) = self.timeout {
+            write_key(document, "timeout", integer("timeout", seconds)?);
+        }
+        if let Some(milliseconds) = self.command_budget_ms {
+            write_key(
+                document,
+                "command_budget_ms",
+                integer("command_budget_ms", milliseconds)?,
+            );
+        }
+        if let Some(bytes) = self.output_budget_bytes {
+            write_key(
+                document,
+                "output_budget_bytes",
+                integer("output_budget_bytes", bytes)?,
+            );
+        }
+        if let Some(value) = self.status {
+            write_key(document, "status", Value::from(value));
+        }
+        if let Some(value) = self.ssh_agent {
+            write_key(document, "ssh_agent", Value::from(value));
+        }
+        Ok(())
+    }
+}
+
 impl From<Flags> for Config {
     fn from(flags: Flags) -> Config {
         Config {
@@ -271,6 +384,111 @@ impl fmt::Debug for Flags {
             .field("ssh_agent", &self.ssh_agent)
             .finish()
     }
+}
+
+/// Writes one key where the file already keeps it, so the comment above the key
+/// and the one beside it stay put; a key the file never had is appended.
+///
+/// The value is given the decor — the spacing and the trailing comment — of the
+/// value it replaces, which is how one line changes and no other byte does.
+fn write_key(document: &mut DocumentMut, key: &str, value: Value) {
+    let mut item = Item::Value(value);
+    match document.get_mut(key) {
+        Some(existing) => {
+            if let (Some(old), Some(fresh)) = (existing.as_value(), item.as_value_mut()) {
+                *fresh.decor_mut() = old.decor().clone();
+            }
+            *existing = item;
+        }
+        None => {
+            document.insert(key, item);
+        }
+    }
+}
+
+/// Writes a string key, or removes it when the string is empty: an emptied key is
+/// a key handed back to the environment, not a key blanked in the file.
+fn write_string(document: &mut DocumentMut, key: &str, value: &str) {
+    if value.is_empty() {
+        document.remove(key);
+    } else {
+        write_key(document, key, Value::from(value));
+    }
+}
+
+/// A list of strings as the file's own array.
+fn array(values: Vec<String>) -> Value {
+    let mut array = toml_edit::Array::new();
+    for value in values {
+        array.push(value);
+    }
+    Value::Array(array)
+}
+
+/// A `u64` as the file's integer, which holds only an `i64`: a number beyond that
+/// is refused, naming the key, rather than written as something no read takes back.
+fn integer(key: &str, value: u64) -> Result<Value, ConfigError> {
+    i64::try_from(value)
+        .map(Value::from)
+        .map_err(|_| ConfigError::BadValue {
+            origin: key.to_owned(),
+            reason: format!("{value} is larger than a config file's integer"),
+        })
+}
+
+/// Writes `text` at `path` through a temp file in that same directory, `fsync`ed
+/// and then renamed over `path`, so the path names either the whole old file or
+/// the whole new one and never a file half written.
+fn write_atomically(path: &Path, text: &str) -> Result<(), ConfigError> {
+    let unwritable = |reason: String| ConfigError::Unwritable {
+        path: path.to_path_buf(),
+        reason,
+    };
+
+    let directory = match path.parent() {
+        Some(directory) if !directory.as_os_str().is_empty() => directory,
+        _ => Path::new("."),
+    };
+    std::fs::create_dir_all(directory).map_err(|error| unwritable(error.to_string()))?;
+
+    // The temp file is a name something else may already hold, in the directory
+    // the rename will land in: that is what makes the rename a rename at all
+    // rather than a copy across filesystems.
+    let name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| String::from("config.toml"));
+    let mut staged = tempfile::Builder::new()
+        .prefix(&format!(".{name}."))
+        .suffix(".staged")
+        .tempfile_in(directory)
+        .map_err(|error| unwritable(error.to_string()))?;
+
+    // Owner-only before a byte is written, so a key is never readable by anyone
+    // else even for the instant the temp file exists.
+    staged
+        .as_file()
+        .set_permissions(std::fs::Permissions::from_mode(0o600))
+        .map_err(|error| unwritable(error.to_string()))?;
+    staged
+        .write_all(text.as_bytes())
+        .map_err(|error| unwritable(error.to_string()))?;
+    staged
+        .as_file()
+        .sync_all()
+        .map_err(|error| unwritable(error.to_string()))?;
+
+    // A failed rename drops the temp file, so a save that cannot land leaves no
+    // litter and the file that was there untouched.
+    staged
+        .persist(path)
+        .map_err(|error| unwritable(error.error.to_string()))?;
+
+    // The rename is what a reader sees; syncing the directory is what makes the
+    // new name survive a power cut. Failing to sync cannot un-write the bytes
+    // already in place, so it is not reported as a failed save.
+    let _ = std::fs::File::open(directory).and_then(|directory| directory.sync_all());
+    Ok(())
 }
 
 /// The variables a config read may consult, so a test can hold them as data
@@ -396,6 +614,13 @@ pub enum ConfigError {
         /// Why it would not.
         reason: String,
     },
+    /// A file that could not be written at all.
+    Unwritable {
+        /// The file that would not be written.
+        path: PathBuf,
+        /// Why it would not.
+        reason: String,
+    },
     /// Neither `XDG_CONFIG_HOME` nor `HOME` is set, so there is nowhere to look.
     NoConfigDir,
 }
@@ -418,6 +643,9 @@ impl fmt::Display for ConfigError {
             }
             ConfigError::Unreadable { path, reason } => {
                 write!(formatter, "cannot read {}: {reason}", path.display())
+            }
+            ConfigError::Unwritable { path, reason } => {
+                write!(formatter, "cannot write {}: {reason}", path.display())
             }
             ConfigError::NoConfigDir => write!(
                 formatter,
