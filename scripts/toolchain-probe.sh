@@ -7,6 +7,11 @@
 # Run it inside the devbox shell:
 #     devbox run -- bash scripts/toolchain-probe.sh
 # Exits non-zero if any check fails; prints one line per check.
+#
+# bwrap is deliberately not checked here any more: whether a kernel lets an
+# unprivileged process create a user namespace is a fact about the machine rather
+# than about the toolchain devbox supplies, and it now has a tier of its own
+# (scripts/sandbox-probe.sh) that can skip loudly instead of failing a build.
 set -uo pipefail
 
 PINNED_RUST=1.99.0
@@ -75,19 +80,7 @@ else
   bad "rustup target: $MUSL_TARGET not installed for $PINNED_RUST (installed: $(tr '\n' ' ' <<<"${got:-}"))"
 fi
 
-# 5. bubblewrap is available for local test runs (the host's, resolved from PATH).
-if got=$(bwrap --version 2>/dev/null); then
-  ok "bwrap --version: $got"
-else
-  bad "bwrap not on PATH"
-fi
-if bwrap --unshare-all --ro-bind / / --dev /dev --proc /proc -- true 2>/dev/null; then
-  ok "bwrap runs unprivileged"
-else
-  bad "bwrap cannot create an unprivileged sandbox"
-fi
-
-# 6. A musl build succeeds and yields a static ELF, proved on a throwaway crate
+# 5. A musl build succeeds and yields a static ELF, proved on a throwaway crate
 #    outside the repo so no product source is needed.
 crate=$(mktemp -d "${TMPDIR:-/dev/shm}/sindri-toolchain-probe.XXXXXX") || exit 1
 trap 'rm -rf "$crate"' EXIT
@@ -130,7 +123,7 @@ else
   bad "cargo build --target $MUSL_TARGET failed: $out"
 fi
 
-# 7. Nothing the product ships may refer to a Nix store path: devbox supplies
+# 6. Nothing the product ships may refer to a Nix store path: devbox supplies
 #    build-time tools only. Cargo workspace manifests, sources and build
 #    scripts are all checked; empty today because ticket #3 creates the crates.
 sources=()
