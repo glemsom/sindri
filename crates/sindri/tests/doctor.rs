@@ -171,6 +171,21 @@ fn printed_description(stdout: &str) -> &str {
         .0
 }
 
+/// The `bash` tool's description as a run at `enforcement` registers it, built
+/// here from the boundary and the catalog doctor had: the independent half of the
+/// byte-for-byte assertion, so doctor is not asked to agree with itself.
+fn registered(ground: &Ground, enforcement: Enforcement) -> String {
+    let boundary = Boundary::from_config(&Config::default(), &ground.workspace(), enforcement)
+        .expect("a boundary over the temp workspace");
+    let catalog = Catalog::discover(&ground.workspace(), Some(&ground.config));
+    let tools = ToolSet::new(&boundary, &catalog, FrontEnd::Batch);
+    tools
+        .get(BASH)
+        .expect("bash is always registered")
+        .description()
+        .to_owned()
+}
+
 /// The one line of the report `name` is listed on, so a row is read whole rather
 /// than by the substring that happened to be asserted.
 fn row<'a>(stdout: &'a str, name: &str) -> &'a str {
@@ -437,25 +452,42 @@ fn the_printed_description_is_the_bash_description_the_model_is_given_byte_for_b
         "a diagnostic that answered wrote no chatter on stderr: {err}"
     );
 
-    // The value the run registers, assembled here from the same boundary and the
-    // same catalog doctor had: the assertion is between two renderings of one
-    // set of inputs, not between doctor and itself.
-    let boundary = Boundary::from_config(
-        &Config::default(),
-        &ground.workspace(),
-        Enforcement::Bubblewrap,
-    )
-    .expect("a boundary over the temp workspace");
-    let catalog = Catalog::discover(&ground.workspace(), Some(&ground.config));
-    let tools = ToolSet::new(&boundary, &catalog, FrontEnd::Batch);
-    let registered = tools
-        .get(BASH)
-        .expect("bash is always registered")
-        .description();
-
     assert_eq!(
         printed_description(&out),
-        registered,
+        registered(&ground, Enforcement::Bubblewrap),
         "§5: the boundary the model is told about is the boundary enforced"
+    );
+}
+
+#[test]
+fn an_unsafe_run_is_told_so_and_has_no_sandbox_to_prove() {
+    let ground = Ground::new();
+    // A machine with no bubblewrap at all: an unsafe run has no sandbox to make,
+    // so finding none changes nothing about what it says.
+    let empty = ground.config.join("no-bwrap");
+    std::fs::create_dir_all(&empty).expect("an empty machine directory");
+
+    let output = run(ground
+        .command(&empty.display().to_string())
+        .args(["--yolo-unsafe", "doctor"]));
+
+    let out = text(&output.stdout);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "there is nothing to prove and nothing to fail: stdout:\n{out}"
+    );
+    assert!(
+        out.contains("enforcement   unsafe"),
+        "the report says how the run would be confined, in §6's two-valued words:\n{out}"
+    );
+    assert!(
+        out.contains("sandbox not proved: this run asked for no sandbox"),
+        "and claims no proof it did not make:\n{out}"
+    );
+    assert_eq!(
+        printed_description(&out),
+        registered(&ground, Enforcement::Unsafe),
+        "the descriptions differ by the enforcement they describe and by nothing else"
     );
 }
