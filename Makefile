@@ -11,7 +11,7 @@
 #     make audit      only the four fast audits (spec §16; the commit hook's entry)
 #     make sandbox    only the sandbox tier, and the test of its own verdicts
 #     make <stage>    one stage alone — fmt, clippy, audit, test, bench,
-#                     toolchain, sandbox
+#                     toolchain, sandbox, release
 #
 # A stage line reads `check: <stage> ... ok` or `... FAIL`, printed after the
 # stage's own output so the verdict is the last thing the eye lands on. Nothing
@@ -38,10 +38,11 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := check
 
 # The definition of done, in order: cheap and fast first, so the slow stages run
-# only on a tree that already passes the quick ones.
-STAGES := fmt clippy audit test bench toolchain sandbox evals no-relink
+# only on a tree that already passes the quick ones. `release` is last because it
+# is the only stage that compiles anything for a target nobody else builds.
+STAGES := fmt clippy audit test bench toolchain sandbox evals no-relink release
 
-.PHONY: check $(STAGES) sandbox-tier
+.PHONY: check $(STAGES) sandbox-tier release-tier
 
 check:
 	@for stage in $(STAGES); do \
@@ -142,3 +143,23 @@ evals:
 # own before this stage's verdict.
 no-relink:
 	$(call stage,no-relink,bash scripts/no-relink-proof.sh)
+
+# The release path of spec §16 and ADR 0001, landed by ticket #62: the artefact the
+# product ships, built and held to its promises rather than built by hand on
+# release day — static, `x86_64-unknown-linux-musl`, no OpenSSL anywhere in it, and
+# able to run on a machine with no devbox, no Nix and no fonts. Split in two the
+# way the sandbox tier is split, and for the same reason: `release` runs the
+# probe's contract test first, and `release-tier` is the probe alone, which is what
+# that test drives. A test that ran itself would never end.
+#
+# The probe is `skippable` because of what it can honestly lack: bwrap, when the
+# kernel forbids unprivileged user namespaces, and a musl C compiler, which
+# devbox does not supply today — the C half of rustls's crypto provider is built
+# by the host's compiler against glibc headers, and the artefact cannot be linked.
+# Both say so in a printed line and a SKIPPED verdict; neither is ever an `ok`.
+release:
+	$(call stage,release-test,bash scripts/release-probe-test.sh)
+	$(call skippable,release,bash scripts/release-probe.sh)
+
+release-tier:
+	$(call skippable,release,bash scripts/release-probe.sh)
