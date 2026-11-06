@@ -2,3 +2,5 @@
 /.worktrees
 /.scratch
 /.devbox
+# A golden frame `insta` has not been blessed into yet (ADR 0012).
+*.snap.new
