@@ -26,6 +26,7 @@
 //! text is scrubbed where it is born rather than by every window after it
 //! (ADR-0011). Nothing here writes a record: that is ticket #17.
 
+pub mod copilot; // the owner-only file the session it keeps is written to
 pub mod retry; // §4's retry policy in one place: an ask is tried three times
 pub mod served; // what a wire says it serves, read off the wire and kept beside the (wire, base_url) pair that produced them
 pub mod transport; // how a request's bytes travel, and the fake a test substitutes
@@ -277,11 +278,13 @@ impl Verdict {
 
 /// Where a wire's credential comes from, as §11 has the user set it: the one
 /// wording a failure and a listing's hint both print.
-fn credential_source(wire: Wire) -> &'static str {
+fn credential_source(wire: Wire) -> String {
     match wire {
-        Wire::Anthropic => "set ANTHROPIC_API_KEY",
-        Wire::Openai => "set OPENAI_API_KEY",
-        Wire::Copilot => "run `sindri auth login copilot`",
+        Wire::Anthropic => "set ANTHROPIC_API_KEY".to_owned(),
+        Wire::Openai => "set OPENAI_API_KEY".to_owned(),
+        // Copilot is signed in to rather than handed a key, so the source is the
+        // command that signs in (§10); it is spelled in one place only.
+        Wire::Copilot => format!("run `{}`", copilot::LOGIN),
     }
 }
 
@@ -315,6 +318,18 @@ impl Failure {
                 wire.word(),
                 credential_source(wire)
             )),
+        }
+    }
+
+    /// The failure of an ask whose sign-in could not be resolved, in the words
+    /// [`SignIn`](copilot::SignIn) chose: nothing was sent, and the message names
+    /// the command that fixes it (`sindri auth login copilot`).
+    pub fn signed_out(reason: copilot::SignIn) -> Self {
+        Self {
+            verdict: Verdict::Unconfigured,
+            retryable: false,
+            streamed: false,
+            message: reason.message(),
         }
     }
 
@@ -373,6 +388,9 @@ pub struct Client {
     backoff: Arc<dyn Backoff + Send + Sync>,
     /// The secrets a wire's own words are scrubbed of before they are kept.
     secrets: SecretSet,
+    /// The Copilot sign-in store, when a run may be signed in rather than handed
+    /// a key: the one place a session is resolved, and refreshed, on the way out.
+    store: Option<copilot::Store>,
 }
 
 impl fmt::Debug for Client {
@@ -381,6 +399,7 @@ impl fmt::Debug for Client {
             .debug_struct("Client")
             .field("transport", &self.transport)
             .field("secrets", &self.secrets.len())
+            .field("store", &self.store)
             .finish_non_exhaustive()
     }
 }
@@ -399,7 +418,20 @@ impl Client {
             transport: DynHttpClient::new(transport),
             backoff: Arc::new(Sleep),
             secrets,
+            store: None,
         }
+    }
+
+    /// Resolve a Copilot session out of `store` when an ask on that wire carries
+    /// no credential of its own, so a run never holds a session and a refresh
+    /// happens where the ask is made (§10).
+    ///
+    /// A client built without one says so by leaving it out: an ask on the wire
+    /// that signs in then comes back as a failure naming the login command,
+    /// rather than as a request sent with nothing.
+    pub fn store(mut self, store: copilot::Store) -> Self {
+        self.store = Some(store);
+        self
     }
 
     /// Wait through `backoff` between attempts, so a test proves the delays of
@@ -434,7 +466,14 @@ impl Client {
     /// needs no runtime of its own.
     pub fn ask(&self, ask: &Ask, deltas: &mut dyn Deltas) -> Result<Answer, Failure> {
         let request = ask.request();
-        let credential = ask.credential.expose();
+        // A session resolved here joins the set this ask is scrubbed with, so a
+        // wire that echoes it back is echoed back masked (ADR-0011).
+        let mut secrets = self.secrets.clone();
+        let credential = match ask.credential.expose() {
+            Some(key) => Some(key.to_owned()),
+            None => self.session(ask.wire, &mut secrets)?,
+        };
+        let credential = credential.as_deref();
         match ask.wire {
             Wire::Anthropic => {
                 let Some(key) = credential else {
@@ -447,7 +486,7 @@ impl Client {
                 let model = endpoint
                     .connect(self.transport.clone())
                     .completion(ask.model.clone());
-                self.drive(model, request, deltas)
+                self.drive(model, request, deltas, &secrets)
             }
             Wire::Openai => {
                 let Some(key) = credential else {
@@ -460,7 +499,7 @@ impl Client {
                 let model = endpoint
                     .connect(self.transport.clone())
                     .completion(ask.model.clone());
-                self.drive(model, request, deltas)
+                self.drive(model, request, deltas, &secrets)
             }
             Wire::Copilot => {
                 let Some(key) = credential else {
@@ -474,9 +513,24 @@ impl Client {
                 let model = endpoint
                     .connect(self.transport.clone())
                     .completion(ask.model.clone());
-                self.drive(model, request, deltas)
+                self.drive(model, request, deltas, &secrets)
             }
         }
+    }
+
+    /// The credential an ask carrying none is sent with: only Copilot has one,
+    /// because only Copilot is signed in to rather than handed a key (§10). It is
+    /// added to `secrets` on the way through, which is what keeps a refusal that
+    /// quotes it back out of the transcript.
+    fn session(&self, wire: Wire, secrets: &mut SecretSet) -> Result<Option<String>, Failure> {
+        let (Wire::Copilot, Some(store)) = (wire, self.store.as_ref()) else {
+            return Ok(None);
+        };
+        let session = store.session().map_err(Failure::signed_out)?;
+        Ok(session.expose().map(|token| {
+            secrets.add(token);
+            token.to_owned()
+        }))
     }
 
     /// One wire bound to one transport, tried as §4 allows: the one place a
@@ -486,12 +540,13 @@ impl Client {
         model: Model<W, DynHttpClient>,
         request: CompletionRequest,
         deltas: &mut dyn Deltas,
+        secrets: &SecretSet,
     ) -> Result<Answer, Failure>
     where
         W: RigWire<Op = rig_core::operation::Completion, Payload = Encoded, Frame = WireFrame>,
     {
         until_final(self.backoff.as_ref(), || {
-            self.attempt(&model, &request, deltas)
+            self.attempt(&model, &request, deltas, secrets)
         })
     }
 
@@ -502,6 +557,7 @@ impl Client {
         model: &Model<W, DynHttpClient>,
         request: &CompletionRequest,
         deltas: &mut dyn Deltas,
+        secrets: &SecretSet,
     ) -> Result<Answer, Failure>
     where
         W: RigWire<Op = rig_core::operation::Completion, Payload = Encoded, Frame = WireFrame>,
@@ -509,7 +565,7 @@ impl Client {
         futures::executor::block_on(async move {
             let mut streaming = model
                 .stream(request.clone())
-                .map_err(|error| Failure::from_wire(error, false, &self.secrets))?;
+                .map_err(|error| Failure::from_wire(error, false, secrets))?;
             let mut streamed = false;
             while let Some(item) = streaming.next().await {
                 match item {
@@ -523,14 +579,14 @@ impl Client {
                     }
                     Ok(_) => {}
                     Err(error) => {
-                        return Err(Failure::from_wire(error, streamed, &self.secrets));
+                        return Err(Failure::from_wire(error, streamed, secrets));
                     }
                 }
             }
             let finished = streaming
                 .finish()
                 .await
-                .map_err(|error| Failure::from_wire(error, streamed, &self.secrets))?;
+                .map_err(|error| Failure::from_wire(error, streamed, secrets))?;
             Ok(Answer::from(&finished))
         })
     }

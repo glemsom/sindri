@@ -10,6 +10,7 @@
 //! hands the prompt to the core and writes the answer, the JSON object or the
 //! exit code that §15 gives the run's stop reason.
 
+mod auth; // the one command that signs in rather than runs
 mod batch; // is the Unix filter: a prompt in, the answer and one newline out
 mod cli; // the command line as clap sees it
 // The host spawns the opener and this binary does not open a tool call yet: #40's
@@ -27,7 +28,7 @@ use clap::Parser;
 use sindri_core::config::{Config, Flags, Process};
 use sindri_core::first_run::FirstRun;
 
-use crate::cli::Cli;
+use crate::cli::{Cli, Command};
 
 /// What a configured launch says while the terminal UI is not yet built: the
 /// front end has everything a run needs and no run to give it to.
@@ -42,6 +43,14 @@ fn main() -> ExitCode {
     // A prompt on the command line is batch mode; a launch with none is the
     // terminal UI's, which is asked for its own reasons below.
     let asked = batch::Job::asked(&cli);
+
+    // A command that runs nothing is answered here, before a config is resolved
+    // or a key is asked for: a sign-in needs neither.
+    if let Some(command) = cli.command {
+        return match command {
+            Command::Auth { action } => auth::run(action),
+        };
+    }
 
     let mut first_run = match FirstRun::resolve(&Process, cli.flags()) {
         Ok(first_run) => first_run,
@@ -117,7 +126,7 @@ fn short_of(first_run: &FirstRun) -> String {
 
 /// The one way this front end says no: the reason on stderr, the code spec §15
 /// gives it, and nothing at all on stdout.
-fn refuse(message: &str, code: u8) -> ExitCode {
+pub(crate) fn refuse(message: &str, code: u8) -> ExitCode {
     eprintln!("sindri: {message}");
     ExitCode::from(code)
 }
