@@ -20,7 +20,8 @@
 #     SINDRI_BLESS=1 make evals
 #                     rewrite the evals' goldens from what the tree does now, which
 #                     is the only way one moves (ADR 0012's rule for a frame) — the
-#                     `doctor` family has no golden and reads the switch as nothing
+#                     `doctor` and mermaid families have no golden and read the switch
+#                     as nothing
 #     make frame F=boot-120x40
 #                     print one golden frame as the code draws it now, to eyeball it
 #     make frame-update F=boot-120x40
@@ -190,22 +191,26 @@ sandbox-tier:
 	$(call skippable,sandbox,bash scripts/sandbox-probe.sh)
 
 # The evals of spec §16 and §2, landed by ticket #59: four families of artefact held
-# to a fact rather than to a sentence — the bytes each wire sends, every field of
-# every `Entry` against a secret planted in it, and the mermaid corpus against the
-# SVG it drew are held byte for byte to the golden checked in beside the test, and
-# `doctor`'s printed description is held to the bytes the tool set a run registers
-# renders. That fourth family is the one with no golden: both sides are computed,
-# the binary's by running it and the expected bytes by asking `ToolSet`, so there is
-# nothing to check in and nothing a blessing could move. Every one of them fails
-# naming the line or tag that moved, none reaches the network, and none needs a
-# terminal.
+# to a fact rather than to a sentence. The bytes each wire sends, and every field of
+# every `Entry` against a secret planted in it, are held byte for byte to the golden
+# checked in beside the test. `doctor`'s printed description is held to the bytes the
+# tool set a run registers renders: both sides are computed, the binary's by running
+# it and the expected bytes by asking `ToolSet`, so there is nothing to check in and
+# nothing a blessing could move. The mermaid corpus is the other computed family, and
+# for a reason worth knowing: the renderer measures every label against the fonts
+# installed on the machine and offers no way to hand it one, so the same fence is a
+# different SVG, down to where its words wrap, on a machine with different fonts. A
+# golden of that is a golden of the box that blessed it, so the corpus is held to the
+# facts that are ours instead — every fence draws, the drawing is a whole SVG, and it
+# measures into cells. Every family fails naming the line, tag or fence that moved,
+# none reaches the network, and none needs a terminal.
 #
 # This is a stage of its own and not a part of `test` because these assert on
 # artefacts and not on behaviour: each test is ignored, so `make test` compiles the
 # evals and judges none of them, and a family that drifts is reported by the stage
 # that owns it rather than by the one before it. `SINDRI_BLESS=1 make evals` moves
-# the three goldens deliberately, which is the only way one moves; the `doctor`
-# family has no golden and reads the switch as nothing.
+# the two goldens deliberately, which is the only way one moves; the `doctor` and
+# mermaid families have no golden and read the switch as nothing.
 #
 # One `cargo test` per family, with `&&` between them so the first family that
 # fails stops the rest: each prints its own `check: eval ... ok` line under this

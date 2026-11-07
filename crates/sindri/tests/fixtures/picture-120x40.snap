@@ -4,7 +4,7 @@ expression: drawn
 ---
 picture at 120x40
 00 |  a diagram outside the workspace                                                                                       | plain:2 dim:1 plain:1 dim:7 plain:1 dim:7 plain:1 dim:3 plain:1 dim:9 plain:87
-01 |  ../mermaid/flowchart.svg is outside the workspace, and only a file the run could read is drawn                        | plain:2 dim:24 plain:1 dim:2 plain:1 dim:7 plain:1 dim:3 plain:1 dim:10 plain:1 dim:3 plain:1 dim:4 plain:1 dim:1 plain:1 dim:4 plain:1 dim:3 plain:1 dim:3 plain:1 dim:5 plain:1 dim:4 plain:1 dim:2 plain:1 dim:5 plain:24
+01 |  ../outside-the-workspace.svg is outside the workspace, and only a file the run could read is drawn                    | plain:2 dim:28 plain:1 dim:2 plain:1 dim:7 plain:1 dim:3 plain:1 dim:10 plain:1 dim:3 plain:1 dim:4 plain:1 dim:1 plain:1 dim:4 plain:1 dim:3 plain:1 dim:3 plain:1 dim:5 plain:1 dim:4 plain:1 dim:2 plain:1 dim:5 plain:20
 02 |                                                                                                                        | plain:120
 03 |  a tall field                                                                                                          | plain:2 dim:1 plain:1 dim:4 plain:1 dim:5 plain:106
 04 |                                                                                                                        | plain:120

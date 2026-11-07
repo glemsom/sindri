@@ -1,33 +1,41 @@
-//! The mermaid corpus, compared as the SVG the renderer answers with: every
-//! diagram type a fence is really written as is drawn in this process and held to
-//! the golden checked in beside it (§12, §16, ADR-0003).
+//! The mermaid corpus, held to the fact that each diagram *is* a picture: every
+//! diagram type a fence is really written as is drawn in this process and the
+//! drawing is measured in cells, which is what the front end needs of it before a
+//! pixel is spent (§12, §16, ADR-0003).
 //!
 //! What is held is the drawing and never the fence: a fence that parses is proved
-//! elsewhere, and a corpus of diagrams is here because a renderer's layout is a
-//! fact a reader can only approve by reading the diff. Every case fails on the
-//! first tag that moved, so a layout change is named rather than shown as two
-//! thousand pixels nobody looked at.
+//! elsewhere, and the corpus is here because a renderer's breadth is a claim the
+//! package makes and nothing else in the suite would notice if a diagram type
+//! stopped drawing.
 //!
-//! `SINDRI_BLESS=1` rewrites a golden instead of comparing it, which is the only
-//! way one moves: deliberately, in the commit that changed the drawing.
+//! The comparison is deliberately not byte for byte. `mermaid-rs-renderer` measures
+//! every label against the fonts installed on the machine (`fontdb`'s system load,
+//! which it offers no way to replace), so the same fence is a different SVG, with
+//! different widths and different wrapping, on a machine with different fonts: a
+//! golden of it is a golden of the box that blessed it. What travels with this
+//! binary is the font a *picture* is drawn in (ADR-0003), and that is the half the
+//! goldens can hold — so the drawing is proved here to exist, to be whole, and to
+//! measure, and its geometry goes back into a golden the day the renderer lets a
+//! font be supplied.
 //!
 //! An eval is judged by `make evals` and never by `make test`, which is why the
 //! test here is ignored: the stage that owns a failure is the stage that prints it.
 
 use std::path::{Path, PathBuf};
 
+use sindri::graphics::CellSize;
 use sindri::mermaid::{self, Block, Fence};
 
-/// Where the corpus of real fences lives: one file per fence, and the SVG the renderer
-/// answered with checked in beside it, because a rewrite of a renderer's layout is a
-/// deliberate change and never one nobody looked at (§16).
+/// Where the corpus of real fences lives: one `.mmd` file per fence, and nothing else,
+/// because there is no golden beside it any more.
 const CORPUS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/mermaid");
 
-/// The variable that rewrites a golden instead of comparing it. It is how the corpus was
-/// landed and how a deliberate change to it lands later; nothing else moves a golden.
-const BLESS: &str = "SINDRI_BLESS";
+/// How a refusal says the renderer was given the half a second `mermaid::BOUND` allows and
+/// was not finished: `Block::Refused` carries the sentence a caption prints and not the kind
+/// of refusal, so the sentence is what a starved render is recognised by.
+const STARVED: &str = "took longer than";
 
-/// The corpus, in name order, so two runs of the test compare the same fences.
+/// The corpus, in name order, so two runs of the test walk the same fences.
 fn corpus() -> Vec<PathBuf> {
     let mut fences: Vec<PathBuf> = std::fs::read_dir(CORPUS)
         .unwrap_or_else(|error| panic!("the corpus at {CORPUS} is readable: {error}"))
@@ -38,7 +46,7 @@ fn corpus() -> Vec<PathBuf> {
     fences
 }
 
-/// `fence.mmd` as a test names it, which is how a failure says which fence moved.
+/// `fence.mmd` as a test names it, which is how a failure says which fence it was.
 fn named(path: &Path) -> String {
     path.file_stem()
         .expect("a corpus file has a name")
@@ -46,31 +54,9 @@ fn named(path: &Path) -> String {
         .into_owned()
 }
 
-/// The first tag two goldens disagree on, with its number, because a diff nobody can
-/// read is a test nobody fixes: an SVG is one long line, so the unit a failure names is
-/// the tag.
-fn diff(accepted: &str, rendered: &str) -> String {
-    let mut ours = accepted.split_inclusive('>');
-    let mut theirs = rendered.split_inclusive('>');
-    let mut at = 0;
-    loop {
-        at += 1;
-        match (ours.next(), theirs.next()) {
-            (Some(left), Some(right)) if left == right => continue,
-            (left, right) => {
-                return format!(
-                    "at tag {at}: accepted {left:?}, rendered {right:?}",
-                    left = left.map(str::trim),
-                    right = right.map(str::trim)
-                );
-            }
-        }
-    }
-}
-
 #[test]
 #[ignore = "an eval is judged by `make evals`, not by `make test`"]
-fn the_corpus_of_real_fences_matches_the_svg_checked_in_beside_it() {
+fn every_fence_in_the_corpus_is_drawn_as_a_picture_that_measures() {
     let fences = corpus();
     assert!(
         fences.len() >= 10,
@@ -88,43 +74,78 @@ fn the_corpus_of_real_fences_matches_the_svg_checked_in_beside_it() {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
         let diagram = loop {
             match mermaid::block(&source, Fence::Closed) {
-                Block::Picture(diagram) => break diagram,
-                refused if std::time::Instant::now() > deadline => panic!(
-                    "{} is a fence the renderer draws; a corpus of refusals is a different \
-                     test, and this one said {refused:?}",
-                    named(path)
-                ),
-                _ => continue,
+                Block::Picture(diagram) => break Some(diagram),
+                // Only a render starved of a processor is tried again; a fence the renderer
+                // will not read fails now, in the renderer's own words, rather than after a
+                // deadline it was never going to beat.
+                Block::Refused { caption } if caption.contains(STARVED) => {
+                    if std::time::Instant::now() > deadline {
+                        failures.push(format!(
+                            "{}: still drawing after 20 s: {caption}",
+                            named(path)
+                        ));
+                        break None;
+                    }
+                }
+                Block::Refused { caption } => {
+                    failures.push(format!("{}: refused, and said: {caption}", named(path)));
+                    break None;
+                }
+                Block::Streaming => {
+                    failures.push(format!(
+                        "{}: a fence that closed is not still arriving",
+                        named(path)
+                    ));
+                    break None;
+                }
             }
         };
+        let Some(diagram) = diagram else { continue };
 
-        let accepted = path.with_extension("svg");
-        match std::fs::read_to_string(&accepted) {
-            _ if std::env::var_os(BLESS).is_some() => {
-                // A trailing newline and nothing else, so a golden is a text file a reader's
-                // editor and `git diff` both treat as one line of SVG.
-                let golden = format!("{}\n", diagram.svg());
-                std::fs::write(&accepted, golden)
-                    .unwrap_or_else(|error| panic!("{} is written: {error}", accepted.display()));
-            }
-            Ok(golden) if golden.trim_end_matches('\n') == diagram.svg() => {}
-            Ok(golden) => failures.push(format!(
-                "{}: {}",
+        let svg = diagram.svg();
+        if !svg.trim_start().starts_with("<svg") || !svg.trim_end().ends_with("</svg>") {
+            failures.push(format!(
+                "{}: the drawing is not a whole SVG: {}",
                 named(path),
-                diff(golden.trim_end_matches('\n'), diagram.svg())
+                head_and_tail(svg)
+            ));
+            continue;
+        }
+        match diagram.footprint(CellSize::NOMINAL) {
+            Ok(footprint) if footprint.cols() > 0 && footprint.rows() > 0 => {}
+            Ok(footprint) => failures.push(format!(
+                "{}: the drawing takes no cells at all: {} by {}",
+                named(path),
+                footprint.cols(),
+                footprint.rows()
             )),
-            Err(error) => failures.push(format!("{}: no golden: {error}", named(path))),
+            Err(refusal) => failures.push(format!(
+                "{}: the drawing is a picture nothing can measure: {}",
+                named(path),
+                refusal.message()
+            )),
         }
     }
 
     assert!(
         failures.is_empty(),
-        "the corpus renders as the SVG checked in beside it, or {BLESS}=1 is run to move a \
-         golden deliberately:\n{}",
+        "every fence in the corpus is drawn as a picture that measures:\n{}",
         failures.join("\n")
     );
     println!(
         "\ncheck: eval mermaid-corpus ... ok ({} fences)",
         fences.len()
     );
+}
+
+/// The beginning and the end of a drawing, so a failure says what the SVG actually was
+/// rather than printing a whole one.
+fn head_and_tail(svg: &str) -> String {
+    let head: String = svg.chars().take(60).collect();
+    let tail: String = {
+        let mut last: Vec<char> = svg.chars().rev().take(30).collect();
+        last.reverse();
+        last.into_iter().collect()
+    };
+    format!("{head:?} … {tail:?}")
 }

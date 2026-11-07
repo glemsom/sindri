@@ -157,10 +157,13 @@ _Avoid_: Snapshot (too general), screenshot, golden image
 
 **Eval**:
 An artefact held to a fact rather than to a sentence, and run as its own stage (§16): the bytes a
-wire sends, a record line with a secret planted in every field, and the SVG a mermaid fence drew are
-held byte for byte to the golden checked in beside the test, while the description `doctor` prints is
-held to the bytes the live `ToolSet` renders — computed, not checked in, so no blessing moves it. Its
-failure names the line or tag that moved, and it needs neither the network nor a terminal.
+wire sends and a record line with a secret planted in every field are held byte for byte to the
+golden checked in beside the test, while the description `doctor` prints is held to the bytes the
+live `ToolSet` renders — computed, not checked in, so no blessing moves it. The mermaid corpus is
+computed too, because the renderer measures its labels in the machine's own fonts: it is held to
+whether each fence draws, whether the drawing is a whole SVG, and whether it measures into cells. An
+eval's failure names the line, tag or fence that moved, and it needs neither the network nor a
+terminal.
 _Avoid_: Snapshot, golden test, benchmark
 
 **Picture**:

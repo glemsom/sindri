@@ -227,15 +227,16 @@ fn named(name: &str) -> View {
 ///
 /// The workspace is `tests/fixtures/pictures`, holding the tall drawing the answer names, so the
 /// block is measured from a file the frame really read and measured without a pixel spent on it;
-/// the refused source is a real diagram one directory above it, so the caption is the refusal
-/// this product gives rather than one made up for a fixture (#55, §12).
+/// the refused source is a real diagram one directory above it, kept there for this frame alone
+/// and not borrowed from the mermaid corpus, so the caption is the refusal this product gives
+/// rather than one made up for a fixture, and it does not move when the corpus does (#55, §12).
 fn pictured() -> View {
     let workspace = PathBuf::from(FIXTURES).join("pictures");
 
     let mut view = View::of(
         vec![answer(
             1,
-            "![a diagram outside the workspace](../mermaid/flowchart.svg)\n\n![a tall field]\
+            "![a diagram outside the workspace](../outside-the-workspace.svg)\n\n![a tall field]\
              (tall.svg)",
         )],
         // Far enough back that the band starts at the top of the answer, which is the row the
