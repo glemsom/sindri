@@ -1,0 +1,7 @@
+flowchart TD
+  A[Prompt] --> B{Needs a tool?}
+  B -->|yes| C[Call it]
+  B -->|no| D[Answer]
+  C --> E{Exit 0?}
+  E -->|yes| D
+  E -->|no| A

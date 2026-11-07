@@ -15,6 +15,11 @@
 //! from the room before a word is placed, never after. A row that ran over its width
 //! would be clipped by the paint and lost from whatever copies it.
 //!
+//! One construct is not drawn here at all. A mermaid fence is a picture (§12): its source
+//! goes to [`crate::mermaid`], which draws it or refuses with a reason, and this module draws
+//! the source with that reason under it — the words the block copies as, and what a reader
+//! sees when the picture cannot be placed over them.
+//!
 //! Two rules outlive any construct. A block still open when the text ends — a fence the
 //! wire is still streaming — is drawn as the block it opened, so a half-written code
 //! block is code and never prose that ate the rest of the answer (ADR-0008). And a
@@ -27,6 +32,7 @@ use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, T
 use syntect::parsing::{ParseState, Scope, ScopeStack, SyntaxSet};
 
 use crate::ink::{Face, Ink, Look};
+use crate::mermaid::{self, Fence};
 use crate::rows::{Row, glyphs, split_at};
 
 /// The turns of the parser §12's table asks for, and no others: a table is the one
@@ -47,8 +53,11 @@ pub fn rows(text: &str, cols: u16) -> Vec<Row> {
 pub fn rows_under(text: &str, cols: u16, reserve: u16) -> Vec<Row> {
     let mut room = Room::new(cols.max(1));
     room.reserve = usize::from(reserve);
-    for event in Parser::new_ext(text, OPTIONS) {
-        room.event(event);
+    // Each event is handed the source it came from: a fence's span is the block from its
+    // opening line to its last, which is how a mermaid fence knows whether its closing line
+    // has arrived or the wire is still writing it (§12, ADR-0008).
+    for (event, span) in Parser::new_ext(text, OPTIONS).into_offset_iter() {
+        room.event(event, &text[span]);
     }
     room.finish()
 }
@@ -139,6 +148,9 @@ struct Room {
     /// The code block in hand, while one is open: what carries the highlighter's parse
     /// from one line of it to the next.
     code: Option<Code>,
+    /// The mermaid fence in hand, while one is open: the source being read as a diagram
+    /// rather than as code, and whether its closing line has arrived.
+    mermaid: Option<Mermaid>,
     /// The table in hand, while one is open: read whole before a row of it is drawn,
     /// because a column is as wide as the widest cell the table holds.
     table: Option<Table>,
@@ -169,13 +181,15 @@ impl Room {
             blank: true,
             link: None,
             code: None,
+            mermaid: None,
             table: None,
             reserve: 0,
         }
     }
 
-    /// One event of the parse, drawn: the construct it opens, closes or is made of.
-    fn event(&mut self, event: Event) {
+    /// One event of the parse, drawn: the construct it opens, closes or is made of, with the
+    /// source it was read from when the event is a block and its own span says something.
+    fn event(&mut self, event: Event, span: &str) {
         match event {
             Event::Start(Tag::Paragraph) => self.gap(),
             Event::End(TagEnd::Paragraph) => self.flush_if_written(),
@@ -234,16 +248,15 @@ impl Room {
                     table.close_cell();
                 }
             }
-            Event::Start(Tag::CodeBlock(kind)) => self.open_code(kind),
-            Event::End(TagEnd::CodeBlock) => {
-                self.flush_if_written();
-                self.lead.pop();
-                self.code = None;
-            }
+            Event::Start(Tag::CodeBlock(kind)) => self.open_code(kind, span),
+            Event::End(TagEnd::CodeBlock) => self.close_code(),
             Event::Text(text) => match &mut self.code {
                 // Inside a block the text is code: its own lines, its own spacing, and
                 // the ink the highlighter gives each kind of word.
                 Some(code) => {
+                    if let Some(mermaid) = &mut self.mermaid {
+                        mermaid.source.push_str(&text);
+                    }
                     let lines = code.highlight(&text);
                     for runs in lines {
                         for (text, look) in runs {
@@ -436,7 +449,7 @@ impl Room {
     /// that carries from line to line (§12). A block whose language names no syntax
     /// definition is drawn plain and says nothing about it — an unknown language is the
     /// wire's business and never the run's error.
-    fn open_code(&mut self, kind: CodeBlockKind) {
+    fn open_code(&mut self, kind: CodeBlockKind, span: &str) {
         self.gap();
         self.lead.push((String::from("▏ "), Look::plain(Ink::Dim)));
         let tag = match kind {
@@ -448,6 +461,40 @@ impl Room {
             self.flush();
         }
         self.code = Some(Code::of(&tag));
+        // A mermaid fence is a picture and not code (§12): what is written here is kept so
+        // the drawing can be made when the block closes, and so the reason it could not be
+        // drawn can be printed under the source. The rows are drawn the same either way,
+        // because a diagram's block is what copies as its words and because the picture is
+        // placed over these rows by #55 and by nothing here — which is also why the drawing
+        // is made and dropped today, a render per layout of the fence, until the cache that
+        // keeps it by `(source, cols, rows)` arrives with that placement (ADR-0008).
+        if tag.split_whitespace().next() == Some("mermaid") {
+            let fence = match closed(span) {
+                true => Fence::Closed,
+                false => Fence::Streaming,
+            };
+            self.mermaid = Some(Mermaid {
+                source: String::new(),
+                fence,
+            });
+        }
+    }
+
+    /// A code block closes. A mermaid fence says what became of it — nothing, when it drew
+    /// or is still arriving, and one sentence under its source when it did not, because a
+    /// reader looking at a diagram that is not there cannot otherwise tell a fence they wrote
+    /// badly from a build that cannot draw it (§12, #54).
+    fn close_code(&mut self) {
+        self.flush_if_written();
+        if let Some(mermaid) = self.mermaid.take()
+            && let mermaid::Block::Refused { caption } =
+                mermaid::block(&mermaid.source, mermaid.fence)
+        {
+            self.place(&caption, Look::plain(Ink::Dim), false);
+            self.flush_if_written();
+        }
+        self.lead.pop();
+        self.code = None;
     }
 
     /// Glyphs placed at the end of the row in hand exactly as they were written, broken
@@ -583,6 +630,60 @@ impl Room {
             self.push(Row::blank());
         }
         self.rows
+    }
+}
+
+/// A mermaid fence in hand: the source it is being read as, and whether the wire has
+/// finished writing it.
+struct Mermaid {
+    /// The fence's own words, drawn on the screen and handed to the renderer.
+    source: String,
+    /// Whether the closing line has arrived. A fence still arriving is never rendered, so a
+    /// half-written diagram costs no pass and never flickers (ADR-0008).
+    fence: Fence,
+}
+
+/// Whether the closing line of a fenced block has arrived, read off the block `span` the
+/// parser handed over: the first line opens it with three or more backticks or tildes, and
+/// the last line closes it with a run of the same character, no shorter, and nothing but
+/// spaces after it. A block whose last line is content is one the wire is still writing.
+///
+/// The parse cannot be asked this: it closes the block at the end of the text it was given,
+/// so a fence still streaming and a fence that closed arrive as the same two events.
+fn closed(span: &str) -> bool {
+    let Some(open) = span.lines().next() else {
+        return false;
+    };
+    let Some(close) = span.lines().next_back() else {
+        return false;
+    };
+    let Some((marker, width, _)) = fence_line(open) else {
+        return false;
+    };
+    match fence_line(close) {
+        Some((last, run, tail)) => last == marker && run >= width && tail.trim().is_empty(),
+        None => false,
+    }
+}
+
+/// The fence `line` holds, as the character it is drawn with, how many of them it carries
+/// and what follows that run: `None` for a line that is not one, because it is indented more
+/// than the three columns a fence may be, or because its run is shorter than three.
+fn fence_line(line: &str) -> Option<(char, usize, &str)> {
+    let line = line.trim_end();
+    let indent = line.len() - line.trim_start_matches(' ').len();
+    if indent > 3 {
+        return None;
+    }
+    let body = &line[indent..];
+    let marker = body
+        .chars()
+        .next()
+        .filter(|glyph| *glyph == '`' || *glyph == '~')?;
+    let width = body.chars().take_while(|glyph| *glyph == marker).count();
+    match width {
+        0..=2 => None,
+        _ => Some((marker, width, &body[width..])),
     }
 }
 

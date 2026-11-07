@@ -278,6 +278,62 @@ fn a_fence_still_open_at_the_end_of_the_text_is_a_code_block() {
     );
 }
 
+/// §12's picture row, as far as a terminal without a placement can show it: a mermaid
+/// fence the renderer draws is drawn here as the code it was written as — the words its
+/// block copies as, and what a reader sees until ticket #55 lays the picture over them —
+/// with nothing under it, because there is nothing to say.
+#[test]
+fn a_mermaid_fence_that_draws_is_drawn_as_the_source_it_was_written_as() {
+    let rows = markdown::rows("```mermaid\nflowchart TD\n  A-->B\n```", 200);
+    assert_eq!(
+        drawn(&rows),
+        ["▏ mermaid", "▏ flowchart TD", "▏   A-->B"],
+        "a diagram is drawn as its source and says no reason, because nothing was refused"
+    );
+}
+
+/// #54's refusal row: a mermaid fence the renderer will not read shows its source with one
+/// sentence under it naming the reason, because a reader looking at a diagram that did not
+/// draw cannot otherwise tell a fence they wrote badly from a build that cannot draw it.
+#[test]
+fn a_mermaid_fence_that_will_not_draw_shows_its_source_under_the_reason() {
+    let rows = drawn(&markdown::rows("```mermaid\nnot a diagram\n```", 200));
+    assert_eq!(
+        rows[..2],
+        ["▏ mermaid", "▏ not a diagram"],
+        "the source is drawn as the block it was written as: {rows:?}"
+    );
+    let reason = rows[2].to_lowercase();
+    assert!(
+        reason.contains("could not be drawn") && reason.contains("diagram header"),
+        "the row under the source is the reason, in the renderer's own words: {rows:?}"
+    );
+}
+
+/// ADR-0008's rule on the picture side: a fence whose closing line has not arrived is not a
+/// diagram yet. The proof is the source itself — the same prose that comes back with a
+/// reason once the fence closes comes back with none while it is open, which is only
+/// possible if the renderer was never asked.
+#[test]
+fn a_mermaid_fence_still_streaming_names_no_reason_because_nothing_was_asked() {
+    let closed = drawn(&markdown::rows("```mermaid\nnot a diagram\n```", 200));
+    let open = drawn(&markdown::rows("```mermaid\nnot a diagram", 200));
+
+    assert!(
+        closed.iter().any(|row| row.contains("could not be drawn")),
+        "a closed fence that will not draw names its reason: {closed:?}"
+    );
+    assert!(
+        !open.iter().any(|row| row.contains("could not be drawn")),
+        "a fence still arriving is never a diagram, so no renderer was asked for one: {open:?}"
+    );
+    assert!(
+        open.iter().any(|row| row.contains("not a diagram")),
+        "and its source is drawn all the same, so the answer does not lose what was written: \
+         {open:?}"
+    );
+}
+
 /// §12's table row: `│` between the columns, a `─` rule under the header and no outer
 /// border, so a table reads as a block of the answer rather than as a box drawn around
 /// one.
