@@ -15,9 +15,9 @@
 //! prompt pastes what it is called, which is the whole of what a terminal can honestly hand
 //! out.
 //!
-//! What becomes pixels here is the file and nothing else: [`Picture::rasterise`] reads it and
-//! hands back the pixels of the cells it was measured into, or nothing when the file is not a
-//! picture after all. Where those pixels go is [`crate::pictures`], which places them on the
+//! What becomes pixels here is the picture itself and nothing else: [`Picture::rasterise`]
+//! hands back the pixels of the cells it was measured into, or nothing when what it was
+//! measured from is not a picture after all. Where those pixels go is [`crate::pictures`], which places them on the
 //! terminal, and [`Surface`] is the one value that says how big the cells are and whether this
 //! terminal places a picture at all.
 
@@ -80,34 +80,41 @@ impl Surface {
     }
 }
 
-/// A picture an answer pointed at, measured: the source as it was written, the file it
-/// resolved to, and the cells it takes at the width the band has.
+/// A picture an answer pointed at, measured: the words it is spoken of as, what draws it, and
+/// the cells it takes at the width the band has.
 ///
-/// The source is kept beside the path because the two answer different questions. The source
-/// is the words the answer wrote, which is what the reader marked and what a second answer
-/// writing the same words shares; the path is the file the pixels are read from (ADR-0008).
+/// The words are kept beside what draws the picture because the two answer different
+/// questions. The words are the source an answer wrote — the `src` of an image, the fence of a
+/// diagram — which is what a reader marked and what a second answer writing the same words
+/// shares; what draws it is the file or the drawing the pixels are made from (ADR-0008).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Picture {
-    /// The `src` as the answer wrote it, which is the first half of what a placement is kept
-    /// by.
+    /// The `src` as the answer wrote it, or the fence's own words, which is the first half of
+    /// what a placement is kept by.
     source: String,
-    /// The file it resolved to, which is what the pixels are made from.
-    path: PathBuf,
+    /// What the pixels are made from.
+    drawn: Drawn,
     /// The columns it takes in the band it was measured for.
     cols: u16,
     /// The rows it takes, which is how many rows of the transcript stand for it.
     rows: u16,
 }
 
+/// What a picture's pixels are made from.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Drawn {
+    /// A file inside the workspace: an SVG this crate draws itself, or a raster it decodes.
+    File(PathBuf),
+    /// The SVG a mermaid fence's source became, kept as the text it is (ADR-0003). Text rather
+    /// than a parsed drawing, because a picture is part of a row and a row is a value: it is
+    /// copied, compared and cached like any other, and the drawing is parsed when it is drawn.
+    Drawing(String),
+}
+
 impl Picture {
     /// The `src` as the answer wrote it.
     pub fn source(&self) -> &str {
         &self.source
-    }
-
-    /// The file the picture is drawn from.
-    pub fn path(&self) -> &Path {
-        &self.path
     }
 
     /// The columns this picture takes.
@@ -130,8 +137,8 @@ impl Picture {
     }
 
     /// The pixels of this picture at the cells it was measured into on `cell`, and nothing
-    /// when the file cannot be made a picture of after all: the file was there when it was
-    /// measured and a file can be gone by the time it is drawn.
+    /// when what it was measured from cannot be made a picture of after all: the file was
+    /// there when it was measured, and a file can be gone by the time it is drawn.
     ///
     /// A drawing is rendered at exactly the pixels of its footprint, so the terminal places
     /// what was measured and not a picture it then stretches. A raster is scaled to the same
@@ -140,19 +147,22 @@ impl Picture {
     /// letter in it.
     pub fn rasterise(&self, cell: CellSize) -> Option<image::RgbaImage> {
         let (width, height) = self.pixels(cell);
-        if is_svg(&self.path) {
-            let drawing = std::fs::read_to_string(&self.path).ok()?;
-            return Svg::parse(&drawing)
-                .ok()?
-                .rasterise_at((width, height))
-                .ok();
-        }
-        let picture = image::open(&self.path).ok()?;
-        Some(
-            picture
-                .resize_exact(width, height, image::imageops::FilterType::Triangle)
-                .to_rgba8(),
-        )
+        let drawing = match &self.drawn {
+            Drawn::Drawing(svg) => svg.clone(),
+            Drawn::File(path) if is_svg(path) => std::fs::read_to_string(path).ok()?,
+            Drawn::File(path) => {
+                let picture = image::open(path).ok()?;
+                return Some(
+                    picture
+                        .resize_exact(width, height, image::imageops::FilterType::Triangle)
+                        .to_rgba8(),
+                );
+            }
+        };
+        Svg::parse(&drawing)
+            .ok()?
+            .rasterise_at((width, height))
+            .ok()
     }
 }
 
@@ -175,11 +185,28 @@ pub fn words(source: &str, alt: &str) -> String {
 /// it can say why (§12).
 pub fn measure(source: &str, room: u16, surface: &Surface) -> Result<Picture, Refusal> {
     let path = resolve(source, surface.workspace())?;
-    let (width, height) = size(&path).map_err(|error| Refusal::Unreadable { reason: error })?;
+    of(source, Drawn::File(path), room, surface)
+}
+
+/// The picture a drawing of `svg` is, spoken of as `source`: a mermaid fence measured from the
+/// drawing its words became, and fitted into the band like any other picture (§12, ADR-0003).
+///
+/// Nothing is resolved and no path is read: the words are the fence's own and the drawing is
+/// already in hand, so the only refusal left is the one every picture can meet — a drawing with
+/// no extent at all.
+pub fn drawing(source: &str, svg: &str, room: u16, surface: &Surface) -> Result<Picture, Refusal> {
+    of(source, Drawn::Drawing(svg.to_owned()), room, surface)
+}
+
+/// The picture `source` names, drawn from `drawn` and measured into the cells it takes in a
+/// band `room` columns wide on `surface`: the one place a footprint is fitted, so a file and a
+/// drawing cannot be measured by two rules.
+fn of(source: &str, drawn: Drawn, room: u16, surface: &Surface) -> Result<Picture, Refusal> {
+    let (width, height) = extent(&drawn)?;
     let footprint = Footprint::fit(width, height, surface.cell(), room).map_err(Refusal::of)?;
     Ok(Picture {
         source: source.to_owned(),
-        path,
+        drawn,
         cols: footprint.cols(),
         rows: footprint.rows(),
     })
@@ -279,18 +306,31 @@ fn resolve(source: &str, workspace: Option<&Path>) -> Result<PathBuf, Refusal> {
     }
 }
 
-/// The extent `path` declares, in pixels: an SVG's own, which is measured with no pixel
+/// The extent `drawn` declares, in pixels: an SVG's own, which is measured with no pixel
 /// spent, or the extent a raster picture's header carries — read without decoding the picture,
 /// which is the half of "measured without pixels" that belongs to a file rather than to an
 /// SVG.
-fn size(path: &Path) -> Result<(u32, u32), String> {
-    if is_svg(path) {
-        let drawing = std::fs::read_to_string(path).map_err(|error| error.to_string())?;
-        return Svg::parse(&drawing)
-            .map(|svg| svg.size())
-            .map_err(|refusal| refusal.message());
+fn extent(drawn: &Drawn) -> Result<(u32, u32), Refusal> {
+    let unreadable = |reason: String| Refusal::Unreadable { reason };
+    match drawn {
+        Drawn::Drawing(svg) => measured(svg),
+        Drawn::File(path) if is_svg(path) => {
+            let svg =
+                std::fs::read_to_string(path).map_err(|error| unreadable(error.to_string()))?;
+            measured(&svg)
+        }
+        Drawn::File(path) => {
+            image::image_dimensions(path).map_err(|error| unreadable(error.to_string()))
+        }
     }
-    image::image_dimensions(path).map_err(|error| error.to_string())
+}
+
+/// The size the drawing `svg` declares, and the parser's own words when it is not a drawing.
+fn measured(svg: &str) -> Result<(u32, u32), Refusal> {
+    Svg::parse(svg)
+        .map(|drawing| drawing.size())
+        .map_err(|refusal| refusal.message())
+        .map_err(|reason| Refusal::Unreadable { reason })
 }
 
 /// Whether `path` is an SVG, which this crate draws itself rather than decodes as a raster:

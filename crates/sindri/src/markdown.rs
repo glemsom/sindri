@@ -517,28 +517,73 @@ impl Room {
                 true => Fence::Closed,
                 false => Fence::Streaming,
             };
+            // The block began on the row the language was written on when the fence carried
+            // one, and on the first row of the source when it did not.
+            let at = match tag.is_empty() {
+                true => self.rows.len(),
+                false => self.rows.len().saturating_sub(1),
+            };
             self.mermaid = Some(Mermaid {
                 source: String::new(),
                 fence,
+                at,
             });
         }
     }
 
-    /// A code block closes. A mermaid fence says what became of it — nothing, when it drew
-    /// or is still arriving, and one sentence under its source when it did not, because a
-    /// reader looking at a diagram that is not there cannot otherwise tell a fence they wrote
-    /// badly from a build that cannot draw it (§12, #54).
+    /// A code block closes. A mermaid fence says what became of it — a picture placed over the
+    /// source it stands on, nothing at all while it is still arriving, and one sentence under
+    /// its source when it did not draw — because a reader looking at a diagram that is not
+    /// there cannot otherwise tell a fence they wrote badly from a build that cannot draw it
+    /// (§12, #54).
+    ///
+    /// A terminal that places no picture is left the source, whole: the fence is still drawn
+    /// and still refused in words, and only the placement is what a terminal without the
+    /// protocol does without (§12, ADR-0003).
     fn close_code(&mut self) {
         self.flush_if_written();
-        if let Some(mermaid) = self.mermaid.take()
-            && let mermaid::Block::Refused { caption } =
-                mermaid::block(&mermaid.source, mermaid.fence)
-        {
-            self.place(&caption, Look::plain(Ink::Dim), false);
-            self.flush_if_written();
+        if let Some(mermaid) = self.mermaid.take() {
+            match mermaid::block(&mermaid.source, mermaid.fence) {
+                mermaid::Block::Refused { caption } => self.caption(&caption),
+                mermaid::Block::Picture(diagram) if self.surface.draws() => {
+                    let room = u16::try_from(self.room()).unwrap_or(u16::MAX);
+                    let measured =
+                        picture::drawing(diagram.source(), diagram.svg(), room, &self.surface);
+                    match measured {
+                        Ok(measured) => self.reserve(mermaid.at, &measured),
+                        Err(refusal) => self.caption(&refusal.message()),
+                    }
+                }
+                _ => {}
+            }
         }
         self.lead.pop();
         self.code = None;
+    }
+
+    /// The block a picture was measured into, from the row it opened on: the rows the block
+    /// already stands on, and as many more of its own gutter as the picture needs, so the
+    /// source a reader copies and the cells the picture is placed over are one height.
+    ///
+    /// The picture is the first row's, because that is where the block begins: what is placed
+    /// over a block starts at the top of it, and the words under the placement are what a copy
+    /// of the block takes (§12).
+    fn reserve(&mut self, at: usize, picture: &Picture) {
+        let height = at.saturating_add(usize::from(picture.rows()));
+        while self.rows.len() < height {
+            self.rows.push(Row::of(self.opening()));
+        }
+        if let Some(row) = self.rows.get_mut(at) {
+            *row = row.clone().pictured_over(picture.clone());
+        }
+    }
+
+    /// One sentence under the block in hand, in the ink a fact beside the prose is read in:
+    /// what a picture that is not there is said with, so a fence that vanished never reads as
+    /// a fence the writer never wrote (§12).
+    fn caption(&mut self, reason: &str) {
+        self.prose(reason, Look::plain(Ink::Dim));
+        self.flush_if_written();
     }
 
     /// Glyphs placed at the end of the row in hand exactly as they were written, broken
@@ -628,8 +673,7 @@ impl Room {
             Err(refusal) => {
                 self.prose(&words, look);
                 self.flush_if_written();
-                self.prose(&refusal.message(), look);
-                self.flush_if_written();
+                self.caption(&refusal.message());
             }
             Ok(_) if !self.surface.draws() => {
                 self.prose(&words, look);
@@ -754,14 +798,17 @@ impl Room {
     }
 }
 
-/// A mermaid fence in hand: the source it is being read as, and whether the wire has
-/// finished writing it.
+/// A mermaid fence in hand: the source it is being read as, whether the wire has finished
+/// writing it, and where in the answer its block began.
 struct Mermaid {
     /// The fence's own words, drawn on the screen and handed to the renderer.
     source: String,
     /// Whether the closing line has arrived. A fence still arriving is never rendered, so a
     /// half-written diagram costs no pass and never flickers (ADR-0008).
     fence: Fence,
+    /// The row the block opened on, which is the row its picture is placed over: the words
+    /// under it are the source a reader copies and the block its height is reserved for (§12).
+    at: usize,
 }
 
 /// Whether the closing line of a fenced block has arrived, read off the block `span` the

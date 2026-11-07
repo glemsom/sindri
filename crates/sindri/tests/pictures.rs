@@ -681,3 +681,92 @@ fn a_terminal_that_names_itself_as_one_that_places_pictures_is_told_so() {
         );
     }
 }
+
+/// §12's other picture, and the one the milestone is judged on: a mermaid fence that draws is
+/// a diagram, and the diagram is placed over the source its block stands on — the source being
+/// what the block copies as, and what a reader whose terminal places no picture is left with
+/// (ADR-0003).
+#[test]
+fn a_mermaid_fence_that_draws_is_a_block_the_diagram_is_placed_over() {
+    let (_root, workspace) = workspace(40, 40);
+    let rows = markdown::rows_on(
+        "```mermaid\nflowchart TD\n  A-->B\n```",
+        200,
+        0,
+        &surface(&workspace),
+    );
+    let at = rows
+        .iter()
+        .position(|row| row.picture().is_some())
+        .expect("the diagram is the picture of its block");
+    let diagram = rows[at].picture().expect("the picture of that row");
+
+    assert_eq!(
+        rows[at].glyphs(),
+        "▏ mermaid",
+        "the block's first row is the one it opened with, and the picture is placed over it"
+    );
+    assert_eq!(
+        rows[at + 1].glyphs(),
+        "▏ flowchart TD",
+        "and the fence's own words stand under it, whole"
+    );
+    assert!(
+        rows.len() >= at + usize::from(diagram.rows()),
+        "the block is as tall as the picture placed over it: {} rows of the answer, {} of the \
+         picture",
+        rows.len() - at,
+        diagram.rows()
+    );
+}
+
+/// ADR-0008's rule, held from the other side: a fence whose closing line has not arrived is
+/// not a diagram, so nothing is measured for it and no cell is claimed by a picture that does
+/// not exist yet.
+#[test]
+fn a_mermaid_fence_still_streaming_claims_no_cells_for_a_picture() {
+    let (_root, workspace) = workspace(40, 40);
+
+    let rows = markdown::rows_on(
+        "```mermaid\nflowchart TD\n  A-->B",
+        200,
+        0,
+        &surface(&workspace),
+    );
+
+    assert!(
+        rows.iter().all(|row| row.picture().is_none()),
+        "a fence still being written is the code block it opened and never a picture: {:?}",
+        rows.iter().map(Row::glyphs).collect::<Vec<_>>()
+    );
+    assert!(
+        rows.iter().any(|row| row.glyphs().contains("A-->B")),
+        "and its source is drawn all the same, so the answer loses nothing that was written"
+    );
+}
+
+/// The two pictures a frame draws are placed and kept apart: a diagram and an image in one
+/// answer are two cache entries, each drawn where its own block is, and neither is mistaken for
+/// the other by the cells it takes.
+#[test]
+fn a_diagram_and_an_image_in_one_answer_are_placed_each_over_its_own_block() {
+    let (_root, workspace) = workspace(400, 200);
+    let mut view = frame(
+        &workspace,
+        "![a purple field](shot.png)\n\n```mermaid\nflowchart TD\n  A-->B\n```",
+        true,
+    );
+
+    let painted = painted_at(&mut view, SCREEN);
+
+    assert!(
+        pictured_rows(&painted).len() >= 10,
+        "both pictures are on the screen: {:?}",
+        pictured_rows(&painted)
+    );
+    assert_eq!(
+        transmissions(&painted),
+        2,
+        "and each was transmitted once, from its own first cell"
+    );
+}
