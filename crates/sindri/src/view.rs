@@ -43,6 +43,11 @@
 //! the highlight a reader sees on this frame and the words `Ctrl-Y` hands the terminal are
 //! one value and cannot disagree (§12). Each paints into a band of this frame and changes
 //! its fixture deliberately in the commit that changes it.
+//!
+//! The footer's row is the one piece of chrome §57 gives an order of its own: the hints in
+//! survival order, the count a frame's width is owed, and any that the row has no room for
+//! dropped whole rather than cut — so a narrow frame says less and never a part of
+//! something.
 
 use std::path::PathBuf;
 
@@ -64,13 +69,33 @@ use crate::rows::{Rows, Scroll};
 use crate::settings::Settings;
 use crate::stream::Stream;
 
-/// The hints §12 never takes away, whichever way the frame narrows: the key that sends
-/// a prompt and the key that says which keys there are.
-const FLOOR_HINTS: [(&str, Ink); 3] = [
-    ("Enter send", Ink::Muted),
-    (" · ", Ink::Dim),
-    ("? keys", Ink::Muted),
+/// §12's hints in survival order, most valuable first — the order a narrower footer gives
+/// them up in, from the end (#57). The last one is the table's and no width the table
+/// names draws it; it is here because the order is the contract, and an order with its
+/// tail shaved off could not be extended without renumbering.
+const HINTS: [&str; 8] = [
+    "Enter send",
+    "? keys",
+    "Ctrl-C cancel",
+    "Ctrl-Q quit",
+    "/ commands",
+    "@ files",
+    "↑ queue",
+    "Shift+Enter newline",
 ];
+
+/// What lies between two hints on the footer's row: one gap, in `dim`, the same one the
+/// rail puts between its facts.
+const GAP: &str = " · ";
+
+/// §57's table as the widths it turns at and the hints a footer holds from each, widest
+/// first: seven from a hundred and twenty columns, five from a hundred.
+const STEPS: [(u16, usize); 2] = [(120, 7), (100, 5)];
+
+/// The hints §12 never takes away, whichever way the frame narrows: the key that sends a
+/// prompt and the key that says which keys there are. The first two of `HINTS`, held at
+/// every width and given up last.
+const FLOOR: usize = 2;
 
 /// The hairline a draft is typed under: one glyph, so the composer's top edge is a row
 /// of them, drawn in `dim` because it is a fact about the frame rather than a thing said.
@@ -166,7 +191,7 @@ pub struct View {
 impl View {
     /// The frame a launch opens on: the screen has just been taken, no run has started
     /// and nothing has been typed, so the transcript is empty, the composer shows its
-    /// hairline over one empty row and the footer shows the hints never given up.
+    /// hairline over one empty row and the footer shows the hints its width is owed.
     pub fn boot() -> View {
         View::default()
     }
@@ -868,11 +893,17 @@ impl View {
         cut_row(buffer, screen_band(area), y, &[(refusal, Ink::Err)]);
     }
 
-    /// The footer: the hints §12 keeps at every width, on the bottom edge. The five
-    /// more a 120-column frame shows are the chrome's ticket; these three spans are the
-    /// floor it degrades to, so the golden frame holds what no width can take away.
+    /// The footer: the hints §12's table gives a frame this wide, on the bottom edge, in
+    /// survival order and separated by one gap.
     fn footer(&self, area: Rect, buffer: &mut Buffer) {
-        write(buffer, area, &FLOOR_HINTS);
+        let mut spans: Vec<(&str, Ink)> = Vec::new();
+        for (index, hint) in kept(area.width).into_iter().enumerate() {
+            if index > 0 {
+                spans.push((GAP, Ink::Dim));
+            }
+            spans.push((hint, Ink::Muted));
+        }
+        write(buffer, area, &spans);
     }
 }
 
@@ -1001,6 +1032,39 @@ fn cut_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)]) {
     }
 }
 
+/// The hints a footer `width` columns wide draws, in survival order: as many as §57's
+/// table names for that width, and none the row has no room for.
+///
+/// The two rules cut in one direction. The table decides how many hints a width is owed;
+/// the row decides whether the next of them fits, counted with the gap that introduces it
+/// so a hint that goes never leaves its gap behind. A hint that does not fit ends the row
+/// rather than being skipped for a shorter one further down the order: a footer that
+/// dropped `Ctrl-C cancel` to keep `@ files` would have given a key up in the wrong
+/// direction, and the order is the whole of what the table says.
+fn kept(width: u16) -> Vec<&'static str> {
+    let gap = GAP.chars().count();
+    let mut kept: Vec<&'static str> = Vec::new();
+    let mut taken = 0;
+    for hint in HINTS.iter().take(wanted(width)) {
+        let room = hint.chars().count() + if kept.is_empty() { 0 } else { gap };
+        if taken + room > usize::from(width) {
+            break;
+        }
+        taken += room;
+        kept.push(hint);
+    }
+    kept
+}
+
+/// How many hints §57's table owes a footer `width` columns wide: seven from a hundred and
+/// twenty, five from a hundred, and never fewer than the two §12 never takes away.
+fn wanted(width: u16) -> usize {
+    STEPS
+        .iter()
+        .find(|(from, _)| width >= *from)
+        .map_or(FLOOR, |(_, hints)| *hints)
+}
+
 /// Writes spans of text across a row from its left edge, each in its own ink, and never
 /// half of one: §12 gives a hint up whole or not at all, so a span that would not fit in
 /// what is left of the row is not drawn rather than cut.
@@ -1037,6 +1101,112 @@ mod tests {
             width: cols,
             height: rows,
         }
+    }
+
+    /// The footer's row of a frame `cols` wide and `rows` tall, painted through the same
+    /// `paint` the terminal is handed: the bottom row of the screen, read back as the
+    /// glyphs a reader sees.
+    fn footer(cols: u16, rows: u16) -> String {
+        let mut view = View::boot();
+        let area = screen(cols, rows);
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+        let y = area.bottom() - 1;
+        (area.x..area.right())
+            .map(|x| buffer.cell((x, y)).expect("a cell of the frame").symbol())
+            .collect()
+    }
+
+    #[test]
+    fn a_hundred_and_twenty_columns_hold_the_seven_hints_the_table_names() {
+        assert_eq!(
+            footer(120, 24).trim_end(),
+            "Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · / commands · @ files · ↑ queue",
+            "§57's table gives a 120-column footer seven hints, in survival order and \
+             separated by one gap"
+        );
+    }
+
+    #[test]
+    fn five_hints_are_kept_from_a_hundred_columns_and_ninety_nine_keeps_two() {
+        assert_eq!(
+            footer(100, 24).trim_end(),
+            "Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · / commands",
+            "a hundred columns is the narrowest frame §57 gives five hints, so the two \
+             that go are the queue's and the picker's"
+        );
+        assert_eq!(
+            footer(99, 24).trim_end(),
+            "Enter send · ? keys",
+            "one column under it and the footer is back to the two the floor holds"
+        );
+    }
+
+    #[test]
+    fn sixty_columns_keep_the_two_hints_no_width_takes_away() {
+        assert_eq!(
+            footer(60, 24).trim_end(),
+            "Enter send · ? keys",
+            "the floor is the floor at sixty columns as it is at ninety-nine"
+        );
+    }
+
+    #[test]
+    fn no_hint_is_cut_mid_word_at_any_width_between_twenty_and_two_hundred() {
+        for width in 20..=200u16 {
+            let drawn = footer(width, 24);
+            let row = drawn.trim_end();
+            let parts: Vec<&str> = if row.is_empty() {
+                Vec::new()
+            } else {
+                row.split(GAP).collect()
+            };
+
+            // What the row says, read back as hints: every one of them is a hint of the
+            // table and they are the table's from the front — so a row that stopped in the
+            // middle of a word would fail here as a part no hint is called, and a hint
+            // drawn in the wrong place would fail as the table's wrong hint.
+            assert_eq!(
+                parts.as_slice(),
+                &HINTS[..parts.len()],
+                "at {width} columns the footer reads {row:?}, which is not a run of whole \
+                 hints from the front of the table"
+            );
+        }
+    }
+
+    #[test]
+    fn the_first_two_hints_are_drawn_at_every_width_from_twenty_columns() {
+        for width in 20..=200u16 {
+            let row = footer(width, 24);
+            let hints: Vec<&str> = row.trim_end().split(GAP).collect();
+
+            assert_eq!(
+                hints.get(..FLOOR),
+                Some(&HINTS[..FLOOR]),
+                "at {width} columns the footer reads {:?}: the two hints §12 never takes \
+                 away are drawn whole at every width, and 60 is not a special case of that",
+                row.trim_end()
+            );
+        }
+    }
+
+    #[test]
+    fn a_hint_the_row_has_no_room_for_is_not_drawn_at_all() {
+        // Under twenty columns — narrower than any frame §57's sweep covers — the floor
+        // and the row disagree about `? keys`, and the row wins: a hint is whole or it is
+        // not drawn. The gap the hint would have been introduced by goes with it, so the
+        // row never ends on a separator that separates nothing.
+        assert_eq!(
+            footer(15, 24).trim_end(),
+            "Enter send",
+            "fifteen columns hold the first hint and neither the gap nor the second"
+        );
+        assert_eq!(
+            footer(8, 24).trim_end(),
+            "",
+            "eight columns hold no hint at all, which is what the floor gives way to"
+        );
     }
 
     #[test]

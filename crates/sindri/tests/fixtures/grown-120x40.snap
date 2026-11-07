@@ -42,4 +42,4 @@ grown at 120x40
 36 |patch the test disagrees with. Keep it to                                                                               | plain:120
 37 |one sentence and quote the line you mean,                                                                               | plain:120
 38 |the way the report does.                                                                                                | plain:120
-39 |Enter send · ? keys                                                                                                     | muted:10 dim:3 muted:6 plain:101
+39 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · / commands · @ files · ↑ queue                                      | muted:10 dim:3 muted:6 dim:3 muted:13 dim:3 muted:11 dim:3 muted:10 dim:3 muted:7 dim:3 muted:7 plain:38

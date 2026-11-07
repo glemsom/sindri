@@ -163,6 +163,11 @@ fn named(name: &str) -> View {
         // The same screen after a value it will not take: the refusal under the list,
         // naming the key that has to change, and no file written (§11, ticket #49).
         "settings-refused" => refused(),
+        // The footer's hints at the six widths #57 freezes: the frame a launch opens on,
+        // drawn short so the one row that carries words is the bottom one, and the same
+        // frame at every width so what the eye approves between two pictures is the hints
+        // that went and nothing else (ticket #57, §12).
+        "footer" => View::boot(),
         // A drag over the transcript: the cells a reader has marked, painted in the ink
         // a selection is read in, and the very cells `Ctrl-Y` hands out (#50).
         "mark" => {

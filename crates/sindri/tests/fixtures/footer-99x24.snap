@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+footer at 99x24
+00 |                                                                                                   | plain:99
+01 |                                                                                                   | plain:99
+02 |                                                                                                   | plain:99
+03 |                                                                                                   | plain:99
+04 |                                                                                                   | plain:99
+05 |                                                                                                   | plain:99
+06 |                                                                                                   | plain:99
+07 |                                                                                                   | plain:99
+08 |                                                                                                   | plain:99
+09 |                                                                                                   | plain:99
+10 |                                                                                                   | plain:99
+11 |                                                                                                   | plain:99
+12 |                                                                                                   | plain:99
+13 |                                                                                                   | plain:99
+14 |                                                                                                   | plain:99
+15 |                                                                                                   | plain:99
+16 |                                                                                                   | plain:99
+17 |                                                                                                   | plain:99
+18 |                                                                                                   | plain:99
+19 |                                                                                                   | plain:99
+20 |                                                                                                   | plain:99
+21 |───────────────────────────────────────────────────────────────────────────────────────────────────| dim:99
+22 |                                                                                                   | plain:99
+23 |Enter send · ? keys                                                                                | muted:10 dim:3 muted:6 plain:80
