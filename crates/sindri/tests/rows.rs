@@ -1,7 +1,7 @@
-//! The transcript's cache of rows, held to its three promises through the seams a
-//! later ticket will spend: a width change reflows once, a scroll across a long
-//! history re-lays nothing, and an entry the window never reaches is never laid out
-//! at all (§12, ADR-0008).
+//! The transcript's cache of rows, held to its promises through the seams a later
+//! ticket will spend: a width change reflows once, a surface a picture is measured
+//! against reflows once the same way, a scroll across a long history re-lays nothing,
+//! and an entry the window never reaches is never laid out at all (§12, ADR-0008).
 //!
 //! Every assertion here counts layouts through the cache's own `lays`, because the
 //! promises are about how often layout happens and not about the shape of the code
@@ -13,7 +13,9 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
+use sindri::graphics::CellSize;
 use sindri::ink::{Ink, Look};
+use sindri::picture::Surface;
 use sindri::pulse::Pulse;
 use sindri::rows::{Row, Rows, Scroll, Window, layout};
 use sindri::stream::Stream;
@@ -115,6 +117,73 @@ fn a_width_change_invalidates_the_cache_and_reflows_once() {
     rows.resize(80);
     let restored = rows.window(Scroll::Tail, 6).pieces().len();
     assert_eq!(rows.lays(), shown + reflowed + restored);
+}
+
+/// ADR-0008's rule for a picture, from the cache's own side: how many rows a picture takes
+/// is part of the rows an entry was laid out as, so a surface that changed re-lays what the
+/// window shows — once — and the rows it lays are the diagram's block, taller than the fence
+/// it stands on. A surface that changed nothing drops nothing, which is what keeps a paint
+/// from re-laying the band at every frame.
+#[test]
+fn a_surface_that_changed_relays_the_band_once_and_one_that_did_not_relays_nothing() {
+    let mut rows = Rows::new();
+    rows.push(Entry::Assistant {
+        turn: 1,
+        text: SecretSet::default().redact("```mermaid\nflowchart TD\n  A-->B\n```"),
+    });
+    rows.resize(80);
+    rows.window(Scroll::Tail, 10);
+
+    let words = rows.rows(0).len();
+    assert_eq!(
+        rows.lays(),
+        1,
+        "the fence is laid out once, at the width the band draws it at"
+    );
+    assert!(
+        rows.rows(0).iter().all(|row| row.picture().is_none()),
+        "and a terminal that places no picture is given the fence as the code it is"
+    );
+
+    rows.retune(Surface::none());
+    rows.window(Scroll::Tail, 10);
+    assert_eq!(
+        rows.lays(),
+        1,
+        "a surface that changed nothing drops no row and lays none out again"
+    );
+
+    rows.retune(Surface::of(None, CellSize::new(10, 20), true));
+    rows.window(Scroll::Tail, 10);
+    assert_eq!(
+        rows.lays(),
+        2,
+        "a surface that changed drops what the cache held and lays the band out once"
+    );
+
+    let picture = rows
+        .rows(0)
+        .iter()
+        .find_map(|row| row.picture())
+        .map(|picture| picture.rows());
+    let block = rows.rows(0).len();
+    let picture = picture.expect("the fence is a diagram on a terminal that places pictures");
+    assert!(
+        block >= usize::from(picture),
+        "and the rows laid are the diagram's block, as tall as the picture placed over it: \
+         {block} rows of the answer, {picture} of the picture"
+    );
+    assert!(
+        block >= words,
+        "which is the taller of the two: the fence's own {words} rows are under the picture"
+    );
+
+    rows.rows(0);
+    assert_eq!(
+        rows.lays(),
+        2,
+        "and reading the rows back after it costs no third layout"
+    );
 }
 
 /// Two hundred and sixty turns scrolled from the tail to the head and back: every
