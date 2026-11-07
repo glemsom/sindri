@@ -13,16 +13,16 @@ keys at 120x40
 07 |  Shift+Enter, Ctrl-J  a line break in the draft                                                                        | plain:2 muted:21 plain:97
 08 |  ↑                    the newest queued prompt, or the line above                                                      | plain:2 muted:21 plain:97
 09 |  ↓                    the line below                                                                                   | plain:2 muted:21 plain:97
-10 |  ←                    a glyph left                                                                                     | plain:2 muted:21 plain:97
-11 |  →                    a glyph right                                                                                    | plain:2 muted:21 plain:97
-12 |  Home                 the start of the line                                                                            | plain:2 muted:21 plain:97
-13 |  End                  the end of the line                                                                              | plain:2 muted:21 plain:97
-14 |  Backspace            erase the glyph before the caret                                                                 | plain:2 muted:21 plain:97
-15 |  Ctrl-C               cancel the run, or clear the draft                                                               | plain:2 muted:21 plain:97
-16 |  Ctrl-Q               quit                                                                                             | plain:2 muted:21 plain:97
-17 |                                                                                                                        | plain:120
-18 |                                                                                                                        | plain:120
-19 |                                                                                                                        | plain:120
+10 |  Shift+↓              grow the mark a row down                                                                         | plain:2 muted:21 plain:97
+11 |  Shift+↑              grow the mark a row up                                                                           | plain:2 muted:21 plain:97
+12 |  ←                    a glyph left                                                                                     | plain:2 muted:21 plain:97
+13 |  →                    a glyph right                                                                                    | plain:2 muted:21 plain:97
+14 |  Home                 the start of the line                                                                            | plain:2 muted:21 plain:97
+15 |  End                  the end of the line                                                                              | plain:2 muted:21 plain:97
+16 |  Ctrl-Y               copy the mark, or the last answer                                                                | plain:2 muted:21 plain:97
+17 |  Backspace            erase the glyph before the caret                                                                 | plain:2 muted:21 plain:97
+18 |  Ctrl-C               cancel the run, or clear the draft                                                               | plain:2 muted:21 plain:97
+19 |  Ctrl-Q               quit                                                                                             | plain:2 muted:21 plain:97
 20 |                                                                                                                        | plain:120
 21 |                                                                                                                        | plain:120
 22 |                                                                                                                        | plain:120

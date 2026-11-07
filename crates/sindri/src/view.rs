@@ -23,10 +23,14 @@
 //! turn it is still in, and this file is the sink the wire's fragments land in. The
 //! composer's band is painted from the `Composer` it is handed, and the rows the box
 //! takes are the `Composer`'s to decide: this file asks rather than counts (#41). The
-//! rail's ledger and its 32 columns are ticket #46's, the pulse is #39's, and marking
-//! and copy are #50's. Each paints into a band of this frame — or, in the rail's case,
-//! into the split this file does not yet make — and changes its fixture deliberately in
-//! the commit that changes it.
+//! rail's ledger and its 32 columns are ticket #46's and the pulse is #39's. Each paints
+//! into a band of this frame — or, in the rail's case, into the split this file does not
+//! yet make — and changes its fixture deliberately in the commit that changes it.
+//!
+//! The mark is this file's too, and it is painted from the span `mark` hands out (#50):
+//! every paint lays the transcript's rows out, gathers the lines they are drawn as, and
+//! keeps the span the drag covers — so the highlight a reader sees on this frame and the
+//! words `Ctrl-Y` hands the terminal are one value and cannot disagree (§12).
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -36,6 +40,7 @@ use sindri_core::records::Entry;
 use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, State};
 use crate::ink::Ink;
 use crate::keys::{Act, Mode, Stack};
+use crate::mark::{Cell, Mark, Span};
 use crate::rows::{Rows, Scroll};
 use crate::stream::Stream;
 
@@ -82,6 +87,13 @@ pub struct View {
     /// The modes this frame is in, the composer at the base and any screen opened over
     /// it: what answers a key and, while a screen is up, the whole of what is painted.
     stack: Stack,
+    /// The mark a drag has left, if one has: two corners of the band, kept so that a
+    /// redraw keeps the highlight and `Ctrl-Y` copies again with no fresh selection
+    /// (§12, #50).
+    mark: Option<Mark>,
+    /// The span the last paint drew the highlight from, and the very cells and
+    /// words `Ctrl-Y` hands out: the picture and the copy are one value (§12, #50).
+    marked: Span,
 }
 
 impl View {
@@ -106,6 +118,8 @@ impl View {
             composer: Composer::new(),
             stream: Stream::new(),
             stack: Stack::new(),
+            mark: None,
+            marked: Span::default(),
         }
     }
 
@@ -157,9 +171,61 @@ impl View {
         match act {
             Act::Draft => self.composer.key(key),
             Act::Up => self.up(),
+            Act::Copy => self.copy(),
+            Act::ExtendDown => self.extend(true),
+            Act::ExtendUp => self.extend(false),
             Act::Keys => self.keys(key),
             Act::Close => self.close(),
         }
+    }
+
+    /// A drag over the transcript band, from the cell it began on to the cell it has been
+    /// dragged to: the mark a reader's pointer leaves, which the next paint draws and
+    /// `Ctrl-Y` hands out (§12, #50). A second drag replaces it, because a reader marking
+    /// a new run of words has stopped meaning the old one.
+    pub fn drag(&mut self, anchor: Cell, head: Cell) {
+        self.mark = Some(Mark::drag(anchor, head));
+    }
+
+    /// The mark this frame holds, if the reader has dragged one out: the two corners a
+    /// drag left behind, which outlive the paint that drew them.
+    pub fn mark(&self) -> Option<Mark> {
+        self.mark
+    }
+
+    /// `Ctrl-Y`: the words the mark covers leave the frame, or the newest answer does when
+    /// nothing is marked (§12, #50).
+    ///
+    /// What leaves is the span the last paint drew the highlight from — the very cells a
+    /// reader saw marked — so a copy is never a second reading of the drag that could
+    /// disagree with the picture. A key that moves the mark answers `Outcome::Edited`, and
+    /// the paint that follows is where the span is refigured: the two readings are one
+    /// value, one paint apart at the most.
+    fn copy(&self) -> Outcome {
+        if !self.marked.is_empty() {
+            return Outcome::Copy(self.marked.text());
+        }
+        match self.rows.last_answer() {
+            Some(answer) => Outcome::Copy(answer),
+            // A frame with nothing marked and no answer behind it has nothing to hand
+            // out, and a copy of nothing is not a frame that changed.
+            None => Outcome::Unchanged,
+        }
+    }
+
+    /// `Shift+↓` and `Shift+↑`: the mark grows a whole row down the transcript, or gives
+    /// one back (§12, #50). A mark grows by rows and never by cells, and the anchor stays
+    /// where the drag began; with no mark there is nothing to grow and nothing is painted.
+    fn extend(&mut self, down: bool) -> Outcome {
+        let Some(mark) = self.mark else {
+            return Outcome::Unchanged;
+        };
+        let grown = mark.grown(down);
+        if grown == mark {
+            return Outcome::Unchanged;
+        }
+        self.mark = Some(grown);
+        Outcome::Edited
     }
 
     /// `?`: the screen that lists the keys in force.
@@ -254,6 +320,7 @@ impl View {
         self.rows.live(&self.stream);
         let window = self.rows.window(self.scroll, area.height);
         let mut y = area.y;
+        let mut lines = Vec::new();
         for piece in window.pieces() {
             let rows = self.rows.rows(piece.entry);
             let first = usize::from(piece.skip);
@@ -266,7 +333,38 @@ impl View {
                     },
                     buffer,
                 );
+                // The band's rows are what a mark's cells are counted in, so the lines
+                // they are drawn as are gathered only when there is a mark to read.
+                if self.mark.is_some() {
+                    lines.push(row.glyphs());
+                }
                 y += 1;
+            }
+        }
+        self.marked = match self.mark {
+            Some(mark) => Span::of(mark, &lines),
+            None => Span::default(),
+        };
+        self.highlight(area, buffer);
+    }
+
+    /// Paints the mark over the rows it covers, in the ink a reader's selection is read
+    /// in: the cells of the span `Ctrl-Y` hands out, so what is marked is what leaves
+    /// (§12, #50).
+    fn highlight(&self, area: Rect, buffer: &mut Buffer) {
+        for marked in self.marked.rows() {
+            let Some(y) = area.y.checked_add(marked.row()) else {
+                continue;
+            };
+            if y >= area.bottom() {
+                continue;
+            }
+            let left = area.x.saturating_add(marked.left());
+            let right = left.saturating_add(marked.width()).min(area.right());
+            for x in left..right {
+                if let Some(cell) = buffer.cell_mut((x, y)) {
+                    cell.set_style(Ink::Mark.style());
+                }
             }
         }
     }

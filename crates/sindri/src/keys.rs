@@ -75,6 +75,13 @@ pub enum Act {
     /// `↑`, one key with two homes: the queue's newest prompt on the composer's first
     /// line, the row above the caret anywhere else (A9).
     Up,
+    /// `Ctrl-Y`: the words the mark covers leave the frame, or the newest answer does
+    /// when nothing is marked (§12).
+    Copy,
+    /// `Shift+↓`: the mark grows a whole row down the transcript (§12).
+    ExtendDown,
+    /// `Shift+↑`: the mark gives a whole row of itself back (§12).
+    ExtendUp,
     /// `?`: the screen that lists the keys in force.
     Keys,
     /// `Esc`: the screen on top closes and the mode under it has the keys again.
@@ -97,9 +104,10 @@ pub struct Binding {
 /// The draft's keys, in the order the `?` screen lists them: the ones a prompt is typed
 /// and sent with first, then the caret's, then the two keys that end things.
 ///
-/// Every row here but three is `Act::Draft`: the composer's map is where a text box's
-/// rules are, and this table is what that means as a list a reader can read.
-const COMPOSER: [Binding; 12] = [
+/// Every row here but the ones carrying a rule of the frame's — `?`, `↑`, the two shift
+/// arrows and `Ctrl-Y` — is `Act::Draft`: the composer's map is where a text box's rules
+/// are, and this table is what that means as a list a reader can read.
+const COMPOSER: [Binding; 15] = [
     Binding {
         key: Key::Char('?'),
         name: "?",
@@ -131,6 +139,18 @@ const COMPOSER: [Binding; 12] = [
         act: Act::Draft,
     },
     Binding {
+        key: Key::ShiftDown,
+        name: "Shift+↓",
+        does: "grow the mark a row down",
+        act: Act::ExtendDown,
+    },
+    Binding {
+        key: Key::ShiftUp,
+        name: "Shift+↑",
+        does: "grow the mark a row up",
+        act: Act::ExtendUp,
+    },
+    Binding {
         key: Key::Left,
         name: "←",
         does: "a glyph left",
@@ -153,6 +173,12 @@ const COMPOSER: [Binding; 12] = [
         name: "End",
         does: "the end of the line",
         act: Act::Draft,
+    },
+    Binding {
+        key: Key::Copy,
+        name: "Ctrl-Y",
+        does: "copy the mark, or the last answer",
+        act: Act::Copy,
     },
     Binding {
         key: Key::Backspace,

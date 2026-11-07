@@ -36,6 +36,11 @@ fn calls_120x40_is_a_call_settled_four_ways() {
 }
 
 #[test]
+fn mark_120x40_is_a_drag_over_the_transcript_it_covers() {
+    fixture::assert_frame("mark", 120, 40);
+}
+
+#[test]
 fn keys_120x40_lists_the_keys_of_the_stack_it_sits_on() {
     fixture::assert_frame("keys", 120, 40);
 }
