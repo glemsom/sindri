@@ -397,14 +397,20 @@ pub enum Exit {
     Signalled,
     /// The per-call timeout ran out and the command was killed (§4).
     TimedOut,
-    /// The user's word arrived before the call ran, so it never did (§4).
+    /// The user's word stopped the call: before it ran, so it never did, or while
+    /// it ran, so the command and everything it started were killed (§4).
     Cancelled,
 }
 
 impl Exit {
-    /// The verdict a command's own [`Outcome`] states: the timeout first, because
-    /// a command the timeout killed has no code that means anything.
+    /// The verdict a command's own [`Outcome`] states: the user's word first,
+    /// because a cancellation beats every other trigger (ADR-0006), and then the
+    /// timeout, because a command the timeout killed has no code that means
+    /// anything.
     pub fn of(outcome: &Outcome) -> Exit {
+        if outcome.cancelled {
+            return Exit::Cancelled;
+        }
         if outcome.timed_out {
             return Exit::TimedOut;
         }
@@ -872,6 +878,9 @@ pub struct Shell {
     temp: PathBuf,
     /// The catalog in force, which is what a `skill` call names a value from.
     catalog: Catalog,
+    /// The user's word, which a command in flight hears: a `bash` call killed by a
+    /// cancellation is a call the run was in when it ended (§4).
+    cancel: Cancel,
 }
 
 impl Shell {
@@ -881,7 +890,16 @@ impl Shell {
             boundary,
             temp: temp.into(),
             catalog,
+            cancel: Cancel::new(),
         }
+    }
+
+    /// The flag the user's word arrives on, which is the run's own: one cancellation
+    /// stops the loop and the command it was in flight with, so the two doors into it
+    /// cannot disagree about when the run ended (§4, ADR-0006).
+    pub fn cancel(mut self, cancel: Cancel) -> Shell {
+        self.cancel = cancel;
+        self
     }
 
     /// The `bash` half: one command, run under the boundary and in the temp.
@@ -893,7 +911,7 @@ impl Shell {
         })?;
 
         let started = Instant::now();
-        let outcome = bash::run(&self.boundary, &self.temp, &command)
+        let outcome = bash::run(&self.boundary, &self.temp, &command, &self.cancel)
             .map_err(|error| SecretSet::default().redact(error.to_string()))?;
         Ok(Acted {
             text: rendered(&outcome),

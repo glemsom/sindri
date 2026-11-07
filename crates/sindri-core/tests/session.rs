@@ -9,6 +9,7 @@ use std::process::Command;
 use sindri_core::bash;
 use sindri_core::config::Config;
 use sindri_core::policy::{Boundary, Enforcement};
+use sindri_core::run::Cancel;
 use sindri_core::session::{Session, sessions_root};
 use tempfile::TempDir;
 
@@ -308,6 +309,7 @@ fn a_later_call_reads_what_an_earlier_call_wrote_in_the_temp() {
         "mkdir -p \"$TMPDIR/nested\" \
          && echo kept > \"$TMPDIR/nested/one.txt\" \
          && printf '%s' \"$TMPDIR\" > \"$TMPDIR/where.txt\"",
+        &Cancel::new(),
     )
     .expect("the command runs");
     assert_eq!(first.code, Some(0), "stderr: {}", first.stderr);
@@ -316,6 +318,7 @@ fn a_later_call_reads_what_an_earlier_call_wrote_in_the_temp() {
         &boundary,
         session.temp(),
         "cat \"$TMPDIR/where.txt\"; echo; cat \"$TMPDIR/nested/one.txt\"",
+        &Cancel::new(),
     )
     .expect("the command runs");
 
@@ -352,21 +355,27 @@ fn no_session_sees_another_sessions_temp() {
         &boundary,
         one.temp(),
         "echo private > \"$TMPDIR/only-in-one.txt\" && ls \"$TMPDIR\"",
+        &Cancel::new(),
     )
     .expect("the command runs");
     assert_eq!(wrote.code, Some(0), "stderr: {}", wrote.stderr);
     assert_eq!(wrote.stdout.trim(), "only-in-one.txt");
 
-    let listing =
-        bash::run(&boundary, other.temp(), "ls -A \"$TMPDIR\"").expect("the command runs");
+    let listing = bash::run(&boundary, other.temp(), "ls -A \"$TMPDIR\"", &Cancel::new())
+        .expect("the command runs");
     assert_eq!(listing.code, Some(0), "stderr: {}", listing.stderr);
     assert_eq!(
         listing.stdout, "",
         "the other session's TMPDIR holds nothing of the first's"
     );
 
-    let looking = bash::run(&boundary, other.temp(), "cat \"$TMPDIR/only-in-one.txt\"")
-        .expect("the command runs");
+    let looking = bash::run(
+        &boundary,
+        other.temp(),
+        "cat \"$TMPDIR/only-in-one.txt\"",
+        &Cancel::new(),
+    )
+    .expect("the command runs");
     assert_ne!(
         looking.code,
         Some(0),
@@ -416,8 +425,8 @@ fn output_past_the_budget_is_spilled_as_the_bytes_the_command_wrote() {
     let outcome = bash::run(
         &boundary,
         session.temp(),
-        "i=0; while [ $i -lt 2000 ]; do echo \"line $i of a command that says too much\"; i=$((i+1)); done",
-    )
+        "i=0; while [ $i -lt 2000 ]; do echo \"line $i of a command that says too much\"; i=$((i+1)); done",        &Cancel::new(),
+     )
     .expect("the command runs");
     assert_eq!(outcome.code, Some(0), "stderr: {}", outcome.stderr);
 

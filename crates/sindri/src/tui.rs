@@ -17,18 +17,42 @@
 //! more than a key: it is a burst of bytes, or a bracketed paste (`ESC[200~ … ESC[201~`)
 //! when the terminal offers one, and it reaches the composer as one edit with its line
 //! breaks kept.
+//!
+//! A prompt that leaves the composer starts a run, and the run is driven on a thread of its
+//! own: the loop must stay asleep in `poll` for a key while a request is in flight, so the
+//! fragments the wire lands are woken into this loop through the same pipe a signal uses
+//! and painted as they arrive (§4, §12). Nothing of what a run decides is here — it is one
+//! `launch`, assembled and driven the way batch mode's is — and what is here is the
+//! terminal's half: when to paint, and when to give the screen back.
+//!
+//! `Ctrl-C` and a `SIGINT` from outside are one path. Raw mode means the terminal sends `^C`
+//! as a byte and no signal, so the two arrive at different doors — the decoder here and the
+//! handler in `signal` — and both set the run's own cancellation flag, which stops the run
+//! when the request in flight does and kills the command it is in flight with (§4). The
+//! draft stays where it was on either, because a prompt half-written when a run dies is the
+//! one the reader was writing (§12).
 
 use std::fs::File;
 use std::io::{self, IsTerminal, Read, Write};
 use std::os::fd::{AsFd, BorrowedFd};
 use std::panic::{self, PanicHookInfo};
 use std::process::ExitCode;
-use std::sync::{Mutex, MutexGuard, Once, OnceLock};
+use std::sync::{Arc, Mutex, MutexGuard, Once, OnceLock};
+use std::thread::{self, JoinHandle};
 
 use ratatui::backend::CrosstermBackend;
+use rustix::event::{PollFd, PollFlags, poll};
 use rustix::termios::{InputModes, OptionalActions, Termios, tcgetattr, tcsetattr};
-use sindri::composer::{Key, Outcome};
+use sindri::composer::{Key, Outcome, Prompt, State};
 use sindri::view::View;
+use sindri_core::config::Config;
+use sindri_core::provider::Deltas;
+use sindri_core::run::Cancel;
+use sindri_core::tools::FrontEnd;
+
+use crate::cli::Cli;
+use crate::launch::{Launch, Refusal};
+use crate::signal::{Signals, Wake};
 
 /// Spec §15's usage error: a launch that cannot be a run, a screen a launch cannot
 /// draw on.
@@ -37,6 +61,10 @@ const USAGE: u8 = 2;
 /// Spec §15's setup failure: a terminal that will not take the screen or will not
 /// give a key back.
 const SETUP: u8 = 3;
+
+/// Spec §15's cancellation: a launch the user's own word ended, which is the code a
+/// `SIGINT` out of nowhere has always meant.
+const CANCELLED: u8 = 130;
 
 /// Take the alternate screen, hide the cursor so the first frame is not drawn around a
 /// caret sitting wherever the last shell left it, and ask for bracketed paste — so a
@@ -47,11 +75,21 @@ const TAKE_SCREEN: &[u8] = b"\x1b[?1049h\x1b[?25l\x1b[?2004h";
 /// cursor back last, so a shell gets a terminal that looks the way it did.
 const GIVE_BACK_SCREEN: &[u8] = b"\x1b[?2004l\x1b[?25h\x1b[?1049l";
 
-/// The terminal UI: takes the screen, holds it until `Ctrl-Q`, gives it back.
-pub fn run() -> ExitCode {
+/// The terminal UI: takes the screen, holds it until `Ctrl-Q` or the user's own word, gives
+/// it back.
+pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     if let Some(reason) = missing_terminal() {
         return crate::refuse(&reason, USAGE);
     }
+    // The signal door is opened before the screen is taken: a `SIGINT` that arrives between
+    // raw mode and the loop has to be a cancellation and not a process dying with the
+    // terminal left raw and the alternate screen up (§4, §12).
+    let signals = match Signals::install() {
+        Ok(signals) => signals,
+        Err(error) => {
+            return crate::refuse(&format!("the signal pipe could not be made: {error}"), SETUP);
+        }
+    };
     let terminal = match Terminal::stdio() {
         Ok(terminal) => terminal,
         Err(error) => {
@@ -74,12 +112,29 @@ pub fn run() -> ExitCode {
     if let Err(error) = paint(&mut canvas, &mut view) {
         return crate::refuse(&format!("the frame could not be painted: {error}"), SETUP);
     }
-    let keys = keys(&terminal, &mut canvas, &mut view);
+    let keys = keys(&terminal, &mut canvas, &mut view, cli, config, &signals);
+    // The screen is given back before a word is said about how the launch ended: a refusal
+    // is a line for the shell a reader is handed back to, and not a smear over a frame.
     drop(screen);
     match keys {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(Ending::Quit) => ExitCode::SUCCESS,
+        Ok(Ending::Cancelled) => ExitCode::from(CANCELLED),
+        Ok(Ending::Refused(refusal)) => crate::refuse(refusal.message(), refusal.code()),
         Err(error) => crate::refuse(&format!("the terminal could not be read: {error}"), SETUP),
     }
+}
+
+/// How a launch ended: the ways the loop stops, and the one thing a prompt can be refused.
+enum Ending {
+    /// `Ctrl-Q`, or a terminal that went away and left nothing to quit from: the user's own
+    /// key, and the exit code a key of theirs has.
+    Quit,
+    /// The user's word from outside the keyboard: the run it stopped has ended, the screen is
+    /// given back, and §15's cancellation code is the launch's.
+    Cancelled,
+    /// A prompt that could not start a run at all: the reason is said once the screen is back,
+    /// because a launch with no run to draw has no frame to say it on.
+    Refused(Refusal),
 }
 
 /// What a launch with no prompt is short of when it is short of a terminal: the
@@ -196,68 +251,285 @@ fn paint(canvas: &mut Canvas<'_>, view: &mut View) -> io::Result<()> {
     Ok(())
 }
 
-/// Reads the terminal until `Ctrl-Q`, one event at a time, and repaints when an event
-/// changed what the frame holds.
+/// Reads the terminal until the launch ends, one event at a time, and repaints when an
+/// event changed what the frame holds.
 ///
-/// The loop blocks in `read` and paints nothing while it waits: a launch with nobody at
-/// the keyboard asks the kernel for bytes and sleeps, so an idle frame is not skipped,
-/// it is never drawn (§12).
-fn keys(terminal: &Terminal, canvas: &mut Canvas<'_>, view: &mut View) -> io::Result<()> {
-    let mut input = &terminal.keys;
+/// The loop waits in `poll` and paints nothing while it waits: a launch with nobody at the
+/// keyboard asks the kernel for bytes and sleeps, so an idle frame is not skipped, it is
+/// never drawn (§12). Three things can end that wait — a key on the terminal, a signal, and
+/// a run with something to say — and all three are fds, so one wait covers them and no timer
+/// is needed to make a fragment, a cancellation or a keystroke arrive.
+fn keys(
+    terminal: &Terminal,
+    canvas: &mut Canvas<'_>,
+    view: &mut View,
+    cli: &Cli,
+    config: &Config,
+    signals: &Signals,
+) -> io::Result<Ending> {
     let mut decoder = Decoder::new();
     let mut read = [0u8; 4096];
+    let mut running: Option<Running> = None;
+    let mut interrupted = false;
+    let wake = signals.wake();
     loop {
-        let count = input.read(&mut read)?;
-        // The terminal went away: there is nothing left to quit from, and the screen is
-        // still given back by the guard.
-        if count == 0 {
-            return Ok(());
+        let waiting = wake.reader();
+        let mut fds = [
+            PollFd::new(&terminal.keys, PollFlags::IN),
+            PollFd::new(&waiting, PollFlags::IN),
+        ];
+        match poll(&mut fds, None) {
+            // A signal is not a failure: the pipe it pings says what arrived.
+            Ok(_) | Err(rustix::io::Errno::INTR) => {}
+            Err(error) => return Err(std::io::Error::from(error)),
         }
-        decoder.push(&read[..count]);
-        while let Some(event) = decoder.next() {
-            if answer(canvas, view, event)? {
-                return Ok(());
+        let keyed = fds[0].revents().contains(PollFlags::IN);
+        let woken = fds[1].revents().contains(PollFlags::IN);
+
+        if woken {
+            wake.drain();
+            // The user's own word, from outside the keyboard: the run it stops is the run
+            // `Ctrl-C` stops, and this launch ends once that run has (§4).
+            if signals.arrived() {
+                interrupted = true;
+                if let Some(flight) = &running {
+                    flight.cancel();
+                }
+            }
+            if take(canvas, view, &mut running)? {
+                // The run stopped, so the frame's composer is idle again (§12) and the launch
+                // is the only thing left to end.
+            }
+            if interrupted && running.is_none() {
+                return Ok(Ending::Cancelled);
+            }
+        }
+
+        if keyed {
+            let count = Read::read(&mut &terminal.keys, &mut read)?;
+            // The terminal went away: there is nothing left to quit from, and the screen is
+            // still given back by the guard.
+            if count == 0 {
+                return Ok(Ending::Quit);
+            }
+            decoder.push(&read[..count]);
+            while let Some(event) = decoder.next() {
+                if let Some(ending) = answer(canvas, view, event, &mut running, cli, config, &wake)? {
+                    return Ok(ending);
+                }
             }
         }
     }
 }
 
-/// Answers one event, and says whether the launch ends: the one place an event becomes a
-/// repaint or an exit.
+/// The run in flight: the flag the user's word lands on, the reports the loop has not taken
+/// yet, and the thread that will end — held together so one `Ctrl-C` and one `SIGINT` reach
+/// the same three.
+struct Running {
+    /// The cancellation the loop reads and a command in flight hears (§4).
+    cancel: Cancel,
+    /// What the run has said that the frame has not been told.
+    pending: Arc<Mutex<Vec<Report>>>,
+    /// The thread driving it to a stop reason.
+    thread: JoinHandle<()>,
+}
+
+impl Running {
+    /// Drives `prompt` in its own thread: the fragment a wire lands is pushed where the loop
+    /// takes it and the loop is pinged through the pipe a signal uses, so a run's words
+    /// arrive as a keystroke does and nothing polls for them.
+    fn start(launch: Launch, prompt: Prompt, wake: Arc<Wake>) -> Running {
+        let cancel = Cancel::new();
+        let pending = Arc::new(Mutex::new(Vec::new()));
+        let mut reports = Reports {
+            pending: Arc::clone(&pending),
+            wake,
+        };
+        let interrupted = cancel.clone();
+        let thread = thread::spawn(move || {
+            let mut turns = ();
+            // A launch that could not report a run at all is a run that ended with no stop
+            // reason, which the loop cannot do; the frame is told it stopped either way.
+            let _ = launch.drive(prompt.text(), &mut reports, &mut turns, interrupted);
+            reports.push(Report::Stopped);
+        });
+        Running {
+            cancel,
+            pending,
+            thread,
+        }
+    }
+
+    /// The user's word: the run stops when the request in flight does, and the command it is
+    /// in flight with is killed now (§4).
+    fn cancel(&self) {
+        self.cancel.now();
+    }
+}
+
+/// One thing the run thread has to say to the frame: a fragment of the turn in flight, which
+/// the frame draws where it lands, and the end of the run, which only the loop needs.
+enum Report {
+    /// A fragment of the answer.
+    Text(String),
+    /// A fragment of the reasoning, which has its own gutter and ink (§4, §12).
+    Reasoning(String),
+    /// The run stopped, whatever it stopped as.
+    Stopped,
+}
+
+/// The run's own door into the frame, as the run thread holds it: every fragment lands in the
+/// list the loop takes from, and the loop is pinged once so what landed is painted.
+struct Reports {
+    /// What has landed and not been taken.
+    pending: Arc<Mutex<Vec<Report>>>,
+    /// The pipe the loop waits on.
+    wake: Arc<Wake>,
+}
+
+impl Reports {
+    /// Leaves `report` for the loop and wakes it.
+    fn push(&mut self, report: Report) {
+        lock(&self.pending).push(report);
+        self.wake.raise();
+    }
+}
+
+impl Deltas for Reports {
+    fn text(&mut self, fragment: &str) {
+        self.push(Report::Text(fragment.to_owned()));
+    }
+
+    fn reasoning(&mut self, fragment: &str) {
+        self.push(Report::Reasoning(fragment.to_owned()));
+    }
+}
+
+/// Takes everything the run in flight has left and puts it on the frame, and says whether the
+/// run has ended.
 ///
-/// Which key means what is not decided here. The mode stack decides that — one row of
-/// one table per mode — and this function is left with what the terminal does about the
-/// outcome it is handed: paint the frame, or give the screen back. A new key is a row in
-/// a table, and a new screen is a mode, with no arm added to this function for either.
-fn answer(canvas: &mut Canvas<'_>, view: &mut View, event: Event) -> io::Result<bool> {
+/// A run that ended is a composer that is idle again — so the next `Ctrl-C` is the key that
+/// clears the draft and not one that cancels nothing (§12) — and a thread that is joined
+/// rather than left for the process to exit under. What the last turn said stays on the frame
+/// as the live entry until the next run starts: the record is where a settled turn is kept,
+/// and putting its entries on the frame is the transcript's (ADR-0007, ADR-0008).
+fn take(canvas: &mut Canvas<'_>, view: &mut View, running: &mut Option<Running>) -> io::Result<bool> {
+    let Some(flight) = running.as_ref() else {
+        return Ok(false);
+    };
+    let left = std::mem::take(&mut *lock(&flight.pending));
+    let mut painted = false;
+    let mut stopped = false;
+    for report in left {
+        match report {
+            Report::Text(fragment) => {
+                view.text(&fragment);
+                painted = true;
+            }
+            Report::Reasoning(fragment) => {
+                view.reasoning(&fragment);
+                painted = true;
+            }
+            Report::Stopped => stopped = true,
+        }
+    }
+    if painted {
+        paint(canvas, view)?;
+    }
+    if stopped {
+        view.set_state(State::Idle);
+        if let Some(flight) = running.take() {
+            let _ = flight.thread.join();
+        }
+    }
+    Ok(stopped)
+}
+
+/// Answers one event, and says whether the launch ends there: the one place an event becomes
+/// a repaint, a run, or an exit.
+///
+/// Which key means what is not decided here. The mode stack decides that — one row of one
+/// table per mode — and this function is left with what the terminal does about the outcome
+/// it is handed: paint the frame, start the run a prompt asks for, cancel the run in flight,
+/// or give the screen back. A new key is a row in a table, and a new screen is a mode, with
+/// no arm added to this function for either.
+fn answer(
+    canvas: &mut Canvas<'_>,
+    view: &mut View,
+    event: Event,
+    running: &mut Option<Running>,
+    cli: &Cli,
+    config: &Config,
+    wake: &Arc<Wake>,
+) -> io::Result<Option<Ending>> {
     let key = match event {
         // A paste is one edit and never a key, so nothing inside one can send: the
         // composer is handed the whole text with its line breaks in it.
         Event::Paste(text) => {
             view.paste(&text);
             paint(canvas, view)?;
-            return Ok(false);
+            return Ok(None);
         }
         Event::Key(key) => key,
     };
     match view.key(key) {
-        Outcome::Unchanged => Ok(false),
-        Outcome::Edited | Outcome::Cancel => {
+        Outcome::Unchanged => Ok(None),
+        Outcome::Edited => {
             paint(canvas, view)?;
-            Ok(false)
+            Ok(None)
         }
-        Outcome::Send(prompt) => {
-            // The draft left the composer as a prompt and nothing is listening: the run
-            // loop is #43's, so this value is the seam it takes and this arm is where it
-            // will be handed over. A prompt nobody took is not an error — it is the
-            // frame before the run that answers it.
-            drop(prompt);
+        // `Ctrl-C`: the run in flight is the thing cancelled and the draft stays (§12). The
+        // flag is the one an outside `SIGINT` sets, so the keyboard and the signal are one
+        // path to the same place and the run cannot tell them apart (§4).
+        Outcome::Cancel => {
+            if let Some(flight) = running {
+                flight.cancel();
+            }
             paint(canvas, view)?;
-            Ok(false)
+            Ok(None)
+        }
+        // A prompt that left the composer starts a run, unless one is already in flight:
+        // the queue a prompt typed during a run waits in is #42's, and until it lands the
+        // prompt is dropped rather than run beside the one already going.
+        Outcome::Send(prompt) => {
+            let sent = send(prompt, canvas, view, running, cli, config, wake)?;
+            Ok(sent)
         }
         // `Ctrl-Q` is the one way out.
-        Outcome::Quit => Ok(true),
+        Outcome::Quit => Ok(Some(Ending::Quit)),
     }
+}
+
+/// Starts the run a sent draft asks for, as a launch of its own and a thread of its own, and
+/// says whether the launch ends instead.
+///
+/// A launch that cannot run at all ends the launch rather than being drawn: a frame has no
+/// band for a refusal yet, and a screen that swallowed the reason nothing ran would be the one
+/// silence this front end must not keep (§15).
+fn send(
+    prompt: Prompt,
+    canvas: &mut Canvas<'_>,
+    view: &mut View,
+    running: &mut Option<Running>,
+    cli: &Cli,
+    config: &Config,
+    wake: &Arc<Wake>,
+) -> io::Result<Option<Ending>> {
+    if running.is_some() {
+        paint(canvas, view)?;
+        return Ok(None);
+    }
+    let launch = match Launch::open(cli, config, FrontEnd::Terminal) {
+        Ok(launch) => launch,
+        Err(refusal) => return Ok(Some(Ending::Refused(refusal))),
+    };
+    // A new run's fragments must not be drawn under the answer the last one left: the turn in
+    // flight goes, and the composer is told a run is live so `Ctrl-C` cancels it (§12).
+    view.settle();
+    view.set_state(State::Running);
+    *running = Some(Running::start(launch, prompt, Arc::clone(wake)));
+    paint(canvas, view)?;
+    Ok(None)
 }
 
 /// What the terminal sent, once the bytes that carry it are whole.
