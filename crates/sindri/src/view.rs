@@ -26,14 +26,14 @@
 //! rail draws into the columns it takes from the transcript's band, and how many columns
 //! those are — and what it gives up when there are fewer — is `rail`'s to decide and not
 //! this file's (#46): `paint` asks it for the split and hands it the facts it was given.
-//! The pulse is #39's. Each paints into a band of this frame and changes its fixture
-//! deliberately in the commit that changes it.
-//!
-//! The mark is this file's too, and it is painted from the span `mark` hands out (#50):
-//! every paint lays the transcript's rows out — in the columns the rail left them — and
-//! gathers the lines they are drawn as, keeping the span the drag covers, so the highlight
-//! a reader sees on this frame and the words `Ctrl-Y` hands the terminal are one value and
-//! cannot disagree (§12).
+//! The marker at the head of the newest answer is `pulse`'s to say in words and this
+//! file's to hand to the rows it heads, so the prose around it wraps rather than being cut
+//! by it (#39). The mark is this file's too, and it is painted from the span `mark` hands
+//! out (#50): every paint lays the transcript's rows out — in the columns the rail left
+//! them — and gathers the lines they are drawn as, keeping the span the drag covers, so
+//! the highlight a reader sees on this frame and the words `Ctrl-Y` hands the terminal are
+//! one value and cannot disagree (§12). Each paints into a band of this frame and changes
+//! its fixture deliberately in the commit that changes it.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -44,6 +44,7 @@ use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, State};
 use crate::ink::Ink;
 use crate::keys::{Act, Mode, Stack};
 use crate::mark::{Cell, Mark, Span};
+use crate::pulse::Pulse;
 use crate::rail::Facts;
 use crate::rows::{Rows, Scroll};
 use crate::stream::Stream;
@@ -91,6 +92,9 @@ pub struct View {
     /// The modes this frame is in, the composer at the base and any screen opened over
     /// it: what answers a key and, while a screen is up, the whole of what is painted.
     stack: Stack,
+    /// The marker the newest answer wears (#39): the run's clock while it is live, the form
+    /// it settled on when it stopped, and nothing at all for a launch no run has touched.
+    pulse: Option<Pulse>,
     /// The facts the rail draws down the frame's right-hand columns: what the core knows
     /// about the run and what a caller hands in for the facts nothing produces yet, in
     /// the values `rail` spells them with (#46).
@@ -126,6 +130,7 @@ impl View {
             composer: Composer::new(),
             stream: Stream::new(),
             stack: Stack::new(),
+            pulse: None,
             rail: Facts::default(),
             mark: None,
             marked: Span::default(),
@@ -302,6 +307,16 @@ impl View {
         self.composer.set_state(state);
     }
 
+    /// Hands the frame the marker its newest answer wears (§12): a live one carrying the
+    /// run's elapsed time, or the one a stopped run settled on, or nothing at all.
+    ///
+    /// The elapsed time is the caller's, because the clock lives in `tui` and not in a
+    /// frame: a fixture can paint a marker at 4.2 s, and a settled marker's duration is the
+    /// number the run stopped at rather than one read when the frame is painted (#39).
+    pub fn set_pulse(&mut self, pulse: Option<Pulse>) {
+        self.pulse = pulse;
+    }
+
     /// Paints this frame into `area`: every band of it, in the ink each band is drawn
     /// in, from the top of the screen to the bottom edge.
     ///
@@ -332,8 +347,7 @@ impl View {
 
     /// The transcript: what the run has said so far, newest last, painted from the rows
     /// the cache holds for the window this band reaches and for no other entry. Where a
-    /// reader scrolled back is told what arrived below by #50; the pulse at the head of
-    /// the newest answer is #39's.
+    /// reader scrolled back is told what arrived below by #50.
     ///
     /// The turn in flight is the last of the entries the window reaches and the only one
     /// laid out again as the frame is painted, which is the whole of what makes an answer
@@ -341,7 +355,11 @@ impl View {
     fn transcript(&mut self, area: Rect, buffer: &mut Buffer) {
         buffer.set_style(area, Ink::Plain.style());
         self.rows.resize(area.width);
-        self.rows.live(&self.stream);
+        // The marker is laid into the rows it heads rather than painted over them, so the
+        // answer's first row is wrapped around it and the prose it introduces is never cut
+        // by the mark standing in front of it (#39).
+        let head = self.pulse.as_ref().map(Pulse::head);
+        self.rows.live(&self.stream, head.as_ref());
         let window = self.rows.window(self.scroll, area.height);
         let mut y = area.y;
         let mut lines = Vec::new();

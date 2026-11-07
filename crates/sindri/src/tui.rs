@@ -12,7 +12,11 @@
 //! boot frame, empty transcript and all (§12) — and after it a key arrives as bytes
 //! from `read`, so a launch with nobody at the keyboard writes nothing further: there
 //! is no timer, no tick and no repaint, which is what §12's "an idle frame is never
-//! drawn" means as code. A key that arrives is decoded here, because a key is more than
+//! drawn" means as code. The one exception is a run in flight: the marker at the head of
+//! its newest answer is a clock, so while a run is live the wait is one step of the pulse
+//! and a frame that ran out of time is a frame whose marker has moved. The run stopping is
+//! what ends it — the settled marker is drawn once and the wait goes back to forever (#39).
+//! A key that arrives is decoded here, because a key is more than
 //! a byte — `Shift+Enter` is `CSI 13;2u` under the protocol §17 assumes — and a paste is
 //! more than a key: it is a burst of bytes, or a bracketed paste (`ESC[200~ … ESC[201~`)
 //! when the terminal offers one, and it reaches the composer as one edit with its line
@@ -39,15 +43,19 @@ use std::panic::{self, PanicHookInfo};
 use std::process::ExitCode;
 use std::sync::{Arc, Mutex, MutexGuard, Once, OnceLock};
 use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 
 use ratatui::backend::CrosstermBackend;
+use rustix::event::Timespec;
 use rustix::event::{PollFd, PollFlags, poll};
 use rustix::termios::{InputModes, OptionalActions, Termios, tcgetattr, tcsetattr};
 use sindri::composer::{Key, Outcome, Prompt, State};
+use sindri::pulse::{self, Pulse};
 use sindri::view::View;
 use sindri_core::config::Config;
 use sindri_core::provider::Deltas;
-use sindri_core::run::Cancel;
+use sindri_core::redact::SecretSet;
+use sindri_core::run::{Cancel, Stop};
 use sindri_core::tools::FrontEnd;
 
 use crate::cli::Cli;
@@ -87,7 +95,10 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     let signals = match Signals::install() {
         Ok(signals) => signals,
         Err(error) => {
-            return crate::refuse(&format!("the signal pipe could not be made: {error}"), SETUP);
+            return crate::refuse(
+                &format!("the signal pipe could not be made: {error}"),
+                SETUP,
+            );
         }
     };
     let terminal = match Terminal::stdio() {
@@ -278,7 +289,14 @@ fn keys(
             PollFd::new(&terminal.keys, PollFlags::IN),
             PollFd::new(&waiting, PollFlags::IN),
         ];
-        match poll(&mut fds, None) {
+        // A run in flight is the only clock this loop has: its marker steps once per 80 ms,
+        // so the wait is that long while one is live and forever while none is. Nothing is
+        // drawn for a wait nobody owes a frame for (§12).
+        let step = running
+            .is_some()
+            .then(|| Timespec::try_from(Duration::from_millis(pulse::STEP_MS)).ok())
+            .flatten();
+        match poll(&mut fds, step.as_ref()) {
             // A signal is not a failure: the pipe it pings says what arrived.
             Ok(_) | Err(rustix::io::Errno::INTR) => {}
             Err(error) => return Err(std::io::Error::from(error)),
@@ -286,23 +304,38 @@ fn keys(
         let keyed = fds[0].revents().contains(PollFlags::IN);
         let woken = fds[1].revents().contains(PollFlags::IN);
 
+        // A live run's marker is read off the run's own clock once per pass, so the frame a
+        // step draws, the frame a key draws and the frame a fragment draws all carry the time
+        // the run is at rather than the time it was at when the pulse was last asked for.
+        if let Some(flight) = &running {
+            view.set_pulse(Some(Pulse::live(flight.elapsed_ms())));
+        }
+
+        // The user's own word, from outside the keyboard: the run it stops is the run
+        // `Ctrl-C` stops, and this launch ends once that run has (§4). It is read every pass
+        // and not only on the pass the pipe woke, because the word is a flag that is never
+        // cleared and the byte is only what wakes the loop: a `SIGINT` that landed while the
+        // loop was awake for something else has already raised a byte a drain may have taken.
+        if signals.arrived() && !interrupted {
+            interrupted = true;
+            if let Some(flight) = &running {
+                flight.cancel();
+            }
+        }
+
         if woken {
             wake.drain();
-            // The user's own word, from outside the keyboard: the run it stops is the run
-            // `Ctrl-C` stops, and this launch ends once that run has (§4).
-            if signals.arrived() {
-                interrupted = true;
-                if let Some(flight) = &running {
-                    flight.cancel();
-                }
-            }
             if take(canvas, view, &mut running)? {
                 // The run stopped, so the frame's composer is idle again (§12) and the launch
                 // is the only thing left to end.
             }
-            if interrupted && running.is_none() {
-                return Ok(Ending::Cancelled);
-            }
+        }
+
+        // A run the user's word stopped has ended: a launch that stayed would be a screen left
+        // over a run that is not coming back, so the terminal is given back as soon as there
+        // is nothing left to stop (§4, §12).
+        if interrupted && running.is_none() {
+            return Ok(Ending::Cancelled);
         }
 
         if keyed {
@@ -328,6 +361,14 @@ fn keys(
                 }
             }
         }
+
+        // The wait ran out with nothing to say: a run is live and its marker has stepped, so
+        // the frame that drew the last glyph is a frame that is now wrong. This is the only
+        // frame this loop ever draws for no event but the clock, and it is owed to a run
+        // nobody is watching idle (§12).
+        if !keyed && !woken && running.is_some() {
+            paint(canvas, view)?;
+        }
     }
 }
 
@@ -341,6 +382,8 @@ struct Running {
     pending: Arc<Mutex<Vec<Report>>>,
     /// The thread driving it to a stop reason.
     thread: JoinHandle<()>,
+    /// When the run started, which is where the marker's elapsed time is measured from.
+    started: Instant,
 }
 
 impl Running {
@@ -355,17 +398,27 @@ impl Running {
             wake,
         };
         let interrupted = cancel.clone();
+        let started = Instant::now();
         let thread = thread::spawn(move || {
             let mut turns = ();
             // A launch that could not report a run at all is a run that ended with no stop
-            // reason, which the loop cannot do; the frame is told it stopped either way.
-            let _ = launch.drive(prompt.text(), &mut reports, &mut turns, interrupted);
-            reports.push(Report::Stopped);
+            // reason, which the loop cannot do; the marker settles on it as a failure and
+            // says so rather than turning for a run nobody is driving.
+            let stop = match launch.drive(prompt.text(), &mut reports, &mut turns, interrupted) {
+                Ok(outcome) => outcome.stopped().clone(),
+                Err(refusal) => Stop::Error(SecretSet::default().redact(refusal.message())),
+            };
+            // The duration is read here, where the run stopped, and carried to the frame: a
+            // frame that read the clock when it painted would put a different number beside
+            // the same verdict a minute later (§12).
+            let elapsed_ms = millis(started.elapsed());
+            reports.push(Report::Stopped { stop, elapsed_ms });
         });
         Running {
             cancel,
             pending,
             thread,
+            started,
         }
     }
 
@@ -374,6 +427,16 @@ impl Running {
     fn cancel(&self) {
         self.cancel.now();
     }
+
+    /// How long this run has been going, which is the number its live marker is painted from.
+    fn elapsed_ms(&self) -> u64 {
+        millis(self.started.elapsed())
+    }
+}
+
+/// A span of time as whole milliseconds, which is the unit §12's durations are said in.
+fn millis(span: Duration) -> u64 {
+    u64::try_from(span.as_millis()).unwrap_or(u64::MAX)
 }
 
 /// One thing the run thread has to say to the frame: a fragment of the turn in flight, which
@@ -383,8 +446,14 @@ enum Report {
     Text(String),
     /// A fragment of the reasoning, which has its own gutter and ink (§4, §12).
     Reasoning(String),
-    /// The run stopped, whatever it stopped as.
-    Stopped,
+    /// The run stopped, and with what: the marker settles on the verdict and the duration
+    /// the run reported, which are the two facts §12 settles a pulse on (#39).
+    Stopped {
+        /// Why the run ended, from the core's closed set of stop reasons.
+        stop: Stop,
+        /// How long it had been running when it stopped, read at the stop itself.
+        elapsed_ms: u64,
+    },
 }
 
 /// The run's own door into the frame, as the run thread holds it: every fragment lands in the
@@ -422,13 +491,17 @@ impl Deltas for Reports {
 /// rather than left for the process to exit under. What the last turn said stays on the frame
 /// as the live entry until the next run starts: the record is where a settled turn is kept,
 /// and putting its entries on the frame is the transcript's (ADR-0007, ADR-0008).
-fn take(canvas: &mut Canvas<'_>, view: &mut View, running: &mut Option<Running>) -> io::Result<bool> {
+fn take(
+    canvas: &mut Canvas<'_>,
+    view: &mut View,
+    running: &mut Option<Running>,
+) -> io::Result<bool> {
     let Some(flight) = running.as_ref() else {
         return Ok(false);
     };
     let left = std::mem::take(&mut *lock(&flight.pending));
     let mut painted = false;
-    let mut stopped = false;
+    let mut stopped = None;
     for report in left {
         match report {
             Report::Text(fragment) => {
@@ -439,19 +512,24 @@ fn take(canvas: &mut Canvas<'_>, view: &mut View, running: &mut Option<Running>)
                 view.reasoning(&fragment);
                 painted = true;
             }
-            Report::Stopped => stopped = true,
+            Report::Stopped { stop, elapsed_ms } => stopped = Some((stop, elapsed_ms)),
+        }
+    }
+    if let Some((ref stop, elapsed_ms)) = stopped {
+        // The marker settles on the verdict and on the duration the run stopped at, and this
+        // is the last frame it is drawn on: the wait goes back to forever once the run is
+        // gone, so settling draws once and nothing after (§12).
+        view.set_pulse(Some(Pulse::settled(stop, elapsed_ms)));
+        view.set_state(State::Idle);
+        painted = true;
+        if let Some(flight) = running.take() {
+            let _ = flight.thread.join();
         }
     }
     if painted {
         paint(canvas, view)?;
     }
-    if stopped {
-        view.set_state(State::Idle);
-        if let Some(flight) = running.take() {
-            let _ = flight.thread.join();
-        }
-    }
-    Ok(stopped)
+    Ok(stopped.is_some())
 }
 
 /// Answers one event, and says whether the launch ends there: the one place an event becomes
@@ -551,6 +629,10 @@ fn send(
     view.settle();
     view.set_state(State::Running);
     *running = Some(Running::start(launch, prompt, Arc::clone(wake)));
+    // The marker a run wears before it has said anything: the first step of the braille
+    // cycle and no time on the clock yet, so the frame a prompt is sent from is a frame that
+    // says the run has begun rather than a frame that looks exactly as it did (§12, #39).
+    view.set_pulse(Some(Pulse::live(0)));
     paint(canvas, view)?;
     Ok(None)
 }

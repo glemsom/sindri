@@ -8,6 +8,7 @@
 //! entries is `frames`' `streaming-120x40`.
 
 use sindri::ink::Ink;
+use sindri::pulse::Pulse;
 use sindri::rows::Row;
 use sindri::stream::{Said, Stream};
 use sindri_core::provider::Deltas;
@@ -34,7 +35,7 @@ fn thought_and_answer_fragments_land_in_the_order_they_arrive() {
     stream.reasoning("so its tail is code. ");
     stream.text("is a code block.");
 
-    let rows = stream.rows(60);
+    let rows = stream.rows(60, None);
     let drawn: Vec<String> = rows.iter().map(words).collect();
     assert_eq!(
         drawn,
@@ -83,11 +84,11 @@ fn a_streaming_answer_adds_rows_and_a_fence_still_open_is_code() {
     let mut stream = Stream::new();
     stream.reasoning("read the fence rule first. ");
     stream.text("The rule is one line: ");
-    let drawn = stream.rows(40);
+    let drawn = stream.rows(40, None);
     assert!(!drawn.is_empty(), "a fragment of prose is rows");
 
     stream.text("a fence still open is a code block, never prose.\n```rust\nfn main() {");
-    let more = stream.rows(40);
+    let more = stream.rows(40, None);
     assert_eq!(
         &more[..drawn.len() - 1],
         &drawn[..drawn.len() - 1],
@@ -131,7 +132,47 @@ fn fragments_of_one_kind_accumulate_into_one_run() {
         "the fragments of one run are one run"
     );
     assert_eq!(
-        stream.rows(40).iter().map(words).collect::<Vec<_>>(),
+        stream.rows(40, None).iter().map(words).collect::<Vec<_>>(),
         ["  A fence still open is code."]
     );
+}
+
+/// §12's pulse sits at the head of the newest answer and nowhere else: a turn that said a
+/// thing, thought, and is answering now wears the marker on the second answer's first row
+/// — the row a reader is about to read — while the first keeps the gutter every answer has
+/// (#39).
+#[test]
+fn the_marker_heads_the_newest_answers_first_row_and_no_other() {
+    let mut stream = Stream::new();
+    stream.text("the first thing said. ");
+    stream.reasoning("and then a thought. ");
+    stream.text("and the answer being read now.");
+
+    let head = Pulse::live(4_200).head();
+    let drawn: Vec<String> = stream.rows(60, Some(&head)).iter().map(words).collect();
+
+    assert_eq!(
+        drawn,
+        [
+            "  the first thing said.",
+            "│ and then a thought.",
+            "⠹ 4.2s and the answer being read now.",
+        ],
+        "the marker is on the newest answer, and the older one is drawn as it always was"
+    );
+}
+
+/// A run that has reasoned and not yet answered has no answer to head, so the marker opens
+/// the answer's row under what the turn has said so far: the row exists before its first
+/// fragment does, because a frame waiting on a wire must not look like a frame that is idle
+/// (#39).
+#[test]
+fn a_turn_that_has_only_reasoned_opens_the_answers_row_under_its_thought() {
+    let mut stream = Stream::new();
+    stream.reasoning("thinking it over.");
+
+    let head = Pulse::live(4_200).head();
+    let drawn: Vec<String> = stream.rows(60, Some(&head)).iter().map(words).collect();
+
+    assert_eq!(drawn, ["│ thinking it over.", "⠹ 4.2s"]);
 }
