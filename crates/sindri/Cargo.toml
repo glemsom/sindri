@@ -23,6 +23,12 @@ tiny-skia = "0.12"
 # two formats a workspace picture is written in are named here — a screenshot and a
 # photograph — because a decoder the build does not carry turns a file into a refusal.
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+# The placement half of §12: a picture becomes the Kitty protocol's unicode placeholders,
+# transmitted once per size and written as cells after that, which is what keeps a scroll from
+# sending a picture down the wire again (ADR-0008). Its `image-defaults` and `crossterm`
+# features are off: the protocol is named here rather than sniffed, and the decoders this
+# crate carries are the ones it named above.
+ratatui-image = { version = "8.1", default-features = false }
 pulldown-cmark = { version = "0.12", default-features = false }
 # The frame: what a look is drawn with, and the same code a fixture renders through
 # ratatui's headless backend, so a golden frame and a reader's screen are one picture.

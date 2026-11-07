@@ -70,6 +70,8 @@ use rustix::termios::{
 };
 use sindri::composer::{Key, Outcome, Prompt, State};
 use sindri::graphics::CellSize;
+use sindri::picture;
+use sindri::pictures::Pictures;
 use sindri::pulse::{self, Pulse};
 use sindri::settings::persist;
 use sindri::view::View;
@@ -160,6 +162,15 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     let (cell_size, typed) = probed_cell(&terminal);
     let mut view = View::boot();
     view.set_cell_size(cell_size);
+    // And how its terminal places a picture, read off the environment once: a terminal that
+    // speaks Kitty is handed the pictures its frames draw from, and one that does not is
+    // handed none, which is what leaves it the words a picture is spoken of as (§12,
+    // ADR-0003). The question is asked of the environment and never of the tty, because the
+    // launch has spent its one round trip on the cell size.
+    let named = |key: &str| std::env::var(key).ok();
+    if picture::speaks_kitty(named("TERM").as_deref(), named("TERM_PROGRAM").as_deref()) {
+        view.set_pictures(Pictures::kitty(cell_size));
+    }
     // The frame is told the directory the launch stands in, because `@` walks the workspace
     // and a frame knows only what it was handed. It is the same directory `Launch::open`
     // gives a run — read the same way, from the process — so a path a reader picks is a path

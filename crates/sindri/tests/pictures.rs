@@ -11,11 +11,21 @@
 use std::path::{Path, PathBuf};
 
 use image::{Rgba, RgbaImage};
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
 
+use sindri::composer::{Key, Outcome};
 use sindri::graphics::CellSize;
+use sindri::mark::Cell;
 use sindri::markdown;
 use sindri::picture::{self, Surface};
-use sindri::rows::Row;
+use sindri::pictures::Pictures;
+use sindri::rows::{Row, Scroll};
+use sindri::view::View;
+use sindri_core::records::Entry;
+use sindri_core::redact::SecretSet;
 
 /// A directory with a workspace inside it, and one picture in that workspace: the file a
 /// run's own commands could have read, and so the file an answer may point the reader at.
@@ -328,4 +338,346 @@ fn a_picture_whose_words_are_wider_than_the_band_wraps_and_is_never_cut() {
         said.contains("outside the workspace"),
         "and the reason the caption exists to print is printed: {said:?}"
     );
+}
+
+/// The screen every frame below is painted at: wide enough for the rail beside the band, and
+/// tall enough for an answer holding a picture's whole block.
+const SCREEN: (u16, u16) = (100, 30);
+
+/// The cell a launch probes once and keeps for the length of the launch (§12, ADR-0003).
+fn cell() -> CellSize {
+    CellSize::new(10, 20)
+}
+
+/// The frame an answer is drawn on: the workspace it stands in, the cell the launch measured,
+/// and whether its terminal places a picture at all — the three facts a picture's rows are
+/// measured against.
+fn frame(workspace: &Path, text: &str, draws: bool) -> View {
+    let mut view = View::of(
+        vec![Entry::Assistant {
+            turn: 1,
+            text: SecretSet::default().redact(text),
+        }],
+        Scroll::Tail,
+    );
+    view.set_workspace(workspace.to_path_buf());
+    view.set_cell_size(cell());
+    if draws {
+        view.set_pictures(Pictures::kitty(cell()));
+    }
+    view
+}
+
+/// The frame `view` paints at `size`, as the buffer a terminal would be handed.
+fn painted_at(view: &mut View, size: (u16, u16)) -> Buffer {
+    let (cols, rows) = size;
+    let mut terminal =
+        Terminal::new(TestBackend::new(cols, rows)).expect("a headless screen of that size");
+    let completed = terminal
+        .draw(|frame| view.paint(frame.area(), frame.buffer_mut()))
+        .expect("the frame is painted");
+    completed.buffer.clone()
+}
+
+/// The glyph a Kitty placement writes into every cell it covers, and the only thing on a
+/// screen that says a picture is placed there rather than written about.
+const PLACEHOLDER: char = '\u{10EEEE}';
+
+/// The bytes that carry a picture down the wire: the first chunk of the protocol's
+/// transmission, which is what a terminal is told once and never again for one picture
+/// (ADR-0008).
+const TRANSMIT: &str = "_Gq=2,";
+
+/// The rows of `buffer` a picture is drawn over, top to bottom.
+fn pictured_rows(buffer: &Buffer) -> Vec<u16> {
+    let area = buffer.area;
+    (area.y..area.bottom())
+        .filter(|y| {
+            (area.x..area.right()).any(|x| {
+                buffer
+                    .cell((x, *y))
+                    .is_some_and(|cell| cell.symbol().contains(PLACEHOLDER))
+            })
+        })
+        .collect()
+}
+
+/// How many cells of `buffer` hold the bytes that transmit a picture: the count a scroll and
+/// a repaint must leave where it was.
+fn transmissions(buffer: &Buffer) -> usize {
+    let area = buffer.area;
+    let mut count = 0;
+    for y in area.y..area.bottom() {
+        for x in area.x..area.right() {
+            if let Some(cell) = buffer.cell((x, y))
+                && cell.symbol().contains(TRANSMIT)
+            {
+                count += 1;
+            }
+        }
+    }
+    count
+}
+
+/// §12's picture, drawn: a source inside the workspace reaches the terminal as the Kitty
+/// protocol's placeholders over the rows its block reserved, and its bytes go down the wire on
+/// the paint that first shows it.
+#[test]
+fn a_picture_inside_the_workspace_is_placed_over_the_rows_it_takes() {
+    let (_root, workspace) = workspace(400, 200);
+    let mut view = frame(&workspace, "before ![a purple field](shot.png) after", true);
+
+    let painted = painted_at(&mut view, SCREEN);
+
+    let rows = pictured_rows(&painted);
+    assert_eq!(
+        rows.len(),
+        10,
+        "40 by 10 cells of picture is ten rows of placeholders, and the whole block is on the \
+         screen: {rows:?}"
+    );
+    assert_eq!(
+        view.pictures().rasterises("shot.png"),
+        1,
+        "the picture is made once for the size it was measured into"
+    );
+    assert_eq!(
+        transmissions(&painted),
+        1,
+        "and its bytes are on the screen once, in the first cell of its block"
+    );
+}
+
+/// ADR-0008's second rule as a cost: a picture already placed is never transmitted again. A
+/// repaint of the same frame carries the placeholders and none of the bytes, because the
+/// terminal still holds what the first paint sent it.
+#[test]
+fn painting_a_picture_again_sends_no_bytes_down_the_wire() {
+    let (_root, workspace) = workspace(400, 200);
+    let mut view = frame(&workspace, "![a purple field](shot.png)", true);
+
+    let first = painted_at(&mut view, SCREEN);
+    let again = painted_at(&mut view, SCREEN);
+
+    assert_eq!(
+        transmissions(&first),
+        1,
+        "the first paint is what tells the terminal about the picture"
+    );
+    assert_eq!(
+        transmissions(&again),
+        0,
+        "and the second paint writes the placeholders of a picture the terminal already holds"
+    );
+    assert_eq!(
+        pictured_rows(&again).len(),
+        pictured_rows(&first).len(),
+        "the picture is where it was: a repaint moves neither its rows nor its bytes"
+    );
+    assert_eq!(
+        view.pictures().rasterises("shot.png"),
+        1,
+        "nor is it made a second time at a size it was already made at"
+    );
+}
+
+/// The same rule where a scroll puts it: a placement moved down the band is the picture the
+/// terminal holds, written again at another row — no bytes, no raster.
+#[test]
+fn a_picture_placed_again_after_a_scroll_sends_nothing_down_the_wire() {
+    let (_root, workspace) = workspace(400, 200);
+    let measured = picture::measure("shot.png", 60, &surface(&workspace))
+        .expect("a picture inside the workspace");
+    let mut pictures = Pictures::kitty(cell());
+    let block = Rect {
+        x: 0,
+        y: 2,
+        width: measured.cols(),
+        height: measured.rows(),
+    };
+
+    let mut first = Buffer::empty(Rect::new(0, 0, 80, 30));
+    pictures.place(&measured, cell(), block, &mut first);
+    let mut scrolled = Buffer::empty(Rect::new(0, 0, 80, 30));
+    pictures.place(&measured, cell(), Rect { y: 8, ..block }, &mut scrolled);
+
+    assert_eq!(
+        transmissions(&first),
+        1,
+        "the first placement sends the picture"
+    );
+    assert_eq!(
+        transmissions(&scrolled),
+        0,
+        "and a scroll is a placement of what was sent, not a second sending"
+    );
+    assert_eq!(
+        pictured_rows(&scrolled),
+        (8..8 + measured.rows()).collect::<Vec<_>>(),
+        "the block is drawn where the reader scrolled to"
+    );
+    assert_eq!(
+        pictures.rasterises("shot.png"),
+        1,
+        "and the picture is not made again at a size it was already made at"
+    );
+}
+
+/// ADR-0008's third rule: a resize re-rasterises only what is visible. A width change drops
+/// every row the cache held, so the next paint lays out the entries the band reaches and no
+/// others — and a picture becomes pixels only when its block is on the screen.
+#[test]
+fn a_resize_rasterises_only_the_picture_the_band_goes_on_to_show() {
+    let (_root, workspace) = workspace(800, 200);
+    shoot(&workspace.join("old.png"), 800, 200);
+    let tall = "a paragraph of an answer written out long enough to fill more rows than the \
+                band has, so that the entry above the newest one is off the screen and the \
+                picture in it is never measured";
+    let mut view = View::of(
+        vec![
+            Entry::Assistant {
+                turn: 1,
+                text: SecretSet::default().redact(format!("![first](old.png) {}", tall.repeat(6))),
+            },
+            Entry::Assistant {
+                turn: 2,
+                text: SecretSet::default().redact("![second](shot.png) the newest answer"),
+            },
+        ],
+        Scroll::Tail,
+    );
+    view.set_workspace(workspace.clone());
+    view.set_cell_size(cell());
+    view.set_pictures(Pictures::kitty(cell()));
+
+    painted_at(&mut view, SCREEN);
+    assert_eq!(
+        view.pictures().rasterises("shot.png"),
+        1,
+        "the picture the band shows is made"
+    );
+    assert_eq!(
+        view.pictures().rasterises("old.png"),
+        0,
+        "and the one scrolled above the band is never touched, because no row of it was laid \
+         out to draw"
+    );
+
+    painted_at(&mut view, (60, SCREEN.1));
+    assert_eq!(
+        view.pictures().rasterises("shot.png"),
+        2,
+        "a narrower band fits the visible picture into fewer columns, so it is made again at \
+         the size it is now drawn at"
+    );
+    assert_eq!(
+        view.pictures().rasterises("old.png"),
+        0,
+        "and the picture off the screen keeps the raster it never had, because a resize is not \
+         what makes a picture: the band showing it is (ADR-0008)"
+    );
+}
+
+/// §12's copy rule: a picture's block copies as its words and never as the bytes it is drawn
+/// from. `Ctrl-Y` hands out the rows the block was laid out as, so the cells a reader marked
+/// give `a purple field` and no escape sequence, no placeholder and no base64.
+#[test]
+fn a_picture_block_copied_out_of_the_band_is_its_words_and_never_its_bytes() {
+    let (_root, workspace) = workspace(400, 200);
+    let mut view = frame(&workspace, "![a purple field](shot.png)", true);
+    let painted = painted_at(&mut view, SCREEN);
+    let drawn = *pictured_rows(&painted)
+        .first()
+        .expect("the picture is on the screen");
+
+    view.drag(Cell::new(drawn, 0), Cell::new(drawn, SCREEN.0 - 1));
+    // Painted again, because a copy reads the span the last paint drew: the mark and the
+    // cells `Ctrl-Y` hands out are one value, one paint apart at the most (§12, #50).
+    painted_at(&mut view, SCREEN);
+    let taken = match view.key(Key::Copy) {
+        Outcome::Copy(words) => words,
+        other => panic!("Ctrl-Y is a copy, and this frame answered it {other:?}"),
+    };
+
+    assert_eq!(
+        taken.trim(),
+        "a purple field",
+        "the marked cells hand out what the picture is of — never the bytes that drew it"
+    );
+    assert!(
+        !taken.contains(PLACEHOLDER) && !taken.contains('\u{1b}'),
+        "and nothing of the terminal's own protocol is in what leaves: {taken:?}"
+    );
+}
+
+/// §12's absence over refusal: a terminal that speaks no Kitty is given the words, whole, and
+/// no row reserved for a picture it cannot draw. The frame is the frame a reader without
+/// pictures would have had — nothing truncated, nothing half-drawn, no bytes.
+#[test]
+fn a_terminal_that_speaks_no_kitty_is_given_the_words_and_an_uncorrupted_frame() {
+    let (_root, workspace) = workspace(400, 200);
+    let mut view = frame(
+        &workspace,
+        "before ![a purple field](shot.png) after",
+        false,
+    );
+
+    assert!(!view.pictures().draws(), "this frame places no picture");
+    let painted = painted_at(&mut view, SCREEN);
+    let words: String = (painted.area.y..painted.area.bottom())
+        .map(|y| {
+            (painted.area.x..painted.area.right())
+                .filter_map(|x| painted.cell((x, y)).map(|cell| cell.symbol().to_owned()))
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert!(
+        words.contains("a purple field"),
+        "the picture's words are on the screen, and are the only thing it is said as: {words:?}"
+    );
+    assert_eq!(
+        transmissions(&painted),
+        0,
+        "and no byte of a picture protocol is in a frame that places none"
+    );
+    assert!(
+        pictured_rows(&painted).is_empty(),
+        "nor is a cell claimed for a picture that will not be drawn"
+    );
+}
+
+/// The terminal is asked what it is by its own name, once, before the first frame: a terminal
+/// that speaks Kitty is handed the pictures its frames draw from, and one that does not is
+/// handed none. `KITTY_WINDOW_ID` is not the question — the terminal that names itself in
+/// `TERM` is the terminal that speaks the protocol.
+#[test]
+fn a_terminal_that_names_itself_as_one_that_places_pictures_is_told_so() {
+    for term in [
+        "xterm-kitty",
+        "xterm-ghostty",
+        "xterm-256color-with-wezterm",
+    ] {
+        assert!(
+            picture::speaks_kitty(Some(term), None),
+            "{term} is a terminal that places pictures"
+        );
+    }
+    assert!(
+        picture::speaks_kitty(None, Some("ghostty")),
+        "and a terminal that names itself by its program is one too"
+    );
+
+    for quiet in [
+        (Some("xterm-256color"), None),
+        (Some("screen-256color"), Some("tmux")),
+        (Some("dumb"), None),
+        (None, None),
+    ] {
+        assert!(
+            !picture::speaks_kitty(quiet.0, quiet.1),
+            "{quiet:?} is a terminal that would be handed a picture it cannot place"
+        );
+    }
 }

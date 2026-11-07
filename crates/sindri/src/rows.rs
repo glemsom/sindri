@@ -68,7 +68,7 @@ use sindri_core::run::Exit;
 
 use crate::ink::{Ink, Look};
 use crate::markdown;
-use crate::picture;
+use crate::picture::{self, Surface};
 use crate::pulse::Head;
 use crate::stream::Stream;
 
@@ -218,6 +218,13 @@ impl Row {
 /// an answer is #38's, the pulse at the head of the newest one is #39's, and the tool
 /// row's own contract is #40's.
 pub fn layout(entry: &Entry, cols: u16) -> Vec<Row> {
+    layout_on(entry, cols, &Surface::none())
+}
+
+/// The same entry laid out on a `surface`: where a picture's source is resolved, how big a
+/// cell is, and whether this terminal places one — the three facts that say how many rows an
+/// `src` in an answer takes (§12, #55).
+pub fn layout_on(entry: &Entry, cols: u16, surface: &Surface) -> Vec<Row> {
     let cols = cols.max(1);
     match entry {
         Entry::Turn { turn } => vec![rule(&format!("turn {turn} "), cols)],
@@ -232,7 +239,7 @@ pub fn layout(entry: &Entry, cols: u16) -> Vec<Row> {
             exit,
             ..
         } => settled(name, *exit, &text.to_string(), *bytes, *elapsed_ms, cols),
-        Entry::Assistant { text, .. } => answer(&text.to_string(), cols, None),
+        Entry::Assistant { text, .. } => answer_on(&text.to_string(), cols, None, surface),
         Entry::Reasoning { text, .. } => thought(&text.to_string(), cols),
     }
 }
@@ -248,9 +255,11 @@ pub(crate) fn thought(text: &str, cols: u16) -> Vec<Row> {
         .collect()
 }
 
-/// The rows an answer is drawn as: its markdown, laid out by [`markdown`] and set in the
-/// gutter an answer is printed from — its own margin held open and blank, because an
-/// answer is the thing being read and needs no rule beside it.
+/// The rows an answer is drawn as on a `surface`: its markdown, laid out by [`markdown`] and
+/// set in the gutter an answer is printed from — its own margin held open and blank, because
+/// an answer is the thing being read and needs no rule beside it. The surface is where a
+/// picture's source is resolved, how big a cell is and whether this terminal places one, which
+/// are the three facts that say how many rows an `src` in the answer takes (§12, #55).
 ///
 /// What the constructs look like is `markdown`'s, because the layout is the product and
 /// the ticket that wrote it (#52) owns all of it: a heading's weight, a table's rule, a
@@ -263,7 +272,7 @@ pub(crate) fn thought(text: &str, cols: u16) -> Vec<Row> {
 /// on the one row the run's marker heads (#39) to stand the marker in that gutter instead:
 /// the mark is drawn from the frame's left edge and the words of that row begin after it,
 /// so the row the marker heads loses the columns the gutter held and no more.
-pub(crate) fn answer(text: &str, cols: u16, head: Option<&Head>) -> Vec<Row> {
+pub(crate) fn answer_on(text: &str, cols: u16, head: Option<&Head>, surface: &Surface) -> Vec<Row> {
     let (gutter, room) = margin(INDENT, cols);
     // The columns the marker takes out of the first row's words: its own width, the blank
     // column that keeps it from being one run of glyphs with the prose, less the gutter it
@@ -275,7 +284,7 @@ pub(crate) fn answer(text: &str, cols: u16, head: Option<&Head>) -> Vec<Row> {
             .saturating_sub(u16::try_from(glyphs(gutter)).unwrap_or(u16::MAX)),
         None => 0,
     };
-    let mut rows = markdown::rows_under(text, room, reserve).into_iter();
+    let mut rows = markdown::rows_on(text, room, reserve, surface).into_iter();
     let mut laid: Vec<Row> = Vec::new();
     if let Some(head) = head
         && let Some(first) = rows.next()
@@ -534,6 +543,10 @@ pub struct Rows {
     /// included: ADR-0008's three rules are statements about this number, so it is a
     /// count a test can read rather than one a comment makes.
     lays: usize,
+    /// The surface a picture in an answer is measured against: how many rows a picture takes
+    /// is part of the rows an entry was laid out as, so a frame that changes any of those
+    /// facts drops what this cache holds the same way a width change does (§12, #55).
+    surface: Surface,
 }
 
 /// One entry and the rows it was laid out as, or nothing when this cache has never laid
@@ -636,7 +649,7 @@ impl Rows {
         {
             return;
         }
-        let rows = stream.rows(self.cols, head.as_ref());
+        let rows = stream.rows_on(self.cols, head.as_ref(), &self.surface);
         match self.held.last_mut() {
             Some(held) if matches!(held.what, What::Live { .. }) => {
                 held.what = What::Live { revision, head };
@@ -722,6 +735,20 @@ impl Rows {
         }
     }
 
+    /// Tells the cache the surface its pictures are measured against. The same surface is
+    /// nothing at all; a different one drops every row the cache held, because how many rows a
+    /// picture takes is part of the rows an entry was laid out as, and the next paint lays
+    /// them out again once (ADR-0008).
+    pub fn retune(&mut self, surface: Surface) {
+        if surface == self.surface {
+            return;
+        }
+        self.surface = surface;
+        for held in &mut self.held {
+            held.rows = None;
+        }
+    }
+
     /// The rows of entry `at`, laid out now if this cache has never laid them out at the
     /// width it holds and kept for the next paint. `at` is an index this cache handed
     /// out — the one a [`Piece`] carries — so a cache that does not hold it has been
@@ -739,7 +766,7 @@ impl Rows {
         if held.rows.is_none()
             && let Some(fact) = fact
         {
-            let rows = layout(fact, cols);
+            let rows = layout_on(fact, cols, &self.surface);
             self.lays += 1;
             self.held[at].rows = Some(rows);
         }

@@ -15,9 +15,11 @@
 //! prompt pastes what it is called, which is the whole of what a terminal can honestly hand
 //! out.
 //!
-//! The pixels are not here either. A picture is drawn by [`crate::pictures`], when the band
-//! first shows it, and [`Surface`] is the one value that says how big the cells it is measured
-//! against are and whether this terminal places a picture at all.
+//! What becomes pixels here is the file and nothing else: [`Picture::rasterise`] reads it and
+//! hands back the pixels of the cells it was measured into, or nothing when the file is not a
+//! picture after all. Where those pixels go is [`crate::pictures`], which places them on the
+//! terminal, and [`Surface`] is the one value that says how big the cells are and whether this
+//! terminal places a picture at all.
 
 use std::path::{Path, PathBuf};
 
@@ -126,6 +128,32 @@ impl Picture {
             u32::from(self.rows) * cell.height(),
         )
     }
+
+    /// The pixels of this picture at the cells it was measured into on `cell`, and nothing
+    /// when the file cannot be made a picture of after all: the file was there when it was
+    /// measured and a file can be gone by the time it is drawn.
+    ///
+    /// A drawing is rendered at exactly the pixels of its footprint, so the terminal places
+    /// what was measured and not a picture it then stretches. A raster is scaled to the same
+    /// pixels, by a filter that averages rather than drops, because a screenshot fitted into a
+    /// band is the ordinary case and a nearest neighbour would lose the whole shape of a
+    /// letter in it.
+    pub fn rasterise(&self, cell: CellSize) -> Option<image::RgbaImage> {
+        let (width, height) = self.pixels(cell);
+        if is_svg(&self.path) {
+            let drawing = std::fs::read_to_string(&self.path).ok()?;
+            return Svg::parse(&drawing)
+                .ok()?
+                .rasterise_at((width, height))
+                .ok();
+        }
+        let picture = image::open(&self.path).ok()?;
+        Some(
+            picture
+                .resize_exact(width, height, image::imageops::FilterType::Triangle)
+                .to_rgba8(),
+        )
+    }
 }
 
 /// The words a picture is spoken of as: the alternative text an answer wrote over it, and the
@@ -202,6 +230,27 @@ impl std::fmt::Display for Refusal {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str(&self.message())
     }
+}
+
+/// Whether the terminal this launch is drawing on speaks the Kitty graphics protocol: what
+/// the environment says the terminal calls itself, and nothing else.
+///
+/// Asking the terminal itself is the other way, and it is refused here because the launch has
+/// already spent its one round trip on the cell size: a second question is a second wait
+/// before the first frame, for a fact that decides only whether a picture is drawn at all. So
+/// the name is read off `TERM` and `TERM_PROGRAM` — a terminal that speaks Kitty says so in
+/// one of them, Ghostty included — and a terminal that names neither is treated as one that
+/// places no picture, because absence is the honest degradation: the words stay, whole, and no
+/// half-drawn picture claims to be one (§12, ADR-0003).
+pub fn speaks_kitty(term: Option<&str>, program: Option<&str>) -> bool {
+    let names_a_terminal_that_places_pictures = |word: &str| {
+        let word = word.to_ascii_lowercase();
+        ["kitty", "ghostty", "wezterm"]
+            .iter()
+            .any(|name| word.contains(name))
+    };
+    term.is_some_and(names_a_terminal_that_places_pictures)
+        || program.is_some_and(names_a_terminal_that_places_pictures)
 }
 
 /// The path `source` resolves to, which has to be a file inside `workspace`: the canonical

@@ -23,6 +23,7 @@ pub mod mermaid; // a mermaid fence becomes a picture, or is refused with a reas
 pub mod models; // the names the wire serves, ranked as a query is typed into the screen
 pub mod picker; // the files of the workspace, walked with `ignore`
 pub mod picture; // a picture an answer points at, resolved to a file inside the workspace and measured
+pub mod pictures; // the pictures a frame has placed: every source the terminal was told about
 pub mod pulse; // the marker at the head of the newest answer: the braille glyph a live run turns
 pub mod queue; // the prompts typed while a run is live, waiting above the composer in the order
 pub mod rail; // the run's facts down the frame's right-hand columns, read as a ledger

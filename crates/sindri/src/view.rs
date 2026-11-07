@@ -75,10 +75,12 @@ use crate::keys::{Act, Mode, Stack};
 use crate::mark::{Cell, Mark, Span};
 use crate::models::Models;
 use crate::picker::Picker;
+use crate::picture::Surface;
+use crate::pictures::Pictures;
 use crate::pulse::Pulse;
 use crate::queue::Queue;
 use crate::rail::Facts;
-use crate::rows::{Rows, Scroll};
+use crate::rows::{Row, Rows, Scroll};
 use crate::settings::Settings;
 use crate::stream::Stream;
 
@@ -228,6 +230,10 @@ pub struct View {
     /// The settings modal's rows: the config's keys and the text each of them holds, seeded
     /// from the config the frame was handed when the screen opened (§12, ADR-0009).
     settings: Settings,
+    /// The pictures this frame has placed, each kept by its source and the cells it took:
+    /// what draws a picture over the rows its block reserved, and the cache that keeps a
+    /// scroll from sending one down the wire twice (ADR-0008).
+    pictures: Pictures,
     /// The pixel size of one cell on the terminal this frame is drawn on, as the launch
     /// probed it once before its event loop and handed it over (§12, ADR-0003). A picture
     /// is measured into cells against this and rasterised at its pixels, so the frame that
@@ -357,6 +363,28 @@ impl View {
     /// terminal then stretches.
     pub fn set_cell_size(&mut self, cell_size: CellSize) {
         self.cell_size = cell_size;
+    }
+
+    /// Hands this frame the way its terminal places a picture — nothing at all for a terminal
+    /// that speaks no protocol for them, which is the case every frame fixture is in.
+    pub fn set_pictures(&mut self, pictures: Pictures) {
+        self.pictures = pictures;
+    }
+
+    /// The pictures this frame has placed: what a test reads a raster count off, and what a
+    /// launch hands the frame once it has decided whether its terminal places one.
+    pub fn pictures(&self) -> &Pictures {
+        &self.pictures
+    }
+
+    /// The surface a picture in this frame is measured against: the workspace a source
+    /// resolves inside, the cell it is drawn at, and whether this terminal places one.
+    fn surface(&self) -> Surface {
+        Surface::of(
+            self.workspace.as_deref(),
+            self.cell_size,
+            self.pictures.draws(),
+        )
     }
 
     /// The settings modal's rows, as they stand: what the screen paints and what `Enter`
@@ -837,6 +865,10 @@ impl View {
     fn transcript(&mut self, area: Rect, buffer: &mut Buffer) {
         buffer.set_style(area, Ink::Plain.style());
         self.rows.resize(area.width);
+        // How many rows a picture takes is part of the rows an entry was laid out as, so the
+        // surface they were laid out on is told to the cache before a window is measured
+        // (ADR-0008, §12).
+        self.rows.retune(self.surface());
         // The marker is laid into the rows it heads rather than painted over them, so the
         // answer's first row is wrapped around it and the prose it introduces is never cut
         // by the mark standing in front of it (#39).
@@ -857,6 +889,10 @@ impl View {
                     },
                     buffer,
                 );
+                // The picture is placed after the row's words, because it is drawn over them:
+                // a reader whose terminal places pictures is shown the picture, and a reader
+                // whose terminal does not is left holding the words (§12, #55).
+                place(&mut self.pictures, self.cell_size, row, area, y, buffer);
                 // The band's rows are what a mark's cells are counted in, so the lines
                 // they are drawn as are gathered only when there is a mark to read.
                 if self.mark.is_some() {
@@ -1207,6 +1243,39 @@ struct Bands {
     composer: Rect,
     /// The footer's single row of hints, on the bottom edge.
     footer: Rect,
+}
+
+/// Places the picture `row` stands on, if it stands on one, over the block of cells the
+/// transcript reserved for it.
+///
+/// A block the band does not hold whole is not placed at all: a placement writes into every row
+/// of the block, and a picture half inside the transcript's band would be drawn over the
+/// composer under it. What is left is the row's own words, which is the honest picture of a
+/// picture that is only half on the screen (§12).
+///
+/// It is a free function because the rows it is told about are borrowed from the cache the
+/// frame owns: a method would ask for the frame twice.
+fn place(
+    pictures: &mut Pictures,
+    cell: CellSize,
+    row: &Row,
+    area: Rect,
+    y: u16,
+    buffer: &mut Buffer,
+) {
+    let Some(picture) = row.picture() else {
+        return;
+    };
+    let block = Rect {
+        x: area.x,
+        y,
+        width: picture.cols(),
+        height: picture.rows(),
+    };
+    if block.right() > area.right() || block.bottom() > area.bottom() {
+        return;
+    }
+    pictures.place(picture, cell, block, buffer);
 }
 
 /// Cuts `area` into its four bands. The chrome is measured up from the bottom edge and
