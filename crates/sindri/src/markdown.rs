@@ -20,6 +20,16 @@
 //! the source with that reason under it — the words the block copies as, and what a reader
 //! sees when the picture cannot be placed over them.
 //!
+//! A picture an answer points at is a block too, and the one block whose height this module
+//! cannot work out for itself: how many rows an `src` takes is its own size over the cell it
+//! is drawn at, which only [`crate::picture`] can answer. So the surface a picture is measured
+//! against — the workspace, the cell, whether this terminal places one — is handed to the
+//! layout, and a source that resolves inside the workspace becomes a block of the cells it
+//! takes with the words it is spoken of as at the head of them. Those words are what the block
+//! copies as, and the picture is placed over them by [`crate::pictures`] and never here. A
+//! source that does not resolve is one row saying why, because a picture refused with no
+//! reason is a block that silently disappeared (§12, #55).
+//!
 //! Two rules outlive any construct. A block still open when the text ends — a fence the
 //! wire is still streaming — is drawn as the block it opened, so a half-written code
 //! block is code and never prose that ate the rest of the answer (ADR-0008). And a
@@ -33,6 +43,7 @@ use syntect::parsing::{ParseState, Scope, ScopeStack, SyntaxSet};
 
 use crate::ink::{Face, Ink, Look};
 use crate::mermaid::{self, Fence};
+use crate::picture::{self, Picture, Surface};
 use crate::rows::{Row, glyphs, split_at};
 
 /// The turns of the parser §12's table asks for, and no others: a table is the one
@@ -51,7 +62,15 @@ pub fn rows(text: &str, cols: u16) -> Vec<Row> {
 /// beside it (§39). Every row after the first is laid out at the full width, which is
 /// what makes a live answer and a settled one the same picture with one glyph moved.
 pub fn rows_under(text: &str, cols: u16, reserve: u16) -> Vec<Row> {
-    let mut room = Room::new(cols.max(1));
+    rows_on(text, cols, reserve, &Surface::none())
+}
+
+/// The same markdown on a `surface`: the workspace a picture's source is resolved inside, the
+/// cell it is measured against, and whether this terminal places one. A picture is a block, so
+/// how many rows it takes is the layout's business and the surface is what that is asked of
+/// (§12, #55).
+pub fn rows_on(text: &str, cols: u16, reserve: u16, surface: &Surface) -> Vec<Row> {
+    let mut room = Room::new(cols.max(1), surface);
     room.reserve = usize::from(reserve);
     // Each event is handed the source it came from: a fence's span is the block from its
     // opening line to its last, which is how a mermaid fence knows whether its closing line
@@ -162,11 +181,19 @@ struct Room {
     /// nothing once that row has been written: what keeps the mark's row from running over
     /// the width the rest of the answer was laid out at (#39).
     reserve: usize,
+    /// The surface a picture is measured against: the workspace an `src` resolves inside, the
+    /// cell it is drawn at, and whether this terminal places one (§12, #55).
+    surface: Surface,
+    /// The picture being read, while one is being written: the source it points at and the
+    /// alternative words written over it, which are the words its block is spoken of as.
+    /// Nothing is drawn until the picture closes, because its words are inside it.
+    image: Option<(String, String)>,
 }
 
 impl Room {
-    /// A room `wide` columns across that has written nothing.
-    fn new(wide: u16) -> Room {
+    /// A room `wide` columns across that has written nothing, measuring its pictures against
+    /// `surface`.
+    fn new(wide: u16, surface: &Surface) -> Room {
         Room {
             wide,
             rows: Vec::new(),
@@ -184,6 +211,8 @@ impl Room {
             mermaid: None,
             table: None,
             reserve: 0,
+            surface: surface.clone(),
+            image: None,
         }
     }
 
@@ -269,12 +298,18 @@ impl Room {
                     // Inside a table the text is a cell's, and a cell is measured only
                     // once the whole table has been read.
                     Some(table) => table.text(&text, self.block),
-                    None => {
-                        if let Some((_, said)) = &mut self.link {
-                            said.push_str(&text);
+                    // Inside a picture the text is its alternative words, kept aside for the
+                    // row the picture is spoken of on rather than set into the prose: a
+                    // picture's words are the block's, not the paragraph's (§12, #55).
+                    None => match &mut self.image {
+                        Some((_, alt)) => alt.push_str(&text),
+                        None => {
+                            if let Some((_, said)) = &mut self.link {
+                                said.push_str(&text);
+                            }
+                            self.prose(&text, self.block);
                         }
-                        self.prose(&text, self.block);
-                    }
+                    },
                 },
             },
             // Inline code keeps the spacing it was written with, because a run of code's
@@ -292,6 +327,10 @@ impl Room {
                     }
                 }
             }
+            Event::Start(Tag::Image { dest_url, .. }) => {
+                self.image = Some((String::from(&*dest_url), String::new()));
+            }
+            Event::End(TagEnd::Image) => self.close_image(),
             Event::Start(Tag::Link { dest_url, .. }) => {
                 self.link = Some((String::from(&*dest_url), String::new()));
             }
@@ -300,7 +339,12 @@ impl Room {
             // drew: the paragraph is reflowed to the room, so the two lines are one.
             Event::SoftBreak => match &mut self.table {
                 Some(table) => table.text(" ", self.block),
-                None => self.spaced = true,
+                None => match &mut self.image {
+                    // A line break inside a picture's words is the line they were written on
+                    // and not one the reader drew: the words are flowed like prose.
+                    Some((_, alt)) => alt.push(' '),
+                    None => self.spaced = true,
+                },
             },
             Event::HardBreak => self.flush_if_written(),
             _ => {}
@@ -559,6 +603,73 @@ impl Room {
         }
     }
 
+    /// A picture closes: the block it is, spoken of as its words on the first of its rows and
+    /// measured into the cells it takes under them (§12, #55).
+    ///
+    /// The words are written even where the terminal places the picture over them, because
+    /// they are what the block copies as: the copy reads the layout and the terminal reads the
+    /// placement, and neither has to ask the other what the picture was of.
+    ///
+    /// A source that cannot be drawn is a row saying what the picture was of and why it is not
+    /// there — never a gap where a picture was, and never a row that runs over the band. A
+    /// terminal that places no picture is given the words alone: the rows of a block it cannot
+    /// fill would be a hole in the transcript, and a hole is not an honest way to say that a
+    /// picture is not drawn.
+    fn close_image(&mut self) {
+        let Some((source, alt)) = self.image.take() else {
+            return;
+        };
+        self.flush_if_written();
+        self.gap();
+        let words = picture::words(&source, &alt);
+        let look = Look::plain(Ink::Dim);
+        let room = u16::try_from(self.room()).unwrap_or(u16::MAX);
+        match picture::measure(&source, room, &self.surface) {
+            Err(refusal) => {
+                self.prose(&words, look);
+                self.flush_if_written();
+                self.prose(&refusal.message(), look);
+                self.flush_if_written();
+            }
+            Ok(_) if !self.surface.draws() => {
+                self.prose(&words, look);
+                self.flush_if_written();
+            }
+            Ok(measured) => {
+                let block = self.blocked(&words, look, &measured);
+                self.rows.extend(block);
+            }
+        }
+        // A block stands under one blank row, the same one every other block stands under,
+        // and it says so itself: the last row of a picture is a cell of the picture and does
+        // not stand in for the gap after it.
+        self.blank = false;
+        self.gap();
+    }
+
+    /// The rows a picture takes: its words at the head of them, in the block's own gutter, and
+    /// the cells it was measured into under that — empty, because the picture is what says the
+    /// rest.
+    ///
+    /// The words are laid out by the same room every other word is, so an alt text longer than
+    /// the band wraps onto rows of the block instead of running over its edge. A block is
+    /// therefore the taller of the two: the rows the words needed, or the picture itself.
+    fn blocked(&mut self, words: &str, look: Look, picture: &Picture) -> Vec<Row> {
+        let before = self.rows.len();
+        self.prose(words, look);
+        self.flush_if_written();
+        let mut rows = self.rows.split_off(before);
+        while rows.len() < usize::from(picture.rows()) {
+            // The block's own gutter runs down the rows the picture takes, so a picture in a
+            // quote is still a block of it.
+            rows.push(Row::of(self.opening()));
+        }
+        if let Some(first) = rows.first().cloned() {
+            rows[0] = first.pictured_over(picture.clone());
+        }
+        rows
+    }
+
     /// One blank row between two blocks, so a heading is not taken for the last line of
     /// the paragraph above it: nothing at the top of the answer and never two blank rows
     /// where a block already stands under one.
@@ -572,6 +683,19 @@ impl Room {
     /// hanging indent in front of it, unless it is the item's first row and already
     /// carries the marker that indent stands for.
     fn flush(&mut self) {
+        let opening = self.opening();
+        self.line.clear();
+        self.push(Row::of(opening));
+        self.used = 0;
+        self.spaced = false;
+        self.first = false;
+    }
+
+    /// The runs every row of the block in hand opens with: the block's lead, the hanging indent
+    /// of the items it is inside, and then the row in hand. One reading of a block's gutter, so
+    /// a row written by [`Room::flush`] and a row written by hand — a picture's — open the same
+    /// way.
+    fn opening(&self) -> Vec<(String, Look)> {
         let mut spans = self.lead.clone();
         for (at, mark) in self.marks.iter().enumerate() {
             let innermost = at + 1 == self.marks.len();
@@ -581,11 +705,8 @@ impl Room {
             };
             spans.push((text, Look::plain(Ink::Plain)));
         }
-        spans.append(&mut self.line);
-        self.push(Row::of(spans));
-        self.used = 0;
-        self.spaced = false;
-        self.first = false;
+        spans.extend(self.line.iter().cloned());
+        spans
     }
 
     /// Puts the row in hand down when it says something: what ends a block, and what a
@@ -892,7 +1013,9 @@ fn lines_of(cells: &[Cell], widths: &[usize]) -> Vec<Vec<Cell>> {
         .iter()
         .enumerate()
         .map(|(at, width)| {
-            let mut room = Room::new(u16::try_from(*width).unwrap_or(u16::MAX));
+            // A cell is measured for the words that fit it and never for a picture: a
+            // picture's height is not a column's width, so this room has no surface.
+            let mut room = Room::new(u16::try_from(*width).unwrap_or(u16::MAX), &Surface::none());
             for (text, look) in cells.get(at).into_iter().flatten() {
                 room.prose(text, *look);
             }

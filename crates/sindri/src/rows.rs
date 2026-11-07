@@ -68,6 +68,7 @@ use sindri_core::run::Exit;
 
 use crate::ink::{Ink, Look};
 use crate::markdown;
+use crate::picture;
 use crate::pulse::Head;
 use crate::stream::Stream;
 
@@ -109,6 +110,10 @@ const HAIRLINE: char = '─';
 pub struct Row {
     /// The runs of glyphs, left to right, each written in the look it was given.
     spans: Vec<(String, Look)>,
+    /// The picture this row stands on, when it is the first row of a block a picture is drawn
+    /// over: what the paint places, and the reason the row's own words are the ones a copy of
+    /// the block takes (§12, #55). A row of prose is no picture at all.
+    picture: Option<picture::Picture>,
 }
 
 impl Row {
@@ -126,13 +131,32 @@ impl Row {
                 .map(|(text, look)| (text, look.into()))
                 .filter(|(text, _)| !text.is_empty())
                 .collect(),
+            picture: None,
         }
+    }
+
+    /// The same row with `picture` drawn over the block it stands on: what the first row of a
+    /// picture's block becomes once the picture has been measured, because the words are what
+    /// the block copies as and the placement is what the terminal reads (§12, #55).
+    pub fn pictured_over(mut self, picture: picture::Picture) -> Row {
+        self.picture = Some(picture);
+        self
+    }
+
+    /// The picture this row stands on, and nothing for a row of prose: what the band places
+    /// over the rows the block reserved, and what the copy reads the words of instead of the
+    /// bytes (§12, #55).
+    pub fn picture(&self) -> Option<&picture::Picture> {
+        self.picture.as_ref()
     }
 
     /// A row that says nothing: the blank row two blocks of markdown stand apart by,
     /// which is still a row of the transcript and not a gap in it.
     pub fn blank() -> Row {
-        Row { spans: Vec::new() }
+        Row {
+            spans: Vec::new(),
+            picture: None,
+        }
     }
 
     /// The columns this row takes when it is drawn.
@@ -158,7 +182,10 @@ impl Row {
         let mut spans: Vec<(String, Look)> = Vec::with_capacity(self.spans.len() + 1);
         spans.push((String::from(gutter), Look::plain(ink)));
         spans.extend(self.spans.iter().cloned());
-        Row::of(spans)
+        Row {
+            picture: self.picture.clone(),
+            ..Row::of(spans)
+        }
     }
 
     /// The glyphs this row is made of, left to right, with no ink: the line a mark reads

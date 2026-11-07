@@ -13,7 +13,9 @@ use std::path::{Path, PathBuf};
 use image::{Rgba, RgbaImage};
 
 use sindri::graphics::CellSize;
+use sindri::markdown;
 use sindri::picture::{self, Surface};
+use sindri::rows::Row;
 
 /// A directory with a workspace inside it, and one picture in that workspace: the file a
 /// run's own commands could have read, and so the file an answer may point the reader at.
@@ -172,5 +174,158 @@ fn a_picture_is_spoken_of_as_its_alternate_text_or_as_its_source() {
         picture::words("shot.png", "  "),
         "shot.png",
         "and a picture written with no words is spoken of as its source"
+    );
+}
+
+/// §12's block: a picture takes the cells it was measured into, and the words it is spoken of
+/// as stand at the head of them — so a reader of a terminal that places the picture sees the
+/// picture, and a reader of one that does not sees what it was of.
+///
+/// The words are laid out as prose and not one run, so an alt text longer than the band wraps
+/// onto the block's own rows instead of running over its edge: a row is whole or it is not
+/// written (§12).
+#[test]
+fn a_picture_is_laid_out_as_the_rows_it_takes_with_its_words_at_the_head() {
+    let (_root, workspace) = workspace(40, 40);
+
+    let rows = markdown::rows_on(
+        "before ![a purple field](shot.png) after",
+        80,
+        0,
+        &surface(&workspace),
+    );
+    let at = rows
+        .iter()
+        .position(|row| row.picture().is_some())
+        .expect("the picture is a row of the answer");
+
+    assert_eq!(
+        rows[at].glyphs(),
+        "a purple field",
+        "the row the picture stands on is its words, which is what a copy of it takes"
+    );
+    let measured = rows[at].picture().expect("the picture of that row");
+    assert_eq!(
+        (measured.cols(), measured.rows()),
+        (4, 2),
+        "and the cells of it are the cells it was measured into"
+    );
+    assert_eq!(
+        rows[at + 1].glyphs(),
+        "",
+        "the second of its two rows is the picture's own and holds no words"
+    );
+    assert!(
+        rows.iter().any(|row| row.glyphs().contains("after")),
+        "and what the answer said after the picture is still in the answer: {:?}",
+        rows.iter().map(Row::glyphs).collect::<Vec<_>>()
+    );
+    assert!(
+        rows.iter().all(|row| row.width() <= 80),
+        "no row of the answer is wider than the band it was laid out at"
+    );
+}
+
+/// A picture's words are its own even when the answer wrote none: the source is what it is
+/// spoken of as, because a picture with no words at all would copy as nothing.
+#[test]
+fn a_picture_written_with_no_alternate_text_is_spoken_of_as_its_source() {
+    let (_root, workspace) = workspace(40, 40);
+
+    let rows = markdown::rows_on("![](shot.png)", 80, 0, &surface(&workspace));
+
+    assert_eq!(
+        rows.iter()
+            .find(|row| row.picture().is_some())
+            .expect("the picture is a row")
+            .glyphs(),
+        "shot.png"
+    );
+}
+
+/// A terminal that places no picture is given the words and no rows reserved for a picture it
+/// cannot draw: a block of rows nothing fills is a hole in the transcript, and a hole is not
+/// the honest way to say that a picture is not drawn (§12).
+#[test]
+fn a_terminal_that_places_no_picture_is_given_the_words_and_no_rows_for_it() {
+    let (_root, workspace) = workspace(40, 40);
+    let words_only = Surface::of(Some(&workspace), CellSize::new(10, 20), false);
+
+    let rows = markdown::rows_on(
+        "before ![a purple field](shot.png) after",
+        80,
+        0,
+        &words_only,
+    );
+
+    assert!(
+        rows.iter().all(|row| row.picture().is_none()),
+        "nothing here claims a picture will be drawn"
+    );
+    assert_eq!(
+        rows.iter().map(Row::glyphs).collect::<Vec<_>>().join("\n"),
+        "before\n\na purple field\n\nafter",
+        "the words the picture was pointed at with stand in one row of their own"
+    );
+}
+
+/// And a picture that is refused says so where it would have stood, in the words the refusal
+/// was measured in: a picture that vanished is the failure the caption exists for (§12).
+#[test]
+fn a_refused_picture_is_a_row_saying_why_it_was_not_drawn() {
+    let (root, workspace) = workspace(40, 40);
+    shoot(&root.path().join("outside.png"), 40, 40);
+
+    let rows = markdown::rows_on("![a field](../outside.png)", 80, 0, &surface(&workspace));
+    let said = rows.iter().map(Row::glyphs).collect::<Vec<_>>().join("\n");
+
+    assert!(
+        said.contains("a field") && said.contains("outside the workspace"),
+        "the caption says what the picture was of and why it was not drawn: {said:?}"
+    );
+    assert!(
+        rows.iter().all(|row| row.picture().is_none()),
+        "and nothing claims a picture will be drawn"
+    );
+}
+
+/// A picture's words are held to the band like any other words: an alt text wider than it
+/// wraps instead of running over the edge, and a refusal's caption — which is longer than any
+/// alt text a writer would type — does the same, so a copy of the block never takes half a
+/// word (§12).
+#[test]
+fn a_picture_whose_words_are_wider_than_the_band_wraps_and_is_never_cut() {
+    let (_root, taken) = workspace(40, 40);
+    let alt = "a purple field photographed at dusk from the far side of the car park with a \
+               long lens and no tripod at all";
+
+    for draws in [true, false] {
+        let on = Surface::of(Some(&taken), CellSize::new(10, 20), draws);
+        let rows = markdown::rows_on(&format!("![{alt}](shot.png)"), 30, 0, &on);
+        let said = rows.iter().map(Row::glyphs).collect::<Vec<_>>().join(" ");
+
+        assert!(
+            rows.iter().all(|row| row.width() <= 30),
+            "every row of the block is inside the band it was laid out at: {said:?}"
+        );
+        assert!(
+            said.contains("no tripod at all"),
+            "and every word of the alt text is on the screen, draws the picture or not: \
+             {said:?}"
+        );
+    }
+
+    let (above, band) = workspace(40, 40);
+    shoot(&above.path().join("outside.png"), 40, 40);
+    let rows = markdown::rows_on("![a field](../outside.png)", 24, 0, &surface(&band));
+    let said = rows.iter().map(Row::glyphs).collect::<Vec<_>>().join(" ");
+
+    assert!(
+        rows.iter().all(|row| row.width() <= 24),
+        "no row of the caption runs over its band: {said:?}"
+    );
+    assert!(
+        said.contains("outside the workspace"),
+        "and the reason the caption exists to print is printed: {said:?}"
     );
 }
