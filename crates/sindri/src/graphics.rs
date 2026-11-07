@@ -114,6 +114,34 @@ impl Footprint {
         self.rows
     }
 
+    /// The cells a picture `width` by `height` pixels takes when it is fitted into a band
+    /// `room` columns across: the size a block of a transcript is laid out at, and the size
+    /// the picture is then drawn at.
+    ///
+    /// A picture is fitted and not refused for being wide, because a picture wider than the
+    /// band is the ordinary case — every screenshot on a terminal narrower than the window
+    /// it was taken on — and a row that ran over its width would be a row the paint clips and
+    /// whatever copies it loses. It is fitted by one scale on both axes, so it keeps the
+    /// shape it was drawn in, and that scale only ever shrinks it.
+    ///
+    /// What is still refused is a picture with no extent at all: there is nothing to divide,
+    /// nothing to draw, and a block of no cells would be a picture that disappeared without
+    /// a caption saying why (§12).
+    pub fn fit(width: u32, height: u32, cell: CellSize, room: u16) -> Result<Footprint, Refusal> {
+        let cols = cells(width as f32, cell.width());
+        let rows = cells(height as f32, cell.height());
+        if cols == 0 || rows == 0 {
+            return Err(Refusal::Sizeless);
+        }
+        let scale = (f64::from(room.clamp(1, MAX_COLS)) / f64::from(cols))
+            .min(f64::from(MAX_ROWS) / f64::from(rows))
+            .min(1.0);
+        Ok(Footprint {
+            cols: fitted(f64::from(cols) * scale, room.clamp(1, MAX_COLS)),
+            rows: fitted(f64::from(rows) * scale, MAX_ROWS),
+        })
+    }
+
     /// The pixels this footprint is on a `cell`: the size the picture is drawn at, and the
     /// size the terminal is asked to place.
     pub fn pixels(&self, cell: CellSize) -> (u32, u32) {
@@ -152,6 +180,13 @@ impl Svg {
         })
     }
 
+    /// The picture's own extent in pixels, as the SVG declares it: what a caller that has
+    /// to fit the picture into a band measures from, before it divides by the cell.
+    pub fn size(&self) -> (u32, u32) {
+        let size = self.tree.size();
+        (size.width() as u32, size.height() as u32)
+    }
+
     /// How many cells of a `cell` this picture takes: the SVG's own extent divided by the
     /// cell's pixel size, rounded up on each axis, so a picture is never cut off by the half
     /// cell that did not divide.
@@ -187,6 +222,14 @@ impl Svg {
     /// has room for is refused before the pixels are allocated (§12).
     pub fn rasterise(&self, cell: CellSize) -> Result<image::RgbaImage, Refusal> {
         let (width, height) = self.footprint(cell)?.pixels(cell);
+        self.rasterise_at((width, height))
+    }
+
+    /// The picture as `width` by `height` pixels on a `cell` the picture was measured
+    /// against, whatever extent it declares of its own: what a picture fitted into a band's
+    /// columns is drawn at, because the footprint the band allowed is smaller than the one
+    /// the SVG declares and the pixels have to follow the band rather than the drawing (§12).
+    pub fn rasterise_at(&self, (width, height): (u32, u32)) -> Result<image::RgbaImage, Refusal> {
         let mut pixmap = tiny_skia::Pixmap::new(width, height).ok_or(Refusal::Unrenderable)?;
 
         let size = self.tree.size();
@@ -282,6 +325,17 @@ fn options() -> &'static usvg::Options<'static> {
         database.set_sans_serif_family(LABEL_FAMILY);
         options
     })
+}
+
+/// How many whole cells a fitted picture takes, rounded down so a fit never asks for a
+/// column the band does not have, and never fewer than one so a picture fitted very small is
+/// still a block of the transcript rather than a gap in it.
+fn fitted(cells: f64, ceiling: u16) -> u16 {
+    let whole = cells.floor().max(1.0);
+    u16::try_from(whole as u64)
+        .unwrap_or(ceiling)
+        .min(ceiling)
+        .max(1)
 }
 
 /// How many cells one axis of `pixels` takes at `cell` pixels a cell, rounded up, and zero

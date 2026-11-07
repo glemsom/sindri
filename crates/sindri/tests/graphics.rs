@@ -5,7 +5,7 @@
 //! (#54), and what it hands over is an SVG string; what this holds the module to is the
 //! picture, so a test's SVG is the diagram a fence would produce and never the fence.
 
-use sindri::graphics::{CellSize, Refusal, Svg};
+use sindri::graphics::{CellSize, Footprint, Refusal, Svg};
 use sindri::view::View;
 
 /// The namespace an SVG declares, named once so a picture below reads as its drawing rather
@@ -215,6 +215,78 @@ fn a_picture_no_transcript_has_room_for_is_refused_by_its_size_and_costs_no_pixe
         huge.rasterises(),
         0,
         "a picture that is not drawn costs no pixels"
+    );
+}
+
+/// A picture an answer points at is wider than the band far more often than not — every
+/// screenshot on a terminal narrower than the window it was taken on — so the fit is the
+/// ordinary case and not a refusal: the cells it declares become the cells the band has,
+/// by one scale for both axes, and what is left over goes back to the band.
+#[test]
+fn a_picture_wider_than_the_band_is_fitted_into_it_and_keeps_its_proportions() {
+    let fitted = Footprint::fit(400, 200, CellSize::new(10, 20), 20).expect("a picture fits");
+
+    assert_eq!(
+        (fitted.cols(), fitted.rows()),
+        (20, 5),
+        "40 by 10 cells of picture fitted into 20 columns is 20 by 5: one scale for both axes"
+    );
+
+    // A picture the band already has room for is not stretched to fill it: a four-cell
+    // picture is four cells on a screen eighty columns wide.
+    let small = Footprint::fit(40, 40, CellSize::new(10, 20), 80).expect("a picture fits");
+
+    assert_eq!(
+        (small.cols(), small.rows()),
+        (4, 2),
+        "a picture is fitted down to a band and never up to one"
+    );
+
+    // And one taller than a transcript is ever given is cut by the rows it may have, not by
+    // the columns: the ceiling is the guard between a declared size and an allocation.
+    let tall = Footprint::fit(100, 100_000, CellSize::new(10, 20), 80).expect("a picture fits");
+
+    assert!(
+        tall.rows() <= 100 && tall.cols() <= 80,
+        "a picture of a thousand rows takes the hundred a transcript has: {tall:?}"
+    );
+}
+
+/// A picture with no extent declares nothing to draw, and it is refused at the fit for the
+/// same reason a footprint refuses it: a block of no cells would be a picture that
+/// disappeared without a caption saying so.
+#[test]
+fn a_picture_with_no_extent_at_all_is_refused_by_the_fit() {
+    let refusal = Footprint::fit(0, 0, CellSize::new(10, 20), 80).expect_err("nothing to draw");
+
+    assert_eq!(
+        refusal,
+        Refusal::Sizeless,
+        "a picture of no size is the one reason a size can be refused before drawing"
+    );
+}
+
+/// The pixels of a fitted picture are the pixels of the cells it was fitted into, and not
+/// the pixels it declares: a transcript that reserved twenty columns has to be handed a
+/// twenty-column picture, or the terminal stretches one into the other.
+#[test]
+fn a_picture_is_drawn_at_the_size_the_band_fitted_it_into() {
+    let svg = Svg::parse(&diagram(400, 200)).expect("the diagram parses");
+    let fitted = Footprint::fit(400, 200, CellSize::new(10, 20), 20).expect("a picture fits");
+
+    let pixels = svg
+        .rasterise_at(fitted.pixels(CellSize::new(10, 20)))
+        .expect("the picture draws");
+
+    assert_eq!(
+        (pixels.width(), pixels.height()),
+        (200, 100),
+        "twenty cells by five at a ten by twenty cell is 200 by 100 pixels"
+    );
+    assert_eq!(
+        (svg.size().0, svg.size().1),
+        (400, 200),
+        "and the size it declares is the one the fit was measured from"
     );
 }
 
