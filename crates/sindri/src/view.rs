@@ -11,20 +11,26 @@
 //! The transcript's rows are `rows`' to lay out and this file's to draw: a frame is
 //! handed the entries a run has written and where the reader is scrolled to, and the
 //! band paints the window of them the frame reaches, which is §12's rule that only
-//! on-screen rows are laid out (ADR-0008). The composer's band is painted from the
-//! `Composer` it is handed, and the rows the box takes are the `Composer`'s to decide:
-//! this file asks rather than counts (#41). The rail's ledger and its 32 columns are
-//! ticket #46's, the pulse is #39's, and marking and copy are #50's. Each paints into
-//! a band of this frame — or, in the rail's case, into the split this file does not yet
-//! make — and changes its fixture deliberately in the commit that changes it.
+//! on-screen rows are laid out (ADR-0008). The turn in flight is drawn under those
+//! entries as one more of them — the live one, the answer and the reasoning of the
+//! newest turn as they land — so a run's picture is the facts it has written and the
+//! turn it is still in, and this file is the sink the wire's fragments land in. The
+//! composer's band is painted from the `Composer` it is handed, and the rows the box
+//! takes are the `Composer`'s to decide: this file asks rather than counts (#41). The
+//! rail's ledger and its 32 columns are ticket #46's, the pulse is #39's, and marking
+//! and copy are #50's. Each paints into a band of this frame — or, in the rail's case,
+//! into the split this file does not yet make — and changes its fixture deliberately in
+//! the commit that changes it.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use sindri_core::provider::Deltas;
 use sindri_core::records::Entry;
 
 use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, State};
 use crate::ink::Ink;
 use crate::rows::{Rows, Scroll};
+use crate::stream::Stream;
 
 /// The hints §12 never takes away, whichever way the frame narrows: the key that sends
 /// a prompt and the key that says which keys there are.
@@ -53,6 +59,11 @@ pub struct View {
     /// The draft a prompt is typed into: the composer's band is painted from this
     /// value and from nothing else (#41).
     composer: Composer,
+    /// The turn in flight: the partial answer and the partial reasoning of the run's
+    /// newest turn, painted under the settled entries and laid out again alone as each
+    /// fragment lands (§4, §12). Empty is the case of no turn in flight, which is every
+    /// frame until #43 feeds the run's deltas in here.
+    stream: Stream,
 }
 
 impl View {
@@ -75,6 +86,7 @@ impl View {
             rows,
             scroll,
             composer: Composer::new(),
+            stream: Stream::new(),
         }
     }
 
@@ -91,6 +103,20 @@ impl View {
     /// The draft this frame is drawn around.
     pub fn composer(&self) -> &Composer {
         &self.composer
+    }
+
+    /// The turn in flight: the runs of answer and reasoning that have landed since the
+    /// run's newest turn started, in the order they landed.
+    pub fn stream(&self) -> &Stream {
+        &self.stream
+    }
+
+    /// The turn in flight is over: what it said is written down as entries by then
+    /// (ADR-0007), so the live entry it was drawn as goes and the facts take its place.
+    /// A run calls this when it settles a turn and pushes that turn's entries; a frame
+    /// that kept the stream would draw the same answer twice.
+    pub fn settle(&mut self) {
+        self.stream = Stream::new();
     }
 
     /// Hands the composer one key and says what the terminal is to do about it: paint
@@ -131,9 +157,14 @@ impl View {
     /// the cache holds for the window this band reaches and for no other entry. Where a
     /// reader scrolled back is told what arrived below by #50; the pulse at the head of
     /// the newest answer is #39's.
+    ///
+    /// The turn in flight is the last of the entries the window reaches and the only one
+    /// laid out again as the frame is painted, which is the whole of what makes an answer
+    /// arrive on screen with no relaid history around it (ADR-0008).
     fn transcript(&mut self, area: Rect, buffer: &mut Buffer) {
         buffer.set_style(area, Ink::Plain.style());
         self.rows.resize(area.width);
+        self.rows.live(&self.stream);
         let window = self.rows.window(self.scroll, area.height);
         let mut y = area.y;
         for piece in window.pieces() {
@@ -211,6 +242,20 @@ impl View {
     /// floor it degrades to, so the golden frame holds what no width can take away.
     fn footer(&self, area: Rect, buffer: &mut Buffer) {
         write(buffer, area, &FLOOR_HINTS);
+    }
+}
+
+/// The frame as the sink of the turn in flight: a fragment of answer or of reasoning
+/// lands in this frame's stream, and the next paint draws it (§4). This is the door #43
+/// takes — the run is handed the frame and streams into it — and it is why a fragment
+/// never has to be written down to be seen (ADR-0007).
+impl Deltas for View {
+    fn text(&mut self, fragment: &str) {
+        self.stream.text(fragment);
+    }
+
+    fn reasoning(&mut self, fragment: &str) {
+        self.stream.reasoning(fragment);
     }
 }
 

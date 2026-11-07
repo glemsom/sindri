@@ -26,6 +26,11 @@ fn transcript_scrolled_120x40_cuts_the_top_entry_mid_row() {
 }
 
 #[test]
+fn streaming_120x40_is_a_run_whose_answer_and_thought_are_still_landing() {
+    fixture::assert_frame("streaming", 120, 40);
+}
+
+#[test]
 fn typing_120x40_is_a_composer_at_its_two_row_floor() {
     fixture::assert_frame("typing", 120, 40);
 }

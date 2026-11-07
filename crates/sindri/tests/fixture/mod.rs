@@ -38,6 +38,7 @@ use sindri::composer::{Composer, Key};
 use sindri::ink::Ink;
 use sindri::rows::Scroll;
 use sindri::view::View;
+use sindri_core::provider::Deltas;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
 
@@ -85,6 +86,9 @@ fn named(name: &str) -> View {
         "boot" => View::boot(),
         "transcript" => View::of(transcript(), Scroll::Tail),
         "transcript-scrolled" => View::of(transcript(), Scroll::Back(4)),
+        // A run in the middle of a turn: the same history, a sixth turn opened, and that
+        // turn's answer and reasoning still landing (ticket #38).
+        "streaming" => streaming(),
         // The composer's floor and its ceiling, and the window it scrolls to when the
         // draft outgrows the ceiling: the growth of §12 as three pictures rather than
         // as an opinion (ticket #41).
@@ -219,6 +223,40 @@ fn transcript() -> Vec<Entry> {
              changes one entry re-lays that entry alone.",
         ),
     ]
+}
+
+/// The frame a run is in the middle of: the history the transcript frame holds, a sixth
+/// turn opened on it, and the thought and the answer of that turn landing a fragment at a
+/// time — through `Deltas`, the same door the wire streams them through, so a picture of
+/// a stream is made the way a stream is made (#43).
+///
+/// The answer is left with its code fence still open, which is the one markdown rule this
+/// ticket keeps (ADR-0008): from the fence down, the tail is drawn as code and never as
+/// prose that ate the rest of the answer — and #52 keeps that rule when it replaces the
+/// plain rendering.
+fn streaming() -> View {
+    let mut entries = transcript();
+    entries.push(Entry::Turn { turn: 6 });
+    let mut view = View::of(entries, Scroll::Tail);
+    for fragment in [
+        "The ticket asks whether the tail survives. ",
+        "A fence still streaming is a code block, ",
+        "so its words are drawn as code and nothing is swallowed.",
+    ] {
+        view.reasoning(fragment);
+    }
+    for fragment in [
+        "It survives: ",
+        "the rule is one boolean over the lines, ",
+        "and #52 keeps it.\n",
+        "```rust\n",
+        "fn main() {\n",
+        "    let fence = Fence::open();\n",
+        "    let  tail = fence.words();\n",
+    ] {
+        view.text(fragment);
+    }
+    view
 }
 
 /// A composer holding `lines`, typed a line at a time: a fixture's draft is built
