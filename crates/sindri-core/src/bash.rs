@@ -20,7 +20,9 @@
 //!
 //! [`run`] spawns that argv and waits, until the per-call timeout expires, when
 //! it kills the command and the outcome says `timed_out` — `--die-with-parent`
-//! being what takes the whole sandbox with it.
+//! being what takes the whole sandbox with it — or until the user's word arrives,
+//! when it kills the process group the command leads and the outcome says
+//! `cancelled` (§4).
 //!
 //! The session temp is an input and not a thing this module makes:
 //! [`crate::session`] creates it, adopts it and clears it away, and nothing here
@@ -31,8 +33,9 @@
 use std::error::Error;
 use std::fmt;
 use std::io::{ErrorKind, Read};
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
@@ -40,6 +43,7 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 
 use crate::policy::{Boundary, BoundaryError, Enforcement};
+use crate::run::Cancel;
 
 /// The shell every command string is handed to.
 pub const SHELL: &str = "/bin/sh";
@@ -60,6 +64,10 @@ const MAX_NAP: Duration = Duration::from_millis(25);
 /// How long a reader gets to see the end of its pipe once the command has
 /// ended, so a grandchild left holding the pipe cannot hold the call open.
 const PIPE_GRACE: Duration = Duration::from_millis(250);
+
+/// The signal a stopped command is stopped with: no code to report, and no way
+/// for the command to have a last word about it.
+const SIGKILL: i32 = 9;
 
 /// One argv: the program and the arguments, in the order they are spawned.
 ///
@@ -103,6 +111,8 @@ pub struct Outcome {
     pub code: Option<i32>,
     /// Whether the per-call timeout killed the command.
     pub timed_out: bool,
+    /// Whether the user's word stopped the command while it ran (§4).
+    pub cancelled: bool,
     /// What the command wrote to stdout.
     pub stdout: String,
     /// What the command wrote to stderr.
@@ -250,24 +260,37 @@ pub fn invocation(
     })
 }
 
-/// Runs one command under `boundary` and brings back what it did.
+/// Runs one command under `boundary` and brings back what it did, until it ends
+/// or until the user's word arrives on `cancel`.
 ///
 /// The argv comes from [`invocation`] and from nowhere else, so what confines the
 /// command is the boundary and not this function's own opinion of it. The call is
 /// waited for until the per-call timeout expires, at which point the command is
 /// killed — bubblewrap's `--die-with-parent` takes the whole sandbox with it — and
-/// the outcome says `timed_out`.
-pub fn run(boundary: &Boundary, session_temp: &Path, command: &str) -> Result<Outcome, BashError> {
+/// the outcome says `timed_out`. A cancellation is the other kill and the louder
+/// one: the command's whole process group goes, so an unsafe run's own children
+/// stop with it, and the outcome says `cancelled` (§4, ADR-0006).
+pub fn run(
+    boundary: &Boundary,
+    session_temp: &Path,
+    command: &str,
+    cancel: &Cancel,
+) -> Result<Outcome, BashError> {
     let invocation = invocation(boundary, session_temp, command)?;
     let program = invocation.program().to_owned();
 
     // No stdin: a tool call has no terminal, and a command that reads one would
     // hang the run. Both streams are piped, because the model is given them.
+    //
+    // The command leads a process group of its own, so one kill takes everything
+    // it started: `--die-with-parent` is what carries a sandboxed command's
+    // process with it, and the group is what carries an unsafe one's children.
     let mut child = Command::new(&program)
         .args(invocation.args())
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .process_group(0)
         .spawn()
         .map_err(|error| BashError::Process {
             program: program.clone(),
@@ -280,12 +303,13 @@ pub fn run(boundary: &Boundary, session_temp: &Path, command: &str) -> Result<Ou
     let deadline = Instant::now() + Duration::from_secs(boundary.timeout_seconds());
     let mut nap = Duration::from_millis(1);
     let mut timed_out = false;
+    let mut cancelled = false;
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break Some(status),
             Ok(None) => {}
             Err(error) => {
-                let _ = child.kill();
+                stop(&mut child);
                 let _ = child.wait();
                 return Err(BashError::Process {
                     program,
@@ -293,9 +317,17 @@ pub fn run(boundary: &Boundary, session_temp: &Path, command: &str) -> Result<Ou
                 });
             }
         }
+        // The user's word first: a cancellation beats the timeout that would
+        // otherwise have fired, because it is the louder of the two (§4,
+        // ADR-0006).
+        if cancel.is_set() {
+            cancelled = true;
+            stop(&mut child);
+            break child.wait().ok();
+        }
         if Instant::now() >= deadline {
             timed_out = true;
-            let _ = child.kill();
+            stop(&mut child);
             break child.wait().ok();
         }
         thread::sleep(nap);
@@ -306,9 +338,34 @@ pub fn run(boundary: &Boundary, session_temp: &Path, command: &str) -> Result<Ou
         enforcement: boundary.enforcement(),
         code: status.and_then(|status| status.code()),
         timed_out,
+        cancelled,
         stdout: String::from_utf8_lossy(&stdout.finish()).into_owned(),
         stderr: String::from_utf8_lossy(&stderr.finish()).into_owned(),
     })
+}
+
+/// Stops a command and everything it started: the process group it leads, killed
+/// outright, so no child an unsafe run's own command started outlives the call
+/// that made it (§4). A sandboxed command needs it too — a kill that reaches
+/// only the sandbox's edge is a command still working inside it.
+fn stop(child: &mut Child) {
+    let Ok(pid) = i32::try_from(child.id()) else {
+        let _ = child.kill();
+        return;
+    };
+    // The negative pid names the group, the command leading it included. A group
+    // the kernel has already reaped has nothing left to signal, which is a kill
+    // that lost a race and not a failure.
+    unsafe {
+        kill(-pid, SIGKILL);
+    }
+}
+
+unsafe extern "C" {
+    /// `kill(2)`, declared here as `run` declares `signal(2)`: one syscall that
+    /// names a process group, so the module keeps naming no crate to stop a
+    /// command.
+    fn kill(pid: i32, signal: i32) -> i32;
 }
 
 /// One of a command's output streams, read by a thread of its own so a command

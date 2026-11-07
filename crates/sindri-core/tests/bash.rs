@@ -17,6 +17,7 @@ use std::time::{Duration, Instant};
 use sindri_core::bash::{self, SANDBOX_PATH, TEMP_VARIABLE};
 use sindri_core::config::Config;
 use sindri_core::policy::{Boundary, Enforcement};
+use sindri_core::run::Cancel;
 use tempfile::TempDir;
 
 /// Real directories, because the writable set is canonicalised through the
@@ -128,6 +129,7 @@ fn a_write_inside_the_writable_set_succeeds() {
         &boundary,
         &ground.temp(),
         &format!("echo written > {}", quoted(&inside)),
+        &Cancel::new(),
     )
     .expect("the command runs");
 
@@ -153,6 +155,7 @@ fn a_write_outside_the_writable_set_fails() {
         &boundary,
         &ground.temp(),
         &format!("echo escaped > {}", quoted(&outside)),
+        &Cancel::new(),
     )
     .expect("the command runs");
 
@@ -182,8 +185,13 @@ fn the_host_root_is_read_only() {
     let boundary = boundary(&ground, Enforcement::Bubblewrap, 120);
     let probe = format!("/sindri-bash-probe-{}", std::process::id());
 
-    let outcome = bash::run(&boundary, &ground.temp(), &format!("echo probe > {probe}"))
-        .expect("the command runs");
+    let outcome = bash::run(
+        &boundary,
+        &ground.temp(),
+        &format!("echo probe > {probe}"),
+        &Cancel::new(),
+    )
+    .expect("the command runs");
 
     assert_ne!(outcome.code, Some(0), "the host root is not writable");
     assert!(
@@ -208,6 +216,7 @@ fn the_session_temp_is_tmpdir_and_the_environment_is_only_that_and_a_path() {
         &temp,
         "printf '%s\\n%s\\n%s\\n' \"$TMPDIR\" \"$PATH\" \"${HOME-unset}\" \
          && echo scratch > \"$TMPDIR/scratch.txt\"",
+        &Cancel::new(),
     )
     .expect("the command runs");
     let lines: Vec<&str> = outcome.stdout.lines().collect();
@@ -248,7 +257,8 @@ fn a_command_past_the_timeout_is_killed_and_says_timed_out() {
     let boundary = boundary(&ground, Enforcement::Bubblewrap, 1);
 
     let started = Instant::now();
-    let outcome = bash::run(&boundary, &ground.temp(), "sleep 30").expect("the command runs");
+    let outcome =
+        bash::run(&boundary, &ground.temp(), "sleep 30", &Cancel::new()).expect("the command runs");
     let elapsed = started.elapsed();
 
     assert!(outcome.timed_out, "the result says timed_out");
@@ -270,6 +280,7 @@ fn an_unsafe_run_inherits_the_environment_and_the_cwd() {
         &boundary,
         &ground.temp(),
         "printf '%s\\n%s' \"$PATH\" \"$PWD\"",
+        &Cancel::new(),
     )
     .expect("the command runs");
     let lines: Vec<&str> = outcome.stdout.lines().collect();
@@ -292,7 +303,8 @@ fn an_unsafe_run_says_unsafe_in_the_outcome_the_json_and_the_rail() {
     let ground = Ground::new();
     let boundary = boundary(&ground, Enforcement::Unsafe, 120);
 
-    let outcome = bash::run(&boundary, &ground.temp(), "true").expect("the command runs");
+    let outcome =
+        bash::run(&boundary, &ground.temp(), "true", &Cancel::new()).expect("the command runs");
     let json = serde_json::to_value(&outcome).expect("the outcome serialises");
 
     assert_eq!(outcome.enforcement.word(), "unsafe");
@@ -300,4 +312,118 @@ fn an_unsafe_run_says_unsafe_in_the_outcome_the_json_and_the_rail() {
     assert_eq!(json["enforcement"], serde_json::Value::from("unsafe"));
     assert_eq!(json["timed_out"], serde_json::Value::from(false));
     assert_eq!(json["code"], serde_json::Value::from(0));
+}
+
+/// Waits until `path` exists, and says whether it ever did: a command is made to
+/// say it has started by writing a file, so a test never guesses with a sleep.
+fn waited_for(path: &Path) -> bool {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        if path.exists() {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    false
+}
+
+#[test]
+fn a_cancel_kills_the_command_in_flight_and_the_child_it_started() {
+    let ground = Ground::new();
+    let boundary = boundary(&ground, Enforcement::Unsafe, 120);
+    let outside = ground.outside();
+    let temp = ground.temp();
+    let pidfile = outside.join("sleep.pid");
+    let cancel = Cancel::new();
+    let interrupted = cancel.clone();
+
+    // A `sleep` left in the background is what proves the *group* was killed: a
+    // shell that `exec`s one command is one pid, and killing one pid would pass a
+    // test that a `Ctrl-C` on a run of two commands would not (§4).
+    let command = format!("sleep 30 & echo $! > {}; wait", quoted(&pidfile));
+    let started = Instant::now();
+    let calling = {
+        let boundary = boundary.clone();
+        let temp = temp.clone();
+        std::thread::spawn(move || bash::run(&boundary, &temp, &command, &cancel))
+    };
+
+    assert!(
+        waited_for(&pidfile),
+        "the command started, so there is something in flight to cancel"
+    );
+    interrupted.now();
+    let outcome = calling
+        .join()
+        .expect("the call returns")
+        .expect("the command runs");
+    let elapsed = started.elapsed();
+
+    assert!(
+        outcome.cancelled,
+        "the outcome says the user's word stopped it, not a timeout: {outcome:?}"
+    );
+    assert_eq!(outcome.code, None, "a killed command has no exit code");
+    assert!(
+        elapsed < Duration::from_secs(10),
+        "the call returned in {elapsed:?}, so the command was killed and not waited out"
+    );
+
+    let pid = std::fs::read_to_string(&pidfile)
+        .expect("the pid the command wrote")
+        .trim()
+        .to_owned();
+    assert!(
+        !Path::new(&format!("/proc/{pid}")).exists(),
+        "the sleep the command started is gone, and not only the command: pid {pid}"
+    );
+}
+
+#[test]
+fn a_cancel_kills_a_sandboxed_command_before_it_can_write() {
+    if sandbox().is_none() {
+        return;
+    }
+    let ground = Ground::new();
+    let boundary = boundary(&ground, Enforcement::Bubblewrap, 120);
+    // Both files are in the writable set: a sandboxed command may write there, so a
+    // file that is missing is one a kill stopped and not one the kernel refused.
+    let writable = ground.workspace();
+    let temp = ground.temp();
+    let late = writable.join("late.txt");
+    let started_file = writable.join("started.txt");
+    let cancel = Cancel::new();
+    let interrupted = cancel.clone();
+
+    // The command says it started and then writes, two seconds later, a file the
+    // kernel would let it write: a kill that stopped only at the sandbox's edge
+    // would leave that file behind.
+    let command = format!(
+        "touch {}; sleep 2; echo late > {}",
+        quoted(&started_file),
+        quoted(&late)
+    );
+    let calling = {
+        let boundary = boundary.clone();
+        let temp = temp.clone();
+        std::thread::spawn(move || bash::run(&boundary, &temp, &command, &cancel))
+    };
+
+    assert!(
+        waited_for(&started_file),
+        "the sandboxed command started, so there is something in flight to cancel"
+    );
+    interrupted.now();
+    let outcome = calling
+        .join()
+        .expect("the call returns")
+        .expect("the command runs");
+    assert!(outcome.cancelled, "the user's word stopped it: {outcome:?}");
+
+    std::thread::sleep(Duration::from_secs(3));
+    assert!(
+        !late.exists(),
+        "nothing in the sandbox was left running to write {}",
+        late.display()
+    );
 }
