@@ -36,8 +36,33 @@ fn calls_120x40_is_a_call_settled_four_ways() {
 }
 
 #[test]
+fn mark_120x40_is_a_drag_over_the_transcript_it_covers() {
+    fixture::assert_frame("mark", 120, 40);
+}
+
+#[test]
+fn pulse_live_120x40_is_the_marker_carrying_a_live_runs_elapsed_time() {
+    fixture::assert_frame("pulse-live", 120, 40);
+}
+
+#[test]
+fn pulse_settled_120x40_is_the_marker_a_stopped_run_settled_on() {
+    fixture::assert_frame("pulse-settled", 120, 40);
+}
+
+#[test]
+fn queue_120x40_counts_the_prompts_typed_during_a_run_above_the_composer() {
+    fixture::assert_frame("queue", 120, 40);
+}
+
+#[test]
 fn keys_120x40_lists_the_keys_of_the_stack_it_sits_on() {
     fixture::assert_frame("keys", 120, 40);
+}
+
+#[test]
+fn files_120x40_is_the_eight_files_nearest_the_workspace() {
+    fixture::assert_frame("files", 120, 40);
 }
 
 #[test]
@@ -93,4 +118,29 @@ fn markdown_link_80x24_is_a_link_that_prints_the_url_its_words_hide() {
 #[test]
 fn markdown_table_narrow_40x24_is_a_wide_table_wrapped_inside_its_cells() {
     fixture::assert_frame("markdown-table-narrow", 40, 24);
+}
+
+#[test]
+fn rail_120x40_is_the_ledger_down_the_frames_right_hand_columns() {
+    fixture::assert_frame("rail", 120, 40);
+}
+
+#[test]
+fn rail_100x40_is_the_last_frame_that_holds_a_ledger() {
+    fixture::assert_frame("rail", 100, 40);
+}
+
+#[test]
+fn rail_99x24_is_the_first_frame_that_is_one_strip() {
+    fixture::assert_frame("rail", 99, 24);
+}
+
+#[test]
+fn rail_80x24_is_the_strip_giving_facts_up_in_a12s_order() {
+    fixture::assert_frame("rail", 80, 24);
+}
+
+#[test]
+fn rail_40x24_is_the_strip_down_to_the_fact_that_never_goes() {
+    fixture::assert_frame("rail", 40, 24);
 }

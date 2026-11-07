@@ -30,7 +30,8 @@ back.
 So a frame fixture is `tests/fixtures/<frame>-<cols>x<rows>.snap`. What the file holds is
 what this ADR decided, and is still the point of it: the frame as text, one line per row —
 the row's number, its glyphs between two bars, and the ink of each run of cells named
-(`plain`, `dim`, `muted`, `accent`, `ok`, `err`), never a colour. The metadata fence at the
+(`plain`, `dim`, `muted`, `accent`, `ok`, `err`, and `mark` for a cell a reader's
+selection covers — the one ink that spends a modifier and no colour), never a colour. The metadata fence at the
 top of the file is `insta`'s; the frame is everything below it, and `insta`'s own diff
 prints beneath the harness's line naming the first cell that differs.
 

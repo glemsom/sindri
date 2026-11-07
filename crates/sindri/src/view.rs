@@ -1,6 +1,6 @@
 //! What one frame holds and where each part of it goes: the transcript above, the
-//! composer's band — the hairline a draft is typed under and the draft itself — and
-//! the footer's hints along the bottom edge (§12).
+//! queue's row when prompts are waiting, the composer's band — the hairline a draft is
+//! typed under and the draft itself — and the footer's hints along the bottom edge (§12).
 //!
 //! `View::paint` is the one seam a frame is drawn through. The terminal calls it on
 //! the frame the real screen is painted from, and a test calls it on a frame going to
@@ -23,19 +23,39 @@
 //! turn it is still in, and this file is the sink the wire's fragments land in. The
 //! composer's band is painted from the `Composer` it is handed, and the rows the box
 //! takes are the `Composer`'s to decide: this file asks rather than counts (#41). The
-//! rail's ledger and its 32 columns are ticket #46's, the pulse is #39's, and marking
-//! and copy are #50's. Each paints into a band of this frame — or, in the rail's case,
-//! into the split this file does not yet make — and changes its fixture deliberately in
-//! the commit that changes it.
+//! rail draws into the columns it takes from the transcript's band, and how many columns
+//! those are — and what it gives up when there are fewer — is `rail`'s to decide and not
+//! this file's (#46): `paint` asks it for the split and hands it the facts it was given.
+//! The queue takes one row above the composer while it holds anything and none at all
+//! while it holds nothing — the rows are the `Queue`'s to decide as the box's are the
+//! `Composer`'s — and that row is the whole of what a prompt typed during a run is drawn
+//! as, because the prompt itself is a thing the reader typed and can have back with `↑`
+//! (§12, A9).
+//!
+//! The marker at the head of the newest answer is `pulse`'s to say in words and this
+//! file's to hand to the rows it heads, so the prose around it wraps rather than being cut
+//! by it (#39). The mark is this file's too, and it is painted from the span `mark` hands
+//! out (#50): every paint lays the transcript's rows out — in the columns the rail left
+//! them — and gathers the lines they are drawn as, keeping the span the drag covers, so
+//! the highlight a reader sees on this frame and the words `Ctrl-Y` hands the terminal are
+//! one value and cannot disagree (§12). Each paints into a band of this frame and changes
+//! its fixture deliberately in the commit that changes it.
+
+use std::path::PathBuf;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use sindri_core::provider::Deltas;
 use sindri_core::records::Entry;
 
-use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, State};
+use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, Prompt, State};
 use crate::ink::Ink;
 use crate::keys::{Act, Mode, Stack};
+use crate::mark::{Cell, Mark, Span};
+use crate::picker::Picker;
+use crate::pulse::Pulse;
+use crate::queue::Queue;
+use crate::rail::Facts;
 use crate::rows::{Rows, Scroll};
 use crate::stream::Stream;
 
@@ -59,6 +79,23 @@ const KEYS_MARGIN: u16 = 2;
 /// descriptions of every mode line up in one column an eye can run down.
 const KEYS_GAP: usize = 2;
 
+/// What the `@` picker's screen heads itself with, in the accent ink the keys screen heads
+/// its own with.
+const PICKER_TITLE: &str = "@ files";
+
+/// The label the picker's query sits behind, so a line of glyphs under the title reads as
+/// what the list is narrowed by rather than as a row of it.
+const PICKER_QUERY: &str = "query: ";
+
+/// What a picker whose rows are all gone says: a screen with a query and nothing under it
+/// has to say the query is what emptied it.
+const PICKER_EMPTY: &str = "no file answers";
+
+/// The glyph before the row the selection is on, and the two cells every other row keeps
+/// empty so the paths line up in one column.
+const PICKER_MARK: &str = "\u{203a} ";
+const PICKER_NO_MARK: &str = "  ";
+
 /// One frame's worth of facts, in the shape the terminal draws them. Boot knows none
 /// of them — no run, no prompt, no transcript row, nothing loaded — so the frame is its
 /// chrome and nothing else; a run hands over the entries it has written and where the
@@ -79,9 +116,34 @@ pub struct View {
     /// fragment lands (§4, §12). Empty is the case of no turn in flight, which is every
     /// frame until #43 feeds the run's deltas in here.
     stream: Stream,
+    /// The prompts typed while a run was live, waiting their turn above the composer's
+    /// band, oldest first: what `↑` recalls and `Ctrl-X` drops and what the run after
+    /// this one is taken from (§12, A9).
+    queue: Queue,
     /// The modes this frame is in, the composer at the base and any screen opened over
     /// it: what answers a key and, while a screen is up, the whole of what is painted.
     stack: Stack,
+    /// The marker the newest answer wears (#39): the run's clock while it is live, the form
+    /// it settled on when it stopped, and nothing at all for a launch no run has touched.
+    pulse: Option<Pulse>,
+    /// The facts the rail draws down the frame's right-hand columns: what the core knows
+    /// about the run and what a caller hands in for the facts nothing produces yet, in
+    /// the values `rail` spells them with (#46).
+    rail: Facts,
+    /// The mark a drag has left, if one has: two corners of the band, kept so that a
+    /// redraw keeps the highlight and `Ctrl-Y` copies again with no fresh selection
+    /// (§12, #50).
+    mark: Option<Mark>,
+    /// The span the last paint drew the highlight from, and the very cells and
+    /// words `Ctrl-Y` hands out: the picture and the copy are one value (§12, #50).
+    marked: Span,
+    /// The directory the `@` picker walks: the one the launch stands in, which is the
+    /// workspace a run's commands run in. `None` is a frame that was told no directory,
+    /// and it offers no file rather than inventing one (§12).
+    workspace: Option<PathBuf>,
+    /// The files the picker walks up when `@` is pressed, narrowed by the query typed into
+    /// the screen: empty until a screen is opened, and walked afresh each time it is.
+    picker: Picker,
 }
 
 impl View {
@@ -103,9 +165,7 @@ impl View {
         View {
             rows,
             scroll,
-            composer: Composer::new(),
-            stream: Stream::new(),
-            stack: Stack::new(),
+            ..View::default()
         }
     }
 
@@ -124,6 +184,25 @@ impl View {
         &self.composer
     }
 
+    /// The prompts waiting above the composer, oldest first: what the queue's row counts
+    /// and what the two keys of A9 reach into.
+    pub fn queue(&self) -> &Queue {
+        &self.queue
+    }
+
+    /// A prompt sent while a run is live: it waits above the composer instead of being
+    /// dropped, and it runs once the run in flight stops, in the order it was typed
+    /// (§12).
+    pub fn enqueue(&mut self, prompt: Prompt) {
+        self.queue.push(prompt);
+    }
+
+    /// The prompt whose turn it is: what the terminal starts the next run from when the
+    /// run before it stops. Nothing waiting is no run to start.
+    pub fn dequeue(&mut self) -> Option<Prompt> {
+        self.queue.next_to_run()
+    }
+
     /// The turn in flight: the runs of answer and reasoning that have landed since the
     /// run's newest turn started, in the order they landed.
     pub fn stream(&self) -> &Stream {
@@ -136,6 +215,19 @@ impl View {
     /// that kept the stream would draw the same answer twice.
     pub fn settle(&mut self) {
         self.stream = Stream::new();
+    }
+
+    /// Hands this frame the directory it stands in: the workspace `@` walks, and the one
+    /// the run's own commands are given. A launch reads the same directory off the process
+    /// (`Launch::open`), so the picker and the run cannot disagree about where they are.
+    pub fn set_workspace(&mut self, workspace: PathBuf) {
+        self.workspace = Some(workspace);
+    }
+
+    /// The files the picker last walked and the query narrowing them: what the screen
+    /// paints, and what a selection takes its path from.
+    pub fn picker(&self) -> &Picker {
+        &self.picker
     }
 
     /// The mode on top of the stack: what this frame is showing and what will answer
@@ -157,9 +249,67 @@ impl View {
         match act {
             Act::Draft => self.composer.key(key),
             Act::Up => self.up(),
+            Act::Copy => self.copy(),
+            Act::ExtendDown => self.extend(true),
+            Act::ExtendUp => self.extend(false),
+            Act::Drop => self.drop_newest(),
             Act::Keys => self.keys(key),
+            Act::Files => self.at(key),
+            Act::Query => self.query(key),
+            Act::Previous => self.step(Step::Previous),
+            Act::Next => self.step(Step::Next),
+            Act::Pick => self.pick(),
             Act::Close => self.close(),
         }
+    }
+
+    /// A drag over the transcript band, from the cell it began on to the cell it has been
+    /// dragged to: the mark a reader's pointer leaves, which the next paint draws and
+    /// `Ctrl-Y` hands out (§12, #50). A second drag replaces it, because a reader marking
+    /// a new run of words has stopped meaning the old one.
+    pub fn drag(&mut self, anchor: Cell, head: Cell) {
+        self.mark = Some(Mark::drag(anchor, head));
+    }
+
+    /// The mark this frame holds, if the reader has dragged one out: the two corners a
+    /// drag left behind, which outlive the paint that drew them.
+    pub fn mark(&self) -> Option<Mark> {
+        self.mark
+    }
+
+    /// `Ctrl-Y`: the words the mark covers leave the frame, or the newest answer does when
+    /// nothing is marked (§12, #50).
+    ///
+    /// What leaves is the span the last paint drew the highlight from — the very cells a
+    /// reader saw marked — so a copy is never a second reading of the drag that could
+    /// disagree with the picture. A key that moves the mark answers `Outcome::Edited`, and
+    /// the paint that follows is where the span is refigured: the two readings are one
+    /// value, one paint apart at the most.
+    fn copy(&self) -> Outcome {
+        if !self.marked.is_empty() {
+            return Outcome::Copy(self.marked.text());
+        }
+        match self.rows.last_answer() {
+            Some(answer) => Outcome::Copy(answer),
+            // A frame with nothing marked and no answer behind it has nothing to hand
+            // out, and a copy of nothing is not a frame that changed.
+            None => Outcome::Unchanged,
+        }
+    }
+
+    /// `Shift+↓` and `Shift+↑`: the mark grows a whole row down the transcript, or gives
+    /// one back (§12, #50). A mark grows by rows and never by cells, and the anchor stays
+    /// where the drag began; with no mark there is nothing to grow and nothing is painted.
+    fn extend(&mut self, down: bool) -> Outcome {
+        let Some(mark) = self.mark else {
+            return Outcome::Unchanged;
+        };
+        let grown = mark.grown(down);
+        if grown == mark {
+            return Outcome::Unchanged;
+        }
+        self.mark = Some(grown);
+        Outcome::Edited
     }
 
     /// `?`: the screen that lists the keys in force.
@@ -173,6 +323,66 @@ impl View {
             return self.composer.key(key);
         }
         self.stack.open(Mode::Keys);
+        Outcome::Edited
+    }
+
+    /// `@`: the files of the workspace, walked afresh and offered as one screen (§12).
+    ///
+    /// It is a key only where it starts a word — the head of the draft, or after the
+    /// space, tab or line break that leaves one — for the reason `?` is a key only while
+    /// the draft is empty: this is a text box, and a prompt that could not hold
+    /// `someone@host` would be a prompt that cannot name an address. An `@` inside a word
+    /// is a glyph like every other, so the two ways to want both are a space before the
+    /// key and typing the glyph on.
+    ///
+    /// A frame that was told no workspace offers no file rather than the process's own
+    /// directory: what a launch stands in is handed in (`View::set_workspace`), and a
+    /// picker walking somewhere else would be offering paths no run could read.
+    fn at(&mut self, key: Key) -> Outcome {
+        if !self.composer.at_word_start() {
+            return self.composer.key(key);
+        }
+        let Some(root) = self.workspace.clone() else {
+            return Outcome::Unchanged;
+        };
+        self.picker = Picker::walk(&root);
+        self.stack.open(Mode::Files);
+        Outcome::Edited
+    }
+
+    /// A glyph typed at the picker, or the backspace that takes one back: the query is the
+    /// picker's own filter box, and it answers in the picker's own map (`picker::Picker`).
+    fn query(&mut self, key: Key) -> Outcome {
+        if self.picker.key(key) {
+            Outcome::Edited
+        } else {
+            Outcome::Unchanged
+        }
+    }
+
+    /// `↑` and `↓` at the picker: the selection walks the rows and stops at the ends, so a
+    /// key that moved nothing is a frame that is not painted.
+    fn step(&mut self, step: Step) -> Outcome {
+        let moved = match step {
+            Step::Previous => self.picker.up(),
+            Step::Next => self.picker.down(),
+        };
+        match moved {
+            true => Outcome::Edited,
+            false => Outcome::Unchanged,
+        }
+    }
+
+    /// `Enter` at the picker: the chosen path goes into the draft as one shell word and the
+    /// screen closes. A list the query left empty has no row to take, so there is nothing
+    /// to insert and the screen stays open to be widened again — the alternative is a
+    /// screen closing on a key that did nothing.
+    fn pick(&mut self) -> Outcome {
+        let Some(word) = self.picker.word() else {
+            return Outcome::Unchanged;
+        };
+        self.composer.insert(&word);
+        self.stack.close();
         Outcome::Edited
     }
 
@@ -193,14 +403,30 @@ impl View {
     ///
     /// On the composer's first line the thing above the caret is the queue rather than
     /// another row of the draft, so the arrow recalls the newest queued prompt; anywhere
-    /// else it moves the caret a row up, which is the composer's own map. The queue is
-    /// #42's and is not here yet, so on that line there is nothing to recall and nothing
-    /// to repaint — and #42 adds its queue to this arm rather than to a keymap of its own.
+    /// else it moves the caret a row up, which is the composer's own map, and the queue
+    /// is left where it is. With nothing queued there is nothing to recall and the frame
+    /// is the one it was, so the arrow is not a key that repaints for nothing.
     fn up(&mut self) -> Outcome {
-        if self.composer.on_first_line() {
+        if !self.composer.on_first_line() {
+            return self.composer.key(Key::Up);
+        }
+        match self.queue.recall() {
+            Some(prompt) => {
+                self.composer.recall(prompt);
+                Outcome::Edited
+            }
+            None => Outcome::Unchanged,
+        }
+    }
+
+    /// `Ctrl-X`: the newest queued prompt is dropped, and the ones behind it keep their
+    /// order — the promise a recall makes is that the prompt comes back whole, and the
+    /// promise this key makes is that it does not come back at all (§12).
+    fn drop_newest(&mut self) -> Outcome {
+        if self.queue.recall().is_none() {
             return Outcome::Unchanged;
         }
-        self.composer.key(Key::Up)
+        Outcome::Edited
     }
 
     /// Hands the draft a pasted prompt: one draft, its line breaks kept, and no path
@@ -213,10 +439,28 @@ impl View {
         self.composer.paste(text);
     }
 
+    /// Hands this frame the facts its rail draws: the model, the turns against the cap,
+    /// the two meters, the workspace and its branch, the skills in force, the sandbox
+    /// posture, and the session's GUID and temp. They are the core's own values, so the
+    /// rail cannot say about a run what the run was never handed (#46).
+    pub fn set_facts(&mut self, facts: Facts) {
+        self.rail = facts;
+    }
+
     /// Says whether a run is live, which is the one fact `Ctrl-C`'s rule reads: the run
     /// loop says so when it starts and when it stops (#43), and nothing else may.
     pub fn set_state(&mut self, state: State) {
         self.composer.set_state(state);
+    }
+
+    /// Hands the frame the marker its newest answer wears (§12): a live one carrying the
+    /// run's elapsed time, or the one a stopped run settled on, or nothing at all.
+    ///
+    /// The elapsed time is the caller's, because the clock lives in `tui` and not in a
+    /// frame: a fixture can paint a marker at 4.2 s, and a settled marker's duration is the
+    /// number the run stopped at rather than one read when the frame is painted (#39).
+    pub fn set_pulse(&mut self, pulse: Option<Pulse>) {
+        self.pulse = pulse;
     }
 
     /// Paints this frame into `area`: every band of it, in the ink each band is drawn
@@ -230,20 +474,32 @@ impl View {
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) {
         // A screen is the whole frame: the bands under it are not painted at all, so
         // nothing of a draft a key cannot reach is on the screen pretending otherwise.
-        if self.stack.modal().is_some() {
-            self.keys_screen(area, buffer);
+        if let Some(modal) = self.stack.modal() {
+            match modal {
+                Mode::Files => self.files_screen(area, buffer),
+                // The `?` screen lists the keys of every mode in the stack, so it is what a
+                // screen with no picture of its own is drawn as.
+                Mode::Composer | Mode::Keys => self.keys_screen(area, buffer),
+            }
             return;
         }
-        let bands = bands(area, self.composer.rows());
-        self.transcript(bands.transcript, buffer);
+        let bands = bands(area, self.composer.rows(), self.queue.rows());
+        // The rail takes its columns from the transcript's band before the transcript is
+        // laid out in what is left: a row's width is the width it is drawn at (ADR-0008),
+        // so the rail's share is decided here and nowhere else (#46).
+        let share = self.rail.split(bands.transcript);
+        if let Some((shape, rail)) = share.rail {
+            self.rail.paint(shape, rail, buffer);
+        }
+        self.transcript(share.transcript, buffer);
+        self.queue_band(bands.queue, buffer);
         self.composer_band(bands.composer, buffer);
         self.footer(bands.footer, buffer);
     }
 
     /// The transcript: what the run has said so far, newest last, painted from the rows
     /// the cache holds for the window this band reaches and for no other entry. Where a
-    /// reader scrolled back is told what arrived below by #50; the pulse at the head of
-    /// the newest answer is #39's.
+    /// reader scrolled back is told what arrived below by #50.
     ///
     /// The turn in flight is the last of the entries the window reaches and the only one
     /// laid out again as the frame is painted, which is the whole of what makes an answer
@@ -251,9 +507,14 @@ impl View {
     fn transcript(&mut self, area: Rect, buffer: &mut Buffer) {
         buffer.set_style(area, Ink::Plain.style());
         self.rows.resize(area.width);
-        self.rows.live(&self.stream);
+        // The marker is laid into the rows it heads rather than painted over them, so the
+        // answer's first row is wrapped around it and the prose it introduces is never cut
+        // by the mark standing in front of it (#39).
+        let head = self.pulse.as_ref().map(Pulse::head);
+        self.rows.live(&self.stream, head.as_ref());
         let window = self.rows.window(self.scroll, area.height);
         let mut y = area.y;
+        let mut lines = Vec::new();
         for piece in window.pieces() {
             let rows = self.rows.rows(piece.entry);
             let first = usize::from(piece.skip);
@@ -266,9 +527,54 @@ impl View {
                     },
                     buffer,
                 );
+                // The band's rows are what a mark's cells are counted in, so the lines
+                // they are drawn as are gathered only when there is a mark to read.
+                if self.mark.is_some() {
+                    lines.push(row.glyphs());
+                }
                 y += 1;
             }
         }
+        self.marked = match self.mark {
+            Some(mark) => Span::of(mark, &lines),
+            None => Span::default(),
+        };
+        self.highlight(area, buffer);
+    }
+
+    /// Paints the mark over the rows it covers, in the ink a reader's selection is read
+    /// in: the cells of the span `Ctrl-Y` hands out, so what is marked is what leaves
+    /// (§12, #50).
+    fn highlight(&self, area: Rect, buffer: &mut Buffer) {
+        for marked in self.marked.rows() {
+            let Some(y) = area.y.checked_add(marked.row()) else {
+                continue;
+            };
+            if y >= area.bottom() {
+                continue;
+            }
+            let left = area.x.saturating_add(marked.left());
+            let right = left.saturating_add(marked.width()).min(area.right());
+            for x in left..right {
+                if let Some(cell) = buffer.cell_mut((x, y)) {
+                    cell.set_style(Ink::Mark.style());
+                }
+            }
+        }
+    }
+
+    /// The queue: the prompts typed while a run is live, said as one row — `3 queued` —
+    /// on the frame's top row above the composer's hairline, so a reader whose `Enter`
+    /// ran nothing sees that it was kept and how many are waiting in front of it (§12).
+    ///
+    /// It is drawn in `dim`, the ink of a fact a reader consults rather than reads, and
+    /// the band is empty — no row at all — while nothing waits: the composer moves back
+    /// up to where it was and the transcript takes the row.
+    fn queue_band(&self, area: Rect, buffer: &mut Buffer) {
+        let Some(label) = self.queue.label() else {
+            return;
+        };
+        write(buffer, area, &[(&label, Ink::Dim)]);
     }
 
     /// The composer: the hairline across the band's top row and the draft's lines
@@ -318,7 +624,7 @@ impl View {
         if self.stack.modal().is_some() {
             return None;
         }
-        let bands = bands(area, self.composer.rows());
+        let bands = bands(area, self.composer.rows(), self.queue.rows());
         let (row, column) = self.composer.caret();
         let y = bands
             .composer
@@ -371,6 +677,48 @@ impl View {
         }
     }
 
+    /// The `@` picker: the query the list is narrowed by, then the rows it leaves nearest
+    /// first, the selection marked. The marker is drawn rather than the row tinted alone,
+    /// because a row painted the accent ink tells a reader that something here is chosen and
+    /// not which row it is on a list of eight.
+    ///
+    /// A path wider than the frame is cut at its right edge instead of dropping the row:
+    /// §12's "whole or it is not drawn" is a rule about hints and facts, and a reader
+    /// pointing at a path wants the row it is nearest to, not silence.
+    fn files_screen(&self, area: Rect, buffer: &mut Buffer) {
+        buffer.set_style(area, Ink::Plain.style());
+        let mut y = area.y;
+        screen_row(buffer, area, y, &[(PICKER_TITLE, Ink::Accent)]);
+        y = y.saturating_add(1);
+        if y < area.bottom() {
+            screen_row(
+                buffer,
+                area,
+                y,
+                &[(PICKER_QUERY, Ink::Dim), (self.picker.query(), Ink::Muted)],
+            );
+        }
+        let rows = self.picker.rows();
+        if rows.is_empty() {
+            y = y.saturating_add(1);
+            if y < area.bottom() {
+                screen_row(buffer, area, y, &[(PICKER_EMPTY, Ink::Dim)]);
+            }
+            return;
+        }
+        for (at, path) in rows.iter().enumerate() {
+            y = y.saturating_add(1);
+            if y >= area.bottom() {
+                return;
+            }
+            let (marker, ink) = match at == self.picker.selected() {
+                true => (PICKER_MARK, Ink::Accent),
+                false => (PICKER_NO_MARK, Ink::Plain),
+            };
+            cut_row(buffer, screen_band(area), y, &[(marker, ink), (path, ink)]);
+        }
+    }
+
     /// The footer: the hints §12 keeps at every width, on the bottom edge. The five
     /// more a 120-column frame shows are the chrome's ticket; these three spans are the
     /// floor it degrades to, so the golden frame holds what no width can take away.
@@ -393,37 +741,58 @@ impl Deltas for View {
     }
 }
 
+/// Which way `↑` and `↓` move the picker's selection, said once so the two rows of its
+/// table are one arm of the frame.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Step {
+    /// The row above the selection.
+    Previous,
+    /// The row below it.
+    Next,
+}
+
 /// The bands a frame is cut into, top to bottom.
 struct Bands {
-    /// Everything above the composer: the transcript's rows, and the columns the rail
-    /// will take from them (ticket #46 owns that split).
+    /// Everything above the composer: the transcript's rows, and the columns `rail`
+    /// takes from them, or the row it takes below a hundred columns (#46).
     transcript: Rect,
+    /// The queue's row, when anything is waiting above the composer — none at all while
+    /// the queue holds nothing, so the band has no rows to give.
+    queue: Rect,
     /// The composer's rows of draft, with the hairline on the first of them.
     composer: Rect,
     /// The footer's single row of hints, on the bottom edge.
     footer: Rect,
 }
 
-/// Cuts `area` into its three bands. The chrome is measured up from the bottom edge and
-/// the transcript takes what is left, because the footer holds one row and the composer
-/// as many as the draft asks for (two to six), while the transcript is the band a run
-/// grows into (§12).
-fn bands(area: Rect, composer_rows: u16) -> Bands {
+/// Cuts `area` into its four bands. The chrome is measured up from the bottom edge and
+/// the transcript takes what is left, because the footer holds one row, the queue one
+/// row while anything waits, and the composer as many as the draft asks for (two to six),
+/// while the transcript is the band a run grows into (§12).
+fn bands(area: Rect, composer_rows: u16, queue_rows: u16) -> Bands {
     let footer = area.height.min(1);
-    let composer = composer_rows.min(area.height.saturating_sub(footer));
-    let transcript = area.height.saturating_sub(footer).saturating_sub(composer);
+    let above = area.height.saturating_sub(footer);
+    let composer = composer_rows.min(above);
+    let queue = queue_rows.min(above.saturating_sub(composer));
+    let transcript = above.saturating_sub(composer).saturating_sub(queue);
+    let queue_y = area.y.saturating_add(transcript);
     Bands {
         transcript: Rect {
             height: transcript,
             ..area
         },
+        queue: Rect {
+            y: queue_y,
+            height: queue,
+            ..area
+        },
         composer: Rect {
-            y: area.y.saturating_add(transcript),
+            y: queue_y.saturating_add(queue),
             height: composer,
             ..area
         },
         footer: Rect {
-            y: area.y.saturating_add(transcript).saturating_add(composer),
+            y: queue_y.saturating_add(queue).saturating_add(composer),
             height: footer,
             ..area
         },
@@ -434,14 +803,26 @@ fn bands(area: Rect, composer_rows: u16) -> Bands {
 /// footer's hints, a span that would run past the frame's right edge is not drawn at
 /// all: a screen's row is whole or it is not there.
 fn screen_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)]) {
+    write(
+        buffer,
+        Rect {
+            y,
+            ..screen_band(area)
+        },
+        spans,
+    );
+}
+
+/// The columns a screen's rows are drawn in: the frame inset by the margin that makes them
+/// read as one block rather than as the frame's own prose.
+fn screen_band(area: Rect) -> Rect {
     let margin = KEYS_MARGIN.min(area.width);
-    let row = Rect {
+    Rect {
         x: area.x.saturating_add(margin),
-        y,
         width: area.width.saturating_sub(margin),
         height: 1,
-    };
-    write(buffer, row, spans);
+        ..area
+    }
 }
 
 /// Writes one draft line across a row from the band's left edge, cut at its right
@@ -449,10 +830,24 @@ fn screen_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)]) {
 /// whole — §12's "whole or it is not drawn" is a rule about chrome — so it is cut
 /// rather than dropped.
 fn draft_line(buffer: &mut Buffer, area: Rect, line: &str) {
-    for (x, glyph) in (area.x..area.right()).zip(line.chars()) {
-        if let Some(cell) = buffer.cell_mut((x, area.y)) {
-            cell.set_char(glyph);
-            cell.set_style(Ink::Plain.style());
+    cut_row(buffer, area, area.y, &[(line, Ink::Plain)]);
+}
+
+/// Writes spans of text across one row from its left edge, each in its own ink, and cuts the
+/// last of them at the row's right edge — the writer a line of prose gets, where `write` is
+/// the one chrome gets.
+fn cut_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)]) {
+    let mut x = area.x;
+    for (text, ink) in spans {
+        for glyph in text.chars() {
+            if x >= area.right() {
+                return;
+            }
+            if let Some(cell) = buffer.cell_mut((x, y)) {
+                cell.set_char(glyph);
+                cell.set_style(ink.style());
+            }
+            x += 1;
         }
     }
 }

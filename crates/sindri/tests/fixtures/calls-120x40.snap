@@ -3,28 +3,28 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 calls at 120x40
-00 |turn 1 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
-01 |✓ exit 0  bash  64 bytes · 18 ms                                                                                        | ok:1 dim:31 plain:88
-02 |  src/rows.rs: the check or the cross in `ok`/`err`                                                                     | plain:120
-03 |  The row is drawn from the verdict the record holds.                                                                   | plain:120
-04 |turn 2 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
-05 |✗ exit 1  bash  96 bytes · 211 ms                                                                                       | err:1 dim:32 plain:87
-06 |  warning: unused import: `std::fmt`                                                                                    | plain:120
-07 |  --> src/rows.rs:12:5                                                                                                  | plain:120
-08 |  An unused import, and nowhere else to put it.                                                                         | plain:120
-09 |turn 3 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
-10 |✗ timed out  bash  0 bytes · 120000 ms                                                                                  | err:1 dim:37 plain:82
-11 |  The call ran past its minute and was killed.                                                                          | plain:120
+00 |turn 1 ─────────────────────────────────────────────────────────────────────────────────model     .........claude-sonnet| dim:107 muted:13
+01 |✓ exit 0  bash  64 bytes · 18 ms                                                        ────────────────────────────────| ok:1 dim:31 plain:56 dim:32
+02 |  src/rows.rs: the check or the cross in `ok`/`err`                                     turns     .................6/250| plain:88 dim:27 muted:5
+03 |  The row is drawn from the verdict the record holds.                                   ctx       ...................21%| plain:88 dim:29 muted:3
+04 |turn 2 ─────────────────────────────────────────────────────────────────────────────────cache     ...................88%| dim:117 muted:3
+05 |✗ exit 1  bash  96 bytes · 211 ms                                                       ────────────────────────────────| err:1 dim:32 plain:55 dim:32
+06 |  warning: unused import: `std::fmt`                                                    workspace ..…/.worktrees/46-rail| plain:88 dim:12 muted:20
+07 |  --> src/rows.rs:12:5                                                                  branch    .....spec/1-capability| plain:88 dim:15 muted:17
+08 |  An unused import, and nowhere else to put it.                                         ────────────────────────────────| plain:88 dim:32
+09 |turn 3 ─────────────────────────────────────────────────────────────────────────────────skills    .....................2| dim:119 muted:1
+10 |✗ timed out  bash  0 bytes · 120000 ms                                                  ────────────────────────────────| err:1 dim:37 plain:50 dim:32
+11 |  The call ran past its minute and was killed.                                          sandbox   .................bwrap| plain:88 dim:27 muted:5
 12 |turn 4 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
-13 |✗ cancelled  bash  0 bytes · 3400 ms                                                                                    | err:1 dim:35 plain:84
-14 |  What a verdict says                                                                                                   | plain:2 plain+bold:19 plain:99
+13 |✗ cancelled  bash  0 bytes · 3400 ms                                                    session   ..............9f2c7a41| err:1 dim:35 plain:52 dim:24 muted:8
+14 |  What a verdict says                                                                   temp      ........…/9f2c7a41/tmp| plain:2 plain+bold:19 plain:67 dim:18 muted:14
 15 |                                                                                                                        | plain:120
-16 |  The run stopped on the user's word: Ctrl-C cancels and keeps the draft, so the row says ✗ cancelled rather than       | plain:38 plain+reversed:6 plain:46 plain+reversed:11 plain:19
-17 |  leaving a spinner turning for a result that will never come.                                                          | plain:120
-18 |turn 5 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
-19 |… bash                                                                                                                  | dim:6 plain:114
-20 |  {"command": "make check STAGES=test"}                                                                                 | plain:120
-21 |                                                                                                                        | plain:120
+16 |  The run stopped on the user's word: Ctrl-C cancels and keeps the draft, so the row                                    | plain:38 muted+reversed:6 plain:76
+17 |  says ✗ cancelled rather than leaving a spinner turning for a result that will never                                   | plain:7 muted+reversed:11 plain:102
+18 |  come.                                                                                                                 | plain:120
+19 |turn 5 ─────────────────────────────────────────────────────────────────────────────────                                | dim:88 plain:32
+20 |… bash                                                                                                                  | dim:6 plain:114
+21 |  {"command": "make check STAGES=test"}                                                                                 | plain:120
 22 |                                                                                                                        | plain:120
 23 |                                                                                                                        | plain:120
 24 |                                                                                                                        | plain:120

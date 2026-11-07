@@ -25,27 +25,17 @@
 //! assembles the values and writes the answer.
 
 use std::io::{self, IsTerminal, Read, Write};
-use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
-use sindri_core::asking::Asking;
-use sindri_core::config::{Config, Process};
-use sindri_core::outcome::{Facts as Reported, Outcome};
-use sindri_core::policy::Boundary;
-use sindri_core::preamble::Preamble;
+use sindri_core::config::Config;
+use sindri_core::outcome::Outcome;
 use sindri_core::provider::Deltas;
-use sindri_core::provider::copilot::Store;
-use sindri_core::provider::{Ask, Client, Credential};
-use sindri_core::records::{Facts, Record};
-use sindri_core::run::{Cancel, Limits, Run, Shell, Stop};
-use sindri_core::sandbox;
-use sindri_core::session::{self, Session};
-use sindri_core::skills::Catalog;
-use sindri_core::tools::{FrontEnd, ToolSet};
-use sindri_core::wire::Wire;
+use sindri_core::run::{Cancel, Exchange, Stop};
+use sindri_core::tools::FrontEnd;
 
 use crate::cli::{Cli, Format};
+use crate::launch::{Launch, Turns};
 
 /// §15's setup failure: nothing to run *with* — a session that cannot be made, a
 /// boundary that cannot be held, an answer that cannot be written.
@@ -119,146 +109,51 @@ fn piped_words() -> Option<String> {
     (!words.is_empty()).then_some(words)
 }
 
-/// One batch run: the session, the boundary, the tools, the record and the loop,
-/// driven to a stop reason, and stdout written from what it left.
+/// One batch run: the launch, the loop and what stdout is handed when it stops.
+///
+/// Everything a run is made of is `launch`'s (one assembly both front ends share); this
+/// function is batch mode's voice and its contract — the prompt resolved off the command
+/// line and the pipe, the run narrated on stderr when `-v` asked for it, and §15's one
+/// answer plus one newline, or nothing at all, on stdout.
 pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
     let started = Instant::now();
     let prompt = match job.prompt() {
         Ok(prompt) => prompt,
         Err(usage) => return refuse(&usage, USAGE),
     };
-    let (Some(wire), Some(model)) = (config.provider, config.model.clone()) else {
-        return refuse(
-            "a run needs a provider and a model: set them in the config or in the environment",
-            USAGE,
-        );
+    let launch = match Launch::open(cli, config, FrontEnd::Batch) {
+        Ok(launch) => launch,
+        Err(refusal) => return refuse(refusal.message(), refusal.code()),
     };
-
-    let workspace = match std::env::current_dir() {
-        Ok(workspace) => workspace,
-        Err(error) => {
-            return refuse(
-                &format!("cannot read the working directory: {error}"),
-                SETUP,
-            );
-        }
-    };
-    let state_home = match session::state_home(&Process) {
-        Ok(path) => path,
-        Err(error) => return refuse(&error.to_string(), error.exit_code()),
-    };
-    let session = match Session::create(&state_home) {
-        Ok(session) => session,
-        Err(error) => return refuse(&error.to_string(), error.exit_code()),
-    };
-    let boundary = match Boundary::from_config(config, &workspace, cli.enforcement()) {
-        Ok(boundary) => boundary,
-        Err(error) => return refuse(&error.to_string(), SETUP),
-    };
-    // Boot proves the sandbox once, with a real bubblewrap invocation, before a
-    // turn or a record: a sandbox that cannot be created stops the run here as a
-    // card, because the alternative is running unconfined without being asked to.
-    let proof = match sandbox::prove(&boundary, session.temp()) {
-        Ok(proof) => proof,
-        Err(card) => return refuse(&card.to_string(), card.exit_code()),
-    };
-    let limits = Limits::from_config(config, &boundary);
-    let catalog = Catalog::discover(&workspace, home().as_deref());
-    let tools = ToolSet::new(&boundary, &catalog, FrontEnd::Batch);
-    // A wire that signs in is asked with the session its store holds, and the
-    // store's own literals join the run's secrets, so nothing it holds can reach
-    // a record, the JSON or a line of chatter (ADR-0011). The store is resolved
-    // here rather than by the seam, because a run has no one to show a code to
-    // and a store that cannot be opened is a setup failure and not a reply.
-    let store = match wire {
-        Wire::Copilot => match Store::resolve(&Process) {
-            Ok(store) => Some(store),
-            Err(error) => return refuse(&error.to_string(), error.exit_code()),
-        },
-        Wire::Anthropic | Wire::Openai => None,
-    };
-    let mut secrets = config.secrets();
-    if let Some(store) = &store {
-        secrets = secrets.union(store.secrets());
-    }
-    let mut client = Client::http(headers(config), session.guid(), secrets.clone());
-    if let Some(store) = store {
-        client = client.store(store);
-    }
-    let ask = ask(config, wire, model.clone(), &workspace);
-    // Which endpoint the run answers on is read before the first request leaves,
-    // so a run that dies on its first ask still says where it was (A10).
-    let route = ask.route_of();
-    let asking = Asking::new(client, ask);
-    let executor = Shell::new(boundary.clone(), session.temp(), catalog);
-
-    let mut record = match Record::open(
-        &session,
-        Facts {
-            wire,
-            model: &model,
-            route,
-            boundary: &boundary,
-            limits: &limits,
-            workspace: &workspace,
-            secrets: &secrets,
-        },
-    ) {
-        Ok(record) => record,
-        Err(error) => return refuse(&error.to_string(), SETUP),
-    };
+    let figure = launch.figure();
+    let max_turns = launch.max_turns();
 
     narrate(
         cli,
         &format!(
-            "wire {}, model {model}, enforcement {}",
-            wire.word(),
-            boundary.enforcement().word()
+            "wire {}, model {}, enforcement {}",
+            figure.wire.word(),
+            figure.model,
+            figure.enforcement.word()
         ),
     );
-    // A wire that serves one endpoint has no route to name, and says nothing
-    // rather than naming a shape it does not have.
-    if let Some(route) = route {
+    // A wire that serves one endpoint has no route to name, and says nothing rather than
+    // naming a shape it does not have.
+    if let Some(route) = figure.route {
         narrate(cli, &format!("route {route}"));
     }
-    narrate(cli, &format!("workspace {}", workspace.display()));
-    narrate(cli, &format!("session {}", session.directory().display()));
-    narrate(cli, &proof.to_string());
+    narrate(cli, &format!("workspace {}", figure.workspace.display()));
+    narrate(cli, &format!("session {}", figure.session.display()));
+    narrate(cli, &figure.proof);
 
-    let mut run = Run::new(prompt, asking.clone(), executor)
-        .limits(limits)
-        .tools(&tools)
-        .cancel(Cancel::on_sigint());
+    // The user's word, from a terminal's `^C`: the loop reads the flag and a command in
+    // flight hears it, so a batch run stops where a keystroke in the terminal UI does (§4).
+    let cancel = Cancel::on_sigint();
     let mut quiet = Quiet;
-    while run.state().is_running() {
-        run.turn(&mut quiet);
-        // The loop hands a front end no hook per entry, so a turn is written whole
-        // as it ends: the turn it was, and what the assistant said. A call and its
-        // result need the loop to say when they happen, which is #17's seam to
-        // grow; nothing in this build's wire can ask for one (ADR-0016).
-        if let Some(exchange) = run.history().last() {
-            note(record.turn_started(exchange.turn));
-            note(record.answered(exchange.turn, &exchange.text));
-            narrate(cli, &format!("turn {}", exchange.turn));
-        }
-    }
-
-    let state = run.state();
-    let usage = asking.spent();
-    note(record.spent(usage));
-    note(record.stopped(&state));
-    let outcome = match Outcome::of(
-        &run,
-        Reported {
-            session: session.guid(),
-            model: &model,
-            enforcement: boundary.enforcement(),
-            duration: started.elapsed(),
-            usage: record.document().usage,
-        },
-    ) {
-        Some(outcome) => outcome,
-        None => return refuse("the run ended with no stop reason to report", SETUP),
+    let mut spoken = Says { cli, turns: 0 };
+    let outcome = match launch.drive(&prompt, &mut quiet, &mut spoken, cancel) {
+        Ok(outcome) => outcome,
+        Err(refusal) => return refuse(refusal.message(), refusal.code()),
     };
 
     narrate(
@@ -268,17 +163,14 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
             outcome.stopped(),
             started.elapsed().as_millis(),
             outcome.turns(),
-            outcome.tool_calls(),
+            outcome.tool_calls()
         ),
     );
-    // A run that did not answer says why on stderr: stdout is the answer's alone,
-    // so the reason a script cannot see in stdout is the one it reads here (§15).
-    if let Some(reason) = why(&outcome, limits.max_turns()) {
+    // A run that did not answer says why on stderr: stdout is the answer's alone, so the
+    // reason a script cannot see in stdout is the one it reads here (§15).
+    if let Some(reason) = why(&outcome, max_turns) {
         eprintln!("sindri: {reason}");
     }
-    // The temp is emptied and everything else kept, so a session that ended still
-    // reads beside one that was killed (§13).
-    note(finish(record));
 
     let written = match cli.format {
         Format::Text => match outcome.answer() {
@@ -298,42 +190,21 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
     ExitCode::from(outcome.exit_code())
 }
 
-/// The ask a run is built from: the dialect the config named, the served name, the
-/// endpoint when one was set, the credential, and the preamble the workspace
-/// stands in front of, re-sent every turn.
-fn ask(config: &Config, wire: Wire, model: String, workspace: &Path) -> Ask {
-    let mut ask = Ask::new(wire, model).preamble(Preamble::for_workspace(workspace).render());
-    if let Some(base_url) = &config.base_url {
-        ask = ask.base_url(base_url);
-    }
-    if let Some(route) = config.route {
-        ask = ask.route(route);
-    }
-    ask = match &config.api_key {
-        Some(key) => ask.credential(Credential::new(key)),
-        None => ask.credential(Credential::none()),
-    };
-    ask.thinking(config.thinking.unwrap_or(false))
+/// Batch mode's voice about a run that goes on: one line per turn, on stderr and only when
+/// `-v` asked for it. What a turn said is the record's fact and the JSON's, so the narration
+/// is the turn's number and nothing else.
+struct Says<'a> {
+    /// The command line, for the one question of whether to say anything at all.
+    cli: &'a Cli,
+    /// How many turns have been narrated, which is what a line counts.
+    turns: u32,
 }
 
-/// The run's extra request headers, as the config writes them: `Name: value`,
-/// split at the first colon. A line with no colon is dropped rather than sent as a
-/// name with an empty value.
-fn headers(config: &Config) -> Vec<(String, String)> {
-    config
-        .extra_headers
-        .iter()
-        .flatten()
-        .filter_map(|header| {
-            let (name, value) = header.split_once(':')?;
-            Some((name.trim().to_owned(), value.trim().to_owned()))
-        })
-        .collect()
-}
-
-/// The home the user-scope skills come from, when the environment names one.
-fn home() -> Option<PathBuf> {
-    std::env::var("HOME").ok().map(PathBuf::from)
+impl Turns for Says<'_> {
+    fn turn(&mut self, ended: &Exchange) {
+        self.turns = ended.turn;
+        narrate(self.cli, &format!("turn {}", self.turns));
+    }
 }
 
 /// Writes the answer, and exactly one newline after it: a model that ended its
@@ -364,19 +235,6 @@ fn why(outcome: &Outcome, max_turns: u32) -> Option<String> {
         Stop::Cancelled => Some(String::from("the run was cancelled")),
         Stop::Error(message) => Some(message.to_string()),
     }
-}
-
-/// A record that would not write is a diagnostic and not a reason to stop a run
-/// that is already doing what it was asked: the session that remains still reads.
-fn note(written: Result<(), impl std::fmt::Display>) {
-    if let Err(error) = written {
-        eprintln!("sindri: {error}");
-    }
-}
-
-/// Ends the session: the temp is emptied and the directory is kept.
-fn finish(record: Record) -> Result<(), impl std::fmt::Display> {
-    record.finish()
 }
 
 /// The one way this front end says no: the reason on stderr, the code §15 gives

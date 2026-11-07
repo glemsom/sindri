@@ -68,14 +68,15 @@ use sindri_core::run::Exit;
 
 use crate::ink::{Ink, Look};
 use crate::markdown;
+use crate::pulse::Head;
 use crate::stream::Stream;
 
 /// How far a body sits inside the row that names it, and how far an answer is printed
 /// from the frame's left edge: one step, the step a past run is read back with too, so
 /// a call and what it answered read as one thing said in two rows rather than as two
 /// entries that happened to follow each other. An answer's own gutter is this margin
-/// held open and blank — the two columns #39's pulse at the head of the newest answer
-/// will sit in.
+/// held open and blank — the two columns the marker at the head of the newest answer
+/// takes the place of, on the one row it heads (#39).
 const INDENT: &str = "  ";
 
 /// The gutter a thought row opens with: a hairline down the left of the prose the run
@@ -160,6 +161,12 @@ impl Row {
         Row::of(spans)
     }
 
+    /// The glyphs this row is made of, left to right, with no ink: the line a mark reads
+    /// the words it covers out of, and the cells a mark's columns are counted in (§12).
+    pub fn glyphs(&self) -> String {
+        self.spans.iter().map(|(text, _)| text.as_str()).collect()
+    }
+
     /// Draws this row across the top row of `area`, from its left edge and clipped at
     /// its right one: a row is laid out at a width and drawn at that width or narrower,
     /// so the band's right edge is where a row stops and never where it runs over.
@@ -198,7 +205,7 @@ pub fn layout(entry: &Entry, cols: u16) -> Vec<Row> {
             exit,
             ..
         } => settled(name, *exit, &text.to_string(), *bytes, *elapsed_ms, cols),
-        Entry::Assistant { text, .. } => answer(&text.to_string(), cols),
+        Entry::Assistant { text, .. } => answer(&text.to_string(), cols, None),
         Entry::Reasoning { text, .. } => thought(&text.to_string(), cols),
     }
 }
@@ -220,16 +227,45 @@ pub(crate) fn thought(text: &str, cols: u16) -> Vec<Row> {
 ///
 /// What the constructs look like is `markdown`'s, because the layout is the product and
 /// the ticket that wrote it (#52) owns all of it: a heading's weight, a table's rule, a
-/// code block's gutter and its highlighting. The one rule this file kept before the
-/// parse was here is ADR-0008's, and it moved with the parse: a fence the wire has not
-/// closed yet ends the text with the block still open, and `markdown` draws it as the
-/// code block it is rather than as prose that ate the rest of the answer.
-pub(crate) fn answer(text: &str, cols: u16) -> Vec<Row> {
+/// code block's gutter and its highlighting. That moved ADR-0008's rule with the parse: a
+/// fence the wire has not closed yet ends the text with the block still open, and
+/// `markdown` draws it as the code block it is rather than as prose that ate the rest of
+/// the answer.
+///
+/// The one thing this file still does to the rows is set them in the answer's gutter, and
+/// on the one row the run's marker heads (#39) to stand the marker in that gutter instead:
+/// the mark is drawn from the frame's left edge and the words of that row begin after it,
+/// so the row the marker heads loses the columns the gutter held and no more.
+pub(crate) fn answer(text: &str, cols: u16, head: Option<&Head>) -> Vec<Row> {
     let (gutter, room) = margin(INDENT, cols);
-    markdown::rows(text, room)
-        .into_iter()
-        .map(|row| row.indented(gutter, Ink::Plain))
-        .collect()
+    // The columns the marker takes out of the first row's words: its own width, the blank
+    // column that keeps it from being one run of glyphs with the prose, less the gutter it
+    // stands in the place of.
+    let reserve = match head {
+        Some(head) => head
+            .width()
+            .saturating_add(1)
+            .saturating_sub(u16::try_from(glyphs(gutter)).unwrap_or(u16::MAX)),
+        None => 0,
+    };
+    let mut rows = markdown::rows_under(text, room, reserve).into_iter();
+    let mut laid: Vec<Row> = Vec::new();
+    if let Some(head) = head
+        && let Some(first) = rows.next()
+    {
+        let mut spans: Vec<(String, Look)> = head
+            .spans()
+            .iter()
+            .map(|(text, ink)| (text.clone(), Look::plain(*ink)))
+            .collect();
+        // A blank column between the mark and the words it introduces, so the two are not
+        // one run of glyphs with a braille cell at the front of it.
+        spans.push((String::from(" "), Look::plain(Ink::Plain)));
+        spans.extend(first.spans().iter().cloned());
+        laid.push(Row::of(spans));
+    }
+    laid.extend(rows.map(|row| row.indented(gutter, Ink::Plain)));
+    laid
 }
 
 /// The gutter a body opens with at `cols`, and the columns its words have beside it.
@@ -357,7 +393,14 @@ fn rule(lead: &str, cols: u16) -> Row {
 /// word longer than a row broken across rows, and every line break the text has kept,
 /// because the paragraphs of an answer are the writer's and not the layout's.
 fn wrap(text: &str, cols: u16) -> Vec<String> {
-    let room = usize::from(cols.max(1));
+    wrap_under(text, cols, cols)
+}
+
+/// `text` broken into rows no wider than `room`, except that its first row is held to
+/// `first` — narrower when a marker heads it — and every row after it to `room`.
+fn wrap_under(text: &str, first: u16, room: u16) -> Vec<String> {
+    let first = usize::from(first.max(1));
+    let room = usize::from(room.max(1));
     let mut rows: Vec<String> = Vec::new();
     for line in text.split('\n') {
         let mut row = String::new();
@@ -365,8 +408,11 @@ fn wrap(text: &str, cols: u16) -> Vec<String> {
         for word in line.split_whitespace() {
             let mut word = word;
             loop {
+                // The first row of a line is the one a marker can be standing on, so it is
+                // the one row held to a narrower width than the rest.
+                let limit = if rows.is_empty() { first } else { room };
                 let gap = usize::from(!row.is_empty());
-                if width + gap + glyphs(word) <= room {
+                if width + gap + glyphs(word) <= limit {
                     if gap == 1 {
                         row.push(' ');
                         width += 1;
@@ -382,7 +428,7 @@ fn wrap(text: &str, cols: u16) -> Vec<String> {
                 }
                 // The word is alone on its row and still does not fit: write the
                 // longest head of it that does, and carry the rest to the next row.
-                let (head, rest) = split_at(word, room);
+                let (head, rest) = split_at(word, limit);
                 rows.push(head);
                 word = rest;
                 if word.is_empty() {
@@ -487,10 +533,16 @@ enum What {
     /// The fact, as the run wrote it: kept here so an entry and its rows cannot be told
     /// apart by a caller handing in one where the other was expected.
     Fact(Entry),
-    /// The turn in flight, as the fragment count its rows were laid from: laid out from
-    /// the stream by [`Rows::live`] and by nothing else, so the rows of a live entry are
-    /// always the rows of the fragments that have landed.
-    Live { revision: u64 },
+    /// The turn in flight, as the fragment count its rows were laid from and the marker
+    /// they wear at their head: laid out from the stream by [`Rows::live`] and by nothing
+    /// else, so the rows of a live entry are always the rows of the fragments that have
+    /// landed and of the mark the run's clock is at.
+    Live {
+        /// How many fragments had landed when these rows were laid out.
+        revision: u64,
+        /// The marker the newest answer wore, and nothing when the run was not live.
+        head: Option<Head>,
+    },
 }
 
 impl Rows {
@@ -528,34 +580,43 @@ impl Rows {
     /// tick that changes the live entry costs one layout of it and no layouts of the
     /// history above it (ADR-0008).
     ///
-    /// A stream that has said nothing holds no live entry, and one that is asked again
-    /// without having moved is the same picture and costs nothing: the revision is what
-    /// tells the two apart, so a paint that changed nothing does not wrap the same text
-    /// again. A width change is not a paint that changed nothing — it drops the rows
-    /// like every other entry's — and the next frame lays them out again.
-    pub fn live(&mut self, stream: &Stream) {
-        if stream.is_empty() {
+    /// A stream that has said nothing holds no live entry — unless a marker heads a run that
+    /// has not spoken yet, which is a row of its own — and one that is asked again without
+    /// having moved is the same picture and costs nothing: the fragment count and the mark
+    /// are what tell the two apart, so a paint that changed nothing does not wrap the same
+    /// text again. The mark counts because it is laid into the rows it heads: an entry held
+    /// with the mark of a step ago would be drawn wearing a clock that has moved on. A width
+    /// change is not a paint that changed nothing — it drops the rows like every other
+    /// entry's — and the next frame lays them out again.
+    pub fn live(&mut self, stream: &Stream, head: Option<&Head>) {
+        if stream.is_empty() && head.is_none() {
             self.retire();
             return;
         }
         let revision = stream.revision();
+        let head = head.cloned();
         if let Some(Held {
-            what: What::Live { revision: at },
+            what:
+                What::Live {
+                    revision: at,
+                    head: mark,
+                },
             rows: Some(_),
             ..
         }) = self.held.last()
             && *at == revision
+            && *mark == head
         {
             return;
         }
-        let rows = stream.rows(self.cols);
+        let rows = stream.rows(self.cols, head.as_ref());
         match self.held.last_mut() {
             Some(held) if matches!(held.what, What::Live { .. }) => {
-                held.what = What::Live { revision };
+                held.what = What::Live { revision, head };
                 held.rows = Some(rows);
             }
             _ => self.held.push(Held {
-                what: What::Live { revision },
+                what: What::Live { revision, head },
                 result: None,
                 rows: Some(rows),
             }),
@@ -656,6 +717,16 @@ impl Rows {
             self.held[at].rows = Some(rows);
         }
         self.held[at].rows.as_deref().unwrap_or_default()
+    }
+
+    /// The words of the newest answer this transcript holds, read from the entry and not
+    /// from the rows it was laid out as: a copy of the last answer takes the line breaks
+    /// the model wrote rather than the ones the band wrapped (§12, #50).
+    pub fn last_answer(&self) -> Option<String> {
+        self.held.iter().rev().find_map(|held| match &held.what {
+            What::Fact(Entry::Assistant { text, .. }) => Some(text.to_string()),
+            _ => None,
+        })
     }
 
     /// The transcript's whole height in rows, laying out every entry this cache has

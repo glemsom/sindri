@@ -21,6 +21,27 @@ fn typed(lines: &[&str]) -> Composer {
     composer
 }
 
+/// A view a run is live in and prompts are waiting in: `prompts` typed and sent while
+/// nothing could run them, in the order a reader types them, and then `draft`'s lines
+/// typed into the box underneath — so a test starts where the reader is.
+fn waiting(draft: &[&str], prompts: &[&str]) -> View {
+    let mut view = View::boot();
+    for prompt in prompts {
+        view.paste(prompt);
+        match view.key(Key::Enter) {
+            Outcome::Send(prompt) => view.enqueue(prompt),
+            other => panic!("a draft should have been sent, and {other:?} came instead"),
+        }
+    }
+    for (index, line) in draft.iter().enumerate() {
+        if index > 0 {
+            view.key(Key::Newline);
+        }
+        view.paste(line);
+    }
+    view
+}
+
 #[test]
 fn no_mode_binds_one_key_twice() {
     for mode in Mode::ALL {
@@ -106,7 +127,13 @@ fn a_screen_answers_its_own_keys_and_swallows_the_drafts() {
     let mut view = View::boot();
     view.key(Key::Char('?'));
 
-    for key in [Key::Char('x'), Key::Enter, Key::Backspace, Key::Quit] {
+    for key in [
+        Key::Char('x'),
+        Key::Enter,
+        Key::Backspace,
+        Key::Quit,
+        Key::Drop,
+    ] {
         assert_eq!(
             view.key(key),
             Outcome::Unchanged,
@@ -126,19 +153,44 @@ fn a_screen_answers_its_own_keys_and_swallows_the_drafts() {
 }
 
 #[test]
-fn the_up_arrow_is_bound_in_one_mode_and_one_row() {
-    let bound: Vec<(Mode, Act)> = Mode::ALL
+fn the_up_arrows_one_arm_is_bound_in_one_row_of_one_table() {
+    // A9 is about the draft's `↑`, so it is `Act::Up` that has to resolve in exactly one
+    // row: the queue's recall and the row above the caret are one act, and a second row
+    // carrying it would be a second place that key is decided. A screen's `↑` is its own
+    // act — a list's selection is not a caret — and this rule does not reach it.
+    let bound: Vec<(Mode, Key)> = Mode::ALL
         .iter()
         .flat_map(|mode| mode.table().iter().map(move |binding| (*mode, binding)))
-        .filter(|(_, binding)| binding.key == Key::Up)
-        .map(|(mode, binding)| (mode, binding.act))
+        .filter(|(_, binding)| binding.act == Act::Up)
+        .map(|(mode, binding)| (mode, binding.key))
         .collect();
 
     assert_eq!(
         bound,
-        vec![(Mode::Composer, Act::Up)],
-        "`↑` resolves in exactly one place: the queue's recall and the draft's row \
-         above are one arm, and A9 is decided there (A9)"
+        vec![(Mode::Composer, Key::Up)],
+        "the draft's `↑` resolves in exactly one place, and A9 is decided there (A9)"
+    );
+}
+
+#[test]
+fn the_pickers_up_and_down_are_the_lists_and_never_the_drafts() {
+    let files = Mode::Files.table();
+
+    assert_eq!(
+        files
+            .iter()
+            .find(|binding| binding.key == Key::Up)
+            .map(|binding| binding.act),
+        Some(Act::Previous),
+        "`↑` at the picker moves the selection, and never the draft's caret under the \
+         screen: the keys a mode binds are its own"
+    );
+    assert_eq!(
+        files
+            .iter()
+            .find(|binding| binding.key == Key::Down)
+            .map(|binding| binding.act),
+        Some(Act::Next)
     );
 }
 
@@ -164,6 +216,93 @@ fn up_on_the_first_line_is_the_queues_and_off_it_moves_the_caret() {
          recall and nothing to repaint"
     );
     assert_eq!(view.composer().caret(), (0, 3), "and the caret stayed put");
+}
+
+#[test]
+fn up_on_the_first_line_recalls_the_newest_queued_prompt() {
+    let mut view = waiting(&[], &["first", "second"]);
+
+    assert_eq!(
+        view.key(Key::Up),
+        Outcome::Edited,
+        "the recall is a frame to paint, because the draft and the count both changed"
+    );
+    assert_eq!(
+        view.composer().text(),
+        "second",
+        "the prompt typed last is the draft again"
+    );
+    assert_eq!(view.queue().len(), 1, "and it has left the queue");
+}
+
+#[test]
+fn up_off_the_first_line_moves_the_caret_and_leaves_the_queue_alone() {
+    let mut view = waiting(&["half a thought", "and a second line"], &["first"]);
+
+    assert_eq!(
+        view.composer().caret(),
+        (1, 17),
+        "the caret waits on row two"
+    );
+    assert_eq!(
+        view.key(Key::Up),
+        Outcome::Edited,
+        "off the first line the arrow is the draft's"
+    );
+    assert_eq!(
+        view.composer().caret(),
+        (0, 14),
+        "so the caret rose a row, keeping its column"
+    );
+    assert_eq!(
+        view.queue().len(),
+        1,
+        "and the queue is not what answered the key"
+    );
+}
+
+#[test]
+fn ctrl_x_drops_the_newest_queued_prompt() {
+    let mut view = waiting(&[], &["first", "second", "third"]);
+
+    assert_eq!(view.key(Key::Drop), Outcome::Edited, "the count changed");
+    assert_eq!(
+        view.queue().len(),
+        2,
+        "the prompt typed last is the one dropped"
+    );
+
+    assert_eq!(view.key(Key::Up), Outcome::Edited);
+    assert_eq!(
+        view.composer().text(),
+        "second",
+        "the third is gone and the order of the rest is untouched"
+    );
+}
+
+#[test]
+fn ctrl_x_with_nothing_queued_is_not_a_repaint() {
+    assert_eq!(
+        View::boot().key(Key::Drop),
+        Outcome::Unchanged,
+        "there is no newest queued prompt to drop, so the frame is the one it was"
+    );
+}
+
+#[test]
+fn ctrl_x_is_bound_in_one_mode_and_one_row() {
+    let bound: Vec<(Mode, Act)> = Mode::ALL
+        .iter()
+        .flat_map(|mode| mode.table().iter().map(move |binding| (*mode, binding)))
+        .filter(|(_, binding)| binding.key == Key::Drop)
+        .map(|(mode, binding)| (mode, binding.act))
+        .collect();
+
+    assert_eq!(
+        bound,
+        vec![(Mode::Composer, Act::Drop)],
+        "`Ctrl-X` resolves in exactly one place, and the queue is what answers it (A9)"
+    );
 }
 
 #[test]

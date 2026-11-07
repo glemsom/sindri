@@ -37,7 +37,16 @@ const OPTIONS: Options = Options::ENABLE_TABLES;
 /// The markdown in `text` as the rows it is drawn as at `cols` columns: the whole of
 /// what the transcript asks this module for.
 pub fn rows(text: &str, cols: u16) -> Vec<Row> {
+    rows_under(text, cols, 0)
+}
+
+/// The same markdown at `cols` columns with `reserve` of them given up on the first row
+/// alone: the columns a marker standing at the frame's left edge takes out of the words
+/// beside it (§39). Every row after the first is laid out at the full width, which is
+/// what makes a live answer and a settled one the same picture with one glyph moved.
+pub fn rows_under(text: &str, cols: u16, reserve: u16) -> Vec<Row> {
     let mut room = Room::new(cols.max(1));
+    room.reserve = usize::from(reserve);
     for event in Parser::new_ext(text, OPTIONS) {
         room.event(event);
     }
@@ -137,6 +146,10 @@ struct Room {
     /// at and the words said over it, so the URL is printed only when it says something
     /// the words did not.
     link: Option<(String, String)>,
+    /// The columns the first row gives up to a marker laid at the frame's left edge, and
+    /// nothing once that row has been written: what keeps the mark's row from running over
+    /// the width the rest of the answer was laid out at (#39).
+    reserve: usize,
 }
 
 impl Room {
@@ -157,6 +170,7 @@ impl Room {
             link: None,
             code: None,
             table: None,
+            reserve: 0,
         }
     }
 
@@ -252,9 +266,11 @@ impl Room {
             },
             // Inline code keeps the spacing it was written with, because a run of code's
             // spacing is its meaning: the run is set reversed and broken at the row's
-            // edge and nowhere else.
+            // edge and nowhere else. It is reversed over `muted` and not over `plain`
+            // because a mark is the terminal's reverse video and spends no colour, so the
+            // two would otherwise be one look — see `Look::of`.
             Event::Code(text) => {
-                let reversed = Look::new(Ink::Plain, Face::Reversed);
+                let reversed = Look::new(Ink::Muted, Face::Reversed);
                 match &mut self.table {
                     Some(table) => table.text(&text, reversed),
                     None => {
@@ -269,12 +285,10 @@ impl Room {
             Event::End(TagEnd::Link) => self.close_link(),
             // A soft break is the line the source was wrapped on and not one the writer
             // drew: the paragraph is reflowed to the room, so the two lines are one.
-            Event::SoftBreak => {
-                match &mut self.table {
-                    Some(table) => table.text(" ", self.block),
-                    None => self.spaced = true,
-                }
-            }
+            Event::SoftBreak => match &mut self.table {
+                Some(table) => table.text(" ", self.block),
+                None => self.spaced = true,
+            },
             Event::HardBreak => self.flush_if_written(),
             _ => {}
         }
@@ -392,7 +406,7 @@ impl Room {
         }
         self.push(rule(&widths));
         for cells in table.body() {
-            for line in lines_of(&cells, &widths) {
+            for line in lines_of(cells, &widths) {
                 let row = joined(&line, &widths);
                 self.push(row);
             }
@@ -407,10 +421,7 @@ impl Room {
             .enumerate()
         {
             if at == 1 {
-                self.push(Row::of([(
-                    "─".repeat(available),
-                    Look::plain(Ink::Dim),
-                )]));
+                self.push(Row::of([("─".repeat(available), Look::plain(Ink::Dim))]));
             }
             for cell in cells {
                 for line in lines_of(std::slice::from_ref(cell), &[available]) {
@@ -523,7 +534,7 @@ impl Room {
             };
             spans.push((text, Look::plain(Ink::Plain)));
         }
-        spans.extend(self.line.drain(..));
+        spans.append(&mut self.line);
         self.push(Row::of(spans));
         self.used = 0;
         self.spaced = false;
@@ -551,9 +562,16 @@ impl Room {
     fn room(&self) -> usize {
         let bars: usize = self.lead.iter().map(|(text, _)| glyphs(text)).sum();
         let marks: usize = self.marks.iter().map(|mark| glyphs(mark)).sum();
+        // The reserve holds only while no row has been written: it is the first row alone
+        // that a marker stands beside.
+        let reserve = match self.rows.is_empty() {
+            true => self.reserve,
+            false => 0,
+        };
         usize::from(self.wide)
             .saturating_sub(bars)
             .saturating_sub(marks)
+            .saturating_sub(reserve)
             .max(1)
     }
 
@@ -802,7 +820,11 @@ fn joined(line: &[Cell], widths: &[usize]) -> Row {
     let mut spans: Vec<(String, Look)> = Vec::new();
     for (at, width) in widths.iter().enumerate() {
         if at > 0 {
-            spans.extend(Row::of([(String::from(" │ "), Ink::Plain)]).spans().to_vec());
+            spans.extend(
+                Row::of([(String::from(" │ "), Ink::Plain)])
+                    .spans()
+                    .to_vec(),
+            );
         }
         let cell: &[(String, Look)] = line.get(at).map(Vec::as_slice).unwrap_or_default();
         spans.extend(cell.iter().cloned());
@@ -814,7 +836,7 @@ fn joined(line: &[Cell], widths: &[usize]) -> Row {
             false => width.saturating_sub(measured(cell)),
         };
         if pad > 0 {
-            spans.push((String::from(" ".repeat(pad)), Look::plain(Ink::Plain)));
+            spans.push((" ".repeat(pad), Look::plain(Ink::Plain)));
         }
     }
     Row::of(spans)

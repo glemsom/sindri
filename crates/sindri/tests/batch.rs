@@ -951,6 +951,41 @@ fn a_signal_stops_the_run_with_nothing_on_stdout() {
         text(&output.stderr)
     );
     assert!(output.stdout.is_empty(), "{}", text(&output.stdout));
+
+    // The record is written as the run goes, so a run the user's word stopped is a
+    // session that still reads: the document says why it ended, and the front end
+    // that reads past runs back hands it to a reader (§13).
+    let document = std::fs::read_to_string(ground.session().join("session.json"))
+        .expect("the session document");
+    assert!(
+        document.contains(r#""stopped": "cancelled""#),
+        "the record's stop reason is the user's word: {document}"
+    );
+
+    let directory = ground.session();
+    let guid = directory
+        .file_name()
+        .expect("a session directory is named by its GUID")
+        .to_string_lossy()
+        .into_owned();
+    let read_back = Command::new(env!("CARGO_BIN_EXE_sindri"))
+        .env_clear()
+        .env("XDG_STATE_HOME", &ground.state)
+        .env("HOME", &ground.config)
+        .args(["sessions", "show", &guid])
+        .output()
+        .expect("the binary should run");
+    assert_eq!(
+        read_back.status.code(),
+        Some(0),
+        "the cancelled session reads back: {}",
+        text(&read_back.stderr)
+    );
+    assert!(
+        text(&read_back.stdout).contains("cancelled"),
+        "and says the user's word stopped it: {}",
+        text(&read_back.stdout)
+    );
 }
 
 /// Sends `INT` to `child`, as a terminal's `^C` would.

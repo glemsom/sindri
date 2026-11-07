@@ -6,11 +6,18 @@
 //! Every child gets `env_clear` and homes of its own holding a key, so no launch
 //! stops to paste one and nothing of this process's environment — least of all a
 //! real key — can reach the binary.
+//!
+//! A run is measured here too: a prompt typed and sent starts one against a wire on a
+//! loopback socket that holds its reply until a test lets it go, so a request is in
+//! flight while the test types, and `Ctrl-C` and an outside `SIGINT` are each proved to
+//! stop it where §4 says they do (§4, §12).
 
 use std::fs::File;
 use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
+use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -23,6 +30,15 @@ use tempfile::TempDir;
 /// How long a frame is given to arrive before a test calls it absent: generous,
 /// because a test that is merely slow must not read as a program that never drew.
 const PATIENCE: Duration = Duration::from_secs(10);
+
+/// The answer the wire streams, as a reply was recorded: an Anthropic event stream of
+/// two text fragments, so a run really decodes one and the frame really draws it.
+const ANSWER: &str =
+    include_str!("../../sindri-core/tests/fixtures/providers/anthropic_stream.sse");
+
+/// The word the recorded stream says, split the way it streams: a frame paints the cells
+/// a fragment changed, so a test looks for both halves rather than for one run of words.
+const ANSWER_WORDS: [&str; 2] = ["Hello", "world"];
 
 /// A workspace, a config home and a state home, all of the test's own.
 struct Ground {
@@ -67,6 +83,132 @@ impl Ground {
             .env("ANTHROPIC_API_KEY", "sk-ant-the-recorded-one");
         command
     }
+}
+
+/// A wire on a loopback socket, for the one thing a terminal UI test asks of one: that a
+/// request is in flight while the test types, and that it lands once the test lets it go.
+///
+/// It is `tests/batch.rs`'s socket cut down to a single held reply: what a wire's own
+/// decoding promises is that suite's subject, and here it is only the thing a run waits
+/// on — which is where a cancellation has to arrive (§4).
+struct Wire {
+    /// The port the socket listens on.
+    port: u16,
+    /// One message per request served, so a test knows a run is waiting on the wire.
+    arrived: Receiver<()>,
+    /// One message released, so the wire answers and the run it was in flight with ends.
+    released: Sender<()>,
+    /// Every request read, in the order the runs made them: which prompt a run asked is
+    /// read off the request itself, which is how a test proves the order prompts ran in
+    /// rather than trusting the frame to have painted them in that order (§12).
+    heard: Arc<Mutex<Vec<String>>>,
+}
+
+impl Wire {
+    /// A wire that answers nothing until it is released.
+    fn holding() -> Wire {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("a loopback port");
+        let port = listener.local_addr().expect("a bound address").port();
+        let (arrived, arrivals) = channel();
+        let (release, released) = channel();
+        let heard = Arc::new(Mutex::new(Vec::new()));
+        let listening = Arc::clone(&heard);
+        thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { break };
+                let request = read_request(&mut stream).unwrap_or_default();
+                listening.lock().expect("the wire's requests").push(request);
+                let _ = arrived.send(());
+                let _ = released.recv_timeout(PATIENCE);
+                let _ = answer(&mut stream);
+            }
+        });
+        Wire {
+            port,
+            arrived: arrivals,
+            released: release,
+            heard,
+        }
+    }
+
+    /// The base URL a run is pointed at, so no request leaves this machine.
+    fn base_url(&self) -> String {
+        format!("http://127.0.0.1:{}", self.port)
+    }
+
+    /// Waits until a run has a request in flight.
+    fn wait_for_request(&self) {
+        self.arrived
+            .recv_timeout(PATIENCE)
+            .expect("a request should reach the wire");
+    }
+
+    /// Lets the reply go, so the request a run is in flight with ends.
+    fn release(&self) {
+        let _ = self.released.send(());
+    }
+
+    /// Waits until a request carrying `prompt` reaches the wire, and says whether one did:
+    /// which prompt ran is the prompt the run asked for.
+    fn wait_for_prompt(&self, prompt: &str) -> bool {
+        let deadline = Instant::now() + PATIENCE;
+        while Instant::now() < deadline {
+            if self
+                .requests()
+                .iter()
+                .any(|request| request.contains(prompt))
+            {
+                return true;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        false
+    }
+
+    /// Every request the wire has read, in the order the runs made them.
+    fn requests(&self) -> Vec<String> {
+        self.heard.lock().expect("the wire's requests").clone()
+    }
+}
+
+/// The whole of an HTTP request: the head, then the body its `content-length` promised.
+/// A request read to its end is a request the socket can answer, and a run waiting on a
+/// reply has one nothing has read the body of.
+fn read_request(stream: &mut TcpStream) -> std::io::Result<String> {
+    let mut request = Vec::new();
+    let mut buffer = [0u8; 1024];
+    loop {
+        if let Some(end) = request.windows(4).position(|window| window == b"\r\n\r\n") {
+            let head = String::from_utf8_lossy(&request[..end]).into_owned();
+            let promised = head
+                .lines()
+                .find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    name.eq_ignore_ascii_case("content-length")
+                        .then(|| value.trim().parse::<usize>().ok())?
+                })
+                .unwrap_or(0);
+            if request.len() >= end + 4 + promised {
+                return Ok(String::from_utf8_lossy(&request).into_owned());
+            }
+        }
+        match stream.read(&mut buffer) {
+            Ok(0) | Err(_) => return Ok(String::from_utf8_lossy(&request).into_owned()),
+            Ok(read) => request.extend_from_slice(&buffer[..read]),
+        }
+    }
+}
+
+/// The recorded reply, written as a wire writes one: its length is given so the client
+/// does not wait for a close to find the end of it.
+fn answer(stream: &mut TcpStream) -> std::io::Result<()> {
+    let head = format!(
+        "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+        ANSWER.len()
+    );
+    stream.write_all(head.as_bytes())?;
+    stream.write_all(ANSWER.as_bytes())?;
+    stream.flush()
 }
 
 /// A pseudo-terminal: the slave is the terminal a child is handed, and the master
@@ -191,9 +333,25 @@ struct Session {
 impl Session {
     /// A launch of the binary on its own pseudo-terminal.
     fn open(ground: &Ground) -> (Session, Pty, Drawn) {
+        Session::starting(ground.command())
+    }
+
+    /// A launch that can run a prompt: the ground's own child, pointed at `wire` so its
+    /// run asks a socket on this machine, and taking §6's escape hatch because the
+    /// sandbox is not what a cancellation test is about — the kill reaches the process
+    /// group either way, which `tests/bash.rs` proves where the boundary is the subject.
+    fn asking(ground: &Ground, wire: &Wire) -> (Session, Pty, Drawn) {
+        let mut command = ground.command();
+        command
+            .arg("--yolo-unsafe")
+            .env("SINDRI_BASE_URL", wire.base_url());
+        Session::starting(command)
+    }
+
+    /// A launch of `command` on its own pseudo-terminal.
+    fn starting(mut command: Command) -> (Session, Pty, Drawn) {
         let pty = Pty::open();
-        let child = ground
-            .command()
+        let child = command
             .stdin(Stdio::from(pty.child_end()))
             .stdout(Stdio::from(pty.child_end()))
             .stderr(Stdio::from(pty.child_end()))
@@ -205,6 +363,16 @@ impl Session {
                 .expect("a second handle on the master"),
         );
         (Session { child }, pty, drawn)
+    }
+
+    /// Sends `SIGINT` to the launch, as `kill -INT` would: the user's word from outside the
+    /// keyboard, which is the other door into the one cancellation (§4).
+    fn interrupt(&self) -> bool {
+        Command::new("kill")
+            .args(["-INT", &self.child.id().to_string()])
+            .status()
+            .expect("`kill` should run")
+            .success()
     }
 
     /// Waits for the launch to end, and reports what it ended as. A child that never
@@ -337,6 +505,35 @@ fn an_idle_terminal_is_painted_once_and_then_left_alone() {
 }
 
 #[test]
+fn an_at_walks_the_workspace_the_launch_stands_in() {
+    let ground = Ground::new();
+    std::fs::write(ground.workspace.join("notes.md"), "").expect("a file in the workspace");
+    std::fs::create_dir_all(ground.workspace.join("target")).expect("a directory");
+    std::fs::write(ground.workspace.join("target/built.rs"), "").expect("a built file");
+    std::fs::write(ground.workspace.join(".gitignore"), "target/\n").expect("a gitignore");
+    let (_session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    pty.type_bytes(b"@");
+
+    assert!(
+        drawn.wait_for(b"notes.md"),
+        "`@` opens the files of the workspace the launch stands in, and the file it holds \
+         there is a row of the screen: {:?}",
+        drawn.text()
+    );
+    assert!(
+        !text(&drawn.bytes()).contains("built.rs"),
+        "and a path the workspace's own `.gitignore` ignores is never offered: {:?}",
+        drawn.text()
+    );
+}
+
+#[test]
 fn a_launch_with_no_screen_is_refused_at_exit_two() {
     let ground = Ground::new();
     let pty = Pty::open();
@@ -459,6 +656,30 @@ fn composer_rows(drawn: &str) -> Option<u16> {
         }
     }
     Some(footer? - hairline?)
+}
+
+/// The row `needle` was last painted on, counted from one as a terminal counts, or nothing
+/// when it never was: the frame's own geometry, so a test reads "above the composer" off
+/// the picture rather than assuming where a band landed.
+fn row_of(drawn: &str, needle: &str) -> Option<u16> {
+    let mut row = 0u16;
+    let mut painted_here = String::new();
+    let mut found = None;
+    for mark in painted(drawn) {
+        match mark {
+            Painted::Moved(at, _) => {
+                row = at;
+                painted_here.clear();
+            }
+            Painted::Glyph(glyph) => {
+                painted_here.push(glyph);
+                if painted_here.ends_with(needle) {
+                    found = Some(row);
+                }
+            }
+        }
+    }
+    found
 }
 
 /// Where `needle` was last drawn in `drawn`, or nothing when it never was: a frame paints
@@ -585,7 +806,8 @@ fn shift_enter_from_the_kitty_protocol_breaks_the_line_rather_than_sending() {
 #[test]
 fn enter_takes_the_draft_out_of_the_composer() {
     let ground = Ground::new();
-    let (session, mut pty, drawn) = Session::open(&ground);
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
 
     assert!(
         drawn.wait_for(b"Enter send"),
@@ -601,8 +823,8 @@ fn enter_takes_the_draft_out_of_the_composer() {
         drawn.text()
     );
 
-    // Enter sends. There is no run wired into this launch yet (#43), so the prompt is
-    // dropped; what a reader sees is the box back at its floor, the draft gone from it.
+    // Enter sends: the draft is the run's now, and what a reader sees is the box back at
+    // its floor with the prompt gone from it (§12).
     pty.type_bytes(b"\r");
 
     assert!(
@@ -610,9 +832,16 @@ fn enter_takes_the_draft_out_of_the_composer() {
         "the draft left the composer and the band is back at its floor: {:?}",
         drawn.text()
     );
+    wire.wait_for_request();
+    wire.release();
+    assert!(
+        drawn.wait_until(|frame| ANSWER_WORDS.iter().all(|word| frame.contains(word))),
+        "the run the draft started answered into the frame: {:?}",
+        drawn.text()
+    );
 
     pty.type_bytes(&[0x11]);
-    assert_eq!(session.wait().code(), Some(0));
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
 }
 
 #[test]
@@ -689,4 +918,454 @@ fn question_mark_opens_the_keys_screen_and_escape_gives_the_frame_back() {
         "and the launch is still there to quit once the screen is closed: {:?}",
         drawn.text()
     );
+}
+
+/// A session's document, once a launch has written one: the run under `state`, read the way
+/// a reader reads it back.
+fn document(state: &std::path::Path) -> String {
+    let sessions = state.join("sindri").join("sessions");
+    let mut found: Vec<PathBuf> = std::fs::read_dir(&sessions)
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .map(|entry| entry.path())
+                .collect()
+        })
+        .unwrap_or_default();
+    found.sort();
+    let directory = found.first().expect("the launch recorded a session");
+    std::fs::read_to_string(directory.join("session.json")).expect("the session document")
+}
+
+/// Waits until the document under `state` says `needle`, and says whether it ever did: a
+/// record is written as a run goes, so a test waits for the fact rather than for a sleep.
+fn recorded(state: &std::path::Path, needle: &str) -> bool {
+    let deadline = Instant::now() + PATIENCE;
+    while Instant::now() < deadline {
+        if document(state).contains(needle) {
+            return true;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    false
+}
+
+/// Types a draft and sends it, and waits until the run it started has a request in flight:
+/// the state a cancellation has to arrive in (§4).
+///
+/// The caret is what the draft is waited on and not the words: a glyph typed is a glyph
+/// painted, so the words of a draft arrive one frame each, and the caret landing past the last
+/// of them is the one drawing that says the whole draft is in the box.
+///
+/// The wait is not only for the frame's sake: a terminal handed the draft and the `Enter` in
+/// one read hands over a paste, and no line break in a paste sends (§12).
+fn ask(pty: &mut Pty, drawn: &Drawn, wire: &Wire) {
+    pty.type_bytes(b"triage this");
+    assert!(
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == 12)),
+        "eleven glyphs typed, so the caret waits one column past the last: {:?}",
+        drawn.text()
+    );
+    pty.type_bytes(b"\r");
+    wire.wait_for_request();
+}
+
+#[test]
+fn ctrl_c_in_a_run_cancels_it_and_keeps_the_draft() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask(&mut pty, &drawn, &wire);
+
+    // A draft typed while the run is live: the one a cancel has to keep (§12).
+    pty.type_bytes(b"a second thought");
+    assert!(
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == 17)),
+        "sixteen glyphs of a new draft, and the caret one column past them: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x03]);
+
+    // `Ctrl-C` cancels the run and the draft stays: a caret gone home would be the idle key,
+    // which clears the draft, and a launch that quit would have given the screen back.
+    thread::sleep(Duration::from_millis(300));
+    assert!(
+        caret_at(&drawn.text()).is_some_and(|(_, column)| column == 17),
+        "the draft a cancel found is still in the composer: {:?}",
+        drawn.text()
+    );
+
+    // The run stops when the request in flight does, and says so in the record it was
+    // writing as it went (§4, §13).
+    wire.release();
+    assert!(
+        recorded(&ground.state, r#""stopped": "cancelled""#),
+        "the record's stop reason is the user's own word: {}",
+        document(&ground.state)
+    );
+    assert!(
+        recorded(&ground.state, r#""turns": 1"#),
+        "the run it cancelled is the run that was recorded: {}",
+        document(&ground.state)
+    );
+
+    // The composer is idle again, so the same key now clears the draft — which is how a test
+    // reads back that the run really ended rather than only that the record did.
+    pty.type_bytes(&[0x03]);
+    assert!(
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == 1)),
+        "the run ended, so Ctrl-C is the idle key and clears the draft: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "a cancelled run is not a launch that ends: {:?}",
+        drawn.text()
+    );
+    assert!(
+        drawn.wait_for(b"\x1b[?1049l"),
+        "and Ctrl-Q still gives the screen back: {:?}",
+        drawn.text()
+    );
+}
+
+/// §12's pulse, at the terminal a reader really watches: while a run is live the marker
+/// moves once per 80 ms, and the moment the run stops it settles on the word it stopped
+/// with — `✗ cancelled 5.0s` — and the frame is left alone from then on, because an idle
+/// frame is never drawn (#39).
+#[test]
+fn a_cancelled_run_settles_as_cancelled_and_the_settled_frame_is_left_alone() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask(&mut pty, &drawn, &wire);
+
+    // The run is live and waiting on a wire: the marker at the head of its answer steps
+    // through the braille glyphs while it waits, which is the whole of what tells a reader
+    // that something is still happening.
+    assert!(
+        drawn.wait_until(is_braille),
+        "a live run wears a braille marker: {:?}",
+        drawn.text()
+    );
+    let stepping = drawn.bytes().len();
+    thread::sleep(Duration::from_millis(400));
+    assert!(
+        drawn.bytes().len() > stepping,
+        "a live run is a frame that moves: {:?}",
+        drawn.text()
+    );
+
+    // The user's own word, and the run stops when the request in flight does.
+    pty.type_bytes(&[0x03]);
+    wire.release();
+
+    // Cancelled is settled as cancelled: the marker says the word, and not the cross a
+    // failure wears with nothing beside it.
+    assert!(
+        drawn.wait_until(|frame| frame.contains("cancelled")),
+        "a cancelled run settles as cancelled: {:?}",
+        drawn.text()
+    );
+
+    // Settling draws once and nothing after: the run is over, so there is no clock left to
+    // wake the loop and the settled frame is the last byte the launch writes.
+    thread::sleep(Duration::from_millis(300));
+    let settled = drawn.bytes().len();
+    thread::sleep(Duration::from_millis(600));
+    assert_eq!(
+        drawn.bytes().len(),
+        settled,
+        "a settled frame is left alone, and no idle one is ever drawn: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "the launch outlives the run it cancelled: {:?}",
+        drawn.text()
+    );
+}
+
+/// Whether a frame is wearing a braille marker: one of the ten glyphs the pulse steps
+/// through, which is a cell no other row of this frame draws.
+fn is_braille(frame: &str) -> bool {
+    frame
+        .chars()
+        .any(|glyph| ('\u{2800}'..='\u{28ff}').contains(&glyph))
+}
+
+#[test]
+fn an_outside_sigint_stops_the_run_and_gives_the_terminal_back() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask(&mut pty, &drawn, &wire);
+
+    // The user's word from outside the keyboard: `Ctrl-C` reaches a raw terminal as a byte,
+    // so a `kill -INT` is the other door into the one cancellation (§4).
+    let interrupted = session.interrupt();
+    assert!(interrupted, "the signal was delivered to the launch");
+
+    // The run stops when the request in flight does, and the launch gives the terminal back
+    // rather than dying with it: the screen it took is put back, and §15's cancellation code
+    // is the launch's.
+    wire.release();
+    let status = session.wait();
+    assert_eq!(
+        status.code(),
+        Some(130),
+        "a launch the user's word ended (§15): {:?}",
+        drawn.text()
+    );
+    assert!(
+        drawn.wait_for(b"\x1b[?1049l"),
+        "the alternate screen is given back on a signal as it is on a panic: {:?}",
+        drawn.text()
+    );
+    assert!(
+        recorded(&ground.state, r#""stopped": "cancelled""#),
+        "and the record says what stopped the run: {}",
+        document(&ground.state)
+    );
+    let given_back = pty.attrs();
+    assert!(
+        given_back.local_modes.contains(LocalModes::ICANON)
+            && given_back.local_modes.contains(LocalModes::ECHO),
+        "the state raw mode replaced is back, so a shell can use the terminal the launch left"
+    );
+    assert!(
+        given_back.input_modes.contains(InputModes::IXON),
+        "flow control included"
+    );
+}
+
+/// Types `prompt` and sends it, and waits until the box is empty again: the trace a prompt
+/// typed while a run is live leaves when it went into the queue instead of being dropped
+/// with the draft it was (§12).
+///
+/// The caret is waited on twice and not the words: a frame paints one cell per glyph, so a
+/// caret one column past the last glyph says the whole draft is in the box, and a caret
+/// gone home says it left. The first wait is not only the frame's sake — a terminal handed
+/// the draft and the `Enter` in one read hands over a paste, and no line break in a paste
+/// sends (§12).
+fn queue(pty: &mut Pty, drawn: &Drawn, prompt: &str) {
+    pty.type_bytes(prompt.as_bytes());
+    let typed = u16::try_from(prompt.chars().count()).expect("a prompt narrower than a frame") + 1;
+    assert!(
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == typed)),
+        "{prompt:?} is in the box, the caret one column past its last glyph: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(b"\r");
+    assert!(
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == 1)),
+        "{prompt:?} left the box for the queue: {:?}",
+        drawn.text()
+    );
+}
+
+#[test]
+fn enter_during_a_run_keeps_the_prompt_above_the_composer() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask(&mut pty, &drawn, &wire);
+
+    // `Enter` with a run in flight cannot run the prompt, so the prompt waits above the
+    // composer and the frame says how many are waiting in a row of its own (§12).
+    queue(&mut pty, &drawn, "read the test that failed");
+
+    let frame = drawn.text();
+    let count = row_of(&frame, "1 queued");
+    assert!(
+        count.is_some(),
+        "the frame counts the prompt waiting above the composer: {frame:?}"
+    );
+    assert_eq!(
+        composer_rows(&frame),
+        Some(2),
+        "and the box under it is still at its two-row floor, so the count is not in it"
+    );
+    assert!(
+        count
+            .zip(caret_at(&frame))
+            .is_some_and(|(count, (caret, _))| count < caret),
+        "the count sits above the composer's own row: {frame:?}"
+    );
+
+    wire.release();
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+}
+
+#[test]
+fn the_prompts_typed_during_a_run_run_in_the_order_they_were_typed() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask(&mut pty, &drawn, &wire);
+
+    // Two prompts typed while the first run waits on the wire: neither runs beside it, and
+    // neither is thrown away.
+    queue(&mut pty, &drawn, "second");
+    queue(&mut pty, &drawn, "third");
+
+    // The run in flight stops when its request is answered, and what runs next is the queue,
+    // oldest first: the wire is asked for the prompt typed first, then the one behind it (§12).
+    wire.release();
+    assert!(
+        wire.wait_for_prompt("second"),
+        "the prompt typed first is the run that starts first: {:?}",
+        wire.requests()
+    );
+    wire.release();
+    assert!(
+        wire.wait_for_prompt("third"),
+        "and the one behind it starts next: {:?}",
+        wire.requests()
+    );
+
+    let asked = wire.requests();
+    assert_eq!(asked.len(), 3, "three runs, three requests: {asked:?}");
+    for (at, prompt) in ["triage this", "second", "third"].iter().enumerate() {
+        assert!(
+            asked[at].contains(prompt),
+            "request {at} asks for {prompt:?}: {}",
+            asked[at]
+        );
+    }
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+}
+
+#[test]
+fn ctrl_x_drops_the_newest_prompt_the_queue_holds() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask(&mut pty, &drawn, &wire);
+    queue(&mut pty, &drawn, "keep this");
+    queue(&mut pty, &drawn, "drop this");
+
+    // `Ctrl-X` drops the newest queued prompt (§12). The `x` typed straight after it is the
+    // proof the key was answered: the loop answers one key before the next, so a glyph the
+    // frame painted is a `Ctrl-X` already acted on.
+    pty.type_bytes(&[0x18]);
+    pty.type_bytes(b"x");
+    assert!(
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == 2)),
+        "the glyph typed after Ctrl-X is in the draft, so the drop has happened: {:?}",
+        drawn.text()
+    );
+
+    wire.release();
+    assert!(
+        wire.wait_for_prompt("keep this"),
+        "the prompt the queue still holds is the run that starts: {:?}",
+        wire.requests()
+    );
+    wire.release();
+    thread::sleep(Duration::from_millis(300));
+
+    let asked = wire.requests();
+    assert_eq!(asked.len(), 2, "two runs and no third: {asked:?}");
+    assert!(
+        asked.iter().all(|request| !request.contains("drop this")),
+        "the prompt dropped never ran: {asked:?}"
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+}
+
+#[test]
+fn up_on_the_first_line_takes_the_newest_queued_prompt_back() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask(&mut pty, &drawn, &wire);
+    queue(&mut pty, &drawn, "keep this");
+    queue(&mut pty, &drawn, "the newest");
+
+    // `↑` with the caret on the composer's first line and nothing typed: the thing above the
+    // caret is the queue, so the newest queued prompt is the draft again (A9) — the caret
+    // lands one column past its last glyph, which is how a test reads the words as back.
+    pty.type_bytes(b"\x1b[A");
+    assert!(
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == 11)),
+        "the recalled prompt is the whole draft again: {:?}",
+        drawn.text()
+    );
+
+    // And it left the queue: the run that starts next is the prompt still waiting in it,
+    // because the recalled one is a draft — nothing runs it until `Enter` does.
+    wire.release();
+    assert!(
+        wire.wait_for_prompt("keep this"),
+        "the prompt the queue still holds is the run that starts: {:?}",
+        wire.requests()
+    );
+    wire.release();
+    thread::sleep(Duration::from_millis(300));
+
+    let asked = wire.requests();
+    assert_eq!(asked.len(), 2, "two runs and no third: {asked:?}");
+    assert!(
+        asked.iter().all(|request| !request.contains("the newest")),
+        "the recalled prompt is a draft and not a run: {asked:?}"
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
 }

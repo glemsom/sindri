@@ -13,7 +13,7 @@
 //! through them.
 
 use std::collections::VecDeque;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -1120,5 +1120,95 @@ fn a_builtin_skill_loads_from_the_binary_and_lists_no_files_beside_it() {
         !acted.text.contains("Files in this skill's directory"),
         "and does not list a directory it does not have: {}",
         acted.text
+    );
+}
+
+/// Waits until `path` exists, and says whether it ever did: a command is made to say
+/// it has started by writing a file, so no test guesses with a sleep.
+fn started_at(path: &Path) -> bool {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while std::time::Instant::now() < deadline {
+        if path.exists() {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    false
+}
+
+#[test]
+fn a_call_the_users_word_stops_is_a_cancelled_exit() {
+    let (_root, workspace, boundary) = ground();
+    let running = workspace.join("running");
+    let cancel = Cancel::new();
+    let interrupted = cancel.clone();
+    let shell = Shell::new(boundary, &workspace, Catalog::default()).cancel(cancel);
+    let line = format!("touch '{}'; sleep 20", running.display());
+
+    let calling = std::thread::spawn(move || {
+        shell
+            .execute(
+                &Call::new("bash", format!(r#"{{"command":"{line}"}}"#)),
+                &mut Loaded::default(),
+            )
+            .expect("the command runs")
+    });
+
+    assert!(
+        started_at(&running),
+        "the command started, so there is something in flight to stop"
+    );
+    interrupted.now();
+    let acted = calling.join().expect("the call returns");
+
+    assert_eq!(
+        acted.exit,
+        Exit::Cancelled,
+        "the row a stopped call opens says the user's word stopped it (§12)"
+    );
+}
+
+#[test]
+fn a_run_cancelled_mid_command_kills_it_and_stops_cancelled() {
+    let (_root, workspace, boundary) = ground();
+    let running = workspace.join("running");
+    let late = workspace.join("late.txt");
+    let cancel = Cancel::new();
+    let interrupted = cancel.clone();
+    let shell = Shell::new(boundary, &workspace, Catalog::default()).cancel(cancel.clone());
+    let line = format!(
+        "touch '{}'; sleep 2; echo late > '{}'",
+        running.display(),
+        late.display()
+    );
+    let model = Scripted::answering([Reply::asking("one command", [command(&line)])]);
+    let mut run = Run::new("ask", model, shell).cancel(cancel);
+
+    let driving = std::thread::spawn(move || {
+        let mut sink = Transcript::default();
+        run.drive(&mut sink)
+    });
+
+    assert!(
+        started_at(&running),
+        "the run is in flight in a command of its own"
+    );
+    let cancelled_at = std::time::Instant::now();
+    interrupted.now();
+    let state = driving.join().expect("the run returns");
+
+    assert_eq!(
+        state.stop(),
+        Some(&Stop::Cancelled),
+        "the user's word stops the run the moment the command it was in ends (§4)"
+    );
+    assert!(
+        cancelled_at.elapsed() < Duration::from_secs(10),
+        "and it did not wait the command out"
+    );
+    std::thread::sleep(Duration::from_secs(3));
+    assert!(
+        !late.exists(),
+        "the command the run was in was killed, so it wrote nothing after the word"
     );
 }

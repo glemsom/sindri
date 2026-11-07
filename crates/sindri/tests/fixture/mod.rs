@@ -13,9 +13,10 @@
 //!
 //! The bars are why a row of blank cells keeps its width in a file an editor may
 //! touch: nothing a cell holds hides behind a trailing space. The inks are names —
-//! `dim`, `muted`, `accent`, `ok`, `err`, and `plain` for a cell the terminal draws
-//! in whatever ink its reader chose — and never colours, so a palette change cannot
-//! break a fixture and a fixture cannot smuggle in a theme (ADR-0012).
+//! `dim`, `muted`, `accent`, `ok`, `err`, `plain` for a cell the terminal draws in
+//! whatever ink its reader chose, and `mark` for a cell the reader's mark covers —
+//! and never colours, so a palette change cannot break a fixture and a fixture cannot
+//! smuggle in a theme (ADR-0012, #50).
 //!
 //! A fixture's file is a `.snap` and not the `.txt` ADR-0012 first named, because
 //! `insta` compares and blesses it and hard-codes that extension
@@ -34,14 +35,18 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::{Buffer, Cell};
 
-use sindri::composer::{Composer, Key};
+use sindri::composer::{Composer, Key, Outcome};
 use sindri::ink::Look;
+use sindri::mark;
+use sindri::pulse::Pulse;
+use sindri::rail::Facts;
 use sindri::rows::Scroll;
 use sindri::view::View;
+use sindri_core::policy::Enforcement;
 use sindri_core::provider::Deltas;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
-use sindri_core::run::Exit;
+use sindri_core::run::{Exit, Stop};
 
 /// Where the accepted pictures live: beside the tests that compare them, one file
 /// per frame and size (ADR-0012).
@@ -85,14 +90,18 @@ pub fn assert_frame(name: &str, cols: u16, rows: u16) {
 fn named(name: &str) -> View {
     match name {
         "boot" => View::boot(),
-        "transcript" => View::of(transcript(), Scroll::Tail),
-        "transcript-scrolled" => View::of(transcript(), Scroll::Back(4)),
+        "transcript" => running(transcript(), Scroll::Tail),
+        "transcript-scrolled" => running(transcript(), Scroll::Back(4)),
+        // The rail itself, at the five widths §46 names: the frame of a run just begun, so
+        // the ledger, the strip and the row that counts what went are what the eye is asked
+        // to approve and the picture is not the transcript frame checked in twice.
+        "rail" => running(opening(), Scroll::Tail),
         // A run in the middle of a turn: the same history, a sixth turn opened, and that
         // turn's answer and reasoning still landing (ticket #38).
         "streaming" => streaming(),
         // Every verdict a call row can wear, one call each: the picture of §12's four
         // states, approved in the commit that decides them (#40).
-        "calls" => View::of(calls(), Scroll::Tail),
+        "calls" => running(calls(), Scroll::Tail),
         // The composer's floor and its ceiling, and the window it scrolls to when the
         // draft outgrows the ceiling: the growth of §12 as three pictures rather than
         // as an opinion (ticket #41).
@@ -127,12 +136,37 @@ fn named(name: &str) -> View {
         // A table two hundred columns wide drawn in forty: a table wraps inside its
         // cells and keeps its header's rule rather than reflowing into a paragraph.
         "markdown-table-narrow" => construct(narrow()),
+        // The marker at the head of the newest answer, twice: the run still live and
+        // carrying its elapsed time, and the same run stopped with the duration it stopped
+        // at (#39). One history and one answer, so what the eye is asked to approve between
+        // the two pictures is the marker and nothing else. The live one's answer is still
+        // arriving — three of its four fragments have landed — because a marker carrying
+        // elapsed time is for a turn that has not finished speaking.
+        "pulse-live" => with_pulse(Pulse::live(4_200), &PULSE_ANSWER[..3]),
+        // The settled marker says the duration the run stopped at, and nine point four
+        // seconds rather than the ticket's dozen: §12's table gives a duration past ten
+        // seconds in whole seconds, so the form is the ticket's and the value is the table's.
+        "pulse-settled" => with_pulse(Pulse::settled(&Stop::Final, 9_400), &PULSE_ANSWER),
+        // Prompts typed while a run is live, waiting above the composer and counted in one
+        // row, with a fourth being typed under them (ticket #42, §12, A9).
+        "queue" => queue(),
         // The `?` screen, opened through the same key a reader presses rather than by
         // reaching into the stack: the frame lists the keys of the tables that answer
         // them, so a picture of the screen is a picture of the keymap (ticket #45, A7).
         "keys" => {
             let mut view = View::boot();
             view.key(Key::Char('?'));
+            view
+        }
+        // The `@` picker over a workspace of its own, opened through the key a reader
+        // presses: the eight files nearest the directory the run stands in, which is what
+        // a walk of a workspace actually yields (ticket #47, §12).
+        "files" => picking(),
+        // A drag over the transcript: the cells a reader has marked, painted in the ink
+        // a selection is read in, and the very cells `Ctrl-Y` hands out (#50).
+        "mark" => {
+            let mut view = View::of(transcript(), Scroll::Tail);
+            view.drag(mark::Cell::new(20, 0), mark::Cell::new(23, 70));
             view
         }
         unknown => panic!(
@@ -207,6 +241,88 @@ fn narrow() -> &'static str {
      stands | a table wider than the band it is drawn in wraps inside its cells and keeps \
      the rule under its header |\n| --- | --- |\n| a code block | is guttered by its \
      language's tag and highlighted by syntect |"
+}
+
+/// The frame the `@` picker is drawn on: a workspace of the test's own — a temp directory
+/// holding the tree below — with the screen opened through the key a reader presses, so the
+/// picture is a walk of a real workspace and not eight rows made up for a fixture.
+///
+/// The tree is a product's: a `.gitignore` naming what is built and what is a note of
+/// somebody's, one file it ignores and a directory it ignores whole, and enough files for
+/// §12's eight rows to end before the workspace does. The directory is the walk's and never
+/// the picture's: every row is a path relative to it, so nothing of a temp directory's name
+/// is frozen into a fixture (ticket #47).
+fn picking() -> View {
+    let root = tempfile::tempdir().expect("a temp workspace");
+    for file in [
+        ".gitignore",
+        "Cargo.toml",
+        "GLOSSARY.md",
+        "Makefile",
+        "docs/SPEC.md",
+        "docs/adr/0017-a-mode-is-one-screen-and-one-key-table.md",
+        "crates/sindri-core/src/records.rs",
+        "crates/sindri/src/keys.rs",
+        "crates/sindri/src/rows.rs",
+        "crates/sindri/src/view.rs",
+        "crates/sindri/tests/frames.rs",
+        // A file the `.gitignore` names and a directory it ignores whole: neither is a row,
+        // and the picture of the picker is only right if they are absent from it.
+        "notes.local.md",
+        "target/debug/sindri",
+    ] {
+        let path = root.path().join(file);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).expect("the directories a file sits in");
+        }
+        std::fs::write(&path, "").expect("a file");
+    }
+    std::fs::write(root.path().join(".gitignore"), "target/\n*.local.md\n").expect("a gitignore");
+
+    let mut view = View::boot();
+    view.set_workspace(root.path().to_path_buf());
+    view.key(Key::Char('@'));
+    view
+}
+
+/// The frame a run is in: the entries it has written, where the transcript is scrolled to,
+/// and the facts the rail draws them beside (#46).
+fn running(entries: Vec<Entry>, scroll: Scroll) -> View {
+    let mut view = View::of(entries, scroll);
+    view.set_facts(facts());
+    view
+}
+
+/// The facts a run's rail draws: one of each of §46's blocks, with a workspace, a branch
+/// and a session temp as long as the real ones are — the transcript's six turns, so the
+/// rail and the history beside it are one picture of one run.
+///
+/// A frame of chrome alone — boot, a draft being typed, the `?` screen — is handed no
+/// facts and draws no rail: a frame knows what it was given, and nothing invents the rest
+/// (§15).
+fn facts() -> Facts {
+    Facts {
+        model: Some(String::from("claude-sonnet")),
+        turns: Some((6, 250)),
+        ctx: Some(21),
+        cache: Some(88),
+        workspace: Some(PathBuf::from(
+            "/home/glemsom/Documents/git/sindri/.worktrees/46-rail",
+        )),
+        branch: Some(String::from("spec/1-capability")),
+        skills: Some(2),
+        sandbox: Some(Enforcement::Bubblewrap),
+        session: Some(String::from("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61")),
+        temp: Some(PathBuf::from(
+            "/home/glemsom/.local/state/sindri/sessions/9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61/tmp",
+        )),
+    }
+}
+
+/// The first turn of the run `transcript` holds, as the entries it opened with: what a
+/// rail frame is drawn beside, because the rail is the subject of those five pictures.
+fn opening() -> Vec<Entry> {
+    transcript().into_iter().take(4).collect()
 }
 
 /// The entries a transcript frame is painted from: three turns of a run, each with the
@@ -334,7 +450,7 @@ fn transcript() -> Vec<Entry> {
 fn streaming() -> View {
     let mut entries = transcript();
     entries.push(Entry::Turn { turn: 6 });
-    let mut view = View::of(entries, Scroll::Tail);
+    let mut view = running(entries, Scroll::Tail);
     for fragment in [
         "The ticket asks whether the tail survives. ",
         "A fence still streaming is a code block, ",
@@ -353,6 +469,65 @@ fn streaming() -> View {
     ] {
         view.text(fragment);
     }
+    view
+}
+
+/// The words the pulse frames' newest answer is made of, a fragment at a time: the same
+/// answer in both pictures, so the difference the eye approves between them is the marker
+/// and nothing else.
+const PULSE_ANSWER: [&str; 4] = [
+    "A braille marker at the head of the newest answer carries the run's elapsed ",
+    "time, one step every 80 ms, and settles on the verdict it stopped with — ",
+    "the duration it stopped at, kept and never recomputed. ",
+    "The rows under it keep the answer's own gutter, held open and blank.",
+];
+
+/// The frame a run is in while its newest answer is landing, wearing `pulse` at that
+/// answer's head: a settled turn above, a turn opened on it, and that turn's thought and
+/// answer streamed through the same `Deltas` door the wire streams them through, so the
+/// picture of a marker is made the way a marker is made (#39).
+///
+/// The answer is long enough to wrap past its first row, which is what shows the marker
+/// sitting at the head of one row and the answer's own gutter holding the rest.
+fn with_pulse(pulse: Pulse, said: &[&str]) -> View {
+    let mut entries = opening();
+    entries.push(Entry::Turn { turn: 2 });
+    let mut view = running(entries, Scroll::Tail);
+    for fragment in [
+        "The marker is a clock, so the row it heads is laid out again whenever ",
+        "the mark it wears moves, and a step that changes nothing costs nothing. ",
+    ] {
+        view.reasoning(fragment);
+    }
+    for fragment in said {
+        view.text(fragment);
+    }
+    view.set_pulse(Some(pulse));
+    view
+}
+
+/// The frame a run is in with prompts waiting behind it: three sent while the run was
+/// live, queued the way the terminal queues one — a draft, `Enter`, and the prompt the
+/// composer hands back enqueued instead of run — and a fourth being typed under the count
+/// (§12, #42).
+///
+/// It is the picture of what `Enter` during a run comes to: the prompt was neither run
+/// beside the one in flight nor thrown away, and the row above the composer says how many
+/// are waiting while the box the reader is typing in keeps its place.
+fn queue() -> View {
+    let mut view = running(transcript(), Scroll::Tail);
+    for prompt in [
+        "run the test that failed and read it",
+        "then the fmt check",
+        "and say why the retry hid it",
+    ] {
+        view.paste(prompt);
+        match view.key(Key::Enter) {
+            Outcome::Send(prompt) => view.enqueue(prompt),
+            other => panic!("a draft should have been sent, and {other:?} came instead"),
+        }
+    }
+    view.paste("and this one while they wait");
     view
 }
 

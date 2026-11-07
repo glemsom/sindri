@@ -147,3 +147,9 @@ _Avoid_: Keymap (one word for the whole frame's), binding list, hotkeys
 **Frame fixture**:
 A frame rendered at a fixed size and checked into the tests as the accepted picture of it.
 _Avoid_: Snapshot (too general), screenshot, golden image
+
+**Path picker**:
+The screen `@` opens over the draft: the files of the workspace as `git` reads it, nearest
+the working directory first, narrowed by a query typed into the screen and capped at eight
+rows. A row a selection takes is a path in one shell-safe word.
+_Avoid_: File browser, autocomplete, fuzzy finder, file search

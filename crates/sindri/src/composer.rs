@@ -10,8 +10,8 @@
 //! `State` is the one fact `Ctrl-C`'s rule reads, and whoever owns the run sets it
 //! (#43), so the composer decides what a cancel means and the terminal decides what
 //! to do about it. `Outcome::Send` is the other seam: it carries the draft that just
-//! left the box, and with no run loop wired yet the terminal answers it by dropping
-//! the prompt.
+//! left the box, and the terminal answers it — by starting the run it asks for, or, with
+//! a run already in flight, by queueing it above the box (#42).
 //!
 //! A paste has no path to `Outcome::Send` at all: `Composer::paste` returns nothing a
 //! run could take, so every line break a clipboard carried stays a line break — which
@@ -57,13 +57,24 @@ pub enum Key {
     Right,
     Up,
     Down,
+    /// `Shift+↑`/`Shift+↓`: the mark grows a whole row up the transcript, or down it
+    /// (§12). The frame's, not the box's: a draft has no mark to grow.
+    ShiftUp,
+    ShiftDown,
     /// The keys that travel the cursor to either end of its line.
     Home,
     End,
+    /// `Ctrl-Y`: the words the mark covers leave the terminal, or the newest answer does
+    /// when nothing is marked (§12). A key of the frame's rather than the box's.
+    Copy,
     /// `Ctrl-Q`: the launch ends and the terminal is given back.
     Quit,
     /// `Ctrl-C`: cancels a run and keeps the draft, or clears it when nothing runs.
     Cancel,
+    /// `Ctrl-X`: drops the newest queued prompt. Not a key of this map's — the queue is
+    /// the frame's and so is the rule (A9) — and listed here because this is the one
+    /// vocabulary the keyboard is decoded into.
+    Drop,
     /// `Esc`: closes the screen over the draft. A draft has nothing to close, so the
     /// composer answers it by leaving the draft alone.
     Escape,
@@ -99,6 +110,9 @@ pub enum Outcome {
     Quit,
     /// `Ctrl-C` during a run: the run is the thing cancelled, and the draft stays.
     Cancel,
+    /// `Ctrl-Y`: the words that leave the frame, for the terminal to write out by the
+    /// sequence that carries them out of it — the core names no escape (§12, §14).
+    Copy(String),
 }
 
 /// The draft, where the cursor is in it, how far the band has scrolled and whether a
@@ -195,6 +209,17 @@ impl Composer {
         self.row(self.cursor) == 0
     }
 
+    /// Whether the cursor starts a word — the head of the draft, or a space, a tab or a
+    /// line break behind it. It is the fact `@` turns on, and it is read here rather than
+    /// in a second count of glyphs: a key that opens a screen has to be told from a glyph
+    /// somewhere, and the draft is what knows where the words are.
+    pub fn at_word_start(&self) -> bool {
+        self.text[..self.cursor]
+            .chars()
+            .next_back()
+            .is_none_or(char::is_whitespace)
+    }
+
     /// A pasted prompt in one edit: one draft, its line breaks kept. A terminal puts
     /// `\r\n` or a bare `\r` on the wire for the break a clipboard calls `\n`, so both
     /// become the `\n` the draft is measured in — and not one of them is the `Enter`
@@ -202,6 +227,16 @@ impl Composer {
     pub fn paste(&mut self, text: &str) {
         let kept = text.replace("\r\n", "\n").replace('\r', "\n");
         self.insert(&kept);
+    }
+
+    /// `↑` on the first line: a queued prompt is the draft again, whole, put in where the
+    /// caret waits so that nothing the reader had already typed is thrown away (A9).
+    ///
+    /// A recalled prompt is a paste that took a detour through the queue: every line
+    /// break it was typed with comes back as one, because a prompt is one entry however
+    /// many lines it carries (§12).
+    pub fn recall(&mut self, prompt: Prompt) {
+        self.insert(&prompt.text);
     }
 
     /// Hands the map one key and says what the terminal is to do about it.
@@ -225,9 +260,14 @@ impl Composer {
             Key::Down => Composer::edited(self.down()),
             Key::Home => Composer::edited(self.home()),
             Key::End => Composer::edited(self.end()),
+            // The three keys a mark is taken with are the frame's: a box has no mark, so
+            // it has nothing to say about them and nothing to repaint.
+            Key::ShiftUp | Key::ShiftDown | Key::Copy => Outcome::Unchanged,
             Key::Quit => Outcome::Quit,
             Key::Cancel => self.cancel(),
-            Key::Escape => Outcome::Unchanged,
+            // `Ctrl-X` is the queue's, and the frame answers it before the draft ever
+            // sees it: a draft reaching here changes nothing (A9).
+            Key::Drop | Key::Escape => Outcome::Unchanged,
         }
     }
 
@@ -235,9 +275,9 @@ impl Composer {
     /// draft of nothing but spaces is not a prompt, so the box keeps it and nothing is
     /// repainted.
     ///
-    /// What becomes of a prompt with no run listening is not this value's business:
-    /// the terminal answers the outcome, and with the run loop unwired it drops it
-    /// (#43 takes it).
+    /// What becomes of a prompt when a run is already in flight is not this value's
+    /// business either: the terminal answers the outcome, and a prompt it cannot run now
+    /// waits its turn in the frame's queue rather than being dropped (§12).
     fn send(&mut self) -> Outcome {
         if self.text.trim().is_empty() {
             return Outcome::Unchanged;
@@ -275,9 +315,10 @@ impl Composer {
         }
     }
 
-    /// Puts `text` in at the cursor and follows it: one path for a typed glyph and for
-    /// a whole pasted prompt, so a paste is an edit like any other.
-    fn insert(&mut self, text: &str) {
+    /// Puts `text` in at the cursor and follows it: one path for a typed glyph, for a
+    /// whole pasted prompt, and for the word a picked path is, so each of them is an edit
+    /// like any other and none of them can leave the caret behind.
+    pub fn insert(&mut self, text: &str) {
         self.text.insert_str(self.cursor, text);
         self.cursor += text.len();
         self.follow();
@@ -630,6 +671,35 @@ mod tests {
             composer.key(Key::Up),
             Outcome::Unchanged,
             "there is no line above the first to move to"
+        );
+    }
+
+    #[test]
+    fn a_recalled_prompt_is_the_draft_again_line_for_line() {
+        let mut composer = Composer::new();
+        composer.recall(Prompt {
+            text: String::from("the first line\nthe second"),
+        });
+
+        assert_eq!(
+            composer.text(),
+            "the first line\nthe second",
+            "the prompt came back whole, its line break included"
+        );
+        assert_eq!(composer.caret(), (1, 10), "and the caret follows it");
+    }
+
+    #[test]
+    fn a_prompt_recalled_into_a_draft_leaves_what_was_typed_there() {
+        let mut composer = holding("fix: ");
+        composer.recall(Prompt {
+            text: String::from("the retry"),
+        });
+
+        assert_eq!(
+            composer.text(),
+            "fix: the retry",
+            "a recall puts the prompt where the caret was and takes nothing away"
         );
     }
 

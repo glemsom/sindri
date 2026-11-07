@@ -36,7 +36,21 @@ fn a_heading_is_bold_and_an_h1_stands_under_one_blank_row() {
     );
     assert_eq!(
         drawn(&rows),
-        ["prose first", "", "One", "", "Two", "", "Three", "", "Four", "", "Five", "", "Six"],
+        [
+            "prose first",
+            "",
+            "One",
+            "",
+            "Two",
+            "",
+            "Three",
+            "",
+            "Four",
+            "",
+            "Five",
+            "",
+            "Six"
+        ],
         "every block stands under one blank row, and the h1 under one of its own"
     );
     assert_eq!(
@@ -92,9 +106,10 @@ fn inline_code_is_reversed_and_a_link_names_the_url_the_words_hide() {
     assert!(
         spans.contains(&(
             String::from("make check"),
-            Look::new(Ink::Plain, Face::Reversed)
+            Look::new(Ink::Muted, Face::Reversed)
         )),
-        "a run of inline code is set reversed: {spans:?}"
+        "a run of inline code is reversed over `muted`, so that it is not the mark's \
+         own look: {spans:?}"
     );
     assert!(
         spans.contains(&(
@@ -118,10 +133,9 @@ fn inline_code_keeps_the_spacing_it_was_written_with() {
     let rows = markdown::rows("call `a  b` now", 40);
     assert_eq!(drawn(&rows), ["call a  b now"]);
     assert!(
-        rows[0].spans().contains(&(
-            String::from("a  b"),
-            Look::new(Ink::Plain, Face::Reversed)
-        )),
+        rows[0]
+            .spans()
+            .contains(&(String::from("a  b"), Look::new(Ink::Muted, Face::Reversed))),
         "the code's two spaces are still two: {:?}",
         rows[0].spans()
     );
@@ -139,7 +153,9 @@ fn a_bullet_marks_each_item_and_two_spaces_mark_each_depth() {
     );
     for row in &rows {
         assert!(
-            looks(row).iter().all(|look| *look == Look::plain(Ink::Plain)),
+            looks(row)
+                .iter()
+                .all(|look| *look == Look::plain(Ink::Plain)),
             "a list's words are drawn in the frame's own ink: {row:?}"
         );
     }
@@ -207,16 +223,18 @@ fn a_code_block_is_guttered_by_its_language_and_highlighted() {
         );
     }
     assert!(
-        rows[2].spans().iter().any(|(text, look)| text
-            == "let"
-            && *look == Look::plain(Ink::Accent)),
+        rows[2]
+            .spans()
+            .iter()
+            .any(|(text, look)| text == "let" && *look == Look::plain(Ink::Accent)),
         "a keyword is the ink the eye lands on: {:?}",
         rows[2].spans()
     );
     assert!(
-        rows[2].spans().iter().any(|(text, look)| text
-            == "1"
-            && *look == Look::plain(Ink::Muted)),
+        rows[2]
+            .spans()
+            .iter()
+            .any(|(text, look)| text == "1" && *look == Look::plain(Ink::Muted)),
         "a number is a constant, and constants are read in muted ink: {:?}",
         rows[2].spans()
     );
@@ -311,18 +329,8 @@ fn a_table_wider_than_the_room_wraps_inside_its_cells_and_keeps_every_word() {
     );
     let flat = drawn(&rows).join(" ");
     for cell in [
-        "guttered",
-        "unknown",
-        "language",
-        "header",
-        "never",
-        "around",
-        "prints",
-        "url",
-        "one",
-        "blank",
-        "row",
-        "above",
+        "guttered", "unknown", "language", "header", "never", "around", "prints", "url", "one",
+        "blank", "row", "above",
     ] {
         assert!(flat.contains(cell), "the word {cell:?} was lost: {flat}");
     }
@@ -330,11 +338,7 @@ fn a_table_wider_than_the_room_wraps_inside_its_cells_and_keeps_every_word() {
         .into_iter()
         .filter(|row| row.contains('┼'))
         .collect();
-    assert_eq!(
-        rules.len(),
-        1usize,
-        "one rule, under the header: {rules:?}"
-    );
+    assert_eq!(rules.len(), 1usize, "one rule, under the header: {rules:?}");
     assert!(
         rules[0].chars().all(|glyph| glyph == '─' || glyph == '┼'),
         "the rule is the header's own row with its words spent as rules: {:?}",

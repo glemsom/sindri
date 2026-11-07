@@ -3,8 +3,8 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 markdown-inline at 80x24
-00 |  Run make check before the gate: it is the definition of done, and             | plain:6 plain+reversed:10 plain:64
-01 |  make frame F=boot-120x40 is how a look is eyeballed before it is blessed.     | plain:2 plain+reversed:24 plain:54
+00 |  Run make check before the gate: it is the definition of done, and             | plain:6 muted+reversed:10 plain:64
+01 |  make frame F=boot-120x40 is how a look is eyeballed before it is blessed.     | plain:2 muted+reversed:24 plain:54
 02 |                                                                                | plain:80
 03 |                                                                                | plain:80
 04 |                                                                                | plain:80

@@ -4,13 +4,14 @@
 //!
 //! The glossary's five inks — `dim`, `muted`, `accent`, `ok`, `err` — are joined by
 //! `plain`, which is no colour at all: a cell the terminal draws in whatever ink its
-//! reader chose. A [`Face`] is the other half of a look and not a sixth colour: §12 has
-//! a heading set bold and a run of inline code reversed, and neither is a role a palette
-//! could supply. A [`Look`] is the pair, and `Look::of` reads a painted cell back into
-//! the two names it is in. That reading is how a fixture is written down as roles rather
-//! than as a palette, and it is why a cell painted a colour, a weight or a background
-//! that is not one of these cannot be written down at all: the fixture would have to
-//! name something no look does.
+//! reader chose, and by `mark`, which is the reader's own selection and so the one ink
+//! that spends a modifier instead of a colour. A [`Face`] is the other half of a look and
+//! not an eighth colour: §12 has a heading set bold and a run of inline code reversed,
+//! and neither is a role a palette could supply. A [`Look`] is the pair, and `Look::of`
+//! reads a painted cell back into the two names it is in. That reading is how a fixture is
+//! written down as roles rather than as a palette, and it is why a cell painted a colour, a
+//! weight or a background that is not one of these cannot be written down at all: the
+//! fixture would have to name something no look does.
 
 use ratatui::buffer::Cell;
 use ratatui::style::{Color, Modifier, Style};
@@ -34,18 +35,23 @@ pub enum Ink {
     Ok,
     /// A thing that failed: `✗ exit 1`, a refusal, a budget that ran out.
     Err,
+    /// A cell the reader's mark covers. The one ink that spends no colour: a selection is
+    /// the terminal's own reverse video, so a mark reads the same in every theme and no
+    /// palette change can move it (§12, #50).
+    Mark,
 }
 
 impl Ink {
     /// Every ink there is, in the order this enum names them, so a reader of a fixture
     /// can look one up without a table of its own.
-    pub const ALL: [Ink; 6] = [
+    pub const ALL: [Ink; 7] = [
         Ink::Plain,
         Ink::Dim,
         Ink::Muted,
         Ink::Accent,
         Ink::Ok,
         Ink::Err,
+        Ink::Mark,
     ];
 
     /// The name a fixture writes down, and the name a ticket says out loud.
@@ -57,6 +63,7 @@ impl Ink {
             Ink::Accent => "accent",
             Ink::Ok => "ok",
             Ink::Err => "err",
+            Ink::Mark => "mark",
         }
     }
 
@@ -65,23 +72,41 @@ impl Ink {
         Ink::ALL.into_iter().find(|ink| ink.name() == name)
     }
 
-    /// The style a cell in this ink is drawn in: the foreground, and nothing else, so
-    /// that an ink names a colour and no caller can quietly add a second one.
+    /// The style a cell in this ink is drawn in: the whole of a cell's look, so that an
+    /// ink names one and no caller can quietly add to it.
     pub fn style(self) -> Style {
-        Style::default().fg(self.colour())
+        let (foreground, background, modifier) = self.look();
+        Style::default()
+            .fg(foreground)
+            .bg(background)
+            .add_modifier(modifier)
     }
 
-    /// The colour this ink spends. The five roles are the terminal's own colours and
-    /// not RGB values, so a reader's theme still shows through them: a role is what the
-    /// interface asks for, and which green `ok` is belongs to the terminal (§12).
-    fn colour(self) -> Color {
+    /// The ink a painted cell is in, or nothing when its look is not one ink's: a fixture
+    /// names inks, so a cell this cannot name is a frame it cannot write down. A cell is
+    /// in one ink whatever face it is set in, which is [`Look::of`] asked for the ink
+    /// alone: `dim` is the ink of a bold heading as much as of a leader dot.
+    pub fn of(cell: &Cell) -> Option<Ink> {
+        Look::of(cell).map(Look::ink)
+    }
+
+    /// The whole look this ink stands for, as a foreground, a background and a modifier:
+    /// what a cell drawn in it holds, and what [`Look::of`] reads a cell back by.
+    ///
+    /// The six that spend a colour are the terminal's own and not RGB values, so a reader's
+    /// theme still shows through them: a role is what the interface asks for, and which
+    /// green `ok` is belongs to the terminal (§12). `mark` asks for no colour at all — the
+    /// terminal's reverse video is the look every terminal already gives a selection.
+    fn look(self) -> (Color, Color, Modifier) {
+        let look = |colour| (colour, Color::Reset, Modifier::empty());
         match self {
-            Ink::Plain => Color::Reset,
-            Ink::Dim => Color::DarkGray,
-            Ink::Muted => Color::Gray,
-            Ink::Accent => Color::Cyan,
-            Ink::Ok => Color::Green,
-            Ink::Err => Color::Red,
+            Ink::Plain => look(Color::Reset),
+            Ink::Dim => look(Color::DarkGray),
+            Ink::Muted => look(Color::Gray),
+            Ink::Accent => look(Color::Cyan),
+            Ink::Ok => look(Color::Green),
+            Ink::Err => look(Color::Red),
+            Ink::Mark => (Color::Reset, Color::Reset, Modifier::REVERSED),
         }
     }
 }
@@ -97,7 +122,7 @@ pub enum Face {
     /// What a heading is set in, so it reads as a heading before its words are read.
     Bold,
     /// What inline code is set in: the cell's own two colours swapped, so a run of code
-    /// is marked out without a sixth colour role to name (§12).
+    /// is marked out without a colour role of its own (§12).
     Reversed,
 }
 
@@ -133,7 +158,7 @@ impl Face {
 
 /// A cell's whole look: the [`Ink`] it is drawn in and the [`Face`] it is set in.
 ///
-/// The pair is what a fixture writes down and what `Row::paint` spends, so a look is
+/// The pair is what a fixture writes down and what a row is painted in, so a look is
 /// asked for by name all the way down: `dim` is `dim`, and a bold heading's cell is
 /// `plain+bold` — two names and never a colour or a modifier a caller reached for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -166,7 +191,7 @@ impl Look {
         self.face
     }
 
-    /// The style a cell in this look is drawn in: the ink's foreground and the face's
+    /// The style a cell in this look is drawn in: the ink's own look and the face's
     /// modifier, and nothing else a caller could reach for.
     pub fn style(self) -> Style {
         self.ink.style().add_modifier(self.face.modifier())
@@ -192,17 +217,28 @@ impl Look {
 
     /// The look a painted cell is in, or nothing when its style is not one look's: a
     /// fixture names looks, so a cell this cannot name is a frame it cannot write down.
-    /// A cell is a foreground, a face and nothing else — no background, no underline
-    /// colour, and no modifier that is not a face's.
+    /// A cell is a foreground, a background, and no modifier that is not an ink's or a
+    /// face's.
+    ///
+    /// The ink is found first and the most specific one wins, because only one ink
+    /// spends a modifier: `mark` is reverse video over no colour, so a cell it covers is
+    /// the mark and not `plain` set in a face. That is also why inline code is reversed
+    /// over `muted` rather than over `plain`: two constructs that both spend
+    /// [`Face::Reversed`] would be one look, and a fixture could not tell a marked run
+    /// of code from a run of code.
     pub fn of(cell: &Cell) -> Option<Look> {
-        if cell.bg != Color::Reset || cell.underline_color != Color::Reset {
+        if cell.underline_color != Color::Reset {
             return None;
         }
-        let ink = Ink::ALL.into_iter().find(|ink| ink.colour() == cell.fg)?;
-        let face = Face::ALL
-            .into_iter()
-            .find(|face| face.modifier() == cell.modifier)?;
-        Some(Look::new(ink, face))
+        Ink::ALL.into_iter().rev().find_map(|ink| {
+            let (foreground, background, spent) = ink.look();
+            if (foreground, background) != (cell.fg, cell.bg) || !cell.modifier.contains(spent) {
+                return None;
+            }
+            let rest = cell.modifier - spent;
+            let face = Face::ALL.into_iter().find(|face| face.modifier() == rest)?;
+            Some(Look::new(ink, face))
+        })
     }
 }
 
@@ -211,5 +247,68 @@ impl Look {
 impl From<Ink> for Look {
     fn from(ink: Ink) -> Look {
         Look::plain(ink)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! What a painted cell reads back as, which is how a fixture writes a frame down: an
+    //! ink and a face, foreground, background and the modifiers the two of them spend.
+
+    use super::*;
+
+    #[test]
+    fn every_ink_reads_back_as_the_name_it_is_drawn_in() {
+        for ink in Ink::ALL {
+            let mut cell = Cell::default();
+            cell.set_style(ink.style());
+
+            assert_eq!(
+                Ink::of(&cell),
+                Some(ink),
+                "a cell drawn in {} is that ink, and a fixture has to be able to say so",
+                ink.name()
+            );
+            assert_eq!(Ink::from_name(ink.name()), Some(ink));
+        }
+    }
+
+    #[test]
+    fn a_cell_a_mark_covers_reads_back_as_the_mark_and_no_other_ink() {
+        let mut cell = Cell::default();
+        cell.set_style(Ink::Mark.style());
+
+        assert_eq!(
+            Ink::of(&cell),
+            Some(Ink::Mark),
+            "the marked cell is in `mark`, which is a name a reader can look up"
+        );
+    }
+
+    #[test]
+    fn every_look_reads_back_as_the_two_names_it_is_drawn_in() {
+        let mark = Look::plain(Ink::Mark);
+        for ink in Ink::ALL {
+            for face in Face::ALL {
+                let look = Look::new(ink, face);
+                let mut cell = Cell::default();
+                cell.set_style(look.style());
+
+                // One style carries two names — reverse video over no colour, which is
+                // `mark` and is also `plain` set reversed — and the mark is the name it
+                // reads back as. That is why inline code is reversed over `muted`.
+                if look.style() == mark.style() {
+                    assert_eq!(Look::of(&cell), Some(mark));
+                    continue;
+                }
+                assert_eq!(
+                    Look::of(&cell),
+                    Some(look),
+                    "a cell painted {:?} is that look, and a fixture has to be able to say so",
+                    look.name()
+                );
+                assert_eq!(Look::from_name(&look.name()), Some(look));
+            }
+        }
     }
 }

@@ -3,37 +3,37 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 transcript at 120x40
-00 |  out, so a 250-turn history on a 40-row terminal pays for what it shows and no more.                                   | plain:120
-01 |turn 4 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
-02 |✓ exit 0  bash  96 bytes · 118 ms                                                                                       | ok:1 dim:32 plain:87
-03 |  check: fmt ... ok                                                                                                     | plain:120
-04 |  check: clippy ... ok                                                                                                  | plain:120
-05 |  check: test ... ok                                                                                                    | plain:120
-06 |  check: frames ... ok                                                                                                  | plain:120
-07 |  What that buys is the plain case and what it costs is the scrolled one: a window is a row offset from the tail, so    | plain:120
-08 |  resolving one walks the entries between the tail and the window and lays out every one of them on the way. Each is    | plain:120
-09 |  laid out once and kept, so the whole history scrolled through costs one layout per entry and scrolling it again costs | plain:120
-10 |  none.                                                                                                                 | plain:120
-11 |turn 5 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
-12 |✓ exit 0  bash  128 bytes · 9 ms                                                                                        | ok:1 dim:31 plain:88
-13 |  crates/sindri/src/rows.rs | 412 +++++++++++++                                                                         | plain:120
-14 |  crates/sindri/tests/rows.rs | 198 +++++++++                                                                           | plain:120
-15 |  The transcript's unit is the entry. An entry never carries a formatted line, so the same run is drawn the same way by | plain:120
-16 |  the TUI, by a reader of the transcript and by whatever front end comes next.                                          | plain:120
+00 |✓ exit 0  bash  96 bytes · 118 ms                                                       model     .........claude-sonnet| ok:1 dim:32 plain:55 dim:19 muted:13
+01 |  check: fmt ... ok                                                                     ────────────────────────────────| plain:88 dim:32
+02 |  check: clippy ... ok                                                                  turns     .................6/250| plain:88 dim:27 muted:5
+03 |  check: test ... ok                                                                    ctx       ...................21%| plain:88 dim:29 muted:3
+04 |  check: frames ... ok                                                                  cache     ...................88%| plain:88 dim:29 muted:3
+05 |  What that buys is the plain case and what it costs is the scrolled one: a window is a ────────────────────────────────| plain:88 dim:32
+06 |  row offset from the tail, so resolving one walks the entries between the tail and the workspace ..…/.worktrees/46-rail| plain:88 dim:12 muted:20
+07 |  window and lays out every one of them on the way. Each is laid out once and kept, so  branch    .....spec/1-capability| plain:88 dim:15 muted:17
+08 |  the whole history scrolled through costs one layout per entry and scrolling it again  ────────────────────────────────| plain:88 dim:32
+09 |  costs none.                                                                           skills    .....................2| plain:88 dim:31 muted:1
+10 |turn 5 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+11 |✓ exit 0  bash  128 bytes · 9 ms                                                        sandbox   .................bwrap| ok:1 dim:31 plain:56 dim:27 muted:5
+12 |  crates/sindri/src/rows.rs | 412 +++++++++++++                                         ────────────────────────────────| plain:88 dim:32
+13 |  crates/sindri/tests/rows.rs | 198 +++++++++                                           session   ..............9f2c7a41| plain:88 dim:24 muted:8
+14 |  The transcript's unit is the entry. An entry never carries a formatted line, so the   temp      ........…/9f2c7a41/tmp| plain:88 dim:18 muted:14
+15 |  same run is drawn the same way by the TUI, by a reader of the transcript and by                                       | plain:120
+16 |  whatever front end comes next.                                                                                        | plain:120
 17 |                                                                                                                        | plain:120
 18 |  construct │ where it stands                                                                                           | plain:120
 19 |  ──────────┼───────────────────────────                                                                                | plain:2 dim:38 plain:80
 20 |  heading   │ in the answer's own gutter                                                                                | plain:120
 21 |  code      │ behind a bar, highlighted                                                                                 | plain:120
 22 |  table     │ columns joined by a bar                                                                                   | plain:120
-23 |turn 6 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+23 |turn 6 ─────────────────────────────────────────────────────────────────────────────────                                | dim:88 plain:32
 24 |✓ exit 0  bash  104 bytes · 31 ms                                                                                       | ok:1 dim:32 plain:87
 25 |  check: frame calls ... ok                                                                                             | plain:120
 26 |  check: frame transcript ... ok                                                                                        | plain:120
 27 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101
 28 |                                                                                                                        | plain:120
-29 |  A row says the exit code and not the command, because the verdict is a fact the record holds and the command is a fact| plain:120
-30 |  the row above it holds.                                                                                               | plain:120
+29 |  A row says the exit code and not the command, because the verdict is a fact the record                                | plain:120
+30 |  holds and the command is a fact the row above it holds.                                                               | plain:120
 31 |                                                                                                                        | plain:120
 32 |  ▏ rust                                                                                                                | plain:2 dim:6 plain:112
 33 |  ▏ fn main() {                                                                                                         | plain:2 dim:2 accent:2 plain:114
