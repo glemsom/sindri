@@ -8,6 +8,14 @@ rust-version.workspace = true
 [dependencies]
 clap = { version = "4.6.7", features = ["derive"] }
 ignore = "0.4.34"
+# The picture half of §12 (ADR-0003). `usvg` is built without its system-fonts feature on
+# purpose: the font travels in the binary, and a build that cannot read the machine's fonts
+# is a claim a reader can check rather than one a comment makes.
+usvg = { version = "0.47", default-features = false, features = ["text"] }
+resvg = "0.47"
+tiny-skia = "0.12"
+# The buffer a picture leaves as: straight RGBA, which is what a Kitty placement takes.
+image = { version = "0.25", default-features = false }
 pulldown-cmark = { version = "0.12", default-features = false }
 # The frame: what a look is drawn with, and the same code a fixture renders through
 # ratatui's headless backend, so a golden frame and a reader's screen are one picture.

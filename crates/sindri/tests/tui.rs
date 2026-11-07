@@ -41,6 +41,12 @@ const ANSWER: &str =
 /// a fragment changed, so a test looks for both halves rather than for one run of words.
 const ANSWER_WORDS: [&str; 2] = ["Hello", "world"];
 
+/// `CSI 16 t`, the one question a picture asks a terminal: report the size of a cell in
+/// pixels. A terminal answers `CSI 6 ; height ; width t`, and the launch a test opens here
+/// is never answered, so it settles for the nominal cell — which is exactly what makes the
+/// question visible as the bytes it is (§12, ADR-0003).
+const ASK_CELL: &[u8] = b"\x1b[16t";
+
 /// A recorded Anthropic `GET /v1/models` catalogue: the names a wire really served, which is
 /// the only place a `/model` screen's names may come from (§10).
 const SERVED: &str =
@@ -367,6 +373,18 @@ impl Session {
         Session::starting(ground.command())
     }
 
+    /// A launch as a filter: the prompt on its own command line and no screen at all, on a
+    /// terminal so that a probe would have somewhere to land if anything asked (§3).
+    fn filtering(ground: &Ground, wire: &Wire) -> (Session, Pty, Drawn) {
+        let mut command = ground.command();
+        command
+            .arg("-b")
+            .arg("what does the wire say")
+            .arg("--yolo-unsafe")
+            .env("SINDRI_BASE_URL", wire.base_url());
+        Session::starting(command)
+    }
+
     /// A launch that can run a prompt: the ground's own child, pointed at `wire` so its
     /// run asks a socket on this machine, and taking §6's escape hatch because the
     /// sandbox is not what a cancellation test is about — the kill reaches the process
@@ -441,6 +459,84 @@ fn contains(haystack: &[u8], needle: &[u8]) -> bool {
     haystack
         .windows(needle.len())
         .any(|window| window == needle)
+}
+
+/// §12 and ADR-0003: the pixels in a cell are the one thing a launch asks the terminal
+/// rather than draws into it, so it asks once, before the event loop, and every frame that
+/// follows reads the answer it kept.
+#[test]
+fn the_cell_size_is_asked_of_the_terminal_once_however_many_frames_it_paints() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    // Three keys and three frames: a launch that asked once per frame would have asked
+    // four times by the time the third digit is on the screen.
+    pty.type_bytes(b"777");
+    assert!(
+        drawn.wait_until(|drawn| drawn.matches('7').count() >= 3),
+        "the draft is drawn a key at a time, so three keys are three frames: {:?}",
+        drawn.text()
+    );
+    pty.type_bytes(&[0x11]);
+    session.wait();
+
+    let asked = drawn
+        .bytes()
+        .windows(ASK_CELL.len())
+        .filter(|window| *window == ASK_CELL)
+        .count();
+    assert_eq!(
+        asked,
+        1,
+        "the terminal was asked for the cell's pixels once: {:?}",
+        drawn.text()
+    );
+    let bytes = drawn.bytes();
+    assert!(
+        bytes
+            .windows(ASK_CELL.len())
+            .position(|window| window == ASK_CELL)
+            .zip(bytes.windows(10).position(|window| window == b"Enter send"))
+            .is_some_and(|(asked_at, boot_at)| asked_at < boot_at),
+        "and it was asked before the first frame was painted, so the frame was drawn at \
+         an answer rather than at a guess"
+    );
+}
+
+/// The other half of ADR-0003's rule: a cell's pixels are the terminal UI's fact, so a run
+/// as a filter — which has a terminal here, and uses it only for its answer — asks nothing
+/// and pays for nothing.
+#[test]
+fn a_run_as_a_filter_never_asks_the_terminal_its_cell_size() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, _pty, drawn) = Session::filtering(&ground, &wire);
+
+    wire.wait_for_request();
+    wire.release();
+    let status = session.wait();
+
+    assert_eq!(status.code(), Some(0), "the filter ran: {:?}", drawn.text());
+    assert!(
+        drawn.wait_for(b"Hello"),
+        "its answer is what it wrote: {:?}",
+        drawn.text()
+    );
+    assert!(
+        !contains(&drawn.bytes(), ASK_CELL),
+        "a filter asked the terminal nothing: {:?}",
+        drawn.text()
+    );
+    assert!(
+        !contains(&drawn.bytes(), b"\x1b[?1049h"),
+        "and took no screen of its own: {:?}",
+        drawn.text()
+    );
 }
 
 #[test]
