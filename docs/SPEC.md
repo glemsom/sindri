@@ -331,3 +331,36 @@ core — see ADR-0004.
 §5 says a load is once per conversation. That requires conversation and history to be
 **Resolved:** conversation *is* the run's history. `/new` clears the set, and a `/skill:name`
 load by the human counts, so a later model load returns `already_loaded`.
+
+**A15 — The retry seam sits below the point where text exists (§4, A13 vs rig-core 0.46).**
+A13 said the "never retry a reply that already streamed text" rule is observed at rig-core's
+`Transport` trait. In rig-core 0.46 that trait is generic over a wire and its `send` hands
+back the *wire's own frames*, so a transport sees framed events and never text: text exists
+only once the dialect's decoder has folded them, one layer higher.
+**Resolved:** the seam splits — attempts and headers live in the transport, which implements
+`HttpClientExt` (the trait every rig `Transport` is built from), and whether a reply had
+already streamed is reported by the provider seam's fold as `Failure::streamed`, beside the
+wire's own `Failure::retryable` — see ADR-0013.
+
+**A16 — Where the attempts live (§4, A13 vs ADR-0013).** A13 and ADR-0013 put "attempts and
+headers" in rig-core's `HttpClientExt` transport. A 429 and a 503 reach a transport as a
+`Response` carrying a status, not as an error, and the verdict that says whether to resend
+lives in the body the dialect decodes above it; a transport that retried would decide from a
+status code, which §4 forbids. **Resolved:** the transport dresses the request (extra
+headers, `{session}` expanded) and the fold above it decides — one function reading
+`retryable && !streamed` and refusing a cancel — see ADR-0015.
+
+**A17 — `rig_agent::AgentRunner` is not in rig-core 0.46 (§4 vs ADR-0004).** ADR-0004 makes the
+run loop a driver over `rig_agent::AgentRunner`, whose hook slots are supposed to carry every
+lifecycle rule §4 states. rig-core 0.46 ships no agent module — it is the release that dissolved
+the run vocabulary into `rig-core` — and no `rig-agent` crate is in this build's registry at all:
+`cargo metadata --offline` resolves `rig-core`, `rig-http`, `rig-reqwest`, `rig-tungstenite` and
+`rig-derive` and nothing else of the family, and a build with no network cannot fetch a name its
+lockfile does not hold. What 0.46 does offer is one `Model` that streams one reply, and a
+`Local` pass-through wire: no turn state, no tool-call batching, no hook. There is nothing to
+drive.
+**Resolved:** the fallback ADR-0004 itself named — a driver of our own — is taken, and it stops
+at our own two seams rather than at rig's: `Responder` (one request, one reply or one failure) and
+`Executor` (one call, what it cost). Every §4 rule is then decided in our code and proved with
+fakes, no network and no clock, and the wire stays behind the provider seam where A15 and A16 left
+it — see ADR-0016.

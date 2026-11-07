@@ -1,0 +1,30 @@
+event: response.created
+data: {"type":"response.created","sequence_number":0,"response":{"id":"resp_01","object":"response","created_at":0,"status":"in_progress","model":"gpt-5","output":[],"tools":[]}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":0,"sequence_number":1,"item":{"id":"rs_01","type":"reasoning","summary":[]}}
+
+event: response.reasoning_summary_text.delta
+data: {"type":"response.reasoning_summary_text.delta","item_id":"rs_01","output_index":0,"summary_index":0,"sequence_number":2,"delta":"Weighing "}
+
+event: response.reasoning_summary_text.delta
+data: {"type":"response.reasoning_summary_text.delta","item_id":"rs_01","output_index":0,"summary_index":0,"sequence_number":3,"delta":"it."}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","output_index":0,"sequence_number":4,"item":{"id":"rs_01","type":"reasoning","summary":[{"type":"summary_text","text":"Weighing it."}]}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":1,"sequence_number":5,"item":{"id":"msg_01","type":"message","status":"in_progress","role":"assistant","content":[]}}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","item_id":"msg_01","output_index":1,"content_index":0,"sequence_number":6,"delta":"Hi "}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","item_id":"msg_01","output_index":1,"content_index":0,"sequence_number":7,"delta":"there"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","output_index":1,"sequence_number":8,"item":{"id":"msg_01","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"Hi there","annotations":[]}]}}
+
+event: response.completed
+data: {"type":"response.completed","sequence_number":9,"response":{"id":"resp_01","object":"response","created_at":0,"status":"completed","model":"gpt-5","output":[{"id":"rs_01","type":"reasoning","summary":[{"type":"summary_text","text":"Weighing it."}]},{"id":"msg_01","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"Hi there","annotations":[]}]}],"tools":[],"usage":{"input_tokens":9,"input_tokens_details":{"cached_tokens":3},"output_tokens":4,"output_tokens_details":{"reasoning_tokens":2},"total_tokens":13}}}
+

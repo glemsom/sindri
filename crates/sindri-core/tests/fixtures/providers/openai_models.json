@@ -1,0 +1,1 @@
+{"object":"list","data":[{"id":"gpt-5","object":"model","created":1750000000,"owned_by":"openai"},{"id":"gpt-5-mini","object":"model","created":1750000000,"owned_by":"openai"},{"id":"text-embedding-3-small","object":"model","created":1700000000,"owned_by":"openai"}]}
