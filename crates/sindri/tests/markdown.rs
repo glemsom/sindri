@@ -278,10 +278,11 @@ fn a_fence_still_open_at_the_end_of_the_text_is_a_code_block() {
     );
 }
 
-/// §12's picture row, as far as a terminal without a placement can show it: a mermaid
-/// fence the renderer draws is drawn here as the code it was written as — the words its
-/// block copies as, and what a reader sees until ticket #55 lays the picture over them —
-/// with nothing under it, because there is nothing to say.
+/// §12's picture row, as far as a layout with no surface can show it: a mermaid fence the
+/// renderer draws is drawn here as the code it was written as — the words its block copies as,
+/// and all a reader whose terminal places no picture sees — with nothing under it, because
+/// there is nothing to say. What a frame that *does* place pictures adds over these rows is
+/// `pictures`' (#55).
 #[test]
 fn a_mermaid_fence_that_draws_is_drawn_as_the_source_it_was_written_as() {
     let rows = markdown::rows("```mermaid\nflowchart TD\n  A-->B\n```", 200);

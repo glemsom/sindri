@@ -471,8 +471,8 @@ fn painting_a_picture_again_sends_no_bytes_down_the_wire() {
     );
     assert_eq!(
         pictured_rows(&again).len(),
-        pictured_rows(&first).len(),
-        "the picture is where it was: a repaint moves neither its rows nor its bytes"
+        10,
+        "the picture is where it was, ten rows of placeholders: a repaint moves neither its          rows nor its bytes"
     );
     assert_eq!(
         view.pictures().rasterises("shot.png"),
@@ -712,9 +712,14 @@ fn a_mermaid_fence_that_draws_is_a_block_the_diagram_is_placed_over() {
         "and the fence's own words stand under it, whole"
     );
     assert!(
+        diagram.rows() > 3,
+        "a flowchart is taller than the three rows its source was written on: {} rows",
+        diagram.rows()
+    );
+    assert!(
         rows.len() >= at + usize::from(diagram.rows()),
-        "the block is as tall as the picture placed over it: {} rows of the answer, {} of the \
-         picture",
+        "so the block is as tall as the picture placed over it: {} rows of the answer, {} of \
+         the picture",
         rows.len() - at,
         diagram.rows()
     );
