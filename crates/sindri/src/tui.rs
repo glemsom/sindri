@@ -123,6 +123,23 @@ const ASK_CELL: &[u8] = b"\x1b[16t";
 /// terminal that says nothing — and it is paid once, before the first frame.
 const REPLY_WAIT: Duration = Duration::from_millis(120);
 
+/// Hands `view` the pictures its terminal places, decided from the two things the terminal
+/// says it is: one that speaks Kitty is handed the pictures its frames draw from, and one that
+/// does not is handed none, which is what leaves it the words a picture is spoken of as (§12,
+/// ADR-0003).
+///
+/// `term` and `program` are `TERM` and `TERM_PROGRAM`, read off the environment by the launch
+/// and never off the tty: the launch has spent its one round trip on the cell size, and a
+/// second question before the first frame would buy a fact that decides only whether a picture
+/// is drawn. They are arguments rather than reads because a test has no environment to set: it
+/// hands the function the two facts and reads the frame it gets back.
+fn hand_pictures(view: &mut View, cell: CellSize, term: Option<&str>, program: Option<&str>) {
+    view.set_pictures(match picture::speaks_kitty(term, program) {
+        true => Pictures::kitty(cell),
+        false => Pictures::none(),
+    });
+}
+
 /// The terminal UI: takes the screen, holds it until `Ctrl-Q` or the user's own word, gives
 /// it back.
 pub fn run(cli: &Cli, config: &Config) -> ExitCode {
@@ -162,15 +179,15 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     let (cell_size, typed) = probed_cell(&terminal);
     let mut view = View::boot();
     view.set_cell_size(cell_size);
-    // And how its terminal places a picture, read off the environment once: a terminal that
-    // speaks Kitty is handed the pictures its frames draw from, and one that does not is
-    // handed none, which is what leaves it the words a picture is spoken of as (§12,
-    // ADR-0003). The question is asked of the environment and never of the tty, because the
-    // launch has spent its one round trip on the cell size.
+    // And how its terminal places a picture, read off the environment once, before the first
+    // frame.
     let named = |key: &str| std::env::var(key).ok();
-    if picture::speaks_kitty(named("TERM").as_deref(), named("TERM_PROGRAM").as_deref()) {
-        view.set_pictures(Pictures::kitty(cell_size));
-    }
+    hand_pictures(
+        &mut view,
+        cell_size,
+        named("TERM").as_deref(),
+        named("TERM_PROGRAM").as_deref(),
+    );
     // The frame is told the directory the launch stands in, because `@` walks the workspace
     // and a frame knows only what it was handed. It is the same directory `Launch::open`
     // gives a run — read the same way, from the process — so a path a reader picks is a path
@@ -1534,6 +1551,31 @@ mod tests {
         assert!(
             pty.silent(),
             "the terminal was asked nothing at all: no sequence went out"
+        );
+    }
+
+    /// ADR-0003's amendment at the one place the environment is turned into a frame: the two
+    /// facts the terminal gives reach the view, so a terminal that speaks Kitty is handed the
+    /// pictures its frames draw from and one that speaks no protocol is handed none — the
+    /// frame it paints is the words of a picture, whole (§12).
+    #[test]
+    fn a_terminal_that_speaks_kitty_is_handed_pictures_and_one_that_speaks_none_is_handed_none() {
+        let cell = CellSize::new(10, 20);
+
+        let mut speaks = View::boot();
+        hand_pictures(&mut speaks, cell, Some("xterm-kitty"), None);
+        assert!(
+            speaks.pictures().draws(),
+            "a terminal that names Kitty is handed the pictures its frames draw from"
+        );
+
+        let mut silent = View::boot();
+        silent.set_pictures(Pictures::kitty(cell));
+        hand_pictures(&mut silent, cell, Some("screen-256color"), Some("tmux"));
+        assert!(
+            !silent.pictures().draws(),
+            "and a terminal that names no protocol is handed none, which is the words of a \
+             picture and no placement"
         );
     }
 
