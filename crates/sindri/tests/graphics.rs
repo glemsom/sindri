@@ -252,6 +252,45 @@ fn a_picture_wider_than_the_band_is_fitted_into_it_and_keeps_its_proportions() {
     );
 }
 
+/// §12's one scale, where the picture is lopsided: a picture far longer in one direction
+/// than the other is fitted by the ratio it was drawn at and not by the scale alone. An axis
+/// the scale would leave under the one cell a picture has to have is one cell, and the other
+/// is read off the ratio — three cells by two hundred and fifty is one by eighty-three, not
+/// one by the hundred rows a transcript allows. The ceiling is the one place the shape is not
+/// kept, because a picture that needs more rows than a transcript has is cut to them.
+#[test]
+fn a_picture_longer_in_one_direction_than_the_other_keeps_the_shape_it_was_drawn_in() {
+    let cell = CellSize::new(10, 20);
+
+    let long = Footprint::fit(30, 5_000, cell, 80).expect("a picture fits");
+
+    assert_eq!(
+        (long.cols(), long.rows()),
+        (1, 83),
+        "three cells by two hundred and fifty fitted into eighty columns is one cell by the \
+         eighty-three rows the ratio asks for, and not the hundred rows the ceiling would \
+         have spent on a picture squashed from three columns to one"
+    );
+
+    let beyond = Footprint::fit(100, 100_000, cell, 80).expect("a picture fits");
+
+    assert_eq!(
+        (beyond.cols(), beyond.rows()),
+        (1, 100),
+        "and a picture whose one column would be five hundred rows takes the hundred a \
+         transcript has: the ceiling is the one place the shape is not kept"
+    );
+
+    let flat = Footprint::fit(10_000, 20, cell, 80).expect("a picture fits");
+
+    assert_eq!(
+        (flat.cols(), flat.rows()),
+        (80, 1),
+        "a picture flatter than one cell to the band's width keeps the columns the band gave \
+         it and takes the one row there is"
+    );
+}
+
 /// A picture with no extent declares nothing to draw, and it is refused at the fit for the
 /// same reason a footprint refuses it: a block of no cells would be a picture that
 /// disappeared without a caption saying so.

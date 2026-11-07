@@ -122,7 +122,13 @@ impl Footprint {
     /// band is the ordinary case — every screenshot on a terminal narrower than the window
     /// it was taken on — and a row that ran over its width would be a row the paint clips and
     /// whatever copies it loses. It is fitted by one scale on both axes, so it keeps the
-    /// shape it was drawn in, and that scale only ever shrinks it.
+    /// shape it was drawn in, and that scale only ever shrinks it. The columns are the
+    /// scale's, rounded down to whole cells and never fewer than the one cell a picture has to
+    /// have, and the rows are the ratio the picture was drawn at read at the columns it got:
+    /// three cells by two hundred and fifty fitted into eighty columns is one cell by
+    /// eighty-three rows, and not the hundred rows a squashed picture would have spent. The
+    /// one place the shape is not kept is the ceiling — a picture needing more rows than a
+    /// transcript has is as tall as a transcript allows (§12).
     ///
     /// What is still refused is a picture with no extent at all: there is nothing to divide,
     /// nothing to draw, and a block of no cells would be a picture that disappeared without
@@ -133,13 +139,12 @@ impl Footprint {
         if cols == 0 || rows == 0 {
             return Err(Refusal::Sizeless);
         }
-        let scale = (f64::from(room.clamp(1, MAX_COLS)) / f64::from(cols))
+        let room = room.clamp(1, MAX_COLS);
+        let scale = (f64::from(room) / f64::from(cols))
             .min(f64::from(MAX_ROWS) / f64::from(rows))
             .min(1.0);
-        Ok(Footprint {
-            cols: fitted(f64::from(cols) * scale, room.clamp(1, MAX_COLS)),
-            rows: fitted(f64::from(rows) * scale, MAX_ROWS),
-        })
+        let (cols, rows) = shaped(cols, rows, scale, room);
+        Ok(Footprint { cols, rows })
     }
 
     /// The pixels this footprint is on a `cell`: the size the picture is drawn at, and the
@@ -325,6 +330,23 @@ fn options() -> &'static usvg::Options<'static> {
         database.set_sans_serif_family(LABEL_FAMILY);
         options
     })
+}
+
+/// The whole cells a picture drawn `cols` by `rows` takes when it is scaled by `scale` into
+/// a band `room` columns across, with the shape it was drawn in kept.
+///
+/// The columns are the scale's, rounded down to the whole cells a band can be filled with.
+/// The rows are the ratio the picture was drawn at, read at the columns there are and not at
+/// the columns the scale asked for: three cells by two hundred and fifty fitted into eighty
+/// is one column, and one column of that picture is eighty-three rows — a hundred would be the
+/// same picture squashed by a fifth, which is the thing one scale is meant to prevent. So a
+/// picture is never taller than the shape it was drawn in, and the only thing that can still
+/// press on it is the ceiling: a picture needing more rows than a transcript has is as tall as
+/// the transcript allows (§12).
+fn shaped(cols: u16, rows: u16, scale: f64, room: u16) -> (u16, u16) {
+    let ratio = f64::from(rows) / f64::from(cols);
+    let columns = fitted(f64::from(cols) * scale, room);
+    (columns, fitted(f64::from(columns) * ratio, MAX_ROWS))
 }
 
 /// How many whole cells a fitted picture takes, rounded down so a fit never asks for a
