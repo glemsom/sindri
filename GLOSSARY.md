@@ -155,6 +155,13 @@ _Avoid_: Keymap (one word for the whole frame's), binding list, hotkeys
 A frame rendered at a fixed size and checked into the tests as the accepted picture of it.
 _Avoid_: Snapshot (too general), screenshot, golden image
 
+**Eval**:
+An artefact held byte for byte to the golden checked in beside the test — the bytes a wire sends, the
+description `doctor` prints, a record line with a secret planted in every field, the SVG a mermaid
+fence drew — and run as its own stage (§16). Its failure names the line or tag that moved, and it
+needs neither the network nor a terminal.
+_Avoid_: Snapshot, golden test, benchmark
+
 **Picture**:
 An image an answer points at, or the diagram a mermaid fence becomes: measured into the cells
 it takes — its **footprint** — before a pixel is spent, and drawn as a **placement** over the

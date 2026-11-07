@@ -230,7 +230,7 @@ pub fn layout_on(entry: &Entry, cols: u16, surface: &Surface) -> Vec<Row> {
         Entry::Turn { turn } => vec![rule(&format!("turn {turn} "), cols)],
         Entry::Call {
             name, arguments, ..
-        } => opening(name, &arguments.to_string(), cols),
+        } => opening(&name.to_string(), &arguments.to_string(), cols),
         Entry::Result {
             name,
             text,
@@ -238,7 +238,14 @@ pub fn layout_on(entry: &Entry, cols: u16, surface: &Surface) -> Vec<Row> {
             elapsed_ms,
             exit,
             ..
-        } => settled(name, *exit, &text.to_string(), *bytes, *elapsed_ms, cols),
+        } => settled(
+            &name.to_string(),
+            *exit,
+            &text.to_string(),
+            *bytes,
+            *elapsed_ms,
+            cols,
+        ),
         Entry::Assistant { text, .. } => answer_on(&text.to_string(), cols, None, surface),
         Entry::Reasoning { text, .. } => thought(&text.to_string(), cols),
     }

@@ -77,8 +77,10 @@ pub enum Entry {
     Call {
         /// Which turn asked for it.
         turn: u32,
-        /// The tool, as the schema the model was given names it.
-        name: String,
+        /// The tool, as the schema the model was given names it — scrubbed like every
+        /// other field, because the name is the model's own words until a run looks it
+        /// up, and this line is written before that lookup (ADR-0011).
+        name: Redacted,
         /// The arguments, as the wire wrote them.
         arguments: Redacted,
     },
@@ -86,8 +88,8 @@ pub enum Entry {
     Result {
         /// Which turn asked for it.
         turn: u32,
-        /// The tool that ran.
-        name: String,
+        /// The tool that ran, scrubbed for the reason the call's own name is.
+        name: Redacted,
         /// What the model is told about it.
         text: Redacted,
         /// The command output bytes it cost the run.
@@ -340,7 +342,7 @@ impl Record {
     pub fn called(&mut self, turn: u32, call: &Call) -> Result<(), RecordError> {
         self.append(Entry::Call {
             turn,
-            name: call.name.clone(),
+            name: self.secrets.redact(call.name.clone()),
             arguments: self.secrets.redact(call.arguments.clone()),
         })
     }
@@ -350,7 +352,7 @@ impl Record {
     pub fn resulted(&mut self, turn: u32, call: &Call, acted: &Acted) -> Result<(), RecordError> {
         self.append(Entry::Result {
             turn,
-            name: call.name.clone(),
+            name: self.secrets.redact(call.name.clone()),
             text: self.secrets.redact(acted.text.clone()),
             bytes: acted.bytes,
             elapsed_ms: millis(acted.elapsed),

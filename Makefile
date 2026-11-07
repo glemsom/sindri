@@ -16,7 +16,10 @@
 #                     running the stage that proves it: a gate that rang itself
 #                     would never end
 #     make <stage>    one stage alone — fmt, clippy, audit, test, frames, bench,
-#                     gate, toolchain, sandbox, release
+#                     gate, toolchain, sandbox, evals, release
+#     SINDRI_BLESS=1 make evals
+#                     rewrite the evals' goldens from what the tree does now, which
+#                     is the only way one moves (ADR 0012's rule for a frame)
 #     make frame F=boot-120x40
 #                     print one golden frame as the code draws it now, to eyeball it
 #     make frame-update F=boot-120x40
@@ -27,9 +30,10 @@
 # is printed for a stage that did not run. Two kinds of stage end without an `ok`,
 # and neither ever prints one:
 #
-#   ... MISSING (note)  work that has not landed yet — today ticket #58's evals.
-#                       `make check` still exits 0, with the gap printed on its
-#                       last lines where a reader cannot miss it.
+#   ... MISSING (note)  work that has not landed yet. No stage says it today, and
+#                       the word stays for the next gap: `make check` exits 0 with
+#                       the gap printed on its last lines where a reader cannot
+#                       miss it, and never an `ok` over work that is not there.
 #   ... SKIPPED         a stage the machine would not let run — the sandbox tier
 #                       when the kernel forbids unprivileged user namespaces,
 #                       which is the case ticket #7 exists for; the release path
@@ -69,9 +73,8 @@ endef
 
 # missing: a stage whose machinery does not exist yet. It says so plainly and
 # prints no `ok`, so the gap is visible rather than counted as green. `make
-# check` still exits 0 on a tree whose real stages pass: the gap is ticket #58's
-# and tracking it is what that ticket is for. Landing one of these stages is a
-# one-line change — swap `$(call missing,<name>,<note>)` for
+# check` still exits 0 on a tree whose real stages pass, and landing one of these
+# stages is a one-line change — swap `$(call missing,<name>,<note>)` for
 # `$(call stage,<name>,<command>)` — and nothing else in this file moves.
 define missing
 @printf 'check: $(1) ... MISSING ($(2))\n'
@@ -198,9 +201,29 @@ sandbox:
 sandbox-tier:
 	$(call skippable,sandbox,bash scripts/sandbox-probe.sh)
 
-# Ticket #58 owns this one. A placeholder until it lands.
+# The evals of spec §16 and §2, landed by ticket #59: four families of artefact
+# held byte for byte to the golden checked in beside the test — the bytes each wire
+# sends, the description `doctor` prints against the one a run registers, every
+# field of every `Entry` against a secret planted in it, and the mermaid corpus
+# against the SVG it drew — and every one of them fails naming the line or tag that
+# moved. None reaches the network and none needs a terminal.
+#
+# This is a stage of its own and not a part of `test` because these assert on
+# artefacts and not on behaviour: each test is ignored, so `make test` compiles the
+# evals and judges none of them, and a family that drifts is reported by the stage
+# that owns it rather than by the one before it. `SINDRI_BLESS=1 make evals` moves
+# a golden deliberately, which is the only way one moves.
+#
+# One `cargo test` per family, with `&&` between them so the first family that
+# fails stops the rest: each prints its own `check: eval ... ok` line under this
+# stage's verdict, the way the frame stage prints one line per fixture.
+EVALS := cargo test -p sindri-core --test eval_wire -- --ignored --nocapture && \
+         cargo test -p sindri-core --test eval_redaction -- --ignored --nocapture && \
+         cargo test -p sindri --test eval_doctor -- --ignored --nocapture && \
+         cargo test -p sindri --test eval_mermaid -- --ignored --nocapture
+
 evals:
-	$(call missing,evals,evals are not yet present - ticket #58)
+	$(call stage,evals,$(EVALS))
 
 # The provenance proof of spec §16, and the stage ticket #61 landed: the binary
 # embeds git describe and the commit date and never the wall clock, so a tree

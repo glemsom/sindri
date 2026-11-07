@@ -688,7 +688,7 @@ fn calls() -> Vec<Entry> {
 fn call(turn: u32, name: &str, arguments: &str) -> Entry {
     Entry::Call {
         turn,
-        name: String::from(name),
+        name: SecretSet::default().redact(name),
         arguments: SecretSet::default().redact(arguments),
     }
 }
@@ -697,7 +697,7 @@ fn call(turn: u32, name: &str, arguments: &str) -> Entry {
 fn result(turn: u32, name: &str, exit: Exit, text: &str, bytes: u64, elapsed_ms: u64) -> Entry {
     Entry::Result {
         turn,
-        name: String::from(name),
+        name: SecretSet::default().redact(name),
         text: SecretSet::default().redact(text),
         bytes,
         elapsed_ms,

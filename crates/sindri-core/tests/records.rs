@@ -418,7 +418,7 @@ fn a_result_line_written_before_the_verdict_existed_still_reads() {
         transcript.entries(),
         [Entry::Result {
             turn: 1,
-            name: String::from("bash"),
+            name: SecretSet::default().redact("bash"),
             text: SecretSet::default().redact("exit 0\n"),
             bytes: 7,
             elapsed_ms: 2,
@@ -1032,12 +1032,12 @@ fn a_killed_run_still_reads() {
             Entry::Turn { turn },
             Entry::Call {
                 turn,
-                name: String::from("bash"),
+                name: SecretSet::default().redact("bash"),
                 arguments: SecretSet::default().redact(r#"{"command": "echo hello"}"#),
             },
             Entry::Result {
                 turn,
-                name: String::from("bash"),
+                name: SecretSet::default().redact("bash"),
                 text: SecretSet::default().redact("exit 0\nhello\n"),
                 bytes: 12,
                 elapsed_ms: 3,
