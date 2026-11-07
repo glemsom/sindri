@@ -63,8 +63,9 @@ use rustix::event::{PollFd, PollFlags, poll};
 use rustix::termios::{InputModes, OptionalActions, Termios, tcgetattr, tcsetattr};
 use sindri::composer::{Key, Outcome, Prompt, State};
 use sindri::pulse::{self, Pulse};
+use sindri::settings::persist;
 use sindri::view::View;
-use sindri_core::config::{Config, Flags, Process};
+use sindri_core::config::{Config, Environment, Process, Touched};
 use sindri_core::provider::Deltas;
 use sindri_core::provider::served::Listing;
 use sindri_core::redact::SecretSet;
@@ -95,6 +96,10 @@ const TAKE_SCREEN: &[u8] = b"\x1b[?1049h\x1b[?25l\x1b[?2004h";
 /// Give the alternate screen back, stop asking for bracketed paste first, and put the
 /// cursor back last, so a shell gets a terminal that looks the way it did.
 const GIVE_BACK_SCREEN: &[u8] = b"\x1b[?2004l\x1b[?25h\x1b[?1049l";
+
+/// §11's key for the model a run asks: the one row `/model` writes, named here so the write
+/// reads as the schema's key rather than as a word that happens to match it.
+const MODEL: &str = "model";
 
 /// The terminal UI: takes the screen, holds it until `Ctrl-Q` or the user's own word, gives
 /// it back.
@@ -153,7 +158,18 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     if let Err(error) = paint(&mut canvas, &mut view) {
         return crate::refuse(&format!("the frame could not be painted: {error}"), SETUP);
     }
-    let keys = keys(&terminal, &mut canvas, &mut view, cli, config, &signals);
+    // The config this launch hands each run, which a visit to the settings modal replaces: the
+    // file is written once and resolved again, so the prompt after the visit runs on it.
+    let mut config = config.clone();
+    let keys = keys(
+        &terminal,
+        &mut canvas,
+        &mut view,
+        cli,
+        &mut config,
+        &Process,
+        &signals,
+    );
     // The screen is given back before a word is said about how the launch ended: a refusal
     // is a line for the shell a reader is handed back to, and not a smear over a frame.
     drop(screen);
@@ -305,7 +321,8 @@ fn keys(
     canvas: &mut Canvas<'_>,
     view: &mut View,
     cli: &Cli,
-    config: &Config,
+    config: &mut Config,
+    environment: &impl Environment,
     signals: &Signals,
 ) -> io::Result<Ending> {
     let mut decoder = Decoder::new();
@@ -393,6 +410,7 @@ fn keys(
                     &mut asking,
                     cli,
                     config,
+                    environment,
                     &wake,
                 )? {
                     return Ok(ending);
@@ -591,7 +609,8 @@ fn answer(
     running: &mut Option<Running>,
     asking: &mut Option<Asking>,
     cli: &Cli,
-    config: &Config,
+    config: &mut Config,
+    environment: &impl Environment,
     wake: &Arc<Wake>,
 ) -> io::Result<Option<Ending>> {
     let key = match event {
@@ -627,6 +646,21 @@ fn answer(
             let sent = send(prompt, canvas, view, running, cli, config, wake)?;
             Ok(sent)
         }
+        // `Enter` at the settings modal: the keys a reader touched are written once, by the
+        // core's owner-only atomic save, and the launch's config is resolved again so the next
+        // prompt runs on what the visit left (§11, ADR-0009). A value the schema refuses comes
+        // back naming its key and is said on the screen, with nothing written at all.
+        Outcome::Save(touched) => {
+            match persist(environment, &touched, cli.flags()) {
+                Ok(fresh) => {
+                    *config = fresh;
+                    view.saved();
+                }
+                Err(error) => view.refuse(&error.to_string()),
+            }
+            paint(canvas, view)?;
+            Ok(None)
+        }
         // `Ctrl-Y`: the words leave the terminal by OSC 52, and they are written here
         // because this module is the one that owns the tty — a core that named a sequence
         // would be a core that knows what a terminal is (§12, §14, ADR-0005). Nothing is
@@ -635,19 +669,20 @@ fn answer(
             tell(&terminal.screen, &crate::osc::copy(&words))?;
             Ok(None)
         }
-        // A model name `/model` chose or a `/model <name>` line named: it is written
-        // through the one save every config write goes through — atomic, 0600, and patching
-        // only the `model` key, so the rest of the file including its comments is the
-        // reader's own (ADR-0009, §11). A file that cannot be written is the launch
-        // refusing, because a frame has no band for a refusal and a name silently not
-        // written is the one silence this front end must not keep (§15).
+        // A model name `/model` chose or a `/model <name>` line named: it is written as the
+        // one row a settings visit touches, so the name goes through the very save the
+        // settings modal writes with — atomic, 0600, patching only the `model` key and
+        // leaving the rest of the file, comments and all, the reader's own (ADR-0009, §11).
+        // The config is then resolved again, so the next prompt runs on the name this one
+        // wrote rather than on the one the launch started with (§12). A file that cannot be
+        // written is the launch refusing, because a frame has no band for a refusal and a
+        // name silently not written is the one silence this front end must not keep (§15).
         Outcome::Model(name) => {
-            let touched = Flags {
-                model: Some(name),
-                ..Flags::default()
-            };
-            match Config::save(&Process, &touched) {
-                Ok(()) => {
+            let mut touched = Touched::new();
+            touched.set(MODEL, name);
+            match persist(environment, &touched, cli.flags()) {
+                Ok(fresh) => {
+                    *config = fresh;
                     paint(canvas, view)?;
                     Ok(None)
                 }
@@ -656,6 +691,14 @@ fn answer(
                     error.exit_code(),
                 )))),
             }
+        }
+        // `/settings`: the screen the settings modal fills in, opened over the draft with the
+        // config as it resolved — every row a key and the value in force. The frame holds no
+        // config, so the seeding is here, where the one the launch resolved is (§11, §12).
+        Outcome::Settings => {
+            view.open_settings(config);
+            paint(canvas, view)?;
+            Ok(None)
         }
         // The `/model` screen is up and has nothing to rank: the wire is asked on a thread
         // of its own, so the loop is back in `poll` for a key while the request is out
@@ -770,7 +813,7 @@ fn resume(
     view: &mut View,
     running: &mut Option<Running>,
     cli: &Cli,
-    config: &Config,
+    config: &mut Config,
     wake: &Arc<Wake>,
 ) -> io::Result<Option<Ending>> {
     let Some(prompt) = view.dequeue() else {
@@ -882,8 +925,13 @@ impl Decoder {
         self.take(1);
         let key = match byte {
             0x03 => Key::Cancel,
+            // `Ctrl-U`: the value a settings row holds goes, and the key with it (§12).
+            0x15 => Key::Clear,
             // `Ctrl-X`: the newest queued prompt is dropped (§12).
             0x18 => Key::Drop,
+            // `Tab` is the byte raw mode leaves of it, and `Shift+Tab` is the sequence
+            // `ESC [ Z` below: one key of a screen's, either way.
+            b'\t' => Key::Tab,
             // `Ctrl-Q`, which is why flow control has to be off: a terminal left with
             // `IXON` eats this byte instead of sending it.
             0x11 => Key::Quit,
@@ -954,6 +1002,9 @@ impl Decoder {
             (b'B', _) => Step::Event(Event::Key(Key::Down)),
             (b'C', _) => Step::Event(Event::Key(Key::Right)),
             (b'D', _) => Step::Event(Event::Key(Key::Left)),
+            // `Shift+Tab` is `CSI Z` on every terminal, and `CSI 1;2Z` under one that
+            // says which modifier it held.
+            (b'Z', _) => Step::Event(Event::Key(Key::BackTab)),
             (b'H', _) | (b'~', "1") | (b'~', "7") => Step::Event(Event::Key(Key::Home)),
             (b'F', _) | (b'~', "4") | (b'~', "8") => Step::Event(Event::Key(Key::End)),
             // The paste that starts here is answered by `pasted`: one event for
@@ -1049,6 +1100,8 @@ fn reported(params: &str) -> Option<Key> {
     let modifiers = modifiers.saturating_sub(1);
     match (code, modifiers) {
         (13, 0) => Some(Key::Enter),
+        (9, 0) => Some(Key::Tab),
+        (9, held) if held & SHIFT != 0 => Some(Key::BackTab),
         (13, held) if held & SHIFT != 0 => Some(Key::Newline),
         (106, held) if held & CTRL != 0 => Some(Key::Newline),
         _ => None,
@@ -1264,7 +1317,8 @@ mod tests {
         // The launch's own values, untouched by a copy: nothing here starts a run, and a
         // wake nobody writes to is the loop's when it is there.
         let cli = Cli::parse_from(["sindri"]);
-        let config = sindri_core::config::Config::default();
+        let mut config = sindri_core::config::Config::default();
+        let environment = std::collections::BTreeMap::new();
         let wake = Arc::new(Wake::open().expect("a wake"));
         let mut running = None;
         let mut asking = None;
@@ -1276,7 +1330,8 @@ mod tests {
             &mut running,
             &mut asking,
             &cli,
-            &config,
+            &mut config,
+            &environment,
             &wake,
         )
         .expect("the copy is written");
@@ -1287,6 +1342,98 @@ mod tests {
         assert!(
             drawn.contains(std::str::from_utf8(&sequence).expect("a printable sequence")),
             "the words left as OSC 52 and as nothing else: {drawn:?}"
+        );
+    }
+
+    /// The config home a settings test writes into: one `config.toml` a person left with a
+    /// comment and a model in it, and the environment that points at it.
+    fn config_home(
+        text: &str,
+    ) -> (
+        tempfile::TempDir,
+        std::collections::BTreeMap<String, String>,
+    ) {
+        let home = tempfile::tempdir().expect("a temp dir");
+        let directory = home.path().join("sindri");
+        std::fs::create_dir_all(&directory).expect("the sindri directory");
+        std::fs::write(directory.join("config.toml"), text).expect("the config file");
+        let environment = [(
+            String::from("XDG_CONFIG_HOME"),
+            home.path().display().to_string(),
+        )]
+        .into_iter()
+        .collect();
+        (home, environment)
+    }
+
+    /// The row a settings screen's keys act on, as a reader walks to it.
+    fn walk_to(view: &mut View, key: &str) {
+        for _ in 0..sindri_core::config::Config::KEYS.len() {
+            let row = view
+                .settings()
+                .rows()
+                .nth(view.settings().current())
+                .map(|(name, _)| name);
+            if row == Some(key) {
+                return;
+            }
+            view.key(Key::Down);
+        }
+        panic!("{key} is a key of the schema, so the screen has a row for it");
+    }
+
+    #[test]
+    fn enter_at_the_settings_modal_writes_the_file_and_the_next_prompt_runs_on_it() {
+        let (home, environment) = config_home("# mine\nmodel = \"old-model\"\n");
+        let path = home.path().join("sindri").join("config.toml");
+        let cli = Cli::parse_from(["sindri"]);
+        let mut config = Config::resolve(&environment, cli.flags()).expect("a config");
+        let pty = Pty::open();
+        let terminal =
+            Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
+        let mut canvas = canvas(&terminal).expect("a canvas over it");
+        let mut view = View::boot();
+        view.open_settings(&config);
+        let wake = Arc::new(Wake::open().expect("a wake"));
+        let mut running = None;
+        let mut asking = None;
+
+        walk_to(&mut view, "model");
+        view.key(Key::Clear);
+        for glyph in "new-model".chars() {
+            view.key(Key::Char(glyph));
+        }
+        let ended = answer(
+            &terminal,
+            &mut canvas,
+            &mut view,
+            Event::Key(Key::Enter),
+            &mut running,
+            &mut asking,
+            &cli,
+            &mut config,
+            &environment,
+            &wake,
+        )
+        .expect("the write is made");
+
+        assert!(ended.is_none(), "a write is not the key that quits");
+        assert_eq!(
+            std::fs::read_to_string(&path).expect("the file the write landed in"),
+            "# mine\nmodel = \"new-model\"\n",
+            "Enter writes at once, and only the row the reader touched: the comment is the \
+             byte it was"
+        );
+        assert_eq!(
+            view.mode(),
+            sindri::keys::Mode::Composer,
+            "and the visit is over, so the draft has the keys again"
+        );
+        assert_eq!(
+            config.model.as_deref(),
+            Some("new-model"),
+            "the launch's config is resolved again from what the visit wrote, so the next \
+             prompt — the run `send` starts from this very value — runs on it"
         );
     }
 

@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+markdown-quote at 80x24
+00 |  ▏ A fence still open while streaming renders as a code block, so a            | plain:2 dim:2 plain:76
+01 |  ▏ half-written diagram never costs a raster pass and never flickers while it  | plain:2 dim:2 plain:76
+02 |  ▏ is being typed.                                                             | plain:2 dim:2 plain:76
+03 |                                                                                | plain:80
+04 |                                                                                | plain:80
+05 |                                                                                | plain:80
+06 |                                                                                | plain:80
+07 |                                                                                | plain:80
+08 |                                                                                | plain:80
+09 |                                                                                | plain:80
+10 |                                                                                | plain:80
+11 |                                                                                | plain:80
+12 |                                                                                | plain:80
+13 |                                                                                | plain:80
+14 |                                                                                | plain:80
+15 |                                                                                | plain:80
+16 |                                                                                | plain:80
+17 |                                                                                | plain:80
+18 |                                                                                | plain:80
+19 |                                                                                | plain:80
+20 |                                                                                | plain:80
+21 |────────────────────────────────────────────────────────────────────────────────| dim:80
+22 |                                                                                | plain:80
+23 |Enter send · ? keys                                                             | muted:10 dim:3 muted:6 plain:61

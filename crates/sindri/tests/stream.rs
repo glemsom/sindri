@@ -20,7 +20,7 @@ fn words(row: &Row) -> String {
 
 /// The inks a row's spans are drawn in, in order.
 fn inks(row: &Row) -> Vec<Ink> {
-    row.spans().iter().map(|(_, ink)| *ink).collect()
+    row.spans().iter().map(|(_, look)| look.ink()).collect()
 }
 
 /// §4 and §12's first promise: reasoning and text land in the order they arrive, and
@@ -105,15 +105,16 @@ fn a_streaming_answer_adds_rows_and_a_fence_still_open_is_code() {
         tail,
         [
             "  open is a code block, never prose.",
-            "  ```rust",
-            "  fn main() {"
+            "",
+            "  ▏ rust",
+            "  ▏ fn main() {"
         ],
-        "the fence and its still-streaming contents are drawn as code"
+        "the fence and its still-streaming contents are drawn as the block they opened"
     );
     assert_eq!(
-        inks(more.last().expect("a row under the fence")),
-        [Ink::Plain, Ink::Muted],
-        "and in the ink code is read in, not as prose"
+        inks(more.last().expect("a row under the fence"))[..2],
+        [Ink::Plain, Ink::Dim],
+        "and behind the bar a code block is set behind, not as prose"
     );
 }
 

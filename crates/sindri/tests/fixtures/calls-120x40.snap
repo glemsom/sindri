@@ -17,14 +17,14 @@ calls at 120x40
 11 |  The call ran past its minute and was killed.                                          sandbox   .................bwrap| plain:88 dim:27 muted:5
 12 |turn 4 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
 13 |✗ cancelled  bash  0 bytes · 3400 ms                                                    session   ..............9f2c7a41| err:1 dim:35 plain:52 dim:24 muted:8
-14 |  The run stopped on the user's word, and the draft kept.                               temp      ........…/9f2c7a41/tmp| plain:88 dim:18 muted:14
-15 |turn 5 ─────────────────────────────────────────────────────────────────────────────────                                | dim:88 plain:32
-16 |… bash                                                                                                                  | dim:6 plain:114
-17 |  {"command": "make check STAGES=test"}                                                                                 | plain:120
-18 |                                                                                                                        | plain:120
-19 |                                                                                                                        | plain:120
-20 |                                                                                                                        | plain:120
-21 |                                                                                                                        | plain:120
+14 |  What a verdict says                                                                   temp      ........…/9f2c7a41/tmp| plain:2 plain+bold:19 plain:67 dim:18 muted:14
+15 |                                                                                                                        | plain:120
+16 |  The run stopped on the user's word: Ctrl-C cancels and keeps the draft, so the row                                    | plain:38 muted+reversed:6 plain:76
+17 |  says ✗ cancelled rather than leaving a spinner turning for a result that will never                                   | plain:7 muted+reversed:11 plain:102
+18 |  come.                                                                                                                 | plain:120
+19 |turn 5 ─────────────────────────────────────────────────────────────────────────────────                                | dim:88 plain:32
+20 |… bash                                                                                                                  | dim:6 plain:114
+21 |  {"command": "make check STAGES=test"}                                                                                 | plain:120
 22 |                                                                                                                        | plain:120
 23 |                                                                                                                        | plain:120
 24 |                                                                                                                        | plain:120
@@ -42,4 +42,4 @@ calls at 120x40
 36 |                                                                                                                        | plain:120
 37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
 38 |                                                                                                                        | plain:120
-39 |Enter send · ? keys                                                                                                     | muted:10 dim:3 muted:6 plain:101
+39 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · / commands · @ files · ↑ queue                                      | muted:10 dim:3 muted:6 dim:3 muted:13 dim:3 muted:11 dim:3 muted:10 dim:3 muted:7 dim:3 muted:7 plain:38

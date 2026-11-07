@@ -36,12 +36,13 @@ use ratatui::backend::TestBackend;
 use ratatui::buffer::{Buffer, Cell};
 
 use sindri::composer::{Composer, Key, Outcome};
-use sindri::ink::Ink;
+use sindri::ink::Look;
 use sindri::mark;
 use sindri::pulse::Pulse;
 use sindri::rail::Facts;
 use sindri::rows::Scroll;
 use sindri::view::View;
+use sindri_core::config::Config;
 use sindri_core::policy::Enforcement;
 use sindri_core::provider::served::Where;
 use sindri_core::provider::transport::{Canned, Replay};
@@ -132,6 +133,19 @@ fn named(name: &str) -> View {
             "seven: the session it left",
             "eight: the question to ask",
         ])),
+        // §12's markdown, one construct to a frame at 80 columns: the pictures #52's
+        // contract is frozen as, so a heading's weight or a table's rule is approved
+        // once as a picture and cannot drift under a change nobody looked at.
+        "markdown-headings" => construct(headings()),
+        "markdown-lists" => construct(lists()),
+        "markdown-table" => construct(table()),
+        "markdown-quote" => construct(quoted()),
+        "markdown-code" => construct(code()),
+        "markdown-inline" => construct(inline()),
+        "markdown-link" => construct(link()),
+        // A table two hundred columns wide drawn in forty: a table wraps inside its
+        // cells and keeps its header's rule rather than reflowing into a paragraph.
+        "markdown-table-narrow" => construct(narrow()),
         // The marker at the head of the newest answer, twice: the run still live and
         // carrying its elapsed time, and the same run stopped with the duration it stopped
         // at (#39). One history and one answer, so what the eye is asked to approve between
@@ -162,6 +176,23 @@ fn named(name: &str) -> View {
         // screen, arrived at through the keys a reader presses and the listing a terminal
         // hands back (#48, §10).
         "models" => model_screen(),
+        // The settings modal over the config a launch resolved: every key of the schema,
+        // the value each holds, and the row a key acts on marked (ticket #49, §12,
+        // ADR-0009). The screen opened through the seam `/settings` will call, since that
+        // command is #48's and this ticket owns the screen it opens.
+        "settings" => {
+            let mut view = View::boot();
+            view.open_settings(&in_force());
+            view
+        }
+        // The same screen after a value it will not take: the refusal under the list,
+        // naming the key that has to change, and no file written (§11, ticket #49).
+        "settings-refused" => refused(),
+        // The footer's hints at the six widths #57 freezes: the frame a launch opens on,
+        // drawn short so the one row that carries words is the bottom one, and the same
+        // frame at every width so what the eye approves between two pictures is the hints
+        // that went and nothing else (ticket #57, §12).
+        "footer" => View::boot(),
         // A drag over the transcript: the cells a reader has marked, painted in the ink
         // a selection is read in, and the very cells `Ctrl-Y` hands out (#50).
         "mark" => {
@@ -194,6 +225,73 @@ fn model_screen() -> View {
     view.key(Key::Enter);
     view.set_served(listing);
     view
+}
+
+/// One construct of §12's markdown as the picture of it: an answer holding nothing but
+/// that construct, at the tail of a transcript with no history around it, so what the
+/// frame shows is the construct and not the entry above it.
+fn construct(text: &str) -> View {
+    View::of(vec![answer(1, text)], Scroll::Tail)
+}
+
+/// §12's heading rows: an h1 under one blank row and bold, an h2 bold, an h3 bold and
+/// dim, and h4 down to h6 plain — the four renderings of one construct in one picture.
+fn headings() -> &'static str {
+    "# Markdown rendering\n\n## Headings, tables and highlighted code\n\n### A rule the \
+     fixtures hold\n\n#### A fourth level\n\n##### A fifth level\n\n###### A sixth level"
+}
+
+/// §12's list rows: a bullet per item with two spaces per depth, and an ordered list
+/// numbered from the number it starts at.
+fn lists() -> &'static str {
+    "- a bullet per item\n- two spaces per depth\n  - a nested item\n    - and one \
+     deeper\n- an ordered list underneath\n  1. numbered from one\n  2. and hung under \
+     their own words when they wrap"
+}
+
+/// §12's table row: `│` between the columns, a `─` rule under the header, no outer
+/// border.
+fn table() -> &'static str {
+    "| construct | rendering |\n| --- | --- |\n| heading | bold, one blank row \
+     above |\n| table | columns joined by a bar, a rule under the header |\n| code | a \
+     bar down its left and the language's tag |"
+}
+
+/// §12's quote row: a `▏` bar in dim ink down every row of what was quoted.
+fn quoted() -> &'static str {
+    "> A fence still open while streaming renders as a code block, so a half-written \
+     diagram never costs a raster pass and never flickers while it is being typed."
+}
+
+/// §12's code rows: a `▏` gutter with the language's tag and `syntect`'s highlighting,
+/// and a block whose language no syntax definition names drawn plain and silently.
+fn code() -> &'static str {
+    "```rust\nfn main() {\n    let fence = Fence::open();\n    fence.words();\n}\n```\n\n\
+     ```frobnicate\nthis language names no syntax definition\n```"
+}
+
+/// §12's inline rows: a run of inline code set reversed, inside a paragraph that wraps
+/// around it.
+fn inline() -> &'static str {
+    "Run `make check` before the gate: it is the definition of done, and `make frame \
+     F=boot-120x40` is how a look is eyeballed before it is blessed."
+}
+
+/// §12's link row: the words the link was written over, and the URL in dim ink when the
+/// URL says something the words did not.
+fn link() -> &'static str {
+    "The command is `/export` [in the spec](https://example.test/spec#12), and \
+     [§16](§16) is where the gate is written down."
+}
+
+/// A table wider than the forty columns it is drawn in, every column of it long enough
+/// to wrap: the picture of §12's promise that a narrow band loses columns and never
+/// content.
+fn narrow() -> &'static str {
+    "| a heading of the first level is bold and stands under one blank row wherever it \
+     stands | a table wider than the band it is drawn in wraps inside its cells and keeps \
+     the rule under its header |\n| --- | --- |\n| a code block | is guttered by its \
+     language's tag and highlighted by syntect |"
 }
 
 /// The frame the `@` picker is drawn on: a workspace of the test's own — a temp directory
@@ -235,6 +333,57 @@ fn picking() -> View {
     let mut view = View::boot();
     view.set_workspace(root.path().to_path_buf());
     view.key(Key::Char('@'));
+    view
+}
+
+/// The config the settings fixture opens on: what a person's own file and environment
+/// would have left in force — a secret among the rows, and keys that say nothing because
+/// nothing speaks for them — because the screen's promise is that it shows the config as it
+/// resolved and writes only the rows a reader wrote into (ticket #49).
+fn in_force() -> Config {
+    Config {
+        provider: Some(Wire::Anthropic),
+        model: Some(String::from("claude-sonnet-4-5")),
+        thinking: Some(true),
+        extra_writable_paths: Some(vec![PathBuf::from("/srv/data")]),
+        max_turns: Some(250),
+        timeout: Some(120),
+        api_key: Some(String::from("sk-not-a-real-key")),
+        ..Config::default()
+    }
+}
+
+/// The frame of a visit a value was refused: the screen walked to `max_turns`, emptied,
+/// typed into, and handed the refusal the core's own save gives for it — so the picture is
+/// of a refusal this product can still produce, rather than one typed into a fixture. The
+/// save is refused before it stages anything, so the path it is given is written by nothing.
+fn refused() -> View {
+    let mut view = View::boot();
+    view.open_settings(&in_force());
+    for _ in 0..Config::KEYS.len() {
+        let row = view
+            .settings()
+            .rows()
+            .nth(view.settings().current())
+            .map(|(key, _)| key);
+        if row == Some("max_turns") {
+            break;
+        }
+        view.key(Key::Down);
+    }
+    view.key(Key::Clear);
+    for glyph in "two hundred".chars() {
+        view.key(Key::Char(glyph));
+    }
+    let Outcome::Save(touched) = view.key(Key::Enter) else {
+        panic!("a value typed into a row is a visit Enter hands to the save");
+    };
+    let path = tempfile::tempdir()
+        .expect("a temp dir")
+        .path()
+        .join("config.toml");
+    let error = Config::save_touched_to(&path, &touched).expect_err("a turn cap is a number");
+    view.refuse(&error.to_string());
     view
 }
 
@@ -367,8 +516,9 @@ fn transcript() -> Vec<Entry> {
             5,
             "The transcript's unit is the entry. An entry never carries a formatted line, \
              so the same run is drawn the same way by the TUI, by a reader of the \
-             transcript and by whatever front end comes next, and a streaming tick that \
-             changes one entry re-lays that entry alone.",
+             transcript and by whatever front end comes next.\n\n| construct | where it \
+             stands |\n| --- | --- |\n| heading | in the answer's own gutter |\n| code | \
+             behind a bar, highlighted |\n| table | columns joined by a bar |",
         ),
         Entry::Turn { turn: 6 },
         call(6, "bash", r#"{"command": "make check STAGES=frames"}"#),
@@ -382,9 +532,10 @@ fn transcript() -> Vec<Entry> {
         ),
         answer(
             6,
-            "A row says the exit code and not the command, because the verdict is a fact \
-             the record holds and the command is a fact the row above it holds: a call \
-             that settled is one line, and the line is what happened to it.",
+            "## A row is one line\n\nA row says the exit code and not the command, because \
+             the verdict is a fact the record holds and the command is a fact the row \
+             above it holds.\n\n```rust\nfn main() {\n    let row = Row::of(spans);\n    \
+             row.paint(area, buffer);\n}\n```",
         ),
     ]
 }
@@ -519,7 +670,12 @@ fn calls() -> Vec<Entry> {
         Entry::Turn { turn: 4 },
         call(4, "bash", r#"{"command": "make check STAGES=frames"}"#),
         result(4, "bash", Exit::Cancelled, "", 0, 3_400),
-        answer(4, "The run stopped on the user's word, and the draft kept."),
+        answer(
+            4,
+            "## What a verdict says\n\nThe run stopped on the user's word: `Ctrl-C` \
+             cancels and keeps the draft, so the row says `✗ cancelled` rather than \
+             leaving a spinner turning for a result that will never come.",
+        ),
         // A run in progress ends on a call nobody has answered yet: the row names the
         // call and claims nothing, which is what a cancelled call would stay as if the
         // verdict never reached it.
@@ -590,28 +746,28 @@ fn text(name: &str, buffer: &Buffer) -> String {
     let mut text = format!("{name} at {}x{}", area.width, area.height);
     for y in area.y..area.bottom() {
         let mut glyphs = String::new();
-        let mut runs: Vec<(Ink, u16)> = Vec::new();
+        let mut runs: Vec<(Look, u16)> = Vec::new();
         for x in area.x..area.right() {
             let cell = buffer
                 .cell((x, y))
                 .unwrap_or_else(|| panic!("row {y}, column {x} is outside the frame it is in"));
-            let ink = Ink::of(cell).unwrap_or_else(|| {
+            let look = Look::of(cell).unwrap_or_else(|| {
                 panic!(
-                    "row {y}, column {x} is drawn in a style that is not an ink: \
+                    "row {y}, column {x} is drawn in a style that is not a look: \
                      foreground {:?}, background {:?}, modifiers {:?} — a fixture names \
-                     inks, so a cell no ink names cannot be written down",
+                     looks, so a cell no look names cannot be written down",
                     cell.fg, cell.bg, cell.modifier
                 )
             });
             glyphs.push(glyph(cell, x, y));
             match runs.last_mut() {
-                Some((last, count)) if *last == ink => *count += 1,
-                _ => runs.push((ink, 1)),
+                Some((last, count)) if *last == look => *count += 1,
+                _ => runs.push((look, 1)),
             }
         }
         let runs: Vec<String> = runs
             .iter()
-            .map(|(ink, count)| format!("{}:{count}", ink.name()))
+            .map(|(look, count)| format!("{}:{count}", look.name()))
             .collect();
         text.push_str(&format!("\n{y:02} |{glyphs}| {}", runs.join(" ")));
     }
@@ -695,8 +851,8 @@ fn differing_cell(expected: &Row, actual: &Row) -> String {
 
 /// One cell of a row as a failure says it: its glyph and the ink it is in.
 fn cell(row: &Row, column: usize) -> String {
-    match (row.glyphs.get(column), row.inks.get(column)) {
-        (Some(glyph), Some(ink)) => format!("{glyph:?} in {}", ink.name()),
+    match (row.glyphs.get(column), row.looks.get(column)) {
+        (Some(glyph), Some(look)) => format!("{glyph:?} in {}", look.name()),
         _ => String::from("no cell at all"),
     }
 }
@@ -707,32 +863,34 @@ struct Row {
     number: u16,
     /// The glyph in every column, left to right.
     glyphs: Vec<char>,
-    /// The ink of every column, left to right.
-    inks: Vec<Ink>,
+    /// The look of every column, left to right.
+    looks: Vec<Look>,
 }
 
 /// The row a fixture line holds, or nothing when the line is not a row.
 fn row_of(line: &str) -> Option<Row> {
     let (number, rest) = line.split_once(' ')?;
     let (glyphs, runs) = rest.strip_prefix('|')?.rsplit_once('|')?;
-    let inks = inks_in(runs.trim())?;
+    let looks = looks_in(runs.trim())?;
     let glyphs: Vec<char> = glyphs.chars().collect();
-    (glyphs.len() == inks.len()).then_some(Row {
+    (glyphs.len() == looks.len()).then_some(Row {
         number: number.parse().ok()?,
         glyphs,
-        inks,
+        looks,
     })
 }
 
-/// The ink of every cell a run list names, left to right: `plain:40 accent:4`, the
-/// runs summing to the width of the row they belong to.
-fn inks_in(runs: &str) -> Option<Vec<Ink>> {
-    let mut inks = Vec::new();
+/// The look of every cell a run list names, left to right: `plain:40 accent:4`, the
+/// runs summing to the width of the row they belong to. A cell set in a face says both
+/// names — `plain+bold:6`, `dim+bold:4` — because a look is two names and a fixture
+/// writes down what it paints.
+fn looks_in(runs: &str) -> Option<Vec<Look>> {
+    let mut looks = Vec::new();
     for run in runs.split_whitespace() {
-        let (ink, count) = run.split_once(':')?;
-        let ink = Ink::from_name(ink)?;
+        let (look, count) = run.split_once(':')?;
+        let look = Look::from_name(look)?;
         let count: u16 = count.parse().ok()?;
-        inks.extend(std::iter::repeat_n(ink, usize::from(count)));
+        looks.extend(std::iter::repeat_n(look, usize::from(count)));
     }
-    Some(inks)
+    Some(looks)
 }

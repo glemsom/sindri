@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
-use sindri_core::config::{Config, Flags};
+use sindri_core::config::{Config, Flags, Touched};
 use sindri_core::provider::Route;
 use sindri_core::wire::Wire;
 use tempfile::TempDir;
@@ -519,5 +519,135 @@ fn a_save_writes_the_file_the_environment_points_at() {
         read(&file_in(&home)),
         "model = \"claude-sonnet-4-5\"\n",
         "the save goes to the one file the read path uses"
+    );
+}
+
+/// The keys a settings screen touched, and the text a reader left each row holding: the
+/// patch `Enter` hands the one save.
+fn touched(pairs: &[(&'static str, &str)]) -> Touched {
+    let mut touched = Touched::new();
+    for (key, text) in pairs {
+        touched.set(key, *text);
+    }
+    touched
+}
+
+#[test]
+fn a_settings_save_rewrites_the_one_line_a_reader_touched_and_no_other_byte() {
+    let home = config_home(HAND_WRITTEN);
+    let path = file_in(&home);
+
+    Config::save_touched_to(&path, &touched(&[("model", "new-model")])).expect("the save lands");
+
+    assert_eq!(
+        read(&path),
+        HAND_WRITTEN_AFTER_ONE_MODEL,
+        "a visit that touched one row writes one line: the comments, the blank line and \
+         every key the reader never reached are the bytes they were"
+    );
+}
+
+#[test]
+fn a_value_a_screen_refused_names_the_key_and_leaves_the_file_alone() {
+    let home = config_home(HAND_WRITTEN);
+    let path = file_in(&home);
+
+    let error = Config::save_touched_to(
+        &path,
+        &touched(&[("model", "new-model"), ("max_turns", "two hundred")]),
+    )
+    .expect_err("a turn cap that is not a number is a bad value");
+
+    assert!(
+        error.to_string().contains("max_turns"),
+        "a refusal names the key a reader has to go and fix, and it says: {error}"
+    );
+    assert_eq!(
+        read(&path),
+        HAND_WRITTEN,
+        "a refused save writes nothing at all — not the bad key and not the good one \
+         beside it"
+    );
+}
+
+#[test]
+fn an_emptied_row_removes_the_key_so_the_environment_speaks() {
+    let home = config_home(HAND_WRITTEN);
+    let path = file_in(&home);
+
+    Config::save_touched_to(&path, &touched(&[("model", "")])).expect("the save lands");
+
+    let after = read(&path);
+    assert!(
+        !after.contains("model"),
+        "an emptied row unsets the key rather than blanking it, and the file is:\n{after}"
+    );
+    assert_eq!(
+        after,
+        HAND_WRITTEN.replace(
+            "# swapped a few times a week\nmodel = \"old-model\"  # note beside it\n",
+            ""
+        ),
+        "the key leaves, and the note about it goes with it because it is the key's own \
+         decor: every other line is the byte it was"
+    );
+}
+
+#[test]
+fn a_screens_save_lands_owner_only_and_leaves_no_temp_file_behind() {
+    let home = bare_home();
+    let path = file_in(&home);
+
+    Config::save_touched_to(&path, &touched(&[("model", "claude-sonnet-4-5")]))
+        .expect("the save lands");
+
+    assert_eq!(
+        mode(&path),
+        sindri_core::config::MODE,
+        "one of the keys a screen can write is a secret, so the file is owner-only"
+    );
+    assert_eq!(
+        names_in(path.parent().expect("a directory")),
+        vec![String::from("config.toml")],
+        "the save is one rename into place: a staged temp file left behind would be a \
+         second copy of what the file holds"
+    );
+}
+
+#[test]
+fn every_key_a_screen_shows_is_the_text_a_save_of_it_reads_back() {
+    let home = bare_home();
+    let path = file_in(&home);
+    let written = every_key_touched();
+    let shown = Config::from(written.clone());
+
+    // The one key a screen may not show: a secret is masked wherever it is drawn (§11),
+    // so its row is a mask and never the text a file would hold.
+    let mut readers = Vec::new();
+    for key in Config::KEYS {
+        if key != "api_key" {
+            readers.push((key, shown.text(key)));
+        }
+    }
+    let mut patch = Touched::new();
+    for (key, text) in &readers {
+        patch.set(key, text.as_str());
+    }
+
+    Config::save_touched_to(&path, &patch).expect("the save lands");
+
+    assert_eq!(
+        Config::load_from(&path).expect("the file still reads"),
+        Config {
+            api_key: None,
+            ..Config::from(written)
+        },
+        "the text a row shows is the text a save of that row reads back, so a visit that \
+         touched every row hands the file what the screen said it held"
+    );
+    assert_eq!(
+        shown.text("api_key"),
+        String::from(sindri_core::redact::MASK),
+        "a secret is never in a frame: the row says a key is set and not which one"
     );
 }

@@ -41,9 +41,8 @@ pub enum Mode {
     /// The `/model` screen: the names the wire serves, ranked by a query typed into the
     /// screen, and the one name `Enter` writes into the config (§10, §12).
     Models,
-    /// The `/settings` screen: the screen the settings modal fills in (#49). It answers
-    /// `Esc` and nothing else until #49 gives it the keys that edit a value, which is why
-    /// its table is one row today.
+    /// The settings modal: every key of the config file as one row, the value each holds,
+    /// and a visit that writes only the rows a reader wrote into (§12, ADR-0009).
     Settings,
 }
 
@@ -89,7 +88,8 @@ impl Mode {
         match self {
             Mode::Composer => Some(Act::Draft),
             Mode::Files | Mode::Models => Some(Act::Query),
-            Mode::Keys | Mode::Settings => None,
+            Mode::Settings => Some(Act::Value),
+            Mode::Keys => None,
         }
     }
 }
@@ -135,6 +135,17 @@ pub enum Act {
     /// `Enter` at the `/model` screen: the name under the selection is the model, and it
     /// is written into the config through the one owner-only save (ADR-0009).
     Choose,
+    /// A glyph typed at the settings modal, and a backspace with it: the value of the row
+    /// the keys act on grows or shrinks. The screen's fallback, for the reason the query is
+    /// the picker's — a value is text, and a text box's glyphs are its own map's.
+    Value,
+    /// `Space` at the settings modal: a toggle flips, and every other key takes the space as
+    /// a glyph, because a path or a header may hold one.
+    Flip,
+    /// `Ctrl-U` at the settings modal: the row's value is emptied, which unsets its key.
+    Clear,
+    /// `Enter` at the settings modal: the rows a reader wrote into go to the one save.
+    Write,
 }
 
 /// One row of a key table: the key, the way the `?` screen spells it, and what it does.
@@ -357,15 +368,70 @@ const MODELS: [Binding; 5] = [
     },
 ];
 
-/// The `/settings` screen's one key. A value is edited by the modal #49 builds, and until
-/// it lands this screen has nothing to edit, so `Esc` is the whole of what it answers and
-/// the whole of what the `?` screen says about it.
-const SETTINGS: [Binding; 1] = [Binding {
-    key: Key::Escape,
-    name: "Esc",
-    does: "close this screen",
-    act: Act::Close,
-}];
+/// The settings modal's keys: the two that end the visit, the four ways of walking the list,
+/// the three that change a value, and the backspace that takes one back.
+///
+/// `Tab` and `↓` are two rows and one act, because §12 gives a reader either hand and a
+/// screen whose rows are keys is walked with whichever they reach for first. `Space` is one
+/// key with two meanings — a toggle flipped, a glyph typed — and which it is reads the row,
+/// exactly as `?` reads the draft and `↑` reads the caret: that is `Act::Flip`, and the row
+/// is what decides.
+const SETTINGS: [Binding; 9] = [
+    Binding {
+        key: Key::Escape,
+        name: "Esc",
+        does: "close this screen and write nothing",
+        act: Act::Close,
+    },
+    Binding {
+        key: Key::Enter,
+        name: "Enter",
+        does: "write the keys you touched, and close",
+        act: Act::Write,
+    },
+    Binding {
+        key: Key::Down,
+        name: "↓",
+        does: "the key below",
+        act: Act::Next,
+    },
+    Binding {
+        key: Key::Up,
+        name: "↑",
+        does: "the key above",
+        act: Act::Previous,
+    },
+    Binding {
+        key: Key::Tab,
+        name: "Tab",
+        does: "the key below",
+        act: Act::Next,
+    },
+    Binding {
+        key: Key::BackTab,
+        name: "Shift+Tab",
+        does: "the key above",
+        act: Act::Previous,
+    },
+    Binding {
+        key: Key::Clear,
+        name: "Ctrl-U",
+        does: "empty the value, which unsets the key",
+        act: Act::Clear,
+    },
+    Binding {
+        key: Key::Char(' '),
+        name: "Space",
+        does: "flip a toggle, or type a space",
+        act: Act::Flip,
+    },
+    Binding {
+        key: Key::Backspace,
+        name: "Backspace",
+        does: "erase the last glyph of the value",
+        act: Act::Value,
+    },
+];
 
 /// The stack of modes: the base the frame is always in and the screens opened over it,
 /// top last. A stack rather than a field, because a screen is entered from whatever was

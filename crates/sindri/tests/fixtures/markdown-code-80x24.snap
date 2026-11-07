@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+markdown-code at 80x24
+00 |  ▏ rust                                                                        | plain:2 dim:6 plain:72
+01 |  ▏ fn main() {                                                                 | plain:2 dim:2 accent:2 plain:74
+02 |  ▏     let fence = Fence::open();                                              | plain:2 dim:2 plain:4 accent:3 plain:69
+03 |  ▏     fence.words();                                                          | plain:2 dim:2 plain:76
+04 |  ▏ }                                                                           | plain:2 dim:2 plain:76
+05 |                                                                                | plain:80
+06 |  ▏ frobnicate                                                                  | plain:2 dim:12 plain:66
+07 |  ▏ this language names no syntax definition                                    | plain:2 dim:2 plain:76
+08 |                                                                                | plain:80
+09 |                                                                                | plain:80
+10 |                                                                                | plain:80
+11 |                                                                                | plain:80
+12 |                                                                                | plain:80
+13 |                                                                                | plain:80
+14 |                                                                                | plain:80
+15 |                                                                                | plain:80
+16 |                                                                                | plain:80
+17 |                                                                                | plain:80
+18 |                                                                                | plain:80
+19 |                                                                                | plain:80
+20 |                                                                                | plain:80
+21 |────────────────────────────────────────────────────────────────────────────────| dim:80
+22 |                                                                                | plain:80
+23 |Enter send · ? keys                                                             | muted:10 dim:3 muted:6 plain:61

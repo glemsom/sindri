@@ -13,7 +13,7 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
-use sindri::ink::Ink;
+use sindri::ink::{Ink, Look};
 use sindri::pulse::Pulse;
 use sindri::rows::{Row, Rows, Scroll, Window, layout};
 use sindri::stream::Stream;
@@ -297,7 +297,7 @@ fn words(row: &Row) -> String {
 
 /// The inks a row's spans are drawn in, in order.
 fn inks(row: &Row) -> Vec<Ink> {
-    row.spans().iter().map(|(_, ink)| *ink).collect()
+    row.spans().iter().map(|(_, look)| look.ink()).collect()
 }
 
 /// §4's two gutters and two inks, held at the row and not at the frame: an answer is
@@ -319,11 +319,13 @@ fn a_thought_and_an_answer_each_keep_their_own_gutter_and_ink() {
         let spans = row.spans();
         assert_eq!(
             spans.first(),
-            Some(&(String::from("│ "), Ink::Dim)),
+            Some(&(String::from("│ "), Look::plain(Ink::Dim))),
             "a thought opens with its own rule: {row:?}"
         );
         assert!(
-            spans[1..].iter().all(|(_, ink)| *ink == Ink::Muted),
+            spans[1..]
+                .iter()
+                .all(|(_, look)| *look == Look::plain(Ink::Muted)),
             "a thought is read in the ink reasoning is read in: {row:?}"
         );
     }
@@ -357,13 +359,14 @@ fn a_thought_and_an_answer_each_keep_their_own_gutter_and_ink() {
     );
 }
 
-/// ADR-0008's one markdown rule, the rule #52 inherits when it replaces the plain
-/// rendering: a fenced block is code until its closing fence arrives. Inside the fence
-/// a line keeps its own spacing and is broken at the band's edge and nowhere else, so
-/// what is drawn is the code the model wrote and not the prose a word-wrapper would
-/// have made of it.
+/// §12's code row, and ADR-0008's rule with it: a fenced block is guttered by its
+/// language's tag and drawn as the code it was written, its own spacing kept and its
+/// words broken at the band's edge and nowhere else — and the answer's prose resumes
+/// under the closing fence. A fence whose closing line has not landed yet is the same
+/// block, open to the end of the text, so a half-streamed block is never prose that ate
+/// the rest of the answer.
 #[test]
-fn a_fenced_block_is_drawn_as_code_and_the_prose_resumes_after_it() {
+fn a_fenced_block_is_guttered_by_its_language_and_the_prose_resumes_after_it() {
     let rows = layout(
         &Entry::Assistant {
             turn: 1,
@@ -379,39 +382,43 @@ fn a_fenced_block_is_drawn_as_code_and_the_prose_resumes_after_it() {
         drawn,
         [
             "  The closing fence is what ends a block:",
-            "  ```rust",
-            "  fn main() {",
-            "      let  x = 1;",
-            "  }",
-            "  ```",
+            "",
+            "  ▏ rust",
+            "  ▏ fn main() {",
+            "  ▏     let  x = 1;",
+            "  ▏ }",
+            "",
             "  and the prose goes on.",
         ],
-        "the fence is drawn, the code between it is the code that was written, and the \
+        "the tag stands over the code, the code is the code that was written, and the \
          answer's own prose resumes after the closing fence"
     );
     assert_eq!(
-        inks(&rows[1]),
-        [Ink::Plain, Ink::Dim],
-        "the fence line is a fact about what the text is, and is not read as prose"
+        inks(&rows[2]),
+        [Ink::Plain, Ink::Dim, Ink::Dim],
+        "the bar and the language tag are facts about what the text is: {:?}",
+        rows[2]
     );
     assert_eq!(
-        inks(&rows[3]),
-        [Ink::Plain, Ink::Muted],
-        "the code inside the fence is drawn in the ink code is read in: {:?}",
-        rows[3]
+        rows[3].spans()[..2],
+        [
+            (String::from("  "), Look::plain(Ink::Plain)),
+            (String::from("▏ "), Look::plain(Ink::Dim)),
+        ],
+        "every row of the block is set behind the answer's gutter and the block's bar"
     );
     assert_eq!(
-        inks(&rows[6]),
+        inks(&rows[7]),
         [Ink::Plain, Ink::Plain],
         "and the prose after the fence is the answer's own ink again: {:?}",
-        rows[6]
+        rows[7]
     );
 }
 
 /// A fence whose closing line has not landed yet is a code block and not prose that ate
 /// the rest of the answer: everything after an open fence is drawn as code, its words
 /// whole and its spacing kept, so a half-streamed block costs no raster pass, no
-/// flicker, and no words (ADR-0008).
+/// flicker, and no words (ADR-0008, kept by #52 when it replaced the plain rendering).
 #[test]
 fn a_fence_that_is_still_open_draws_the_rest_of_the_answer_as_code() {
     let rows = layout(
@@ -428,16 +435,16 @@ fn a_fence_that_is_still_open_draws_the_rest_of_the_answer_as_code() {
         drawn,
         [
             "  Here is the rule:",
-            "  ```",
-            "  a fence still open",
-            "      is a code block",
+            "",
+            "  ▏ a fence still open",
+            "  ▏     is a code block",
         ],
         "the tail is drawn as code rather than swallowed as prose"
     );
     for row in &rows[2..] {
         assert_eq!(
-            inks(row),
-            [Ink::Plain, Ink::Muted],
+            row.spans()[1],
+            (String::from("▏ "), Look::plain(Ink::Dim)),
             "every row under an open fence is a code row: {row:?}"
         );
     }
@@ -623,7 +630,7 @@ fn result(which: u32, exit: Exit) -> Entry {
 /// same `Row::paint` a frame is drawn with — so a test reads what the terminal would
 /// and never a field the row happens to hold. The cells are the ones the row fills: a
 /// blank past its end is the band's, not the row's.
-fn painted(row: &Row, cols: u16) -> Vec<(char, Ink)> {
+fn painted(row: &Row, cols: u16) -> Vec<(char, Look)> {
     let area = Rect::new(0, 0, cols, 1);
     let mut buffer = Buffer::empty(area);
     row.paint(area, &mut buffer);
@@ -632,16 +639,16 @@ fn painted(row: &Row, cols: u16) -> Vec<(char, Ink)> {
             let cell = buffer
                 .cell((x, 0))
                 .unwrap_or_else(|| panic!("column {x} is outside the row"));
-            let ink = Ink::of(cell)
-                .unwrap_or_else(|| panic!("column {x} is drawn in a style that is not an ink"));
+            let look = Look::of(cell)
+                .unwrap_or_else(|| panic!("column {x} is drawn in a style that is not a look"));
             let glyph = cell.symbol().chars().next().expect("one glyph a cell");
-            (glyph, ink)
+            (glyph, look)
         })
         .collect()
 }
 
 /// The words of a painted row, cut where the row stops saying anything.
-fn said(row: &[(char, Ink)]) -> String {
+fn said(row: &[(char, Look)]) -> String {
     row.iter()
         .map(|(glyph, _)| *glyph)
         .collect::<String>()
@@ -653,8 +660,8 @@ fn said(row: &[(char, Ink)]) -> String {
 /// ink stops and the faded ink of the facts beside it begins. Named apart from the
 /// span-level `inks` above because the two read different things: one a laid-out row,
 /// the other the cells that row was painted into.
-fn cell_inks(row: &[(char, Ink)]) -> Vec<Ink> {
-    row.iter().map(|(_, ink)| *ink).collect()
+fn cell_inks(row: &[(char, Look)]) -> Vec<Ink> {
+    row.iter().map(|(_, look)| look.ink()).collect()
 }
 
 /// §12's first state: a call that exited zero settles on a check, the code it exited

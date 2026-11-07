@@ -10,15 +10,19 @@
 //!
 //! A frame is a stack of modes, and the mode on top is what is drawn: the composer at
 //! the base, and a screen over it — the `?` screen, which replaces the bands with one list
-//! of the keys in force painted from the tables that answer them (#45), the `@` picker, the
-//! `/model` screen and the `/settings` screen. Where a screen is up there is no draft on
-//! the frame and no caret, because a key pressed then would not reach one.
+//! of the keys in force painted from the tables that answer them (#45), the `@` picker
+//! (#47), the `/model` screen (#48) and the settings modal (#49), each painted from the
+//! value it walks — the picker's query and rows, the served names, the settings screen's
+//! keys and the value each holds — so a screen never keeps a second copy of what answers
+//! it. Where a screen is up there is no draft on the frame and no caret, because a key
+//! pressed then would not reach one.
 //!
 //! A draft that reaches `Enter` is a prompt, except when it names a `/` command: those are
 //! the frame's own to answer — a conversation started again, a skill loaded, a screen
 //! opened, a model written — and never a run's (§12, §5). `commands` reads the line and
 //! this file acts on it, so a command is one spelling of one act whichever way it was
-//! typed.
+//! typed. What a frame cannot do itself — ask a wire, open a config, write one — it hands
+//! back as an outcome and the terminal, which owns the socket and the file, does.
 //!
 //! The transcript's rows are `rows`' to lay out and this file's to draw: a frame is
 //! handed the entries a run has written and where the reader is scrolled to, and the
@@ -46,11 +50,17 @@
 //! the highlight a reader sees on this frame and the words `Ctrl-Y` hands the terminal are
 //! one value and cannot disagree (§12). Each paints into a band of this frame and changes
 //! its fixture deliberately in the commit that changes it.
+//!
+//! The footer's row is the one piece of chrome §57 gives an order of its own: the hints in
+//! survival order, the count a frame's width is owed, and any that the row has no room for
+//! dropped whole rather than cut — so a narrow frame says less and never a part of
+//! something.
 
 use std::path::PathBuf;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use sindri_core::config::{Config, Touched};
 use sindri_core::provider::Deltas;
 use sindri_core::provider::served::Listing;
 use sindri_core::records::Entry;
@@ -68,15 +78,36 @@ use crate::pulse::Pulse;
 use crate::queue::Queue;
 use crate::rail::Facts;
 use crate::rows::{Rows, Scroll};
+use crate::settings::Settings;
 use crate::stream::Stream;
 
-/// The hints §12 never takes away, whichever way the frame narrows: the key that sends
-/// a prompt and the key that says which keys there are.
-const FLOOR_HINTS: [(&str, Ink); 3] = [
-    ("Enter send", Ink::Muted),
-    (" · ", Ink::Dim),
-    ("? keys", Ink::Muted),
+/// §12's hints in survival order, most valuable first — the order a narrower footer gives
+/// them up in, from the end (#57). The last one is the table's and no width the table
+/// names draws it; it is here because the order is the contract, and an order with its
+/// tail shaved off could not be extended without renumbering.
+const HINTS: [&str; 8] = [
+    "Enter send",
+    "? keys",
+    "Ctrl-C cancel",
+    "Ctrl-Q quit",
+    "/ commands",
+    "@ files",
+    "↑ queue",
+    "Shift+Enter newline",
 ];
+
+/// What lies between two hints on the footer's row: one gap, in `dim`, the same one the
+/// rail puts between its facts.
+const GAP: &str = " · ";
+
+/// §57's table as the widths it turns at and the hints a footer holds from each, widest
+/// first: seven from a hundred and twenty columns, five from a hundred.
+const STEPS: [(u16, usize); 2] = [(120, 7), (100, 5)];
+
+/// The hints §12 never takes away, whichever way the frame narrows: the key that sends a
+/// prompt and the key that says which keys there are. The first two of `HINTS`, held at
+/// every width and given up last.
+const FLOOR: usize = 2;
 
 /// The hairline a draft is typed under: one glyph, so the composer's top edge is a row
 /// of them, drawn in `dim` because it is a fact about the frame rather than a thing said.
@@ -102,10 +133,19 @@ const PICKER_QUERY: &str = "query: ";
 /// has to say the query is what emptied it.
 const PICKER_EMPTY: &str = "no file answers";
 
-/// The glyph before the row the selection is on, and the two cells every other row keeps
-/// empty so the paths line up in one column.
-const PICKER_MARK: &str = "\u{203a} ";
-const PICKER_NO_MARK: &str = "  ";
+/// The glyph before the row a key would act on, and the two cells every other row keeps
+/// empty so what follows lines up in one column. The picker's selection and the settings
+/// modal's key are one mark, because both say "this row is the one a key acts on".
+const ROW_MARK: &str = "\u{203a} ";
+const ROW_GAP: &str = "  ";
+
+/// What the settings modal heads itself with, in the accent ink the other screens head
+/// their own with.
+const SETTINGS_TITLE: &str = "settings";
+
+/// The gap between a key's name and the value it holds on the settings screen: two columns,
+/// so the values line up in one column an eye can run down.
+const SETTINGS_GAP: usize = 2;
 
 /// What the `/model` screen heads itself with, in the same accent ink and the same margin
 /// as the picker: the two screens are one shape, and a reader who has met one has met both.
@@ -126,9 +166,6 @@ const MODELS_EMPTY: &str = "no served name answers";
 /// The gap between a served name and the wire's own prose for it: two columns, so the prose
 /// of every row starts in one column an eye can run down.
 const NAMES_GAP: usize = 2;
-
-/// What the `/settings` screen heads itself with. The rows #49 fills in go under it.
-const SETTINGS_TITLE: &str = "settings";
 
 /// One frame's worth of facts, in the shape the terminal draws them. Boot knows none
 /// of them — no run, no prompt, no transcript row, nothing loaded — so the frame is its
@@ -187,12 +224,15 @@ pub struct View {
     /// The home the user-scope skills are read from, when the launch has one, so the frame
     /// asks the catalog the same question a run asks it (§7, ADR-0014).
     home: Option<PathBuf>,
+    /// The settings modal's rows: the config's keys and the text each of them holds, seeded
+    /// from the config the frame was handed when the screen opened (§12, ADR-0009).
+    settings: Settings,
 }
 
 impl View {
     /// The frame a launch opens on: the screen has just been taken, no run has started
     /// and nothing has been typed, so the transcript is empty, the composer shows its
-    /// hairline over one empty row and the footer shows the hints never given up.
+    /// hairline over one empty row and the footer shows the hints its width is owed.
     pub fn boot() -> View {
         View::default()
     }
@@ -298,6 +338,39 @@ impl View {
         self.home = home;
     }
 
+    /// The settings modal's rows, as they stand: what the screen paints and what `Enter`
+    /// would write.
+    pub fn settings(&self) -> &Settings {
+        &self.settings
+    }
+
+    /// Opens the settings modal over the draft, seeded with the config as it resolved (§12):
+    /// every row is a key and the value in force, and a row nobody writes into is a row the
+    /// visit does not touch, so the screen can show more than it may write (ADR-0009).
+    ///
+    /// The door is `/settings`'s: the frame holds no config, so `/settings` comes back as
+    /// `Outcome::Settings` and the terminal — which holds the config it launched with —
+    /// seeds the screen here.
+    pub fn open_settings(&mut self, config: &Config) {
+        self.settings = Settings::of(config);
+        self.stack.open(Mode::Settings);
+    }
+
+    /// The write the settings modal asked for landed: the screen closes and the draft has
+    /// the keys again, because the visit is over and what it wrote is in the file (§12).
+    pub fn saved(&mut self) {
+        if self.stack.top() == Mode::Settings {
+            self.stack.close();
+        }
+    }
+
+    /// The write the settings modal asked for did not land: the screen stays open with the
+    /// reason on it, naming the key a reader has to change, so a refusal is read where the
+    /// value that has to change is (§11).
+    pub fn refuse(&mut self, reason: &str) {
+        self.settings.refuse(reason);
+    }
+
     /// The mode on top of the stack: what this frame is showing and what will answer
     /// the next key.
     pub fn mode(&self) -> Mode {
@@ -328,6 +401,10 @@ impl View {
             Act::Next => self.step(Step::Next),
             Act::Pick => self.pick(),
             Act::Choose => self.choose(),
+            Act::Value => self.value(key),
+            Act::Flip => self.flip(),
+            Act::Clear => self.clear(),
+            Act::Write => self.write(),
             Act::Close => self.close(),
         }
     }
@@ -398,15 +475,16 @@ impl View {
     }
 
     /// What one `command` comes to, in the vocabulary the terminal acts on: the frame's own
-    /// answer for everything a frame holds, and an outcome for the two things it does not —
-    /// a name the save writes, and the wire the names are read off.
+    /// answer for everything a frame holds, and an outcome for the three things it does not —
+    /// a name the save writes, the wire the names are read off, and the config the settings
+    /// screen is seeded from.
     fn answer(&mut self, command: Command) -> Outcome {
         match command {
             Command::New => self.start_over(),
             Command::Skill(name) => self.skill(&name),
             Command::Model => self.model(),
             Command::ModelNamed(name) => Outcome::Model(name),
-            Command::Settings => self.screen(Mode::Settings),
+            Command::Settings => Outcome::Settings,
             Command::Help => self.screen(Mode::Keys),
             Command::Quit => Outcome::Quit,
         }
@@ -466,8 +544,10 @@ impl View {
         Outcome::Served
     }
 
-    /// `/settings` and `/help`: one screen opened over the draft, which is the whole of what
-    /// a reader is handed — the screen answers its own keys from there (§12, A7).
+    /// `/help`: one screen opened over the draft, which is the whole of what a reader is
+    /// handed — the screen answers its own keys from there (§12, A7). `/settings` is the same
+    /// act and not the same call: its rows are the config's, which the frame holds no copy
+    /// of, so it opens in the terminal (`Outcome::Settings`, `View::open_settings`).
     fn screen(&mut self, mode: Mode) -> Outcome {
         self.stack.open(mode);
         Outcome::Edited
@@ -536,12 +616,16 @@ impl View {
         }
     }
 
-    /// `↑` and `↓` at a screen: the selection walks the rows and stops at the ends, so a key
-    /// that moved nothing is a frame that is not painted.
+    /// `↑`, `↓`, `Tab` and `Shift+Tab` at a list: the picker's and the model screen's
+    /// selection walks the rows and stops at the ends, the settings modal's key walks its
+    /// rows round, and whichever list is up, a key that moved nothing is a frame that is not
+    /// painted.
     fn step(&mut self, step: Step) -> Outcome {
         let moved = match (self.stack.top(), step) {
             (Mode::Models, Step::Previous) => self.models.up(),
             (Mode::Models, Step::Next) => self.models.down(),
+            (Mode::Settings, Step::Previous) => self.settings.up(),
+            (Mode::Settings, Step::Next) => self.settings.down(),
             (_, Step::Previous) => self.picker.up(),
             (_, Step::Next) => self.picker.down(),
         };
@@ -562,6 +646,51 @@ impl View {
         self.composer.insert(&word);
         self.stack.close();
         Outcome::Edited
+    }
+
+    /// A glyph typed at the settings modal, or the backspace that takes one back: the value
+    /// of the row the keys act on is the settings screen's own text, so it answers in its own
+    /// map (`settings::Settings`) the way the picker's query does.
+    fn value(&mut self, key: Key) -> Outcome {
+        match self.settings.key(key) {
+            true => Outcome::Edited,
+            false => Outcome::Unchanged,
+        }
+    }
+
+    /// `Space` at the settings modal: one key with two meanings. On a toggle it flips the
+    /// value, and on every other key it is a glyph like any other, because a path or a header
+    /// may hold a space and a screen that could not hold one would be a screen that cannot
+    /// name a path (§12).
+    fn flip(&mut self) -> Outcome {
+        match self.settings.space() {
+            true => Outcome::Edited,
+            false => Outcome::Unchanged,
+        }
+    }
+
+    /// `Ctrl-U` at the settings modal: the row's value is emptied, and an emptied value is
+    /// what the save unsets — the environment speaking again for that key (§11).
+    fn clear(&mut self) -> Outcome {
+        match self.settings.clear() {
+            true => Outcome::Edited,
+            false => Outcome::Unchanged,
+        }
+    }
+
+    /// `Enter` at the settings modal: the rows a reader wrote into are the patch, and the
+    /// terminal writes it through the core's one save, so the frame never opens a file.
+    ///
+    /// A visit that touched nothing has nothing to write, and `Enter` is still the reader
+    /// saying they are done: the screen closes as it would after a write, because a key of
+    /// theirs that left the screen open would be a screen they have to close twice.
+    fn write(&mut self) -> Outcome {
+        let touched: Touched = self.settings.touched();
+        if touched.is_empty() {
+            self.stack.close();
+            return Outcome::Edited;
+        }
+        Outcome::Save(touched)
     }
 
     /// `Esc`: the screen on top closes and the mode under it has the keys again. The
@@ -892,8 +1021,8 @@ impl View {
                 return;
             }
             let (marker, ink) = match at == self.picker.selected() {
-                true => (PICKER_MARK, Ink::Accent),
-                false => (PICKER_NO_MARK, Ink::Plain),
+                true => (ROW_MARK, Ink::Accent),
+                false => (ROW_GAP, Ink::Plain),
             };
             cut_row(buffer, screen_band(area), y, &[(marker, ink), (path, ink)]);
         }
@@ -947,8 +1076,8 @@ impl View {
                 return;
             }
             let (marker, ink) = match at == self.models.selected() {
-                true => (PICKER_MARK, Ink::Accent),
-                false => (PICKER_NO_MARK, Ink::Plain),
+                true => (ROW_MARK, Ink::Accent),
+                false => (ROW_GAP, Ink::Plain),
             };
             let name = format!("{id:<widest$}");
             cut_row(
@@ -960,21 +1089,64 @@ impl View {
         }
     }
 
-    /// The `/settings` screen: the heading, and the rows the settings modal fills in (#49).
+    /// The settings modal: every key of the config file as one row, the value it holds beside
+    /// it, the row a key would act on marked — and, when a write was refused, the reason
+    /// under the list, naming the key that has to change (§11, §12).
     ///
-    /// It is a screen and not a form, because a form whose fields answered no key would be a
-    /// picture of editing nobody can do: what a reader is handed today is the screen, and
-    /// #49's key table and rows are what put a cursor in it (§12, A7).
+    /// The screen is painted from the rows `settings` walks rather than from a list of its
+    /// own, so a key the schema gains is a row here with nothing to remember, and a value
+    /// that is too wide for the frame is cut at its right edge rather than dropping the row:
+    /// §12's "whole or it is not drawn" is a rule about hints and facts, and a reader fixing a
+    /// value wants the key they are fixing.
     fn settings_screen(&self, area: Rect, buffer: &mut Buffer) {
         buffer.set_style(area, Ink::Plain.style());
-        screen_row(buffer, area, area.y, &[(SETTINGS_TITLE, Ink::Accent)]);
+        let key_width = Config::KEYS
+            .iter()
+            .map(|key| key.chars().count() + SETTINGS_GAP)
+            .max()
+            .unwrap_or(0);
+        let mut y = area.y;
+        screen_row(buffer, area, y, &[(SETTINGS_TITLE, Ink::Accent)]);
+        for (at, (key, text)) in self.settings.rows().enumerate() {
+            y = y.saturating_add(1);
+            if y >= area.bottom() {
+                return;
+            }
+            let (marker, name_ink, value_ink) = match at == self.settings.current() {
+                true => (ROW_MARK, Ink::Accent, Ink::Accent),
+                false => (ROW_GAP, Ink::Muted, Ink::Plain),
+            };
+            let name = format!("{:<key_width$}", key);
+            cut_row(
+                buffer,
+                screen_band(area),
+                y,
+                &[(marker, name_ink), (&name, name_ink), (text, value_ink)],
+            );
+        }
+        let Some(refusal) = self.settings.refusal() else {
+            return;
+        };
+        // The refusal sits a blank row under the list so it reads as a verdict on the visit
+        // rather than as the last key's value.
+        y = y.saturating_add(2);
+        if y >= area.bottom() {
+            return;
+        }
+        cut_row(buffer, screen_band(area), y, &[(refusal, Ink::Err)]);
     }
 
-    /// The footer: the hints §12 keeps at every width, on the bottom edge. The five
-    /// more a 120-column frame shows are the chrome's ticket; these three spans are the
-    /// floor it degrades to, so the golden frame holds what no width can take away.
+    /// The footer: the hints §12's table gives a frame this wide, on the bottom edge, in
+    /// survival order and separated by one gap.
     fn footer(&self, area: Rect, buffer: &mut Buffer) {
-        write(buffer, area, &FLOOR_HINTS);
+        let mut spans: Vec<(&str, Ink)> = Vec::new();
+        for (index, hint) in kept(area.width).into_iter().enumerate() {
+            if index > 0 {
+                spans.push((GAP, Ink::Dim));
+            }
+            spans.push((hint, Ink::Muted));
+        }
+        write(buffer, area, &spans);
     }
 }
 
@@ -1103,6 +1275,39 @@ fn cut_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)]) {
     }
 }
 
+/// The hints a footer `width` columns wide draws, in survival order: as many as §57's
+/// table names for that width, and none the row has no room for.
+///
+/// The two rules cut in one direction. The table decides how many hints a width is owed;
+/// the row decides whether the next of them fits, counted with the gap that introduces it
+/// so a hint that goes never leaves its gap behind. A hint that does not fit ends the row
+/// rather than being skipped for a shorter one further down the order: a footer that
+/// dropped `Ctrl-C cancel` to keep `@ files` would have given a key up in the wrong
+/// direction, and the order is the whole of what the table says.
+fn kept(width: u16) -> Vec<&'static str> {
+    let gap = GAP.chars().count();
+    let mut kept: Vec<&'static str> = Vec::new();
+    let mut taken = 0;
+    for hint in HINTS.iter().take(wanted(width)) {
+        let room = hint.chars().count() + if kept.is_empty() { 0 } else { gap };
+        if taken + room > usize::from(width) {
+            break;
+        }
+        taken += room;
+        kept.push(hint);
+    }
+    kept
+}
+
+/// How many hints §57's table owes a footer `width` columns wide: seven from a hundred and
+/// twenty, five from a hundred, and never fewer than the two §12 never takes away.
+fn wanted(width: u16) -> usize {
+    STEPS
+        .iter()
+        .find(|(from, _)| width >= *from)
+        .map_or(FLOOR, |(_, hints)| *hints)
+}
+
 /// Writes spans of text across a row from its left edge, each in its own ink, and never
 /// half of one: §12 gives a hint up whole or not at all, so a span that would not fit in
 /// what is left of the row is not drawn rather than cut.
@@ -1139,6 +1344,112 @@ mod tests {
             width: cols,
             height: rows,
         }
+    }
+
+    /// The footer's row of a frame `cols` wide and `rows` tall, painted through the same
+    /// `paint` the terminal is handed: the bottom row of the screen, read back as the
+    /// glyphs a reader sees.
+    fn footer(cols: u16, rows: u16) -> String {
+        let mut view = View::boot();
+        let area = screen(cols, rows);
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+        let y = area.bottom() - 1;
+        (area.x..area.right())
+            .map(|x| buffer.cell((x, y)).expect("a cell of the frame").symbol())
+            .collect()
+    }
+
+    #[test]
+    fn a_hundred_and_twenty_columns_hold_the_seven_hints_the_table_names() {
+        assert_eq!(
+            footer(120, 24).trim_end(),
+            "Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · / commands · @ files · ↑ queue",
+            "§57's table gives a 120-column footer seven hints, in survival order and \
+             separated by one gap"
+        );
+    }
+
+    #[test]
+    fn five_hints_are_kept_from_a_hundred_columns_and_ninety_nine_keeps_two() {
+        assert_eq!(
+            footer(100, 24).trim_end(),
+            "Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · / commands",
+            "a hundred columns is the narrowest frame §57 gives five hints, so the two \
+             that go are the queue's and the picker's"
+        );
+        assert_eq!(
+            footer(99, 24).trim_end(),
+            "Enter send · ? keys",
+            "one column under it and the footer is back to the two the floor holds"
+        );
+    }
+
+    #[test]
+    fn sixty_columns_keep_the_two_hints_no_width_takes_away() {
+        assert_eq!(
+            footer(60, 24).trim_end(),
+            "Enter send · ? keys",
+            "the floor is the floor at sixty columns as it is at ninety-nine"
+        );
+    }
+
+    #[test]
+    fn no_hint_is_cut_mid_word_at_any_width_between_twenty_and_two_hundred() {
+        for width in 20..=200u16 {
+            let drawn = footer(width, 24);
+            let row = drawn.trim_end();
+            let parts: Vec<&str> = if row.is_empty() {
+                Vec::new()
+            } else {
+                row.split(GAP).collect()
+            };
+
+            // What the row says, read back as hints: every one of them is a hint of the
+            // table and they are the table's from the front — so a row that stopped in the
+            // middle of a word would fail here as a part no hint is called, and a hint
+            // drawn in the wrong place would fail as the table's wrong hint.
+            assert_eq!(
+                parts.as_slice(),
+                &HINTS[..parts.len()],
+                "at {width} columns the footer reads {row:?}, which is not a run of whole \
+                 hints from the front of the table"
+            );
+        }
+    }
+
+    #[test]
+    fn the_first_two_hints_are_drawn_at_every_width_from_twenty_columns() {
+        for width in 20..=200u16 {
+            let row = footer(width, 24);
+            let hints: Vec<&str> = row.trim_end().split(GAP).collect();
+
+            assert_eq!(
+                hints.get(..FLOOR),
+                Some(&HINTS[..FLOOR]),
+                "at {width} columns the footer reads {:?}: the two hints §12 never takes \
+                 away are drawn whole at every width, and 60 is not a special case of that",
+                row.trim_end()
+            );
+        }
+    }
+
+    #[test]
+    fn a_hint_the_row_has_no_room_for_is_not_drawn_at_all() {
+        // Under twenty columns — narrower than any frame §57's sweep covers — the floor
+        // and the row disagree about `? keys`, and the row wins: a hint is whole or it is
+        // not drawn. The gap the hint would have been introduced by goes with it, so the
+        // row never ends on a separator that separates nothing.
+        assert_eq!(
+            footer(15, 24).trim_end(),
+            "Enter send",
+            "fifteen columns hold the first hint and neither the gap nor the second"
+        );
+        assert_eq!(
+            footer(8, 24).trim_end(),
+            "",
+            "eight columns hold no hint at all, which is what the floor gives way to"
+        );
     }
 
     #[test]

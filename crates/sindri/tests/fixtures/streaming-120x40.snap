@@ -3,43 +3,43 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 streaming at 120x40
-00 |  that fills the band. Only the rows a band reaches are laid out, so a 250-turn history model     .........claude-sonnet| plain:88 dim:19 muted:13
-01 |  on a 40-row terminal pays for what it shows and no more.                              ────────────────────────────────| plain:88 dim:32
-02 |turn 4 ─────────────────────────────────────────────────────────────────────────────────turns     .................6/250| dim:115 muted:5
-03 |✓ exit 0  bash  96 bytes · 118 ms                                                       ctx       ...................21%| ok:1 dim:32 plain:55 dim:29 muted:3
-04 |  check: fmt ... ok                                                                     cache     ...................88%| plain:88 dim:29 muted:3
-05 |  check: clippy ... ok                                                                  ────────────────────────────────| plain:88 dim:32
-06 |  check: test ... ok                                                                    workspace ..…/.worktrees/46-rail| plain:88 dim:12 muted:20
-07 |  check: frames ... ok                                                                  branch    .....spec/1-capability| plain:88 dim:15 muted:17
-08 |  What that buys is the plain case and what it costs is the scrolled one: a window is a ────────────────────────────────| plain:88 dim:32
-09 |  row offset from the tail, so resolving one walks the entries between the tail and the skills    .....................2| plain:88 dim:31 muted:1
-10 |  window and lays out every one of them on the way. Each is laid out once and kept, so  ────────────────────────────────| plain:88 dim:32
-11 |  the whole history scrolled through costs one layout per entry and scrolling it again  sandbox   .................bwrap| plain:88 dim:27 muted:5
-12 |  costs none.                                                                           ────────────────────────────────| plain:88 dim:32
-13 |turn 5 ─────────────────────────────────────────────────────────────────────────────────session   ..............9f2c7a41| dim:112 muted:8
-14 |✓ exit 0  bash  128 bytes · 9 ms                                                        temp      ........…/9f2c7a41/tmp| ok:1 dim:31 plain:56 dim:18 muted:14
-15 |  crates/sindri/src/rows.rs | 412 +++++++++++++                                                                         | plain:120
-16 |  crates/sindri/tests/rows.rs | 198 +++++++++                                                                           | plain:120
-17 |  The transcript's unit is the entry. An entry never carries a formatted line, so the                                   | plain:120
-18 |  same run is drawn the same way by the TUI, by a reader of the transcript and by                                       | plain:120
-19 |  whatever front end comes next, and a streaming tick that changes one entry re-lays                                    | plain:120
-20 |  that entry alone.                                                                                                     | plain:120
-21 |turn 6 ─────────────────────────────────────────────────────────────────────────────────                                | dim:88 plain:32
-22 |✓ exit 0  bash  104 bytes · 31 ms                                                                                       | ok:1 dim:32 plain:87
-23 |  check: frame calls ... ok                                                                                             | plain:120
-24 |  check: frame transcript ... ok                                                                                        | plain:120
-25 |  A row says the exit code and not the command, because the verdict is a fact the record                                | plain:120
-26 |  holds and the command is a fact the row above it holds: a call that settled is one                                    | plain:120
-27 |  line, and the line is what happened to it.                                                                            | plain:120
+00 |  costs none.                                                                           model     .........claude-sonnet| plain:88 dim:19 muted:13
+01 |turn 5 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+02 |✓ exit 0  bash  128 bytes · 9 ms                                                        turns     .................6/250| ok:1 dim:31 plain:56 dim:27 muted:5
+03 |  crates/sindri/src/rows.rs | 412 +++++++++++++                                         ctx       ...................21%| plain:88 dim:29 muted:3
+04 |  crates/sindri/tests/rows.rs | 198 +++++++++                                           cache     ...................88%| plain:88 dim:29 muted:3
+05 |  The transcript's unit is the entry. An entry never carries a formatted line, so the   ────────────────────────────────| plain:88 dim:32
+06 |  same run is drawn the same way by the TUI, by a reader of the transcript and by       workspace ..…/.worktrees/46-rail| plain:88 dim:12 muted:20
+07 |  whatever front end comes next.                                                        branch    .....spec/1-capability| plain:88 dim:15 muted:17
+08 |                                                                                        ────────────────────────────────| plain:88 dim:32
+09 |  construct │ where it stands                                                           skills    .....................2| plain:88 dim:31 muted:1
+10 |  ──────────┼───────────────────────────                                                ────────────────────────────────| plain:2 dim:38 plain:48 dim:32
+11 |  heading   │ in the answer's own gutter                                                sandbox   .................bwrap| plain:88 dim:27 muted:5
+12 |  code      │ behind a bar, highlighted                                                 ────────────────────────────────| plain:88 dim:32
+13 |  table     │ columns joined by a bar                                                   session   ..............9f2c7a41| plain:88 dim:24 muted:8
+14 |turn 6 ─────────────────────────────────────────────────────────────────────────────────temp      ........…/9f2c7a41/tmp| dim:106 muted:14
+15 |✓ exit 0  bash  104 bytes · 31 ms                                                                                       | ok:1 dim:32 plain:87
+16 |  check: frame calls ... ok                                                                                             | plain:120
+17 |  check: frame transcript ... ok                                                                                        | plain:120
+18 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101
+19 |                                                                                                                        | plain:120
+20 |  A row says the exit code and not the command, because the verdict is a fact the record                                | plain:120
+21 |  holds and the command is a fact the row above it holds.                                                               | plain:120
+22 |                                                                                                                        | plain:120
+23 |  ▏ rust                                                                                                                | plain:2 dim:6 plain:112
+24 |  ▏ fn main() {                                                                                                         | plain:2 dim:2 accent:2 plain:114
+25 |  ▏     let row = Row::of(spans);                                                                                       | plain:2 dim:2 plain:4 accent:3 plain:109
+26 |  ▏     row.paint(area, buffer);                                                                                        | plain:2 dim:2 plain:116
+27 |  ▏ }                                                                                                                   | plain:2 dim:2 plain:116
 28 |turn 6 ─────────────────────────────────────────────────────────────────────────────────                                | dim:88 plain:32
 29 |│ The ticket asks whether the tail survives. A fence still streaming is a code block, so                                | dim:2 muted:86 plain:32
 30 |│ its words are drawn as code and nothing is swallowed.                                                                 | dim:2 muted:53 plain:65
 31 |  It survives: the rule is one boolean over the lines, and #52 keeps it.                                                | plain:120
-32 |  ```rust                                                                                                               | plain:2 dim:7 plain:111
-33 |  fn main() {                                                                                                           | plain:2 muted:11 plain:107
-34 |      let fence = Fence::open();                                                                                        | plain:2 muted:30 plain:88
-35 |      let  tail = fence.words();                                                                                        | plain:2 muted:30 plain:88
-36 |                                                                                                                        | plain:120
+32 |                                                                                                                        | plain:120
+33 |  ▏ rust                                                                                                                | plain:2 dim:6 plain:112
+34 |  ▏ fn main() {                                                                                                         | plain:2 dim:2 accent:2 plain:114
+35 |  ▏     let fence = Fence::open();                                                                                      | plain:2 dim:2 plain:4 accent:3 plain:109
+36 |  ▏     let  tail = fence.words();                                                                                      | plain:2 dim:2 plain:4 accent:3 plain:109
 37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
 38 |                                                                                                                        | plain:120
-39 |Enter send · ? keys                                                                                                     | muted:10 dim:3 muted:6 plain:101
+39 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · / commands · @ files · ↑ queue                                      | muted:10 dim:3 muted:6 dim:3 muted:13 dim:3 muted:11 dim:3 muted:10 dim:3 muted:7 dim:3 muted:7 plain:38

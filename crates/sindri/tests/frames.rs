@@ -71,6 +71,16 @@ fn models_120x40_is_the_names_the_wire_served_as_one_screen() {
 }
 
 #[test]
+fn settings_120x40_is_the_keys_the_schema_has_and_the_value_each_holds() {
+    fixture::assert_frame("settings", 120, 40);
+}
+
+#[test]
+fn settings_refused_120x40_is_a_value_the_screen_will_not_take_naming_its_key() {
+    fixture::assert_frame("settings-refused", 120, 40);
+}
+
+#[test]
 fn typing_120x40_is_a_composer_at_its_two_row_floor() {
     fixture::assert_frame("typing", 120, 40);
 }
@@ -83,6 +93,46 @@ fn grown_120x40_is_a_composer_at_its_six_row_ceiling() {
 #[test]
 fn scrolled_120x40_is_a_composer_showing_the_last_five_rows_of_a_taller_draft() {
     fixture::assert_frame("scrolled", 120, 40);
+}
+
+#[test]
+fn markdown_headings_80x24_is_a_heading_at_each_of_the_four_renderings() {
+    fixture::assert_frame("markdown-headings", 80, 24);
+}
+
+#[test]
+fn markdown_lists_80x24_is_a_bullet_and_an_ordinal_two_spaces_per_depth() {
+    fixture::assert_frame("markdown-lists", 80, 24);
+}
+
+#[test]
+fn markdown_table_80x24_is_columns_ruled_under_their_header_and_never_bordered() {
+    fixture::assert_frame("markdown-table", 80, 24);
+}
+
+#[test]
+fn markdown_quote_80x24_is_prose_set_behind_one_dim_bar() {
+    fixture::assert_frame("markdown-quote", 80, 24);
+}
+
+#[test]
+fn markdown_code_80x24_is_a_guttered_block_highlighted_and_one_unknown_language() {
+    fixture::assert_frame("markdown-code", 80, 24);
+}
+
+#[test]
+fn markdown_inline_80x24_is_a_run_of_code_set_reversed_in_a_paragraph() {
+    fixture::assert_frame("markdown-inline", 80, 24);
+}
+
+#[test]
+fn markdown_link_80x24_is_a_link_that_prints_the_url_its_words_hide() {
+    fixture::assert_frame("markdown-link", 80, 24);
+}
+
+#[test]
+fn markdown_table_narrow_40x24_is_a_wide_table_wrapped_inside_its_cells() {
+    fixture::assert_frame("markdown-table-narrow", 40, 24);
 }
 
 #[test]
@@ -108,4 +158,34 @@ fn rail_80x24_is_the_strip_giving_facts_up_in_a12s_order() {
 #[test]
 fn rail_40x24_is_the_strip_down_to_the_fact_that_never_goes() {
     fixture::assert_frame("rail", 40, 24);
+}
+
+#[test]
+fn footer_130x24_is_seven_hints_with_columns_to_spare() {
+    fixture::assert_frame("footer", 130, 24);
+}
+
+#[test]
+fn footer_120x24_is_the_narrowest_frame_that_holds_seven_hints() {
+    fixture::assert_frame("footer", 120, 24);
+}
+
+#[test]
+fn footer_119x24_is_the_first_width_that_gives_the_seventh_hint_up() {
+    fixture::assert_frame("footer", 119, 24);
+}
+
+#[test]
+fn footer_100x24_is_the_narrowest_frame_that_holds_five_hints() {
+    fixture::assert_frame("footer", 100, 24);
+}
+
+#[test]
+fn footer_99x24_is_the_first_width_down_to_the_two_that_never_go() {
+    fixture::assert_frame("footer", 99, 24);
+}
+
+#[test]
+fn footer_60x24_is_the_floor_the_hints_never_fall_below() {
+    fixture::assert_frame("footer", 60, 24);
 }

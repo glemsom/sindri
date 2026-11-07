@@ -8,11 +8,13 @@ rust-version.workspace = true
 [dependencies]
 clap = { version = "4.6.7", features = ["derive"] }
 ignore = "0.4.34"
+pulldown-cmark = { version = "0.12", default-features = false }
 # The frame: what a look is drawn with, and the same code a fixture renders through
 # ratatui's headless backend, so a golden frame and a reader's screen are one picture.
 ratatui = "0.29"
 rustix = { version = "1.1.6", features = ["event", "fs", "termios"] }
 sindri-core = { path = "../sindri-core" }
+syntect = { version = "5.3", default-features = false, features = ["default-fancy"] }
 
 [dev-dependencies]
 # The golden frames of ADR 0012: `insta` compares a rendered frame against the fixture

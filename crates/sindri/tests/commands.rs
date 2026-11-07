@@ -18,6 +18,7 @@ use sindri::commands::{self, Command};
 use sindri::composer::{Key, Outcome};
 use sindri::keys::Mode;
 use sindri::view::View;
+use sindri_core::config::Config;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
 
@@ -165,16 +166,28 @@ fn settings_opens_the_screen_the_modal_fills_in() {
     let root = workspace_with("commit-message", "");
     let mut view = frame(root.path());
 
-    assert_eq!(say(&mut view, "/settings"), Outcome::Edited);
+    assert_eq!(
+        say(&mut view, "/settings"),
+        Outcome::Settings,
+        "the screen's rows are the config's and a frame holds no config, so the terminal — \
+         which holds the one it launched with — is what seeds it"
+    );
+    assert_eq!(
+        view.mode(),
+        Mode::Composer,
+        "and nothing is opened before the seeding: an empty form is not the screen"
+    );
+
+    view.open_settings(&Config::default());
+
     assert_eq!(
         view.mode(),
         Mode::Settings,
-        "the screen is ticket #49's to fill in, and what this ticket owes is the command \
-         that opens it"
+        "seeded, the screen is up and the draft is behind it"
     );
     assert!(
         painted(&mut view).contains("settings"),
-        "and the screen says what a reader opened: {}",
+        "and it says what a reader opened: {}",
         painted(&mut view)
     );
 }

@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+markdown-lists at 80x24
+00 |  • a bullet per item                                                           | plain:80
+01 |  • two spaces per depth                                                        | plain:80
+02 |    • a nested item                                                             | plain:80
+03 |      • and one deeper                                                          | plain:80
+04 |  • an ordered list underneath                                                  | plain:80
+05 |    1. numbered from one                                                        | plain:80
+06 |    2. and hung under their own words when they wrap                            | plain:80
+07 |                                                                                | plain:80
+08 |                                                                                | plain:80
+09 |                                                                                | plain:80
+10 |                                                                                | plain:80
+11 |                                                                                | plain:80
+12 |                                                                                | plain:80
+13 |                                                                                | plain:80
+14 |                                                                                | plain:80
+15 |                                                                                | plain:80
+16 |                                                                                | plain:80
+17 |                                                                                | plain:80
+18 |                                                                                | plain:80
+19 |                                                                                | plain:80
+20 |                                                                                | plain:80
+21 |────────────────────────────────────────────────────────────────────────────────| dim:80
+22 |                                                                                | plain:80
+23 |Enter send · ? keys                                                             | muted:10 dim:3 muted:6 plain:61
