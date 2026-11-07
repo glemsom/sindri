@@ -22,6 +22,7 @@ use std::time::{Duration, Instant};
 
 use rustix::fs::{Mode, OFlags, open};
 use rustix::pty::{OpenptFlags, grantpt, openpt, ptsname, unlockpt};
+use rustix::termios::{Winsize, tcsetwinsize};
 use tempfile::TempDir;
 
 /// How long a sequence is given to arrive before a test calls it absent: generous, because a
@@ -147,7 +148,15 @@ struct Pty {
 }
 
 impl Pty {
-    /// A fresh pseudo-terminal, nobody's controlling terminal.
+    /// A fresh pseudo-terminal, nobody's controlling terminal, told its size the way a real one
+    /// would be.
+    ///
+    /// A pty that never says how big it is leaves the answer to whoever asks outside this
+    /// process: crossterm opens `/dev/tty`, and where there is none — a CI runner — it falls
+    /// back to the descriptor itself, which reports the nought by nought a fresh pty holds. A
+    /// frame painted into no cells at all draws no glyph and puts the caret nowhere, so a test
+    /// that asks where the caret waits was passing on a developer's machine only because the
+    /// developer's own terminal answered for the pty (§12).
     fn open() -> Pty {
         let master = openpt(OpenptFlags::RDWR | OpenptFlags::NOCTTY).expect("a pseudoterminal");
         grantpt(&master).expect("the slave is granted");
@@ -156,6 +165,16 @@ impl Pty {
         let path = PathBuf::from(name.to_str().expect("a printable name"));
         let slave = open(path.as_path(), OFlags::RDWR | OFlags::NOCTTY, Mode::empty())
             .expect("the slave opens");
+        tcsetwinsize(
+            &slave,
+            Winsize {
+                ws_row: 24,
+                ws_col: 80,
+                ws_xpixel: 800,
+                ws_ypixel: 480,
+            },
+        )
+        .expect("the terminal takes its size");
         Pty {
             master: File::from(master),
             slave: File::from(slave),

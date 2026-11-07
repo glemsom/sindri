@@ -25,7 +25,7 @@ use std::time::{Duration, Instant};
 
 use rustix::fs::{Mode, OFlags, open};
 use rustix::pty::{OpenptFlags, grantpt, openpt, ptsname, unlockpt};
-use rustix::termios::{InputModes, LocalModes, Termios, tcgetattr};
+use rustix::termios::{InputModes, LocalModes, Termios, Winsize, tcgetattr, tcsetwinsize};
 use tempfile::TempDir;
 
 /// How long a frame is given to arrive before a test calls it absent: generous,
@@ -258,7 +258,15 @@ struct Pty {
 }
 
 impl Pty {
-    /// A fresh pseudo-terminal, nobody's controlling terminal.
+    /// A fresh pseudo-terminal, nobody's controlling terminal, told its size the way a real one
+    /// would be.
+    ///
+    /// A pty that never says how big it is leaves the answer to whoever asks outside this
+    /// process: crossterm opens `/dev/tty`, and where there is none — a CI runner — it falls
+    /// back to the descriptor itself, which reports the nought by nought a fresh pty holds. A
+    /// frame painted into no cells draws no glyph and puts the caret nowhere, so every test
+    /// that reads the caret was passing on a developer's machine only because the developer's
+    /// own terminal answered for the pty (§12).
     fn open() -> Pty {
         let master = openpt(OpenptFlags::RDWR | OpenptFlags::NOCTTY).expect("a pseudoterminal");
         grantpt(&master).expect("the slave is granted");
@@ -267,6 +275,19 @@ impl Pty {
         let path = PathBuf::from(name.to_str().expect("a printable name"));
         let slave = open(path.as_path(), OFlags::RDWR | OFlags::NOCTTY, Mode::empty())
             .expect("the slave opens");
+        tcsetwinsize(
+            &slave,
+            // The cells are said, the pixels are not: a terminal that reports no pixel
+            // fields is the shape `the_cell_size_is_asked_of_the_terminal_once` needs, and it
+            // is the common case — most terminals fill neither field.
+            Winsize {
+                ws_row: 40,
+                ws_col: 120,
+                ws_xpixel: 0,
+                ws_ypixel: 0,
+            },
+        )
+        .expect("the terminal takes its size");
         Pty {
             master: File::from(master),
             slave: File::from(slave),

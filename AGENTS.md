@@ -1,3 +1,9 @@
+## Comments
+
+Code is written for agents to read, so the default is none.
+A comment earns its place only by carrying what the code cannot show: an external constraint, a hidden side effect, a non-obvious gotcha.
+Tickets, specs, and why-this-over-that live in git history and the PR, not above the code.
+
 ## Agent skills
 
 ### Issue tracker
