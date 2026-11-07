@@ -41,6 +41,11 @@ fn mark_120x40_is_a_drag_over_the_transcript_it_covers() {
 }
 
 #[test]
+fn picture_120x40_is_a_picture_block_its_words_its_gutter_and_a_refused_caption() {
+    fixture::assert_frame("picture", 120, 40);
+}
+
+#[test]
 fn pulse_live_120x40_is_the_marker_carrying_a_live_runs_elapsed_time() {
     fixture::assert_frame("pulse-live", 120, 40);
 }

@@ -36,8 +36,10 @@ use ratatui::backend::TestBackend;
 use ratatui::buffer::{Buffer, Cell};
 
 use sindri::composer::{Composer, Key, Outcome};
+use sindri::graphics::CellSize;
 use sindri::ink::Look;
 use sindri::mark;
+use sindri::pictures::Pictures;
 use sindri::pulse::Pulse;
 use sindri::rail::Facts;
 use sindri::rows::Scroll;
@@ -193,6 +195,13 @@ fn named(name: &str) -> View {
         // frame at every width so what the eye approves between two pictures is the hints
         // that went and nothing else (ticket #57, §12).
         "footer" => View::boot(),
+        // §12's picture block, as the frame draws it: the words a picture is spoken of as, the
+        // gutter rows the placement would cover, and the caption a refused source is said with
+        // (#55). The picture is taller than the band, so it is not placed at all — a block the
+        // band does not hold whole keeps its words and is never half-drawn — which is also what
+        // lets the frame be written down: a placement is an escape sequence, and a fixture is
+        // glyphs and inks (ADR-0012).
+        "picture" => pictured(),
         // A drag over the transcript: the cells a reader has marked, painted in the ink
         // a selection is read in, and the very cells `Ctrl-Y` hands out (#50).
         "mark" => {
@@ -205,6 +214,39 @@ fn named(name: &str) -> View {
              paints, and a fixture under any other name is a picture of nothing"
         ),
     }
+}
+
+/// The frame §12's picture block is drawn on: an answer whose first picture is a source outside
+/// the workspace, refused with the caption that says why, and whose second is a picture a
+/// hundred rows tall on a band of thirty-seven.
+///
+/// It is held at the top of the answer, because that is where the block's own row is: a block
+/// taller than the band is never placed — a placement writes into every row of it, and the rows
+/// past the band's bottom belong to the composer under it — so what the frame shows is the block
+/// as the layout makes it, its words in dim ink and the gutter rows under them.
+///
+/// The workspace is `tests/fixtures/pictures`, holding the tall drawing the answer names, so the
+/// block is measured from a file the frame really read and measured without a pixel spent on it;
+/// the refused source is a real diagram one directory above it, so the caption is the refusal
+/// this product gives rather than one made up for a fixture (#55, §12).
+fn pictured() -> View {
+    let workspace = PathBuf::from(FIXTURES).join("pictures");
+
+    let mut view = View::of(
+        vec![answer(
+            1,
+            "![a diagram outside the workspace](../mermaid/flowchart.svg)\n\n![a tall field]\
+             (tall.svg)",
+        )],
+        // Far enough back that the band starts at the top of the answer, which is the row the
+        // tall picture's block begins on: the block is a hundred rows and the band is
+        // thirty-seven.
+        Scroll::Back(70),
+    );
+    view.set_workspace(workspace);
+    view.set_cell_size(CellSize::new(10, 20));
+    view.set_pictures(Pictures::kitty(CellSize::new(10, 20)));
+    view
 }
 
 /// The frame the `/model` screen is drawn on: `/model` typed and sent, and the listing the
