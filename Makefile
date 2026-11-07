@@ -28,13 +28,9 @@
 #
 # A stage line reads `check: <stage> ... ok` or `... FAIL`, printed after the
 # stage's own output so the verdict is the last thing the eye lands on. Nothing
-# is printed for a stage that did not run. Two kinds of stage end without an `ok`,
-# and neither ever prints one:
+# is printed for a stage that did not run. One kind of stage ends without an `ok`,
+# and never prints one:
 #
-#   ... MISSING (note)  work that has not landed yet. No stage says it today, and
-#                       the word stays for the next gap: `make check` exits 0 with
-#                       the gap printed on its last lines where a reader cannot
-#                       miss it, and never an `ok` over work that is not there.
 #   ... SKIPPED         a stage the machine would not let run — the sandbox tier
 #                       when the kernel forbids unprivileged user namespaces,
 #                       which is the case ticket #7 exists for; the release path
@@ -72,19 +68,10 @@ define stage
 @if $(2); then printf 'check: $(1) ... ok\n'; else printf 'check: $(1) ... FAIL\n'; exit 1; fi
 endef
 
-# missing: a stage whose machinery does not exist yet. It says so plainly and
-# prints no `ok`, so the gap is visible rather than counted as green. `make
-# check` still exits 0 on a tree whose real stages pass, and landing one of these
-# stages is a one-line change — swap `$(call missing,<name>,<note>)` for
-# `$(call stage,<name>,<command>)` — and nothing else in this file moves.
-define missing
-@printf 'check: $(1) ... MISSING ($(2))\n'
-endef
-
-# skippable: a stage that can honestly say the machine would not let it run.
-# Unlike `missing` it is no placeholder — the machinery exists and runs wherever
-# the machine allows it — and unlike `stage` it has three verdicts, relayed from
-# the command's exit code so that two of them can never blur into one:
+# skippable: a stage that can honestly say the machine would not let it run. It is
+# no placeholder — the machinery exists and runs wherever the machine allows it — and
+# unlike `stage` it has three verdicts, relayed from the command's exit code so that
+# two of them can never blur into one:
 #
 #   0   ... ok        it ran and passed
 #   77  ... SKIPPED   it did not run; the reason is the line above, and the run
