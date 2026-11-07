@@ -156,10 +156,11 @@ A frame rendered at a fixed size and checked into the tests as the accepted pict
 _Avoid_: Snapshot (too general), screenshot, golden image
 
 **Eval**:
-An artefact held byte for byte to the golden checked in beside the test — the bytes a wire sends, the
-description `doctor` prints, a record line with a secret planted in every field, the SVG a mermaid
-fence drew — and run as its own stage (§16). Its failure names the line or tag that moved, and it
-needs neither the network nor a terminal.
+An artefact held to a fact rather than to a sentence, and run as its own stage (§16): the bytes a
+wire sends, a record line with a secret planted in every field, and the SVG a mermaid fence drew are
+held byte for byte to the golden checked in beside the test, while the description `doctor` prints is
+held to the bytes the live `ToolSet` renders — computed, not checked in, so no blessing moves it. Its
+failure names the line or tag that moved, and it needs neither the network nor a terminal.
 _Avoid_: Snapshot, golden test, benchmark
 
 **Picture**:
