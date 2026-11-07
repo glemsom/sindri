@@ -222,9 +222,13 @@ fn keys(terminal: &Terminal, canvas: &mut Canvas<'_>, view: &mut View) -> io::Re
     }
 }
 
-/// Answers one event, and says whether the launch ends: the one place a key becomes a
-/// repaint or an exit, so a key the composer learns to answer is a new arm here and
-/// nothing else.
+/// Answers one event, and says whether the launch ends: the one place an event becomes a
+/// repaint or an exit.
+///
+/// Which key means what is not decided here. The mode stack decides that — one row of
+/// one table per mode — and this function is left with what the terminal does about the
+/// outcome it is handed: paint the frame, or give the screen back. A new key is a row in
+/// a table, and a new screen is a mode, with no arm added to this function for either.
 fn answer(canvas: &mut Canvas<'_>, view: &mut View, event: Event) -> io::Result<bool> {
     let key = match event {
         // A paste is one edit and never a key, so nothing inside one can send: the
@@ -288,8 +292,9 @@ struct Decoder {
     /// Bytes read but not yet answered by an event.
     pending: Vec<u8>,
     /// Whether the newest read was one byte, which is the only thing that tells the
-    /// `Enter` key from a paste's line break: a burst of bytes is a paste, and no
-    /// keyboard puts two keys in one read.
+    /// `Enter` key from a paste's line break, and a bare `ESC` from the first byte of a
+    /// sequence: a burst of bytes is a paste or a sequence, and no keyboard puts two
+    /// keys in one read.
     alone: bool,
     /// Whether the bytes arriving now are a bracketed paste, up to `PASTE_END`.
     pasting: bool,
@@ -333,6 +338,13 @@ impl Decoder {
         let Some(&byte) = self.pending.first() else {
             return Step::Waiting;
         };
+        // An `ESC` that arrived on its own is the Esc key: a sequence that opens with it
+        // brings the bytes that say which sequence it is, and the alternative — waiting
+        // for a byte a keyboard may never send — is a screen nobody can close.
+        if byte == ESCAPE && self.pending.len() == 1 && self.alone {
+            self.take(1);
+            return Step::Event(Event::Key(Key::Escape));
+        }
         if byte == ESCAPE {
             return self.escape();
         }
@@ -722,6 +734,16 @@ mod tests {
         /// A key, as the event that carries it.
         fn key(key: Key) -> Event {
             Event::Key(key)
+        }
+
+        #[test]
+        fn a_bare_escape_is_the_key_that_closes_a_screen() {
+            assert_eq!(
+                event(b"\x1b"),
+                key(Key::Escape),
+                "one ESC read on its own is the Esc key, and not the start of a sequence \
+                 that never came"
+            );
         }
 
         #[test]

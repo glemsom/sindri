@@ -1,0 +1,45 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+keys at 120x40
+00 |  ? keys                                                                                                                | plain:2 accent:6 plain:112
+01 |  keys                                                                                                                  | plain:2 dim:4 plain:114
+02 |  Esc                  close this screen                                                                                | plain:2 muted:21 plain:97
+03 |  ?                    close this screen                                                                                | plain:2 muted:21 plain:97
+04 |  composer                                                                                                              | plain:2 dim:8 plain:110
+05 |  ?                    the keys, while the draft is empty                                                               | plain:2 muted:21 plain:97
+06 |  Enter                send the prompt                                                                                  | plain:2 muted:21 plain:97
+07 |  Shift+Enter, Ctrl-J  a line break in the draft                                                                        | plain:2 muted:21 plain:97
+08 |  ↑                    the newest queued prompt, or the line above                                                      | plain:2 muted:21 plain:97
+09 |  ↓                    the line below                                                                                   | plain:2 muted:21 plain:97
+10 |  ←                    a glyph left                                                                                     | plain:2 muted:21 plain:97
+11 |  →                    a glyph right                                                                                    | plain:2 muted:21 plain:97
+12 |  Home                 the start of the line                                                                            | plain:2 muted:21 plain:97
+13 |  End                  the end of the line                                                                              | plain:2 muted:21 plain:97
+14 |  Backspace            erase the glyph before the caret                                                                 | plain:2 muted:21 plain:97
+15 |  Ctrl-C               cancel the run, or clear the draft                                                               | plain:2 muted:21 plain:97
+16 |  Ctrl-Q               quit                                                                                             | plain:2 muted:21 plain:97
+17 |                                                                                                                        | plain:120
+18 |                                                                                                                        | plain:120
+19 |                                                                                                                        | plain:120
+20 |                                                                                                                        | plain:120
+21 |                                                                                                                        | plain:120
+22 |                                                                                                                        | plain:120
+23 |                                                                                                                        | plain:120
+24 |                                                                                                                        | plain:120
+25 |                                                                                                                        | plain:120
+26 |                                                                                                                        | plain:120
+27 |                                                                                                                        | plain:120
+28 |                                                                                                                        | plain:120
+29 |                                                                                                                        | plain:120
+30 |                                                                                                                        | plain:120
+31 |                                                                                                                        | plain:120
+32 |                                                                                                                        | plain:120
+33 |                                                                                                                        | plain:120
+34 |                                                                                                                        | plain:120
+35 |                                                                                                                        | plain:120
+36 |                                                                                                                        | plain:120
+37 |                                                                                                                        | plain:120
+38 |                                                                                                                        | plain:120
+39 |                                                                                                                        | plain:120

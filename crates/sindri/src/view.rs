@@ -8,6 +8,12 @@
 //! sees are produced by the same code — the point of ADR-0012, and the reason a
 //! visual decision can be graded by an agent at all.
 //!
+//! A frame is a stack of modes, and the mode on top is what is drawn: the composer at
+//! the base, and the `?` screen over it, which replaces the bands with one list of the
+//! keys in force painted from the tables that answer them (#45). Where a screen is up
+//! there is no draft on the frame and no caret, because a key pressed then would not
+//! reach one.
+//!
 //! The transcript's rows are `rows`' to lay out and this file's to draw: a frame is
 //! handed the entries a run has written and where the reader is scrolled to, and the
 //! band paints the window of them the frame reaches, which is §12's rule that only
@@ -29,6 +35,7 @@ use sindri_core::records::Entry;
 
 use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, State};
 use crate::ink::Ink;
+use crate::keys::{Act, Mode, Stack};
 use crate::rows::{Rows, Scroll};
 use crate::stream::Stream;
 
@@ -43,6 +50,14 @@ const FLOOR_HINTS: [(&str, Ink); 3] = [
 /// The hairline a draft is typed under: one glyph, so the composer's top edge is a row
 /// of them, drawn in `dim` because it is a fact about the frame rather than a thing said.
 const HAIRLINE: char = '─';
+
+/// The columns the keys screen leaves empty at its left edge, so its rows read as one
+/// block rather than as the frame's own prose.
+const KEYS_MARGIN: u16 = 2;
+
+/// The gap between a key's name and what it does on the keys screen: two columns, so the
+/// descriptions of every mode line up in one column an eye can run down.
+const KEYS_GAP: usize = 2;
 
 /// One frame's worth of facts, in the shape the terminal draws them. Boot knows none
 /// of them — no run, no prompt, no transcript row, nothing loaded — so the frame is its
@@ -64,6 +79,9 @@ pub struct View {
     /// fragment lands (§4, §12). Empty is the case of no turn in flight, which is every
     /// frame until #43 feeds the run's deltas in here.
     stream: Stream,
+    /// The modes this frame is in, the composer at the base and any screen opened over
+    /// it: what answers a key and, while a screen is up, the whole of what is painted.
+    stack: Stack,
 }
 
 impl View {
@@ -87,6 +105,7 @@ impl View {
             scroll,
             composer: Composer::new(),
             stream: Stream::new(),
+            stack: Stack::new(),
         }
     }
 
@@ -119,16 +138,78 @@ impl View {
         self.stream = Stream::new();
     }
 
-    /// Hands the composer one key and says what the terminal is to do about it: paint
-    /// the band again, send the draft, quit, or leave a run cancelled and the draft
-    /// where it was. The composer decides; the terminal acts (ADR-0005).
-    pub fn key(&mut self, key: Key) -> Outcome {
-        self.composer.key(key)
+    /// The mode on top of the stack: what this frame is showing and what will answer
+    /// the next key.
+    pub fn mode(&self) -> Mode {
+        self.stack.top()
     }
 
-    /// Hands the composer a pasted prompt: one draft, its line breaks kept, and no
-    /// path back to something a run could take.
+    /// Hands the frame one key and says what the terminal is to do about it: paint the
+    /// frame again, send the draft, quit, or leave a run cancelled and the draft where
+    /// it was. The mode on top decides — one row of its table, or its fallback — and the
+    /// terminal acts (ADR-0005).
+    pub fn key(&mut self, key: Key) -> Outcome {
+        let Some(act) = self.stack.act(key) else {
+            // A screen that names no row for the key has nothing to say about it, which
+            // is how a glyph typed at a screen stays out of the draft under it.
+            return Outcome::Unchanged;
+        };
+        match act {
+            Act::Draft => self.composer.key(key),
+            Act::Up => self.up(),
+            Act::Keys => self.keys(key),
+            Act::Close => self.close(),
+        }
+    }
+
+    /// `?`: the screen that lists the keys in force.
+    ///
+    /// It is a key only while the draft is empty, for the reason `↑` is the queue's only
+    /// on the first line: the composer is a text box, and a prompt that could not hold a
+    /// question mark would be a composer that cannot ask a question. With a draft the
+    /// key is a glyph like every other, and the frame's keys are a `Ctrl-C` away.
+    fn keys(&mut self, key: Key) -> Outcome {
+        if !self.composer.text().is_empty() {
+            return self.composer.key(key);
+        }
+        self.stack.open(Mode::Keys);
+        Outcome::Edited
+    }
+
+    /// `Esc`: the screen on top closes and the mode under it has the keys again. The
+    /// composer is the base of the stack and never closes, so there the key does
+    /// nothing and nothing is repainted.
+    fn close(&mut self) -> Outcome {
+        let closed = self.stack.top();
+        self.stack.close();
+        if self.stack.top() == closed {
+            Outcome::Unchanged
+        } else {
+            Outcome::Edited
+        }
+    }
+
+    /// `↑` — one key with two homes, and this is the only place it is decided (A9).
+    ///
+    /// On the composer's first line the thing above the caret is the queue rather than
+    /// another row of the draft, so the arrow recalls the newest queued prompt; anywhere
+    /// else it moves the caret a row up, which is the composer's own map. The queue is
+    /// #42's and is not here yet, so on that line there is nothing to recall and nothing
+    /// to repaint — and #42 adds its queue to this arm rather than to a keymap of its own.
+    fn up(&mut self) -> Outcome {
+        if self.composer.on_first_line() {
+            return Outcome::Unchanged;
+        }
+        self.composer.key(Key::Up)
+    }
+
+    /// Hands the draft a pasted prompt: one draft, its line breaks kept, and no path
+    /// back to something a run could take. A screen has no draft, so what a clipboard
+    /// holds while one is open is dropped rather than typed where nobody can see it.
     pub fn paste(&mut self, text: &str) {
+        if self.stack.modal().is_some() {
+            return;
+        }
         self.composer.paste(text);
     }
 
@@ -147,6 +228,12 @@ impl View {
     /// composer's rows are read from the draft, so the band a draft grows into is
     /// measured when the frame is drawn and never cached.
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) {
+        // A screen is the whole frame: the bands under it are not painted at all, so
+        // nothing of a draft a key cannot reach is on the screen pretending otherwise.
+        if self.stack.modal().is_some() {
+            self.keys_screen(area, buffer);
+            return;
+        }
         let bands = bands(area, self.composer.rows());
         self.transcript(bands.transcript, buffer);
         self.composer_band(bands.composer, buffer);
@@ -226,6 +313,11 @@ impl View {
     /// letter tinted `accent` — invisible on the space it usually sits on — and a
     /// reverse-video block cannot be written into a fixture at all.
     pub fn cursor(&self, area: Rect) -> Option<(u16, u16)> {
+        // No draft is on screen while one is open, so there is no cell for the caret to
+        // wait on: it would be a cursor floating over a list.
+        if self.stack.modal().is_some() {
+            return None;
+        }
         let bands = bands(area, self.composer.rows());
         let (row, column) = self.composer.caret();
         let y = bands
@@ -235,6 +327,48 @@ impl View {
             .checked_add(row)?;
         let x = area.x.checked_add(column)?;
         (column < area.width && y < bands.composer.bottom()).then_some((x, y))
+    }
+
+    /// The `?` screen: every key in force, the mode that answers first at the top and
+    /// the modes under it after — because the top one is where the reader is, and the
+    /// rest are why their keys are not doing anything.
+    ///
+    /// It is painted from the tables themselves rather than from prose about them, so
+    /// the screen and the keys cannot disagree, and a mode added later is a variant, a
+    /// table and a heading here with nothing else to remember (A7).
+    fn keys_screen(&self, area: Rect, buffer: &mut Buffer) {
+        buffer.set_style(area, Ink::Plain.style());
+        let modes: Vec<Mode> = self.stack.modes().collect();
+        let name_width = modes
+            .iter()
+            .flat_map(|mode| mode.table())
+            .map(|binding| binding.name.chars().count() + KEYS_GAP)
+            .max()
+            .unwrap_or(0);
+        let mut y = area.y;
+        screen_row(buffer, area, y, &[("? keys", Ink::Accent)]);
+        for mode in modes {
+            // A blank row before each heading, so a mode's keys read as one block and
+            // the heading is not taken for the last key of the block above it.
+            y = y.saturating_add(1);
+            if y >= area.bottom() {
+                return;
+            }
+            screen_row(buffer, area, y, &[(mode.name(), Ink::Dim)]);
+            for binding in mode.table() {
+                y = y.saturating_add(1);
+                if y >= area.bottom() {
+                    return;
+                }
+                let name = format!("{:<name_width$}", binding.name);
+                screen_row(
+                    buffer,
+                    area,
+                    y,
+                    &[(&name, Ink::Muted), (binding.does, Ink::Plain)],
+                );
+            }
+        }
     }
 
     /// The footer: the hints §12 keeps at every width, on the bottom edge. The five
@@ -294,6 +428,20 @@ fn bands(area: Rect, composer_rows: u16) -> Bands {
             ..area
         },
     }
+}
+
+/// Writes one row of a screen at the screen's margin, each span in its own ink. Like the
+/// footer's hints, a span that would run past the frame's right edge is not drawn at
+/// all: a screen's row is whole or it is not there.
+fn screen_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)]) {
+    let margin = KEYS_MARGIN.min(area.width);
+    let row = Rect {
+        x: area.x.saturating_add(margin),
+        y,
+        width: area.width.saturating_sub(margin),
+        height: 1,
+    };
+    write(buffer, row, spans);
 }
 
 /// Writes one draft line across a row from the band's left edge, cut at its right
@@ -362,6 +510,25 @@ mod tests {
         // into the second line.
         assert_eq!(view.composer().rows(), 3);
         assert_eq!(view.cursor(area), Some((11, 10)));
+    }
+
+    #[test]
+    fn a_screen_has_no_caret_for_the_terminal_to_put_anywhere() {
+        let mut view = View::boot();
+        let area = screen(40, 12);
+        assert!(
+            view.cursor(area).is_some(),
+            "the empty draft's caret has a cell before the screen opens"
+        );
+
+        view.key(Key::Char('?'));
+
+        assert_eq!(
+            view.cursor(area),
+            None,
+            "a screen is the whole frame and has no draft in it, so the caret is not left \
+             floating over a list"
+        );
     }
 
     #[test]

@@ -21,11 +21,6 @@ fn transcript_120x40_is_a_run_laid_out_at_the_tail() {
 }
 
 #[test]
-fn calls_120x40_is_a_call_settled_four_ways() {
-    fixture::assert_frame("calls", 120, 40);
-}
-
-#[test]
 fn transcript_scrolled_120x40_cuts_the_top_entry_mid_row() {
     fixture::assert_frame("transcript-scrolled", 120, 40);
 }
@@ -33,6 +28,16 @@ fn transcript_scrolled_120x40_cuts_the_top_entry_mid_row() {
 #[test]
 fn streaming_120x40_is_a_run_whose_answer_and_thought_are_still_landing() {
     fixture::assert_frame("streaming", 120, 40);
+}
+
+#[test]
+fn calls_120x40_is_a_call_settled_four_ways() {
+    fixture::assert_frame("calls", 120, 40);
+}
+
+#[test]
+fn keys_120x40_lists_the_keys_of_the_stack_it_sits_on() {
+    fixture::assert_frame("keys", 120, 40);
 }
 
 #[test]

@@ -114,6 +114,14 @@ fn named(name: &str) -> View {
             "seven: the session it left",
             "eight: the question to ask",
         ])),
+        // The `?` screen, opened through the same key a reader presses rather than by
+        // reaching into the stack: the frame lists the keys of the tables that answer
+        // them, so a picture of the screen is a picture of the keymap (ticket #45, A7).
+        "keys" => {
+            let mut view = View::boot();
+            view.key(Key::Char('?'));
+            view
+        }
         unknown => panic!(
             "no frame is named {unknown}: `named` lists the frames this front end \
              paints, and a fixture under any other name is a picture of nothing"

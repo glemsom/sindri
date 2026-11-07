@@ -64,6 +64,9 @@ pub enum Key {
     Quit,
     /// `Ctrl-C`: cancels a run and keeps the draft, or clears it when nothing runs.
     Cancel,
+    /// `Esc`: closes the screen over the draft. A draft has nothing to close, so the
+    /// composer answers it by leaving the draft alone.
+    Escape,
 }
 
 /// A prompt that has left the composer: what `Enter` makes of a draft, and the value
@@ -87,7 +90,8 @@ pub enum Outcome {
     /// The key moved nothing — a key this map has no use for, or a backspace in an
     /// empty box — so there is nothing to repaint.
     Unchanged,
-    /// The draft changed: what the frame holds is no longer what the composer does.
+    /// The frame changed — the draft, or the screen over it — so what it holds is no
+    /// longer what it did and the terminal has a frame to paint.
     Edited,
     /// `Enter`, with a draft worth sending in it: the prompt is the terminal's now.
     Send(Prompt),
@@ -223,6 +227,7 @@ impl Composer {
             Key::End => Composer::edited(self.end()),
             Key::Quit => Outcome::Quit,
             Key::Cancel => self.cancel(),
+            Key::Escape => Outcome::Unchanged,
         }
     }
 
