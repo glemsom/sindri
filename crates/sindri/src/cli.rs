@@ -9,7 +9,7 @@
 //!
 //! `--route` names the completion endpoint a wire that serves two is sent on,
 //! in the two words the core accepts, so a misbehaving route can be got round
-//! without renaming the model (Appendix A10).
+//! without renaming the model (§10).
 //!
 //! `auth login`, `doctor` and `sessions` are subcommands rather than flags because
 //! they are the three things this binary does that run nothing (§3, §13): a
@@ -68,7 +68,7 @@ pub struct Cli {
     pub api_key: Option<String>,
 
     /// The completion endpoint to take, for a wire that serves two: `chat` or
-    /// `responses`, so a route that misbehaves can be got round by name (A10).
+    /// `responses`, so a route that misbehaves can be got round by name (§10).
     /// Replaces a `route` the config file holds, as a repeated flag does.
     #[arg(long, value_name = "ROUTE", value_enum)]
     pub route: Option<RouteWord>,
@@ -82,7 +82,7 @@ pub struct Cli {
     #[arg(long = "yolo-unsafe")]
     pub yolo_unsafe: bool,
 
-    /// The output format, global so either front end accepts it (§3, A5).
+    /// The output format, global so either front end accepts it (§3).
     #[arg(long, global = true, value_name = "FORMAT", default_value = "text")]
     pub format: Format,
 
@@ -160,7 +160,7 @@ pub enum LoginWire {
 
 /// The routes a launch may name, as clap sees them: the two words the core
 /// accepts, so no third spelling can be typed, and nothing here decides which
-/// endpoint a name is served by — that is rig's (Appendix A10).
+/// endpoint a name is served by — that is rig's (§10).
 #[derive(Clone, Copy, Debug, ValueEnum)]
 pub enum RouteWord {
     /// `POST /chat/completions`.

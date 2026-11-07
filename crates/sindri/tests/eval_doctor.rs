@@ -12,7 +12,7 @@
 //!
 //! Nothing here reads the network, and nothing here needs a terminal: the report is
 //! stdout, and a host that will not let bubblewrap make a sandbox still prints it
-//! whole and exits 3 over a card (§15, Appendix A1).
+//! whole and exits 3 over a card (§15).
 //!
 //! An eval is judged by `make evals` and never by `make test`, which is why the
 //! test here is ignored: the stage that owns a failure is the stage that prints it.

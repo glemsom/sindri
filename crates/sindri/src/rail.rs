@@ -1,7 +1,7 @@
 //! The rail: the run's facts down the frame's right-hand columns, read as a ledger —
 //! a label in a fixed field, dot leaders running out to one hanging edge, a hairline
 //! between blocks — and given up in one order when the frame is too narrow to hold
-//! all of it (§12, Appendix A12, ticket #46).
+//! all of it (§12, ticket #46).
 //!
 //! The facts are handed in and never reached for: `Facts` is what the core knows about a
 //! run — the model, the turns against the cap, the enforcement in force, the workspace,
@@ -17,7 +17,7 @@
 //!
 //! Nothing is ever drawn in part. A value that leaves no room for a leader in its column
 //! drops the fact rather than being cut off, a path keeps whole components and marks the
-//! head it left with `…/`, and what the room cannot hold is given up in A12's order —
+//! head it left with `…/`, and what the room cannot hold is given up in §12's order —
 //! temp path, cache hits, session GUID, branch, skills in force, context meter,
 //! workspace, turns, model — beside a row saying how many went. The sandbox posture is
 //! absent from that order because §12 says it never goes. The degradation is a pure
@@ -121,7 +121,7 @@ pub struct Facts {
     /// How much of the context window the run has spent, in whole percent.
     pub ctx: Option<u8>,
     /// How much of the run's input the provider served from its own cache, in whole
-    /// percent (Appendix A11).
+    /// percent (ADR-0010).
     pub cache: Option<u8>,
     /// The one directory the run stands in.
     pub workspace: Option<PathBuf>,
@@ -285,8 +285,8 @@ impl Facts {
 
     /// The facts this rail keeps and how many it gave up: one whose value will not fit
     /// the column it is drawn in goes before anything else, and what is left is given up
-    /// in A12's order until the rail's room holds the rest and the row that counts what
-    /// went (§12, A12, #46).
+    /// in §12's order until the rail's room holds the rest and the row that counts what
+    /// went (#46).
     fn kept(&self, shape: Shape, area: Rect) -> Kept {
         let known = self.known();
         let total = known.len();
@@ -396,7 +396,7 @@ impl Facts {
 }
 
 /// One fact as the rail draws it: which of §12's facts it is, which is also the label
-/// its field holds and its place in A12's sacrifice order, and the value beside it.
+/// its field holds and its place in §12's sacrifice order, and the value beside it.
 struct Fact {
     /// Which fact this is.
     kind: Kind,
@@ -618,7 +618,7 @@ impl Kind {
     }
 }
 
-/// A12's sacrifice order, the first to go first: what the rail gives up as the room
+/// §12's sacrifice order, the first to go first: what the rail gives up as the room
 /// runs out. The sandbox posture is deliberately absent, because §12 says it never
 /// goes, so no loop over this list can reach it.
 const SACRIFICE: [Kind; 9] = [
@@ -640,7 +640,7 @@ mod tests {
     //! gets instead of the columns, and the row that counts what went. None of them
     //! needs a terminal — where a cell's glyph and ink are the question, the buffer the
     //! ledger paints into is the answer, and no fixture is asked about a rule a loop can
-    //! state (§12, A12, ADR-0012).
+    //! state (§12, ADR-0012).
 
     use std::path::Path;
 
@@ -1117,7 +1117,7 @@ mod tests {
                 "turns",
                 "model"
             ],
-            "A12's sacrifice order, the first to go first"
+            "§12's sacrifice order, the first to go first"
         );
         assert!(
             !SACRIFICE.contains(&Kind::Sandbox),

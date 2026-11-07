@@ -301,7 +301,7 @@ fn a_key_at_the_model_screen_reaches_no_draft() {
         view.composer().text(),
         "",
         "a screen is the whole frame, and a glyph typed at it narrows a list rather than \
-         composing a prompt nobody can see (§12, A7)"
+         composing a prompt nobody can see (§12, ADR-0017)"
     );
 }
 

@@ -1,7 +1,10 @@
 # Sindri — capability spec
 
 What Sindri is, what it must do, and what makes it different from a generic "LLM with
-tools" agent.
+tools" agent. This is acceptance criteria, not a plan: it says *what must be true*, `docs/adr/`
+says *why it is built this way*, `GLOSSARY.md` says *what the words mean*, and the issue
+tracker says *when*. A `§N` here names a section of this file; `ADR-NNNN` names a record in
+`docs/adr/`.
 
 ## 1. One sentence
 
@@ -14,7 +17,9 @@ tools" agent.
 - **stdout is a contract.** Batch mode's stdout is the answer plus exactly one newline, and
   nothing at all when the run failed or was cancelled. All chatter goes to stderr.
 - **Exit codes are the interface.** A script never parses prose to learn what happened.
-- **Three tools.** `bash` runs everything; `skill` and `open` exist only where a shell cannot decide on the model's behalf.
+- **Three tools at most.** `bash` runs everything; `skill` and `open` exist only where a
+  shell cannot decide on the model's behalf. A front end registers what it honours, so batch
+  mode has two.
 - **The boundary the model is told about is the boundary enforced.** Tool descriptions are
   *derived* from the live sandbox policy and limits, never hand-written and never drifting.
 - **Absence over refusal.** A tool a front end cannot honour is not registered at all, so
@@ -31,12 +36,14 @@ tools" agent.
 - `sindri -b PROMPT` — batch: ask, print the answer. Reads piped stdin as context appended
   after the prompt; with no prompt argument stdin *is* the prompt; a pipe without `-b` is
   refused.
-- `sindri doctor` — prove the sandbox, print the description the model sees, list every skill found with its scope (builtin / user / repo) and any shadowing.
-  the sandbox itself failed.
+- `sindri doctor` — prove the sandbox, print the description the model sees, list every skill
+  found with its scope (builtin / user / repo) and any shadowing. A sandbox it cannot prove is a
+  card naming the failing check, at exit 3.
 - `sindri sessions list|show` — read past runs back.
 - `sindri auth login copilot` — OAuth device-flow sign-in.
-- `--format json` and `-v` are global, so a TUI launch accepts and ignores them.
-- `--yolo-unsafe` Run without sandbox at all
+- `--format json` and `-v` are global, so a TUI launch accepts and ignores them. The JSON
+  contract below is batch mode's, so a TUI launch writes nothing to stdout.
+- `--yolo-unsafe` — run without the sandbox at all.
 
 ## 4. The run loop (the agent)
 
@@ -46,7 +53,8 @@ tools" agent.
   gutter and ink.
 - **Loaded-skill set carries across turns** within a run; cleared when history is cleared;
   two identical loads in one wave are one load.
-- **Two second limits, separate from the turn cap** (batching hides work inside one script):
+- **Two budgets, separate from the turn cap** (batching hides work inside one script, so a
+  per-turn limit would be spent per script and not per run):
   - command wall clock per run (default **1 hour**)
   - bytes of command output fed back (default **8 MiB**)
 - **Per-call timeout** (default **120s**, max 3600) — a killed command reports `timed_out`.
@@ -93,7 +101,7 @@ tools" agent.
 ## 6. Sandbox
 
 - Every `bash` call runs in **unprivileged bubblewrap**: host root read-only (a boundary on writes, not reads) plus a writable set the user chose.
-- Per-session **temp** mapped to `TMPDIR`: writable scratch that lives as long as the session, so calls in one run see each other's files and no run sees another's. 
+- Per-session **temp** mapped to `TMPDIR`: writable scratch that lives as long as the session, so calls in one run see each other's files and no run sees another's.
 - Writable set invariant: canonical, absolute, distinct, non-nested, never `/`.
 - `--yolo-unsafe` is the one escape hatch: commands run with the user's own privileges,
   outside bubblewrap, inheriting environment and cwd. It has **no config key and no
@@ -152,7 +160,8 @@ tools" agent.
 - **`.sindri.toml` in the working directory is never read** — a checked-in config granting
   writable paths would turn `git clone && sindri` into privilege escalation.
 - Keys: provider, model, base_url, api_key, thinking, extra_writable_paths, extra_headers,
-  max_turns, timeout, status, ssh_agent. `--yolo-unsafe` is deliberately not among them.
+  max_turns, timeout, command_budget_ms, output_budget_bytes, status, ssh_agent.
+  `--yolo-unsafe` is deliberately not among them.
 - Secrets: masked, never in the transcript, never in a record, redacted everywhere.
 - A first run needs no file: an API-key row that says where a key comes from, where it will
   be written, that the file is 0600, and that the value is never shown again.
@@ -161,27 +170,33 @@ tools" agent.
 
 - **Frame**: alternate screen, streaming markdown transcript, rail, composer. An idle frame is never drawn.
 - **Pulse**: while a run is live, a braille marker at the head of the newest answer carries elapsed time and settles on `✓`/`✗` with the duration it stopped at.
-- **Tool calls as rows**: `✓ exit 0` / `✗ exit N` / `✗ timed out` / `✗ cancelled`. Tool calls is painted with faded ink
+- **Tool calls as rows**: `✓ exit 0` / `✗ exit N` / `✗ timed out` / `✗ cancelled`, painted in faded ink.
 - **Queue**: a prompt typed during a run waits above the composer, whole and in order
-  (`3 queued`); `↑` takes the newest back; `Ctrl-X` drops it.
-- **Rail** — 32 columns, always visible, read as a ledger (labels in a fixed field, dot leaders, one hanging edge, hairline between blocks): cache hits, turns vs cap, context meter, model, workspace, branch, session GUID, temp path, skills in force, sandbox posture. Below 100 columns it becomes one strip.
+  (`3 queued`); `↑` on the composer's first line takes the newest back and anywhere else moves
+  the caret; `Ctrl-X` drops it.
+- **Rail** — 32 columns, always visible, read as a ledger (labels in a fixed field, dot
+  leaders, one hanging edge, hairline between blocks): cache hits, turns vs cap, context meter,
+  model, workspace, branch, session GUID, temp path, skills in force, sandbox posture. Below 100
+  columns it becomes one strip. Facts are given up in one order — temp path, cache hits, session
+  GUID, branch, skills in force, context meter, workspace, turns, model — and sandbox posture
+  never goes.
 - **Composer** 2–6 rows: `Enter` sends, `Shift+Enter`/`Ctrl-J` newline, `Ctrl-Q` quits,
   `Ctrl-C` cancels and keeps the draft (clears it when idle). A pasted prompt arrives as one
   draft with its line breaks kept.
 - **Scroll and copy**: `PgUp`/`PgDn`/wheel, `Home`/`End` with tail-follow; a reader scrolled
   back is told what arrived below (`↓ 4 new rows`); only on-screen rows are laid out.
   A drag **marks exactly the cells the copy will take** (`mark::span` is shared by mark and
-  copy, so they cannot disagree); the mark persists so `Ctrl-Y` copies again, or copies the last answer when there is no mark. `Shift+↑/↓` grow the mark a row at a time. Words leave by OSC 52
-- **`@` path picker**: walks the workspace, honours .gitignore file.
- — a file the run can read is a file the reader may point at. Proximity-ranked, capped at 8 rows.
+  copy, so they cannot disagree); the mark persists so `Ctrl-Y` copies again, or copies the last answer when there is no mark. `Shift+↑/↓` grow the mark a row at a time. Words leave by OSC 52.
+- **`@` path picker**: walks the workspace as `git` reads it and honours `.gitignore` — a file
+  the run can read is a file the reader may point at. Proximity-ranked, capped at 8 rows.
 - **`/` commands**: `/new`, `/skill[:name]`, `/model`, `/settings`, `/help`, `/quit`.
 - **`/model`** opens a screen of the names the wire serves, ranked as you type; `Enter`
   writes the chosen name through the same owner-only atomic save; `/model <name>` sets a
   name the wire never offered, by the same write.
 - **Settings modal**: arrow/Tab between keys, `Ctrl-U` empties, `Space` flips a toggle, an empty value *unsets* the key so the environment speaks. `Enter` writes at once and the next prompt runs on it; `Esc` discards; only touched fields are written, once, atomically.
 - **Chrome degrades by priority, never by truncation**: footer shows 7 hints from 120 cols,
-  5 from 100, never fewer than `Enter send` and `? keys`; the rail gives facts up in one
-  order and keeps a row saying how many went (`+7 more`); a key or a fact is whole or it is
+  5 from 100, never fewer than `Enter send` and `? keys`; the rail gives facts up in the
+  order above and keeps a row saying how many went (`+7 more`); a key or a fact is whole or it is
   not drawn.
 - **Markdown rendering**: headings, tables, code with syntax highlighting, and **pictures** —
   an image `src` resolved inside the workspace, or a **mermaid fence** rasterised — measured without spending pixels and refused with a reason the caption can print. A picture's block
@@ -235,160 +250,23 @@ tools" agent.
   audits, tests, evals, a no-relink proof, and the release scripts run as processes.
 - **Four fast audits** (`make audit`, milliseconds, also wired into a commit hook):
   - every module opens with a `//!` paragraph of at least eight words;
-  - every `mod` in a crate root trailed by one clause cut from that module's paragraph — and
-    the reverse: a file under a tests tree that no declaration names is reported where it lies;
+  - every `mod` in a crate root trailed by one clause cut from that module's paragraph;
+  - the reverse: a file under a tests tree that no declaration names is reported where it lies;
   - every `#[test]` name states the behaviour, with no `test_`/`it_`/`works`/`check_` opener.
 - **No-relink proof**: the binary embeds `git describe` + commit date, never the wall clock, so an unchanged tree must not relink.
 
-## 17. What makes Sindri different (the short list)
+## 17. Assumptions and what makes Sindri different
 
-- **Rich terminal**: We assume a terminal with Kitty protocol support. This enabled the ability to show images and rasterisation.
+- **A rich terminal**: we assume a terminal that speaks the Kitty graphics protocol. That is
+  what buys pictures and diagram rasterisation.
 - **A filter and a TUI over one core** — the same run, scriptable or watchable.
-- **Three tools**: composition over enumeration. A shell is the universal tool; the other two exist only for what a shell cannot decide.
-- **Descriptions derived from enforcement** — the model is told the boundary in force, and cannot be told a stale one.
-- **Skills as a tool with a catalog, permissions and dedup** — not files read by `cat`.
-  Built-in skills compiled into the binary so instructions and enforcement ship together.
-- **Session temp per run** shared across a run's calls, mapped to `TMPDIR`, spilled output
-  preserved — a real scratch lifecycle, not a single shared `/tmp`.
-- **Cancellation, budgets and stop reasons as product features**, not error paths.
-- **Records written as the run goes**, append-only, forward-compatible, and readable back by
-  the same `Entry` values the UI and `/export` use.
-- **Terminal protocol citizenship**: OSC 7501 status, OSC 52 copy, degraded-but-whole chrome
-- **Safety posture with no persisted unsafe mode** and a repo-local config that is never read.
+- **Three tools** — composition over enumeration. A shell is the universal tool; the other two
+  exist only for what a shell cannot decide.
+- **Descriptions derived from enforcement** — the model is told the boundary in force, and
+  cannot be told a stale one.
+- **Skills as a tool with a catalog, permissions and dedup** — built-in skills compiled into the
+  binary, so instructions and enforcement ship together.
+- **Cancellation, budgets and stop reasons as product features**, not error paths, over records
+  written as the run goes and read back by the same `Entry` values.
+- **Safety posture with no persisted unsafe mode**, and a repo-local config that is never read.
 - **Evals that assert on artefacts, not prose** — and benches that decide wording.
-
----
-
-## Appendix A — Contradictions and open questions
-
-The spec above is acceptance criteria and is not edited to fit what gets built. This
-appendix is the one place a gap is recorded, and a gap is closed here — never by editing the
-section that raised it. Every entry below is closed: it states its question, then a
-`**Resolved:**` clause saying where the answer lives — the ADR that settles it when the
-answer is a design decision, the artefact or policy that carries it when the answer corrects
-words. None is open. An entry that is ever re-opened keeps its question and its resolution,
-and says beside them what re-opened it, because this appendix is a record and not a rewrite
-of history. `ADR` = an architecture decision record. Four tests hold the four rules this
-record obeys — `crates/sindri-core/tests/spec_docs.rs` — so a truncated question, a missing
-resolution, or a reference to something the tree does not hold is a failing test rather than
-a matter of a reader noticing.
-
-**A1 — `doctor` ends mid-sentence (§3).** The last line reads "the sandbox itself failed."
-with no subject. **Resolved:** the lost clause is "exit 3", matching §15's sandbox/setup
-failure.
-
-**A2 — "Three tools" is two in batch (§2 vs §5).** `open` is absent off a terminal, so a
-batch run has `bash` and `skill`. **Resolved:** three is the ceiling, not the count; a front
-end registers what it honours and nothing else.
-
-**A3 — "Two second limits" (§4).** The heading says seconds; the two limits are a wall clock
-and a byte count. Should read "two budgets". Cosmetic but load-bearing: it is the sentence
-that makes a turn cap and a command budget different things. **Resolved:** the reading is
-"two budgets", and §4's words stay as they are, because they are acceptance criteria:
-`Budget` in `GLOSSARY.md` says what the two limits are and what they are not, §11's key list
-predates the decision and so does not name them — that omission is what A4 records — and
-both keys exist in the config schema — `command_budget_ms` and `output_budget_bytes` in
-`crates/sindri-core/src/config.rs` — settled as keys like the rest by ADR-0009, so a
-one-hour wall clock is a product default rather than a law.
-
-**A4 — The budgets have defaults but no config keys (§4 vs §11).** 1 hour and 8 MiB are
-named as defaults, `max_turns` and `timeout` are named as keys, and §13 records "dials
-obeyed". **Resolved:** both are config keys (`command_budget_ms`, `output_budget_bytes`)
-— see ADR-0009.
-
-**A5 — `--format json` on a TUI launch (§3 vs §15).** A TUI launch "accepts and ignores"
-`--format json`, but §15 promises one compact object on stdout or nothing at all. A TUI
-that ignores it emits nothing — which §15 permits only for a failed or cancelled run.
-**Resolved:** the JSON contract is a *batch-mode* contract. A TUI launch accepts the flag and
-must write nothing to stdout, because a TUI that emitted an answer object would be claiming
-§15's guarantee for a run nobody scripted.
-
-**A6 — `/export` is a phantom (§13, §17).** "the same `Entry` values the UI and
-`/export` use" implies an export feature that §3, §12 and §1 never define. Either it
-exists (and needs a syntax, a target and a format) or the mentions go. **Resolved:** `/export`
-is cut; the mentions in §13 and §17 mean `sessions show` — see ADR-0002.
-
-**A7 — `? keys` is a phantom (§12).** The footer must never show fewer than
-"`Enter send` and `? keys`". **Resolved:** the overlay is built — one screen listing the keys of
-the current mode stack, painted from the same key tables that answer those keys, because a mode
-is one screen and one key table — see ADR-0017.
-
-**A8 — "Four fast audits" lists three bullets (§16).** Bullet 2 carries a two-way rule
-(a `mod` without its clause, and an undeclared file under a tests tree). Is that two audits
-or one? **Resolved:** four named audits — module paragraph, `mod` clause, undeclared file under
-a tests tree, and test name. Each prints its own line — see `scripts/audit.sh`.
-(Question restored: the original text was cut.)
-
-**A9 — `↑` in the queue versus `↑` in the composer (§12).** `↑` takes the newest queued
-prompt back; the composer has 2–6 rows, where `↑` must move the cursor. One key, two
-meanings — which wins? **Resolved:** `↑` on the composer's first line with the queue non-empty
-recalls the newest queued prompt; anywhere else it moves the cursor — one arm reading the caret,
-so the key is decided in one place — see ADR-0017.
-(Question restored: the original text was cut.)
-
-**A10 — Which models use Chat Completions and which use Responses (§10).** The dialect
-is "chosen by model name where the identifier demands it", but for OpenAI-family and Copilot
-identifiers, who decides — the identifier, the config, or the wire? **Resolved:** delegated to
-rig. An `OpenAiWire` selects its `Route` (`Chat` or `Responses`) from the dialect and model, and
-`with_route` overrides it when a route misbehaves. The chosen route is recorded per run so a
-mystery is debuggable.
-(Question restored: the original text was cut.)
-
-**A11 — `cache hits` on the rail needs a caching story (§12).** The fact exists, so
-prompt caching must be spent somewhere explicit: Anthropic `cache_control` breakpoints, then
-what — and are the other wires left with no cache at all? **Resolved:** see ADR-0010 — two
-Anthropic breakpoints, report-only elsewhere, preamble never moves.
-(Question restored: the original text was cut.)
-
-**A12 — The rail's abandonment order (§12).** "gives facts up in one order" — which order, and
-which fact never goes? **Resolved:** sacrifice order is temp path, cache hits, session GUID,
-branch, skills in force, context meter, workspace, turns, model — and sandbox posture never
-goes. The order is carried by the rail itself: `BLOCKS` in `crates/sindri/src/rail.rs` draws
-the temp path last, and `SACRIFICE` opens with it, so the last row drawn is the first row
-given up.
-(Question restored: the original text was cut.)
-
-**A13 — Retry and the "already streamed" rule (§4).** "Never retry a reply that already
-streamed text" requires observing the stream at the retry seam. **Resolved:** the seam is
-rig-core's `Transport` trait, implemented once in core — see ADR-0004. **Resolved, then
-overtaken by A15 and A16:** that trait is generic over a wire and hands back the wire's own
-frames, so no text exists at that seam to observe, and the seam splits — see ADR-0015.
-
-**A14 — `skill` load scope (§4 vs §5).** §4 clears the loaded set when history clears;
-§5 says a load is once per conversation. That requires conversation and history to be one
-thing. Are they? **Resolved:** conversation *is* the run's history. `/new` clears the set, and a
-`/skill:name` load by the human counts, so a later model load returns `already_loaded`.
-(Question restored: the original text was cut.)
-
-**A15 — The retry seam sits below the point where text exists (§4, A13 vs rig-core 0.46).**
-A13 said the "never retry a reply that already streamed text" rule is observed at rig-core's
-`Transport` trait. In rig-core 0.46 that trait is generic over a wire and its `send` hands
-back the *wire's own frames*, so a transport sees framed events and never text: text exists
-only once the dialect's decoder has folded them, one layer higher.
-**Resolved:** the seam splits — attempts and headers live in the transport, which implements
-`HttpClientExt` (the trait every rig `Transport` is built from), and whether a reply had
-already streamed is reported by the provider seam's fold as `Failure::streamed`, beside the
-wire's own `Failure::retryable` — see ADR-0013.
-
-**A16 — Where the attempts live (§4, A13 vs ADR-0013).** A13 and ADR-0013 put "attempts and
-headers" in rig-core's `HttpClientExt` transport. A 429 and a 503 reach a transport as a
-`Response` carrying a status, not as an error, and the verdict that says whether to resend
-lives in the body the dialect decodes above it; a transport that retried would decide from a
-status code, which §4 forbids. **Resolved:** the transport dresses the request (extra
-headers, `{session}` expanded) and the fold above it decides — one function reading
-`retryable && !streamed` and refusing a cancel — see ADR-0015.
-
-**A17 — `rig_agent::AgentRunner` is not in rig-core 0.46 (§4 vs ADR-0004).** ADR-0004 makes the
-run loop a driver over `rig_agent::AgentRunner`, whose hook slots are supposed to carry every
-lifecycle rule §4 states. rig-core 0.46 ships no agent module — it is the release that dissolved
-the run vocabulary into `rig-core` — and no `rig-agent` crate is in this build's registry at all:
-`cargo metadata --offline` resolves `rig-core`, `rig-http`, `rig-reqwest`, `rig-tungstenite` and
-`rig-derive` and nothing else of the family, and a build with no network cannot fetch a name its
-lockfile does not hold. What 0.46 does offer is one `Model` that streams one reply, and a
-`Local` pass-through wire: no turn state, no tool-call batching, no hook. There is nothing to
-drive.
-**Resolved:** the fallback ADR-0004 itself named — a driver of our own — is taken, and it stops
-at our own two seams rather than at rig's: `Responder` (one request, one reply or one failure) and
-`Executor` (one call, what it cost). Every §4 rule is then decided in our code and proved with
-fakes, no network and no clock, and the wire stays behind the provider seam where A15 and A16 left
-it — see ADR-0016.

@@ -160,11 +160,11 @@ fn named(name: &str) -> View {
         // seconds in whole seconds, so the form is the ticket's and the value is the table's.
         "pulse-settled" => with_pulse(Pulse::settled(&Stop::Final, 9_400), &PULSE_ANSWER),
         // Prompts typed while a run is live, waiting above the composer and counted in one
-        // row, with a fourth being typed under them (ticket #42, §12, A9).
+        // row, with a fourth being typed under them (ticket #42, §12).
         "queue" => queue(),
         // The `?` screen, opened through the same key a reader presses rather than by
         // reaching into the stack: the frame lists the keys of the tables that answer
-        // them, so a picture of the screen is a picture of the keymap (ticket #45, A7).
+        // them, so a picture of the screen is a picture of the keymap (ticket #45, §12).
         "keys" => {
             let mut view = View::boot();
             view.key(Key::Char('?'));

@@ -1487,7 +1487,7 @@ fn up_on_the_first_line_takes_the_newest_queued_prompt_back() {
     queue(&mut pty, &drawn, "the newest");
 
     // `↑` with the caret on the composer's first line and nothing typed: the thing above the
-    // caret is the queue, so the newest queued prompt is the draft again (A9) — the caret
+    // caret is the queue, so the newest queued prompt is the draft again (§12) — the caret
     // lands one column past its last glyph, which is how a test reads the words as back.
     pty.type_bytes(b"\x1b[A");
     assert!(

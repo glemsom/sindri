@@ -40,7 +40,7 @@
 //! while it holds nothing — the rows are the `Queue`'s to decide as the box's are the
 //! `Composer`'s — and that row is the whole of what a prompt typed during a run is drawn
 //! as, because the prompt itself is a thing the reader typed and can have back with `↑`
-//! (§12, A9).
+//! (§12, ADR-0017).
 //!
 //! The marker at the head of the newest answer is `pulse`'s to say in words and this
 //! file's to hand to the rows it heads, so the prose around it wraps rather than being cut
@@ -192,7 +192,7 @@ pub struct View {
     stream: Stream,
     /// The prompts typed while a run was live, waiting their turn above the composer's
     /// band, oldest first: what `↑` recalls and `Ctrl-X` drops and what the run after
-    /// this one is taken from (§12, A9).
+    /// this one is taken from (§12, ADR-0017).
     queue: Queue,
     /// The modes this frame is in, the composer at the base and any screen opened over
     /// it: what answers a key and, while a screen is up, the whole of what is painted.
@@ -222,7 +222,7 @@ pub struct View {
     /// for, beside the query typed into the screen and the row the selection is on (§10).
     models: Models,
     /// The skills loaded so far in this conversation, in load order: the one set a human's
-    /// `/skill:name` writes to, and the set clearing the history empties (§4, §5, A14).
+    /// `/skill:name` writes to, and the set clearing the history empties (§4, §5).
     loaded: Loaded,
     /// The home the user-scope skills are read from, when the launch has one, so the frame
     /// asks the catalog the same question a run asks it (§7, ADR-0014).
@@ -282,7 +282,7 @@ impl View {
     }
 
     /// The prompts waiting above the composer, oldest first: what the queue's row counts
-    /// and what the two keys of A9 reach into.
+    /// and what the two keys §12 gives the queue reach into.
     pub fn queue(&self) -> &Queue {
         &self.queue
     }
@@ -340,7 +340,7 @@ impl View {
     }
 
     /// The names loaded so far in this conversation, in load order: what `/skill:name`
-    /// writes to and what `/new` empties (§4, §5, A14).
+    /// writes to and what `/new` empties (§4, §5).
     pub fn loaded(&self) -> &Loaded {
         &self.loaded
     }
@@ -542,7 +542,7 @@ impl View {
     /// `/new`: the conversation starts again — the transcript's rows, the turn in flight,
     /// the marker at the head of its newest answer and the mark over it are all this frame
     /// held of it — and the loaded-skill set goes with them, because a load is once per
-    /// conversation and the conversation is the history (§4, §13, A14).
+    /// conversation, and the conversation is the history (§4, §13).
     ///
     /// The run in flight, if there is one, is left and not stopped: it was superseded
     /// rather than ended, so its session keeps saying `running` and it reaches its own stop
@@ -566,7 +566,7 @@ impl View {
     /// the catalog's decision and never this file's — `user-invocable: false` is a door only
     /// the model has — and a name the catalog does not offer loads nothing at all, because a
     /// name in this set is what a later model load answers `already_loaded` from: a name put
-    /// there by hand would answer for a body nothing had ever handed over (§5, A14).
+    /// there by hand would answer for a body nothing had ever handed over (§5).
     fn skill(&mut self, name: &str) -> Outcome {
         let Some(workspace) = self.workspace.clone() else {
             return Outcome::Unchanged;
@@ -594,7 +594,7 @@ impl View {
     }
 
     /// `/help`: one screen opened over the draft, which is the whole of what a reader is
-    /// handed — the screen answers its own keys from there (§12, A7). `/settings` is the same
+    /// handed — the screen answers its own keys from there (§12, ADR-0017). `/settings` is the same
     /// act and not the same call: its rows are the config's, which the frame holds no copy
     /// of, so it opens in the terminal (`Outcome::Settings`, `View::open_settings`).
     fn screen(&mut self, mode: Mode) -> Outcome {
@@ -755,7 +755,7 @@ impl View {
         }
     }
 
-    /// `↑` — one key with two homes, and this is the only place it is decided (A9).
+    /// `↑` — one key with two homes, and this is the only place it is decided (§12).
     ///
     /// On the composer's first line the thing above the caret is the queue rather than
     /// another row of the draft, so the arrow recalls the newest queued prompt; anywhere
@@ -1011,7 +1011,7 @@ impl View {
     ///
     /// It is painted from the tables themselves rather than from prose about them, so
     /// the screen and the keys cannot disagree, and a mode added later is a variant, a
-    /// table and a heading here with nothing else to remember (A7).
+    /// table and a heading here with nothing else to remember (§12).
     fn keys_screen(&self, area: Rect, buffer: &mut Buffer) {
         buffer.set_style(area, Ink::Plain.style());
         let modes: Vec<Mode> = self.stack.modes().collect();

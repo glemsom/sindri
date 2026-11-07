@@ -98,7 +98,7 @@ pub struct Figure {
     pub wire: Wire,
     /// The served name it asks for.
     pub model: String,
-    /// The completion endpoint, for a wire that serves two (A10).
+    /// The completion endpoint, for a wire that serves two (§10).
     pub route: Option<Route>,
     /// How its commands are confined: `bubblewrap` or `unsafe`.
     pub enforcement: Enforcement,
@@ -132,7 +132,7 @@ pub struct Launch {
     model: String,
     /// The dialect it asks.
     wire: Wire,
-    /// The completion endpoint, for a wire that serves two (A10).
+    /// The completion endpoint, for a wire that serves two (§10).
     route: Option<Route>,
     /// What boot proved about the sandbox, as the one line a front end narrates.
     proof: Proof,
@@ -193,7 +193,7 @@ impl Launch {
         }
         let ask = ask(config, wire, model.clone(), &workspace);
         // Which endpoint the run answers on is read before the first request leaves, so a
-        // run that dies on its first ask still says where it was (A10).
+        // run that dies on its first ask still says where it was (§10).
         let route = ask.route_of();
         let asking = Asking::new(client, ask);
         let shell = Shell::new(boundary.clone(), session.temp(), catalog);

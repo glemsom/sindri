@@ -1,6 +1,6 @@
 //! The prompts typed while a run is live, waiting above the composer in the order they
 //! were typed and counted in one row: the queue §12 names, and the value `↑` and
-//! `Ctrl-X` reach into (A9).
+//! `Ctrl-X` reach into (§12).
 //!
 //! Nothing here knows what a terminal is (ADR-0005): a queue is prompts in a line, so
 //! the order they run in, the newest one recalled and the row the frame says them in are
@@ -21,7 +21,7 @@ use crate::composer::Prompt;
 ///
 /// A prompt joins the back and leaves the front when its turn comes, which is what "in
 /// order" means as code. The newest leaves the back when `↑` recalls it, because the
-/// prompt the reader most likely wants back is the one they typed last (A9).
+/// prompt the reader most likely wants back is the one they typed last (§12).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Queue {
     /// The prompts waiting, oldest first.
@@ -57,7 +57,7 @@ impl Queue {
     }
 
     /// The newest prompt, taken back out of the queue: what `↑` on the composer's first
-    /// line recalls (A9), and what `Ctrl-X` takes and throws away. Nothing waiting is
+    /// line recalls (§12), and what `Ctrl-X` takes and throws away. Nothing waiting is
     /// nothing to take.
     pub fn recall(&mut self) -> Option<Prompt> {
         self.waiting.pop_back()

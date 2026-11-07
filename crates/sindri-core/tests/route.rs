@@ -2,7 +2,7 @@
 //! model's own name — `chat` for `POST /chat/completions`, `responses` for
 //! `POST /responses` — that the Copilot dialect answers on either with streamed
 //! text, usage and the editor identity rig stamps, and that a person can make a
-//! run take the other route when one misbehaves (Appendix A10).
+//! run take the other route when one misbehaves (§10).
 //!
 //! Nothing here reaches the network: the transport hands back bytes a fixture
 //! recorded, so the request the wire really encodes is the one asserted on, and

@@ -1,7 +1,7 @@
 //! Which completion endpoint an OpenAI-shaped wire serves: `chat` for
 //! `POST /chat/completions` and `responses` for `POST /responses`. The choice is
 //! rig's, read off the wire it builds from the dialect and the served name, and
-//! a run may name the other one when a route misbehaves (Appendix A10).
+//! a run may name the other one when a route misbehaves (§10).
 //!
 //! Nothing here decides the route a second time. `OpenAiWire` is the one place
 //! rig routes, so the route kept here is the route the request takes, and the

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The four fast audits of spec §16 and Appendix A8, in one pass over the tree:
+# The four fast audits of spec §16, in one pass over the tree:
 # no cargo, no compilation, no network, milliseconds on the whole workspace.
 # Ticket #5 wires this into `make audit`; it is the entry point for that target
 # and for the commit hook, so it takes the repo root and prints one line per

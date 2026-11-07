@@ -214,7 +214,7 @@ fn a_run_that_was_recorded_reads_back_as_the_run_it_was() {
             wire: Wire::Copilot,
             model: "a-model-read-off-the-wire",
             // Copilot serves two endpoints and this name asks for neither, so
-            // the route is the one its dialect answers by habit (A10).
+            // the route is the one its dialect answers by habit (§10).
             route: Some(Route::Chat),
             boundary: &boundary,
             limits: &limits,

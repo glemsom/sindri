@@ -733,7 +733,7 @@ fn a_launch_with_no_prompt_accepts_json_and_verbose_and_writes_nothing_to_stdout
     );
     assert!(
         output.stdout.is_empty(),
-        "and an object a launch cannot claim is never written (A5): {}",
+        "and an object a launch cannot claim is never written (§3): {}",
         text(&output.stdout)
     );
 }

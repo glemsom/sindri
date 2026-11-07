@@ -1190,7 +1190,7 @@ impl Decoder {
         self.take(last_at + 1);
         match (last, params.as_str()) {
             // A modified arrow says so between the bracket and its final byte, which is
-            // the one spelling §17's terminals use for `Shift+↑` and `Shift+↓` (A9, #50).
+            // the one spelling §17's terminals use for `Shift+↑` and `Shift+↓` (§12, #50).
             (b'A', _) if shifted(&params) => Step::Event(Event::Key(Key::ShiftUp)),
             (b'B', _) if shifted(&params) => Step::Event(Event::Key(Key::ShiftDown)),
             (b'A', _) => Step::Event(Event::Key(Key::Up)),

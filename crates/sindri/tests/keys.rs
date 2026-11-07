@@ -1,8 +1,7 @@
 //! The mode stack's contract, walked rather than eyeballed: one key table per mode
 //! with no key bound twice in one of them, a screen that answers only its own keys,
 //! and the two keys that carry a rule — `?` that opens the keys and `↑` that the
-//! queue shares with the draft — resolving exactly where the appendix says (§12, A7,
-//! A9).
+//! queue shares with the draft — resolving exactly where ADR-0017 and §12 say.
 
 use sindri::composer::{Composer, Key, Outcome};
 use sindri::keys::{Act, Mode};
@@ -154,7 +153,7 @@ fn a_screen_answers_its_own_keys_and_swallows_the_drafts() {
 
 #[test]
 fn the_up_arrows_one_arm_is_bound_in_one_row_of_one_table() {
-    // A9 is about the draft's `↑`, so it is `Act::Up` that has to resolve in exactly one
+    // §12 is about the draft's `↑`, so it is `Act::Up` that has to resolve in exactly one
     // row: the queue's recall and the row above the caret are one act, and a second row
     // carrying it would be a second place that key is decided. A screen's `↑` is its own
     // act — a list's selection is not a caret — and this rule does not reach it.
@@ -168,7 +167,7 @@ fn the_up_arrows_one_arm_is_bound_in_one_row_of_one_table() {
     assert_eq!(
         bound,
         vec![(Mode::Composer, Key::Up)],
-        "the draft's `↑` resolves in exactly one place, and A9 is decided there (A9)"
+        "the draft's `↑` resolves in exactly one place, and §12's rule is decided there (§12)"
     );
 }
 
@@ -301,7 +300,7 @@ fn ctrl_x_is_bound_in_one_mode_and_one_row() {
     assert_eq!(
         bound,
         vec![(Mode::Composer, Act::Drop)],
-        "`Ctrl-X` resolves in exactly one place, and the queue is what answers it (A9)"
+        "`Ctrl-X` resolves in exactly one place, and the queue is what answers it (§12)"
     );
 }
 

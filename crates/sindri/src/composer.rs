@@ -54,7 +54,7 @@ pub enum Key {
     /// Backspace: the glyph before the cursor goes.
     Backspace,
     /// The arrow keys, which move the cursor — `Up` on the first line being where the
-    /// queue's recall sits, which is the queue's decision and not this map's (A9).
+    /// queue's recall sits, which is the queue's decision and not this map's (§12).
     Left,
     Right,
     Up,
@@ -74,7 +74,7 @@ pub enum Key {
     /// `Ctrl-C`: cancels a run and keeps the draft, or clears it when nothing runs.
     Cancel,
     /// `Ctrl-X`: drops the newest queued prompt. Not a key of this map's — the queue is
-    /// the frame's and so is the rule (A9) — and listed here because this is the one
+    /// the frame's and so is the rule (§12) — and listed here because this is the one
     /// vocabulary the keyboard is decoded into.
     Drop,
     /// `Ctrl-U`: empties the value a settings row holds, which unsets the key it names. Not
@@ -229,7 +229,7 @@ impl Composer {
 
     /// Whether the cursor waits on the draft's first line — the fact the queue's `↑`
     /// turns on, because on that line and with a queue the arrow recalls rather than
-    /// moves (A9).
+    /// moves (§12).
     pub fn on_first_line(&self) -> bool {
         self.row(self.cursor) == 0
     }
@@ -255,7 +255,7 @@ impl Composer {
     }
 
     /// `↑` on the first line: a queued prompt is the draft again, whole, put in where the
-    /// caret waits so that nothing the reader had already typed is thrown away (A9).
+    /// caret waits so that nothing the reader had already typed is thrown away (§12).
     ///
     /// A recalled prompt is a paste that took a detour through the queue: every line
     /// break it was typed with comes back as one, because a prompt is one entry however
@@ -291,7 +291,7 @@ impl Composer {
             Key::Quit => Outcome::Quit,
             Key::Cancel => self.cancel(),
             // `Ctrl-X` is the queue's, and the frame answers it before the draft ever
-            // sees it: a draft reaching here changes nothing (A9).
+            // sees it: a draft reaching here changes nothing (§12).
             // `Ctrl-U`, `Tab` and `Shift+Tab` are the settings screen's, and are the
             // frame's to answer: a draft reaching here changes nothing.
             Key::Drop | Key::Escape | Key::Clear | Key::Tab | Key::BackTab => Outcome::Unchanged,

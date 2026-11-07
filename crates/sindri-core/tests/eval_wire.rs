@@ -45,7 +45,7 @@ const CHAT: &str = include_str!("fixtures/providers/copilot_chat_stream.sse");
 /// Every payload this crate sends, named as its golden is: the ask that produces a
 /// request, and the recorded reply that lets the ask finish. One case per dialect and
 /// route the run can choose, because a route is a different body and not a different
-/// word for the same one (§10, Appendix A10).
+/// word for the same one (§10).
 fn cases() -> Vec<(&'static str, Ask, &'static str)> {
     vec![
         (

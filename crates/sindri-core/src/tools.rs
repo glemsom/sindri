@@ -12,8 +12,8 @@
 //! batch mode, so a batch run has two tools and its schema says two.
 //!
 //! [`FrontEnd`] is that fact and no other: a front end registers what it honours,
-//! which is Appendix A2's answer to a spec that counts three tools and a batch
-//! mode that can only honour two.
+//! which is §5's answer to a spec that counts three tools and a batch mode that can
+//! only honour two.
 
 use crate::open;
 use crate::policy::Boundary;
@@ -30,7 +30,7 @@ pub const SKILL: &str = "skill";
 pub const OPEN: &str = "open";
 
 /// Which front end is registering, because §5's third tool is absent where there
-/// is nobody to look: three tools is the ceiling and not the count (A2).
+/// is nobody to look: three tools is the ceiling and not the count (§5).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FrontEnd {
     /// A terminal with somebody in front of it, so `open` is registered.

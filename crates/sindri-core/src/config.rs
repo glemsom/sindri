@@ -54,7 +54,7 @@ pub struct Config {
     /// The model a run asks for, named rather than invented.
     pub model: Option<String>,
     /// The completion endpoint a run takes, for a wire that serves two, so a
-    /// route that misbehaves can be got round by name (Appendix A10).
+    /// route that misbehaves can be got round by name (§10).
     pub route: Option<Route>,
     /// Where the wire's endpoint is, when it is not the dialect's own.
     pub base_url: Option<String>,

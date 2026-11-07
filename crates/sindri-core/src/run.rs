@@ -562,7 +562,7 @@ pub trait Responder {
 /// The loaded-skill set rides on the call rather than on the executor, because
 /// it is the run's bookkeeping and not a tool's: a `skill` call is answered by
 /// the tool that holds the catalog, and what has been loaded is decided in one
-/// place for both doors into it (§5, A14).
+/// place for both doors into it (§5).
 pub trait Executor {
     /// Run `call`, offering a skill it loads to `loaded`, and say what it cost
     /// the run.
@@ -584,7 +584,7 @@ pub enum Load {
 ///
 /// Both doors into it write here and neither keeps a set of its own — the
 /// human's `/skill:name` and the model's `skill` call — which is what makes a
-/// human load answer a later model load with `already_loaded` (A14).
+/// human load answer a later model load with `already_loaded` (§4).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Loaded {
     /// The names, in load order, which is the order a request carries them in.
@@ -615,7 +615,7 @@ impl Loaded {
     }
 
     /// Forget every name, because the history was cleared and the conversation
-    /// is the history (§4, A14).
+    /// is the history (§4).
     pub fn clear(&mut self) {
         self.names.clear();
     }
@@ -747,7 +747,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
     }
 
     /// Clear the history, and the loaded-skill set with it: a load is once per
-    /// conversation and the conversation is the run's history (§4, A14).
+    /// conversation and the conversation is the run's history (§4).
     pub fn clear_history(&mut self) {
         self.history.clear();
         self.skills.clear();

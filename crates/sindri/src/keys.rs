@@ -1,12 +1,12 @@
 //! The mode stack and one key table per mode: a key resolves in exactly one mode, the
 //! mode on top of the stack answers every key, and the row that answers it is one row
-//! of one table — so a new mode is a new table and nothing else (§12, A7, A9).
+//! of one table — so a new mode is a new table and nothing else (§12, ADR-0017).
 //!
 //! A table is data rather than a `match` for one reason: the `?` screen lists the keys
 //! a reader can press right now, and a screen built from the same rows that answer the
 //! keys cannot drift from them. `Mode::table` is therefore both the keymap and the
-//! content of the screen that explains the keymap, and the appendix's "one screen
-//! listing the keys of the current mode stack" is that list, mode by mode.
+//! content of the screen that explains the keymap, and §12's "one screen listing the
+//! keys of the current mode stack" is that list, mode by mode.
 //!
 //! The stack is explicit and shallow: `Composer` is the base every frame has, because a
 //! prompt is what this front end is for, and a modal — `Keys`, `Files`, `Models` and
@@ -16,7 +16,7 @@
 //! draft nobody can see.
 //!
 //! Six keys are a row and a rule, and every rule lives in an arm of the frame rather than in
-//! a second keymap: the queue's two (A9) — `↑` bound to `Act::Up`, because its recall and
+//! a second keymap: the queue's two (§12) — `↑` bound to `Act::Up`, because its recall and
 //! the row above the caret are one key with two homes, and `Ctrl-X` to `Act::Drop`; `@`
 //! bound to `Act::Files`, because it opens the picker only where it starts a word and is a
 //! glyph anywhere else; `?` bound to `Act::Keys`, which is a key only while the draft is
@@ -103,7 +103,7 @@ pub enum Act {
     /// which this frame reads and never restates.
     Draft,
     /// `↑`, one key with two homes: the queue's newest prompt on the composer's first
-    /// line, the row above the caret anywhere else (A9).
+    /// line, the row above the caret anywhere else (§12).
     Up,
     /// `Ctrl-Y`: the words the mark covers leave the frame, or the newest answer does
     /// when nothing is marked (§12).
@@ -126,7 +126,7 @@ pub enum Act {
     /// else. The picker's fallback, for the reason the draft is the composer's.
     Query,
     /// `↑` and `↓` at the picker: the row above and the row below the selection. Two acts
-    /// and not one, and neither of them the composer's `Up`, because A9's rule is about the
+    /// and not one, and neither of them the composer's `Up`, because §12's rule is about the
     /// draft's caret and a list's selection is not a caret.
     Previous,
     Next,

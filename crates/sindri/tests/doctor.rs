@@ -17,7 +17,7 @@
 //!
 //! The tests that read the report off this machine's own `PATH` do not require it
 //! to be able to make a sandbox: `doctor` prints the whole report either way and
-//! ends `0` over a sandbox it proved and `3` over one the kernel refused (§15, A1),
+//! ends `0` over a sandbox it proved and `3` over one the kernel refused (§15, §3),
 //! and that a host may forbid the second is a fact about the host rather than a
 //! verdict on the report. What is not relaxed is the description's bytes — nor the
 //! card, which a faked machine proves where this one may not.
@@ -158,7 +158,7 @@ fn run(command: &mut Command) -> Output {
 /// Asserts that `doctor` answered with a report rather than a refusal of its own:
 /// `0` over a sandbox this machine proved, and `3` over one its kernel would not
 /// let it make — the report is whole in both, with the card printed under a
-/// `sandbox failed` row (§15, A1). Which of the two this host is, is the host's
+/// `sandbox failed` row (§15, §3). Which of the two this host is, is the host's
 /// fact; the card itself is read in
 /// `a_sandbox_check_that_fails_is_named_in_a_card_and_exits_three`, from a machine
 /// that refuses on demand.
@@ -284,7 +284,7 @@ fn a_sandbox_check_that_fails_is_named_in_a_card_and_exits_three() {
     assert_eq!(
         output.status.code(),
         Some(3),
-        "§15's sandbox/setup failure, which is A1's lost clause: stdout:\n{out}\nstderr:\n{err}"
+        "§15's sandbox/setup failure, which is §3's exit 3: stdout:\n{out}\nstderr:\n{err}"
     );
     assert!(
         out.contains("cannot create the sandbox: bubblewrap creates an unprivileged sandbox"),

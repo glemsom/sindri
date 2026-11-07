@@ -5,7 +5,7 @@
 //! bubblewrap invocation over the boundary in force, borrowing a session's temp
 //! for the length of the check because that is the directory a run's commands are
 //! handed as `TMPDIR`. A check that fails prints the card naming it and exits 3,
-//! which is Appendix A1's lost clause.
+//! which is §3's exit 3.
 //!
 //! The description is read off the tool set a run registers rather than rendered
 //! here, so §5's sentence — the boundary the model is told about is the boundary

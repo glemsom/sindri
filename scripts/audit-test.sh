@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Acceptance test for scripts/audit.sh, the four fast audits (spec §16, A8).
+# Acceptance test for scripts/audit.sh, the four fast audits (spec §16).
 # Each case builds a throwaway tree under $TMPDIR holding one violation, and
 # asserts both the exit code and the `file:line` the audit names. Fixtures live
 # in a temp dir on purpose: the audit scans every file it is given, so a

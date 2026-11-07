@@ -276,7 +276,7 @@ fn new_empties_the_loaded_skill_set() {
     assert!(
         view.loaded().names().is_empty(),
         "a load is once per conversation and the conversation is the history, so clearing \
-         the history empties the set (§4, A14): {:?}",
+         the history empties the set (§4): {:?}",
         view.loaded().names()
     );
 }
@@ -304,7 +304,7 @@ fn a_skill_the_catalog_does_not_hold_loads_nothing() {
     assert!(
         view.loaded().names().is_empty(),
         "a name in the set would answer a later model load with `already_loaded` for a body \
-         nothing ever handed over (§5, A14)"
+         nothing ever handed over (§5)"
     );
 }
 

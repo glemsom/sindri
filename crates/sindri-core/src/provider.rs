@@ -104,7 +104,7 @@ pub struct Ask {
     /// Whether the model should reason before it answers.
     thinking: bool,
     /// The route a person named for a wire that serves two, when one of them
-    /// misbehaves (Appendix A10).
+    /// misbehaves (§10).
     route: Option<Route>,
 }
 
@@ -162,7 +162,7 @@ impl Ask {
 
     /// Send the ask on `route` whatever the model's own name asks for, so a
     /// route that misbehaves can be got round without renaming the model
-    /// (Appendix A10). A dialect that serves one endpoint ignores it.
+    /// (§10). A dialect that serves one endpoint ignores it.
     pub fn route(mut self, route: Route) -> Self {
         self.route = Some(route);
         self
