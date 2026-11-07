@@ -231,12 +231,12 @@ fn every_row_fits_the_width_it_was_laid_out_for() {
         Entry::Turn { turn: 1000 },
         Entry::Call {
             turn: 1,
-            name: String::from("a-tool-whose-name-is-longer-than-the-band-it-is-drawn-in"),
+            name: secrets.redact("a-tool-whose-name-is-longer-than-the-band-it-is-drawn-in"),
             arguments: secrets.redact(""),
         },
         Entry::Result {
             turn: 1,
-            name: String::from("bash"),
+            name: secrets.redact("bash"),
             text: secrets.redact("unbreakableandunforgivingwordthatnospacecansplit\n日本語の答え"),
             bytes: u64::MAX,
             elapsed_ms: u64::MAX,
@@ -280,7 +280,7 @@ fn an_entry_with_nothing_to_say_is_still_one_row() {
         },
         Entry::Call {
             turn: 1,
-            name: String::from("bash"),
+            name: secrets.redact("bash"),
             arguments: secrets.redact(""),
         },
     ] {
@@ -609,7 +609,7 @@ fn a_live_run_opens_the_answers_row_before_it_has_said_anything() {
 fn call(which: u32) -> Entry {
     Entry::Call {
         turn: which,
-        name: String::from("bash"),
+        name: SecretSet::default().redact("bash"),
         arguments: SecretSet::default().redact(r#"{"command": "ls"}"#),
     }
 }
@@ -618,7 +618,7 @@ fn call(which: u32) -> Entry {
 fn result(which: u32, exit: Exit) -> Entry {
     Entry::Result {
         turn: which,
-        name: String::from("bash"),
+        name: SecretSet::default().redact("bash"),
         text: SecretSet::default().redact("exit 0\na.txt\n"),
         bytes: 7,
         elapsed_ms: 2,
