@@ -155,6 +155,18 @@ _Avoid_: Keymap (one word for the whole frame's), binding list, hotkeys
 A frame rendered at a fixed size and checked into the tests as the accepted picture of it.
 _Avoid_: Snapshot (too general), screenshot, golden image
 
+**Picture**:
+An image an answer points at, or the diagram a mermaid fence becomes: measured into the cells
+it takes — its **footprint** — before a pixel is spent, and drawn as a **placement** over the
+rows its block reserved. A picture's block is its words, which is what a copy takes.
+_Avoid_: Image (that is the `src`), graphic, thumbnail, raster (one way of drawing one)
+
+**Surface**:
+The three facts a picture is measured against — the workspace its source must resolve inside,
+the pixels in one cell, and whether this terminal places pictures at all — as one value, so a
+frame that changed none of them re-lays no row and a frame that changed one re-lays once.
+_Avoid_: Context, environment, settings
+
 **Path picker**:
 The screen `@` opens over the draft: the files of the workspace as `git` reads it, nearest
 the working directory first, narrowed by a query typed into the screen and capped at eight

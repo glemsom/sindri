@@ -21,8 +21,9 @@
 
 use sindri_core::provider::Deltas;
 
+use crate::picture::Surface;
 use crate::pulse::Head;
-use crate::rows::{Row, answer, thought};
+use crate::rows::{Row, answer_on, thought};
 
 /// What a run has said so far of the turn it is in the middle of: the fragments that
 /// have landed, in the order they landed, each stretch of them belonging to a thought or
@@ -90,13 +91,19 @@ impl Stream {
     /// said — the row exists before its first fragment does, because a frame waiting on a
     /// wire must not look like a frame that is idle.
     pub fn rows(&self, cols: u16, head: Option<&Head>) -> Vec<Row> {
+        self.rows_on(cols, head, &Surface::none())
+    }
+
+    /// The rows the turn in flight is drawn as on a `surface`: the same rows, with a picture
+    /// in the answer half-written measured against the workspace it points into (§12, #55).
+    pub fn rows_on(&self, cols: u16, head: Option<&Head>, surface: &Surface) -> Vec<Row> {
         let newest = self.runs.iter().rposition(|run| run.said == Said::Answer);
         let mut rows = Vec::new();
         for (at, run) in self.runs.iter().enumerate() {
             let head = if Some(at) == newest { head } else { None };
             rows.extend(match run.said {
                 Said::Reasoning => thought(&run.words, cols),
-                Said::Answer => answer(&run.words, cols, head),
+                Said::Answer => answer_on(&run.words, cols, head, surface),
             });
         }
         if let (None, Some(head)) = (newest, head) {
