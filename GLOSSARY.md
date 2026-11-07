@@ -155,6 +155,13 @@ _Avoid_: Keymap (one word for the whole frame's), binding list, hotkeys
 A frame rendered at a fixed size and checked into the tests as the accepted picture of it.
 _Avoid_: Snapshot (too general), screenshot, golden image
 
+**Eval**:
+An artefact held byte for byte to the golden checked in beside the test — the bytes a wire sends, the
+description `doctor` prints, a record line with a secret planted in every field, the SVG a mermaid
+fence drew — and run as its own stage (§16). Its failure names the line or tag that moved, and it
+needs neither the network nor a terminal.
+_Avoid_: Snapshot, golden test, benchmark
+
 **Path picker**:
 The screen `@` opens over the draft: the files of the workspace as `git` reads it, nearest
 the working directory first, narrowed by a query typed into the screen and capped at eight
