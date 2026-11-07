@@ -475,6 +475,35 @@ fn an_idle_terminal_is_painted_once_and_then_left_alone() {
 }
 
 #[test]
+fn an_at_walks_the_workspace_the_launch_stands_in() {
+    let ground = Ground::new();
+    std::fs::write(ground.workspace.join("notes.md"), "").expect("a file in the workspace");
+    std::fs::create_dir_all(ground.workspace.join("target")).expect("a directory");
+    std::fs::write(ground.workspace.join("target/built.rs"), "").expect("a built file");
+    std::fs::write(ground.workspace.join(".gitignore"), "target/\n").expect("a gitignore");
+    let (_session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    pty.type_bytes(b"@");
+
+    assert!(
+        drawn.wait_for(b"notes.md"),
+        "`@` opens the files of the workspace the launch stands in, and the file it holds \
+         there is a row of the screen: {:?}",
+        drawn.text()
+    );
+    assert!(
+        !text(&drawn.bytes()).contains("built.rs"),
+        "and a path the workspace's own `.gitignore` ignores is never offered: {:?}",
+        drawn.text()
+    );
+}
+
+#[test]
 fn a_launch_with_no_screen_is_refused_at_exit_two() {
     let ground = Ground::new();
     let pty = Pty::open();

@@ -41,6 +41,11 @@ fn keys_120x40_lists_the_keys_of_the_stack_it_sits_on() {
 }
 
 #[test]
+fn files_120x40_is_the_eight_files_nearest_the_workspace() {
+    fixture::assert_frame("files", 120, 40);
+}
+
+#[test]
 fn typing_120x40_is_a_composer_at_its_two_row_floor() {
     fixture::assert_frame("typing", 120, 40);
 }

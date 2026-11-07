@@ -195,6 +195,17 @@ impl Composer {
         self.row(self.cursor) == 0
     }
 
+    /// Whether the cursor starts a word — the head of the draft, or a space, a tab or a
+    /// line break behind it. It is the fact `@` turns on, and it is read here rather than
+    /// in a second count of glyphs: a key that opens a screen has to be told from a glyph
+    /// somewhere, and the draft is what knows where the words are.
+    pub fn at_word_start(&self) -> bool {
+        self.text[..self.cursor]
+            .chars()
+            .next_back()
+            .is_none_or(char::is_whitespace)
+    }
+
     /// A pasted prompt in one edit: one draft, its line breaks kept. A terminal puts
     /// `\r\n` or a bare `\r` on the wire for the break a clipboard calls `\n`, so both
     /// become the `\n` the draft is measured in — and not one of them is the `Enter`
@@ -275,9 +286,10 @@ impl Composer {
         }
     }
 
-    /// Puts `text` in at the cursor and follows it: one path for a typed glyph and for
-    /// a whole pasted prompt, so a paste is an edit like any other.
-    fn insert(&mut self, text: &str) {
+    /// Puts `text` in at the cursor and follows it: one path for a typed glyph, for a
+    /// whole pasted prompt, and for the word a picked path is, so each of them is an edit
+    /// like any other and none of them can leave the caret behind.
+    pub fn insert(&mut self, text: &str) {
         self.text.insert_str(self.cursor, text);
         self.cursor += text.len();
         self.follow();

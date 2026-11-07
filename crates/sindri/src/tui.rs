@@ -87,7 +87,10 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     let signals = match Signals::install() {
         Ok(signals) => signals,
         Err(error) => {
-            return crate::refuse(&format!("the signal pipe could not be made: {error}"), SETUP);
+            return crate::refuse(
+                &format!("the signal pipe could not be made: {error}"),
+                SETUP,
+            );
         }
     };
     let terminal = match Terminal::stdio() {
@@ -103,6 +106,19 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
         }
     };
     let mut view = View::boot();
+    // The frame is told the directory the launch stands in, because `@` walks the workspace
+    // and a frame knows only what it was handed. It is the same directory `Launch::open`
+    // gives a run — read the same way, from the process — so a path a reader picks is a path
+    // the run's own commands can read (§12).
+    match std::env::current_dir() {
+        Ok(workspace) => view.set_workspace(workspace),
+        Err(error) => {
+            return crate::refuse(
+                &format!("cannot read the working directory: {error}"),
+                SETUP,
+            );
+        }
+    }
     let mut canvas = match canvas(&terminal) {
         Ok(canvas) => canvas,
         Err(error) => {
@@ -314,7 +330,8 @@ fn keys(
             }
             decoder.push(&read[..count]);
             while let Some(event) = decoder.next() {
-                if let Some(ending) = answer(canvas, view, event, &mut running, cli, config, &wake)? {
+                if let Some(ending) = answer(canvas, view, event, &mut running, cli, config, &wake)?
+                {
                     return Ok(ending);
                 }
             }
@@ -413,7 +430,11 @@ impl Deltas for Reports {
 /// rather than left for the process to exit under. What the last turn said stays on the frame
 /// as the live entry until the next run starts: the record is where a settled turn is kept,
 /// and putting its entries on the frame is the transcript's (ADR-0007, ADR-0008).
-fn take(canvas: &mut Canvas<'_>, view: &mut View, running: &mut Option<Running>) -> io::Result<bool> {
+fn take(
+    canvas: &mut Canvas<'_>,
+    view: &mut View,
+    running: &mut Option<Running>,
+) -> io::Result<bool> {
     let Some(flight) = running.as_ref() else {
         return Ok(false);
     };
