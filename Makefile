@@ -201,7 +201,7 @@ sandbox:
 sandbox-tier:
 	$(call skippable,sandbox,bash scripts/sandbox-probe.sh)
 
-# The evals of spec §16 and §17, landed by ticket #59: four families of artefact
+# The evals of spec §16 and §2, landed by ticket #59: four families of artefact
 # held byte for byte to the golden checked in beside the test — the bytes each wire
 # sends, the description `doctor` prints against the one a run registers, every
 # field of every `Entry` against a secret planted in it, and the mermaid corpus
