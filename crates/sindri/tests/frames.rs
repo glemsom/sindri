@@ -54,3 +54,28 @@ fn grown_120x40_is_a_composer_at_its_six_row_ceiling() {
 fn scrolled_120x40_is_a_composer_showing_the_last_five_rows_of_a_taller_draft() {
     fixture::assert_frame("scrolled", 120, 40);
 }
+
+#[test]
+fn rail_120x40_is_the_ledger_down_the_frames_right_hand_columns() {
+    fixture::assert_frame("rail", 120, 40);
+}
+
+#[test]
+fn rail_100x40_is_the_last_frame_that_holds_a_ledger() {
+    fixture::assert_frame("rail", 100, 40);
+}
+
+#[test]
+fn rail_99x24_is_the_first_frame_that_is_one_strip() {
+    fixture::assert_frame("rail", 99, 24);
+}
+
+#[test]
+fn rail_80x24_is_the_strip_giving_facts_up_in_a12s_order() {
+    fixture::assert_frame("rail", 80, 24);
+}
+
+#[test]
+fn rail_40x24_is_the_strip_down_to_the_fact_that_never_goes() {
+    fixture::assert_frame("rail", 40, 24);
+}

@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+rail at 80x24
+00 |turn 1 ─────────────────────────────────────────────────────────────────────────| dim:80
+01 |✓ exit 0  bash  412 bytes · 23 ms                                               | ok:1 dim:32 plain:47
+02 |  src/rows.rs: the glyph a turn opens with                                      | plain:80
+03 |  src/rows.rs: a word longer than a row is broken                               | plain:80
+04 |  Rendering lives in the front end and not in the core, because an entry is a   | plain:80
+05 |  fact and never a rendering: the TUI and any reader draw one run from one      | plain:80
+06 |  value, and the core may not name a terminal at all.                           | plain:80
+07 |                                                                                | plain:80
+08 |                                                                                | plain:80
+09 |                                                                                | plain:80
+10 |                                                                                | plain:80
+11 |                                                                                | plain:80
+12 |                                                                                | plain:80
+13 |                                                                                | plain:80
+14 |                                                                                | plain:80
+15 |                                                                                | plain:80
+16 |                                                                                | plain:80
+17 |                                                                                | plain:80
+18 |                                                                                | plain:80
+19 |                                                                                | plain:80
+20 |model claude-sonnet · turns 6/250 · sandbox bwrap · +7 more                     | dim:6 muted:13 dim:9 muted:5 dim:11 muted:5 dim:3 muted:7 plain:21
+21 |────────────────────────────────────────────────────────────────────────────────| dim:80
+22 |                                                                                | plain:80
+23 |Enter send · ? keys                                                             | muted:10 dim:3 muted:6 plain:61

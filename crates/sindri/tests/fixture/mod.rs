@@ -36,8 +36,10 @@ use ratatui::buffer::{Buffer, Cell};
 
 use sindri::composer::{Composer, Key};
 use sindri::ink::Ink;
+use sindri::rail::Facts;
 use sindri::rows::Scroll;
 use sindri::view::View;
+use sindri_core::policy::Enforcement;
 use sindri_core::provider::Deltas;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
@@ -85,14 +87,18 @@ pub fn assert_frame(name: &str, cols: u16, rows: u16) {
 fn named(name: &str) -> View {
     match name {
         "boot" => View::boot(),
-        "transcript" => View::of(transcript(), Scroll::Tail),
-        "transcript-scrolled" => View::of(transcript(), Scroll::Back(4)),
+        "transcript" => running(transcript(), Scroll::Tail),
+        "transcript-scrolled" => running(transcript(), Scroll::Back(4)),
+        // The rail itself, at the five widths §46 names: the frame of a run just begun, so
+        // the ledger, the strip and the row that counts what went are what the eye is asked
+        // to approve and the picture is not the transcript frame checked in twice.
+        "rail" => running(opening(), Scroll::Tail),
         // A run in the middle of a turn: the same history, a sixth turn opened, and that
         // turn's answer and reasoning still landing (ticket #38).
         "streaming" => streaming(),
         // Every verdict a call row can wear, one call each: the picture of §12's four
         // states, approved in the commit that decides them (#40).
-        "calls" => View::of(calls(), Scroll::Tail),
+        "calls" => running(calls(), Scroll::Tail),
         // The composer's floor and its ceiling, and the window it scrolls to when the
         // draft outgrows the ceiling: the growth of §12 as three pictures rather than
         // as an opinion (ticket #41).
@@ -127,6 +133,46 @@ fn named(name: &str) -> View {
              paints, and a fixture under any other name is a picture of nothing"
         ),
     }
+}
+
+/// The frame a run is in: the entries it has written, where the transcript is scrolled to,
+/// and the facts the rail draws them beside (#46).
+fn running(entries: Vec<Entry>, scroll: Scroll) -> View {
+    let mut view = View::of(entries, scroll);
+    view.set_facts(facts());
+    view
+}
+
+/// The facts a run's rail draws: one of each of §46's blocks, with a workspace, a branch
+/// and a session temp as long as the real ones are — the transcript's six turns, so the
+/// rail and the history beside it are one picture of one run.
+///
+/// A frame of chrome alone — boot, a draft being typed, the `?` screen — is handed no
+/// facts and draws no rail: a frame knows what it was given, and nothing invents the rest
+/// (§15).
+fn facts() -> Facts {
+    Facts {
+        model: Some(String::from("claude-sonnet")),
+        turns: Some((6, 250)),
+        ctx: Some(21),
+        cache: Some(88),
+        workspace: Some(PathBuf::from(
+            "/home/glemsom/Documents/git/sindri/.worktrees/46-rail",
+        )),
+        branch: Some(String::from("spec/1-capability")),
+        skills: Some(2),
+        sandbox: Some(Enforcement::Bubblewrap),
+        session: Some(String::from("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61")),
+        temp: Some(PathBuf::from(
+            "/home/glemsom/.local/state/sindri/sessions/9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61/tmp",
+        )),
+    }
+}
+
+/// The first turn of the run `transcript` holds, as the entries it opened with: what a
+/// rail frame is drawn beside, because the rail is the subject of those five pictures.
+fn opening() -> Vec<Entry> {
+    transcript().into_iter().take(4).collect()
 }
 
 /// The entries a transcript frame is painted from: three turns of a run, each with the
@@ -252,7 +298,7 @@ fn transcript() -> Vec<Entry> {
 fn streaming() -> View {
     let mut entries = transcript();
     entries.push(Entry::Turn { turn: 6 });
-    let mut view = View::of(entries, Scroll::Tail);
+    let mut view = running(entries, Scroll::Tail);
     for fragment in [
         "The ticket asks whether the tail survives. ",
         "A fence still streaming is a code block, ",
