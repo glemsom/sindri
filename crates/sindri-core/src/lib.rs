@@ -17,5 +17,6 @@ pub mod run; // the agent loop, its turns and the stop reason that ended it
 pub mod sandbox; // boot proves it once, and a card names the failing check
 pub mod session; // the temp a run's calls share and the spill a budget emptied
 pub mod skills; // reported rather than silently resolved
+pub mod status; // what a run says it is doing is told at a pace here
 pub mod tools; // the tools a run registers, and the ones it drops when there is nothing to name
 pub mod wire; // a provider dialect and its endpoint

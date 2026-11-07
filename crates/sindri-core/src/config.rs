@@ -104,6 +104,13 @@ impl Config {
     /// toggle, so no screen keeps a second list that could drift (§12).
     pub const TOGGLES: [&'static str; 3] = ["thinking", "status", "ssh_agent"];
 
+    /// Whether a run tells the terminal it is on what it is doing (§14): one switch, on
+    /// unless it was turned off, read here so neither front end holds its own opinion
+    /// about the default.
+    pub fn tells_status(&self) -> bool {
+        self.status.unwrap_or(true)
+    }
+
     /// Reads the one file at `path`. An absent file is not an error: a first run
     /// needs no file at all, so every key simply stays unset.
     pub fn load_from(path: &Path) -> Result<Config, ConfigError> {

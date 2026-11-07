@@ -16,6 +16,12 @@ message is built from an enum of permitted facts, never from a formatted string.
 The test that keeps it honest walks every `Entry` variant with a known secret planted in each
 field and asserts the serialized bytes never contain it.
 
+§14's window is closed the same way. A status is built from a `Told` — the state, the turn, a
+stop reason from §4's closed set — and its line is one fixed phrase per variant, so a stop
+reason's own detail (which budget ran out, what a wire said went wrong) stays in the record
+where the redaction reaches it, and the test plants a refused request's text in a stop reason
+and asserts no word of it survives into the status.
+
 ## As built
 
 `Redacted` carries the `SecretSet` it scrubs through, rather than a bare `String` handed its
