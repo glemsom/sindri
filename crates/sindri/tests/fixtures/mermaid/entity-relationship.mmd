@@ -1,0 +1,8 @@
+erDiagram
+  SESSION ||--o{ ENTRY : holds
+  ENTRY ||--o| RESULT : ends in
+  SESSION ||--|| STATUS : written by
+  SESSION {
+    string guid
+    string branch
+  }

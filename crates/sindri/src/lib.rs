@@ -19,6 +19,7 @@ pub mod ink; // the look a cell is drawn in, asked for by name: the ink it is in
 pub mod keys; // the mode stack and one key table per mode
 pub mod mark; // the cells a reader has marked, and the words they hold
 pub mod markdown; // markdown becomes the rows a transcript entry is drawn as
+pub mod mermaid; // a mermaid fence becomes a picture, or is refused with a reason the caption can print
 pub mod models; // the names the wire serves, ranked as a query is typed into the screen
 pub mod picker; // the files of the workspace, walked with `ignore`
 pub mod pulse; // the marker at the head of the newest answer: the braille glyph a live run turns

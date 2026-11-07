@@ -1,0 +1,6 @@
+stateDiagram-v2
+  [*] --> Idle
+  Idle --> Live: a run starts
+  Live --> Settled: a stop reason lands
+  Settled --> Idle: the next prompt
+  Settled --> [*]
