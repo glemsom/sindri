@@ -362,6 +362,22 @@ fn canvas(terminal: &Terminal) -> io::Result<Canvas<'_>> {
     ratatui::Terminal::new(CrosstermBackend::new(&terminal.screen))
 }
 
+/// The same canvas at a size already known, so nothing is asked of the operating system. A test
+/// holds both ends of a pseudo-terminal whose size it set itself, so the answer is the test's to
+/// give: crossterm answers a size question by opening `/dev/tty` and, with none to open, by
+/// running `tput` — and under a suite's parallel threads that `fork` can be refused for want of
+/// process slots, which arrives here as a terminal that could not be measured rather than as the
+/// resource it was (§16).
+#[cfg(test)]
+fn canvas_at(terminal: &Terminal, area: ratatui::layout::Rect) -> io::Result<Canvas<'_>> {
+    ratatui::Terminal::with_options(
+        CrosstermBackend::new(&terminal.screen),
+        ratatui::TerminalOptions {
+            viewport: ratatui::Viewport::Fixed(area),
+        },
+    )
+}
+
 /// Paints the frame the view holds now: at launch the boot frame, and afterwards one
 /// frame per key that changed what it holds.
 ///
@@ -1531,6 +1547,40 @@ mod tests {
         }
     }
 
+    /// The size a test's frame is painted at: a pseudo-terminal holds no size of its own until
+    /// one is set, and a canvas that asks for one instead of being told would put a question to
+    /// the environment that the test already has the answer to.
+    fn painted_at() -> ratatui::layout::Rect {
+        ratatui::layout::Rect::new(0, 0, 80, 24)
+    }
+
+    /// A canvas a test paints through is the shape the test gave it, not the shape the terminal
+    /// reports: the size is an argument, so no `/dev/tty` is opened and no `tput` is spawned to
+    /// answer a question a pseudo-terminal was never going to answer anyway (§16).
+    #[test]
+    fn a_canvas_told_its_size_is_the_shape_it_was_told() {
+        let pty = Pty::open();
+        pty.resize(100, 30, 1000, 600);
+        let terminal =
+            Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
+
+        let mut canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
+        let mut drawn = None;
+        canvas
+            .draw(|frame| drawn = Some(frame.area()))
+            .expect("a frame");
+
+        assert_eq!(
+            drawn,
+            Some(painted_at()),
+            "the frame is the shape the test gave it, and the terminal's own 100 by 30 is not"
+        );
+        // The question this canvas never asks is `Terminal::size`, which is answered from
+        // outside this process — by the terminal a suite happens to run under, or by a `tput`
+        // that had to be spawned to find one — so a refusal to answer it is reported here as a
+        // frame that could not be measured rather than as the process slot it wanted.
+    }
+
     /// ADR-0003's cheap half: a terminal that fills its `winsize`'s pixel fields is asked
     /// nothing, because the kernel's own answer is the whole of what a picture needs.
     #[test]
@@ -1672,7 +1722,7 @@ mod tests {
         let mut pty = Pty::open();
         let terminal =
             Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
-        let mut canvas = canvas(&terminal).expect("a canvas over it");
+        let mut canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
         let mut view = View::of(
             vec![Entry::Assistant {
                 turn: 1,
@@ -1772,7 +1822,7 @@ mod tests {
         let pty = Pty::open();
         let terminal =
             Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
-        let mut canvas = canvas(&terminal).expect("a canvas over it");
+        let mut canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
         let mut view = View::boot();
         view.open_settings(&config);
         let wake = Arc::new(Wake::open().expect("a wake"));
