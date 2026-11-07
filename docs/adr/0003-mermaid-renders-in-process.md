@@ -38,4 +38,11 @@ frame for a fact that decides only whether a picture is drawn. And `KITTY_WINDOW
 asked after: it is unset in Ghostty, which places pictures, so the variable is evidence of a
 terminal that happens to set it rather than of one that can draw.
 
-What a terminal that lies costs is the case the spec already legislates: the words stay, whole.
+What a terminal that lies costs is the words under the placement. A picture is drawn over the
+rows its block reserved — that is where a picture goes, and a block's first row is the top of it
+(§12) — so a terminal that names Kitty and cannot place one shows the protocol's placeholder
+glyphs in the cells the words were written in, not the words. What stays whole is the block: the
+rows are its words whatever the terminal draws on them, so a copy of the block is a copy of its
+words and never of a placement (§12), and a terminal that names no protocol is still given those
+words whole. The tofu is the price of deciding from the name rather than asking, and asking is a
+round trip before the first frame.
