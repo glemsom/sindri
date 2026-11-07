@@ -13,7 +13,7 @@
 //! through them.
 
 use std::collections::VecDeque;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -1125,7 +1125,7 @@ fn a_builtin_skill_loads_from_the_binary_and_lists_no_files_beside_it() {
 
 /// Waits until `path` exists, and says whether it ever did: a command is made to say
 /// it has started by writing a file, so no test guesses with a sleep.
-fn started_at(path: &PathBuf) -> bool {
+fn started_at(path: &Path) -> bool {
     let deadline = std::time::Instant::now() + Duration::from_secs(10);
     while std::time::Instant::now() < deadline {
         if path.exists() {

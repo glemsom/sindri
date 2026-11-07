@@ -26,6 +26,7 @@ use sindri_core::outcome::{Facts as Reported, Outcome};
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::preamble::Preamble;
 use sindri_core::provider::copilot::Store;
+use sindri_core::provider::served::{Listing, Where};
 use sindri_core::provider::{Ask, Client, Credential, Deltas, Route};
 use sindri_core::records::{Facts, Record};
 use sindri_core::run::{Cancel, Exchange, Limits, Run, Shell};
@@ -298,6 +299,43 @@ impl Launch {
     }
 }
 
+/// The names the wire in force serves, read off it and never invented: what the `/model`
+/// screen offers a reader, kept beside the `(wire, base_url)` pair that produced them
+/// (§10, §12).
+///
+/// It is assembled here for the reason the run's client is: which wire, which endpoint and
+/// which credential are one reading of the config, and a terminal that built its own would
+/// be a second opinion about them. A wire that cannot answer hands back a listing with no
+/// names and one line saying why, which is §10's hint and never a refusal — `/model <name>`
+/// still names a model and the run goes on.
+///
+/// `None` when this launch has no wire at all, which is a config `main` refuses before the
+/// screen is taken: there is nothing to ask and nothing to show.
+pub fn served(config: &Config) -> Option<Listing> {
+    let wire = config.provider?;
+    let at = match &config.base_url {
+        Some(base_url) => Where::at(wire, base_url.clone()),
+        None => Where::own(wire),
+    };
+    let credential = match &config.api_key {
+        Some(key) => Credential::new(key.clone()),
+        None => Credential::none(),
+    };
+    // A listing is not a run, so there is no session to expand `{session}` to and no record
+    // for the names to land in: the headers travel because a gateway may need them, and the
+    // empty session is what a request outside a run has.
+    let mut client = Client::http(headers(config), String::new(), config.secrets());
+    if wire == Wire::Copilot {
+        // A Copilot session is signed in to rather than handed a key. A store that will not
+        // open is a wire that cannot be asked, and §10's hint is the line that says to sign
+        // in rather than a screen that waits for ever.
+        if let Ok(store) = Store::resolve(&Process) {
+            client = client.store(store);
+        }
+    }
+    Some(client.served(&at, &credential, &at))
+}
+
 /// The ask a run is built from: the dialect the config named, the served name, the endpoint
 /// when one was set, the credential, and the preamble the workspace stands in front of,
 /// re-sent every turn.
@@ -331,8 +369,10 @@ fn headers(config: &Config) -> Vec<(String, String)> {
         .collect()
 }
 
-/// The home the user-scope skills come from, when the environment names one.
-fn home() -> Option<PathBuf> {
+/// The home the user-scope skills come from, when the environment names one. The frame
+/// reads it through here too, so the catalog a `/skill:name` line asks and the catalog a
+/// run's tool is derived from are one directory (§7).
+pub(crate) fn home() -> Option<PathBuf> {
     std::env::var("HOME").ok().map(PathBuf::from)
 }
 

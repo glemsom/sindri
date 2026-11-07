@@ -34,6 +34,13 @@
 //! is never a key that throws a prompt away, which is the one thing a reader would take as
 //! the product losing their words.
 //!
+//! Two of the `/` commands are the terminal's to finish rather than the frame's (§12): the
+//! model name a screen chose is written into the config through the one owner-only save
+//! (ADR-0009), and the names the `/model` screen offers are asked of the wire — a request,
+//! so on a thread of its own, landing in the frame the way a run's fragments land. What a
+//! command means is not decided here: the frame reads the line and hands back an outcome,
+//! and this is the half that owns a socket and a file.
+//!
 //! `Ctrl-C` and a `SIGINT` from outside are one path. Raw mode means the terminal sends `^C`
 //! as a byte and no signal, so the two arrive at different doors — the decoder here and the
 //! handler in `signal` — and both set the run's own cancellation flag, which stops the run
@@ -57,8 +64,9 @@ use rustix::termios::{InputModes, OptionalActions, Termios, tcgetattr, tcsetattr
 use sindri::composer::{Key, Outcome, Prompt, State};
 use sindri::pulse::{self, Pulse};
 use sindri::view::View;
-use sindri_core::config::Config;
+use sindri_core::config::{Config, Flags, Process};
 use sindri_core::provider::Deltas;
+use sindri_core::provider::served::Listing;
 use sindri_core::redact::SecretSet;
 use sindri_core::run::{Cancel, Stop};
 use sindri_core::tools::FrontEnd;
@@ -132,6 +140,10 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
             );
         }
     }
+    // And the home the user-scope skills are read from, for the same reason: a name
+    // `/skill:name` accepts and a name a run could call have to come from one catalog, which
+    // is why the directory is read the way `launch` reads it and not read again here (§7).
+    view.set_home(crate::launch::home());
     let mut canvas = match canvas(&terminal) {
         Ok(canvas) => canvas,
         Err(error) => {
@@ -299,6 +311,7 @@ fn keys(
     let mut decoder = Decoder::new();
     let mut read = [0u8; 4096];
     let mut running: Option<Running> = None;
+    let mut asking: Option<Asking> = None;
     let mut interrupted = false;
     let wake = signals.wake();
     loop {
@@ -343,6 +356,7 @@ fn keys(
 
         if woken {
             wake.drain();
+            served(canvas, view, &mut asking)?;
             if take(canvas, view, &mut running)? && !interrupted {
                 // The run stopped, so the frame's composer is idle again (§12) and the next
                 // prompt the reader typed while it was live is the run to start. A launch the
@@ -376,6 +390,7 @@ fn keys(
                     view,
                     event,
                     &mut running,
+                    &mut asking,
                     cli,
                     config,
                     &wake,
@@ -566,7 +581,7 @@ fn take(
 /// function for either.
 #[allow(
     clippy::too_many_arguments,
-    reason = "the one seam both #43 and #50 hand their value through"
+    reason = "the one seam #43, #48 and #50 each hand their value through"
 )]
 fn answer(
     terminal: &Terminal,
@@ -574,6 +589,7 @@ fn answer(
     view: &mut View,
     event: Event,
     running: &mut Option<Running>,
+    asking: &mut Option<Asking>,
     cli: &Cli,
     config: &Config,
     wake: &Arc<Wake>,
@@ -619,9 +635,88 @@ fn answer(
             tell(&terminal.screen, &crate::osc::copy(&words))?;
             Ok(None)
         }
+        // A model name `/model` chose or a `/model <name>` line named: it is written
+        // through the one save every config write goes through — atomic, 0600, and patching
+        // only the `model` key, so the rest of the file including its comments is the
+        // reader's own (ADR-0009, §11). A file that cannot be written is the launch
+        // refusing, because a frame has no band for a refusal and a name silently not
+        // written is the one silence this front end must not keep (§15).
+        Outcome::Model(name) => {
+            let touched = Flags {
+                model: Some(name),
+                ..Flags::default()
+            };
+            match Config::save(&Process, &touched) {
+                Ok(()) => {
+                    paint(canvas, view)?;
+                    Ok(None)
+                }
+                Err(error) => Ok(Some(Ending::Refused(Refusal::new(
+                    error.to_string(),
+                    error.exit_code(),
+                )))),
+            }
+        }
+        // The `/model` screen is up and has nothing to rank: the wire is asked on a thread
+        // of its own, so the loop is back in `poll` for a key while the request is out
+        // (§10, §12).
+        Outcome::Served => {
+            *asking = ask(config, wake);
+            paint(canvas, view)?;
+            Ok(None)
+        }
         // `Ctrl-Q` is the one way out.
         Outcome::Quit => Ok(Some(Ending::Quit)),
     }
+}
+
+/// A wire being asked what it serves, on a thread of its own: `/model` opens its screen at
+/// once and the names land in the frame when they land, because a request takes as long as
+/// it takes and the loop owes a key its answer now (§10, §12).
+struct Asking {
+    /// Where the listing lands, or `None` while the request is still out.
+    landing: Arc<Mutex<Option<Listing>>>,
+    /// The thread that asked, joined once the answer is on the frame.
+    thread: JoinHandle<()>,
+}
+
+/// Asks the wire the config names what it serves, and pings the loop through the pipe a
+/// signal uses when the answer is in: one more fd the loop waits on, and no timer.
+fn ask(config: &Config, wake: &Arc<Wake>) -> Option<Asking> {
+    let config = config.clone();
+    let landing = Arc::new(Mutex::new(None));
+    let answer = Arc::clone(&landing);
+    let wake = Arc::clone(wake);
+    let thread = thread::spawn(move || {
+        // A launch with no wire is one `main` refused before the screen was taken, so the
+        // only answer this thread can leave is a listing.
+        if let Some(listing) = crate::launch::served(&config) {
+            *lock(&answer) = Some(listing);
+            wake.raise();
+        }
+    });
+    // A thread that has landed its answer already is still joined below, and nothing here
+    // blocks: what the frame paints now is the screen saying it is asking.
+    Some(Asking { landing, thread })
+}
+
+/// Puts the names a wire answered with on the frame, and drops the thread that asked them:
+/// the `/model` screen is painted once with the listing it was waiting for, the way a run's
+/// fragments are painted as they land (§10, §12).
+fn served(canvas: &mut Canvas<'_>, view: &mut View, asking: &mut Option<Asking>) -> io::Result<()> {
+    let landed = match asking.as_ref() {
+        Some(flight) => lock(&flight.landing).take(),
+        None => None,
+    };
+    let Some(listing) = landed else {
+        return Ok(());
+    };
+    view.set_served(listing);
+    paint(canvas, view)?;
+    if let Some(flight) = asking.take() {
+        let _ = flight.thread.join();
+    }
+    Ok(())
 }
 
 /// Starts the run a sent draft asks for, as a launch of its own and a thread of its own, and
@@ -1172,12 +1267,14 @@ mod tests {
         let config = sindri_core::config::Config::default();
         let wake = Arc::new(Wake::open().expect("a wake"));
         let mut running = None;
+        let mut asking = None;
         let ended = answer(
             &terminal,
             &mut canvas,
             &mut view,
             Event::Key(Key::Copy),
             &mut running,
+            &mut asking,
             &cli,
             &config,
             &wake,

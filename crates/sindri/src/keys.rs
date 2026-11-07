@@ -9,10 +9,11 @@
 //! listing the keys of the current mode stack" is that list, mode by mode.
 //!
 //! The stack is explicit and shallow: `Composer` is the base every frame has, because a
-//! prompt is what this front end is for, and a modal — `Keys` and `Files` today — sits over
-//! it. `Stack::act` asks the mode on top and never the modes under it, which is what "a key
-//! resolves in exactly one mode" means as code: a glyph pressed at a screen that binds
-//! no glyph does nothing at all, rather than editing a draft nobody can see.
+//! prompt is what this front end is for, and a modal — `Keys`, `Files`, `Models` and
+//! `Settings` today — sits over it. `Stack::act` asks the mode on top and never the modes
+//! under it, which is what "a key resolves in exactly one mode" means as code: a glyph
+//! pressed at a screen that binds no glyph does nothing at all, rather than editing a
+//! draft nobody can see.
 //!
 //! Six keys are a row and a rule, and every rule lives in an arm of the frame rather than in
 //! a second keymap: the queue's two (A9) — `↑` bound to `Act::Up`, because its recall and
@@ -37,12 +38,25 @@ pub enum Mode {
     /// The `@` picker: the files of the workspace, narrowed by a query typed into the
     /// screen and capped at the rows §12 gives it.
     Files,
+    /// The `/model` screen: the names the wire serves, ranked by a query typed into the
+    /// screen, and the one name `Enter` writes into the config (§10, §12).
+    Models,
+    /// The `/settings` screen: the screen the settings modal fills in (#49). It answers
+    /// `Esc` and nothing else until #49 gives it the keys that edit a value, which is why
+    /// its table is one row today.
+    Settings,
 }
 
 impl Mode {
     /// Every mode there is, so a test can walk the tables rather than trust that the
     /// one it remembered is the one that landed.
-    pub const ALL: [Mode; 3] = [Mode::Composer, Mode::Keys, Mode::Files];
+    pub const ALL: [Mode; 5] = [
+        Mode::Composer,
+        Mode::Keys,
+        Mode::Files,
+        Mode::Models,
+        Mode::Settings,
+    ];
 
     /// The mode's name, as the `?` screen heads its rows with it.
     pub fn name(self) -> &'static str {
@@ -50,6 +64,8 @@ impl Mode {
             Mode::Composer => "composer",
             Mode::Keys => "keys",
             Mode::Files => "files",
+            Mode::Models => "model",
+            Mode::Settings => "settings",
         }
     }
 
@@ -59,6 +75,8 @@ impl Mode {
             Mode::Composer => &COMPOSER,
             Mode::Keys => &KEYS,
             Mode::Files => &FILES,
+            Mode::Models => &MODELS,
+            Mode::Settings => &SETTINGS,
         }
     }
 
@@ -70,8 +88,8 @@ impl Mode {
     fn fallback(self) -> Option<Act> {
         match self {
             Mode::Composer => Some(Act::Draft),
-            Mode::Files => Some(Act::Query),
-            Mode::Keys => None,
+            Mode::Files | Mode::Models => Some(Act::Query),
+            Mode::Keys | Mode::Settings => None,
         }
     }
 }
@@ -114,6 +132,9 @@ pub enum Act {
     Next,
     /// `Enter` at the picker: the chosen row's path goes into the draft.
     Pick,
+    /// `Enter` at the `/model` screen: the name under the selection is the model, and it
+    /// is written into the config through the one owner-only save (ADR-0009).
+    Choose,
 }
 
 /// One row of a key table: the key, the way the `?` screen spells it, and what it does.
@@ -297,6 +318,54 @@ const FILES: [Binding; 5] = [
         act: Act::Query,
     },
 ];
+
+/// The `/model` screen's keys: the screen's own list, then the query it is narrowed by.
+///
+/// It is the picker's five keys because it is the picker's shape — a list, a filter box over
+/// it, a selection that walks it — but `Enter` is `Act::Choose` and not `Act::Pick`: a path
+/// goes into a draft, and a model name is written into the config (ADR-0009).
+const MODELS: [Binding; 5] = [
+    Binding {
+        key: Key::Escape,
+        name: "Esc",
+        does: "close this screen, and name no model",
+        act: Act::Close,
+    },
+    Binding {
+        key: Key::Up,
+        name: "↑",
+        does: "the served name above",
+        act: Act::Previous,
+    },
+    Binding {
+        key: Key::Down,
+        name: "↓",
+        does: "the served name below",
+        act: Act::Next,
+    },
+    Binding {
+        key: Key::Enter,
+        name: "Enter",
+        does: "write the chosen name as the model",
+        act: Act::Choose,
+    },
+    Binding {
+        key: Key::Backspace,
+        name: "Backspace",
+        does: "erase the last glyph of the query",
+        act: Act::Query,
+    },
+];
+
+/// The `/settings` screen's one key. A value is edited by the modal #49 builds, and until
+/// it lands this screen has nothing to edit, so `Esc` is the whole of what it answers and
+/// the whole of what the `?` screen says about it.
+const SETTINGS: [Binding; 1] = [Binding {
+    key: Key::Escape,
+    name: "Esc",
+    does: "close this screen",
+    act: Act::Close,
+}];
 
 /// The stack of modes: the base the frame is always in and the screens opened over it,
 /// top last. A stack rather than a field, because a screen is entered from whatever was

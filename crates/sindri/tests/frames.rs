@@ -66,6 +66,11 @@ fn files_120x40_is_the_eight_files_nearest_the_workspace() {
 }
 
 #[test]
+fn models_120x40_is_the_names_the_wire_served_as_one_screen() {
+    fixture::assert_frame("models", 120, 40);
+}
+
+#[test]
 fn typing_120x40_is_a_composer_at_its_two_row_floor() {
     fixture::assert_frame("typing", 120, 40);
 }
