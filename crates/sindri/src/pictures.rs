@@ -10,6 +10,11 @@
 //! "a scroll never re-transmits a picture" a fact about the cache and not a hope about the
 //! loop (ADR-0008).
 //!
+//! What is kept is what the band shows and nothing else ([`Pictures::retain_shown`]): a width
+//! dragged across a range leaves one placement behind it, not a raster per size it passed
+//! through, which is §12's "a resize re-rasterises only what is visible" as a cost and not as
+//! a counter.
+//!
 //! A terminal that places no picture is given none of this at all: [`Pictures::none`] is a
 //! frame with no protocol, and its pictures stay the words their block was laid out as. What
 //! is never done is half a picture — a row of placeholders with nothing behind them, or a
@@ -19,7 +24,7 @@
 //! [`crate::picture`] is where it was.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use ratatui::buffer::Buffer;
@@ -51,8 +56,12 @@ pub struct Pictures {
     /// The protocol this terminal speaks and the font size a placement is built at, and
     /// nothing for a terminal that speaks no protocol for pictures.
     picker: Option<Picker>,
-    /// The pictures placed so far, by source and the cells they took.
+    /// The pictures placed so far, by source and the cells they took: the ones the band
+    /// shows, because a paint drops what it did not place.
     held: HashMap<(String, u16, u16), Placed>,
+    /// The pictures the paint in hand has placed: what a prune keeps, and nothing between one
+    /// paint and the next.
+    shown: HashSet<(String, u16, u16)>,
     /// How many times each source has been made into pixels: the instrument a test reads
     /// instead of the shape of this code, and the number §12's "a resize re-rasterises only
     /// what is visible" is a statement about.
@@ -98,6 +107,20 @@ impl Pictures {
         self.rasterises.get(source).copied().unwrap_or(0)
     }
 
+    /// Drops every picture the paint in hand has not placed, and keeps the ones it has: what
+    /// the band shows is the whole of what this cache holds, so a width dragged across a range
+    /// leaves one placement behind it rather than a raster per size it passed through (§12).
+    ///
+    /// It is called once per paint of the transcript's band, after the band's rows are placed.
+    /// A size the band shows again is a picture the terminal already holds and is written as
+    /// placeholders with nothing transmitted; a size the band has left is made and sent again
+    /// when it comes back, which is the one cost of the bound and is cheaper than keeping every
+    /// size a resize passed through for the length of the launch (ADR-0008, #55).
+    pub fn retain_shown(&mut self) {
+        let shown = std::mem::take(&mut self.shown);
+        self.held.retain(|key, _| shown.contains(key));
+    }
+
     /// Draws `picture` over `area`, which is the block of cells the transcript reserved for
     /// it: the bytes go to the terminal the first time this source is seen at this size, and
     /// every placement after that writes placeholders pointing at what is already there
@@ -112,6 +135,7 @@ impl Pictures {
         };
         let source = picture.source().to_owned();
         let key = (source.clone(), picture.cols(), picture.rows());
+        self.shown.insert(key.clone());
         let placed = match self.held.get(&key) {
             Some(placed) => placed.clone(),
             None => {

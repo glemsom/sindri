@@ -901,6 +901,10 @@ impl View {
                 y += 1;
             }
         }
+        // What this band placed is the whole of what the cache keeps: a picture the band has
+        // scrolled past is a raster nobody is looking at, and a width dragged across a range
+        // would leave one behind at every size it passed through (§12, ADR-0008).
+        self.pictures.retain_shown();
         self.marked = match self.mark {
             Some(mark) => Span::of(mark, &lines),
             None => Span::default(),

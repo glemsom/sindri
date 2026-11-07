@@ -578,6 +578,66 @@ fn a_resize_rasterises_only_the_picture_the_band_goes_on_to_show() {
     );
 }
 
+/// §12's third rule as the cost it is: the cache holds the pictures the band shows and drops
+/// the ones it has left, so dragging a width across a range does not keep a full raster per
+/// size for ever. The size the band no longer shows is gone — going back to it makes the
+/// picture again — while the size it does show is still held, so a repaint of it transmits
+/// nothing and #55's "a scroll never re-transmits" survives the bound.
+#[test]
+fn a_resize_keeps_the_picture_the_band_shows_and_drops_the_size_it_has_left() {
+    let (_root, workspace) = workspace(800, 200);
+    let mut view = frame(&workspace, "![a purple field](shot.png)", true);
+
+    let wide = painted_at(&mut view, SCREEN);
+    assert_eq!(
+        transmissions(&wide),
+        1,
+        "the picture is sent once at the size the wide band fits it into"
+    );
+    assert_eq!(
+        view.pictures().rasterises("shot.png"),
+        1,
+        "and made once for that size"
+    );
+
+    let narrow = painted_at(&mut view, (60, SCREEN.1));
+    assert_eq!(
+        view.pictures().rasterises("shot.png"),
+        2,
+        "the narrower band fits the picture into fewer columns, so it is another picture"
+    );
+    assert_eq!(
+        transmissions(&narrow),
+        1,
+        "and the terminal is told about that size once"
+    );
+
+    let again = painted_at(&mut view, (60, SCREEN.1));
+    assert_eq!(
+        transmissions(&again),
+        0,
+        "the size the band shows is still held: a repaint of it transmits nothing"
+    );
+    assert_eq!(
+        view.pictures().rasterises("shot.png"),
+        2,
+        "and makes no second raster of it"
+    );
+
+    let back = painted_at(&mut view, SCREEN);
+    assert_eq!(
+        view.pictures().rasterises("shot.png"),
+        3,
+        "the size the band has left is held no longer, so going back to it makes the picture \
+         again"
+    );
+    assert_eq!(
+        transmissions(&back),
+        1,
+        "and sends it again, which is the price of a cache that is bounded"
+    );
+}
+
 /// §12's copy rule: a picture's block copies as its words and never as the bytes it is drawn
 /// from. `Ctrl-Y` hands out the rows the block was laid out as, so the cells a reader marked
 /// give `a purple field` and no escape sequence, no placeholder and no base64.
