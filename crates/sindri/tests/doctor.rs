@@ -27,10 +27,6 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use sindri_core::config::Config;
-use sindri_core::policy::{Boundary, Enforcement};
-use sindri_core::skills::Catalog;
-use sindri_core::tools::{BASH, FrontEnd, ToolSet};
 use tempfile::TempDir;
 
 /// A workspace, a config home and a state home, all of the test's own.
@@ -59,12 +55,6 @@ impl Ground {
             std::fs::create_dir_all(path).expect("a directory");
         }
         ground
-    }
-
-    /// The workspace as the child's `getcwd` spells it: canonical, because the
-    /// boundary the description is rendered from is built from that path.
-    fn workspace(&self) -> PathBuf {
-        std::fs::canonicalize(&self.workspace).expect("the workspace resolves")
     }
 
     /// A skill directory `SKILL.md` under `scope`, written with the frontmatter
