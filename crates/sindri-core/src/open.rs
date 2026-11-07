@@ -247,9 +247,7 @@ impl Ground {
 /// and from the boundary in force, so the model reads the rule it will be held to.
 pub fn description(boundary: &Boundary) -> String {
     let mut lines: Vec<String> = vec![
-        String::from(
-            "Open one target in the browser on this machine, which is the only browser there is.",
-        ),
+        String::from("Open one target in the browser on this machine."),
         String::new(),
         String::from("Name exactly one target; an empty value is the same as naming none."),
         format!(

@@ -266,11 +266,12 @@ appendix is the one place a gap is recorded, and a gap is closed here — never 
 section that raised it. Every entry below is closed: it states its question, then a
 `**Resolved:**` clause saying where the answer lives — the ADR that settles it when the
 answer is a design decision, the artefact or policy that carries it when the answer corrects
-words. None is open. An entry that is ever re-opened keeps its question and its resolution and
-is marked `reopened` beside the reason, because this appendix is a record and not a rewrite of
-history. `ADR` = an architecture decision record. One test holds the two rules every entry
-obeys — `crates/sindri-core/tests/spec_docs.rs` — so a truncated question or a missing
-resolution is a failing test rather than a matter of a reader noticing.
+words. None is open. An entry that is ever re-opened keeps its question and its resolution,
+and says beside them what re-opened it, because this appendix is a record and not a rewrite
+of history. `ADR` = an architecture decision record. Four tests hold the four rules this
+record obeys — `crates/sindri-core/tests/spec_docs.rs` — so a truncated question, a missing
+resolution, or a reference to something the tree does not hold is a failing test rather than
+a matter of a reader noticing.
 
 **A1 — `doctor` ends mid-sentence (§3).** The last line reads "the sandbox itself failed."
 with no subject. **Resolved:** the lost clause is "exit 3", matching §15's sandbox/setup
@@ -280,14 +281,15 @@ failure.
 batch run has `bash` and `skill`. **Resolved:** three is the ceiling, not the count; a front
 end registers what it honours and nothing else.
 
-**A3 — "Two second limits" (§4).** The heading says seconds; the two limits are a wall
-clock and a byte count. Should read "two budgets". Cosmetic but load-bearing: it is the
-sentence that makes a turn cap and a command budget different things. **Resolved:** the
-reading is "two budgets", and §4's words stay as they are, because they are acceptance
-criteria: `Budget` in `GLOSSARY.md` says what the two limits are and what they are not, §11
-names them as the keys `command_budget_ms` and `output_budget_bytes`, and ADR-0009 settles
-that both are config keys like the rest, so a one-hour wall clock is a product default rather
-than a law — see ADR-0009.
+**A3 — "Two second limits" (§4).** The heading says seconds; the two limits are a wall clock
+and a byte count. Should read "two budgets". Cosmetic but load-bearing: it is the sentence
+that makes a turn cap and a command budget different things. **Resolved:** the reading is
+"two budgets", and §4's words stay as they are, because they are acceptance criteria:
+`Budget` in `GLOSSARY.md` says what the two limits are and what they are not, §11's key list
+predates the decision and so does not name them — that omission is what A4 records — and
+both keys exist in the config schema — `command_budget_ms` and `output_budget_bytes` in
+`crates/sindri-core/src/config.rs` — settled as keys like the rest by ADR-0009, so a
+one-hour wall clock is a product default rather than a law.
 
 **A4 — The budgets have defaults but no config keys (§4 vs §11).** 1 hour and 8 MiB are
 named as defaults, `max_turns` and `timeout` are named as keys, and §13 records "dials
@@ -330,6 +332,7 @@ identifiers, who decides — the identifier, the config, or the wire? **Resolved
 rig. An `OpenAiWire` selects its `Route` (`Chat` or `Responses`) from the dialect and model, and
 `with_route` overrides it when a route misbehaves. The chosen route is recorded per run so a
 mystery is debuggable.
+(Question restored: the original text was cut.)
 
 **A11 — `cache hits` on the rail needs a caching story (§12).** The fact exists, so
 prompt caching must be spent somewhere explicit: Anthropic `cache_control` breakpoints, then
@@ -340,16 +343,16 @@ Anthropic breakpoints, report-only elsewhere, preamble never moves.
 **A12 — The rail's abandonment order (§12).** "gives facts up in one order" — which order, and
 which fact never goes? **Resolved:** sacrifice order is temp path, cache hits, session GUID,
 branch, skills in force, context meter, workspace, turns, model — and sandbox posture never
-goes. The order is carried by the rail itself, the first row to go first.
+goes. The order is carried by the rail itself: `BLOCKS` in `crates/sindri/src/rail.rs` draws
+the temp path last, and `SACRIFICE` opens with it, so the last row drawn is the first row
+given up.
 (Question restored: the original text was cut.)
 
 **A13 — Retry and the "already streamed" rule (§4).** "Never retry a reply that already
 streamed text" requires observing the stream at the retry seam. **Resolved:** the seam is
 rig-core's `Transport` trait, implemented once in core — see ADR-0004. **Resolved, then
 overtaken by A15 and A16:** that trait is generic over a wire and hands back the wire's own
-frames, so no text exists at that seam to observe — the transport keeps the attempts and the
-headers, and whether a reply had already streamed is reported by the fold above it — see
-ADR-0013 and ADR-0015.
+frames, so no text exists at that seam to observe, and the seam splits — see ADR-0015.
 
 **A14 — `skill` load scope (§4 vs §5).** §4 clears the loaded set when history clears;
 §5 says a load is once per conversation. That requires conversation and history to be one
