@@ -1,0 +1,137 @@
+# CI runs `make check` — the definition of done (spec §16) — in the same devbox
+# shell a developer uses (ADR 0001), so CI cannot drift into a second, weaker
+# definition of what "done" means. Ticket #7 wired this up.
+#
+# RUNNER IMAGE: ubuntu-24.04, GitHub-hosted, x86_64.
+#
+# UNPRIVILEGED USER NAMESPACES ON IT: RESTRICTED. Ubuntu 23.10 and later ship
+# AppArmor's `kernel.apparmor_restrict_unprivileged_userns=1`, and the 24.04
+# image runs that default, so `bwrap --unshare-all` is refused unless the binary
+# carries an AppArmor profile the kernel knows about — which the devbox-supplied
+# bwrap does not. The first real run on this image is expected to say
+# `sandbox tier: skipped (bwrap unavailable)` in the job summary, and to keep the
+# job green, because everything the runner *can* check did pass. That is the
+# whole point of the ticket: the gap is printed where a reader cannot miss it —
+# `check: sandbox ... SKIPPED`, never `... ok`, plus a job-summary block and a
+# warning annotation — rather than dropped or quietly ticked green.
+#
+# The suites whose subject is not the sandbox do not stop at that wall either.
+# Where a run cannot be confined, the batch contract is proved with every child
+# handed `--yolo-unsafe` — the one route past a sandbox that cannot be created —
+# and the suite prints `skip batch: ...`, naming the tier that run left uncovered,
+# so the contract is still checked byte for byte while the gap stays on the page.
+# Doctor's report is read either way: it prints the whole report and ends 0 over a
+# sandbox it proved, 3 over one the kernel refused. A runner that forbids a
+# sandbox must neither redden a job over code it did check nor green a sandbox
+# nothing made.
+#
+# Why 24.04 and not 22.04, where the tier would actually run: 22.04 is the older
+# image and is on its way out of the hosted fleet, so coverage bought there
+# would vanish without a word the day it retires. Written this way, the tier
+# runs the day a runner allows it (a self-hosted runner, or a host with
+# `sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`) and prints its skip
+# the day one does not; nothing in between is silent.
+#
+# NO SECRETS, NO PROVIDER CREDENTIALS: every stage is build-time only, and the
+# job holds `contents: read`. If a stage ever needs a credential, that is a
+# different ticket and a different judgement.
+
+name: check
+
+on:
+  push:
+    branches: [main, spec/1-capability]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same ref makes the older run's verdict irrelevant, so keep
+# the newest run and let the rest go.
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # devbox is pinned, so a CI run and a laptop run materialise the same shell.
+  # The toolchain inside it is pinned by devbox.json (Rust 1.99, ADR 0001).
+  DEVBOX_VERSION: 0.19.0
+
+jobs:
+  check:
+    name: make check (devbox)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out the tree
+        uses: actions/checkout@v4
+
+      # devbox needs Nix underneath it; the action also enables the
+      # `nix-command` and `flakes` features devbox expects. Pinned to a commit
+      # rather than a tag, so the code CI runs cannot change under us.
+      - name: Install Nix
+        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+
+      # The devbox release tarball, named by a pinned version. Not the
+      # interactive installer: CI has no one to answer its prompt.
+      - name: Install devbox ${{ env.DEVBOX_VERSION }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://github.com/jetify-com/devbox/releases/download/${DEVBOX_VERSION}/devbox_${DEVBOX_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL "$url" | tar -xz -C "$RUNNER_TEMP" devbox
+          sudo install -m 0755 "$RUNNER_TEMP/devbox" /usr/local/bin/devbox
+          devbox version
+
+      # devbox's init hook keeps rustup and cargo under this directory; caching
+      # it turns a toolchain download into a copy. Keyed on the lockfile and the
+      # manifest, so a toolchain change misses the cache instead of hiding behind
+      # a stale one.
+      - name: Cache the pinned Rust toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/sindri
+          key: sindri-toolchain-${{ runner.os }}-${{ hashFiles('devbox.lock', 'devbox.json') }}
+          restore-keys: sindri-toolchain-${{ runner.os }}-
+
+      - name: Materialise the devbox shell
+        run: devbox install
+
+      # `make check` is one command on purpose: fmt, clippy, the four audits, the
+      # tests, the toolchain probe, the sandbox tier, and the two stages that are
+      # still placeholders (they print `MISSING`, ticket #58). Running the stages
+      # as separate steps would be a second definition of done that could drift
+      # from the first. Its stage lines are relayed to the job summary below.
+      - name: make check, inside a devbox shell
+        shell: bash
+        run: |
+          set -uo pipefail
+          status=0
+          devbox run -- make check 2>&1 | tee "$RUNNER_TEMP/check.log" || status=$?
+          exit "$status"
+
+      # The verdicts, where a reviewer of the run actually looks. A skipped
+      # sandbox tier must be visible here as a skip: the stage lines are copied
+      # verbatim, `check: sandbox ... SKIPPED` and all, and a warning annotation
+      # marks the run as uncovered in that one tier.
+      - name: Stage verdicts in the job summary
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          log="$RUNNER_TEMP/check.log"
+          if [[ ! -f $log ]]; then
+            echo "::warning title=No verdict lines::make check produced no log, so no stage reported a verdict in this run."
+            exit 0
+          fi
+          {
+            echo '### `make check` stage verdicts'
+            echo
+            echo '```'
+            grep -E '^(check:|sandbox tier:|audit: |skip batch:)' "$log" || echo 'no verdict lines: the run stopped before a stage reported one'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if grep -q 'sandbox tier: skipped' "$log"; then
+            echo "::warning title=Sandbox tier skipped::sandbox tier: skipped (bwrap unavailable) - this runner forbids unprivileged user namespaces, so confinement is uncovered by this run; every other stage ran."
+          fi

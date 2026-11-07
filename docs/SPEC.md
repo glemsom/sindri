@@ -262,8 +262,16 @@ tools" agent.
 ## Appendix A — Contradictions and open questions
 
 The spec above is acceptance criteria and is not edited to fit what gets built. This
-appendix is the one place a gap is recorded. `ADR` = settled in an architecture decision
-record; `open` = not yet decided anywhere.
+appendix is the one place a gap is recorded, and a gap is closed here — never by editing the
+section that raised it. Every entry below is closed: it states its question, then a
+`**Resolved:**` clause saying where the answer lives — the ADR that settles it when the
+answer is a design decision, the artefact or policy that carries it when the answer corrects
+words. None is open. An entry that is ever re-opened keeps its question and its resolution,
+and says beside them what re-opened it, because this appendix is a record and not a rewrite
+of history. `ADR` = an architecture decision record. Four tests hold the four rules this
+record obeys — `crates/sindri-core/tests/spec_docs.rs` — so a truncated question, a missing
+resolution, or a reference to something the tree does not hold is a failing test rather than
+a matter of a reader noticing.
 
 **A1 — `doctor` ends mid-sentence (§3).** The last line reads "the sandbox itself failed."
 with no subject. **Resolved:** the lost clause is "exit 3", matching §15's sandbox/setup
@@ -273,9 +281,15 @@ failure.
 batch run has `bash` and `skill`. **Resolved:** three is the ceiling, not the count; a front
 end registers what it honours and nothing else.
 
-**A3 — "Two second limits" (§4).** The heading says seconds; the two limits are a wall
-clock and a byte count. Should read "two budgets". Cosmetic but load-bearing: it is the
-sentence that makes a turn cap and a command budget different things.
+**A3 — "Two second limits" (§4).** The heading says seconds; the two limits are a wall clock
+and a byte count. Should read "two budgets". Cosmetic but load-bearing: it is the sentence
+that makes a turn cap and a command budget different things. **Resolved:** the reading is
+"two budgets", and §4's words stay as they are, because they are acceptance criteria:
+`Budget` in `GLOSSARY.md` says what the two limits are and what they are not, §11's key list
+predates the decision and so does not name them — that omission is what A4 records — and
+both keys exist in the config schema — `command_budget_ms` and `output_budget_bytes` in
+`crates/sindri-core/src/config.rs` — settled as keys like the rest by ADR-0009, so a
+one-hour wall clock is a product default rather than a law.
 
 **A4 — The budgets have defaults but no config keys (§4 vs §11).** 1 hour and 8 MiB are
 named as defaults, `max_turns` and `timeout` are named as keys, and §13 records "dials
@@ -296,38 +310,85 @@ is cut; the mentions in §13 and §17 mean `sessions show` — see ADR-0002.
 
 **A7 — `? keys` is a phantom (§12).** The footer must never show fewer than
 "`Enter send` and `? keys`". **Resolved:** the overlay is built — one screen listing the keys of
-the current mode stack.
+the current mode stack, painted from the same key tables that answer those keys, because a mode
+is one screen and one key table — see ADR-0017.
 
 **A8 — "Four fast audits" lists three bullets (§16).** Bullet 2 carries a two-way rule
-(a `mod` without its clause, and an undeclared file under a tests tree). Is that two
-**Resolved:** four named audits — module paragraph, `mod` clause, undeclared file under a
-tests tree, and test name. Each prints its own line.
+(a `mod` without its clause, and an undeclared file under a tests tree). Is that two audits
+or one? **Resolved:** four named audits — module paragraph, `mod` clause, undeclared file under
+a tests tree, and test name. Each prints its own line — see `scripts/audit.sh`.
+(Question restored: the original text was cut.)
 
 **A9 — `↑` in the queue versus `↑` in the composer (§12).** `↑` takes the newest queued
 prompt back; the composer has 2–6 rows, where `↑` must move the cursor. One key, two
-**Resolved:** `↑` on the composer's first line with the queue non-empty recalls the newest queued
-prompt; anywhere else it moves the cursor.
+meanings — which wins? **Resolved:** `↑` on the composer's first line with the queue non-empty
+recalls the newest queued prompt; anywhere else it moves the cursor — one arm reading the caret,
+so the key is decided in one place — see ADR-0017.
+(Question restored: the original text was cut.)
 
 **A10 — Which models use Chat Completions and which use Responses (§10).** The dialect
-is "chosen by model name where the identifier demands it", but for OpenAI-family and
-**Resolved:** delegated to rig. An `OpenAiWire` selects its `Route` (`Chat` or `Responses`) from
-the dialect and model, and `with_route` overrides it when a route misbehaves. The chosen route
-is recorded per run so a mystery is debuggable.
+is "chosen by model name where the identifier demands it", but for OpenAI-family and Copilot
+identifiers, who decides — the identifier, the config, or the wire? **Resolved:** delegated to
+rig. An `OpenAiWire` selects its `Route` (`Chat` or `Responses`) from the dialect and model, and
+`with_route` overrides it when a route misbehaves. The chosen route is recorded per run so a
+mystery is debuggable.
+(Question restored: the original text was cut.)
 
 **A11 — `cache hits` on the rail needs a caching story (§12).** The fact exists, so
-prompt caching must be spent somewhere explicit: Anthropic `cache_control` breakpoints,
-**Resolved:** seen ADR-0010 — two Anthropic breakpoints, report-only elsewhere, preamble never
-moves.
+prompt caching must be spent somewhere explicit: Anthropic `cache_control` breakpoints, then
+what — and are the other wires left with no cache at all? **Resolved:** see ADR-0010 — two
+Anthropic breakpoints, report-only elsewhere, preamble never moves.
+(Question restored: the original text was cut.)
 
-**A12 — The rail's abandonment order (§12).** "gives facts up in one order" — which
-**Resolved:** sacrifice order is temp path, cache hits, session GUID, branch, skills in force,
-context meter, workspace, turns, model — and sandbox posture never goes.
+**A12 — The rail's abandonment order (§12).** "gives facts up in one order" — which order, and
+which fact never goes? **Resolved:** sacrifice order is temp path, cache hits, session GUID,
+branch, skills in force, context meter, workspace, turns, model — and sandbox posture never
+goes. The order is carried by the rail itself: `BLOCKS` in `crates/sindri/src/rail.rs` draws
+the temp path last, and `SACRIFICE` opens with it, so the last row drawn is the first row
+given up.
+(Question restored: the original text was cut.)
 
 **A13 — Retry and the "already streamed" rule (§4).** "Never retry a reply that already
-streamed text" requires observing the stream at the retry seam. **Resolved:** the seam is rig-core's `Transport` trait, implemented once in
-core — see ADR-0004.
+streamed text" requires observing the stream at the retry seam. **Resolved:** the seam is
+rig-core's `Transport` trait, implemented once in core — see ADR-0004. **Resolved, then
+overtaken by A15 and A16:** that trait is generic over a wire and hands back the wire's own
+frames, so no text exists at that seam to observe, and the seam splits — see ADR-0015.
 
 **A14 — `skill` load scope (§4 vs §5).** §4 clears the loaded set when history clears;
-§5 says a load is once per conversation. That requires conversation and history to be
-**Resolved:** conversation *is* the run's history. `/new` clears the set, and a `/skill:name`
-load by the human counts, so a later model load returns `already_loaded`.
+§5 says a load is once per conversation. That requires conversation and history to be one
+thing. Are they? **Resolved:** conversation *is* the run's history. `/new` clears the set, and a
+`/skill:name` load by the human counts, so a later model load returns `already_loaded`.
+(Question restored: the original text was cut.)
+
+**A15 — The retry seam sits below the point where text exists (§4, A13 vs rig-core 0.46).**
+A13 said the "never retry a reply that already streamed text" rule is observed at rig-core's
+`Transport` trait. In rig-core 0.46 that trait is generic over a wire and its `send` hands
+back the *wire's own frames*, so a transport sees framed events and never text: text exists
+only once the dialect's decoder has folded them, one layer higher.
+**Resolved:** the seam splits — attempts and headers live in the transport, which implements
+`HttpClientExt` (the trait every rig `Transport` is built from), and whether a reply had
+already streamed is reported by the provider seam's fold as `Failure::streamed`, beside the
+wire's own `Failure::retryable` — see ADR-0013.
+
+**A16 — Where the attempts live (§4, A13 vs ADR-0013).** A13 and ADR-0013 put "attempts and
+headers" in rig-core's `HttpClientExt` transport. A 429 and a 503 reach a transport as a
+`Response` carrying a status, not as an error, and the verdict that says whether to resend
+lives in the body the dialect decodes above it; a transport that retried would decide from a
+status code, which §4 forbids. **Resolved:** the transport dresses the request (extra
+headers, `{session}` expanded) and the fold above it decides — one function reading
+`retryable && !streamed` and refusing a cancel — see ADR-0015.
+
+**A17 — `rig_agent::AgentRunner` is not in rig-core 0.46 (§4 vs ADR-0004).** ADR-0004 makes the
+run loop a driver over `rig_agent::AgentRunner`, whose hook slots are supposed to carry every
+lifecycle rule §4 states. rig-core 0.46 ships no agent module — it is the release that dissolved
+the run vocabulary into `rig-core` — and no `rig-agent` crate is in this build's registry at all:
+`cargo metadata --offline` resolves `rig-core`, `rig-http`, `rig-reqwest`, `rig-tungstenite` and
+`rig-derive` and nothing else of the family, and a build with no network cannot fetch a name its
+lockfile does not hold. What 0.46 does offer is one `Model` that streams one reply, and a
+`Local` pass-through wire: no turn state, no tool-call batching, no hook. There is nothing to
+drive.
+**Resolved:** the fallback ADR-0004 itself named — a driver of our own — is taken, and it stops
+at our own two seams rather than at rig's: `Responder` (one request, one reply or one failure) and
+`Executor` (one call, what it cost). Every §4 rule is then decided in our code and proved with
+fakes, no network and no clock, and the wire stays behind the provider seam where A15 and A16 left
+it — see ADR-0016.

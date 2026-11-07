@@ -1,0 +1,45 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+typing at 120x40
+00 |                                                                                                                        | plain:120
+01 |                                                                                                                        | plain:120
+02 |                                                                                                                        | plain:120
+03 |                                                                                                                        | plain:120
+04 |                                                                                                                        | plain:120
+05 |                                                                                                                        | plain:120
+06 |                                                                                                                        | plain:120
+07 |                                                                                                                        | plain:120
+08 |                                                                                                                        | plain:120
+09 |                                                                                                                        | plain:120
+10 |                                                                                                                        | plain:120
+11 |                                                                                                                        | plain:120
+12 |                                                                                                                        | plain:120
+13 |                                                                                                                        | plain:120
+14 |                                                                                                                        | plain:120
+15 |                                                                                                                        | plain:120
+16 |                                                                                                                        | plain:120
+17 |                                                                                                                        | plain:120
+18 |                                                                                                                        | plain:120
+19 |                                                                                                                        | plain:120
+20 |                                                                                                                        | plain:120
+21 |                                                                                                                        | plain:120
+22 |                                                                                                                        | plain:120
+23 |                                                                                                                        | plain:120
+24 |                                                                                                                        | plain:120
+25 |                                                                                                                        | plain:120
+26 |                                                                                                                        | plain:120
+27 |                                                                                                                        | plain:120
+28 |                                                                                                                        | plain:120
+29 |                                                                                                                        | plain:120
+30 |                                                                                                                        | plain:120
+31 |                                                                                                                        | plain:120
+32 |                                                                                                                        | plain:120
+33 |                                                                                                                        | plain:120
+34 |                                                                                                                        | plain:120
+35 |                                                                                                                        | plain:120
+36 |                                                                                                                        | plain:120
+37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+38 |why does the retry test fail                                                                                            | plain:120
+39 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · / commands · @ files · ↑ queue                                      | muted:10 dim:3 muted:6 dim:3 muted:13 dim:3 muted:11 dim:3 muted:10 dim:3 muted:7 dim:3 muted:7 plain:38

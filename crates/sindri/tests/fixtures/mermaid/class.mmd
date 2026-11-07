@@ -1,0 +1,9 @@
+classDiagram
+  class Entry {
+    +Turn(u32)
+    +Assistant(String)
+  }
+  class Window {
+    +rows(&self) Vec<Row>
+  }
+  Entry --> Window : laid out as

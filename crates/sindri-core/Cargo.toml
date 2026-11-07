@@ -1,0 +1,24 @@
+[package]
+name = "sindri-core"
+description = "Every decision Sindri makes, and no terminal."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+futures = "0.3"
+http = "1"
+rig-core = { version = "0.46", default-features = false }
+rig-reqwest = "0.46"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_norway = "0.9.42"
+tempfile = "3"
+toml = "0.9"
+toml_edit = "0.22"
+
+[dev-dependencies]
+# The wording bench's estimator (ticket #60): a real BPE, so a section's price is
+# counted by a tokenizer rather than guessed from bytes.
+tiktoken-rs = "0.9"
+

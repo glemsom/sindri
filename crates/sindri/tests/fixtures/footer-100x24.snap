@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+footer at 100x24
+00 |                                                                                                    | plain:100
+01 |                                                                                                    | plain:100
+02 |                                                                                                    | plain:100
+03 |                                                                                                    | plain:100
+04 |                                                                                                    | plain:100
+05 |                                                                                                    | plain:100
+06 |                                                                                                    | plain:100
+07 |                                                                                                    | plain:100
+08 |                                                                                                    | plain:100
+09 |                                                                                                    | plain:100
+10 |                                                                                                    | plain:100
+11 |                                                                                                    | plain:100
+12 |                                                                                                    | plain:100
+13 |                                                                                                    | plain:100
+14 |                                                                                                    | plain:100
+15 |                                                                                                    | plain:100
+16 |                                                                                                    | plain:100
+17 |                                                                                                    | plain:100
+18 |                                                                                                    | plain:100
+19 |                                                                                                    | plain:100
+20 |                                                                                                    | plain:100
+21 |────────────────────────────────────────────────────────────────────────────────────────────────────| dim:100
+22 |                                                                                                    | plain:100
+23 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · / commands                                      | muted:10 dim:3 muted:6 dim:3 muted:13 dim:3 muted:11 dim:3 muted:10 plain:38

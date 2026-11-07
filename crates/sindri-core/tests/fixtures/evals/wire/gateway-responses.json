@@ -1,0 +1,25 @@
+{
+  "body": {
+    "input": [
+      {
+        "content": [
+          {
+            "text": "Say hello",
+            "type": "input_text"
+          }
+        ],
+        "role": "user",
+        "type": "message"
+      }
+    ],
+    "model": "gpt-5",
+    "stream": true
+  },
+  "headers": {
+    "accept": "text/event-stream",
+    "authorization": "Bearer «redacted»",
+    "content-type": "application/json"
+  },
+  "method": "POST",
+  "url": "https://gateway.example/v1/responses"
+}

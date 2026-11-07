@@ -1,0 +1,297 @@
+#!/usr/bin/env bash
+# Contract test for the stage that proves the gate has teeth (spec §16; ticket
+# #5): scripts/check-probe.sh, and the stage line the Makefile relays it as.
+#
+# `make check` is the definition of done, and a definition that cannot say no is
+# a formality. The probe's job is therefore to show the gate failing: it writes
+# one defect at a time into the tree — an unformatted file, a clippy warning, a
+# panicking `#[test]` — drives the real `make check` over a stage subset, and
+# requires the owning stage to print `... FAIL` and the run to stop there. This
+# test proves those assertions can fail, which nothing else can:
+#
+#   1. A stage that answers `... ok` over a defect is caught by name, and so is
+#      one that fails without printing a verdict line, and one whose run goes on
+#      past the stage that failed.
+#   2. A machine with no `make` or no `cargo` gets automake's 77 and a printed
+#      skip, never the green line a run that happened has earned.
+#   3. An honest machine earns `gate: ok (...)` — and the stage line relays it —
+#      without compiling anything, because the stand-in believes the probe rather
+#      than building the tree.
+#   4. A probe killed mid-run leaves the tree exactly as it found it, checked
+#      against the `git status --porcelain` taken before it started, and the
+#      stand-in's own record shows the defect really was in the tree when the
+#      signal landed.
+#
+# The machine is faked the way scripts/sandbox-probe-test.sh fakes it: a stand-in
+# `make` first on PATH. The stand-in answers for make and nothing else, so the
+# rest of PATH — cargo, git, bash — is the real one.
+#
+# WHAT THIS DOES NOT DO, said plainly: it never runs the real probe against this
+# machine. That is what the `gate` stage itself does on every `make check`, and
+# repeating it here would double the one cost that stage exists to keep small.
+# What is proven here is every verdict the probe can print, and the tree left
+# behind when it dies.
+#
+#     bash scripts/check-probe-test.sh
+set -uo pipefail
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+probe="$repo_root/scripts/check-probe.sh"
+bash_path=$(command -v bash)
+make_path=$(command -v make)
+scratch=$(mktemp -d "${TMPDIR:-/dev/shm}/sindri-check-probe-test.XXXXXX") || exit 1
+trap 'rm -rf "$scratch"' EXIT
+
+passed=0
+failed=0
+ok() { printf 'ok   %s\n' "$*"; passed=$((passed + 1)); }
+bad() { printf 'FAIL %s\n' "$*"; failed=$((failed + 1)); }
+
+# Every stand-in appends the tree it was handed here, so the test can prove the
+# probe really wrote a defect into it rather than merely running. It appends
+# because one probe writes three defects in turn and each is worth seeing.
+export CHECK_PROBE_RECORD="$scratch/make-saw.status"
+
+# The tree as this test found it. The kill case compares against this rather than
+# against empty: a developer's own uncommitted work is none of this probe's
+# business, and a probe that demanded a pristine tree would fail for a reason
+# that has nothing to do with the gate.
+tree_before=$(cd "$repo_root" && git status --porcelain)
+
+# Each stand-in is a `make` of its own in a directory of its own, so a case puts
+# that directory first on PATH and nothing else moves. Each reads the stage list
+# out of the `STAGES=...` argument the real make would have taken, so it answers
+# about the stage actually in question.
+for machine in blind mute runon honest hang; do
+  mkdir -p "$scratch/machine-$machine"
+done
+
+# A make that answers every stage with a green line: the lie the probe exists to
+# catch.
+cat >"$scratch/machine-blind/make" <<'SH'
+#!/bin/sh
+for arg in "$@"; do case $arg in STAGES=*) stages=${arg#STAGES=} ;; esac; done
+set -- $stages
+git status --porcelain >>"${CHECK_PROBE_RECORD:-/dev/null}" 2>/dev/null
+printf 'check: %s ... ok\n' "${1:-fmt}"
+exit 0
+SH
+
+# A make that fails without saying what failed: a stage that swallows its own
+# verdict is not a gate, however loudly it exits.
+cat >"$scratch/machine-mute/make" <<'SH'
+#!/bin/sh
+exit 1
+SH
+
+# A make whose run goes on past the stage that failed: the FAIL line is there and
+# the gate still did not stop, so the defect was seen and the run continued.
+#
+# It is `/bin/sh` and POSIX on purpose, like every stand-in below: on a machine
+# whose `sh` is dash — the runner this CI uses — a `[[` would fail to be found,
+# the canary line would never be printed, and this case would read as a probe that
+# missed a run going on rather than as a stand-in that never drew the line.
+cat >"$scratch/machine-runon/make" <<'SH'
+#!/bin/sh
+for arg in "$@"; do case $arg in STAGES=*) stages=${arg#STAGES=} ;; esac; done
+set -- $stages
+printf 'check: %s ... FAIL\n' "${1:-fmt}"
+[ -n "${2:-}" ] && printf 'check: %s ... ok\n' "$2"
+exit 2
+SH
+
+# A make that is honest, and cheap because it is: it reports the stage the probe
+# asks about as failed and stops there, which is what a real gate over a real
+# defect does. The probe cannot tell the difference and does not need to — what
+# it asserts is the verdict and where the run stopped.
+cat >"$scratch/machine-honest/make" <<'SH'
+#!/bin/sh
+for arg in "$@"; do case $arg in STAGES=*) stages=${arg#STAGES=} ;; esac; done
+set -- $stages
+printf 'check: %s ... FAIL\n' "${1:-fmt}"
+exit 2
+SH
+
+# A make that never comes back, so the probe can be killed in the middle of its
+# first case with that case's defect already written into the tree.
+cat >"$scratch/machine-hang/make" <<'SH'
+#!/bin/sh
+for arg in "$@"; do case $arg in STAGES=*) stages=${arg#STAGES=} ;; esac; done
+git status --porcelain >>"${CHECK_PROBE_RECORD:-/dev/null}" 2>/dev/null
+printf '%s\n' "$$" >"${CHECK_PROBE_PIDFILE:-/dev/null}"
+exec sleep 120
+SH
+chmod +x "$scratch"/machine-{blind,mute,runon,honest,hang}/make
+
+# Two machines that lack a tool the probe needs, each a PATH holding nothing but
+# links to the tools it does have: no `make` at all, and a `make` with no `cargo`
+# behind it. A PATH built from links, rather than the real one with a directory
+# removed, is the only way to be sure which tool is the missing one.
+no_make="$scratch/machine-no-make"
+no_cargo="$scratch/machine-no-cargo"
+mkdir -p "$no_make" "$no_cargo"
+for tool in bash git cargo; do
+  path=$(command -v "$tool") && ln -s "$path" "$no_make/$tool"
+done
+for tool in bash git make; do
+  path=$(command -v "$tool") && ln -s "$path" "$no_cargo/$tool"
+done
+
+# run_probe PATH -- captures OUT and CODE from the probe alone.
+run_probe() {
+  OUT=$(env PATH="$1" "$bash_path" "$probe" 2>&1)
+  CODE=$?
+}
+
+# run_make PATH -- captures OUT and CODE from `make gate-tier`, the relay `make
+# check` prints its verdict through. The tier's own target rather than
+# `make gate`, because that one runs this test, and a test that ran itself would
+# never end.
+run_make() {
+  OUT=$(env PATH="$1" "$make_path" --no-print-directory -C "$repo_root" gate-tier 2>&1)
+  CODE=$?
+}
+
+assert_code() { # want desc
+  if [[ $CODE == "$1" ]]; then ok "$2: exit $CODE"; else
+    bad "$2: exit $CODE, want $1"; printf '  output:\n%s\n' "$OUT"; fi
+}
+assert_line() { # exact-line desc
+  if grep -qxF -- "$1" <<<"$OUT"; then ok "$2: '$1'"; else
+    bad "$2: missing line '$1'"; printf '  output:\n%s\n' "$OUT"; fi
+}
+assert_has() { # substring desc
+  if [[ $OUT == *"$1"* ]]; then ok "$2: names $1"; else
+    bad "$2: never names $1"; printf '  output:\n%s\n' "$OUT"; fi
+}
+refute() { # substring desc -- no line may carry it
+  if grep -qF -- "$1" <<<"$OUT"; then
+    bad "$2: output carries '$1'"; printf '  output:\n%s\n' "$OUT"; else
+    ok "$2: never says '$1'"; fi
+}
+
+# 1. No make at all: the probe cannot drive the gate, and says so at 77 rather
+#    than printing a verdict it did not earn.
+run_probe "$no_make"
+assert_code 77 "no make"
+assert_line 'gate: skipped (make unavailable)' "no make"
+refute 'gate: ok' "no make, no green line over a gate nobody rang"
+
+# 2. A make with no cargo behind it: the stages could not build, so the probe
+#    never starts them, and the skip names the tool that is missing.
+run_probe "$no_cargo"
+assert_code 77 "no cargo"
+assert_line 'gate: skipped (cargo unavailable)' "no cargo"
+refute 'gate: ok' "no cargo, no green line over a gate nobody rang"
+
+# 3. A stage that answers `ok` over a defect is the one failure this stage exists
+#    to catch, and the probe must say so by name.
+run_probe "$scratch/machine-blind:$PATH"
+assert_code 1 "blind make"
+assert_has 'gate: FAIL (' "blind make"
+assert_has 'fmt: exit 0, want non-zero' "blind make"
+refute 'gate: ok' "blind make"
+if grep -q 'gate_probe_' "$CHECK_PROBE_RECORD" 2>/dev/null; then
+  ok "blind make: the probe had put the defect in the tree"
+else
+  bad "blind make: no defect was ever written into the tree"
+fi
+
+# 4. A stage that fails without printing its verdict line leaves a reader no way
+#    to know which stage failed, and that is not the gate working either.
+run_probe "$scratch/machine-mute:$PATH"
+assert_code 1 "mute make"
+assert_has "wants 'check: fmt ... FAIL'" "mute make"
+refute 'gate: ok' "mute make"
+
+# 5. A run that goes on past the stage that failed caught the defect and did not
+#    stop: the FAIL line is there, so only a canary can tell the two apart.
+run_probe "$scratch/machine-runon:$PATH"
+assert_code 1 "run-on make"
+assert_has 'the run went on to clippy' "run-on make"
+refute 'gate: ok' "run-on make"
+
+# 6. An honest machine earns the green line, and the `gate` stage relays it — the
+#    two together are what `make check` prints on a tree whose gate has teeth.
+run_probe "$scratch/machine-honest:$PATH"
+assert_code 0 "honest make"
+assert_line 'gate: ok (5 checks)' "honest make"
+assert_has 'ok   gate: fmt caught a deliberately unformatted file' "honest make"
+assert_has 'ok   gate: clippy caught a warning' "honest make"
+assert_has 'ok   gate: test caught a panicking test' "honest make"
+assert_has 'ok   gate: the tree is left as it was found' "honest make"
+assert_has 'ok   gate: no defect file survives the run' "honest make"
+refute 'gate: FAIL' "honest make"
+
+run_make "$scratch/machine-honest:$PATH"
+assert_code 0 "make gate-tier, honest make"
+assert_line 'check: gate ... ok' "make gate-tier, honest make"
+
+run_make "$scratch/machine-blind:$PATH"
+assert_code 2 "make gate-tier, blind make"
+assert_line 'check: gate ... FAIL' "make gate-tier, blind make"
+refute 'check: gate ... ok' "make gate-tier, blind make"
+
+# 7. Killed in the middle of its first case, with the defect already written: the
+#    trap must take it back out, and the tree must read exactly as it did before
+#    the probe started. The stand-in's record is read first, because a probe
+#    killed before it wrote anything would pass the tree check proving nothing.
+CHECK_PROBE_RECORD="$scratch/killed.status" CHECK_PROBE_PIDFILE="$scratch/killed.pid" \
+  PATH="$scratch/machine-hang:$PATH" "$bash_path" "$probe" >"$scratch/killed.out" 2>&1 &
+probe_pid=$!
+for _ in $(seq 1 400); do [[ -s "$scratch/killed.pid" ]] && break; sleep 0.05; done
+if [[ -s "$scratch/killed.pid" ]]; then
+  ok "killed mid-run: the probe reached the stage"
+else
+  bad "killed mid-run: the probe never reached the stage"; cat "$scratch/killed.out"; fi
+if grep -q 'gate_probe_unformatted.rs' "$scratch/killed.status" 2>/dev/null; then
+  ok "killed mid-run: the first defect was in the tree when the signal landed"
+else
+  bad "killed mid-run: no defect was in the tree to be restored"
+fi
+kill -TERM "$(cat "$scratch/killed.pid" 2>/dev/null)" "$probe_pid" 2>/dev/null
+wait "$probe_pid"
+CODE=$?
+if ((CODE != 0)); then ok "killed mid-run: exit $CODE, never 0"; else
+  bad "killed mid-run: exit 0, want non-zero for a run that was killed"; fi
+left=$(ls "$repo_root"/crates/sindri-core/tests/gate_probe_*.rs 2>/dev/null)
+if [[ -z $left ]]; then ok "killed mid-run: no defect file survives"; else
+  bad "killed mid-run: '$left' was left behind"; fi
+if [[ $(cd "$repo_root" && git status --porcelain) == "$tree_before" ]]; then
+  ok "killed mid-run: git status --porcelain reads as it did before"
+else
+  bad "killed mid-run: the tree changed"; (cd "$repo_root" && git status --porcelain) | diff - <(printf '%s\n' "$tree_before") || true
+fi
+
+# 8. The stage really is part of the gate, and it is wired to this family of
+#    scripts. Read from make itself rather than from the file, so a stage added
+#    to STAGES but never wired, or wired but never listed, is caught either way.
+OUT=$("$make_path" --no-print-directory -C "$repo_root" -n -p 2>/dev/null |
+  sed -n 's/^STAGES := //p' | head -1)
+if [[ $OUT == *gate* ]]; then
+  ok "make check: STAGES lists gate"
+else
+  bad "make check: STAGES is '$OUT', want gate among them"
+fi
+OUT=$(cd "$repo_root" && "$make_path" --no-print-directory -n check 2>&1)
+if [[ $OUT == *gate* ]]; then
+  ok "make check: the loop reaches the gate stage"
+else
+  bad "make check: the loop never reaches the gate stage"
+fi
+OUT=$(cd "$repo_root" && "$make_path" --no-print-directory -n gate-tier 2>&1)
+if [[ $OUT == *check-probe.sh* ]]; then
+  ok "make gate-tier: runs the probe"
+else
+  bad "make gate-tier: does not reach the probe"
+fi
+# And the stage never rings itself: the loop it drives is a subset of STAGES, so
+# the probe must be handing make a stage list of its own.
+if grep -q 'STAGES=' "$probe" 2>/dev/null; then
+  ok "the probe drives the loop through a stage subset"
+else
+  bad "the probe never hands make a stage subset"
+fi
+
+printf '\n%s passed, %s failed\n' "$passed" "$failed"
+(( failed == 0 ))

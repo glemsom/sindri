@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+rail at 40x24
+00 |turn 1 ─────────────────────────────────| dim:40
+01 |✓ exit 0  bash  412 bytes · 23 ms       | ok:1 dim:32 plain:7
+02 |  src/rows.rs: the glyph a turn opens   | plain:40
+03 |  with                                  | plain:40
+04 |  src/rows.rs: a word longer than a row | plain:40
+05 |  is broken                             | plain:40
+06 |  Rendering lives in the front end and  | plain:40
+07 |  not in the core, because an entry is a| plain:40
+08 |  fact and never a rendering: the TUI   | plain:40
+09 |  and any reader draw one run from one  | plain:40
+10 |  value, and the core may not name a    | plain:40
+11 |  terminal at all.                      | plain:40
+12 |                                        | plain:40
+13 |                                        | plain:40
+14 |                                        | plain:40
+15 |                                        | plain:40
+16 |                                        | plain:40
+17 |                                        | plain:40
+18 |                                        | plain:40
+19 |                                        | plain:40
+20 |sandbox bwrap · +9 more                 | dim:8 muted:5 dim:3 muted:7 plain:17
+21 |────────────────────────────────────────| dim:40
+22 |                                        | plain:40
+23 |Enter send · ? keys                     | muted:10 dim:3 muted:6 plain:21
