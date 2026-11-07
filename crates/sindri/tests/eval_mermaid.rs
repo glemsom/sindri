@@ -114,5 +114,8 @@ fn the_corpus_of_real_fences_matches_the_svg_checked_in_beside_it() {
          golden deliberately:\n{}",
         failures.join("\n")
     );
-    println!("\ncheck: eval mermaid-corpus ... ok ({} fences)", fences.len());
+    println!(
+        "\ncheck: eval mermaid-corpus ... ok ({} fences)",
+        fences.len()
+    );
 }

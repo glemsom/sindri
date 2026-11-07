@@ -3,12 +3,12 @@
 //! and a state home of the test's own, and its stdout, its stderr and its exit
 //! code are read back as bytes.
 //!
-//! The one assertion that must not be softened is the description's: doctor's
-//! printed bytes are compared against the `bash` tool description a run
-//! registers, built here from the boundary and the catalog the test resolved for
-//! itself, so a doctor that re-rendered the boundary in its own words would fail
-//! rather than pass by agreeing with itself. Every child gets `env_clear`, so
-//! nothing of this process's environment reaches the binary.
+//! The description's bytes are an eval and not a test (§16): `eval_doctor` spawns
+//! this binary, cuts the description out of its stdout, and holds it to the bytes
+//! the `bash` tool a run registers renders, so a doctor that re-rendered the
+//! boundary in its own words fails there rather than passing by agreeing with
+//! itself. What is left here is what the report says and what it costs. Every child
+//! gets `env_clear`, so nothing of this process's environment reaches the binary.
 //!
 //! A failing sandbox check is reachable without a broken kernel by putting a
 //! stand-in `bwrap` first on `PATH`, the way `scripts/sandbox-probe-test.sh`
@@ -180,34 +180,6 @@ fn a_report_was_made(output: &Output) {
         text(&output.stdout),
         text(&output.stderr)
     );
-}
-
-/// The description doctor printed, cut out by the heading it is printed under and
-/// the heading that follows it.
-fn printed_description(stdout: &str) -> &str {
-    let heading = format!("the description the model is given for `{BASH}`\n\n");
-    let rest = stdout
-        .split_once(&heading)
-        .unwrap_or_else(|| panic!("doctor never printed the description:\n{stdout}"))
-        .1;
-    rest.split_once("\n\nskills (")
-        .unwrap_or_else(|| panic!("doctor never listed the skills:\n{stdout}"))
-        .0
-}
-
-/// The `bash` tool's description as a run at `enforcement` registers it, built
-/// here from the boundary and the catalog doctor had: the independent half of the
-/// byte-for-byte assertion, so doctor is not asked to agree with itself.
-fn registered(ground: &Ground, enforcement: Enforcement) -> String {
-    let boundary = Boundary::from_config(&Config::default(), &ground.workspace(), enforcement)
-        .expect("a boundary over the temp workspace");
-    let catalog = Catalog::discover(&ground.workspace(), Some(&ground.config));
-    let tools = ToolSet::new(&boundary, &catalog, FrontEnd::Batch);
-    tools
-        .get(BASH)
-        .expect("bash is always registered")
-        .description()
-        .to_owned()
 }
 
 /// The one line of the report `name` is listed on, so a row is read whole rather
@@ -453,29 +425,6 @@ fn a_builtin_shadowed_by_a_nearer_scope_is_named_by_the_scope_alone() {
 }
 
 #[test]
-fn the_printed_description_is_the_bash_description_the_model_is_given_byte_for_byte() {
-    let ground = Ground::new();
-    // This machine's own PATH, so the real bwrap is the one doctor proves with.
-    let path = std::env::var("PATH").expect("this machine has a PATH");
-
-    let output = run(ground.command(&path).args(["doctor"]));
-
-    let out = text(&output.stdout);
-    let err = text(&output.stderr);
-    a_report_was_made(&output);
-    assert!(
-        err.is_empty(),
-        "a diagnostic that answered wrote no chatter on stderr: {err}"
-    );
-
-    assert_eq!(
-        printed_description(&out),
-        registered(&ground, Enforcement::Bubblewrap),
-        "§5: the boundary the model is told about is the boundary enforced"
-    );
-}
-
-#[test]
 fn an_unsafe_run_is_told_so_and_has_no_sandbox_to_prove() {
     let ground = Ground::new();
     // A machine with no bubblewrap at all: an unsafe run has no sandbox to make,
@@ -500,10 +449,5 @@ fn an_unsafe_run_is_told_so_and_has_no_sandbox_to_prove() {
     assert!(
         out.contains("sandbox not proved: this run asked for no sandbox"),
         "and claims no proof it did not make:\n{out}"
-    );
-    assert_eq!(
-        printed_description(&out),
-        registered(&ground, Enforcement::Unsafe),
-        "the descriptions differ by the enforcement they describe and by nothing else"
     );
 }
