@@ -9,13 +9,19 @@
 //! listing the keys of the current mode stack" is that list, mode by mode.
 //!
 //! The stack is explicit and shallow: `Composer` is the base every frame has, because a
-//! prompt is what this front end is for, and a modal — today only `Keys` — sits over it.
-//! `Stack::act` asks the mode on top and never the modes under it, which is what "a key
+//! prompt is what this front end is for, and a modal — `Keys` and `Files` today — sits over
+//! it. `Stack::act` asks the mode on top and never the modes under it, which is what "a key
 //! resolves in exactly one mode" means as code: a glyph pressed at a screen that binds
-//! no glyph does nothing at all, rather than editing a draft nobody can see. The two
-//! keys that need a rule instead of a row are the queue's (A9), and both are rows like
-//! any other — `↑` bound to `Act::Up`, `Ctrl-X` to `Act::Drop` — so the rules that read
-//! the queue live in two arms of the frame and not in a second keymap.
+//! no glyph does nothing at all, rather than editing a draft nobody can see.
+//!
+//! Six keys are a row and a rule, and every rule lives in an arm of the frame rather than in
+//! a second keymap: the queue's two (A9) — `↑` bound to `Act::Up`, because its recall and
+//! the row above the caret are one key with two homes, and `Ctrl-X` to `Act::Drop`; `@`
+//! bound to `Act::Files`, because it opens the picker only where it starts a word and is a
+//! glyph anywhere else; `?` bound to `Act::Keys`, which is a key only while the draft is
+//! empty; and the mark's two, `Shift+↑` and `Shift+↓`, which grow a mark only over a
+//! transcript there is a row to grow it to. Each arm reads one fact about the frame or the
+//! draft, and no table has to know about it.
 
 use crate::composer::Key;
 
@@ -28,18 +34,22 @@ pub enum Mode {
     Composer,
     /// The `?` screen: every key in force, the mode that answers first at the top.
     Keys,
+    /// The `@` picker: the files of the workspace, narrowed by a query typed into the
+    /// screen and capped at the rows §12 gives it.
+    Files,
 }
 
 impl Mode {
     /// Every mode there is, so a test can walk the tables rather than trust that the
     /// one it remembered is the one that landed.
-    pub const ALL: [Mode; 2] = [Mode::Composer, Mode::Keys];
+    pub const ALL: [Mode; 3] = [Mode::Composer, Mode::Keys, Mode::Files];
 
     /// The mode's name, as the `?` screen heads its rows with it.
     pub fn name(self) -> &'static str {
         match self {
             Mode::Composer => "composer",
             Mode::Keys => "keys",
+            Mode::Files => "files",
         }
     }
 
@@ -48,6 +58,7 @@ impl Mode {
         match self {
             Mode::Composer => &COMPOSER,
             Mode::Keys => &KEYS,
+            Mode::Files => &FILES,
         }
     }
 
@@ -59,6 +70,7 @@ impl Mode {
     fn fallback(self) -> Option<Act> {
         match self {
             Mode::Composer => Some(Act::Draft),
+            Mode::Files => Some(Act::Query),
             Mode::Keys => None,
         }
     }
@@ -87,8 +99,21 @@ pub enum Act {
     Drop,
     /// `?`: the screen that lists the keys in force.
     Keys,
+    /// `@`: the screen that offers the files of the workspace.
+    Files,
     /// `Esc`: the screen on top closes and the mode under it has the keys again.
     Close,
+    /// A glyph typed at the picker: the query is a filter box's, which narrows a list
+    /// rather than composing a draft, and it takes a glyph and a backspace and nothing
+    /// else. The picker's fallback, for the reason the draft is the composer's.
+    Query,
+    /// `↑` and `↓` at the picker: the row above and the row below the selection. Two acts
+    /// and not one, and neither of them the composer's `Up`, because A9's rule is about the
+    /// draft's caret and a list's selection is not a caret.
+    Previous,
+    Next,
+    /// `Enter` at the picker: the chosen row's path goes into the draft.
+    Pick,
 }
 
 /// One row of a key table: the key, the way the `?` screen spells it, and what it does.
@@ -107,15 +132,21 @@ pub struct Binding {
 /// The draft's keys, in the order the `?` screen lists them: the ones a prompt is typed
 /// and sent with first, then the caret's, then the two keys that end things.
 ///
-/// Every row here but the ones carrying a rule of the frame's — `?`, `↑`, `Ctrl-X`, the
-/// two shift arrows and `Ctrl-Y` — is `Act::Draft`: the composer's map is where a text
+/// Every row here but the ones carrying a rule of the frame's — `?`, `@`, `↑`, `Ctrl-X`,
+/// the two shift arrows and `Ctrl-Y` — is `Act::Draft`: the composer's map is where a text
 /// box's rules are, and this table is what that means as a list a reader can read.
-const COMPOSER: [Binding; 16] = [
+const COMPOSER: [Binding; 17] = [
     Binding {
         key: Key::Char('?'),
         name: "?",
         does: "the keys, while the draft is empty",
         act: Act::Keys,
+    },
+    Binding {
+        key: Key::Char('@'),
+        name: "@",
+        does: "the files of the workspace, while it starts a word",
+        act: Act::Files,
     },
     Binding {
         key: Key::Enter,
@@ -224,6 +255,46 @@ const KEYS: [Binding; 2] = [
         name: "?",
         does: "close this screen",
         act: Act::Close,
+    },
+];
+
+/// The `@` picker's keys: the screen's own list first, then the query it is narrowed by.
+///
+/// A glyph that narrows the query is the one key this table does not name, exactly as the
+/// composer's table does not name the glyphs that extend a draft: the table lists the keys
+/// worth explaining, and a glyph is explained by the list it shortens. What the query
+/// answers is `Act::Query` — the picker's own map, backspace included — and a key neither
+/// the table nor the query's map has a use for does nothing at all.
+const FILES: [Binding; 5] = [
+    Binding {
+        key: Key::Escape,
+        name: "Esc",
+        does: "close this screen, and the draft as it was",
+        act: Act::Close,
+    },
+    Binding {
+        key: Key::Up,
+        name: "↑",
+        does: "the file above",
+        act: Act::Previous,
+    },
+    Binding {
+        key: Key::Down,
+        name: "↓",
+        does: "the file below",
+        act: Act::Next,
+    },
+    Binding {
+        key: Key::Enter,
+        name: "Enter",
+        does: "put the chosen path in the draft",
+        act: Act::Pick,
+    },
+    Binding {
+        key: Key::Backspace,
+        name: "Backspace",
+        does: "erase the last glyph of the query",
+        act: Act::Query,
     },
 ];
 

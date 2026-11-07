@@ -145,6 +145,10 @@ fn named(name: &str) -> View {
             view.key(Key::Char('?'));
             view
         }
+        // The `@` picker over a workspace of its own, opened through the key a reader
+        // presses: the eight files nearest the directory the run stands in, which is what
+        // a walk of a workspace actually yields (ticket #47, §12).
+        "files" => picking(),
         // A drag over the transcript: the cells a reader has marked, painted in the ink
         // a selection is read in, and the very cells `Ctrl-Y` hands out (#50).
         "mark" => {
@@ -157,6 +161,48 @@ fn named(name: &str) -> View {
              paints, and a fixture under any other name is a picture of nothing"
         ),
     }
+}
+
+/// The frame the `@` picker is drawn on: a workspace of the test's own — a temp directory
+/// holding the tree below — with the screen opened through the key a reader presses, so the
+/// picture is a walk of a real workspace and not eight rows made up for a fixture.
+///
+/// The tree is a product's: a `.gitignore` naming what is built and what is a note of
+/// somebody's, one file it ignores and a directory it ignores whole, and enough files for
+/// §12's eight rows to end before the workspace does. The directory is the walk's and never
+/// the picture's: every row is a path relative to it, so nothing of a temp directory's name
+/// is frozen into a fixture (ticket #47).
+fn picking() -> View {
+    let root = tempfile::tempdir().expect("a temp workspace");
+    for file in [
+        ".gitignore",
+        "Cargo.toml",
+        "GLOSSARY.md",
+        "Makefile",
+        "docs/SPEC.md",
+        "docs/adr/0017-a-mode-is-one-screen-and-one-key-table.md",
+        "crates/sindri-core/src/records.rs",
+        "crates/sindri/src/keys.rs",
+        "crates/sindri/src/rows.rs",
+        "crates/sindri/src/view.rs",
+        "crates/sindri/tests/frames.rs",
+        // A file the `.gitignore` names and a directory it ignores whole: neither is a row,
+        // and the picture of the picker is only right if they are absent from it.
+        "notes.local.md",
+        "target/debug/sindri",
+    ] {
+        let path = root.path().join(file);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).expect("the directories a file sits in");
+        }
+        std::fs::write(&path, "").expect("a file");
+    }
+    std::fs::write(root.path().join(".gitignore"), "target/\n*.local.md\n").expect("a gitignore");
+
+    let mut view = View::boot();
+    view.set_workspace(root.path().to_path_buf());
+    view.key(Key::Char('@'));
+    view
 }
 
 /// The frame a run is in: the entries it has written, where the transcript is scrolled to,

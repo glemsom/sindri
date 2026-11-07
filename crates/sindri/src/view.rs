@@ -41,6 +41,8 @@
 //! one value and cannot disagree (§12). Each paints into a band of this frame and changes
 //! its fixture deliberately in the commit that changes it.
 
+use std::path::PathBuf;
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use sindri_core::provider::Deltas;
@@ -50,6 +52,7 @@ use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, Prompt, State};
 use crate::ink::Ink;
 use crate::keys::{Act, Mode, Stack};
 use crate::mark::{Cell, Mark, Span};
+use crate::picker::Picker;
 use crate::pulse::Pulse;
 use crate::queue::Queue;
 use crate::rail::Facts;
@@ -75,6 +78,23 @@ const KEYS_MARGIN: u16 = 2;
 /// The gap between a key's name and what it does on the keys screen: two columns, so the
 /// descriptions of every mode line up in one column an eye can run down.
 const KEYS_GAP: usize = 2;
+
+/// What the `@` picker's screen heads itself with, in the accent ink the keys screen heads
+/// its own with.
+const PICKER_TITLE: &str = "@ files";
+
+/// The label the picker's query sits behind, so a line of glyphs under the title reads as
+/// what the list is narrowed by rather than as a row of it.
+const PICKER_QUERY: &str = "query: ";
+
+/// What a picker whose rows are all gone says: a screen with a query and nothing under it
+/// has to say the query is what emptied it.
+const PICKER_EMPTY: &str = "no file answers";
+
+/// The glyph before the row the selection is on, and the two cells every other row keeps
+/// empty so the paths line up in one column.
+const PICKER_MARK: &str = "\u{203a} ";
+const PICKER_NO_MARK: &str = "  ";
 
 /// One frame's worth of facts, in the shape the terminal draws them. Boot knows none
 /// of them — no run, no prompt, no transcript row, nothing loaded — so the frame is its
@@ -117,6 +137,13 @@ pub struct View {
     /// The span the last paint drew the highlight from, and the very cells and
     /// words `Ctrl-Y` hands out: the picture and the copy are one value (§12, #50).
     marked: Span,
+    /// The directory the `@` picker walks: the one the launch stands in, which is the
+    /// workspace a run's commands run in. `None` is a frame that was told no directory,
+    /// and it offers no file rather than inventing one (§12).
+    workspace: Option<PathBuf>,
+    /// The files the picker walks up when `@` is pressed, narrowed by the query typed into
+    /// the screen: empty until a screen is opened, and walked afresh each time it is.
+    picker: Picker,
 }
 
 impl View {
@@ -138,14 +165,7 @@ impl View {
         View {
             rows,
             scroll,
-            composer: Composer::new(),
-            stream: Stream::new(),
-            queue: Queue::new(),
-            stack: Stack::new(),
-            pulse: None,
-            rail: Facts::default(),
-            mark: None,
-            marked: Span::default(),
+            ..View::default()
         }
     }
 
@@ -197,6 +217,19 @@ impl View {
         self.stream = Stream::new();
     }
 
+    /// Hands this frame the directory it stands in: the workspace `@` walks, and the one
+    /// the run's own commands are given. A launch reads the same directory off the process
+    /// (`Launch::open`), so the picker and the run cannot disagree about where they are.
+    pub fn set_workspace(&mut self, workspace: PathBuf) {
+        self.workspace = Some(workspace);
+    }
+
+    /// The files the picker last walked and the query narrowing them: what the screen
+    /// paints, and what a selection takes its path from.
+    pub fn picker(&self) -> &Picker {
+        &self.picker
+    }
+
     /// The mode on top of the stack: what this frame is showing and what will answer
     /// the next key.
     pub fn mode(&self) -> Mode {
@@ -221,6 +254,11 @@ impl View {
             Act::ExtendUp => self.extend(false),
             Act::Drop => self.drop_newest(),
             Act::Keys => self.keys(key),
+            Act::Files => self.at(key),
+            Act::Query => self.query(key),
+            Act::Previous => self.step(Step::Previous),
+            Act::Next => self.step(Step::Next),
+            Act::Pick => self.pick(),
             Act::Close => self.close(),
         }
     }
@@ -285,6 +323,66 @@ impl View {
             return self.composer.key(key);
         }
         self.stack.open(Mode::Keys);
+        Outcome::Edited
+    }
+
+    /// `@`: the files of the workspace, walked afresh and offered as one screen (§12).
+    ///
+    /// It is a key only where it starts a word — the head of the draft, or after the
+    /// space, tab or line break that leaves one — for the reason `?` is a key only while
+    /// the draft is empty: this is a text box, and a prompt that could not hold
+    /// `someone@host` would be a prompt that cannot name an address. An `@` inside a word
+    /// is a glyph like every other, so the two ways to want both are a space before the
+    /// key and typing the glyph on.
+    ///
+    /// A frame that was told no workspace offers no file rather than the process's own
+    /// directory: what a launch stands in is handed in (`View::set_workspace`), and a
+    /// picker walking somewhere else would be offering paths no run could read.
+    fn at(&mut self, key: Key) -> Outcome {
+        if !self.composer.at_word_start() {
+            return self.composer.key(key);
+        }
+        let Some(root) = self.workspace.clone() else {
+            return Outcome::Unchanged;
+        };
+        self.picker = Picker::walk(&root);
+        self.stack.open(Mode::Files);
+        Outcome::Edited
+    }
+
+    /// A glyph typed at the picker, or the backspace that takes one back: the query is the
+    /// picker's own filter box, and it answers in the picker's own map (`picker::Picker`).
+    fn query(&mut self, key: Key) -> Outcome {
+        if self.picker.key(key) {
+            Outcome::Edited
+        } else {
+            Outcome::Unchanged
+        }
+    }
+
+    /// `↑` and `↓` at the picker: the selection walks the rows and stops at the ends, so a
+    /// key that moved nothing is a frame that is not painted.
+    fn step(&mut self, step: Step) -> Outcome {
+        let moved = match step {
+            Step::Previous => self.picker.up(),
+            Step::Next => self.picker.down(),
+        };
+        match moved {
+            true => Outcome::Edited,
+            false => Outcome::Unchanged,
+        }
+    }
+
+    /// `Enter` at the picker: the chosen path goes into the draft as one shell word and the
+    /// screen closes. A list the query left empty has no row to take, so there is nothing
+    /// to insert and the screen stays open to be widened again — the alternative is a
+    /// screen closing on a key that did nothing.
+    fn pick(&mut self) -> Outcome {
+        let Some(word) = self.picker.word() else {
+            return Outcome::Unchanged;
+        };
+        self.composer.insert(&word);
+        self.stack.close();
         Outcome::Edited
     }
 
@@ -376,8 +474,13 @@ impl View {
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) {
         // A screen is the whole frame: the bands under it are not painted at all, so
         // nothing of a draft a key cannot reach is on the screen pretending otherwise.
-        if self.stack.modal().is_some() {
-            self.keys_screen(area, buffer);
+        if let Some(modal) = self.stack.modal() {
+            match modal {
+                Mode::Files => self.files_screen(area, buffer),
+                // The `?` screen lists the keys of every mode in the stack, so it is what a
+                // screen with no picture of its own is drawn as.
+                Mode::Composer | Mode::Keys => self.keys_screen(area, buffer),
+            }
             return;
         }
         let bands = bands(area, self.composer.rows(), self.queue.rows());
@@ -574,6 +677,48 @@ impl View {
         }
     }
 
+    /// The `@` picker: the query the list is narrowed by, then the rows it leaves nearest
+    /// first, the selection marked. The marker is drawn rather than the row tinted alone,
+    /// because a row painted the accent ink tells a reader that something here is chosen and
+    /// not which row it is on a list of eight.
+    ///
+    /// A path wider than the frame is cut at its right edge instead of dropping the row:
+    /// §12's "whole or it is not drawn" is a rule about hints and facts, and a reader
+    /// pointing at a path wants the row it is nearest to, not silence.
+    fn files_screen(&self, area: Rect, buffer: &mut Buffer) {
+        buffer.set_style(area, Ink::Plain.style());
+        let mut y = area.y;
+        screen_row(buffer, area, y, &[(PICKER_TITLE, Ink::Accent)]);
+        y = y.saturating_add(1);
+        if y < area.bottom() {
+            screen_row(
+                buffer,
+                area,
+                y,
+                &[(PICKER_QUERY, Ink::Dim), (self.picker.query(), Ink::Muted)],
+            );
+        }
+        let rows = self.picker.rows();
+        if rows.is_empty() {
+            y = y.saturating_add(1);
+            if y < area.bottom() {
+                screen_row(buffer, area, y, &[(PICKER_EMPTY, Ink::Dim)]);
+            }
+            return;
+        }
+        for (at, path) in rows.iter().enumerate() {
+            y = y.saturating_add(1);
+            if y >= area.bottom() {
+                return;
+            }
+            let (marker, ink) = match at == self.picker.selected() {
+                true => (PICKER_MARK, Ink::Accent),
+                false => (PICKER_NO_MARK, Ink::Plain),
+            };
+            cut_row(buffer, screen_band(area), y, &[(marker, ink), (path, ink)]);
+        }
+    }
+
     /// The footer: the hints §12 keeps at every width, on the bottom edge. The five
     /// more a 120-column frame shows are the chrome's ticket; these three spans are the
     /// floor it degrades to, so the golden frame holds what no width can take away.
@@ -594,6 +739,16 @@ impl Deltas for View {
     fn reasoning(&mut self, fragment: &str) {
         self.stream.reasoning(fragment);
     }
+}
+
+/// Which way `↑` and `↓` move the picker's selection, said once so the two rows of its
+/// table are one arm of the frame.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Step {
+    /// The row above the selection.
+    Previous,
+    /// The row below it.
+    Next,
 }
 
 /// The bands a frame is cut into, top to bottom.
@@ -648,14 +803,26 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16) -> Bands {
 /// footer's hints, a span that would run past the frame's right edge is not drawn at
 /// all: a screen's row is whole or it is not there.
 fn screen_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)]) {
+    write(
+        buffer,
+        Rect {
+            y,
+            ..screen_band(area)
+        },
+        spans,
+    );
+}
+
+/// The columns a screen's rows are drawn in: the frame inset by the margin that makes them
+/// read as one block rather than as the frame's own prose.
+fn screen_band(area: Rect) -> Rect {
     let margin = KEYS_MARGIN.min(area.width);
-    let row = Rect {
+    Rect {
         x: area.x.saturating_add(margin),
-        y,
         width: area.width.saturating_sub(margin),
         height: 1,
-    };
-    write(buffer, row, spans);
+        ..area
+    }
 }
 
 /// Writes one draft line across a row from the band's left edge, cut at its right
@@ -663,10 +830,24 @@ fn screen_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)]) {
 /// whole — §12's "whole or it is not drawn" is a rule about chrome — so it is cut
 /// rather than dropped.
 fn draft_line(buffer: &mut Buffer, area: Rect, line: &str) {
-    for (x, glyph) in (area.x..area.right()).zip(line.chars()) {
-        if let Some(cell) = buffer.cell_mut((x, area.y)) {
-            cell.set_char(glyph);
-            cell.set_style(Ink::Plain.style());
+    cut_row(buffer, area, area.y, &[(line, Ink::Plain)]);
+}
+
+/// Writes spans of text across one row from its left edge, each in its own ink, and cuts the
+/// last of them at the row's right edge — the writer a line of prose gets, where `write` is
+/// the one chrome gets.
+fn cut_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)]) {
+    let mut x = area.x;
+    for (text, ink) in spans {
+        for glyph in text.chars() {
+            if x >= area.right() {
+                return;
+            }
+            if let Some(cell) = buffer.cell_mut((x, y)) {
+                cell.set_char(glyph);
+                cell.set_style(ink.style());
+            }
+            x += 1;
         }
     }
 }

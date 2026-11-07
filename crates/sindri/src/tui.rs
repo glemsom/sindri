@@ -119,6 +119,19 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
         }
     };
     let mut view = View::boot();
+    // The frame is told the directory the launch stands in, because `@` walks the workspace
+    // and a frame knows only what it was handed. It is the same directory `Launch::open`
+    // gives a run — read the same way, from the process — so a path a reader picks is a path
+    // the run's own commands can read (§12).
+    match std::env::current_dir() {
+        Ok(workspace) => view.set_workspace(workspace),
+        Err(error) => {
+            return crate::refuse(
+                &format!("cannot read the working directory: {error}"),
+                SETUP,
+            );
+        }
+    }
     let mut canvas = match canvas(&terminal) {
         Ok(canvas) => canvas,
         Err(error) => {
