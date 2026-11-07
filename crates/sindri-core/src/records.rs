@@ -37,7 +37,7 @@ use crate::policy::{Boundary, Enforcement, PolicyRecord};
 use crate::provider::Route;
 use crate::provider::Usage as Ask;
 use crate::redact::{Redacted, SecretSet};
-use crate::run::{Acted, Call, Exit, Limits, State};
+use crate::run::{Acted, Call, Exit, Limits, State, Stop};
 use crate::session::{Session, SessionError};
 use crate::wire::Wire;
 
@@ -402,14 +402,10 @@ impl Record {
     }
 
     /// What the run says it is doing (§14), written as one status document: the
-    /// run's own words and never the command, the prompt or the answer.
-    pub fn told(&mut self, phase: Phase, message: &str, turn: u32) -> Result<(), RecordError> {
-        let status = Status {
-            phase,
-            message: self.secrets.redact(message),
-            turn,
-            workspace: name_of(&self.document.workspace),
-        };
+    /// run's own words, built from the permitted facts and never from the command,
+    /// the prompt or the answer.
+    pub fn told(&mut self, told: Told) -> Result<(), RecordError> {
+        let status = Status::new(told, &self.document.workspace);
         let path = self.session.directory().join(STATUS);
         write_line(&mut self.statuses, &path, &status)
     }
@@ -629,12 +625,96 @@ impl Phase {
     }
 }
 
+/// The permitted facts a status line is built from, and the whole of them: the
+/// state, the turn it is about, and — once the run stopped — §4's stop reason,
+/// which is a word from a closed set.
+///
+/// No variant carries text the run was handed, so no status can be the command,
+/// the prompt or the answer: a status line is the one thing that leaves by the
+/// terminal, where the record's redaction cannot reach it, so the rule §14 states
+/// is a type here rather than a habit (ADR-0011). A stop reason's narrower detail
+/// — which budget ran out, or what a wire said went wrong — therefore stays in
+/// the record, because that is exactly the text a tty cannot scrub.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Told {
+    /// Nothing is being asked and nothing is running.
+    Idle,
+    /// A turn is on the wire: the run has asked the model and is waiting for the
+    /// reply.
+    Asking {
+        /// The turn the run is in.
+        turn: u32,
+    },
+    /// The turn asked for a command and the run is waiting for it, which is the one
+    /// thing it cannot go on without (§5).
+    ///
+    /// No front end says this yet: the loop runs a turn's calls inside the turn, so the
+    /// only seam a front end is handed fires once the waiting is over, and a `blocked`
+    /// said then would be a status that lies. The variant is here because §14's five
+    /// states are the whole of what a status may be, and the per-call seam that can say
+    /// it honestly is #17's to grow (ADR-0016).
+    Waiting {
+        /// The turn the run is in.
+        turn: u32,
+    },
+    /// The run stopped, and why.
+    Stopped {
+        /// The turn the run stopped in.
+        turn: u32,
+        /// Why it ended, from §4's closed set.
+        stop: Stop,
+    },
+}
+
+impl Told {
+    /// Which of §14's five states this is. A run the user's own word ended is
+    /// `done` and not `error`: it did what it was told, which is to stop.
+    pub fn phase(&self) -> Phase {
+        match self {
+            Told::Idle => Phase::Idle,
+            Told::Asking { .. } => Phase::Working,
+            Told::Waiting { .. } => Phase::Blocked,
+            Told::Stopped { stop, .. } => match stop {
+                Stop::Error(_) => Phase::Error,
+                Stop::Final | Stop::MaxTurns | Stop::Budget(_) | Stop::Cancelled => Phase::Done,
+            },
+        }
+    }
+
+    /// The one coarse line, in the run's own words: one fixed phrase per variant,
+    /// and never a word the run was handed, so the line is coarse by construction
+    /// and not by care.
+    pub fn line(&self) -> &'static str {
+        match self {
+            Told::Idle => "waiting for a prompt",
+            Told::Asking { .. } => "asking the model",
+            Told::Waiting { .. } => "waiting for a command",
+            Told::Stopped { stop, .. } => match stop {
+                Stop::Final => "answered",
+                Stop::MaxTurns => "reached the turn cap",
+                Stop::Budget(_) => "spent a budget",
+                Stop::Cancelled => "cancelled",
+                Stop::Error(_) => "failed",
+            },
+        }
+    }
+
+    /// The turn the run is in, and nothing for a run that has not started one.
+    pub fn turn(&self) -> u32 {
+        match self {
+            Told::Idle => 0,
+            Told::Asking { turn } | Told::Waiting { turn } | Told::Stopped { turn, .. } => *turn,
+        }
+    }
+}
+
 /// One status document: what the run said it was doing, in its own words, at the
 /// turn it was in (§14).
 ///
-/// The message is a coarse line and never the command, the prompt or the answer;
-/// it is scrubbed like every other record field anyway, because a rule about
-/// what is worth redacting is a rule and this is a type.
+/// It is built from a [`Told`] and from nothing else, so the four facts are the
+/// permitted ones and the line is never the command, the prompt or the answer. The
+/// same document is what a terminal is told over OSC 7501, which is why the reader
+/// of one reads the facts it carries rather than a second rendering of them.
 ///
 /// It reads back as it was written, so a front end showing a past run draws the
 /// status documents from the facts they carry and from no second rendering of
@@ -652,6 +732,29 @@ pub struct Status {
 }
 
 impl Status {
+    /// The status `told` says about a run standing in `workspace`: §14's four facts,
+    /// and the only door to them — a [`Status`] is built from a [`Told`] and never
+    /// from a string, so its line cannot be anything but the enum's own words.
+    pub fn new(told: Told, workspace: &Path) -> Status {
+        Status {
+            phase: told.phase(),
+            // The line is the enum's own, so there is no run text here for a set to
+            // catch; the field stays `Redacted` because every document field that
+            // carries words is one (ADR-0011).
+            message: SecretSet::default().redact(told.line()),
+            turn: told.turn(),
+            workspace: name_of(workspace),
+        }
+    }
+
+    /// The document as one line of JSON: what `status.json` writes, and the payload
+    /// a terminal is told, so the two windows onto a run cannot disagree about it.
+    pub fn json(&self) -> Vec<u8> {
+        // Four facts of a string and a number: there is no value here a serializer
+        // could refuse.
+        serde_json::to_vec(self).expect("a status is four facts and always serialises")
+    }
+
     /// Which of the five states the run was in.
     pub fn phase(&self) -> Phase {
         self.phase

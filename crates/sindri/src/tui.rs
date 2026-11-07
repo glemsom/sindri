@@ -22,6 +22,11 @@
 //! when the terminal offers one, and it reaches the composer as one edit with its line
 //! breaks kept.
 //!
+//! A launch also says what it is doing, over OSC 7501 and on the terminal it owns: `idle`
+//! while nothing is in flight, the turn count while a run asks, and the stop reason when it
+//! lands (§14). The pace a report is told at is the core's, the writing is this module's,
+//! and the frame's own step is the clock a withheld report waits for.
+//!
 //! A prompt that leaves the composer starts a run, and the run is driven on a thread of its
 //! own: the loop must stay asleep in `poll` for a key while a request is in flight, so the
 //! fragments the wire lands are woken into this loop through the same pipe a signal uses
@@ -71,12 +76,14 @@ use sindri::view::View;
 use sindri_core::config::{Config, Environment, Process, Touched};
 use sindri_core::provider::Deltas;
 use sindri_core::provider::served::Listing;
+use sindri_core::records::Told;
 use sindri_core::redact::SecretSet;
-use sindri_core::run::{Cancel, Stop};
+use sindri_core::run::{Cancel, Exchange, Stop};
 use sindri_core::tools::FrontEnd;
 
 use crate::cli::Cli;
-use crate::launch::{Launch, Refusal};
+use crate::launch::{Launch, Refusal, Turns};
+use crate::osc::Teller;
 use crate::signal::{Signals, Wake};
 
 /// Spec §15's usage error: a launch that cannot be a run, a screen a launch cannot
@@ -157,15 +164,16 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     // and a frame knows only what it was handed. It is the same directory `Launch::open`
     // gives a run — read the same way, from the process — so a path a reader picks is a path
     // the run's own commands can read (§12).
-    match std::env::current_dir() {
-        Ok(workspace) => view.set_workspace(workspace),
+    let workspace = match std::env::current_dir() {
+        Ok(workspace) => workspace,
         Err(error) => {
             return crate::refuse(
                 &format!("cannot read the working directory: {error}"),
                 SETUP,
             );
         }
-    }
+    };
+    view.set_workspace(workspace.clone());
     // And the home the user-scope skills are read from, for the same reason: a name
     // `/skill:name` accepts and a name a run could call have to come from one catalog, which
     // is why the directory is read the way `launch` reads it and not read again here (§7).
@@ -179,6 +187,19 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     if let Err(error) = paint(&mut canvas, &mut view) {
         return crate::refuse(&format!("the frame could not be painted: {error}"), SETUP);
     }
+    // §14: what the run is doing, said on the terminal this module owns. One teller for the
+    // whole launch and not one per run, so the pace a status is told at is the launch's; the
+    // screen is a second handle on the same descriptor a frame is drawn on, and `idle` is
+    // what a launch with no run in flight is.
+    let mut telling = match terminal.screen.try_clone() {
+        Ok(screen) => Teller::new(screen, config.tells_status(), &workspace),
+        Err(error) => {
+            return crate::refuse(&format!("the terminal could not be told: {error}"), SETUP);
+        }
+    };
+    if let Err(error) = telling.say(Told::Idle) {
+        return crate::refuse(&format!("the status could not be written: {error}"), SETUP);
+    }
     // The config this launch hands each run, which a visit to the settings modal replaces: the
     // file is written once and resolved again, so the prompt after the visit runs on it.
     let mut config = config.clone();
@@ -191,6 +212,7 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
         &Process,
         &signals,
         &typed,
+        &mut telling,
     );
     // The screen is given back before a word is said about how the launch ended: a refusal
     // is a line for the shell a reader is handed back to, and not a smear over a frame.
@@ -340,10 +362,11 @@ fn paint(canvas: &mut Canvas<'_>, view: &mut View) -> io::Result<()> {
 /// is needed to make a fragment, a cancellation or a keystroke arrive.
 ///
 /// `typed` is what the cell probe read off the terminal before the loop started: a reader's
-/// keys, answered here rather than left in a buffer nothing reads.
+/// keys, answered here rather than left in a buffer nothing reads. `telling` is what the run
+/// in flight says about itself, written by the one thing here that owns a tty (§14).
 #[allow(
     clippy::too_many_arguments,
-    reason = "the one seam every mode's key is handed through, as `answer` is"
+    reason = "the one seam every mode's key is handed through, plus the teller the run is announced to"
 )]
 fn keys(
     terminal: &Terminal,
@@ -354,6 +377,7 @@ fn keys(
     environment: &impl Environment,
     signals: &Signals,
     typed: &[u8],
+    telling: &mut Teller<File>,
 ) -> io::Result<Ending> {
     let mut decoder = Decoder::new();
     let mut read = [0u8; 4096];
@@ -377,6 +401,7 @@ fn keys(
             config,
             environment,
             &wake,
+            telling,
         )? {
             return Ok(ending);
         }
@@ -403,6 +428,10 @@ fn keys(
         let keyed = fds[0].revents().contains(PollFlags::IN);
         let woken = fds[1].revents().contains(PollFlags::IN);
 
+        // §14's second has a clock here and nowhere else: a report the pace withheld is said
+        // the moment its window is up, so a withheld report is late rather than lost.
+        telling.due()?;
+
         // A live run's marker is read off the run's own clock once per pass, so the frame a
         // step draws, the frame a key draws and the frame a fragment draws all carry the time
         // the run is at rather than the time it was at when the pulse was last asked for.
@@ -425,12 +454,14 @@ fn keys(
         if woken {
             wake.drain();
             served(canvas, view, &mut asking)?;
-            if take(canvas, view, &mut running)? && !interrupted {
+            if take(canvas, view, &mut running, telling)? && !interrupted {
                 // The run stopped, so the frame's composer is idle again (§12) and the next
                 // prompt the reader typed while it was live is the run to start. A launch the
                 // user's own word ended starts nothing: the queue waits for a reader who
                 // still wants it.
-                if let Some(ending) = resume(canvas, view, &mut running, cli, config, &wake)? {
+                if let Some(ending) =
+                    resume(canvas, view, &mut running, cli, config, &wake, telling)?
+                {
                     return Ok(ending);
                 }
             }
@@ -463,6 +494,7 @@ fn keys(
                     config,
                     environment,
                     &wake,
+                    telling,
                 )? {
                     return Ok(ending);
                 }
@@ -500,26 +532,39 @@ impl Running {
     fn start(launch: Launch, prompt: Prompt, wake: Arc<Wake>) -> Running {
         let cancel = Cancel::new();
         let pending = Arc::new(Mutex::new(Vec::new()));
+        // Two handles on one list of reports: what the wire lands, and the turns that end,
+        // both of which the loop takes and only this thread knows about.
         let mut reports = Reports {
+            pending: Arc::clone(&pending),
+            wake: Arc::clone(&wake),
+        };
+        let mut turns = Reports {
             pending: Arc::clone(&pending),
             wake,
         };
         let interrupted = cancel.clone();
         let started = Instant::now();
         let thread = thread::spawn(move || {
-            let mut turns = ();
             // A launch that could not report a run at all is a run that ended with no stop
             // reason, which the loop cannot do; the marker settles on it as a failure and
             // says so rather than turning for a run nobody is driving.
-            let stop = match launch.drive(prompt.text(), &mut reports, &mut turns, interrupted) {
-                Ok(outcome) => outcome.stopped().clone(),
-                Err(refusal) => Stop::Error(SecretSet::default().redact(refusal.message())),
-            };
+            let (turns, stop) =
+                match launch.drive(prompt.text(), &mut reports, &mut turns, interrupted) {
+                    Ok(outcome) => (outcome.turns(), outcome.stopped().clone()),
+                    Err(refusal) => (
+                        0,
+                        Stop::Error(SecretSet::default().redact(refusal.message())),
+                    ),
+                };
             // The duration is read here, where the run stopped, and carried to the frame: a
             // frame that read the clock when it painted would put a different number beside
             // the same verdict a minute later (§12).
             let elapsed_ms = millis(started.elapsed());
-            reports.push(Report::Stopped { stop, elapsed_ms });
+            reports.push(Report::Stopped {
+                stop,
+                elapsed_ms,
+                turns,
+            });
         });
         Running {
             cancel,
@@ -553,6 +598,10 @@ enum Report {
     Text(String),
     /// A fragment of the reasoning, which has its own gutter and ink (§4, §12).
     Reasoning(String),
+    /// What the run is doing, in §14's five words and the facts they are built from: that
+    /// it is asking the model in this turn, which the frame has nothing to draw but a
+    /// terminal wants to know.
+    Told(Told),
     /// The run stopped, and with what: the marker settles on the verdict and the duration
     /// the run reported, which are the two facts §12 settles a pulse on (#39).
     Stopped {
@@ -560,6 +609,8 @@ enum Report {
         stop: Stop,
         /// How long it had been running when it stopped, read at the stop itself.
         elapsed_ms: u64,
+        /// How many turns it had started, which is the count its last status names.
+        turns: u32,
     },
 }
 
@@ -590,6 +641,24 @@ impl Deltas for Reports {
     }
 }
 
+impl Turns for Reports {
+    /// A turn ended and asked for calls, so the run's next ask is the news a status bar
+    /// wants: the count it carries moves on, and the frame says so by drawing the answer the
+    /// turn left (§14).
+    ///
+    /// A turn that asked for no call ended the run, and the stop reason is the word a
+    /// terminal is owed: "asking the model in turn 2" would be a status about a turn this run
+    /// will never start. The calls themselves are run inside the turn, so the one state that
+    /// cannot be said from here is `blocked` (see `Told::Waiting`).
+    fn turn(&mut self, ended: &Exchange) {
+        if !ended.calls.is_empty() {
+            self.push(Report::Told(Told::Asking {
+                turn: ended.turn + 1,
+            }));
+        }
+    }
+}
+
 /// Takes everything the run in flight has left and puts it on the frame, and says whether the
 /// run has ended.
 ///
@@ -602,6 +671,7 @@ fn take(
     canvas: &mut Canvas<'_>,
     view: &mut View,
     running: &mut Option<Running>,
+    telling: &mut Teller<File>,
 ) -> io::Result<bool> {
     let Some(flight) = running.as_ref() else {
         return Ok(false);
@@ -619,10 +689,23 @@ fn take(
                 view.reasoning(&fragment);
                 painted = true;
             }
-            Report::Stopped { stop, elapsed_ms } => stopped = Some((stop, elapsed_ms)),
+            // A status changes no cell of the frame, and is said by the one thing here that
+            // owns a tty: the report the run handed over is written as it lands (§14).
+            Report::Told(told) => telling.say(told)?,
+            Report::Stopped {
+                stop,
+                elapsed_ms,
+                turns,
+            } => stopped = Some((stop, elapsed_ms, turns)),
         }
     }
-    if let Some((ref stop, elapsed_ms)) = stopped {
+    if let Some((ref stop, elapsed_ms, turns)) = stopped {
+        // The run's last word on the terminal: the stop reason is a change of state and is
+        // said at once, whatever the pace would say about a turn (§14).
+        telling.say(Told::Stopped {
+            turn: turns,
+            stop: stop.clone(),
+        })?;
         // The marker settles on the verdict and on the duration the run stopped at, and this
         // is the last frame it is drawn on: the wait goes back to forever once the run is
         // gone, so settling draws once and nothing after (§12).
@@ -650,7 +733,7 @@ fn take(
 /// function for either.
 #[allow(
     clippy::too_many_arguments,
-    reason = "the one seam #43, #48 and #50 each hand their value through"
+    reason = "the one seam #43, #48, #50 and #56 each hand their value through"
 )]
 fn answer(
     terminal: &Terminal,
@@ -663,6 +746,7 @@ fn answer(
     config: &mut Config,
     environment: &impl Environment,
     wake: &Arc<Wake>,
+    telling: &mut Teller<File>,
 ) -> io::Result<Option<Ending>> {
     let key = match event {
         // A paste is one edit and never a key, so nothing inside one can send: the
@@ -694,7 +778,7 @@ fn answer(
         // then it waits above the composer for the run in flight to stop, and runs in the
         // order it was typed (§12).
         Outcome::Send(prompt) => {
-            let sent = send(prompt, canvas, view, running, cli, config, wake)?;
+            let sent = send(prompt, canvas, view, running, cli, config, wake, telling)?;
             Ok(sent)
         }
         // `Enter` at the settings modal: the keys a reader touched are written once, by the
@@ -705,6 +789,9 @@ fn answer(
             match persist(environment, &touched, cli.flags()) {
                 Ok(fresh) => {
                     *config = fresh;
+                    // The one switch, as the visit left it: a `status` key turned off here
+                    // stops the telling at the next report rather than at the next launch.
+                    telling.switch(config.tells_status());
                     view.saved();
                 }
                 Err(error) => view.refuse(&error.to_string()),
@@ -819,6 +906,10 @@ fn served(canvas: &mut Canvas<'_>, view: &mut View, asking: &mut Option<Asking>)
 /// A launch that cannot run at all ends the launch rather than being drawn: a frame has no
 /// band for a refusal yet, and a screen that swallowed the reason nothing ran would be the one
 /// silence this front end must not keep (§15).
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the one seam a prompt starts a run through, and the teller it is announced to"
+)]
 fn send(
     prompt: Prompt,
     canvas: &mut Canvas<'_>,
@@ -827,6 +918,7 @@ fn send(
     cli: &Cli,
     config: &Config,
     wake: &Arc<Wake>,
+    telling: &mut Teller<File>,
 ) -> io::Result<Option<Ending>> {
     if running.is_some() {
         // A run is live, so the prompt cannot be answered now: it joins the queue the frame
@@ -850,6 +942,9 @@ fn send(
     // says the run has begun rather than a frame that looks exactly as it did (§12, #39).
     view.set_pulse(Some(Pulse::live(0)));
     paint(canvas, view)?;
+    // The terminal is told the run has begun: its first turn is on the wire, and a status
+    // bar that heard nothing while the frame went busy would be a status bar lying (§14).
+    telling.say(Told::Asking { turn: 1 })?;
     Ok(None)
 }
 
@@ -859,6 +954,10 @@ fn send(
 /// A queue with nothing waiting starts nothing, and the launch goes back to waiting for a
 /// key. A launch that cannot run at all ends the launch here as it does from a key — the
 /// prompt is already out of the queue, and a reason nothing ran is still said.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the same seam `send` is, plus the prompt a run that stopped left queued"
+)]
 fn resume(
     canvas: &mut Canvas<'_>,
     view: &mut View,
@@ -866,11 +965,12 @@ fn resume(
     cli: &Cli,
     config: &mut Config,
     wake: &Arc<Wake>,
+    telling: &mut Teller<File>,
 ) -> io::Result<Option<Ending>> {
     let Some(prompt) = view.dequeue() else {
         return Ok(None);
     };
-    send(prompt, canvas, view, running, cli, config, wake)
+    send(prompt, canvas, view, running, cli, config, wake, telling)
 }
 
 /// What the terminal sent, once the bytes that carry it are whole.
@@ -1538,6 +1638,15 @@ mod tests {
         let mut config = sindri_core::config::Config::default();
         let environment = std::collections::BTreeMap::new();
         let wake = Arc::new(Wake::open().expect("a wake"));
+        // A teller on the terminal the frame is drawn on, because that is where a status
+        // goes (§14). Neither key here is a report, so it writes nothing.
+        let mut telling = Teller::new(
+            pty.slave
+                .try_clone()
+                .expect("a second handle on the terminal"),
+            true,
+            std::path::Path::new("/work/sindri"),
+        );
         let mut running = None;
         let mut asking = None;
         let ended = answer(
@@ -1551,6 +1660,7 @@ mod tests {
             &mut config,
             &environment,
             &wake,
+            &mut telling,
         )
         .expect("the copy is written");
 
@@ -1613,6 +1723,15 @@ mod tests {
         let mut view = View::boot();
         view.open_settings(&config);
         let wake = Arc::new(Wake::open().expect("a wake"));
+        // A teller on the terminal the frame is drawn on, because that is where a status
+        // goes (§14). Neither key here is a report, so it writes nothing.
+        let mut telling = Teller::new(
+            pty.slave
+                .try_clone()
+                .expect("a second handle on the terminal"),
+            true,
+            std::path::Path::new("/work/sindri"),
+        );
         let mut running = None;
         let mut asking = None;
 
@@ -1632,6 +1751,7 @@ mod tests {
             &mut config,
             &environment,
             &wake,
+            &mut telling,
         )
         .expect("the write is made");
 

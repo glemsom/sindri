@@ -7,6 +7,10 @@
 //! reason's own, read off `Outcome::exit_code` so this front end cannot hold a
 //! second opinion about how a run ended (ADR-0006).
 //!
+//! The run's status leaves here too, by OSC 7501 and on stderr, and only when stderr is a
+//! terminal: a status sequence written into a file or a pipe is bytes a script did not ask
+//! for and cannot use, so a filter on a pipe is told nothing at all (§14).
+//!
 //! The prompt is the command line's, with a pipe appended after it as context; a
 //! pipe with no prompt *is* the prompt, and a pipe with no `-b` is neither — a
 //! terminal UI off a terminal is a refusal and not a guess (§3). A pipe is never
@@ -31,11 +35,13 @@ use std::time::Instant;
 use sindri_core::config::Config;
 use sindri_core::outcome::Outcome;
 use sindri_core::provider::Deltas;
+use sindri_core::records::Told;
 use sindri_core::run::{Cancel, Exchange, Stop};
 use sindri_core::tools::FrontEnd;
 
 use crate::cli::{Cli, Format};
 use crate::launch::{Launch, Turns};
+use crate::osc::Teller;
 
 /// §15's setup failure: nothing to run *with* — a session that cannot be made, a
 /// boundary that cannot be held, an answer that cannot be written.
@@ -127,6 +133,9 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
     };
     let figure = launch.figure();
     let max_turns = launch.max_turns();
+    // §14: what the run is doing, said on stderr when there is a terminal there to read it.
+    let mut telling = Teller::new(io::stderr(), tells(config), &figure.workspace);
+    quietly(telling.say(Told::Asking { turn: 1 }));
 
     narrate(
         cli,
@@ -150,11 +159,23 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
     // flight hears it, so a batch run stops where a keystroke in the terminal UI does (§4).
     let cancel = Cancel::on_sigint();
     let mut quiet = Quiet;
-    let mut spoken = Says { cli, turns: 0 };
-    let outcome = match launch.drive(&prompt, &mut quiet, &mut spoken, cancel) {
-        Ok(outcome) => outcome,
-        Err(refusal) => return refuse(refusal.message(), refusal.code()),
+    let outcome = {
+        let mut spoken = Says {
+            cli,
+            turns: 0,
+            telling: &mut telling,
+        };
+        match launch.drive(&prompt, &mut quiet, &mut spoken, cancel) {
+            Ok(outcome) => outcome,
+            Err(refusal) => return refuse(refusal.message(), refusal.code()),
+        }
     };
+    // The last word about the run: a stop reason is a new state and is said at once, so a
+    // run that ended inside a second of starting is still said to have ended (§14).
+    quietly(telling.say(Told::Stopped {
+        turn: outcome.turns(),
+        stop: outcome.stopped().clone(),
+    }));
 
     narrate(
         cli,
@@ -191,19 +212,34 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
 }
 
 /// Batch mode's voice about a run that goes on: one line per turn, on stderr and only when
-/// `-v` asked for it. What a turn said is the record's fact and the JSON's, so the narration
-/// is the turn's number and nothing else.
+/// `-v` asked for it, and one status per turn for a terminal that asked for none of it. What
+/// a turn said is the record's fact and the JSON's, so the narration is the turn's number
+/// and nothing else.
 struct Says<'a> {
     /// The command line, for the one question of whether to say anything at all.
     cli: &'a Cli,
     /// How many turns have been narrated, which is what a line counts.
     turns: u32,
+    /// What the run is doing, said at §14's pace rather than a turn at a time.
+    telling: &'a mut Teller<io::Stderr>,
 }
 
 impl Turns for Says<'_> {
     fn turn(&mut self, ended: &Exchange) {
         self.turns = ended.turn;
         narrate(self.cli, &format!("turn {}", self.turns));
+        // A report the pace withheld is said here, on the first turn whose window has
+        // opened, before this turn's own report is offered: late is what §14 asks for, and
+        // never lost. A filter nobody watches has no other clock to go by.
+        quietly(self.telling.due());
+        // A turn that asked for no call has ended the run, so the next word to a terminal is
+        // the stop reason said below: "asking the model in turn 2" would be a status about a
+        // turn this run will never start (§14).
+        if !ended.calls.is_empty() {
+            quietly(self.telling.say(Told::Asking {
+                turn: self.turns + 1,
+            }));
+        }
     }
 }
 
@@ -215,6 +251,19 @@ fn write_line(line: &str) -> io::Result<()> {
     stdout.write_all(line.trim_end_matches('\n').as_bytes())?;
     stdout.write_all(b"\n")?;
     stdout.flush()
+}
+
+/// Whether this launch tells its terminal what the run is doing: §14's one switch, on by
+/// default, and only where stderr is a terminal — a file or a pipe gets nothing at all,
+/// because a sequence is a thing only a terminal can read.
+fn tells(config: &Config) -> bool {
+    config.tells_status() && io::stderr().is_terminal()
+}
+
+/// A status nobody could write is not a reason to fail a run that is answering: a terminal
+/// that has gone away is a terminal there is nothing left to tell.
+fn quietly(written: io::Result<()>) {
+    let _ = written;
 }
 
 /// One line of the run, on stderr and only when `-v` asked for it: stdout is the

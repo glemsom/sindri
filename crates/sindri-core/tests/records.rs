@@ -19,7 +19,7 @@ use sindri_core::config::Config;
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::provider::Route;
 use sindri_core::provider::Usage as Ask;
-use sindri_core::records::{Entry, Facts, Phase, Record, read_transcript, timestamp};
+use sindri_core::records::{Entry, Facts, Record, Status, Told, read_transcript, timestamp};
 use sindri_core::redact::{MASK, SecretSet};
 use sindri_core::run::{Acted, Budget, Call, Exit, Limits, State, Stop};
 use sindri_core::session::Session;
@@ -663,10 +663,13 @@ fn a_status_document_is_one_line_of_the_runs_own_words() {
     let mut record = ground.record(&session);
 
     record
-        .told(Phase::Working, "asking the model", 3)
+        .told(Told::Asking { turn: 3 })
         .expect("a status document is written");
     record
-        .told(Phase::Done, "answered", 3)
+        .told(Told::Stopped {
+            turn: 3,
+            stop: Stop::Final,
+        })
         .expect("a status document is written");
 
     let written = lines(&session.directory().join("status.json"));
@@ -687,6 +690,82 @@ fn a_status_document_is_one_line_of_the_runs_own_words() {
             }),
         ],
         "the status documents are the run's own words, one per line, in order"
+    );
+}
+
+#[test]
+fn each_of_the_five_states_says_its_own_coarse_line() {
+    // One row per state §14 names, walked as a table: the phase word a status bar keys
+    // off and the coarse line a person reads beside it.
+    let told = [
+        (Told::Idle, "idle", "waiting for a prompt"),
+        (Told::Asking { turn: 4 }, "working", "asking the model"),
+        (
+            Told::Waiting { turn: 4 },
+            "blocked",
+            "waiting for a command",
+        ),
+        (
+            Told::Stopped {
+                turn: 4,
+                stop: Stop::Final,
+            },
+            "done",
+            "answered",
+        ),
+        (
+            Told::Stopped {
+                turn: 4,
+                stop: Stop::Error(SecretSet::default().redact("the wire said no")),
+            },
+            "error",
+            "failed",
+        ),
+    ];
+
+    for (told, phase, line) in told {
+        let status = Status::new(told.clone(), Path::new("/work/sindri"));
+        assert_eq!(status.phase().word(), phase, "the state of {told:?}");
+        assert_eq!(status.message().to_string(), line, "the line of {told:?}");
+        assert_eq!(status.workspace(), "sindri", "and the workspace's name");
+    }
+}
+
+#[test]
+fn a_status_line_never_carries_a_word_the_run_was_handed() {
+    // The one place a run's own text could reach a status line is a stop reason that
+    // carries it — a wire's refusal names the request back. The line is the enum's own
+    // words and nothing else, which is what makes §14's rule a type and not a habit.
+    let refused = "the model refused: temperature 9000 is outside [0, 1]";
+    let told = Told::Stopped {
+        turn: 2,
+        stop: Stop::Error(SecretSet::default().redact(refused)),
+    };
+
+    let status = Status::new(told, Path::new("/work/sindri"));
+    let written = String::from_utf8(status.json()).expect("a document is UTF-8");
+
+    assert_eq!(status.message().to_string(), "failed");
+    assert!(
+        !written.contains("temperature"),
+        "no word of the run's own reaches the status line: {written}"
+    );
+}
+
+#[test]
+fn every_turn_a_status_names_is_the_turn_it_was_told_at() {
+    // `idle` is a run with no turn in it and says nothing rather than a turn zero, so a
+    // reader is never told a turn the run has not had.
+    assert_eq!(Told::Idle.turn(), 0);
+    assert_eq!(Told::Asking { turn: 7 }.turn(), 7);
+    assert_eq!(Told::Waiting { turn: 7 }.turn(), 7);
+    assert_eq!(
+        Told::Stopped {
+            turn: 7,
+            stop: Stop::Cancelled
+        }
+        .turn(),
+        7
     );
 }
 

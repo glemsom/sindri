@@ -34,6 +34,13 @@ _Avoid_: Response, output, result
 How one call ended, from a closed set: the code a command exited with, the per-call timeout that killed it, the user's word that stopped it, or a signal that left no code to report. A fact of the result entry, and what a tool row says.
 _Avoid_: Verdict (that one is the wire's), status, outcome, result
 
+**Status**:
+What the run says it is doing: one of §14's five states — `idle`, `working`, `done`, `blocked`,
+`error` — with one coarse line of the run's own words, the turn count and the workspace's name.
+Built from `Told`'s permitted facts and never from a formatted string, so it can never be the
+command, the prompt or the answer, and written by whoever owns the tty.
+_Avoid_: Progress, notice, indicator
+
 ## Confinement
 
 **Enforcement**:
