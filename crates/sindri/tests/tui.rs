@@ -956,6 +956,80 @@ fn ctrl_c_in_a_run_cancels_it_and_keeps_the_draft() {
     );
 }
 
+/// §12's pulse, at the terminal a reader really watches: while a run is live the marker
+/// moves once per 80 ms, and the moment the run stops it settles on the word it stopped
+/// with — `✗ cancelled 5.0s` — and the frame is left alone from then on, because an idle
+/// frame is never drawn (#39).
+#[test]
+fn a_cancelled_run_settles_as_cancelled_and_the_settled_frame_is_left_alone() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask(&mut pty, &drawn, &wire);
+
+    // The run is live and waiting on a wire: the marker at the head of its answer steps
+    // through the braille glyphs while it waits, which is the whole of what tells a reader
+    // that something is still happening.
+    assert!(
+        drawn.wait_until(is_braille),
+        "a live run wears a braille marker: {:?}",
+        drawn.text()
+    );
+    let stepping = drawn.bytes().len();
+    thread::sleep(Duration::from_millis(400));
+    assert!(
+        drawn.bytes().len() > stepping,
+        "a live run is a frame that moves: {:?}",
+        drawn.text()
+    );
+
+    // The user's own word, and the run stops when the request in flight does.
+    pty.type_bytes(&[0x03]);
+    wire.release();
+
+    // Cancelled is settled as cancelled: the marker says the word, and not the cross a
+    // failure wears with nothing beside it.
+    assert!(
+        drawn.wait_until(|frame| frame.contains("cancelled")),
+        "a cancelled run settles as cancelled: {:?}",
+        drawn.text()
+    );
+
+    // Settling draws once and nothing after: the run is over, so there is no clock left to
+    // wake the loop and the settled frame is the last byte the launch writes.
+    thread::sleep(Duration::from_millis(300));
+    let settled = drawn.bytes().len();
+    thread::sleep(Duration::from_millis(600));
+    assert_eq!(
+        drawn.bytes().len(),
+        settled,
+        "a settled frame is left alone, and no idle one is ever drawn: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "the launch outlives the run it cancelled: {:?}",
+        drawn.text()
+    );
+}
+
+/// Whether a frame is wearing a braille marker: one of the ten glyphs the pulse steps
+/// through, which is a cell no other row of this frame draws.
+fn is_braille(frame: &str) -> bool {
+    frame
+        .chars()
+        .any(|glyph| ('\u{2800}'..='\u{28ff}').contains(&glyph))
+}
+
 #[test]
 fn an_outside_sigint_stops_the_run_and_gives_the_terminal_back() {
     let ground = Ground::new();

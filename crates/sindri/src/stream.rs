@@ -21,6 +21,7 @@
 
 use sindri_core::provider::Deltas;
 
+use crate::pulse::Head;
 use crate::rows::{Row, answer, thought};
 
 /// What a run has said so far of the turn it is in the middle of: the fragments that
@@ -81,13 +82,27 @@ impl Stream {
 
     /// The rows the turn in flight is drawn as at `cols`: every run set in the gutter and
     /// ink of the kind it is, laid out by the code the settled entries are laid out by.
-    pub fn rows(&self, cols: u16) -> Vec<Row> {
+    ///
+    /// `head` is the marker the newest answer wears (§12, #39) and it goes on that answer
+    /// alone: an older answer is prose a reader has already been through, and the thought
+    /// beside it is not the thing the run is producing. A turn that has reasoned and not yet
+    /// answered has no answer to head, so the marker opens the answer's row under what it has
+    /// said — the row exists before its first fragment does, because a frame waiting on a
+    /// wire must not look like a frame that is idle.
+    pub fn rows(&self, cols: u16, head: Option<&Head>) -> Vec<Row> {
+        let newest = self.runs.iter().rposition(|run| run.said == Said::Answer);
         let mut rows = Vec::new();
-        for run in &self.runs {
+        for (at, run) in self.runs.iter().enumerate() {
+            let head = if Some(at) == newest { head } else { None };
             rows.extend(match run.said {
                 Said::Reasoning => thought(&run.words, cols),
-                Said::Answer => answer(&run.words, cols),
+                Said::Answer => answer(&run.words, cols, head),
             });
+        }
+        if let (None, Some(head)) = (newest, head) {
+            rows.push(Row::of(
+                head.spans().iter().map(|(text, ink)| (text.clone(), *ink)),
+            ));
         }
         rows
     }

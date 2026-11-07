@@ -17,10 +17,10 @@
 //! a pipe with a byte in it is a readiness the next `poll` returns.
 
 use std::io;
-use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::os::fd::AsRawFd;
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 use rustix::io::write as tell_fd;
 

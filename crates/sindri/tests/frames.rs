@@ -36,6 +36,16 @@ fn calls_120x40_is_a_call_settled_four_ways() {
 }
 
 #[test]
+fn pulse_live_120x40_is_the_marker_carrying_a_live_runs_elapsed_time() {
+    fixture::assert_frame("pulse-live", 120, 40);
+}
+
+#[test]
+fn pulse_settled_120x40_is_the_marker_a_stopped_run_settled_on() {
+    fixture::assert_frame("pulse-settled", 120, 40);
+}
+
+#[test]
 fn keys_120x40_lists_the_keys_of_the_stack_it_sits_on() {
     fixture::assert_frame("keys", 120, 40);
 }

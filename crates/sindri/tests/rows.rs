@@ -14,6 +14,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use sindri::ink::Ink;
+use sindri::pulse::Pulse;
 use sindri::rows::{Row, Rows, Scroll, Window, layout};
 use sindri::stream::Stream;
 use sindri_core::provider::Deltas;
@@ -471,7 +472,7 @@ fn a_live_entry_is_laid_out_alone_as_its_fragments_land() {
     .repeat(15)
     {
         stream.text(fragment);
-        rows.live(&stream);
+        rows.live(&stream, None);
         rows.window(Scroll::Tail, 20);
     }
 
@@ -506,7 +507,7 @@ fn a_settled_turn_is_drawn_from_its_facts_and_never_twice() {
 
     let mut stream = Stream::new();
     stream.text("a fence still open is a code block.");
-    rows.live(&stream);
+    rows.live(&stream, None);
     let live = rows.window(Scroll::Tail, 20);
     assert_eq!(rows.len(), 2, "the turn and the live entry under it");
     assert!(
@@ -530,7 +531,7 @@ fn a_settled_turn_is_drawn_from_its_facts_and_never_twice() {
 
     // The stream is emptied when its turn ends (#43 hands the next turn a new one), and
     // an empty stream draws no live entry at all.
-    rows.live(&Stream::new());
+    rows.live(&Stream::new(), None);
     assert_eq!(
         rows.len(),
         2,
@@ -538,6 +539,65 @@ fn a_settled_turn_is_drawn_from_its_facts_and_never_twice() {
     );
     assert_eq!(rows_shown(&rows.window(Scroll::Tail, 20)), 2);
 }
+
+/// The marker at the head of the newest answer is a clock, so the live entry it heads is
+/// laid out again whenever the mark moves and at no other time: a step that draws the same
+/// glyph and the same words costs nothing, and a step that changes them costs the one row
+/// it heads (#39, ADR-0008).
+#[test]
+fn a_live_entry_is_laid_out_again_when_the_marker_moves() {
+    let mut rows = Rows::new();
+    rows.resize(40);
+    let mut stream = Stream::new();
+    stream.text("an answer arriving");
+    rows.live(&stream, Some(&Pulse::live(4_200).head()));
+    let laid = rows.lays();
+    assert_eq!(laid, 1, "the live entry, laid out once to be drawn");
+
+    rows.live(&stream, Some(&Pulse::live(4_200).head()));
+    assert_eq!(
+        rows.lays(),
+        laid,
+        "the same mark at the same time is the same picture"
+    );
+
+    // 80 ms on, the glyph has stepped: the width is the same and the row is not, so the
+    // entry is laid out again rather than drawn with yesterday's mark on it.
+    rows.live(&stream, Some(&Pulse::live(4_280).head()));
+    assert_eq!(
+        rows.lays(),
+        laid + 1,
+        "a moved marker is one layout of the live entry"
+    );
+
+    stream.text(" and settling");
+    rows.live(&stream, Some(&Pulse::live(4_280).head()));
+    assert_eq!(
+        rows.lays(),
+        laid + 2,
+        "a fragment and a moved marker are one layout each, and never two for one"
+    );
+}
+
+/// A run is live before it has said a word, and the marker is what says so: the answer's
+/// row is opened by it, empty beneath it, because a frame that showed nothing at all for
+/// the length of a request would be the one silence §12's pulse exists to break.
+#[test]
+fn a_live_run_opens_the_answers_row_before_it_has_said_anything() {
+    let mut rows = Rows::new();
+    rows.resize(40);
+    rows.live(&Stream::new(), Some(&Pulse::live(0).head()));
+
+    assert_eq!(rows.len(), 1, "the answer's row, opened by its marker");
+    assert_eq!(rows_shown(&rows.window(Scroll::Tail, 20)), 1);
+    assert_eq!(said(&painted(&rows.rows(0)[0], 40)), "⠋ 0.0s");
+
+    // The mark goes when the run does, and the row it opened goes with it: no mark, no
+    // live entry, and nothing left on the frame claiming a run is in flight.
+    rows.live(&Stream::new(), None);
+    assert_eq!(rows.len(), 0);
+}
+
 /// A call the model asked for: its name, and the command it wrote.
 fn call(which: u32) -> Entry {
     Entry::Call {
