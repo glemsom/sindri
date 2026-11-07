@@ -5,22 +5,13 @@
 //!
 //! What is held here is the fence, never the drawing: a picture is proved by the ink of a
 //! raster and by the count of raster passes the seam keeps, so a test says "it drew" and
-//! never "it drew this thousand pixels".
+//! never "it drew this thousand pixels". The corpus of real fences, whose drawing is a
+//! golden a reader approves, is an eval and not a test (§16).
 
-use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use sindri::graphics::CellSize;
 use sindri::mermaid::{self, Block, Diagram, Fence, Refusal};
-
-/// Where the corpus of real fences lives: one file per fence, and the SVG the renderer
-/// answered with checked in beside it, because a rewrite of a renderer's layout is a
-/// deliberate change and never one nobody looked at (§16).
-const CORPUS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/mermaid");
-
-/// The variable that rewrites a golden instead of comparing it. It is how the corpus was
-/// landed and how a deliberate change to it lands later; nothing else moves a golden.
-const BLESS: &str = "SINDRI_BLESS";
 
 /// A fence a reader really writes, and the one every picture below is drawn from.
 const FLOWCHART: &str =
@@ -33,46 +24,6 @@ const PROSE: &str = "this is not a mermaid diagram";
 /// Every pixel of a raster that carries any ink at all.
 fn inked(image: &image::RgbaImage) -> usize {
     image.pixels().filter(|pixel| pixel.0[3] > 0).count()
-}
-
-/// The corpus, in name order, so two runs of the test compare the same fences.
-fn corpus() -> Vec<PathBuf> {
-    let mut fences: Vec<PathBuf> = std::fs::read_dir(CORPUS)
-        .unwrap_or_else(|error| panic!("the corpus at {CORPUS} is readable: {error}"))
-        .map(|file| file.expect("a readable directory entry").path())
-        .filter(|path| path.extension().is_some_and(|kind| kind == "mmd"))
-        .collect();
-    fences.sort();
-    fences
-}
-
-/// `fence.mmd` as a test names it, which is how a failure says which fence moved.
-fn named(path: &Path) -> String {
-    path.file_stem()
-        .expect("a corpus file has a name")
-        .to_string_lossy()
-        .into_owned()
-}
-
-/// The first line two goldens disagree on, with its number, because a diff nobody can read
-/// is a test nobody fixes: an SVG is one long line, so the unit a failure names is the tag.
-fn diff(accepted: &str, rendered: &str) -> String {
-    let mut ours = accepted.split_inclusive('>');
-    let mut theirs = rendered.split_inclusive('>');
-    let mut at = 0;
-    loop {
-        at += 1;
-        match (ours.next(), theirs.next()) {
-            (Some(left), Some(right)) if left == right => continue,
-            (left, right) => {
-                return format!(
-                    "at tag {at}: accepted {left:?}, rendered {right:?}",
-                    left = left.map(str::trim),
-                    right = right.map(str::trim)
-                );
-            }
-        }
-    }
 }
 
 /// The first of #54's five: a fence a reader writes is drawn — the SVG is there, the cells
@@ -221,55 +172,4 @@ fn a_closed_fence_hands_over_the_picture_or_the_reason_it_did_not_draw() {
         ),
         other => panic!("a closed fence that does not parse is a refusal, not {other:?}"),
     }
-}
-
-/// #54's fifth line: the corpus of real fences is compared as the SVG the renderer answers
-/// with, so a change to how a diagram is laid out is a diff a reader reads rather than a
-/// picture nobody looks at. Ticket #59 puts this in front of `make evals`; until then it is
-/// one more test of this crate.
-#[test]
-fn the_corpus_of_real_fences_renders_to_the_svg_checked_in_beside_it() {
-    let fences = corpus();
-    assert!(
-        fences.len() >= 10,
-        "the corpus holds the diagram types a fence is really written as: {} of them",
-        fences.len()
-    );
-
-    let mut failures = Vec::new();
-    for path in &fences {
-        let source = std::fs::read_to_string(path)
-            .unwrap_or_else(|error| panic!("{} is readable: {error}", path.display()));
-        let Block::Picture(diagram) = mermaid::block(&source, Fence::Closed) else {
-            panic!(
-                "{} is a fence the renderer draws; a corpus of refusals is a different test",
-                named(path)
-            );
-        };
-
-        let accepted = path.with_extension("svg");
-        match std::fs::read_to_string(&accepted) {
-            _ if std::env::var_os(BLESS).is_some() => {
-                // A trailing newline and nothing else, so a golden is a text file a reader's
-                // editor and `git diff` both treat as one line of SVG.
-                let golden = format!("{}\n", diagram.svg());
-                std::fs::write(&accepted, golden)
-                    .unwrap_or_else(|error| panic!("{} is written: {error}", accepted.display()));
-            }
-            Ok(golden) if golden.trim_end_matches('\n') == diagram.svg() => {}
-            Ok(golden) => failures.push(format!(
-                "{}: {}",
-                named(path),
-                diff(golden.trim_end_matches('\n'), diagram.svg())
-            )),
-            Err(error) => failures.push(format!("{}: no golden: {error}", named(path))),
-        }
-    }
-
-    assert!(
-        failures.is_empty(),
-        "the corpus renders as the SVG checked in beside it, or {BLESS}=1 is run to move a \
-         golden deliberately:\n{}",
-        failures.join("\n")
-    );
 }
