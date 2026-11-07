@@ -104,3 +104,33 @@ fn rail_80x24_is_the_strip_giving_facts_up_in_a12s_order() {
 fn rail_40x24_is_the_strip_down_to_the_fact_that_never_goes() {
     fixture::assert_frame("rail", 40, 24);
 }
+
+#[test]
+fn footer_130x24_is_seven_hints_with_columns_to_spare() {
+    fixture::assert_frame("footer", 130, 24);
+}
+
+#[test]
+fn footer_120x24_is_the_narrowest_frame_that_holds_seven_hints() {
+    fixture::assert_frame("footer", 120, 24);
+}
+
+#[test]
+fn footer_119x24_is_the_first_width_that_gives_the_seventh_hint_up() {
+    fixture::assert_frame("footer", 119, 24);
+}
+
+#[test]
+fn footer_100x24_is_the_narrowest_frame_that_holds_five_hints() {
+    fixture::assert_frame("footer", 100, 24);
+}
+
+#[test]
+fn footer_99x24_is_the_first_width_down_to_the_two_that_never_go() {
+    fixture::assert_frame("footer", 99, 24);
+}
+
+#[test]
+fn footer_60x24_is_the_floor_the_hints_never_fall_below() {
+    fixture::assert_frame("footer", 60, 24);
+}

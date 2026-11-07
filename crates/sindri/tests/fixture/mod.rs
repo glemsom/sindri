@@ -149,6 +149,11 @@ fn named(name: &str) -> View {
         // presses: the eight files nearest the directory the run stands in, which is what
         // a walk of a workspace actually yields (ticket #47, §12).
         "files" => picking(),
+        // The footer's hints at the six widths #57 freezes: the frame a launch opens on,
+        // drawn short so the one row that carries words is the bottom one, and the same
+        // frame at every width so what the eye approves between two pictures is the hints
+        // that went and nothing else (ticket #57, §12).
+        "footer" => View::boot(),
         // A drag over the transcript: the cells a reader has marked, painted in the ink
         // a selection is read in, and the very cells `Ctrl-Y` hands out (#50).
         "mark" => {
