@@ -13,9 +13,10 @@
 //!
 //! The bars are why a row of blank cells keeps its width in a file an editor may
 //! touch: nothing a cell holds hides behind a trailing space. The inks are names —
-//! `dim`, `muted`, `accent`, `ok`, `err`, and `plain` for a cell the terminal draws
-//! in whatever ink its reader chose — and never colours, so a palette change cannot
-//! break a fixture and a fixture cannot smuggle in a theme (ADR-0012).
+//! `dim`, `muted`, `accent`, `ok`, `err`, `plain` for a cell the terminal draws in
+//! whatever ink its reader chose, and `mark` for a cell the reader's mark covers —
+//! and never colours, so a palette change cannot break a fixture and a fixture cannot
+//! smuggle in a theme (ADR-0012, #50).
 //!
 //! A fixture's file is a `.snap` and not the `.txt` ADR-0012 first named, because
 //! `insta` compares and blesses it and hard-codes that extension
@@ -36,6 +37,7 @@ use ratatui::buffer::{Buffer, Cell};
 
 use sindri::composer::{Composer, Key};
 use sindri::ink::Ink;
+use sindri::mark;
 use sindri::rail::Facts;
 use sindri::rows::Scroll;
 use sindri::view::View;
@@ -126,6 +128,13 @@ fn named(name: &str) -> View {
         "keys" => {
             let mut view = View::boot();
             view.key(Key::Char('?'));
+            view
+        }
+        // A drag over the transcript: the cells a reader has marked, painted in the ink
+        // a selection is read in, and the very cells `Ctrl-Y` hands out (#50).
+        "mark" => {
+            let mut view = View::of(transcript(), Scroll::Tail);
+            view.drag(mark::Cell::new(20, 0), mark::Cell::new(23, 70));
             view
         }
         unknown => panic!(

@@ -314,7 +314,16 @@ fn keys(
             }
             decoder.push(&read[..count]);
             while let Some(event) = decoder.next() {
-                if let Some(ending) = answer(canvas, view, event, &mut running, cli, config, &wake)? {
+                if let Some(ending) = answer(
+                    terminal,
+                    canvas,
+                    view,
+                    event,
+                    &mut running,
+                    cli,
+                    config,
+                    &wake,
+                )? {
                     return Ok(ending);
                 }
             }
@@ -450,10 +459,16 @@ fn take(canvas: &mut Canvas<'_>, view: &mut View, running: &mut Option<Running>)
 ///
 /// Which key means what is not decided here. The mode stack decides that — one row of one
 /// table per mode — and this function is left with what the terminal does about the outcome
-/// it is handed: paint the frame, start the run a prompt asks for, cancel the run in flight,
-/// or give the screen back. A new key is a row in a table, and a new screen is a mode, with
-/// no arm added to this function for either.
+/// it is handed: paint the frame, start the run a prompt asks for, cancel the run in
+/// flight, write the words an `OSC` 52 carries to the terminal, or give the screen back. A
+/// new key is a row in a table, and a new screen is a mode, with no arm added to this
+/// function for either.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the one seam both #43 and #50 hand their value through"
+)]
 fn answer(
+    terminal: &Terminal,
     canvas: &mut Canvas<'_>,
     view: &mut View,
     event: Event,
@@ -494,6 +509,14 @@ fn answer(
         Outcome::Send(prompt) => {
             let sent = send(prompt, canvas, view, running, cli, config, wake)?;
             Ok(sent)
+        }
+        // `Ctrl-Y`: the words leave the terminal by OSC 52, and they are written here
+        // because this module is the one that owns the tty — a core that named a sequence
+        // would be a core that knows what a terminal is (§12, §14, ADR-0005). Nothing is
+        // repainted: a copy changes no cell of the frame.
+        Outcome::Copy(words) => {
+            tell(&terminal.screen, &crate::osc::copy(&words))?;
+            Ok(None)
         }
         // `Ctrl-Q` is the one way out.
         Outcome::Quit => Ok(Some(Ending::Quit)),
@@ -638,6 +661,8 @@ impl Decoder {
             // `Ctrl-Q`, which is why flow control has to be off: a terminal left with
             // `IXON` eats this byte instead of sending it.
             0x11 => Key::Quit,
+            // `Ctrl-Y`: the copy of §12, and no glyph of any draft.
+            0x19 => Key::Copy,
             0x7f | 0x08 => Key::Backspace,
             // `Ctrl-J` is the plain newline every terminal sends, and it breaks a line
             // rather than sending one: `Enter` is the carriage return below.
@@ -695,6 +720,10 @@ impl Decoder {
         let params = String::from_utf8_lossy(&self.pending[2..last_at]).into_owned();
         self.take(last_at + 1);
         match (last, params.as_str()) {
+            // A modified arrow says so between the bracket and its final byte, which is
+            // the one spelling §17's terminals use for `Shift+↑` and `Shift+↓` (A9, #50).
+            (b'A', _) if shifted(&params) => Step::Event(Event::Key(Key::ShiftUp)),
+            (b'B', _) if shifted(&params) => Step::Event(Event::Key(Key::ShiftDown)),
             (b'A', _) => Step::Event(Event::Key(Key::Up)),
             (b'B', _) => Step::Event(Event::Key(Key::Down)),
             (b'C', _) => Step::Event(Event::Key(Key::Right)),
@@ -752,6 +781,19 @@ impl Decoder {
     fn take(&mut self, count: usize) {
         self.pending.drain(..count);
     }
+}
+
+/// Whether a control sequence's parameters say the shift key was held: the modifiers are
+/// the last field, one more than a mask of shift, alt, ctrl and super.
+fn shifted(params: &str) -> bool {
+    /// The bit that says shift was held, in the protocol's modifier mask.
+    const SHIFT: u32 = 1;
+
+    let modifiers = params.rsplit(';').next().unwrap_or_default();
+    let modifiers = modifiers.split(':').next().unwrap_or_default();
+    modifiers
+        .parse::<u32>()
+        .is_ok_and(|held| held.saturating_sub(1) & SHIFT != 0)
 }
 
 /// The key an arrow's final byte names, from either spelling of the arrows.
@@ -882,9 +924,13 @@ mod tests {
     use std::panic;
     use std::path::PathBuf;
 
+    use clap::Parser;
     use rustix::fs::{Mode, OFlags, open};
     use rustix::pty::{OpenptFlags, grantpt, openpt, ptsname, unlockpt};
     use rustix::termios::LocalModes;
+    use sindri::rows::Scroll;
+    use sindri_core::records::Entry;
+    use sindri_core::redact::SecretSet;
 
     use super::*;
 
@@ -968,6 +1014,51 @@ mod tests {
             pty.attrs().input_modes.bits(),
             before.input_modes.bits(),
             "the second give-back changes nothing"
+        );
+    }
+
+    #[test]
+    fn a_copy_leaves_the_terminal_by_osc_52_and_asks_no_clipboard_utility() {
+        let mut pty = Pty::open();
+        let terminal =
+            Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
+        let mut canvas = canvas(&terminal).expect("a canvas over it");
+        let mut view = View::of(
+            vec![Entry::Assistant {
+                turn: 1,
+                text: SecretSet::default().redact("read the transcript"),
+            }],
+            Scroll::Tail,
+        );
+
+        // No mark, so `Ctrl-Y` copies the last answer, which is the case a launch with no
+        // pointer can reach: the words leave the terminal as the sequence that carries
+        // them, and nothing is spawned to put them in a clipboard — the bytes go down the
+        // wire the frame does, which is what makes a copy work over SSH.
+        // The launch's own values, untouched by a copy: nothing here starts a run, and a
+        // wake nobody writes to is the loop's when it is there.
+        let cli = Cli::parse_from(["sindri"]);
+        let config = sindri_core::config::Config::default();
+        let wake = Arc::new(Wake::open().expect("a wake"));
+        let mut running = None;
+        let ended = answer(
+            &terminal,
+            &mut canvas,
+            &mut view,
+            Event::Key(Key::Copy),
+            &mut running,
+            &cli,
+            &config,
+            &wake,
+        )
+        .expect("the copy is written");
+
+        assert!(ended.is_none(), "a copy is not the key that quits");
+        let drawn = pty.drawn();
+        let sequence = crate::osc::copy("read the transcript");
+        assert!(
+            drawn.contains(std::str::from_utf8(&sequence).expect("a printable sequence")),
+            "the words left as OSC 52 and as nothing else: {drawn:?}"
         );
     }
 
@@ -1109,6 +1200,27 @@ mod tests {
                  no line break in one may send: {events:?}"
             );
             assert_eq!(events.len(), 8, "one event per glyph and per line break");
+        }
+
+        #[test]
+        fn ctrl_y_arrives_as_the_key_that_copies() {
+            assert_eq!(
+                event(b"\x19"),
+                key(Key::Copy),
+                "`Ctrl-Y` is one control byte, and it is the key the mark is copied with \
+                 rather than a glyph of the draft"
+            );
+        }
+
+        #[test]
+        fn a_shifted_arrow_arrives_as_the_key_that_grows_the_mark() {
+            assert_eq!(
+                event(b"\x1b[1;2A"),
+                key(Key::ShiftUp),
+                "a modified arrow carries its modifiers between the bracket and the final \
+                 byte, which is how a terminal says shift was held"
+            );
+            assert_eq!(event(b"\x1b[1;2B"), key(Key::ShiftDown));
         }
 
         #[test]

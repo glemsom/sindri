@@ -57,9 +57,16 @@ pub enum Key {
     Right,
     Up,
     Down,
+    /// `Shift+↑`/`Shift+↓`: the mark grows a whole row up the transcript, or down it
+    /// (§12). The frame's, not the box's: a draft has no mark to grow.
+    ShiftUp,
+    ShiftDown,
     /// The keys that travel the cursor to either end of its line.
     Home,
     End,
+    /// `Ctrl-Y`: the words the mark covers leave the terminal, or the newest answer does
+    /// when nothing is marked (§12). A key of the frame's rather than the box's.
+    Copy,
     /// `Ctrl-Q`: the launch ends and the terminal is given back.
     Quit,
     /// `Ctrl-C`: cancels a run and keeps the draft, or clears it when nothing runs.
@@ -99,6 +106,9 @@ pub enum Outcome {
     Quit,
     /// `Ctrl-C` during a run: the run is the thing cancelled, and the draft stays.
     Cancel,
+    /// `Ctrl-Y`: the words that leave the frame, for the terminal to write out by the
+    /// sequence that carries them out of it — the core names no escape (§12, §14).
+    Copy(String),
 }
 
 /// The draft, where the cursor is in it, how far the band has scrolled and whether a
@@ -225,6 +235,9 @@ impl Composer {
             Key::Down => Composer::edited(self.down()),
             Key::Home => Composer::edited(self.home()),
             Key::End => Composer::edited(self.end()),
+            // The three keys a mark is taken with are the frame's: a box has no mark, so
+            // it has nothing to say about them and nothing to repaint.
+            Key::ShiftUp | Key::ShiftDown | Key::Copy => Outcome::Unchanged,
             Key::Quit => Outcome::Quit,
             Key::Cancel => self.cancel(),
             Key::Escape => Outcome::Unchanged,

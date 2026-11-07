@@ -138,6 +138,12 @@ impl Row {
         &self.spans
     }
 
+    /// The glyphs this row is made of, left to right, with no ink: the line a mark reads
+    /// the words it covers out of, and the cells a mark's columns are counted in (§12).
+    pub fn glyphs(&self) -> String {
+        self.spans.iter().map(|(text, _)| text.as_str()).collect()
+    }
+
     /// Draws this row across the top row of `area`, from its left edge and clipped at
     /// its right one: a row is laid out at a width and drawn at that width or narrower,
     /// so the band's right edge is where a row stops and never where it runs over.
@@ -450,7 +456,7 @@ fn split_at(word: &str, room: usize) -> (String, &str) {
 
 /// The columns a run of glyphs takes: measured and never counted, because a glyph can
 /// be two cells wide and a row is a count of cells.
-fn glyphs(text: &str) -> usize {
+pub(crate) fn glyphs(text: &str) -> usize {
     Span::raw(text).width()
 }
 
@@ -690,6 +696,16 @@ impl Rows {
             self.held[at].rows = Some(rows);
         }
         self.held[at].rows.as_deref().unwrap_or_default()
+    }
+
+    /// The words of the newest answer this transcript holds, read from the entry and not
+    /// from the rows it was laid out as: a copy of the last answer takes the line breaks
+    /// the model wrote rather than the ones the band wrapped (§12, #50).
+    pub fn last_answer(&self) -> Option<String> {
+        self.held.iter().rev().find_map(|held| match &held.what {
+            What::Fact(Entry::Assistant { text, .. }) => Some(text.to_string()),
+            _ => None,
+        })
     }
 
     /// The transcript's whole height in rows, laying out every entry this cache has
