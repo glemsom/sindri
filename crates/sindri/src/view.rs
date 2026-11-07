@@ -1,6 +1,6 @@
 //! What one frame holds and where each part of it goes: the transcript above, the
-//! composer's band — the hairline a draft is typed under and the draft itself — and
-//! the footer's hints along the bottom edge (§12).
+//! queue's row when prompts are waiting, the composer's band — the hairline a draft is
+//! typed under and the draft itself — and the footer's hints along the bottom edge (§12).
 //!
 //! `View::paint` is the one seam a frame is drawn through. The terminal calls it on
 //! the frame the real screen is painted from, and a test calls it on a frame going to
@@ -26,6 +26,12 @@
 //! rail draws into the columns it takes from the transcript's band, and how many columns
 //! those are — and what it gives up when there are fewer — is `rail`'s to decide and not
 //! this file's (#46): `paint` asks it for the split and hands it the facts it was given.
+//! The queue takes one row above the composer while it holds anything and none at all
+//! while it holds nothing — the rows are the `Queue`'s to decide as the box's are the
+//! `Composer`'s — and that row is the whole of what a prompt typed during a run is drawn
+//! as, because the prompt itself is a thing the reader typed and can have back with `↑`
+//! (§12, A9).
+//!
 //! The marker at the head of the newest answer is `pulse`'s to say in words and this
 //! file's to hand to the rows it heads, so the prose around it wraps rather than being cut
 //! by it (#39). The mark is this file's too, and it is painted from the span `mark` hands
@@ -40,11 +46,12 @@ use ratatui::layout::Rect;
 use sindri_core::provider::Deltas;
 use sindri_core::records::Entry;
 
-use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, State};
+use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, Prompt, State};
 use crate::ink::Ink;
 use crate::keys::{Act, Mode, Stack};
 use crate::mark::{Cell, Mark, Span};
 use crate::pulse::Pulse;
+use crate::queue::Queue;
 use crate::rail::Facts;
 use crate::rows::{Rows, Scroll};
 use crate::stream::Stream;
@@ -89,6 +96,10 @@ pub struct View {
     /// fragment lands (§4, §12). Empty is the case of no turn in flight, which is every
     /// frame until #43 feeds the run's deltas in here.
     stream: Stream,
+    /// The prompts typed while a run was live, waiting their turn above the composer's
+    /// band, oldest first: what `↑` recalls and `Ctrl-X` drops and what the run after
+    /// this one is taken from (§12, A9).
+    queue: Queue,
     /// The modes this frame is in, the composer at the base and any screen opened over
     /// it: what answers a key and, while a screen is up, the whole of what is painted.
     stack: Stack,
@@ -129,6 +140,7 @@ impl View {
             scroll,
             composer: Composer::new(),
             stream: Stream::new(),
+            queue: Queue::new(),
             stack: Stack::new(),
             pulse: None,
             rail: Facts::default(),
@@ -150,6 +162,25 @@ impl View {
     /// The draft this frame is drawn around.
     pub fn composer(&self) -> &Composer {
         &self.composer
+    }
+
+    /// The prompts waiting above the composer, oldest first: what the queue's row counts
+    /// and what the two keys of A9 reach into.
+    pub fn queue(&self) -> &Queue {
+        &self.queue
+    }
+
+    /// A prompt sent while a run is live: it waits above the composer instead of being
+    /// dropped, and it runs once the run in flight stops, in the order it was typed
+    /// (§12).
+    pub fn enqueue(&mut self, prompt: Prompt) {
+        self.queue.push(prompt);
+    }
+
+    /// The prompt whose turn it is: what the terminal starts the next run from when the
+    /// run before it stops. Nothing waiting is no run to start.
+    pub fn dequeue(&mut self) -> Option<Prompt> {
+        self.queue.next_to_run()
     }
 
     /// The turn in flight: the runs of answer and reasoning that have landed since the
@@ -188,6 +219,7 @@ impl View {
             Act::Copy => self.copy(),
             Act::ExtendDown => self.extend(true),
             Act::ExtendUp => self.extend(false),
+            Act::Drop => self.drop_newest(),
             Act::Keys => self.keys(key),
             Act::Close => self.close(),
         }
@@ -273,14 +305,30 @@ impl View {
     ///
     /// On the composer's first line the thing above the caret is the queue rather than
     /// another row of the draft, so the arrow recalls the newest queued prompt; anywhere
-    /// else it moves the caret a row up, which is the composer's own map. The queue is
-    /// #42's and is not here yet, so on that line there is nothing to recall and nothing
-    /// to repaint — and #42 adds its queue to this arm rather than to a keymap of its own.
+    /// else it moves the caret a row up, which is the composer's own map, and the queue
+    /// is left where it is. With nothing queued there is nothing to recall and the frame
+    /// is the one it was, so the arrow is not a key that repaints for nothing.
     fn up(&mut self) -> Outcome {
-        if self.composer.on_first_line() {
+        if !self.composer.on_first_line() {
+            return self.composer.key(Key::Up);
+        }
+        match self.queue.recall() {
+            Some(prompt) => {
+                self.composer.recall(prompt);
+                Outcome::Edited
+            }
+            None => Outcome::Unchanged,
+        }
+    }
+
+    /// `Ctrl-X`: the newest queued prompt is dropped, and the ones behind it keep their
+    /// order — the promise a recall makes is that the prompt comes back whole, and the
+    /// promise this key makes is that it does not come back at all (§12).
+    fn drop_newest(&mut self) -> Outcome {
+        if self.queue.recall().is_none() {
             return Outcome::Unchanged;
         }
-        self.composer.key(Key::Up)
+        Outcome::Edited
     }
 
     /// Hands the draft a pasted prompt: one draft, its line breaks kept, and no path
@@ -332,7 +380,7 @@ impl View {
             self.keys_screen(area, buffer);
             return;
         }
-        let bands = bands(area, self.composer.rows());
+        let bands = bands(area, self.composer.rows(), self.queue.rows());
         // The rail takes its columns from the transcript's band before the transcript is
         // laid out in what is left: a row's width is the width it is drawn at (ADR-0008),
         // so the rail's share is decided here and nowhere else (#46).
@@ -341,6 +389,7 @@ impl View {
             self.rail.paint(shape, rail, buffer);
         }
         self.transcript(share.transcript, buffer);
+        self.queue_band(bands.queue, buffer);
         self.composer_band(bands.composer, buffer);
         self.footer(bands.footer, buffer);
     }
@@ -411,6 +460,20 @@ impl View {
         }
     }
 
+    /// The queue: the prompts typed while a run is live, said as one row — `3 queued` —
+    /// on the frame's top row above the composer's hairline, so a reader whose `Enter`
+    /// ran nothing sees that it was kept and how many are waiting in front of it (§12).
+    ///
+    /// It is drawn in `dim`, the ink of a fact a reader consults rather than reads, and
+    /// the band is empty — no row at all — while nothing waits: the composer moves back
+    /// up to where it was and the transcript takes the row.
+    fn queue_band(&self, area: Rect, buffer: &mut Buffer) {
+        let Some(label) = self.queue.label() else {
+            return;
+        };
+        write(buffer, area, &[(&label, Ink::Dim)]);
+    }
+
     /// The composer: the hairline across the band's top row and the draft's lines
     /// below it — the rows the box takes, from the line it has scrolled to. Where the
     /// cursor sits inside a line is not painted here but handed to the terminal (see
@@ -458,7 +521,7 @@ impl View {
         if self.stack.modal().is_some() {
             return None;
         }
-        let bands = bands(area, self.composer.rows());
+        let bands = bands(area, self.composer.rows(), self.queue.rows());
         let (row, column) = self.composer.caret();
         let y = bands
             .composer
@@ -538,32 +601,43 @@ struct Bands {
     /// Everything above the composer: the transcript's rows, and the columns `rail`
     /// takes from them, or the row it takes below a hundred columns (#46).
     transcript: Rect,
+    /// The queue's row, when anything is waiting above the composer — none at all while
+    /// the queue holds nothing, so the band has no rows to give.
+    queue: Rect,
     /// The composer's rows of draft, with the hairline on the first of them.
     composer: Rect,
     /// The footer's single row of hints, on the bottom edge.
     footer: Rect,
 }
 
-/// Cuts `area` into its three bands. The chrome is measured up from the bottom edge and
-/// the transcript takes what is left, because the footer holds one row and the composer
-/// as many as the draft asks for (two to six), while the transcript is the band a run
-/// grows into (§12).
-fn bands(area: Rect, composer_rows: u16) -> Bands {
+/// Cuts `area` into its four bands. The chrome is measured up from the bottom edge and
+/// the transcript takes what is left, because the footer holds one row, the queue one
+/// row while anything waits, and the composer as many as the draft asks for (two to six),
+/// while the transcript is the band a run grows into (§12).
+fn bands(area: Rect, composer_rows: u16, queue_rows: u16) -> Bands {
     let footer = area.height.min(1);
-    let composer = composer_rows.min(area.height.saturating_sub(footer));
-    let transcript = area.height.saturating_sub(footer).saturating_sub(composer);
+    let above = area.height.saturating_sub(footer);
+    let composer = composer_rows.min(above);
+    let queue = queue_rows.min(above.saturating_sub(composer));
+    let transcript = above.saturating_sub(composer).saturating_sub(queue);
+    let queue_y = area.y.saturating_add(transcript);
     Bands {
         transcript: Rect {
             height: transcript,
             ..area
         },
+        queue: Rect {
+            y: queue_y,
+            height: queue,
+            ..area
+        },
         composer: Rect {
-            y: area.y.saturating_add(transcript),
+            y: queue_y.saturating_add(queue),
             height: composer,
             ..area
         },
         footer: Rect {
-            y: area.y.saturating_add(transcript).saturating_add(composer),
+            y: queue_y.saturating_add(queue).saturating_add(composer),
             height: footer,
             ..area
         },

@@ -10,8 +10,8 @@
 //! `State` is the one fact `Ctrl-C`'s rule reads, and whoever owns the run sets it
 //! (#43), so the composer decides what a cancel means and the terminal decides what
 //! to do about it. `Outcome::Send` is the other seam: it carries the draft that just
-//! left the box, and with no run loop wired yet the terminal answers it by dropping
-//! the prompt.
+//! left the box, and the terminal answers it — by starting the run it asks for, or, with
+//! a run already in flight, by queueing it above the box (#42).
 //!
 //! A paste has no path to `Outcome::Send` at all: `Composer::paste` returns nothing a
 //! run could take, so every line break a clipboard carried stays a line break — which
@@ -71,6 +71,10 @@ pub enum Key {
     Quit,
     /// `Ctrl-C`: cancels a run and keeps the draft, or clears it when nothing runs.
     Cancel,
+    /// `Ctrl-X`: drops the newest queued prompt. Not a key of this map's — the queue is
+    /// the frame's and so is the rule (A9) — and listed here because this is the one
+    /// vocabulary the keyboard is decoded into.
+    Drop,
     /// `Esc`: closes the screen over the draft. A draft has nothing to close, so the
     /// composer answers it by leaving the draft alone.
     Escape,
@@ -214,6 +218,16 @@ impl Composer {
         self.insert(&kept);
     }
 
+    /// `↑` on the first line: a queued prompt is the draft again, whole, put in where the
+    /// caret waits so that nothing the reader had already typed is thrown away (A9).
+    ///
+    /// A recalled prompt is a paste that took a detour through the queue: every line
+    /// break it was typed with comes back as one, because a prompt is one entry however
+    /// many lines it carries (§12).
+    pub fn recall(&mut self, prompt: Prompt) {
+        self.insert(&prompt.text);
+    }
+
     /// Hands the map one key and says what the terminal is to do about it.
     pub fn key(&mut self, key: Key) -> Outcome {
         match key {
@@ -240,7 +254,9 @@ impl Composer {
             Key::ShiftUp | Key::ShiftDown | Key::Copy => Outcome::Unchanged,
             Key::Quit => Outcome::Quit,
             Key::Cancel => self.cancel(),
-            Key::Escape => Outcome::Unchanged,
+            // `Ctrl-X` is the queue's, and the frame answers it before the draft ever
+            // sees it: a draft reaching here changes nothing (A9).
+            Key::Drop | Key::Escape => Outcome::Unchanged,
         }
     }
 
@@ -248,9 +264,9 @@ impl Composer {
     /// draft of nothing but spaces is not a prompt, so the box keeps it and nothing is
     /// repainted.
     ///
-    /// What becomes of a prompt with no run listening is not this value's business:
-    /// the terminal answers the outcome, and with the run loop unwired it drops it
-    /// (#43 takes it).
+    /// What becomes of a prompt when a run is already in flight is not this value's
+    /// business either: the terminal answers the outcome, and a prompt it cannot run now
+    /// waits its turn in the frame's queue rather than being dropped (§12).
     fn send(&mut self) -> Outcome {
         if self.text.trim().is_empty() {
             return Outcome::Unchanged;
@@ -643,6 +659,35 @@ mod tests {
             composer.key(Key::Up),
             Outcome::Unchanged,
             "there is no line above the first to move to"
+        );
+    }
+
+    #[test]
+    fn a_recalled_prompt_is_the_draft_again_line_for_line() {
+        let mut composer = Composer::new();
+        composer.recall(Prompt {
+            text: String::from("the first line\nthe second"),
+        });
+
+        assert_eq!(
+            composer.text(),
+            "the first line\nthe second",
+            "the prompt came back whole, its line break included"
+        );
+        assert_eq!(composer.caret(), (1, 10), "and the caret follows it");
+    }
+
+    #[test]
+    fn a_prompt_recalled_into_a_draft_leaves_what_was_typed_there() {
+        let mut composer = holding("fix: ");
+        composer.recall(Prompt {
+            text: String::from("the retry"),
+        });
+
+        assert_eq!(
+            composer.text(),
+            "fix: the retry",
+            "a recall puts the prompt where the caret was and takes nothing away"
         );
     }
 

@@ -35,7 +35,7 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::{Buffer, Cell};
 
-use sindri::composer::{Composer, Key};
+use sindri::composer::{Composer, Key, Outcome};
 use sindri::ink::Ink;
 use sindri::mark;
 use sindri::pulse::Pulse;
@@ -134,6 +134,9 @@ fn named(name: &str) -> View {
         // seconds rather than the ticket's dozen: §12's table gives a duration past ten
         // seconds in whole seconds, so the form is the ticket's and the value is the table's.
         "pulse-settled" => with_pulse(Pulse::settled(&Stop::Final, 9_400), &PULSE_ANSWER),
+        // Prompts typed while a run is live, waiting above the composer and counted in one
+        // row, with a fourth being typed under them (ticket #42, §12, A9).
+        "queue" => queue(),
         // The `?` screen, opened through the same key a reader presses rather than by
         // reaching into the stack: the frame lists the keys of the tables that answer
         // them, so a picture of the screen is a picture of the keymap (ticket #45, A7).
@@ -372,6 +375,31 @@ fn with_pulse(pulse: Pulse, said: &[&str]) -> View {
         view.text(fragment);
     }
     view.set_pulse(Some(pulse));
+    view
+}
+
+/// The frame a run is in with prompts waiting behind it: three sent while the run was
+/// live, queued the way the terminal queues one — a draft, `Enter`, and the prompt the
+/// composer hands back enqueued instead of run — and a fourth being typed under the count
+/// (§12, #42).
+///
+/// It is the picture of what `Enter` during a run comes to: the prompt was neither run
+/// beside the one in flight nor thrown away, and the row above the composer says how many
+/// are waiting while the box the reader is typing in keeps its place.
+fn queue() -> View {
+    let mut view = running(transcript(), Scroll::Tail);
+    for prompt in [
+        "run the test that failed and read it",
+        "then the fmt check",
+        "and say why the retry hid it",
+    ] {
+        view.paste(prompt);
+        match view.key(Key::Enter) {
+            Outcome::Send(prompt) => view.enqueue(prompt),
+            other => panic!("a draft should have been sent, and {other:?} came instead"),
+        }
+    }
+    view.paste("and this one while they wait");
     view
 }
 
