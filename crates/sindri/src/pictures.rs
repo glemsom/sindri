@@ -130,7 +130,11 @@ impl Pictures {
     /// row it stands on already carries its words: a refusal at this point has no row of its
     /// own to be said on, and half a picture is worse than a caption.
     pub fn place(&mut self, picture: &Picture, cell: CellSize, area: Rect, buffer: &mut Buffer) {
-        let Some(picker) = self.picker.clone() else {
+        // Borrowed and not cloned: a `Picker` carries the terminal's font size and its protocol,
+        // and a copy of it per placement would be a copy per row painted for a value nothing
+        // writes to. The fields this then writes are the cache's own, which the borrow does not
+        // cover.
+        let Some(picker) = self.picker.as_ref() else {
             return;
         };
         let source = picture.source().to_owned();
