@@ -551,7 +551,7 @@ impl Room {
                     let measured =
                         picture::drawing(diagram.source(), diagram.svg(), room, &self.surface);
                     match measured {
-                        Ok(measured) => self.reserve(mermaid.at, &measured),
+                        Ok(measured) => self.pictured(mermaid.at, &measured),
                         Err(refusal) => self.caption(&refusal.message()),
                     }
                 }
@@ -562,14 +562,18 @@ impl Room {
         self.code = None;
     }
 
-    /// The block a picture was measured into, from the row it opened on: the rows the block
-    /// already stands on, and as many more of its own gutter as the picture needs, so the
-    /// source a reader copies and the cells the picture is placed over are one height.
+    /// Draws `picture` over the block that begins at `at`, growing the block to the picture's
+    /// own height: the rows the block already stands on, and as many more of its own opening as
+    /// the picture needs — the bar of the quote it is in runs down them, so a picture in a quote
+    /// is still a block of it — so the source a reader copies and the cells the picture is
+    /// placed over are one height.
     ///
     /// The picture is the first row's, because that is where the block begins: what is placed
     /// over a block starts at the top of it, and the words under the placement are what a copy
-    /// of the block takes (§12).
-    fn reserve(&mut self, at: usize, picture: &Picture) {
+    /// of the block takes (§12, #55). It is one function for a fence and for an image because
+    /// they are one block — a code block a diagram is placed over, and an alt text a picture is
+    /// — and a second way to grow one would be a second answer to how tall a block is.
+    fn pictured(&mut self, at: usize, picture: &Picture) {
         let height = at.saturating_add(usize::from(picture.rows()));
         while self.rows.len() < height {
             self.rows.push(Row::of(self.opening()));
@@ -681,8 +685,10 @@ impl Room {
                 self.flush_if_written();
             }
             Ok(measured) => {
-                let block = self.blocked(&words, look, &measured);
-                self.rows.extend(block);
+                let at = self.rows.len();
+                self.prose(&words, look);
+                self.flush_if_written();
+                self.pictured(at, &measured);
             }
         }
         // A block stands under one blank row, the same one every other block stands under,
@@ -690,29 +696,6 @@ impl Room {
         // not stand in for the gap after it.
         self.blank = false;
         self.gap();
-    }
-
-    /// The rows a picture takes: its words at the head of them, in the block's own gutter, and
-    /// the cells it was measured into under that — empty, because the picture is what says the
-    /// rest.
-    ///
-    /// The words are laid out by the same room every other word is, so an alt text longer than
-    /// the band wraps onto rows of the block instead of running over its edge. A block is
-    /// therefore the taller of the two: the rows the words needed, or the picture itself.
-    fn blocked(&mut self, words: &str, look: Look, picture: &Picture) -> Vec<Row> {
-        let before = self.rows.len();
-        self.prose(words, look);
-        self.flush_if_written();
-        let mut rows = self.rows.split_off(before);
-        while rows.len() < usize::from(picture.rows()) {
-            // The block's own gutter runs down the rows the picture takes, so a picture in a
-            // quote is still a block of it.
-            rows.push(Row::of(self.opening()));
-        }
-        if let Some(first) = rows.first().cloned() {
-            rows[0] = first.pictured_over(picture.clone());
-        }
-        rows
     }
 
     /// One blank row between two blocks, so a heading is not taken for the last line of
