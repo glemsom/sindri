@@ -36,6 +36,11 @@ fn calls_120x40_is_a_call_settled_four_ways() {
 }
 
 #[test]
+fn queue_120x40_counts_the_prompts_typed_during_a_run_above_the_composer() {
+    fixture::assert_frame("queue", 120, 40);
+}
+
+#[test]
 fn keys_120x40_lists_the_keys_of_the_stack_it_sits_on() {
     fixture::assert_frame("keys", 120, 40);
 }

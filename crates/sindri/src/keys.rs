@@ -12,10 +12,10 @@
 //! prompt is what this front end is for, and a modal — today only `Keys` — sits over it.
 //! `Stack::act` asks the mode on top and never the modes under it, which is what "a key
 //! resolves in exactly one mode" means as code: a glyph pressed at a screen that binds
-//! no glyph does nothing at all, rather than editing a draft nobody can see. The one
-//! key that needs a rule instead of a row is `↑` (A9), and it is a row like any other
-//! bound to `Act::Up`, so the rule that reads the queue lives in one arm of the frame
-//! and not in a second keymap.
+//! no glyph does nothing at all, rather than editing a draft nobody can see. The two
+//! keys that need a rule instead of a row are the queue's (A9), and both are rows like
+//! any other — `↑` bound to `Act::Up`, `Ctrl-X` to `Act::Drop` — so the rules that read
+//! the queue live in two arms of the frame and not in a second keymap.
 
 use crate::composer::Key;
 
@@ -75,6 +75,9 @@ pub enum Act {
     /// `↑`, one key with two homes: the queue's newest prompt on the composer's first
     /// line, the row above the caret anywhere else (A9).
     Up,
+    /// `Ctrl-X`: the newest prompt waiting in the queue is dropped, and the ones behind
+    /// it keep their order (§12).
+    Drop,
     /// `?`: the screen that lists the keys in force.
     Keys,
     /// `Esc`: the screen on top closes and the mode under it has the keys again.
@@ -99,7 +102,7 @@ pub struct Binding {
 ///
 /// Every row here but three is `Act::Draft`: the composer's map is where a text box's
 /// rules are, and this table is what that means as a list a reader can read.
-const COMPOSER: [Binding; 12] = [
+const COMPOSER: [Binding; 13] = [
     Binding {
         key: Key::Char('?'),
         name: "?",
@@ -123,6 +126,12 @@ const COMPOSER: [Binding; 12] = [
         name: "↑",
         does: "the newest queued prompt, or the line above",
         act: Act::Up,
+    },
+    Binding {
+        key: Key::Drop,
+        name: "Ctrl-X",
+        does: "drop the newest queued prompt",
+        act: Act::Drop,
     },
     Binding {
         key: Key::Down,

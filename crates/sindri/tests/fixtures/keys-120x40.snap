@@ -12,15 +12,15 @@ keys at 120x40
 06 |  Enter                send the prompt                                                                                  | plain:2 muted:21 plain:97
 07 |  Shift+Enter, Ctrl-J  a line break in the draft                                                                        | plain:2 muted:21 plain:97
 08 |  ↑                    the newest queued prompt, or the line above                                                      | plain:2 muted:21 plain:97
-09 |  ↓                    the line below                                                                                   | plain:2 muted:21 plain:97
-10 |  ←                    a glyph left                                                                                     | plain:2 muted:21 plain:97
-11 |  →                    a glyph right                                                                                    | plain:2 muted:21 plain:97
-12 |  Home                 the start of the line                                                                            | plain:2 muted:21 plain:97
-13 |  End                  the end of the line                                                                              | plain:2 muted:21 plain:97
-14 |  Backspace            erase the glyph before the caret                                                                 | plain:2 muted:21 plain:97
-15 |  Ctrl-C               cancel the run, or clear the draft                                                               | plain:2 muted:21 plain:97
-16 |  Ctrl-Q               quit                                                                                             | plain:2 muted:21 plain:97
-17 |                                                                                                                        | plain:120
+09 |  Ctrl-X               drop the newest queued prompt                                                                    | plain:2 muted:21 plain:97
+10 |  ↓                    the line below                                                                                   | plain:2 muted:21 plain:97
+11 |  ←                    a glyph left                                                                                     | plain:2 muted:21 plain:97
+12 |  →                    a glyph right                                                                                    | plain:2 muted:21 plain:97
+13 |  Home                 the start of the line                                                                            | plain:2 muted:21 plain:97
+14 |  End                  the end of the line                                                                              | plain:2 muted:21 plain:97
+15 |  Backspace            erase the glyph before the caret                                                                 | plain:2 muted:21 plain:97
+16 |  Ctrl-C               cancel the run, or clear the draft                                                               | plain:2 muted:21 plain:97
+17 |  Ctrl-Q               quit                                                                                             | plain:2 muted:21 plain:97
 18 |                                                                                                                        | plain:120
 19 |                                                                                                                        | plain:120
 20 |                                                                                                                        | plain:120

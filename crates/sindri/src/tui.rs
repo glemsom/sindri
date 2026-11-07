@@ -25,6 +25,11 @@
 //! `launch`, assembled and driven the way batch mode's is — and what is here is the
 //! terminal's half: when to paint, and when to give the screen back.
 //!
+//! A prompt sent while a run is live cannot be answered now, so it waits in the frame's queue
+//! above the composer and runs once that run stops, in the order it was typed (§12): `Enter`
+//! is never a key that throws a prompt away, which is the one thing a reader would take as
+//! the product losing their words.
+//!
 //! `Ctrl-C` and a `SIGINT` from outside are one path. Raw mode means the terminal sends `^C`
 //! as a byte and no signal, so the two arrive at different doors — the decoder here and the
 //! handler in `signal` — and both set the run's own cancellation flag, which stops the run
@@ -87,7 +92,10 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     let signals = match Signals::install() {
         Ok(signals) => signals,
         Err(error) => {
-            return crate::refuse(&format!("the signal pipe could not be made: {error}"), SETUP);
+            return crate::refuse(
+                &format!("the signal pipe could not be made: {error}"),
+                SETUP,
+            );
         }
     };
     let terminal = match Terminal::stdio() {
@@ -296,9 +304,14 @@ fn keys(
                     flight.cancel();
                 }
             }
-            if take(canvas, view, &mut running)? {
-                // The run stopped, so the frame's composer is idle again (§12) and the launch
-                // is the only thing left to end.
+            if take(canvas, view, &mut running)? && !interrupted {
+                // The run stopped, so the frame's composer is idle again (§12) and the next
+                // prompt the reader typed while it was live is the run to start. A launch the
+                // user's own word ended starts nothing: the queue waits for a reader who
+                // still wants it.
+                if let Some(ending) = resume(canvas, view, &mut running, cli, config, &wake)? {
+                    return Ok(ending);
+                }
             }
             if interrupted && running.is_none() {
                 return Ok(Ending::Cancelled);
@@ -314,7 +327,8 @@ fn keys(
             }
             decoder.push(&read[..count]);
             while let Some(event) = decoder.next() {
-                if let Some(ending) = answer(canvas, view, event, &mut running, cli, config, &wake)? {
+                if let Some(ending) = answer(canvas, view, event, &mut running, cli, config, &wake)?
+                {
                     return Ok(ending);
                 }
             }
@@ -413,7 +427,11 @@ impl Deltas for Reports {
 /// rather than left for the process to exit under. What the last turn said stays on the frame
 /// as the live entry until the next run starts: the record is where a settled turn is kept,
 /// and putting its entries on the frame is the transcript's (ADR-0007, ADR-0008).
-fn take(canvas: &mut Canvas<'_>, view: &mut View, running: &mut Option<Running>) -> io::Result<bool> {
+fn take(
+    canvas: &mut Canvas<'_>,
+    view: &mut View,
+    running: &mut Option<Running>,
+) -> io::Result<bool> {
     let Some(flight) = running.as_ref() else {
         return Ok(false);
     };
@@ -489,8 +507,8 @@ fn answer(
             Ok(None)
         }
         // A prompt that left the composer starts a run, unless one is already in flight:
-        // the queue a prompt typed during a run waits in is #42's, and until it lands the
-        // prompt is dropped rather than run beside the one already going.
+        // then it waits above the composer for the run in flight to stop, and runs in the
+        // order it was typed (§12).
         Outcome::Send(prompt) => {
             let sent = send(prompt, canvas, view, running, cli, config, wake)?;
             Ok(sent)
@@ -516,6 +534,10 @@ fn send(
     wake: &Arc<Wake>,
 ) -> io::Result<Option<Ending>> {
     if running.is_some() {
+        // A run is live, so the prompt cannot be answered now: it joins the queue the frame
+        // says as `N queued` rather than being dropped, and the run that stops next is the
+        // oldest prompt waiting (§12).
+        view.enqueue(prompt);
         paint(canvas, view)?;
         return Ok(None);
     }
@@ -530,6 +552,26 @@ fn send(
     *running = Some(Running::start(launch, prompt, Arc::clone(wake)));
     paint(canvas, view)?;
     Ok(None)
+}
+
+/// Starts the next prompt the queue is holding, once the run before it has stopped: one
+/// prompt per stop, oldest first, which is what §12's "in order" means as a run.
+///
+/// A queue with nothing waiting starts nothing, and the launch goes back to waiting for a
+/// key. A launch that cannot run at all ends the launch here as it does from a key — the
+/// prompt is already out of the queue, and a reason nothing ran is still said.
+fn resume(
+    canvas: &mut Canvas<'_>,
+    view: &mut View,
+    running: &mut Option<Running>,
+    cli: &Cli,
+    config: &Config,
+    wake: &Arc<Wake>,
+) -> io::Result<Option<Ending>> {
+    let Some(prompt) = view.dequeue() else {
+        return Ok(None);
+    };
+    send(prompt, canvas, view, running, cli, config, wake)
 }
 
 /// What the terminal sent, once the bytes that carry it are whole.
@@ -635,6 +677,8 @@ impl Decoder {
         self.take(1);
         let key = match byte {
             0x03 => Key::Cancel,
+            // `Ctrl-X`: the newest queued prompt is dropped (§12).
+            0x18 => Key::Drop,
             // `Ctrl-Q`, which is why flow control has to be off: a terminal left with
             // `IXON` eats this byte instead of sending it.
             0x11 => Key::Quit,
@@ -1047,6 +1091,11 @@ mod tests {
         #[test]
         fn a_kitty_enter_report_without_a_modifier_still_sends() {
             assert_eq!(event(b"\x1b[13u"), key(Key::Enter));
+        }
+
+        #[test]
+        fn ctrl_x_is_the_byte_that_drops_the_newest_queued_prompt() {
+            assert_eq!(event(b"\x18"), key(Key::Drop));
         }
 
         #[test]

@@ -98,6 +98,10 @@ struct Wire {
     arrived: Receiver<()>,
     /// One message released, so the wire answers and the run it was in flight with ends.
     released: Sender<()>,
+    /// Every request read, in the order the runs made them: which prompt a run asked is
+    /// read off the request itself, which is how a test proves the order prompts ran in
+    /// rather than trusting the frame to have painted them in that order (§12).
+    heard: Arc<Mutex<Vec<String>>>,
 }
 
 impl Wire {
@@ -107,10 +111,13 @@ impl Wire {
         let port = listener.local_addr().expect("a bound address").port();
         let (arrived, arrivals) = channel();
         let (release, released) = channel();
+        let heard = Arc::new(Mutex::new(Vec::new()));
+        let listening = Arc::clone(&heard);
         thread::spawn(move || {
             for stream in listener.incoming() {
                 let Ok(mut stream) = stream else { break };
-                let _ = read_request(&mut stream);
+                let request = read_request(&mut stream).unwrap_or_default();
+                listening.lock().expect("the wire's requests").push(request);
                 let _ = arrived.send(());
                 let _ = released.recv_timeout(PATIENCE);
                 let _ = answer(&mut stream);
@@ -120,6 +127,7 @@ impl Wire {
             port,
             arrived: arrivals,
             released: release,
+            heard,
         }
     }
 
@@ -138,6 +146,28 @@ impl Wire {
     /// Lets the reply go, so the request a run is in flight with ends.
     fn release(&self) {
         let _ = self.released.send(());
+    }
+
+    /// Waits until a request carrying `prompt` reaches the wire, and says whether one did:
+    /// which prompt ran is the prompt the run asked for.
+    fn wait_for_prompt(&self, prompt: &str) -> bool {
+        let deadline = Instant::now() + PATIENCE;
+        while Instant::now() < deadline {
+            if self
+                .requests()
+                .iter()
+                .any(|request| request.contains(prompt))
+            {
+                return true;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        false
+    }
+
+    /// Every request the wire has read, in the order the runs made them.
+    fn requests(&self) -> Vec<String> {
+        self.heard.lock().expect("the wire's requests").clone()
     }
 }
 
@@ -599,6 +629,30 @@ fn composer_rows(drawn: &str) -> Option<u16> {
     Some(footer? - hairline?)
 }
 
+/// The row `needle` was last painted on, counted from one as a terminal counts, or nothing
+/// when it never was: the frame's own geometry, so a test reads "above the composer" off
+/// the picture rather than assuming where a band landed.
+fn row_of(drawn: &str, needle: &str) -> Option<u16> {
+    let mut row = 0u16;
+    let mut painted_here = String::new();
+    let mut found = None;
+    for mark in painted(drawn) {
+        match mark {
+            Painted::Moved(at, _) => {
+                row = at;
+                painted_here.clear();
+            }
+            Painted::Glyph(glyph) => {
+                painted_here.push(glyph);
+                if painted_here.ends_with(needle) {
+                    found = Some(row);
+                }
+            }
+        }
+    }
+    found
+}
+
 /// Where `needle` was last drawn in `drawn`, or nothing when it never was: a frame paints
 /// the cells that changed and leaves the rest, so what a test reads back is a stream of
 /// every frame that has been painted, and the last one is the end of it.
@@ -1005,4 +1059,210 @@ fn an_outside_sigint_stops_the_run_and_gives_the_terminal_back() {
         given_back.input_modes.contains(InputModes::IXON),
         "flow control included"
     );
+}
+
+/// Types `prompt` and sends it, and waits until the box is empty again: the trace a prompt
+/// typed while a run is live leaves when it went into the queue instead of being dropped
+/// with the draft it was (§12).
+///
+/// The caret is waited on twice and not the words: a frame paints one cell per glyph, so a
+/// caret one column past the last glyph says the whole draft is in the box, and a caret
+/// gone home says it left. The first wait is not only the frame's sake — a terminal handed
+/// the draft and the `Enter` in one read hands over a paste, and no line break in a paste
+/// sends (§12).
+fn queue(pty: &mut Pty, drawn: &Drawn, prompt: &str) {
+    pty.type_bytes(prompt.as_bytes());
+    let typed = u16::try_from(prompt.chars().count()).expect("a prompt narrower than a frame") + 1;
+    assert!(
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == typed)),
+        "{prompt:?} is in the box, the caret one column past its last glyph: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(b"\r");
+    assert!(
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == 1)),
+        "{prompt:?} left the box for the queue: {:?}",
+        drawn.text()
+    );
+}
+
+#[test]
+fn enter_during_a_run_keeps_the_prompt_above_the_composer() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask(&mut pty, &drawn, &wire);
+
+    // `Enter` with a run in flight cannot run the prompt, so the prompt waits above the
+    // composer and the frame says how many are waiting in a row of its own (§12).
+    queue(&mut pty, &drawn, "read the test that failed");
+
+    let frame = drawn.text();
+    let count = row_of(&frame, "1 queued");
+    assert!(
+        count.is_some(),
+        "the frame counts the prompt waiting above the composer: {frame:?}"
+    );
+    assert_eq!(
+        composer_rows(&frame),
+        Some(2),
+        "and the box under it is still at its two-row floor, so the count is not in it"
+    );
+    assert!(
+        count
+            .zip(caret_at(&frame))
+            .is_some_and(|(count, (caret, _))| count < caret),
+        "the count sits above the composer's own row: {frame:?}"
+    );
+
+    wire.release();
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+}
+
+#[test]
+fn the_prompts_typed_during_a_run_run_in_the_order_they_were_typed() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask(&mut pty, &drawn, &wire);
+
+    // Two prompts typed while the first run waits on the wire: neither runs beside it, and
+    // neither is thrown away.
+    queue(&mut pty, &drawn, "second");
+    queue(&mut pty, &drawn, "third");
+
+    // The run in flight stops when its request is answered, and what runs next is the queue,
+    // oldest first: the wire is asked for the prompt typed first, then the one behind it (§12).
+    wire.release();
+    assert!(
+        wire.wait_for_prompt("second"),
+        "the prompt typed first is the run that starts first: {:?}",
+        wire.requests()
+    );
+    wire.release();
+    assert!(
+        wire.wait_for_prompt("third"),
+        "and the one behind it starts next: {:?}",
+        wire.requests()
+    );
+
+    let asked = wire.requests();
+    assert_eq!(asked.len(), 3, "three runs, three requests: {asked:?}");
+    for (at, prompt) in ["triage this", "second", "third"].iter().enumerate() {
+        assert!(
+            asked[at].contains(prompt),
+            "request {at} asks for {prompt:?}: {}",
+            asked[at]
+        );
+    }
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+}
+
+#[test]
+fn ctrl_x_drops_the_newest_prompt_the_queue_holds() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask(&mut pty, &drawn, &wire);
+    queue(&mut pty, &drawn, "keep this");
+    queue(&mut pty, &drawn, "drop this");
+
+    // `Ctrl-X` drops the newest queued prompt (§12). The `x` typed straight after it is the
+    // proof the key was answered: the loop answers one key before the next, so a glyph the
+    // frame painted is a `Ctrl-X` already acted on.
+    pty.type_bytes(&[0x18]);
+    pty.type_bytes(b"x");
+    assert!(
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == 2)),
+        "the glyph typed after Ctrl-X is in the draft, so the drop has happened: {:?}",
+        drawn.text()
+    );
+
+    wire.release();
+    assert!(
+        wire.wait_for_prompt("keep this"),
+        "the prompt the queue still holds is the run that starts: {:?}",
+        wire.requests()
+    );
+    wire.release();
+    thread::sleep(Duration::from_millis(300));
+
+    let asked = wire.requests();
+    assert_eq!(asked.len(), 2, "two runs and no third: {asked:?}");
+    assert!(
+        asked.iter().all(|request| !request.contains("drop this")),
+        "the prompt dropped never ran: {asked:?}"
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+}
+
+#[test]
+fn up_on_the_first_line_takes_the_newest_queued_prompt_back() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask(&mut pty, &drawn, &wire);
+    queue(&mut pty, &drawn, "keep this");
+    queue(&mut pty, &drawn, "the newest");
+
+    // `↑` with the caret on the composer's first line and nothing typed: the thing above the
+    // caret is the queue, so the newest queued prompt is the draft again (A9) — the caret
+    // lands one column past its last glyph, which is how a test reads the words as back.
+    pty.type_bytes(b"\x1b[A");
+    assert!(
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == 11)),
+        "the recalled prompt is the whole draft again: {:?}",
+        drawn.text()
+    );
+
+    // And it left the queue: the run that starts next is the prompt still waiting in it,
+    // because the recalled one is a draft — nothing runs it until `Enter` does.
+    wire.release();
+    assert!(
+        wire.wait_for_prompt("keep this"),
+        "the prompt the queue still holds is the run that starts: {:?}",
+        wire.requests()
+    );
+    wire.release();
+    thread::sleep(Duration::from_millis(300));
+
+    let asked = wire.requests();
+    assert_eq!(asked.len(), 2, "two runs and no third: {asked:?}");
+    assert!(
+        asked.iter().all(|request| !request.contains("the newest")),
+        "the recalled prompt is a draft and not a run: {asked:?}"
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
 }
