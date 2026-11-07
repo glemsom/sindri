@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+markdown-table-narrow at 40x24
+00 |  a heading of the  │ a table wider than| plain:40
+01 |  first level is    │ the band it is    | plain:40
+02 |  bold and stands   │ drawn in wraps    | plain:40
+03 |  under one blank   │ inside its cells  | plain:40
+04 |  row wherever it   │ and keeps the rule| plain:40
+05 |  stands            │ under its header  | plain:40
+06 |  ──────────────────┼───────────────────| plain:2 dim:38
+07 |  a code block      │ is guttered by its| plain:40
+08 |                    │ language's tag and| plain:40
+09 |                    │ highlighted by    | plain:40
+10 |                    │ syntect           | plain:40
+11 |                                        | plain:40
+12 |                                        | plain:40
+13 |                                        | plain:40
+14 |                                        | plain:40
+15 |                                        | plain:40
+16 |                                        | plain:40
+17 |                                        | plain:40
+18 |                                        | plain:40
+19 |                                        | plain:40
+20 |                                        | plain:40
+21 |────────────────────────────────────────| dim:40
+22 |                                        | plain:40
+23 |Enter send · ? keys                     | muted:10 dim:3 muted:6 plain:21

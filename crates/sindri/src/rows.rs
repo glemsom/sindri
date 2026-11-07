@@ -66,7 +66,8 @@ use ratatui::text::Span;
 use sindri_core::records::Entry;
 use sindri_core::run::Exit;
 
-use crate::ink::Ink;
+use crate::ink::{Ink, Look};
+use crate::markdown;
 use crate::pulse::Head;
 use crate::stream::Stream;
 
@@ -106,24 +107,32 @@ const HAIRLINE: char = '─';
 /// split.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Row {
-    /// The runs of glyphs, left to right, each written in the ink it was given.
-    spans: Vec<(String, Ink)>,
+    /// The runs of glyphs, left to right, each written in the look it was given.
+    spans: Vec<(String, Look)>,
 }
 
 impl Row {
     /// A row of `spans`, each run of glyphs drawn in its own ink. A run of no glyphs is
     /// no run at all: it is dropped here, so a band too narrow to hold a gutter beside
     /// one glyph of prose leaves no empty span behind for a reader to puzzle at.
-    pub fn of<I>(spans: I) -> Row
+    pub fn of<V, I>(spans: I) -> Row
     where
-        I: IntoIterator<Item = (String, Ink)>,
+        V: Into<Look>,
+        I: IntoIterator<Item = (String, V)>,
     {
         Row {
             spans: spans
                 .into_iter()
+                .map(|(text, look)| (text, look.into()))
                 .filter(|(text, _)| !text.is_empty())
                 .collect(),
         }
+    }
+
+    /// A row that says nothing: the blank row two blocks of markdown stand apart by,
+    /// which is still a row of the transcript and not a gap in it.
+    pub fn blank() -> Row {
+        Row { spans: Vec::new() }
     }
 
     /// The columns this row takes when it is drawn.
@@ -135,8 +144,21 @@ impl Row {
     /// The runs of glyphs this row is made of, left to right, each with the ink it is
     /// written in: what a caller reads a laid-out row back as — the words a picture
     /// copies, the gutter a test holds a row to — without a second way to lay one out.
-    pub fn spans(&self) -> &[(String, Ink)] {
+    pub fn spans(&self) -> &[(String, Look)] {
         &self.spans
+    }
+
+    /// This row set one gutter further in: the margin an entry is printed from, which
+    /// a markdown row knows nothing of and the entry that asked for it knows the whole
+    /// of (§12's answer gutter). A row of nothing stays a row of nothing.
+    pub fn indented(&self, gutter: &str, ink: Ink) -> Row {
+        if self.spans.is_empty() {
+            return self.clone();
+        }
+        let mut spans: Vec<(String, Look)> = Vec::with_capacity(self.spans.len() + 1);
+        spans.push((String::from(gutter), Look::plain(ink)));
+        spans.extend(self.spans.iter().cloned());
+        Row::of(spans)
     }
 
     /// The glyphs this row is made of, left to right, with no ink: the line a mark reads
@@ -150,12 +172,12 @@ impl Row {
     /// so the band's right edge is where a row stops and never where it runs over.
     pub fn paint(&self, area: Rect, buffer: &mut Buffer) {
         let mut x = area.x;
-        for (text, ink) in &self.spans {
+        for (text, look) in &self.spans {
             if x >= area.right() {
                 return;
             }
             let room = usize::from(area.right() - x);
-            let (next, _) = buffer.set_stringn(x, area.y, text, room, ink.style());
+            let (next, _) = buffer.set_stringn(x, area.y, text, room, look.style());
             x = next;
         }
     }
@@ -199,125 +221,51 @@ pub(crate) fn thought(text: &str, cols: u16) -> Vec<Row> {
         .collect()
 }
 
-/// The rows an answer is drawn as: its prose, and a fence's contents drawn as code.
-/// Its own gutter is held open and blank, because an answer is the thing being read
-/// and needs no rule beside it.
+/// The rows an answer is drawn as: its markdown, laid out by [`markdown`] and set in the
+/// gutter an answer is printed from — its own margin held open and blank, because an
+/// answer is the thing being read and needs no rule beside it.
 ///
-/// The one rule about markdown this file keeps is ADR-0008's: a fenced block is
-/// rasterised by nobody and drawn as code until its closing fence arrives, so a fence
-/// that is still streaming is a code block and never prose that ate the rest of the
-/// answer. Markdown itself — headings, tables, highlighting, pictures — is #52's: it
-/// replaces this plain rendering and keeps this rule, which is why the rule lives here
-/// as one boolean over the lines and not inside a renderer.
+/// What the constructs look like is `markdown`'s, because the layout is the product and
+/// the ticket that wrote it (#52) owns all of it: a heading's weight, a table's rule, a
+/// code block's gutter and its highlighting. That moved ADR-0008's rule with the parse: a
+/// fence the wire has not closed yet ends the text with the block still open, and
+/// `markdown` draws it as the code block it is rather than as prose that ate the rest of
+/// the answer.
+///
+/// The one thing this file still does to the rows is set them in the answer's gutter, and
+/// on the one row the run's marker heads (#39) to stand the marker in that gutter instead:
+/// the mark is drawn from the frame's left edge and the words of that row begin after it,
+/// so the row the marker heads loses the columns the gutter held and no more.
 pub(crate) fn answer(text: &str, cols: u16, head: Option<&Head>) -> Vec<Row> {
-    let mut rows = Vec::new();
-    let mut fenced = false;
-    // The marker heads the first row the answer is drawn as and no other, so it is taken
-    // by the first line that produces one and is gone by the second (#39).
-    let mut head = head;
-    for line in text.split('\n') {
-        let marked = head.take();
-        if fence(line) {
-            rows.push(fence_row(line, cols, marked));
-            fenced = !fenced;
-            continue;
-        }
-        if fenced {
-            rows.extend(code(line, cols, marked));
-        } else {
-            rows.extend(prose(line, cols, marked));
-        }
-    }
-    rows
-}
-
-/// One row with `head` at its left edge and `text` set after it: the row a marker heads. A
-/// blank column sits between the mark and the words it introduces, so the two are not one
-/// run of glyphs with a braille cell at the front of it, and an answer that has said nothing
-/// yet is the mark alone.
-fn heading(head: &Head, text: String, ink: Ink) -> Row {
-    let mut spans: Vec<(String, Ink)> = head.spans().to_vec();
-    if !text.is_empty() {
-        spans.push((String::from(" "), Ink::Plain));
-        spans.push((text, ink));
-    }
-    Row::of(spans)
-}
-
-/// One line of an answer's prose as the rows it wraps into: words kept whole where
-/// they fit and broken across rows where they do not, in the frame's own ink.
-fn prose(line: &str, cols: u16, head: Option<&Head>) -> Vec<Row> {
     let (gutter, room) = margin(INDENT, cols);
-    let mut rows = Vec::new();
-    for (at, line) in wrap_under(line, first_room(head, cols, room), room)
-        .into_iter()
-        .enumerate()
+    // The columns the marker takes out of the first row's words: its own width, the blank
+    // column that keeps it from being one run of glyphs with the prose, less the gutter it
+    // stands in the place of.
+    let reserve = match head {
+        Some(head) => head
+            .width()
+            .saturating_add(1)
+            .saturating_sub(u16::try_from(glyphs(gutter)).unwrap_or(u16::MAX)),
+        None => 0,
+    };
+    let mut rows = markdown::rows_under(text, room, reserve).into_iter();
+    let mut laid: Vec<Row> = Vec::new();
+    if let Some(head) = head
+        && let Some(first) = rows.next()
     {
-        rows.push(match head {
-            // The marker is drawn from the frame's left edge, so it stands where the
-            // answer's gutter stands and the prose of that one row begins after it.
-            Some(head) if at == 0 => heading(head, line, Ink::Plain),
-            _ => Row::of([(gutter.to_owned(), Ink::Plain), (line, Ink::Plain)]),
-        });
+        let mut spans: Vec<(String, Look)> = head
+            .spans()
+            .iter()
+            .map(|(text, ink)| (text.clone(), Look::plain(*ink)))
+            .collect();
+        // A blank column between the mark and the words it introduces, so the two are not
+        // one run of glyphs with a braille cell at the front of it.
+        spans.push((String::from(" "), Look::plain(Ink::Plain)));
+        spans.extend(first.spans().iter().cloned());
+        laid.push(Row::of(spans));
     }
-    rows
-}
-
-/// The columns the first row of a body has for its words when `head` stands at the frame's
-/// left edge: the marker's width, a blank column, and then the prose — and `room` when
-/// nothing heads the row.
-fn first_room(head: Option<&Head>, cols: u16, room: u16) -> u16 {
-    match head {
-        Some(head) => cols.saturating_sub(head.width().saturating_add(1)),
-        None => room,
-    }
-}
-
-/// The fence line itself, whichever language it names: a fact about what the text is
-/// and not a thing the model said, so it is drawn in `dim` and clipped like a name.
-fn fence_row(line: &str, cols: u16, head: Option<&Head>) -> Row {
-    let (gutter, room) = margin(INDENT, cols);
-    match head {
-        Some(head) => heading(
-            head,
-            clip(line, first_room(Some(head), cols, room)),
-            Ink::Dim,
-        ),
-        None => Row::of([
-            (gutter.to_owned(), Ink::Plain),
-            (clip(line, room), Ink::Dim),
-        ]),
-    }
-}
-
-/// One line of a fenced block as the rows it is drawn as: the line's own spacing kept
-/// and broken at the band's edge and nowhere else, because code reflowed like prose is
-/// no longer the code that was written — and a row that ran over would be clipped by
-/// the paint and lost from whatever copies it.
-fn code(line: &str, cols: u16, head: Option<&Head>) -> Vec<Row> {
-    let (gutter, width) = margin(INDENT, cols);
-    let first = usize::from(first_room(head, cols, width));
-    let room = usize::from(width);
-    let mut rows: Vec<Row> = Vec::new();
-    let mut rest = line;
-    loop {
-        let (chunk, tail) = split_at(rest, if rows.is_empty() { first } else { room });
-        rows.push(match head {
-            Some(head) if rows.is_empty() => heading(head, chunk, Ink::Muted),
-            _ => Row::of([(gutter.to_owned(), Ink::Plain), (chunk, Ink::Muted)]),
-        });
-        if tail.is_empty() {
-            return rows;
-        }
-        rest = tail;
-    }
-}
-
-/// Whether `line` opens or closes a fenced block: three backticks, whatever language
-/// they name. This is as much markdown as this file reads, and #52 is the ticket that
-/// reads the rest.
-fn fence(line: &str) -> bool {
-    line.trim_start().starts_with("```")
+    laid.extend(rows.map(|row| row.indented(gutter, Ink::Plain)));
+    laid
 }
 
 /// The gutter a body opens with at `cols`, and the columns its words have beside it.
@@ -496,7 +444,10 @@ fn wrap_under(text: &str, first: u16, room: u16) -> Vec<String> {
 /// The longest head of `word` that fits in `room` columns, and what is left of it. A
 /// first glyph wider than the room is taken anyway: a row that carried nothing would
 /// break the word nowhere and forever.
-fn split_at(word: &str, room: usize) -> (String, &str) {
+///
+/// `markdown` breaks a word with this too, so a row is measured by one measure and a
+/// word this file calls wide is wide to both.
+pub(crate) fn split_at(word: &str, room: usize) -> (String, &str) {
     let mut width = 0;
     for (at, glyph) in word.char_indices() {
         let mut encoded = [0; 4];

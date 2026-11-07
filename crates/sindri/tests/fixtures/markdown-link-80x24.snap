@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+markdown-link at 80x24
+00 |  The command is /export in the spec https://example.test/spec#12, and §16 is   | plain:17 muted+reversed:7 plain:13 dim:28 plain:15
+01 |  where the gate is written down.                                               | plain:80
+02 |                                                                                | plain:80
+03 |                                                                                | plain:80
+04 |                                                                                | plain:80
+05 |                                                                                | plain:80
+06 |                                                                                | plain:80
+07 |                                                                                | plain:80
+08 |                                                                                | plain:80
+09 |                                                                                | plain:80
+10 |                                                                                | plain:80
+11 |                                                                                | plain:80
+12 |                                                                                | plain:80
+13 |                                                                                | plain:80
+14 |                                                                                | plain:80
+15 |                                                                                | plain:80
+16 |                                                                                | plain:80
+17 |                                                                                | plain:80
+18 |                                                                                | plain:80
+19 |                                                                                | plain:80
+20 |                                                                                | plain:80
+21 |────────────────────────────────────────────────────────────────────────────────| dim:80
+22 |                                                                                | plain:80
+23 |Enter send · ? keys                                                             | muted:10 dim:3 muted:6 plain:61
