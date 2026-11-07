@@ -21,5 +21,6 @@ pub mod pulse; // the marker at the head of the newest answer: the braille glyph
 pub mod queue; // the prompts typed while a run is live, waiting above the composer in the order
 pub mod rail; // the run's facts down the frame's right-hand columns, read as a ledger
 pub mod rows; // the transcript's rows: one entry of the core's records laid out as the rows it is
+pub mod settings; // the config file's keys as one list, the value each of them holds
 pub mod stream; // the turn in flight: the answer and the thought of the run's newest turn, fed a
 pub mod view; // what one frame holds and where each part of it goes

@@ -66,6 +66,16 @@ fn files_120x40_is_the_eight_files_nearest_the_workspace() {
 }
 
 #[test]
+fn settings_120x40_is_the_keys_the_schema_has_and_the_value_each_holds() {
+    fixture::assert_frame("settings", 120, 40);
+}
+
+#[test]
+fn settings_refused_120x40_is_a_value_the_screen_will_not_take_naming_its_key() {
+    fixture::assert_frame("settings-refused", 120, 40);
+}
+
+#[test]
 fn typing_120x40_is_a_composer_at_its_two_row_floor() {
     fixture::assert_frame("typing", 120, 40);
 }

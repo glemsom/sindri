@@ -17,6 +17,8 @@
 //! run could take, so every line break a clipboard carried stays a line break — which
 //! is the whole of "a pasted prompt arrives as one draft with its line breaks kept".
 
+use sindri_core::config::Touched;
+
 /// The fewest rows the composer's band takes: the hairline and one row of draft.
 pub const MIN_ROWS: u16 = 2;
 
@@ -75,6 +77,14 @@ pub enum Key {
     /// the frame's and so is the rule (A9) — and listed here because this is the one
     /// vocabulary the keyboard is decoded into.
     Drop,
+    /// `Ctrl-U`: empties the value a settings row holds, which unsets the key it names. Not
+    /// a key of this map's either — a draft is cleared by `Ctrl-C` when nothing runs — and
+    /// listed here for the same reason `Ctrl-X` is (§12).
+    Clear,
+    /// `Tab` and `Shift+Tab`: the row below and the row above at a screen whose rows are
+    /// keys, and the end of the list wrapping round to its other end.
+    Tab,
+    BackTab,
     /// `Esc`: closes the screen over the draft. A draft has nothing to close, so the
     /// composer answers it by leaving the draft alone.
     Escape,
@@ -113,6 +123,9 @@ pub enum Outcome {
     /// `Ctrl-Y`: the words that leave the frame, for the terminal to write out by the
     /// sequence that carries them out of it — the core names no escape (§12, §14).
     Copy(String),
+    /// `Enter` at the settings modal: the keys a reader touched, for the terminal to write
+    /// through the core's one owner-only save (ADR-0009). A frame opens no file.
+    Save(Touched),
 }
 
 /// The draft, where the cursor is in it, how far the band has scrolled and whether a
@@ -267,7 +280,9 @@ impl Composer {
             Key::Cancel => self.cancel(),
             // `Ctrl-X` is the queue's, and the frame answers it before the draft ever
             // sees it: a draft reaching here changes nothing (A9).
-            Key::Drop | Key::Escape => Outcome::Unchanged,
+            // `Ctrl-U`, `Tab` and `Shift+Tab` are the settings screen's, and are the
+            // frame's to answer: a draft reaching here changes nothing.
+            Key::Drop | Key::Escape | Key::Clear | Key::Tab | Key::BackTab => Outcome::Unchanged,
         }
     }
 

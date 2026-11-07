@@ -42,11 +42,13 @@ use sindri::pulse::Pulse;
 use sindri::rail::Facts;
 use sindri::rows::Scroll;
 use sindri::view::View;
+use sindri_core::config::Config;
 use sindri_core::policy::Enforcement;
 use sindri_core::provider::Deltas;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
 use sindri_core::run::{Exit, Stop};
+use sindri_core::wire::Wire;
 
 /// Where the accepted pictures live: beside the tests that compare them, one file
 /// per frame and size (ADR-0012).
@@ -149,6 +151,18 @@ fn named(name: &str) -> View {
         // presses: the eight files nearest the directory the run stands in, which is what
         // a walk of a workspace actually yields (ticket #47, §12).
         "files" => picking(),
+        // The settings modal over the config a launch resolved: every key of the schema,
+        // the value each holds, and the row a key acts on marked (ticket #49, §12,
+        // ADR-0009). The screen opened through the seam `/settings` will call, since that
+        // command is #48's and this ticket owns the screen it opens.
+        "settings" => {
+            let mut view = View::boot();
+            view.open_settings(&in_force());
+            view
+        }
+        // The same screen after a value it will not take: the refusal under the list,
+        // naming the key that has to change, and no file written (§11, ticket #49).
+        "settings-refused" => refused(),
         // A drag over the transcript: the cells a reader has marked, painted in the ink
         // a selection is read in, and the very cells `Ctrl-Y` hands out (#50).
         "mark" => {
@@ -202,6 +216,57 @@ fn picking() -> View {
     let mut view = View::boot();
     view.set_workspace(root.path().to_path_buf());
     view.key(Key::Char('@'));
+    view
+}
+
+/// The config the settings fixture opens on: what a person's own file and environment
+/// would have left in force — a secret among the rows, and keys that say nothing because
+/// nothing speaks for them — because the screen's promise is that it shows the config as it
+/// resolved and writes only the rows a reader wrote into (ticket #49).
+fn in_force() -> Config {
+    Config {
+        provider: Some(Wire::Anthropic),
+        model: Some(String::from("claude-sonnet-4-5")),
+        thinking: Some(true),
+        extra_writable_paths: Some(vec![PathBuf::from("/srv/data")]),
+        max_turns: Some(250),
+        timeout: Some(120),
+        api_key: Some(String::from("sk-not-a-real-key")),
+        ..Config::default()
+    }
+}
+
+/// The frame of a visit a value was refused: the screen walked to `max_turns`, emptied,
+/// typed into, and handed the refusal the core's own save gives for it — so the picture is
+/// of a refusal this product can still produce, rather than one typed into a fixture. The
+/// save is refused before it stages anything, so the path it is given is written by nothing.
+fn refused() -> View {
+    let mut view = View::boot();
+    view.open_settings(&in_force());
+    for _ in 0..Config::KEYS.len() {
+        let row = view
+            .settings()
+            .rows()
+            .nth(view.settings().current())
+            .map(|(key, _)| key);
+        if row == Some("max_turns") {
+            break;
+        }
+        view.key(Key::Down);
+    }
+    view.key(Key::Clear);
+    for glyph in "two hundred".chars() {
+        view.key(Key::Char(glyph));
+    }
+    let Outcome::Save(touched) = view.key(Key::Enter) else {
+        panic!("a value typed into a row is a visit Enter hands to the save");
+    };
+    let path = tempfile::tempdir()
+        .expect("a temp dir")
+        .path()
+        .join("config.toml");
+    let error = Config::save_touched_to(&path, &touched).expect_err("a turn cap is a number");
+    view.refuse(&error.to_string());
     view
 }
 
