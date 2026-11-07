@@ -10,9 +10,12 @@
 //!
 //! A frame is a stack of modes, and the mode on top is what is drawn: the composer at
 //! the base, and the `?` screen over it, which replaces the bands with one list of the
-//! keys in force painted from the tables that answer them (#45). Where a screen is up
-//! there is no draft on the frame and no caret, because a key pressed then would not
-//! reach one.
+//! keys in force painted from the tables that answer them (#45). Two more screens replace
+//! the frame the same way: the `@` picker's eight files (#47) and the settings modal's rows
+//! (#49), each painted from the value it walks — the picker's query and rows, the settings
+//! screen's keys and the value each holds — so a screen never keeps a second copy of what
+//! answers it. Where a screen is up there is no draft on the frame and no caret, because a
+//! key pressed then would not reach one.
 //!
 //! The transcript's rows are `rows`' to lay out and this file's to draw: a frame is
 //! handed the entries a run has written and where the reader is scrolled to, and the
@@ -45,6 +48,7 @@ use std::path::PathBuf;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use sindri_core::config::{Config, Touched};
 use sindri_core::provider::Deltas;
 use sindri_core::records::Entry;
 
@@ -57,6 +61,7 @@ use crate::pulse::Pulse;
 use crate::queue::Queue;
 use crate::rail::Facts;
 use crate::rows::{Rows, Scroll};
+use crate::settings::Settings;
 use crate::stream::Stream;
 
 /// The hints §12 never takes away, whichever way the frame narrows: the key that sends
@@ -91,10 +96,19 @@ const PICKER_QUERY: &str = "query: ";
 /// has to say the query is what emptied it.
 const PICKER_EMPTY: &str = "no file answers";
 
-/// The glyph before the row the selection is on, and the two cells every other row keeps
-/// empty so the paths line up in one column.
-const PICKER_MARK: &str = "\u{203a} ";
-const PICKER_NO_MARK: &str = "  ";
+/// The glyph before the row a key would act on, and the two cells every other row keeps
+/// empty so what follows lines up in one column. The picker's selection and the settings
+/// modal's key are one mark, because both say "this row is the one a key acts on".
+const ROW_MARK: &str = "\u{203a} ";
+const ROW_GAP: &str = "  ";
+
+/// What the settings modal heads itself with, in the accent ink the other screens head
+/// their own with.
+const SETTINGS_TITLE: &str = "settings";
+
+/// The gap between a key's name and the value it holds on the settings screen: two columns,
+/// so the values line up in one column an eye can run down.
+const SETTINGS_GAP: usize = 2;
 
 /// One frame's worth of facts, in the shape the terminal draws them. Boot knows none
 /// of them — no run, no prompt, no transcript row, nothing loaded — so the frame is its
@@ -144,6 +158,9 @@ pub struct View {
     /// The files the picker walks up when `@` is pressed, narrowed by the query typed into
     /// the screen: empty until a screen is opened, and walked afresh each time it is.
     picker: Picker,
+    /// The settings modal's rows: the config's keys and the text each of them holds, seeded
+    /// from the config the frame was handed when the screen opened (§12, ADR-0009).
+    settings: Settings,
 }
 
 impl View {
@@ -230,6 +247,38 @@ impl View {
         &self.picker
     }
 
+    /// The settings modal's rows, as they stand: what the screen paints and what `Enter`
+    /// would write.
+    pub fn settings(&self) -> &Settings {
+        &self.settings
+    }
+
+    /// Opens the settings modal over the draft, seeded with the config as it resolved (§12):
+    /// every row is a key and the value in force, and a row nobody writes into is a row the
+    /// visit does not touch, so the screen can show more than it may write (ADR-0009).
+    ///
+    /// The door is `/settings`'s to open (#48); until that command lands this is the seam it
+    /// calls, and the same seam a fixture opens the screen with.
+    pub fn open_settings(&mut self, config: &Config) {
+        self.settings = Settings::of(config);
+        self.stack.open(Mode::Settings);
+    }
+
+    /// The write the settings modal asked for landed: the screen closes and the draft has
+    /// the keys again, because the visit is over and what it wrote is in the file (§12).
+    pub fn saved(&mut self) {
+        if self.stack.top() == Mode::Settings {
+            self.stack.close();
+        }
+    }
+
+    /// The write the settings modal asked for did not land: the screen stays open with the
+    /// reason on it, naming the key a reader has to change, so a refusal is read where the
+    /// value that has to change is (§11).
+    pub fn refuse(&mut self, reason: &str) {
+        self.settings.refuse(reason);
+    }
+
     /// The mode on top of the stack: what this frame is showing and what will answer
     /// the next key.
     pub fn mode(&self) -> Mode {
@@ -259,6 +308,10 @@ impl View {
             Act::Previous => self.step(Step::Previous),
             Act::Next => self.step(Step::Next),
             Act::Pick => self.pick(),
+            Act::Value => self.value(key),
+            Act::Flip => self.flip(),
+            Act::Clear => self.clear(),
+            Act::Write => self.write(),
             Act::Close => self.close(),
         }
     }
@@ -360,12 +413,15 @@ impl View {
         }
     }
 
-    /// `↑` and `↓` at the picker: the selection walks the rows and stops at the ends, so a
-    /// key that moved nothing is a frame that is not painted.
+    /// `↑`, `↓`, `Tab` and `Shift+Tab` at a list: the picker's selection walks the rows and
+    /// stops at the ends, and the settings modal's key walks its rows round, and whichever
+    /// list is up, a key that moved nothing is a frame that is not painted.
     fn step(&mut self, step: Step) -> Outcome {
-        let moved = match step {
-            Step::Previous => self.picker.up(),
-            Step::Next => self.picker.down(),
+        let moved = match (self.stack.top(), step) {
+            (Mode::Settings, Step::Previous) => self.settings.up(),
+            (Mode::Settings, Step::Next) => self.settings.down(),
+            (_, Step::Previous) => self.picker.up(),
+            (_, Step::Next) => self.picker.down(),
         };
         match moved {
             true => Outcome::Edited,
@@ -384,6 +440,51 @@ impl View {
         self.composer.insert(&word);
         self.stack.close();
         Outcome::Edited
+    }
+
+    /// A glyph typed at the settings modal, or the backspace that takes one back: the value
+    /// of the row the keys act on is the settings screen's own text, so it answers in its own
+    /// map (`settings::Settings`) the way the picker's query does.
+    fn value(&mut self, key: Key) -> Outcome {
+        match self.settings.key(key) {
+            true => Outcome::Edited,
+            false => Outcome::Unchanged,
+        }
+    }
+
+    /// `Space` at the settings modal: one key with two meanings. On a toggle it flips the
+    /// value, and on every other key it is a glyph like any other, because a path or a header
+    /// may hold a space and a screen that could not hold one would be a screen that cannot
+    /// name a path (§12).
+    fn flip(&mut self) -> Outcome {
+        match self.settings.space() {
+            true => Outcome::Edited,
+            false => Outcome::Unchanged,
+        }
+    }
+
+    /// `Ctrl-U` at the settings modal: the row's value is emptied, and an emptied value is
+    /// what the save unsets — the environment speaking again for that key (§11).
+    fn clear(&mut self) -> Outcome {
+        match self.settings.clear() {
+            true => Outcome::Edited,
+            false => Outcome::Unchanged,
+        }
+    }
+
+    /// `Enter` at the settings modal: the rows a reader wrote into are the patch, and the
+    /// terminal writes it through the core's one save, so the frame never opens a file.
+    ///
+    /// A visit that touched nothing has nothing to write, and `Enter` is still the reader
+    /// saying they are done: the screen closes as it would after a write, because a key of
+    /// theirs that left the screen open would be a screen they have to close twice.
+    fn write(&mut self) -> Outcome {
+        let touched: Touched = self.settings.touched();
+        if touched.is_empty() {
+            self.stack.close();
+            return Outcome::Edited;
+        }
+        Outcome::Save(touched)
     }
 
     /// `Esc`: the screen on top closes and the mode under it has the keys again. The
@@ -477,6 +578,7 @@ impl View {
         if let Some(modal) = self.stack.modal() {
             match modal {
                 Mode::Files => self.files_screen(area, buffer),
+                Mode::Settings => self.settings_screen(area, buffer),
                 // The `?` screen lists the keys of every mode in the stack, so it is what a
                 // screen with no picture of its own is drawn as.
                 Mode::Composer | Mode::Keys => self.keys_screen(area, buffer),
@@ -712,11 +814,58 @@ impl View {
                 return;
             }
             let (marker, ink) = match at == self.picker.selected() {
-                true => (PICKER_MARK, Ink::Accent),
-                false => (PICKER_NO_MARK, Ink::Plain),
+                true => (ROW_MARK, Ink::Accent),
+                false => (ROW_GAP, Ink::Plain),
             };
             cut_row(buffer, screen_band(area), y, &[(marker, ink), (path, ink)]);
         }
+    }
+
+    /// The settings modal: every key of the config file as one row, the value it holds beside
+    /// it, the row a key would act on marked — and, when a write was refused, the reason
+    /// under the list, naming the key that has to change (§11, §12).
+    ///
+    /// The screen is painted from the rows `settings` walks rather than from a list of its
+    /// own, so a key the schema gains is a row here with nothing to remember, and a value
+    /// that is too wide for the frame is cut at its right edge rather than dropping the row:
+    /// §12's "whole or it is not drawn" is a rule about hints and facts, and a reader fixing a
+    /// value wants the key they are fixing.
+    fn settings_screen(&self, area: Rect, buffer: &mut Buffer) {
+        buffer.set_style(area, Ink::Plain.style());
+        let key_width = Config::KEYS
+            .iter()
+            .map(|key| key.chars().count() + SETTINGS_GAP)
+            .max()
+            .unwrap_or(0);
+        let mut y = area.y;
+        screen_row(buffer, area, y, &[(SETTINGS_TITLE, Ink::Accent)]);
+        for (at, (key, text)) in self.settings.rows().enumerate() {
+            y = y.saturating_add(1);
+            if y >= area.bottom() {
+                return;
+            }
+            let (marker, name_ink, value_ink) = match at == self.settings.current() {
+                true => (ROW_MARK, Ink::Accent, Ink::Accent),
+                false => (ROW_GAP, Ink::Muted, Ink::Plain),
+            };
+            let name = format!("{:<key_width$}", key);
+            cut_row(
+                buffer,
+                screen_band(area),
+                y,
+                &[(marker, name_ink), (&name, name_ink), (text, value_ink)],
+            );
+        }
+        let Some(refusal) = self.settings.refusal() else {
+            return;
+        };
+        // The refusal sits a blank row under the list so it reads as a verdict on the visit
+        // rather than as the last key's value.
+        y = y.saturating_add(2);
+        if y >= area.bottom() {
+            return;
+        }
+        cut_row(buffer, screen_band(area), y, &[(refusal, Ink::Err)]);
     }
 
     /// The footer: the hints §12 keeps at every width, on the bottom edge. The five

@@ -17,6 +17,11 @@
 //! directory renamed into place, so a reader never sees a half-written file and
 //! a crash mid-save leaves the file that was already there. It is owner-only,
 //! because one of the keys it can hold is a secret.
+//!
+//! The settings modal's write is that same save with one step in front of it: the text
+//! a reader typed into a row is read by the schema first (`Touched`), so a value that
+//! will not do is refused naming its key before the file is read for a patch, and a row
+//! a reader emptied is a key the file loses rather than one it blanks (§11, ADR-0009).
 
 use std::collections::BTreeMap;
 use std::env;
@@ -94,6 +99,11 @@ impl Config {
         "ssh_agent",
     ];
 
+    /// The keys whose value is `true` or `false`, and so the keys a screen's `Space` flips
+    /// rather than types into: the one place that says which of the schema's keys is a
+    /// toggle, so no screen keeps a second list that could drift (§12).
+    pub const TOGGLES: [&'static str; 3] = ["thinking", "status", "ssh_agent"];
+
     /// Reads the one file at `path`. An absent file is not an error: a first run
     /// needs no file at all, so every key simply stays unset.
     pub fn load_from(path: &Path) -> Result<Config, ConfigError> {
@@ -155,6 +165,32 @@ impl Config {
     /// whole file it had or the whole file the save wrote, and a crash between
     /// the two leaves the file that was there (ADR-0009).
     pub fn save_to(path: &Path, touched: &Flags) -> Result<(), ConfigError> {
+        Config::repatch(path, |document| touched.patch_into(document))
+    }
+
+    /// Writes the rows a settings screen touched into the one file at `path`: the schema
+    /// reads each text first, so a value that will not parse is refused naming the key
+    /// *before* anything is staged — a refusal writes nothing at all (§11) — and then the
+    /// file is patched in place, exactly as a save of the flag layer is (ADR-0009).
+    ///
+    /// A row a reader emptied is a key the file loses rather than one it blanks, so the
+    /// layer below it — the environment — speaks again (§11).
+    pub fn save_touched_to(path: &Path, touched: &Touched) -> Result<(), ConfigError> {
+        let (flags, emptied) = touched.patch()?;
+        Config::repatch(path, |document| {
+            for key in &emptied {
+                document.remove(key);
+            }
+            flags.patch_into(document)
+        })
+    }
+
+    /// Reads the file at `path`, hands its document to `patch`, and writes the whole file
+    /// back through the temp file a rename makes atomic: the one body of every save.
+    fn repatch(
+        path: &Path,
+        patch: impl FnOnce(&mut DocumentMut) -> Result<(), ConfigError>,
+    ) -> Result<(), ConfigError> {
         let existing = match std::fs::read_to_string(path) {
             Ok(text) => text,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
@@ -177,13 +213,70 @@ impl Config {
                     reason: error.to_string(),
                 })?;
 
-        touched.patch_into(&mut document)?;
+        patch(&mut document)?;
         write_atomically(path, &document.to_string())
     }
 
     /// Writes into the one file the environment points at.
     pub fn save(environment: &impl Environment, touched: &Flags) -> Result<(), ConfigError> {
         Config::save_to(&config_path(environment)?, touched)
+    }
+
+    /// Writes what a settings screen touched into the one file the environment points at.
+    pub fn save_touched(
+        environment: &impl Environment,
+        touched: &Touched,
+    ) -> Result<(), ConfigError> {
+        Config::save_touched_to(&config_path(environment)?, touched)
+    }
+
+    /// The value this layer holds for `key`, as the one text a screen shows: a wire and a
+    /// route by the word they are named by, a list's items on the one line a row has, and a
+    /// secret as its mask — the one value a frame may not hold (§11, ADR-0011). A key this
+    /// layer leaves unset is empty, because unset is a state and not a value.
+    pub fn text(&self, key: &str) -> String {
+        let shown = |value: &Option<String>| value.clone().unwrap_or_default();
+        match key {
+            "provider" => self
+                .provider
+                .map(|wire| wire.word().to_owned())
+                .unwrap_or_default(),
+            "model" => shown(&self.model),
+            "route" => self
+                .route
+                .map(|route| route.word().to_owned())
+                .unwrap_or_default(),
+            "base_url" => shown(&self.base_url),
+            "api_key" => self
+                .api_key
+                .as_ref()
+                .map(|_| MASK.to_owned())
+                .unwrap_or_default(),
+            "thinking" => on_or_empty(self.thinking),
+            "extra_writable_paths" => self
+                .extra_writable_paths
+                .as_ref()
+                .map(|paths| {
+                    paths
+                        .iter()
+                        .map(|path| path.display().to_string())
+                        .collect::<Vec<String>>()
+                        .join(LIST_SEPARATOR)
+                })
+                .unwrap_or_default(),
+            "extra_headers" => self
+                .extra_headers
+                .as_ref()
+                .map(|headers| headers.join(LIST_SEPARATOR))
+                .unwrap_or_default(),
+            "max_turns" => number_or_empty(self.max_turns),
+            "timeout" => number_or_empty(self.timeout),
+            "command_budget_ms" => number_or_empty(self.command_budget_ms),
+            "output_budget_bytes" => number_or_empty(self.output_budget_bytes),
+            "status" => on_or_empty(self.status),
+            "ssh_agent" => on_or_empty(self.ssh_agent),
+            _ => String::new(),
+        }
     }
 
     /// This layer, with every key it leaves unset taken from the layer below it.
@@ -424,6 +517,126 @@ impl fmt::Debug for Flags {
     }
 }
 
+/// The keys a settings screen touched, and the text a reader left each of them holding:
+/// the patch `Enter` hands the one save (ADR-0009).
+///
+/// A key this does not name is a key nobody touched, so the file keeps whatever it already
+/// said about it — which is what makes a visit that changed one row one line of the file.
+/// An emptied text is a key a person handed back: the file loses it rather than blanking
+/// it, so the environment above it speaks again (§11).
+///
+/// The text is what a reader typed, not a value: the schema reads it in `patch`, and a
+/// text that will not parse is refused there, naming the key, before anything is staged.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Touched {
+    /// One row per key a reader wrote into, in the schema's own spelling.
+    keys: BTreeMap<&'static str, String>,
+}
+
+/// The glyph a row separates the items of a list with: a screen's row is one line, so a
+/// list of paths or of headers has to fit on it, and a comma is what a reader can see and
+/// type. A path or a header value that needs a comma in it is edited in the file, which
+/// stays the owner of everything a row cannot hold.
+const LIST_SEPARATOR: &str = ", ";
+
+impl Touched {
+    /// A visit that has written nothing yet: a screen opened is a file untouched.
+    pub fn new() -> Touched {
+        Touched::default()
+    }
+
+    /// Records the text the screen holds for `key` — an empty text being a key the reader
+    /// emptied, which the save is to remove.
+    pub fn set(&mut self, key: &'static str, text: impl Into<String>) {
+        self.keys.insert(key, text.into());
+    }
+
+    /// Whether the visit touched anything at all: a screen closed without a key pressed is
+    /// a file with no save to make.
+    pub fn is_empty(&self) -> bool {
+        self.keys.is_empty()
+    }
+
+    /// The rows this holds, in the schema's order rather than a hash's: what a test reads
+    /// back, and what a screen would paint if it grew a preview of the write.
+    pub fn rows(&self) -> impl Iterator<Item = (&'static str, &str)> {
+        self.keys.iter().map(|(key, text)| (*key, text.as_str()))
+    }
+
+    /// The patch as the schema reads it: every touched row parsed into the flag layer, and
+    /// every row a reader emptied named so the file loses it.
+    ///
+    /// This is the one place typed text meets the schema, and it is why a refusal can
+    /// promise that nothing was written: the parse happens before the file is even read
+    /// for a patch.
+    fn patch(&self) -> Result<(Flags, Vec<&'static str>), ConfigError> {
+        let mut flags = Flags::default();
+        let mut emptied: Vec<&'static str> = Vec::new();
+        for (key, held) in &self.keys {
+            let text = held.trim();
+            if text.is_empty() {
+                emptied.push(key);
+                continue;
+            }
+            match *key {
+                "provider" => flags.provider = Some(as_wire(key, text)?),
+                "model" => flags.model = Some(text.to_owned()),
+                "route" => flags.route = Some(as_route(key, text)?),
+                "base_url" => flags.base_url = Some(text.to_owned()),
+                "api_key" => flags.api_key = Some(text.to_owned()),
+                "thinking" => flags.thinking = Some(parsed(key, text)?),
+                "extra_writable_paths" => {
+                    flags.extra_writable_paths =
+                        Some(listed(text).into_iter().map(PathBuf::from).collect());
+                }
+                "extra_headers" => flags.extra_headers = Some(headers_of(key, text)?),
+                "max_turns" => flags.max_turns = Some(parsed(key, text)?),
+                "timeout" => flags.timeout = Some(parsed(key, text)?),
+                "command_budget_ms" => flags.command_budget_ms = Some(parsed(key, text)?),
+                "output_budget_bytes" => flags.output_budget_bytes = Some(parsed(key, text)?),
+                "status" => flags.status = Some(parsed(key, text)?),
+                "ssh_agent" => flags.ssh_agent = Some(parsed(key, text)?),
+                _ => {
+                    return Err(ConfigError::BadValue {
+                        origin: (*key).to_owned(),
+                        reason: String::from("not a key of the config file"),
+                    });
+                }
+            }
+        }
+        Ok((flags, emptied))
+    }
+}
+
+/// The items one row holds, split on the separator a row uses and read as items rather than
+/// as spellings of them: the spaces around a comma are the row's, not the value's.
+fn listed(text: &str) -> Vec<String> {
+    text.split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+/// The headers one row holds: the same list a row separates with commas, each of them
+/// checked for the shape every header has.
+fn headers_of(key: &str, text: &str) -> Result<Vec<String>, ConfigError> {
+    let headers = listed(text);
+    header_shape(key, &headers)?;
+    Ok(headers)
+}
+
+/// The value a row shows for a toggle: the word it holds, and nothing at all while the key
+/// is unset — unset being a state and not a false.
+fn on_or_empty(value: Option<bool>) -> String {
+    value.map(|on| on.to_string()).unwrap_or_default()
+}
+
+/// The digits a row shows for a number, and nothing at all while the key is unset.
+fn number_or_empty(number: Option<impl fmt::Display>) -> String {
+    number.map(|value| value.to_string()).unwrap_or_default()
+}
+
 /// Writes one key where the file already keeps it, so the comment above the key
 /// and the one beside it stay put; a key the file never had is appended.
 ///
@@ -577,13 +790,7 @@ where
 {
     match spoken(environment, name) {
         None => Ok(None),
-        Some(value) => value
-            .parse::<T>()
-            .map(Some)
-            .map_err(|error| ConfigError::BadValue {
-                origin: name.to_owned(),
-                reason: format!("`{value}` will not parse: {error}"),
-            }),
+        Some(text) => parsed(name, &text).map(Some),
     }
 }
 
@@ -591,15 +798,7 @@ where
 fn spoken_route(environment: &impl Environment, name: &str) -> Result<Option<Route>, ConfigError> {
     match spoken(environment, name) {
         None => Ok(None),
-        Some(word) => Route::from_word(&word)
-            .map(Some)
-            .ok_or_else(|| ConfigError::BadValue {
-                origin: name.to_owned(),
-                reason: format!(
-                    "`{word}` is not a route; expected one of {}",
-                    Route::WORDS.join(", ")
-                ),
-            }),
+        Some(word) => as_route(name, &word).map(Some),
     }
 }
 
@@ -607,16 +806,44 @@ fn spoken_route(environment: &impl Environment, name: &str) -> Result<Option<Rou
 fn spoken_wire(environment: &impl Environment, name: &str) -> Result<Option<Wire>, ConfigError> {
     match spoken(environment, name) {
         None => Ok(None),
-        Some(word) => Wire::from_word(&word)
-            .map(Some)
-            .ok_or_else(|| ConfigError::BadValue {
-                origin: name.to_owned(),
-                reason: format!(
-                    "`{word}` is not a wire; expected one of {}",
-                    Wire::WORDS.join(", ")
-                ),
-            }),
+        Some(word) => as_wire(name, &word).map(Some),
     }
+}
+
+/// A text read as some other type, naming the key or variable it came from when it will not
+/// parse: the one spelling of "a value will not do", shared by the environment and by the
+/// text a settings row holds.
+fn parsed<T>(origin: &str, text: &str) -> Result<T, ConfigError>
+where
+    T: FromStr,
+    T::Err: fmt::Display,
+{
+    text.parse::<T>().map_err(|error| ConfigError::BadValue {
+        origin: origin.to_owned(),
+        reason: format!("`{text}` will not parse: {error}"),
+    })
+}
+
+/// A text read as a route, which accepts exactly the two words.
+fn as_route(origin: &str, text: &str) -> Result<Route, ConfigError> {
+    Route::from_word(text).ok_or_else(|| ConfigError::BadValue {
+        origin: origin.to_owned(),
+        reason: format!(
+            "`{text}` is not a route; expected one of {}",
+            Route::WORDS.join(", ")
+        ),
+    })
+}
+
+/// A text read as a wire, which accepts exactly the three words.
+fn as_wire(origin: &str, text: &str) -> Result<Wire, ConfigError> {
+    Wire::from_word(text).ok_or_else(|| ConfigError::BadValue {
+        origin: origin.to_owned(),
+        reason: format!(
+            "`{text}` is not a wire; expected one of {}",
+            Wire::WORDS.join(", ")
+        ),
+    })
 }
 
 /// A variable read as headers, one `Name: value` per line: a header value cannot
@@ -634,13 +861,20 @@ fn spoken_headers(
         .filter(|line| !line.is_empty())
         .map(str::to_owned)
         .collect();
-    if let Some(bad) = headers.iter().find(|header| !header.contains(':')) {
-        return Err(ConfigError::BadValue {
-            origin: name.to_owned(),
-            reason: format!("`{bad}` is not a header; a header is `Name: value`"),
-        });
-    }
+    header_shape(name, &headers)?;
     Ok(Some(headers))
+}
+
+/// Whether every header is `Name: value`, refusing the first that is not, naming where it
+/// was found: a header without a colon is a line a wire cannot send.
+fn header_shape(origin: &str, headers: &[String]) -> Result<(), ConfigError> {
+    match headers.iter().find(|header| !header.contains(':')) {
+        Some(bad) => Err(ConfigError::BadValue {
+            origin: origin.to_owned(),
+            reason: format!("`{bad}` is not a header; a header is `Name: value`"),
+        }),
+        None => Ok(()),
+    }
 }
 
 /// Why a config would not load. Every one of them is a usage error, so the

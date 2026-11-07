@@ -37,12 +37,15 @@ pub enum Mode {
     /// The `@` picker: the files of the workspace, narrowed by a query typed into the
     /// screen and capped at the rows §12 gives it.
     Files,
+    /// The settings modal: every key of the config file as one row, the value each holds,
+    /// and a visit that writes only the rows a reader wrote into (§12, ADR-0009).
+    Settings,
 }
 
 impl Mode {
     /// Every mode there is, so a test can walk the tables rather than trust that the
     /// one it remembered is the one that landed.
-    pub const ALL: [Mode; 3] = [Mode::Composer, Mode::Keys, Mode::Files];
+    pub const ALL: [Mode; 4] = [Mode::Composer, Mode::Keys, Mode::Files, Mode::Settings];
 
     /// The mode's name, as the `?` screen heads its rows with it.
     pub fn name(self) -> &'static str {
@@ -50,6 +53,7 @@ impl Mode {
             Mode::Composer => "composer",
             Mode::Keys => "keys",
             Mode::Files => "files",
+            Mode::Settings => "settings",
         }
     }
 
@@ -59,6 +63,7 @@ impl Mode {
             Mode::Composer => &COMPOSER,
             Mode::Keys => &KEYS,
             Mode::Files => &FILES,
+            Mode::Settings => &SETTINGS,
         }
     }
 
@@ -71,6 +76,7 @@ impl Mode {
         match self {
             Mode::Composer => Some(Act::Draft),
             Mode::Files => Some(Act::Query),
+            Mode::Settings => Some(Act::Value),
             Mode::Keys => None,
         }
     }
@@ -114,6 +120,17 @@ pub enum Act {
     Next,
     /// `Enter` at the picker: the chosen row's path goes into the draft.
     Pick,
+    /// A glyph typed at the settings modal, and a backspace with it: the value of the row
+    /// the keys act on grows or shrinks. The screen's fallback, for the reason the query is
+    /// the picker's — a value is text, and a text box's glyphs are its own map's.
+    Value,
+    /// `Space` at the settings modal: a toggle flips, and every other key takes the space as
+    /// a glyph, because a path or a header may hold one.
+    Flip,
+    /// `Ctrl-U` at the settings modal: the row's value is emptied, which unsets its key.
+    Clear,
+    /// `Enter` at the settings modal: the rows a reader wrote into go to the one save.
+    Write,
 }
 
 /// One row of a key table: the key, the way the `?` screen spells it, and what it does.
@@ -295,6 +312,71 @@ const FILES: [Binding; 5] = [
         name: "Backspace",
         does: "erase the last glyph of the query",
         act: Act::Query,
+    },
+];
+
+/// The settings modal's keys: the two that end the visit, the four ways of walking the list,
+/// the three that change a value, and the backspace that takes one back.
+///
+/// `Tab` and `↓` are two rows and one act, because §12 gives a reader either hand and a
+/// screen whose rows are keys is walked with whichever they reach for first. `Space` is one
+/// key with two meanings — a toggle flipped, a glyph typed — and which it is reads the row,
+/// exactly as `?` reads the draft and `↑` reads the caret: that is `Act::Flip`, and the row
+/// is what decides.
+const SETTINGS: [Binding; 9] = [
+    Binding {
+        key: Key::Escape,
+        name: "Esc",
+        does: "close this screen and write nothing",
+        act: Act::Close,
+    },
+    Binding {
+        key: Key::Enter,
+        name: "Enter",
+        does: "write the keys you touched, and close",
+        act: Act::Write,
+    },
+    Binding {
+        key: Key::Down,
+        name: "↓",
+        does: "the key below",
+        act: Act::Next,
+    },
+    Binding {
+        key: Key::Up,
+        name: "↑",
+        does: "the key above",
+        act: Act::Previous,
+    },
+    Binding {
+        key: Key::Tab,
+        name: "Tab",
+        does: "the key below",
+        act: Act::Next,
+    },
+    Binding {
+        key: Key::BackTab,
+        name: "Shift+Tab",
+        does: "the key above",
+        act: Act::Previous,
+    },
+    Binding {
+        key: Key::Clear,
+        name: "Ctrl-U",
+        does: "empty the value, which unsets the key",
+        act: Act::Clear,
+    },
+    Binding {
+        key: Key::Char(' '),
+        name: "Space",
+        does: "flip a toggle, or type a space",
+        act: Act::Flip,
+    },
+    Binding {
+        key: Key::Backspace,
+        name: "Backspace",
+        does: "erase the last glyph of the value",
+        act: Act::Value,
     },
 ];
 
