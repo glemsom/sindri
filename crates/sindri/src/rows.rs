@@ -66,7 +66,8 @@ use ratatui::text::Span;
 use sindri_core::records::Entry;
 use sindri_core::run::Exit;
 
-use crate::ink::Ink;
+use crate::ink::{Ink, Look};
+use crate::markdown;
 use crate::stream::Stream;
 
 /// How far a body sits inside the row that names it, and how far an answer is printed
@@ -105,24 +106,32 @@ const HAIRLINE: char = '─';
 /// split.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Row {
-    /// The runs of glyphs, left to right, each written in the ink it was given.
-    spans: Vec<(String, Ink)>,
+    /// The runs of glyphs, left to right, each written in the look it was given.
+    spans: Vec<(String, Look)>,
 }
 
 impl Row {
     /// A row of `spans`, each run of glyphs drawn in its own ink. A run of no glyphs is
     /// no run at all: it is dropped here, so a band too narrow to hold a gutter beside
     /// one glyph of prose leaves no empty span behind for a reader to puzzle at.
-    pub fn of<I>(spans: I) -> Row
+    pub fn of<V, I>(spans: I) -> Row
     where
-        I: IntoIterator<Item = (String, Ink)>,
+        V: Into<Look>,
+        I: IntoIterator<Item = (String, V)>,
     {
         Row {
             spans: spans
                 .into_iter()
+                .map(|(text, look)| (text, look.into()))
                 .filter(|(text, _)| !text.is_empty())
                 .collect(),
         }
+    }
+
+    /// A row that says nothing: the blank row two blocks of markdown stand apart by,
+    /// which is still a row of the transcript and not a gap in it.
+    pub fn blank() -> Row {
+        Row { spans: Vec::new() }
     }
 
     /// The columns this row takes when it is drawn.
@@ -134,8 +143,21 @@ impl Row {
     /// The runs of glyphs this row is made of, left to right, each with the ink it is
     /// written in: what a caller reads a laid-out row back as — the words a picture
     /// copies, the gutter a test holds a row to — without a second way to lay one out.
-    pub fn spans(&self) -> &[(String, Ink)] {
+    pub fn spans(&self) -> &[(String, Look)] {
         &self.spans
+    }
+
+    /// This row set one gutter further in: the margin an entry is printed from, which
+    /// a markdown row knows nothing of and the entry that asked for it knows the whole
+    /// of (§12's answer gutter). A row of nothing stays a row of nothing.
+    pub fn indented(&self, gutter: &str, ink: Ink) -> Row {
+        if self.spans.is_empty() {
+            return self.clone();
+        }
+        let mut spans: Vec<(String, Look)> = Vec::with_capacity(self.spans.len() + 1);
+        spans.push((String::from(gutter), Look::plain(ink)));
+        spans.extend(self.spans.iter().cloned());
+        Row::of(spans)
     }
 
     /// Draws this row across the top row of `area`, from its left edge and clipped at
@@ -143,12 +165,12 @@ impl Row {
     /// so the band's right edge is where a row stops and never where it runs over.
     pub fn paint(&self, area: Rect, buffer: &mut Buffer) {
         let mut x = area.x;
-        for (text, ink) in &self.spans {
+        for (text, look) in &self.spans {
             if x >= area.right() {
                 return;
             }
             let room = usize::from(area.right() - x);
-            let (next, _) = buffer.set_stringn(x, area.y, text, room, ink.style());
+            let (next, _) = buffer.set_stringn(x, area.y, text, room, look.style());
             x = next;
         }
     }
@@ -192,81 +214,22 @@ pub(crate) fn thought(text: &str, cols: u16) -> Vec<Row> {
         .collect()
 }
 
-/// The rows an answer is drawn as: its prose, and a fence's contents drawn as code.
-/// Its own gutter is held open and blank, because an answer is the thing being read
-/// and needs no rule beside it.
+/// The rows an answer is drawn as: its markdown, laid out by [`markdown`] and set in the
+/// gutter an answer is printed from — its own margin held open and blank, because an
+/// answer is the thing being read and needs no rule beside it.
 ///
-/// The one rule about markdown this file keeps is ADR-0008's: a fenced block is
-/// rasterised by nobody and drawn as code until its closing fence arrives, so a fence
-/// that is still streaming is a code block and never prose that ate the rest of the
-/// answer. Markdown itself — headings, tables, highlighting, pictures — is #52's: it
-/// replaces this plain rendering and keeps this rule, which is why the rule lives here
-/// as one boolean over the lines and not inside a renderer.
+/// What the constructs look like is `markdown`'s, because the layout is the product and
+/// the ticket that wrote it (#52) owns all of it: a heading's weight, a table's rule, a
+/// code block's gutter and its highlighting. The one rule this file kept before the
+/// parse was here is ADR-0008's, and it moved with the parse: a fence the wire has not
+/// closed yet ends the text with the block still open, and `markdown` draws it as the
+/// code block it is rather than as prose that ate the rest of the answer.
 pub(crate) fn answer(text: &str, cols: u16) -> Vec<Row> {
-    let mut rows = Vec::new();
-    let mut fenced = false;
-    for line in text.split('\n') {
-        if fence(line) {
-            rows.push(fence_row(line, cols));
-            fenced = !fenced;
-            continue;
-        }
-        if fenced {
-            rows.extend(code(line, cols));
-        } else {
-            rows.extend(prose(line, cols));
-        }
-    }
-    rows
-}
-
-/// One line of an answer's prose as the rows it wraps into: words kept whole where
-/// they fit and broken across rows where they do not, in the frame's own ink.
-fn prose(line: &str, cols: u16) -> Vec<Row> {
     let (gutter, room) = margin(INDENT, cols);
-    wrap(line, room)
+    markdown::rows(text, room)
         .into_iter()
-        .map(|line| Row::of([(gutter.to_owned(), Ink::Plain), (line, Ink::Plain)]))
+        .map(|row| row.indented(gutter, Ink::Plain))
         .collect()
-}
-
-/// The fence line itself, whichever language it names: a fact about what the text is
-/// and not a thing the model said, so it is drawn in `dim` and clipped like a name.
-fn fence_row(line: &str, cols: u16) -> Row {
-    let (gutter, room) = margin(INDENT, cols);
-    Row::of([
-        (gutter.to_owned(), Ink::Plain),
-        (clip(line, room), Ink::Dim),
-    ])
-}
-
-/// One line of a fenced block as the rows it is drawn as: the line's own spacing kept
-/// and broken at the band's edge and nowhere else, because code reflowed like prose is
-/// no longer the code that was written — and a row that ran over would be clipped by
-/// the paint and lost from whatever copies it.
-fn code(line: &str, cols: u16) -> Vec<Row> {
-    let (gutter, width) = margin(INDENT, cols);
-    let room = usize::from(width);
-    let mut rows = Vec::new();
-    let mut rest = line;
-    loop {
-        let (head, tail) = split_at(rest, room);
-        rows.push(Row::of([
-            (gutter.to_owned(), Ink::Plain),
-            (head, Ink::Muted),
-        ]));
-        if tail.is_empty() {
-            return rows;
-        }
-        rest = tail;
-    }
-}
-
-/// Whether `line` opens or closes a fenced block: three backticks, whatever language
-/// they name. This is as much markdown as this file reads, and #52 is the ticket that
-/// reads the rest.
-fn fence(line: &str) -> bool {
-    line.trim_start().starts_with("```")
 }
 
 /// The gutter a body opens with at `cols`, and the columns its words have beside it.
@@ -435,7 +398,10 @@ fn wrap(text: &str, cols: u16) -> Vec<String> {
 /// The longest head of `word` that fits in `room` columns, and what is left of it. A
 /// first glyph wider than the room is taken anyway: a row that carried nothing would
 /// break the word nowhere and forever.
-fn split_at(word: &str, room: usize) -> (String, &str) {
+///
+/// `markdown` breaks a word with this too, so a row is measured by one measure and a
+/// word this file calls wide is wide to both.
+pub(crate) fn split_at(word: &str, room: usize) -> (String, &str) {
     let mut width = 0;
     for (at, glyph) in word.char_indices() {
         let mut encoded = [0; 4];
@@ -450,7 +416,7 @@ fn split_at(word: &str, room: usize) -> (String, &str) {
 
 /// The columns a run of glyphs takes: measured and never counted, because a glyph can
 /// be two cells wide and a row is a count of cells.
-fn glyphs(text: &str) -> usize {
+pub(crate) fn glyphs(text: &str) -> usize {
     Span::raw(text).width()
 }
 

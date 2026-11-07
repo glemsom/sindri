@@ -54,3 +54,43 @@ fn grown_120x40_is_a_composer_at_its_six_row_ceiling() {
 fn scrolled_120x40_is_a_composer_showing_the_last_five_rows_of_a_taller_draft() {
     fixture::assert_frame("scrolled", 120, 40);
 }
+
+#[test]
+fn markdown_headings_80x24_is_a_heading_at_each_of_the_four_renderings() {
+    fixture::assert_frame("markdown-headings", 80, 24);
+}
+
+#[test]
+fn markdown_lists_80x24_is_a_bullet_and_an_ordinal_two_spaces_per_depth() {
+    fixture::assert_frame("markdown-lists", 80, 24);
+}
+
+#[test]
+fn markdown_table_80x24_is_columns_ruled_under_their_header_and_never_bordered() {
+    fixture::assert_frame("markdown-table", 80, 24);
+}
+
+#[test]
+fn markdown_quote_80x24_is_prose_set_behind_one_dim_bar() {
+    fixture::assert_frame("markdown-quote", 80, 24);
+}
+
+#[test]
+fn markdown_code_80x24_is_a_guttered_block_highlighted_and_one_unknown_language() {
+    fixture::assert_frame("markdown-code", 80, 24);
+}
+
+#[test]
+fn markdown_inline_80x24_is_a_run_of_code_set_reversed_in_a_paragraph() {
+    fixture::assert_frame("markdown-inline", 80, 24);
+}
+
+#[test]
+fn markdown_link_80x24_is_a_link_that_prints_the_url_its_words_hide() {
+    fixture::assert_frame("markdown-link", 80, 24);
+}
+
+#[test]
+fn markdown_table_narrow_40x24_is_a_wide_table_wrapped_inside_its_cells() {
+    fixture::assert_frame("markdown-table-narrow", 40, 24);
+}

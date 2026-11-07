@@ -17,13 +17,13 @@ calls at 120x40
 11 |  The call ran past its minute and was killed.                                                                          | plain:120
 12 |turn 4 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
 13 |✗ cancelled  bash  0 bytes · 3400 ms                                                                                    | err:1 dim:35 plain:84
-14 |  The run stopped on the user's word, and the draft kept.                                                               | plain:120
-15 |turn 5 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
-16 |… bash                                                                                                                  | dim:6 plain:114
-17 |  {"command": "make check STAGES=test"}                                                                                 | plain:120
-18 |                                                                                                                        | plain:120
-19 |                                                                                                                        | plain:120
-20 |                                                                                                                        | plain:120
+14 |  What a verdict says                                                                                                   | plain:2 plain+bold:19 plain:99
+15 |                                                                                                                        | plain:120
+16 |  The run stopped on the user's word: Ctrl-C cancels and keeps the draft, so the row says ✗ cancelled rather than       | plain:38 plain+reversed:6 plain:46 plain+reversed:11 plain:19
+17 |  leaving a spinner turning for a result that will never come.                                                          | plain:120
+18 |turn 5 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+19 |… bash                                                                                                                  | dim:6 plain:114
+20 |  {"command": "make check STAGES=test"}                                                                                 | plain:120
 21 |                                                                                                                        | plain:120
 22 |                                                                                                                        | plain:120
 23 |                                                                                                                        | plain:120
