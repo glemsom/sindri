@@ -123,9 +123,21 @@ pub enum Outcome {
     /// `Ctrl-Y`: the words that leave the frame, for the terminal to write out by the
     /// sequence that carries them out of it — the core names no escape (§12, §14).
     Copy(String),
+    /// A model name `Enter` or a `/model <name>` line chose: the terminal writes it into
+    /// the config through the one owner-only save (ADR-0009), because a frame holds a
+    /// value and the file is not one (§11, §12).
+    Model(String),
+    /// The `/model` screen is up and has no names yet: the terminal asks the wire what it
+    /// serves and hands the listing back, because asking is a request and a frame makes
+    /// none (§10, ADR-0005).
+    Served,
     /// `Enter` at the settings modal: the keys a reader touched, for the terminal to write
     /// through the core's one owner-only save (ADR-0009). A frame opens no file.
     Save(Touched),
+    /// `/settings`: the screen is the terminal's to open, because its rows are the config's
+    /// and the frame holds no config — the terminal seeds it from the one it launched with
+    /// (§11, §12).
+    Settings,
 }
 
 /// The draft, where the cursor is in it, how far the band has scrolled and whether a

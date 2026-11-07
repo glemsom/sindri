@@ -15,7 +15,8 @@
 use std::fs::File;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::path::PathBuf;
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
@@ -39,6 +40,17 @@ const ANSWER: &str =
 /// The word the recorded stream says, split the way it streams: a frame paints the cells
 /// a fragment changed, so a test looks for both halves rather than for one run of words.
 const ANSWER_WORDS: [&str; 2] = ["Hello", "world"];
+
+/// A recorded Anthropic `GET /v1/models` catalogue: the names a wire really served, which is
+/// the only place a `/model` screen's names may come from (§10).
+const SERVED: &str =
+    include_str!("../../sindri-core/tests/fixtures/providers/anthropic_models.json");
+
+/// The two identifiers the recorded catalogue holds, named once so an assertion reads as the
+/// wire's list. The first is also the model the launch is configured with, so a test that
+/// writes the second is a test that wrote a name the run was not already asking.
+const FIRST_SERVED: &str = "claude-sonnet-4-6";
+const SECOND_SERVED: &str = "claude-haiku-4-5";
 
 /// A workspace, a config home and a state home, all of the test's own.
 struct Ground {
@@ -117,7 +129,14 @@ impl Wire {
             for stream in listener.incoming() {
                 let Ok(mut stream) = stream else { break };
                 let request = read_request(&mut stream).unwrap_or_default();
+                // A wire asked what it serves answers at once: a listing is not a run, and
+                // nothing waits on one the way a test waits on a reply it is holding (§10).
+                let listing = request.starts_with("GET ");
                 listening.lock().expect("the wire's requests").push(request);
+                if listing {
+                    let _ = catalogue(&mut stream);
+                    continue;
+                }
                 let _ = arrived.send(());
                 let _ = released.recv_timeout(PATIENCE);
                 let _ = answer(&mut stream);
@@ -208,6 +227,18 @@ fn answer(stream: &mut TcpStream) -> std::io::Result<()> {
     );
     stream.write_all(head.as_bytes())?;
     stream.write_all(ANSWER.as_bytes())?;
+    stream.flush()
+}
+
+/// The recorded catalogue, written as the listing route answers one: the names a wire says
+/// it serves, in its own order, so a `/model` screen has something to rank (§10).
+fn catalogue(stream: &mut TcpStream) -> std::io::Result<()> {
+    let head = format!(
+        "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+        SERVED.len()
+    );
+    stream.write_all(head.as_bytes())?;
+    stream.write_all(SERVED.as_bytes())?;
     stream.flush()
 }
 
@@ -1364,6 +1395,272 @@ fn up_on_the_first_line_takes_the_newest_queued_prompt_back() {
     assert!(
         asked.iter().all(|request| !request.contains("the newest")),
         "the recalled prompt is a draft and not a run: {asked:?}"
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+}
+
+/// A `/` line typed and sent: the words, and then `Enter` as a key of its own once the frame
+/// has caught up with them.
+///
+/// The `Enter` is a separate write and a separate read on purpose: §12's decoder reads a
+/// burst of bytes as a paste — where a line break is a line break and never a send — so the
+/// only way a test presses `Enter` on a command line is to let the draft land first.
+fn command(pty: &mut Pty, drawn: &Drawn, line: &str) {
+    pty.type_bytes(line.as_bytes());
+    let column = line.chars().count() as u16 + 1;
+    assert!(
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, at)| at == column)),
+        "the command line is the draft before it is sent, so the caret waits one column \
+         past its last glyph: {:?}",
+        drawn.text()
+    );
+    pty.type_bytes(b"\r");
+}
+
+/// The config file a launch would write, holding a reader's own comment and a key the save
+/// must not touch: what an owner-only save that patched the whole file would destroy.
+fn a_readers_config(ground: &Ground) -> PathBuf {
+    let path = ground.config.join("sindri").join("config.toml");
+    std::fs::create_dir_all(path.parent().expect("a directory")).expect("the config's directory");
+    std::fs::write(
+        &path,
+        "# the model I like, and a comment the save must not eat\n\
+         model = \"claude-sonnet-4-6\"\n\
+         max_turns = 42\n",
+    )
+    .expect("a config of the reader's own");
+    path
+}
+
+/// Waits until the config at `path` says `model = <name>`, and hands the file back: the save
+/// happens on the launch's own thread, so a test waits for the file rather than for a sleep.
+fn written_model(path: &Path, name: &str) -> String {
+    let deadline = Instant::now() + PATIENCE;
+    loop {
+        let text = std::fs::read_to_string(path).unwrap_or_default();
+        if text.contains(&format!("model = \"{name}\"")) {
+            return text;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the config should have been written with `{name}` by now, and says:\n{text}"
+        );
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[test]
+fn slash_model_offers_the_names_the_wire_serves_and_enter_writes_the_one_chosen() {
+    let ground = Ground::new();
+    let config = a_readers_config(&ground);
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    // `/model` is a command line and not a prompt: no run is started and the request that
+    // was never made is not one the wire heard.
+    command(&mut pty, &drawn, "/model");
+    assert!(
+        drawn.wait_until(|frame| { frame.contains(FIRST_SERVED) && frame.contains(SECOND_SERVED) }),
+        "the screen offers the names the wire served: {:?}",
+        drawn.text()
+    );
+    assert!(
+        wire.requests()
+            .iter()
+            .all(|request| request.starts_with("GET ")),
+        "a command line is the frame's and never the model's: the wire was asked what it \
+         serves and for no completion at all: {:?}",
+        wire.requests()
+    );
+
+    // A query typed into the screen ranks it: `haiku` leaves the second name, so `Enter`
+    // takes the name the query named rather than the first the wire listed (§12). The
+    // query is waited for before the `Enter`, because a terminal handed both in one read
+    // hands over a paste, and no line break in a paste sends.
+    pty.type_bytes(b"haiku");
+    assert!(
+        drawn.wait_until(|frame| row_of(frame, "Claude Haiku 4.5") == Some(3)),
+        "the names are ranked as the query is typed, so the haiku model is the first row \
+         under the box and the sonnet model is no row at all: {:?}",
+        drawn.text()
+    );
+    pty.type_bytes(b"\r");
+
+    let written = written_model(&config, SECOND_SERVED);
+    assert!(
+        written.contains("# the model I like"),
+        "the save patched the one key it touched and kept the reader's comment (ADR-0009): \
+         {written}"
+    );
+    assert!(
+        written.contains("max_turns = 42"),
+        "and every key it was not handed: {written}"
+    );
+    let mode = std::fs::metadata(&config)
+        .expect("the file the save left")
+        .permissions()
+        .mode()
+        & 0o777;
+    assert_eq!(mode, 0o600, "written owner-only, like every config write");
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+}
+
+#[test]
+fn slash_model_with_a_name_sets_a_model_the_wire_never_offered() {
+    let ground = Ground::new();
+    let config = a_readers_config(&ground);
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    // A name no listing holds: the point of the command form, and the reason a wire that
+    // cannot answer is a hint rather than a refusal (§10, §12).
+    command(&mut pty, &drawn, "/model a-name-the-wire-never-served");
+
+    let written = written_model(&config, "a-name-the-wire-never-served");
+    assert!(
+        written.contains("# the model I like"),
+        "by the same owner-only save, patching the same one key: {written}"
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+}
+
+#[test]
+fn slash_help_opens_the_keys_in_force_and_slash_settings_its_own_screen() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    // `Backspace` is a word only the keys screen says: the footer the composer keeps names
+    // two hints, and the screen that lists every key in force names this one.
+    command(&mut pty, &drawn, "/help");
+    assert!(
+        drawn.wait_until(|frame| frame.contains("Backspace")),
+        "`/help` opens the screen that lists the keys in force: {:?}",
+        drawn.text()
+    );
+
+    // Esc gives the frame back, and the footer coming back after the screen's own words is
+    // how the frame says so — the same drawing `?` is closed on.
+    pty.type_bytes(b"\x1b");
+    assert!(
+        drawn.wait_until(|frame| last(frame, "Enter send") > last(frame, "Backspace")),
+        "Esc closed the keys screen: {:?}",
+        drawn.text()
+    );
+    command(&mut pty, &drawn, "/settings");
+    assert!(
+        drawn.wait_until(|frame| row_of(frame, "settings") == Some(1)),
+        "`/settings` opens its own screen, headed on the frame's first row: {:?}",
+        drawn.text()
+    );
+
+    // And it gives the frame back the way the keys screen does; `Ctrl-Q` is the composer's
+    // key, so the screen is closed before the launch is asked to end.
+    pty.type_bytes(b"\x1b");
+    assert!(
+        drawn.wait_until(|frame| last(frame, "Enter send") > last(frame, "settings")),
+        "Esc closed the settings screen: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+}
+
+#[test]
+fn slash_quit_quits_as_ctrl_q_does() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    command(&mut pty, &drawn, "/quit");
+
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "the command line is the one way out as a line: {:?}",
+        drawn.text()
+    );
+    assert!(
+        drawn.wait_for(b"\x1b[?1049l"),
+        "and the screen it took is given back: {:?}",
+        drawn.text()
+    );
+}
+
+#[test]
+fn slash_new_clears_the_frame_and_leaves_the_session_it_superseded_running() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    // A run in flight, its reply held at the wire: the session it is recorded under exists
+    // and says `running` because no stop reason has landed yet (§13).
+    ask(&mut pty, &drawn, &wire);
+
+    command(&mut pty, &drawn, "/new");
+    assert!(
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == 1)),
+        "the command line left the composer, so it was answered rather than queued: {:?}",
+        drawn.text()
+    );
+
+    let said = document(&ground.state);
+    assert!(
+        said.contains("\"stopped\": \"running\""),
+        "a session `/new` superseded keeps saying `running`, because it did not stop — it \
+         was left: {said}"
+    );
+    assert!(
+        !said.contains("\"end\":"),
+        "and it is given no end it did not reach: {said}"
+    );
+    assert!(
+        wire.requests().len() == 1,
+        "the run in flight is not stopped by `/new`, and no second run was started: {:?}",
+        wire.requests()
+    );
+
+    // The run it left still reaches its own stop reason, in its own record: nothing of the
+    // conversation was written off, only the frame's hold of it was dropped.
+    wire.release();
+    assert!(
+        drawn.wait_until(|frame| ANSWER_WORDS.iter().all(|word| frame.contains(word))),
+        "the run the reader left goes on to answer: {:?}",
+        drawn.text()
     );
 
     pty.type_bytes(&[0x11]);

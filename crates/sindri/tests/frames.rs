@@ -66,6 +66,11 @@ fn files_120x40_is_the_eight_files_nearest_the_workspace() {
 }
 
 #[test]
+fn models_120x40_is_the_names_the_wire_served_as_one_screen() {
+    fixture::assert_frame("models", 120, 40);
+}
+
+#[test]
 fn settings_120x40_is_the_keys_the_schema_has_and_the_value_each_holds() {
     fixture::assert_frame("settings", 120, 40);
 }

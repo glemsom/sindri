@@ -9,13 +9,20 @@
 //! visual decision can be graded by an agent at all.
 //!
 //! A frame is a stack of modes, and the mode on top is what is drawn: the composer at
-//! the base, and the `?` screen over it, which replaces the bands with one list of the
-//! keys in force painted from the tables that answer them (#45). Two more screens replace
-//! the frame the same way: the `@` picker's eight files (#47) and the settings modal's rows
-//! (#49), each painted from the value it walks — the picker's query and rows, the settings
-//! screen's keys and the value each holds — so a screen never keeps a second copy of what
-//! answers it. Where a screen is up there is no draft on the frame and no caret, because a
-//! key pressed then would not reach one.
+//! the base, and a screen over it — the `?` screen, which replaces the bands with one list
+//! of the keys in force painted from the tables that answer them (#45), the `@` picker
+//! (#47), the `/model` screen (#48) and the settings modal (#49), each painted from the
+//! value it walks — the picker's query and rows, the served names, the settings screen's
+//! keys and the value each holds — so a screen never keeps a second copy of what answers
+//! it. Where a screen is up there is no draft on the frame and no caret, because a key
+//! pressed then would not reach one.
+//!
+//! A draft that reaches `Enter` is a prompt, except when it names a `/` command: those are
+//! the frame's own to answer — a conversation started again, a skill loaded, a screen
+//! opened, a model written — and never a run's (§12, §5). `commands` reads the line and
+//! this file acts on it, so a command is one spelling of one act whichever way it was
+//! typed. What a frame cannot do itself — ask a wire, open a config, write one — it hands
+//! back as an outcome and the terminal, which owns the socket and the file, does.
 //!
 //! The transcript's rows are `rows`' to lay out and this file's to draw: a frame is
 //! handed the entries a run has written and where the reader is scrolled to, and the
@@ -55,12 +62,17 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use sindri_core::config::{Config, Touched};
 use sindri_core::provider::Deltas;
+use sindri_core::provider::served::Listing;
 use sindri_core::records::Entry;
+use sindri_core::run::{Load, Loaded};
+use sindri_core::skills::{Catalog, Skill};
 
+use crate::commands::{self, Command};
 use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, Prompt, State};
 use crate::ink::Ink;
 use crate::keys::{Act, Mode, Stack};
 use crate::mark::{Cell, Mark, Span};
+use crate::models::Models;
 use crate::picker::Picker;
 use crate::pulse::Pulse;
 use crate::queue::Queue;
@@ -135,6 +147,26 @@ const SETTINGS_TITLE: &str = "settings";
 /// so the values line up in one column an eye can run down.
 const SETTINGS_GAP: usize = 2;
 
+/// What the `/model` screen heads itself with, in the same accent ink and the same margin
+/// as the picker: the two screens are one shape, and a reader who has met one has met both.
+const MODELS_TITLE: &str = "/model";
+
+/// The label the screen's query sits behind, so a line of glyphs under the title reads as
+/// what the rows are ranked by rather than as a row of them.
+const MODELS_QUERY: &str = "query: ";
+
+/// What a screen whose names have not landed says: the wire was asked, and the answer is
+/// the one thing the screen is for (§10).
+const MODELS_ASKING: &str = "asking the wire what it serves";
+
+/// What a screen whose query leaves no name says: a query and nothing under it means the
+/// query is what emptied the list.
+const MODELS_EMPTY: &str = "no served name answers";
+
+/// The gap between a served name and the wire's own prose for it: two columns, so the prose
+/// of every row starts in one column an eye can run down.
+const NAMES_GAP: usize = 2;
+
 /// One frame's worth of facts, in the shape the terminal draws them. Boot knows none
 /// of them — no run, no prompt, no transcript row, nothing loaded — so the frame is its
 /// chrome and nothing else; a run hands over the entries it has written and where the
@@ -183,6 +215,15 @@ pub struct View {
     /// The files the picker walks up when `@` is pressed, narrowed by the query typed into
     /// the screen: empty until a screen is opened, and walked afresh each time it is.
     picker: Picker,
+    /// The names the wire serves, as `/model` offers them: the listing the terminal asked
+    /// for, beside the query typed into the screen and the row the selection is on (§10).
+    models: Models,
+    /// The skills loaded so far in this conversation, in load order: the one set a human's
+    /// `/skill:name` writes to, and the set clearing the history empties (§4, §5, A14).
+    loaded: Loaded,
+    /// The home the user-scope skills are read from, when the launch has one, so the frame
+    /// asks the catalog the same question a run asks it (§7, ADR-0014).
+    home: Option<PathBuf>,
     /// The settings modal's rows: the config's keys and the text each of them holds, seeded
     /// from the config the frame was handed when the screen opened (§12, ADR-0009).
     settings: Settings,
@@ -272,6 +313,31 @@ impl View {
         &self.picker
     }
 
+    /// The names the wire served and the query narrowing them: what the `/model` screen
+    /// paints, and what a choice takes its name from.
+    pub fn models(&self) -> &Models {
+        &self.models
+    }
+
+    /// Hands the frame the names the wire serves, once the ask has landed: the screen that
+    /// said it was asking paints them instead (§10, §12).
+    pub fn set_served(&mut self, listing: Listing) {
+        self.models.served(listing);
+    }
+
+    /// The names loaded so far in this conversation, in load order: what `/skill:name`
+    /// writes to and what `/new` empties (§4, §5, A14).
+    pub fn loaded(&self) -> &Loaded {
+        &self.loaded
+    }
+
+    /// Hands this frame the home its user-scope skills are read from. A launch reads the
+    /// same directory off the process when it builds the catalog a run's tools are derived
+    /// from, so a name the frame accepts and a name a run could call are one catalog (§7).
+    pub fn set_home(&mut self, home: Option<PathBuf>) {
+        self.home = home;
+    }
+
     /// The settings modal's rows, as they stand: what the screen paints and what `Enter`
     /// would write.
     pub fn settings(&self) -> &Settings {
@@ -282,8 +348,9 @@ impl View {
     /// every row is a key and the value in force, and a row nobody writes into is a row the
     /// visit does not touch, so the screen can show more than it may write (ADR-0009).
     ///
-    /// The door is `/settings`'s to open (#48); until that command lands this is the seam it
-    /// calls, and the same seam a fixture opens the screen with.
+    /// The door is `/settings`'s: the frame holds no config, so `/settings` comes back as
+    /// `Outcome::Settings` and the terminal — which holds the config it launched with —
+    /// seeds the screen here.
     pub fn open_settings(&mut self, config: &Config) {
         self.settings = Settings::of(config);
         self.stack.open(Mode::Settings);
@@ -321,7 +388,7 @@ impl View {
             return Outcome::Unchanged;
         };
         match act {
-            Act::Draft => self.composer.key(key),
+            Act::Draft => self.draft(key),
             Act::Up => self.up(),
             Act::Copy => self.copy(),
             Act::ExtendDown => self.extend(true),
@@ -333,6 +400,7 @@ impl View {
             Act::Previous => self.step(Step::Previous),
             Act::Next => self.step(Step::Next),
             Act::Pick => self.pick(),
+            Act::Choose => self.choose(),
             Act::Value => self.value(key),
             Act::Flip => self.flip(),
             Act::Clear => self.clear(),
@@ -390,6 +458,112 @@ impl View {
         Outcome::Edited
     }
 
+    /// The draft's own keys, and the one place a `/` line stops being a prompt.
+    ///
+    /// A line that names a command is the frame's to answer, and it is answered here rather
+    /// than by the terminal because what a command comes to is what the frame holds — a
+    /// screen opened, a history cleared, a set emptied — and no run ever sees it (§12, §5).
+    /// A line that names no command is a prompt like any other.
+    fn draft(&mut self, key: Key) -> Outcome {
+        match self.composer.key(key) {
+            Outcome::Send(prompt) => match commands::read(prompt.text()) {
+                Some(command) => self.answer(command),
+                None => Outcome::Send(prompt),
+            },
+            outcome => outcome,
+        }
+    }
+
+    /// What one `command` comes to, in the vocabulary the terminal acts on: the frame's own
+    /// answer for everything a frame holds, and an outcome for the three things it does not —
+    /// a name the save writes, the wire the names are read off, and the config the settings
+    /// screen is seeded from.
+    fn answer(&mut self, command: Command) -> Outcome {
+        match command {
+            Command::New => self.start_over(),
+            Command::Skill(name) => self.skill(&name),
+            Command::Model => self.model(),
+            Command::ModelNamed(name) => Outcome::Model(name),
+            Command::Settings => Outcome::Settings,
+            Command::Help => self.screen(Mode::Keys),
+            Command::Quit => Outcome::Quit,
+        }
+    }
+
+    /// `/new`: the conversation starts again — the transcript's rows, the turn in flight,
+    /// the marker at the head of its newest answer and the mark over it are all this frame
+    /// held of it — and the loaded-skill set goes with them, because a load is once per
+    /// conversation and the conversation is the history (§4, §13, A14).
+    ///
+    /// The run in flight, if there is one, is left and not stopped: it was superseded
+    /// rather than ended, so its session keeps saying `running` and it reaches its own stop
+    /// reason in its own record (§13). `/new` writes no record at all.
+    fn start_over(&mut self) -> Outcome {
+        self.rows = Rows::new();
+        self.scroll = Scroll::Tail;
+        self.stream = Stream::new();
+        self.pulse = None;
+        self.mark = None;
+        self.marked = Span::default();
+        self.loaded.clear();
+        Outcome::Edited
+    }
+
+    /// `/skill:name`, and `/skill name` with it, which is the same line (§5): one skill,
+    /// loaded into the one set the conversation keeps.
+    ///
+    /// The catalog is discovered afresh, the way `@` walks the workspace afresh, so a
+    /// `SKILL.md` written a moment ago can be named now. Which names a person may ask for is
+    /// the catalog's decision and never this file's — `user-invocable: false` is a door only
+    /// the model has — and a name the catalog does not offer loads nothing at all, because a
+    /// name in this set is what a later model load answers `already_loaded` from: a name put
+    /// there by hand would answer for a body nothing had ever handed over (§5, A14).
+    fn skill(&mut self, name: &str) -> Outcome {
+        let Some(workspace) = self.workspace.clone() else {
+            return Outcome::Unchanged;
+        };
+        let catalog = Catalog::discover(&workspace, self.home.as_deref());
+        if !catalog.get(name).is_some_and(Skill::human_invocable) {
+            return Outcome::Unchanged;
+        }
+        match self.loaded.load(name) {
+            Load::Loaded => Outcome::Edited,
+            // A second load of one skill is `already_loaded` and carries no body, so it is
+            // no change to the set and no frame to paint (§5).
+            Load::AlreadyLoaded => Outcome::Unchanged,
+        }
+    }
+
+    /// `/model`: the screen of the names the wire serves, opened afresh and asking. A
+    /// listing read a moment ago goes with the screen that showed it, because names read off
+    /// a wire are evidence about the pair that was asked and about the moment it answered
+    /// (§10).
+    fn model(&mut self) -> Outcome {
+        self.models = Models::new();
+        self.stack.open(Mode::Models);
+        Outcome::Served
+    }
+
+    /// `/help`: one screen opened over the draft, which is the whole of what a reader is
+    /// handed — the screen answers its own keys from there (§12, A7). `/settings` is the same
+    /// act and not the same call: its rows are the config's, which the frame holds no copy
+    /// of, so it opens in the terminal (`Outcome::Settings`, `View::open_settings`).
+    fn screen(&mut self, mode: Mode) -> Outcome {
+        self.stack.open(mode);
+        Outcome::Edited
+    }
+
+    /// `Enter` at the `/model` screen: the name under the selection is the model, and the
+    /// screen closes. A list the query left empty has no name to choose, so the screen stays
+    /// open to be widened again rather than closing on a key that did nothing.
+    fn choose(&mut self) -> Outcome {
+        let Some(name) = self.models.chosen().map(str::to_owned) else {
+            return Outcome::Unchanged;
+        };
+        self.stack.close();
+        Outcome::Model(name)
+    }
+
     /// `?`: the screen that lists the keys in force.
     ///
     /// It is a key only while the draft is empty, for the reason `↑` is the queue's only
@@ -428,21 +602,28 @@ impl View {
         Outcome::Edited
     }
 
-    /// A glyph typed at the picker, or the backspace that takes one back: the query is the
-    /// picker's own filter box, and it answers in the picker's own map (`picker::Picker`).
+    /// A glyph typed at a screen's filter box, or the backspace that takes one back: each
+    /// screen's query is its own (`picker::Picker`, `models::Models`), and the mode on top is
+    /// which one is being typed into.
     fn query(&mut self, key: Key) -> Outcome {
-        if self.picker.key(key) {
-            Outcome::Edited
-        } else {
-            Outcome::Unchanged
+        let changed = match self.stack.top() {
+            Mode::Models => self.models.key(key),
+            _ => self.picker.key(key),
+        };
+        match changed {
+            true => Outcome::Edited,
+            false => Outcome::Unchanged,
         }
     }
 
-    /// `↑`, `↓`, `Tab` and `Shift+Tab` at a list: the picker's selection walks the rows and
-    /// stops at the ends, and the settings modal's key walks its rows round, and whichever
-    /// list is up, a key that moved nothing is a frame that is not painted.
+    /// `↑`, `↓`, `Tab` and `Shift+Tab` at a list: the picker's and the model screen's
+    /// selection walks the rows and stops at the ends, the settings modal's key walks its
+    /// rows round, and whichever list is up, a key that moved nothing is a frame that is not
+    /// painted.
     fn step(&mut self, step: Step) -> Outcome {
         let moved = match (self.stack.top(), step) {
+            (Mode::Models, Step::Previous) => self.models.up(),
+            (Mode::Models, Step::Next) => self.models.down(),
             (Mode::Settings, Step::Previous) => self.settings.up(),
             (Mode::Settings, Step::Next) => self.settings.down(),
             (_, Step::Previous) => self.picker.up(),
@@ -603,6 +784,7 @@ impl View {
         if let Some(modal) = self.stack.modal() {
             match modal {
                 Mode::Files => self.files_screen(area, buffer),
+                Mode::Models => self.models_screen(area, buffer),
                 Mode::Settings => self.settings_screen(area, buffer),
                 // The `?` screen lists the keys of every mode in the stack, so it is what a
                 // screen with no picture of its own is drawn as.
@@ -843,6 +1025,67 @@ impl View {
                 false => (ROW_GAP, Ink::Plain),
             };
             cut_row(buffer, screen_band(area), y, &[(marker, ink), (path, ink)]);
+        }
+    }
+
+    /// The `/model` screen: the query the names are ranked by, then the names themselves,
+    /// the selection marked and the wire's own prose beside each identifier so a reader
+    /// chooses between names they can read (§10, §12).
+    ///
+    /// A wire that has not answered yet is one line saying it was asked, because the screen
+    /// opens at once and the names arrive when they arrive; a wire that could not answer is
+    /// §10's hint in that same place, never a refusal, since a model named by hand still
+    /// runs.
+    fn models_screen(&self, area: Rect, buffer: &mut Buffer) {
+        buffer.set_style(area, Ink::Plain.style());
+        let mut y = area.y;
+        screen_row(buffer, area, y, &[(MODELS_TITLE, Ink::Accent)]);
+        y = y.saturating_add(1);
+        if y < area.bottom() {
+            screen_row(
+                buffer,
+                area,
+                y,
+                &[(MODELS_QUERY, Ink::Dim), (self.models.query(), Ink::Muted)],
+            );
+        }
+        let rows = self.models.rows();
+        let said = match self.models.hint() {
+            _ if self.models.waiting() => Some(MODELS_ASKING),
+            Some(hint) => Some(hint),
+            None if rows.is_empty() => Some(MODELS_EMPTY),
+            None => None,
+        };
+        if let Some(said) = said {
+            y = y.saturating_add(1);
+            if y < area.bottom() {
+                screen_row(buffer, area, y, &[(said, Ink::Dim)]);
+            }
+            return;
+        }
+        // The identifiers in one column and the wire's prose after them, so two rows read
+        // as one list rather than as two sentences that happen to be under each other.
+        let widest = rows
+            .iter()
+            .map(|(id, _)| id.chars().count() + NAMES_GAP)
+            .max()
+            .unwrap_or(0);
+        for (at, (id, label)) in rows.iter().enumerate() {
+            y = y.saturating_add(1);
+            if y >= area.bottom() {
+                return;
+            }
+            let (marker, ink) = match at == self.models.selected() {
+                true => (ROW_MARK, Ink::Accent),
+                false => (ROW_GAP, Ink::Plain),
+            };
+            let name = format!("{id:<widest$}");
+            cut_row(
+                buffer,
+                screen_band(area),
+                y,
+                &[(marker, ink), (&name, ink), (label, Ink::Dim)],
+            );
         }
     }
 

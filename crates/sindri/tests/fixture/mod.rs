@@ -44,7 +44,9 @@ use sindri::rows::Scroll;
 use sindri::view::View;
 use sindri_core::config::Config;
 use sindri_core::policy::Enforcement;
-use sindri_core::provider::Deltas;
+use sindri_core::provider::served::Where;
+use sindri_core::provider::transport::{Canned, Replay};
+use sindri_core::provider::{Client, Credential, Deltas};
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
 use sindri_core::run::{Exit, Stop};
@@ -53,6 +55,12 @@ use sindri_core::wire::Wire;
 /// Where the accepted pictures live: beside the tests that compare them, one file
 /// per frame and size (ADR-0012).
 const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
+
+/// A recorded Anthropic `GET /v1/models` catalogue, so the `/model` screen's picture is
+/// painted from names a wire really served rather than from a list written down here (#48,
+/// §10).
+const SERVED: &str =
+    include_str!("../../../sindri-core/tests/fixtures/providers/anthropic_models.json");
 
 /// Renders the frame `name` at `cols` columns by `rows` rows and holds it to the
 /// fixture that is the accepted picture of it, naming the first cell that differs
@@ -164,6 +172,10 @@ fn named(name: &str) -> View {
         // presses: the eight files nearest the directory the run stands in, which is what
         // a walk of a workspace actually yields (ticket #47, §12).
         "files" => picking(),
+        // The `/model` screen: the names the wire serves, narrowed by a query typed into the
+        // screen, arrived at through the keys a reader presses and the listing a terminal
+        // hands back (#48, §10).
+        "models" => model_screen(),
         // The settings modal over the config a launch resolved: every key of the schema,
         // the value each holds, and the row a key acts on marked (ticket #49, §12,
         // ADR-0009). The screen opened through the seam `/settings` will call, since that
@@ -193,6 +205,26 @@ fn named(name: &str) -> View {
              paints, and a fixture under any other name is a picture of nothing"
         ),
     }
+}
+
+/// The frame the `/model` screen is drawn on: `/model` typed and sent, and the listing the
+/// wire answered with handed in the moment it lands.
+///
+/// The names are read through the same listing code a live wire goes through, from the
+/// catalogue recorded off the wire — so the picture holds two served names, a selection on
+/// the first of them, and the wire's own prose beside each, and holds no name this tree
+/// invented (§10).
+fn model_screen() -> View {
+    let replay = Replay::new([Canned::reply(200, SERVED)]);
+    let at = Where::own(Wire::Anthropic);
+    let listing = Client::over(replay, SecretSet::default())
+        .waits(|_| {})
+        .served(&at, &Credential::new("sk-ant-recorded"), &at);
+    let mut view = View::boot();
+    view.paste("/model");
+    view.key(Key::Enter);
+    view.set_served(listing);
+    view
 }
 
 /// One construct of §12's markdown as the picture of it: an answer holding nothing but
