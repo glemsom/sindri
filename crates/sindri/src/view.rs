@@ -23,10 +23,11 @@
 //! turn it is still in, and this file is the sink the wire's fragments land in. The
 //! composer's band is painted from the `Composer` it is handed, and the rows the box
 //! takes are the `Composer`'s to decide: this file asks rather than counts (#41). The
-//! rail's ledger and its 32 columns are ticket #46's, the pulse is #39's, and marking
-//! and copy are #50's. Each paints into a band of this frame — or, in the rail's case,
-//! into the split this file does not yet make — and changes its fixture deliberately in
-//! the commit that changes it.
+//! rail draws into the columns it takes from the transcript's band, and how many columns
+//! those are — and what it gives up when there are fewer — is `rail`'s to decide and not
+//! this file's (#46): `paint` asks it for the split and hands it the facts it was given.
+//! The pulse is #39's, and marking and copy are #50's. Each paints into a band of this
+//! frame and changes its fixture deliberately in the commit that changes it.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -36,6 +37,7 @@ use sindri_core::records::Entry;
 use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, State};
 use crate::ink::Ink;
 use crate::keys::{Act, Mode, Stack};
+use crate::rail::Facts;
 use crate::rows::{Rows, Scroll};
 use crate::stream::Stream;
 
@@ -82,6 +84,10 @@ pub struct View {
     /// The modes this frame is in, the composer at the base and any screen opened over
     /// it: what answers a key and, while a screen is up, the whole of what is painted.
     stack: Stack,
+    /// The facts the rail draws down the frame's right-hand columns: what the core knows
+    /// about the run and what a caller hands in for the facts nothing produces yet, in
+    /// the values `rail` spells them with (#46).
+    rail: Facts,
 }
 
 impl View {
@@ -106,6 +112,7 @@ impl View {
             composer: Composer::new(),
             stream: Stream::new(),
             stack: Stack::new(),
+            rail: Facts::default(),
         }
     }
 
@@ -213,6 +220,14 @@ impl View {
         self.composer.paste(text);
     }
 
+    /// Hands this frame the facts its rail draws: the model, the turns against the cap,
+    /// the two meters, the workspace and its branch, the skills in force, the sandbox
+    /// posture, and the session's GUID and temp. They are the core's own values, so the
+    /// rail cannot say about a run what the run was never handed (#46).
+    pub fn set_facts(&mut self, facts: Facts) {
+        self.rail = facts;
+    }
+
     /// Says whether a run is live, which is the one fact `Ctrl-C`'s rule reads: the run
     /// loop says so when it starts and when it stops (#43), and nothing else may.
     pub fn set_state(&mut self, state: State) {
@@ -235,7 +250,14 @@ impl View {
             return;
         }
         let bands = bands(area, self.composer.rows());
-        self.transcript(bands.transcript, buffer);
+        // The rail takes its columns from the transcript's band before the transcript is
+        // laid out in what is left: a row's width is the width it is drawn at (ADR-0008),
+        // so the rail's share is decided here and nowhere else (#46).
+        let share = self.rail.split(bands.transcript);
+        if let Some((shape, rail)) = share.rail {
+            self.rail.paint(shape, rail, buffer);
+        }
+        self.transcript(share.transcript, buffer);
         self.composer_band(bands.composer, buffer);
         self.footer(bands.footer, buffer);
     }
@@ -395,8 +417,8 @@ impl Deltas for View {
 
 /// The bands a frame is cut into, top to bottom.
 struct Bands {
-    /// Everything above the composer: the transcript's rows, and the columns the rail
-    /// will take from them (ticket #46 owns that split).
+    /// Everything above the composer: the transcript's rows, and the columns `rail`
+    /// takes from them, or the row it takes below a hundred columns (#46).
     transcript: Rect,
     /// The composer's rows of draft, with the hairline on the first of them.
     composer: Rect,
