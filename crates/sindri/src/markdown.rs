@@ -508,10 +508,11 @@ impl Room {
         // A mermaid fence is a picture and not code (§12): what is written here is kept so
         // the drawing can be made when the block closes, and so the reason it could not be
         // drawn can be printed under the source. The rows are drawn the same either way,
-        // because a diagram's block is what copies as its words and because the picture is
-        // placed over these rows by #55 and by nothing here — which is also why the drawing
-        // is made and dropped today, a render per layout of the fence, until the cache that
-        // keeps it by `(source, cols, rows)` arrives with that placement (ADR-0008).
+        // because a diagram's block is what copies as its words, and the picture is placed
+        // over these rows by `close_code` and by nothing else. The drawing is made once per
+        // layout of the fence; what is kept between paints is the placement, in
+        // `pictures::Pictures::held` under the source and the cells it took, so a repaint of
+        // the same band transmits nothing and draws no second raster (ADR-0008).
         if tag.split_whitespace().next() == Some("mermaid") {
             let fence = match closed(span) {
                 true => Fence::Closed,
