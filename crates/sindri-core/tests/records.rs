@@ -372,6 +372,60 @@ fn the_assistant_entry_lands_when_the_turn_ends() {
     );
 }
 
+/// A thought is a fact of its own: reasoning is written down beside the answer it
+/// reached, under a `kind` of its own, so a reader can show a run's thinking without
+/// the interface having to remember it — and a build that knows no `reasoning` skips
+/// the line, which is how a newer `sindri` writes what an older one reads past.
+#[test]
+fn a_thought_lands_as_its_own_entry_beside_the_answer() {
+    let ground = Ground::new().holding("hunter2");
+    let session = ground.session();
+    let mut record = ground.record(&session);
+
+    record.turn_started(1).expect("a turn start is recorded");
+    record
+        .reasoned(1, "the key is hunter2, so read the file before answering")
+        .expect("a thought is recorded");
+    record
+        .answered(1, "one file.")
+        .expect("an answer is recorded");
+
+    let written = lines(&session.directory().join("transcript.jsonl"));
+    assert_eq!(
+        written,
+        vec![
+            json!({"kind": "turn", "turn": 1}),
+            json!({
+                "kind": "reasoning",
+                "turn": 1,
+                "text": format!("the key is {MASK}, so read the file before answering"),
+            }),
+            json!({"kind": "assistant", "turn": 1, "text": "one file."}),
+        ],
+        "a thought is written when it lands, in the order the turn said it: {written:?}"
+    );
+
+    let transcript = read_transcript(session.directory()).expect("the transcript reads");
+    assert_eq!(
+        transcript.entries(),
+        [
+            Entry::Turn { turn: 1 },
+            Entry::Reasoning {
+                turn: 1,
+                text: SecretSet::default().redact(format!(
+                    "the key is {MASK}, so read the file before answering"
+                )),
+            },
+            Entry::Assistant {
+                turn: 1,
+                text: SecretSet::default().redact("one file."),
+            },
+        ],
+        "the thought reads back as its own fact, and the answer still follows it"
+    );
+    assert_eq!(transcript.skipped(), 0, "nothing was skipped");
+}
+
 #[test]
 fn no_line_of_the_record_carries_a_secret() {
     let ground = Ground::new().holding("hunter2");

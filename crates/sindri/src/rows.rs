@@ -11,6 +11,13 @@
 //! on the next paint — once, because a paint lays an entry out to draw it and then
 //! keeps the answer.
 //!
+//! The turn in flight is the exception that proves the rule: a [`Stream`] is no fact
+//! (ADR-0007), so [`Rows::live`] hands the cache the rows it is drawn as right now and
+//! the cache holds them as its last entry — the live one — laid out again from the stream
+//! whenever a fragment has landed and never laid out from an entry, because there is no
+//! entry yet. A fact landing retires it, so what a turn said is drawn from the entries it
+//! settled into and is never on the screen twice.
+//!
 //! What a band of rows shows is [`Rows::window`]: the entries it intersects, with how
 //! much of each is inside it. The window is measured from the tail backwards, so
 //! following the newest row never asks how tall the history is — it lays out the
@@ -28,6 +35,14 @@
 //! measuring a whole transcript, it lays out every entry the cache has never seen, and
 //! #50's marking and `↓ 4 new rows` are what will spend it. The window never does.
 //!
+//! An answer and a thought are the two things the model says, and each is drawn in its
+//! own gutter and its own ink (§4): an answer from the two blank columns that #39's pulse
+//! will sit in, and a thought inside the hairline rule that says it was said to the
+//! side. Markdown is #52's, and it replaces the plain rendering below; the one rule
+//! that outlives it is ADR-0008's — a fenced block is drawn as code until its closing
+//! fence arrives, so a fence still streaming is a code block and never prose that ate
+//! the rest of the answer.
+//!
 //! `Call` and `Result` rows are deliberately plain here. What a tool row says — `✓ exit
 //! 0`, `✗ exit N`, `✗ timed out`, `✗ cancelled` — and the faded ink §12 paints tool
 //! calls in are ticket #40's contract: it changes these two shapes and their golden
@@ -39,11 +54,21 @@ use ratatui::text::Span;
 use sindri_core::records::Entry;
 
 use crate::ink::Ink;
+use crate::stream::Stream;
 
-/// How far a body sits inside the row that names it: one step, the step a past run is
-/// read back with too, so a call and what it answered read as one thing said in two
-/// rows rather than as two entries that happened to follow each other.
+/// How far a body sits inside the row that names it, and how far an answer is printed
+/// from the frame's left edge: one step, the step a past run is read back with too, so
+/// a call and what it answered read as one thing said in two rows rather than as two
+/// entries that happened to follow each other. An answer's own gutter is this margin
+/// held open and blank — the two columns #39's pulse at the head of the newest answer
+/// will sit in.
 const INDENT: &str = "  ";
+
+/// The gutter a thought row opens with: a hairline down the left of the prose the run
+/// reasoned, so a thought reads as something said beside the answer and not as part of
+/// it (§12). Two columns wide, which is the margin an answer is set from, so the two
+/// kinds of row line up under each other.
+const THOUGHT: &str = "│ ";
 
 /// The glyph a turn opens with, repeated to the right edge: the transcript's own
 /// hairline, one column wide, so a long history reads as a ledger with dividers in it
@@ -61,13 +86,18 @@ pub struct Row {
 }
 
 impl Row {
-    /// A row of `spans`, each run of glyphs drawn in its own ink.
+    /// A row of `spans`, each run of glyphs drawn in its own ink. A run of no glyphs is
+    /// no run at all: it is dropped here, so a band too narrow to hold a gutter beside
+    /// one glyph of prose leaves no empty span behind for a reader to puzzle at.
     pub fn of<I>(spans: I) -> Row
     where
         I: IntoIterator<Item = (String, Ink)>,
     {
         Row {
-            spans: spans.into_iter().collect(),
+            spans: spans
+                .into_iter()
+                .filter(|(text, _)| !text.is_empty())
+                .collect(),
         }
     }
 
@@ -75,6 +105,13 @@ impl Row {
     pub fn width(&self) -> u16 {
         let columns: usize = self.spans.iter().map(|(text, _)| glyphs(text)).sum();
         u16::try_from(columns).unwrap_or(u16::MAX)
+    }
+
+    /// The runs of glyphs this row is made of, left to right, each with the ink it is
+    /// written in: what a caller reads a laid-out row back as — the words a picture
+    /// copies, the gutter a test holds a row to — without a second way to lay one out.
+    pub fn spans(&self) -> &[(String, Ink)] {
+        &self.spans
     }
 
     /// Draws this row across the top row of `area`, from its left edge and clipped at
@@ -127,10 +164,112 @@ pub fn layout(entry: &Entry, cols: u16) -> Vec<Row> {
             rows.extend(body(&text.to_string(), cols));
             rows
         }
-        Entry::Assistant { text, .. } => wrap(&text.to_string(), cols)
-            .into_iter()
-            .map(|line| Row::of([(line, Ink::Plain)]))
-            .collect(),
+        Entry::Assistant { text, .. } => answer(&text.to_string(), cols),
+        Entry::Reasoning { text, .. } => thought(&text.to_string(), cols),
+    }
+}
+
+/// The rows a thought is drawn as: the prose the run reasoned, set inside the rule
+/// §12 gives reasoning and read in the ink secondary prose is read in, so what a run
+/// said to itself is legible as thinking and never mistaken for the answer.
+pub(crate) fn thought(text: &str, cols: u16) -> Vec<Row> {
+    let (gutter, room) = margin(THOUGHT, cols);
+    wrap(text, room)
+        .into_iter()
+        .map(|line| Row::of([(gutter.to_owned(), Ink::Dim), (line, Ink::Muted)]))
+        .collect()
+}
+
+/// The rows an answer is drawn as: its prose, and a fence's contents drawn as code.
+/// Its own gutter is held open and blank, because an answer is the thing being read
+/// and needs no rule beside it.
+///
+/// The one rule about markdown this file keeps is ADR-0008's: a fenced block is
+/// rasterised by nobody and drawn as code until its closing fence arrives, so a fence
+/// that is still streaming is a code block and never prose that ate the rest of the
+/// answer. Markdown itself — headings, tables, highlighting, pictures — is #52's: it
+/// replaces this plain rendering and keeps this rule, which is why the rule lives here
+/// as one boolean over the lines and not inside a renderer.
+pub(crate) fn answer(text: &str, cols: u16) -> Vec<Row> {
+    let mut rows = Vec::new();
+    let mut fenced = false;
+    for line in text.split('\n') {
+        if fence(line) {
+            rows.push(fence_row(line, cols));
+            fenced = !fenced;
+            continue;
+        }
+        if fenced {
+            rows.extend(code(line, cols));
+        } else {
+            rows.extend(prose(line, cols));
+        }
+    }
+    rows
+}
+
+/// One line of an answer's prose as the rows it wraps into: words kept whole where
+/// they fit and broken across rows where they do not, in the frame's own ink.
+fn prose(line: &str, cols: u16) -> Vec<Row> {
+    let (gutter, room) = margin(INDENT, cols);
+    wrap(line, room)
+        .into_iter()
+        .map(|line| Row::of([(gutter.to_owned(), Ink::Plain), (line, Ink::Plain)]))
+        .collect()
+}
+
+/// The fence line itself, whichever language it names: a fact about what the text is
+/// and not a thing the model said, so it is drawn in `dim` and clipped like a name.
+fn fence_row(line: &str, cols: u16) -> Row {
+    let (gutter, room) = margin(INDENT, cols);
+    Row::of([
+        (gutter.to_owned(), Ink::Plain),
+        (clip(line, room), Ink::Dim),
+    ])
+}
+
+/// One line of a fenced block as the rows it is drawn as: the line's own spacing kept
+/// and broken at the band's edge and nowhere else, because code reflowed like prose is
+/// no longer the code that was written — and a row that ran over would be clipped by
+/// the paint and lost from whatever copies it.
+fn code(line: &str, cols: u16) -> Vec<Row> {
+    let (gutter, width) = margin(INDENT, cols);
+    let room = usize::from(width);
+    let mut rows = Vec::new();
+    let mut rest = line;
+    loop {
+        let (head, tail) = split_at(rest, room);
+        rows.push(Row::of([
+            (gutter.to_owned(), Ink::Plain),
+            (head, Ink::Muted),
+        ]));
+        if tail.is_empty() {
+            return rows;
+        }
+        rest = tail;
+    }
+}
+
+/// Whether `line` opens or closes a fenced block: three backticks, whatever language
+/// they name. This is as much markdown as this file reads, and #52 is the ticket that
+/// reads the rest.
+fn fence(line: &str) -> bool {
+    line.trim_start().starts_with("```")
+}
+
+/// The gutter a body opens with at `cols`, and the columns its words have beside it.
+///
+/// The gutter is given up rather than the invariant: a band too narrow to hold the
+/// gutter and one glyph of prose is a band whose rows carry the prose alone, because a
+/// row laid out wider than the width it was laid out for is a row the paint would clip
+/// and whatever copies it would lose.
+fn margin(gutter: &str, cols: u16) -> (&str, u16) {
+    let width = u16::try_from(glyphs(gutter)).unwrap_or(cols);
+    // Two columns, because that is the widest one glyph is: a margin that left less
+    // than that would cost a row the whole width it was laid out for.
+    match cols > width.saturating_add(1) {
+        true => (gutter, cols - width),
+        false => ("", cols),
     }
 }
 
@@ -156,11 +295,10 @@ fn clip(text: &str, room: u16) -> String {
 /// step in from the left edge leaves of `cols`, and set one step in from the name that
 /// introduced them.
 fn body(text: &str, cols: u16) -> Vec<Row> {
-    let step = u16::try_from(glyphs(INDENT)).unwrap_or(cols);
-    let room = cols.saturating_sub(step).max(1);
+    let (gutter, room) = margin(INDENT, cols);
     wrap(text, room)
         .into_iter()
-        .map(|line| Row::of([(clip(&format!("{INDENT}{line}"), cols), Ink::Plain)]))
+        .map(|line| Row::of([(gutter.to_owned(), Ink::Plain), (line, Ink::Plain)]))
         .collect()
 }
 
@@ -284,11 +422,25 @@ pub struct Rows {
 /// it out at the width it holds.
 #[derive(Clone, Debug)]
 struct Held {
-    /// The fact, as the run wrote it: kept here so an entry and its rows cannot be told
-    /// apart by a caller handing in one where the other was expected.
-    entry: Entry,
+    /// What this entry is, which is the whole of the difference between a fact and the
+    /// turn the run is still writing.
+    what: What,
     /// The rows it is drawn as, once they exist at this width.
     rows: Option<Vec<Row>>,
+}
+
+/// What one entry of the cache is: a fact the run wrote down, or the live entry of the
+/// turn in flight, which is no fact yet (ADR-0007) and which this cache can only lay out
+/// from the stream it is handed.
+#[derive(Clone, Debug)]
+enum What {
+    /// The fact, as the run wrote it: kept here so an entry and its rows cannot be told
+    /// apart by a caller handing in one where the other was expected.
+    Fact(Entry),
+    /// The turn in flight, as the fragment count its rows were laid from: laid out from
+    /// the stream by [`Rows::live`] and by nothing else, so the rows of a live entry are
+    /// always the rows of the fragments that have landed.
+    Live { revision: u64 },
 }
 
 impl Rows {
@@ -301,10 +453,65 @@ impl Rows {
     /// Holds one more entry, unlaid: a fact the run has just written, appended where
     /// the run wrote it.
     pub fn push(&mut self, entry: Entry) {
-        self.held.push(Held { entry, rows: None });
+        self.retire();
+        self.held.push(Held {
+            what: What::Fact(entry),
+            rows: None,
+        });
     }
 
-    /// How many entries this cache holds.
+    /// Holds the turn in flight as the transcript's live entry: the rows the stream is
+    /// drawn as now, laid again every time a fragment lands and by nobody else, so a
+    /// tick that changes the live entry costs one layout of it and no layouts of the
+    /// history above it (ADR-0008).
+    ///
+    /// A stream that has said nothing holds no live entry, and one that is asked again
+    /// without having moved is the same picture and costs nothing: the revision is what
+    /// tells the two apart, so a paint that changed nothing does not wrap the same text
+    /// again. A width change is not a paint that changed nothing — it drops the rows
+    /// like every other entry's — and the next frame lays them out again.
+    pub fn live(&mut self, stream: &Stream) {
+        if stream.is_empty() {
+            self.retire();
+            return;
+        }
+        let revision = stream.revision();
+        if let Some(Held {
+            what: What::Live { revision: at },
+            rows: Some(_),
+        }) = self.held.last()
+            && *at == revision
+        {
+            return;
+        }
+        let rows = stream.rows(self.cols);
+        match self.held.last_mut() {
+            Some(held) if matches!(held.what, What::Live { .. }) => {
+                held.what = What::Live { revision };
+                held.rows = Some(rows);
+            }
+            _ => self.held.push(Held {
+                what: What::Live { revision },
+                rows: Some(rows),
+            }),
+        }
+        self.lays += 1;
+    }
+
+    /// Drops the live entry, if this cache holds one: a fact landing is the end of the
+    /// turn in flight, and the block that was drawn while it streamed is the fact's own
+    /// rows now — so the turn is drawn from what it settled into and never twice.
+    fn retire(&mut self) {
+        if matches!(
+            self.held.last().map(|held| &held.what),
+            Some(What::Live { .. })
+        ) {
+            self.held.pop();
+        }
+    }
+
+    /// How many entries this cache holds: the facts it was given and, while a turn is in
+    /// flight, the live entry of that turn as one more.
     pub fn len(&self) -> usize {
         self.held.len()
     }
@@ -343,16 +550,19 @@ impl Rows {
     /// The rows of entry `at`, laid out now if this cache has never laid them out at the
     /// width it holds and kept for the next paint. `at` is an index this cache handed
     /// out — the one a [`Piece`] carries — so a cache that does not hold it has been
-    /// read wrong.
+    /// read wrong. The live entry is the one entry with no fact behind it: its rows are
+    /// the stream's and [`Rows::live`] is what lays them, so a cache that has not been
+    /// handed a stream draws nothing for it rather than inventing a row.
     pub fn rows(&mut self, at: usize) -> &[Row] {
         let cols = self.cols;
-        let held = &mut self.held[at];
-        if held.rows.is_none() {
-            let rows = layout(&held.entry, cols);
-            held.rows = Some(rows);
+        if self.held[at].rows.is_none()
+            && let What::Fact(entry) = &self.held[at].what
+        {
+            let rows = layout(entry, cols);
             self.lays += 1;
+            self.held[at].rows = Some(rows);
         }
-        held.rows.as_deref().unwrap_or_default()
+        self.held[at].rows.as_deref().unwrap_or_default()
     }
 
     /// The transcript's whole height in rows, laying out every entry this cache has

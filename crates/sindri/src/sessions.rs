@@ -212,6 +212,9 @@ fn entry_lines(entry: &Entry) -> Vec<String> {
             format!("  result {name} in turn {turn}, {bytes} bytes in {elapsed_ms} ms"),
             &text.to_string(),
         ),
+        Entry::Reasoning { turn, text } => {
+            under(format!("  reasoning in turn {turn}"), &text.to_string())
+        }
         Entry::Assistant { turn, text } => {
             under(format!("  assistant in turn {turn}"), &text.to_string())
         }

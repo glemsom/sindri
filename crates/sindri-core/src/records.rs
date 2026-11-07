@@ -56,9 +56,9 @@ const STATUS: &str = "status.json";
 
 /// One thing that happened in a run, in order, as the transcript writes it.
 ///
-/// The tag is `kind`, and the variants are the four moments durability is
-/// granular to (ADR-0007): a turn starts, a call is made, a result lands, and the
-/// assistant answers when the turn ends. Every field is a fact the run was
+/// The tag is `kind`, and the variants are the moments durability is granular to
+/// (ADR-0007): a turn starts, a call is made, a result lands, the turn reasons, and
+/// the assistant answers when the turn ends. Every field is a fact the run was
 /// handed — the model's own words, the wire's own arguments — and never a
 /// formatted line, so the interface and any reader draw one run from one value.
 ///
@@ -94,6 +94,19 @@ pub enum Entry {
         bytes: u64,
         /// How long it held the run's clock.
         elapsed_ms: u64,
+    },
+    /// The turn reasoned before it answered: what the model said to itself, settled
+    /// as the one fact it is.
+    ///
+    /// A thought has no partial form here: fragments land in the front end's own
+    /// value and never in the transcript (ADR-0007), so this is the whole of what one
+    /// turn reasoned, written when that turn stopped reasoning. A build that knows no
+    /// `reasoning` skips the line, which is the forward rule this enum keeps.
+    Reasoning {
+        /// Which turn reasoned.
+        turn: u32,
+        /// What the model said to itself, as it settled.
+        text: Redacted,
     },
     /// The turn ended with what the assistant said.
     Assistant {
@@ -336,6 +349,16 @@ impl Record {
             text: self.secrets.redact(acted.text.clone()),
             bytes: acted.bytes,
             elapsed_ms: millis(acted.elapsed),
+        })
+    }
+
+    /// The turn reasoned `text` before it answered: written as its own fact beside the
+    /// answer it reached, so a reader can show a run's thinking and a build that knows
+    /// no `reasoning` reads past it (ADR-0007).
+    pub fn reasoned(&mut self, turn: u32, text: &str) -> Result<(), RecordError> {
+        self.append(Entry::Reasoning {
+            turn,
+            text: self.secrets.redact(text),
         })
     }
 

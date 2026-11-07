@@ -3,43 +3,43 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 transcript at 120x40
-00 |reader draw one run from one value, and the core may not name a terminal at all.                                        | plain:120
-01 |turn 2 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
-02 |call bash                                                                                                               | muted:9 plain:111
-03 |  {"command": "cargo test -p sindri --test rows"}                                                                       | plain:120
-04 |result bash 208 bytes · 97 ms                                                                                           | muted:29 plain:91
-05 |  running 4 tests                                                                                                       | plain:120
-06 |  test result: ok. 4 passed; 0 failed                                                                                   | plain:120
-07 |A width change drops what the cache held and reflows on the next paint, once, because a paint lays an entry out to draw | plain:120
-08 |it and then keeps the answer. The cache is one width deep, which is what a resize being a reflow and not a lookup means.| plain:120
-09 |turn 3 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
-10 |call bash                                                                                                               | muted:9 plain:111
-11 |  {"command": "make check STAGES=rows"}                                                                                 | plain:120
-12 |result bash 64 bytes · 41 ms                                                                                            | muted:28 plain:92
-13 |  check: test ... ok                                                                                                    | plain:120
-14 |The window is measured from the tail backwards, so following the newest row never asks how tall the history is: it lays | plain:120
-15 |out the entries it shows and stops at the first row that fills the band. Only the rows a band reaches are laid out, so a| plain:120
-16 |250-turn history on a 40-row terminal pays for what it shows and no more.                                               | plain:120
-17 |turn 4 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
-18 |call bash                                                                                                               | muted:9 plain:111
-19 |  {"command": "make check"}                                                                                             | plain:120
-20 |result bash 96 bytes · 118 ms                                                                                           | muted:29 plain:91
-21 |  check: fmt ... ok                                                                                                     | plain:120
-22 |  check: clippy ... ok                                                                                                  | plain:120
-23 |  check: test ... ok                                                                                                    | plain:120
-24 |  check: frames ... ok                                                                                                  | plain:120
-25 |What that buys is the plain case and what it costs is the scrolled one: a window is a row offset from the tail, so      | plain:120
-26 |resolving one walks the entries between the tail and the window and lays out every one of them on the way. Each is laid | plain:120
-27 |out once and kept, so the whole history scrolled through costs one layout per entry and scrolling it again costs none.  | plain:120
+00 |call bash                                                                                                               | muted:9 plain:111
+01 |  {"command": "cargo test -p sindri --test rows"}                                                                       | plain:120
+02 |result bash 208 bytes · 97 ms                                                                                           | muted:29 plain:91
+03 |  running 4 tests                                                                                                       | plain:120
+04 |  test result: ok. 4 passed; 0 failed                                                                                   | plain:120
+05 |  A width change drops what the cache held and reflows on the next paint, once, because a paint lays an entry out to    | plain:120
+06 |  draw it and then keeps the answer. The cache is one width deep, which is what a resize being a reflow and not a lookup| plain:120
+07 |  means.                                                                                                                | plain:120
+08 |turn 3 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+09 |call bash                                                                                                               | muted:9 plain:111
+10 |  {"command": "make check STAGES=rows"}                                                                                 | plain:120
+11 |result bash 64 bytes · 41 ms                                                                                            | muted:28 plain:92
+12 |  check: test ... ok                                                                                                    | plain:120
+13 |  The window is measured from the tail backwards, so following the newest row never asks how tall the history is: it    | plain:120
+14 |  lays out the entries it shows and stops at the first row that fills the band. Only the rows a band reaches are laid   | plain:120
+15 |  out, so a 250-turn history on a 40-row terminal pays for what it shows and no more.                                   | plain:120
+16 |turn 4 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+17 |call bash                                                                                                               | muted:9 plain:111
+18 |  {"command": "make check"}                                                                                             | plain:120
+19 |result bash 96 bytes · 118 ms                                                                                           | muted:29 plain:91
+20 |  check: fmt ... ok                                                                                                     | plain:120
+21 |  check: clippy ... ok                                                                                                  | plain:120
+22 |  check: test ... ok                                                                                                    | plain:120
+23 |  check: frames ... ok                                                                                                  | plain:120
+24 |  What that buys is the plain case and what it costs is the scrolled one: a window is a row offset from the tail, so    | plain:120
+25 |  resolving one walks the entries between the tail and the window and lays out every one of them on the way. Each is    | plain:120
+26 |  laid out once and kept, so the whole history scrolled through costs one layout per entry and scrolling it again costs | plain:120
+27 |  none.                                                                                                                 | plain:120
 28 |turn 5 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
 29 |call bash                                                                                                               | muted:9 plain:111
 30 |  {"command": "git diff --stat"}                                                                                        | plain:120
 31 |result bash 128 bytes · 9 ms                                                                                            | muted:28 plain:92
 32 |  crates/sindri/src/rows.rs | 412 +++++++++++++                                                                         | plain:120
 33 |  crates/sindri/tests/rows.rs | 198 +++++++++                                                                           | plain:120
-34 |The transcript's unit is the entry. An entry never carries a formatted line, so the same run is drawn the same way by   | plain:120
-35 |the TUI, by a reader of the transcript and by whatever front end comes next, and a streaming tick that changes one entry| plain:120
-36 |re-lays that entry alone.                                                                                               | plain:120
+34 |  The transcript's unit is the entry. An entry never carries a formatted line, so the same run is drawn the same way by | plain:120
+35 |  the TUI, by a reader of the transcript and by whatever front end comes next, and a streaming tick that changes one    | plain:120
+36 |  entry re-lays that entry alone.                                                                                       | plain:120
 37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
 38 |                                                                                                                        | plain:120
 39 |Enter send · ? keys                                                                                                     | muted:10 dim:3 muted:6 plain:101

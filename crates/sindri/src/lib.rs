@@ -15,4 +15,5 @@
 pub mod composer; // the draft a prompt is typed into, as a value rather than a widget
 pub mod ink; // the ink a cell is drawn in, asked for by name
 pub mod rows; // the transcript's rows: one entry of the core's records laid out as the rows it is
+pub mod stream; // the turn in flight: the answer and the thought of the run's newest turn, fed a
 pub mod view; // what one frame holds and where each part of it goes
