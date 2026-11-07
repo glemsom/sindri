@@ -14,13 +14,14 @@
 //! resolves in exactly one mode" means as code: a glyph pressed at a screen that binds
 //! no glyph does nothing at all, rather than editing a draft nobody can see.
 //!
-//! Three keys are a row and a rule, and the rule lives in one arm of the frame rather than
-//! in a second keymap: `↑` (A9) bound to `Act::Up`, because the queue's recall and the row
-//! above the caret are one key with two homes; `@` bound to `Act::Files`, because it opens
-//! the picker only where it starts a word and is a glyph anywhere else; and `?` bound to
-//! `Act::Keys`, which is a key only while the draft is empty. Each arm reads one fact about
-//! the draft — where the caret is, or whether there is anything in it — and no table has to
-//! know about it.
+//! Six keys are a row and a rule, and every rule lives in an arm of the frame rather than in
+//! a second keymap: the queue's two (A9) — `↑` bound to `Act::Up`, because its recall and
+//! the row above the caret are one key with two homes, and `Ctrl-X` to `Act::Drop`; `@`
+//! bound to `Act::Files`, because it opens the picker only where it starts a word and is a
+//! glyph anywhere else; `?` bound to `Act::Keys`, which is a key only while the draft is
+//! empty; and the mark's two, `Shift+↑` and `Shift+↓`, which grow a mark only over a
+//! transcript there is a row to grow it to. Each arm reads one fact about the frame or the
+//! draft, and no table has to know about it.
 
 use crate::composer::Key;
 
@@ -86,6 +87,16 @@ pub enum Act {
     /// `↑`, one key with two homes: the queue's newest prompt on the composer's first
     /// line, the row above the caret anywhere else (A9).
     Up,
+    /// `Ctrl-Y`: the words the mark covers leave the frame, or the newest answer does
+    /// when nothing is marked (§12).
+    Copy,
+    /// `Shift+↓`: the mark grows a whole row down the transcript (§12).
+    ExtendDown,
+    /// `Shift+↑`: the mark gives a whole row of itself back (§12).
+    ExtendUp,
+    /// `Ctrl-X`: the newest prompt waiting in the queue is dropped, and the ones behind
+    /// it keep their order (§12).
+    Drop,
     /// `?`: the screen that lists the keys in force.
     Keys,
     /// `@`: the screen that offers the files of the workspace.
@@ -121,9 +132,10 @@ pub struct Binding {
 /// The draft's keys, in the order the `?` screen lists them: the ones a prompt is typed
 /// and sent with first, then the caret's, then the two keys that end things.
 ///
-/// Every row here but three is `Act::Draft`: the composer's map is where a text box's
-/// rules are, and this table is what that means as a list a reader can read.
-const COMPOSER: [Binding; 13] = [
+/// Every row here but the ones carrying a rule of the frame's — `?`, `@`, `↑`, `Ctrl-X`,
+/// the two shift arrows and `Ctrl-Y` — is `Act::Draft`: the composer's map is where a text
+/// box's rules are, and this table is what that means as a list a reader can read.
+const COMPOSER: [Binding; 17] = [
     Binding {
         key: Key::Char('?'),
         name: "?",
@@ -155,10 +167,28 @@ const COMPOSER: [Binding; 13] = [
         act: Act::Up,
     },
     Binding {
+        key: Key::Drop,
+        name: "Ctrl-X",
+        does: "drop the newest queued prompt",
+        act: Act::Drop,
+    },
+    Binding {
         key: Key::Down,
         name: "↓",
         does: "the line below",
         act: Act::Draft,
+    },
+    Binding {
+        key: Key::ShiftDown,
+        name: "Shift+↓",
+        does: "grow the mark a row down",
+        act: Act::ExtendDown,
+    },
+    Binding {
+        key: Key::ShiftUp,
+        name: "Shift+↑",
+        does: "grow the mark a row up",
+        act: Act::ExtendUp,
     },
     Binding {
         key: Key::Left,
@@ -183,6 +213,12 @@ const COMPOSER: [Binding; 13] = [
         name: "End",
         does: "the end of the line",
         act: Act::Draft,
+    },
+    Binding {
+        key: Key::Copy,
+        name: "Ctrl-Y",
+        does: "copy the mark, or the last answer",
+        act: Act::Copy,
     },
     Binding {
         key: Key::Backspace,

@@ -13,9 +13,10 @@
 //!
 //! The bars are why a row of blank cells keeps its width in a file an editor may
 //! touch: nothing a cell holds hides behind a trailing space. The inks are names —
-//! `dim`, `muted`, `accent`, `ok`, `err`, and `plain` for a cell the terminal draws
-//! in whatever ink its reader chose — and never colours, so a palette change cannot
-//! break a fixture and a fixture cannot smuggle in a theme (ADR-0012).
+//! `dim`, `muted`, `accent`, `ok`, `err`, `plain` for a cell the terminal draws in
+//! whatever ink its reader chose, and `mark` for a cell the reader's mark covers —
+//! and never colours, so a palette change cannot break a fixture and a fixture cannot
+//! smuggle in a theme (ADR-0012, #50).
 //!
 //! A fixture's file is a `.snap` and not the `.txt` ADR-0012 first named, because
 //! `insta` compares and blesses it and hard-codes that extension
@@ -34,8 +35,10 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::{Buffer, Cell};
 
-use sindri::composer::{Composer, Key};
+use sindri::composer::{Composer, Key, Outcome};
 use sindri::ink::Ink;
+use sindri::mark;
+use sindri::pulse::Pulse;
 use sindri::rail::Facts;
 use sindri::rows::Scroll;
 use sindri::view::View;
@@ -43,7 +46,7 @@ use sindri_core::policy::Enforcement;
 use sindri_core::provider::Deltas;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
-use sindri_core::run::Exit;
+use sindri_core::run::{Exit, Stop};
 
 /// Where the accepted pictures live: beside the tests that compare them, one file
 /// per frame and size (ADR-0012).
@@ -120,6 +123,20 @@ fn named(name: &str) -> View {
             "seven: the session it left",
             "eight: the question to ask",
         ])),
+        // The marker at the head of the newest answer, twice: the run still live and
+        // carrying its elapsed time, and the same run stopped with the duration it stopped
+        // at (#39). One history and one answer, so what the eye is asked to approve between
+        // the two pictures is the marker and nothing else. The live one's answer is still
+        // arriving — three of its four fragments have landed — because a marker carrying
+        // elapsed time is for a turn that has not finished speaking.
+        "pulse-live" => with_pulse(Pulse::live(4_200), &PULSE_ANSWER[..3]),
+        // The settled marker says the duration the run stopped at, and nine point four
+        // seconds rather than the ticket's dozen: §12's table gives a duration past ten
+        // seconds in whole seconds, so the form is the ticket's and the value is the table's.
+        "pulse-settled" => with_pulse(Pulse::settled(&Stop::Final, 9_400), &PULSE_ANSWER),
+        // Prompts typed while a run is live, waiting above the composer and counted in one
+        // row, with a fourth being typed under them (ticket #42, §12, A9).
+        "queue" => queue(),
         // The `?` screen, opened through the same key a reader presses rather than by
         // reaching into the stack: the frame lists the keys of the tables that answer
         // them, so a picture of the screen is a picture of the keymap (ticket #45, A7).
@@ -132,6 +149,13 @@ fn named(name: &str) -> View {
         // presses: the eight files nearest the directory the run stands in, which is what
         // a walk of a workspace actually yields (ticket #47, §12).
         "files" => picking(),
+        // A drag over the transcript: the cells a reader has marked, painted in the ink
+        // a selection is read in, and the very cells `Ctrl-Y` hands out (#50).
+        "mark" => {
+            let mut view = View::of(transcript(), Scroll::Tail);
+            view.drag(mark::Cell::new(20, 0), mark::Cell::new(23, 70));
+            view
+        }
         unknown => panic!(
             "no frame is named {unknown}: `named` lists the frames this front end \
              paints, and a fixture under any other name is a picture of nothing"
@@ -363,6 +387,65 @@ fn streaming() -> View {
     ] {
         view.text(fragment);
     }
+    view
+}
+
+/// The words the pulse frames' newest answer is made of, a fragment at a time: the same
+/// answer in both pictures, so the difference the eye approves between them is the marker
+/// and nothing else.
+const PULSE_ANSWER: [&str; 4] = [
+    "A braille marker at the head of the newest answer carries the run's elapsed ",
+    "time, one step every 80 ms, and settles on the verdict it stopped with — ",
+    "the duration it stopped at, kept and never recomputed. ",
+    "The rows under it keep the answer's own gutter, held open and blank.",
+];
+
+/// The frame a run is in while its newest answer is landing, wearing `pulse` at that
+/// answer's head: a settled turn above, a turn opened on it, and that turn's thought and
+/// answer streamed through the same `Deltas` door the wire streams them through, so the
+/// picture of a marker is made the way a marker is made (#39).
+///
+/// The answer is long enough to wrap past its first row, which is what shows the marker
+/// sitting at the head of one row and the answer's own gutter holding the rest.
+fn with_pulse(pulse: Pulse, said: &[&str]) -> View {
+    let mut entries = opening();
+    entries.push(Entry::Turn { turn: 2 });
+    let mut view = running(entries, Scroll::Tail);
+    for fragment in [
+        "The marker is a clock, so the row it heads is laid out again whenever ",
+        "the mark it wears moves, and a step that changes nothing costs nothing. ",
+    ] {
+        view.reasoning(fragment);
+    }
+    for fragment in said {
+        view.text(fragment);
+    }
+    view.set_pulse(Some(pulse));
+    view
+}
+
+/// The frame a run is in with prompts waiting behind it: three sent while the run was
+/// live, queued the way the terminal queues one — a draft, `Enter`, and the prompt the
+/// composer hands back enqueued instead of run — and a fourth being typed under the count
+/// (§12, #42).
+///
+/// It is the picture of what `Enter` during a run comes to: the prompt was neither run
+/// beside the one in flight nor thrown away, and the row above the composer says how many
+/// are waiting while the box the reader is typing in keeps its place.
+fn queue() -> View {
+    let mut view = running(transcript(), Scroll::Tail);
+    for prompt in [
+        "run the test that failed and read it",
+        "then the fmt check",
+        "and say why the retry hid it",
+    ] {
+        view.paste(prompt);
+        match view.key(Key::Enter) {
+            Outcome::Send(prompt) => view.enqueue(prompt),
+            other => panic!("a draft should have been sent, and {other:?} came instead"),
+        }
+    }
+    view.paste("and this one while they wait");
     view
 }
 
