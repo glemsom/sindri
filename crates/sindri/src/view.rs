@@ -69,6 +69,7 @@ use sindri_core::skills::{Catalog, Skill};
 
 use crate::commands::{self, Command};
 use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, Prompt, State};
+use crate::graphics::CellSize;
 use crate::ink::Ink;
 use crate::keys::{Act, Mode, Stack};
 use crate::mark::{Cell, Mark, Span};
@@ -227,6 +228,13 @@ pub struct View {
     /// The settings modal's rows: the config's keys and the text each of them holds, seeded
     /// from the config the frame was handed when the screen opened (§12, ADR-0009).
     settings: Settings,
+    /// The pixel size of one cell on the terminal this frame is drawn on, as the launch
+    /// probed it once before its event loop and handed it over (§12, ADR-0003). A picture
+    /// is measured into cells against this and rasterised at its pixels, so the frame that
+    /// draws the picture and the terminal that places it agree about how big one cell is.
+    /// A frame nobody probed for — a fixture, or a launch with no terminal — draws at the
+    /// nominal cell.
+    cell_size: CellSize,
 }
 
 impl View {
@@ -336,6 +344,19 @@ impl View {
     /// from, so a name the frame accepts and a name a run could call are one catalog (§7).
     pub fn set_home(&mut self, home: Option<PathBuf>) {
         self.home = home;
+    }
+
+    /// The pixel size of one cell, which is what a picture is measured and drawn at.
+    pub fn cell_size(&self) -> CellSize {
+        self.cell_size
+    }
+
+    /// Hands this frame the cell its terminal really has, probed once by the launch and
+    /// never asked here: a frame has no terminal to ask (§12, ADR-0003). What it buys is a
+    /// picture drawn at the pixels the screen will place it in, rather than at a guess the
+    /// terminal then stretches.
+    pub fn set_cell_size(&mut self, cell_size: CellSize) {
+        self.cell_size = cell_size;
     }
 
     /// The settings modal's rows, as they stand: what the screen paints and what `Enter`

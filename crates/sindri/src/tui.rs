@@ -60,8 +60,11 @@ use std::time::{Duration, Instant};
 use ratatui::backend::CrosstermBackend;
 use rustix::event::Timespec;
 use rustix::event::{PollFd, PollFlags, poll};
-use rustix::termios::{InputModes, OptionalActions, Termios, tcgetattr, tcsetattr};
+use rustix::termios::{
+    InputModes, OptionalActions, Termios, Winsize, tcgetattr, tcgetwinsize, tcsetattr,
+};
 use sindri::composer::{Key, Outcome, Prompt, State};
+use sindri::graphics::CellSize;
 use sindri::pulse::{self, Pulse};
 use sindri::settings::persist;
 use sindri::view::View;
@@ -101,6 +104,16 @@ const GIVE_BACK_SCREEN: &[u8] = b"\x1b[?2004l\x1b[?25h\x1b[?1049l";
 /// reads as the schema's key rather than as a word that happens to match it.
 const MODEL: &str = "model";
 
+/// `CSI 16 t`: the one question a launch puts to its terminal, asking how many pixels one
+/// cell of it is. A terminal that knows answers `CSI 6 ; height ; width t`; one that does
+/// not says nothing at all, which is why the wait below is bounded (§12, ADR-0003).
+const ASK_CELL: &[u8] = b"\x1b[16t";
+
+/// How long the terminal is given to answer the cell question. A terminal that answers
+/// takes microseconds and one that cannot never will, so this is only ever the cost of a
+/// terminal that says nothing — and it is paid once, before the first frame.
+const REPLY_WAIT: Duration = Duration::from_millis(120);
+
 /// The terminal UI: takes the screen, holds it until `Ctrl-Q` or the user's own word, gives
 /// it back.
 pub fn run(cli: &Cli, config: &Config) -> ExitCode {
@@ -131,7 +144,15 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
             return crate::refuse(&format!("the terminal would not go raw: {error}"), SETUP);
         }
     };
+    // The pixels in one cell, asked of the terminal once and kept by the frame for the length
+    // of the launch: every picture this screen measures is measured against it (§12,
+    // ADR-0003). A launch with no terminal never reaches this line, which is what keeps the
+    // round trip out of batch mode. A key typed while the launch waited is handed on to the
+    // loop rather than dropped: a reader typing at a blank screen did not ask for their words
+    // to go missing.
+    let (cell_size, typed) = probed_cell(&terminal);
     let mut view = View::boot();
+    view.set_cell_size(cell_size);
     // The frame is told the directory the launch stands in, because `@` walks the workspace
     // and a frame knows only what it was handed. It is the same directory `Launch::open`
     // gives a run — read the same way, from the process — so a path a reader picks is a path
@@ -169,6 +190,7 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
         &mut config,
         &Process,
         &signals,
+        &typed,
     );
     // The screen is given back before a word is said about how the launch ended: a refusal
     // is a line for the shell a reader is handed back to, and not a smear over a frame.
@@ -316,6 +338,13 @@ fn paint(canvas: &mut Canvas<'_>, view: &mut View) -> io::Result<()> {
 /// never drawn (§12). Three things can end that wait — a key on the terminal, a signal, and
 /// a run with something to say — and all three are fds, so one wait covers them and no timer
 /// is needed to make a fragment, a cancellation or a keystroke arrive.
+///
+/// `typed` is what the cell probe read off the terminal before the loop started: a reader's
+/// keys, answered here rather than left in a buffer nothing reads.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the one seam every mode's key is handed through, as `answer` is"
+)]
 fn keys(
     terminal: &Terminal,
     canvas: &mut Canvas<'_>,
@@ -324,6 +353,7 @@ fn keys(
     config: &mut Config,
     environment: &impl Environment,
     signals: &Signals,
+    typed: &[u8],
 ) -> io::Result<Ending> {
     let mut decoder = Decoder::new();
     let mut read = [0u8; 4096];
@@ -331,6 +361,27 @@ fn keys(
     let mut asking: Option<Asking> = None;
     let mut interrupted = false;
     let wake = signals.wake();
+
+    // A key the cell probe read is a key: it arrived before the first frame was painted, and
+    // the loop answers it here rather than waiting for a second one that may never come.
+    decoder.push(typed);
+    while let Some(event) = decoder.next() {
+        if let Some(ending) = answer(
+            terminal,
+            canvas,
+            view,
+            event,
+            &mut running,
+            &mut asking,
+            cli,
+            config,
+            environment,
+            &wake,
+        )? {
+            return Ok(ending);
+        }
+    }
+
     loop {
         let waiting = wake.reader();
         let mut fds = [
@@ -1178,6 +1229,82 @@ fn guard_panics() {
     });
 }
 
+/// The pixel size of one cell, as this launch's terminal reports it, and the bytes the
+/// terminal sent that were not the answer and are therefore a reader's keys (§12, ADR-0003).
+///
+/// Three answers, in the order of what they cost. The kernel's own `winsize` carries the
+/// window's pixels on a terminal that fills it, and costs no round trip at all. `CSI 16 t` is
+/// one write and one bounded wait, for the terminals that do not fill it. And a terminal that
+/// will not say is drawn at the nominal cell rather than holding the launch open.
+fn probed_cell(terminal: &Terminal) -> (CellSize, Vec<u8>) {
+    if let Some(cell) = tcgetwinsize(&terminal.screen).ok().and_then(of_winsize) {
+        return (cell, Vec::new());
+    }
+    if tell(&terminal.screen, ASK_CELL).is_err() {
+        return (CellSize::NOMINAL, Vec::new());
+    }
+    let Some(wait) = Timespec::try_from(REPLY_WAIT).ok() else {
+        return (CellSize::NOMINAL, Vec::new());
+    };
+    let mut fds = [PollFd::new(&terminal.keys, PollFlags::IN)];
+    match poll(&mut fds, Some(&wait)) {
+        Ok(_) if fds[0].revents().contains(PollFlags::IN) => {}
+        // Nothing arrived in the time a terminal that will answer takes: this one will not.
+        _ => return (CellSize::NOMINAL, Vec::new()),
+    }
+    let mut read = [0u8; 64];
+    let count = Read::read(&mut &terminal.keys, &mut read).unwrap_or(0);
+    let (cell, typed) = cell_reply(&read[..count]);
+    (cell.unwrap_or(CellSize::NOMINAL), typed)
+}
+
+/// The cell size a terminal's own `winsize` implies, when it carries pixels: the window's
+/// pixels over the cells it holds. A terminal that reports no pixels, or fewer pixels than it
+/// has cells, has not said, and `None` says so.
+fn of_winsize(size: Winsize) -> Option<CellSize> {
+    let (cols, rows) = (size.ws_col, size.ws_row);
+    let (xpixel, ypixel) = (size.ws_xpixel, size.ws_ypixel);
+    if cols == 0 || rows == 0 || xpixel < cols || ypixel < rows {
+        return None;
+    }
+    Some(CellSize::new(
+        u32::from(xpixel / cols),
+        u32::from(ypixel / rows),
+    ))
+}
+
+/// The cell size a terminal's answer carries, read off the bytes it sent, beside the bytes
+/// that were not that answer — a key typed while the launch waited is a key, not a reply.
+fn cell_reply(bytes: &[u8]) -> (Option<CellSize>, Vec<u8>) {
+    let mut cell = None;
+    let mut typed = Vec::with_capacity(bytes.len());
+    let mut at = 0;
+    while at < bytes.len() {
+        if cell.is_none()
+            && let Some((length, answer)) = cell_at(&bytes[at..])
+        {
+            cell = Some(answer);
+            at += length;
+            continue;
+        }
+        typed.push(bytes[at]);
+        at += 1;
+    }
+    (cell, typed)
+}
+
+/// A `CSI 6 ; height ; width t` answer at the front of `bytes`, and how many bytes it took.
+fn cell_at(bytes: &[u8]) -> Option<(usize, CellSize)> {
+    const OPENING: &[u8] = b"\x1b[6;";
+    let params = bytes.strip_prefix(OPENING)?;
+    let end = params.iter().position(|byte| *byte == b't')?;
+    let (height, width) = std::str::from_utf8(&params[..end]).ok()?.split_once(';')?;
+    Some((
+        end + OPENING.len() + 1,
+        CellSize::new(width.parse().ok()?, height.parse().ok()?),
+    ))
+}
+
 /// Writes a sequence out and flushes it: a frame that sat in a buffer is a frame
 /// nobody saw, and a screen given back only at exit is a terminal left blank when
 /// the process dies.
@@ -1206,7 +1333,7 @@ mod tests {
     use clap::Parser;
     use rustix::fs::{Mode, OFlags, open};
     use rustix::pty::{OpenptFlags, grantpt, openpt, ptsname, unlockpt};
-    use rustix::termios::LocalModes;
+    use rustix::termios::{LocalModes, tcsetwinsize};
     use sindri::rows::Scroll;
     use sindri_core::records::Entry;
     use sindri_core::redact::SecretSet;
@@ -1247,10 +1374,101 @@ mod tests {
             String::from_utf8_lossy(&drawn[..count]).into_owned()
         }
 
+        /// The size this terminal reports, cells and pixels both.
+        fn resize(&self, cols: u16, rows: u16, xpixel: u16, ypixel: u16) {
+            tcsetwinsize(
+                &self.slave,
+                Winsize {
+                    ws_row: rows,
+                    ws_col: cols,
+                    ws_xpixel: xpixel,
+                    ws_ypixel: ypixel,
+                },
+            )
+            .expect("the terminal takes its size");
+        }
+
+        /// Whether the launch has written nothing at all: a master with no byte waiting is a
+        /// terminal nobody spoke to, and asking that question must not block the way a read
+        /// would.
+        fn silent(&mut self) -> bool {
+            let mut fds = [PollFd::new(&self.master, PollFlags::IN)];
+            let wait = Timespec::try_from(Duration::from_millis(20)).expect("a span");
+            poll(&mut fds, Some(&wait)).is_ok() && !fds[0].revents().contains(PollFlags::IN)
+        }
+
         /// The terminal's state, as the program left it.
         fn attrs(&self) -> Termios {
             tcgetattr(&self.slave).expect("the terminal's state")
         }
+    }
+
+    /// ADR-0003's cheap half: a terminal that fills its `winsize`'s pixel fields is asked
+    /// nothing, because the kernel's own answer is the whole of what a picture needs.
+    #[test]
+    fn a_terminal_that_reports_its_pixels_is_asked_no_question() {
+        let mut pty = Pty::open();
+        pty.resize(80, 24, 800, 480);
+        let terminal =
+            Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
+
+        let (cell, typed) = probed_cell(&terminal);
+
+        assert_eq!(
+            cell,
+            CellSize::new(10, 20),
+            "800 by 480 pixels over 80 by 24 cells is a 10 by 20 cell"
+        );
+        assert!(typed.is_empty(), "and nothing was typed into the launch");
+        assert!(
+            pty.silent(),
+            "the terminal was asked nothing at all: no sequence went out"
+        );
+    }
+
+    /// The other answer: a terminal that reports no pixels is asked, and one that says
+    /// nothing is drawn at the nominal cell rather than holding the launch open.
+    #[test]
+    fn a_terminal_that_answers_nothing_is_drawn_at_the_nominal_cell() {
+        let mut pty = Pty::open();
+        pty.resize(80, 24, 0, 0);
+        let terminal =
+            Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
+
+        let (cell, typed) = probed_cell(&terminal);
+
+        assert_eq!(
+            cell,
+            CellSize::NOMINAL,
+            "the nominal cell is what a terminal that will not say gets"
+        );
+        assert!(typed.is_empty(), "and no key was typed, so none was kept");
+        assert!(
+            pty.drawn().contains("\u{1b}[16t"),
+            "the question really was put to it"
+        );
+    }
+
+    /// And the answer, read for what it says: `CSI 6 ; height ; width t`, with whatever a
+    /// reader typed while the launch waited kept beside it rather than swallowed.
+    #[test]
+    fn the_answer_is_read_off_the_bytes_the_terminal_sent_and_the_keys_beside_it_kept() {
+        let (cell, typed) = cell_reply(b"a\x1b[6;18;9tb");
+
+        assert_eq!(cell, Some(CellSize::new(9, 18)), "9 wide by 18 tall");
+        assert_eq!(
+            typed,
+            b"ab".to_vec(),
+            "the two keys that were not the answer are kept, in the order they were typed"
+        );
+
+        let (cell, typed) = cell_reply(b"\x1b[6;18;9");
+        assert_eq!(cell, None, "an answer cut in half is no answer");
+        assert_eq!(
+            typed,
+            b"\x1b[6;18;9".to_vec(),
+            "and every byte of it is a key"
+        );
     }
 
     #[test]
