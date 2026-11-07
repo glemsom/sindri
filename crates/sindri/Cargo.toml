@@ -19,8 +19,10 @@ mermaid-rs-renderer = { version = "0.3.1", default-features = false }
 usvg = { version = "0.47", default-features = false, features = ["text"] }
 resvg = "0.47"
 tiny-skia = "0.12"
-# The buffer a picture leaves as: straight RGBA, which is what a Kitty placement takes.
-image = { version = "0.25", default-features = false }
+# The buffer a picture leaves as: straight RGBA, which is what a Kitty placement takes. The
+# two formats a workspace picture is written in are named here — a screenshot and a
+# photograph — because a decoder the build does not carry turns a file into a refusal.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 pulldown-cmark = { version = "0.12", default-features = false }
 # The frame: what a look is drawn with, and the same code a fixture renders through
 # ratatui's headless backend, so a golden frame and a reader's screen are one picture.
