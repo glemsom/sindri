@@ -17,9 +17,9 @@
 //!
 //! What becomes pixels here is the picture itself and nothing else: [`Picture::rasterise`]
 //! hands back the pixels of the cells it was measured into, or nothing when what it was
-//! measured from is not a picture after all. Where those pixels go is [`crate::pictures`], which places them on the
-//! terminal, and [`Surface`] is the one value that says how big the cells are and whether this
-//! terminal places a picture at all.
+//! measured from is not a picture after all. Where those pixels go is [`crate::pictures`],
+//! which places them on the terminal, and [`Surface`] is the one value that says how big the
+//! cells are and whether this terminal places a picture at all.
 
 use std::path::{Path, PathBuf};
 
