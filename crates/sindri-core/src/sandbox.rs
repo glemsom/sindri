@@ -280,6 +280,28 @@ mod tests {
 
     use super::*;
     use crate::config::Config;
+    use std::time::{Duration, Instant};
+
+    /// The proof, asked for again if the stand-in was reported busy.
+    ///
+    /// `ETXTBSY` is what the kernel answers when a file is open for writing anywhere at the
+    /// moment it is executed, and every stand-in here is a file this process wrote a moment
+    /// earlier: under a suite where each test binary forks at once, that is a fact about the
+    /// instant and never about the stand-in. So a busy one is asked again; a stand-in that is
+    /// really broken answers something else, and fails the test exactly as before.
+    fn proved(bwrap: &Path, boundary: &Boundary, session_temp: &Path) -> Result<Proof, Card> {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let outcome = prove_with(bwrap, boundary, session_temp);
+            let busy = outcome
+                .as_ref()
+                .err()
+                .is_some_and(|card| card.said().contains("Text file busy"));
+            if !busy || Instant::now() > deadline {
+                return outcome;
+            }
+        }
+    }
 
     /// A stand-in `bwrap` on disk: the machine a test hands the proof instead of
     /// this one's own, so every refusal is provable where the real bwrap works.
@@ -391,7 +413,7 @@ mod tests {
         let machine = Machine::working();
         let ground = Ground::new();
 
-        let proof = prove_with(
+        let proof = proved(
             &machine.bwrap,
             &ground.boundary(Enforcement::Bubblewrap),
             &ground.temp,
@@ -417,7 +439,7 @@ mod tests {
         let workspace = ground.workspace.display().to_string();
         let temp = ground.temp.display().to_string();
 
-        prove_with(
+        proved(
             &machine.bwrap,
             &ground.boundary(Enforcement::Bubblewrap),
             &ground.temp,
@@ -463,7 +485,7 @@ mod tests {
         let ground = Ground::new();
         let absent = ground.workspace.join("bin").join("bwrap");
 
-        let card = prove_with(
+        let card = proved(
             &absent,
             &ground.boundary(Enforcement::Bubblewrap),
             &ground.temp,
@@ -482,7 +504,7 @@ mod tests {
         let machine = Machine::broken();
         let ground = Ground::new();
 
-        let card = prove_with(
+        let card = proved(
             &machine.bwrap,
             &ground.boundary(Enforcement::Bubblewrap),
             &ground.temp,
@@ -501,7 +523,7 @@ mod tests {
         let machine = Machine::restricted();
         let ground = Ground::new();
 
-        let card = prove_with(
+        let card = proved(
             &machine.bwrap,
             &ground.boundary(Enforcement::Bubblewrap),
             &ground.temp,
@@ -521,7 +543,7 @@ mod tests {
         let machine = Machine::restricted();
         let ground = Ground::new();
 
-        let card = prove_with(
+        let card = proved(
             &machine.bwrap,
             &ground.boundary(Enforcement::Bubblewrap),
             &ground.temp,
@@ -545,7 +567,7 @@ mod tests {
         let machine = Machine::new("echo 'bubblewrap 0.12.0 (stand-in)'\nexit 0", "exit 7");
         let ground = Ground::new();
 
-        let card = prove_with(
+        let card = proved(
             &machine.bwrap,
             &ground.boundary(Enforcement::Bubblewrap),
             &ground.temp,
@@ -563,7 +585,7 @@ mod tests {
         // would hand back a card instead of a pass.
         let machine = Machine::restricted();
 
-        let proof = prove_with(
+        let proof = proved(
             &machine.bwrap,
             &ground.boundary(Enforcement::Unsafe),
             &ground.temp,
