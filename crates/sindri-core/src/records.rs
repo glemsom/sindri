@@ -37,7 +37,7 @@ use crate::policy::{Boundary, Enforcement, PolicyRecord};
 use crate::provider::Route;
 use crate::provider::Usage as Ask;
 use crate::redact::{Redacted, SecretSet};
-use crate::run::{Acted, Call, Limits, State};
+use crate::run::{Acted, Call, Exit, Limits, State};
 use crate::session::{Session, SessionError};
 use crate::wire::Wire;
 
@@ -94,6 +94,11 @@ pub enum Entry {
         bytes: u64,
         /// How long it held the run's clock.
         elapsed_ms: u64,
+        /// How the call ended, which is what its row says — and nothing at all on a
+        /// line a build wrote before the verdict was a fact, which still reads
+        /// (ADR-0007) and is left out of the file rather than written as `null`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        exit: Option<Exit>,
     },
     /// The turn reasoned before it answered: what the model said to itself, settled
     /// as the one fact it is.
@@ -340,8 +345,8 @@ impl Record {
         })
     }
 
-    /// `call` came back with `acted`: what the model is told, and what the run
-    /// paid for it.
+    /// `call` came back with `acted`: what the model is told, what the run paid for
+    /// it, and how it ended.
     pub fn resulted(&mut self, turn: u32, call: &Call, acted: &Acted) -> Result<(), RecordError> {
         self.append(Entry::Result {
             turn,
@@ -349,6 +354,7 @@ impl Record {
             text: self.secrets.redact(acted.text.clone()),
             bytes: acted.bytes,
             elapsed_ms: millis(acted.elapsed),
+            exit: Some(acted.exit),
         })
     }
 

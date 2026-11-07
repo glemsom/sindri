@@ -30,6 +30,10 @@ _Avoid_: Exit reason, status, outcome
 The text a run produces for stdout — the only thing on stdout in batch mode.
 _Avoid_: Response, output, result
 
+**Exit**:
+How one call ended, from a closed set: the code a command exited with, the per-call timeout that killed it, the user's word that stopped it, or a signal that left no code to report. A fact of the result entry, and what a tool row says.
+_Avoid_: Verdict (that one is the wire's), status, outcome, result
+
 ## Confinement
 
 **Enforcement**:

@@ -15,7 +15,7 @@ use sindri_core::provider::{Deltas, Failure};
 use sindri_core::records::Usage;
 use sindri_core::redact::{Redacted, SecretSet};
 use sindri_core::run::{
-    Acted, Call, Executor, Limits, Loaded, Reply, Request, Responder, Run, State, Stop,
+    Acted, Call, Executor, Exit, Limits, Loaded, Reply, Request, Responder, Run, State, Stop,
 };
 
 /// A model that says one thing and asks for nothing.
@@ -65,6 +65,7 @@ impl Executor for Costs {
             text: String::from("exit 0\n"),
             bytes: 64,
             elapsed: Duration::from_millis(5),
+            exit: Exit::Code(0),
         })
     }
 }

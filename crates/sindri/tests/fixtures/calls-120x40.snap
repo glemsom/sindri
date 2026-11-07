@@ -1,0 +1,45 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+calls at 120x40
+00 |turn 1 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+01 |✓ exit 0  bash  64 bytes · 18 ms                                                                                        | ok:1 dim:31 plain:88
+02 |  src/rows.rs: the check or the cross in `ok`/`err`                                                                     | plain:120
+03 |  The row is drawn from the verdict the record holds.                                                                   | plain:120
+04 |turn 2 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+05 |✗ exit 1  bash  96 bytes · 211 ms                                                                                       | err:1 dim:32 plain:87
+06 |  warning: unused import: `std::fmt`                                                                                    | plain:120
+07 |  --> src/rows.rs:12:5                                                                                                  | plain:120
+08 |  An unused import, and nowhere else to put it.                                                                         | plain:120
+09 |turn 3 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+10 |✗ timed out  bash  0 bytes · 120000 ms                                                                                  | err:1 dim:37 plain:82
+11 |  The call ran past its minute and was killed.                                                                          | plain:120
+12 |turn 4 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+13 |✗ cancelled  bash  0 bytes · 3400 ms                                                                                    | err:1 dim:35 plain:84
+14 |  The run stopped on the user's word, and the draft kept.                                                               | plain:120
+15 |turn 5 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+16 |… bash                                                                                                                  | dim:6 plain:114
+17 |  {"command": "make check STAGES=test"}                                                                                 | plain:120
+18 |                                                                                                                        | plain:120
+19 |                                                                                                                        | plain:120
+20 |                                                                                                                        | plain:120
+21 |                                                                                                                        | plain:120
+22 |                                                                                                                        | plain:120
+23 |                                                                                                                        | plain:120
+24 |                                                                                                                        | plain:120
+25 |                                                                                                                        | plain:120
+26 |                                                                                                                        | plain:120
+27 |                                                                                                                        | plain:120
+28 |                                                                                                                        | plain:120
+29 |                                                                                                                        | plain:120
+30 |                                                                                                                        | plain:120
+31 |                                                                                                                        | plain:120
+32 |                                                                                                                        | plain:120
+33 |                                                                                                                        | plain:120
+34 |                                                                                                                        | plain:120
+35 |                                                                                                                        | plain:120
+36 |                                                                                                                        | plain:120
+37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+38 |                                                                                                                        | plain:120
+39 |Enter send · ? keys                                                                                                     | muted:10 dim:3 muted:6 plain:101

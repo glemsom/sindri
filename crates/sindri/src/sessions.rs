@@ -23,6 +23,7 @@ use sindri_core::records::{
     Entry, Recorded, Status, Usage, choose, document_path, read_lines, read_sessions, read_status,
     read_transcript, status_path, transcript_path,
 };
+use sindri_core::run::Exit;
 use sindri_core::session;
 
 use crate::cli::SessionsAction;
@@ -208,8 +209,12 @@ fn entry_lines(entry: &Entry) -> Vec<String> {
             text,
             bytes,
             elapsed_ms,
+            exit,
         } => under(
-            format!("  result {name} in turn {turn}, {bytes} bytes in {elapsed_ms} ms"),
+            format!(
+                "  result {name} in turn {turn}, {bytes} bytes in {elapsed_ms} ms, {}",
+                verdict(*exit)
+            ),
             &text.to_string(),
         ),
         Entry::Reasoning { turn, text } => {
@@ -218,6 +223,16 @@ fn entry_lines(entry: &Entry) -> Vec<String> {
         Entry::Assistant { turn, text } => {
             under(format!("  assistant in turn {turn}"), &text.to_string())
         }
+    }
+}
+
+/// How a result ended, as `sessions show` prints it: the verdict the record holds, in
+/// the same words the row and the model's line use, and a plain `no verdict recorded`
+/// for a line an older build wrote before there was one to record.
+fn verdict(exit: Option<Exit>) -> String {
+    match exit {
+        Some(exit) => exit.word(),
+        None => String::from("no verdict recorded"),
     }
 }
 

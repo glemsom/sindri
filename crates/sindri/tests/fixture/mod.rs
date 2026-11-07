@@ -41,6 +41,7 @@ use sindri::view::View;
 use sindri_core::provider::Deltas;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
+use sindri_core::run::Exit;
 
 /// Where the accepted pictures live: beside the tests that compare them, one file
 /// per frame and size (ADR-0012).
@@ -89,6 +90,9 @@ fn named(name: &str) -> View {
         // A run in the middle of a turn: the same history, a sixth turn opened, and that
         // turn's answer and reasoning still landing (ticket #38).
         "streaming" => streaming(),
+        // Every verdict a call row can wear, one call each: the picture of §12's four
+        // states, approved in the commit that decides them (#40).
+        "calls" => View::of(calls(), Scroll::Tail),
         // The composer's floor and its ceiling, and the window it scrolls to when the
         // draft outgrows the ceiling: the growth of §12 as three pictures rather than
         // as an opinion (ticket #41).
@@ -125,29 +129,13 @@ fn named(name: &str) -> View {
 /// The facts are the ones this ticket's own module header states, because a fixture is
 /// a picture of a real frame rather than a grid of sample text.
 fn transcript() -> Vec<Entry> {
-    let secrets = SecretSet::default();
-    let call = |turn, name: &str, arguments: &str| Entry::Call {
-        turn,
-        name: String::from(name),
-        arguments: secrets.redact(arguments),
-    };
-    let result = |turn, name: &str, text: &str, bytes, elapsed_ms| Entry::Result {
-        turn,
-        name: String::from(name),
-        text: secrets.redact(text),
-        bytes,
-        elapsed_ms,
-    };
-    let answer = |turn, text: &str| Entry::Assistant {
-        turn,
-        text: secrets.redact(text),
-    };
     vec![
         Entry::Turn { turn: 1 },
         call(1, "bash", r#"{"command": "rg -n 'fence' src"}"#),
         result(
             1,
             "bash",
+            Exit::Code(0),
             "src/rows.rs: the glyph a turn opens with\nsrc/rows.rs: a word longer than a row is broken",
             412,
             23,
@@ -167,6 +155,7 @@ fn transcript() -> Vec<Entry> {
         result(
             2,
             "bash",
+            Exit::Code(0),
             "running 4 tests\ntest result: ok. 4 passed; 0 failed",
             208,
             97,
@@ -180,7 +169,7 @@ fn transcript() -> Vec<Entry> {
         ),
         Entry::Turn { turn: 3 },
         call(3, "bash", r#"{"command": "make check STAGES=rows"}"#),
-        result(3, "bash", "check: test ... ok", 64, 41),
+        result(3, "bash", Exit::Code(0), "check: test ... ok", 64, 41),
         answer(
             3,
             "The window is measured from the tail backwards, so following the newest row \
@@ -194,6 +183,7 @@ fn transcript() -> Vec<Entry> {
         result(
             4,
             "bash",
+            Exit::Code(0),
             "check: fmt ... ok\ncheck: clippy ... ok\ncheck: test ... ok\ncheck: frames ... ok",
             96,
             118,
@@ -211,6 +201,7 @@ fn transcript() -> Vec<Entry> {
         result(
             5,
             "bash",
+            Exit::Code(0),
             "crates/sindri/src/rows.rs | 412 +++++++++++++\ncrates/sindri/tests/rows.rs | 198 +++++++++",
             128,
             9,
@@ -221,6 +212,22 @@ fn transcript() -> Vec<Entry> {
              so the same run is drawn the same way by the TUI, by a reader of the \
              transcript and by whatever front end comes next, and a streaming tick that \
              changes one entry re-lays that entry alone.",
+        ),
+        Entry::Turn { turn: 6 },
+        call(6, "bash", r#"{"command": "make check STAGES=frames"}"#),
+        result(
+            6,
+            "bash",
+            Exit::Code(0),
+            "check: frame calls ... ok\ncheck: frame transcript ... ok",
+            104,
+            31,
+        ),
+        answer(
+            6,
+            "A row says the exit code and not the command, because the verdict is a fact \
+             the record holds and the command is a fact the row above it holds: a call \
+             that settled is one line, and the line is what happened to it.",
         ),
     ]
 }
@@ -257,6 +264,81 @@ fn streaming() -> View {
         view.text(fragment);
     }
     view
+}
+
+/// The entries a verdict frame is painted from: four calls settled four ways — the
+/// four states §12 gives a tool row — so a reader of the fixture sees what `✓ exit 0`,
+/// `✗ exit N`, `✗ timed out` and `✗ cancelled` look like before meeting them in a run.
+///
+/// The two that printed nothing printed nothing because there was nothing to print: a
+/// command the timeout killed and one the user's word stopped never reached their output.
+fn calls() -> Vec<Entry> {
+    vec![
+        Entry::Turn { turn: 1 },
+        call(1, "bash", r#"{"command": "rg -n 'verdict' src"}"#),
+        result(
+            1,
+            "bash",
+            Exit::Code(0),
+            "src/rows.rs: the check or the cross in `ok`/`err`",
+            64,
+            18,
+        ),
+        answer(1, "The row is drawn from the verdict the record holds."),
+        Entry::Turn { turn: 2 },
+        call(2, "bash", r#"{"command": "cargo clippy --all-targets"}"#),
+        result(
+            2,
+            "bash",
+            Exit::Code(1),
+            "warning: unused import: `std::fmt`\n  --> src/rows.rs:12:5",
+            96,
+            211,
+        ),
+        answer(2, "An unused import, and nowhere else to put it."),
+        Entry::Turn { turn: 3 },
+        call(3, "bash", r#"{"command": "cargo test --workspace"}"#),
+        result(3, "bash", Exit::TimedOut, "", 0, 120_000),
+        answer(3, "The call ran past its minute and was killed."),
+        Entry::Turn { turn: 4 },
+        call(4, "bash", r#"{"command": "make check STAGES=frames"}"#),
+        result(4, "bash", Exit::Cancelled, "", 0, 3_400),
+        answer(4, "The run stopped on the user's word, and the draft kept."),
+        // A run in progress ends on a call nobody has answered yet: the row names the
+        // call and claims nothing, which is what a cancelled call would stay as if the
+        // verdict never reached it.
+        Entry::Turn { turn: 5 },
+        call(5, "bash", r#"{"command": "make check STAGES=test"}"#),
+    ]
+}
+
+/// A call as the run writes one: the tool the model named and the arguments it wrote.
+fn call(turn: u32, name: &str, arguments: &str) -> Entry {
+    Entry::Call {
+        turn,
+        name: String::from(name),
+        arguments: SecretSet::default().redact(arguments),
+    }
+}
+
+/// What came back from a call: the verdict that ended it, and what it printed.
+fn result(turn: u32, name: &str, exit: Exit, text: &str, bytes: u64, elapsed_ms: u64) -> Entry {
+    Entry::Result {
+        turn,
+        name: String::from(name),
+        text: SecretSet::default().redact(text),
+        bytes,
+        elapsed_ms,
+        exit: Some(exit),
+    }
+}
+
+/// The turn's answer: what the model said once the calls it asked for were done.
+fn answer(turn: u32, text: &str) -> Entry {
+    Entry::Assistant {
+        turn,
+        text: SecretSet::default().redact(text),
+    }
 }
 
 /// A composer holding `lines`, typed a line at a time: a fixture's draft is built

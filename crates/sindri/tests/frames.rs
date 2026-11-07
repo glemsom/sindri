@@ -21,6 +21,11 @@ fn transcript_120x40_is_a_run_laid_out_at_the_tail() {
 }
 
 #[test]
+fn calls_120x40_is_a_call_settled_four_ways() {
+    fixture::assert_frame("calls", 120, 40);
+}
+
+#[test]
 fn transcript_scrolled_120x40_cuts_the_top_entry_mid_row() {
     fixture::assert_frame("transcript-scrolled", 120, 40);
 }

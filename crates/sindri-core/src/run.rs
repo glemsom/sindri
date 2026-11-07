@@ -34,8 +34,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use serde::Serialize;
 use serde::Serializer;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::bash::{self, Outcome};
@@ -378,16 +378,74 @@ impl Call {
     }
 }
 
+/// How one call ended, from the closed set §12's rows are drawn from: a command
+/// that exited with a code, one the per-call timeout killed, one the user's word
+/// stopped before it ran, and the case `std::process` reports as no code at all, a
+/// command a signal killed.
+///
+/// This is a fact and never a rendering (ADR-0007), which is the whole reason it
+/// exists: the row that says `✗ exit 1` reads this value, so the picture cannot
+/// disagree with what happened by reading a sentence out of the text beside it —
+/// and the sentence the model is told is derived from the same value, so the two
+/// cannot drift apart either.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Exit {
+    /// The command ran and exited with this code.
+    Code(i32),
+    /// A signal killed it, so the platform names no code to report.
+    Signalled,
+    /// The per-call timeout ran out and the command was killed (§4).
+    TimedOut,
+    /// The user's word arrived before the call ran, so it never did (§4).
+    Cancelled,
+}
+
+impl Exit {
+    /// The verdict a command's own [`Outcome`] states: the timeout first, because
+    /// a command the timeout killed has no code that means anything.
+    pub fn of(outcome: &Outcome) -> Exit {
+        if outcome.timed_out {
+            return Exit::TimedOut;
+        }
+        match outcome.code {
+            Some(code) => Exit::Code(code),
+            None => Exit::Signalled,
+        }
+    }
+
+    /// The words a row says it in and the line the model is told, in one table:
+    /// `✓ exit 0` and the text fed back to the model are the same phrasing because
+    /// they are the same fact.
+    pub fn word(self) -> String {
+        match self {
+            Exit::Code(code) => format!("exit {code}"),
+            Exit::Signalled => String::from("killed by a signal"),
+            Exit::TimedOut => String::from("timed out"),
+            Exit::Cancelled => String::from("cancelled"),
+        }
+    }
+
+    /// Whether this is a thing that finished well, which is the one fact the check
+    /// and the cross stand for: an exit code of zero, and nothing else.
+    pub fn is_ok(self) -> bool {
+        self == Exit::Code(0)
+    }
+}
+
 /// What one call did: the text the model is handed back, the output bytes it
-/// cost the run, and how long it held the run's clock.
+/// cost the run, how long it held the run's clock, and how it ended.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Acted {
-    /// What the model is told about this call.
+    /// What the model is told about this call: what it printed, and nothing about how
+    /// it ended — `exit` is that half of the fact.
     pub text: String,
     /// The command output bytes it cost, which is what a budget counts.
     pub bytes: u64,
     /// How long it took, which is what the other budget counts.
     pub elapsed: Duration,
+    /// How the call ended, which is what its row says and what a budget cannot see.
+    pub exit: Exit,
 }
 
 /// What one request answered: the text, and the calls it asked for.
@@ -841,6 +899,7 @@ impl Shell {
             text: rendered(&outcome),
             bytes: u64::try_from(outcome.stdout.len() + outcome.stderr.len()).unwrap_or(u64::MAX),
             elapsed: started.elapsed(),
+            exit: Exit::of(&outcome),
         })
     }
 
@@ -884,6 +943,9 @@ impl Shell {
             text,
             bytes: 0,
             elapsed: Duration::ZERO,
+            // A load runs no command, so there is no code to report and the call did
+            // what it said: the one verdict a call that never reached a shell has.
+            exit: Exit::Code(0),
         })
     }
 }
@@ -933,19 +995,12 @@ fn command_of(arguments: &str) -> Option<String> {
     Some(command.to_owned())
 }
 
-/// What the model is told about one command: how it ended, and the output the
-/// run paid for.
+/// What one command printed: its output and nothing else. How it ended is not
+/// written here, because it is not a line of the output — [`Exit`] carries it, the
+/// record keeps it as its own field, and whoever hands the result back to the model
+/// writes the one line from that fact rather than reading it back out of prose.
 fn rendered(outcome: &Outcome) -> String {
-    let status = if outcome.timed_out {
-        String::from("timed out")
-    } else {
-        match outcome.code {
-            Some(code) => format!("exit {code}"),
-            None => String::from("killed by a signal"),
-        }
-    };
-    let mut text = format!("{status}\n");
-    text.push_str(&outcome.stdout);
+    let mut text = outcome.stdout.clone();
     text.push_str(&outcome.stderr);
     text
 }
