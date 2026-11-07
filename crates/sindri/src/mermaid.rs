@@ -20,6 +20,7 @@
 //! that overran is left to finish by itself, because the one thing worse than a wasted
 //! thread is a frame that waited for it.
 
+use std::sync::OnceLock;
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -91,9 +92,28 @@ pub struct Diagram {
     picture: Svg,
 }
 
+/// The renderer's own start-up, paid once before any fence is put on a clock.
+///
+/// [`BOUND`] is a bound on a stall the reader feels and not a measure of any diagram, but the
+/// first render in a process pays for the renderer's initialisation as well as for the drawing
+/// — and on a loaded machine that alone can outlast half a second, refusing a fence a warm
+/// renderer draws in a few milliseconds. So the first caller draws a fence nobody asked for
+/// and throws it away, untimed, and every fence after it is timed against the drawing alone.
+fn warmed() {
+    static WARM: OnceLock<()> = OnceLock::new();
+    WARM.get_or_init(|| {
+        let _ = mermaid_rs_renderer::render(WARM_UP);
+    });
+}
+
+/// The fence the renderer is woken with: two nodes and an edge, which is nothing to draw and
+/// everything the renderer needs to have drawn once.
+const WARM_UP: &str = "flowchart TD\n  A-->B";
+
 impl Diagram {
     /// Draws `source` within [`BOUND`].
     pub fn of(source: &str) -> Result<Diagram, Refusal> {
+        warmed();
         let fence = source.to_owned();
         let drawn = within(BOUND, move || {
             // The renderer's own error is the reason a caption prints, kept as words rather

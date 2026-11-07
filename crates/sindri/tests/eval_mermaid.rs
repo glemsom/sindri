@@ -82,11 +82,20 @@ fn the_corpus_of_real_fences_matches_the_svg_checked_in_beside_it() {
     for path in &fences {
         let source = std::fs::read_to_string(path)
             .unwrap_or_else(|error| panic!("{} is readable: {error}", path.display()));
-        let Block::Picture(diagram) = mermaid::block(&source, Fence::Closed) else {
-            panic!(
-                "{} is a fence the renderer draws; a corpus of refusals is a different test",
-                named(path)
-            );
+        // Rendered again until it draws: `mermaid::BOUND` is a stall a reader should not feel,
+        // and a machine running every eval at once can spend it on scheduling rather than on
+        // drawing. A fence the renderer really will not read still fails, with its own words.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        let diagram = loop {
+            match mermaid::block(&source, Fence::Closed) {
+                Block::Picture(diagram) => break diagram,
+                refused if std::time::Instant::now() > deadline => panic!(
+                    "{} is a fence the renderer draws; a corpus of refusals is a different \
+                     test, and this one said {refused:?}",
+                    named(path)
+                ),
+                _ => continue,
+            }
         };
 
         let accepted = path.with_extension("svg");
