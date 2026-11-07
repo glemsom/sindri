@@ -230,10 +230,10 @@ impl Svg {
         self.rasterise_at((width, height))
     }
 
-    /// The picture as `width` by `height` pixels on a `cell` the picture was measured
-    /// against, whatever extent it declares of its own: what a picture fitted into a band's
-    /// columns is drawn at, because the footprint the band allowed is smaller than the one
-    /// the SVG declares and the pixels have to follow the band rather than the drawing (§12).
+    /// The picture as `width` by `height` pixels, whatever extent it declares of its own:
+    /// what a picture fitted into a band's columns is drawn at, because the footprint the band
+    /// allowed is smaller than the one the SVG declares and the pixels have to follow the band
+    /// rather than the drawing (§12).
     pub fn rasterise_at(&self, (width, height): (u32, u32)) -> Result<image::RgbaImage, Refusal> {
         let mut pixmap = tiny_skia::Pixmap::new(width, height).ok_or(Refusal::Unrenderable)?;
 
