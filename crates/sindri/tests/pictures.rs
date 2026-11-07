@@ -3,10 +3,13 @@
 //! that leaves the workspace — or is not there at all — is refused with the reason the
 //! caption prints in its place (§12, #55).
 //!
-//! Nothing here has a terminal. A placement is asserted as the bytes it puts in a cell of a
-//! buffer ratatui's headless backend hands back, and a cost — a raster made, a picture sent —
-//! is read off the counter the placement keeps, so the three rules ADR-0008 laid down are
-//! numbers a test can hold rather than a reading of the code.
+//! Nothing here has a terminal. A placement is asserted as the glyphs it puts in the cells of a
+//! buffer ratatui's headless backend hands back — the placeholders of a picture the terminal
+//! holds, and the protocol's transmission header in the cell that sends one — and a cost, a
+//! raster made, is read off the counter the placement keeps, so the three rules ADR-0008 laid
+//! down are numbers a test can hold rather than a reading of the code. What the header count is
+//! not is a wire: no byte leaves this process, and the count says only that no cell of a frame
+//! carries a transmission.
 
 use std::path::{Path, PathBuf};
 
@@ -383,9 +386,9 @@ fn painted_at(view: &mut View, size: (u16, u16)) -> Buffer {
 /// screen that says a picture is placed there rather than written about.
 const PLACEHOLDER: char = '\u{10EEEE}';
 
-/// The bytes that carry a picture down the wire: the first chunk of the protocol's
-/// transmission, which is what a terminal is told once and never again for one picture
-/// (ADR-0008).
+/// The first chunk of the protocol's transmission, which is what a terminal is told once and
+/// never again for one picture (ADR-0008): the glyphs a cell holds when the placement is the
+/// one that sends the picture rather than one that points at what the terminal already holds.
 const TRANSMIT: &str = "_Gq=2,";
 
 /// The rows of `buffer` a picture is drawn over, top to bottom.
@@ -402,9 +405,15 @@ fn pictured_rows(buffer: &Buffer) -> Vec<u16> {
         .collect()
 }
 
-/// How many cells of `buffer` hold the bytes that transmit a picture: the count a scroll and
-/// a repaint must leave where it was.
-fn transmissions(buffer: &Buffer) -> usize {
+/// The transmission headers `buffer` carries, counted as the cells whose glyphs hold the
+/// protocol's first chunk: the bytes a terminal is sent when this buffer is written out, and
+/// the count a scroll and a repaint must leave where it was (ADR-0008).
+///
+/// It is a reading of the painted buffer and not of a wire — nothing here has a terminal to
+/// write one to. What it holds is that no cell of the frame carries a transmission, which is
+/// the whole of what a frame can do about a picture the terminal already holds; it does not
+/// count the bytes of one, and it does not say what a terminal does with them.
+fn transmission_headers(buffer: &Buffer) -> usize {
     let area = buffer.area;
     let mut count = 0;
     for y in area.y..area.bottom() {
@@ -420,8 +429,8 @@ fn transmissions(buffer: &Buffer) -> usize {
 }
 
 /// §12's picture, drawn: a source inside the workspace reaches the terminal as the Kitty
-/// protocol's placeholders over the rows its block reserved, and its bytes go down the wire on
-/// the paint that first shows it.
+/// protocol's placeholders over the rows its block reserved, and the paint that first shows it
+/// is the one that carries its transmission header.
 #[test]
 fn a_picture_inside_the_workspace_is_placed_over_the_rows_it_takes() {
     let (_root, workspace) = workspace(400, 200);
@@ -442,17 +451,17 @@ fn a_picture_inside_the_workspace_is_placed_over_the_rows_it_takes() {
         "the picture is made once for the size it was measured into"
     );
     assert_eq!(
-        transmissions(&painted),
+        transmission_headers(&painted),
         1,
-        "and its bytes are on the screen once, in the first cell of its block"
+        "and the header that sends it is on the screen once, in the first cell of its block"
     );
 }
 
 /// ADR-0008's second rule as a cost: a picture already placed is never transmitted again. A
-/// repaint of the same frame carries the placeholders and none of the bytes, because the
-/// terminal still holds what the first paint sent it.
+/// repaint of the same frame carries the placeholders and no transmission header, because the
+/// protocol's own flag says the terminal holds what the first paint sent it.
 #[test]
-fn painting_a_picture_again_sends_no_bytes_down_the_wire() {
+fn a_picture_painted_a_second_time_carries_no_transmission_header() {
     let (_root, workspace) = workspace(400, 200);
     let mut view = frame(&workspace, "![a purple field](shot.png)", true);
 
@@ -460,19 +469,20 @@ fn painting_a_picture_again_sends_no_bytes_down_the_wire() {
     let again = painted_at(&mut view, SCREEN);
 
     assert_eq!(
-        transmissions(&first),
+        transmission_headers(&first),
         1,
         "the first paint is what tells the terminal about the picture"
     );
     assert_eq!(
-        transmissions(&again),
+        transmission_headers(&again),
         0,
         "and the second paint writes the placeholders of a picture the terminal already holds"
     );
     assert_eq!(
         pictured_rows(&again).len(),
         10,
-        "the picture is where it was, ten rows of placeholders: a repaint moves neither its          rows nor its bytes"
+        "the picture is where it was, ten rows of placeholders: a repaint moves neither its \
+         rows nor its transmission"
     );
     assert_eq!(
         view.pictures().rasterises("shot.png"),
@@ -482,9 +492,9 @@ fn painting_a_picture_again_sends_no_bytes_down_the_wire() {
 }
 
 /// The same rule where a scroll puts it: a placement moved down the band is the picture the
-/// terminal holds, written again at another row — no bytes, no raster.
+/// terminal holds, written again at another row — no header, no raster.
 #[test]
-fn a_picture_placed_again_after_a_scroll_sends_nothing_down_the_wire() {
+fn a_picture_placed_again_after_a_scroll_carries_no_transmission_header() {
     let (_root, workspace) = workspace(400, 200);
     let measured = picture::measure("shot.png", 60, &surface(&workspace))
         .expect("a picture inside the workspace");
@@ -502,12 +512,12 @@ fn a_picture_placed_again_after_a_scroll_sends_nothing_down_the_wire() {
     pictures.place(&measured, cell(), Rect { y: 8, ..block }, &mut scrolled);
 
     assert_eq!(
-        transmissions(&first),
+        transmission_headers(&first),
         1,
         "the first placement sends the picture"
     );
     assert_eq!(
-        transmissions(&scrolled),
+        transmission_headers(&scrolled),
         0,
         "and a scroll is a placement of what was sent, not a second sending"
     );
@@ -578,6 +588,66 @@ fn a_resize_rasterises_only_the_picture_the_band_goes_on_to_show() {
     );
 }
 
+/// §12's third rule as the cost it is: the cache holds the pictures the band shows and drops
+/// the ones it has left, so dragging a width across a range does not keep a full raster per
+/// size for ever. The size the band no longer shows is gone — going back to it makes the
+/// picture again — while the size it does show is still held, so a repaint of it transmits
+/// nothing and #55's "a scroll never re-transmits" survives the bound.
+#[test]
+fn a_resize_keeps_the_picture_the_band_shows_and_drops_the_size_it_has_left() {
+    let (_root, workspace) = workspace(800, 200);
+    let mut view = frame(&workspace, "![a purple field](shot.png)", true);
+
+    let wide = painted_at(&mut view, SCREEN);
+    assert_eq!(
+        transmission_headers(&wide),
+        1,
+        "the picture is sent once at the size the wide band fits it into"
+    );
+    assert_eq!(
+        view.pictures().rasterises("shot.png"),
+        1,
+        "and made once for that size"
+    );
+
+    let narrow = painted_at(&mut view, (60, SCREEN.1));
+    assert_eq!(
+        view.pictures().rasterises("shot.png"),
+        2,
+        "the narrower band fits the picture into fewer columns, so it is another picture"
+    );
+    assert_eq!(
+        transmission_headers(&narrow),
+        1,
+        "and the terminal is told about that size once"
+    );
+
+    let again = painted_at(&mut view, (60, SCREEN.1));
+    assert_eq!(
+        transmission_headers(&again),
+        0,
+        "the size the band shows is still held: a repaint of it transmits nothing"
+    );
+    assert_eq!(
+        view.pictures().rasterises("shot.png"),
+        2,
+        "and makes no second raster of it"
+    );
+
+    let back = painted_at(&mut view, SCREEN);
+    assert_eq!(
+        view.pictures().rasterises("shot.png"),
+        3,
+        "the size the band has left is held no longer, so going back to it makes the picture \
+         again"
+    );
+    assert_eq!(
+        transmission_headers(&back),
+        1,
+        "and sends it again, which is the price of a cache that is bounded"
+    );
+}
+
 /// §12's copy rule: a picture's block copies as its words and never as the bytes it is drawn
 /// from. `Ctrl-Y` hands out the rows the block was laid out as, so the cells a reader marked
 /// give `a purple field` and no escape sequence, no placeholder and no base64.
@@ -612,7 +682,7 @@ fn a_picture_block_copied_out_of_the_band_is_its_words_and_never_its_bytes() {
 
 /// §12's absence over refusal: a terminal that speaks no Kitty is given the words, whole, and
 /// no row reserved for a picture it cannot draw. The frame is the frame a reader without
-/// pictures would have had — nothing truncated, nothing half-drawn, no bytes.
+/// pictures would have had — nothing truncated, nothing half-drawn, no transmission header.
 #[test]
 fn a_terminal_that_speaks_no_kitty_is_given_the_words_and_an_uncorrupted_frame() {
     let (_root, workspace) = workspace(400, 200);
@@ -638,7 +708,7 @@ fn a_terminal_that_speaks_no_kitty_is_given_the_words_and_an_uncorrupted_frame()
         "the picture's words are on the screen, and are the only thing it is said as: {words:?}"
     );
     assert_eq!(
-        transmissions(&painted),
+        transmission_headers(&painted),
         0,
         "and no byte of a picture protocol is in a frame that places none"
     );
@@ -770,7 +840,7 @@ fn a_diagram_and_an_image_in_one_answer_are_placed_each_over_its_own_block() {
         pictured_rows(&painted)
     );
     assert_eq!(
-        transmissions(&painted),
+        transmission_headers(&painted),
         2,
         "and each was transmitted once, from its own first cell"
     );

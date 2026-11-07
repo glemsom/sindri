@@ -19,7 +19,8 @@
 #                     gate, toolchain, sandbox, evals, release
 #     SINDRI_BLESS=1 make evals
 #                     rewrite the evals' goldens from what the tree does now, which
-#                     is the only way one moves (ADR 0012's rule for a frame)
+#                     is the only way one moves (ADR 0012's rule for a frame) — the
+#                     `doctor` family has no golden and reads the switch as nothing
 #     make frame F=boot-120x40
 #                     print one golden frame as the code draws it now, to eyeball it
 #     make frame-update F=boot-120x40
@@ -27,13 +28,9 @@
 #
 # A stage line reads `check: <stage> ... ok` or `... FAIL`, printed after the
 # stage's own output so the verdict is the last thing the eye lands on. Nothing
-# is printed for a stage that did not run. Two kinds of stage end without an `ok`,
-# and neither ever prints one:
+# is printed for a stage that did not run. One kind of stage ends without an `ok`,
+# and never prints one:
 #
-#   ... MISSING (note)  work that has not landed yet. No stage says it today, and
-#                       the word stays for the next gap: `make check` exits 0 with
-#                       the gap printed on its last lines where a reader cannot
-#                       miss it, and never an `ok` over work that is not there.
 #   ... SKIPPED         a stage the machine would not let run — the sandbox tier
 #                       when the kernel forbids unprivileged user namespaces,
 #                       which is the case ticket #7 exists for; the release path
@@ -71,19 +68,10 @@ define stage
 @if $(2); then printf 'check: $(1) ... ok\n'; else printf 'check: $(1) ... FAIL\n'; exit 1; fi
 endef
 
-# missing: a stage whose machinery does not exist yet. It says so plainly and
-# prints no `ok`, so the gap is visible rather than counted as green. `make
-# check` still exits 0 on a tree whose real stages pass, and landing one of these
-# stages is a one-line change — swap `$(call missing,<name>,<note>)` for
-# `$(call stage,<name>,<command>)` — and nothing else in this file moves.
-define missing
-@printf 'check: $(1) ... MISSING ($(2))\n'
-endef
-
-# skippable: a stage that can honestly say the machine would not let it run.
-# Unlike `missing` it is no placeholder — the machinery exists and runs wherever
-# the machine allows it — and unlike `stage` it has three verdicts, relayed from
-# the command's exit code so that two of them can never blur into one:
+# skippable: a stage that can honestly say the machine would not let it run. It is
+# no placeholder — the machinery exists and runs wherever the machine allows it — and
+# unlike `stage` it has three verdicts, relayed from the command's exit code so that
+# two of them can never blur into one:
 #
 #   0   ... ok        it ran and passed
 #   77  ... SKIPPED   it did not run; the reason is the line above, and the run
@@ -201,18 +189,23 @@ sandbox:
 sandbox-tier:
 	$(call skippable,sandbox,bash scripts/sandbox-probe.sh)
 
-# The evals of spec §16 and §2, landed by ticket #59: four families of artefact
-# held byte for byte to the golden checked in beside the test — the bytes each wire
-# sends, the description `doctor` prints against the one a run registers, every
-# field of every `Entry` against a secret planted in it, and the mermaid corpus
-# against the SVG it drew — and every one of them fails naming the line or tag that
-# moved. None reaches the network and none needs a terminal.
+# The evals of spec §16 and §2, landed by ticket #59: four families of artefact held
+# to a fact rather than to a sentence — the bytes each wire sends, every field of
+# every `Entry` against a secret planted in it, and the mermaid corpus against the
+# SVG it drew are held byte for byte to the golden checked in beside the test, and
+# `doctor`'s printed description is held to the bytes the tool set a run registers
+# renders. That fourth family is the one with no golden: both sides are computed,
+# the binary's by running it and the expected bytes by asking `ToolSet`, so there is
+# nothing to check in and nothing a blessing could move. Every one of them fails
+# naming the line or tag that moved, none reaches the network, and none needs a
+# terminal.
 #
 # This is a stage of its own and not a part of `test` because these assert on
 # artefacts and not on behaviour: each test is ignored, so `make test` compiles the
 # evals and judges none of them, and a family that drifts is reported by the stage
 # that owns it rather than by the one before it. `SINDRI_BLESS=1 make evals` moves
-# a golden deliberately, which is the only way one moves.
+# the three goldens deliberately, which is the only way one moves; the `doctor`
+# family has no golden and reads the switch as nothing.
 #
 # One `cargo test` per family, with `&&` between them so the first family that
 # fails stops the rest: each prints its own `check: eval ... ok` line under this
