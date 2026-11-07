@@ -1,0 +1,10 @@
+sequenceDiagram
+  participant U as User
+  participant T as TUI
+  participant C as Core
+  U->>T: type a prompt
+  T->>C: one run
+  C-->>T: a delta
+  T-->>U: rows grow
+  U->>T: Ctrl-C
+  C-->>T: stopped
