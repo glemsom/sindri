@@ -239,7 +239,8 @@ impl Svg {
 
         let size = self.tree.size();
         // One scale for both axes: the footprint rounds each axis up to a whole cell, and
-        // scaling them apart would tilt every diagram.
+        // scaling them apart would tilt every diagram. What the round-up leaves over is the
+        // margin, and the translate is what splits it.
         let scale = (width as f32 / size.width()).min(height as f32 / size.height());
         let transform = tiny_skia::Transform::from_scale(scale, scale).post_translate(
             (width as f32 - size.width() * scale) / 2.0,

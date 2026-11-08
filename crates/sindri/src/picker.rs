@@ -50,8 +50,6 @@ impl Picker {
     pub fn walk(root: &Path) -> Picker {
         let mut files: Vec<String> = Vec::new();
         let mut walk = ignore::WalkBuilder::new(root);
-        // Two of the crate's defaults, turned around, and neither of them a rule about
-        // what a reader may read.
         walk.hidden(false).require_git(false);
         for entry in walk.build().flatten() {
             let path = entry.path();

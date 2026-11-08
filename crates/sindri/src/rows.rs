@@ -281,8 +281,8 @@ pub(crate) fn thought(text: &str, cols: u16) -> Vec<Row> {
 /// so the row the marker heads loses the columns the gutter held and no more.
 pub(crate) fn answer_on(text: &str, cols: u16, head: Option<&Head>, surface: &Surface) -> Vec<Row> {
     let (gutter, room) = margin(INDENT, cols);
-    // The marker's own width and its blank column, less the gutter it stands in the place
-    // of, are the columns it takes out of the first row's words.
+    // The blank column that keeps the marker from running into the prose is the marker's
+    // too; the gutter it stands in the place of is not.
     let reserve = match head {
         Some(head) => head
             .width()

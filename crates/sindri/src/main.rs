@@ -14,6 +14,7 @@ mod batch; // is the Unix filter: a prompt in, the answer and one newline out
 mod cli; // the command line as clap sees it
 mod doctor; // the honest window: it proves the sandbox
 mod launch; // one launch's run, assembled the same way whichever front end asked for it
+// Nothing in this binary calls the opener yet: the tool-call rows that will are not built.
 #[allow(dead_code)]
 mod open; // the host spawns the opener, because the sandbox has no display
 mod osc; // sequences that carry words out of the terminal
@@ -51,8 +52,8 @@ fn main() -> ExitCode {
         Err(error) => return refuse(&error.to_string(), error.exit_code()),
     };
 
-    // The row goes to stderr, because stdout is the answer's alone, and a batch run that
-    // is already configured keeps it for `-v`, where the reader sees nothing else.
+    // The row goes to stderr, because stdout is the answer's alone: a filter's stderr is
+    // the only window a person has on a run that went wrong.
     if asked.is_none() || !first_run.is_ready() || cli.is_verbose() {
         eprintln!("{}", first_run.api_key_row());
     }

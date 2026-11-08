@@ -321,7 +321,7 @@ pub fn served(config: &Config) -> Option<Listing> {
     let mut client = Client::http(headers(config), String::new(), config.secrets());
     if wire == Wire::Copilot {
         // A Copilot session is signed in to rather than handed a key. A store that will not
-        // open is a wire that cannot be asked, so it is left out rather than waited on.
+        // open is left out, so the run asks unauthenticated and the hint says to sign in.
         if let Ok(store) = Store::resolve(&Process) {
             client = client.store(store);
         }

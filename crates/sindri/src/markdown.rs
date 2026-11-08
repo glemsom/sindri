@@ -500,7 +500,7 @@ impl Room {
         self.code = Some(Code::of(&tag));
         // A mermaid fence is a picture and not code: its source is kept so the drawing can
         // be made when the block closes, and so the reason it could not be drawn prints
-        // under it. The rows are drawn either way and the picture is placed over them.
+        // under it. `close_code` alone places the picture; the rows are drawn either way.
         if tag.split_whitespace().next() == Some("mermaid") {
             let fence = match closed(span) {
                 true => Fence::Closed,

@@ -556,7 +556,6 @@ fn tail(path: &str, columns: usize) -> String {
         return String::new();
     }
     if kept.len() == parts.len() {
-        // Every component fits: the path comes back whole, leading slash and all.
         return path.to_owned();
     }
     format!("…/{}", kept.join("/"))
@@ -982,8 +981,6 @@ mod tests {
             if screen.contains(&more) {
                 continue;
             }
-            // The one rail without a count row is a strip too narrow to hold it beside the
-            // fact that never goes.
             let kept = CONTRACT
                 .iter()
                 .filter(|(label, _)| screen.contains(label))

@@ -199,7 +199,7 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
         return refuse(&format!("cannot write the answer: {error}"), SETUP);
     }
 
-    // The verbose stream ends with the session GUID, whatever the exit code.
+    // The session GUID is the last line of the verbose stream, whatever the run's stop reason.
     if cli.is_verbose() {
         eprintln!("{}", outcome.session());
     }
