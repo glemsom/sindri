@@ -8,7 +8,7 @@ calls at 120x40
 02 |  src/rows.rs: the check or the cross in `ok`/`err`                                     think     ..................high| plain:88 dim:28 muted:4
 03 |  The row is drawn from the verdict the record holds.                                   ────────────────────────────────| plain:88 dim:32
 04 |turn 2 ─────────────────────────────────────────────────────────────────────────────────turns     .................6/250| dim:115 muted:5
-05 |✗ exit 1  bash  96 bytes · 211 ms                                                       ctx       ...................21%| err:1 dim:32 plain:55 dim:29 muted:3
+05 |✗ exit 1  bash  96 bytes · 211 ms                                                       ctx       ........48.2k/200k 24%| err:1 dim:32 plain:55 dim:18 muted:14
 06 |  warning: unused import: `std::fmt`                                                    cache     ...................88%| plain:88 dim:29 muted:3
 07 |  --> src/rows.rs:12:5                                                                  ────────────────────────────────| plain:88 dim:32
 08 |  An unused import, and nowhere else to put it.                                         workspace ..…/.worktrees/46-rail| plain:88 dim:12 muted:20

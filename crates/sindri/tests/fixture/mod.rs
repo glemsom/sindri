@@ -41,7 +41,7 @@ use sindri::ink::Look;
 use sindri::mark;
 use sindri::pictures::Pictures;
 use sindri::pulse::Pulse;
-use sindri::rail::Facts;
+use sindri::rail::{Ctx, Facts};
 use sindri::rows::Scroll;
 use sindri::view::View;
 use sindri_core::config::Config;
@@ -405,7 +405,10 @@ fn facts() -> Facts {
         model: Some(String::from("claude-sonnet")),
         think: Some(String::from("high")),
         turns: Some((6, 250)),
-        ctx: Some(21),
+        ctx: Some(Ctx {
+            size: 48_200,
+            window: Some(200_000),
+        }),
         cache: Some(88),
         workspace: Some(PathBuf::from(
             "/home/glemsom/Documents/git/sindri/.worktrees/46-rail",

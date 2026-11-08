@@ -8,7 +8,7 @@ transcript-scrolled at 120x40
 02 |  on a 40-row terminal pays for what it shows and no more.                              think     ..................high| plain:88 dim:28 muted:4
 03 |turn 4 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
 04 |✓ exit 0  bash  96 bytes · 118 ms                                                       turns     .................6/250| ok:1 dim:32 plain:55 dim:27 muted:5
-05 |  check: fmt ... ok                                                                     ctx       ...................21%| plain:88 dim:29 muted:3
+05 |  check: fmt ... ok                                                                     ctx       ........48.2k/200k 24%| plain:88 dim:18 muted:14
 06 |  check: clippy ... ok                                                                  cache     ...................88%| plain:88 dim:29 muted:3
 07 |  check: test ... ok                                                                    ────────────────────────────────| plain:88 dim:32
 08 |  check: frames ... ok                                                                  workspace ..…/.worktrees/46-rail| plain:88 dim:12 muted:20

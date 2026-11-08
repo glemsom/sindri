@@ -8,7 +8,7 @@ transcript at 120x40
 02 |  check: clippy ... ok                                                                  think     ..................high| plain:88 dim:28 muted:4
 03 |  check: test ... ok                                                                    ────────────────────────────────| plain:88 dim:32
 04 |  check: frames ... ok                                                                  turns     .................6/250| plain:88 dim:27 muted:5
-05 |  What that buys is the plain case and what it costs is the scrolled one: a window is a ctx       ...................21%| plain:88 dim:29 muted:3
+05 |  What that buys is the plain case and what it costs is the scrolled one: a window is a ctx       ........48.2k/200k 24%| plain:88 dim:18 muted:14
 06 |  row offset from the tail, so resolving one walks the entries between the tail and the cache     ...................88%| plain:88 dim:29 muted:3
 07 |  window and lays out every one of them on the way. Each is laid out once and kept, so  ────────────────────────────────| plain:88 dim:32
 08 |  the whole history scrolled through costs one layout per entry and scrolling it again  workspace ..…/.worktrees/46-rail| plain:88 dim:12 muted:20
