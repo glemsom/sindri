@@ -3,22 +3,22 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 rail at 100x40
-00 |turn 1 ─────────────────────────────────────────────────────────────model     .........claude-sonnet| dim:87 muted:13
-01 |✓ exit 0  bash  412 bytes · 23 ms                                   ────────────────────────────────| ok:1 dim:32 plain:35 dim:32
-02 |  src/rows.rs: the glyph a turn opens with                          turns     .................6/250| plain:68 dim:27 muted:5
-03 |  src/rows.rs: a word longer than a row is broken                   ctx       ...................21%| plain:68 dim:29 muted:3
-04 |  Rendering lives in the front end and not in the core, because an  cache     ...................88%| plain:68 dim:29 muted:3
-05 |  entry is a fact and never a rendering: the TUI and any reader draw────────────────────────────────| plain:68 dim:32
-06 |  one run from one value, and the core may not name a terminal at   workspace ..…/.worktrees/46-rail| plain:68 dim:12 muted:20
-07 |  all.                                                              branch    .....spec/1-capability| plain:68 dim:15 muted:17
-08 |                                                                    ────────────────────────────────| plain:68 dim:32
-09 |                                                                    skills    .....................2| plain:68 dim:31 muted:1
-10 |                                                                    ────────────────────────────────| plain:68 dim:32
-11 |                                                                    sandbox   .................bwrap| plain:68 dim:27 muted:5
-12 |                                                                    ────────────────────────────────| plain:68 dim:32
-13 |                                                                    session   ..............9f2c7a41| plain:68 dim:24 muted:8
-14 |                                                                    temp      ........…/9f2c7a41/tmp| plain:68 dim:18 muted:14
-15 |                                                                                                    | plain:100
+00 |turn 1 ─────────────────────────────────────────────────────────────wire      .............anthropic| dim:91 muted:9
+01 |✓ exit 0  bash  412 bytes · 23 ms                                   model     .........claude-sonnet| ok:1 dim:32 plain:35 dim:19 muted:13
+02 |  src/rows.rs: the glyph a turn opens with                          ────────────────────────────────| plain:68 dim:32
+03 |  src/rows.rs: a word longer than a row is broken                   turns     .................6/250| plain:68 dim:27 muted:5
+04 |  Rendering lives in the front end and not in the core, because an  ctx       ...................21%| plain:68 dim:29 muted:3
+05 |  entry is a fact and never a rendering: the TUI and any reader drawcache     ...................88%| plain:68 dim:29 muted:3
+06 |  one run from one value, and the core may not name a terminal at   ────────────────────────────────| plain:68 dim:32
+07 |  all.                                                              workspace ..…/.worktrees/46-rail| plain:68 dim:12 muted:20
+08 |                                                                    branch    .....spec/1-capability| plain:68 dim:15 muted:17
+09 |                                                                    ────────────────────────────────| plain:68 dim:32
+10 |                                                                    skills    .....................2| plain:68 dim:31 muted:1
+11 |                                                                    ────────────────────────────────| plain:68 dim:32
+12 |                                                                    sandbox   .................bwrap| plain:68 dim:27 muted:5
+13 |                                                                    ────────────────────────────────| plain:68 dim:32
+14 |                                                                    session   ..............9f2c7a41| plain:68 dim:24 muted:8
+15 |                                                                    temp      ........…/9f2c7a41/tmp| plain:68 dim:18 muted:14
 16 |                                                                                                    | plain:100
 17 |                                                                                                    | plain:100
 18 |                                                                                                    | plain:100

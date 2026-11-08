@@ -3,22 +3,22 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 pulse-settled at 120x40
-00 |turn 1 ─────────────────────────────────────────────────────────────────────────────────model     .........claude-sonnet| dim:107 muted:13
-01 |✓ exit 0  bash  412 bytes · 23 ms                                                       ────────────────────────────────| ok:1 dim:32 plain:55 dim:32
-02 |  src/rows.rs: the glyph a turn opens with                                              turns     .................6/250| plain:88 dim:27 muted:5
-03 |  src/rows.rs: a word longer than a row is broken                                       ctx       ...................21%| plain:88 dim:29 muted:3
-04 |  Rendering lives in the front end and not in the core, because an entry is a fact and  cache     ...................88%| plain:88 dim:29 muted:3
-05 |  never a rendering: the TUI and any reader draw one run from one value, and the core   ────────────────────────────────| plain:88 dim:32
-06 |  may not name a terminal at all.                                                       workspace ..…/.worktrees/46-rail| plain:88 dim:12 muted:20
-07 |turn 2 ─────────────────────────────────────────────────────────────────────────────────branch    .....spec/1-capability| dim:103 muted:17
-08 |│ The marker is a clock, so the row it heads is laid out again whenever the mark it     ────────────────────────────────| dim:2 muted:81 plain:5 dim:32
-09 |│ wears moves, and a step that changes nothing costs nothing.                           skills    .....................2| dim:2 muted:59 plain:27 dim:31 muted:1
-10 |✓ 9.4s A braille marker at the head of the newest answer carries the run's elapsed time,────────────────────────────────| ok:1 muted:5 plain:82 dim:32
-11 |  one step every 80 ms, and settles on the verdict it stopped with — the duration it    sandbox   .................bwrap| plain:88 dim:27 muted:5
-12 |  stopped at, kept and never recomputed. The rows under it keep the answer's own gutter,────────────────────────────────| plain:88 dim:32
-13 |  held open and blank.                                                                  session   ..............9f2c7a41| plain:88 dim:24 muted:8
-14 |                                                                                        temp      ........…/9f2c7a41/tmp| plain:88 dim:18 muted:14
-15 |                                                                                                                        | plain:120
+00 |turn 1 ─────────────────────────────────────────────────────────────────────────────────wire      .............anthropic| dim:111 muted:9
+01 |✓ exit 0  bash  412 bytes · 23 ms                                                       model     .........claude-sonnet| ok:1 dim:32 plain:55 dim:19 muted:13
+02 |  src/rows.rs: the glyph a turn opens with                                              ────────────────────────────────| plain:88 dim:32
+03 |  src/rows.rs: a word longer than a row is broken                                       turns     .................6/250| plain:88 dim:27 muted:5
+04 |  Rendering lives in the front end and not in the core, because an entry is a fact and  ctx       ...................21%| plain:88 dim:29 muted:3
+05 |  never a rendering: the TUI and any reader draw one run from one value, and the core   cache     ...................88%| plain:88 dim:29 muted:3
+06 |  may not name a terminal at all.                                                       ────────────────────────────────| plain:88 dim:32
+07 |turn 2 ─────────────────────────────────────────────────────────────────────────────────workspace ..…/.worktrees/46-rail| dim:100 muted:20
+08 |│ The marker is a clock, so the row it heads is laid out again whenever the mark it     branch    .....spec/1-capability| dim:2 muted:81 plain:5 dim:15 muted:17
+09 |│ wears moves, and a step that changes nothing costs nothing.                           ────────────────────────────────| dim:2 muted:59 plain:27 dim:32
+10 |✓ 9.4s A braille marker at the head of the newest answer carries the run's elapsed time,skills    .....................2| ok:1 muted:5 plain:82 dim:31 muted:1
+11 |  one step every 80 ms, and settles on the verdict it stopped with — the duration it    ────────────────────────────────| plain:88 dim:32
+12 |  stopped at, kept and never recomputed. The rows under it keep the answer's own gutter,sandbox   .................bwrap| plain:88 dim:27 muted:5
+13 |  held open and blank.                                                                  ────────────────────────────────| plain:88 dim:32
+14 |                                                                                        session   ..............9f2c7a41| plain:88 dim:24 muted:8
+15 |                                                                                        temp      ........…/9f2c7a41/tmp| plain:88 dim:18 muted:14
 16 |                                                                                                                        | plain:120
 17 |                                                                                                                        | plain:120
 18 |                                                                                                                        | plain:120

@@ -792,10 +792,11 @@ impl View {
         self.composer.paste(text);
     }
 
-    /// Hands this frame the facts its rail draws: the model, the turns against the cap,
-    /// the two meters, the workspace and its branch, the skills in force, the sandbox
-    /// posture, and the session's GUID and temp. They are the core's own values, so the
-    /// rail cannot say about a run what the run was never handed (#46).
+    /// Hands this frame the facts its rail draws: the dialect the run asks over and the
+    /// model it was served, the turns against the cap, the two meters, the workspace and
+    /// its branch, the skills in force, the sandbox posture, and the session's GUID and
+    /// temp. They are the core's own values, so the rail cannot say about a run what the
+    /// run was never handed (#46).
     pub fn set_facts(&mut self, facts: Facts) {
         self.rail = facts;
     }

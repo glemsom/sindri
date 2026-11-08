@@ -23,7 +23,7 @@ rail at 99x24
 17 |                                                                                                   | plain:99
 18 |                                                                                                   | plain:99
 19 |                                                                                                   | plain:99
-20 |model claude-sonnet · turns 6/250 · workspace …/.worktrees/46-rail · sandbox bwrap · +6 more       | dim:6 muted:13 dim:9 muted:5 dim:13 muted:20 dim:11 muted:5 dim:3 muted:7 plain:7
+20 |wire anthropic · model claude-sonnet · turns 6/250 · sandbox bwrap · +7 more                       | dim:5 muted:9 dim:9 muted:13 dim:9 muted:5 dim:11 muted:5 dim:3 muted:7 plain:23
 21 |───────────────────────────────────────────────────────────────────────────────────────────────────| dim:99
 22 |                                                                                                   | plain:99
 23 |Enter send · ? keys                                                                                | muted:10 dim:3 muted:6 plain:80
