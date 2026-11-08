@@ -3,6 +3,10 @@
 //! bytes it draws — and the bytes typing a key makes it give back — are read off
 //! the master as the sequences they are.
 //!
+//! A live run's rail is measured here too: the facts a launch hands its frame are drawn from
+//! the frame the run's first turn is in flight from, and the facts the turn moved are drawn
+//! once it ends.
+//!
 //! Every child gets `env_clear` and homes of its own holding a key, so no launch
 //! stops to paste one and nothing of this process's environment — least of all a
 //! real key — can reach the binary.
@@ -101,6 +105,35 @@ impl Ground {
             .env("SINDRI_MODEL", "claude-sonnet-4-6")
             .env("ANTHROPIC_API_KEY", "sk-ant-the-recorded-one");
         command
+    }
+}
+
+/// Puts `ground`'s workspace on a branch: a run records the checkout it stands in, and a
+/// directory that is no repository has no branch for a rail to draw.
+fn on_a_branch(ground: &Ground) {
+    for args in [
+        &["init", "-q", "-b", "main"][..],
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "the first commit",
+        ][..],
+    ] {
+        assert!(
+            Command::new("git")
+                .args(args)
+                .current_dir(&ground.workspace)
+                .status()
+                .expect("git runs")
+                .success(),
+            "the workspace becomes a repository on a branch"
+        );
     }
 }
 
@@ -776,34 +809,65 @@ fn sequence(drawn: &str) -> Option<Sequence> {
     Some(Sequence { move_to, taken })
 }
 
-/// The rows the composer's band took in the last frame that painted it: the gap between
-/// the row of its hairline and the row of the footer's first hint, which is the box's
-/// height (§12).
+/// One run of glyphs the stream wrote without the cursor leaving them: the row it was
+/// written on, the column it starts in, and the glyphs themselves.
 ///
-/// The hairline is the one drawn from the frame's first column and not any run of them: a
-/// rail draws hairlines of its own, and a frame that changed nothing but the rail paints
-/// those after the composer's.
-fn composer_rows(drawn: &str) -> Option<u16> {
+/// A frame paints only the cells that changed, so a picture is replayed from these rather
+/// than read off the bytes that carried it — and a row, a needle and a band's height are all
+/// questions about the same replay.
+struct Run {
+    /// The row, counted from one as a terminal counts.
+    row: u16,
+    /// The column the first glyph sits in, counted from one.
+    column: u16,
+    /// The glyphs, in the order they landed.
+    glyphs: String,
+}
+
+/// Every run of glyphs in `drawn`, in the order they landed.
+fn runs(drawn: &str) -> Vec<Run> {
     let (mut row, mut column) = (0u16, 0u16);
-    let (mut hairline, mut footer) = (None, None);
-    let mut painted_here = String::new();
+    let mut moved = false;
+    let mut runs: Vec<Run> = Vec::new();
     for mark in painted(drawn) {
         match mark {
             Painted::Moved(at, col) => {
                 row = at;
                 column = col;
-                painted_here.clear();
+                moved = true;
             }
             Painted::Glyph(glyph) => {
-                painted_here.push(glyph);
-                if glyph == '─' && column == 1 {
-                    hairline = Some(row);
+                match runs.last_mut() {
+                    Some(run) if !moved => run.glyphs.push(glyph),
+                    _ => runs.push(Run {
+                        row,
+                        column,
+                        glyphs: glyph.to_string(),
+                    }),
                 }
-                if painted_here.ends_with("Enter send") {
-                    footer = Some(row);
-                }
+                moved = false;
                 column = column.saturating_add(1);
             }
+        }
+    }
+    runs
+}
+
+/// The rows the composer's band took in the last frame that painted it: the gap between
+/// the row of its hairline and the row of the footer's first hint, which is the box's
+/// height.
+///
+/// The hairline is the one drawn from the frame's first column and not any run of them: a
+/// rail draws hairlines of its own, and a frame that changed nothing but the rail paints
+/// those after the composer's.
+fn composer_rows(drawn: &str) -> Option<u16> {
+    let (mut hairline, mut footer) = (None, None);
+    for run in runs(drawn) {
+        if run.glyphs.starts_with('─') && run.column == 1 {
+            hairline = Some(run.row);
+        }
+        if run.glyphs.contains("Enter send") {
+            footer = Some(run.row);
         }
     }
     Some(footer? - hairline?)
@@ -813,24 +877,10 @@ fn composer_rows(drawn: &str) -> Option<u16> {
 /// when it never was: the frame's own geometry, so a test reads "above the composer" off
 /// the picture rather than assuming where a band landed.
 fn row_of(drawn: &str, needle: &str) -> Option<u16> {
-    let mut row = 0u16;
-    let mut painted_here = String::new();
-    let mut found = None;
-    for mark in painted(drawn) {
-        match mark {
-            Painted::Moved(at, _) => {
-                row = at;
-                painted_here.clear();
-            }
-            Painted::Glyph(glyph) => {
-                painted_here.push(glyph);
-                if painted_here.ends_with(needle) {
-                    found = Some(row);
-                }
-            }
-        }
-    }
-    found
+    runs(drawn)
+        .into_iter()
+        .rfind(|run| run.glyphs.contains(needle))
+        .map(|run| run.row)
 }
 
 /// Where `needle` was last drawn in `drawn`, or nothing when it never was: a frame paints
@@ -840,43 +890,39 @@ fn last(drawn: &str, needle: &str) -> Option<usize> {
     drawn.rfind(needle)
 }
 
-/// One row of the frame as the terminal holds it after every frame drawn so far: a frame
-/// paints the cells that changed and leaves the rest, so a value that moved is read off the
-/// row the moves and glyphs leave in it rather than off the bytes that landed last.
-fn row_text(drawn: &str, row: u16) -> String {
-    let mut cells: BTreeMap<u16, char> = BTreeMap::new();
-    let (mut here, mut column) = (0u16, 0u16);
-    for mark in painted(drawn) {
-        match mark {
-            Painted::Moved(at, col) => {
-                here = at;
-                column = col;
-            }
-            Painted::Glyph(glyph) => {
-                if here == row {
-                    cells.insert(column, glyph);
-                }
-                column = column.saturating_add(1);
-            }
+/// The frame as the terminal holds it after every frame drawn so far: each row that has a
+/// glyph on it, and the glyphs in the cells the stream left there, a space between two runs
+/// and the last write to a cell winning — because a frame paints the cells that changed and
+/// leaves the rest, so a value that moved is read off the row rather than off the bytes that
+/// landed last.
+fn picture(drawn: &str) -> BTreeMap<u16, String> {
+    let mut rows: BTreeMap<u16, BTreeMap<u16, char>> = BTreeMap::new();
+    for run in runs(drawn) {
+        let cells = rows.entry(run.row).or_default();
+        let mut column = run.column;
+        for glyph in run.glyphs.chars() {
+            cells.insert(column, glyph);
+            column = column.saturating_add(1);
         }
     }
-    let (Some(first), Some(last)) = (cells.keys().next(), cells.keys().next_back()) else {
-        return String::new();
-    };
-    (*first..=*last)
-        .map(|column| cells.get(&column).copied().unwrap_or(' '))
+    rows.into_iter()
+        .map(|(row, cells)| {
+            let first = *cells.keys().next().expect("a row holds a glyph");
+            let last = *cells.keys().next_back().expect("a row holds a glyph");
+            let text = (first..=last)
+                .map(|column| cells.get(&column).copied().unwrap_or(' '))
+                .collect();
+            (row, text)
+        })
         .collect()
 }
 
-/// Whether the rail row drawn under `label` reads `value` after every frame so far: the
-/// label in its field, and the value the row ends in — the rail's right-hand edge being the
-/// frame's own.
+/// Whether a row of the frame reads `label` in a field and ends in `value`: the rail draws
+/// each label in its own field and each value against the frame's right-hand edge.
 fn rail_reads(drawn: &str, label: &str, value: &str) -> bool {
-    let Some(row) = row_of(drawn, label) else {
-        return false;
-    };
-    let row = row_text(drawn, row);
-    row.contains(&format!("{label} ")) && row.ends_with(value)
+    picture(drawn)
+        .values()
+        .any(|row| row.contains(&format!("{label} ")) && row.ends_with(value))
 }
 
 /// The cell the last frame left the caret on: typing paints one glyph per frame, so where
@@ -1119,6 +1165,17 @@ fn document(state: &std::path::Path) -> String {
     std::fs::read_to_string(directory.join("session.json")).expect("the session document")
 }
 
+/// The GUID the launch recorded under `state`, which a rail draws by its first eight.
+fn guid(state: &std::path::Path) -> String {
+    let document: serde_json::Value =
+        serde_json::from_str(&document(state)).expect("the session document is JSON");
+    String::from(
+        document["session"]
+            .as_str()
+            .expect("a document names its session"),
+    )
+}
+
 /// Waits until the document under `state` says `needle`, and says whether it ever did: a
 /// record is written as a run goes, so a test waits for the fact rather than for a sleep.
 fn recorded(state: &std::path::Path, needle: &str) -> bool {
@@ -1290,6 +1347,7 @@ fn a_cancelled_run_settles_as_cancelled_and_the_settled_frame_is_left_alone() {
 #[test]
 fn a_live_run_draws_the_facts_it_was_handed_and_its_first_turn_moves_them() {
     let ground = Ground::new();
+    on_a_branch(&ground);
     let wire = Wire::holding();
     let mut command = ground.command();
     command
@@ -1348,6 +1406,28 @@ fn a_live_run_draws_the_facts_it_was_handed_and_its_first_turn_moves_them() {
          reported is drawn against the window the config named: {:?}",
         drawn.text()
     );
+    assert!(
+        drawn.wait_until(|frame| frame.contains('✓')),
+        "the run answered and settled on its marker: {:?}",
+        drawn.text()
+    );
+
+    // The frame the run stopped on keeps the last facts it was handed, the way the
+    // transcript keeps its last entry.
+    let frame = drawn.text();
+    let recorded = guid(&ground.state);
+    for (label, value) in [
+        ("turns", "1/250"),
+        ("ctx", "11/200k 0%"),
+        ("workspace", "/workspace"),
+        ("branch", "main"),
+        ("session", &recorded[..8]),
+    ] {
+        assert!(
+            rail_reads(&frame, label, value),
+            "the settled frame draws `{label} {value}`: {frame:?}"
+        );
+    }
 
     pty.type_bytes(b"\x11");
     assert_eq!(

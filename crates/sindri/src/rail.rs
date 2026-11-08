@@ -6,8 +6,8 @@
 //! The facts are handed in and never reached for: `Facts` is what the core knows about a
 //! run — the dialect it asks over, the name it was served and whether that model thinks,
 //! the turns against the cap, the enforcement in force, the workspace, the branch, the
-//! session's GUID and its temp — and what nothing produces yet is a caller's to fill, so a
-//! rail draws a fact only when somebody handed it one.
+//! session's GUID and its temp — and the one fact nothing produces yet is a caller's to
+//! fill, so a rail draws a fact only when somebody handed it one.
 //!
 //! Two shapes and one rule between them. At a hundred columns and above the rail is
 //! §12's 32 columns down the frame's right-hand edge, one labelled fact per row; below a
@@ -147,10 +147,8 @@ impl Ctx {
     /// How full the window is, when one is known: a window of no tokens is no window at
     /// all, and a share of it is no number the rail could draw.
     ///
-    /// The share is whole percent, rounded and capped at a hundred: a run already past its
-    /// window has no larger number to show, and the rail cannot claim room that is not
-    /// there. The ink is set here and nowhere else, so no paint site holds a second opinion
-    /// about what nearly full means.
+    /// The ink is set here and nowhere else, so no paint site holds a second opinion about
+    /// what nearly full means.
     fn fill(&self) -> Option<Fill> {
         let window = self.window.filter(|window| *window > 0)?;
         let percent = share(self.size, window)?;
@@ -186,14 +184,17 @@ impl Fill {
     }
 }
 
-/// The share of `of` that `part` is, in whole percent, rounded: capped at a hundred, because
-/// a run already past what it is measured against has no larger share to show and the rail
-/// cannot claim room that is not there. A share of nothing is no percentage at all.
-fn share(part: u64, of: u64) -> Option<u8> {
-    if of == 0 {
+/// The share of a whole that a part is, in whole percent, rounded: capped at a hundred,
+/// because a part already past its whole has no larger share to show and the rail cannot
+/// claim room that is not there. A share of nothing is no percentage at all.
+///
+/// One rule for the two rows that are a percentage of something: the window a run fills, and
+/// the part of its input the provider served from its own cache.
+fn share(part: u64, whole: u64) -> Option<u8> {
+    if whole == 0 {
         return None;
     }
-    let percent = (u128::from(part) * 100 + u128::from(of) / 2) / u128::from(of);
+    let percent = (u128::from(part) * 100 + u128::from(whole) / 2) / u128::from(whole);
     Some(u8::try_from(percent.min(100)).unwrap_or(100))
 }
 
@@ -234,9 +235,9 @@ fn scaled(parts: u64, places: u32, unit: &str) -> String {
 /// run's size, the cache's hit rate, the workspace and the branch it stands on, the skills
 /// in force, the sandbox posture, and the session's GUID and temp.
 ///
-/// A fact the frame knows nothing about is `None` and is not drawn, never guessed at
-/// (§15), so a frame before its first run has no rail at all. The skills in force are the
-/// one fact nothing produces yet, and a caller passes that one in until its ticket lands.
+/// A fact the frame knows nothing about is `None` and is not drawn, never guessed at, so a
+/// frame before its first run has no rail at all. The skills in force are the one fact
+/// nothing produces yet, and a caller passes that one in until its ticket lands.
 #[derive(Debug, Default, Clone)]
 pub struct Facts {
     /// The dialect the run asks over, in the wire's own word: `anthropic`, `openai` or
@@ -303,28 +304,20 @@ impl Facts {
         }
     }
 
-    /// The size of the conversation, as one ask's report measured it: the input that ask
-    /// carried, and the part of it the provider served from its own cache.
+    /// The size of the conversation as one ask's report measured it — the input that ask
+    /// carried, the window a reader named a share of it, and the part of it the provider
+    /// served from its own cache.
     ///
     /// The report is one turn's and never a running total, which is why the document cannot
-    /// hand these two in: the `usage` it keeps is every ask summed, and a sum of the inputs
-    /// grows with each turn while the conversation's size is what the newest request held.
-    pub fn measured(mut self, ask: &Usage) -> Facts {
-        self.ctx = ask.input.map(|size| Ctx { size, window: None });
-        self.cache = ask
-            .input
-            .zip(ask.cached_input)
-            .and_then(|(input, cached)| share(cached, input));
-        self
-    }
-
-    /// The window the config names the run's size a share of, when a reader named one: a
-    /// window is only ever a share of a size, so a frame that knows no size keeps no window
-    /// rather than drawing a fill of a conversation nothing measured.
-    pub fn window(mut self, window: Option<u64>) -> Facts {
-        if let Some(ctx) = self.ctx.as_mut() {
-            ctx.window = window;
-        }
+    /// hand these in: the `usage` it keeps is every ask summed, and a sum of the inputs grows
+    /// with each turn while the conversation's size is what the newest request carried. A
+    /// report that states no size replaces nothing, so the last size the wire stated stands.
+    pub fn measured(mut self, ask: &Usage, window: Option<u64>) -> Facts {
+        let Some(size) = ask.input else {
+            return self;
+        };
+        self.ctx = Some(Ctx { size, window });
+        self.cache = ask.cached_input.and_then(|cached| share(cached, size));
         self
     }
 
@@ -822,7 +815,7 @@ mod tests {
     use std::path::Path;
 
     use sindri_core::policy::PolicyRecord;
-    use sindri_core::provider::Usage as Ask;
+    use sindri_core::provider::Usage as Report;
     use sindri_core::records::{Dials, SessionDocument, Usage};
     use sindri_core::run::State as RunState;
     use sindri_core::session::Session;
@@ -1041,17 +1034,21 @@ mod tests {
     }
 
     #[test]
-    fn the_size_and_the_cache_one_asks_report_carries_are_the_facts_the_rail_draws() {
+    fn the_size_and_the_cache_a_turns_report_carries_are_the_facts_the_rail_draws() {
         let root = tempfile::tempdir().expect("a temp state home");
         let session = Session::create(root.path()).expect("a session");
         let document = document(session.guid());
-        let ask = Ask {
+        let asked = Report {
             input: Some(48_200),
             cached_input: Some(12_050),
-            ..Ask::default()
+            ..Report::default()
+        };
+        let uncached = Report {
+            input: Some(48_200),
+            ..Report::default()
         };
 
-        let facts = Facts::of(&session, &document).measured(&ask);
+        let facts = Facts::of(&session, &document).measured(&asked, None);
 
         assert_eq!(
             facts.ctx,
@@ -1059,7 +1056,7 @@ mod tests {
                 size: 48_200,
                 window: None
             }),
-            "the input the ask carried, and no window until a reader names one"
+            "the input the turn carried, and no window until a reader names one"
         );
         assert_eq!(
             facts.cache,
@@ -1067,47 +1064,45 @@ mod tests {
             "a quarter of every input token came from the provider's own cache"
         );
 
-        let uncached = Ask {
-            input: Some(48_200),
-            ..Ask::default()
-        };
-
         assert_eq!(
-            Facts::of(&session, &document).measured(&uncached).cache,
+            Facts::of(&session, &document)
+                .measured(&uncached, None)
+                .cache,
             None,
-            "a wire that reported no cached tokens has no hit rate to draw"
+            "a report that names no cached token has no hit rate to draw"
         );
     }
 
     #[test]
-    fn a_window_is_a_share_of_a_size_and_a_frame_without_one_keeps_no_window() {
+    fn a_report_that_states_no_size_leaves_the_size_the_wire_last_stated() {
         let root = tempfile::tempdir().expect("a temp state home");
         let session = Session::create(root.path()).expect("a session");
         let document = document(session.guid());
-        let ask = Ask {
+        let speaking = Report {
             input: Some(48_200),
-            ..Ask::default()
+            ..Report::default()
         };
 
+        let facts = Facts::of(&session, &document)
+            .measured(&speaking, Some(200_000))
+            .measured(&Report::default(), Some(200_000));
+
         assert_eq!(
-            Facts::of(&session, &document)
-                .measured(&ask)
-                .window(Some(200_000))
-                .ctx,
+            facts.ctx,
             Some(Ctx {
                 size: 48_200,
                 window: Some(200_000)
             }),
-            "the window a reader named, beside the size the wire measured"
+            "a turn whose wire reported no token erases no row: the last size it stated, \
+             against the window a reader named, is the size the rail keeps"
         );
 
         assert_eq!(
             Facts::of(&session, &document)
-                .measured(&Ask::default())
-                .window(Some(200_000))
+                .measured(&Report::default(), Some(200_000))
                 .ctx,
             None,
-            "a share of a window is no row at all without a size to be a share of"
+            "and a share of a window is no row at all until a size is stated"
         );
     }
 

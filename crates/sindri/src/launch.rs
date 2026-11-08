@@ -262,13 +262,13 @@ impl Launch {
     /// a frame reads the run and never the config the run came from.
     fn facts(&self, measured: &Usage) -> rail::Facts {
         rail::Facts::of(&self.session, self.record.document())
-            .measured(measured)
-            .window(self.context_window)
+            .measured(measured, self.context_window)
     }
 
     /// Drives `prompt` to a stop reason: every fragment of the turn in flight lands in
-    /// `deltas`, every turn that ends is handed to `turns`, and the session is written as it
-    /// goes and ended whatever the run did (§13).
+    /// `deltas`, every turn that ends is handed to `turns`, the facts a rail draws follow the
+    /// run from its open to its stop, and the session is written as it goes and ended
+    /// whatever the run did (§13).
     ///
     /// The report's stop reason is read off the loop and never decided here, so no front end
     /// can hold a second opinion about how a run ended (§15, ADR-0006), and a cancellation
