@@ -346,8 +346,6 @@ fn no_session_sees_another_sessions_temp() {
     let ground = Ground::new();
     let boundary = ground.boundary();
     let state = state_home();
-    // Two sessions created at once, from one state home: nothing but the GUID
-    // tells them apart, and nothing may reach across.
     let mut one = Session::create(state.path()).expect("a session");
     let mut other = Session::create(state.path()).expect("another session");
 

@@ -378,8 +378,6 @@ fn a_prefix_no_session_carries_is_a_usage_error_that_names_it() {
 #[test]
 fn a_session_left_by_new_keeps_saying_running_because_it_did_not_stop() {
     let state = State::empty();
-    // A session `/new` superseded: the document says `running` and carries no
-    // end, because the run was left and never stopped (§13).
     state.session(
         THIRD,
         "copilot",
@@ -419,10 +417,9 @@ fn show_json_hands_on_the_files_in_their_own_shape() {
         "2024-03-01T00:00:00Z",
         "final",
     );
-    // A field this build never writes into a document, and a kind of entry it has
-    // no variant for: both are a newer `sindri` talking to an older reader, and
-    // both survive only if the files are handed on as bytes rather than re-encoded
-    // through this build's types (ADR-0007).
+    // A field this build never writes, and a kind of entry it has no variant for: both
+    // are a newer `sindri` talking to an older reader, and both survive only if the files
+    // are handed on as bytes rather than re-encoded through this build's types.
     let document = std::fs::read_to_string(directory.join("session.json"))
         .expect("a session document")
         .replace(
@@ -494,8 +491,6 @@ fn show_json_leaves_out_a_line_that_is_not_json() {
         "2024-03-01T00:00:00Z",
         "running",
     );
-    // A run killed mid-write leaves half a line, which is no shape at all: the
-    // files are still handed on, and the half line is the only thing lost.
     std::fs::write(
         directory.join("transcript.jsonl"),
         "{\"kind\": \"turn\", \"turn\": 1}\n{\"kind\": \"assistant\", \"text\": \"Hel",

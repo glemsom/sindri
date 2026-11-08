@@ -308,7 +308,7 @@ fn a_running_run_says_running_and_the_stop_set_is_five_words() {
     run.turn(&mut Transcript::default());
     assert_eq!(run.state().word(), "final");
 
-    // The closed set, in the words the record and the JSON use, against §15's
+    // The closed set, in the words the record and the JSON use, against the
     // one mapping from a stop reason to an exit code.
     let closed: Vec<(State, &str, u8)> = vec![
         (State::Running, "running", 0),
@@ -633,7 +633,7 @@ fn the_config_names_the_turn_cap_and_the_boundary_names_the_budgets() {
     let limits = Limits::from_config(&configured, &boundary);
 
     assert_eq!(limits.max_turns(), 7, "the cap is the config's to set");
-    // §4's two numbers, written out rather than restated from the constants the
+    // The two numbers, written out rather than restated from the constants the
     // code uses, so this test can disagree with the code.
     assert_eq!(limits.clock(), Duration::from_secs(60 * 60));
     assert_eq!(limits.output(), 8 * 1024 * 1024);

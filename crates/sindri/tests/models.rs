@@ -128,8 +128,6 @@ fn a_name_the_query_starts_ranks_above_one_that_merely_holds_it() {
 fn a_query_that_starts_a_later_name_puts_it_first() {
     let mut models = Models::new();
     models.served(listed());
-    // The second name is ranked first because the query is a prefix of it, and the first is
-    // not a row at all: what the rank is for is reaching a name past the order the wire gave.
     for glyph in SECOND.chars() {
         models.key(Key::Char(glyph));
     }
@@ -204,8 +202,6 @@ fn a_query_that_matches_no_served_name_takes_no_name() {
 
 #[test]
 fn the_screen_offers_eight_rows_and_no_more() {
-    // A wire that serves more than a screen's worth of names: eight rows is §12's cap, and
-    // the query is what reaches the ninth.
     let names: Vec<String> = (0..20).map(|at| format!("a-served-name-{at}")).collect();
     let catalogue = format!(
         "{{\"data\":[{}],\"has_more\":false}}",

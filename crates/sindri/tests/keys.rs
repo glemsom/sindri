@@ -153,10 +153,9 @@ fn a_screen_answers_its_own_keys_and_swallows_the_drafts() {
 
 #[test]
 fn the_up_arrows_one_arm_is_bound_in_one_row_of_one_table() {
-    // §12 is about the draft's `↑`, so it is `Act::Up` that has to resolve in exactly one
-    // row: the queue's recall and the row above the caret are one act, and a second row
-    // carrying it would be a second place that key is decided. A screen's `↑` is its own
-    // act — a list's selection is not a caret — and this rule does not reach it.
+    // The draft's `↑` is `Act::Up`, and it has to resolve in exactly one row: the queue's
+    // recall and the row above the caret are one act. A screen's `↑` is its own act — a
+    // list's selection is not a caret — and this rule does not reach it.
     let bound: Vec<(Mode, Key)> = Mode::ALL
         .iter()
         .flat_map(|mode| mode.table().iter().map(move |binding| (*mode, binding)))

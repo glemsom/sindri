@@ -108,8 +108,6 @@ fn every_session_the_state_home_holds_reads_newest_first() {
 fn a_directory_holding_no_readable_document_is_no_session_to_list() {
     let state = Ground::empty();
     state.session("4444-dddd", "2024-04-01T00:00:00Z", "final");
-    // A directory a session left behind with no document in it, and one whose
-    // document this build cannot read: neither records a run to read back.
     std::fs::create_dir_all(state.sessions().join("5555-eeee").join("tmp"))
         .expect("a session temp");
     let unreadable = state.sessions().join("6666-ffff");
@@ -214,7 +212,7 @@ fn a_run_that_was_recorded_reads_back_as_the_run_it_was() {
             wire: Wire::Copilot,
             model: "a-model-read-off-the-wire",
             // Copilot serves two endpoints and this name asks for neither, so
-            // the route is the one its dialect answers by habit (§10).
+            // the route is the one its dialect answers by habit.
             route: Some(Route::Chat),
             boundary: &boundary,
             limits: &limits,

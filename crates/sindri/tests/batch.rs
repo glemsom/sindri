@@ -939,7 +939,7 @@ fn a_signal_stops_the_run_with_nothing_on_stdout() {
     wire.wait_for_request();
     signal(&child);
     // The reply is let go after the signal, so the run sees the user's word
-    // before it can settle as an answer (ADR-0006).
+    // before it can settle as an answer.
     std::thread::sleep(Duration::from_millis(100));
     let _ = release.send(());
     let output = child.wait_with_output().expect("the binary should finish");
@@ -952,9 +952,8 @@ fn a_signal_stops_the_run_with_nothing_on_stdout() {
     );
     assert!(output.stdout.is_empty(), "{}", text(&output.stdout));
 
-    // The record is written as the run goes, so a run the user's word stopped is a
-    // session that still reads: the document says why it ended, and the front end
-    // that reads past runs back hands it to a reader (§13).
+    // The record is written as the run goes, so a run the user's word stopped is
+    // a session that still reads: the document says why it ended.
     let document = std::fs::read_to_string(ground.session().join("session.json"))
         .expect("the session document");
     assert!(

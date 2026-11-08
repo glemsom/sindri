@@ -661,8 +661,8 @@ fn a_picture_block_copied_out_of_the_band_is_its_words_and_never_its_bytes() {
         .expect("the picture is on the screen");
 
     view.drag(Cell::new(drawn, 0), Cell::new(drawn, SCREEN.0 - 1));
-    // Painted again, because a copy reads the span the last paint drew: the mark and the
-    // cells `Ctrl-Y` hands out are one value, one paint apart at the most (§12, #50).
+    // The mark and the cells `Ctrl-Y` hands out are one value, one paint apart at
+    // the most.
     painted_at(&mut view, SCREEN);
     let taken = match view.key(Key::Copy) {
         Outcome::Copy(words) => words,

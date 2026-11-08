@@ -343,8 +343,6 @@ fn a_screen_answers_no_command_line() {
 
 #[test]
 fn the_commands_are_read_off_the_draft_the_reader_typed() {
-    // The whole of a command line lives in the draft until `Enter`, so the composer holds
-    // the words and never a command: what a `/` line comes to is decided once, at the send.
     let root = workspace_with("commit-message", "");
     let mut view = frame(root.path());
     view.paste("/model");
@@ -359,8 +357,9 @@ fn the_commands_are_read_off_the_draft_the_reader_typed() {
 
 #[test]
 fn a_frame_with_no_workspace_loads_no_skill() {
-    // A frame that was told no workspace has no catalog to ask, and offering a skill from a
-    // directory no run could read would be naming a name nothing can load (§12).
+    // A frame that was told no workspace has no catalog to ask, and offering a
+    // skill from a directory no run could read would be naming a name nothing can
+    // load.
     let mut view = View::boot();
 
     assert_eq!(say(&mut view, "/skill:commit-message"), Outcome::Unchanged);

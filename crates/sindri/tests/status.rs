@@ -379,8 +379,6 @@ fn sequences(stream: &str) -> Vec<&str> {
 
 #[test]
 fn a_batch_run_on_a_pipe_is_told_nothing() {
-    // §14: a pipe gets no status at all. A sequence written into one is bytes a script did
-    // not ask for and cannot use, and the answer on stdout is the whole of what it wants.
     let ground = Ground::new();
     let wire = Wire::answering();
 
@@ -406,8 +404,6 @@ fn a_batch_run_on_a_pipe_is_told_nothing() {
 
 #[test]
 fn a_batch_run_whose_stderr_is_a_file_is_told_nothing() {
-    // The other half of §14's rule: a file is not a terminal either, so a redirected stderr
-    // carries the answer's silence and no escape sequence at all.
     let ground = Ground::new();
     let wire = Wire::answering();
     let written = ground.state.join("stderr.log");
@@ -426,9 +422,6 @@ fn a_batch_run_whose_stderr_is_a_file_is_told_nothing() {
 
 #[test]
 fn a_batch_run_tells_the_terminal_it_is_on_how_the_run_is_going() {
-    // The terminal a filter was given is the one place a status belongs: `working` while the
-    // turn is on the wire, and `done` when the answer lands, with the turn count and the
-    // workspace's name on it.
     let ground = Ground::new();
     let wire = Wire::answering();
 
@@ -466,10 +459,9 @@ fn a_batch_run_tells_the_terminal_it_is_on_how_the_run_is_going() {
 
 #[test]
 fn a_status_is_written_unqueried_and_a_terminal_that_answers_nothing_still_reads_it() {
-    // §14: no detection query, ever. The terminal here answers nothing at all — a pseudo-
-    // terminal's slave never replies on its own — so a launch that waited for a yes would
-    // write no status and this test would hang. And no byte it writes asks anything: no
-    // device-attributes, no cursor-position report, no query inside the sequence.
+    // No detection query, ever. The terminal here answers nothing at all — a
+    // pseudo-terminal's slave never replies on its own — so a launch that waited for a
+    // yes would hang, and no byte it writes asks anything.
     let ground = Ground::new();
     let wire = Wire::answering();
 
@@ -499,8 +491,6 @@ fn a_status_is_written_unqueried_and_a_terminal_that_answers_nothing_still_reads
 
 #[test]
 fn the_status_key_turns_the_telling_off() {
-    // §14's one switch, on by default and off when the environment says so: the run still
-    // answers, and the terminal it is on is told nothing about it.
     let ground = Ground::new();
     let wire = Wire::answering();
     let pty = Pty::open();
@@ -523,9 +513,6 @@ fn the_status_key_turns_the_telling_off() {
 
 #[test]
 fn a_frame_with_no_run_in_flight_is_told_idle() {
-    // The terminal UI owns its tty, so it says what it is doing from the first frame: a
-    // launch with nothing asked is `idle`, and nothing was asked of the terminal to know it
-    // can read the sequence.
     let ground = Ground::new();
     let wire = Wire::answering();
 
@@ -542,9 +529,6 @@ fn a_frame_with_no_run_in_flight_is_told_idle() {
 
 #[test]
 fn a_frame_tells_its_terminal_that_a_run_is_working_and_then_done() {
-    // The other end of the same story: a prompt sent starts a run, and the terminal is told
-    // the turn it is on and then that it stopped — which is what a status bar in another
-    // pane, or a terminal's own tab, draws the run from (§14).
     let ground = Ground::new();
     let wire = Wire::answering();
     let (session, mut pty, drawn) = Session::frame(&ground, &wire);
@@ -556,7 +540,7 @@ fn a_frame_tells_its_terminal_that_a_run_is_working_and_then_done() {
     );
     // A prompt typed, then `Enter` on its own: a carriage return that arrives with more of
     // its burst is a paste's line break and sends nothing, which is the rule the composer is
-    // built on (§12). No `?` in the draft either: that key opens a screen of its own.
+    // built on. No `?` in the draft either: that key opens a screen of its own.
     pty.type_bytes(b"triage this");
     assert!(
         drawn.wait_until(|stream| caret_column(stream) == Some(12)),

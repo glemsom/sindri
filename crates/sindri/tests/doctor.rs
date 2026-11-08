@@ -193,7 +193,6 @@ fn every_skill_found_is_listed_with_the_scope_it_came_from() {
     let out = text(&output.stdout);
     a_report_was_made(&output);
 
-    // One builtin is compiled in, so three skills are found: one per scope.
     assert!(
         out.contains("skills (3 found)"),
         "the catalog is counted, and the builtin is one of them:\n{out}"
@@ -241,7 +240,6 @@ fn a_shadowed_name_reports_both_sides_and_the_nearer_scope_wins() {
     let out = text(&output.stdout);
     a_report_was_made(&output);
 
-    // One name, one row: the nearer scope's skill is the one in force.
     let winner = row(&out, "greet");
     assert!(
         winner.trim_start().starts_with("repo"),
@@ -256,7 +254,6 @@ fn a_shadowed_name_reports_both_sides_and_the_nearer_scope_wins() {
         "the skill that never loads is not described as if it had:\n{out}"
     );
 
-    // Both sides of the shadowing, and the loser by the path that never loads.
     let lost = ground
         .user_skill_path("greet")
         .canonicalize()
@@ -417,8 +414,6 @@ fn a_builtin_shadowed_by_a_nearer_scope_is_named_by_the_scope_alone() {
 #[test]
 fn an_unsafe_run_is_told_so_and_has_no_sandbox_to_prove() {
     let ground = Ground::new();
-    // A machine with no bubblewrap at all: an unsafe run has no sandbox to make,
-    // so finding none changes nothing about what it says.
     let empty = ground.config.join("no-bwrap");
     std::fs::create_dir_all(&empty).expect("an empty machine directory");
 
