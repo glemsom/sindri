@@ -152,10 +152,10 @@ ok "built the tree: $settled"
 # 2. Build again with nothing touched.
 check_same_binary 'an unchanged tree' "$settled"
 
-# 3. Touch a file no compiler ever reads — the spec itself — and demand the
+# 3. Touch a file no compiler ever reads — the glossary — and demand the
 #    binary stay exactly where it was. This is the move a build script that
 #    watched the whole package, or that stamped the clock, fails.
-doc=docs/SPEC.md
+doc=GLOSSARY.md
 if [[ ! -f $doc ]]; then
   bad "there is no $doc to touch, so a non-compiled change cannot be shown"
 else
