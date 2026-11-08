@@ -15,8 +15,8 @@
 #                     to prove the loop stops at a stage that failed without ever
 #                     running the stage that proves it: a gate that rang itself
 #                     would never end
-#     make <stage>    one stage alone — fmt, clippy, audit, test, frames, bench,
-#                     gate, toolchain, sandbox, evals, release
+#     make <stage>    one stage alone — fmt, clippy, audit, comments, test, frames,
+#                     bench, gate, toolchain, sandbox, evals, release
 #     SINDRI_BLESS=1 make evals
 #                     rewrite the evals' goldens from what the tree does now, which
 #                     is the only way one moves (ADR 0012's rule for a frame) — the
@@ -36,7 +36,8 @@
 #                       when the kernel forbids unprivileged user namespaces,
 #                       which is the case ticket #7 exists for; the release path
 #                       when there is no bwrap or no musl C compiler; the gate
-#                       when there is no cargo on PATH. The
+#                       when there is no cargo on PATH; the comment gate when
+#                       there is no awk, no sort, or no way to list the tree. The
 #                       reason is the line above the verdict, the exit stays 0,
 #                       and the verdict is deliberately not `ok`: a green line
 #                       over code nothing covered is the one lie this target
@@ -53,9 +54,9 @@ SHELL := /bin/bash
 # The definition of done, in order: cheap and fast first, so the slow stages run
 # only on a tree that already passes the quick ones. `release` is last because it
 # is the only stage that compiles anything for a target nobody else builds.
-STAGES := fmt clippy audit test frames bench gate toolchain sandbox evals no-relink release
+STAGES := fmt clippy audit comments test frames bench gate toolchain sandbox evals no-relink release
 
-.PHONY: check $(STAGES) frame frame-update sandbox-tier release-tier gate-tier
+.PHONY: check $(STAGES) frame frame-update sandbox-tier release-tier gate-tier comments-tier
 
 check:
 	@for stage in $(STAGES); do \
@@ -100,6 +101,21 @@ clippy:
 # stage adds the verdict: audit.sh exits non-zero if any rule found anything.
 audit:
 	$(call stage,audit,bash scripts/audit.sh .)
+
+# The comment gate of ADR-0018 (ticket #72): no `//` comment in a `.rs` file cites
+# a section, an ADR or an issue, and none runs past three lines. One pass over the
+# sources, no cargo and no compile.
+#
+# `comments-tier` is the probe alone, because `comments` runs the probe's contract
+# test first and that test drives `comments-tier`; a stage that drove itself would
+# never end. `skippable` because a machine with no awk cannot read a comment at
+# all, and a machine that cannot read the tree must not be told it is clean.
+comments:
+	$(call stage,comments-test,bash scripts/comments-probe-test.sh)
+	$(call skippable,comments,bash scripts/comments-probe.sh)
+
+comments-tier:
+	$(call skippable,comments,bash scripts/comments-probe.sh)
 
 test:
 	$(call stage,test,cargo test --workspace)
