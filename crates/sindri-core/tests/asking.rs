@@ -123,6 +123,38 @@ fn the_answers_text_is_what_the_run_answers_with() {
 }
 
 #[test]
+fn a_reply_carries_what_its_ask_spent_and_the_total_stays_the_runs() {
+    let replay = Replay::new([Canned::stream(ANTHROPIC), Canned::stream(ANTHROPIC)]);
+    let asking = Asking::new(client_over(&replay), ask());
+    let mut first = Run::new("triage this", asking.clone(), Unreached);
+    let mut second = Run::new("triage this", asking.clone(), Unreached);
+
+    first.drive(&mut Transcript::default());
+    second.drive(&mut Transcript::default());
+
+    assert_eq!(
+        first.history()[0].usage.input,
+        Some(11),
+        "the turn's exchange says what that turn's ask was handed"
+    );
+    assert_eq!(
+        first.history()[0].usage.output,
+        Some(7),
+        "and what it was answered with"
+    );
+    assert_eq!(
+        second.history()[0].usage.input,
+        Some(11),
+        "a second ask of the same conversation is the same size, not twice it"
+    );
+    assert_eq!(
+        asking.spent().input,
+        Some(22),
+        "while the total the record reads is still every ask summed"
+    );
+}
+
+#[test]
 fn a_refused_ask_stops_the_run_in_the_one_line_safe_to_print() {
     let replay = Replay::new([Canned::reply(400, BAD_REQUEST)]);
     let mut run = Run::new(

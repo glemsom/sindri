@@ -41,7 +41,7 @@ use serde_json::Value;
 use crate::bash::{self, Outcome};
 use crate::config::Config;
 use crate::policy::{Boundary, DEFAULT_COMMAND_BUDGET_MS, DEFAULT_OUTPUT_BUDGET_BYTES};
-use crate::provider::{Deltas, Failure};
+use crate::provider::{Deltas, Failure, Usage};
 use crate::redact::{Redacted, SecretSet};
 use crate::skills::Catalog;
 use crate::tools::{BASH, SKILL, ToolSet};
@@ -453,7 +453,8 @@ pub struct Acted {
     pub exit: Exit,
 }
 
-/// What one request answered: the text, and the calls it asked for.
+/// What one request answered: the text, the calls it asked for, and what the ask
+/// spent.
 ///
 /// A reply that asks for no call is a complete answer and stops the run as
 /// `final`; a reply that asks for calls hands them back to the loop, which runs
@@ -464,6 +465,9 @@ pub struct Reply {
     pub text: String,
     /// The calls it asked for, in the order it asked.
     pub calls: Vec<Call>,
+    /// What this ask spent, as much of it as the wire reported: the size the
+    /// conversation had, and never a running total of the run's asks.
+    pub usage: Usage,
 }
 
 impl Reply {
@@ -471,7 +475,7 @@ impl Reply {
     pub fn answer(text: impl Into<String>) -> Reply {
         Reply {
             text: text.into(),
-            calls: Vec::new(),
+            ..Reply::default()
         }
     }
 
@@ -480,12 +484,19 @@ impl Reply {
         Reply {
             text: text.into(),
             calls: calls.into_iter().collect(),
+            ..Reply::default()
         }
+    }
+
+    /// This reply, carrying what its ask spent.
+    pub fn spent(mut self, usage: Usage) -> Reply {
+        self.usage = usage;
+        self
     }
 }
 
-/// One exchange in a run's history: the turn it belongs to, what the reply said
-/// and what it asked for.
+/// One exchange in a run's history: the turn it belongs to, what the reply said,
+/// what it asked for and what its ask spent.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Exchange {
     /// The turn that produced it, counted from one.
@@ -494,6 +505,9 @@ pub struct Exchange {
     pub text: String,
     /// The calls the reply asked for.
     pub calls: Vec<Call>,
+    /// What this turn's ask spent, so a history of the conversation says how big
+    /// the conversation was at each turn rather than what the run spent in all.
+    pub usage: Usage,
 }
 
 /// One turn's request, as the model seam receives it: the human's own words, the
@@ -788,6 +802,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
             turn: self.turns,
             text: reply.text.clone(),
             calls: reply.calls.clone(),
+            usage: reply.usage,
         });
 
         // Each call is charged as it lands, so a spent budget stops the rest of the turn.

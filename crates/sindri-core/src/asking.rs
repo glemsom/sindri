@@ -21,7 +21,7 @@ use crate::records::Usage;
 use crate::run::{Reply, Request, Responder};
 
 /// The model, as the loop needs it: one ask put to one wire per turn, with the
-/// reply's text handed back as the turn's answer.
+/// reply's text and the tokens that ask spent handed back as the turn's answer.
 #[derive(Clone, Debug)]
 pub struct Asking {
     /// Where a request goes: the provider seam, and never a client library.
@@ -30,7 +30,8 @@ pub struct Asking {
     ask: Ask,
     /// What the asks have spent so far, summed as each reply lands: a `Responder`
     /// is asked through a shared reference, so the total is behind a lock and is
-    /// shared by every clone of this value.
+    /// shared by every clone of this value. The reply carries the ask's own report
+    /// and this carries the sum, because a turn's context is not a run's spend.
     spent: Arc<Mutex<Usage>>,
 }
 
@@ -69,6 +70,6 @@ impl Responder for Asking {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .charge(&answer.usage);
-        Ok(Reply::answer(answer.text))
+        Ok(Reply::answer(answer.text).spent(answer.usage))
     }
 }

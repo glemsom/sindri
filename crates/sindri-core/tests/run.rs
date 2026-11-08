@@ -21,7 +21,7 @@ use sindri_core::config::Config;
 use sindri_core::policy::{
     Boundary, DEFAULT_COMMAND_BUDGET_MS, DEFAULT_OUTPUT_BUDGET_BYTES, Enforcement,
 };
-use sindri_core::provider::{Deltas, Failure};
+use sindri_core::provider::{Deltas, Failure, Usage};
 use sindri_core::redact::{Redacted, SecretSet};
 use sindri_core::run::{
     Acted, Budget, Call, Cancel, Executor, Exit, Limits, Load, Loaded, Reply, Request, Responder,
@@ -99,6 +99,16 @@ fn command(line: &str) -> Call {
 /// A model that always asks for one more command, so no turn is ever final.
 fn loopy() -> Reply {
     Reply::asking("more", [command("true")])
+}
+
+/// What one ask spent, as the wire reported it: the input a conversation is, and
+/// the output the answer cost.
+fn spent(input: Option<u64>, output: Option<u64>) -> Usage {
+    Usage {
+        input,
+        output,
+        ..Usage::default()
+    }
 }
 
 /// The tools a test hands the loop: what one call costs the run, whether calls
@@ -201,6 +211,68 @@ fn a_turn_is_one_request_and_the_calls_it_asks_for() {
         state,
         State::Running,
         "a turn that asked for a call has not answered yet"
+    );
+}
+
+#[test]
+fn a_turns_exchange_carries_what_that_turns_ask_spent_and_not_the_total() {
+    let mut run = Run::new(
+        "count the files",
+        Scripted::answering([
+            Reply::asking("running it", [command("true")]).spent(spent(Some(1_200), Some(20))),
+            Reply::answer("twelve").spent(spent(Some(1_400), Some(9))),
+        ]),
+        Tools::cheap(),
+    );
+
+    run.drive(&mut Transcript::default());
+
+    let history = run.history();
+    assert_eq!(history.len(), 2, "two asks, two exchanges");
+    assert_eq!(
+        history[1].usage.input,
+        Some(1_400),
+        "the second exchange is the second ask's input, and never the sum of both"
+    );
+    assert_eq!(
+        history[0].usage.input,
+        Some(1_200),
+        "and the first keeps its own ask's report"
+    );
+    assert_eq!(
+        history[1].usage.output,
+        Some(9),
+        "the output rides the same exchange, so one turn's cost is in one place"
+    );
+}
+
+#[test]
+fn an_ask_that_reported_no_input_leaves_the_size_unknown_rather_than_zero() {
+    let mut run = Run::new(
+        "say hi",
+        Scripted::answering([
+            Reply::asking("running it", [command("true")]).spent(spent(None, Some(3))),
+            Reply::answer("hello"),
+        ]),
+        Tools::cheap(),
+    );
+
+    run.drive(&mut Transcript::default());
+
+    let history = run.history();
+    assert_eq!(
+        history[0].usage.input, None,
+        "a count nobody reported is absent, not a size of zero"
+    );
+    assert_eq!(
+        history[0].usage.output,
+        Some(3),
+        "and the half that was reported is still reported"
+    );
+    assert_eq!(
+        history[1].usage,
+        Usage::default(),
+        "a reply built without a spend carries nothing spent"
     );
 }
 
