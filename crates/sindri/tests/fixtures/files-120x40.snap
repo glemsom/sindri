@@ -9,8 +9,8 @@ files at 120x40
 03 |    Cargo.toml                                                                                                          | plain:120
 04 |    GLOSSARY.md                                                                                                         | plain:120
 05 |    Makefile                                                                                                            | plain:120
-06 |    docs/SPEC.md                                                                                                        | plain:120
-07 |    docs/adr/0017-a-mode-is-one-screen-and-one-key-table.md                                                             | plain:120
+06 |    docs/adr/0018-the-specs-link-to-code-is-the-test.md                                                                 | plain:120
+07 |    docs/agents/domain.md                                                                                               | plain:120
 08 |    crates/sindri-core/src/records.rs                                                                                   | plain:120
 09 |    crates/sindri/src/keys.rs                                                                                           | plain:120
 10 |                                                                                                                        | plain:120
