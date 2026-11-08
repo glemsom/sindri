@@ -31,10 +31,9 @@ use sindri::mermaid::Diagram;
 /// because there is no golden beside it any more.
 const CORPUS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/mermaid");
 
-/// How long this eval waits for one fence, which is its own patience and deliberately not
-/// `mermaid::BOUND`: a bound on a stall a reader feels says nothing about what a corpus of
-/// every diagram type costs on a shared runner, and reading it as one made this eval red for
-/// work that takes milliseconds.
+/// How long this eval waits for one fence: its own patience, deliberately not
+/// `mermaid::BOUND`, because a bound on a stall a reader feels says nothing about what a
+/// corpus costs on a shared runner.
 const EVAL_BOUND: Duration = Duration::from_secs(30);
 
 /// The corpus, in name order, so two runs of the test walk the same fences.
@@ -46,6 +45,12 @@ fn corpus() -> Vec<PathBuf> {
         .collect();
     fences.sort();
     fences
+}
+
+/// The fence `path` holds, or a panic naming the file that is not readable.
+fn source(path: &Path) -> String {
+    std::fs::read_to_string(path)
+        .unwrap_or_else(|error| panic!("{} is readable: {error}", path.display()))
 }
 
 /// `fence.mmd` as a test names it, which is how a failure says which fence it was.
@@ -66,11 +71,14 @@ fn every_fence_in_the_corpus_is_drawn_as_a_picture_that_measures() {
         fences.len()
     );
 
+    // The first draw in a process pays the renderer's start-up as well as the drawing, and
+    // that is no fence's cost: one is drawn untimed so every number below is a drawing.
+    let _ = Diagram::of_within(EVAL_BOUND, &source(&fences[0]));
+
     let mut failures = Vec::new();
     let mut slowest: Option<(String, Duration)> = None;
     for path in &fences {
-        let source = std::fs::read_to_string(path)
-            .unwrap_or_else(|error| panic!("{} is readable: {error}", path.display()));
+        let source = source(path);
         let started = Instant::now();
         let diagram = match Diagram::of_within(EVAL_BOUND, &source) {
             Ok(diagram) => diagram,
@@ -118,7 +126,7 @@ fn every_fence_in_the_corpus_is_drawn_as_a_picture_that_measures() {
         "every fence in the corpus is drawn as a picture that measures:\n{}",
         failures.join("\n")
     );
-    let (slowest, taken) = slowest.expect("every fence that passed the guard drew");
+    let (slowest, taken) = slowest.expect("every fence drew, so one of them was the slowest");
     println!(
         "\ncheck: eval mermaid-corpus ... ok ({} fences, slowest {slowest} at {} ms)",
         fences.len(),

@@ -117,10 +117,8 @@ impl Diagram {
     }
 
     /// Draws `source` within `bound`: the wall clock the caller can afford to wait.
-    ///
-    /// [`BOUND`] is the patience of a reader watching a frame. A caller with no reader to
-    /// wait on — a corpus drawn one fence after another on a shared machine — names its own,
-    /// instead of reading the product's promise as a measure of what a diagram costs.
+    /// [`BOUND`] is the patience of a reader watching a frame, and a caller with no reader
+    /// waiting names its own instead.
     pub fn of_within(bound: Duration, source: &str) -> Result<Diagram, Refusal> {
         warmed();
         let fence = source.to_owned();

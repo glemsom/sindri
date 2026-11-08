@@ -124,9 +124,8 @@ fn a_render_that_outlasts_its_bound_is_refused_rather_than_hanging_the_transcrip
     );
 }
 
-/// A caller who names a wall clock gets its own: the eval draws a corpus on a shared runner
-/// and needs more patience than a reader watching a frame, and the number it was given is the
-/// number its refusal carries.
+/// A bound the caller names is the bound its refusal carries, so a patience chosen for work
+/// nobody is waiting on is not read back as the product's own.
 #[test]
 fn a_render_is_refused_with_the_bound_its_caller_gave_it() {
     let bound = Duration::from_millis(1);
