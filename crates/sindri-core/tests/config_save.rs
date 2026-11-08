@@ -621,7 +621,7 @@ fn every_key_a_screen_shows_is_the_text_a_save_of_it_reads_back() {
     let written = every_key_touched();
     let shown = Config::from(written.clone());
 
-    // The one key a screen may not show: a secret is masked wherever it is drawn (§11),
+    // The one key a screen may not show: a secret is masked wherever it is drawn,
     // so its row is a mask and never the text a file would hold.
     let mut readers = Vec::new();
     for key in Config::KEYS {

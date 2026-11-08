@@ -78,7 +78,6 @@ fn a_width_change_invalidates_the_cache_and_reflows_once() {
     );
     assert_eq!(rows.lays(), shown, "the first pass lays out what it shows");
 
-    // The same width, asked again, is the same picture and costs no layout at all.
     let again = rows.window(Scroll::Tail, 6);
     assert_eq!(again.pieces().len(), shown);
     assert_eq!(
@@ -87,8 +86,6 @@ fn a_width_change_invalidates_the_cache_and_reflows_once() {
         "a paint at an unchanged width re-lays nothing"
     );
 
-    // The newest answer is on screen either way, and narrower is taller: the rows
-    // itself are relaid, not merely recounted.
     let newest = rows.len() - 1;
     let wide_rows = rows.rows(newest).len();
 
@@ -112,8 +109,6 @@ fn a_width_change_invalidates_the_cache_and_reflows_once() {
         "reading the rows costs nothing extra"
     );
 
-    // The cache holds one width, as the ADR decided: going back is a reflow, not a
-    // lookup of what the wider width used to hold.
     rows.resize(80);
     let restored = rows.window(Scroll::Tail, 6).pieces().len();
     assert_eq!(rows.lays(), shown + reflowed + restored);
@@ -232,8 +227,6 @@ fn scrolling_the_whole_transcript_lays_each_entry_out_once() {
         "the whole history was laid out, one entry at a time"
     );
 
-    // Scrolling back down to the tail is the same walk over rows the cache already
-    // holds, and it lays out nothing new.
     for back in (0..=260).rev() {
         rows.window(Scroll::Back(back), room);
     }
@@ -532,7 +525,6 @@ fn a_live_entry_is_laid_out_alone_as_its_fragments_land() {
     }
     rows.resize(60);
 
-    // The settled picture first: the entries the band reaches, laid out to be drawn.
     rows.window(Scroll::Tail, 20);
     let settled = rows.lays();
     assert!(
@@ -591,8 +583,6 @@ fn a_settled_turn_is_drawn_from_its_facts_and_never_twice() {
         "the live entry is drawn while it is live"
     );
 
-    // The turn ends: what it said is written down as the fact it is, and the live entry
-    // goes with the same call.
     rows.push(Entry::Assistant {
         turn: 1,
         text: secrets.redact("a fence still open is a code block."),
@@ -605,8 +595,6 @@ fn a_settled_turn_is_drawn_from_its_facts_and_never_twice() {
         "one row for the turn and one for the answer, and no third for a block that was never a fact"
     );
 
-    // The stream is emptied when its turn ends (#43 hands the next turn a new one), and
-    // an empty stream draws no live entry at all.
     rows.live(&Stream::new(), None);
     assert_eq!(
         rows.len(),
@@ -668,8 +656,6 @@ fn a_live_run_opens_the_answers_row_before_it_has_said_anything() {
     assert_eq!(rows_shown(&rows.window(Scroll::Tail, 20)), 1);
     assert_eq!(said(&painted(&rows.rows(0)[0], 40)), "⠋ 0.0s");
 
-    // The mark goes when the run does, and the row it opened goes with it: no mark, no
-    // live entry, and nothing left on the frame claiming a run is in flight.
     rows.live(&Stream::new(), None);
     assert_eq!(rows.len(), 0);
 }
@@ -854,8 +840,6 @@ fn settling_a_call_lays_that_entry_again_and_leaves_the_history_alone() {
     rows.window(Scroll::Tail, 40);
     let laid = rows.lays();
 
-    // What the history was drawn as, entry by entry, before the call settled: every
-    // entry but the last, which is the call this test is about.
     let settled_at = rows.len() - 1;
     let history: Vec<Vec<Row>> = (0..settled_at).map(|at| rows.rows(at).to_vec()).collect();
     assert_eq!(

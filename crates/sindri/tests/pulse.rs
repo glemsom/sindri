@@ -170,10 +170,9 @@ fn a_run_that_reached_its_answer_settles_on_a_check_and_the_duration_it_stopped_
         (String::from("✓"), sindri::ink::Ink::Ok)
     );
 
-    // Twelve point four seconds is past ten, so §12's table says `12s` and not the `12.4s`
-    // the settled form is spelled with in the ticket: one duration comes from one number of
-    // milliseconds, the four bands are the ones frozen, and a marker that kept the decimal
-    // those bands drop would be a second way to say how long a run took.
+    // Twelve point four seconds is past ten, so the marker says `12s` and not
+    // `12.4s`: past ten seconds a duration is whole seconds, and the decimal the
+    // form drops would be a second way to say how long a run took.
     assert_eq!(Pulse::settled(&Stop::Final, 12_400).head().text(), "✓ 12s");
 }
 
@@ -220,8 +219,6 @@ fn the_widest_marker_asks_for_one_cell_and_fourteen_characters() {
         14,
         "fourteen characters is the most any marker says beside its glyph"
     );
-    // One cell for the glyph, a space, and those fourteen: sixteen columns is the widest
-    // a marker ever asks a frame for, which is what has it survive a narrow terminal.
     assert_eq!(widest.head().width(), 16);
 }
 
@@ -264,9 +261,6 @@ fn a_marker_survives_a_narrow_frame() {
     view.set_pulse(Some(Pulse::settled(&Stop::Cancelled, 5_000)));
     let rows = frame(&mut view, 24, 12);
 
-    // Sixteen columns of marker on a twenty-four column frame: the mark is whole and the
-    // answer's first row is what narrows, which is §12's rule that chrome is whole or it is
-    // not drawn, applied to the one row a run is watched on.
     assert!(
         rows[0].starts_with("✗ cancelled 5.0s "),
         "the whole mark, in a frame with room to spare for it: {:?}",
@@ -285,9 +279,6 @@ fn a_settled_marker_is_the_value_at_stop_and_is_never_recomputed() {
         "the duration the run stopped at"
     );
 
-    // A minute on, the frame is painted again from the value that settled it: the marker
-    // reads the same, where a live marker asked for the same second of running reads a
-    // different number entirely.
     assert_eq!(
         Pulse::live(72_400).words(),
         "1m12s",
@@ -298,9 +289,6 @@ fn a_settled_marker_is_the_value_at_stop_and_is_never_recomputed() {
 
 #[test]
 fn a_live_marker_draws_the_answers_row_before_the_answer_has_said_anything() {
-    // A run waiting on a wire has said nothing yet. The answer's row is opened by the
-    // marker anyway, because a frame that showed nothing at all for the length of a
-    // request would be the one silence the pulse exists to break.
     let mut view = View::boot();
     view.set_pulse(Some(Pulse::live(4_200)));
     let rows = frame(&mut view, 60, 12);
@@ -320,7 +308,6 @@ fn a_frame_with_no_run_has_no_marker_on_it() {
         "a boot frame wears no marker: {:?}",
         rows
     );
-    // A key that changes nothing about a run leaves no mark behind either.
     view.key(Key::Char('x'));
     assert!(
         frame(&mut view, 60, 12)

@@ -339,7 +339,7 @@ fn a_cancel_kills_the_command_in_flight_and_the_child_it_started() {
 
     // A `sleep` left in the background is what proves the *group* was killed: a
     // shell that `exec`s one command is one pid, and killing one pid would pass a
-    // test that a `Ctrl-C` on a run of two commands would not (§4).
+    // test that a `Ctrl-C` on a run of two commands would not.
     let command = format!("sleep 30 & echo $! > {}; wait", quoted(&pidfile));
     let started = Instant::now();
     let calling = {

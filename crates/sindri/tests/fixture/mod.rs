@@ -71,10 +71,8 @@ pub fn assert_frame(name: &str, cols: u16, rows: u16) {
     let fixture = format!("{name}-{cols}x{rows}");
     let drawn = drawn(name, cols, rows);
 
-    // `make frame F=…` prints one frame as the code draws it now: a picture nobody
-    // can see is a picture nobody approves. This changes what is printed and never
-    // what is compared, so a stray variable in a shell cannot make a test report a
-    // picture it did not check.
+    // `make frame F=…` only changes what is printed, never what is compared, so a
+    // stray variable in a shell cannot make a test report a picture it did not check.
     if std::env::var("SINDRI_FRAME").as_deref() == Ok(fixture.as_str()) {
         println!("{drawn}");
     }
@@ -104,19 +102,9 @@ fn named(name: &str) -> View {
         "boot" => View::boot(),
         "transcript" => running(transcript(), Scroll::Tail),
         "transcript-scrolled" => running(transcript(), Scroll::Back(4)),
-        // The rail itself, at the five widths §46 names: the frame of a run just begun, so
-        // the ledger, the strip and the row that counts what went are what the eye is asked
-        // to approve and the picture is not the transcript frame checked in twice.
         "rail" => running(opening(), Scroll::Tail),
-        // A run in the middle of a turn: the same history, a sixth turn opened, and that
-        // turn's answer and reasoning still landing (ticket #38).
         "streaming" => streaming(),
-        // Every verdict a call row can wear, one call each: the picture of §12's four
-        // states, approved in the commit that decides them (#40).
         "calls" => running(calls(), Scroll::Tail),
-        // The composer's floor and its ceiling, and the window it scrolls to when the
-        // draft outgrows the ceiling: the growth of §12 as three pictures rather than
-        // as an opinion (ticket #41).
         "typing" => View::typing(draft(&["why does the retry test fail"])),
         "grown" => View::typing(draft(&[
             "read the transcript, then the failing test,",
@@ -135,9 +123,6 @@ fn named(name: &str) -> View {
             "seven: the session it left",
             "eight: the question to ask",
         ])),
-        // §12's markdown, one construct to a frame at 80 columns: the pictures #52's
-        // contract is frozen as, so a heading's weight or a table's rule is approved
-        // once as a picture and cannot drift under a change nobody looked at.
         "markdown-headings" => construct(headings()),
         "markdown-lists" => construct(lists()),
         "markdown-table" => construct(table()),
@@ -145,65 +130,33 @@ fn named(name: &str) -> View {
         "markdown-code" => construct(code()),
         "markdown-inline" => construct(inline()),
         "markdown-link" => construct(link()),
-        // A table two hundred columns wide drawn in forty: a table wraps inside its
-        // cells and keeps its header's rule rather than reflowing into a paragraph.
         "markdown-table-narrow" => construct(narrow()),
-        // The marker at the head of the newest answer, twice: the run still live and
-        // carrying its elapsed time, and the same run stopped with the duration it stopped
-        // at (#39). One history and one answer, so what the eye is asked to approve between
-        // the two pictures is the marker and nothing else. The live one's answer is still
-        // arriving — three of its four fragments have landed — because a marker carrying
-        // elapsed time is for a turn that has not finished speaking.
+        // The live marker's answer is still arriving — three of its four fragments have
+        // landed — because a marker carrying elapsed time is for a turn that has not
+        // finished speaking.
         "pulse-live" => with_pulse(Pulse::live(4_200), &PULSE_ANSWER[..3]),
-        // The settled marker says the duration the run stopped at, and nine point four
-        // seconds rather than the ticket's dozen: §12's table gives a duration past ten
-        // seconds in whole seconds, so the form is the ticket's and the value is the table's.
+        // Nine point four seconds rather than twelve: past ten seconds a duration is
+        // whole seconds, so the marker this picture holds drops the decimal.
         "pulse-settled" => with_pulse(Pulse::settled(&Stop::Final, 9_400), &PULSE_ANSWER),
-        // Prompts typed while a run is live, waiting above the composer and counted in one
-        // row, with a fourth being typed under them (ticket #42, §12).
         "queue" => queue(),
-        // The `?` screen, opened through the same key a reader presses rather than by
-        // reaching into the stack: the frame lists the keys of the tables that answer
-        // them, so a picture of the screen is a picture of the keymap (ticket #45, §12).
         "keys" => {
             let mut view = View::boot();
             view.key(Key::Char('?'));
             view
         }
-        // The `@` picker over a workspace of its own, opened through the key a reader
-        // presses: the eight files nearest the directory the run stands in, which is what
-        // a walk of a workspace actually yields (ticket #47, §12).
         "files" => picking(),
-        // The `/model` screen: the names the wire serves, narrowed by a query typed into the
-        // screen, arrived at through the keys a reader presses and the listing a terminal
-        // hands back (#48, §10).
         "models" => model_screen(),
-        // The settings modal over the config a launch resolved: every key of the schema,
-        // the value each holds, and the row a key acts on marked (ticket #49, §12,
-        // ADR-0009). The screen opened through the seam `/settings` will call, since that
-        // command is #48's and this ticket owns the screen it opens.
         "settings" => {
             let mut view = View::boot();
             view.open_settings(&in_force());
             view
         }
-        // The same screen after a value it will not take: the refusal under the list,
-        // naming the key that has to change, and no file written (§11, ticket #49).
         "settings-refused" => refused(),
-        // The footer's hints at the six widths #57 freezes: the frame a launch opens on,
-        // drawn short so the one row that carries words is the bottom one, and the same
-        // frame at every width so what the eye approves between two pictures is the hints
-        // that went and nothing else (ticket #57, §12).
         "footer" => View::boot(),
-        // §12's picture block, as the frame draws it: the words a picture is spoken of as, the
-        // gutter rows the placement would cover, and the caption a refused source is said with
-        // (#55). The picture is taller than the band, so it is not placed at all — a block the
-        // band does not hold whole keeps its words and is never half-drawn — which is also what
-        // lets the frame be written down: a placement is an escape sequence, and a fixture is
-        // glyphs and inks (ADR-0012).
+        // The picture is taller than the band, so it is never placed: a block the band
+        // does not hold whole keeps its words, which is also what lets the fixture be
+        // glyphs and inks rather than an escape sequence.
         "picture" => pictured(),
-        // A drag over the transcript: the cells a reader has marked, painted in the ink
-        // a selection is read in, and the very cells `Ctrl-Y` hands out (#50).
         "mark" => {
             let mut view = View::of(transcript(), Scroll::Tail);
             view.drag(mark::Cell::new(20, 0), mark::Cell::new(23, 70));
@@ -239,9 +192,9 @@ fn pictured() -> View {
             "![a diagram outside the workspace](../outside-the-workspace.svg)\n\n![a tall field]\
              (tall.svg)",
         )],
-        // Far enough back that the band starts at the top of the answer, which is the row the
-        // tall picture's block begins on: the block is a hundred rows and the band is
-        // thirty-seven.
+        // Far enough back that the band starts at the top of the answer, which is the
+        // row the tall picture's block begins on: the block is a hundred rows and the
+        // band is thirty-seven.
         Scroll::Back(70),
     );
     view.set_workspace(workspace);
@@ -360,8 +313,8 @@ fn picking() -> View {
         "crates/sindri/src/rows.rs",
         "crates/sindri/src/view.rs",
         "crates/sindri/tests/frames.rs",
-        // A file the `.gitignore` names and a directory it ignores whole: neither is a row,
-        // and the picture of the picker is only right if they are absent from it.
+        // A file the `.gitignore` names and a directory it ignores whole: neither is a
+        // row, so the picture of the picker is only right if they are absent from it.
         "notes.local.md",
         "target/debug/sindri",
     ] {
@@ -719,9 +672,6 @@ fn calls() -> Vec<Entry> {
              cancels and keeps the draft, so the row says `✗ cancelled` rather than \
              leaving a spinner turning for a result that will never come.",
         ),
-        // A run in progress ends on a call nobody has answered yet: the row names the
-        // call and claims nothing, which is what a cancelled call would stay as if the
-        // verdict never reached it.
         Entry::Turn { turn: 5 },
         call(5, "bash", r#"{"command": "make check STAGES=test"}"#),
     ]

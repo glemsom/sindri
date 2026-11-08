@@ -174,8 +174,6 @@ fn the_pixels_are_made_at_the_cell_size_the_picture_was_measured_at() {
         "and the column past its edge is not touched, so the edge is where the SVG put it"
     );
 
-    // The same picture on a bigger terminal: the pixels follow the cell the TUI probed,
-    // so the edge falls on the boundary the doubled size gives it.
     let doubled = svg.rasterise(CellSize::new(16, 32)).expect("it draws");
     assert_eq!((doubled.width(), doubled.height()), (16, 32));
     assert_eq!(pixel(&doubled, 7, 16), [0, 0, 0, 255]);
@@ -232,8 +230,6 @@ fn a_picture_wider_than_the_band_is_fitted_into_it_and_keeps_its_proportions() {
         "40 by 10 cells of picture fitted into 20 columns is 20 by 5: one scale for both axes"
     );
 
-    // A picture the band already has room for is not stretched to fill it: a four-cell
-    // picture is four cells on a screen eighty columns wide.
     let small = Footprint::fit(40, 40, CellSize::new(10, 20), 80).expect("a picture fits");
 
     assert_eq!(

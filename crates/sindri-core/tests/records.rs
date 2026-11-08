@@ -695,8 +695,6 @@ fn a_status_document_is_one_line_of_the_runs_own_words() {
 
 #[test]
 fn each_of_the_five_states_says_its_own_coarse_line() {
-    // One row per state §14 names, walked as a table: the phase word a status bar keys
-    // off and the coarse line a person reads beside it.
     let told = [
         (Told::Idle, "idle", "waiting for a prompt"),
         (Told::Asking { turn: 4 }, "working", "asking the model"),
@@ -733,9 +731,9 @@ fn each_of_the_five_states_says_its_own_coarse_line() {
 
 #[test]
 fn a_status_line_never_carries_a_word_the_run_was_handed() {
-    // The one place a run's own text could reach a status line is a stop reason that
-    // carries it — a wire's refusal names the request back. The line is the enum's own
-    // words and nothing else, which is what makes §14's rule a type and not a habit.
+    // The one place a run's own text could reach a status line is a stop reason
+    // that carries it — a wire's refusal names the request back. The line is the
+    // enum's own words and nothing else.
     let refused = "the model refused: temperature 9000 is outside [0, 1]";
     let told = Told::Stopped {
         turn: 2,
@@ -1049,7 +1047,6 @@ fn a_killed_run_still_reads() {
             },
         ]
     };
-    // Every turn the child said it had written is whole, four entries to a turn.
     for turn in 1..=last {
         let base = (turn as usize - 1) * 4;
         assert!(
@@ -1062,7 +1059,6 @@ fn a_killed_run_still_reads() {
             "every entry up to the last turn boundary must be there"
         );
     }
-    // And whatever the kill caught mid-flight is a turn part-written, in order.
     let in_flight = expected(last + 1);
     assert!(
         entries.len() - last as usize * 4 <= 4,

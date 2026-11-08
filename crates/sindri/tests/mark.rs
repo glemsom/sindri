@@ -128,9 +128,6 @@ fn a_redraw_keeps_the_highlight_and_ctrl_y_copies_it_again() {
 
     let before = painted(&mut view);
     let taken = copied(&mut view);
-    // Nothing touched the mark: no drag, no key. The frame is drawn again because
-    // something else changed — a fragment landed, the draft grew — and the highlight has
-    // to be on it exactly as it was.
     let after = painted(&mut view);
     let again = copied(&mut view);
 

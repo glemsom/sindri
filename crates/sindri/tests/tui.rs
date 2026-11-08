@@ -135,8 +135,8 @@ impl Wire {
             for stream in listener.incoming() {
                 let Ok(mut stream) = stream else { break };
                 let request = read_request(&mut stream).unwrap_or_default();
-                // A wire asked what it serves answers at once: a listing is not a run, and
-                // nothing waits on one the way a test waits on a reply it is holding (§10).
+                // A wire asked what it serves answers at once: a listing is not a run, so
+                // nothing waits on one the way a reply a test is holding does.
                 let listing = request.starts_with("GET ");
                 listening.lock().expect("the wire's requests").push(request);
                 if listing {
@@ -278,8 +278,8 @@ impl Pty {
         tcsetwinsize(
             &slave,
             // The cells are said, the pixels are not: a terminal that reports no pixel
-            // fields is the shape `the_cell_size_is_asked_of_the_terminal_once` needs, and it
-            // is the common case — most terminals fill neither field.
+            // fields is the shape `the_cell_size_is_asked_of_the_terminal_once` needs, and
+            // most terminals fill neither field.
             Winsize {
                 ws_row: 40,
                 ws_col: 120,
@@ -622,9 +622,6 @@ fn an_idle_terminal_is_painted_once_and_then_left_alone() {
         "the screen is taken: {:?}",
         drawn.text()
     );
-    // §12's one frame a launch owes: the boot frame, whose footer carries the two
-    // hints no width takes away. Nothing has been typed and no fact has arrived, so
-    // once this is on the screen there is nothing left to draw.
     assert!(
         drawn.wait_for(b"Enter send"),
         "the boot frame is drawn once: {:?}",
@@ -642,7 +639,6 @@ fn an_idle_terminal_is_painted_once_and_then_left_alone() {
         drawn.text()
     );
 
-    // And it was waiting rather than gone: the same launch still answers a key.
     pty.type_bytes(&[0x11]);
     assert_eq!(
         session.wait().code(),
@@ -884,8 +880,6 @@ fn a_bracketed_paste_arrives_as_one_draft_with_its_line_breaks_kept() {
             "the draft holds {word:?}, as the clipboard wrote it"
         );
     }
-    // One draft and not three prompts: a box that had sent on a line break would be back
-    // at its two-row floor, and this one is a row taller for each line it kept.
     assert_eq!(
         composer_rows(&frame),
         Some(4),
@@ -971,8 +965,6 @@ fn enter_takes_the_draft_out_of_the_composer() {
         drawn.text()
     );
 
-    // Enter sends: the draft is the run's now, and what a reader sees is the box back at
-    // its floor with the prompt gone from it (§12).
     pty.type_bytes(b"\r");
 
     assert!(
@@ -1011,9 +1003,9 @@ fn ctrl_c_when_idle_clears_the_draft_and_leaves_the_launch_running() {
 
     pty.type_bytes(&[0x03]);
 
-    // No run is wired into this launch yet (#43), so `Ctrl-C` is the idle key and clears
-    // the draft. The caret going home is the proof: a draft kept would leave it in the
-    // nineteenth column and paint nothing at all.
+    // No run is wired into this launch yet, so `Ctrl-C` is the idle key and clears
+    // the draft. The caret going home is the proof: a draft kept would leave it in
+    // the nineteenth column and paint nothing at all.
     assert!(
         drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == 1)),
         "Ctrl-C cleared the draft: {:?}",
@@ -1039,10 +1031,9 @@ fn question_mark_opens_the_keys_screen_and_escape_gives_the_frame_back() {
         drawn.text()
     );
 
-    // `?` is the key the footer names, and with an empty draft it is a key rather than a
-    // glyph: one screen listing the keys in force, over the whole frame. A frame paints
-    // the cells that changed and skips the blanks between runs of words, so a word the
-    // screen says and the draft never does is what is looked for.
+    // `?` with an empty draft is a key rather than a glyph. A frame paints only the cells
+    // that changed and skips blanks between words, so a word the screen says and the
+    // draft never does is what is looked for.
     pty.type_bytes(b"?");
     assert!(
         drawn.wait_until(|frame| frame.contains("Backspace")),
@@ -1050,8 +1041,8 @@ fn question_mark_opens_the_keys_screen_and_escape_gives_the_frame_back() {
         drawn.text()
     );
 
-    // Esc gives the frame back: the hints the screen covered are painted again, and
-    // painted after the screen's own words rather than left over from before it.
+    // Esc gives the frame back: the hints the screen covered are painted again,
+    // after the screen's own words rather than left over from before it.
     pty.type_bytes(b"\x1b");
     assert!(
         drawn.wait_until(|frame| last(frame, "Enter send") > last(frame, "Backspace")),
@@ -1131,7 +1122,6 @@ fn ctrl_c_in_a_run_cancels_it_and_keeps_the_draft() {
     );
     ask(&mut pty, &drawn, &wire);
 
-    // A draft typed while the run is live: the one a cancel has to keep (§12).
     pty.type_bytes(b"a second thought");
     assert!(
         drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == 17)),
@@ -1150,8 +1140,6 @@ fn ctrl_c_in_a_run_cancels_it_and_keeps_the_draft() {
         drawn.text()
     );
 
-    // The run stops when the request in flight does, and says so in the record it was
-    // writing as it went (§4, §13).
     wire.release();
     assert!(
         recorded(&ground.state, r#""stopped": "cancelled""#),
@@ -1220,12 +1208,9 @@ fn a_cancelled_run_settles_as_cancelled_and_the_settled_frame_is_left_alone() {
         drawn.text()
     );
 
-    // The user's own word, and the run stops when the request in flight does.
     pty.type_bytes(&[0x03]);
     wire.release();
 
-    // Cancelled is settled as cancelled: the marker says the word, and not the cross a
-    // failure wears with nothing beside it.
     assert!(
         drawn.wait_until(|frame| frame.contains("cancelled")),
         "a cancelled run settles as cancelled: {:?}",
@@ -1274,14 +1259,14 @@ fn an_outside_sigint_stops_the_run_and_gives_the_terminal_back() {
     );
     ask(&mut pty, &drawn, &wire);
 
-    // The user's word from outside the keyboard: `Ctrl-C` reaches a raw terminal as a byte,
-    // so a `kill -INT` is the other door into the one cancellation (§4).
+    // The user's word from outside the keyboard: `Ctrl-C` reaches a raw terminal
+    // as a byte, so a `kill -INT` is the other door into the one cancellation.
     let interrupted = session.interrupt();
     assert!(interrupted, "the signal was delivered to the launch");
 
-    // The run stops when the request in flight does, and the launch gives the terminal back
-    // rather than dying with it: the screen it took is put back, and §15's cancellation code
-    // is the launch's.
+    // The run stops when the request in flight does, and the launch gives the
+    // terminal back rather than dying with it: the screen it took is put back, and
+    // the cancellation code is the launch's.
     wire.release();
     let status = session.wait();
     assert_eq!(
@@ -1351,8 +1336,6 @@ fn enter_during_a_run_keeps_the_prompt_above_the_composer() {
     );
     ask(&mut pty, &drawn, &wire);
 
-    // `Enter` with a run in flight cannot run the prompt, so the prompt waits above the
-    // composer and the frame says how many are waiting in a row of its own (§12).
     queue(&mut pty, &drawn, "read the test that failed");
 
     let frame = drawn.text();
@@ -1391,13 +1374,9 @@ fn the_prompts_typed_during_a_run_run_in_the_order_they_were_typed() {
     );
     ask(&mut pty, &drawn, &wire);
 
-    // Two prompts typed while the first run waits on the wire: neither runs beside it, and
-    // neither is thrown away.
     queue(&mut pty, &drawn, "second");
     queue(&mut pty, &drawn, "third");
 
-    // The run in flight stops when its request is answered, and what runs next is the queue,
-    // oldest first: the wire is asked for the prompt typed first, then the one behind it (§12).
     wire.release();
     assert!(
         wire.wait_for_prompt("second"),
@@ -1440,9 +1419,9 @@ fn ctrl_x_drops_the_newest_prompt_the_queue_holds() {
     queue(&mut pty, &drawn, "keep this");
     queue(&mut pty, &drawn, "drop this");
 
-    // `Ctrl-X` drops the newest queued prompt (§12). The `x` typed straight after it is the
-    // proof the key was answered: the loop answers one key before the next, so a glyph the
-    // frame painted is a `Ctrl-X` already acted on.
+    // The `x` typed straight after `Ctrl-X` is the proof the key was answered: the
+    // loop answers one key before the next, so a glyph the frame painted is a
+    // `Ctrl-X` already acted on.
     pty.type_bytes(&[0x18]);
     pty.type_bytes(b"x");
     assert!(
@@ -1486,9 +1465,6 @@ fn up_on_the_first_line_takes_the_newest_queued_prompt_back() {
     queue(&mut pty, &drawn, "keep this");
     queue(&mut pty, &drawn, "the newest");
 
-    // `↑` with the caret on the composer's first line and nothing typed: the thing above the
-    // caret is the queue, so the newest queued prompt is the draft again (§12) — the caret
-    // lands one column past its last glyph, which is how a test reads the words as back.
     pty.type_bytes(b"\x1b[A");
     assert!(
         drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == 11)),
@@ -1496,8 +1472,6 @@ fn up_on_the_first_line_takes_the_newest_queued_prompt_back() {
         drawn.text()
     );
 
-    // And it left the queue: the run that starts next is the prompt still waiting in it,
-    // because the recalled one is a draft — nothing runs it until `Enter` does.
     wire.release();
     assert!(
         wire.wait_for_prompt("keep this"),
@@ -1581,8 +1555,6 @@ fn slash_model_offers_the_names_the_wire_serves_and_enter_writes_the_one_chosen(
         drawn.text()
     );
 
-    // `/model` is a command line and not a prompt: no run is started and the request that
-    // was never made is not one the wire heard.
     command(&mut pty, &drawn, "/model");
     assert!(
         drawn.wait_until(|frame| { frame.contains(FIRST_SERVED) && frame.contains(SECOND_SERVED) }),
@@ -1598,10 +1570,9 @@ fn slash_model_offers_the_names_the_wire_serves_and_enter_writes_the_one_chosen(
         wire.requests()
     );
 
-    // A query typed into the screen ranks it: `haiku` leaves the second name, so `Enter`
-    // takes the name the query named rather than the first the wire listed (§12). The
-    // query is waited for before the `Enter`, because a terminal handed both in one read
-    // hands over a paste, and no line break in a paste sends.
+    // The query is typed and waited for before the `Enter`, because a terminal
+    // handed both in one read hands over a paste, and no line break in a paste
+    // sends.
     pty.type_bytes(b"haiku");
     assert!(
         drawn.wait_until(|frame| row_of(frame, "Claude Haiku 4.5") == Some(3)),
@@ -1644,8 +1615,6 @@ fn slash_model_with_a_name_sets_a_model_the_wire_never_offered() {
         drawn.text()
     );
 
-    // A name no listing holds: the point of the command form, and the reason a wire that
-    // cannot answer is a hint rather than a refusal (§10, §12).
     command(&mut pty, &drawn, "/model a-name-the-wire-never-served");
 
     let written = written_model(&config, "a-name-the-wire-never-served");
@@ -1669,8 +1638,9 @@ fn slash_help_opens_the_keys_in_force_and_slash_settings_its_own_screen() {
         drawn.text()
     );
 
-    // `Backspace` is a word only the keys screen says: the footer the composer keeps names
-    // two hints, and the screen that lists every key in force names this one.
+    // `Backspace` is a word only the keys screen says: the footer the composer
+    // keeps names two hints, and the screen that lists every key in force names
+    // this one.
     command(&mut pty, &drawn, "/help");
     assert!(
         drawn.wait_until(|frame| frame.contains("Backspace")),
@@ -1678,8 +1648,6 @@ fn slash_help_opens_the_keys_in_force_and_slash_settings_its_own_screen() {
         drawn.text()
     );
 
-    // Esc gives the frame back, and the footer coming back after the screen's own words is
-    // how the frame says so — the same drawing `?` is closed on.
     pty.type_bytes(b"\x1b");
     assert!(
         drawn.wait_until(|frame| last(frame, "Enter send") > last(frame, "Backspace")),
@@ -1693,8 +1661,8 @@ fn slash_help_opens_the_keys_in_force_and_slash_settings_its_own_screen() {
         drawn.text()
     );
 
-    // And it gives the frame back the way the keys screen does; `Ctrl-Q` is the composer's
-    // key, so the screen is closed before the launch is asked to end.
+    // And it gives the frame back the way the keys screen does; `Ctrl-Q` is the
+    // composer's key, so the screen is closed before the launch is asked to end.
     pty.type_bytes(b"\x1b");
     assert!(
         drawn.wait_until(|frame| last(frame, "Enter send") > last(frame, "settings")),
@@ -1744,8 +1712,8 @@ fn slash_new_clears_the_frame_and_leaves_the_session_it_superseded_running() {
         drawn.text()
     );
 
-    // A run in flight, its reply held at the wire: the session it is recorded under exists
-    // and says `running` because no stop reason has landed yet (§13).
+    // A run in flight, its reply held at the wire: the session it is recorded
+    // under exists and says `running` because no stop reason has landed yet.
     ask(&mut pty, &drawn, &wire);
 
     command(&mut pty, &drawn, "/new");
@@ -1771,8 +1739,6 @@ fn slash_new_clears_the_frame_and_leaves_the_session_it_superseded_running() {
         wire.requests()
     );
 
-    // The run it left still reaches its own stop reason, in its own record: nothing of the
-    // conversation was written off, only the frame's hold of it was dropped.
     wire.release();
     assert!(
         drawn.wait_until(|frame| ANSWER_WORDS.iter().all(|word| frame.contains(word))),

@@ -58,8 +58,6 @@ fn thought_and_answer_fragments_land_in_the_order_they_arrive() {
         "a thought is read in reasoning's ink, inside its rule; an answer in the frame's"
     );
 
-    // And the turn settles into the runs it was said in, which is what a run writes
-    // down as entries when the turn ends: one fact per run, in this order.
     assert_eq!(
         stream.said().collect::<Vec<_>>(),
         [
