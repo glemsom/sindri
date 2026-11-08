@@ -31,11 +31,14 @@
 #                                              the reason is the line above
 #   1   release: FAIL (...)                    it ran and failed
 #
-# Two reasons to skip, and only two, both facts about the machine rather than the
-# tree: no bwrap, or a kernel that will not let bwrap unshare — the same pair
-# scripts/sandbox-probe.sh skips on — and a shell that has lost the musl C
-# compiler it pins (see `toolchain_gap` below). A skip is printed, never counted
-# as a pass, and keeps the run's exit 0.
+# One reason to skip, and only one, and it is a fact about the machine rather than
+# the tree: no bwrap, or a kernel that will not let bwrap unshare — the same pair
+# scripts/sandbox-probe.sh skips on. Every other thing the build can want is the
+# shell's own pin (`devbox.json` names `zig` and `cargo-zigbuild`) or the tree's
+# own defect, so a build that cannot link is a FAIL. A skip over it would be a
+# green line no day could ever contradict: the output that excuses the compiler is
+# the output a broken toolchain and a broken tree print alike. A skip is printed,
+# never counted as a pass, and keeps the run's exit 0.
 #
 #     devbox run -- make release
 #     devbox run -- bash scripts/release-probe.sh
@@ -74,34 +77,14 @@ finish() {
   exit 0
 }
 
-# toolchain_gap BUILD_OUTPUT -- true when the build failed for the one reason this
-# stage knows by name: the C half of rustls's crypto provider (aws-lc-rs) was
-# compiled by a compiler that targets glibc rather than musl, so it references
-# stdio entry points rustc's bundled musl does not define. The shell pins `zig cc`
-# and step 1 builds with it, so this is the shape of a shell that lost the
-# compiler it pinned: the stage says so and skips rather than failing a tree that
-# is not at fault. Any other link or compile error is a FAIL: this predicate is
-# the symbols below and nothing else.
-toolchain_gap() {
-  local said=$1
-  local symbol
-  for symbol in __isoc23_sscanf __isoc99_sscanf __fprintf_chk __snprintf_chk; do
-    if [[ $said == *"undefined reference to \`$symbol'"* ]]; then
-      return 0
-    fi
-  done
-  return 1
-}
-
 if ! command -v cargo >/dev/null 2>&1; then
   bad 'cargo is not on PATH: run this inside `devbox shell`'
   finish
 fi
 
 if ! command -v cargo-zigbuild >/dev/null 2>&1; then
-  skip 'cargo-zigbuild is not on PATH: run this inside `devbox shell`'
-  printf 'release: skipped (no musl C compiler)\n'
-  exit "$SKIPPED_STATUS"
+  bad 'cargo-zigbuild is not on PATH: run this inside `devbox shell`'
+  finish
 fi
 
 # 1. The artefact, built the way the product ships it: `cargo zigbuild` puts the C
@@ -113,11 +96,6 @@ fi
 if said=$(RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C strip=none" \
     cargo zigbuild --release --target "$target" --package sindri 2>&1); then
   ok "cargo zigbuild --release --target $target --package sindri"
-elif toolchain_gap "$said"; then
-  skip "$(grep -m1 'undefined reference to' <<<"$said" | sed 's/^ *//')"
-  skip "the musl target's C was compiled against glibc headers: the shell has lost the musl C compiler it pins"
-  printf 'release: skipped (no musl C compiler)\n'
-  exit "$SKIPPED_STATUS"
 else
   bad "cargo zigbuild --release --target $target --package sindri failed:"
   printf '%s\n' "$said"
