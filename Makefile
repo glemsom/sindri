@@ -35,9 +35,10 @@
 #   ... SKIPPED         a stage the machine would not let run — the sandbox tier
 #                       when the kernel forbids unprivileged user namespaces,
 #                       which is the case ticket #7 exists for; the release path
-#                       when there is no bwrap, or no musl C compiler on PATH;
-#                       the gate when there is no cargo on PATH; the comment gate
-#                       when there is no awk, no sort, or no way to list the tree.
+#                       when there is no bwrap, or a kernel that will not let one
+#                       be made; the gate when there is no cargo on PATH; the
+#                       comment gate when there is no awk, no sort, or no way to
+#                       list the tree.
 #                       The reason is the line above the verdict, the exit stays 0,
 #                       and the verdict is deliberately not `ok`: a green line
 #                       over code nothing covered is the one lie this target
@@ -256,11 +257,12 @@ no-relink:
 # probe's contract test first, and `release-tier` is the probe alone, which is what
 # that test drives. A test that ran itself would never end.
 #
-# The probe is `skippable` because of what it can honestly lack: bwrap, when the
-# kernel forbids unprivileged user namespaces, and the musl C compiler the shell
-# pins — without `zig cc` the C half of rustls's crypto provider is built by a
-# glibc compiler, and the artefact cannot be linked. Both say so in a printed line
-# and a SKIPPED verdict; neither is ever an `ok`.
+# The probe is `skippable` for one thing and one thing only: bwrap, when the kernel
+# forbids unprivileged user namespaces. Everything else it needs is pinned by
+# `devbox.json` — `zig` and `cargo-zigbuild` compile the C half of rustls's crypto
+# provider for musl — so a build that cannot link is a defect in the tree or the
+# shell, reported as a FAIL. A skip over that output could never say so: the same
+# `undefined reference` is what a broken toolchain and a broken tree print.
 release:
 	$(call stage,release-test,bash scripts/release-probe-test.sh)
 	$(call skippable,release,bash scripts/release-probe.sh)
