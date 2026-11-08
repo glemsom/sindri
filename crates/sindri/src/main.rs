@@ -14,9 +14,6 @@ mod batch; // is the Unix filter: a prompt in, the answer and one newline out
 mod cli; // the command line as clap sees it
 mod doctor; // the honest window: it proves the sandbox
 mod launch; // one launch's run, assembled the same way whichever front end asked for it
-// The host spawns the opener and this binary does not open a tool call yet: #40's
-// tool-call rows are what will call it, so until one lands the module is complete
-// and unreached.
 #[allow(dead_code)]
 mod open; // the host spawns the opener, because the sandbox has no display
 mod osc; // sequences that carry words out of the terminal
@@ -39,13 +36,8 @@ const USAGE: u8 = 2;
 
 fn main() -> ExitCode {
     let mut cli = Cli::parse();
-    // A prompt on the command line is batch mode; a launch with none is the
-    // terminal UI's, which is asked for its own reasons below.
     let asked = batch::Job::asked(&cli);
 
-    // A command that runs nothing is answered here, before a config is resolved
-    // or a key is asked for: none of a sign-in, a diagnostic or a read of past
-    // runs needs one.
     if let Some(command) = cli.command.take() {
         return match command {
             Command::Auth { action } => auth::run(action),
@@ -59,17 +51,15 @@ fn main() -> ExitCode {
         Err(error) => return refuse(&error.to_string(), error.exit_code()),
     };
 
-    // The row goes to stderr, not stdout: stdout is the answer's alone (§15), and
-    // a fact about where a secret will live is not part of an answer. A batch run
-    // that is already configured keeps it for `-v`, because a filter's stderr is
-    // the only thing a person reads when something goes wrong.
+    // The row goes to stderr, because stdout is the answer's alone, and a batch run that
+    // is already configured keeps it for `-v`, where the reader sees nothing else.
     if asked.is_none() || !first_run.is_ready() || cli.is_verbose() {
         eprintln!("{}", first_run.api_key_row());
     }
 
     if first_run.missing().contains(&"api_key") {
-        // In batch mode a pipe is words to ask and never a credential, so a key is
-        // only pasted when there is a terminal to paste it at.
+        // In batch mode a pipe is words to ask and never a credential: a key is pasted
+        // only at a terminal.
         if asked.is_some() && !batch::stdin_is_terminal() {
             return refuse(&short_of(&first_run), USAGE);
         }
@@ -80,8 +70,7 @@ fn main() -> ExitCode {
         if pasted.is_empty() {
             return refuse(&short_of(&first_run), USAGE);
         }
-        // The key is written where the row said it would be, owner-only, and is
-        // not held in the flag layer afterwards: a file is the only copy.
+        // The flag layer is dropped after the save: the file is the only copy of the key.
         let touched = Flags {
             api_key: Some(pasted),
             ..Flags::default()
@@ -105,8 +94,6 @@ fn main() -> ExitCode {
             "a pipe is context for a prompt, and a prompt is what -b is for",
             USAGE,
         ),
-        // No prompt and a terminal to draw on: the terminal UI takes the screen and
-        // owes a frame, and every prompt typed into it is a run of its own.
         None => tui::run(&cli, first_run.config()),
     }
 }

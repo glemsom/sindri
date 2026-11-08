@@ -151,8 +151,6 @@ mod tests {
 
     #[test]
     fn a_copy_leaves_as_the_sequence_that_carries_words_out() {
-        // "sindri" is c2luZHJp in base64, and six bytes are two whole groups: no padding,
-        // which is the case a wrong one of the two would hide.
         assert_eq!(
             copy("sindri"),
             b"\x1b]52;c;c2luZHJp\x1b\\".to_vec(),
@@ -162,9 +160,6 @@ mod tests {
 
     #[test]
     fn a_status_leaves_as_the_sequence_that_carries_what_the_run_is_doing() {
-        // The document, whole, between the sequence's two halves: a status bar can parse
-        // the state and a person can read the line, and the reader of one is the reader of
-        // `status.json`.
         let report = Status::new(Told::Asking { turn: 3 }, Path::new("/work/sindri"));
         assert_eq!(
             status(&report),
@@ -176,9 +171,6 @@ mod tests {
 
     #[test]
     fn a_status_is_neither_a_progress_report_nor_a_query() {
-        // §14 says never `progress` and never `9;4`: turn 12 of 250 is not five percent of
-        // anything. And the sequence is written unqueried — no detection query, ever — so
-        // the only two escapes in it are the one that opens it and the ST that ends it.
         let told = [
             Told::Idle,
             Told::Asking { turn: 12 },
@@ -216,10 +208,9 @@ mod tests {
 
     #[test]
     fn a_workspace_named_with_a_semicolon_cannot_split_the_sequence() {
-        // The payload is one document and not a list of fields: a reader splits the
-        // sequence at the single `;` that follows the number and takes the rest whole, so a
-        // directory called `weird;dir` is a character *inside* the document rather than a
-        // field boundary the sequence never meant.
+        // A reader splits the sequence at the single `;` after the number and takes the
+        // rest whole, so a directory called `weird;dir` is a character inside the document
+        // rather than a field boundary the sequence never meant.
         let sequence = String::from_utf8(status(&Status::new(
             Told::Idle,
             Path::new("/work/weird;dir"),
@@ -237,7 +228,6 @@ mod tests {
 
     #[test]
     fn a_teller_that_is_off_says_nothing_at_all() {
-        // §14's one switch: with `status` off, the run writes no sequence anywhere.
         let mut written = Vec::new();
         let mut teller = Teller::new(&mut written, false, Path::new("/work/sindri"));
 
@@ -247,8 +237,6 @@ mod tests {
 
     #[test]
     fn a_teller_says_one_state_once() {
-        // The pace, at the writer: two reports of one state inside a second are one
-        // sequence, and a state told again is not told again at all.
         let mut written = Vec::new();
         {
             let mut teller = Teller::new(&mut written, true, Path::new("/work/sindri"));
@@ -274,8 +262,6 @@ mod tests {
 
     #[test]
     fn the_words_are_padded_out_to_whole_groups_and_survive_their_bytes() {
-        // "hi" is aGk= and "why" d3h5, so one and two leftover bytes are both padded out;
-        // the newline is the byte a line break really is, encoded and not eaten.
         assert_eq!(base64(b"hi"), "aGk=");
         assert_eq!(base64(b"why"), "d2h5");
         assert_eq!(base64(b"one\ntwo"), "b25lCnR3bw==");

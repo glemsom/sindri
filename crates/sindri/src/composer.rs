@@ -285,15 +285,12 @@ impl Composer {
             Key::Down => Composer::edited(self.down()),
             Key::Home => Composer::edited(self.home()),
             Key::End => Composer::edited(self.end()),
-            // The three keys a mark is taken with are the frame's: a box has no mark, so
-            // it has nothing to say about them and nothing to repaint.
+            // The mark's three keys are the frame's: a box has no mark to change.
             Key::ShiftUp | Key::ShiftDown | Key::Copy => Outcome::Unchanged,
             Key::Quit => Outcome::Quit,
             Key::Cancel => self.cancel(),
-            // `Ctrl-X` is the queue's, and the frame answers it before the draft ever
-            // sees it: a draft reaching here changes nothing (§12).
-            // `Ctrl-U`, `Tab` and `Shift+Tab` are the settings screen's, and are the
-            // frame's to answer: a draft reaching here changes nothing.
+            // `Ctrl-X` is the queue's and `Ctrl-U`, `Tab` and `Shift+Tab` the settings
+            // screen's: the frame answers them before the draft ever sees them.
             Key::Drop | Key::Escape | Key::Clear | Key::Tab | Key::BackTab => Outcome::Unchanged,
         }
     }

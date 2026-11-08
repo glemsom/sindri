@@ -281,9 +281,8 @@ pub(crate) fn thought(text: &str, cols: u16) -> Vec<Row> {
 /// so the row the marker heads loses the columns the gutter held and no more.
 pub(crate) fn answer_on(text: &str, cols: u16, head: Option<&Head>, surface: &Surface) -> Vec<Row> {
     let (gutter, room) = margin(INDENT, cols);
-    // The columns the marker takes out of the first row's words: its own width, the blank
-    // column that keeps it from being one run of glyphs with the prose, less the gutter it
-    // stands in the place of.
+    // The marker's own width and its blank column, less the gutter it stands in the place
+    // of, are the columns it takes out of the first row's words.
     let reserve = match head {
         Some(head) => head
             .width()
@@ -301,8 +300,6 @@ pub(crate) fn answer_on(text: &str, cols: u16, head: Option<&Head>, surface: &Su
             .iter()
             .map(|(text, ink)| (text.clone(), Look::plain(*ink)))
             .collect();
-        // A blank column between the mark and the words it introduces, so the two are not
-        // one run of glyphs with a braille cell at the front of it.
         spans.push((String::from(" "), Look::plain(Ink::Plain)));
         spans.extend(first.spans().iter().cloned());
         laid.push(Row::of(spans));
@@ -319,8 +316,8 @@ pub(crate) fn answer_on(text: &str, cols: u16, head: Option<&Head>, surface: &Su
 /// and whatever copies it would lose.
 fn margin(gutter: &str, cols: u16) -> (&str, u16) {
     let width = u16::try_from(glyphs(gutter)).unwrap_or(cols);
-    // Two columns, because that is the widest one glyph is: a margin that left less
-    // than that would cost a row the whole width it was laid out for.
+    // Two columns, because that is the widest one glyph is: a margin that left less would
+    // cost a row the whole width it was laid out for.
     match cols > width.saturating_add(1) {
         true => (gutter, cols - width),
         false => ("", cols),
@@ -451,8 +448,8 @@ fn wrap_under(text: &str, first: u16, room: u16) -> Vec<String> {
         for word in line.split_whitespace() {
             let mut word = word;
             loop {
-                // The first row of a line is the one a marker can be standing on, so it is
-                // the one row held to a narrower width than the rest.
+                // The first row is the one a marker can stand on, so it alone is held to a
+                // narrower width than the rest.
                 let limit = if rows.is_empty() { first } else { room };
                 let gap = usize::from(!row.is_empty());
                 if width + gap + glyphs(word) <= limit {
@@ -469,8 +466,6 @@ fn wrap_under(text: &str, first: u16, room: u16) -> Vec<String> {
                     width = 0;
                     continue;
                 }
-                // The word is alone on its row and still does not fit: write the
-                // longest head of it that does, and carry the rest to the next row.
                 let (head, rest) = split_at(word, limit);
                 rows.push(head);
                 word = rest;
@@ -814,7 +809,6 @@ impl Rows {
     pub fn window(&mut self, scroll: Scroll, height: u16) -> Window {
         let back = scroll.back();
         let top = back.saturating_add(u32::from(height));
-        // The rows of the transcript below the entry being measured.
         let mut below = 0;
         let mut pieces = Vec::new();
         for at in (0..self.held.len()).rev() {

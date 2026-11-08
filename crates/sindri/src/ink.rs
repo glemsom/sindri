@@ -294,9 +294,8 @@ mod tests {
                 let mut cell = Cell::default();
                 cell.set_style(look.style());
 
-                // One style carries two names — reverse video over no colour, which is
-                // `mark` and is also `plain` set reversed — and the mark is the name it
-                // reads back as. That is why inline code is reversed over `muted`.
+                // Reverse video over no colour is both `mark` and `plain` reversed, and
+                // `Look::of` reads it back as the mark.
                 if look.style() == mark.style() {
                     assert_eq!(Look::of(&cell), Some(mark));
                     continue;

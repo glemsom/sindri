@@ -267,8 +267,8 @@ impl Facts {
             x = put(buffer, x, area.y, " ", Ink::Dim);
             x = put(buffer, x, area.y, &fact.value, Ink::Muted);
         }
-        // §12 keeps a row saying how many went, so a strip too narrow to hold the count
-        // beside the fact that never goes is the one rail without one.
+        // A strip too narrow to hold the count beside the fact that never goes is the one
+        // rail without one.
         if kept.went > 0 && strip_columns(&kept.facts, kept.went) <= usize::from(area.width) {
             if !kept.facts.is_empty() {
                 x = put(buffer, x, area.y, GAP, Ink::Dim);
@@ -300,9 +300,8 @@ impl Facts {
                 .iter()
                 .find_map(|kind| kept.iter().position(|fact| fact.kind == *kind))
             else {
-                // Only the sandbox is left, and §12 says the sandbox posture never goes:
-                // this rail is narrower or shorter than its own last fact, and there is
-                // nothing left to give up.
+                // Only the sandbox is left and it never goes: a rail narrower than its last
+                // fact has nothing left to give up.
                 break;
             };
             kept.remove(victim);
@@ -376,9 +375,8 @@ impl Facts {
         }
         if let Some(temp) = &self.temp {
             let path = temp.to_string_lossy();
-            // The session's own directory is named by its GUID, and the rail names a
-            // GUID by its first eight in both rows that carry one, so the temp is drawn
-            // under the same short name the session row above it uses.
+            // The temp's path carries the session's whole GUID, so it is drawn under the
+            // eight-column name the session row above it uses.
             let named = match (short, self.session.as_deref()) {
                 (Some(short), Some(guid)) => path.replace(guid, short),
                 _ => path.into_owned(),
@@ -558,7 +556,7 @@ fn tail(path: &str, columns: usize) -> String {
         return String::new();
     }
     if kept.len() == parts.len() {
-        // Every component fits, so the path is what it was: the leading slash and all.
+        // Every component fits: the path comes back whole, leading slash and all.
         return path.to_owned();
     }
     format!("…/{}", kept.join("/"))
@@ -952,8 +950,6 @@ mod tests {
     fn no_fact_is_ever_drawn_partially_at_any_width_between_twenty_and_two_hundred() {
         for width in 20..=200u16 {
             let shape = Shape::of(width);
-            // The rail's own room, as the frame cuts it: the ledger's 32 columns, or the
-            // strip's one row across the whole frame.
             let area = match shape {
                 Shape::Ledger => band(COLUMNS, 40),
                 Shape::Strip => band(width, 1),
@@ -964,8 +960,6 @@ mod tests {
 
             let mut went = 0;
             for (label, value) in CONTRACT {
-                // A fact is whole or it is not there: the row its label is drawn on
-                // carries its value too, and a fact with no row went.
                 match rows.iter().find(|row| row.contains(label)) {
                     Some(row) => assert!(
                         row.contains(value),
@@ -988,8 +982,8 @@ mod tests {
             if screen.contains(&more) {
                 continue;
             }
-            // §12 keeps a row saying how many went, so the only rail without one is a
-            // strip too narrow to hold the count beside the fact that never goes.
+            // The one rail without a count row is a strip too narrow to hold it beside the
+            // fact that never goes.
             let kept = CONTRACT
                 .iter()
                 .filter(|(label, _)| screen.contains(label))
@@ -1004,8 +998,6 @@ mod tests {
 
     #[test]
     fn a_strip_row_is_the_facts_beside_each_other_each_with_its_label_and_one_gap() {
-        // A band wide enough for every fact the frame knows, so this test is about the
-        // row's shape and the sacrifice that a narrow row costs is the test below's.
         let mut buffer = Buffer::empty(band(200, 1));
 
         frame().paint(Shape::Strip, band(200, 1), &mut buffer);

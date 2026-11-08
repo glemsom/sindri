@@ -31,9 +31,8 @@ pub fn ask() -> io::Result<String> {
     drop(echo);
     read?;
 
-    // The Enter that ended the paste is not on the screen when the terminal was
-    // silenced, and a pipe shows nothing in the first place, so the prompt's own
-    // line is ended here rather than where the person typed.
+    // The Enter that ended the paste was never echoed, and a pipe shows nothing at all,
+    // so the prompt ends its own line here.
     writeln!(stderr)?;
     Ok(line.trim().to_owned())
 }

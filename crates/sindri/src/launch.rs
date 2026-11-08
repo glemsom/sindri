@@ -163,19 +163,16 @@ impl Launch {
             .map_err(|error| Refusal::new(error.to_string(), error.exit_code()))?;
         let boundary = Boundary::from_config(config, &workspace, cli.enforcement())
             .map_err(|error| Refusal::new(error.to_string(), SETUP))?;
-        // Boot proves the sandbox once, with a real bubblewrap invocation, before a turn
-        // or a record: a sandbox that cannot be created stops the run here as a card,
-        // because the alternative is running unconfined without being asked to (§6).
+        // A sandbox that cannot be created stops the run here, before a turn or a record:
+        // the alternative is running unconfined without being asked to.
         let proof = sandbox::prove(&boundary, session.temp())
             .map_err(|card| Refusal::new(card.to_string(), card.exit_code()))?;
         let limits = Limits::from_config(config, &boundary);
         let catalog = Catalog::discover(&workspace, home().as_deref());
         let tools = ToolSet::new(&boundary, &catalog, front_end);
-        // A wire that signs in is asked with the session its store holds, and the store's
-        // own literals join the run's secrets, so nothing it holds can reach a record, the
-        // JSON or a line of chatter (ADR-0011). The store is resolved here rather than by
-        // the seam, because a run has no one to show a code to and a store that cannot be
-        // opened is a setup failure and not a reply.
+        // The store's own literals join the run's secrets, so nothing it holds can reach a
+        // record, the JSON or a line of chatter. A store that cannot be opened is a setup
+        // failure and not a reply.
         let store = match wire {
             Wire::Copilot => Some(
                 Store::resolve(&Process)
@@ -192,8 +189,8 @@ impl Launch {
             client = client.store(store);
         }
         let ask = ask(config, wire, model.clone(), &workspace);
-        // Which endpoint the run answers on is read before the first request leaves, so a
-        // run that dies on its first ask still says where it was (§10).
+        // The route is read before the first request leaves, so a run that dies on its
+        // first ask still says where it was.
         let route = ask.route_of();
         let asking = Asking::new(client, ask);
         let shell = Shell::new(boundary.clone(), session.temp(), catalog);
@@ -268,9 +265,7 @@ impl Launch {
         while run.state().is_running() {
             run.turn(deltas);
             // The loop hands a front end no hook per entry, so a turn is written whole as
-            // it ends: the turn it was, and what the assistant said. A call and its result
-            // need the loop to say when they happen, which is #17's seam to grow; nothing
-            // in this build's wire can ask for one (ADR-0016).
+            // it ends: a call and its result would need the loop to say when they happen.
             if let Some(exchange) = run.history().last() {
                 note(self.record.turn_started(exchange.turn));
                 note(self.record.answered(exchange.turn, &exchange.text));
@@ -292,8 +287,8 @@ impl Launch {
                 usage: self.record.document().usage,
             },
         );
-        // The temp is emptied and everything else kept, so a session that ended still reads
-        // beside one that was killed (§13).
+        // The temp is emptied and everything else kept, so a session that ended still
+        // reads beside one that was killed.
         note(self.record.finish());
         outcome.ok_or_else(|| Refusal::new("the run ended with no stop reason to report", SETUP))
     }
@@ -321,14 +316,12 @@ pub fn served(config: &Config) -> Option<Listing> {
         Some(key) => Credential::new(key.clone()),
         None => Credential::none(),
     };
-    // A listing is not a run, so there is no session to expand `{session}` to and no record
-    // for the names to land in: the headers travel because a gateway may need them, and the
-    // empty session is what a request outside a run has.
+    // A listing is not a run: there is no session to expand `{session}` to and no record
+    // for the names to land in, so the empty session is what a request outside a run has.
     let mut client = Client::http(headers(config), String::new(), config.secrets());
     if wire == Wire::Copilot {
         // A Copilot session is signed in to rather than handed a key. A store that will not
-        // open is a wire that cannot be asked, and §10's hint is the line that says to sign
-        // in rather than a screen that waits for ever.
+        // open is a wire that cannot be asked, so it is left out rather than waited on.
         if let Ok(store) = Store::resolve(&Process) {
             client = client.store(store);
         }

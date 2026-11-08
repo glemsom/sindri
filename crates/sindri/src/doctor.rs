@@ -61,18 +61,12 @@ pub fn run(cli: &Cli) -> ExitCode {
         Err(error) => return refuse(&error.to_string(), SETUP),
     };
     let catalog = Catalog::discover(&workspace, home().as_deref());
-    // The description is the registered tool's own bytes: assembling the tool set
-    // here, from the same boundary and catalog a run is built from, is what makes
-    // re-rendering impossible rather than merely discouraged (§5).
     let tools = ToolSet::new(&boundary, &catalog, FrontEnd::Batch);
     let described = tools
         .get(BASH)
         .expect("`bash` is the one tool every run registers")
         .description();
 
-    // The proof spends a session temp, because that is the directory a run's
-    // commands are handed as TMPDIR: the state home is read here and nowhere else,
-    // and the session itself is taken away again when the report is written.
     let state_home = match session::state_home(&Process) {
         Ok(state_home) => state_home,
         Err(error) => return refuse(&error.to_string(), error.exit_code()),
@@ -148,9 +142,6 @@ impl Report<'_> {
 
         lines.push(String::new());
         lines.extend(skills(&self.catalog.listing()));
-        // §7: a `SKILL.md` that will not parse is a diagnostic naming the line,
-        // never a failed catalog and never a silence — and a silence is exactly
-        // what a window that hid one would be.
         if !self.catalog.diagnostics().is_empty() {
             lines.push(String::new());
             lines.extend(diagnostics(self.catalog.diagnostics()));
@@ -168,8 +159,6 @@ fn skills(listing: &[Listing]) -> Vec<String> {
         0 => String::from("skills (none found)"),
         found => format!("skills ({found} found)"),
     }];
-    // The names are aligned to the longest of them, so a scope and a description
-    // line up as columns and a row is read left to right.
     let widest = listing
         .iter()
         .map(|entry| entry.name.chars().count())
@@ -187,13 +176,9 @@ fn skills(listing: &[Listing]) -> Vec<String> {
             .trim_end()
             .to_owned(),
         );
-        // A shadowed name reports both sides: the row above is the skill in
-        // force, and this is the one it took the name from, by the path that
-        // never loads, so a person can open the file that is being ignored.
+        // A shadowed name reports the loser too, by the path that never loads, so a
+        // person can open the file discovery is ignoring.
         for lost in &entry.shadows {
-            // The loser is named by its scope and, where it has one, by the path
-            // that never loads: a builtin has no path at all, so its scope word is
-            // the whole of what there is to say.
             let worse_off = match &lost.loser_path {
                 Some(path) => format!("{} {}", lost.loser.word(), path.display()),
                 None => lost.loser.word().to_owned(),

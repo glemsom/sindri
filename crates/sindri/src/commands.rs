@@ -76,8 +76,6 @@ pub fn read(line: &str) -> Option<Command> {
             false => Command::ModelNamed(rest.to_owned()),
         }),
         SKILL => named(rest),
-        // `/skill:name`: the name is what follows the colon, and the two spellings meet
-        // here so that neither is the second place a load is decided (§5).
         other => named(other.strip_prefix(&format!("{SKILL}:"))?),
     }
 }

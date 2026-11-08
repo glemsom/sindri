@@ -133,7 +133,6 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
     };
     let figure = launch.figure();
     let max_turns = launch.max_turns();
-    // §14: what the run is doing, said on stderr when there is a terminal there to read it.
     let mut telling = Teller::new(io::stderr(), tells(config), &figure.workspace);
     quietly(telling.say(Told::Asking { turn: 1 }));
 
@@ -146,8 +145,6 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
             figure.enforcement.word()
         ),
     );
-    // A wire that serves one endpoint has no route to name, and says nothing rather than
-    // naming a shape it does not have.
     if let Some(route) = figure.route {
         narrate(cli, &format!("route {route}"));
     }
@@ -155,8 +152,6 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
     narrate(cli, &format!("session {}", figure.session.display()));
     narrate(cli, &figure.proof);
 
-    // The user's word, from a terminal's `^C`: the loop reads the flag and a command in
-    // flight hears it, so a batch run stops where a keystroke in the terminal UI does (§4).
     let cancel = Cancel::on_sigint();
     let mut quiet = Quiet;
     let outcome = {
@@ -170,8 +165,8 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
             Err(refusal) => return refuse(refusal.message(), refusal.code()),
         }
     };
-    // The last word about the run: a stop reason is a new state and is said at once, so a
-    // run that ended inside a second of starting is still said to have ended (§14).
+    // A stop reason is a new state and is said at once, so a run that ended inside a
+    // second of starting still says it ended.
     quietly(telling.say(Told::Stopped {
         turn: outcome.turns(),
         stop: outcome.stopped().clone(),
@@ -187,8 +182,8 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
             outcome.tool_calls()
         ),
     );
-    // A run that did not answer says why on stderr: stdout is the answer's alone, so the
-    // reason a script cannot see in stdout is the one it reads here (§15).
+    // The reason a run gave no answer goes to stderr, which is where a script reads it:
+    // stdout is the answer's alone.
     if let Some(reason) = why(&outcome, max_turns) {
         eprintln!("sindri: {reason}");
     }
@@ -204,7 +199,7 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
         return refuse(&format!("cannot write the answer: {error}"), SETUP);
     }
 
-    // §15 ends the verbose stream with the session GUID, whatever the exit code.
+    // The verbose stream ends with the session GUID, whatever the exit code.
     if cli.is_verbose() {
         eprintln!("{}", outcome.session());
     }
@@ -228,13 +223,11 @@ impl Turns for Says<'_> {
     fn turn(&mut self, ended: &Exchange) {
         self.turns = ended.turn;
         narrate(self.cli, &format!("turn {}", self.turns));
-        // A report the pace withheld is said here, on the first turn whose window has
-        // opened, before this turn's own report is offered: late is what §14 asks for, and
-        // never lost. A filter nobody watches has no other clock to go by.
+        // A report the pace withheld is said here, before this turn's own: a filter
+        // nobody watches has no other clock to go by.
         quietly(self.telling.due());
-        // A turn that asked for no call has ended the run, so the next word to a terminal is
-        // the stop reason said below: "asking the model in turn 2" would be a status about a
-        // turn this run will never start (§14).
+        // A turn that asked for no call has ended the run, so the stop reason is the
+        // next word a terminal hears.
         if !ended.calls.is_empty() {
             quietly(self.telling.say(Told::Asking {
                 turn: self.turns + 1,

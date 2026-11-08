@@ -72,9 +72,8 @@ pub fn rows_under(text: &str, cols: u16, reserve: u16) -> Vec<Row> {
 pub fn rows_on(text: &str, cols: u16, reserve: u16, surface: &Surface) -> Vec<Row> {
     let mut room = Room::new(cols.max(1), surface);
     room.reserve = usize::from(reserve);
-    // Each event is handed the source it came from: a fence's span is the block from its
-    // opening line to its last, which is how a mermaid fence knows whether its closing line
-    // has arrived or the wire is still writing it (§12, ADR-0008).
+    // Each event is handed the span it came from, which is how a mermaid fence knows
+    // whether its closing line has arrived or the wire is still writing it.
     for (event, span) in Parser::new_ext(text, OPTIONS).into_offset_iter() {
         room.event(event, &text[span]);
     }
@@ -102,12 +101,12 @@ fn kinds() -> &'static [(Scope, Ink)] {
         [
             ("comment", Ink::Dim),
             ("string", Ink::Muted),
-            // An operator is punctuation rather than a word, and the eye lands on the
-            // words: `let x = 1` is read with the operator in the prose's own ink.
+            // An operator is punctuation rather than a word, so it takes the prose's ink
+            // and the eye lands on the words.
             ("keyword.operator", Ink::Plain),
             ("keyword", Ink::Accent),
-            // `let` is a storage type to the grammars that name it, and it is as much a
-            // word of the language as `fn` is.
+            // `let` is a storage type to the grammars that name it, and as much a word of
+            // the language as `fn` is.
             ("storage", Ink::Accent),
             ("constant", Ink::Muted),
         ]
@@ -280,8 +279,6 @@ impl Room {
             Event::Start(Tag::CodeBlock(kind)) => self.open_code(kind, span),
             Event::End(TagEnd::CodeBlock) => self.close_code(),
             Event::Text(text) => match &mut self.code {
-                // Inside a block the text is code: its own lines, its own spacing, and
-                // the ink the highlighter gives each kind of word.
                 Some(code) => {
                     if let Some(mermaid) = &mut self.mermaid {
                         mermaid.source.push_str(&text);
@@ -295,12 +292,10 @@ impl Room {
                     }
                 }
                 None => match &mut self.table {
-                    // Inside a table the text is a cell's, and a cell is measured only
-                    // once the whole table has been read.
+                    // A cell is measured only once the whole table has been read.
                     Some(table) => table.text(&text, self.block),
-                    // Inside a picture the text is its alternative words, kept aside for the
-                    // row the picture is spoken of on rather than set into the prose: a
-                    // picture's words are the block's, not the paragraph's (§12, #55).
+                    // A picture's words are kept aside for the row the picture is spoken
+                    // of on: they are the block's, not the paragraph's.
                     None => match &mut self.image {
                         Some((_, alt)) => alt.push_str(&text),
                         None => {
@@ -313,10 +308,8 @@ impl Room {
                 },
             },
             // Inline code keeps the spacing it was written with, because a run of code's
-            // spacing is its meaning: the run is set reversed and broken at the row's
-            // edge and nowhere else. It is reversed over `muted` and not over `plain`
-            // because a mark is the terminal's reverse video and spends no colour, so the
-            // two would otherwise be one look — see `Look::of`.
+            // spacing is its meaning. It is reversed over `muted`, because `mark` is
+            // reverse over no colour and the two would otherwise be one look.
             Event::Code(text) => {
                 let reversed = Look::new(Ink::Muted, Face::Reversed);
                 match &mut self.table {
@@ -335,13 +328,13 @@ impl Room {
                 self.link = Some((String::from(&*dest_url), String::new()));
             }
             Event::End(TagEnd::Link) => self.close_link(),
-            // A soft break is the line the source was wrapped on and not one the writer
-            // drew: the paragraph is reflowed to the room, so the two lines are one.
+            // A soft break is the line the source was wrapped on, not one the writer drew:
+            // the paragraph is reflowed to the room.
             Event::SoftBreak => match &mut self.table {
                 Some(table) => table.text(" ", self.block),
                 None => match &mut self.image {
-                    // A line break inside a picture's words is the line they were written on
-                    // and not one the reader drew: the words are flowed like prose.
+                    // A break in a picture's words is the source's wrapping: they flow
+                    // like prose.
                     Some((_, alt)) => alt.push(' '),
                     None => self.spaced = true,
                 },
@@ -505,21 +498,16 @@ impl Room {
             self.flush();
         }
         self.code = Some(Code::of(&tag));
-        // A mermaid fence is a picture and not code (§12): what is written here is kept so
-        // the drawing can be made when the block closes, and so the reason it could not be
-        // drawn can be printed under the source. The rows are drawn the same either way,
-        // because a diagram's block is what copies as its words, and the picture is placed
-        // over these rows by `close_code` and by nothing else. The drawing is made once per
-        // layout of the fence; what is kept between paints is the placement, in
-        // `pictures::Pictures::held` under the source and the cells it took, so a repaint of
-        // the same band transmits nothing and draws no second raster (ADR-0008).
+        // A mermaid fence is a picture and not code: its source is kept so the drawing can
+        // be made when the block closes, and so the reason it could not be drawn prints
+        // under it. The rows are drawn either way and the picture is placed over them.
         if tag.split_whitespace().next() == Some("mermaid") {
             let fence = match closed(span) {
                 true => Fence::Closed,
                 false => Fence::Streaming,
             };
-            // The block began on the row the language was written on when the fence carried
-            // one, and on the first row of the source when it did not.
+            // The block began on the row the language was written on, when the fence
+            // carried one, and otherwise on the first row of the source.
             let at = match tag.is_empty() {
                 true => self.rows.len(),
                 false => self.rows.len().saturating_sub(1),
@@ -691,9 +679,8 @@ impl Room {
                 self.pictured(at, &measured);
             }
         }
-        // A block stands under one blank row, the same one every other block stands under,
-        // and it says so itself: the last row of a picture is a cell of the picture and does
-        // not stand in for the gap after it.
+        // A block stands under one blank row: the last row of a picture is a cell of the
+        // picture and does not stand in for the gap after it.
         self.blank = false;
         self.gap();
     }
@@ -867,8 +854,8 @@ impl Code {
         let mut lines = Vec::new();
         let mut rest = text.split('\n').peekable();
         while let Some(line) = rest.next() {
-            // The newline that ended the last line is not a line of its own: a block
-            // whose text ends in one has no blank row after its last row of code.
+            // The newline that ended the last line is not a line of its own: a block whose
+            // text ends in one has no blank row after it.
             if rest.peek().is_none() && line.is_empty() {
                 break;
             }
@@ -895,8 +882,8 @@ impl Code {
                 runs.push((String::from(&line[at..offset]), Look::plain(ink_of(scopes))));
                 at = offset;
             }
-            // A scope stack operation this build cannot apply leaves the stack as it
-            // was: the line is drawn in the ink of the scopes that did apply.
+            // A scope operation this build cannot apply leaves the stack as it was, so the
+            // line keeps the ink of the scopes that did apply.
             let _ = scopes.apply(&op);
         }
         if at < line.len() {
@@ -1044,8 +1031,8 @@ fn lines_of(cells: &[Cell], widths: &[usize]) -> Vec<Vec<Cell>> {
         .iter()
         .enumerate()
         .map(|(at, width)| {
-            // A cell is measured for the words that fit it and never for a picture: a
-            // picture's height is not a column's width, so this room has no surface.
+            // A picture's height is not a column's width, so this room has no surface for
+            // one: a cell is measured for the words that fit it.
             let mut room = Room::new(u16::try_from(*width).unwrap_or(u16::MAX), &Surface::none());
             for (text, look) in cells.get(at).into_iter().flatten() {
                 room.prose(text, *look);
@@ -1083,8 +1070,8 @@ fn joined(line: &[Cell], widths: &[usize]) -> Row {
         }
         let cell: &[(String, Look)] = line.get(at).map(Vec::as_slice).unwrap_or_default();
         spans.extend(cell.iter().cloned());
-        // The last column keeps no blank past its words: padding it would draw cells
-        // that say nothing, and a row is a run of glyphs and not a box.
+        // The last column keeps no blank past its words: padding it would draw cells that
+        // say nothing, and a row is a run of glyphs and not a box.
         let last = at + 1 == widths.len();
         let pad = match last {
             true => 0,

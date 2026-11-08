@@ -68,9 +68,8 @@ impl Opener {
                 reason: error.to_string(),
             })?;
 
-        // A browser outlives the frame that opened it, so the call does not wait
-        // for one; the thread waits instead, which is what keeps the child from
-        // becoming a zombie a long session never collects.
+        // A browser outlives the frame, so the wait is a thread's: that is what reaps the
+        // child instead of leaving a zombie a long session never collects.
         thread::spawn(move || {
             let _ = child.wait();
         });
