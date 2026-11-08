@@ -20,6 +20,20 @@ struct Adr {
     slug: String,
 }
 
+impl Adr {
+    /// The record a file name claims to be, read as it is rather than judged: a name that breaks
+    /// the convention still yields the number and slug it opens with, so the complaint can say why.
+    fn named(file: &str) -> Adr {
+        let stem = file.strip_suffix(".md").unwrap_or(file);
+        let (number, slug) = stem.split_once('-').unwrap_or((stem, ""));
+        Adr {
+            file: String::from(file),
+            number: String::from(number),
+            slug: String::from(slug),
+        }
+    }
+}
+
 /// One document that may cite an ADR: the path a failure quotes, and the text read from it.
 struct Document {
     /// The path the document is read from, as a failure names it.
@@ -55,28 +69,23 @@ fn read(root: &Path, name: &str) -> Document {
 }
 
 /// The ADRs the directory holds, listed at run time so a new one is covered without
-/// touching this file.
+/// touching this file. Anything but a hidden file is a record, so a stray name is judged rather
+/// than passed over.
 fn adrs(root: &Path) -> Vec<Adr> {
     let directory = root.join("docs/adr");
     let listing = fs::read_dir(&directory)
         .unwrap_or_else(|error| panic!("cannot list {}: {error}", directory.display()));
     let mut adrs: Vec<Adr> = listing
         .map(|entry| entry.expect("a readable docs/adr entry").path())
-        .filter(|path| path.extension().is_some_and(|extension| extension == "md"))
+        .filter(|path| path.is_file())
         .map(|path| {
-            let file = path
-                .file_name()
+            path.file_name()
                 .expect("a named ADR")
                 .to_string_lossy()
-                .into_owned();
-            let stem = file.strip_suffix(".md").unwrap_or(&file).to_owned();
-            let (number, slug) = stem.split_once('-').unwrap_or((stem.as_str(), ""));
-            Adr {
-                file,
-                number: String::from(number),
-                slug: String::from(slug),
-            }
+                .into_owned()
         })
+        .filter(|file| !file.starts_with('.'))
+        .map(|file| Adr::named(&file))
         .collect();
     adrs.sort_by(|left, right| left.file.cmp(&right.file));
     assert!(
@@ -116,14 +125,11 @@ fn cited_adrs(text: &str) -> Vec<Citation> {
     cited
 }
 
-#[test]
-fn every_cited_adr_is_a_file_or_marked_retired() {
-    let held: BTreeSet<String> = adrs(&repo_root())
-        .into_iter()
-        .map(|adr| adr.number)
-        .collect();
+/// Every citation the documents make that the numbers the tree holds do not allow: a number with
+/// no file and no `(retired)` marker, or a live number wearing one.
+fn citation_complaints(held: &BTreeSet<String>, documents: &[Document]) -> Vec<String> {
     let mut complaints = Vec::new();
-    for document in citing_documents() {
+    for document in documents {
         for citation in cited_adrs(&document.body) {
             let number = citation.number;
             match (held.contains(&number), citation.retired) {
@@ -139,6 +145,16 @@ fn every_cited_adr_is_a_file_or_marked_retired() {
             }
         }
     }
+    complaints
+}
+
+#[test]
+fn every_cited_adr_is_a_file_or_marked_retired() {
+    let held: BTreeSet<String> = adrs(&repo_root())
+        .into_iter()
+        .map(|adr| adr.number)
+        .collect();
+    let complaints = citation_complaints(&held, &citing_documents());
     assert!(
         complaints.is_empty(),
         "references that name nothing:\n{}",
@@ -146,10 +162,14 @@ fn every_cited_adr_is_a_file_or_marked_retired() {
     );
 }
 
-#[test]
-fn every_adr_is_a_number_and_a_slug() {
+/// Every record whose name the convention `NNNN-<lowercase-slug>.md` rejects, and why.
+fn adr_name_complaints(adrs: &[Adr]) -> Vec<String> {
     let mut complaints = Vec::new();
-    for adr in adrs(&repo_root()) {
+    for adr in adrs {
+        if !adr.file.ends_with(".md") {
+            complaints.push(format!("docs/adr/{}: is not a `.md` record", adr.file));
+            continue;
+        }
         if adr.number.len() != 4 || !adr.number.chars().all(|digit| digit.is_ascii_digit()) {
             complaints.push(format!(
                 "docs/adr/{}: opens with no four-digit number",
@@ -168,9 +188,67 @@ fn every_adr_is_a_number_and_a_slug() {
             ));
         }
     }
+    complaints
+}
+
+#[test]
+fn every_adr_is_a_number_and_a_slug() {
+    let complaints = adr_name_complaints(&adrs(&repo_root()));
     assert!(
         complaints.is_empty(),
         "ADRs named against the convention:\n{}",
         complaints.join("\n")
     );
+}
+
+#[test]
+fn a_citation_of_a_record_the_tree_does_not_hold_is_a_complaint() {
+    let held = BTreeSet::from([String::from("0018")]);
+    let documents = [Document {
+        name: String::from("GLOSSARY.md"),
+        body: String::from("the word was settled by ADR-0002, whose record is retired"),
+    }];
+
+    let complaints = citation_complaints(&held, &documents);
+
+    assert_eq!(complaints.len(), 1, "{complaints:?}");
+    assert!(complaints[0].contains("GLOSSARY.md"), "{complaints:?}");
+    assert!(complaints[0].contains("ADR-0002"), "{complaints:?}");
+}
+
+#[test]
+fn a_live_record_cited_as_retired_is_a_complaint() {
+    let held = BTreeSet::from([String::from("0018")]);
+    let documents = [Document {
+        name: String::from("AGENTS.md"),
+        body: String::from("the comments rule is ADR-0018 (retired)"),
+    }];
+
+    let complaints = citation_complaints(&held, &documents);
+
+    assert_eq!(complaints.len(), 1, "{complaints:?}");
+    assert!(complaints[0].contains("AGENTS.md"), "{complaints:?}");
+    assert!(complaints[0].contains("ADR-0018"), "{complaints:?}");
+}
+
+#[test]
+fn a_record_named_against_the_convention_is_a_complaint() {
+    let records = [
+        Adr::named("18-a-slug.md"),
+        Adr::named("0018-Not_A_Slug.md"),
+        Adr::named("0018-a-slug.txt"),
+    ];
+
+    let complaints = adr_name_complaints(&records);
+
+    assert_eq!(complaints.len(), 3, "{complaints:?}");
+    for record in &records {
+        assert!(
+            complaints
+                .iter()
+                .any(|complaint| complaint.contains(&record.file)),
+            "{} earns no complaint of its own: {complaints:?}",
+            record.file
+        );
+    }
 }
