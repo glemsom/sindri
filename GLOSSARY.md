@@ -130,7 +130,3 @@ _Avoid_: Requirement, plan (an ADR is the reason)
 One numbered file under `docs/adr/`, holding one decision: what was chosen, why, and what a reader
 is held to.
 _Avoid_: Note, memo, doc, record (the run writes those)
-
-**Disposition**:
-What a cleanup edit does with one comment: delete it, keep it, or promote it to rustdoc.
-_Avoid_: Verdict (the wire's word), call, ruling

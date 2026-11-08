@@ -60,5 +60,5 @@ exist once there is a binary it can verify by checksum and by `sindri --version`
 - TLS goes through the platform verifier and the system trust store. This supersedes the retired
   record's `webpki-roots` half, which nothing in the tree depends on now.
 
-ADR-0018's habits hold this file as they hold every other: a numbered name, a slug, no number
+The reference guard in `crates/sindri-core/tests/doc_references.rs` holds this file as it holds every other: a numbered name, a slug, no number
 reused, and no retired marker on a live record.

@@ -9,7 +9,7 @@ files at 120x40
 03 |    Cargo.toml                                                                                                          | plain:120
 04 |    GLOSSARY.md                                                                                                         | plain:120
 05 |    Makefile                                                                                                            | plain:120
-06 |    docs/adr/0018-the-specs-link-to-code-is-the-test.md                                                                 | plain:120
+06 |    docs/adr/0019-the-facts-the-rail-gives-up-have-a-screen.md                                                          | plain:120
 07 |    docs/agents/domain.md                                                                                               | plain:120
 08 |    crates/sindri-core/src/records.rs                                                                                   | plain:120
 09 |    crates/sindri/src/keys.rs                                                                                           | plain:120

@@ -44,5 +44,5 @@ exactly as nothing is painted under `?`, `@`, `/model` or `/settings`.
   with `…`, and a value with no room for either is not there at all.
 - The rail's blocks, its sacrifice order and its fixtures are unchanged by the screen's landing.
 
-ADR-0018's habits hold this file as they hold every other: a numbered name, a slug, no number
+The reference guard in `crates/sindri-core/tests/doc_references.rs` holds this file as it holds every other: a numbered name, a slug, no number
 reused, and no retired marker on a live record.
