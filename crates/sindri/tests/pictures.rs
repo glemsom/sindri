@@ -759,16 +759,8 @@ fn a_terminal_that_names_itself_as_one_that_places_pictures_is_told_so() {
 #[test]
 fn a_mermaid_fence_that_draws_is_a_block_the_diagram_is_placed_over() {
     let (_root, workspace) = workspace(40, 40);
-    // Laid out again until the diagram is placed: `mermaid::BOUND` is a stall a reader should
-    // not feel, and a machine running the whole suite at once can spend it on scheduling.
     let source = "```mermaid\nflowchart TD\n  A-->B\n```";
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
-    let rows = loop {
-        let rows = markdown::rows_on(source, 200, 0, &surface(&workspace));
-        if rows.iter().any(|row| row.picture().is_some()) || std::time::Instant::now() > deadline {
-            break rows;
-        }
-    };
+    let rows = markdown::rows_on(source, 200, 0, &surface(&workspace));
     let at = rows
         .iter()
         .position(|row| row.picture().is_some())

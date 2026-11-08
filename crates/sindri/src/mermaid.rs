@@ -113,9 +113,16 @@ const WARM_UP: &str = "flowchart TD\n  A-->B";
 impl Diagram {
     /// Draws `source` within [`BOUND`].
     pub fn of(source: &str) -> Result<Diagram, Refusal> {
+        Diagram::of_within(BOUND, source)
+    }
+
+    /// Draws `source` within `bound`: the wall clock the caller can afford to wait.
+    /// [`BOUND`] is the patience of a reader watching a frame, and a caller with no reader
+    /// waiting names its own instead.
+    pub fn of_within(bound: Duration, source: &str) -> Result<Diagram, Refusal> {
         warmed();
         let fence = source.to_owned();
-        let drawn = within(BOUND, move || {
+        let drawn = within(bound, move || {
             // The renderer's error is kept as words: nothing downstream of here should have
             // to link its error type.
             mermaid_rs_renderer::render(&fence).map_err(|error| error.to_string())

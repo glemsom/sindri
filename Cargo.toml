@@ -6,3 +6,9 @@ members = ["crates/sindri-core", "crates/sindri"]
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.99"
+
+# The renderer is measured by an eval and shipped in release, so the test profile draws it at
+# the speed it ships at: unoptimized it is nine times slower, which no budget in this crate was
+# ever chosen against.
+[profile.dev.package.mermaid-rs-renderer]
+opt-level = 3
