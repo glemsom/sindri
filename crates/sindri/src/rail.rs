@@ -16,15 +16,16 @@
 //! where §12 says — so the frame's paint asks for its share rather than counting columns
 //! of its own, and the transcript is laid out at the width the rail leaves it (ADR-0008).
 //!
-//! Nothing is ever drawn in part. A value that leaves no room for a leader in its column
-//! drops the fact rather than being cut off, a path keeps whole components and marks the
-//! head it left with `…/`, and what the room cannot hold is given up in §12's order —
-//! temp path, cache hits, session GUID, branch, skills in force, context size, workspace,
-//! turns, wire, thinking, model — beside a row saying how many went. The sandbox posture
-//! is absent from that order because §12 says it never goes. The degradation is a pure
-//! function of the room, not a paint: what the rail keeps and the rows it makes are read by
-//! a test without a buffer, which is how a rule about every frame width from 20 to 200 is
-//! proved rather than eyeballed.
+//! Nothing is ever drawn in part. A value with no cut rule of its own that leaves no room
+//! for a leader in its column drops the fact rather than being cut off; a path keeps whole
+//! components and marks the head it left with `…/`; a served name keeps whole
+//! hyphen-separated segments from its head and marks the tail it left with `…`; and what
+//! the room cannot hold is given up in one settled order — temp path, cache hits, session
+//! GUID, branch, skills in force, context size, workspace, turns, wire, thinking, model —
+//! beside a row saying how many went. The sandbox posture is absent from that order because
+//! it never goes. The degradation is a pure function of the room, not a paint: what the rail
+//! keeps and the rows it makes are read by a test without a buffer, which is how a rule
+//! about every frame width from 20 to 200 is proved rather than eyeballed.
 
 use std::path::PathBuf;
 
@@ -243,7 +244,9 @@ pub struct Facts {
     /// The dialect the run asks over, in the wire's own word: `anthropic`, `openai` or
     /// `copilot`, and never a fourth.
     pub wire: Option<String>,
-    /// The model the run asks, by the name its wire served.
+    /// The served name of the model the run asks: a model identifier read off the wire and
+    /// never invented, whole here, and cut to its head wherever the rail draws it, because
+    /// no value column holds a dated name.
     pub model: Option<String>,
     /// Whether the model thinks before it answers, in the one word the rail draws it
     /// by: `high` or `off`, and never a third.
@@ -461,9 +464,9 @@ impl Facts {
         Kept { facts: kept, went }
     }
 
-    /// Every fact this frame knows, in the order §46's blocks read them, each value
-    /// spelled the way the rail spells it: a session by the first eight of its GUID, a
-    /// path by the tail that fits a value column.
+    /// Every fact this frame knows, block by block, each value spelled the way the rail
+    /// spells it: a session by the first eight of its GUID, a path by the tail that fits a
+    /// value column, and a served name by the head.
     fn known(&self) -> Vec<Fact> {
         let short = self.session.as_deref().map(short_id);
         let mut facts = Vec::new();
@@ -471,7 +474,7 @@ impl Facts {
             facts.push(Fact::new(Kind::Wire, wire.clone()));
         }
         if let Some(model) = &self.model {
-            facts.push(Fact::new(Kind::Model, model.clone()));
+            facts.push(Fact::new(Kind::Model, head(model, VALUE)));
         }
         if let Some(think) = &self.think {
             facts.push(Fact::new(Kind::Think, think.clone()));
@@ -617,9 +620,13 @@ fn ledger_rows(kept: &[Fact], went: usize) -> Vec<Row<'_>> {
 /// Whether one fact is drawn whole on a row `width` columns wide: a label in its field, a
 /// value against the edge, and at least one leader between them, because a label butted
 /// straight against a value is not a ledger row. A value that leaves no room for the
-/// leader drops the fact rather than being cut (#46).
+/// leader drops the fact rather than being cut, and so does a value with nothing left in
+/// it — a fact cut to nothing says nothing.
 fn fits(fact: &Fact, shape: Shape, width: u16) -> bool {
     let value = fact.value.chars().count();
+    if value == 0 {
+        return false;
+    }
     match shape {
         Shape::Ledger => usize::from(FIELD) + LEADER_MIN + value <= usize::from(width),
         Shape::Strip => columns(fact.kind.label()) + 1 + value <= usize::from(width),
@@ -724,6 +731,37 @@ fn tail(path: &str, columns: usize) -> String {
         return path.to_owned();
     }
     format!("…/{}", kept.join("/"))
+}
+
+/// The head of a served name in at most `columns`: as many of the name's whole
+/// hyphen-separated segments as fit while the `…` that marks what went is counted in, and
+/// never a segment drawn in part.
+///
+/// A served name runs past any rail column — a dated Anthropic name is twenty-six and a
+/// gateway's is forty-one — and widening the rail only moves the number it fails at. So a
+/// name keeps its head, where the family a reader names lives, and gives up the stamps
+/// that follow it: `claude-sonnet-4-5…` and never `…-20250929`. A gateway that puts its
+/// vendor in front of the family keeps that prefix instead, because the rule is the head.
+/// A name whose first segment does not fit beside its own mark is empty, which drops the
+/// fact.
+fn head(name: &str, columns: usize) -> String {
+    if name.chars().count() <= columns {
+        return name.to_owned();
+    }
+    let mut kept: Vec<&str> = Vec::new();
+    let mut width = 0;
+    for (index, part) in name.split('-').enumerate() {
+        let next = width + part.chars().count() + usize::from(index > 0);
+        if next + 1 > columns {
+            break;
+        }
+        kept.push(part);
+        width = next;
+    }
+    if kept.is_empty() {
+        return String::new();
+    }
+    format!("{}…", kept.join("-"))
 }
 
 /// A session's GUID by its first eight columns, or whole when it is shorter than that:
@@ -863,12 +901,20 @@ mod tests {
         runs
     }
 
+    /// The name the frame's run was served, as the wire served it: the dated Anthropic
+    /// name a real run is given, which is wider than a value column.
+    const SERVED: &str = "claude-sonnet-4-5-20250929";
+
+    /// What the rail draws of [`SERVED`]: its head, and the mark saying the date stamp
+    /// went. Written down here because it is the contract the rail is held to.
+    const CUT: &str = "claude-sonnet-4-5…";
+
     /// The facts a frame of a run holds, as the rails draw them: one of each of §46's
     /// blocks, with a workspace and a temp as long as the real ones.
     fn frame() -> Facts {
         Facts {
             wire: Some(String::from("anthropic")),
-            model: Some(String::from("claude-sonnet")),
+            model: Some(String::from(SERVED)),
             think: Some(String::from("high")),
             turns: Some((3, 250)),
             ctx: Some(Ctx {
@@ -894,7 +940,7 @@ mod tests {
     /// what went can be read off the screen and not off the module's own tables.
     const CONTRACT: [(&str, &str); 12] = [
         ("wire", "anthropic"),
-        ("model", "claude-sonnet"),
+        ("model", CUT),
         ("think", "high"),
         ("turns", "3/250"),
         ("ctx", "48.2k"),
@@ -1260,7 +1306,7 @@ mod tests {
             rows[..7],
             [
                 "wire      .............anthropic",
-                "model     .........claude-sonnet",
+                "model     ....claude-sonnet-4-5…",
                 "think     ..................high",
                 "────────────────────────────────",
                 "turns     .................3/250",
@@ -1328,7 +1374,7 @@ mod tests {
             rows,
             [
                 "wire      .............anthropic",
-                "model     .........claude-sonnet",
+                "model     ....claude-sonnet-4-5…",
                 "think     ..................high",
                 "────────────────────────────────",
                 "turns     .................3/250",
@@ -1424,9 +1470,9 @@ mod tests {
     }
 
     #[test]
-    fn a_value_with_no_room_for_a_leader_drops_the_fact_rather_than_being_cut() {
+    fn a_fact_with_no_cut_rule_of_its_own_is_dropped_when_no_leader_fits() {
         let facts = Facts {
-            model: Some(String::from("sonnet-with-a-very-long-name")),
+            branch: Some(String::from("spec/a-branch-name-that-cannot-fit")),
             ..Facts::default()
         };
         let mut buffer = Buffer::empty(band(COLUMNS, 2));
@@ -1436,12 +1482,70 @@ mod tests {
         assert_eq!(
             glyphs(&buffer, 0),
             "+1 more                         ",
-            "a served name wider than the column leaves no room for a leader in a \
-             thirty-two column rail, so the fact goes and the row says so"
+            "a branch wider than the column leaves no room for a leader in a thirty-two \
+             column rail, so the fact goes and the row says so"
         );
         assert!(
-            !glyphs(&buffer, 0).contains("sonnet"),
+            !glyphs(&buffer, 0).contains("spec/a"),
             "and never the start of it in the fact's place"
+        );
+    }
+
+    #[test]
+    fn a_served_name_longer_than_the_column_is_drawn_by_its_head_and_its_mark() {
+        let facts = Facts {
+            model: Some(String::from("claude-sonnet-4-5-20250929")),
+            ..Facts::default()
+        };
+        let mut ledger = Buffer::empty(band(COLUMNS, 1));
+
+        facts.paint(Shape::Ledger, band(COLUMNS, 1), &mut ledger);
+
+        assert_eq!(
+            glyphs(&ledger, 0),
+            "model     ....claude-sonnet-4-5…",
+            "a dated name takes the value column whole, and the mark says the date stamp went"
+        );
+
+        let mut strip = Buffer::empty(band(40, 1));
+
+        facts.paint(Shape::Strip, band(40, 1), &mut strip);
+
+        assert_eq!(
+            glyphs(&strip, 0).trim_end(),
+            "model claude-sonnet-4-5…",
+            "and the strip's copy of the same name is cut the same way"
+        );
+    }
+
+    #[test]
+    fn a_served_name_with_no_segment_to_keep_is_dropped_and_counted() {
+        let facts = Facts {
+            model: Some(String::from("aservednamethatnobreaksanywhere")),
+            ..Facts::default()
+        };
+        let mut ledger = Buffer::empty(band(COLUMNS, 2));
+
+        facts.paint(Shape::Ledger, band(COLUMNS, 2), &mut ledger);
+
+        assert_eq!(
+            glyphs(&ledger, 0),
+            "+1 more                         ",
+            "a name cut to nothing says nothing, so the fact goes and the row counts it"
+        );
+        assert!(
+            !glyphs(&ledger, 0).contains("aserved"),
+            "and never the start of it in the fact's place"
+        );
+
+        let mut strip = Buffer::empty(band(40, 1));
+
+        facts.paint(Shape::Strip, band(40, 1), &mut strip);
+
+        assert_eq!(
+            glyphs(&strip, 0).trim_end(),
+            "+1 more",
+            "and the strip gives up the same fact, and says so in the same words"
         );
     }
 
@@ -1456,7 +1560,7 @@ mod tests {
             rows,
             [
                 "wire      .............anthropic",
-                "model     .........claude-sonnet",
+                "model     ....claude-sonnet-4-5…",
                 "think     ..................high",
                 "────────────────────────────────",
                 "turns     .................3/250",
@@ -1479,7 +1583,7 @@ mod tests {
         assert_eq!(
             rows,
             [
-                "model     .........claude-sonnet",
+                "model     ....claude-sonnet-4-5…",
                 "────────────────────────────────",
                 "sandbox   .................bwrap",
                 "+10 more                        ",
@@ -1549,18 +1653,96 @@ mod tests {
         }
     }
 
+    /// The value a row draws beside `label`, read off the painted row: the label's field
+    /// and its leaders skipped and the padding after the value dropped, so a test reads the
+    /// fact the way a reader reads it. A row that draws no such label carries no value.
+    fn drawn(row: &str, label: &str) -> Option<String> {
+        let rest = row.split_once(label)?.1;
+        Some(
+            rest.trim_start_matches([' ', '.'])
+                .chars()
+                .take_while(|glyph| !glyph.is_whitespace() && *glyph != '·')
+                .collect(),
+        )
+    }
+
+    #[test]
+    fn no_served_name_is_drawn_in_part_at_any_width_between_twenty_and_two_hundred() {
+        assert_no_width_draws_a_name_in_part("claude-sonnet-4-5");
+        assert_no_width_draws_a_name_in_part(SERVED);
+        assert_no_width_draws_a_name_in_part("anthropic.claude-3-5-sonnet-20241022-v2:0");
+    }
+
+    /// One served name at every width the rail is drawn at: whole when it fits, its head
+    /// and the mark that says the rest went when it does not, and never part of it without
+    /// a mark or wider than the row it is drawn in.
+    fn assert_no_width_draws_a_name_in_part(name: &str) {
+        let mut cut = 0;
+        for width in 20..=200u16 {
+            let shape = Shape::of(width);
+            let area = match shape {
+                Shape::Ledger => band(COLUMNS, 1),
+                Shape::Strip => band(width, 1),
+            };
+            let facts = Facts {
+                model: Some(String::from(name)),
+                ..Facts::default()
+            };
+            let mut buffer = Buffer::empty(area);
+
+            facts.paint(shape, area, &mut buffer);
+            let row = glyphs(&buffer, 0);
+            let Some(value) = drawn(&row, "model") else {
+                continue;
+            };
+
+            assert!(
+                value == name || value.ends_with('…'),
+                "at {width} columns {name:?} is drawn as {value:?}, which is neither the \
+                 whole name nor a name with the mark that says the rest went"
+            );
+            assert!(
+                name.starts_with(value.trim_end_matches('…')),
+                "at {width} columns {name:?} is drawn as {value:?}: the head survives and \
+                 the tail is what goes"
+            );
+            assert!(
+                fits(&Fact::new(Kind::Model, value.clone()), shape, area.width),
+                "at {width} columns {name:?} is drawn as {value:?}, which the {shape:?} row \
+                 has no room for"
+            );
+            if value.ends_with('…') {
+                cut += 1;
+            }
+        }
+        if name.chars().count() <= VALUE {
+            assert_eq!(
+                cut, 0,
+                "{name:?} fits a value column, so no width in the sweep may cut it"
+            );
+        } else {
+            assert!(
+                cut > 0,
+                "{name:?} is wider than the value column, so some width in the sweep draws \
+                 it cut: a sweep that never did would prove nothing"
+            );
+        }
+    }
+
     #[test]
     fn a_strip_row_is_the_facts_beside_each_other_each_with_its_label_and_one_gap() {
-        // 215 columns is the whole row, gap for gap, so no fact is given up to prove order.
-        let mut buffer = Buffer::empty(band(215, 1));
+        // 220 columns is the whole row, gap for gap, so no fact is given up to prove order.
+        let mut buffer = Buffer::empty(band(220, 1));
 
-        frame().paint(Shape::Strip, band(215, 1), &mut buffer);
+        frame().paint(Shape::Strip, band(220, 1), &mut buffer);
 
         assert_eq!(
             glyphs(&buffer, 0),
-            "wire anthropic · model claude-sonnet · think high · turns 3/250 · ctx 48.2k · \
-             cache 88% · workspace …/.worktrees/46-rail · branch spec/1-capability · skills \
-             2 · sandbox bwrap · session 9f2c7a41 · temp …/9f2c7a41/tmp",
+            format!(
+                "wire anthropic · model {CUT} · think high · turns 3/250 · ctx 48.2k · \
+                 cache 88% · workspace …/.worktrees/46-rail · branch spec/1-capability · \
+                 skills 2 · sandbox bwrap · session 9f2c7a41 · temp …/9f2c7a41/tmp"
+            ),
             "one row, the same facts in the same order, a gap between two of them, \
              and not one given up"
         );
@@ -1571,9 +1753,11 @@ mod tests {
 
         assert_eq!(
             glyphs(&narrower, 0).trim_end(),
-            "wire anthropic · model claude-sonnet · think high · turns 3/250 · ctx 48.2k · \
-             workspace …/.worktrees/46-rail · branch spec/1-capability · skills 2 · sandbox \
-             bwrap · session 9f2c7a41 · +2 more",
+            format!(
+                "wire anthropic · model {CUT} · think high · turns 3/250 · ctx 48.2k · \
+                 workspace …/.worktrees/46-rail · branch spec/1-capability · skills 2 · \
+                 sandbox bwrap · session 9f2c7a41 · +2 more"
+            ),
             "two hundred columns give up the temp and the cache, and count them"
         );
     }
@@ -1590,7 +1774,7 @@ mod tests {
             facts,
             [
                 ("wire", String::from("anthropic")),
-                ("model", String::from("claude-sonnet")),
+                ("model", String::from(CUT)),
                 ("think", String::from("high")),
                 ("turns", String::from("3/250")),
                 ("ctx", String::from("48.2k")),
@@ -1623,6 +1807,36 @@ mod tests {
             tail("/the-name-that-will-not-fit-anywhere", VALUE),
             "",
             "no component fits the column, so the fact has no value to draw"
+        );
+    }
+
+    #[test]
+    fn a_served_name_keeps_the_segments_that_fit_and_marks_the_cut_at_its_tail() {
+        assert_eq!(
+            head("claude-sonnet-4-5-20250929", VALUE),
+            "claude-sonnet-4-5…",
+            "a dated name keeps the family a reader can name, and marks the date stamp it \
+             left behind"
+        );
+        assert_eq!(
+            head("claude-sonnet-4-5", VALUE),
+            "claude-sonnet-4-5",
+            "a name that fits is drawn whole, with no mark to explain"
+        );
+        assert_eq!(
+            head("anthropic.claude-3-5-sonnet-20241022-v2:0", VALUE),
+            "anthropic.claude-3-5…",
+            "a gateway name is cut at a segment boundary, and never mid-segment"
+        );
+        assert_eq!(
+            head("claude-sonnet-4-5-20250929", "claude".len() + 1),
+            "claude…",
+            "the mark takes a column of its own, so the head stops one short of the room"
+        );
+        assert_eq!(
+            head("aservednamethatnobreaksanywhere", VALUE),
+            "",
+            "a name whose first segment does not fit beside the mark has no head to keep"
         );
     }
 
