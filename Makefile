@@ -36,9 +36,9 @@
 #                       when the kernel forbids unprivileged user namespaces,
 #                       which is the case ticket #7 exists for; the release path
 #                       when there is no bwrap, or a kernel that will not let one
-#                       be made; the gate when there is no cargo on PATH;
-#                       the comment gate
-#                       when there is no awk, no sort, or no way to list the tree.
+#                       be made; the gate when there is no cargo on PATH; the
+#                       comment gate when there is no awk, no sort, or no way to
+#                       list the tree.
 #                       The reason is the line above the verdict, the exit stays 0,
 #                       and the verdict is deliberately not `ok`: a green line
 #                       over code nothing covered is the one lie this target

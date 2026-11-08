@@ -7,12 +7,11 @@
 #
 #   1. A broken release script turns the stage line into `check: release ... FAIL`
 #      and stops the run with a non-zero exit. That is the bullet in the ticket,
-#      and it is proven by handing the stage a `cargo` that refuses to build.
-#      So is the second: a `cargo` whose link dies on `undefined reference to
-#      __isoc99_sscanf`, which is the tree's C half compiled by a compiler for the
-#      wrong libc. That output used to be this stage's one excuse to skip; it is a
-#      defect now, and a stage that skipped over it would print the green line a
-#      stage that ran has earned.
+#      and it is proven twice: by a `cargo` that refuses to build, and by one whose
+#      link dies on `undefined reference to __isoc23_sscanf` — the tree's C half
+#      compiled by a compiler for the wrong libc. That second output used to be
+#      this stage's one excuse to skip. It is a defect now, and a stage that
+#      skipped over it would print the green line a stage that ran has earned.
 #   2. Every assertion the probe makes is one that can fail. An artefact that is
 #      not static, one that is glibc rather than musl, and one carrying an OpenSSL
 #      symbol are each caught by name — and a machine with no bwrap, or a kernel
@@ -149,8 +148,17 @@ chmod +x "$restricted/bwrap"
 
 # The stand-in cargos, first on PATH so the stage's own `cargo build` is answered
 # without a build: one succeeds, one fails the way a broken tree fails, and one
-# fails the way a build whose C half was compiled for another libc fails — the
-# link dying on the symbols glibc's headers name and musl does not define.
+# fails the way a build whose C half was compiled for another libc fails — a real
+# link, not a written-down one.
+#
+# That third one writes a defect of its own and compiles it: a program asking
+# musl's linker for a stdio entry point glibc's headers name and musl does not
+# define, which is the shape of the C half of rustls's provider built by a
+# compiler for the wrong libc. Its `undefined reference` is the linker's, in
+# rustc's own words, so the case cannot pass on a message the test made up — and
+# the probe no longer reads the message at all. `__isoc99_sscanf` would not do:
+# musl defines that one, so the link would succeed and prove nothing.
+rustc_path=$(command -v rustc)
 for kind in ok broken glibc-c; do mkdir -p "$scratch/cargo-$kind"; done
 printf '#!/bin/sh\nexit 0\n' >"$scratch/cargo-ok/cargo"
 cat >"$scratch/cargo-broken/cargo" <<'CARGO'
@@ -158,9 +166,24 @@ cat >"$scratch/cargo-broken/cargo" <<'CARGO'
 echo 'error[E0425]: cannot find value `answer` in this scope' >&2
 exit 101
 CARGO
-cat >"$scratch/cargo-glibc-c/cargo" <<'CARGO'
+cat >"$scratch/cargo-glibc-c/cargo" <<CARGO
 #!/bin/sh
-echo "bcm.c:(.text.aws_lc_0_47_0_handle_cpu_env+0x54): undefined reference to \`__isoc23_sscanf'" >&2
+mkdir -p "$scratch/link-defect"
+cat >"$scratch/link-defect/defect.rs" <<'RS'
+extern "C" {
+    fn __isoc23_sscanf(text: *const u8, format: *const u8) -> i32;
+}
+fn main() {
+    let n = unsafe { __isoc23_sscanf(b"1\0".as_ptr(), b"%d\0".as_ptr()) };
+    println!("{n}");
+}
+RS
+if said=\$("$rustc_path" --target x86_64-unknown-linux-musl -o "$scratch/link-defect/sindri" \
+    "$scratch/link-defect/defect.rs" 2>&1); then
+  echo 'release-probe-test: the link defect linked, so this case proves nothing' >&2
+else
+  printf '%s\n' "\$said" >&2
+fi
 exit 101
 CARGO
 chmod +x "$scratch"/cargo-{ok,broken,glibc-c}/cargo
@@ -334,7 +357,7 @@ else
   assert_line 'release: ok (6 checks)' 'artefact built through zigbuild'
 fi
 refute 'FAIL release:' 'artefact built through zigbuild'
-refute 'cargo-zigbuild is not on PATH' 'artefact built through zigbuild, never the toolchain gap'
+refute 'cargo-zigbuild is not on PATH' 'artefact built through zigbuild, never a missing tool'
 argv=$(cat "$scratch/zigbuild-argv" 2>/dev/null)
 for arg in zigbuild --release --target x86_64-unknown-linux-musl --package sindri; do
   assert_arg "$arg"
@@ -386,16 +409,16 @@ assert_has 'FAIL release: the artefact names a store path' 'artefact carrying a 
 refute 'release: ok' 'artefact carrying a store path, no green tick'
 use_artefact "$scratch/good"
 
-# 7. A link that dies on `undefined reference to __isoc99_sscanf`: the C half of
+# 7. A link that dies on `undefined reference to __isoc23_sscanf`: the C half of
 #    rustls's provider compiled against glibc's headers by a compiler for the
 #    wrong libc. That output was this stage's reason to skip once, on the grounds
 #    that the shell supplied no compiler for musl. The shell supplies one now, so
 #    the same output is a defect in the tree or in the shell, and the stage fails
 #    over it: a skip here is a green line over an artefact nobody built.
-use_artefact "$scratch/good"
 run_probe "$scratch/cargo-glibc-c:$PATH"
 assert_code 1 'a musl link that fails'
 assert_line 'release: FAIL (0 checks)' 'a musl link that fails'
+assert_has 'undefined reference to' 'a musl link that fails: relays what the linker said'
 assert_has '__isoc23_sscanf' 'a musl link that fails: names the symbol it could not find'
 refute 'release: skipped' 'a musl link that fails, never the skip it used to be'
 refute 'release: ok' 'a musl link that fails, no green tick over an artefact nobody built'
@@ -405,7 +428,7 @@ refute 'release: ok' 'a musl link that fails, no green tick over an artefact nob
 #     tool it wanted rather than skipping over the artefact it never built.
 run_probe "$scratch/cargo-ok:$nozig"
 assert_code 1 'no cargo-zigbuild'
-assert_has 'release: FAIL (' 'no cargo-zigbuild'
+assert_line 'release: FAIL (0 checks)' 'no cargo-zigbuild'
 assert_has 'cargo-zigbuild is not on PATH' 'no cargo-zigbuild'
 refute 'release: skipped' 'no cargo-zigbuild, never a skip over an artefact nobody built'
 refute 'release: ok' 'no cargo-zigbuild, no green tick over an artefact nobody built'
