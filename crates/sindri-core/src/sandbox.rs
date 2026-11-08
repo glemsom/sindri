@@ -193,15 +193,10 @@ pub fn prove(boundary: &Boundary, session_temp: &Path) -> Result<Proof, Card> {
 /// `PATH` of its own: a stand-in is a machine that refuses on demand, so all
 /// three refusals are provable without a broken kernel.
 pub fn prove_with(bwrap: &Path, boundary: &Boundary, session_temp: &Path) -> Result<Proof, Card> {
-    // The escape hatch has no sandbox, so there is nothing to prove and nothing
-    // to report green: an empty proof says exactly that.
     if boundary.enforcement() == Enforcement::Unsafe {
         return Ok(Proof { checks: Vec::new() });
     }
 
-    // The first two checks are one spawn: whether there is a bubblewrap, and
-    // whether the one there answers for itself. Which of the two failed is what
-    // the error kind says, so the card names the check and not the symptom.
     let spoke = match ask(bwrap, &[String::from("--version")]) {
         Ok(spoken) => spoken,
         Err(error) if error.kind() == ErrorKind::NotFound => {
@@ -215,9 +210,6 @@ pub fn prove_with(bwrap: &Path, boundary: &Boundary, session_temp: &Path) -> Res
     }
     checks.push(Check::Runs);
 
-    // The third check is the sandbox itself, built by the one function that
-    // turns a boundary into an argv: a boundary that cannot even be rendered
-    // never reaches the check that would have run it, and the card says why.
     let invocation = bash::invocation(boundary, session_temp, PROBE)
         .map_err(|error| Card::new(Check::Namespaces, error.to_string()))?;
     let made = match ask(bwrap, invocation.args()) {
@@ -446,10 +438,6 @@ mod tests {
         )
         .expect("a machine that can make a sandbox proves it");
 
-        // The proof is the sandbox the run's own commands will get: every
-        // namespace unshared, the root read-only, the workspace bound over
-        // itself, the session temp mapped to TMPDIR, and the probe as the
-        // command.
         let handed = machine.handed();
         let flags: Vec<&str> = handed.iter().map(String::as_str).collect();
         for flag in [
@@ -550,8 +538,6 @@ mod tests {
         )
         .expect_err("this machine cannot make the sandbox");
 
-        // Written out as a reader meets it: the failing check, what it said and
-        // what can be done, on three plain lines and no terminal anywhere.
         assert_eq!(
             card.to_string(),
             "cannot create the sandbox: bubblewrap creates an unprivileged sandbox\n  \

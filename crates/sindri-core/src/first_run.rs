@@ -68,8 +68,6 @@ impl FirstRun {
     pub fn resolve(environment: &impl Environment, flags: Flags) -> Result<FirstRun, ConfigError> {
         let path = config_path(environment)?;
         let file = Config::load_from(&path)?;
-        // The layers above the file, kept apart so the wire can be read off them
-        // before the file's key is consulted.
         let above = Config::from(flags).above(Config::from_environment(environment)?);
         let wire_key = above
             .provider

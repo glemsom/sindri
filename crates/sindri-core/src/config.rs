@@ -132,9 +132,8 @@ impl Config {
             reason: error.to_string(),
         })?;
 
-        // `deny_unknown_fields` catches an unknown key too, but it reports the
-        // serde shape of the schema rather than the key and the file the user
-        // has to go and fix. Naming the key first is the whole point of §11.
+        // Named by hand before serde sees it: `deny_unknown_fields` reports the
+        // schema's shape rather than the key and the file the user has to fix.
         if let Some(key) = table
             .keys()
             .find(|key| !Config::KEYS.contains(&key.as_str()))
@@ -709,9 +708,8 @@ fn write_atomically(path: &Path, text: &str) -> Result<(), ConfigError> {
     };
     std::fs::create_dir_all(directory).map_err(|error| unwritable(error.to_string()))?;
 
-    // The temp file is a name something else may already hold, in the directory
-    // the rename will land in: that is what makes the rename a rename at all
-    // rather than a copy across filesystems.
+    // Staged in the directory the rename lands in, so the rename is a rename
+    // and never a copy across filesystems.
     let name = path
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
@@ -736,15 +734,14 @@ fn write_atomically(path: &Path, text: &str) -> Result<(), ConfigError> {
         .sync_all()
         .map_err(|error| unwritable(error.to_string()))?;
 
-    // A failed rename drops the temp file, so a save that cannot land leaves no
-    // litter and the file that was there untouched.
+    // A save that cannot land leaves no litter and the file that was there untouched.
     staged
         .persist(path)
         .map_err(|error| unwritable(error.error.to_string()))?;
 
-    // The rename is what a reader sees; syncing the directory is what makes the
-    // new name survive a power cut. Failing to sync cannot un-write the bytes
-    // already in place, so it is not reported as a failed save.
+    // Syncing the directory is what makes the new name survive a power cut.
+    // Failing to sync cannot un-write bytes already in place, so it is not
+    // reported as a failed save.
     let _ = std::fs::File::open(directory).and_then(|directory| directory.sync_all());
     Ok(())
 }

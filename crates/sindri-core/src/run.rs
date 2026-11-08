@@ -94,10 +94,9 @@ impl Cancel {
     /// inheriting a signal nobody is left to observe.
     pub fn on_sigint() -> Cancel {
         INTERRUPTED.store(false, Ordering::SeqCst);
-        // The returned handler is the one this replaced, which is not ours to
-        // restore: a process has one run's worth of `^C` policy. The handler is
-        // carried as a function pointer before it is written as the integer
-        // `signal(2)` takes, which is the cast that is defined.
+        // Installed process-wide and never restored: a process has one `^C`
+        // policy. A function pointer is cast to the integer `signal(2)` takes,
+        // which is the cast that is defined.
         let handler: extern "C" fn(i32) = interrupted;
         unsafe { signal(SIGINT, handler as usize) };
         Cancel {
@@ -762,8 +761,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
         if !self.state.is_running() {
             return self.state();
         }
-        // The user's word first, before any other trigger gets to speak: a
-        // cancellation always wins (ADR-0006).
+        // A cancellation beats every other stop, so it settles first.
         if self.cancel.is_set() {
             self.settle(Stop::Cancelled);
             return self.state();
@@ -792,9 +790,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
             calls: reply.calls.clone(),
         });
 
-        // The calls the turn asked for, one at a time, each charged to the run
-        // as it lands: no further call is run once the budget is spent, and no
-        // further turn is started either.
+        // Each call is charged as it lands, so a spent budget stops the rest of the turn.
         for call in &reply.calls {
             let acted = match self.executor.execute(call, &mut self.skills) {
                 Ok(acted) => acted,
@@ -961,8 +957,7 @@ impl Shell {
             text,
             bytes: 0,
             elapsed: Duration::ZERO,
-            // A load runs no command, so there is no code to report and the call did
-            // what it said: the one verdict a call that never reached a shell has.
+            // A load runs no command, so there is no code to report.
             exit: Exit::Code(0),
         })
     }

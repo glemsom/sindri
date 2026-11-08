@@ -154,8 +154,6 @@ impl Ground {
             });
         }
 
-        // The authority runs from `//` to the first path, query or fragment, and
-        // its host is what is left once a userinfo and a port are taken off.
         let authority = match rest.strip_prefix("//") {
             Some(tail) => tail.split(['/', '?', '#']).next().unwrap_or_default(),
             None => "",
@@ -182,8 +180,6 @@ impl Ground {
     fn file(&self, written: &str) -> Result<Opening, Refusal> {
         let path = Path::new(written);
 
-        // The string first: its extension as written, and where it lands before
-        // any symlink is followed.
         let as_written = extension(path);
         if !allowed(&as_written) {
             return Err(Refusal::Extension {
@@ -203,8 +199,8 @@ impl Ground {
             });
         }
 
-        // Then the path itself: resolve it, which is where a symlink to `/` stops
-        // being a `.html` file inside the workspace.
+        // Resolved second: this is where a symlink to `/` stops being a `.html`
+        // file inside the workspace.
         let resolved = resolve(&absolute, Path::new(written))?;
         if !self.contains(&resolved) {
             return Err(Refusal::Escapes {

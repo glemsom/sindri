@@ -27,7 +27,7 @@
 //! (ADR-0011). Nothing here writes a record: that is ticket #17.
 
 pub mod copilot; // the owner-only file the session it keeps is written to
-pub mod retry; // §4's retry policy in one place: an ask is tried three times
+pub mod retry; // retry policy in one place: an ask is tried three times
 pub mod route; // which completion endpoint an OpenAI-shaped wire serves
 pub mod served; // what a wire says it serves, read off the wire and kept beside the (wire, base_url) pair that produced them
 pub mod transport; // how a request's bytes travel, and the fake a test substitutes
@@ -314,8 +314,6 @@ fn credential_source(wire: Wire) -> String {
     match wire {
         Wire::Anthropic => "set ANTHROPIC_API_KEY".to_owned(),
         Wire::Openai => "set OPENAI_API_KEY".to_owned(),
-        // Copilot is signed in to rather than handed a key, so the source is the
-        // command that signs in (§10); it is spelled in one place only.
         Wire::Copilot => format!("run `{}`", copilot::LOGIN),
     }
 }
@@ -499,7 +497,7 @@ impl Client {
     pub fn ask(&self, ask: &Ask, deltas: &mut dyn Deltas) -> Result<Answer, Failure> {
         let request = ask.request();
         // A session resolved here joins the set this ask is scrubbed with, so a
-        // wire that echoes it back is echoed back masked (ADR-0011).
+        // wire that echoes it back is echoed back masked.
         let mut secrets = self.secrets.clone();
         let credential = match ask.credential.expose() {
             Some(key) => Some(key.to_owned()),
@@ -520,9 +518,6 @@ impl Client {
                     .completion(ask.model.clone());
                 self.drive(model, request, deltas, &secrets)
             }
-            // Both OpenAI-shaped dialects are one configuration apart — the
-            // dialect, the endpoint and the route are `Ask::endpoint` — so the
-            // two arms are one, and a third such wire would change neither.
             Wire::Openai | Wire::Copilot => {
                 let Some(key) = credential else {
                     return Err(Failure::unconfigured(ask.wire));

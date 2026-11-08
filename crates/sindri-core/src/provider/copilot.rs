@@ -153,10 +153,9 @@ impl Store {
     pub fn session(&self) -> Result<Credential, SignIn> {
         let record = self.record();
         let secrets = secrets_of(&record);
-        // Read before the resolve, because rig drops a GitHub token the exchange
-        // refused: afterwards a store that no longer holds one cannot say
-        // whether it ever did, and that is the difference between a sign-in the
-        // wire will not take and one that never happened.
+        // Read before the resolve: rig drops a token the exchange refused, and
+        // afterwards the store cannot say whether it ever held one — the
+        // difference between a sign-in the wire will not take and none at all.
         let had_sign_in = holds_github_token(&record);
         let authenticator = self.authenticator(DeviceCodeHandler::default(), false);
         match futures::executor::block_on(authenticator.auth_context(&self.transport)) {
