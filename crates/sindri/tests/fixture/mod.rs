@@ -402,7 +402,7 @@ fn running(entries: Vec<Entry>, scroll: Scroll) -> View {
 fn facts() -> Facts {
     Facts {
         wire: Some(String::from("anthropic")),
-        model: Some(String::from("claude-sonnet")),
+        model: Some(String::from("claude-sonnet-4-5-20250929")),
         think: Some(String::from("high")),
         turns: Some((6, 250)),
         ctx: Some(Ctx {

@@ -4,7 +4,7 @@ expression: drawn
 ---
 transcript-scrolled at 120x40
 00 |  how tall the history is: it lays out the entries it shows and stops at the first row  wire      .............anthropic| plain:88 dim:23 muted:9
-01 |  that fills the band. Only the rows a band reaches are laid out, so a 250-turn history model     .........claude-sonnet| plain:88 dim:19 muted:13
+01 |  that fills the band. Only the rows a band reaches are laid out, so a 250-turn history model     ....claude-sonnet-4-5…| plain:88 dim:14 muted:18
 02 |  on a 40-row terminal pays for what it shows and no more.                              think     ..................high| plain:88 dim:28 muted:4
 03 |turn 4 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
 04 |✓ exit 0  bash  96 bytes · 118 ms                                                       turns     .................6/250| ok:1 dim:32 plain:55 dim:27 muted:5

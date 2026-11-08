@@ -4,7 +4,7 @@ expression: drawn
 ---
 queue at 120x40
 00 |  check: fmt ... ok                                                                     wire      .............anthropic| plain:88 dim:23 muted:9
-01 |  check: clippy ... ok                                                                  model     .........claude-sonnet| plain:88 dim:19 muted:13
+01 |  check: clippy ... ok                                                                  model     ....claude-sonnet-4-5…| plain:88 dim:14 muted:18
 02 |  check: test ... ok                                                                    think     ..................high| plain:88 dim:28 muted:4
 03 |  check: frames ... ok                                                                  ────────────────────────────────| plain:88 dim:32
 04 |  What that buys is the plain case and what it costs is the scrolled one: a window is a turns     .................6/250| plain:88 dim:27 muted:5

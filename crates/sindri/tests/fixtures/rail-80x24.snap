@@ -23,7 +23,7 @@ rail at 80x24
 17 |                                                                                | plain:80
 18 |                                                                                | plain:80
 19 |                                                                                | plain:80
-20 |wire anthropic · model claude-sonnet · think high · sandbox bwrap · +8 more     | dim:5 muted:9 dim:9 muted:13 dim:9 muted:4 dim:11 muted:5 dim:3 muted:7 plain:5
+20 |wire anthropic · model claude-sonnet-4-5… · think high · sandbox bwrap · +8 more| dim:5 muted:9 dim:9 muted:18 dim:9 muted:4 dim:11 muted:5 dim:3 muted:7
 21 |────────────────────────────────────────────────────────────────────────────────| dim:80
 22 |                                                                                | plain:80
 23 |Enter send · ? keys                                                             | muted:10 dim:3 muted:6 plain:61

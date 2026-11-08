@@ -4,7 +4,7 @@ expression: drawn
 ---
 calls at 120x40
 00 |turn 1 ─────────────────────────────────────────────────────────────────────────────────wire      .............anthropic| dim:111 muted:9
-01 |✓ exit 0  bash  64 bytes · 18 ms                                                        model     .........claude-sonnet| ok:1 dim:31 plain:56 dim:19 muted:13
+01 |✓ exit 0  bash  64 bytes · 18 ms                                                        model     ....claude-sonnet-4-5…| ok:1 dim:31 plain:56 dim:14 muted:18
 02 |  src/rows.rs: the check or the cross in `ok`/`err`                                     think     ..................high| plain:88 dim:28 muted:4
 03 |  The row is drawn from the verdict the record holds.                                   ────────────────────────────────| plain:88 dim:32
 04 |turn 2 ─────────────────────────────────────────────────────────────────────────────────turns     .................6/250| dim:115 muted:5

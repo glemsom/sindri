@@ -4,7 +4,7 @@ expression: drawn
 ---
 streaming at 120x40
 00 |  costs none.                                                                           wire      .............anthropic| plain:88 dim:23 muted:9
-01 |turn 5 ─────────────────────────────────────────────────────────────────────────────────model     .........claude-sonnet| dim:107 muted:13
+01 |turn 5 ─────────────────────────────────────────────────────────────────────────────────model     ....claude-sonnet-4-5…| dim:102 muted:18
 02 |✓ exit 0  bash  128 bytes · 9 ms                                                        think     ..................high| ok:1 dim:31 plain:56 dim:28 muted:4
 03 |  crates/sindri/src/rows.rs | 412 +++++++++++++                                         ────────────────────────────────| plain:88 dim:32
 04 |  crates/sindri/tests/rows.rs | 198 +++++++++                                           turns     .................6/250| plain:88 dim:27 muted:5
