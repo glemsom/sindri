@@ -170,21 +170,46 @@ run "$scratch/trailing_cite"
 assert_code 1 "a citation in a trailing // comment"
 assert_line '  src/lib.rs:8: cites a spec section (§16)' "a citation in a trailing // comment"
 
-# 10. A `//` that is a URL scheme is inside a string, not a comment: this tree's
-#    fixtures carry URLs with fragments, and a gate that read one as `#12` would
-#    fail on the tree the batches cleaned.
+# 10. A `//` inside a string literal is code, not a comment: this tree's fixtures
+#     carry URLs with fragments and Rust that strips a `//` prefix, and a gate that
+#     read either as a comment would fail on the tree the batches cleaned.
 break_case url 'const DOC: &str = "https://example.test/spec#12";'
 run "$scratch/url"
 assert_code 0 "a URL with a fragment in a string"
 refute 'comments gate: FAIL' "a URL with a fragment in a string"
 
-# 11. A machine with no awk cannot read the tree, and says so instead of earning
-#     the green line a gate that ran has earned. The probe is handed a PATH
-#     holding a shell and nothing else, so awk is not the only thing missing.
-none="$scratch/machine-none"
-mkdir -p "$none"
-ln -s "$(command -v bash)" "$none/bash"
-OUT=$(env PATH="$none" "$none/bash" "$probe" "$clean" 2>&1)
+break_case strip 'let authority = match rest.strip_prefix("//") {'
+run "$scratch/strip"
+assert_code 0 "a // inside a string literal"
+refute 'comments gate: FAIL' "a // inside a string literal"
+
+break_case hidden 'let note = "// §16 and ADR-0018 are in this string, not a comment";'
+run "$scratch/hidden"
+assert_code 0 "a citation inside a string literal"
+refute 'comments gate: FAIL' "a citation inside a string literal"
+
+# A `#` that runs on into a word is a colour, not an issue number: a gate that
+# read `#1a2b3c` as #1 would fail a comment on a palette.
+break_case colour '// The chosen ink is #1a2b3c, and nothing here cites anything.'
+run "$scratch/colour"
+assert_code 0 "a hex colour in a // comment"
+refute 'comments gate: FAIL' "a hex colour in a // comment"
+
+# 11. A machine that cannot read the tree says so instead of earning the green
+#     line a gate that ran has earned — and it says which tool is missing, so the
+#     gap is fixable rather than mysterious. Each case is handed a PATH holding
+#     the shell and the tools named for it, and nothing else.
+machine() { # NAME TOOL... -- a PATH holding a shell and every TOOL, symlinked
+  local name=$1 tool
+  shift
+  mkdir -p "$scratch/machine-$name"
+  ln -s "$(command -v bash)" "$scratch/machine-$name/bash"
+  for tool in "$@"; do ln -s "$(command -v "$tool")" "$scratch/machine-$name/$tool"; done
+  printf '%s' "$scratch/machine-$name"
+}
+
+none=$(machine none)
+OUT=$(env PATH="$none" "$none/bash" "$probe" "$clean" </dev/null 2>&1)
 CODE=$?
 assert_code 77 "no awk"
 assert_line 'skip comments: awk not on PATH' "no awk"
@@ -193,6 +218,22 @@ refute 'comments gate: ok' "no awk, no green line over a tree nothing read"
 # The skip is the verdict, not a crash: a machine this bare has no `dirname` or
 # `git` either, so the probe may borrow nothing from the machine to say it.
 refute 'command not found' "no awk, no borrowed tool on PATH"
+
+# A tool missing further down the pass is a skip too: a machine that holds awk and
+# nothing else would otherwise walk no file and call the empty list a clean tree.
+for tool in sort find; do
+  if [[ $tool == find ]]; then
+    path=$(machine "no-$tool" awk sort)
+  else
+    path=$(machine "no-$tool" awk)
+  fi
+  OUT=$(env PATH="$path" "$path/bash" "$probe" "$clean" </dev/null 2>&1)
+  CODE=$?
+  assert_code 77 "no $tool"
+  assert_line "skip comments: $tool not on PATH" "no $tool"
+  assert_line "comments gate: skipped ($tool unavailable)" "no $tool"
+  refute 'comments gate: ok' "no $tool, no green line over a tree nothing read"
+done
 
 # 12. The stage line: the verdicts relayed the way every neighbouring stage
 #     relays them, and only the skip keeps exit 0 with the gate unrun.
@@ -241,7 +282,7 @@ else
   bad "make check: STAGES is '$OUT', want comments among them"
 fi
 OUT=$(cd "$repo_root" && "$make_path" --no-print-directory -n check 2>&1)
-if grep -q 'comments' <<<"$OUT"; then
+if grep -q 'scripts/comments-probe.sh' <<<"$OUT"; then
   ok "make check: the loop reaches the comments stage"
 else
   bad "make check: the loop never reaches the comments stage"; printf '  output:\n%s\n' "$OUT"

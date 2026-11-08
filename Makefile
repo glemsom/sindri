@@ -36,7 +36,8 @@
 #                       when the kernel forbids unprivileged user namespaces,
 #                       which is the case ticket #7 exists for; the release path
 #                       when there is no bwrap or no musl C compiler; the gate
-#                       when there is no cargo on PATH. The
+#                       when there is no cargo on PATH; the comment gate when
+#                       there is no awk, no sort, or no way to list the tree. The
 #                       reason is the line above the verdict, the exit stays 0,
 #                       and the verdict is deliberately not `ok`: a green line
 #                       over code nothing covered is the one lie this target
@@ -101,18 +102,14 @@ clippy:
 audit:
 	$(call stage,audit,bash scripts/audit.sh .)
 
-# The comment gate of ADR-0018, landed by ticket #72: a `//` comment in a `.rs`
-# file carries what the code cannot show, and never a citation — no `§16`, no
-# `ADR-0011`, no issue number — and never a paragraph, because a run of `//`
-# lines is at most three. It reads the tree the cleanup batches left, so it starts
-# green and only ever reports a regression; it costs one pass over the sources, no
-# cargo and no compile, which is why it sits beside the audits.
+# The comment gate of ADR-0018 (ticket #72): no `//` comment in a `.rs` file cites
+# a section, an ADR or an issue, and none runs past three lines. One pass over the
+# sources, no cargo and no compile.
 #
-# Split in two the way the sandbox tier is split, and for the same reason:
-# `comments` runs the probe's contract test first, and `comments-tier` is the
-# probe alone, which is what that test drives. `skippable` because a machine with
-# no awk cannot read a comment at all: it prints the reason and a SKIPPED verdict,
-# never the `ok` a gate that ran over the tree has earned.
+# `comments-tier` is the probe alone, because `comments` runs the probe's contract
+# test first and that test drives `comments-tier`; a stage that drove itself would
+# never end. `skippable` because a machine with no awk cannot read a comment at
+# all, and a machine that cannot read the tree must not be told it is clean.
 comments:
 	$(call stage,comments-test,bash scripts/comments-probe-test.sh)
 	$(call skippable,comments,bash scripts/comments-probe.sh)

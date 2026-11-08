@@ -4,9 +4,10 @@
 # nor a paragraph.
 #
 #   citation      no `//` comment names a spec section (`§16`), a decision
-#                 (`ADR-0011`, `ADR 0011`) or an issue (`#72`, `ticket 71`). What
-#                 replaces one is nothing: the capability is named by the test
-#                 that proves it, and git carries the rest.
+#                 (`ADR-0011`) or an issue (`#72`, `ticket 71`) — the spellings
+#                 this tree writes them in. What replaces one is nothing: the
+#                 capability is named by the test that proves it, and git carries
+#                 the rest.
 #   block-length  a run of consecutive `//` lines is at most three, blank `//`
 #                 lines in the run included, because a fourth line is the
 #                 paragraph that argues a design and the argument is the pull
@@ -23,8 +24,10 @@
 #
 #   0   comments gate: ok (N files, M // comments)   the tree the cleanup batches
 #                                                    left, and nothing since
-#   77  comments gate: skipped (awk unavailable)     this machine cannot read the
-#                                                    tree; the reason is the line
+#   77  comments gate: skipped (<tool> unavailable)  this machine cannot read the
+#                                                    tree — no awk, no sort, or no
+#                                                    git and no find — and says
+#                                                    which; the reason is the line
 #                                                    above, and `make check`
 #                                                    relays it as SKIPPED, never
 #                                                    as the ok a gate that ran has
@@ -33,17 +36,18 @@
 #                                                    runs past three lines
 #
 # HOW IT IS READ, so nobody has to guess. A `//` comment is a line whose first
-# characters are `//` but not `///` or `//!`, or the text after the first `//` on
-# a line of code. A `//` preceded by a colon is not a comment: `https://` is a URL
-# scheme inside a string, and this tree's fixtures are full of them. That is the
-# whole of the string handling, so a string literal followed by `//` further
-# along the line reads as a comment — no line in this tree does that. Not read at
-# all: a `/* */` block comment, and a `//` on a line inside a string that spans
-# several. One violation per comment: the first citation it carries is the one
+# characters are `//` but not `///` or `//!`, or the first `//` on a line of code
+# that is not inside a string literal — `strip_prefix("//")` and
+# `"https://example.test/spec#12"` are both code, and this tree is full of them.
+# Quotes are counted, not parsed, so the three things this does not tell apart:
+# a `/* */` block comment, a `//` on a line inside a string that spans several
+# lines, and a `'"'` character literal, which opens the scan the way a string
+# does. One violation per comment: the first citation it carries is the one
 # named.
 set -uo pipefail
 
 SKIPPED_STATUS=77
+# The separator in the records awk hands back, a byte no citation holds.
 US=$'\x1f'
 # The three lines ADR-0018 allows a kept comment block, and the number the
 # violation is reported with.
@@ -62,11 +66,18 @@ repo_root=$(cd "${1:-$here/..}" && pwd) || {
 }
 cd "$repo_root" || exit 2
 
-if ! command -v awk >/dev/null 2>&1; then
-  printf 'skip comments: awk not on PATH\n'
-  printf 'comments gate: skipped (awk unavailable)\n'
+# needed TOOL -- exits on the skip verdict when TOOL is not on PATH, so a machine
+# that cannot read the tree says so rather than reporting the tree it never read.
+# The verdict line is printed here and nowhere else, so there is one wording.
+needed() {
+  if command -v "$1" >/dev/null 2>&1; then return 0; fi
+  printf 'skip comments: %s not on PATH\n' "$1"
+  printf 'comments gate: skipped (%s unavailable)\n' "$1"
   exit "$SKIPPED_STATUS"
-fi
+}
+
+needed awk
+needed sort
 
 files=()
 collect() {
@@ -76,9 +87,10 @@ collect() {
     [[ -f $path ]] && files+=("$path")
   done < <("$@")
 }
-if git rev-parse --git-dir >/dev/null 2>&1; then
+if command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then
   collect git ls-files --cached --others --exclude-standard -- '*.rs'
 else
+  needed find
   collect find . \( -name .git -o -name target -o -name .worktrees -o -name node_modules -o -name vendor \) -prune \
     -o -type f -name '*.rs' -print
 fi
@@ -99,14 +111,16 @@ if ((${#files[@]})); then
     esac
   done < <(awk -v US="$US" -v MAX="$MAX_BLOCK" '
     # comment_start LINE -- the column the line’s comment starts at, or 0. A `//`
-    # preceded by a colon is a URL scheme inside a string, not a comment.
-    function comment_start(line,   i, n, prev) {
+    # inside a string literal is code, so the scan tracks a quote and the escapes
+    # inside one, and only the `//` it reaches outside a string is a comment.
+    function comment_start(line,   i, n, c, quoted) {
       n = length(line)
+      quoted = 0
       for (i = 1; i < n; i++) {
-        if (substr(line, i, 2) != "//") continue
-        prev = (i > 1) ? substr(line, i - 1, 1) : " "
-        if (prev == ":") { i++; continue }
-        return i
+        c = substr(line, i, 1)
+        if (c == "\\") { i++; continue }
+        if (c == "\"") { quoted = !quoted; continue }
+        if (!quoted && substr(line, i, 2) == "//") return i
       }
       return 0
     }
@@ -138,6 +152,8 @@ if ((${#files[@]})); then
         return
       }
       if (match(text, /#[0-9]+/)) {
+        # The digit run has to end the number: `#1a2b3c` is a colour, not #1.
+        if (substr(text, RSTART + RLENGTH, 1) ~ /[A-Za-z0-9_]/) return
         WHAT = "cites an issue number"; CITED = substr(text, RSTART, RLENGTH)
       }
     }
