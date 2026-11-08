@@ -23,7 +23,7 @@ stats at 80x24
 17 |workspace ................./home/glemsom/Documents/git/sindri/.worktrees/46-rail| dim:27 muted:53
 18 |branch    .....................................................spec/1-capability| dim:63 muted:17
 19 |commit    ...............................................................16becb5| dim:73 muted:7
-20 |confine                                                                         | dim:7 plain:73
-21 |sandbox   ............................................................bubblewrap| dim:70 muted:10
+20 |                                                                                | plain:80
+21 |                                                                                | plain:80
 22 |                                                                                | plain:80
-23 |+8 more                                                                         | muted:7 plain:73
+23 |+9 more                                                                         | muted:7 plain:73

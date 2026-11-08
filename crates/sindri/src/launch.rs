@@ -290,8 +290,7 @@ impl Launch {
             .tools(&self.tools)
             .cancel(cancel);
         let mut measured = Usage::default();
-        turns.facts(self.facts(&measured));
-        turns.record(self.record.document());
+        hand(turns, &self, &measured);
         while run.state().is_running() {
             run.turn(deltas);
             // The loop hands a front end no hook per entry, so a turn is written whole as
@@ -305,8 +304,7 @@ impl Launch {
                     measured = exchange.usage;
                 }
                 turns.turn(exchange);
-                turns.facts(self.facts(&measured));
-                turns.record(self.record.document());
+                hand(turns, &self, &measured);
             }
         }
 
@@ -314,8 +312,7 @@ impl Launch {
         let usage = self.asking.spent();
         note(self.record.spent(usage));
         note(self.record.stopped(&state));
-        turns.facts(self.facts(&measured));
-        turns.record(self.record.document());
+        hand(turns, &self, &measured);
         let outcome = Outcome::of(
             &run,
             Reported {
@@ -331,6 +328,15 @@ impl Launch {
         note(self.record.finish());
         outcome.ok_or_else(|| Refusal::new("the run ended with no stop reason to report", SETUP))
     }
+}
+
+/// What a front end is handed of a run at one moment: the facts a rail draws and the record the
+/// run has written, together, because they are two readings of one run at one instant and a
+/// front end that took one without the other could draw a screen the rail beside it disagrees
+/// with.
+fn hand(turns: &mut dyn Turns, launch: &Launch, measured: &Usage) {
+    turns.facts(launch.facts(measured));
+    turns.record(launch.record.document());
 }
 
 /// The names the wire in force serves, read off it and never invented: what the `/model`

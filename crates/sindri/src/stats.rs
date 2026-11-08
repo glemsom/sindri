@@ -4,19 +4,20 @@
 //! what the run has spent in tokens, when it started, when and why it stopped, the whole GUID,
 //! the whole temp and the whole workspace have no home on it. This screen is that home, opened
 //! by `/stats` and closed by `Esc`: a ledger of the same facts, grouped into the rail's blocks
-//! and then into the blocks it cannot hold, laid out in as many columns as the band has room
-//! for and never split across two.
+//! and then into the blocks it cannot hold, laid out in the fewest columns that hold them and
+//! never more than the band has room for a column of.
 //!
-//! It reads what the frame was handed and nothing else — the rail's `Facts` for the meters and
-//! the session, the record for everything the run wrote down, and the loaded-skill set for the
+//! It reads what the frame was handed and nothing else — the rail's `Facts` for the run's meters
+//! and its session, which the rail already derives and which this screen must not derive a second
+//! time; the record for everything else the run wrote down; and the loaded-skill set for the
 //! names — so the screen and the rail beside it cannot disagree about one run. A fact the run
 //! knows nothing about is not drawn: no route for a wire that serves one endpoint, no cache
 //! before the wire reported one, no end or exit while the run is going, no branch or commit
 //! off a checkout.
 //!
 //! The layout is a pure function of the blocks and the band, so what a band of a given size
-//! yields is read by a test without a buffer: [`Stats::screen`] places the blocks, counts what
-//! did not fit, and [`Stats::paint`] writes the cells that placement describes.
+//! yields is read by a test without a buffer: the screen a band is drawn as places the blocks and
+//! counts what did not fit, and [`Stats::paint`] writes the cells that placement describes.
 //!
 //! Why the screen exists at all, and why it is `/stats` and not `/status`, is ADR-0019's; the
 //! acceptance criteria are the ticket's. What this module holds is the drawing of them.
@@ -28,47 +29,38 @@ use ratatui::layout::Rect;
 use sindri_core::records::SessionDocument;
 
 use crate::ink::Ink;
-use crate::rail::{Facts, head, put, tail, tokens};
+use crate::rail::{Facts, head, label_row, more, put, tail, tokens, value_room};
 
 /// The columns a column of this screen is never narrower than: a label field, its leaders and
 /// enough value to read is forty columns, and a band that cannot hold one gets one anyway.
-pub const MIN_COLUMN: u16 = 40;
-
-/// The columns a row's label is drawn in, the rail's own field, so the two read the same.
-const FIELD: u16 = 10;
-
-/// The fewest leader dots a row is drawn with: a label butted against its value is not a
-/// ledger row, and a value that leaves no room for one is not drawn.
-const LEADER_MIN: usize = 1;
-
-/// The glyph a row's leaders are drawn with.
-const LEADER: char = '.';
+const MIN_COLUMN: u16 = 40;
 
 /// What lies between two columns: one gap, so the value against one column's edge does not run
-/// into the label at the next one's.
-const GAP: u16 = 2;
+/// into the label at the next one's. It is not the rail's gap — that one separates two facts on
+/// one row — and a column's row is the rail's own, field and leaders and all.
+const COLUMN_GAP: u16 = 2;
 
 /// The stats a frame was handed: the rail's facts, the run's record and the names it has
 /// loaded, grouped into the blocks the screen draws in the order it reads them.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Stats {
-    /// The blocks, in the order the screen reads them, each with the rows the run knows.
-    blocks: Vec<Rows>,
+    /// The blocks, in the order the screen reads them, each with the facts the run knows.
+    blocks: Vec<Block>,
 }
 
-/// One block of the screen: the word it is headed by and the rows under it.
+/// One block of the screen: the word it is headed by and the facts under it.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Rows {
-    /// The heading, which is the ticket's own name for the block.
+struct Block {
+    /// The word the block is headed by.
     label: &'static str,
-    /// The rows, in the order the block reads them.
-    rows: Vec<Row>,
+    /// The facts the block holds, in the order it reads them.
+    rows: Vec<Fact>,
 }
 
-/// One row of a block: a label and the value beside it, or a name standing on its own.
+/// One fact of a block: a label and the value beside it, or a name standing on its own.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Row {
-    /// The label the row is read by, and nothing when the row is a name and no more.
+struct Fact {
+    /// The label the fact is read by, and nothing when it is a name and no more.
     label: Option<&'static str>,
     /// The value, before the column it lands in cuts it.
     value: Value,
@@ -99,26 +91,26 @@ impl Value {
     }
 }
 
-impl Row {
+impl Fact {
     /// A row of a fixed word: a wire, a turn count, a spend, an instant.
-    fn word(label: &'static str, value: impl Into<String>) -> Row {
-        Row {
+    fn word(label: &'static str, value: impl Into<String>) -> Fact {
+        Fact {
             label: Some(label),
             value: Value::Word(value.into()),
         }
     }
 
     /// A row of a path: the workspace the run stands in, and the temp it was given.
-    fn path(label: &'static str, path: &Path) -> Row {
-        Row {
+    fn path(label: &'static str, path: &Path) -> Fact {
+        Fact {
             label: Some(label),
             value: Value::Path(path.to_string_lossy().into_owned()),
         }
     }
 
     /// A row of a name: the model the run was served, and a skill it has loaded.
-    fn name(label: &'static str, name: impl Into<String>) -> Row {
-        Row {
+    fn name(label: &'static str, name: impl Into<String>) -> Fact {
+        Fact {
             label: Some(label),
             value: Value::Name(name.into()),
         }
@@ -126,8 +118,8 @@ impl Row {
 
     /// A row of a name and no label: a skill the run has loaded, read by its own word from
     /// the column's left edge rather than by a field it would only repeat.
-    fn bare(name: impl Into<String>) -> Row {
-        Row {
+    fn bare(name: impl Into<String>) -> Fact {
+        Fact {
             label: None,
             value: Value::Name(name.into()),
         }
@@ -139,7 +131,7 @@ impl Row {
     fn drawn(&self, width: u16) -> Option<Drawn> {
         let room = match self.label {
             None => usize::from(width),
-            Some(_) => usize::from(width).saturating_sub(usize::from(FIELD) + LEADER_MIN),
+            Some(_) => value_room(width),
         };
         Some(Drawn {
             label: self.label.map(String::from),
@@ -196,26 +188,26 @@ impl Stats {
     /// has nothing to draw, which is the title and no row.
     pub fn of(facts: &Facts, document: &SessionDocument, skills: &[String]) -> Stats {
         let mut run = vec![
-            Row::word("wire", document.wire.word()),
-            Row::name("model", document.model.clone()),
+            Fact::word("wire", document.wire.word()),
+            Fact::name("model", document.model.clone()),
         ];
         if let Some(route) = document.route {
-            run.push(Row::word("route", route.word()));
+            run.push(Fact::word("route", route.word()));
         }
-        run.push(Row::word(
+        run.push(Fact::word(
             "think",
             if document.thinking { "high" } else { "off" },
         ));
 
         let mut meters = Vec::new();
         if let Some((turns, cap)) = facts.turns {
-            meters.push(Row::word("turns", format!("{turns}/{cap}")));
+            meters.push(Fact::word("turns", format!("{turns}/{cap}")));
         }
         if let Some(ctx) = &facts.ctx {
-            meters.push(Row::word("ctx", ctx.said()));
+            meters.push(Fact::word("ctx", ctx.said()));
         }
         if let Some(cache) = facts.cache {
-            meters.push(Row::word("cache", format!("{cache}%")));
+            meters.push(Fact::word("cache", format!("{cache}%")));
         }
 
         let spent = document.usage;
@@ -228,37 +220,37 @@ impl Stats {
             ("reasoning", spent.reasoning),
         ] {
             if let Some(count) = count {
-                spend.push(Row::word(label, tokens(count)));
+                spend.push(Fact::word(label, tokens(count)));
             }
         }
 
-        let mut place = vec![Row::path("workspace", &document.workspace)];
+        let mut place = vec![Fact::path("workspace", &document.workspace)];
         if let Some(branch) = &document.branch {
-            place.push(Row::word("branch", branch.clone()));
+            place.push(Fact::word("branch", branch.clone()));
         }
         if let Some(commit) = &document.commit {
-            place.push(Row::word("commit", commit.clone()));
+            place.push(Fact::word("commit", commit.clone()));
         }
 
-        let mut stop = vec![Row::word("stopped", document.stopped.word())];
+        let mut stop = vec![Fact::word("stopped", document.stopped.word())];
         if let Some(reason) = document.stopped.stop() {
-            stop.push(Row::word("exit", reason.exit_code().to_string()));
+            stop.push(Fact::word("exit", reason.exit_code().to_string()));
         }
-        stop.push(Row::word("start", document.start.clone()));
+        stop.push(Fact::word("start", document.start.clone()));
         if let Some(end) = &document.end {
-            stop.push(Row::word("end", end.clone()));
+            stop.push(Fact::word("end", end.clone()));
         }
 
-        let confine = vec![Row::word("sandbox", document.enforcement.word())];
+        let confine = vec![Fact::word("sandbox", document.enforcement.word())];
 
-        let names: Vec<Row> = skills.iter().map(Row::bare).collect();
+        let names: Vec<Fact> = skills.iter().map(Fact::bare).collect();
 
         let mut session = Vec::new();
         if let Some(guid) = &facts.session {
-            session.push(Row::word("session", guid.clone()));
+            session.push(Fact::word("session", guid.clone()));
         }
         if let Some(temp) = &facts.temp {
-            session.push(Row::path("temp", temp));
+            session.push(Fact::path("temp", temp));
         }
 
         Stats {
@@ -274,7 +266,7 @@ impl Stats {
             ]
             .into_iter()
             .filter(|(_, rows)| !rows.is_empty())
-            .map(|(label, rows)| Rows { label, rows })
+            .map(|(label, rows)| Block { label, rows })
             .collect(),
         }
     }
@@ -294,15 +286,24 @@ impl Stats {
                 }
             }
         }
-        let (true, Some(column), true) = (screen.went > 0, screen.columns.last(), area.height > 0)
-        else {
+        let Some(column) = screen.columns.last() else {
             return;
         };
-        let said = format!("+{} more", screen.went);
-        put(buffer, column.x, area.bottom() - 1, &said, Ink::Muted);
+        if screen.went == 0 || area.height == 0 {
+            return;
+        }
+        put(
+            buffer,
+            column.x,
+            area.bottom() - 1,
+            &more(screen.went),
+            Ink::Muted,
+        );
     }
 
-    /// The blocks this screen holds, in the order the screen reads them.
+    /// The blocks this screen holds, in the order the screen reads them: what a test reads the
+    /// grouping and the size of each block by, with no band and no buffer.
+    #[cfg(test)]
     fn blocks(&self) -> impl ExactSizeIterator<Item = (&'static str, usize)> {
         self.blocks
             .iter()
@@ -317,6 +318,10 @@ impl Stats {
     /// for the rows it was handed takes more columns, and only then does it count what the last
     /// of them could not hold — in the row above the count's own, because the count is a row of
     /// the band like any other.
+    ///
+    /// A block's facts are whole, and so is the order they are read in: a band that gives one
+    /// up gives up every block after it, so what the last column counts is the tail of the
+    /// screen rather than a hole in the middle of it.
     fn screen(&self, area: Rect) -> Screen {
         if area.width == 0 || area.height == 0 || self.blocks.is_empty() {
             return Screen::default();
@@ -341,7 +346,7 @@ impl Stats {
             .map(|at| Column {
                 x: area
                     .x
-                    .saturating_add((at as u16).saturating_mul(width.saturating_add(GAP))),
+                    .saturating_add((at as u16).saturating_mul(width.saturating_add(COLUMN_GAP))),
                 width,
                 blocks: Vec::new(),
             })
@@ -349,20 +354,27 @@ impl Stats {
         let mut room = vec![rows; count];
         let mut went = 0;
         let mut at = 0;
-        for block in &self.blocks {
+        for (index, block) in self.blocks.iter().enumerate() {
             let drawn: Vec<Drawn> = block
                 .rows
                 .iter()
                 .filter_map(|row| row.drawn(width))
                 .collect();
-            went += block.rows.len() - drawn.len();
+            if drawn.is_empty() {
+                went += block.rows.len();
+                continue;
+            }
             let height = u16::try_from(drawn.len())
                 .unwrap_or(u16::MAX)
                 .saturating_add(1);
             let Some(place) = (at..count).find(|column| room[*column] >= height) else {
-                went += drawn.len();
-                continue;
+                went += self.blocks[index..]
+                    .iter()
+                    .map(|block| block.rows.len())
+                    .sum::<usize>();
+                break;
             };
+            went += block.rows.len() - drawn.len();
             room[place] -= height;
             at = place;
             columns[place].blocks.push(Placed {
@@ -377,7 +389,7 @@ impl Stats {
     /// The most columns a band `width` wide has room for: as many as hold a column of the least
     /// width this screen draws one at, and never more than there are blocks to fill them.
     fn columns(&self, width: u16) -> usize {
-        let holds = (width.saturating_add(GAP)) / (MIN_COLUMN + GAP);
+        let holds = (width.saturating_add(COLUMN_GAP)) / (MIN_COLUMN + COLUMN_GAP);
         usize::from(holds.max(1)).min(self.blocks.len())
     }
 }
@@ -389,7 +401,7 @@ fn column_width(width: u16, count: usize) -> u16 {
         return 0;
     };
     width
-        .saturating_sub(GAP.saturating_mul(count - 1))
+        .saturating_sub(COLUMN_GAP.saturating_mul(count - 1))
         .checked_div(count)
         .unwrap_or(0)
 }
@@ -402,16 +414,13 @@ fn drawn_row(buffer: &mut Buffer, column: &Column, y: u16, row: &Drawn) {
         put(buffer, column.x, y, &row.value, Ink::Muted);
         return;
     };
-    let value = row.value.chars().count();
-    let start = usize::from(column.width).saturating_sub(value);
-    let field = format!("{label:<width$}", width = usize::from(FIELD));
-    put(buffer, column.x, y, &field, Ink::Dim);
-    let leaders: String =
-        std::iter::repeat_n(LEADER, start.saturating_sub(usize::from(FIELD))).collect();
-    put(buffer, column.x + FIELD, y, &leaders, Ink::Dim);
-    let x = column
-        .x
-        .saturating_add(u16::try_from(start).unwrap_or(column.width));
+    let area = Rect {
+        x: column.x,
+        y,
+        width: column.width,
+        height: 1,
+    };
+    let x = label_row(buffer, area, label, row.value.chars().count());
     put(buffer, x, y, &row.value, Ink::Muted);
 }
 
@@ -708,7 +717,7 @@ mod tests {
                         row.value.chars().count()
                             + match row.label {
                                 None => 0,
-                                Some(_) => usize::from(FIELD) + LEADER_MIN,
+                                Some(_) => usize::from(column.width) - value_room(column.width),
                             }
                             <= usize::from(column.width),
                         "every row lands inside its column: {row:?} in {} columns",
@@ -774,7 +783,7 @@ mod tests {
 
         for width in MIN_COLUMN..=200 {
             let screen = stats.screen(band(width, 40));
-            let holds = (width + GAP) / (MIN_COLUMN + GAP);
+            let holds = (width + COLUMN_GAP) / (MIN_COLUMN + COLUMN_GAP);
 
             assert!(
                 screen.columns.len() <= usize::from(holds).min(stats.blocks.len()),

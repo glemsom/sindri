@@ -11,10 +11,10 @@
 //! A frame is a stack of modes, and the mode on top is what is drawn: the composer at
 //! the base, and a screen over it — the `?` screen, which replaces the bands with one list
 //! of the keys in force painted from the tables that answer them (#45), the `@` picker
-//! (#47), the `/model` screen (#48) and the settings modal (#49), each painted from the
-//! value it walks — the picker's query and rows, the served names, the settings screen's
-//! keys and the value each holds — so a screen never keeps a second copy of what answers
-//! it. Where a screen is up there is no draft on the frame and no caret, because a key
+//! (#47), the `/model` screen (#48), the settings modal (#49) and the stats screen (#88),
+//! each painted from the value it walks — the picker's query and rows, the served names, the
+//! settings screen's keys and the value each holds, the stats screen's facts and the record
+//! beside them — so a screen never keeps a second copy of what answers it. Where a screen is up there is no draft on the frame and no caret, because a key
 //! pressed then would not reach one.
 //!
 //! A draft that reaches `Enter` is a prompt, except when it names a `/` command: those are

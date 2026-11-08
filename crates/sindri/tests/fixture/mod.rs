@@ -59,6 +59,10 @@ use sindri_core::wire::Wire;
 /// per frame and size (ADR-0012).
 const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
 
+/// The GUID of the session every frame of a run here is drawn for: the whole of it, because
+/// the stats screen is the one place a reader can see all thirty-six characters.
+pub const GUID: &str = "9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61";
+
 /// A recorded Anthropic `GET /v1/models` catalogue, so the `/model` screen's picture is
 /// painted from names a wire really served rather than from a list written down here (#48,
 /// §10).
@@ -430,9 +434,9 @@ fn stats() -> View {
 
 /// The record the stopped run of a stats frame wrote: the same run `facts` draws, so the
 /// screen and the rail beside it are one picture of one run rather than two.
-fn document() -> SessionDocument {
+pub fn document() -> SessionDocument {
     SessionDocument {
-        session: String::from("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61"),
+        session: String::from(GUID),
         wire: Wire::Anthropic,
         model: String::from("claude-sonnet-4-5-20250929"),
         enforcement: Enforcement::Bubblewrap,
@@ -485,7 +489,7 @@ fn running(entries: Vec<Entry>, scroll: Scroll) -> View {
 /// A frame of chrome alone — boot, a draft being typed, the `?` screen — is handed no
 /// facts and draws no rail: a frame knows what it was given, and nothing invents the rest
 /// (§15).
-fn facts() -> Facts {
+pub fn facts() -> Facts {
     Facts {
         wire: Some(String::from("anthropic")),
         model: Some(String::from("claude-sonnet-4-5-20250929")),
@@ -502,7 +506,7 @@ fn facts() -> Facts {
         branch: Some(String::from("spec/1-capability")),
         skills: Some(2),
         sandbox: Some(Enforcement::Bubblewrap),
-        session: Some(String::from("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61")),
+        session: Some(String::from(GUID)),
         temp: Some(PathBuf::from(
             "/home/glemsom/.local/state/sindri/sessions/9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61/tmp",
         )),

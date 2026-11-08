@@ -6,86 +6,18 @@
 //! without a buffer); what is proved here is the frame's half: that a reader can reach the
 //! screen, that it draws what the frame was handed, and that it is a screen and not a band.
 
-use std::path::PathBuf;
-
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 
 use sindri::commands::{self, Command};
 use sindri::composer::{Key, Outcome};
 use sindri::keys::Mode;
-use sindri::rail::{Ctx, Facts};
 use sindri::view::View;
-use sindri_core::policy::{Enforcement, PolicyRecord};
-use sindri_core::records::{Dials, SessionDocument, Usage};
-use sindri_core::run::{State as RunState, Stop};
-use sindri_core::wire::Wire;
 
-/// The GUID of the session the screen's run is writing: the whole of it, which is one of the
-/// facts no rail column holds.
-const GUID: &str = "9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61";
+#[allow(dead_code)] // the harness draws every frame; this binary asks it for the run only
+mod fixture; // one frame rendered at a fixed size into the text a fixture holds
 
-/// The facts a run's rail draws, in the values a live run holds them.
-fn facts() -> Facts {
-    Facts {
-        wire: Some(String::from("anthropic")),
-        model: Some(String::from("claude-sonnet-4-5-20250929")),
-        think: Some(String::from("high")),
-        turns: Some((6, 250)),
-        ctx: Some(Ctx {
-            size: 48_200,
-            window: Some(200_000),
-        }),
-        cache: Some(88),
-        workspace: Some(PathBuf::from("/home/glemsom/src/sindri")),
-        branch: Some(String::from("spec/1-capability")),
-        skills: Some(2),
-        sandbox: Some(Enforcement::Bubblewrap),
-        session: Some(String::from(GUID)),
-        temp: Some(PathBuf::from(format!(
-            "/home/glemsom/.local/state/sindri/sessions/{GUID}/tmp"
-        ))),
-    }
-}
-
-/// The record a stopped run wrote, as the core holds it.
-fn document() -> SessionDocument {
-    SessionDocument {
-        session: String::from(GUID),
-        wire: Wire::Anthropic,
-        model: String::from("claude-sonnet-4-5-20250929"),
-        enforcement: Enforcement::Bubblewrap,
-        policy: PolicyRecord {
-            enforcement: Enforcement::Bubblewrap,
-            writable: vec![String::from("/home/glemsom/src/sindri")],
-            timeout_seconds: 120,
-            command_budget_ms: 3_600_000,
-            output_budget_bytes: 8 * 1024 * 1024,
-            description: String::from("the boundary the model was told about"),
-        },
-        workspace: PathBuf::from("/home/glemsom/src/sindri"),
-        branch: Some(String::from("spec/1-capability")),
-        commit: Some(String::from("16becb5")),
-        dials: Dials {
-            max_turns: 250,
-            command_budget_ms: 3_600_000,
-            output_budget_bytes: 8 * 1024 * 1024,
-        },
-        start: String::from("2026-01-01T00:00:00Z"),
-        end: Some(String::from("2026-01-01T00:04:00Z")),
-        turns: 6,
-        usage: Usage {
-            input: Some(48_200),
-            output: Some(3_100),
-            total: Some(51_300),
-            cached_input: Some(12_000),
-            reasoning: Some(900),
-        },
-        stopped: RunState::Stopped(Stop::Final),
-        route: Some(sindri_core::provider::Route::Chat),
-        thinking: true,
-    }
-}
+use fixture::{GUID, document, facts};
 
 /// The rows of the frame as a reader sees it, every cell of every row.
 fn painted(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
