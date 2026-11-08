@@ -20,7 +20,9 @@
 # artefact makes the OpenSSL case. The machine is faked the way
 # scripts/sandbox-probe-test.sh fakes it — a stand-in `bwrap` first on PATH, and a
 # stand-in `cargo` that answers the build without building — so every verdict is
-# provable on a machine whose real tools are fine.
+# provable on a machine whose real tools are fine. One of those stand-ins records
+# how the stage asked it for the artefact, because the build command is itself a
+# promise: the C half of rustls's provider links only when it is compiled for musl.
 #
 #     bash scripts/release-probe-test.sh
 set -uo pipefail
@@ -43,6 +45,18 @@ target="$scratch/target"
 artefact="$target/x86_64-unknown-linux-musl/release/sindri"
 mkdir -p "$(dirname "$artefact")"
 
+# need_artefact DESC OUT SRC [rustc args...] -- compile SRC into OUT as the static
+# musl binary a case hands the stage, and say whether the test can run at all.
+need_artefact() {
+  local desc=$1 out=$2 src=$3
+  shift 3
+  if rustc --target x86_64-unknown-linux-musl -C panic=abort -O "$@" -o "$out" "$src"; then
+    ok "an artefact to hand the probe: $desc"
+  else
+    bad "rustc could not make the artefact this test needs: $desc"
+  fi
+}
+
 # A static musl binary for the probe to pass, built from four lines with no
 # dependency at all, so this test pays a compile rather than a release build.
 cat >"$scratch/good.rs" <<'RS'
@@ -50,23 +64,24 @@ fn main() {
     println!("sindri 0.0.0 (release-probe-test)");
 }
 RS
-if rustc --target x86_64-unknown-linux-musl -C panic=abort -O -o "$scratch/good" "$scratch/good.rs"; then
-  ok 'a static musl artefact to hand the probe'
-else
-  bad 'rustc could not build the static musl artefact this test needs'
-fi
+need_artefact 'the good one' "$scratch/good" "$scratch/good.rs"
 
 # The artefact the probe must refuse: dynamic, so it carries the interpreter a
 # static one does not.
 if cp /bin/true "$scratch/dynamic"; then ok 'a dynamic glibc artefact to refuse'; else
   bad 'no /bin/true to copy a dynamic artefact from'; fi
 
-# An artefact that is static and carries glibc's own version string, which is the
-# case only the glibc marker catches: staticness alone would pass it, so the probe
-# may not use staticness as its evidence of musl. Appending the string is enough,
-# because a statically linked libc leaves exactly that behind.
-cp "$scratch/good" "$scratch/glibc"
-printf 'GNU C Library (GNU libc) stable release version 2.44.\n' >>"$scratch/glibc"
+# An artefact that is static, carries musl's `__stdio_exit`, and still says it is
+# glibc: the case only the glibc marker catches, because staticness alone would
+# pass it. The string is compiled into `.rodata` rather than appended, where a
+# statically linked libc would leave it — and where the stage's own `strip` keeps
+# it, so the artefact under test is one the stage could really have been handed.
+cat >"$scratch/glibc.rs" <<'RS'
+fn main() {
+    println!("GNU C Library (GNU libc) stable release version 2.44.");
+}
+RS
+need_artefact 'one that says glibc' "$scratch/glibc" "$scratch/glibc.rs"
 
 # And two artefacts that carry no musl to find: one with no symbol table at all,
 # one with musl's own `__stdio_exit` taken out of it.
@@ -92,16 +107,26 @@ if objcopy --add-symbol SSL_CTX_new=.text:0 "$scratch/openssl-symbol" 2>/dev/nul
 else
   bad 'objcopy could not make the OpenSSL artefact this test needs'
 fi
-cp "$scratch/good" "$scratch/openssl-string"
-printf 'libssl.so.3' >>"$scratch/openssl-string"
+cat >"$scratch/openssl-string.rs" <<'RS'
+fn main() {
+    println!("linking libssl.so.3");
+}
+RS
+need_artefact 'one carrying an OpenSSL library name' \
+  "$scratch/openssl-string" "$scratch/openssl-string.rs"
 
 # The machines, by PATH. A bwrap that reports a version and a kernel that will not
 # let it unshare is the machine the skip exists for; a directory holding only the
 # tools the probe needs is the machine with no bwrap at all.
 tools="$scratch/machine-no-bwrap"
 mkdir -p "$tools"
-for tool in bash grep nm strings od head sort tr sed basename dirname cat; do
+for tool in bash grep nm strings od head sort tr sed strip basename dirname cat cargo-zigbuild; do
   path=$(command -v "$tool") && ln -s "$path" "$tools/$tool"
+done
+nozig="$scratch/machine-no-zigbuild"
+mkdir -p "$nozig"
+for tool in bash grep nm strings od head sort tr sed strip bwrap basename dirname cat; do
+  path=$(command -v "$tool") && ln -s "$path" "$nozig/$tool"
 done
 restricted="$scratch/machine-restricted"
 mkdir -p "$restricted"
@@ -132,6 +157,24 @@ echo "bcm.c:(.text.aws_lc_0_47_0_handle_cpu_env+0x54): undefined reference to \`
 exit 101
 CARGO
 chmod +x "$scratch"/cargo-{ok,broken,no-musl-cc}/cargo
+
+# The stand-in that answers the build the way the release path must ask for one:
+# it records the argv and the rustflags it was handed, and refuses every
+# subcommand but `zigbuild`, so a stage that reached plain `cargo build` — and ran
+# the host's own glibc `cc` over musl's C — would fail this test rather than pass
+# it quietly.
+mkdir -p "$scratch/cargo-zig"
+cat >"$scratch/cargo-zig/cargo" <<CARGO
+#!/bin/sh
+printf '%s\n' "\$*" >"$scratch/zigbuild-argv"
+printf '%s\n' "\${RUSTFLAGS:-}" >"$scratch/zigbuild-rustflags"
+case " \$* " in
+  *' zigbuild '*) exit 0 ;;
+esac
+echo "cargo \$1: the release path builds through cargo-zigbuild" >&2
+exit 101
+CARGO
+chmod +x "$scratch/cargo-zig/cargo"
 
 # use_artefact FILE -- put FILE where the probe looks, so the probe needs no
 # argument and no case can forget to say which artefact it means.
@@ -169,6 +212,14 @@ assert_has() { # substring desc
   if [[ $OUT == *"$1"* ]]; then ok "$2: names $1"; else
     bad "$2: never names $1"; printf '  output:\n%s\n' "$OUT"; fi
 }
+assert_not_failed() { # desc -- the verdicts a stage that failed never prints
+  if [[ $CODE == 0 || $CODE == 77 ]]; then ok "$1: exit $CODE"; else
+    bad "$1: exit $CODE, want 0 or 77"; printf '  output:\n%s\n' "$OUT"; fi
+}
+assert_arg() { # want -- the argv the stage recorded names it
+  if [[ " ${argv:-} " == *" $1 "* ]]; then ok "the build: asks for $1"; else
+    bad "the build: never asks for $1 (argv: ${argv:-none})"; fi
+}
 refute() { # substring desc -- no line may carry it
   if grep -qF -- "$1" <<<"$OUT"; then
     bad "$2: output carries '$1'"; printf '  output:\n%s\n' "$OUT"; else
@@ -187,7 +238,7 @@ run_probe "$scratch/cargo-ok:$PATH"
 can_confine=
 if [[ $CODE == 0 ]]; then
   can_confine=yes
-  assert_line 'release: ok (5 checks)' 'good artefact'
+  assert_line 'release: ok (6 checks)' 'good artefact'
   assert_has 'artefact is a static ELF' 'good artefact'
   assert_has 'artefact is musl, not glibc' 'good artefact'
   assert_has 'no OpenSSL symbol or string' 'good artefact'
@@ -258,8 +309,75 @@ assert_has 'FAIL release: no artefact at' 'a build that left no artefact'
 use_artefact "$scratch/good"
 run_probe "$scratch/cargo-broken:$PATH"
 assert_code 1 'a broken build'
-assert_has 'FAIL release: cargo build --release --target x86_64-unknown-linux-musl' 'a broken build'
+assert_has 'FAIL release: cargo zigbuild --release --target x86_64-unknown-linux-musl' 'a broken build'
 refute 'release: skipped' 'a broken build is a failure, not a skip'
+
+# 6b. The build is the one that links. devbox's `cc` is a glibc compiler, and the C
+#     half of rustls's provider compiled by it is a musl link that dies on what
+#     glibc's headers name, so the artefact is built by the compiler that targets
+#     musl — `cargo zigbuild` — and asked to keep the symbol table the musl
+#     assertion reads.
+use_artefact "$scratch/good"
+run_probe "$scratch/cargo-zig:$PATH"
+if [[ $can_confine == no ]]; then
+  assert_line 'release: skipped (bwrap unavailable)' \
+    'artefact built through zigbuild, machine that will not unshare'
+else
+  assert_code 0 'artefact built through zigbuild'
+  assert_line 'release: ok (6 checks)' 'artefact built through zigbuild'
+fi
+refute 'FAIL release:' 'artefact built through zigbuild'
+refute 'no musl C compiler' 'artefact built through zigbuild, never the compiler skip'
+argv=$(cat "$scratch/zigbuild-argv" 2>/dev/null)
+for arg in zigbuild --release --target x86_64-unknown-linux-musl --package sindri; do
+  assert_arg "$arg"
+done
+rustflags=$(cat "$scratch/zigbuild-rustflags" 2>/dev/null)
+if [[ $rustflags == *strip=none* ]]; then
+  ok 'the build: keeps the symbol table musl is read from'
+else
+  bad "the build: rustflags are '${rustflags:-none}', want -C strip=none among them"
+fi
+
+# 6c. Zig compiles the C of its own libc with debug info that names the store it
+#     came from, and the artefact the product ships may name no store path
+#     it. So the stage drops that debug info — and drops no more than that: the
+#     symbol table the musl assertion reads is still there afterwards.
+debug_src="$scratch/nix/store/00000000000000000000000000000000-zig-0.17.0/src"
+mkdir -p "$debug_src"
+cp "$scratch/good.rs" "$debug_src/main.rs"
+need_artefact 'one whose debug info names a store path' \
+  "$scratch/with-debug" "$debug_src/main.rs" -C debuginfo=2
+use_artefact "$scratch/with-debug"
+run_probe "$scratch/cargo-ok:$PATH"
+assert_not_failed 'artefact carrying debug info'
+if grep -qa '/nix/store' "$artefact"; then
+  bad 'the artefact still names a store path: the debug info was left in it'
+else
+  ok 'the artefact names no store path: the debug info was dropped'
+fi
+if nm -- "$artefact" 2>/dev/null | grep -qw '__stdio_exit'; then
+  ok 'the artefact keeps the symbol table the musl assertion reads'
+else
+  bad 'the artefact lost its symbol table with the debug info'
+fi
+
+# 6d. A store path the stage cannot strip away is the artefact it must refuse: the
+#     string lives in `.rodata`, where a linked-in object would leave it, so the
+#     sections `--strip-debug` drops are not carrying it.
+cat >"$scratch/store-path.rs" <<'RS'
+fn main() {
+    println!("/nix/store/00000000000000000000000000000000-glibc-2.44/lib/libc.so.6");
+}
+RS
+need_artefact 'one carrying a store path in a section strip keeps' \
+  "$scratch/store-path" "$scratch/store-path.rs"
+use_artefact "$scratch/store-path"
+run_probe "$scratch/cargo-ok:$PATH"
+assert_code 1 'artefact carrying a store path'
+assert_has 'FAIL release: the artefact names a store path' 'artefact carrying a store path'
+refute 'release: ok' 'artefact carrying a store path, no green tick'
+use_artefact "$scratch/good"
 
 # 7. The one gap this stage knows by name: no musl C compiler, so the artefact
 #    cannot link. The reason is printed and the verdict skips — it is neither a
@@ -269,6 +387,14 @@ assert_code 77 'no musl C compiler'
 assert_line 'release: skipped (no musl C compiler)' 'no musl C compiler'
 assert_has '__isoc23_sscanf' 'no musl C compiler: names the symbol that could not be found'
 refute 'release: ok' 'no musl C compiler, no green tick over an artefact nobody built'
+
+# 7b. A machine with every tool but the compiler the shell pins: the same skip,
+#     said the same way, so a shell that lost it is never a tree's failure.
+run_probe "$scratch/cargo-ok:$nozig"
+assert_code 77 'no cargo-zigbuild'
+assert_line 'release: skipped (no musl C compiler)' 'no cargo-zigbuild'
+assert_has 'cargo-zigbuild is not on PATH' 'no cargo-zigbuild'
+refute 'release: ok' 'no cargo-zigbuild, no green tick over an artefact nobody built'
 
 # 8. A machine with no bwrap: the probe says which capability is missing and
 #    exits 77, with the reason above the verdict.
@@ -305,6 +431,11 @@ run_stage "$scratch/cargo-no-musl-cc:$PATH"
 assert_code 0 'make release-tier, no musl C compiler'
 assert_line 'check: release ... SKIPPED' 'make release-tier, no musl C compiler'
 refute 'check: release ... ok' 'make release-tier, no musl C compiler'
+
+run_stage "$scratch/cargo-ok:$nozig"
+assert_code 0 'make release-tier, no cargo-zigbuild'
+assert_line 'check: release ... SKIPPED' 'make release-tier, no cargo-zigbuild'
+refute 'check: release ... ok' 'make release-tier, no cargo-zigbuild'
 
 run_stage "$scratch/cargo-broken:$PATH"
 assert_code 2 'make release-tier, broken build'

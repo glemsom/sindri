@@ -35,10 +35,10 @@
 #   ... SKIPPED         a stage the machine would not let run — the sandbox tier
 #                       when the kernel forbids unprivileged user namespaces,
 #                       which is the case ticket #7 exists for; the release path
-#                       when there is no bwrap or no musl C compiler; the gate
-#                       when there is no cargo on PATH; the comment gate when
-#                       there is no awk, no sort, or no way to list the tree. The
-#                       reason is the line above the verdict, the exit stays 0,
+#                       when there is no bwrap, or no musl C compiler on PATH;
+#                       the gate when there is no cargo on PATH; the comment gate
+#                       when there is no awk, no sort, or no way to list the tree.
+#                       The reason is the line above the verdict, the exit stays 0,
 #                       and the verdict is deliberately not `ok`: a green line
 #                       over code nothing covered is the one lie this target
 #                       must not tell. Only a skip is ever exit 0 this way; a
@@ -257,10 +257,10 @@ no-relink:
 # that test drives. A test that ran itself would never end.
 #
 # The probe is `skippable` because of what it can honestly lack: bwrap, when the
-# kernel forbids unprivileged user namespaces, and a musl C compiler, which
-# devbox does not supply today — the C half of rustls's crypto provider is built
-# by the host's compiler against glibc headers, and the artefact cannot be linked.
-# Both say so in a printed line and a SKIPPED verdict; neither is ever an `ok`.
+# kernel forbids unprivileged user namespaces, and the musl C compiler the shell
+# pins — without `zig cc` the C half of rustls's crypto provider is built by a
+# glibc compiler, and the artefact cannot be linked. Both say so in a printed line
+# and a SKIPPED verdict; neither is ever an `ok`.
 release:
 	$(call stage,release-test,bash scripts/release-probe-test.sh)
 	$(call skippable,release,bash scripts/release-probe.sh)
