@@ -3,6 +3,10 @@
 //! bytes it draws — and the bytes typing a key makes it give back — are read off
 //! the master as the sequences they are.
 //!
+//! A live run's rail is measured here too: the facts a launch hands its frame are drawn from
+//! the frame the run's first turn is in flight from, and the facts the turn moved are drawn
+//! once it ends.
+//!
 //! Every child gets `env_clear` and homes of its own holding a key, so no launch
 //! stops to paste one and nothing of this process's environment — least of all a
 //! real key — can reach the binary.
@@ -12,6 +16,7 @@
 //! flight while the test types, and `Ctrl-C` and an outside `SIGINT` are each proved to
 //! stop it where §4 says they do (§4, §12).
 
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -36,6 +41,11 @@ const PATIENCE: Duration = Duration::from_secs(10);
 /// two text fragments, so a run really decodes one and the frame really draws it.
 const ANSWER: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_stream.sse");
+
+/// The same reply with the part of its eleven input tokens the provider served from its own
+/// cache: four of them, which is thirty-six percent of the input.
+const ANSWER_CACHED: &str =
+    include_str!("../../sindri-core/tests/fixtures/providers/anthropic_stream_cached.sse");
 
 /// The word the recorded stream says, split the way it streams: a frame paints the cells
 /// a fragment changed, so a test looks for both halves rather than for one run of words.
@@ -103,6 +113,35 @@ impl Ground {
     }
 }
 
+/// Puts `ground`'s workspace on a branch: a run records the checkout it stands in, and a
+/// directory that is no repository has no branch for a rail to draw.
+fn on_a_branch(ground: &Ground) {
+    for args in [
+        &["init", "-q", "-b", "main"][..],
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "the first commit",
+        ][..],
+    ] {
+        assert!(
+            Command::new("git")
+                .args(args)
+                .current_dir(&ground.workspace)
+                .status()
+                .expect("git runs")
+                .success(),
+            "the workspace becomes a repository on a branch"
+        );
+    }
+}
+
 /// A wire on a loopback socket, for the one thing a terminal UI test asks of one: that a
 /// request is in flight while the test types, and that it lands once the test lets it go.
 ///
@@ -125,6 +164,17 @@ struct Wire {
 impl Wire {
     /// A wire that answers nothing until it is released.
     fn holding() -> Wire {
+        Wire::answering(ANSWER)
+    }
+
+    /// A wire whose reply is the recorded one with the share of its input the provider served
+    /// from its own cache: the row a frame has nothing else to draw a hit rate from.
+    fn holding_a_cached_reply() -> Wire {
+        Wire::answering(ANSWER_CACHED)
+    }
+
+    /// A wire that holds `reply` until it is released.
+    fn answering(reply: &'static str) -> Wire {
         let listener = TcpListener::bind("127.0.0.1:0").expect("a loopback port");
         let port = listener.local_addr().expect("a bound address").port();
         let (arrived, arrivals) = channel();
@@ -145,7 +195,7 @@ impl Wire {
                 }
                 let _ = arrived.send(());
                 let _ = released.recv_timeout(PATIENCE);
-                let _ = answer(&mut stream);
+                let _ = answer(&mut stream, reply);
             }
         });
         Wire {
@@ -226,13 +276,13 @@ fn read_request(stream: &mut TcpStream) -> std::io::Result<String> {
 
 /// The recorded reply, written as a wire writes one: its length is given so the client
 /// does not wait for a close to find the end of it.
-fn answer(stream: &mut TcpStream) -> std::io::Result<()> {
+fn answer(stream: &mut TcpStream, reply: &'static str) -> std::io::Result<()> {
     let head = format!(
         "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
-        ANSWER.len()
+        reply.len()
     );
     stream.write_all(head.as_bytes())?;
-    stream.write_all(ANSWER.as_bytes())?;
+    stream.write_all(reply.as_bytes())?;
     stream.flush()
 }
 
@@ -775,28 +825,65 @@ fn sequence(drawn: &str) -> Option<Sequence> {
     Some(Sequence { move_to, taken })
 }
 
-/// The rows the composer's band took in the last frame that painted it: the gap between
-/// the row of its hairline and the row of the footer's first hint, which is the box's
-/// height (§12).
-fn composer_rows(drawn: &str) -> Option<u16> {
-    let mut row = 0u16;
-    let (mut hairline, mut footer) = (None, None);
-    let mut painted_here = String::new();
+/// One run of glyphs the stream wrote without the cursor leaving them: the row it was
+/// written on, the column it starts in, and the glyphs themselves.
+///
+/// A frame paints only the cells that changed, so a picture is replayed from these rather
+/// than read off the bytes that carried it — and a row, a needle and a band's height are all
+/// questions about the same replay.
+struct Run {
+    /// The row, counted from one as a terminal counts.
+    row: u16,
+    /// The column the first glyph sits in, counted from one.
+    column: u16,
+    /// The glyphs, in the order they landed.
+    glyphs: String,
+}
+
+/// Every run of glyphs in `drawn`, in the order they landed.
+fn runs(drawn: &str) -> Vec<Run> {
+    let (mut row, mut column) = (0u16, 0u16);
+    let mut moved = false;
+    let mut runs: Vec<Run> = Vec::new();
     for mark in painted(drawn) {
         match mark {
-            Painted::Moved(at, _) => {
+            Painted::Moved(at, col) => {
                 row = at;
-                painted_here.clear();
+                column = col;
+                moved = true;
             }
             Painted::Glyph(glyph) => {
-                painted_here.push(glyph);
-                if glyph == '─' {
-                    hairline = Some(row);
+                match runs.last_mut() {
+                    Some(run) if !moved => run.glyphs.push(glyph),
+                    _ => runs.push(Run {
+                        row,
+                        column,
+                        glyphs: glyph.to_string(),
+                    }),
                 }
-                if painted_here.ends_with("Enter send") {
-                    footer = Some(row);
-                }
+                moved = false;
+                column = column.saturating_add(1);
             }
+        }
+    }
+    runs
+}
+
+/// The rows the composer's band took in the last frame that painted it: the gap between
+/// the row of its hairline and the row of the footer's first hint, which is the box's
+/// height.
+///
+/// The hairline is the one drawn from the frame's first column and not any run of them: a
+/// rail draws hairlines of its own, and a frame that changed nothing but the rail paints
+/// those after the composer's.
+fn composer_rows(drawn: &str) -> Option<u16> {
+    let (mut hairline, mut footer) = (None, None);
+    for run in runs(drawn) {
+        if run.glyphs.starts_with('─') && run.column == 1 {
+            hairline = Some(run.row);
+        }
+        if run.glyphs.contains("Enter send") {
+            footer = Some(run.row);
         }
     }
     Some(footer? - hairline?)
@@ -806,24 +893,10 @@ fn composer_rows(drawn: &str) -> Option<u16> {
 /// when it never was: the frame's own geometry, so a test reads "above the composer" off
 /// the picture rather than assuming where a band landed.
 fn row_of(drawn: &str, needle: &str) -> Option<u16> {
-    let mut row = 0u16;
-    let mut painted_here = String::new();
-    let mut found = None;
-    for mark in painted(drawn) {
-        match mark {
-            Painted::Moved(at, _) => {
-                row = at;
-                painted_here.clear();
-            }
-            Painted::Glyph(glyph) => {
-                painted_here.push(glyph);
-                if painted_here.ends_with(needle) {
-                    found = Some(row);
-                }
-            }
-        }
-    }
-    found
+    runs(drawn)
+        .into_iter()
+        .rfind(|run| run.glyphs.contains(needle))
+        .map(|run| run.row)
 }
 
 /// Where `needle` was last drawn in `drawn`, or nothing when it never was: a frame paints
@@ -831,6 +904,41 @@ fn row_of(drawn: &str, needle: &str) -> Option<u16> {
 /// every frame that has been painted, and the last one is the end of it.
 fn last(drawn: &str, needle: &str) -> Option<usize> {
     drawn.rfind(needle)
+}
+
+/// The frame as the terminal holds it after every frame drawn so far: each row that has a
+/// glyph on it, and the glyphs in the cells the stream left there, a space between two runs
+/// and the last write to a cell winning — because a frame paints the cells that changed and
+/// leaves the rest, so a value that moved is read off the row rather than off the bytes that
+/// landed last.
+fn picture(drawn: &str) -> BTreeMap<u16, String> {
+    let mut rows: BTreeMap<u16, BTreeMap<u16, char>> = BTreeMap::new();
+    for run in runs(drawn) {
+        let cells = rows.entry(run.row).or_default();
+        let mut column = run.column;
+        for glyph in run.glyphs.chars() {
+            cells.insert(column, glyph);
+            column = column.saturating_add(1);
+        }
+    }
+    rows.into_iter()
+        .map(|(row, cells)| {
+            let first = *cells.keys().next().expect("a row holds a glyph");
+            let last = *cells.keys().next_back().expect("a row holds a glyph");
+            let text = (first..=last)
+                .map(|column| cells.get(&column).copied().unwrap_or(' '))
+                .collect();
+            (row, text)
+        })
+        .collect()
+}
+
+/// Whether a row of the frame reads `label` in a field and ends in `value`: the rail draws
+/// each label in its own field and each value against the frame's right-hand edge.
+fn rail_reads(drawn: &str, label: &str, value: &str) -> bool {
+    picture(drawn)
+        .values()
+        .any(|row| row.contains(&format!("{label} ")) && row.ends_with(value))
 }
 
 /// The cell the last frame left the caret on: typing paints one glyph per frame, so where
@@ -1073,6 +1181,17 @@ fn document(state: &std::path::Path) -> String {
     std::fs::read_to_string(directory.join("session.json")).expect("the session document")
 }
 
+/// The GUID the launch recorded under `state`, which a rail draws by its first eight.
+fn guid(state: &std::path::Path) -> String {
+    let document: serde_json::Value =
+        serde_json::from_str(&document(state)).expect("the session document is JSON");
+    String::from(
+        document["session"]
+            .as_str()
+            .expect("a document names its session"),
+    )
+}
+
 /// Waits until the document under `state` says `needle`, and says whether it ever did: a
 /// record is written as a run goes, so a test waits for the fact rather than for a sleep.
 fn recorded(state: &std::path::Path, needle: &str) -> bool {
@@ -1231,6 +1350,124 @@ fn a_cancelled_run_settles_as_cancelled_and_the_settled_frame_is_left_alone() {
         session.wait().code(),
         Some(0),
         "the launch outlives the run it cancelled: {:?}",
+        drawn.text()
+    );
+}
+
+/// A live run's rail: the facts the run was opened with are drawn on the frame its first
+/// turn is in flight from, and the turn's own facts are drawn once it ends — the size the
+/// wire reported against the window the config names, and the turn counted against the cap.
+///
+/// The window is the config's, reached by the run and by nothing in the frame: a rail that
+/// read the config itself would be a second opinion about what the run obeys.
+#[test]
+fn a_live_run_draws_the_facts_it_was_handed_and_its_first_turn_moves_them() {
+    let ground = Ground::new();
+    on_a_branch(&ground);
+    let wire = Wire::holding_a_cached_reply();
+    let mut command = ground.command();
+    command
+        .arg("--yolo-unsafe")
+        .env("SINDRI_BASE_URL", wire.base_url())
+        .env("SINDRI_CONTEXT_WINDOW", "200000");
+    let (session, mut pty, drawn) = Session::starting(command);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    assert_eq!(
+        row_of(&drawn.text(), "turns"),
+        None,
+        "a frame before any run knows no fact and draws no rail: {:?}",
+        drawn.text()
+    );
+
+    ask(&mut pty, &drawn, &wire);
+
+    assert!(
+        drawn.wait_until(|frame| rail_reads(frame, "turns", "0/250")),
+        "the frame a run's first turn is in flight from draws the facts the run was \
+         opened with, and the cap with no turn spent: {:?}",
+        drawn.text()
+    );
+    let recorded = guid(&ground.state);
+    for (label, value) in [
+        ("wire", "anthropic"),
+        ("model", "claude-sonnet-4-6"),
+        ("think", "off"),
+        ("workspace", "/workspace"),
+        ("branch", "main"),
+        ("sandbox", "unsafe"),
+        ("session", &recorded[..8]),
+    ] {
+        assert!(
+            rail_reads(&drawn.text(), label, value),
+            "the rail draws `{label} {value}` on the frame the run opened: {:?}",
+            drawn.text()
+        );
+    }
+    assert_eq!(
+        row_of(&drawn.text(), "ctx"),
+        None,
+        "no reply has reported a size, so there is no ctx row to read even though a \
+         window is named: {:?}",
+        drawn.text()
+    );
+    assert_eq!(
+        row_of(&drawn.text(), "cache"),
+        None,
+        "and no reply has reported what the provider served from its own cache: {:?}",
+        drawn.text()
+    );
+
+    wire.release();
+
+    assert!(
+        drawn.wait_until(|frame| {
+            rail_reads(frame, "turns", "1/250")
+                && rail_reads(frame, "ctx", "11/200k 0%")
+                && rail_reads(frame, "cache", "36%")
+        }),
+        "the turn the run took is counted against the cap, the size the wire reported is \
+         drawn against the window the config named, and the share of that input the \
+         provider served from its own cache beside it: {:?}",
+        drawn.text()
+    );
+    assert!(
+        drawn.wait_until(|frame| frame.contains('✓')),
+        "the run answered and settled on its marker: {:?}",
+        drawn.text()
+    );
+
+    // The frame the run stopped on keeps the last facts it was handed, the way the
+    // transcript keeps its last entry.
+    let frame = drawn.text();
+    for (label, value) in [
+        ("turns", "1/250"),
+        ("ctx", "11/200k 0%"),
+        ("cache", "36%"),
+        ("workspace", "/workspace"),
+        ("branch", "main"),
+        ("session", &recorded[..8]),
+    ] {
+        assert!(
+            rail_reads(&frame, label, value),
+            "the settled frame draws `{label} {value}`: {frame:?}"
+        );
+    }
+
+    pty.type_bytes(b"\x11");
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "the launch outlives the run whose facts it drew: {:?}",
+        drawn.text()
+    );
+    assert!(
+        drawn.wait_for(b"\x1b[?1049l"),
+        "and gives the screen back: {:?}",
         drawn.text()
     );
 }

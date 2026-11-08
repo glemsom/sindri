@@ -73,6 +73,7 @@ use sindri::graphics::CellSize;
 use sindri::picture;
 use sindri::pictures::Pictures;
 use sindri::pulse::{self, Pulse};
+use sindri::rail::Facts;
 use sindri::settings::persist;
 use sindri::view::View;
 use sindri_core::config::{Config, Environment, Process, Touched};
@@ -621,6 +622,9 @@ enum Report {
     /// it is asking the model in this turn, which the frame has nothing to draw but a
     /// terminal wants to know.
     Told(Told),
+    /// The facts the run holds, as its rail draws them: handed when the run opens, as each
+    /// turn ends and when it stops.
+    Facts(Facts),
     /// The run stopped, and with what: the marker settles on the verdict and the duration
     /// the run reported, which are the two facts §12 settles a pulse on (#39).
     Stopped {
@@ -676,6 +680,10 @@ impl Turns for Reports {
             }));
         }
     }
+
+    fn facts(&mut self, facts: Facts) {
+        self.push(Report::Facts(facts));
+    }
 }
 
 /// Takes everything the run in flight has left and puts it on the frame, and says whether the
@@ -710,6 +718,10 @@ fn take(
             }
             // A status changes no cell: it is written by the one thing here that owns a tty.
             Report::Told(told) => telling.say(told)?,
+            Report::Facts(facts) => {
+                view.set_facts(facts);
+                painted = true;
+            }
             Report::Stopped {
                 stop,
                 elapsed_ms,
