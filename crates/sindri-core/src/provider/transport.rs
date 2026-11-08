@@ -13,9 +13,9 @@
 //! nothing, and it is how a front end, `doctor` and any later conformance check
 //! can prove what the seam does without a key.
 
-// rig's `http::` error is 128 bytes and is the type the transport trait's own
-// signature returns, so every fallible helper here carries it; boxing it would
-// mean wrapping the trait, which is a second seam in front of the first.
+// rig's `http::` error is 128 bytes and is what the transport trait returns, so
+// every fallible helper carries it: `#[allow]` here beats wrapping the trait,
+// which would be a second seam in front of the first.
 #![allow(clippy::result_large_err)]
 
 use std::collections::VecDeque;

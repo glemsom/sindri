@@ -314,8 +314,6 @@ fn credential_source(wire: Wire) -> String {
     match wire {
         Wire::Anthropic => "set ANTHROPIC_API_KEY".to_owned(),
         Wire::Openai => "set OPENAI_API_KEY".to_owned(),
-        // Copilot is signed in to rather than handed a key, so the source is the
-        // command that signs in (§10); it is spelled in one place only.
         Wire::Copilot => format!("run `{}`", copilot::LOGIN),
     }
 }
@@ -499,7 +497,7 @@ impl Client {
     pub fn ask(&self, ask: &Ask, deltas: &mut dyn Deltas) -> Result<Answer, Failure> {
         let request = ask.request();
         // A session resolved here joins the set this ask is scrubbed with, so a
-        // wire that echoes it back is echoed back masked (ADR-0011).
+        // wire that echoes it back is echoed back masked.
         let mut secrets = self.secrets.clone();
         let credential = match ask.credential.expose() {
             Some(key) => Some(key.to_owned()),
@@ -520,9 +518,6 @@ impl Client {
                     .completion(ask.model.clone());
                 self.drive(model, request, deltas, &secrets)
             }
-            // Both OpenAI-shaped dialects are one configuration apart — the
-            // dialect, the endpoint and the route are `Ask::endpoint` — so the
-            // two arms are one, and a third such wire would change neither.
             Wire::Openai | Wire::Copilot => {
                 let Some(key) = credential else {
                     return Err(Failure::unconfigured(ask.wire));

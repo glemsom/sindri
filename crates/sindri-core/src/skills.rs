@@ -376,10 +376,7 @@ type ByName = BTreeMap<String, Skill>;
 /// The directory each one is written in is where it is edited, never where it is
 /// read: `include_str!` bakes the text in, so deleting the directory afterwards
 /// changes nothing about the skills this build offers.
-const BUILTIN_SKILLS: &[&str] = &[
-    // One commit message, written from the diff in the repository's own style.
-    include_str!("../skills/commit-message/SKILL.md"),
-];
+const BUILTIN_SKILLS: &[&str] = &[include_str!("../skills/commit-message/SKILL.md")];
 
 /// One place discovery reads skills from, as the precedence order visits it:
 /// lowest first, so a later skill takes a name from an earlier one.
@@ -399,8 +396,6 @@ impl Source {
             Source::Embedded(text) => match parse(text, None, scope) {
                 Ok(skill) => vec![skill],
                 Err(refusal) => {
-                    // A built-in has no file to point at, so the refusal names
-                    // the artefact instead.
                     let path = Path::new("<builtin>");
                     catalog.diagnostics.push(refusal.diagnostic(path));
                     Vec::new()

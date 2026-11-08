@@ -499,11 +499,9 @@ fn git(workspace: &Path, args: &[&str]) -> Option<String> {
 pub fn timestamp(time: SystemTime) -> String {
     let seconds = match time.duration_since(UNIX_EPOCH) {
         Ok(since) => i64::try_from(since.as_secs()).unwrap_or(i64::MAX),
-        // Before the epoch, the instant is a whole number of seconds back and
-        // then a part of one more, because a fraction of a second before the
-        // epoch is a whole second earlier and never the epoch itself. The
-        // calendar below counts backwards through a whole day at a time, which
-        // is what `div_euclid` is for.
+        // Before the epoch a fraction of a second is a whole second earlier than
+        // truncation puts it, and `div_euclid` below counts backwards through
+        // whole days.
         Err(error) => {
             let before = error.duration();
             let whole = -i64::try_from(before.as_secs()).unwrap_or(i64::MAX);
@@ -520,9 +518,8 @@ pub fn timestamp(time: SystemTime) -> String {
         (second_of_day / 60) % 60,
         second_of_day % 60,
     );
-    // Positional, so the widths are all the string holds: a format that spelled
-    // `{year:04}` and `{month:02}` side by side reads, to the tree's model-list
-    // scan, as two served names written out by hand.
+    // Positional on purpose: to the model-list scan, `{year:04}` beside
+    // `{month:02}` reads as two served names written out by hand.
     format!(
         "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
         year, month, day, hour, minute, second
@@ -740,9 +737,8 @@ impl Status {
     pub fn new(told: Told, workspace: &Path) -> Status {
         Status {
             phase: told.phase(),
-            // The line is the enum's own, so there is no run text here for a set to
-            // catch; the field stays `Redacted` because every document field that
-            // carries words is one (ADR-0011).
+            // The line is the enum's own, so an empty set has nothing to catch;
+            // the field is `Redacted` because every field carrying words is.
             message: SecretSet::default().redact(told.line()),
             turn: told.turn(),
             workspace: name_of(workspace),
@@ -752,8 +748,6 @@ impl Status {
     /// The document as one line of JSON: what `status.json` writes, and the payload
     /// a terminal is told, so the two windows onto a run cannot disagree about it.
     pub fn json(&self) -> Vec<u8> {
-        // Four facts of a string and a number: there is no value here a serializer
-        // could refuse.
         serde_json::to_vec(self).expect("a status is four facts and always serialises")
     }
 

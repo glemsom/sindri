@@ -182,16 +182,11 @@ pub fn invocation(
     session_temp: &Path,
     command: &str,
 ) -> Result<Invocation, BashError> {
-    // The command as the model wrote it: one string, handed to a shell, because
-    // a pipeline or a short script is one turn's work.
     let shell = Invocation {
         program: String::from(SHELL),
         args: vec![String::from("-c"), String::from(command)],
     };
 
-    // The escape hatch is nothing between the run and the user's own
-    // privileges: no bubblewrap, no mounts, no environment of ours, and the cwd
-    // the process already had. The temp is not mapped, because nothing is.
     if boundary.enforcement() == Enforcement::Unsafe {
         return Ok(shell);
     }
@@ -205,11 +200,9 @@ pub fn invocation(
     let temp = session_temp.display().to_string();
     let mut args: Vec<String> = Vec::new();
 
-    // Every namespace unshared, the network kept: §5 sends search, fetch and
-    // HTTP through this shell, so the boundary is a boundary on writes and not
-    // on reads. Dying with the parent is what makes the timeout a kill of the
-    // whole sandbox rather than of one process in it, and the new session keeps
-    // a sandboxed command off the terminal that started it.
+    // The network is kept on purpose: search and fetch run through this shell, so
+    // the boundary is on writes and not on reads. `--die-with-parent` makes the
+    // timeout kill the whole sandbox; `--new-session` keeps it off the terminal.
     args.extend(
         [
             "--unshare-all",
@@ -220,22 +213,13 @@ pub fn invocation(
         .map(String::from),
     );
 
-    // The host root, read-only: the command sees the machine it always saw and
-    // may write none of it. /dev and /proc are mounted over it so a command has
-    // the devices and the process view a shell expects.
     args.extend(["--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc"].map(String::from));
 
-    // The writable set, exactly as the boundary holds it: canonical, sorted,
-    // non-nested. Each path is bound over itself, so it stays where the model
-    // was told it is.
     for path in boundary.writable().paths() {
         let path = path.display().to_string();
         args.extend([String::from("--bind"), path.clone(), path]);
     }
 
-    // The session temp, mapped to TMPDIR: scratch that lives as long as the
-    // session. This module is handed the path and maps it; it does not create
-    // it, adopt it or clear it away.
     args.extend([
         String::from("--bind"),
         temp.clone(),
@@ -249,7 +233,6 @@ pub fn invocation(
         String::from(SANDBOX_PATH),
     ]);
 
-    // The separator, and then the command the model wrote.
     args.push(String::from("--"));
     args.push(shell.program);
     args.extend(shell.args);
@@ -279,12 +262,11 @@ pub fn run(
     let invocation = invocation(boundary, session_temp, command)?;
     let program = invocation.program().to_owned();
 
-    // No stdin: a tool call has no terminal, and a command that reads one would
-    // hang the run. Both streams are piped, because the model is given them.
+    // No stdin: a command that reads one would hang the run.
     //
     // The command leads a process group of its own, so one kill takes everything
-    // it started: `--die-with-parent` is what carries a sandboxed command's
-    // process with it, and the group is what carries an unsafe one's children.
+    // it started: `--die-with-parent` for a sandboxed command's process, the
+    // group for an unsafe one's children.
     let mut child = Command::new(&program)
         .args(invocation.args())
         .stdin(Stdio::null())
@@ -317,9 +299,7 @@ pub fn run(
                 });
             }
         }
-        // The user's word first: a cancellation beats the timeout that would
-        // otherwise have fired, because it is the louder of the two (§4,
-        // ADR-0006).
+        // A cancellation beats the timeout that would otherwise have fired.
         if cancel.is_set() {
             cancelled = true;
             stop(&mut child);
@@ -353,9 +333,8 @@ fn stop(child: &mut Child) {
         let _ = child.kill();
         return;
     };
-    // The negative pid names the group, the command leading it included. A group
-    // the kernel has already reaped has nothing left to signal, which is a kill
-    // that lost a race and not a failure.
+    // The negative pid names the group. One the kernel has already reaped has
+    // nothing left to signal: a kill that lost a race, not a failure.
     unsafe {
         kill(-pid, SIGKILL);
     }
@@ -468,8 +447,6 @@ mod tests {
     #[test]
     fn the_sandbox_argv_is_the_boundary_and_nothing_else() {
         let ground = Ground::new();
-        // Named in reverse, so the vector shows the boundary's sorted order
-        // rather than the order a caller happened to name.
         let boundary = boundary(&ground, &["zdata", "adata"], Enforcement::Bubblewrap);
         let workspace = ground.path.join("workspace");
         let adata = ground.path.join("adata");
@@ -479,8 +456,8 @@ mod tests {
             .expect("the boundary renders an argv")
             .argv();
 
-        // The worked example, written out: an independent statement of what
-        // confines a command, so the builder cannot drift into saying otherwise.
+        // Written out by hand rather than built by the code under test, so the
+        // builder cannot drift into saying otherwise.
         let expected: Vec<String> = vec![
             "bwrap",
             "--unshare-all",
@@ -534,8 +511,6 @@ mod tests {
             .expect("the boundary renders an argv")
             .argv();
 
-        // Nothing between the run and the user's own privileges: no bubblewrap,
-        // no mounts, no environment of ours, and the cwd the process already has.
         assert_eq!(argv, vec!["/bin/sh", "-c", "echo hi"]);
     }
 
@@ -567,7 +542,6 @@ mod tests {
         std::fs::create_dir_all(&inner).expect("the inner directory");
         let (data_name, inner_name) = (data.display().to_string(), inner.display().to_string());
 
-        // Every way a set stops being a set, each with the path that broke it.
         let broken: Vec<(&str, Vec<PathBuf>, &str)> = vec![
             ("duplicate", vec![data.clone(), data.clone()], &data_name),
             ("nested", vec![data.clone(), inner.clone()], &inner_name),

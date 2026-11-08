@@ -57,8 +57,8 @@ impl Throttle {
     pub fn offer(&mut self, report: Status, now: Instant) -> Option<Status> {
         if let Some((said, at)) = &self.said {
             if said == &report {
-                // Already on the terminal. Anything held for the window is the same
-                // story told again, so it is no longer worth saying late.
+                // Already said, so anything held for the window is the same story
+                // told again, and it is dropped rather than said late.
                 self.held = None;
                 return None;
             }
