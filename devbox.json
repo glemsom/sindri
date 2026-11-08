@@ -2,8 +2,8 @@
   "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.19.0/.schema/devbox.schema.json",
   "packages": [
     "rustup@1.29.2",
-    "bubblewrap@latest",
-    "pkg-config@latest",
+    "bubblewrap@0.12.0",
+    "pkg-config@0.29.2",
     "zig@0.17.0",
     "github:NixOS/nixpkgs/6dadaf4375be35033e1c84395adbd53ff5fded96#cargo-zigbuild"
   ],
@@ -14,8 +14,10 @@
       "export RUSTUP_HOME CARGO_HOME",
       "export PATH=\"$CARGO_HOME/bin:$PATH\"",
       "rustup default 1.99.0 >/dev/null",
-      "rustup component add rustfmt clippy --toolchain 1.99.0",
-      "rustup target add x86_64-unknown-linux-musl --toolchain 1.99.0"
+      "rustup component add rustfmt clippy",
+      "rustup target add x86_64-unknown-linux-musl",
+      "export CC_x86_64_unknown_linux_musl=\"$DEVBOX_PROJECT_ROOT/scripts/musl-cc.sh\"",
+      "export AR_x86_64_unknown_linux_musl=\"zig ar\""
     ],
     "scripts": {
       "probe": "bash scripts/toolchain-probe.sh"
