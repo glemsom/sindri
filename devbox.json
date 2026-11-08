@@ -3,7 +3,9 @@
   "packages": [
     "rustup@1.29.2",
     "bubblewrap@latest",
-    "pkg-config@latest"
+    "pkg-config@latest",
+    "zig@0.17.0",
+    "github:NixOS/nixpkgs/6dadaf4375be35033e1c84395adbd53ff5fded96#cargo-zigbuild"
   ],
   "shell": {
     "init_hook": [

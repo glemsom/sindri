@@ -2,7 +2,7 @@
 # The release stage of `make check` (spec §16, ADR 0001; ticket #62): the release
 # path exercised by the gate rather than by hand on release day. It builds the
 # artefact the product ships — a static `x86_64-unknown-linux-musl` binary — and
-# then asserts four things about the bytes it made:
+# then asserts five things about the bytes it made:
 #
 #   1. static      nothing in it names an ELF interpreter, so it needs no loader
 #                  from the machine it runs on;
@@ -13,13 +13,16 @@
 #                  musl binary cannot use the GNU NSS resolver and TLS therefore
 #                  goes through rustls (ADR 0001). `openssl-probe` reads an env
 #                  var and is not OpenSSL; `SSL_CTX_new` is;
-#   4. it runs     with no devbox, no Nix and no fonts: an empty root, an empty
+#   4. no store    no `/nix/store` path in it: devbox supplies build-time tools
+#                  only, so nothing it built may name the store it came from;
+#   5. it runs     with no devbox, no Nix and no fonts: an empty root, an empty
 #                  environment, no PATH, and the artefact as the only file in it,
 #                  printing what it prints here. A binary that needs a Nix store
 #                  path, a system library or a font to start cannot.
 #
 # The build reuses CARGO_TARGET_DIR, like every other cargo call in the gate: a
 # tree that has already built the artefact pays a freshness check, not a compile.
+# It goes through `zig cc`, the only compiler in the shell that targets musl.
 #
 # Three verdicts, and the exit code is part of the contract:
 #
@@ -30,8 +33,8 @@
 #
 # Two reasons to skip, and only two, both facts about the machine rather than the
 # tree: no bwrap, or a kernel that will not let bwrap unshare — the same pair
-# scripts/sandbox-probe.sh skips on — and no musl C compiler, which is where this
-# stage stands today (see `toolchain_gap` below). A skip is printed, never counted
+# scripts/sandbox-probe.sh skips on — and a shell that has lost the musl C
+# compiler it pins (see `toolchain_gap` below). A skip is printed, never counted
 # as a pass, and keeps the run's exit 0.
 #
 #     devbox run -- make release
@@ -72,15 +75,13 @@ finish() {
 }
 
 # toolchain_gap BUILD_OUTPUT -- true when the build failed for the one reason this
-# stage knows by name. devbox supplies a C compiler for the host and no compiler
-# for the musl target, so the C half of rustls's crypto provider (aws-lc-rs) is
-# compiled by the host's compiler against the host's C headers; nixpkgs' compiler
-# wrapper appends its own hardening and dialect flags after any this stage passes,
-# and those headers then name glibc-only stdio entry points that rustc's bundled
-# musl does not define. The fix is a musl C compiler in devbox.json, which is the
-# toolchain's business and not this script's, so the stage says so and skips
-# rather than failing a tree that is not at fault. Any other link or compile
-# error is a FAIL: this predicate is the symbols below and nothing else.
+# stage knows by name: the C half of rustls's crypto provider (aws-lc-rs) was
+# compiled by a compiler that targets glibc rather than musl, so it references
+# stdio entry points rustc's bundled musl does not define. The shell pins `zig cc`
+# and step 1 builds with it, so this is the shape of a shell that lost the
+# compiler it pinned: the stage says so and skips rather than failing a tree that
+# is not at fault. Any other link or compile error is a FAIL: this predicate is
+# the symbols below and nothing else.
 toolchain_gap() {
   local said=$1
   local symbol
@@ -97,22 +98,39 @@ if ! command -v cargo >/dev/null 2>&1; then
   finish
 fi
 
-# 1. The artefact, built the way the product ships it.
-if said=$(cargo build --release --target "$target" --package sindri 2>&1); then
-  ok "cargo build --release --target $target --package sindri"
+if ! command -v cargo-zigbuild >/dev/null 2>&1; then
+  skip 'cargo-zigbuild is not on PATH: run this inside `devbox shell`'
+  printf 'release: skipped (no musl C compiler)\n'
+  exit "$SKIPPED_STATUS"
+fi
+
+# 1. The artefact, built the way the product ships it: `cargo zigbuild` puts the C
+#    half of rustls's provider through `zig cc`, which compiles and links for musl.
+#    `-C strip=none` because zig reads the strip zigbuild asks for as
+#    strip-everything, and that would take the symbol table with it — while zig's
+#    own libc arrives with debug info that names the store, so `--strip-debug`
+#    takes those sections and keeps the table.
+if said=$(RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C strip=none" \
+    cargo zigbuild --release --target "$target" --package sindri 2>&1); then
+  ok "cargo zigbuild --release --target $target --package sindri"
 elif toolchain_gap "$said"; then
   skip "$(grep -m1 'undefined reference to' <<<"$said" | sed 's/^ *//')"
-  skip "the musl target's C is compiled against glibc headers and devbox supplies no musl C compiler"
+  skip "the musl target's C was compiled against glibc headers: the shell has lost the musl C compiler it pins"
   printf 'release: skipped (no musl C compiler)\n'
   exit "$SKIPPED_STATUS"
 else
-  bad "cargo build --release --target $target --package sindri failed:"
+  bad "cargo zigbuild --release --target $target --package sindri failed:"
   printf '%s\n' "$said"
   finish
 fi
 
 if [[ ! -f $artefact ]]; then
   bad "no artefact at $artefact after a successful build"
+  finish
+fi
+
+if ! said=$(strip --strip-debug -- "$artefact" 2>&1); then
+  bad "strip --strip-debug could not drop the debug info from $(basename -- "$artefact"): $said"
   finish
 fi
 
@@ -168,7 +186,17 @@ else
   ok 'no OpenSSL symbol or string in the artefact'
 fi
 
-# 5. It runs with nothing around it. bwrap makes the empty root, `--clearenv`
+# 5. No Nix store path: devbox supplies build-time tools only, so nothing it built
+#    may name the store it came from. Debug info is the way one arrives here, which
+#    is why the sections above are stripped.
+if store=$(grep -oa '/nix/store/[^[:space:]]*' -- "$artefact" | head -1 | cut -c1-120) &&
+   [[ -n $store ]]; then
+  bad "the artefact names a store path: $store"
+else
+  ok 'no Nix store path in the artefact'
+fi
+
+# 6. It runs with nothing around it. bwrap makes the empty root, `--clearenv`
 #    empties the environment, and the artefact is the only file mounted into it —
 #    so there is no devbox shell, no /nix, no /usr/share/fonts and no dynamic
 #    loader for anything to find. The bytes it prints are compared with the bytes
