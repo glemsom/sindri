@@ -28,6 +28,9 @@ const SETTINGS: &str = "/settings";
 /// The command that opens the keys in force.
 const HELP: &str = "/help";
 
+/// The command that opens the screen of facts the rail is too narrow to hold.
+const STATS: &str = "/stats";
+
 /// The command that ends the launch.
 const QUIT: &str = "/quit";
 
@@ -48,6 +51,8 @@ pub enum Command {
     Settings,
     /// `/help`: the keys in force, which is the screen `?` opens.
     Help,
+    /// `/stats`: the facts the rail gives up, drawn whole on the frame's whole band.
+    Stats,
     /// `/quit`: the launch ends and the terminal is given back.
     Quit,
 }
@@ -70,6 +75,7 @@ pub fn read(line: &str) -> Option<Command> {
         NEW => Some(Command::New),
         SETTINGS => Some(Command::Settings),
         HELP => Some(Command::Help),
+        STATS => Some(Command::Stats),
         QUIT => Some(Command::Quit),
         MODEL => Some(match rest.is_empty() {
             true => Command::Model,

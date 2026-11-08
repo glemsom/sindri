@@ -11,10 +11,10 @@
 //! A frame is a stack of modes, and the mode on top is what is drawn: the composer at
 //! the base, and a screen over it — the `?` screen, which replaces the bands with one list
 //! of the keys in force painted from the tables that answer them (#45), the `@` picker
-//! (#47), the `/model` screen (#48) and the settings modal (#49), each painted from the
-//! value it walks — the picker's query and rows, the served names, the settings screen's
-//! keys and the value each holds — so a screen never keeps a second copy of what answers
-//! it. Where a screen is up there is no draft on the frame and no caret, because a key
+//! (#47), the `/model` screen (#48), the settings modal (#49) and the stats screen (#88),
+//! each painted from the value it walks — the picker's query and rows, the served names, the
+//! settings screen's keys and the value each holds, the stats screen's facts and the record
+//! beside them — so a screen never keeps a second copy of what answers it. Where a screen is up there is no draft on the frame and no caret, because a key
 //! pressed then would not reach one.
 //!
 //! A draft that reaches `Enter` is a prompt, except when it names a `/` command: those are
@@ -63,7 +63,7 @@ use ratatui::layout::Rect;
 use sindri_core::config::{Config, Touched};
 use sindri_core::provider::Deltas;
 use sindri_core::provider::served::Listing;
-use sindri_core::records::Entry;
+use sindri_core::records::{Entry, SessionDocument};
 use sindri_core::run::{Load, Loaded};
 use sindri_core::skills::{Catalog, Skill};
 
@@ -82,6 +82,7 @@ use crate::queue::Queue;
 use crate::rail::Facts;
 use crate::rows::{Row, Rows, Scroll};
 use crate::settings::Settings;
+use crate::stats::Stats;
 use crate::stream::Stream;
 
 /// §12's hints in survival order, most valuable first — the order a narrower footer gives
@@ -154,6 +155,10 @@ const SETTINGS_GAP: usize = 2;
 /// as the picker: the two screens are one shape, and a reader who has met one has met both.
 const MODELS_TITLE: &str = "/model";
 
+/// What the stats screen heads itself with: the command a reader typed to open it, in the ink
+/// the other screens head themselves in.
+const STATS_TITLE: &str = "/stats";
+
 /// The label the screen's query sits behind, so a line of glyphs under the title reads as
 /// what the rows are ranked by rather than as a row of them.
 const MODELS_QUERY: &str = "query: ";
@@ -204,6 +209,10 @@ pub struct View {
     /// about the run and what a caller hands in for the facts nothing produces yet, in
     /// the values `rail` spells them with (#46).
     rail: Facts,
+    /// The record the run has written, handed in beside the facts: what the stats screen draws
+    /// that no rail column holds — the route, the spend, the instants, the whole GUID — and
+    /// nothing at all before a run has opened one.
+    record: Option<SessionDocument>,
     /// The mark a drag has left, if one has: two corners of the band, kept so that a
     /// redraw keeps the highlight and `Ctrl-Y` copies again with no fresh selection
     /// (§12, #50).
@@ -420,6 +429,12 @@ impl View {
         self.settings.refuse(reason);
     }
 
+    /// Hands this frame the record the run has written, beside the facts its rail draws: the
+    /// stats screen draws both, and a frame handed no record opens it with a title and no row.
+    pub fn set_record(&mut self, document: &SessionDocument) {
+        self.record = Some(document.clone());
+    }
+
     /// The mode on top of the stack: what this frame is showing and what will answer
     /// the next key.
     pub fn mode(&self) -> Mode {
@@ -533,6 +548,7 @@ impl View {
             Command::ModelNamed(name) => Outcome::Model(name),
             Command::Settings => Outcome::Settings,
             Command::Help => self.screen(Mode::Keys),
+            Command::Stats => self.screen(Mode::Stats),
             Command::Quit => Outcome::Quit,
         }
     }
@@ -833,6 +849,7 @@ impl View {
                 Mode::Files => self.files_screen(area, buffer),
                 Mode::Models => self.models_screen(area, buffer),
                 Mode::Settings => self.settings_screen(area, buffer),
+                Mode::Stats => self.stats_screen(area, buffer),
                 // The `?` screen is what a screen with no picture of its own is drawn as.
                 Mode::Composer | Mode::Keys => self.keys_screen(area, buffer),
             }
@@ -1184,6 +1201,31 @@ impl View {
             return;
         }
         cut_row(buffer, screen_band(area), y, &[(refusal, Ink::Err)]);
+    }
+
+    /// The stats screen: the facts the rail gives up, under the title of the command that
+    /// opened it, laid out in the columns `stats` decides and painted from what this frame was
+    /// handed — the record and the rail's facts — so the screen cannot say anything the run did
+    /// not write down.
+    fn stats_screen(&self, area: Rect, buffer: &mut Buffer) {
+        buffer.set_style(area, Ink::Plain.style());
+        screen_row(buffer, area, area.y, &[(STATS_TITLE, Ink::Accent)]);
+        let body = Rect {
+            y: area.y.saturating_add(1),
+            height: area.height.saturating_sub(1),
+            ..area
+        };
+        self.stats().paint(body, buffer);
+    }
+
+    /// The screen's rows, built from the three values this frame holds: the rail's facts for
+    /// the meters and the session, the record for everything the run wrote down, and the names
+    /// it has loaded. A frame handed no record has no row to draw.
+    fn stats(&self) -> Stats {
+        let Some(document) = &self.record else {
+            return Stats::default();
+        };
+        Stats::of(&self.rail, document, self.loaded.names())
     }
 
     /// The footer: the hints §12's table gives a frame this wide, on the bottom edge, in

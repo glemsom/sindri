@@ -45,18 +45,23 @@ use sindri::rail::{Ctx, Facts};
 use sindri::rows::Scroll;
 use sindri::view::View;
 use sindri_core::config::Config;
-use sindri_core::policy::Enforcement;
+use sindri_core::policy::{Enforcement, PolicyRecord};
+use sindri_core::provider::Route;
 use sindri_core::provider::served::Where;
 use sindri_core::provider::transport::{Canned, Replay};
 use sindri_core::provider::{Client, Credential, Deltas};
-use sindri_core::records::Entry;
+use sindri_core::records::{Dials, Entry, SessionDocument, Usage};
 use sindri_core::redact::SecretSet;
-use sindri_core::run::{Exit, Stop};
+use sindri_core::run::{Exit, State as RunState, Stop};
 use sindri_core::wire::Wire;
 
 /// Where the accepted pictures live: beside the tests that compare them, one file
 /// per frame and size (ADR-0012).
 const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
+
+/// The GUID of the session every frame of a run here is drawn for: the whole of it, because
+/// the stats screen is the one place a reader can see all thirty-six characters.
+pub const GUID: &str = "9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61";
 
 /// A recorded Anthropic `GET /v1/models` catalogue, so the `/model` screen's picture is
 /// painted from names a wire really served rather than from a list written down here (#48,
@@ -152,6 +157,7 @@ fn named(name: &str) -> View {
             view
         }
         "settings-refused" => refused(),
+        "stats" => stats(),
         "footer" => View::boot(),
         // The picture is taller than the band, so it is never placed: a block the band
         // does not hold whole keeps its words, which is also what lets the fixture be
@@ -384,6 +390,90 @@ fn refused() -> View {
     view
 }
 
+/// The frame the stats screen is drawn on: a stopped run's facts and record handed in, two
+/// skills loaded through the command a reader loads them with, and `/stats` typed to open the
+/// screen — so the picture is the whole of what one run gives a reader, and not a grid of
+/// sample rows.
+///
+/// The workspace is a temp directory holding the two `SKILL.md` files the catalog offers: the
+/// loaded set is the frame's own, and a name put there by hand would be a name no body was
+/// ever handed over for.
+fn stats() -> View {
+    let root = tempfile::tempdir().expect("a temp workspace");
+    for name in ["bash", "records"] {
+        let directory = root.path().join(".agents/skills").join(name);
+        std::fs::create_dir_all(&directory).expect("the skill's directory");
+        std::fs::write(
+            directory.join("SKILL.md"),
+            format!("---\nname: {name}\ndescription: the {name} skill\n---\n\nBody.\n"),
+        )
+        .expect("a SKILL.md");
+    }
+
+    let mut view = View::boot();
+    view.set_workspace(root.path().to_path_buf());
+    view.set_home(None);
+    for name in ["bash", "records"] {
+        view.paste(&format!("/skill:{name}"));
+        assert_eq!(
+            view.key(Key::Enter),
+            Outcome::Edited,
+            "a skill the catalog offers is one the frame loads"
+        );
+    }
+    view.set_facts(facts());
+    view.set_record(&document());
+    view.paste("/stats");
+    assert_eq!(
+        view.key(Key::Enter),
+        Outcome::Edited,
+        "a `/stats` line opens the screen"
+    );
+    view
+}
+
+/// The record the stopped run of a stats frame wrote: the same run `facts` draws, so the
+/// screen and the rail beside it are one picture of one run rather than two.
+pub fn document() -> SessionDocument {
+    SessionDocument {
+        session: String::from(GUID),
+        wire: Wire::Anthropic,
+        model: String::from("claude-sonnet-4-5-20250929"),
+        enforcement: Enforcement::Bubblewrap,
+        policy: PolicyRecord {
+            enforcement: Enforcement::Bubblewrap,
+            writable: vec![String::from(
+                "/home/glemsom/Documents/git/sindri/.worktrees/46-rail",
+            )],
+            timeout_seconds: 120,
+            command_budget_ms: 3_600_000,
+            output_budget_bytes: 8 * 1024 * 1024,
+            description: String::from("the boundary the model was told about"),
+        },
+        workspace: PathBuf::from("/home/glemsom/Documents/git/sindri/.worktrees/46-rail"),
+        branch: Some(String::from("spec/1-capability")),
+        commit: Some(String::from("16becb5")),
+        dials: Dials {
+            max_turns: 250,
+            command_budget_ms: 3_600_000,
+            output_budget_bytes: 8 * 1024 * 1024,
+        },
+        start: String::from("2026-01-01T00:00:00Z"),
+        end: Some(String::from("2026-01-01T00:04:12Z")),
+        turns: 6,
+        usage: Usage {
+            input: Some(48_200),
+            output: Some(3_100),
+            total: Some(51_300),
+            cached_input: Some(12_000),
+            reasoning: Some(900),
+        },
+        stopped: RunState::Stopped(Stop::Final),
+        route: Some(Route::Chat),
+        thinking: true,
+    }
+}
+
 /// The frame a run is in: the entries it has written, where the transcript is scrolled to,
 /// and the facts the rail draws them beside (#46).
 fn running(entries: Vec<Entry>, scroll: Scroll) -> View {
@@ -399,7 +489,7 @@ fn running(entries: Vec<Entry>, scroll: Scroll) -> View {
 /// A frame of chrome alone — boot, a draft being typed, the `?` screen — is handed no
 /// facts and draws no rail: a frame knows what it was given, and nothing invents the rest
 /// (§15).
-fn facts() -> Facts {
+pub fn facts() -> Facts {
     Facts {
         wire: Some(String::from("anthropic")),
         model: Some(String::from("claude-sonnet-4-5-20250929")),
@@ -416,7 +506,7 @@ fn facts() -> Facts {
         branch: Some(String::from("spec/1-capability")),
         skills: Some(2),
         sandbox: Some(Enforcement::Bubblewrap),
-        session: Some(String::from("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61")),
+        session: Some(String::from(GUID)),
         temp: Some(PathBuf::from(
             "/home/glemsom/.local/state/sindri/sessions/9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61/tmp",
         )),

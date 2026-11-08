@@ -79,7 +79,7 @@ use sindri::view::View;
 use sindri_core::config::{Config, Environment, Process, Touched};
 use sindri_core::provider::Deltas;
 use sindri_core::provider::served::Listing;
-use sindri_core::records::Told;
+use sindri_core::records::{SessionDocument, Told};
 use sindri_core::redact::SecretSet;
 use sindri_core::run::{Cancel, Exchange, Stop};
 use sindri_core::tools::FrontEnd;
@@ -625,6 +625,9 @@ enum Report {
     /// The facts the run holds, as its rail draws them: handed when the run opens, as each
     /// turn ends and when it stops.
     Facts(Facts),
+    /// The record the run has written, handed beside those facts: what the stats screen draws
+    /// that no rail column holds.
+    Record(SessionDocument),
     /// The run stopped, and with what: the marker settles on the verdict and the duration
     /// the run reported, which are the two facts §12 settles a pulse on (#39).
     Stopped {
@@ -684,6 +687,10 @@ impl Turns for Reports {
     fn facts(&mut self, facts: Facts) {
         self.push(Report::Facts(facts));
     }
+
+    fn record(&mut self, document: &SessionDocument) {
+        self.push(Report::Record(document.clone()));
+    }
 }
 
 /// Takes everything the run in flight has left and puts it on the frame, and says whether the
@@ -720,6 +727,10 @@ fn take(
             Report::Told(told) => telling.say(told)?,
             Report::Facts(facts) => {
                 view.set_facts(facts);
+                painted = true;
+            }
+            Report::Record(document) => {
+                view.set_record(&document);
                 painted = true;
             }
             Report::Stopped {

@@ -157,6 +157,13 @@ impl Ctx {
         (value, Some(fill))
     }
 
+    /// The run's size as the ledger writes it, which is the spelling every drawing of it
+    /// outside the rail's own rows uses: a size and the share of a window it is are one fact
+    /// and are spelled in one place.
+    pub(crate) fn said(&self) -> String {
+        self.spelled(Shape::Ledger).0
+    }
+
     /// How full the window is, when one is known: a window of no tokens is no share of
     /// anything, which `share` is the one place to say.
     ///
@@ -214,7 +221,7 @@ fn share(part: u64, whole: u64) -> Option<u8> {
 /// The size of a run in spelled tokens: whole under a thousand, and three figures with a
 /// unit above it — `948`, `48.2k`, `1.02M` — because no reader counts six digits off a
 /// rail, and a rail column has no room to make them read as one number.
-fn tokens(count: u64) -> String {
+pub(crate) fn tokens(count: u64) -> String {
     if count < 1_000 {
         return count.to_string();
     }
@@ -412,7 +419,7 @@ impl Facts {
                     put(buffer, area.x, y, &hairline, Ink::Dim);
                 }
                 Row::Went(went) => {
-                    put(buffer, area.x, y, &format!("+{went} more"), Ink::Muted);
+                    put(buffer, area.x, y, &more(went), Ink::Muted);
                 }
             }
             y = y.saturating_add(1);
@@ -439,13 +446,7 @@ impl Facts {
             if !kept.facts.is_empty() {
                 x = put(buffer, x, area.y, GAP, Ink::Dim);
             }
-            put(
-                buffer,
-                x,
-                area.y,
-                &format!("+{} more", kept.went),
-                Ink::Muted,
-            );
+            put(buffer, x, area.y, &more(kept.went), Ink::Muted);
         }
     }
 
@@ -705,7 +706,7 @@ fn strip_columns(facts: &[Fact], went: usize, counted: bool) -> usize {
         if !facts.is_empty() {
             taken += columns(GAP);
         }
-        taken += columns(&format!("+{went} more"));
+        taken += columns(&more(went));
     }
     taken
 }
@@ -714,17 +715,39 @@ fn strip_columns(facts: &[Fact], went: usize, counted: bool) -> usize {
 /// to the value, and the value against the rail's right-hand edge — the one hanging edge
 /// §46's contract asks for.
 fn ledger_row(buffer: &mut Buffer, area: Rect, fact: &Fact) {
-    let value = fact.value.chars().count();
-    let start = usize::from(area.width).saturating_sub(value);
-    let label = format!("{:<width$}", fact.kind.label(), width = usize::from(FIELD));
-    put(buffer, area.x, area.y, &label, Ink::Dim);
+    let x = label_row(buffer, area, fact.kind.label(), columns(&fact.value));
+    fact.draw(buffer, x, area.y);
+}
+
+/// The label of one ledger row in its field and the leaders out to a value `value_width`
+/// columns wide, and the column that value starts at: the rule both the rail and the screen
+/// that widens it draw a row by, so a label sits in the same field and the values end on the
+/// same hanging edge wherever they are read.
+pub(crate) fn label_row(buffer: &mut Buffer, area: Rect, label: &str, value_width: usize) -> u16 {
+    let start = usize::from(area.width).saturating_sub(value_width);
+    let field = format!("{label:<width$}", width = usize::from(FIELD));
+    put(buffer, area.x, area.y, &field, Ink::Dim);
     let leaders: String =
         std::iter::repeat_n(LEADER, start.saturating_sub(usize::from(FIELD))).collect();
     put(buffer, area.x + FIELD, area.y, &leaders, Ink::Dim);
-    let x = area
-        .x
-        .saturating_add(u16::try_from(start).unwrap_or(area.width));
-    fact.draw(buffer, x, area.y);
+    area.x
+        .saturating_add(u16::try_from(start).unwrap_or(area.width))
+}
+
+/// The row that says how many facts the room could not hold, in the one wording both shapes
+/// of the rail and the screen that widens it count them by.
+///
+/// The columns a labelled row has left for its value: the row's width less the label's field and
+/// the one leader that makes it a ledger row, which is what a value has to be cut to wherever a
+/// ledger row is drawn.
+pub(crate) fn more(count: usize) -> String {
+    format!("+{count} more")
+}
+
+/// The columns a labelled row drawn in `width` columns leaves its value: the field and one
+/// leader come off the front, and a value that leaves less than that is not drawn at all.
+pub(crate) fn value_room(width: u16) -> usize {
+    usize::from(width).saturating_sub(usize::from(FIELD) + LEADER_MIN)
 }
 
 /// The columns `text` takes: one per glyph, whatever the glyph's bytes say, because a
@@ -736,7 +759,7 @@ fn columns(text: &str) -> usize {
 /// Writes `text` from `x` across a row, one glyph per cell, in `ink`, and hands back the
 /// column after it: every row here is measured before it is written, so this only has to
 /// stop at the frame's edge.
-fn put(buffer: &mut Buffer, x: u16, y: u16, text: &str, ink: Ink) -> u16 {
+pub(crate) fn put(buffer: &mut Buffer, x: u16, y: u16, text: &str, ink: Ink) -> u16 {
     let mut x = x;
     for glyph in text.chars() {
         if let Some(cell) = buffer.cell_mut((x, y)) {
@@ -756,7 +779,7 @@ fn put(buffer: &mut Buffer, x: u16, y: u16, text: &str, ink: Ink) -> u16 {
 /// than its tail does. Nothing is ever cut mid-component: a name with its middle gone is
 /// the `san…` §46 forbids, and a tail that cannot hold even the last component is empty,
 /// which drops the fact.
-fn tail(path: &str, columns: usize) -> String {
+pub(crate) fn tail(path: &str, columns: usize) -> String {
     let parts: Vec<&str> = path.split('/').filter(|part| !part.is_empty()).collect();
     if parts.is_empty() {
         return path.to_owned();
@@ -794,7 +817,7 @@ fn tail(path: &str, columns: usize) -> String {
 /// vendor in front of the family keeps that prefix instead, because the rule is the head.
 /// A name whose first segment does not fit beside its own mark is empty, which drops the
 /// fact.
-fn head(name: &str, columns: usize) -> String {
+pub(crate) fn head(name: &str, columns: usize) -> String {
     if name.chars().count() <= columns {
         return name.to_owned();
     }

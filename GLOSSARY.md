@@ -108,6 +108,12 @@ The screen `@` opens: the workspace's files as `git` reads them, nearest first, 
 rows.
 _Avoid_: File browser, autocomplete, fuzzy finder, file search
 
+**Stats screen**:
+The screen `/stats` opens: the facts the rail is too narrow to hold — the route, the spend, the
+instants, the whole GUID, the whole temp, the whole workspace — drawn from the record the run wrote
+and the facts it was handed, and settled rather than live.
+_Avoid_: Status screen, dashboard, details, inspector
+
 ## The paper trail
 
 **Spec**:
