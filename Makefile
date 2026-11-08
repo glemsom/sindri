@@ -189,11 +189,10 @@ gate:
 gate-tier:
 	$(call skippable,gate,bash scripts/check-probe.sh)
 
-# The toolchain tier (spec §6, §16, ADR 0001; ticket #4 wired here by #5, and the
-# pins ticket #101 added): proves the devbox shell supplies what the release needs
-# — the pinned Rust and musl target, and a C compiler named for the musl target so
-# no build reaches the host's glibc `cc` — and that every package it supplies names
-# a version and every tool it decided against is absent. Split in two the way the
+# The toolchain tier: proves the devbox shell supplies what the release needs — the
+# pinned Rust and musl target, and a C compiler named for the musl target so no
+# build reaches the host's glibc `cc` — and that every package it supplies names a
+# version and every tool it decided against is absent. Split in two the way the
 # sandbox tier is split and for the same reason: `toolchain` runs the tier's
 # contract test first, and `toolchain-tier` is the relay alone, which is what that
 # test drives. A test that rang the tier would ring itself.

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# The toolchain tier of `make check` (spec §6, §16, ADR 0001; ticket #4, and the
-# pins ticket #101 added): proves the devbox shell supplies everything the release
-# needs, and that nothing it supplies is floating.
+# The toolchain tier of `make check`: proves the devbox shell supplies everything
+# the release needs to build, and that nothing it supplies is floating.
 #
 # Five sets of facts:
 #
@@ -88,13 +87,28 @@ finish() {
   exit 0
 }
 
+# unavailable REASON -- this shell cannot run the tier. The verdict line is printed
+# here and nowhere else, so there is one wording to grep for.
+unavailable() {
+  skip "$1"
+  printf 'toolchain tier: skipped (no devbox shell)\n'
+  exit "$SKIPPED_STATUS"
+}
+
+# is_static_elf FILE -- ELF magic and no interpreter's name in it. A dynamically
+# linked binary carries PT_INTERP, hence the interpreter's name; a static one
+# carries neither. No readelf and no file(1) needed, and the same reading
+# scripts/release-probe.sh makes of the artefact.
+is_static_elf() {
+  [[ $(head -c 4 -- "$1" | od -An -c | tr -d ' ') == '177ELF' ]] &&
+    ! grep -qa 'ld-musl' -- "$1" && ! grep -qa 'ld-linux' -- "$1"
+}
+
 # Not being in a devbox shell is the one thing this tier cannot measure around: the
 # toolchain is what the shell supplies, and a tree with no cargo on PATH has none to
 # read. It is printed, never counted as a pass, and keeps the run's exit 0.
 if ! command -v cargo >/dev/null 2>&1; then
-  skip 'cargo is not on PATH: run this inside `devbox shell`'
-  printf 'toolchain tier: skipped (no devbox shell)\n'
-  exit "$SKIPPED_STATUS"
+  unavailable 'cargo is not on PATH: run this inside `devbox shell`'
 fi
 
 # 1. Every package names a version or a commit: `name@<version>` where the version
@@ -120,7 +134,7 @@ if ((counted == 0)); then
 elif ((${#floating[@]})); then
   bad "devbox.json lets packages float: ${floating[*]}"
 else
-  ok "every package in devbox.json names a version: $counted packages"
+  ok "every package in devbox.json names a version or a commit: $counted packages"
 fi
 
 # 2. The two tools the tree decided against, held to by the file that would supply
@@ -218,7 +232,8 @@ fi
 # 8. The C compiler is named for its target. The value may carry arguments —
 #    `zig cc -target x86_64-linux-musl` is a program and a flag — which is how the
 #    `cc` crate reads it too.
-work=$(mktemp -d "${TMPDIR:-/dev/shm}/sindri-toolchain-probe.XXXXXX") || exit 1
+work=$(mktemp -d "${TMPDIR:-/dev/shm}/sindri-toolchain-probe.XXXXXX") ||
+  { bad 'no temporary directory to build in'; finish; }
 trap 'rm -rf "$work"' EXIT
 cat >"$work/musl-c.c" <<'C'
 #include <stdio.h>
@@ -242,7 +257,7 @@ if [[ -z $cc_value ]]; then
 else
   if said=$("${cc_cmd[@]}" -dumpmachine 2>&1); then
     case "$said" in
-      *musl*) ok "$CC_VAR names the musl target: $said" ;;
+      x86_64-*musl*) ok "$CC_VAR names the musl target: $said" ;;
       *)
         bad "$CC_VAR is '$cc_value', and for $MUSL_TARGET it names '$said': that is a compiler for another libc"
         ;;
@@ -257,36 +272,44 @@ fi
 #    glibc does not, and a static binary needs no interpreter from either. The
 #    host's cc produces neither a static ELF here nor that symbol.
 c_built=0
-if [[ -n $cc_value ]] && said=$("${cc_cmd[@]}" -static -o "$work/musl-c" "$work/musl-c.c" 2>&1); then
-  c_built=1
-elif [[ -n $cc_value ]]; then
-  bad "$CC_VAR is '$cc_value', and cannot build a C program for $MUSL_TARGET: $said"
+if [[ -n $cc_value ]]; then
+  if said=$("${cc_cmd[@]}" -static -o "$work/musl-c" "$work/musl-c.c" 2>&1); then
+    c_built=1
+  else
+    bad "$CC_VAR is '$cc_value', and cannot build a C program for $MUSL_TARGET: $said"
+  fi
 fi
-if ((c_built)) &&
-   [[ $(head -c 4 "$work/musl-c" | od -An -c | tr -d ' ') == '177ELF' ]] &&
-   ! grep -qa 'ld-musl' "$work/musl-c" && ! grep -qa 'ld-linux' "$work/musl-c"; then
-  ok "a C program it builds for $MUSL_TARGET is a static ELF"
-else
-  bad "a C program built for $MUSL_TARGET is not a static ELF"
-fi
-if ((c_built)) && got=$(nm -- "$work/musl-c" 2>/dev/null) &&
-   grep -qw '__stdio_exit' <<<"$got" && ! grep -qa 'GNU C Library' "$work/musl-c"; then
-  ok "the C it builds is musl's, not glibc's: __stdio_exit and no GNU C Library"
-else
-  bad "the C built for $MUSL_TARGET is not musl's: no __stdio_exit or a glibc marker"
+# Nothing is read off a program that was never built: the failure above says why,
+# and a second line about a file that does not exist would blame the wrong fact.
+if ((c_built)); then
+  if is_static_elf "$work/musl-c"; then
+    ok "a C program it builds for $MUSL_TARGET is a static ELF"
+  else
+    bad "a C program built for $MUSL_TARGET is not a static ELF"
+  fi
+  # `__stdio_exit` lives in the symbol table, so the name is in the bytes; glibc
+  # does not define it and says who it is instead. Both read with grep, because a
+  # toolchain tier may not borrow a fact from the host's binutils.
+  if grep -qa '__stdio_exit' -- "$work/musl-c" && ! grep -qa 'GNU C Library' -- "$work/musl-c"; then
+    ok "the C it builds is musl's, not glibc's: __stdio_exit and no GNU C Library"
+  else
+    bad "the C built for $MUSL_TARGET is not musl's: no __stdio_exit or a glibc marker"
+  fi
 fi
 
-# 10. The archiver named for the target archives an object that compiler made.
+# 10. The archiver named for the target archives an object that compiler made. An
+#     `ar` archive carries its members' names as plain strings, so the member is
+#     found without calling the host's `ar` to list it.
 if [[ -z $ar_value ]]; then
   bad "$AR_VAR is not set, so no archiver is named for $MUSL_TARGET"
-elif ((c_built == 0)); then
-  bad "$AR_VAR cannot be shown to archive anything: no musl object was built"
-elif said=$("${cc_cmd[@]}" -c -o "$work/musl-c.o" "$work/musl-c.c" 2>&1) &&
+elif ((c_built)); then
+  if said=$("${cc_cmd[@]}" -c -o "$work/musl-c.o" "$work/musl-c.c" 2>&1) &&
      said=$("${ar_cmd[@]}" rcs "$work/libmusl-c.a" "$work/musl-c.o" 2>&1) &&
-     ar t "$work/libmusl-c.a" 2>/dev/null | grep -qx 'musl-c.o'; then
-  ok "$AR_VAR archives what the musl compiler builds: $ar_value"
-else
-  bad "$AR_VAR is '$ar_value', and it does not archive a musl object: $said"
+     grep -qa 'musl-c.o' -- "$work/libmusl-c.a"; then
+    ok "$AR_VAR archives what the musl compiler builds: $ar_value"
+  else
+    bad "$AR_VAR is '$ar_value', and it does not archive a musl object: $said"
+  fi
 fi
 
 # 11. The pkg-config question, answered by the shell's own pkg-config: it is the
@@ -302,16 +325,20 @@ if [[ $resolved == /nix/store/* ]]; then
 else
   bad "the pkg-config on PATH is '${resolved:-none}', which the shell does not supply: a system AWS-LC or OpenSSL would be the answer it gives"
 fi
-hits=()
-for module in openssl libcrypto aws-lc; do
-  if pkg-config --exists "$module" 2>/dev/null; then
-    hits+=("$module at $(pkg-config --variable=prefix "$module" 2>/dev/null)")
-  fi
-done
-if ((${#hits[@]})); then
-  bad "pkg-config resolves a system C library the artefact may not link: ${hits[*]}"
+if [[ -z $pkg_config_path ]]; then
+  bad 'no pkg-config on PATH, so nothing can be said about a system AWS-LC or OpenSSL'
 else
-  ok 'pkg-config finds no system AWS-LC or OpenSSL: the vendored C is the only candidate'
+  hits=()
+  for module in openssl libcrypto aws-lc; do
+    if pkg-config --exists "$module" 2>/dev/null; then
+      hits+=("$module at $(pkg-config --variable=prefix "$module" 2>/dev/null)")
+    fi
+  done
+  if ((${#hits[@]})); then
+    bad "pkg-config resolves a system C library the artefact may not link: ${hits[*]}"
+  else
+    ok 'pkg-config finds no system AWS-LC or OpenSSL: the vendored C is the only candidate'
+  fi
 fi
 
 # 12. A musl build succeeds and yields a static ELF, proved on a throwaway crate
@@ -336,10 +363,7 @@ if out=$(CARGO_TARGET_DIR="$work/target" cargo build --quiet --release --target 
   --manifest-path "$work/Cargo.toml" 2>&1); then
   ok "cargo build --target $MUSL_TARGET: succeeded"
   bin="$work/target/$MUSL_TARGET/release/probe"
-  # A dynamically linked binary carries PT_INTERP, hence the interpreter's
-  # name; a static one carries neither. No readelf or file(1) needed.
-  if [[ $(head -c 4 "$bin" | od -An -c | tr -d ' ') == '177ELF' ]] &&
-     ! grep -qa 'ld-musl' "$bin" && ! grep -qa 'ld-linux' "$bin"; then
+  if is_static_elf "$bin"; then
     ok "musl artefact is a static ELF: $(basename "$bin")"
   else
     bad "musl artefact at $bin is not a static ELF"
@@ -372,10 +396,16 @@ while IFS= read -r f; do sources+=("$f"); done < <(
 )
 if ((${#sources[@]} == 0)); then
   skip 'no /nix/store references: no product sources yet (ticket #3 creates them)'
-elif hits=$(grep -rIl '/nix/store' "${sources[@]}" 2>/dev/null); then
-  bad "/nix/store references in product sources: $(tr '\n' ' ' <<<"$hits")"
 else
-  ok 'no /nix/store references in product sources'
+  grep_status=0
+  hits=$(grep -rIl '/nix/store' "${sources[@]}" 2>/dev/null) || grep_status=$?
+  if ((grep_status == 0)); then
+    bad "/nix/store references in product sources: $(tr '\n' ' ' <<<"$hits")"
+  elif ((grep_status == 1)); then
+    ok 'no /nix/store references in product sources'
+  else
+    bad "the product sources could not be read: grep exited $grep_status"
+  fi
 fi
 
 finish

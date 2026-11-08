@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Contract test for the toolchain tier of `make check` (spec §6, §16, ADR 0001;
-# ticket #4, and the C compiler and the pins ticket #101 added): the assertions
+# Contract test for the toolchain tier of `make check`: the assertions
 # scripts/toolchain-probe.sh makes, and the stage line the Makefile relays.
 #
-# The tier proves the devbox shell supplies the build toolchain the release needs,
-# so a fact nothing can contradict is a fact this test does not let it claim. Each
-# assertion is driven to its failure here:
+# The tier proves the devbox shell supplies the build toolchain the release needs.
+# This test drives its three verdicts and the facts ticket #101 added to their
+# failures; the passing case is the tree and the shell this test runs in, so the
+# facts that were already there are held by that run rather than by a fake:
 #
 #   * a machine with no cargo on PATH is not a devbox shell: that is a printed
 #     SKIPPED at 77, relayed as `check: toolchain ... SKIPPED` with the run's exit
@@ -64,9 +64,12 @@ bad() { printf 'FAIL %s\n' "$*"; failed=$((failed + 1)); }
 # one fact without touching the repo the test is running against.
 new_tree() {
   local dir="$scratch/tree-$1"
-  mkdir -p "$dir/scripts"
-  cp "$probe" "$dir/scripts/toolchain-probe.sh"
-  cp "$repo_root/Cargo.toml" "$repo_root/devbox.json" "$dir/"
+  if ! mkdir -p "$dir/scripts" ||
+     ! cp "$probe" "$dir/scripts/toolchain-probe.sh" ||
+     ! cp "$repo_root/Cargo.toml" "$repo_root/devbox.json" "$dir/"; then
+    bad "could not make the tree '$1' this case needs"
+    return 1
+  fi
   printf '%s' "$dir"
 }
 
@@ -125,7 +128,7 @@ run_target() {
   CODE=$?
 }
 
-run_stage() { run_target toolchain-tier "$@"; } 
+run_stage() { run_target toolchain-tier "$@"; }
 
 assert_code() { # want desc
   if [[ $CODE == "$1" ]]; then ok "$2: exit $CODE"; else

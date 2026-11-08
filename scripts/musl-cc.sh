@@ -8,10 +8,17 @@
 # target this compiler is named for is the one given, and any other is dropped.
 # Everything else `cc-rs` passes, its own flags included, goes through untouched.
 args=()
-for arg in "$@"; do
-  case $arg in
-    --target=*) ;;
-    *) args+=("$arg") ;;
+while (($#)); do
+  case $1 in
+    --target=*) shift ;;
+    -target)
+      shift
+      (($#)) && shift
+      ;;
+    *)
+      args+=("$1")
+      shift
+      ;;
   esac
 done
 exec zig cc -target x86_64-linux-musl "${args[@]}"
