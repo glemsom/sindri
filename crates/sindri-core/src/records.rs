@@ -268,8 +268,8 @@ pub struct SessionDocument {
     /// written (§15).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub route: Option<Route>,
-    /// Whether the model reasons before it answers: the fact a rail draws, and the
-    /// value every ask of the run sends, always written because the run always knows it.
+    /// Whether the model reasons before it answers. Written even when it is false,
+    /// because the run always knows it.
     pub thinking: bool,
 }
 

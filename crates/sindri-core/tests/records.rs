@@ -231,7 +231,7 @@ fn a_session_document_says_whether_the_model_thinks() {
 }
 
 #[test]
-fn the_thinking_field_lands_after_the_route_so_two_runs_that_did_the_same_thing_read_alike() {
+fn the_thinking_field_lands_after_the_route_because_later_fields_only_append() {
     let ground = Ground::new();
     let session = ground.session();
     let boundary = ground.boundary();

@@ -525,58 +525,39 @@ fn a_run_that_answered_records_its_turn_and_why_it_stopped() {
 }
 
 #[test]
-fn a_run_launched_with_thinking_records_the_value_its_ask_sends() {
-    let ground = Ground::new();
-    let wire = Wire::answering(vec![Reply::stream(ANTHROPIC)]);
+fn a_run_records_the_thinking_its_ask_sends() {
+    for (launched, thinks) in [(Some("true"), true), (Some("false"), false), (None, false)] {
+        let ground = Ground::new();
+        let wire = Wire::answering(vec![Reply::stream(ANTHROPIC)]);
+        let mut command = ground.asking(&wire, "say hello");
+        if let Some(value) = launched {
+            command.env("SINDRI_THINKING", value);
+        }
 
-    let output = ground
-        .asking(&wire, "say hello")
-        .env("SINDRI_THINKING", "true")
-        .output()
-        .expect("the binary should run");
-    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+        let output = command.output().expect("the binary should run");
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "SINDRI_THINKING={launched:?}: {}",
+            text(&output.stderr)
+        );
 
-    let document: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(ground.session().join("session.json")).expect("the document"),
-    )
-    .expect("a JSON document");
-    assert_eq!(
-        document["thinking"],
-        serde_json::json!(true),
-        "the run that thinks says so in the session it wrote: {document}"
-    );
-    assert!(
-        wire.requests()[0].contains(r#""thinking""#),
-        "and the ask it recorded is the ask the wire was sent: {:?}",
-        wire.requests()[0]
-    );
-}
-
-#[test]
-fn a_run_launched_without_thinking_records_that_it_does_not() {
-    let ground = Ground::new();
-    let wire = Wire::answering(vec![Reply::stream(ANTHROPIC)]);
-
-    let output = ground
-        .asking(&wire, "say hello")
-        .output()
-        .expect("the binary should run");
-    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
-
-    let document: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(ground.session().join("session.json")).expect("the document"),
-    )
-    .expect("a JSON document");
-    assert_eq!(
-        document["thinking"],
-        serde_json::json!(false),
-        "a run that was told nothing says off rather than leaving the field out: {document}"
-    );
-    assert!(
-        !wire.requests()[0].contains(r#""thinking""#),
-        "and sends nothing for it: {:?}",
-        wire.requests()[0]
-    );
+        let written = std::fs::read_to_string(ground.session().join("session.json"))
+            .expect("the session document");
+        let document: serde_json::Value = serde_json::from_str(&written).expect("a JSON document");
+        assert_eq!(
+            document["thinking"],
+            serde_json::json!(thinks),
+            "a run launched with {launched:?} says whether it thinks rather than leaving \
+             the field out: {written}"
+        );
+        assert_eq!(
+            wire.requests()[0].contains(r#""thinking""#),
+            thinks,
+            "and the value recorded is the value its ask sends: {:?}",
+            wire.requests()[0]
+        );
+    }
 }
 
 #[test]

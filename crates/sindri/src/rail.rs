@@ -1080,6 +1080,25 @@ mod tests {
     }
 
     #[test]
+    fn a_band_that_can_only_hold_the_model_block_draws_the_model_without_its_think_row() {
+        let mut buffer = Buffer::empty(band(COLUMNS, 4));
+
+        frame().paint(Shape::Ledger, band(COLUMNS, 4), &mut buffer);
+
+        let rows: Vec<String> = (0..4).map(|y| glyphs(&buffer, y)).collect();
+        assert_eq!(
+            rows,
+            [
+                "model     .........claude-sonnet",
+                "────────────────────────────────",
+                "sandbox   .................bwrap",
+                "+10 more                        ",
+            ],
+            "thinking is given up before the model it sits under, so the model keeps its row"
+        );
+    }
+
+    #[test]
     fn a_narrow_frame_gives_facts_up_in_a12s_order_and_counts_what_went() {
         let mut buffer = Buffer::empty(band(40, 1));
 
@@ -1154,6 +1173,18 @@ mod tests {
              2 · sandbox bwrap · session 9f2c7a41 · temp …/9f2c7a41/tmp",
             "one row, the same facts in the same order, a gap between two of them, \
              and not one given up"
+        );
+
+        let mut narrower = Buffer::empty(band(200, 1));
+
+        frame().paint(Shape::Strip, band(200, 1), &mut narrower);
+
+        assert_eq!(
+            glyphs(&narrower, 0).trim_end(),
+            "wire anthropic · model claude-sonnet · think high · turns 3/250 · ctx 21% · \
+             workspace …/.worktrees/46-rail · branch spec/1-capability · skills 2 · sandbox \
+             bwrap · session 9f2c7a41 · +2 more",
+            "two hundred columns give up the temp and the cache, and count them"
         );
     }
 

@@ -160,9 +160,7 @@ impl Ask {
         self
     }
 
-    /// Whether the model reasons before it answers, as [`thinking`](Ask::thinking)
-    /// set it: the one reading of the field every ask of the run sends and the record
-    /// writes.
+    /// Whether this ask asks the model to reason before it answers.
     pub fn thinks(&self) -> bool {
         self.thinking
     }
@@ -200,7 +198,7 @@ impl Ask {
             request = request.preamble(preamble.clone());
         }
         let mut options = GenerationOptions::default();
-        options.reasoning = self.thinks().then_some(Reasoning::Effort(Effort::High));
+        options.reasoning = self.thinking.then_some(Reasoning::Effort(Effort::High));
         request.options(options)
     }
 }
