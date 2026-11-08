@@ -1,11 +1,11 @@
-//! Pins the rule that every ADR number a document cites names a file in `docs/adr/`, unless
-//! the citation marks it retired, so no reader is sent after a name the tree does not hold.
+//! Pins the two rules an ADR keeps: its file is named `NNNN-<lowercase-slug>.md`, and a document
+//! that cites `ADR-NNNN` either names a record the tree holds or marks the number `(retired)`, so
+//! no reader is sent after a name that is gone.
 //!
-//! The files are read at run time rather than pasted in at build time, because the
-//! documentation is deliberately not an input a compiler watches: the no-relink proof
-//! touches it precisely to show that the binary does not move.
+//! The files are read at run time rather than pasted in at build time, because the documentation is
+//! deliberately not an input a compiler watches: the no-relink proof touches it precisely to show
+//! that the binary does not move.
 
-use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -68,9 +68,8 @@ fn read(root: &Path, name: &str) -> Document {
     }
 }
 
-/// The ADRs the directory holds, listed at run time so a new one is covered without
-/// touching this file. Anything but a hidden file is a record, so a stray name is judged rather
-/// than passed over.
+/// The ADRs the directory holds, listed at run time so a new one is covered without touching this
+/// file. Anything but a hidden file is a record, so a stray name is judged rather than passed over.
 fn adrs(root: &Path) -> Vec<Adr> {
     let directory = root.join("docs/adr");
     let listing = fs::read_dir(&directory)
@@ -96,12 +95,11 @@ fn adrs(root: &Path) -> Vec<Adr> {
     adrs
 }
 
-/// Every document allowed to cite an ADR: the agents' own file, the glossary, and every ADR.
-fn citing_documents() -> Vec<Document> {
-    let root = repo_root();
-    let mut documents = vec![read(&root, "AGENTS.md"), read(&root, "GLOSSARY.md")];
-    for adr in adrs(&root) {
-        documents.push(read(&root, &format!("docs/adr/{}", adr.file)));
+/// Every document allowed to cite an ADR: the agents' own file, the glossary, and every record.
+fn citing_documents(root: &Path, records: &[Adr]) -> Vec<Document> {
+    let mut documents = vec![read(root, "AGENTS.md"), read(root, "GLOSSARY.md")];
+    for adr in records {
+        documents.push(read(root, &format!("docs/adr/{}", adr.file)));
     }
     documents
 }
@@ -125,14 +123,15 @@ fn cited_adrs(text: &str) -> Vec<Citation> {
     cited
 }
 
-/// Every citation the documents make that the numbers the tree holds do not allow: a number with
+/// Every citation the documents make that the records the tree holds do not allow: a number with
 /// no file and no `(retired)` marker, or a live number wearing one.
-fn citation_complaints(held: &BTreeSet<String>, documents: &[Document]) -> Vec<String> {
+fn citation_complaints(records: &[Adr], documents: &[Document]) -> Vec<String> {
     let mut complaints = Vec::new();
     for document in documents {
         for citation in cited_adrs(&document.body) {
             let number = citation.number;
-            match (held.contains(&number), citation.retired) {
+            let held = records.iter().any(|adr| adr.number == number);
+            match (held, citation.retired) {
                 (true, false) | (false, true) => {}
                 (true, true) => complaints.push(format!(
                     "{}: ADR-{number} (retired) is a file in docs/adr/, so it cannot be cited as retired",
@@ -148,18 +147,11 @@ fn citation_complaints(held: &BTreeSet<String>, documents: &[Document]) -> Vec<S
     complaints
 }
 
-#[test]
-fn every_cited_adr_is_a_file_or_marked_retired() {
-    let held: BTreeSet<String> = adrs(&repo_root())
-        .into_iter()
-        .map(|adr| adr.number)
-        .collect();
-    let complaints = citation_complaints(&held, &citing_documents());
-    assert!(
-        complaints.is_empty(),
-        "references that name nothing:\n{}",
-        complaints.join("\n")
-    );
+/// Every citation complaint a whole tree earns: its records listed, then read as documents and
+/// judged as names.
+fn citation_complaints_in(root: &Path) -> Vec<String> {
+    let records = adrs(root);
+    citation_complaints(&records, &citing_documents(root, &records))
 }
 
 /// Every record whose name the convention `NNNN-<lowercase-slug>.md` rejects, and why.
@@ -176,12 +168,14 @@ fn adr_name_complaints(adrs: &[Adr]) -> Vec<String> {
                 adr.file
             ));
         }
-        if adr.slug.is_empty()
-            || !adr
-                .slug
-                .chars()
-                .all(|glyph| glyph.is_ascii_lowercase() || glyph.is_ascii_digit() || glyph == '-')
-        {
+        let slug_is_words = !adr.slug.is_empty()
+            && adr.slug.split('-').all(|word| {
+                !word.is_empty()
+                    && word
+                        .chars()
+                        .all(|glyph| glyph.is_ascii_lowercase() || glyph.is_ascii_digit())
+            });
+        if !slug_is_words {
             complaints.push(format!(
                 "docs/adr/{}: carries no slug of lowercase words",
                 adr.file
@@ -189,6 +183,28 @@ fn adr_name_complaints(adrs: &[Adr]) -> Vec<String> {
         }
     }
     complaints
+}
+
+/// A tree written for one case: the files it names, under a temporary root, so the walk the guard
+/// does can be fed a name the real tree does not hold.
+fn tree(files: &[(&str, &str)]) -> tempfile::TempDir {
+    let root = tempfile::tempdir().expect("a temp tree");
+    for (name, body) in files {
+        let path = root.path().join(name);
+        fs::create_dir_all(path.parent().expect("a named file")).expect("a writable directory");
+        fs::write(&path, body).expect("a writable file");
+    }
+    root
+}
+
+#[test]
+fn every_cited_adr_is_a_file_or_marked_retired() {
+    let complaints = citation_complaints_in(&repo_root());
+    assert!(
+        complaints.is_empty(),
+        "references that name nothing:\n{}",
+        complaints.join("\n")
+    );
 }
 
 #[test]
@@ -203,32 +219,48 @@ fn every_adr_is_a_number_and_a_slug() {
 
 #[test]
 fn a_citation_of_a_record_the_tree_does_not_hold_is_a_complaint() {
-    let held = BTreeSet::from([String::from("0018")]);
-    let documents = [Document {
-        name: String::from("GLOSSARY.md"),
-        body: String::from("the word was settled by ADR-0002, whose record is retired"),
-    }];
+    let tree = tree(&[
+        ("AGENTS.md", "the comments rule is ADR-0042"),
+        ("GLOSSARY.md", "# Sindri"),
+        ("docs/adr/0018-a-record.md", "# A record"),
+    ]);
 
-    let complaints = citation_complaints(&held, &documents);
-
-    assert_eq!(complaints.len(), 1, "{complaints:?}");
-    assert!(complaints[0].contains("GLOSSARY.md"), "{complaints:?}");
-    assert!(complaints[0].contains("ADR-0002"), "{complaints:?}");
+    assert_eq!(
+        citation_complaints_in(tree.path()),
+        [String::from(
+            "AGENTS.md: ADR-0042 names no file in docs/adr/ and is not marked retired"
+        )]
+    );
 }
 
 #[test]
 fn a_live_record_cited_as_retired_is_a_complaint() {
-    let held = BTreeSet::from([String::from("0018")]);
-    let documents = [Document {
-        name: String::from("AGENTS.md"),
-        body: String::from("the comments rule is ADR-0018 (retired)"),
-    }];
+    let tree = tree(&[
+        ("AGENTS.md", "the comments rule is ADR-0018 (retired)"),
+        ("GLOSSARY.md", "# Sindri"),
+        ("docs/adr/0018-a-record.md", "# A record"),
+    ]);
 
-    let complaints = citation_complaints(&held, &documents);
+    assert_eq!(
+        citation_complaints_in(tree.path()),
+        [String::from(
+            "AGENTS.md: ADR-0018 (retired) is a file in docs/adr/, so it cannot be cited as retired"
+        )]
+    );
+}
 
-    assert_eq!(complaints.len(), 1, "{complaints:?}");
-    assert!(complaints[0].contains("AGENTS.md"), "{complaints:?}");
-    assert!(complaints[0].contains("ADR-0018"), "{complaints:?}");
+#[test]
+fn a_held_record_and_a_retired_number_are_both_allowed() {
+    let tree = tree(&[
+        ("AGENTS.md", "ADR-0018 settled it, after ADR-0002 (retired)"),
+        ("GLOSSARY.md", "# Sindri, and ADR-0018 again"),
+        (
+            "docs/adr/0018-a-record.md",
+            "# A record, superseding ADR-0002 (retired)",
+        ),
+    ]);
+
+    assert_eq!(citation_complaints_in(tree.path()), Vec::<String>::new());
 }
 
 #[test]
@@ -236,19 +268,17 @@ fn a_record_named_against_the_convention_is_a_complaint() {
     let records = [
         Adr::named("18-a-slug.md"),
         Adr::named("0018-Not_A_Slug.md"),
+        Adr::named("0018-a--slug.md"),
         Adr::named("0018-a-slug.txt"),
     ];
 
-    let complaints = adr_name_complaints(&records);
-
-    assert_eq!(complaints.len(), 3, "{complaints:?}");
-    for record in &records {
-        assert!(
-            complaints
-                .iter()
-                .any(|complaint| complaint.contains(&record.file)),
-            "{} earns no complaint of its own: {complaints:?}",
-            record.file
-        );
-    }
+    assert_eq!(
+        adr_name_complaints(&records),
+        [
+            String::from("docs/adr/18-a-slug.md: opens with no four-digit number"),
+            String::from("docs/adr/0018-Not_A_Slug.md: carries no slug of lowercase words"),
+            String::from("docs/adr/0018-a--slug.md: carries no slug of lowercase words"),
+            String::from("docs/adr/0018-a-slug.txt: is not a `.md` record"),
+        ]
+    );
 }
