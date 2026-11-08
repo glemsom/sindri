@@ -42,6 +42,11 @@ const PATIENCE: Duration = Duration::from_secs(10);
 const ANSWER: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_stream.sse");
 
+/// The same reply with the part of its eleven input tokens the provider served from its own
+/// cache: four of them, which is thirty-six percent of the input.
+const ANSWER_CACHED: &str =
+    include_str!("../../sindri-core/tests/fixtures/providers/anthropic_stream_cached.sse");
+
 /// The word the recorded stream says, split the way it streams: a frame paints the cells
 /// a fragment changed, so a test looks for both halves rather than for one run of words.
 const ANSWER_WORDS: [&str; 2] = ["Hello", "world"];
@@ -159,6 +164,17 @@ struct Wire {
 impl Wire {
     /// A wire that answers nothing until it is released.
     fn holding() -> Wire {
+        Wire::answering(ANSWER)
+    }
+
+    /// A wire whose reply is the recorded one with the share of its input the provider served
+    /// from its own cache: the row a frame has nothing else to draw a hit rate from.
+    fn holding_a_cached_reply() -> Wire {
+        Wire::answering(ANSWER_CACHED)
+    }
+
+    /// A wire that holds `reply` until it is released.
+    fn answering(reply: &'static str) -> Wire {
         let listener = TcpListener::bind("127.0.0.1:0").expect("a loopback port");
         let port = listener.local_addr().expect("a bound address").port();
         let (arrived, arrivals) = channel();
@@ -179,7 +195,7 @@ impl Wire {
                 }
                 let _ = arrived.send(());
                 let _ = released.recv_timeout(PATIENCE);
-                let _ = answer(&mut stream);
+                let _ = answer(&mut stream, reply);
             }
         });
         Wire {
@@ -260,13 +276,13 @@ fn read_request(stream: &mut TcpStream) -> std::io::Result<String> {
 
 /// The recorded reply, written as a wire writes one: its length is given so the client
 /// does not wait for a close to find the end of it.
-fn answer(stream: &mut TcpStream) -> std::io::Result<()> {
+fn answer(stream: &mut TcpStream, reply: &'static str) -> std::io::Result<()> {
     let head = format!(
         "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
-        ANSWER.len()
+        reply.len()
     );
     stream.write_all(head.as_bytes())?;
-    stream.write_all(ANSWER.as_bytes())?;
+    stream.write_all(reply.as_bytes())?;
     stream.flush()
 }
 
@@ -1348,7 +1364,7 @@ fn a_cancelled_run_settles_as_cancelled_and_the_settled_frame_is_left_alone() {
 fn a_live_run_draws_the_facts_it_was_handed_and_its_first_turn_moves_them() {
     let ground = Ground::new();
     on_a_branch(&ground);
-    let wire = Wire::holding();
+    let wire = Wire::holding_a_cached_reply();
     let mut command = ground.command();
     command
         .arg("--yolo-unsafe")
@@ -1376,11 +1392,15 @@ fn a_live_run_draws_the_facts_it_was_handed_and_its_first_turn_moves_them() {
          opened with, and the cap with no turn spent: {:?}",
         drawn.text()
     );
+    let recorded = guid(&ground.state);
     for (label, value) in [
         ("wire", "anthropic"),
         ("model", "claude-sonnet-4-6"),
         ("think", "off"),
+        ("workspace", "/workspace"),
+        ("branch", "main"),
         ("sandbox", "unsafe"),
+        ("session", &recorded[..8]),
     ] {
         assert!(
             rail_reads(&drawn.text(), label, value),
@@ -1395,15 +1415,24 @@ fn a_live_run_draws_the_facts_it_was_handed_and_its_first_turn_moves_them() {
          window is named: {:?}",
         drawn.text()
     );
+    assert_eq!(
+        row_of(&drawn.text(), "cache"),
+        None,
+        "and no reply has reported what the provider served from its own cache: {:?}",
+        drawn.text()
+    );
 
     wire.release();
 
     assert!(
         drawn.wait_until(|frame| {
-            rail_reads(frame, "turns", "1/250") && rail_reads(frame, "ctx", "11/200k 0%")
+            rail_reads(frame, "turns", "1/250")
+                && rail_reads(frame, "ctx", "11/200k 0%")
+                && rail_reads(frame, "cache", "36%")
         }),
-        "the turn the run took is counted against the cap, and the size the wire \
-         reported is drawn against the window the config named: {:?}",
+        "the turn the run took is counted against the cap, the size the wire reported is \
+         drawn against the window the config named, and the share of that input the \
+         provider served from its own cache beside it: {:?}",
         drawn.text()
     );
     assert!(
@@ -1415,10 +1444,10 @@ fn a_live_run_draws_the_facts_it_was_handed_and_its_first_turn_moves_them() {
     // The frame the run stopped on keeps the last facts it was handed, the way the
     // transcript keeps its last entry.
     let frame = drawn.text();
-    let recorded = guid(&ground.state);
     for (label, value) in [
         ("turns", "1/250"),
         ("ctx", "11/200k 0%"),
+        ("cache", "36%"),
         ("workspace", "/workspace"),
         ("branch", "main"),
         ("session", &recorded[..8]),

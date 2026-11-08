@@ -144,13 +144,13 @@ impl Ctx {
         }
     }
 
-    /// How full the window is, when one is known: a window of no tokens is no window at
-    /// all, and a share of it is no number the rail could draw.
+    /// How full the window is, when one is known: a window of no tokens is no share of
+    /// anything, which `share` is the one place to say.
     ///
     /// The ink is set here and nowhere else, so no paint site holds a second opinion about
     /// what nearly full means.
     fn fill(&self) -> Option<Fill> {
-        let window = self.window.filter(|window| *window > 0)?;
+        let window = self.window?;
         let percent = share(self.size, window)?;
         Some(Fill {
             percent,
@@ -311,7 +311,7 @@ impl Facts {
     /// The report is one turn's and never a running total, which is why the document cannot
     /// hand these in: the `usage` it keeps is every ask summed, and a sum of the inputs grows
     /// with each turn while the conversation's size is what the newest request carried. A
-    /// report that states no size replaces nothing, so the last size the wire stated stands.
+    /// report that states no size measures nothing, so the frame is handed back as it was.
     pub fn measured(mut self, ask: &Usage, window: Option<u64>) -> Facts {
         let Some(size) = ask.input else {
             return self;
@@ -1074,35 +1074,39 @@ mod tests {
     }
 
     #[test]
-    fn a_report_that_states_no_size_leaves_the_size_the_wire_last_stated() {
+    fn a_report_that_states_no_size_measures_nothing() {
         let root = tempfile::tempdir().expect("a temp state home");
         let session = Session::create(root.path()).expect("a session");
         let document = document(session.guid());
-        let speaking = Report {
+        let reported = Report {
             input: Some(48_200),
+            cached_input: Some(4_820),
             ..Report::default()
         };
 
-        let facts = Facts::of(&session, &document)
-            .measured(&speaking, Some(200_000))
-            .measured(&Report::default(), Some(200_000));
-
         assert_eq!(
-            facts.ctx,
+            Facts::of(&session, &document)
+                .measured(&reported, Some(200_000))
+                .ctx,
             Some(Ctx {
                 size: 48_200,
                 window: Some(200_000)
             }),
-            "a turn whose wire reported no token erases no row: the last size it stated, \
-             against the window a reader named, is the size the rail keeps"
+            "the window a reader named, beside the size this report measured"
         );
 
         assert_eq!(
-            Facts::of(&session, &document)
-                .measured(&Report::default(), Some(200_000))
-                .ctx,
-            None,
-            "and a share of a window is no row at all until a size is stated"
+            (
+                Facts::of(&session, &document)
+                    .measured(&Report::default(), Some(200_000))
+                    .ctx,
+                Facts::of(&session, &document)
+                    .measured(&Report::default(), None)
+                    .cache
+            ),
+            (None, None),
+            "a report that carries no token is no size to be a share of a window and no \
+             input to make a hit rate of, so the row is absent rather than nought"
         );
     }
 

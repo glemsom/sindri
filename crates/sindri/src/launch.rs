@@ -258,8 +258,8 @@ impl Launch {
     }
 
     /// The facts a rail draws, as this run holds them now: what the record has written about
-    /// it, the size the turn's own ask reported, and the window this launch was handed — so
-    /// a frame reads the run and never the config the run came from.
+    /// it, the size the wire last stated, and the window this launch was handed — so a frame
+    /// reads the run and never the config the run came from.
     fn facts(&self, measured: &Usage) -> rail::Facts {
         rail::Facts::of(&self.session, self.record.document())
             .measured(measured, self.context_window)
@@ -293,7 +293,11 @@ impl Launch {
             if let Some(exchange) = run.history().last() {
                 note(self.record.turn_started(exchange.turn));
                 note(self.record.answered(exchange.turn, &exchange.text));
-                measured = exchange.usage;
+                // The size a rail draws is the input the wire last stated, so a turn whose
+                // report carries none leaves the size the turn before it stated.
+                if exchange.usage.input.is_some() {
+                    measured = exchange.usage;
+                }
                 turns.turn(exchange);
                 turns.facts(self.facts(&measured));
             }
