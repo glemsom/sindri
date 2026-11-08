@@ -37,8 +37,9 @@
 #                       which is the case ticket #7 exists for; the release path
 #                       when there is no bwrap, or a kernel that will not let one
 #                       be made; the gate when there is no cargo on PATH; the
-#                       comment gate when there is no awk, no sort, or no way to
-#                       list the tree.
+#                       toolchain tier outside a devbox shell, where there is no
+#                       toolchain to measure; the comment gate when there is no
+#                       awk, no sort, or no way to list the tree.
 #                       The reason is the line above the verdict, the exit stays 0,
 #                       and the verdict is deliberately not `ok`: a green line
 #                       over code nothing covered is the one lie this target
@@ -57,7 +58,7 @@ SHELL := /bin/bash
 # is the only stage that compiles anything for a target nobody else builds.
 STAGES := fmt clippy audit comments test frames bench gate toolchain sandbox evals no-relink release
 
-.PHONY: check $(STAGES) frame frame-update sandbox-tier release-tier gate-tier comments-tier
+.PHONY: check $(STAGES) frame frame-update sandbox-tier release-tier gate-tier comments-tier toolchain-tier
 
 check:
 	@for stage in $(STAGES); do \
@@ -188,10 +189,24 @@ gate:
 gate-tier:
 	$(call skippable,gate,bash scripts/check-probe.sh)
 
-# Proves the devbox shell supplies the pinned Rust 1.99 and the musl target
-# (ADR 0001, ticket #4 wired here by #5).
+# The toolchain tier (spec §6, §16, ADR 0001; ticket #4 wired here by #5, and the
+# pins ticket #101 added): proves the devbox shell supplies what the release needs
+# — the pinned Rust and musl target, and a C compiler named for the musl target so
+# no build reaches the host's glibc `cc` — and that every package it supplies names
+# a version and every tool it decided against is absent. Split in two the way the
+# sandbox tier is split and for the same reason: `toolchain` runs the tier's
+# contract test first, and `toolchain-tier` is the relay alone, which is what that
+# test drives. A test that rang the tier would ring itself.
+#
+# Both are `skippable` because outside a devbox shell there is no toolchain to
+# measure and no machine the contract test could drive: the tier and its test say
+# so at 77 and the stage prints SKIPPED, never the `ok` a tier that ran earned.
 toolchain:
-	$(call stage,toolchain,bash scripts/toolchain-probe.sh)
+	$(call skippable,toolchain-test,bash scripts/toolchain-probe-test.sh)
+	$(call skippable,toolchain,bash scripts/toolchain-probe.sh)
+
+toolchain-tier:
+	$(call skippable,toolchain,bash scripts/toolchain-probe.sh)
 
 # The sandbox tier (spec §16, ADR 0001): proves this machine can confine a
 # command, which needs unprivileged user namespaces. Split in two so the tier's

@@ -1,9 +1,9 @@
 {
   "lockfile_version": "1",
   "packages": {
-    "bubblewrap@latest": {
-      "last_modified": "2026-11-04T21:12:09Z",
-      "resolved": "github:NixOS/nixpkgs/6dadaf4375be35033e1c84395adbd53ff5fded96#bubblewrap",
+    "bubblewrap@0.12.0": {
+      "last_modified": "2026-11-06T15:06:19Z",
+      "resolved": "github:NixOS/nixpkgs/4fe25e12eb9f4c744966dd3de5a05246cf098601#bubblewrap",
       "source": "devbox-search",
       "version": "0.12.0",
       "systems": {
@@ -44,9 +44,9 @@
       "last_modified": "2026-10-24T03:22:33Z",
       "resolved": "github:NixOS/nixpkgs/674a2028661e550a97400c1cc992b9cca9a668a1?lastModified=1792812153&narHash=sha256-T2%2BXBfNbf9pecLUWS4%2BRtuVNZ3W8K5taG5QdV71mWlk%3D"
     },
-    "pkg-config@latest": {
-      "last_modified": "2026-11-04T21:12:09Z",
-      "resolved": "github:NixOS/nixpkgs/6dadaf4375be35033e1c84395adbd53ff5fded96#pkg-config",
+    "pkg-config@0.29.2": {
+      "last_modified": "2026-11-06T15:06:19Z",
+      "resolved": "github:NixOS/nixpkgs/4fe25e12eb9f4c744966dd3de5a05246cf098601#pkg-config",
       "source": "devbox-search",
       "version": "0.29.2",
       "systems": {
