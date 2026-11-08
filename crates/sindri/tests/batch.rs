@@ -525,6 +525,42 @@ fn a_run_that_answered_records_its_turn_and_why_it_stopped() {
 }
 
 #[test]
+fn a_run_records_the_thinking_its_ask_sends() {
+    for (launched, thinks) in [(Some("true"), true), (Some("false"), false), (None, false)] {
+        let ground = Ground::new();
+        let wire = Wire::answering(vec![Reply::stream(ANTHROPIC)]);
+        let mut command = ground.asking(&wire, "say hello");
+        if let Some(value) = launched {
+            command.env("SINDRI_THINKING", value);
+        }
+
+        let output = command.output().expect("the binary should run");
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "SINDRI_THINKING={launched:?}: {}",
+            text(&output.stderr)
+        );
+
+        let written = std::fs::read_to_string(ground.session().join("session.json"))
+            .expect("the session document");
+        let document: serde_json::Value = serde_json::from_str(&written).expect("a JSON document");
+        assert_eq!(
+            document["thinking"],
+            serde_json::json!(thinks),
+            "a run launched with {launched:?} says whether it thinks rather than leaving \
+             the field out: {written}"
+        );
+        assert_eq!(
+            wire.requests()[0].contains(r#""thinking""#),
+            thinks,
+            "and the value recorded is the value its ask sends: {:?}",
+            wire.requests()[0]
+        );
+    }
+}
+
+#[test]
 fn a_piped_stdin_is_context_that_follows_the_prompt() {
     let ground = Ground::new();
     let wire = Wire::answering(vec![Reply::stream(ANTHROPIC)]);

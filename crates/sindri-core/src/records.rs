@@ -138,6 +138,8 @@ pub struct Facts<'a> {
     /// The completion endpoint the wire answered on, for a wire that serves two
     /// of them (§10), and nothing for one that serves a single shape.
     pub route: Option<Route>,
+    /// Whether the model reasons before it answers, as the run's asks send it.
+    pub thinking: bool,
     /// The boundary the model was told about and every command is held to.
     pub boundary: &'a Boundary,
     /// The dials the run obeys.
@@ -219,8 +221,8 @@ fn added(total: Option<u64>, ask: Option<u64>) -> Option<u64> {
 /// The session document: provider, model, the route it answered on where the
 /// wire serves two, enforcement, the policy handed to the model, the workspace,
 /// the branch and commit it stood on, the dials obeyed, when it started and
-/// ended, how many turns it started, what it spent, and why it stopped —
-/// `running` until a stop reason lands (§13, §10).
+/// ended, how many turns it started, what it spent, why it stopped — `running`
+/// until a stop reason lands — and whether the model thinks (§13, §10).
 ///
 /// Field order is fixed and later fields only append, and a field the run knows
 /// nothing about is left out rather than written as `null` (§15), so the JSON of
@@ -266,6 +268,9 @@ pub struct SessionDocument {
     /// written (§15).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub route: Option<Route>,
+    /// Whether the model reasons before it answers. Written even when it is false,
+    /// because the run always knows it.
+    pub thinking: bool,
 }
 
 /// One session's records: the three files, the document held in memory and
@@ -304,6 +309,7 @@ impl Record {
             usage: Usage::default(),
             stopped: State::Running,
             route: facts.route,
+            thinking: facts.thinking,
         };
         let transcript = appending(&session.directory().join(TRANSCRIPT))?;
         let statuses = appending(&session.directory().join(STATUS))?;

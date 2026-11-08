@@ -81,6 +81,7 @@ impl Ground {
             wire: Wire::Anthropic,
             model: "claude-sonnet-4",
             route: None,
+            thinking: false,
             boundary,
             limits: &self.limits,
             workspace: &self.workspace,
@@ -169,6 +170,7 @@ fn a_session_document_says_which_route_answered_it() {
         wire: Wire::Copilot,
         model: "gpt-4o",
         route: Some(Route::Chat),
+        thinking: false,
         boundary: &boundary,
         limits: &ground.limits,
         workspace: &ground.workspace,
@@ -196,6 +198,59 @@ fn a_document_of_a_wire_with_one_endpoint_names_no_route() {
     assert!(
         document.get("route").is_none(),
         "a field the run knows nothing about is left out, never null: {document}"
+    );
+}
+
+#[test]
+fn a_session_document_says_whether_the_model_thinks() {
+    let ground = Ground::new();
+    let boundary = ground.boundary();
+    let thinking = ground.session();
+    let facts = Facts {
+        thinking: true,
+        ..ground.facts(&boundary)
+    };
+    drop(Record::open(&thinking, facts).expect("a record"));
+
+    let document = json(&thinking.directory().join("session.json"));
+    assert_eq!(
+        document["thinking"],
+        json!(true),
+        "a run launched with thinking says the model will think: {document}"
+    );
+
+    let plain = ground.session();
+    drop(Record::open(&plain, ground.facts(&boundary)).expect("a record"));
+
+    let document = json(&plain.directory().join("session.json"));
+    assert_eq!(
+        document["thinking"],
+        json!(false),
+        "a run launched without it says so rather than leaving the field out: {document}"
+    );
+}
+
+#[test]
+fn the_thinking_field_lands_after_the_route_because_later_fields_only_append() {
+    let ground = Ground::new();
+    let session = ground.session();
+    let boundary = ground.boundary();
+    let facts = Facts {
+        wire: Wire::Copilot,
+        model: "gpt-4o",
+        route: Some(Route::Chat),
+        thinking: true,
+        ..ground.facts(&boundary)
+    };
+    drop(Record::open(&session, facts).expect("a record"));
+
+    let written =
+        std::fs::read_to_string(session.directory().join("session.json")).expect("the document");
+    let route = written.find("\"route\"").expect("the route is written");
+    let thinking = written.find("\"thinking\"").expect("thinking is written");
+    assert!(
+        route < thinking,
+        "later fields only append, so thinking follows the route: {written}"
     );
 }
 
@@ -931,6 +986,7 @@ fn child_writes_entries_until_it_is_killed() {
             wire: Wire::Anthropic,
             model: "a-model-the-wire-serves",
             route: None,
+            thinking: false,
             boundary: &boundary,
             limits: &limits,
             workspace: &workspace,

@@ -214,6 +214,7 @@ fn a_run_that_was_recorded_reads_back_as_the_run_it_was() {
             // Copilot serves two endpoints and this name asks for neither, so
             // the route is the one its dialect answers by habit.
             route: Some(Route::Chat),
+            thinking: false,
             boundary: &boundary,
             limits: &limits,
             workspace: &workspace,

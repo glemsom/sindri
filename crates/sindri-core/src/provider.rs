@@ -160,6 +160,11 @@ impl Ask {
         self
     }
 
+    /// Whether this ask asks the model to reason before it answers.
+    pub fn thinks(&self) -> bool {
+        self.thinking
+    }
+
     /// Send the ask on `route` whatever the model's own name asks for, so a
     /// route that misbehaves can be got round without renaming the model
     /// (§10). A dialect that serves one endpoint ignores it.

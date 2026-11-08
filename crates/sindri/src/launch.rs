@@ -192,6 +192,7 @@ impl Launch {
         // The route is read before the first request leaves, so a run that dies on its
         // first ask still says where it was.
         let route = ask.route_of();
+        let thinking = ask.thinks();
         let asking = Asking::new(client, ask);
         let shell = Shell::new(boundary.clone(), session.temp(), catalog);
 
@@ -201,6 +202,7 @@ impl Launch {
                 wire,
                 model: &model,
                 route,
+                thinking,
                 boundary: &boundary,
                 limits: &limits,
                 workspace: &workspace,

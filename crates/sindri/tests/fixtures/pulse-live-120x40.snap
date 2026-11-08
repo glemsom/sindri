@@ -5,21 +5,21 @@ expression: drawn
 pulse-live at 120x40
 00 |turn 1 ─────────────────────────────────────────────────────────────────────────────────wire      .............anthropic| dim:111 muted:9
 01 |✓ exit 0  bash  412 bytes · 23 ms                                                       model     .........claude-sonnet| ok:1 dim:32 plain:55 dim:19 muted:13
-02 |  src/rows.rs: the glyph a turn opens with                                              ────────────────────────────────| plain:88 dim:32
-03 |  src/rows.rs: a word longer than a row is broken                                       turns     .................6/250| plain:88 dim:27 muted:5
-04 |  Rendering lives in the front end and not in the core, because an entry is a fact and  ctx       ...................21%| plain:88 dim:29 muted:3
-05 |  never a rendering: the TUI and any reader draw one run from one value, and the core   cache     ...................88%| plain:88 dim:29 muted:3
-06 |  may not name a terminal at all.                                                       ────────────────────────────────| plain:88 dim:32
-07 |turn 2 ─────────────────────────────────────────────────────────────────────────────────workspace ..…/.worktrees/46-rail| dim:100 muted:20
-08 |│ The marker is a clock, so the row it heads is laid out again whenever the mark it     branch    .....spec/1-capability| dim:2 muted:81 plain:5 dim:15 muted:17
-09 |│ wears moves, and a step that changes nothing costs nothing.                           ────────────────────────────────| dim:2 muted:59 plain:27 dim:32
-10 |⠹ 4.2s A braille marker at the head of the newest answer carries the run's elapsed time,skills    .....................2| accent:1 dim:5 plain:82 dim:31 muted:1
-11 |  one step every 80 ms, and settles on the verdict it stopped with — the duration it    ────────────────────────────────| plain:88 dim:32
-12 |  stopped at, kept and never recomputed.                                                sandbox   .................bwrap| plain:88 dim:27 muted:5
-13 |                                                                                        ────────────────────────────────| plain:88 dim:32
-14 |                                                                                        session   ..............9f2c7a41| plain:88 dim:24 muted:8
-15 |                                                                                        temp      ........…/9f2c7a41/tmp| plain:88 dim:18 muted:14
-16 |                                                                                                                        | plain:120
+02 |  src/rows.rs: the glyph a turn opens with                                              think     ..................high| plain:88 dim:28 muted:4
+03 |  src/rows.rs: a word longer than a row is broken                                       ────────────────────────────────| plain:88 dim:32
+04 |  Rendering lives in the front end and not in the core, because an entry is a fact and  turns     .................6/250| plain:88 dim:27 muted:5
+05 |  never a rendering: the TUI and any reader draw one run from one value, and the core   ctx       ...................21%| plain:88 dim:29 muted:3
+06 |  may not name a terminal at all.                                                       cache     ...................88%| plain:88 dim:29 muted:3
+07 |turn 2 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+08 |│ The marker is a clock, so the row it heads is laid out again whenever the mark it     workspace ..…/.worktrees/46-rail| dim:2 muted:81 plain:5 dim:12 muted:20
+09 |│ wears moves, and a step that changes nothing costs nothing.                           branch    .....spec/1-capability| dim:2 muted:59 plain:27 dim:15 muted:17
+10 |⠹ 4.2s A braille marker at the head of the newest answer carries the run's elapsed time,────────────────────────────────| accent:1 dim:5 plain:82 dim:32
+11 |  one step every 80 ms, and settles on the verdict it stopped with — the duration it    skills    .....................2| plain:88 dim:31 muted:1
+12 |  stopped at, kept and never recomputed.                                                ────────────────────────────────| plain:88 dim:32
+13 |                                                                                        sandbox   .................bwrap| plain:88 dim:27 muted:5
+14 |                                                                                        ────────────────────────────────| plain:88 dim:32
+15 |                                                                                        session   ..............9f2c7a41| plain:88 dim:24 muted:8
+16 |                                                                                        temp      ........…/9f2c7a41/tmp| plain:88 dim:18 muted:14
 17 |                                                                                                                        | plain:120
 18 |                                                                                                                        | plain:120
 19 |                                                                                                                        | plain:120
