@@ -731,9 +731,9 @@ fn each_of_the_five_states_says_its_own_coarse_line() {
 
 #[test]
 fn a_status_line_never_carries_a_word_the_run_was_handed() {
-    // The one place a run's own text could reach a status line is a stop reason
-    // that carries it — a wire's refusal names the request back. The line is the
-    // enum's own words and nothing else.
+    // The one place a run's own text could reach a status line is a stop reason that
+    // carries it — a wire's refusal names the request back. The line is the enum's own
+    // words and nothing else.
     let refused = "the model refused: temperature 9000 is outside [0, 1]";
     let told = Told::Stopped {
         turn: 2,

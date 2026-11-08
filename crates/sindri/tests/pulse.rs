@@ -170,9 +170,7 @@ fn a_run_that_reached_its_answer_settles_on_a_check_and_the_duration_it_stopped_
         (String::from("✓"), sindri::ink::Ink::Ok)
     );
 
-    // Twelve point four seconds is past ten, so the marker says `12s` and not
-    // `12.4s`: past ten seconds a duration is whole seconds, and the decimal the
-    // form drops would be a second way to say how long a run took.
+    // Past ten seconds a duration is whole seconds, so the form drops the decimal.
     assert_eq!(Pulse::settled(&Stop::Final, 12_400).head().text(), "✓ 12s");
 }
 

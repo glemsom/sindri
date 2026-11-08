@@ -308,8 +308,8 @@ fn a_running_run_says_running_and_the_stop_set_is_five_words() {
     run.turn(&mut Transcript::default());
     assert_eq!(run.state().word(), "final");
 
-    // The closed set, in the words the record and the JSON use, against the one
-    // mapping from a stop reason to an exit code.
+    // The closed set, in the words the record and the JSON use, against the
+    // one mapping from a stop reason to an exit code.
     let closed: Vec<(State, &str, u8)> = vec![
         (State::Running, "running", 0),
         (State::Stopped(Stop::Final), "final", 0),

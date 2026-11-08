@@ -379,7 +379,6 @@ fn sequences(stream: &str) -> Vec<&str> {
 
 #[test]
 fn a_batch_run_on_a_pipe_is_told_nothing() {
-    // A sequence written into a pipe is bytes a script did not ask for and cannot use.
     let ground = Ground::new();
     let wire = Wire::answering();
 
@@ -405,8 +404,6 @@ fn a_batch_run_on_a_pipe_is_told_nothing() {
 
 #[test]
 fn a_batch_run_whose_stderr_is_a_file_is_told_nothing() {
-    // A file is not a terminal either, so a redirected stderr carries no escape
-    // sequence at all.
     let ground = Ground::new();
     let wire = Wire::answering();
     let written = ground.state.join("stderr.log");
@@ -532,8 +529,6 @@ fn a_frame_with_no_run_in_flight_is_told_idle() {
 
 #[test]
 fn a_frame_tells_its_terminal_that_a_run_is_working_and_then_done() {
-    // A status bar in another pane, or a terminal's own tab, draws the run from
-    // these lines.
     let ground = Ground::new();
     let wire = Wire::answering();
     let (session, mut pty, drawn) = Session::frame(&ground, &wire);
@@ -543,9 +538,9 @@ fn a_frame_tells_its_terminal_that_a_run_is_working_and_then_done() {
         "the frame is up: {:?}",
         text(&drawn.bytes())
     );
-    // A prompt typed, then `Enter` on its own: a carriage return arriving with more of
-    // its burst is a paste's line break and sends nothing. No `?` in the draft either:
-    // that key opens a screen of its own.
+    // A prompt typed, then `Enter` on its own: a carriage return that arrives with more of
+    // its burst is a paste's line break and sends nothing, which is the rule the composer is
+    // built on. No `?` in the draft either: that key opens a screen of its own.
     pty.type_bytes(b"triage this");
     assert!(
         drawn.wait_until(|stream| caret_column(stream) == Some(12)),

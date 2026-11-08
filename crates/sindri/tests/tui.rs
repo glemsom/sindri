@@ -135,8 +135,8 @@ impl Wire {
             for stream in listener.incoming() {
                 let Ok(mut stream) = stream else { break };
                 let request = read_request(&mut stream).unwrap_or_default();
-                // A wire asked what it serves answers at once: a listing is not a run, so
-                // nothing waits on one the way a reply a test is holding does.
+                // A wire asked what it serves answers at once: a listing is not a run, and
+                // nothing waits on one the way a test waits on a reply it is holding.
                 let listing = request.starts_with("GET ");
                 listening.lock().expect("the wire's requests").push(request);
                 if listing {
@@ -278,8 +278,8 @@ impl Pty {
         tcsetwinsize(
             &slave,
             // The cells are said, the pixels are not: a terminal that reports no pixel
-            // fields is the shape `the_cell_size_is_asked_of_the_terminal_once` needs, and
-            // most terminals fill neither field.
+            // fields is the shape `the_cell_size_is_asked_of_the_terminal_once` needs, and it
+            // is the common case — most terminals fill neither field.
             Winsize {
                 ws_row: 40,
                 ws_col: 120,
@@ -1031,9 +1031,6 @@ fn question_mark_opens_the_keys_screen_and_escape_gives_the_frame_back() {
         drawn.text()
     );
 
-    // `?` with an empty draft is a key rather than a glyph. A frame paints only the cells
-    // that changed and skips blanks between words, so a word the screen says and the
-    // draft never does is what is looked for.
     pty.type_bytes(b"?");
     assert!(
         drawn.wait_until(|frame| frame.contains("Backspace")),
@@ -1041,8 +1038,8 @@ fn question_mark_opens_the_keys_screen_and_escape_gives_the_frame_back() {
         drawn.text()
     );
 
-    // Esc gives the frame back: the hints the screen covered are painted again,
-    // after the screen's own words rather than left over from before it.
+    // The hints come back painted after the screen's own words, rather than left
+    // over from before it.
     pty.type_bytes(b"\x1b");
     assert!(
         drawn.wait_until(|frame| last(frame, "Enter send") > last(frame, "Backspace")),
@@ -1259,14 +1256,14 @@ fn an_outside_sigint_stops_the_run_and_gives_the_terminal_back() {
     );
     ask(&mut pty, &drawn, &wire);
 
-    // The user's word from outside the keyboard: `Ctrl-C` reaches a raw terminal
-    // as a byte, so a `kill -INT` is the other door into the one cancellation.
+    // The user's word from outside the keyboard: `Ctrl-C` reaches a raw terminal as a byte,
+    // so a `kill -INT` is the other door into the one cancellation.
     let interrupted = session.interrupt();
     assert!(interrupted, "the signal was delivered to the launch");
 
-    // The run stops when the request in flight does, and the launch gives the
-    // terminal back rather than dying with it: the screen it took is put back, and
-    // the cancellation code is the launch's.
+    // The run stops when the request in flight does, and the launch gives the terminal back
+    // rather than dying with it: the screen it took is put back, and the cancellation code
+    // is the launch's.
     wire.release();
     let status = session.wait();
     assert_eq!(
@@ -1638,9 +1635,8 @@ fn slash_help_opens_the_keys_in_force_and_slash_settings_its_own_screen() {
         drawn.text()
     );
 
-    // `Backspace` is a word only the keys screen says: the footer the composer
-    // keeps names two hints, and the screen that lists every key in force names
-    // this one.
+    // `Backspace` is a word only the keys screen says: the footer the composer keeps names
+    // two hints, and the screen that lists every key in force names this one.
     command(&mut pty, &drawn, "/help");
     assert!(
         drawn.wait_until(|frame| frame.contains("Backspace")),
@@ -1661,8 +1657,8 @@ fn slash_help_opens_the_keys_in_force_and_slash_settings_its_own_screen() {
         drawn.text()
     );
 
-    // And it gives the frame back the way the keys screen does; `Ctrl-Q` is the
-    // composer's key, so the screen is closed before the launch is asked to end.
+    // And it gives the frame back the way the keys screen does; `Ctrl-Q` is the composer's
+    // key, so the screen is closed before the launch is asked to end.
     pty.type_bytes(b"\x1b");
     assert!(
         drawn.wait_until(|frame| last(frame, "Enter send") > last(frame, "settings")),

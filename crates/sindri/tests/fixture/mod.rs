@@ -135,8 +135,8 @@ fn named(name: &str) -> View {
         // landed — because a marker carrying elapsed time is for a turn that has not
         // finished speaking.
         "pulse-live" => with_pulse(Pulse::live(4_200), &PULSE_ANSWER[..3]),
-        // Nine point four seconds rather than twelve: past ten seconds a duration is
-        // whole seconds, so the marker this picture holds drops the decimal.
+        // Nine point four seconds rather than twelve: the value is under ten, so the
+        // marker keeps its decimal where a duration past ten is whole seconds.
         "pulse-settled" => with_pulse(Pulse::settled(&Stop::Final, 9_400), &PULSE_ANSWER),
         "queue" => queue(),
         "keys" => {
@@ -192,9 +192,9 @@ fn pictured() -> View {
             "![a diagram outside the workspace](../outside-the-workspace.svg)\n\n![a tall field]\
              (tall.svg)",
         )],
-        // Far enough back that the band starts at the top of the answer, which is the
-        // row the tall picture's block begins on: the block is a hundred rows and the
-        // band is thirty-seven.
+        // Far enough back that the band starts at the top of the answer, which is the row the
+        // tall picture's block begins on: the block is a hundred rows and the band is
+        // thirty-seven.
         Scroll::Back(70),
     );
     view.set_workspace(workspace);
@@ -313,8 +313,8 @@ fn picking() -> View {
         "crates/sindri/src/rows.rs",
         "crates/sindri/src/view.rs",
         "crates/sindri/tests/frames.rs",
-        // A file the `.gitignore` names and a directory it ignores whole: neither is a
-        // row, so the picture of the picker is only right if they are absent from it.
+        // A file the `.gitignore` names and a directory it ignores whole: neither is a row,
+        // and the picture of the picker is only right if they are absent from it.
         "notes.local.md",
         "target/debug/sindri",
     ] {
