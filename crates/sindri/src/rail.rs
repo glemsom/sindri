@@ -1,7 +1,7 @@
 //! The rail: the run's facts down the frame's right-hand columns, read as a ledger —
 //! a label in a fixed field, dot leaders running out to one hanging edge, a hairline
-//! between blocks — and given up in one order when the frame is too narrow to hold
-//! all of it (§12, ticket #46).
+//! between blocks — and given up, fact by fact, when the frame is too narrow to hold all
+//! of it.
 //!
 //! The facts are handed in and never reached for: `Facts` is what the core knows about a
 //! run — the dialect it asks over, the name it was served and whether that model thinks,
@@ -9,12 +9,15 @@
 //! session's GUID and its temp — and the one fact nothing produces yet is a caller's to
 //! fill, so a rail draws a fact only when somebody handed it one.
 //!
-//! Two shapes and one rule between them. At a hundred columns and above the rail is
-//! §12's 32 columns down the frame's right-hand edge, one labelled fact per row; below a
-//! hundred it is one strip along the bottom of the band, the same facts in the same
-//! order. [`Facts::split`] is that rule — the band the transcript and the rail share, cut
-//! where §12 says — so the frame's paint asks for its share rather than counting columns
-//! of its own, and the transcript is laid out at the width the rail leaves it (ADR-0008).
+//! Two shapes and two questions. At a hundred columns and above the rail is 32 columns
+//! down the frame's right-hand edge, one labelled fact per row, and it carries every fact
+//! the frame knows. Below a hundred it is one strip along the bottom of the band, and it
+//! carries a shorter list of its own — the run's size, the model, the confinement and the
+//! branch — because a narrow frame has one row and a reader watching it wants the facts
+//! that change. [`Facts::split`] is the rule between them: the band the transcript and the
+//! rail share, cut where the width says, so the frame's paint asks for its share rather
+//! than counting columns of its own, and the transcript is laid out at the width the rail
+//! leaves it (ADR-0008).
 //!
 //! Nothing is ever drawn in part. A value with no cut rule of its own that leaves no room
 //! for a leader in its column drops the fact rather than being cut off; a path keeps whole
@@ -22,10 +25,13 @@
 //! hyphen-separated segments from its head and marks the tail it left with `…`; and what
 //! the room cannot hold is given up in one settled order — temp path, cache hits, session
 //! GUID, branch, skills in force, context size, workspace, turns, wire, thinking, model —
-//! beside a row saying how many went. The sandbox posture is absent from that order because
-//! it never goes. The degradation is a pure function of the room, not a paint: what the rail
-//! keeps and the rows it makes are read by a test without a buffer, which is how a rule
-//! about every frame width from 20 to 200 is proved rather than eyeballed.
+//! beside a row saying how many went. That is the ledger's order; the sandbox posture is
+//! absent from it because it never goes, and the strip gives its own four facts up from the
+//! tail of its own list instead, where the count of what went is the last item of the row
+//! and so the first thing the room takes. The degradation is a pure function of the room,
+//! not a paint: what the rail keeps and the rows it makes are read by a test without a
+//! buffer, which is how a rule about every frame width from 20 to 200 is proved rather than
+//! eyeballed.
 
 use std::path::PathBuf;
 
@@ -127,22 +133,29 @@ pub struct Ctx {
 }
 
 impl Ctx {
-    /// The value the rail draws it as — the size in spelled tokens, and the window beside
-    /// it and the share of it the run fills when one is known — and the share that value
-    /// ends in, so the row's text and the ink it is said in come from one derivation.
-    fn spelled(&self) -> (String, Option<Fill>) {
-        match self.fill() {
-            Some(fill) => (
-                format!(
-                    "{}/{} {}",
-                    tokens(self.size),
-                    tokens(fill.window),
-                    fill.said()
-                ),
-                Some(fill),
+    /// The value the rail draws it as in `shape` — the size in spelled tokens, and the
+    /// window beside it and the share of it the run fills when one is known — and the share
+    /// that value ends in, so the row's text and the ink it is said in come from one
+    /// derivation.
+    ///
+    /// The strip keeps the share and gives up the size when both are known: it is one row
+    /// shared with three other facts, and the number that says how much room the next turn
+    /// has left is the one a reader watches. A frame that knows no window has no share to
+    /// keep, so both shapes draw the size there.
+    fn spelled(&self, shape: Shape) -> (String, Option<Fill>) {
+        let Some(fill) = self.fill() else {
+            return (tokens(self.size), None);
+        };
+        let value = match shape {
+            Shape::Ledger => format!(
+                "{}/{} {}",
+                tokens(self.size),
+                tokens(fill.window),
+                fill.said()
             ),
-            None => (tokens(self.size), None),
-        }
+            Shape::Strip => fill.said(),
+        };
+        (value, Some(fill))
     }
 
     /// How full the window is, when one is known: a window of no tokens is no share of
@@ -329,13 +342,13 @@ impl Facts {
     /// strip along the band's bottom row below a hundred columns. A frame that knows no
     /// fact draws no rail, and the transcript loses no room to one.
     pub fn split(&self, band: Rect) -> Share {
-        if band.width == 0 || band.height == 0 || self.known().is_empty() {
+        let shape = Shape::of(band.width);
+        if band.width == 0 || band.height == 0 || self.known(shape).is_empty() {
             return Share {
                 transcript: band,
                 rail: None,
             };
         }
-        let shape = Shape::of(band.width);
         let (transcript, rail) = match shape {
             Shape::Ledger => {
                 let columns = COLUMNS.min(band.width);
@@ -407,7 +420,7 @@ impl Facts {
         }
     }
 
-    /// The strip: the same facts on the band's one row, each as its label and its value
+    /// The strip: its own four facts on the band's one row, each as its label and its value
     /// with a gap between them, because a narrow frame has a row to spare and no column.
     /// What went is counted at the end of the row when the row has room for the count.
     fn strip(&self, area: Rect, buffer: &mut Buffer) {
@@ -421,9 +434,9 @@ impl Facts {
             x = put(buffer, x, area.y, " ", Ink::Dim);
             x = fact.draw(buffer, x, area.y);
         }
-        // A strip too narrow to hold the count beside the fact that never goes is the one
-        // rail without one.
-        if kept.went > 0 && strip_columns(&kept.facts, kept.went) <= usize::from(area.width) {
+        // A strip too narrow to hold the count beside the facts it keeps is the one rail
+        // without one.
+        if kept.counted {
             if !kept.facts.is_empty() {
                 x = put(buffer, x, area.y, GAP, Ink::Dim);
             }
@@ -437,37 +450,66 @@ impl Facts {
         }
     }
 
-    /// The facts this rail keeps and how many it gave up: one whose value will not fit
-    /// the column it is drawn in goes before anything else, and what is left is given up
-    /// in §12's order until the rail's room holds the rest and the row that counts what
-    /// went (#46).
+    /// The facts this rail keeps and how many it gave up: one whose value will not fit the
+    /// row it is drawn in goes before anything else, and what is left is given up until the
+    /// room holds it.
+    ///
+    /// The shapes part here. The ledger draws every fact it knows, one block after another,
+    /// and gives them up in §12's settled order beside the row that says how many went. The
+    /// strip carries the four facts of its own list and no others, and it gives them up from
+    /// the tail of that list — but the count of what went is the last item of its one row,
+    /// so the room takes the count first, and only then a fact, because a fact a reader can
+    /// see says more than a number that only says how much they cannot.
     fn kept(&self, shape: Shape, area: Rect) -> Kept {
-        let known = self.known();
+        let known = self.known(shape);
         let total = known.len();
         let mut kept: Vec<Fact> = known
             .into_iter()
+            .filter(|fact| shape == Shape::Ledger || STRIP.contains(&fact.kind))
             .filter(|fact| fits(fact, shape, area.width))
             .collect();
+        if shape == Shape::Strip {
+            kept.sort_by_key(|fact| strip_place(fact.kind));
+        }
+        let order: &[Kind] = match shape {
+            Shape::Ledger => &SACRIFICE,
+            Shape::Strip => &STRIP_SACRIFICE,
+        };
         let mut went = total - kept.len();
-        while !holds(&kept, went, shape, area) {
-            let Some(victim) = SACRIFICE
+        let mut uncounted = false;
+        loop {
+            let counted = went > 0 && !uncounted;
+            if holds(&kept, went, counted, shape, area) {
+                break;
+            }
+            if counted && holds(&kept, went, false, shape, area) {
+                uncounted = true;
+                continue;
+            }
+            let Some(victim) = order
                 .iter()
                 .find_map(|kind| kept.iter().position(|fact| fact.kind == *kind))
             else {
-                // Only the sandbox is left and it never goes: a rail narrower than its last
-                // fact has nothing left to give up.
+                // Nothing the shape may give up is left — the ledger keeps the sandbox
+                // posture and the strip the run's size — so a rail narrower than that fact
+                // has nothing left to give up.
                 break;
             };
             kept.remove(victim);
             went = went.saturating_add(1);
         }
-        Kept { facts: kept, went }
+        Kept {
+            facts: kept,
+            went,
+            counted: went > 0 && !uncounted,
+        }
     }
 
-    /// Every fact this frame knows, block by block, each value spelled the way the rail
-    /// spells it: a session by the first eight of its GUID, a path by the tail that fits a
-    /// value column, and a served name by the head.
-    fn known(&self) -> Vec<Fact> {
+    /// Every fact this frame knows, block by block, each value spelled the way the shape it
+    /// is drawn in spells it: a session by the first eight of its GUID, a path by the tail
+    /// that fits a value column, a served name by the head, and the run's size by the share
+    /// of its window wherever the strip has room for only one of the two.
+    fn known(&self, shape: Shape) -> Vec<Fact> {
         let short = self.session.as_deref().map(short_id);
         let mut facts = Vec::new();
         if let Some(wire) = &self.wire {
@@ -483,7 +525,7 @@ impl Facts {
             facts.push(Fact::new(Kind::Turns, format!("{turns}/{cap}")));
         }
         if let Some(ctx) = &self.ctx {
-            let (value, fill) = ctx.spelled();
+            let (value, fill) = ctx.spelled(shape);
             facts.push(Fact {
                 fill,
                 ..Fact::new(Kind::Ctx, value)
@@ -573,10 +615,13 @@ impl Fact {
 /// What the rail keeps and what it gave up: the facts it draws, in the order it reads
 /// them, and the count of those it could not hold.
 struct Kept {
-    /// The facts that survive the room, in block order.
+    /// The facts that survive the room, in the order the shape reads them.
     facts: Vec<Fact>,
     /// How many of the facts the frame knew the rail could not hold.
     went: usize,
+    /// Whether the rail says how many went: the ledger always does when one did, and the
+    /// strip only while its one row has room for the count beside the facts it kept.
+    counted: bool,
 }
 
 /// One row of the ledger, before it is a row of glyphs: a fact, the hairline between two
@@ -633,17 +678,27 @@ fn fits(fact: &Fact, shape: Shape, width: u16) -> bool {
     }
 }
 
+/// Where a fact sits in the strip's list: the place the strip reads it in, and the place it
+/// is given up in counted from the other end.
+fn strip_place(kind: Kind) -> usize {
+    STRIP
+        .iter()
+        .position(|read| *read == kind)
+        .unwrap_or(usize::MAX)
+}
+
 /// Whether the room holds what the rail kept: the ledger's rows within the band's height,
 /// or the strip's one row within its width.
-fn holds(facts: &[Fact], went: usize, shape: Shape, area: Rect) -> bool {
+fn holds(facts: &[Fact], went: usize, counted: bool, shape: Shape, area: Rect) -> bool {
     match shape {
         Shape::Ledger => ledger_rows(facts, went).len() <= usize::from(area.height),
-        Shape::Strip => strip_columns(facts, went) <= usize::from(area.width),
+        Shape::Strip => strip_columns(facts, went, counted) <= usize::from(area.width),
     }
 }
 
-/// The columns the strip's one row takes, the count of what went included.
-fn strip_columns(facts: &[Fact], went: usize) -> usize {
+/// The columns the strip's one row takes, the count of what went included when `counted`
+/// says the row carries one.
+fn strip_columns(facts: &[Fact], went: usize, counted: bool) -> usize {
     let mut taken = 0;
     for (index, fact) in facts.iter().enumerate() {
         if index > 0 {
@@ -651,7 +706,7 @@ fn strip_columns(facts: &[Fact], went: usize) -> usize {
         }
         taken += columns(fact.kind.label()) + 1 + columns(&fact.value);
     }
-    if went > 0 {
+    if counted {
         if !facts.is_empty() {
             taken += columns(GAP);
         }
@@ -824,6 +879,18 @@ impl Kind {
     }
 }
 
+/// The four facts the strip carries, in the order it reads them: the thing you watch, the
+/// thing you are, the thing that confines you, and the thing you are standing on. The
+/// ledger draws these four inside its own blocks and in its own order; the strip has one
+/// row and a different question on it, so its list is its own.
+const STRIP: [Kind; 4] = [Kind::Ctx, Kind::Model, Kind::Sandbox, Kind::Branch];
+
+/// The order the strip gives its facts up in: [`STRIP`] without its head, read from the
+/// tail, so a reader who has to lose one loses the branch they are standing on before the
+/// confinement that holds them, and the run's size — the head, the thing they watch — is
+/// the one it never gives up.
+const STRIP_SACRIFICE: [Kind; 3] = [Kind::Branch, Kind::Sandbox, Kind::Model];
+
 /// §12's sacrifice order, the first to go first: what the rail gives up as the room
 /// runs out. The sandbox posture is deliberately absent, because §12 says it never
 /// goes, so no loop over this list can reach it.
@@ -908,6 +975,9 @@ mod tests {
     /// What the rail draws of [`SERVED`]: its head, and the mark saying the date stamp
     /// went. Written down here because it is the contract the rail is held to.
     const CUT: &str = "claude-sonnet-4-5…";
+
+    /// The branch the frame's run stands on, as wide as a real one.
+    const BRANCH: &str = "spec/1-capability";
 
     /// The facts a frame of a run holds, as the rails draw them: one of each of §46's
     /// blocks, with a workspace and a temp as long as the real ones.
@@ -1281,14 +1351,10 @@ mod tests {
             facts.paint(Shape::Strip, band(40, 1), &mut strip);
 
             assert_eq!(
-                Ink::of(
-                    strip
-                        .cell((4 + said - tail, 0))
-                        .expect("a cell of the share")
-                ),
+                Ink::of(strip.cell((4, 0)).expect("a cell of the share")),
                 Some(ink),
-                "the strip reads the share in the same ink the ledger does: one threshold, \
-                 in one place"
+                "the strip draws that share and nothing else, and reads it in the same ink \
+                 the ledger does: one threshold, in one place"
             );
         }
     }
@@ -1593,15 +1659,133 @@ mod tests {
     }
 
     #[test]
-    fn a_narrow_frame_gives_facts_up_in_a12s_order_and_counts_what_went() {
+    fn a_strip_carries_the_share_of_a_named_window_and_gives_up_the_size_beside_it() {
+        let facts = Facts {
+            ctx: Some(Ctx {
+                size: 48_200,
+                window: Some(200_000),
+            }),
+            ..Facts::default()
+        };
+        let mut ledger = Buffer::empty(band(COLUMNS, 1));
+
+        facts.paint(Shape::Ledger, band(COLUMNS, 1), &mut ledger);
+
+        assert_eq!(
+            glyphs(&ledger, 0),
+            "ctx       ........48.2k/200k 24%",
+            "the ledger's ctx row says the size and the share of the window it is"
+        );
+
+        let mut strip = Buffer::empty(band(40, 1));
+
+        facts.paint(Shape::Strip, band(40, 1), &mut strip);
+
+        assert_eq!(
+            glyphs(&strip, 0).trim_end(),
+            "ctx 24%",
+            "the strip's one row has no room for the size the share is a share of, so it \
+             keeps the number that says how much of the window is left"
+        );
+    }
+
+    #[test]
+    fn forty_columns_hold_the_fact_a_reader_watches_and_the_model_they_are() {
         let mut buffer = Buffer::empty(band(40, 1));
 
         frame().paint(Shape::Strip, band(40, 1), &mut buffer);
 
         assert_eq!(
             glyphs(&buffer, 0),
-            "sandbox bwrap · +11 more                ",
-            "forty columns hold the fact that never goes and the count of the eleven that did"
+            "ctx 48.2k · model claude-sonnet-4-5…    ",
+            "forty columns hold the run's size and the model, because the four facts of the \
+             strip's list are all it carries and the count does not fit beside the two"
+        );
+    }
+
+    #[test]
+    fn ninety_nine_columns_hold_the_four_facts_and_count_the_ones_they_left_out() {
+        let mut facts = frame();
+        facts.ctx = Some(Ctx {
+            size: 48_200,
+            window: Some(200_000),
+        });
+        let mut buffer = Buffer::empty(band(99, 1));
+
+        facts.paint(Shape::Strip, band(99, 1), &mut buffer);
+
+        assert_eq!(
+            glyphs(&buffer, 0).trim_end(),
+            format!("ctx 24% · model {CUT} · sandbox bwrap · branch {BRANCH} · +8 more"),
+            "ninety-nine columns hold the whole list and the count of the eight facts the \
+             strip does not carry at all"
+        );
+    }
+
+    #[test]
+    fn the_strip_gives_its_facts_up_from_the_tail_of_its_own_list() {
+        let mut counted = Buffer::empty(band(47, 1));
+
+        frame().paint(Shape::Strip, band(47, 1), &mut counted);
+
+        assert_eq!(
+            glyphs(&counted, 0).trim_end(),
+            "ctx 48.2k · model claude-sonnet-4-5… · +10 more",
+            "the branch and the sandbox posture went, and the count that fits says so"
+        );
+
+        let mut facts_win = Buffer::empty(band(60, 1));
+
+        frame().paint(Shape::Strip, band(60, 1), &mut facts_win);
+
+        assert_eq!(
+            glyphs(&facts_win, 0).trim_end(),
+            "ctx 48.2k · model claude-sonnet-4-5… · sandbox bwrap",
+            "three facts beat the count: the room the count would take is the room the \
+             sandbox posture is drawn in"
+        );
+    }
+
+    #[test]
+    fn a_strip_with_one_fact_draws_it_and_a_frame_with_none_draws_no_strip() {
+        let one = Facts {
+            sandbox: Some(Enforcement::Bubblewrap),
+            ..Facts::default()
+        };
+        let mut buffer = Buffer::empty(band(40, 1));
+
+        one.paint(Shape::Strip, band(40, 1), &mut buffer);
+
+        assert_eq!(
+            glyphs(&buffer, 0).trim_end(),
+            "sandbox bwrap",
+            "the one fact the frame knows is drawn, and no count stands where nothing went"
+        );
+
+        let none = Facts::default().split(band(40, 24));
+
+        assert_eq!(none.rail, None, "a frame that knows no fact draws no strip");
+        assert_eq!(
+            none.transcript,
+            band(40, 24),
+            "and the transcript keeps the whole band"
+        );
+    }
+
+    #[test]
+    fn the_strip_carries_its_own_list_in_the_order_a_reader_watches_it() {
+        let order: Vec<&str> = STRIP.iter().map(|kind| kind.label()).collect();
+
+        assert_eq!(
+            order,
+            ["ctx", "model", "sandbox", "branch"],
+            "the thing you watch, the thing you are, the thing that confines you, and the \
+             thing you are standing on"
+        );
+        assert!(
+            !STRIP.contains(&Kind::Turns),
+            "turns stays out of the list: the strip has no room to say both how full the \
+             conversation is and how many turns it took to fill"
         );
     }
 
@@ -1641,14 +1825,16 @@ mod tests {
             if screen.contains(&more) {
                 continue;
             }
-            let kept = CONTRACT
-                .iter()
-                .filter(|(label, _)| screen.contains(label))
-                .count();
-            let foot = "sandbox bwrap".len() + GAP.len() + more.len();
+            assert_eq!(
+                shape,
+                Shape::Strip,
+                "at {width} columns the ledger dropped the {more} row it had room to draw"
+            );
+            let drawn = columns(screen.trim_end());
             assert!(
-                went != 0 && kept <= 1 && foot > usize::from(width),
-                "at {width} columns the rail dropped the {more} row it had room to draw"
+                drawn + columns(GAP) + columns(&more) > usize::from(width),
+                "at {width} columns the strip dropped the {more} count it had room to draw \
+                 beside the {drawn} columns it kept"
             );
         }
     }
@@ -1730,42 +1916,35 @@ mod tests {
     }
 
     #[test]
-    fn a_strip_row_is_the_facts_beside_each_other_each_with_its_label_and_one_gap() {
+    fn a_strip_row_is_the_four_facts_of_its_list_beside_each_other_with_one_gap() {
         // 220 columns is the whole row, gap for gap, so no fact is given up to prove order.
         let mut buffer = Buffer::empty(band(220, 1));
 
         frame().paint(Shape::Strip, band(220, 1), &mut buffer);
 
         assert_eq!(
-            glyphs(&buffer, 0),
-            format!(
-                "wire anthropic · model {CUT} · think high · turns 3/250 · ctx 48.2k · \
-                 cache 88% · workspace …/.worktrees/46-rail · branch spec/1-capability · \
-                 skills 2 · sandbox bwrap · session 9f2c7a41 · temp …/9f2c7a41/tmp"
-            ),
-            "one row, the same facts in the same order, a gap between two of them, \
-             and not one given up"
+            glyphs(&buffer, 0).trim_end(),
+            format!("ctx 48.2k · model {CUT} · sandbox bwrap · branch {BRANCH} · +8 more"),
+            "one row, the strip's own four facts in its own order, a gap between two of \
+             them, and the count of the eight it does not carry even with the room to"
         );
 
-        let mut narrower = Buffer::empty(band(200, 1));
+        let mut narrower = Buffer::empty(band(88, 1));
 
-        frame().paint(Shape::Strip, band(200, 1), &mut narrower);
+        frame().paint(Shape::Strip, band(88, 1), &mut narrower);
 
         assert_eq!(
             glyphs(&narrower, 0).trim_end(),
-            format!(
-                "wire anthropic · model {CUT} · think high · turns 3/250 · ctx 48.2k · \
-                 workspace …/.worktrees/46-rail · branch spec/1-capability · skills 2 · \
-                 sandbox bwrap · session 9f2c7a41 · +2 more"
-            ),
-            "two hundred columns give up the temp and the cache, and count them"
+            format!("ctx 48.2k · model {CUT} · sandbox bwrap · branch {BRANCH}"),
+            "eighty-eight columns hold the four facts and no count: the count's own \
+             eleven columns are the ones this row does not have"
         );
     }
 
     #[test]
     fn a_fact_is_drawn_in_the_words_the_rail_reads_it_in() {
         let facts: Vec<(&str, String)> = frame()
-            .known()
+            .known(Shape::Ledger)
             .into_iter()
             .map(|fact| (fact.kind.label(), fact.value))
             .collect();
