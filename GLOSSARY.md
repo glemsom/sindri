@@ -13,19 +13,6 @@ _Avoid_: Job, task, query, conversation
 One request to the model and the tool calls it asks for. Not a unit of progress.
 _Avoid_: Step, iteration, wave
 
-**Turn cap**:
-The ceiling on turns in a run (`max_turns`); exhausting it is a stop reason, not an error.
-_Avoid_: Max steps, budget
-
-**Budget**:
-A run-scoped limit a turn cap cannot see: command wall clock, or bytes of output fed back.
-_Avoid_: Limit, quota, allowance
-
-**Stop reason**:
-Why a run ended: `final`, `max_turns`, `budget`, `cancelled`, `error`. A record says `running`
-until one lands.
-_Avoid_: Exit reason, status, outcome
-
 **Answer**:
 The text a run produces for stdout — the only thing on stdout in batch mode.
 _Avoid_: Response, output, result
@@ -41,15 +28,6 @@ the command, the prompt or the answer.
 _Avoid_: Progress, notice, indicator
 
 ## Confinement
-
-**Enforcement**:
-How a run's commands are confined: `bubblewrap` or `unsafe`.
-_Avoid_: Sandbox mode, safety level, permission
-
-**Policy**:
-The boundary in force for a run — writable set, per-call timeout, budgets — that tool descriptions
-are derived from.
-_Avoid_: Config, permissions, settings
 
 **Writable set**:
 The canonical, absolute, distinct, non-nested paths a run may write, never `/`.
@@ -76,31 +54,12 @@ Which endpoint an OpenAI-shaped wire serves — `chat` or `responses` — by the
 overridable per run.
 _Avoid_: Endpoint, API, mode, protocol
 
-**Preamble**:
-The system message, re-sent every turn, so every word in it is a tax.
-_Avoid_: System prompt, instructions
-
-**Verdict**:
-The kind of failure a wire classified — timeout, rate limit, server fault, transport, client,
-refusal, cancel, broken — never the status code.
-_Avoid_: Error code, status, reason
-
-**Attempt**:
-One send of one ask: three at most, 200 ms doubling, and only for a retryable failure that
-streamed no text.
-_Avoid_: Try, retry, resend
-
 ## Sessions and skills
 
 **Session**:
 One recorded run's directory, named by its GUID: session document, transcript, status documents,
 temp.
 _Avoid_: Conversation, chat, history
-
-**Entry**:
-One thing that happened in a run, in order, as written to the transcript — the unit the UI and any
-reader share.
-_Avoid_: Event, log line, message
 
 **Skill**:
 A directory holding a `SKILL.md` whose body the model can load by name, in one of three scopes.
@@ -111,28 +70,9 @@ The names loaded so far, in load order; `/skill:name` and the `skill` call both 
 clearing the history empties it.
 _Avoid_: Conversation state, skill cache, loaded prompt
 
-**Scope**:
+**Skill scope**:
 Where a skill came from, lowest precedence first: `builtin`, `user`, `repo`.
 _Avoid_: Source, origin, level
-
-**Shadowing**:
-A nearer scope taking a name from a further one, reported rather than resolved silently.
-_Avoid_: Override, collision, duplicate
-
-## Secrets
-
-**Secret**:
-A literal string a run was trusted with that nothing the run writes may contain.
-_Avoid_: Key, token, password, environment value
-
-**Redacted**:
-A string carrying the `SecretSet` it scrubs through, so it prints safe wherever it leaves core.
-_Avoid_: Masked, sanitised, filtered
-
-**Secret set**:
-Every literal a run must never let out, matched longest first so one cannot leave a tail of
-another.
-_Avoid_: Denylist, pattern list, filter
 
 ## The shape
 
@@ -147,24 +87,6 @@ _Avoid_: UI, client, interface
 **Ink**:
 A colour role asked for by name — dim, muted, accent, ok, err — never a literal colour.
 _Avoid_: Colour, style, RGB
-
-**Mode**:
-A screen that answers keys, in one explicit stack; the mode on top answers every key.
-_Avoid_: State, layer, screen (too general), view
-
-**Key table**:
-The keys one mode answers, as data — the key, how `?` spells it, what it does — so the keymap
-screen is painted from the rows that are the keymap.
-_Avoid_: Keymap (one word for the whole frame's), binding list, hotkeys
-
-**Frame fixture**:
-A frame rendered at a fixed size and checked in as the accepted picture of it.
-_Avoid_: Snapshot (too general), screenshot, golden image
-
-**Eval**:
-An artefact held to a fact rather than a sentence, run as its own stage (§16); it needs neither
-the network nor a terminal.
-_Avoid_: Snapshot, golden test, benchmark
 
 **Picture**:
 An image an answer points at, or the diagram a fence becomes — measured into its **footprint** of
