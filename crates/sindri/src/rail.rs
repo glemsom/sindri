@@ -141,6 +141,12 @@ impl Ctx {
     /// shared with three other facts, and the number that says how much room the next turn
     /// has left is the one a reader watches. A frame that knows no window has no share to
     /// keep, so both shapes draw the size there.
+    /// The run's size as the ledger writes it, which is the only spelling outside the rail:
+    /// a share of a window is one fact and is spelled in one place.
+    pub(crate) fn said(&self) -> String {
+        self.spelled(Shape::Ledger).0
+    }
+
     fn spelled(&self, shape: Shape) -> (String, Option<Fill>) {
         let Some(fill) = self.fill() else {
             return (tokens(self.size), None);
@@ -214,7 +220,7 @@ fn share(part: u64, whole: u64) -> Option<u8> {
 /// The size of a run in spelled tokens: whole under a thousand, and three figures with a
 /// unit above it — `948`, `48.2k`, `1.02M` — because no reader counts six digits off a
 /// rail, and a rail column has no room to make them read as one number.
-fn tokens(count: u64) -> String {
+pub(crate) fn tokens(count: u64) -> String {
     if count < 1_000 {
         return count.to_string();
     }
@@ -736,7 +742,7 @@ fn columns(text: &str) -> usize {
 /// Writes `text` from `x` across a row, one glyph per cell, in `ink`, and hands back the
 /// column after it: every row here is measured before it is written, so this only has to
 /// stop at the frame's edge.
-fn put(buffer: &mut Buffer, x: u16, y: u16, text: &str, ink: Ink) -> u16 {
+pub(crate) fn put(buffer: &mut Buffer, x: u16, y: u16, text: &str, ink: Ink) -> u16 {
     let mut x = x;
     for glyph in text.chars() {
         if let Some(cell) = buffer.cell_mut((x, y)) {
@@ -756,7 +762,7 @@ fn put(buffer: &mut Buffer, x: u16, y: u16, text: &str, ink: Ink) -> u16 {
 /// than its tail does. Nothing is ever cut mid-component: a name with its middle gone is
 /// the `san…` §46 forbids, and a tail that cannot hold even the last component is empty,
 /// which drops the fact.
-fn tail(path: &str, columns: usize) -> String {
+pub(crate) fn tail(path: &str, columns: usize) -> String {
     let parts: Vec<&str> = path.split('/').filter(|part| !part.is_empty()).collect();
     if parts.is_empty() {
         return path.to_owned();
@@ -794,7 +800,7 @@ fn tail(path: &str, columns: usize) -> String {
 /// vendor in front of the family keeps that prefix instead, because the rule is the head.
 /// A name whose first segment does not fit beside its own mark is empty, which drops the
 /// fact.
-fn head(name: &str, columns: usize) -> String {
+pub(crate) fn head(name: &str, columns: usize) -> String {
     if name.chars().count() <= columns {
         return name.to_owned();
     }

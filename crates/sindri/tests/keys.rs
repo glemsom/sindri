@@ -80,6 +80,37 @@ fn every_row_of_a_table_says_what_its_key_is_and_does() {
 }
 
 #[test]
+fn the_stats_screen_is_the_sixth_mode_and_answers_escape_and_nothing_else() {
+    assert_eq!(
+        Mode::ALL.len(),
+        6,
+        "a mode added later is a variant, a table and a row of `ALL`, so the `?` screen lists \
+         it with the five that came before"
+    );
+    assert!(Mode::ALL.contains(&Mode::Stats));
+    assert_eq!(
+        Mode::Stats.name(),
+        "stats",
+        "the word the `?` screen heads it with"
+    );
+
+    let table = Mode::Stats.table();
+
+    assert_eq!(
+        table.len(),
+        1,
+        "a screen of what the run has already written has nothing to type into and nothing to \
+         walk, so it answers one key"
+    );
+    assert_eq!(table[0].key, Key::Escape);
+    assert_eq!(
+        table[0].act,
+        Act::Close,
+        "the key that gives the frame back"
+    );
+}
+
+#[test]
 fn question_mark_opens_the_keys_screen_and_escape_closes_it() {
     let mut view = View::boot();
 

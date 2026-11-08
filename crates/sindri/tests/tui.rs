@@ -1472,6 +1472,76 @@ fn a_live_run_draws_the_facts_it_was_handed_and_its_first_turn_moves_them() {
     );
 }
 
+/// The stats screen reads the record the run wrote and not the file it is still writing: a
+/// run opened, asked once and stopped hands its frame the whole document, so `/stats` draws the
+/// facts no rail column holds — the GUID in all thirty-six characters, and the tokens the
+/// turn spent.
+#[test]
+fn the_stats_screen_draws_the_record_the_run_handed_its_frame() {
+    let ground = Ground::new();
+    on_a_branch(&ground);
+    let wire = Wire::holding_a_cached_reply();
+    let mut launch = ground.command();
+    launch
+        .arg("--yolo-unsafe")
+        .env("SINDRI_BASE_URL", wire.base_url());
+    let (session, mut pty, drawn) = Session::starting(launch);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask(&mut pty, &drawn, &wire);
+    wire.release();
+    assert!(
+        drawn.wait_until(|frame| frame.contains('\u{2713}')),
+        "the run answered and stopped: {:?}",
+        drawn.text()
+    );
+
+    let recorded = guid(&ground.state);
+    command(&mut pty, &drawn, "/stats");
+
+    assert!(
+        drawn.wait_until(|frame| picture(frame).values().any(|row| row.contains(&recorded))),
+        "the screen draws the session's GUID in all thirty-six characters, which is a fact \
+         the rail has no column for: {:?}",
+        drawn.text()
+    );
+    for label in [
+        "input", "output", "total", "cached", "stopped", "start", "end", "commit",
+    ] {
+        assert!(
+            drawn.wait_until(|frame| picture(frame).values().any(|row| row.starts_with(label))),
+            "the screen draws `{label}`, which is a row only the record the run wrote has: {:?}",
+            drawn.text()
+        );
+    }
+    assert!(
+        picture(&drawn.text())
+            .values()
+            .any(|row| row.starts_with("stopped") && row.trim_end().ends_with("final")),
+        "and the record says how the run stopped: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(b"\x1b");
+    assert!(
+        drawn.wait_until(|frame| last(frame, "Enter send") > last(frame, "/stats")),
+        "Esc closes the screen, and the composer's bands are painted again under it: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(b"\x11");
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "the launch outlives the screen it drew: {:?}",
+        drawn.text()
+    );
+}
+
 /// Whether a frame is wearing a braille marker: one of the ten glyphs the pulse steps
 /// through, which is a cell no other row of this frame draws.
 fn is_braille(frame: &str) -> bool {

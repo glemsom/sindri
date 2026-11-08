@@ -29,7 +29,7 @@ use sindri_core::preamble::Preamble;
 use sindri_core::provider::copilot::Store;
 use sindri_core::provider::served::{Listing, Where};
 use sindri_core::provider::{Ask, Client, Credential, Deltas, Route, Usage};
-use sindri_core::records::{Facts, Record};
+use sindri_core::records::{Facts, Record, SessionDocument};
 use sindri_core::run::{Cancel, Exchange, Limits, Run, Shell};
 use sindri_core::sandbox::{self, Proof};
 use sindri_core::session::{self, Session};
@@ -90,6 +90,11 @@ pub trait Turns {
     /// once when it stops, so a frame moves with the run and settles with it. A front end
     /// with no rail takes this and draws nothing.
     fn facts(&mut self, _facts: rail::Facts) {}
+
+    /// The record the run has written, handed on the same path and at the same moments as the
+    /// facts: what a screen of the run's own facts draws, so it reads the run and never the
+    /// file the run is still writing.
+    fn record(&mut self, _document: &SessionDocument) {}
 }
 
 /// A front end with nothing to say about a turn that ended.
@@ -286,6 +291,7 @@ impl Launch {
             .cancel(cancel);
         let mut measured = Usage::default();
         turns.facts(self.facts(&measured));
+        turns.record(self.record.document());
         while run.state().is_running() {
             run.turn(deltas);
             // The loop hands a front end no hook per entry, so a turn is written whole as
@@ -300,6 +306,7 @@ impl Launch {
                 }
                 turns.turn(exchange);
                 turns.facts(self.facts(&measured));
+                turns.record(self.record.document());
             }
         }
 
@@ -308,6 +315,7 @@ impl Launch {
         note(self.record.spent(usage));
         note(self.record.stopped(&state));
         turns.facts(self.facts(&measured));
+        turns.record(self.record.document());
         let outcome = Outcome::of(
             &run,
             Reported {

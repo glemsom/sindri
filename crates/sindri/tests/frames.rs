@@ -86,6 +86,16 @@ fn settings_refused_120x40_is_a_value_the_screen_will_not_take_naming_its_key() 
 }
 
 #[test]
+fn stats_120x40_is_the_facts_the_rail_gives_up_drawn_whole() {
+    fixture::assert_frame("stats", 120, 40);
+}
+
+#[test]
+fn stats_80x24_is_that_screen_on_a_band_that_counts_the_rows_it_cannot_hold() {
+    fixture::assert_frame("stats", 80, 24);
+}
+
+#[test]
 fn typing_120x40_is_a_composer_at_its_two_row_floor() {
     fixture::assert_frame("typing", 120, 40);
 }

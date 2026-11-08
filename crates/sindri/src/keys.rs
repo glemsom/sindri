@@ -9,8 +9,8 @@
 //! keys of the current mode stack" is that list, mode by mode.
 //!
 //! The stack is explicit and shallow: `Composer` is the base every frame has, because a
-//! prompt is what this front end is for, and a modal — `Keys`, `Files`, `Models` and
-//! `Settings` today — sits over it. `Stack::act` asks the mode on top and never the modes
+//! prompt is what this front end is for, and a modal — `Keys`, `Files`, `Models`, `Settings`
+//! and `Stats` today — sits over it. `Stack::act` asks the mode on top and never the modes
 //! under it, which is what "a key resolves in exactly one mode" means as code: a glyph
 //! pressed at a screen that binds no glyph does nothing at all, rather than editing a
 //! draft nobody can see.
@@ -44,17 +44,21 @@ pub enum Mode {
     /// The settings modal: every key of the config file as one row, the value each holds,
     /// and a visit that writes only the rows a reader wrote into (§12, ADR-0009).
     Settings,
+    /// The stats screen: the facts the rail is too narrow to hold, drawn whole on the
+    /// frame's whole band — the record the run wrote and the facts it was handed.
+    Stats,
 }
 
 impl Mode {
     /// Every mode there is, so a test can walk the tables rather than trust that the
     /// one it remembered is the one that landed.
-    pub const ALL: [Mode; 5] = [
+    pub const ALL: [Mode; 6] = [
         Mode::Composer,
         Mode::Keys,
         Mode::Files,
         Mode::Models,
         Mode::Settings,
+        Mode::Stats,
     ];
 
     /// The mode's name, as the `?` screen heads its rows with it.
@@ -65,6 +69,7 @@ impl Mode {
             Mode::Files => "files",
             Mode::Models => "model",
             Mode::Settings => "settings",
+            Mode::Stats => "stats",
         }
     }
 
@@ -76,6 +81,7 @@ impl Mode {
             Mode::Files => &FILES,
             Mode::Models => &MODELS,
             Mode::Settings => &SETTINGS,
+            Mode::Stats => &STATS,
         }
     }
 
@@ -89,7 +95,7 @@ impl Mode {
             Mode::Composer => Some(Act::Draft),
             Mode::Files | Mode::Models => Some(Act::Query),
             Mode::Settings => Some(Act::Value),
-            Mode::Keys => None,
+            Mode::Keys | Mode::Stats => None,
         }
     }
 }
@@ -432,6 +438,17 @@ const SETTINGS: [Binding; 9] = [
         act: Act::Value,
     },
 ];
+
+/// The stats screen's keys: `Esc` and nothing else. A screen that draws what the run has
+/// already written has nothing to type into and nothing to walk, so the one key it answers is
+/// the one that gives the frame back, and everything else is swallowed rather than reaching the
+/// draft under it.
+const STATS: [Binding; 1] = [Binding {
+    key: Key::Escape,
+    name: "Esc",
+    does: "close this screen, and the draft as it was",
+    act: Act::Close,
+}];
 
 /// The stack of modes: the base the frame is always in and the screens opened over it,
 /// top last. A stack rather than a field, because a screen is entered from whatever was
