@@ -400,6 +400,7 @@ fn running(entries: Vec<Entry>, scroll: Scroll) -> View {
 /// (§15).
 fn facts() -> Facts {
     Facts {
+        wire: Some(String::from("anthropic")),
         model: Some(String::from("claude-sonnet")),
         turns: Some((6, 250)),
         ctx: Some(21),

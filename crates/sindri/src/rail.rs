@@ -4,9 +4,10 @@
 //! all of it (§12, ticket #46).
 //!
 //! The facts are handed in and never reached for: `Facts` is what the core knows about a
-//! run — the model, the turns against the cap, the enforcement in force, the workspace,
-//! the branch, the session's GUID and its temp — and what nothing produces yet is a
-//! caller's to fill, so a rail draws a fact only when somebody handed it one (§15).
+//! run — the dialect it asks over and the name it was served, the turns against the cap,
+//! the enforcement in force, the workspace, the branch, the session's GUID and its temp —
+//! and what nothing produces yet is a caller's to fill, so a rail draws a fact only when
+//! somebody handed it one.
 //!
 //! Two shapes and one rule between them. At a hundred columns and above the rail is
 //! §12's 32 columns down the frame's right-hand edge, one labelled fact per row; below a
@@ -18,12 +19,12 @@
 //! Nothing is ever drawn in part. A value that leaves no room for a leader in its column
 //! drops the fact rather than being cut off, a path keeps whole components and marks the
 //! head it left with `…/`, and what the room cannot hold is given up in §12's order —
-//! temp path, cache hits, session GUID, branch, skills in force, context meter,
-//! workspace, turns, model — beside a row saying how many went. The sandbox posture is
-//! absent from that order because §12 says it never goes. The degradation is a pure
-//! function of the room, not a paint: what the rail keeps and the rows it makes are read
-//! by a test without a buffer, which is how a rule about every frame width from 20 to 200
-//! is proved rather than eyeballed.
+//! temp path, cache hits, session GUID, branch, skills in force, context meter, workspace,
+//! turns, wire, model — beside a row saying how many went. The sandbox posture is absent
+//! from that order because §12 says it never goes. The degradation is a pure function of
+//! the room, not a paint: what the rail keeps and the rows it makes are read by a test
+//! without a buffer, which is how a rule about every frame width from 20 to 200 is proved
+//! rather than eyeballed.
 
 use std::path::PathBuf;
 
@@ -73,11 +74,11 @@ const FIELD: u16 = 10;
 /// value is not a ledger row, so a value that leaves no room for one drops the fact.
 const LEADER_MIN: usize = 1;
 
-/// §46's blocks, top to bottom, each with the facts the contract puts in it: the model
-/// alone, the run's three meters, where it stands, what it has loaded, how it is
-/// confined, and the session it is writing.
+/// §46's blocks, top to bottom, each with the facts the contract puts in it: the dialect
+/// and the model it served, the run's three meters, where it stands, what it has loaded,
+/// how it is confined, and the session it is writing.
 const BLOCKS: [&[Kind]; 6] = [
-    &[Kind::Model],
+    &[Kind::Wire, Kind::Model],
     &[Kind::Turns, Kind::Ctx, Kind::Cache],
     &[Kind::Workspace, Kind::Branch],
     &[Kind::Skills],
@@ -103,10 +104,10 @@ const GAP: &str = " · ";
 /// The hairline that runs the rail's full width between two blocks.
 const HAIRLINE: char = '─';
 
-/// The facts the rail draws, as the core holds them: the model the run asks by its
-/// served name, the turns it has opened against the cap it obeys, the two meters, the
-/// workspace and the branch it stands on, the skills in force, the sandbox posture, and
-/// the session's GUID and temp (§12, §13).
+/// The facts the rail draws, as the core holds them: the dialect the run asks over and
+/// the model it was served by name, the turns it has opened against the cap it obeys, the
+/// two meters, the workspace and the branch it stands on, the skills in force, the sandbox
+/// posture, and the session's GUID and temp.
 ///
 /// A fact the frame knows nothing about is `None` and is not drawn, never guessed at
 /// (§15), so a frame before its first run has no rail at all. Three of these nothing
@@ -114,6 +115,9 @@ const HAIRLINE: char = '─';
 /// caller passes them in until the tickets that fill them land.
 #[derive(Debug, Default, Clone)]
 pub struct Facts {
+    /// The dialect the run asks over, in the wire's three-valued word: the protocol
+    /// that answered, printed above the name it served.
+    pub wire: Option<String>,
     /// The model the run asks, by the name its wire served.
     pub model: Option<String>,
     /// The turns the run has opened, and the cap it obeys.
@@ -151,14 +155,15 @@ pub struct Share {
 impl Facts {
     /// The facts a run holds, read off the two values the core keeps them in: the session
     /// the run is writing, whose GUID and temp the rail draws, and the document the
-    /// record rewrites as facts land — the model, the turns against the cap, the
-    /// enforcement in force, the workspace and the branch (§13).
+    /// record rewrites as facts land — the wire and the model it served, the turns against
+    /// the cap, the enforcement in force, the workspace and the branch.
     ///
     /// Three facts nothing produces yet — the context meter, the cache meter and the
     /// skills in force — are left for the caller to hand in, and so is every frame's
     /// `Facts` until the run loop hands one to a frame (#43).
     pub fn of(session: &Session, document: &SessionDocument) -> Facts {
         Facts {
+            wire: Some(document.wire.word().to_owned()),
             model: Some(document.model.clone()),
             turns: Some((document.turns, document.dials.max_turns)),
             sandbox: Some(document.enforcement),
@@ -316,6 +321,12 @@ impl Facts {
     fn known(&self) -> Vec<Fact> {
         let short = self.session.as_deref().map(short_id);
         let mut facts = Vec::new();
+        if let Some(wire) = &self.wire {
+            facts.push(Fact {
+                kind: Kind::Wire,
+                value: wire.clone(),
+            });
+        }
         if let Some(model) = &self.model {
             facts.push(Fact {
                 kind: Kind::Model,
@@ -574,6 +585,8 @@ fn short_id(guid: &str) -> &str {
 /// Which fact a row of the rail carries.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Kind {
+    /// The dialect the run asks over: one of the wire's three words.
+    Wire,
     /// The model the run asks, by the name its wire served.
     Model,
     /// The turns the run has opened, against the cap it obeys.
@@ -601,6 +614,7 @@ impl Kind {
     /// so the rail and the ticket cannot call one fact two things (#46).
     fn label(self) -> &'static str {
         match self {
+            Kind::Wire => "wire",
             Kind::Model => "model",
             Kind::Turns => "turns",
             Kind::Ctx => "ctx",
@@ -618,7 +632,7 @@ impl Kind {
 /// §12's sacrifice order, the first to go first: what the rail gives up as the room
 /// runs out. The sandbox posture is deliberately absent, because §12 says it never
 /// goes, so no loop over this list can reach it.
-const SACRIFICE: [Kind; 9] = [
+const SACRIFICE: [Kind; 10] = [
     Kind::Temp,
     Kind::Cache,
     Kind::Session,
@@ -627,6 +641,7 @@ const SACRIFICE: [Kind; 9] = [
     Kind::Ctx,
     Kind::Workspace,
     Kind::Turns,
+    Kind::Wire,
     Kind::Model,
 ];
 
@@ -693,6 +708,7 @@ mod tests {
     /// blocks, with a workspace and a temp as long as the real ones.
     fn frame() -> Facts {
         Facts {
+            wire: Some(String::from("anthropic")),
             model: Some(String::from("claude-sonnet")),
             turns: Some((3, 250)),
             ctx: Some(21),
@@ -713,7 +729,8 @@ mod tests {
     /// §46's contract, as a test states it rather than as the code holds it: every fact
     /// the rail draws, its label and its value, so a fact's wholeness and the count of
     /// what went can be read off the screen and not off the module's own tables.
-    const CONTRACT: [(&str, &str); 10] = [
+    const CONTRACT: [(&str, &str); 11] = [
+        ("wire", "anthropic"),
         ("model", "claude-sonnet"),
         ("turns", "3/250"),
         ("ctx", "21%"),
@@ -819,6 +836,11 @@ mod tests {
 
         let facts = Facts::of(&session, &document);
 
+        assert_eq!(
+            facts.wire.as_deref(),
+            Some("anthropic"),
+            "the dialect the document was written for, in the wire's own word"
+        );
         assert_eq!(facts.model.as_deref(), Some("claude-sonnet"));
         assert_eq!(facts.turns, Some((3, 250)), "the turns opened, and the cap");
         assert_eq!(facts.sandbox, Some(Enforcement::Bubblewrap));
@@ -852,10 +874,11 @@ mod tests {
 
         frame().paint(Shape::Ledger, band(COLUMNS, 16), &mut buffer);
 
-        let rows: Vec<String> = (0..15).map(|y| glyphs(&buffer, y)).collect();
+        let rows: Vec<String> = (0..16).map(|y| glyphs(&buffer, y)).collect();
         assert_eq!(
             rows,
             [
+                "wire      .............anthropic",
                 "model     .........claude-sonnet",
                 "────────────────────────────────",
                 "turns     .................3/250",
@@ -875,15 +898,79 @@ mod tests {
             "six blocks, a hairline between two of them, nothing given up at this width"
         );
         assert_eq!(
-            inks(&buffer, 1),
+            inks(&buffer, 2),
             [(Ink::Dim, 32)],
             "the hairline runs the rail's width"
         );
         assert_eq!(
-            inks(&buffer, 2),
+            inks(&buffer, 3),
             [(Ink::Dim, 27), (Ink::Muted, 5)],
             "label, leaders, then the value"
         );
+    }
+
+    #[test]
+    fn a_frame_handed_no_wire_draws_no_wire_row_and_never_a_placeholder() {
+        let facts = Facts {
+            wire: None,
+            model: Some(String::from("claude-sonnet")),
+            ..Facts::default()
+        };
+        let mut buffer = Buffer::empty(band(COLUMNS, 2));
+
+        facts.paint(Shape::Ledger, band(COLUMNS, 2), &mut buffer);
+
+        assert_eq!(
+            glyphs(&buffer, 0),
+            "model     .........claude-sonnet",
+            "a rail handed no wire has no wire row, and the model keeps the first row"
+        );
+        assert!(
+            !glyphs(&buffer, 1).contains("+1 more"),
+            "and nothing went, so nothing is counted"
+        );
+    }
+
+    #[test]
+    fn the_wire_row_says_one_of_the_three_words_the_dialect_is_known_by() {
+        let root = tempfile::tempdir().expect("a temp state home");
+        let session = Session::create(root.path()).expect("a session");
+
+        for wire in [Wire::Anthropic, Wire::Openai, Wire::Copilot] {
+            let mut document = document(session.guid());
+            document.wire = wire;
+
+            let facts = Facts {
+                wire: Facts::of(&session, &document).wire,
+                ..Facts::default()
+            };
+            let mut buffer = Buffer::empty(band(COLUMNS, 1));
+            facts.paint(Shape::Ledger, band(COLUMNS, 1), &mut buffer);
+            let row = glyphs(&buffer, 0);
+            let trimmed = row.trim_end();
+
+            assert_eq!(
+                facts.wire.as_deref(),
+                Some(wire.word()),
+                "the document's own dialect, in its own word"
+            );
+            assert_eq!(
+                &trimmed[..usize::from(FIELD)],
+                "wire      ",
+                "the label in its field"
+            );
+            assert!(
+                trimmed.ends_with(wire.word()),
+                "the value is the one word the dialect is named by: {trimmed:?}"
+            );
+            assert!(
+                trimmed[usize::from(FIELD)..trimmed.len() - wire.word().len()]
+                    .chars()
+                    .all(|glyph| glyph == LEADER),
+                "and leaders run out from the field to it, with nothing else on the row: \
+                 {trimmed:?}"
+            );
+        }
     }
 
     #[test]
@@ -918,17 +1005,17 @@ mod tests {
         assert_eq!(
             rows,
             [
+                "wire      .............anthropic",
                 "model     .........claude-sonnet",
                 "────────────────────────────────",
                 "turns     .................3/250",
                 "────────────────────────────────",
-                "workspace ..…/.worktrees/46-rail",
-                "────────────────────────────────",
                 "sandbox   .................bwrap",
-                "+6 more                         ",
+                "+7 more                         ",
+                "                                ",
             ],
-            "temp, cache, session, branch, skills and ctx went, in that order, and the \
-             foot of the rail says six"
+            "temp, cache, session, branch, skills, ctx and workspace went, in that \
+             order, and the foot of the rail says seven"
         );
     }
 
@@ -940,8 +1027,8 @@ mod tests {
 
         assert_eq!(
             glyphs(&buffer, 0),
-            "sandbox bwrap · +9 more                 ",
-            "forty columns hold the fact that never goes and the count of the nine that did"
+            "sandbox bwrap · +10 more                ",
+            "forty columns hold the fact that never goes and the count of the ten that did"
         );
     }
 
@@ -1001,9 +1088,9 @@ mod tests {
 
         assert_eq!(
             glyphs(&buffer, 0).trim_end(),
-            "model claude-sonnet · turns 3/250 · ctx 21% · cache 88% · workspace \
-             …/.worktrees/46-rail · branch spec/1-capability · skills 2 · sandbox bwrap · \
-             session 9f2c7a41 · temp …/9f2c7a41/tmp",
+            "wire anthropic · model claude-sonnet · turns 3/250 · ctx 21% · cache 88% · \
+             workspace …/.worktrees/46-rail · branch spec/1-capability · skills 2 · sandbox \
+             bwrap · session 9f2c7a41 · temp …/9f2c7a41/tmp",
             "one row, the same facts in the same order, a gap between two of them"
         );
     }
@@ -1019,6 +1106,7 @@ mod tests {
         assert_eq!(
             facts,
             [
+                ("wire", String::from("anthropic")),
                 ("model", String::from("claude-sonnet")),
                 ("turns", String::from("3/250")),
                 ("ctx", String::from("21%")),
@@ -1104,6 +1192,7 @@ mod tests {
                 "ctx",
                 "workspace",
                 "turns",
+                "wire",
                 "model"
             ],
             "§12's sacrifice order, the first to go first"
