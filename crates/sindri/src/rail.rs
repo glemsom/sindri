@@ -74,15 +74,15 @@ const FIELD: u16 = 10;
 /// value is not a ledger row, so a value that leaves no room for one drops the fact.
 const LEADER_MIN: usize = 1;
 
-/// The share of a window at which the rail raises its voice: a conversation ninety percent
+/// The share of a window at which the rail raises its voice: a run ninety percent
 /// full is one turn from being no room at all, and telling that from the ordinary case is
 /// the one thing the ctx row says twice.
 const FULL: u8 = 90;
 
 /// §46's blocks, top to bottom, each with the facts the contract puts in it: the dialect,
-/// the model it served and whether it thinks, the turns it has taken, the conversation's
-/// size and the cache's hit rate, where it stands, what it has loaded, how it is confined,
-/// and the session it is writing.
+/// the model it served and whether it thinks, the turns it has taken, the run's size and
+/// the cache's hit rate, where it stands, what it has loaded, how it is confined, and the
+/// session it is writing.
 const BLOCKS: [&[Kind]; 6] = [
     &[Kind::Wire, Kind::Model, Kind::Think],
     &[Kind::Turns, Kind::Ctx, Kind::Cache],
@@ -110,48 +110,53 @@ const GAP: &str = " · ";
 /// The hairline that runs the rail's full width between two blocks.
 const HAIRLINE: char = '─';
 
-/// The conversation's size, measured once per turn by the wire: the input it last reported,
-/// and the window the config names, when a reader named one.
+/// The run's size, measured once per turn by the wire: the input it last reported, and the
+/// window the config names, when a reader named one.
 ///
 /// It is the size the last request carried and never the size of the next one, which grows
 /// by whatever tool results the turn produced, so a run one turn from a full window is a run
 /// whose window is nearly full and no more exactly than that.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Ctx {
-    /// The input tokens the wire last reported for the conversation.
+    /// The input tokens the wire last reported for the run.
     pub size: u64,
     /// How many tokens the model's window holds, when a reader named one.
     pub window: Option<u64>,
 }
 
 impl Ctx {
-    /// The value the rail draws it as: the size in spelled tokens, and — when a window is
-    /// known — the window beside it and the share of it the conversation fills.
-    fn value(&self) -> String {
-        match (self.window(), self.fill()) {
-            (Some(window), Some(fill)) => {
-                format!("{}/{} {}%", tokens(self.size), tokens(window), fill.percent)
-            }
-            _ => tokens(self.size),
+    /// The value the rail draws it as — the size in spelled tokens, and the window beside
+    /// it and the share of it the run fills when one is known — and the share that value
+    /// ends in, so the row's text and the ink it is said in come from one derivation.
+    fn spelled(&self) -> (String, Option<Fill>) {
+        match self.fill() {
+            Some(fill) => (
+                format!(
+                    "{}/{} {}",
+                    tokens(self.size),
+                    tokens(fill.window),
+                    fill.said()
+                ),
+                Some(fill),
+            ),
+            None => (tokens(self.size), None),
         }
     }
 
-    /// The window the size is a share of, when one is known: a window of no tokens is no
-    /// window at all, and a share of it is no number anyone can draw.
-    fn window(&self) -> Option<u64> {
-        self.window.filter(|window| *window > 0)
-    }
-
-    /// How full the window is, in whole percent, rounded and capped at a hundred: a
-    /// conversation already past its window has no larger number to show, and the rail
-    /// cannot claim room that is not there.
+    /// How full the window is, when one is known: a window of no tokens is no window at
+    /// all, and a share of it is no number the rail could draw.
+    ///
+    /// The share is whole percent, rounded and capped at a hundred: a run already past its
+    /// window has no larger number to show, and the rail cannot claim room that is not
+    /// there. The ink is set here and nowhere else, so no paint site holds a second opinion
+    /// about what nearly full means.
     fn fill(&self) -> Option<Fill> {
-        let window = self.window()?;
+        let window = self.window.filter(|window| *window > 0)?;
         let share = (u128::from(self.size) * 100 + u128::from(window) / 2) / u128::from(window);
         let percent = u8::try_from(share.min(100)).unwrap_or(100);
         Some(Fill {
             percent,
-            columns: format!("{percent}%").chars().count(),
+            window,
             ink: if percent >= FULL {
                 Ink::Accent
             } else {
@@ -161,40 +166,48 @@ impl Ctx {
     }
 }
 
-/// How full the conversation's window is, and where the rail says so: the tail of the ctx
-/// row, which is the one fact on the rail that says how much room the next turn has left.
+/// How full the run's window is, and where the rail says so: the tail of the ctx row, which
+/// is the one fact on the rail that says how much room the next turn has left.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Fill {
     /// How full the window is, in whole percent.
     percent: u8,
-    /// The columns of the value's tail the share takes, `%` and all.
-    columns: usize,
+    /// The window it is a share of, in tokens.
+    window: u64,
     /// The ink the share is drawn in: `muted` while there is room, and `accent` once the
     /// window is nearly full.
     ink: Ink,
 }
 
-/// The size of a conversation in spelled tokens: whole under a thousand, and three figures
-/// with a unit above it — `948`, `48.2k`, `1.02M` — because no reader counts six digits off
-/// a rail, and a rail column has no room to make them read as one number.
+impl Fill {
+    /// The share as the rail writes it, `%` and all.
+    fn said(&self) -> String {
+        format!("{}%", self.percent)
+    }
+}
+
+/// The size of a run in spelled tokens: whole under a thousand, and three figures with a
+/// unit above it — `948`, `48.2k`, `1.02M` — because no reader counts six digits off a
+/// rail, and a rail column has no room to make them read as one number.
 fn tokens(count: u64) -> String {
     if count < 1_000 {
         return count.to_string();
     }
-    // Tenths of a thousand, and hundredths of a million: the first carries three figures
-    // up to nine hundred and ninety-nine thousand, and the second once rounding takes a
-    // count past four.
-    let tenths = (count + 50) / 100;
+    // Tenths of a thousand, and hundredths of a million: the first carries three figures up
+    // to nine hundred and ninety-nine thousand, and the second once rounding takes a count
+    // past four.
+    let tenths = count.saturating_add(50) / 100;
     if tenths < 10_000 {
-        return spelled(tenths, 1, "k");
+        return scaled(tenths, 1, "k");
     }
-    spelled((count + 5_000) / 10_000, 2, "M")
+    scaled(count.saturating_add(5_000) / 10_000, 2, "M")
 }
 
-/// `parts` of a unit's last decimal places, drawn as the unit's whole part and what is
-/// left of it: `48` tenths of a thousand is `4.8`, and a zero left dangling at the end of
-/// the decimals is dropped, so two hundred thousand is `200k` and not `200.0k`.
-fn spelled(parts: u64, places: u32, unit: &str) -> String {
+/// An amount counted in a unit's smallest shown fraction, drawn as that unit's whole part,
+/// a decimal point and what is left of the fraction: `482` tenths of a thousand is `48.2k`.
+/// A zero left dangling at the end of the decimals is dropped, so two hundred thousand is
+/// `200k` and not `200.0k`.
+fn scaled(parts: u64, places: u32, unit: &str) -> String {
     let divisor = 10u64.pow(places);
     let whole = parts / divisor;
     let fraction = parts % divisor;
@@ -207,13 +220,13 @@ fn spelled(parts: u64, places: u32, unit: &str) -> String {
 
 /// The facts the rail draws, as the core holds them: the dialect the run asks over and
 /// the model it was served by name, the turns it has opened against the cap it obeys, the
-/// conversation's size, the cache's hit rate, the workspace and the branch it stands on,
-/// the skills in force, the sandbox posture, and the session's GUID and temp.
+/// run's size, the cache's hit rate, the workspace and the branch it stands on, the skills
+/// in force, the sandbox posture, and the session's GUID and temp.
 ///
 /// A fact the frame knows nothing about is `None` and is not drawn, never guessed at
 /// (§15), so a frame before its first run has no rail at all. Three of these nothing
-/// produces yet — the conversation's size, the cache's hit rate and the skills in force —
-/// and a caller passes them in until the tickets that fill them land.
+/// produces yet — the run's size, the cache's hit rate and the skills in force — and a
+/// caller passes them in until the tickets that fill them land.
 #[derive(Debug, Default, Clone)]
 pub struct Facts {
     /// The dialect the run asks over, in the wire's own word: `anthropic`, `openai` or
@@ -226,12 +239,11 @@ pub struct Facts {
     pub think: Option<String>,
     /// The turns the run has opened, and the cap it obeys.
     pub turns: Option<(u32, u32)>,
-    /// The conversation's size as the wire last measured it, and the window it is a share
-    /// of when one is known.
+    /// The run's size as the wire last measured it, and the window it is a share of when
+    /// one is known.
     pub ctx: Option<Ctx>,
     /// How much of the run's input the provider served from its own cache, in whole
-    /// percent (ADR-0010): a hit rate and not a fill, so it gets no meter and no
-    /// threshold, whatever the ctx row beside it says.
+    /// percent (ADR-0010): a hit rate and not a fill, so it gets no meter and no threshold.
     pub cache: Option<u8>,
     /// The one directory the run stands in.
     pub workspace: Option<PathBuf>,
@@ -264,9 +276,9 @@ impl Facts {
     /// record rewrites as facts land — the wire, the model it served and whether it thinks,
     /// the turns against the cap, the enforcement in force, the workspace and the branch.
     ///
-    /// Three facts nothing produces yet — the conversation's size, the cache's hit rate
-    /// and the skills in force — are left for the caller to hand in, and so is every
-    /// frame's `Facts` until the run loop hands one to a frame (#43).
+    /// Three facts nothing produces yet — the run's size, the cache's hit rate and the
+    /// skills in force — are left for the caller to hand in, and so is every frame's
+    /// `Facts` until the run loop hands one to a frame (#43).
     pub fn of(session: &Session, document: &SessionDocument) -> Facts {
         Facts {
             wire: Some(document.wire.word().to_owned()),
@@ -441,9 +453,10 @@ impl Facts {
             facts.push(Fact::new(Kind::Turns, format!("{turns}/{cap}")));
         }
         if let Some(ctx) = &self.ctx {
+            let (value, fill) = ctx.spelled();
             facts.push(Fact {
-                fill: ctx.fill(),
-                ..Fact::new(Kind::Ctx, ctx.value())
+                fill,
+                ..Fact::new(Kind::Ctx, value)
             });
         }
         if let Some(cache) = self.cache {
@@ -491,8 +504,7 @@ struct Fact {
     kind: Kind,
     /// The value, in the rail's own words.
     value: String,
-    /// How full the window is, when this fact's value ends in a share of one: the columns
-    /// of its tail the share takes, and the ink it is drawn in.
+    /// How full the window is, when this fact's value ends in a share of one.
     fill: Option<Fill>,
 }
 
@@ -512,9 +524,17 @@ impl Fact {
         let Some(fill) = self.fill else {
             return put(buffer, x, y, &self.value, Ink::Muted);
         };
-        let said = self.value.chars().count();
-        let head: String = self.value.chars().take(said - fill.columns).collect();
-        let share: String = self.value.chars().skip(said - fill.columns).collect();
+        let share = fill.said();
+        let head: String = self
+            .value
+            .chars()
+            .take(
+                self.value
+                    .chars()
+                    .count()
+                    .saturating_sub(share.chars().count()),
+            )
+            .collect();
         let x = put(buffer, x, y, &head, Ink::Muted);
         put(buffer, x, y, &share, fill.ink)
     }
@@ -700,7 +720,7 @@ enum Kind {
     Think,
     /// The turns the run has opened, against the cap it obeys.
     Turns,
-    /// The conversation's size, as the wire last measured it.
+    /// The run's size, as the wire last measured it.
     Ctx,
     /// How much of the run's input the provider served from its own cache.
     Cache,
@@ -1003,8 +1023,15 @@ mod tests {
         }
     }
 
+    /// The ctx row a value deserves, as the rail draws it: the label in its field, leaders
+    /// out to the rail's edge, and the value against it.
+    fn ctx_line(value: &str) -> String {
+        let leaders = usize::from(COLUMNS) - usize::from(FIELD) - value.chars().count();
+        format!("ctx       {}{value}", ".".repeat(leaders))
+    }
+
     #[test]
-    fn a_conversations_size_is_spelled_in_tokens_and_never_counted_out() {
+    fn a_runs_size_is_spelled_in_tokens_and_never_counted_out() {
         for (size, value) in [
             (0, "0"),
             (948, "948"),
@@ -1027,19 +1054,17 @@ mod tests {
 
             assert_eq!(
                 glyphs(&buffer, 0).trim_end(),
-                format!(
-                    "ctx       {}{value}",
-                    ".".repeat(usize::from(COLUMNS) - usize::from(FIELD) - value.chars().count())
-                ),
+                ctx_line(value),
                 "{size} tokens is drawn as {value} and never as the count itself"
             );
         }
     }
 
     #[test]
-    fn a_conversation_with_a_window_draws_the_window_and_the_share_of_it_it_fills() {
+    fn a_run_with_a_window_draws_the_window_and_the_share_of_it_it_fills() {
         for (size, window, value) in [
             (0, 200_000, "0/200k 0%"),
+            (48_200, 0, "48.2k"),
             (48_200, 200_000, "48.2k/200k 24%"),
             (100_000, 1_020_000, "100k/1.02M 10%"),
             (200_000, 200_000, "200k/200k 100%"),
@@ -1058,12 +1083,10 @@ mod tests {
 
             assert_eq!(
                 glyphs(&buffer, 0).trim_end(),
-                format!(
-                    "ctx       {}{value}",
-                    ".".repeat(usize::from(COLUMNS) - usize::from(FIELD) - value.chars().count())
-                ),
-                "{size} tokens against a window of {window} is drawn as {value}, and a \
-                 conversation past its window has no larger share to claim"
+                ctx_line(value),
+                "{size} tokens against a window of {window} is drawn as {value}: a run past \
+                 its window has no larger share to claim, and a window of no tokens is no \
+                 window at all"
             );
         }
     }
@@ -1147,16 +1170,21 @@ mod tests {
             "and the rail gave nothing up, so it counts nothing: no row may say so"
         );
 
-        let mut tight = Buffer::empty(band(COLUMNS, 8));
+        let band = band(COLUMNS, 8);
+        let mut tight = Buffer::empty(band);
 
-        unknown.paint(Shape::Ledger, band(COLUMNS, 8), &mut tight);
+        frame().paint(Shape::Ledger, band, &mut tight);
+        let with = glyphs(&tight, 7);
+
+        unknown.paint(Shape::Ledger, band, &mut tight);
+        let without = glyphs(&tight, 7);
 
         assert_eq!(
-            glyphs(&tight, 7),
-            "+6 more                         ",
-            "the count is of the facts the frame knew: one size fewer known is one fact \
-             fewer given up, and never a count that charges the rail for a fact it was \
-             never handed"
+            (with.trim_end(), without.trim_end()),
+            ("+7 more", "+6 more"),
+            "the count is of the facts the frame knew: the size joining the frame is one \
+             more fact given up at this height and no fact the rail draws, so its absence \
+             leaves the count one shorter and never one longer"
         );
     }
 
