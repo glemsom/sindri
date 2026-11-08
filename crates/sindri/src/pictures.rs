@@ -130,10 +130,8 @@ impl Pictures {
     /// row it stands on already carries its words: a refusal at this point has no row of its
     /// own to be said on, and half a picture is worse than a caption.
     pub fn place(&mut self, picture: &Picture, cell: CellSize, area: Rect, buffer: &mut Buffer) {
-        // Borrowed and not cloned: a `Picker` carries the terminal's font size and its protocol,
-        // and a copy of it per placement would be a copy per row painted for a value nothing
-        // writes to. The fields this then writes are the cache's own, which the borrow does not
-        // cover.
+        // Borrowed and not cloned: a copy per placement would be a copy per row painted for
+        // a value nothing writes to. What is written here are the cache's own fields.
         let Some(picker) = self.picker.as_ref() else {
             return;
         };
@@ -155,11 +153,9 @@ impl Pictures {
             }
         };
         let mut placed = placed.borrow_mut();
-        // The protocol remembers the rectangle it encoded, position and all, and a scroll
-        // moves the block without changing the picture: asked about its own rows it would
-        // answer that everything had changed and send the bytes again on every paint. So the
-        // rect it is asked about is the block's size at the origin, and what follows is the
-        // block's real cells, which is where the placeholders must land (ADR-0008).
+        // The protocol remembers the rectangle it encoded, so asking it about rows that
+        // moved would send the bytes again on every paint: it is asked about the size at the
+        // origin, and the placeholders take the block's real cells.
         let size = Rect { x: 0, y: 0, ..area };
         if placed.needs_resize(&Resize::Scale(None), size).is_some() {
             placed.resize_encode(&Resize::Scale(None), size);

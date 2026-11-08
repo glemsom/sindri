@@ -249,8 +249,6 @@ mod tests {
 
     #[test]
     fn blanks_at_either_end_of_a_marked_row_are_no_part_of_it() {
-        // An answer is set two columns in from the left edge, so a drag taken from the
-        // edge itself covers the gutter: a cell that holds nothing is no part of a mark.
         let lines = band(&["  a gutter is not words"]);
 
         let span = Span::of(Mark::drag(Cell::new(0, 0), Cell::new(0, 40)), &lines);

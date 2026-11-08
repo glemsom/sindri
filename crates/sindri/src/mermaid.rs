@@ -116,14 +116,13 @@ impl Diagram {
         warmed();
         let fence = source.to_owned();
         let drawn = within(BOUND, move || {
-            // The renderer's own error is the reason a caption prints, kept as words rather
-            // than as its error type: nothing downstream of here should have to link it.
+            // The renderer's error is kept as words: nothing downstream of here should have
+            // to link its error type.
             mermaid_rs_renderer::render(&fence).map_err(|error| error.to_string())
         })?;
         let svg = drawn.map_err(|reason| Refusal::Unreadable { reason })?;
-        // A renderer that answers with an SVG nothing can read is a refusal too, and its
-        // reason is the picture's: this front end draws through `usvg` and does not know a
-        // second way to read a drawing.
+        // An SVG this front end cannot read is a refusal too, and its reason is the
+        // picture's: `usvg` is the one way it reads a drawing.
         let picture = Svg::parse(&svg).map_err(|refusal| Refusal::Unreadable {
             reason: refusal.message(),
         })?;

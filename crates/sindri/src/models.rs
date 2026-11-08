@@ -84,9 +84,8 @@ impl Models {
                     .map(|rank| (rank, (served.id.as_str(), served.label.as_str())))
             })
             .collect();
-        // The rank decides, and the wire's own order decides what rank cannot: the sort is
-        // stable, so two names that match as well as each other stay in the order the wire
-        // listed them in.
+        // The sort is stable, so names that rank alike stay in the order the wire listed
+        // them in.
         ranked.sort_by_key(|(rank, _)| *rank);
         ranked.into_iter().take(CAP).map(|(_, row)| row).collect()
     }

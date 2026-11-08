@@ -128,9 +128,8 @@ extern "C" fn interrupted(_signal: i32) {
     ARRIVED.store(true, Ordering::SeqCst);
     let fd = HANDLER.load(Ordering::SeqCst);
     if fd >= 0 {
-        // The fd is the pipe this module opened and no one has closed: it outlives the
-        // process's handlers, so rebuilding a borrow of it here is the one thing the
-        // handler does that needs care.
+        // `HANDLER` holds the number and is never cleared, so the fd dangles once the last
+        // `Arc<Wake>` drops: this borrow is sound only while a wake is alive.
         ping(unsafe { BorrowedFd::borrow_raw(fd) });
     }
 }

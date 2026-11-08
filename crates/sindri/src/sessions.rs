@@ -142,8 +142,6 @@ fn reading(recorded: &Recorded) -> Result<String, String> {
         lines.push(format!("commit {commit}"));
     }
     lines.push(format!("started {}", recorded.start()));
-    // A run that never stopped is given no end it did not reach, so the word the
-    // document carries is the whole answer for a session that was left.
     lines.push(match recorded.end() {
         Some(end) => format!("stopped {}, ended {end}", recorded.stopped()),
         None => format!("stopped {}", recorded.stopped()),
