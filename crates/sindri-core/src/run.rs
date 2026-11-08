@@ -465,8 +465,7 @@ pub struct Reply {
     pub text: String,
     /// The calls it asked for, in the order it asked.
     pub calls: Vec<Call>,
-    /// What this ask spent, as much of it as the wire reported: the size the
-    /// conversation had, and never a running total of the run's asks.
+    /// The tokens this ask spent, as much of it as the wire reported.
     pub usage: Usage,
 }
 
@@ -475,7 +474,8 @@ impl Reply {
     pub fn answer(text: impl Into<String>) -> Reply {
         Reply {
             text: text.into(),
-            ..Reply::default()
+            calls: Vec::new(),
+            usage: Usage::default(),
         }
     }
 
@@ -484,12 +484,12 @@ impl Reply {
         Reply {
             text: text.into(),
             calls: calls.into_iter().collect(),
-            ..Reply::default()
+            usage: Usage::default(),
         }
     }
 
-    /// This reply, carrying what its ask spent.
-    pub fn spent(mut self, usage: Usage) -> Reply {
+    /// This reply, carrying the tokens its own ask spent.
+    pub fn spent(mut self, usage: Usage) -> Self {
         self.usage = usage;
         self
     }
@@ -505,8 +505,7 @@ pub struct Exchange {
     pub text: String,
     /// The calls the reply asked for.
     pub calls: Vec<Call>,
-    /// What this turn's ask spent, so a history of the conversation says how big
-    /// the conversation was at each turn rather than what the run spent in all.
+    /// The tokens this turn's ask spent: one ask's report, never a running total.
     pub usage: Usage,
 }
 

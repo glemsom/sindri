@@ -30,8 +30,7 @@ pub struct Asking {
     ask: Ask,
     /// What the asks have spent so far, summed as each reply lands: a `Responder`
     /// is asked through a shared reference, so the total is behind a lock and is
-    /// shared by every clone of this value. The reply carries the ask's own report
-    /// and this carries the sum, because a turn's context is not a run's spend.
+    /// shared by every clone of this value. No reply is handed this sum.
     spent: Arc<Mutex<Usage>>,
 }
 

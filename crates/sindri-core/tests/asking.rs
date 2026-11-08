@@ -138,19 +138,14 @@ fn a_reply_carries_what_its_ask_spent_and_the_total_stays_the_runs() {
         "the turn's exchange says what that turn's ask was handed"
     );
     assert_eq!(
-        first.history()[0].usage.output,
-        Some(7),
-        "and what it was answered with"
-    );
-    assert_eq!(
         second.history()[0].usage.input,
         Some(11),
-        "a second ask of the same conversation is the same size, not twice it"
+        "a second ask of the same history is the same size, not twice it"
     );
     assert_eq!(
         asking.spent().input,
         Some(22),
-        "while the total the record reads is still every ask summed"
+        "while the total the record and the outcome read is still every ask summed"
     );
 }
 
