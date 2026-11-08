@@ -432,8 +432,8 @@ impl View {
     /// terminal acts (ADR-0005).
     pub fn key(&mut self, key: Key) -> Outcome {
         let Some(act) = self.stack.act(key) else {
-            // A screen that names no row for a key keeps it from the draft under it, which is
-            // how a glyph typed at a screen stays out of the transcript's composer.
+            // A screen that names no row for the key has nothing to say about it, which
+            // is how a glyph typed at a screen stays out of the draft under it.
             return Outcome::Unchanged;
         };
         match act {
@@ -575,8 +575,7 @@ impl View {
         }
         match self.loaded.load(name) {
             Load::Loaded => Outcome::Edited,
-            // A second load is `already_loaded` and carries no body: no change to the set and
-            // no frame to paint.
+            // A second load is `already_loaded` and carries no body.
             Load::AlreadyLoaded => Outcome::Unchanged,
         }
     }
@@ -982,7 +981,7 @@ impl View {
     /// letter tinted `accent` — invisible on the space it usually sits on — and a
     /// reverse-video block cannot be written into a fixture at all.
     pub fn cursor(&self, area: Rect) -> Option<(u16, u16)> {
-        // No draft is on screen while a modal is open, so there is no cell for the caret to
+        // No draft is on screen while one is open, so there is no cell for the caret to
         // wait on: it would be a cursor floating over a list.
         if self.stack.modal().is_some() {
             return None;
@@ -1515,7 +1514,7 @@ mod tests {
 
     #[test]
     fn a_hint_the_row_has_no_room_for_is_not_drawn_at_all() {
-        // Narrower than any frame the sweep covers, the row wins over the floor: a hint is
+        // Narrower than any frame a footer is drawn at, the row wins over the floor: a hint is
         // whole or not drawn, and the gap that would have introduced it goes with it.
         assert_eq!(
             footer(15, 24).trim_end(),

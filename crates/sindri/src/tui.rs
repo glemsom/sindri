@@ -147,7 +147,8 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
         return crate::refuse(&reason, USAGE);
     }
     // Opened before the screen is taken: a `SIGINT` that arrives between raw mode and the
-    // loop has to be a cancellation, and not a process dying with the terminal left raw.
+    // loop has to be a cancellation, and not a process dying with the terminal left raw and
+    // the alternate screen up.
     let signals = match Signals::install() {
         Ok(signals) => signals,
         Err(error) => {
@@ -169,8 +170,8 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
             return crate::refuse(&format!("the terminal would not go raw: {error}"), SETUP);
         }
     };
-    // The one round trip to the terminal, and a launch with no terminal never reaches it. A
-    // key typed while the launch waited is handed to the loop rather than dropped.
+    // The cell size asked before the first frame, and a launch with no terminal never reaches
+    // this line. A key typed while the launch waited is handed to the loop rather than dropped.
     let (cell_size, typed) = probed_cell(&terminal);
     let mut view = View::boot();
     view.set_cell_size(cell_size);
@@ -459,7 +460,8 @@ fn keys(
         let keyed = fds[0].revents().contains(PollFlags::IN);
         let woken = fds[1].revents().contains(PollFlags::IN);
 
-        // The pace's only clock: a report withheld past its window is said late, never lost.
+        // The pace has no other clock: a report withheld past its window is said late, never
+        // lost.
         telling.due()?;
 
         if let Some(flight) = &running {
@@ -552,6 +554,7 @@ impl Running {
     fn start(launch: Launch, prompt: Prompt, wake: Arc<Wake>) -> Running {
         let cancel = Cancel::new();
         let pending = Arc::new(Mutex::new(Vec::new()));
+        // Two handles on one list of reports, one per trait the run writes through.
         let mut reports = Reports {
             pending: Arc::clone(&pending),
             wake: Arc::clone(&wake),
@@ -1066,7 +1069,6 @@ impl Decoder {
         let key = match byte {
             0x03 => Key::Cancel,
             0x15 => Key::Clear,
-            // `Ctrl-X`: the newest queued prompt goes.
             0x18 => Key::Drop,
             // `Tab` is the byte raw mode leaves of it; `Shift+Tab` is the `ESC [ Z` below.
             b'\t' => Key::Tab,
@@ -1755,8 +1757,8 @@ mod tests {
         let mut view = View::boot();
         view.open_settings(&config);
         let wake = Arc::new(Wake::open().expect("a wake"));
-        // A teller on the frame's own terminal, which writes nothing: neither key here is a
-        // report.
+        // A teller on the frame's own terminal; neither key here is a report, so it writes
+        // nothing.
         let mut telling = Teller::new(
             pty.slave
                 .try_clone()
