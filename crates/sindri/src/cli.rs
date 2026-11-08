@@ -75,7 +75,7 @@ pub struct Cli {
 
     /// How many tokens a conversation may fill before its window is full, replacing a
     /// `context_window` the file or the environment holds.
-    #[arg(long = "context-window", value_name = "TOKENS", value_parser = window)]
+    #[arg(long = "context-window", value_name = "TOKENS", value_parser = window_tokens)]
     pub context_window: Option<u64>,
 
     /// Run without a sandbox at all: the one escape hatch (§6).
@@ -163,9 +163,9 @@ pub enum LoginWire {
     Copilot,
 }
 
-/// A context window typed on the command line, held to the rule every other door is: a
-/// window of no tokens is a share with no whole to take.
-fn window(text: &str) -> Result<u64, String> {
+/// The tokens a context window typed on the command line names, held to the rule every
+/// other door is.
+fn window_tokens(text: &str) -> Result<u64, String> {
     let tokens: u64 = text
         .parse::<u64>()
         .map_err(|error: std::num::ParseIntError| error.to_string())?;

@@ -17,6 +17,11 @@ _Avoid_: Step, iteration, wave
 The text a run produces for stdout — the only thing on stdout in batch mode.
 _Avoid_: Response, output, result
 
+**Context window**:
+How many tokens the model's window holds, when a reader names it in the config. No wire reports
+one and nothing here guesses, so a run with none named has a size and no share of it.
+_Avoid_: Context limit, token budget, max context
+
 **Exit**:
 How one call ended: a code, the timeout that killed it, the user's word, or a signal. A fact of
 the result entry.

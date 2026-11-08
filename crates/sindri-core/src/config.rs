@@ -66,8 +66,7 @@ pub struct Config {
     pub extra_writable_paths: Option<Vec<PathBuf>>,
     /// Request headers as `Name: value`, with `{session}` expanded per session.
     pub extra_headers: Option<Vec<String>>,
-    /// How many tokens a conversation may fill before the window is full, which no
-    /// catalogue holds and no wire reports, so it is the config's to name.
+    /// How many tokens the model's window holds, when a reader names it.
     pub context_window: Option<u64>,
     /// The turn cap: a stop reason when it is reached, never an error.
     pub max_turns: Option<u32>,
@@ -416,7 +415,7 @@ pub struct Flags {
     pub extra_writable_paths: Option<Vec<PathBuf>>,
     /// Request headers as `Name: value`, with `{session}` expanded per session.
     pub extra_headers: Option<Vec<String>>,
-    /// How many tokens a conversation may fill before the window is full.
+    /// How many tokens the model's window holds, when a reader names it.
     pub context_window: Option<u64>,
     /// The turn cap: a stop reason when it is reached, never an error.
     pub max_turns: Option<u32>,
@@ -469,7 +468,7 @@ impl Flags {
             write_key(
                 document,
                 "context_window",
-                integer("context_window", tokens)?,
+                integer("context_window", nonzero_window("context_window", tokens)?)?,
             );
         }
         if let Some(turns) = self.max_turns {
@@ -620,9 +619,7 @@ impl Touched {
                         Some(listed(text).into_iter().map(PathBuf::from).collect());
                 }
                 "extra_headers" => flags.extra_headers = Some(headers_of(key, text)?),
-                "context_window" => {
-                    flags.context_window = Some(nonzero_window(key, parsed(key, text)?)?);
-                }
+                "context_window" => flags.context_window = Some(parsed(key, text)?),
                 "max_turns" => flags.max_turns = Some(parsed(key, text)?),
                 "timeout" => flags.timeout = Some(parsed(key, text)?),
                 "command_budget_ms" => flags.command_budget_ms = Some(parsed(key, text)?),
@@ -825,15 +822,6 @@ where
     }
 }
 
-/// A variable read as a context window, refused at nothing: the same number the file and a
-/// settings row are held to, read from the layer above the file.
-fn spoken_window(environment: &impl Environment, name: &str) -> Result<Option<u64>, ConfigError> {
-    match spoken_parsed(environment, name)? {
-        None => Ok(None),
-        Some(window) => nonzero_window(name, window).map(Some),
-    }
-}
-
 /// A variable read as a route, which accepts exactly the two words.
 fn spoken_route(environment: &impl Environment, name: &str) -> Result<Option<Route>, ConfigError> {
     match spoken(environment, name) {
@@ -847,6 +835,14 @@ fn spoken_wire(environment: &impl Environment, name: &str) -> Result<Option<Wire
     match spoken(environment, name) {
         None => Ok(None),
         Some(word) => as_wire(name, &word).map(Some),
+    }
+}
+
+/// A variable read as a context window.
+fn spoken_window(environment: &impl Environment, name: &str) -> Result<Option<u64>, ConfigError> {
+    match spoken_parsed(environment, name)? {
+        None => Ok(None),
+        Some(window) => nonzero_window(name, window).map(Some),
     }
 }
 
@@ -864,11 +860,11 @@ where
     })
 }
 
-/// The one wording a window of no tokens is refused with, wherever one is read: a share of
-/// nothing is a division by zero, and a percentage no run could ever fill or fix.
+/// The one wording a window of no tokens is refused with, wherever one is read or written:
+/// a share of nothing is a division by zero.
 pub const WINDOW_REFUSAL: &str = "the context window must be at least one token";
 
-/// A context window, refused at nothing wherever one is read.
+/// A context window, refused at nothing.
 fn nonzero_window(origin: &str, window: u64) -> Result<u64, ConfigError> {
     if window == 0 {
         return Err(ConfigError::BadValue {

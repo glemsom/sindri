@@ -590,6 +590,32 @@ fn a_context_window_of_nothing_a_reader_types_is_refused_naming_the_row() {
 }
 
 #[test]
+fn a_context_window_of_nothing_a_save_is_handed_is_refused_and_writes_nothing() {
+    let home = bare_home();
+    let path = file_in(&home);
+
+    let error = Config::save_to(
+        &path,
+        &Flags {
+            context_window: Some(0),
+            ..Flags::default()
+        },
+    )
+    .expect_err("a window of no tokens is a share nothing can be taken of");
+
+    let message = error.to_string();
+    assert!(
+        message.contains("context_window") && message.contains("at least one token"),
+        "the refusal names the key and the smallest window that would do, and it says: {message}"
+    );
+    assert!(
+        !path.exists(),
+        "a save refuses a window no read would take back, rather than writing a file the \
+         next read calls a usage error"
+    );
+}
+
+#[test]
 fn a_value_a_screen_refused_names_the_key_and_leaves_the_file_alone() {
     let home = config_home(HAND_WRITTEN);
     let path = file_in(&home);
