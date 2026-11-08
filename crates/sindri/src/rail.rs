@@ -19,7 +19,7 @@
 //! Nothing is ever drawn in part. A value that leaves no room for a leader in its column
 //! drops the fact rather than being cut off, a path keeps whole components and marks the
 //! head it left with `…/`, and what the room cannot hold is given up in §12's order —
-//! temp path, cache hits, session GUID, branch, skills in force, context meter, workspace,
+//! temp path, cache hits, session GUID, branch, skills in force, context size, workspace,
 //! turns, wire, thinking, model — beside a row saying how many went. The sandbox posture
 //! is absent from that order because §12 says it never goes. The degradation is a pure
 //! function of the room, not a paint: what the rail keeps and the rows it makes are read by
@@ -74,9 +74,15 @@ const FIELD: u16 = 10;
 /// value is not a ledger row, so a value that leaves no room for one drops the fact.
 const LEADER_MIN: usize = 1;
 
+/// The share of a window at which the rail raises its voice: a run ninety percent
+/// full is one turn from being no room at all, and telling that from the ordinary case is
+/// the one thing the ctx row says twice.
+const FULL: u8 = 90;
+
 /// §46's blocks, top to bottom, each with the facts the contract puts in it: the dialect,
-/// the model it served and whether it thinks, the run's three meters, where it stands, what
-/// it has loaded, how it is confined, and the session it is writing.
+/// the model it served and whether it thinks, the turns it has taken, the run's size and
+/// the cache's hit rate, where it stands, what it has loaded, how it is confined, and the
+/// session it is writing.
 const BLOCKS: [&[Kind]; 6] = [
     &[Kind::Wire, Kind::Model, Kind::Think],
     &[Kind::Turns, Kind::Ctx, Kind::Cache],
@@ -104,14 +110,122 @@ const GAP: &str = " · ";
 /// The hairline that runs the rail's full width between two blocks.
 const HAIRLINE: char = '─';
 
+/// The run's size, measured once per turn by the wire: the input it last reported, and the
+/// window the config names, when a reader named one.
+///
+/// It is the size the last request carried and never the size of the next one, which grows
+/// by whatever tool results the turn produced, so a run one turn from a full window is a run
+/// whose window is nearly full and no more exactly than that.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Ctx {
+    /// The input tokens the wire last reported for the run.
+    pub size: u64,
+    /// How many tokens the model's window holds, when a reader named one.
+    pub window: Option<u64>,
+}
+
+impl Ctx {
+    /// The value the rail draws it as — the size in spelled tokens, and the window beside
+    /// it and the share of it the run fills when one is known — and the share that value
+    /// ends in, so the row's text and the ink it is said in come from one derivation.
+    fn spelled(&self) -> (String, Option<Fill>) {
+        match self.fill() {
+            Some(fill) => (
+                format!(
+                    "{}/{} {}",
+                    tokens(self.size),
+                    tokens(fill.window),
+                    fill.said()
+                ),
+                Some(fill),
+            ),
+            None => (tokens(self.size), None),
+        }
+    }
+
+    /// How full the window is, when one is known: a window of no tokens is no window at
+    /// all, and a share of it is no number the rail could draw.
+    ///
+    /// The share is whole percent, rounded and capped at a hundred: a run already past its
+    /// window has no larger number to show, and the rail cannot claim room that is not
+    /// there. The ink is set here and nowhere else, so no paint site holds a second opinion
+    /// about what nearly full means.
+    fn fill(&self) -> Option<Fill> {
+        let window = self.window.filter(|window| *window > 0)?;
+        let share = (u128::from(self.size) * 100 + u128::from(window) / 2) / u128::from(window);
+        let percent = u8::try_from(share.min(100)).unwrap_or(100);
+        Some(Fill {
+            percent,
+            window,
+            ink: if percent >= FULL {
+                Ink::Accent
+            } else {
+                Ink::Muted
+            },
+        })
+    }
+}
+
+/// How full the run's window is, and where the rail says so: the tail of the ctx row, which
+/// is the one fact on the rail that says how much room the next turn has left.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Fill {
+    /// How full the window is, in whole percent.
+    percent: u8,
+    /// The window it is a share of, in tokens.
+    window: u64,
+    /// The ink the share is drawn in: `muted` while there is room, and `accent` once the
+    /// window is nearly full.
+    ink: Ink,
+}
+
+impl Fill {
+    /// The share as the rail writes it, `%` and all.
+    fn said(&self) -> String {
+        format!("{}%", self.percent)
+    }
+}
+
+/// The size of a run in spelled tokens: whole under a thousand, and three figures with a
+/// unit above it — `948`, `48.2k`, `1.02M` — because no reader counts six digits off a
+/// rail, and a rail column has no room to make them read as one number.
+fn tokens(count: u64) -> String {
+    if count < 1_000 {
+        return count.to_string();
+    }
+    // Tenths of a thousand, and hundredths of a million: the first carries three figures up
+    // to nine hundred and ninety-nine thousand, and the second once rounding takes a count
+    // past four.
+    let tenths = count.saturating_add(50) / 100;
+    if tenths < 10_000 {
+        return scaled(tenths, 1, "k");
+    }
+    scaled(count.saturating_add(5_000) / 10_000, 2, "M")
+}
+
+/// An amount counted in a unit's smallest shown fraction, drawn as that unit's whole part,
+/// a decimal point and what is left of the fraction: `482` tenths of a thousand is `48.2k`.
+/// A zero left dangling at the end of the decimals is dropped, so two hundred thousand is
+/// `200k` and not `200.0k`.
+fn scaled(parts: u64, places: u32, unit: &str) -> String {
+    let divisor = 10u64.pow(places);
+    let whole = parts / divisor;
+    let fraction = parts % divisor;
+    if fraction == 0 {
+        return format!("{whole}{unit}");
+    }
+    let decimals = format!("{fraction:0width$}", width = places as usize);
+    format!("{whole}.{}{unit}", decimals.trim_end_matches('0'))
+}
+
 /// The facts the rail draws, as the core holds them: the dialect the run asks over and
 /// the model it was served by name, the turns it has opened against the cap it obeys, the
-/// two meters, the workspace and the branch it stands on, the skills in force, the sandbox
-/// posture, and the session's GUID and temp.
+/// run's size, the cache's hit rate, the workspace and the branch it stands on, the skills
+/// in force, the sandbox posture, and the session's GUID and temp.
 ///
 /// A fact the frame knows nothing about is `None` and is not drawn, never guessed at
 /// (§15), so a frame before its first run has no rail at all. Three of these nothing
-/// produces yet — the context meter, the cache meter and the skills in force — and a
+/// produces yet — the run's size, the cache's hit rate and the skills in force — and a
 /// caller passes them in until the tickets that fill them land.
 #[derive(Debug, Default, Clone)]
 pub struct Facts {
@@ -125,10 +239,11 @@ pub struct Facts {
     pub think: Option<String>,
     /// The turns the run has opened, and the cap it obeys.
     pub turns: Option<(u32, u32)>,
-    /// How much of the context window the run has spent, in whole percent.
-    pub ctx: Option<u8>,
+    /// The run's size as the wire last measured it, and the window it is a share of when
+    /// one is known.
+    pub ctx: Option<Ctx>,
     /// How much of the run's input the provider served from its own cache, in whole
-    /// percent (ADR-0010).
+    /// percent (ADR-0010): a hit rate and not a fill, so it gets no meter and no threshold.
     pub cache: Option<u8>,
     /// The one directory the run stands in.
     pub workspace: Option<PathBuf>,
@@ -161,7 +276,7 @@ impl Facts {
     /// record rewrites as facts land — the wire, the model it served and whether it thinks,
     /// the turns against the cap, the enforcement in force, the workspace and the branch.
     ///
-    /// Three facts nothing produces yet — the context meter, the cache meter and the
+    /// Three facts nothing produces yet — the run's size, the cache's hit rate and the
     /// skills in force — are left for the caller to hand in, and so is every frame's
     /// `Facts` until the run loop hands one to a frame (#43).
     pub fn of(session: &Session, document: &SessionDocument) -> Facts {
@@ -274,7 +389,7 @@ impl Facts {
             }
             x = put(buffer, x, area.y, fact.kind.label(), Ink::Dim);
             x = put(buffer, x, area.y, " ", Ink::Dim);
-            x = put(buffer, x, area.y, &fact.value, Ink::Muted);
+            x = fact.draw(buffer, x, area.y);
         }
         // A strip too narrow to hold the count beside the fact that never goes is the one
         // rail without one.
@@ -326,73 +441,44 @@ impl Facts {
         let short = self.session.as_deref().map(short_id);
         let mut facts = Vec::new();
         if let Some(wire) = &self.wire {
-            facts.push(Fact {
-                kind: Kind::Wire,
-                value: wire.clone(),
-            });
+            facts.push(Fact::new(Kind::Wire, wire.clone()));
         }
         if let Some(model) = &self.model {
-            facts.push(Fact {
-                kind: Kind::Model,
-                value: model.clone(),
-            });
+            facts.push(Fact::new(Kind::Model, model.clone()));
         }
         if let Some(think) = &self.think {
-            facts.push(Fact {
-                kind: Kind::Think,
-                value: think.clone(),
-            });
+            facts.push(Fact::new(Kind::Think, think.clone()));
         }
         if let Some((turns, cap)) = self.turns {
-            facts.push(Fact {
-                kind: Kind::Turns,
-                value: format!("{turns}/{cap}"),
-            });
+            facts.push(Fact::new(Kind::Turns, format!("{turns}/{cap}")));
         }
-        if let Some(ctx) = self.ctx {
+        if let Some(ctx) = &self.ctx {
+            let (value, fill) = ctx.spelled();
             facts.push(Fact {
-                kind: Kind::Ctx,
-                value: format!("{ctx}%"),
+                fill,
+                ..Fact::new(Kind::Ctx, value)
             });
         }
         if let Some(cache) = self.cache {
-            facts.push(Fact {
-                kind: Kind::Cache,
-                value: format!("{cache}%"),
-            });
+            facts.push(Fact::new(Kind::Cache, format!("{cache}%")));
         }
         if let Some(workspace) = &self.workspace {
             let value = tail(&workspace.to_string_lossy(), VALUE);
             if !value.is_empty() {
-                facts.push(Fact {
-                    kind: Kind::Workspace,
-                    value,
-                });
+                facts.push(Fact::new(Kind::Workspace, value));
             }
         }
         if let Some(branch) = &self.branch {
-            facts.push(Fact {
-                kind: Kind::Branch,
-                value: branch.clone(),
-            });
+            facts.push(Fact::new(Kind::Branch, branch.clone()));
         }
         if let Some(skills) = self.skills {
-            facts.push(Fact {
-                kind: Kind::Skills,
-                value: skills.to_string(),
-            });
+            facts.push(Fact::new(Kind::Skills, skills.to_string()));
         }
         if let Some(sandbox) = self.sandbox {
-            facts.push(Fact {
-                kind: Kind::Sandbox,
-                value: sandbox.rail_label().to_owned(),
-            });
+            facts.push(Fact::new(Kind::Sandbox, sandbox.rail_label().to_owned()));
         }
         if let Some(short) = short {
-            facts.push(Fact {
-                kind: Kind::Session,
-                value: short.to_owned(),
-            });
+            facts.push(Fact::new(Kind::Session, short.to_owned()));
         }
         if let Some(temp) = &self.temp {
             let path = temp.to_string_lossy();
@@ -404,10 +490,7 @@ impl Facts {
             };
             let value = tail(&named, VALUE);
             if !value.is_empty() {
-                facts.push(Fact {
-                    kind: Kind::Temp,
-                    value,
-                });
+                facts.push(Fact::new(Kind::Temp, value));
             }
         }
         facts
@@ -421,6 +504,40 @@ struct Fact {
     kind: Kind,
     /// The value, in the rail's own words.
     value: String,
+    /// How full the window is, when this fact's value ends in a share of one.
+    fill: Option<Fill>,
+}
+
+impl Fact {
+    /// A fact drawn as one run of `muted`: the shape every value but the ctx row's takes.
+    fn new(kind: Kind, value: impl Into<String>) -> Fact {
+        Fact {
+            kind,
+            value: value.into(),
+            fill: None,
+        }
+    }
+
+    /// Writes the value from `x` across a row, the share at its tail in the fill's ink and
+    /// the rest in `muted`, and hands back the column after it.
+    fn draw(&self, buffer: &mut Buffer, x: u16, y: u16) -> u16 {
+        let Some(fill) = self.fill else {
+            return put(buffer, x, y, &self.value, Ink::Muted);
+        };
+        let share = fill.said();
+        let head: String = self
+            .value
+            .chars()
+            .take(
+                self.value
+                    .chars()
+                    .count()
+                    .saturating_sub(share.chars().count()),
+            )
+            .collect();
+        let x = put(buffer, x, y, &head, Ink::Muted);
+        put(buffer, x, y, &share, fill.ink)
+    }
 }
 
 /// What the rail keeps and what it gave up: the facts it draws, in the order it reads
@@ -523,7 +640,7 @@ fn ledger_row(buffer: &mut Buffer, area: Rect, fact: &Fact) {
     let x = area
         .x
         .saturating_add(u16::try_from(start).unwrap_or(area.width));
-    put(buffer, x, area.y, &fact.value, Ink::Muted);
+    fact.draw(buffer, x, area.y);
 }
 
 /// The columns `text` takes: one per glyph, whatever the glyph's bytes say, because a
@@ -603,7 +720,7 @@ enum Kind {
     Think,
     /// The turns the run has opened, against the cap it obeys.
     Turns,
-    /// How much of the context window the run has spent.
+    /// The run's size, as the wire last measured it.
     Ctx,
     /// How much of the run's input the provider served from its own cache.
     Cache,
@@ -726,7 +843,10 @@ mod tests {
             model: Some(String::from("claude-sonnet")),
             think: Some(String::from("high")),
             turns: Some((3, 250)),
-            ctx: Some(21),
+            ctx: Some(Ctx {
+                size: 48_200,
+                window: None,
+            }),
             cache: Some(88),
             workspace: Some(PathBuf::from(
                 "/home/glemsom/Documents/git/sindri/.worktrees/46-rail",
@@ -749,7 +869,7 @@ mod tests {
         ("model", "claude-sonnet"),
         ("think", "high"),
         ("turns", "3/250"),
-        ("ctx", "21%"),
+        ("ctx", "48.2k"),
         ("cache", "88%"),
         ("workspace", "…/.worktrees/46-rail"),
         ("branch", "spec/1-capability"),
@@ -903,6 +1023,171 @@ mod tests {
         }
     }
 
+    /// The ctx row a value deserves, as the rail draws it: the label in its field, leaders
+    /// out to the rail's edge, and the value against it.
+    fn ctx_line(value: &str) -> String {
+        let leaders = usize::from(COLUMNS) - usize::from(FIELD) - value.chars().count();
+        format!("ctx       {}{value}", ".".repeat(leaders))
+    }
+
+    #[test]
+    fn a_runs_size_is_spelled_in_tokens_and_never_counted_out() {
+        for (size, value) in [
+            (0, "0"),
+            (948, "948"),
+            (999, "999"),
+            (1_000, "1k"),
+            (48_200, "48.2k"),
+            (200_000, "200k"),
+            (999_949, "999.9k"),
+            (999_950, "1M"),
+            (1_020_000, "1.02M"),
+            (1_100_000, "1.1M"),
+        ] {
+            let facts = Facts {
+                ctx: Some(Ctx { size, window: None }),
+                ..Facts::default()
+            };
+            let mut buffer = Buffer::empty(band(COLUMNS, 1));
+
+            facts.paint(Shape::Ledger, band(COLUMNS, 1), &mut buffer);
+
+            assert_eq!(
+                glyphs(&buffer, 0).trim_end(),
+                ctx_line(value),
+                "{size} tokens is drawn as {value} and never as the count itself"
+            );
+        }
+    }
+
+    #[test]
+    fn a_run_with_a_window_draws_the_window_and_the_share_of_it_it_fills() {
+        for (size, window, value) in [
+            (0, 200_000, "0/200k 0%"),
+            (48_200, 0, "48.2k"),
+            (48_200, 200_000, "48.2k/200k 24%"),
+            (100_000, 1_020_000, "100k/1.02M 10%"),
+            (200_000, 200_000, "200k/200k 100%"),
+            (250_000, 200_000, "250k/200k 100%"),
+        ] {
+            let facts = Facts {
+                ctx: Some(Ctx {
+                    size,
+                    window: Some(window),
+                }),
+                ..Facts::default()
+            };
+            let mut buffer = Buffer::empty(band(COLUMNS, 1));
+
+            facts.paint(Shape::Ledger, band(COLUMNS, 1), &mut buffer);
+
+            assert_eq!(
+                glyphs(&buffer, 0).trim_end(),
+                ctx_line(value),
+                "{size} tokens against a window of {window} is drawn as {value}: a run past \
+                 its window has no larger share to claim, and a window of no tokens is no \
+                 window at all"
+            );
+        }
+    }
+
+    #[test]
+    fn a_nearly_full_window_is_the_one_share_the_rail_raises_its_voice_about() {
+        for (size, value, share, ink) in [
+            (178_000, "178k/200k 89%", "89%", Ink::Muted),
+            (180_000, "180k/200k 90%", "90%", Ink::Accent),
+            (200_000, "200k/200k 100%", "100%", Ink::Accent),
+            (240_000, "240k/200k 100%", "100%", Ink::Accent),
+        ] {
+            let facts = Facts {
+                ctx: Some(Ctx {
+                    size,
+                    window: Some(200_000),
+                }),
+                ..Facts::default()
+            };
+            let mut ledger = Buffer::empty(band(COLUMNS, 1));
+
+            facts.paint(Shape::Ledger, band(COLUMNS, 1), &mut ledger);
+
+            let said = value.chars().count() as u16;
+            let tail = share.chars().count() as u16;
+            let expected: Vec<(Ink, u16)> = if ink == Ink::Muted {
+                vec![(Ink::Muted, said)]
+            } else {
+                vec![(Ink::Muted, said - tail), (ink, tail)]
+            };
+            assert_eq!(
+                &inks(&ledger, 0)[1..],
+                expected,
+                "{value} is drawn muted but for its share, which is {} at ninety percent \
+                 and above",
+                ink.name()
+            );
+
+            let mut strip = Buffer::empty(band(40, 1));
+
+            facts.paint(Shape::Strip, band(40, 1), &mut strip);
+
+            assert_eq!(
+                Ink::of(
+                    strip
+                        .cell((4 + said - tail, 0))
+                        .expect("a cell of the share")
+                ),
+                Some(ink),
+                "the strip reads the share in the same ink the ledger does: one threshold, \
+                 in one place"
+            );
+        }
+    }
+
+    #[test]
+    fn a_frame_handed_no_size_draws_no_ctx_row_and_counts_nothing_for_it() {
+        let mut unknown = frame();
+        unknown.ctx = None;
+        let mut roomy = Buffer::empty(band(COLUMNS, 17));
+
+        unknown.paint(Shape::Ledger, band(COLUMNS, 17), &mut roomy);
+
+        let rows: Vec<String> = (0..17).map(|y| glyphs(&roomy, y)).collect();
+        assert_eq!(
+            rows[..7],
+            [
+                "wire      .............anthropic",
+                "model     .........claude-sonnet",
+                "think     ..................high",
+                "────────────────────────────────",
+                "turns     .................3/250",
+                "cache     ...................88%",
+                "────────────────────────────────",
+            ],
+            "a frame before the first reply has no size, so it draws no ctx row and the \
+             block closes up under the turns"
+        );
+        assert!(
+            !rows.iter().any(|row| row.contains("more")),
+            "and the rail gave nothing up, so it counts nothing: no row may say so"
+        );
+
+        let band = band(COLUMNS, 8);
+        let mut tight = Buffer::empty(band);
+
+        frame().paint(Shape::Ledger, band, &mut tight);
+        let with = glyphs(&tight, 7);
+
+        unknown.paint(Shape::Ledger, band, &mut tight);
+        let without = glyphs(&tight, 7);
+
+        assert_eq!(
+            (with.trim_end(), without.trim_end()),
+            ("+7 more", "+6 more"),
+            "the count is of the facts the frame knew: the size joining the frame is one \
+             more fact given up at this height and no fact the rail draws, so its absence \
+             leaves the count one shorter and never one longer"
+        );
+    }
+
     #[test]
     fn the_ledger_draws_whether_the_model_thinks_below_the_model_it_belongs_to() {
         let facts = Facts {
@@ -942,7 +1227,7 @@ mod tests {
                 "think     ..................high",
                 "────────────────────────────────",
                 "turns     .................3/250",
-                "ctx       ...................21%",
+                "ctx       .................48.2k",
                 "cache     ...................88%",
                 "────────────────────────────────",
                 "workspace ..…/.worktrees/46-rail",
@@ -1161,14 +1446,14 @@ mod tests {
 
     #[test]
     fn a_strip_row_is_the_facts_beside_each_other_each_with_its_label_and_one_gap() {
-        // 213 columns is the whole row, gap for gap, so no fact is given up to prove order.
-        let mut buffer = Buffer::empty(band(213, 1));
+        // 215 columns is the whole row, gap for gap, so no fact is given up to prove order.
+        let mut buffer = Buffer::empty(band(215, 1));
 
-        frame().paint(Shape::Strip, band(213, 1), &mut buffer);
+        frame().paint(Shape::Strip, band(215, 1), &mut buffer);
 
         assert_eq!(
             glyphs(&buffer, 0),
-            "wire anthropic · model claude-sonnet · think high · turns 3/250 · ctx 21% · \
+            "wire anthropic · model claude-sonnet · think high · turns 3/250 · ctx 48.2k · \
              cache 88% · workspace …/.worktrees/46-rail · branch spec/1-capability · skills \
              2 · sandbox bwrap · session 9f2c7a41 · temp …/9f2c7a41/tmp",
             "one row, the same facts in the same order, a gap between two of them, \
@@ -1181,7 +1466,7 @@ mod tests {
 
         assert_eq!(
             glyphs(&narrower, 0).trim_end(),
-            "wire anthropic · model claude-sonnet · think high · turns 3/250 · ctx 21% · \
+            "wire anthropic · model claude-sonnet · think high · turns 3/250 · ctx 48.2k · \
              workspace …/.worktrees/46-rail · branch spec/1-capability · skills 2 · sandbox \
              bwrap · session 9f2c7a41 · +2 more",
             "two hundred columns give up the temp and the cache, and count them"
@@ -1203,7 +1488,7 @@ mod tests {
                 ("model", String::from("claude-sonnet")),
                 ("think", String::from("high")),
                 ("turns", String::from("3/250")),
-                ("ctx", String::from("21%")),
+                ("ctx", String::from("48.2k")),
                 ("cache", String::from("88%")),
                 ("workspace", String::from("…/.worktrees/46-rail")),
                 ("branch", String::from("spec/1-capability")),
