@@ -402,6 +402,7 @@ fn facts() -> Facts {
     Facts {
         wire: Some(String::from("anthropic")),
         model: Some(String::from("claude-sonnet")),
+        think: Some(String::from("high")),
         turns: Some((6, 250)),
         ctx: Some(21),
         cache: Some(88),

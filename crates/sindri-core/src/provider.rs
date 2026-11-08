@@ -160,6 +160,13 @@ impl Ask {
         self
     }
 
+    /// Whether the model reasons before it answers, as [`thinking`](Ask::thinking)
+    /// set it: the one reading of the field every ask of the run sends and the record
+    /// writes.
+    pub fn thinks(&self) -> bool {
+        self.thinking
+    }
+
     /// Send the ask on `route` whatever the model's own name asks for, so a
     /// route that misbehaves can be got round without renaming the model
     /// (§10). A dialect that serves one endpoint ignores it.
@@ -193,7 +200,7 @@ impl Ask {
             request = request.preamble(preamble.clone());
         }
         let mut options = GenerationOptions::default();
-        options.reasoning = self.thinking.then_some(Reasoning::Effort(Effort::High));
+        options.reasoning = self.thinks().then_some(Reasoning::Effort(Effort::High));
         request.options(options)
     }
 }

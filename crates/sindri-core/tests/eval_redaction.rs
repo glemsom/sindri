@@ -93,6 +93,7 @@ impl Ground {
                 wire: Wire::Anthropic,
                 model: "claude-sonnet-4",
                 route: None,
+                thinking: false,
                 boundary: &boundary,
                 limits: &self.limits,
                 workspace: &self.workspace,

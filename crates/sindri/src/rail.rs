@@ -4,10 +4,10 @@
 //! all of it (§12, ticket #46).
 //!
 //! The facts are handed in and never reached for: `Facts` is what the core knows about a
-//! run — the dialect it asks over and the name it was served, the turns against the cap,
-//! the enforcement in force, the workspace, the branch, the session's GUID and its temp —
-//! and what nothing produces yet is a caller's to fill, so a rail draws a fact only when
-//! somebody handed it one.
+//! run — the dialect it asks over, the name it was served and whether that model thinks,
+//! the turns against the cap, the enforcement in force, the workspace, the branch, the
+//! session's GUID and its temp — and what nothing produces yet is a caller's to fill, so a
+//! rail draws a fact only when somebody handed it one.
 //!
 //! Two shapes and one rule between them. At a hundred columns and above the rail is
 //! §12's 32 columns down the frame's right-hand edge, one labelled fact per row; below a
@@ -20,11 +20,11 @@
 //! drops the fact rather than being cut off, a path keeps whole components and marks the
 //! head it left with `…/`, and what the room cannot hold is given up in §12's order —
 //! temp path, cache hits, session GUID, branch, skills in force, context meter, workspace,
-//! turns, wire, model — beside a row saying how many went. The sandbox posture is absent
-//! from that order because §12 says it never goes. The degradation is a pure function of
-//! the room, not a paint: what the rail keeps and the rows it makes are read by a test
-//! without a buffer, which is how a rule about every frame width from 20 to 200 is proved
-//! rather than eyeballed.
+//! turns, wire, thinking, model — beside a row saying how many went. The sandbox posture
+//! is absent from that order because §12 says it never goes. The degradation is a pure
+//! function of the room, not a paint: what the rail keeps and the rows it makes are read by
+//! a test without a buffer, which is how a rule about every frame width from 20 to 200 is
+//! proved rather than eyeballed.
 
 use std::path::PathBuf;
 
@@ -74,11 +74,11 @@ const FIELD: u16 = 10;
 /// value is not a ledger row, so a value that leaves no room for one drops the fact.
 const LEADER_MIN: usize = 1;
 
-/// §46's blocks, top to bottom, each with the facts the contract puts in it: the dialect
-/// and the model it served, the run's three meters, where it stands, what it has loaded,
-/// how it is confined, and the session it is writing.
+/// §46's blocks, top to bottom, each with the facts the contract puts in it: the dialect,
+/// the model it served and whether it thinks, the run's three meters, where it stands, what
+/// it has loaded, how it is confined, and the session it is writing.
 const BLOCKS: [&[Kind]; 6] = [
-    &[Kind::Wire, Kind::Model],
+    &[Kind::Wire, Kind::Model, Kind::Think],
     &[Kind::Turns, Kind::Ctx, Kind::Cache],
     &[Kind::Workspace, Kind::Branch],
     &[Kind::Skills],
@@ -120,6 +120,9 @@ pub struct Facts {
     pub wire: Option<String>,
     /// The model the run asks, by the name its wire served.
     pub model: Option<String>,
+    /// Whether the model thinks before it answers, in the one word the rail draws it
+    /// by: `high` or `off`, and never a third.
+    pub think: Option<String>,
     /// The turns the run has opened, and the cap it obeys.
     pub turns: Option<(u32, u32)>,
     /// How much of the context window the run has spent, in whole percent.
@@ -155,8 +158,8 @@ pub struct Share {
 impl Facts {
     /// The facts a run holds, read off the two values the core keeps them in: the session
     /// the run is writing, whose GUID and temp the rail draws, and the document the
-    /// record rewrites as facts land — the wire and the model it served, the turns against
-    /// the cap, the enforcement in force, the workspace and the branch.
+    /// record rewrites as facts land — the wire, the model it served and whether it thinks,
+    /// the turns against the cap, the enforcement in force, the workspace and the branch.
     ///
     /// Three facts nothing produces yet — the context meter, the cache meter and the
     /// skills in force — are left for the caller to hand in, and so is every frame's
@@ -165,6 +168,7 @@ impl Facts {
         Facts {
             wire: Some(document.wire.word().to_owned()),
             model: Some(document.model.clone()),
+            think: Some(if document.thinking { "high" } else { "off" }.to_owned()),
             turns: Some((document.turns, document.dials.max_turns)),
             sandbox: Some(document.enforcement),
             workspace: Some(document.workspace.clone()),
@@ -331,6 +335,12 @@ impl Facts {
             facts.push(Fact {
                 kind: Kind::Model,
                 value: model.clone(),
+            });
+        }
+        if let Some(think) = &self.think {
+            facts.push(Fact {
+                kind: Kind::Think,
+                value: think.clone(),
             });
         }
         if let Some((turns, cap)) = self.turns {
@@ -589,6 +599,8 @@ enum Kind {
     Wire,
     /// The model the run asks, by the name its wire served.
     Model,
+    /// Whether the model thinks before it answers.
+    Think,
     /// The turns the run has opened, against the cap it obeys.
     Turns,
     /// How much of the context window the run has spent.
@@ -616,6 +628,7 @@ impl Kind {
         match self {
             Kind::Wire => "wire",
             Kind::Model => "model",
+            Kind::Think => "think",
             Kind::Turns => "turns",
             Kind::Ctx => "ctx",
             Kind::Cache => "cache",
@@ -632,7 +645,7 @@ impl Kind {
 /// §12's sacrifice order, the first to go first: what the rail gives up as the room
 /// runs out. The sandbox posture is deliberately absent, because §12 says it never
 /// goes, so no loop over this list can reach it.
-const SACRIFICE: [Kind; 10] = [
+const SACRIFICE: [Kind; 11] = [
     Kind::Temp,
     Kind::Cache,
     Kind::Session,
@@ -642,6 +655,7 @@ const SACRIFICE: [Kind; 10] = [
     Kind::Workspace,
     Kind::Turns,
     Kind::Wire,
+    Kind::Think,
     Kind::Model,
 ];
 
@@ -710,6 +724,7 @@ mod tests {
         Facts {
             wire: Some(String::from("anthropic")),
             model: Some(String::from("claude-sonnet")),
+            think: Some(String::from("high")),
             turns: Some((3, 250)),
             ctx: Some(21),
             cache: Some(88),
@@ -729,9 +744,10 @@ mod tests {
     /// §46's contract, as a test states it rather than as the code holds it: every fact
     /// the rail draws, its label and its value, so a fact's wholeness and the count of
     /// what went can be read off the screen and not off the module's own tables.
-    const CONTRACT: [(&str, &str); 11] = [
+    const CONTRACT: [(&str, &str); 12] = [
         ("wire", "anthropic"),
         ("model", "claude-sonnet"),
+        ("think", "high"),
         ("turns", "3/250"),
         ("ctx", "21%"),
         ("cache", "88%"),
@@ -773,6 +789,7 @@ mod tests {
             usage: Usage::default(),
             stopped: RunState::Running,
             route: None,
+            thinking: false,
         }
     }
 
@@ -869,17 +886,60 @@ mod tests {
     }
 
     #[test]
-    fn the_ledger_reads_its_blocks_in_the_contracts_order_with_a_hairline_between_two() {
-        let mut buffer = Buffer::empty(band(COLUMNS, 16));
+    fn the_facts_a_session_holds_say_whether_the_model_thinks() {
+        for (thinking, word) in [(true, "high"), (false, "off")] {
+            let root = tempfile::tempdir().expect("a temp state home");
+            let session = Session::create(root.path()).expect("a session");
+            let mut document = document(session.guid());
+            document.thinking = thinking;
 
-        frame().paint(Shape::Ledger, band(COLUMNS, 16), &mut buffer);
+            let facts = Facts::of(&session, &document);
 
-        let rows: Vec<String> = (0..16).map(|y| glyphs(&buffer, y)).collect();
+            assert_eq!(
+                facts.think.as_deref(),
+                Some(word),
+                "a document that says {thinking} is drawn as {word} and never a third word"
+            );
+        }
+    }
+
+    #[test]
+    fn the_ledger_draws_whether_the_model_thinks_below_the_model_it_belongs_to() {
+        let facts = Facts {
+            wire: Some(String::from("anthropic")),
+            model: Some(String::from("claude-sonnet")),
+            think: Some(String::from("high")),
+            ..Facts::default()
+        };
+        let mut buffer = Buffer::empty(band(COLUMNS, 3));
+
+        facts.paint(Shape::Ledger, band(COLUMNS, 3), &mut buffer);
+
+        let rows: Vec<String> = (0..3).map(|y| glyphs(&buffer, y)).collect();
         assert_eq!(
             rows,
             [
                 "wire      .............anthropic",
                 "model     .........claude-sonnet",
+                "think     ..................high",
+            ],
+            "the model block holds the fact, one row below the model it is about"
+        );
+    }
+
+    #[test]
+    fn the_ledger_reads_its_blocks_in_the_contracts_order_with_a_hairline_between_two() {
+        let mut buffer = Buffer::empty(band(COLUMNS, 17));
+
+        frame().paint(Shape::Ledger, band(COLUMNS, 17), &mut buffer);
+
+        let rows: Vec<String> = (0..17).map(|y| glyphs(&buffer, y)).collect();
+        assert_eq!(
+            rows,
+            [
+                "wire      .............anthropic",
+                "model     .........claude-sonnet",
+                "think     ..................high",
                 "────────────────────────────────",
                 "turns     .................3/250",
                 "ctx       ...................21%",
@@ -898,12 +958,12 @@ mod tests {
             "six blocks, a hairline between two of them, nothing given up at this width"
         );
         assert_eq!(
-            inks(&buffer, 2),
+            inks(&buffer, 3),
             [(Ink::Dim, 32)],
             "the hairline runs the rail's width"
         );
         assert_eq!(
-            inks(&buffer, 3),
+            inks(&buffer, 4),
             [(Ink::Dim, 27), (Ink::Muted, 5)],
             "label, leaders, then the value"
         );
@@ -1007,12 +1067,12 @@ mod tests {
             [
                 "wire      .............anthropic",
                 "model     .........claude-sonnet",
+                "think     ..................high",
                 "────────────────────────────────",
                 "turns     .................3/250",
                 "────────────────────────────────",
                 "sandbox   .................bwrap",
                 "+7 more                         ",
-                "                                ",
             ],
             "temp, cache, session, branch, skills, ctx and workspace went, in that \
              order, and the foot of the rail says seven"
@@ -1027,8 +1087,8 @@ mod tests {
 
         assert_eq!(
             glyphs(&buffer, 0),
-            "sandbox bwrap · +10 more                ",
-            "forty columns hold the fact that never goes and the count of the ten that did"
+            "sandbox bwrap · +11 more                ",
+            "forty columns hold the fact that never goes and the count of the eleven that did"
         );
     }
 
@@ -1082,16 +1142,18 @@ mod tests {
 
     #[test]
     fn a_strip_row_is_the_facts_beside_each_other_each_with_its_label_and_one_gap() {
-        let mut buffer = Buffer::empty(band(200, 1));
+        // 213 columns is the whole row, gap for gap, so no fact is given up to prove order.
+        let mut buffer = Buffer::empty(band(213, 1));
 
-        frame().paint(Shape::Strip, band(200, 1), &mut buffer);
+        frame().paint(Shape::Strip, band(213, 1), &mut buffer);
 
         assert_eq!(
-            glyphs(&buffer, 0).trim_end(),
-            "wire anthropic · model claude-sonnet · turns 3/250 · ctx 21% · cache 88% · \
-             workspace …/.worktrees/46-rail · branch spec/1-capability · skills 2 · sandbox \
-             bwrap · session 9f2c7a41 · temp …/9f2c7a41/tmp",
-            "one row, the same facts in the same order, a gap between two of them"
+            glyphs(&buffer, 0),
+            "wire anthropic · model claude-sonnet · think high · turns 3/250 · ctx 21% · \
+             cache 88% · workspace …/.worktrees/46-rail · branch spec/1-capability · skills \
+             2 · sandbox bwrap · session 9f2c7a41 · temp …/9f2c7a41/tmp",
+            "one row, the same facts in the same order, a gap between two of them, \
+             and not one given up"
         );
     }
 
@@ -1108,6 +1170,7 @@ mod tests {
             [
                 ("wire", String::from("anthropic")),
                 ("model", String::from("claude-sonnet")),
+                ("think", String::from("high")),
                 ("turns", String::from("3/250")),
                 ("ctx", String::from("21%")),
                 ("cache", String::from("88%")),
@@ -1193,6 +1256,7 @@ mod tests {
                 "workspace",
                 "turns",
                 "wire",
+                "think",
                 "model"
             ],
             "§12's sacrifice order, the first to go first"

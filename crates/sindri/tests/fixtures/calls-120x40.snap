@@ -5,21 +5,21 @@ expression: drawn
 calls at 120x40
 00 |turn 1 ─────────────────────────────────────────────────────────────────────────────────wire      .............anthropic| dim:111 muted:9
 01 |✓ exit 0  bash  64 bytes · 18 ms                                                        model     .........claude-sonnet| ok:1 dim:31 plain:56 dim:19 muted:13
-02 |  src/rows.rs: the check or the cross in `ok`/`err`                                     ────────────────────────────────| plain:88 dim:32
-03 |  The row is drawn from the verdict the record holds.                                   turns     .................6/250| plain:88 dim:27 muted:5
-04 |turn 2 ─────────────────────────────────────────────────────────────────────────────────ctx       ...................21%| dim:117 muted:3
-05 |✗ exit 1  bash  96 bytes · 211 ms                                                       cache     ...................88%| err:1 dim:32 plain:55 dim:29 muted:3
-06 |  warning: unused import: `std::fmt`                                                    ────────────────────────────────| plain:88 dim:32
-07 |  --> src/rows.rs:12:5                                                                  workspace ..…/.worktrees/46-rail| plain:88 dim:12 muted:20
-08 |  An unused import, and nowhere else to put it.                                         branch    .....spec/1-capability| plain:88 dim:15 muted:17
-09 |turn 3 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
-10 |✗ timed out  bash  0 bytes · 120000 ms                                                  skills    .....................2| err:1 dim:37 plain:50 dim:31 muted:1
-11 |  The call ran past its minute and was killed.                                          ────────────────────────────────| plain:88 dim:32
-12 |turn 4 ─────────────────────────────────────────────────────────────────────────────────sandbox   .................bwrap| dim:115 muted:5
-13 |✗ cancelled  bash  0 bytes · 3400 ms                                                    ────────────────────────────────| err:1 dim:35 plain:52 dim:32
-14 |  What a verdict says                                                                   session   ..............9f2c7a41| plain:2 plain+bold:19 plain:67 dim:24 muted:8
-15 |                                                                                        temp      ........…/9f2c7a41/tmp| plain:88 dim:18 muted:14
-16 |  The run stopped on the user's word: Ctrl-C cancels and keeps the draft, so the row                                    | plain:38 muted+reversed:6 plain:76
+02 |  src/rows.rs: the check or the cross in `ok`/`err`                                     think     ..................high| plain:88 dim:28 muted:4
+03 |  The row is drawn from the verdict the record holds.                                   ────────────────────────────────| plain:88 dim:32
+04 |turn 2 ─────────────────────────────────────────────────────────────────────────────────turns     .................6/250| dim:115 muted:5
+05 |✗ exit 1  bash  96 bytes · 211 ms                                                       ctx       ...................21%| err:1 dim:32 plain:55 dim:29 muted:3
+06 |  warning: unused import: `std::fmt`                                                    cache     ...................88%| plain:88 dim:29 muted:3
+07 |  --> src/rows.rs:12:5                                                                  ────────────────────────────────| plain:88 dim:32
+08 |  An unused import, and nowhere else to put it.                                         workspace ..…/.worktrees/46-rail| plain:88 dim:12 muted:20
+09 |turn 3 ─────────────────────────────────────────────────────────────────────────────────branch    .....spec/1-capability| dim:103 muted:17
+10 |✗ timed out  bash  0 bytes · 120000 ms                                                  ────────────────────────────────| err:1 dim:37 plain:50 dim:32
+11 |  The call ran past its minute and was killed.                                          skills    .....................2| plain:88 dim:31 muted:1
+12 |turn 4 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+13 |✗ cancelled  bash  0 bytes · 3400 ms                                                    sandbox   .................bwrap| err:1 dim:35 plain:52 dim:27 muted:5
+14 |  What a verdict says                                                                   ────────────────────────────────| plain:2 plain+bold:19 plain:67 dim:32
+15 |                                                                                        session   ..............9f2c7a41| plain:88 dim:24 muted:8
+16 |  The run stopped on the user's word: Ctrl-C cancels and keeps the draft, so the row    temp      ........…/9f2c7a41/tmp| plain:38 muted+reversed:6 plain:44 dim:18 muted:14
 17 |  says ✗ cancelled rather than leaving a spinner turning for a result that will never                                   | plain:7 muted+reversed:11 plain:102
 18 |  come.                                                                                                                 | plain:120
 19 |turn 5 ─────────────────────────────────────────────────────────────────────────────────                                | dim:88 plain:32
