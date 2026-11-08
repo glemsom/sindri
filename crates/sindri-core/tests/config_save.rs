@@ -398,6 +398,7 @@ fn every_key_touched() -> Flags {
         thinking: Some(true),
         extra_writable_paths: Some(vec![PathBuf::from("/srv/data")]),
         extra_headers: Some(vec![String::from("X-Gateway-Session: {session}")]),
+        context_window: Some(200_000),
         max_turns: Some(250),
         timeout: Some(120),
         command_budget_ms: Some(3_600_000),
@@ -544,6 +545,47 @@ fn a_settings_save_rewrites_the_one_line_a_reader_touched_and_no_other_byte() {
         HAND_WRITTEN_AFTER_ONE_MODEL,
         "a visit that touched one row writes one line: the comments, the blank line and \
          every key the reader never reached are the bytes they were"
+    );
+}
+
+#[test]
+fn a_context_window_a_reader_types_is_written_as_a_number_the_file_reads_back() {
+    let home = bare_home();
+    let path = file_in(&home);
+
+    Config::save_touched_to(&path, &touched(&[("context_window", "200000")]))
+        .expect("the save lands");
+
+    assert!(
+        read(&path).contains("context_window = 200000"),
+        "a window is a count, so the file holds it as a number and not as a string: {}",
+        read(&path)
+    );
+    assert_eq!(
+        Config::load_from(&path)
+            .expect("the file still reads")
+            .context_window,
+        Some(200_000),
+        "the number the row held is the number the next read takes back"
+    );
+}
+
+#[test]
+fn a_context_window_of_nothing_a_reader_types_is_refused_naming_the_row() {
+    let home = bare_home();
+    let path = file_in(&home);
+
+    let error = Config::save_touched_to(&path, &touched(&[("context_window", "0")]))
+        .expect_err("a window of no tokens is a share nothing can be taken of");
+
+    let message = error.to_string();
+    assert!(
+        message.contains("context_window") && message.contains("at least one token"),
+        "the refusal names the row a reader has to go and fix, and it says: {message}"
+    );
+    assert!(
+        !path.exists(),
+        "a refused save stages nothing, so there is no file to read"
     );
 }
 

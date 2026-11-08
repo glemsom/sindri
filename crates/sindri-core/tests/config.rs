@@ -37,7 +37,7 @@ fn resolved(home: &Path, vars: &[(&str, &str)], flags: Flags) -> Result<Config, 
 ///
 /// This is the independent source of truth for the key list: if the schema grows
 /// a key and this table does not, the drift test below says so.
-const EXAMPLES: [(&str, &str); 14] = [
+const EXAMPLES: [(&str, &str); 15] = [
     ("provider", "\"openai\""),
     ("model", "\"claude-sonnet-4-5\""),
     ("route", "\"responses\""),
@@ -46,6 +46,7 @@ const EXAMPLES: [(&str, &str); 14] = [
     ("thinking", "true"),
     ("extra_writable_paths", "[\"/srv/data\"]"),
     ("extra_headers", "[\"X-Gateway-Session: {session}\"]"),
+    ("context_window", "200000"),
     ("max_turns", "250"),
     ("timeout", "120"),
     ("command_budget_ms", "3600000"),
@@ -110,6 +111,7 @@ fn every_key_in_the_schema_is_accepted() {
         config.extra_writable_paths,
         Some(vec![PathBuf::from("/srv/data")])
     );
+    assert_eq!(config.context_window, Some(200_000));
     assert_eq!(config.max_turns, Some(250));
     assert_eq!(config.timeout, Some(120));
     assert_eq!(config.command_budget_ms, Some(3_600_000));
@@ -120,6 +122,133 @@ fn every_key_in_the_schema_is_accepted() {
     assert_eq!(
         config.extra_headers,
         Some(vec![String::from("X-Gateway-Session: {session}")])
+    );
+}
+
+#[test]
+fn a_context_window_in_the_file_is_read_as_tokens_beside_the_turn_cap() {
+    let keys = Config::KEYS.to_vec();
+    let at = keys
+        .iter()
+        .position(|key| *key == "context_window")
+        .expect("the schema names the window");
+
+    assert_eq!(
+        keys.get(at + 1),
+        Some(&"max_turns"),
+        "the settings modal walks the schema's order, so the window is one of the run dials \
+         and sits immediately before the cap: {keys:?}"
+    );
+
+    let home = config_home("context_window = 200000\n");
+    let config = resolved(home.path(), &[], Flags::default()).expect("the config loads");
+
+    assert_eq!(
+        config.context_window,
+        Some(200_000),
+        "the window is the config's to own: no catalogue holds one and no wire reports one"
+    );
+}
+
+#[test]
+fn a_context_window_of_nothing_is_refused_naming_the_key() {
+    let home = config_home("context_window = 0\n");
+    let path = home.path().join("sindri").join("config.toml");
+
+    let error = resolved(home.path(), &[], Flags::default())
+        .expect_err("a window of no tokens is a share nothing can be taken of");
+
+    assert_eq!(error.exit_code(), 2);
+    let message = error.to_string();
+    assert!(
+        message.contains("at least one token") && message.contains(&path.display().to_string()),
+        "the refusal says the smallest window that would do and the file it was written in, \
+         and it says: {message}"
+    );
+}
+
+#[test]
+fn an_unset_context_window_is_no_window_at_all() {
+    let home = config_home("");
+
+    let config = resolved(home.path(), &[], Flags::default()).expect("the config loads");
+
+    assert_eq!(
+        config.context_window, None,
+        "leaving the window unset is legal and is the default: no window, no percentage, \
+         and nothing guessed"
+    );
+}
+
+#[test]
+fn the_context_window_layers_file_then_environment_then_flag() {
+    let home = config_home("context_window = 200000\n");
+    let flag = Flags {
+        context_window: Some(50_000),
+        ..Flags::default()
+    };
+
+    let from_file = resolved(home.path(), &[], Flags::default()).expect("the config loads");
+    let from_environment = resolved(
+        home.path(),
+        &[("SINDRI_CONTEXT_WINDOW", "100000")],
+        Flags::default(),
+    )
+    .expect("the config loads");
+    let from_flag = resolved(home.path(), &[("SINDRI_CONTEXT_WINDOW", "100000")], flag)
+        .expect("the config loads");
+
+    assert_eq!(
+        from_file.context_window,
+        Some(200_000),
+        "the file speaks when nothing above it does"
+    );
+    assert_eq!(
+        from_environment.context_window,
+        Some(100_000),
+        "an exported window wins over the file"
+    );
+    assert_eq!(
+        from_flag.context_window,
+        Some(50_000),
+        "the flag is read above both, and replaces rather than adds"
+    );
+}
+
+#[test]
+fn an_exported_nothing_leaves_the_files_window_speaking() {
+    let home = config_home("context_window = 200000\n");
+
+    let config = resolved(
+        home.path(),
+        &[("SINDRI_CONTEXT_WINDOW", "")],
+        Flags::default(),
+    )
+    .expect("the config loads");
+
+    assert_eq!(
+        config.context_window,
+        Some(200_000),
+        "an exported nothing is silence, so the key the file speaks is still the key in force"
+    );
+}
+
+#[test]
+fn a_context_window_of_nothing_in_the_environment_names_the_variable() {
+    let home = config_home("");
+
+    let error = resolved(
+        home.path(),
+        &[("SINDRI_CONTEXT_WINDOW", "0")],
+        Flags::default(),
+    )
+    .expect_err("a window of no tokens is a share nothing can be taken of");
+
+    assert_eq!(error.exit_code(), 2);
+    let message = error.to_string();
+    assert!(
+        message.contains("SINDRI_CONTEXT_WINDOW") && message.contains("at least one token"),
+        "the refusal names the variable a person has to fix, and it says: {message}"
     );
 }
 

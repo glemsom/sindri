@@ -12,13 +12,13 @@ settings at 120x40
 06 |    thinking              true                                                                                          | plain:2 muted:24 plain:94
 07 |    extra_writable_paths  /srv/data                                                                                     | plain:2 muted:24 plain:94
 08 |    extra_headers                                                                                                       | plain:2 muted:24 plain:94
-09 |    max_turns             250                                                                                           | plain:2 muted:24 plain:94
-10 |    timeout               120                                                                                           | plain:2 muted:24 plain:94
-11 |    command_budget_ms                                                                                                   | plain:2 muted:24 plain:94
-12 |    output_budget_bytes                                                                                                 | plain:2 muted:24 plain:94
-13 |    status                                                                                                              | plain:2 muted:24 plain:94
-14 |    ssh_agent                                                                                                           | plain:2 muted:24 plain:94
-15 |                                                                                                                        | plain:120
+09 |    context_window        200000                                                                                        | plain:2 muted:24 plain:94
+10 |    max_turns             250                                                                                           | plain:2 muted:24 plain:94
+11 |    timeout               120                                                                                           | plain:2 muted:24 plain:94
+12 |    command_budget_ms                                                                                                   | plain:2 muted:24 plain:94
+13 |    output_budget_bytes                                                                                                 | plain:2 muted:24 plain:94
+14 |    status                                                                                                              | plain:2 muted:24 plain:94
+15 |    ssh_agent                                                                                                           | plain:2 muted:24 plain:94
 16 |                                                                                                                        | plain:120
 17 |                                                                                                                        | plain:120
 18 |                                                                                                                        | plain:120

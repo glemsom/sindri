@@ -19,7 +19,7 @@
 //! typed, and an id that names no session is refused by the core.
 
 use clap::{Parser, Subcommand, ValueEnum};
-use sindri_core::config::Flags;
+use sindri_core::config::{Flags, WINDOW_REFUSAL};
 use sindri_core::policy::Enforcement;
 use sindri_core::provider::Route;
 
@@ -72,6 +72,11 @@ pub struct Cli {
     /// Replaces a `route` the config file holds, as a repeated flag does.
     #[arg(long, value_name = "ROUTE", value_enum)]
     pub route: Option<RouteWord>,
+
+    /// How many tokens a conversation may fill before its window is full, replacing a
+    /// `context_window` the file or the environment holds.
+    #[arg(long = "context-window", value_name = "TOKENS", value_parser = window)]
+    pub context_window: Option<u64>,
 
     /// Run without a sandbox at all: the one escape hatch (§6).
     ///
@@ -158,6 +163,18 @@ pub enum LoginWire {
     Copilot,
 }
 
+/// A context window typed on the command line, held to the rule every other door is: a
+/// window of no tokens is a share with no whole to take.
+fn window(text: &str) -> Result<u64, String> {
+    let tokens: u64 = text
+        .parse::<u64>()
+        .map_err(|error: std::num::ParseIntError| error.to_string())?;
+    if tokens == 0 {
+        return Err(String::from(WINDOW_REFUSAL));
+    }
+    Ok(tokens)
+}
+
 /// The routes a launch may name, as clap sees them: the two words the core
 /// accepts, so no third spelling can be typed, and nothing here decides which
 /// endpoint a name is served by — that is rig's (§10).
@@ -186,6 +203,7 @@ impl Cli {
         Flags {
             api_key: self.api_key.clone(),
             route: self.route.map(RouteWord::route),
+            context_window: self.context_window,
             ..Flags::default()
         }
     }
@@ -208,5 +226,39 @@ impl Cli {
         } else {
             Enforcement::Bubblewrap
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_context_window_flag_is_a_count_of_tokens_the_run_is_handed() {
+        let cli = Cli::try_parse_from(["sindri", "--context-window", "200000"])
+            .expect("a window of tokens is a flag this parser holds");
+
+        assert_eq!(
+            cli.flags().context_window,
+            Some(200_000),
+            "a window named on the command line is read above the file and the environment, \
+             which is how every other run dial gets in"
+        );
+    }
+
+    #[test]
+    fn a_context_window_of_nothing_on_the_command_line_is_refused() {
+        let error = Cli::try_parse_from(["sindri", "--context-window", "0"])
+            .expect_err("a window of no tokens is a share nothing can be taken of");
+
+        assert_eq!(
+            error.exit_code(),
+            2,
+            "a value that will not do is a usage error"
+        );
+        assert!(
+            error.to_string().contains("at least one token"),
+            "the refusal says the smallest window that would do, and it says: {error}"
+        );
     }
 }

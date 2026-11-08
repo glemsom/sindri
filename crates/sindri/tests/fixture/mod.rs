@@ -342,6 +342,7 @@ fn in_force() -> Config {
         model: Some(String::from("claude-sonnet-4-5")),
         thinking: Some(true),
         extra_writable_paths: Some(vec![PathBuf::from("/srv/data")]),
+        context_window: Some(200_000),
         max_turns: Some(250),
         timeout: Some(120),
         api_key: Some(String::from("sk-not-a-real-key")),
