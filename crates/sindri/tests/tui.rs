@@ -12,6 +12,7 @@
 //! flight while the test types, and `Ctrl-C` and an outside `SIGINT` are each proved to
 //! stop it where §4 says they do (§4, §12).
 
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -778,24 +779,30 @@ fn sequence(drawn: &str) -> Option<Sequence> {
 /// The rows the composer's band took in the last frame that painted it: the gap between
 /// the row of its hairline and the row of the footer's first hint, which is the box's
 /// height (§12).
+///
+/// The hairline is the one drawn from the frame's first column and not any run of them: a
+/// rail draws hairlines of its own, and a frame that changed nothing but the rail paints
+/// those after the composer's.
 fn composer_rows(drawn: &str) -> Option<u16> {
-    let mut row = 0u16;
+    let (mut row, mut column) = (0u16, 0u16);
     let (mut hairline, mut footer) = (None, None);
     let mut painted_here = String::new();
     for mark in painted(drawn) {
         match mark {
-            Painted::Moved(at, _) => {
+            Painted::Moved(at, col) => {
                 row = at;
+                column = col;
                 painted_here.clear();
             }
             Painted::Glyph(glyph) => {
                 painted_here.push(glyph);
-                if glyph == '─' {
+                if glyph == '─' && column == 1 {
                     hairline = Some(row);
                 }
                 if painted_here.ends_with("Enter send") {
                     footer = Some(row);
                 }
+                column = column.saturating_add(1);
             }
         }
     }
@@ -831,6 +838,45 @@ fn row_of(drawn: &str, needle: &str) -> Option<u16> {
 /// every frame that has been painted, and the last one is the end of it.
 fn last(drawn: &str, needle: &str) -> Option<usize> {
     drawn.rfind(needle)
+}
+
+/// One row of the frame as the terminal holds it after every frame drawn so far: a frame
+/// paints the cells that changed and leaves the rest, so a value that moved is read off the
+/// row the moves and glyphs leave in it rather than off the bytes that landed last.
+fn row_text(drawn: &str, row: u16) -> String {
+    let mut cells: BTreeMap<u16, char> = BTreeMap::new();
+    let (mut here, mut column) = (0u16, 0u16);
+    for mark in painted(drawn) {
+        match mark {
+            Painted::Moved(at, col) => {
+                here = at;
+                column = col;
+            }
+            Painted::Glyph(glyph) => {
+                if here == row {
+                    cells.insert(column, glyph);
+                }
+                column = column.saturating_add(1);
+            }
+        }
+    }
+    let (Some(first), Some(last)) = (cells.keys().next(), cells.keys().next_back()) else {
+        return String::new();
+    };
+    (*first..=*last)
+        .map(|column| cells.get(&column).copied().unwrap_or(' '))
+        .collect()
+}
+
+/// Whether the rail row drawn under `label` reads `value` after every frame so far: the
+/// label in its field, and the value the row ends in — the rail's right-hand edge being the
+/// frame's own.
+fn rail_reads(drawn: &str, label: &str, value: &str) -> bool {
+    let Some(row) = row_of(drawn, label) else {
+        return false;
+    };
+    let row = row_text(drawn, row);
+    row.contains(&format!("{label} ")) && row.ends_with(value)
 }
 
 /// The cell the last frame left the caret on: typing paints one glyph per frame, so where
@@ -1231,6 +1277,88 @@ fn a_cancelled_run_settles_as_cancelled_and_the_settled_frame_is_left_alone() {
         session.wait().code(),
         Some(0),
         "the launch outlives the run it cancelled: {:?}",
+        drawn.text()
+    );
+}
+
+/// A live run's rail: the facts the run was opened with are drawn on the frame its first
+/// turn is in flight from, and the turn's own facts are drawn once it ends — the size the
+/// wire reported against the window the config names, and the turn counted against the cap.
+///
+/// The window is the config's, reached by the run and by nothing in the frame: a rail that
+/// read the config itself would be a second opinion about what the run obeys.
+#[test]
+fn a_live_run_draws_the_facts_it_was_handed_and_its_first_turn_moves_them() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let mut command = ground.command();
+    command
+        .arg("--yolo-unsafe")
+        .env("SINDRI_BASE_URL", wire.base_url())
+        .env("SINDRI_CONTEXT_WINDOW", "200000");
+    let (session, mut pty, drawn) = Session::starting(command);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    assert_eq!(
+        row_of(&drawn.text(), "turns"),
+        None,
+        "a frame before any run knows no fact and draws no rail: {:?}",
+        drawn.text()
+    );
+
+    ask(&mut pty, &drawn, &wire);
+
+    assert!(
+        drawn.wait_until(|frame| rail_reads(frame, "turns", "0/250")),
+        "the frame a run's first turn is in flight from draws the facts the run was \
+         opened with, and the cap with no turn spent: {:?}",
+        drawn.text()
+    );
+    for (label, value) in [
+        ("wire", "anthropic"),
+        ("model", "claude-sonnet-4-6"),
+        ("think", "off"),
+        ("sandbox", "unsafe"),
+    ] {
+        assert!(
+            rail_reads(&drawn.text(), label, value),
+            "the rail draws `{label} {value}` on the frame the run opened: {:?}",
+            drawn.text()
+        );
+    }
+    assert_eq!(
+        row_of(&drawn.text(), "ctx"),
+        None,
+        "no reply has reported a size, so there is no ctx row to read even though a \
+         window is named: {:?}",
+        drawn.text()
+    );
+
+    wire.release();
+
+    assert!(
+        drawn.wait_until(|frame| {
+            rail_reads(frame, "turns", "1/250") && rail_reads(frame, "ctx", "11/200k 0%")
+        }),
+        "the turn the run took is counted against the cap, and the size the wire \
+         reported is drawn against the window the config named: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(b"\x11");
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "the launch outlives the run whose facts it drew: {:?}",
+        drawn.text()
+    );
+    assert!(
+        drawn.wait_for(b"\x1b[?1049l"),
+        "and gives the screen back: {:?}",
         drawn.text()
     );
 }

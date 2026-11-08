@@ -20,6 +20,7 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
+use sindri::rail;
 use sindri_core::asking::Asking;
 use sindri_core::config::{Config, Process};
 use sindri_core::outcome::{Facts as Reported, Outcome};
@@ -27,7 +28,7 @@ use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::preamble::Preamble;
 use sindri_core::provider::copilot::Store;
 use sindri_core::provider::served::{Listing, Where};
-use sindri_core::provider::{Ask, Client, Credential, Deltas, Route};
+use sindri_core::provider::{Ask, Client, Credential, Deltas, Route, Usage};
 use sindri_core::records::{Facts, Record};
 use sindri_core::run::{Cancel, Exchange, Limits, Run, Shell};
 use sindri_core::sandbox::{self, Proof};
@@ -79,10 +80,16 @@ impl Refusal {
 
 /// What a front end is told as a run goes, besides the fragments landing in its
 /// [`Deltas`]: the turn that just ended, so the front end that speaks says so and the one
-/// that draws takes what it needs of it.
+/// that draws takes what it needs of it, and the run's facts, so the one that draws a rail
+/// draws the run's own.
 pub trait Turns {
     /// One turn ended: what the model said, and the calls it asked for.
     fn turn(&mut self, ended: &Exchange);
+
+    /// The facts a rail draws, handed when the run is open, again as each turn ends and
+    /// once when it stops, so a frame moves with the run and settles with it. A front end
+    /// with no rail takes this and draws nothing.
+    fn facts(&mut self, _facts: rail::Facts) {}
 }
 
 /// A front end with nothing to say about a turn that ended.
@@ -134,6 +141,9 @@ pub struct Launch {
     wire: Wire,
     /// The completion endpoint, for a wire that serves two (§10).
     route: Option<Route>,
+    /// The window the config names the run's size a share of, when a reader named one: kept
+    /// here the way the dials are, so the rail asks this run and not the config again.
+    context_window: Option<u64>,
     /// What boot proved about the sandbox, as the one line a front end narrates.
     proof: Proof,
     /// When the run was opened, which is where its duration is measured from.
@@ -222,6 +232,7 @@ impl Launch {
             model,
             wire,
             route,
+            context_window: config.context_window,
             proof,
             started,
         })
@@ -246,6 +257,15 @@ impl Launch {
         self.limits.max_turns()
     }
 
+    /// The facts a rail draws, as this run holds them now: what the record has written about
+    /// it, the size the turn's own ask reported, and the window this launch was handed — so
+    /// a frame reads the run and never the config the run came from.
+    fn facts(&self, measured: &Usage) -> rail::Facts {
+        rail::Facts::of(&self.session, self.record.document())
+            .measured(measured)
+            .window(self.context_window)
+    }
+
     /// Drives `prompt` to a stop reason: every fragment of the turn in flight lands in
     /// `deltas`, every turn that ends is handed to `turns`, and the session is written as it
     /// goes and ended whatever the run did (§13).
@@ -264,6 +284,8 @@ impl Launch {
             .limits(self.limits)
             .tools(&self.tools)
             .cancel(cancel);
+        let mut measured = Usage::default();
+        turns.facts(self.facts(&measured));
         while run.state().is_running() {
             run.turn(deltas);
             // The loop hands a front end no hook per entry, so a turn is written whole as
@@ -271,7 +293,9 @@ impl Launch {
             if let Some(exchange) = run.history().last() {
                 note(self.record.turn_started(exchange.turn));
                 note(self.record.answered(exchange.turn, &exchange.text));
+                measured = exchange.usage;
                 turns.turn(exchange);
+                turns.facts(self.facts(&measured));
             }
         }
 
@@ -279,6 +303,7 @@ impl Launch {
         let usage = self.asking.spent();
         note(self.record.spent(usage));
         note(self.record.stopped(&state));
+        turns.facts(self.facts(&measured));
         let outcome = Outcome::of(
             &run,
             Reported {
