@@ -1268,6 +1268,15 @@ fn ctrl_c_in_a_run_cancels_it_and_keeps_the_draft() {
         document(&ground.state)
     );
 
+    // The frame learns the run ended from the marker the run settles on, and not from the
+    // record: a key typed while that report is still in flight would read as one pressed
+    // during a live run, so the settled marker is what this test waits for.
+    assert!(
+        drawn.wait_until(|frame| frame.contains('\u{2717}')),
+        "the cancelled run's marker has settled: {:?}",
+        drawn.text()
+    );
+
     // The composer is idle again, so the same key now clears the draft — which is how a test
     // reads back that the run really ended rather than only that the record did.
     pty.type_bytes(&[0x03]);
