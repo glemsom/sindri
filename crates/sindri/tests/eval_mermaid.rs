@@ -22,18 +22,20 @@
 //! test here is ignored: the stage that owns a failure is the stage that prints it.
 
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use sindri::graphics::CellSize;
-use sindri::mermaid::{self, Block, Fence};
+use sindri::mermaid::Diagram;
 
 /// Where the corpus of real fences lives: one `.mmd` file per fence, and nothing else,
 /// because there is no golden beside it any more.
 const CORPUS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/mermaid");
 
-/// How a refusal says the renderer was given the half a second `mermaid::BOUND` allows and
-/// was not finished: `Block::Refused` carries the sentence a caption prints and not the kind
-/// of refusal, so the sentence is what a starved render is recognised by.
-const STARVED: &str = "took longer than";
+/// How long this eval waits for one fence, which is its own patience and deliberately not
+/// `mermaid::BOUND`: a bound on a stall a reader feels says nothing about what a corpus of
+/// every diagram type costs on a shared runner, and reading it as one made this eval red for
+/// work that takes milliseconds.
+const EVAL_BOUND: Duration = Duration::from_secs(30);
 
 /// The corpus, in name order, so two runs of the test walk the same fences.
 fn corpus() -> Vec<PathBuf> {
@@ -65,42 +67,26 @@ fn every_fence_in_the_corpus_is_drawn_as_a_picture_that_measures() {
     );
 
     let mut failures = Vec::new();
+    let mut slowest: Option<(String, Duration)> = None;
     for path in &fences {
         let source = std::fs::read_to_string(path)
             .unwrap_or_else(|error| panic!("{} is readable: {error}", path.display()));
-        // Rendered again until it draws: `mermaid::BOUND` is a stall a reader should not feel,
-        // and a machine running every eval at once can spend it on scheduling rather than on
-        // drawing. A fence the renderer really will not read still fails, with its own words.
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
-        let diagram = loop {
-            match mermaid::block(&source, Fence::Closed) {
-                Block::Picture(diagram) => break Some(diagram),
-                // Only a render starved of a processor is tried again; a fence the renderer
-                // will not read fails now, in the renderer's own words, rather than after a
-                // deadline it was never going to beat.
-                Block::Refused { caption } if caption.contains(STARVED) => {
-                    if std::time::Instant::now() > deadline {
-                        failures.push(format!(
-                            "{}: still drawing after 20 s: {caption}",
-                            named(path)
-                        ));
-                        break None;
-                    }
-                }
-                Block::Refused { caption } => {
-                    failures.push(format!("{}: refused, and said: {caption}", named(path)));
-                    break None;
-                }
-                Block::Streaming => {
-                    failures.push(format!(
-                        "{}: a fence that closed is not still arriving",
-                        named(path)
-                    ));
-                    break None;
-                }
+        let started = Instant::now();
+        let diagram = match Diagram::of_within(EVAL_BOUND, &source) {
+            Ok(diagram) => diagram,
+            Err(refusal) => {
+                failures.push(format!(
+                    "{}: refused, and said: {}",
+                    named(path),
+                    refusal.message()
+                ));
+                continue;
             }
         };
-        let Some(diagram) = diagram else { continue };
+        let drawn = started.elapsed();
+        if slowest.as_ref().is_none_or(|(_, taken)| drawn > *taken) {
+            slowest = Some((named(path), drawn));
+        }
 
         let svg = diagram.svg();
         if !svg.trim_start().starts_with("<svg") || !svg.trim_end().ends_with("</svg>") {
@@ -132,9 +118,11 @@ fn every_fence_in_the_corpus_is_drawn_as_a_picture_that_measures() {
         "every fence in the corpus is drawn as a picture that measures:\n{}",
         failures.join("\n")
     );
+    let (slowest, taken) = slowest.expect("every fence that passed the guard drew");
     println!(
-        "\ncheck: eval mermaid-corpus ... ok ({} fences)",
-        fences.len()
+        "\ncheck: eval mermaid-corpus ... ok ({} fences, slowest {slowest} at {} ms)",
+        fences.len(),
+        taken.as_millis()
     );
 }
 

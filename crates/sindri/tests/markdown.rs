@@ -278,24 +278,6 @@ fn a_fence_still_open_at_the_end_of_the_text_is_a_code_block() {
     );
 }
 
-/// `text` laid out until its diagrams have drawn, or as far as a bound of this test's own
-/// allows: `mermaid::BOUND` is a stall a *reader* should not feel, and a machine running the
-/// whole suite at once can spend it on scheduling rather than on drawing. A fence the renderer
-/// really will not draw still fails here — that is what a refusal is — but a fence that was
-/// merely starved of a processor is laid out again.
-fn laid_out_until_drawn(text: &str, cols: u16) -> Vec<sindri::rows::Row> {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
-    loop {
-        let rows = markdown::rows(text, cols);
-        let starved = drawn(&rows)
-            .iter()
-            .any(|line| line.contains("took longer than"));
-        if !starved || std::time::Instant::now() > deadline {
-            return rows;
-        }
-    }
-}
-
 /// §12's picture row, as far as a layout with no surface can show it: a mermaid fence the
 /// renderer draws is drawn here as the code it was written as — the words its block copies as,
 /// and all a reader whose terminal places no picture sees — with nothing under it, because
@@ -303,7 +285,7 @@ fn laid_out_until_drawn(text: &str, cols: u16) -> Vec<sindri::rows::Row> {
 /// `pictures`' (#55).
 #[test]
 fn a_mermaid_fence_that_draws_is_drawn_as_the_source_it_was_written_as() {
-    let rows = laid_out_until_drawn("```mermaid\nflowchart TD\n  A-->B\n```", 200);
+    let rows = markdown::rows("```mermaid\nflowchart TD\n  A-->B\n```", 200);
     assert_eq!(
         drawn(&rows),
         ["▏ mermaid", "▏ flowchart TD", "▏   A-->B"],

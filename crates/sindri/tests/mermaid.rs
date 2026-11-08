@@ -124,6 +124,22 @@ fn a_render_that_outlasts_its_bound_is_refused_rather_than_hanging_the_transcrip
     );
 }
 
+/// A caller who names a wall clock gets its own: the eval draws a corpus on a shared runner
+/// and needs more patience than a reader watching a frame, and the number it was given is the
+/// number its refusal carries.
+#[test]
+fn a_render_is_refused_with_the_bound_its_caller_gave_it() {
+    let bound = Duration::from_millis(1);
+    let refusal = Diagram::of_within(bound, FLOWCHART)
+        .expect_err("a fence is not drawn in the one millisecond it was given");
+
+    assert_eq!(
+        refusal,
+        Refusal::TooSlow { bound },
+        "the refusal is the caller's own bound and not the product's"
+    );
+}
+
 /// The other half of the fourth line: a renderer that dies is a refusal too. A renderer that
 /// panics on the thread the frame is painted on would take the frame with it.
 #[test]
