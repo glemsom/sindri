@@ -115,8 +115,8 @@ const HAIRLINE: char = '─';
 /// caller passes them in until the tickets that fill them land.
 #[derive(Debug, Default, Clone)]
 pub struct Facts {
-    /// The dialect the run asks over, in the wire's three-valued word: the protocol
-    /// that answered, printed above the name it served.
+    /// The dialect the run asks over, in the wire's own word: `anthropic`, `openai` or
+    /// `copilot`, and never a fourth.
     pub wire: Option<String>,
     /// The model the run asks, by the name its wire served.
     pub model: Option<String>,
@@ -585,7 +585,7 @@ fn short_id(guid: &str) -> &str {
 /// Which fact a row of the rail carries.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Kind {
-    /// The dialect the run asks over: one of the wire's three words.
+    /// The dialect the run asks over.
     Wire,
     /// The model the run asks, by the name its wire served.
     Model,
@@ -910,7 +910,7 @@ mod tests {
     }
 
     #[test]
-    fn a_frame_handed_no_wire_draws_no_wire_row_and_never_a_placeholder() {
+    fn a_frame_handed_no_wire_draws_no_wire_row() {
         let facts = Facts {
             wire: None,
             model: Some(String::from("claude-sonnet")),
@@ -921,54 +921,54 @@ mod tests {
         facts.paint(Shape::Ledger, band(COLUMNS, 2), &mut buffer);
 
         assert_eq!(
-            glyphs(&buffer, 0),
-            "model     .........claude-sonnet",
-            "a rail handed no wire has no wire row, and the model keeps the first row"
-        );
-        assert!(
-            !glyphs(&buffer, 1).contains("+1 more"),
-            "and nothing went, so nothing is counted"
+            (glyphs(&buffer, 0).trim_end(), glyphs(&buffer, 1).trim_end()),
+            ("model     .........claude-sonnet", ""),
+            "a rail handed no wire has no wire row, and nothing went, so no row counts it"
         );
     }
 
     #[test]
-    fn the_wire_row_says_one_of_the_three_words_the_dialect_is_known_by() {
+    fn the_facts_of_a_run_take_the_dialect_its_document_names() {
         let root = tempfile::tempdir().expect("a temp state home");
         let session = Session::create(root.path()).expect("a session");
 
-        for wire in [Wire::Anthropic, Wire::Openai, Wire::Copilot] {
+        for (wire, word) in [
+            (Wire::Anthropic, "anthropic"),
+            (Wire::Openai, "openai"),
+            (Wire::Copilot, "copilot"),
+        ] {
             let mut document = document(session.guid());
             document.wire = wire;
 
-            let facts = Facts {
-                wire: Facts::of(&session, &document).wire,
-                ..Facts::default()
-            };
-            let mut buffer = Buffer::empty(band(COLUMNS, 1));
-            facts.paint(Shape::Ledger, band(COLUMNS, 1), &mut buffer);
-            let row = glyphs(&buffer, 0);
-            let trimmed = row.trim_end();
+            let facts = Facts::of(&session, &document);
 
             assert_eq!(
                 facts.wire.as_deref(),
-                Some(wire.word()),
-                "the document's own dialect, in its own word"
+                Some(word),
+                "the dialect the document names, in the word the rail draws it by"
             );
+        }
+    }
+
+    #[test]
+    fn a_ledger_row_draws_the_wire_by_its_word_and_nothing_beside_it() {
+        for (word, row) in [
+            ("anthropic", "wire      .............anthropic"),
+            ("openai", "wire      ................openai"),
+            ("copilot", "wire      ...............copilot"),
+        ] {
+            let facts = Facts {
+                wire: Some(String::from(word)),
+                ..Facts::default()
+            };
+            let mut buffer = Buffer::empty(band(COLUMNS, 1));
+
+            facts.paint(Shape::Ledger, band(COLUMNS, 1), &mut buffer);
+
             assert_eq!(
-                &trimmed[..usize::from(FIELD)],
-                "wire      ",
-                "the label in its field"
-            );
-            assert!(
-                trimmed.ends_with(wire.word()),
-                "the value is the one word the dialect is named by: {trimmed:?}"
-            );
-            assert!(
-                trimmed[usize::from(FIELD)..trimmed.len() - wire.word().len()]
-                    .chars()
-                    .all(|glyph| glyph == LEADER),
-                "and leaders run out from the field to it, with nothing else on the row: \
-                 {trimmed:?}"
+                glyphs(&buffer, 0),
+                row,
+                "the label in its field, leaders out to the word, and nothing else"
             );
         }
     }
