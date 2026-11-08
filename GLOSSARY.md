@@ -114,6 +114,11 @@ instants, the whole GUID, the whole temp, the whole workspace — drawn from the
 and the facts it was handed, and settled rather than live.
 _Avoid_: Status screen, dashboard, details, inspector
 
+**Artefact**:
+The one file the product ships, static and `x86_64-unknown-linux-musl`, built and held by the
+release stage. What the evals hold to a golden is a fixture, not this.
+_Avoid_: Build, build output, package
+
 ## The paper trail
 
 **Spec**:
