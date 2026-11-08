@@ -790,6 +790,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
             calls: reply.calls.clone(),
         });
 
+        // Each call is charged as it lands, so a spent budget stops the rest of the turn.
         for call in &reply.calls {
             let acted = match self.executor.execute(call, &mut self.skills) {
                 Ok(acted) => acted,

@@ -220,6 +220,8 @@ pub fn invocation(
         args.extend([String::from("--bind"), path.clone(), path]);
     }
 
+    // The session temp is mapped here and never created: this module does not
+    // make it, adopt it or clear it away.
     args.extend([
         String::from("--bind"),
         temp.clone(),
@@ -263,7 +265,7 @@ pub fn run(
     let program = invocation.program().to_owned();
 
     // No stdin: a command that reads one would hang the run.
-    //
+
     // The command leads a process group of its own, so one kill takes everything
     // it started: `--die-with-parent` for a sandboxed command's process, the
     // group for an unsafe one's children.
@@ -299,7 +301,6 @@ pub fn run(
                 });
             }
         }
-        // A cancellation beats the timeout that would otherwise have fired.
         if cancel.is_set() {
             cancelled = true;
             stop(&mut child);
@@ -447,6 +448,7 @@ mod tests {
     #[test]
     fn the_sandbox_argv_is_the_boundary_and_nothing_else() {
         let ground = Ground::new();
+        // Named in reverse, so the vector shows the boundary's sorted order, not the caller's.
         let boundary = boundary(&ground, &["zdata", "adata"], Enforcement::Bubblewrap);
         let workspace = ground.path.join("workspace");
         let adata = ground.path.join("adata");

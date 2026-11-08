@@ -27,7 +27,7 @@
 //! (ADR-0011). Nothing here writes a record: that is ticket #17.
 
 pub mod copilot; // the owner-only file the session it keeps is written to
-pub mod retry; // §4's retry policy in one place: an ask is tried three times
+pub mod retry; // retry policy in one place: an ask is tried three times
 pub mod route; // which completion endpoint an OpenAI-shaped wire serves
 pub mod served; // what a wire says it serves, read off the wire and kept beside the (wire, base_url) pair that produced them
 pub mod transport; // how a request's bytes travel, and the fake a test substitutes
