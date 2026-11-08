@@ -486,8 +486,6 @@ impl View {
         }
         match self.rows.last_answer() {
             Some(answer) => Outcome::Copy(answer),
-            // A frame with nothing marked and no answer behind it has nothing to hand
-            // out, and a copy of nothing is not a frame that changed.
             None => Outcome::Unchanged,
         }
     }
@@ -577,8 +575,7 @@ impl View {
         }
         match self.loaded.load(name) {
             Load::Loaded => Outcome::Edited,
-            // A second load of one skill is `already_loaded` and carries no body, so it is
-            // no change to the set and no frame to paint (§5).
+            // A second load is `already_loaded` and carries no body.
             Load::AlreadyLoaded => Outcome::Unchanged,
         }
     }
@@ -828,23 +825,21 @@ impl View {
     /// composer's rows are read from the draft, so the band a draft grows into is
     /// measured when the frame is drawn and never cached.
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) {
-        // A screen is the whole frame: the bands under it are not painted at all, so
-        // nothing of a draft a key cannot reach is on the screen pretending otherwise.
+        // A screen is the whole frame: the bands under it are not painted, so no draft a key
+        // cannot reach is on the screen pretending otherwise.
         if let Some(modal) = self.stack.modal() {
             match modal {
                 Mode::Files => self.files_screen(area, buffer),
                 Mode::Models => self.models_screen(area, buffer),
                 Mode::Settings => self.settings_screen(area, buffer),
-                // The `?` screen lists the keys of every mode in the stack, so it is what a
-                // screen with no picture of its own is drawn as.
+                // The `?` screen is what a screen with no picture of its own is drawn as.
                 Mode::Composer | Mode::Keys => self.keys_screen(area, buffer),
             }
             return;
         }
         let bands = bands(area, self.composer.rows(), self.queue.rows());
-        // The rail takes its columns from the transcript's band before the transcript is
-        // laid out in what is left: a row's width is the width it is drawn at (ADR-0008),
-        // so the rail's share is decided here and nowhere else (#46).
+        // The rail's share is taken from the transcript's band before the transcript is laid
+        // out in what is left: a row's width is the width it is drawn at.
         let share = self.rail.split(bands.transcript);
         if let Some((shape, rail)) = share.rail {
             self.rail.paint(shape, rail, buffer);
@@ -866,12 +861,10 @@ impl View {
         buffer.set_style(area, Ink::Plain.style());
         self.rows.resize(area.width);
         // How many rows a picture takes is part of the rows an entry was laid out as, so the
-        // surface they were laid out on is told to the cache before a window is measured
-        // (ADR-0008, §12).
+        // surface they were laid out on reaches the cache before a window is measured.
         self.rows.retune(self.surface());
-        // The marker is laid into the rows it heads rather than painted over them, so the
-        // answer's first row is wrapped around it and the prose it introduces is never cut
-        // by the mark standing in front of it (#39).
+        // Laid into the rows it heads rather than painted over them: the answer's first row is
+        // wrapped around it, and the prose it introduces is never cut by the mark.
         let head = self.pulse.as_ref().map(Pulse::head);
         self.rows.live(&self.stream, head.as_ref());
         let window = self.rows.window(self.scroll, area.height);
@@ -889,21 +882,20 @@ impl View {
                     },
                     buffer,
                 );
-                // The picture is placed after the row's words, because it is drawn over them:
-                // a reader whose terminal places pictures is shown the picture, and a reader
-                // whose terminal does not is left holding the words (§12, #55).
+                // Placed after the row's words, because it is drawn over them: a terminal that
+                // places no picture leaves the reader the words.
                 place(&mut self.pictures, self.cell_size, row, area, y, buffer);
-                // The band's rows are what a mark's cells are counted in, so the lines
-                // they are drawn as are gathered only when there is a mark to read.
+                // Gathered only when there is a mark: a mark's cells are counted in the rows
+                // this band draws.
                 if self.mark.is_some() {
                     lines.push(row.glyphs());
                 }
                 y += 1;
             }
         }
-        // What this band placed is the whole of what the cache keeps: a picture the band has
-        // scrolled past is a raster nobody is looking at, and a width dragged across a range
-        // would leave one behind at every size it passed through (§12, ADR-0008).
+        // What this band placed is all the cache keeps: a picture scrolled past is a raster
+        // nobody is looking at, and a width dragged across a range would leave one behind at
+        // every size it passed through.
         self.pictures.retain_shown();
         self.marked = match self.mark {
             Some(mark) => Span::of(mark, &lines),
@@ -1024,8 +1016,6 @@ impl View {
         let mut y = area.y;
         screen_row(buffer, area, y, &[("? keys", Ink::Accent)]);
         for mode in modes {
-            // A blank row before each heading, so a mode's keys read as one block and
-            // the heading is not taken for the last key of the block above it.
             y = y.saturating_add(1);
             if y >= area.bottom() {
                 return;
@@ -1124,8 +1114,6 @@ impl View {
             }
             return;
         }
-        // The identifiers in one column and the wire's prose after them, so two rows read
-        // as one list rather than as two sentences that happen to be under each other.
         let widest = rows
             .iter()
             .map(|(id, _)| id.chars().count() + NAMES_GAP)
@@ -1188,8 +1176,8 @@ impl View {
         let Some(refusal) = self.settings.refusal() else {
             return;
         };
-        // The refusal sits a blank row under the list so it reads as a verdict on the visit
-        // rather than as the last key's value.
+        // A blank row under the list, so the refusal reads as a verdict on the visit and not
+        // as the last key's value.
         y = y.saturating_add(2);
         if y >= area.bottom() {
             return;
@@ -1499,10 +1487,6 @@ mod tests {
                 row.split(GAP).collect()
             };
 
-            // What the row says, read back as hints: every one of them is a hint of the
-            // table and they are the table's from the front — so a row that stopped in the
-            // middle of a word would fail here as a part no hint is called, and a hint
-            // drawn in the wrong place would fail as the table's wrong hint.
             assert_eq!(
                 parts.as_slice(),
                 &HINTS[..parts.len()],
@@ -1530,10 +1514,8 @@ mod tests {
 
     #[test]
     fn a_hint_the_row_has_no_room_for_is_not_drawn_at_all() {
-        // Under twenty columns — narrower than any frame §57's sweep covers — the floor
-        // and the row disagree about `? keys`, and the row wins: a hint is whole or it is
-        // not drawn. The gap the hint would have been introduced by goes with it, so the
-        // row never ends on a separator that separates nothing.
+        // Narrower than any frame a footer is drawn at, the row wins over the floor: a hint is
+        // whole or not drawn, and the gap that would have introduced it goes with it.
         assert_eq!(
             footer(15, 24).trim_end(),
             "Enter send",
@@ -1556,9 +1538,6 @@ mod tests {
         let view = View::typing(composer);
         let area = screen(40, 12);
 
-        // Twelve rows: the footer takes the last, and the three-row band — a hairline
-        // and two lines of draft — sits on rows 8 to 10. The caret is eleven glyphs
-        // into the second line.
         assert_eq!(view.composer().rows(), 3);
         assert_eq!(view.cursor(area), Some((11, 10)));
     }
