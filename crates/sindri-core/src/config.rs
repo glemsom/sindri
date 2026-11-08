@@ -66,6 +66,8 @@ pub struct Config {
     pub extra_writable_paths: Option<Vec<PathBuf>>,
     /// Request headers as `Name: value`, with `{session}` expanded per session.
     pub extra_headers: Option<Vec<String>>,
+    /// How many tokens the model's window holds, when a reader names it.
+    pub context_window: Option<u64>,
     /// The turn cap: a stop reason when it is reached, never an error.
     pub max_turns: Option<u32>,
     /// The per-call timeout in seconds.
@@ -82,7 +84,7 @@ pub struct Config {
 
 impl Config {
     /// Every key the schema has, in the order the settings modal walks them.
-    pub const KEYS: [&'static str; 14] = [
+    pub const KEYS: [&'static str; 15] = [
         "provider",
         "model",
         "route",
@@ -91,6 +93,7 @@ impl Config {
         "thinking",
         "extra_writable_paths",
         "extra_headers",
+        "context_window",
         "max_turns",
         "timeout",
         "command_budget_ms",
@@ -144,12 +147,17 @@ impl Config {
             });
         }
 
-        table
-            .try_into()
-            .map_err(|error: toml::de::Error| ConfigError::BadValue {
-                origin: path.display().to_string(),
-                reason: error.to_string(),
-            })
+        let config: Config =
+            table
+                .try_into()
+                .map_err(|error: toml::de::Error| ConfigError::BadValue {
+                    origin: path.display().to_string(),
+                    reason: error.to_string(),
+                })?;
+        if let Some(window) = config.context_window {
+            nonzero_window(&path.display().to_string(), window)?;
+        }
+        Ok(config)
     }
 
     /// Reads the file the environment points at.
@@ -275,6 +283,7 @@ impl Config {
                 .as_ref()
                 .map(|headers| headers.join(LIST_SEPARATOR))
                 .unwrap_or_default(),
+            "context_window" => number_or_empty(self.context_window),
             "max_turns" => number_or_empty(self.max_turns),
             "timeout" => number_or_empty(self.timeout),
             "command_budget_ms" => number_or_empty(self.command_budget_ms),
@@ -296,6 +305,7 @@ impl Config {
             thinking: self.thinking.or(lower.thinking),
             extra_writable_paths: self.extra_writable_paths.or(lower.extra_writable_paths),
             extra_headers: self.extra_headers.or(lower.extra_headers),
+            context_window: self.context_window.or(lower.context_window),
             max_turns: self.max_turns.or(lower.max_turns),
             timeout: self.timeout.or(lower.timeout),
             command_budget_ms: self.command_budget_ms.or(lower.command_budget_ms),
@@ -320,6 +330,7 @@ impl Config {
             extra_writable_paths: spoken(environment, "SINDRI_EXTRA_WRITABLE_PATHS")
                 .map(|paths| env::split_paths(&paths).collect()),
             extra_headers: spoken_headers(environment, "SINDRI_EXTRA_HEADERS")?,
+            context_window: spoken_window(environment, "SINDRI_CONTEXT_WINDOW")?,
             max_turns: spoken_parsed(environment, "SINDRI_MAX_TURNS")?,
             timeout: spoken_parsed(environment, "SINDRI_TIMEOUT")?,
             command_budget_ms: spoken_parsed(environment, "SINDRI_COMMAND_BUDGET_MS")?,
@@ -370,6 +381,7 @@ impl fmt::Debug for Config {
             .field("thinking", &self.thinking)
             .field("extra_writable_paths", &self.extra_writable_paths)
             .field("extra_headers", &self.extra_headers.as_ref().map(|_| MASK))
+            .field("context_window", &self.context_window)
             .field("max_turns", &self.max_turns)
             .field("timeout", &self.timeout)
             .field("command_budget_ms", &self.command_budget_ms)
@@ -403,6 +415,8 @@ pub struct Flags {
     pub extra_writable_paths: Option<Vec<PathBuf>>,
     /// Request headers as `Name: value`, with `{session}` expanded per session.
     pub extra_headers: Option<Vec<String>>,
+    /// How many tokens the model's window holds, when a reader names it.
+    pub context_window: Option<u64>,
     /// The turn cap: a stop reason when it is reached, never an error.
     pub max_turns: Option<u32>,
     /// The per-call timeout in seconds.
@@ -450,6 +464,13 @@ impl Flags {
         if let Some(headers) = &self.extra_headers {
             write_key(document, "extra_headers", array(headers.clone()));
         }
+        if let Some(tokens) = self.context_window {
+            write_key(
+                document,
+                "context_window",
+                integer("context_window", nonzero_window("context_window", tokens)?)?,
+            );
+        }
         if let Some(turns) = self.max_turns {
             write_key(document, "max_turns", Value::from(i64::from(turns)));
         }
@@ -491,6 +512,7 @@ impl From<Flags> for Config {
             thinking: flags.thinking,
             extra_writable_paths: flags.extra_writable_paths,
             extra_headers: flags.extra_headers,
+            context_window: flags.context_window,
             max_turns: flags.max_turns,
             timeout: flags.timeout,
             command_budget_ms: flags.command_budget_ms,
@@ -513,6 +535,7 @@ impl fmt::Debug for Flags {
             .field("thinking", &self.thinking)
             .field("extra_writable_paths", &self.extra_writable_paths)
             .field("extra_headers", &self.extra_headers.as_ref().map(|_| MASK))
+            .field("context_window", &self.context_window)
             .field("max_turns", &self.max_turns)
             .field("timeout", &self.timeout)
             .field("command_budget_ms", &self.command_budget_ms)
@@ -596,6 +619,7 @@ impl Touched {
                         Some(listed(text).into_iter().map(PathBuf::from).collect());
                 }
                 "extra_headers" => flags.extra_headers = Some(headers_of(key, text)?),
+                "context_window" => flags.context_window = Some(parsed(key, text)?),
                 "max_turns" => flags.max_turns = Some(parsed(key, text)?),
                 "timeout" => flags.timeout = Some(parsed(key, text)?),
                 "command_budget_ms" => flags.command_budget_ms = Some(parsed(key, text)?),
@@ -814,6 +838,14 @@ fn spoken_wire(environment: &impl Environment, name: &str) -> Result<Option<Wire
     }
 }
 
+/// A variable read as a context window.
+fn spoken_window(environment: &impl Environment, name: &str) -> Result<Option<u64>, ConfigError> {
+    match spoken_parsed(environment, name)? {
+        None => Ok(None),
+        Some(window) => nonzero_window(name, window).map(Some),
+    }
+}
+
 /// A text read as some other type, naming the key or variable it came from when it will not
 /// parse: the one spelling of "a value will not do", shared by the environment and by the
 /// text a settings row holds.
@@ -826,6 +858,21 @@ where
         origin: origin.to_owned(),
         reason: format!("`{text}` will not parse: {error}"),
     })
+}
+
+/// The one wording a window of no tokens is refused with, wherever one is read or written:
+/// a share of nothing is a division by zero.
+pub const WINDOW_REFUSAL: &str = "the context window must be at least one token";
+
+/// A context window, refused at nothing.
+fn nonzero_window(origin: &str, window: u64) -> Result<u64, ConfigError> {
+    if window == 0 {
+        return Err(ConfigError::BadValue {
+            origin: origin.to_owned(),
+            reason: String::from(WINDOW_REFUSAL),
+        });
+    }
+    Ok(window)
 }
 
 /// A text read as a route, which accepts exactly the two words.

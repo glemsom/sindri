@@ -322,6 +322,67 @@ fn space_flips_a_toggle_and_the_file_holds_the_word_it_was_flipped_to() {
 }
 
 #[test]
+fn a_context_window_typed_into_the_modal_round_trips_through_the_file() {
+    let home = home(HAND_WRITTEN);
+    let path = file_in(&home);
+    let mut view = opened(&home);
+    walk_to(&mut view, "context_window");
+    type_into(&mut view, "200000");
+
+    let touched = entered(&mut view);
+    let fresh = settings::persist(&environment(&home), &touched, Flags::default())
+        .expect("the write lands");
+
+    assert_eq!(
+        read(&path),
+        format!("{HAND_WRITTEN}context_window = 200000\n"),
+        "the row is a count a reader types, so the key the file gains is the number itself \
+         and every line it already had is untouched"
+    );
+    assert_eq!(
+        fresh.context_window,
+        Some(200_000),
+        "and the config the next prompt is handed is resolved from the file the visit wrote"
+    );
+    assert_eq!(
+        resolved(&home).context_window,
+        Some(200_000),
+        "so any later launch reads the window the reader set"
+    );
+}
+
+#[test]
+fn a_context_window_of_nothing_typed_into_the_modal_is_refused_naming_the_row() {
+    let home = home(HAND_WRITTEN);
+    let path = file_in(&home);
+    let mut view = opened(&home);
+    walk_to(&mut view, "context_window");
+    type_into(&mut view, "0");
+
+    let touched = entered(&mut view);
+    let error = settings::persist(&environment(&home), &touched, Flags::default())
+        .expect_err("a window of no tokens is a share nothing can be taken of");
+    view.refuse(&error.to_string());
+
+    assert_eq!(
+        view.mode(),
+        Mode::Settings,
+        "the refusal is read where the value is, so the screen stays open to be fixed"
+    );
+    assert!(
+        view.settings().refusal().is_some_and(
+            |reason| reason.contains("context_window") && reason.contains("at least one token")
+        ),
+        "and it names the row and the smallest window that would do, and it says: {error}"
+    );
+    assert_eq!(
+        read(&path),
+        HAND_WRITTEN,
+        "a refused save writes nothing at all"
+    );
+}
+
+#[test]
 fn the_screen_starts_from_the_config_as_it_resolved_and_not_from_the_file_alone() {
     let home = home(HAND_WRITTEN);
     let mut environment = environment(&home);
