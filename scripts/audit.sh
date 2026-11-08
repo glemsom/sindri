@@ -109,8 +109,7 @@ read_declarations() {
 
 violations_undeclared_test_file=()
 
-# Rule 1. A file under a tests tree that no declaration names is reported where
-# it lies; the reading at the top of this file says what reaches it.
+# A file under a tests tree that no declaration reaches, reported where it lies.
 audit_undeclared_test_file() {
   local -A children=() reached=()
   local -a queue=()
@@ -154,9 +153,9 @@ audit_undeclared_test_file() {
   done
 }
 
-# Every `#[test]` name in the tree, as records of file US line US name. An
-# attribute may sit between the `#[test]` and the `fn`, as a cfg or a
-# should_panic does; anything else in between ends the search.
+# Every `#[test]` name in the tree, as records of file US line US name. A cfg or
+# a should_panic may sit between the `#[test]` and the `fn`; anything else ends
+# the search.
 test_lines=()
 read_test_names() {
   ((${#files[@]})) || return 0
@@ -177,8 +176,6 @@ read_test_names() {
 
 violations_test_name=()
 
-# The opening word of a name, when it is one the rule bans: `test`, `it`, `works`
-# or `check`, bare or trailed by an underscore.
 test_opener() {
   local name=$1 opener
   for opener in test it works check; do
@@ -190,7 +187,6 @@ test_opener() {
   return 1
 }
 
-# Rule 2. Every `#[test]` name states the behaviour.
 audit_test_name() {
   local record file line name opener
   for record in "${test_lines[@]}"; do

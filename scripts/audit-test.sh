@@ -52,74 +52,69 @@ assert_has() { # substring desc
   if [[ $OUT == *"$1"* ]]; then ok "$2: names $1"; else
     bad "$2: never names $1"; printf '  output:\n%s\n' "$OUT"; fi
 }
-assert_no_line() { # exact-line desc
-  if grep -qxF -- "$1" <<<"$OUT"; then
-    bad "$2: unexpected line '$1'"; printf '  output:\n%s\n' "$OUT"
-  else ok "$2: prints no '$1'"; fi
+assert_rules() { # desc rule...
+  local desc=$1 got
+  shift
+  got=$(sed -n 's/^audit: \(.*\) \.\.\. .*/\1/p' <<<"$OUT" | tr '\n' ' ')
+  if [[ $got == "$* " ]]; then ok "$desc: rules $*"; else
+    bad "$desc: rules '$got', want '$* '"; printf '  output:\n%s\n' "$OUT"; fi
 }
 
 # No rule reads a comment: a tree that carries none passes every rule.
 run "$clean"
 assert_code 0 "a tree with no comments"
-assert_line 'audit: undeclared-test-file ... ok' "a tree with no comments"
-assert_line 'audit: test-name ... ok' "a tree with no comments"
-if [[ $(grep -c '^audit: ' <<<"$OUT") == 2 ]]; then ok "a tree with no comments: two rules, two lines"; else
-  bad "a tree with no comments: $(grep -c '^audit: ' <<<"$OUT") audit lines, want 2"; fi
+assert_rules "a tree with no comments" undeclared-test-file test-name
 
-# 1. A file under a tests tree that no declaration names is reported where it
-#    lies — and a nested file a declaration does reach is not reported.
-case1="$scratch/undeclared"
-cp -a "$clean" "$case1"
-mkdir -p "$case1/crates/demo/tests/common"
-cat >"$case1/crates/demo/tests/common/helper.rs" <<'RS'
+undeclared="$scratch/undeclared"
+cp -a "$clean" "$undeclared"
+mkdir -p "$undeclared/crates/demo/tests/common"
+cat >"$undeclared/crates/demo/tests/common/helper.rs" <<'RS'
 pub fn helper() {}
 RS
-run "$case1"
+run "$undeclared"
 assert_code 1 "undeclared-test-file"
 assert_line 'audit: undeclared-test-file ... FAIL' undeclared-test-file
 assert_has 'crates/demo/tests/common/helper.rs:1:' undeclared-test-file
 assert_line 'audit: test-name ... ok' "undeclared case leaves the other rule alone"
 
-case1b="$scratch/declared"
-cp -a "$clean" "$case1b"
-mkdir -p "$case1b/crates/demo/tests/common"
-cat >"$case1b/crates/demo/tests/behaviour.rs" <<'RS'
+declared="$scratch/declared"
+cp -a "$clean" "$declared"
+mkdir -p "$declared/crates/demo/tests/common"
+cat >"$declared/crates/demo/tests/behaviour.rs" <<'RS'
 mod common;
 
 #[test]
 fn demo_keeps_a_field() {}
 RS
-cat >"$case1b/crates/demo/tests/common/mod.rs" <<'RS'
+cat >"$declared/crates/demo/tests/common/mod.rs" <<'RS'
 mod helper;
 RS
-cat >"$case1b/crates/demo/tests/common/helper.rs" <<'RS'
+cat >"$declared/crates/demo/tests/common/helper.rs" <<'RS'
 pub fn helper() {}
 RS
-run "$case1b"
+run "$declared"
 assert_code 0 "nested file a declaration reaches"
 assert_line 'audit: undeclared-test-file ... ok' "nested file a declaration reaches"
 
-# A file nested one level further is reported too: reach is transitive, and the
-# walk stops where the declarations stop.
-case1c="$scratch/undeclared-deep"
-cp -a "$case1b" "$case1c"
-mkdir -p "$case1c/crates/demo/tests/common/deep"
-cat >"$case1c/crates/demo/tests/common/deep/helper.rs" <<'RS'
+# Reach is transitive, and the walk stops where the declarations stop.
+deep="$scratch/undeclared-deep"
+cp -a "$declared" "$deep"
+mkdir -p "$deep/crates/demo/tests/common/deep"
+cat >"$deep/crates/demo/tests/common/deep/helper.rs" <<'RS'
 pub fn helper() {}
 RS
-run "$case1c"
+run "$deep"
 assert_code 1 "undeclared-test-file, one level deeper"
 assert_has 'crates/demo/tests/common/deep/helper.rs:1:' "undeclared-test-file, one level deeper"
 
-# 2. Every `#[test]` name states the behaviour: no test/it/works/check opener.
 for opener in test_ it_ works_ check_; do
-  case2="$scratch/test-name-${opener%_}"
-  cp -a "$clean" "$case2"
-  cat >"$case2/crates/demo/tests/behaviour.rs" <<RS
+  named="$scratch/test-name-${opener%_}"
+  cp -a "$clean" "$named"
+  cat >"$named/crates/demo/tests/behaviour.rs" <<RS
 #[test]
 fn ${opener}demo_keeps_a_field() {}
 RS
-  run "$case2"
+  run "$named"
   assert_code 1 "test-name, '${opener}' opener"
   assert_line 'audit: test-name ... FAIL' "test-name, '${opener}' opener"
   assert_has 'crates/demo/tests/behaviour.rs:2:' "test-name, '${opener}' opener"
@@ -132,21 +127,16 @@ else
 fi
 
 # Two violations, two independent failures: one broken tree, two FAIL lines.
-case3="$scratch/both"
-cp -a "$case1" "$case3"
-cat >"$case3/crates/demo/tests/behaviour.rs" <<'RS'
+both="$scratch/both"
+cp -a "$undeclared" "$both"
+cat >"$both/crates/demo/tests/behaviour.rs" <<'RS'
 #[test]
 fn it_keeps_a_field() {}
 RS
-run "$case3"
+run "$both"
 assert_code 1 "both rules broken"
 for rule in undeclared-test-file test-name; do
   assert_line "audit: $rule ... FAIL" "both rules broken"
-done
-
-# Neither rule that mandated a comment survives, so neither prints a line.
-for rule in module-paragraph mod-clause; do
-  assert_no_line "audit: $rule ... ok" "removed rule"
 done
 
 # The whole tree as it stands must pass every rule, fast.
@@ -154,10 +144,7 @@ start=$(date +%s%N)
 run "$repo_root"
 elapsed_ms=$(( ($(date +%s%N) - start) / 1000000 ))
 assert_code 0 "this tree"
-assert_line 'audit: undeclared-test-file ... ok' "this tree"
-assert_line 'audit: test-name ... ok' "this tree"
-if [[ $(grep -c '^audit: ' <<<"$OUT") == 2 ]]; then ok "this tree: one line per rule, two lines"; else
-  bad "this tree: $(grep -c '^audit: ' <<<"$OUT") audit lines, want 2"; fi
+assert_rules "this tree" undeclared-test-file test-name
 if (( elapsed_ms < 1000 )); then ok "this tree: ${elapsed_ms}ms, under a second"; else
   bad "this tree: ${elapsed_ms}ms, want under a second"; fi
 
