@@ -15,8 +15,7 @@ use crate::ink::Ink;
 
 pub const COLUMNS: u16 = 32;
 
-/// The frame width the ledger gives way at: a hundred-column frame is the last that holds a
-/// column.
+/// The frame width the ledger gives way at: a hundred-column frame is the last that holds one.
 pub const NARROW: u16 = 100;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -127,7 +126,6 @@ impl Ctx {
 struct Fill {
     percent: u8,
     window: u64,
-    /// `muted` while there is room, `accent` once the window is nearly full.
     ink: Ink,
 }
 
@@ -186,7 +184,6 @@ pub struct Facts {
     pub wire: Option<String>,
     /// The served name of the model, whole here and cut to its head wherever the rail draws it.
     pub model: Option<String>,
-    /// Whether the model thinks: `high` or `off`, and never a third.
     pub think: Option<String>,
     pub turns: Option<(u32, u32)>,
     pub ctx: Option<Ctx>,
@@ -195,6 +192,7 @@ pub struct Facts {
     pub cache: Option<u8>,
     pub workspace: Option<PathBuf>,
     pub branch: Option<String>,
+    /// Nothing produces this fact yet: a caller passes it in until its producer lands.
     pub skills: Option<usize>,
     pub sandbox: Option<Enforcement>,
     pub session: Option<String>,
@@ -337,9 +335,9 @@ impl Facts {
         }
     }
 
-    /// The facts this rail keeps and how many it gave up. The ledger gives them up in a settled
-    /// order beside the row that says how many went; the strip gives them up from the tail of its
-    /// own list, but its count is the last item of its one row, so the room takes the count first.
+    /// The ledger gives its facts up in a settled order beside the row that says how many went; the
+    /// strip gives them up from the tail of its own list, but its count is the last item of its one
+    /// row, so the room takes the count first.
     fn kept(&self, shape: Shape, area: Rect) -> Kept {
         let known = self.known(shape);
         let total = known.len();
@@ -443,8 +441,8 @@ impl Facts {
     }
 }
 
-/// One fact as the rail draws it: which fact, which is also its label field and its place in the
-/// sacrifice order, and the value beside it.
+/// One fact as the rail draws it: the fact itself, which names its label field and its place in
+/// the sacrifice order, and the value beside it.
 struct Fact {
     kind: Kind,
     value: String,
@@ -488,8 +486,7 @@ struct Kept {
     counted: bool,
 }
 
-/// One row of the ledger, before it is a row of glyphs. Pure, so the height a set of facts needs
-/// is a number a test reads without a buffer.
+/// One row of the ledger, before it is a row of glyphs.
 enum Row<'a> {
     Fact(&'a Fact),
     Hairline,
@@ -591,8 +588,8 @@ pub(crate) fn more(count: usize) -> String {
     format!("+{count} more")
 }
 
-/// The columns a labelled row drawn in `width` columns leaves its value: the field and one
-/// leader come off the front.
+/// The columns a labelled row drawn in `width` columns leaves its value: the field and one leader
+/// come off the front, and a value left less than that is not drawn at all.
 pub(crate) fn value_room(width: u16) -> usize {
     usize::from(width).saturating_sub(usize::from(FIELD) + LEADER_MIN)
 }
@@ -645,9 +642,9 @@ pub(crate) fn tail(path: &str, columns: usize) -> String {
     format!("…/{}", kept.join("/"))
 }
 
-/// The head of a served name in at most `columns`: whole hyphen-separated segments, and never one
-/// drawn in part. A name keeps its head, where the family lives, and gives up the stamps that
-/// follow it. A name whose first segment does not fit beside its own mark is empty.
+/// The head of a served name in at most `columns`: whole hyphen-separated segments, and never a
+/// part of one. A name keeps its head, where the family lives, and gives up its stamps, because
+/// widening the rail only moves the width a name fails at. A head that fits no mark is empty.
 pub(crate) fn head(name: &str, columns: usize) -> String {
     if name.chars().count() <= columns {
         return name.to_owned();
@@ -821,9 +818,8 @@ mod tests {
         }
     }
 
-    /// The contract as a test states it rather than as the code holds it: every fact the rail draws,
-    /// so a fact's wholeness and the count of what went are read off the screen, not off the module's
-    /// own tables.
+    /// Every fact the rail draws, its label and its value, stated here and not read off the module's
+    /// own tables, so a test cannot pass by agreeing with the code it is testing.
     const CONTRACT: [(&str, &str); 12] = [
         ("wire", "anthropic"),
         ("model", CUT),
@@ -839,8 +835,6 @@ mod tests {
         ("temp", "…/9f2c7a41/tmp"),
     ];
 
-    /// A document filled in by hand, so the rail's wiring is read off the document's fields and not
-    /// off a real run.
     fn document(guid: &str) -> SessionDocument {
         SessionDocument {
             session: guid.to_owned(),
@@ -1681,8 +1675,8 @@ mod tests {
         }
     }
 
-    /// The value a row draws beside `label`: the field and its leaders skipped and the padding after
-    /// the value dropped, so a test reads the fact the way a reader does.
+    /// The value a row draws beside `label`, read off the painted row: the field and its leaders
+    /// skipped, the padding after the value dropped.
     fn drawn(row: &str, label: &str) -> Option<String> {
         let rest = row.split_once(label)?.1;
         Some(

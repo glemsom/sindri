@@ -12,8 +12,8 @@ use crate::mermaid::{self, Fence};
 use crate::picture::{self, Picture, Surface};
 use crate::rows::{Row, glyphs, split_at};
 
-/// The parser's options: GFM tables on, because CommonMark leaves tables out, and nothing
-/// else, because no other extension is drawn differently here.
+/// The parser's options: GFM tables on, because CommonMark leaves tables out. No other extension
+/// is enabled, so a footnote, a strikethrough and a task list parse as plain prose.
 const OPTIONS: Options = Options::ENABLE_TABLES;
 
 pub fn rows(text: &str, cols: u16) -> Vec<Row> {
@@ -45,9 +45,8 @@ fn syntaxes() -> &'static SyntaxSet {
     SYNTAXES.get_or_init(SyntaxSet::load_defaults_newlines)
 }
 
-/// The ink a kind of word is drawn in, read off the scope `syntect` puts it in. A
-/// `syntect` theme is deliberately not spent here: it colours a cell by RGB, and a cell of
-/// this frame is drawn in an ink a fixture writes down by name.
+/// The ink a kind of word is drawn in, read off the scope `syntect` puts it in: a `syntect` theme
+/// colours a cell by RGB, where a cell of this frame is an ink a fixture writes down by name.
 fn kinds() -> &'static [(Scope, Ink)] {
     static KINDS: OnceLock<Vec<(Scope, Ink)>> = OnceLock::new();
     KINDS.get_or_init(|| {
@@ -399,9 +398,8 @@ impl Room {
             self.flush();
         }
         self.code = Some(Code::of(&tag));
-        // A mermaid fence is a picture and not code: its source is kept so the drawing can
-        // be made when the block closes, and so the reason it could not be drawn prints
-        // under it.
+        // A mermaid fence is a picture and not code: its source is kept so the drawing can be
+        // made when the block closes, and so the reason it could not be drawn prints under it.
         if tag.split_whitespace().next() == Some("mermaid") {
             let fence = match closed(span) {
                 true => Fence::Closed,
@@ -436,6 +434,8 @@ impl Room {
                         Err(refusal) => self.caption(&refusal.message()),
                     }
                 }
+                // A fence still arriving, and a picture this terminal cannot place, are drawn as
+                // the source alone.
                 _ => {}
             }
         }
@@ -623,6 +623,8 @@ struct Mermaid {
     /// Whether the closing line has arrived. A fence still arriving is never rendered, so a
     /// half-written diagram costs no pass and never flickers.
     fence: Fence,
+    /// The row the block opened on, which is the row its picture is placed over. A fence that
+    /// carried a language opened it one row up, so the two cases count from different rows.
     at: usize,
 }
 
@@ -901,7 +903,6 @@ fn rule(widths: &[usize]) -> Row {
     Row::of([(text, Ink::Dim)])
 }
 
-/// The columns a cell takes when it is drawn on one row: what a column is measured by.
 fn measured(cell: &[(String, Look)]) -> usize {
     cell.iter().map(|(text, _)| glyphs(text)).sum()
 }

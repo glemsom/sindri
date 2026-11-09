@@ -22,14 +22,9 @@ const INDENT: &str = "  ";
 /// so the two kinds of row line up.
 const THOUGHT: &str = "│ ";
 
-/// The glyph a call opens with, before anything has happened to it.
 const PENDING: char = '…';
-
-/// The glyphs a settled call wears, well and otherwise.
 const CHECK: char = '✓';
 const CROSS: char = '✗';
-
-/// The glyph a turn's divider fills the width with.
 const HAIRLINE: char = '─';
 
 /// One row of the transcript: never wider than the width it was laid out at, bar the
@@ -154,9 +149,9 @@ pub(crate) fn thought(text: &str, cols: u16) -> Vec<Row> {
         .collect()
 }
 
-/// The rows an answer is drawn as, set in the answer's gutter — except the row the
-/// run's marker heads, which stands the marker in that gutter, so that row alone loses
-/// the columns the gutter held and no more.
+/// The rows an answer is drawn as, set in the answer's gutter — except the row the run's marker
+/// heads, which stands the marker and its blank column in that gutter and lays that row's words
+/// out beside them.
 pub(crate) fn answer_on(text: &str, cols: u16, head: Option<&Head>, surface: &Surface) -> Vec<Row> {
     let (gutter, room) = margin(INDENT, cols);
     // The marker's trailing blank column counts against the width; the gutter it stands
@@ -370,11 +365,11 @@ impl Scroll {
 pub struct Rows {
     cols: u16,
     held: Vec<Held>,
-    /// How many times an entry has been laid out here: a test reads it, and nothing else
-    /// does.
+    /// How many layouts this cache has done. No code reads it: a test holds the laying out to a
+    /// count rather than to a shape.
     lays: usize,
-    /// What a picture in an answer is measured against, which is part of the rows an entry
-    /// was laid out as.
+    /// What a picture in an answer is measured against — the cell, and whether this terminal
+    /// places one — because how many rows a picture takes is part of the rows it was laid out as.
     surface: Surface,
 }
 
