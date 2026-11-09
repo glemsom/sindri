@@ -1,11 +1,3 @@
-use std::error::Error;
-use std::fmt;
-use std::fs::File;
-use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use serde::{Deserialize, Serialize};
 use crate::policy::{Boundary, Enforcement, PolicyRecord};
 use crate::provider::Route;
 use crate::provider::Usage as Ask;
@@ -13,6 +5,14 @@ use crate::redact::{Redacted, SecretSet};
 use crate::run::{Acted, Call, Exit, Limits, State, Stop};
 use crate::session::{Session, SessionError};
 use crate::wire::Wire;
+use serde::{Deserialize, Serialize};
+use std::error::Error;
+use std::fmt;
+use std::fs::File;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 const SESSION: &str = "session.json";
 const STAGING: &str = "session.json.tmp";
 const TRANSCRIPT: &str = "transcript.jsonl";
@@ -322,17 +322,9 @@ fn millis(duration: Duration) -> u64 {
 }
 #[derive(Debug)]
 pub enum RecordError {
-    Unwritable {
-        path: PathBuf,
-        reason: String,
-    },
-    Unserializable {
-        reason: String,
-    },
-    Unreadable {
-        path: PathBuf,
-        reason: String,
-    },
+    Unwritable { path: PathBuf, reason: String },
+    Unserializable { reason: String },
+    Unreadable { path: PathBuf, reason: String },
 }
 impl fmt::Display for RecordError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -373,16 +365,9 @@ impl Phase {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Told {
     Idle,
-    Asking {
-        turn: u32,
-    },
-    Waiting {
-        turn: u32,
-    },
-    Stopped {
-        turn: u32,
-        stop: Stop,
-    },
+    Asking { turn: u32 },
+    Waiting { turn: u32 },
+    Stopped { turn: u32, stop: Stop },
 }
 impl Told {
     pub fn phase(&self) -> Phase {
@@ -659,13 +644,8 @@ pub fn choose<'a>(sessions: &'a [Recorded], id: &str) -> Result<&'a Recorded, Lo
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LookupError {
-    Ambiguous {
-        id: String,
-        candidates: Vec<String>,
-    },
-    Absent {
-        id: String,
-    },
+    Ambiguous { id: String, candidates: Vec<String> },
+    Absent { id: String },
 }
 impl LookupError {
     pub fn exit_code(&self) -> u8 {

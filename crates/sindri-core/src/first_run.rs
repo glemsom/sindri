@@ -1,6 +1,6 @@
-use std::path::Path;
 use crate::config::{self, Config, ConfigError, Environment, Flags, config_path};
 use crate::wire::Wire;
+use std::path::Path;
 pub fn api_key_row(wire: Option<Wire>, path: &Path) -> String {
     let mut sources: Vec<&str> = Vec::new();
     if let Some(variable) = wire.and_then(Wire::credential_variable) {

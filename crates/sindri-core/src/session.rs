@@ -1,10 +1,10 @@
+use crate::config::{Environment, spoken};
+use serde::Serialize;
 use std::error::Error;
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
-use serde::Serialize;
-use crate::config::{Environment, spoken};
 const APPLICATION: &str = "sindri";
 const SESSIONS: &str = "sessions";
 const TEMP: &str = "tmp";
@@ -166,25 +166,11 @@ fn fresh_guid() -> Result<String, SessionError> {
 #[derive(Debug)]
 pub enum SessionError {
     NoStateHome,
-    NoEntropy {
-        reason: String,
-    },
-    Uncreatable {
-        path: PathBuf,
-        reason: String,
-    },
-    Unreadable {
-        path: PathBuf,
-        reason: String,
-    },
-    Unremovable {
-        path: PathBuf,
-        reason: String,
-    },
-    Unspillable {
-        path: PathBuf,
-        reason: String,
-    },
+    NoEntropy { reason: String },
+    Uncreatable { path: PathBuf, reason: String },
+    Unreadable { path: PathBuf, reason: String },
+    Unremovable { path: PathBuf, reason: String },
+    Unspillable { path: PathBuf, reason: String },
 }
 impl SessionError {
     pub fn exit_code(&self) -> u8 {

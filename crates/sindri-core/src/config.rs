@@ -1,3 +1,7 @@
+use crate::provider::Route;
+use crate::redact::{MASK, SecretSet};
+use crate::wire::Wire;
+use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::env;
 use std::error::Error;
@@ -6,11 +10,7 @@ use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use serde::Deserialize;
 use toml_edit::{DocumentMut, Item, Value};
-use crate::provider::Route;
-use crate::redact::{MASK, SecretSet};
-use crate::wire::Wire;
 pub const MODE: u32 = 0o600;
 #[derive(Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -658,22 +658,10 @@ fn header_shape(origin: &str, headers: &[String]) -> Result<(), ConfigError> {
 }
 #[derive(Debug)]
 pub enum ConfigError {
-    UnknownKey {
-        key: String,
-        path: PathBuf,
-    },
-    BadValue {
-        origin: String,
-        reason: String,
-    },
-    Unreadable {
-        path: PathBuf,
-        reason: String,
-    },
-    Unwritable {
-        path: PathBuf,
-        reason: String,
-    },
+    UnknownKey { key: String, path: PathBuf },
+    BadValue { origin: String, reason: String },
+    Unreadable { path: PathBuf, reason: String },
+    Unwritable { path: PathBuf, reason: String },
     NoConfigDir,
 }
 impl ConfigError {
