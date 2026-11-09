@@ -1,12 +1,6 @@
-//! Proves the three record files §13 puts in a session directory: `session.json`
-//! says what the run was and how it ended, `transcript.jsonl` holds one fact per
-//! line as the run goes, and `status.json` holds what the run said it was doing.
-//!
-//! The tests read the files with their own eyes rather than through the writer,
-//! so the shape the file has is the shape asserted and a reader of a killed run
-//! is what is proved. Every test holds its state home and its workspace in a temp
-//! directory of its own and hands them in, so no real `XDG_STATE_HOME` or `HOME`
-//! is read or written.
+//! Proves the three record files in a session directory: `session.json` says what the run was and
+//! how it ended, `transcript.jsonl` one fact per line as the run goes, and `status.json` what the
+//! run said it was doing. The files are read with the test's own eyes, not the writer's.
 
 use std::io::{BufRead, BufReader};
 use std::os::unix::process::ExitStatusExt;
@@ -26,22 +20,15 @@ use sindri_core::session::Session;
 use sindri_core::wire::Wire;
 use tempfile::TempDir;
 
-/// A workspace, a state home and the run's facts, all of the test's own.
 struct Ground {
-    /// Held so the directories outlive the paths that name them.
     _root: TempDir,
-    /// The one directory the run stands in.
     workspace: PathBuf,
-    /// The state home the session directory is made under.
     state: PathBuf,
-    /// The dials the run obeys.
     limits: Limits,
-    /// Every literal the record must never write down.
     secrets: SecretSet,
 }
 
 impl Ground {
-    /// A ground with an empty workspace and an empty state home.
     fn new() -> Ground {
         let root = tempfile::tempdir().expect("a temp ground");
         let workspace = root.path().join("workspace");
@@ -58,24 +45,20 @@ impl Ground {
         }
     }
 
-    /// This ground with `secret` among the literals the record must not carry.
     fn holding(mut self, secret: &str) -> Ground {
         self.secrets = SecretSet::of([secret]);
         self
     }
 
-    /// A session directory of this ground's state home.
     fn session(&self) -> Session {
         Session::create(&self.state).expect("a session")
     }
 
-    /// The boundary a run in this workspace holds.
     fn boundary(&self) -> Boundary {
         Boundary::from_config(&Config::default(), &self.workspace, Enforcement::Unsafe)
             .expect("the boundary holds")
     }
 
-    /// The facts a session document opens with.
     fn facts<'a>(&'a self, boundary: &'a Boundary) -> Facts<'a> {
         Facts {
             wire: Wire::Anthropic,
@@ -89,14 +72,12 @@ impl Ground {
         }
     }
 
-    /// A record opened on `session` in this ground.
     fn record(&self, session: &Session) -> Record {
         let boundary = self.boundary();
         Record::open(session, self.facts(&boundary)).expect("a record")
     }
 }
 
-/// One of the records files, read as JSON.
 fn json(path: &Path) -> Value {
     let text = std::fs::read_to_string(path).unwrap_or_else(|error| {
         panic!("cannot read {}: {error}", path.display());
@@ -256,8 +237,8 @@ fn the_thinking_field_lands_after_the_route_because_later_fields_only_append() {
 
 #[test]
 fn a_timestamp_is_rfc3339_in_utc_by_the_date_command() {
-    // `date` is the independent statement of what an instant is called: not a
-    // second copy of this code's own arithmetic.
+    // `date` is the independent statement of what an instant is called: not a second copy of this
+    // code's own arithmetic.
     for seconds in [0u64, 1_000_000_000, 1_717_000_000, 4_102_444_800] {
         let instant = UNIX_EPOCH + Duration::from_secs(seconds);
         let truth = Command::new("date")
@@ -276,8 +257,8 @@ fn a_timestamp_is_rfc3339_in_utc_by_the_date_command() {
         "1970-01-01T00:00:00Z",
         "the epoch is the epoch"
     );
-    // A clock that is wrong is still a clock: an instant before the epoch counts
-    // backwards through a whole day and does not wrap.
+    // A clock that is wrong is still a clock: an instant before the epoch counts backwards through
+    // a whole day and does not wrap.
     let before = UNIX_EPOCH - Duration::from_secs(1);
     let truth = Command::new("date")
         .args(["-u", "-d", "@-1", "+%Y-%m-%dT%H:%M:%SZ"])
@@ -292,7 +273,6 @@ fn a_timestamp_is_rfc3339_in_utc_by_the_date_command() {
     );
 }
 
-/// Appends `line` to a records file, exactly as a newer `sindri` might write it.
 fn push(path: &Path, line: &str) {
     use std::io::Write as _;
     let mut file = std::fs::OpenOptions::new()
@@ -303,7 +283,6 @@ fn push(path: &Path, line: &str) {
     writeln!(file, "{line}").unwrap_or_else(|error| panic!("cannot append: {error}"));
 }
 
-/// Every line of a records file, read as JSON.
 fn lines(path: &Path) -> Vec<Value> {
     let text = std::fs::read_to_string(path).unwrap_or_else(|error| {
         panic!("cannot read {}: {error}", path.display());
@@ -396,10 +375,6 @@ fn a_tool_call_and_its_result_are_two_entries_of_their_own_facts() {
     );
 }
 
-/// How a call ended is a fact of its result and not a sentence a reader of the text
-/// beside it works out (ADR-0007): the row that says `✗ exit 1` reads this field, so
-/// §12's four states are four values the run wrote down rather than four ways of
-/// wording the same prose.
 #[test]
 fn a_result_writes_the_verdict_its_call_settled_with() {
     let ground = Ground::new();
@@ -452,9 +427,6 @@ fn a_result_writes_the_verdict_its_call_settled_with() {
     );
 }
 
-/// A newer build may always write what an older one reads past (ADR-0007): a result
-/// line written before the verdict existed still reads, and reads as a result with no
-/// verdict rather than as a result that finished well.
 #[test]
 fn a_result_line_written_before_the_verdict_existed_still_reads() {
     let ground = Ground::new();
@@ -516,10 +488,6 @@ fn the_assistant_entry_lands_when_the_turn_ends() {
     );
 }
 
-/// A thought is a fact of its own: reasoning is written down beside the answer it
-/// reached, under a `kind` of its own, so a reader can show a run's thinking without
-/// the interface having to remember it — and a build that knows no `reasoning` skips
-/// the line, which is how a newer `sindri` writes what an older one reads past.
 #[test]
 fn a_thought_lands_as_its_own_entry_beside_the_answer() {
     let ground = Ground::new().holding("hunter2");
@@ -786,9 +754,8 @@ fn each_of_the_five_states_says_its_own_coarse_line() {
 
 #[test]
 fn a_status_line_never_carries_a_word_the_run_was_handed() {
-    // The one place a run's own text could reach a status line is a stop reason that
-    // carries it — a wire's refusal names the request back. The line is the enum's own
-    // words and nothing else.
+    // The one place a run's own text could reach a status line is a stop reason that carries it — a
+    // wire's refusal names the request back — so the line is the enum's own words and nothing else.
     let refused = "the model refused: temperature 9000 is outside [0, 1]";
     let told = Told::Stopped {
         turn: 2,
@@ -807,8 +774,8 @@ fn a_status_line_never_carries_a_word_the_run_was_handed() {
 
 #[test]
 fn every_turn_a_status_names_is_the_turn_it_was_told_at() {
-    // `idle` is a run with no turn in it and says nothing rather than a turn zero, so a
-    // reader is never told a turn the run has not had.
+    // `idle` is a run with no turn in it and says nothing rather than a turn zero, so a reader is
+    // never told a turn the run has not had.
     assert_eq!(Told::Idle.turn(), 0);
     assert_eq!(Told::Asking { turn: 7 }.turn(), 7);
     assert_eq!(Told::Waiting { turn: 7 }.turn(), 7);
@@ -830,8 +797,8 @@ fn a_kind_this_build_does_not_know_is_skipped_and_the_rest_loads() {
     let path = session.directory().join("transcript.jsonl");
 
     record.turn_started(1).expect("a turn start is recorded");
-    // What a newer `sindri` may write: a kind this build has never heard of, its
-    // own fields, and a line that was cut short by a kill.
+    // What a newer `sindri` may write: a kind this build has never heard of, its own fields, and a
+    // line that was cut short by a kill.
     push(
         &path,
         r#"{"kind": "thinking", "turn": 1, "thought": "a newer build wrote this"}"#,
@@ -872,8 +839,8 @@ fn a_known_kind_ignores_fields_this_build_has_never_heard_of() {
     assert_eq!(transcript.skipped(), 0);
 }
 
-/// One git command in `directory`, with no home, no global config and no
-/// identity of the machine's own to read or write.
+/// One git command in `directory`, with no home, no global config and no identity of the machine's
+/// own to read or write.
 fn git(directory: &Path, args: &[&str]) -> String {
     let output = Command::new("git")
         .arg("-C")
@@ -962,9 +929,6 @@ fn a_workspace_that_is_no_checkout_says_so_rather_than_guessing() {
     );
 }
 
-/// The child half of `a_killed_run_still_reads`: it opens a session of its own,
-/// writes one turn after another, and is killed by that test — so it never
-/// returns anything but its own death.
 #[test]
 #[ignore = "spawned by a_killed_run_still_reads, which kills it"]
 fn child_writes_entries_until_it_is_killed() {
@@ -1046,8 +1010,8 @@ fn a_killed_run_still_reads() {
         .spawn()
         .expect("the child runs");
 
-    // The child's own lines, marked, because the test harness prints lines of
-    // its own on the same stream.
+    // The child's own lines, marked, because the test harness prints lines of its own on the same
+    // stream.
     let said = BufReader::new(child.stdout.take().expect("the child's stdout"));
     let (mut guid, mut directory, mut last) = (String::new(), PathBuf::new(), 0);
     for line in said.lines() {

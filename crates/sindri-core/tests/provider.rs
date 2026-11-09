@@ -1,31 +1,20 @@
-//! What the provider seam promises, asked through the real wire implementations
-//! and the real event-stream decoding, against replies recorded from the two
-//! providers §10 names. Nothing here reaches the network: the transport hands
-//! back bytes a fixture recorded, so the framing and the decoding are the ones
-//! a live run would use and only the socket is missing.
+//! What the provider seam promises, asked through the real wire implementations and the real
+//! event-stream decoding, against replies recorded from the two providers. Nothing reaches the
+//! network: the transport hands back recorded bytes, so only the socket is missing.
 
 use sindri_core::provider::transport::{Canned, Http, Replay};
 use sindri_core::provider::{Ask, Client, Credential, Deltas, Verdict};
 use sindri_core::redact::SecretSet;
 use sindri_core::wire::Wire;
 
-/// An Anthropic Messages reply, reasoning block first, as the wire streamed it.
 const ANTHROPIC: &str = include_str!("fixtures/providers/anthropic_stream.sse");
-/// The same dialect, cut off after its first text fragment: no `message_stop`.
 const ANTHROPIC_TRUNCATED: &str = include_str!("fixtures/providers/anthropic_truncated.sse");
-/// An OpenAI Responses reply: the route the openai dialect takes for a name of
-/// its own, reasoning summarized before the answer.
 const OPENAI_RESPONSES: &str = include_str!("fixtures/providers/openai_responses_stream.sse");
-/// A refusal the wire sent with a status of its own.
 const BAD_REQUEST: &str = r#"{"error":{"message":"unknown model","type":"invalid_request_error"}}"#;
 
-/// A sink that keeps what arrived, in the order it arrived, so a test can see
-/// the fragments and not only the folded answer.
 #[derive(Debug, Default)]
 struct Transcript {
-    /// Every text fragment, joined.
     text: String,
-    /// Every reasoning fragment, joined.
     reasoning: String,
 }
 
@@ -39,7 +28,6 @@ impl Deltas for Transcript {
     }
 }
 
-/// An Anthropic ask, with a credential, against `replay`.
 fn anthropic_ask() -> Ask {
     Ask::new(Wire::Anthropic, "claude-sonnet-4-6")
         .key("sk-ant-recorded")

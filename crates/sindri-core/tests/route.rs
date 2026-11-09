@@ -1,30 +1,17 @@
-//! Proves the route an OpenAI-shaped wire serves is rig's choice from the
-//! model's own name — `chat` for `POST /chat/completions`, `responses` for
-//! `POST /responses` — that the Copilot dialect answers on either with streamed
-//! text, usage and the editor identity rig stamps, and that a person can make a
-//! run take the other route when one misbehaves (§10).
-//!
-//! Nothing here reaches the network: the transport hands back bytes a fixture
-//! recorded, so the request the wire really encodes is the one asserted on, and
-//! the address it went to is how the route is proved rather than a field read
-//! off an internal.
+//! Proves the route an OpenAI-shaped wire serves is chosen from the model's own name — `chat` for
+//! `POST /chat/completions`, `responses` for `POST /responses` — that the Copilot dialect answers
+//! on either, and that a person can make a run take the other route when one misbehaves.
 
 use sindri_core::provider::transport::{Canned, Replay};
 use sindri_core::provider::{Ask, Client, Deltas, Route};
 use sindri_core::redact::SecretSet;
 use sindri_core::wire::Wire;
 
-/// A Copilot Chat Completions reply, as the dialect streamed it for a name that
-/// asks for no other route.
 const CHAT: &str = include_str!("fixtures/providers/copilot_chat_stream.sse");
-/// The same dialect's Responses reply, for a name whose identifier demands it.
 const RESPONSES: &str = include_str!("fixtures/providers/openai_responses_stream.sse");
 
-/// A sink that keeps every fragment that landed, so a test proves the answer
-/// streamed rather than only that it folded.
 #[derive(Debug, Default)]
 struct Streamed {
-    /// Every text fragment, joined in the order it arrived.
     text: String,
 }
 
@@ -36,15 +23,12 @@ impl Deltas for Streamed {
     fn reasoning(&mut self, _fragment: &str) {}
 }
 
-/// A Copilot ask of `model`, carrying a session of its own: the seam's own
-/// route, with the sign-in store left out of the picture.
 fn copilot(model: &str) -> Ask {
     Ask::new(Wire::Copilot, model)
         .key("tid=recorded_copilot_session")
         .prompt("Say hello")
 }
 
-/// The address the one request `replay` was given went to.
 fn addressed(replay: &Replay) -> String {
     let sent = replay.requests();
     let [request] = sent.as_slice() else {

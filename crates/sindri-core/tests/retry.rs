@@ -1,7 +1,6 @@
-//! What §4's retry policy does, proved without a socket and without sleeping:
-//! the waits it takes are recorded by a fake backoff, so the sequence of delays
-//! and the number of attempts are assertions rather than elapsed time, and the
-//! replies it retries are the bytes a fixture recorded.
+//! What the retry policy does, proved without a socket and without sleeping: the waits it takes are
+//! recorded by a fake backoff, so the sequence of delays and the number of attempts are assertions
+//! rather than elapsed time, and the replies it retries are the bytes a fixture recorded.
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -12,19 +11,12 @@ use sindri_core::provider::{Ask, Client, Deltas, Failure, Verdict};
 use sindri_core::redact::SecretSet;
 use sindri_core::wire::Wire;
 
-/// An Anthropic Messages reply, as the wire streamed it.
 const ANTHROPIC: &str = include_str!("fixtures/providers/anthropic_stream.sse");
-/// The same dialect, cut off after its first text fragment: no `message_stop`.
 const ANTHROPIC_TRUNCATED: &str = include_str!("fixtures/providers/anthropic_truncated.sse");
-/// What a wire says when it wants fewer requests in flight.
 const RATE_LIMITED: &str = r#"{"error":{"message":"slow down","type":"rate_limit_error"}}"#;
-/// What a wire says when its own side faulted.
 const OVERLOADED: &str = r#"{"error":{"message":"overloaded","type":"overloaded_error"}}"#;
-/// What a wire says when the request itself was wrong.
 const BAD_REQUEST: &str = r#"{"error":{"message":"unknown model","type":"invalid_request_error"}}"#;
 
-/// A backoff that only remembers what it was asked to wait, so a test asserts
-/// the sequence of delays instead of spending them.
 #[derive(Clone, Default)]
 struct Recorded(Arc<Mutex<Vec<Duration>>>);
 
@@ -38,7 +30,6 @@ impl Backoff for Recorded {
 }
 
 impl Recorded {
-    /// Every delay this backoff was handed, in order.
     fn delays(&self) -> Vec<Duration> {
         self.0
             .lock()
@@ -47,8 +38,6 @@ impl Recorded {
     }
 }
 
-/// A failure as a wire reports one: the verdict it classified, the wire's own
-/// retry answer, and whether anything had streamed by then.
 fn failure(verdict: Verdict, retryable: bool, streamed: bool) -> Failure {
     Failure {
         verdict,
@@ -82,11 +71,8 @@ fn a_retryable_verdict_is_tried_three_times_and_then_given_up() {
     );
 }
 
-/// A sink that keeps what arrived, so a test sees the fragments and not only the
-/// folded answer.
 #[derive(Debug, Default)]
 struct Transcript {
-    /// Every text fragment, joined.
     text: String,
 }
 
@@ -98,7 +84,6 @@ impl Deltas for Transcript {
     fn reasoning(&mut self, _fragment: &str) {}
 }
 
-/// An Anthropic ask with a credential, as §10 sends one.
 fn anthropic_ask() -> Ask {
     Ask::new(Wire::Anthropic, "claude-sonnet-4-6")
         .key("sk-ant-recorded")

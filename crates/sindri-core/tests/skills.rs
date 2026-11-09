@@ -1,25 +1,17 @@
-//! Proves skill discovery across the three scopes: what a workspace, a home and
-//! the compiled-in registry offer, which of two skills of one name survives, and
-//! that a scope the repository root does not own is never read at all.
-//!
-//! Every fixture is built under a temp dir with its own `.git` marker and its own
-//! home, so discovery is never pointed at the tree these tests live in and the
-//! person's real `~/.agents/skills` never decides a test.
+//! Proves skill discovery across the three scopes: what a workspace, a home and the compiled-in
+//! registry offer, which of two skills of one name survives, and that a scope the repository root
+//! does not own is never read. Every fixture is a temp dir, so no real `~/.agents/skills` is read.
 
 use std::path::{Path, PathBuf};
 
 use sindri_core::skills::{Catalog, Diagnostic, Scope, Shadowing};
 use tempfile::TempDir;
 
-/// A tree holding everything discovery reads: a home beside a repository root,
-/// a workspace nested inside that root, and no ancestor it should ever visit.
 struct Tree {
     root: TempDir,
 }
 
 impl Tree {
-    /// A tree with a repository root (`repo/`, holding `.git`) and a workspace
-    /// three directories down inside it.
     fn new() -> Tree {
         let root = tempfile::tempdir().expect("a temp dir");
         let tree = Tree { root };
@@ -29,38 +21,28 @@ impl Tree {
         tree
     }
 
-    /// A path inside the tree, whether or not anything is there yet.
     fn at(&self, relative: &str) -> PathBuf {
         self.root.path().join(relative)
     }
 
-    /// The home discovery is told about: `~` for this fixture.
     fn home(&self) -> PathBuf {
         self.at("home")
     }
 
-    /// The repository root: the directory holding `.git`.
     fn repo(&self) -> PathBuf {
         self.at("repo")
     }
 
-    /// The workspace: `repo/work/deep`, so two `.agents/skills` sit between it
-    /// and the repository root.
     fn workspace(&self) -> PathBuf {
         self.at("repo/work/deep")
     }
 
-    /// A skill directory named `name` under `scope_dir`, holding a `SKILL.md`
-    /// whose frontmatter carries `name` and `description`.
     fn skill(&self, scope_dir: &Path, name: &str, description: &str) -> PathBuf {
         let directory = scope_dir.join(name);
         write(&directory.join("SKILL.md"), &skill_md(name, description));
         directory
     }
 
-    /// A skill directory named `name` under `scope_dir`, whose frontmatter also
-    /// carries `flag`: one of §5's permission lines, written as a skill author
-    /// would write it.
     fn flagged(&self, scope_dir: &Path, name: &str, description: &str, flag: &str) -> PathBuf {
         let directory = scope_dir.join(name);
         write(
@@ -71,40 +53,28 @@ impl Tree {
     }
 }
 
-/// A symlink at `link` pointing at `target`, with every directory above the link
-/// created, so a dangling link is dangling on purpose.
 fn symlink(target: &Path, link: &Path) {
     std::fs::create_dir_all(link.parent().expect("a parent")).expect("the directories");
     std::os::unix::fs::symlink(target, link).expect("the symlink");
 }
 
-/// Writes `text` to `path`, creating every directory above it.
 fn write(path: &Path, text: &str) {
     std::fs::create_dir_all(path.parent().expect("a parent")).expect("the directories");
     std::fs::write(path, text).expect("the file");
 }
 
-/// A `SKILL.md` a well-formed skill would hold: frontmatter naming it and
-/// describing it, then a body that is the instructions.
 fn skill_md(name: &str, description: &str) -> String {
     format!("---\nname: {name}\ndescription: {description}\n---\n\nBody of {name}.\n")
 }
 
-/// A `SKILL.md` carrying one permission line besides the two every skill needs,
-/// so a test states the flag rather than the whole file.
 fn flagged_skill_md(name: &str, description: &str, flag: &str) -> String {
     format!("---\nname: {name}\ndescription: {description}\n{flag}\n---\n\nBody of {name}.\n")
 }
 
-/// The catalog a workspace and a home offer on their own, with no built-in
-/// handed in. Everything here is about what disk offers, so the binary's own
-/// skills would only be noise; `builtin_skills.rs` proves that scope.
 fn disk_only(workspace: &Path, home: &Path) -> Catalog {
     Catalog::discover_with_builtin(workspace, Some(home), &[])
 }
 
-/// The descriptions in a catalog, by name, so a test can say which skill of a
-/// shared name won.
 fn described(catalog: &Catalog) -> Vec<(String, String)> {
     catalog
         .skills()
@@ -398,8 +368,6 @@ fn a_frontmatter_without_a_description_is_refused_at_the_frontmatter() {
     );
 }
 
-/// A `SKILL.md` of the kind a build compiles in, so the builtin scope can be
-/// proved before any built-in content exists.
 const BUILTIN_GREET: &str =
     "---\nname: greet\ndescription: the built-in way\n---\n\nBuilt-in body.\n";
 

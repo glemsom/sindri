@@ -1,5 +1,5 @@
-//! Proves a session's directory: where it lives under the state home, the GUID
-//! that names it, the temp mapped to `TMPDIR`, and the spill beside it.
+//! Proves a session's directory: where it lives under the state home, the GUID that names it, the
+//! temp mapped to `TMPDIR`, and the spill beside it.
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -13,43 +13,35 @@ use sindri_core::run::Cancel;
 use sindri_core::session::{Session, sessions_root};
 use tempfile::TempDir;
 
-/// An environment a test can hold as data, instead of mutating the process's.
 fn environment(vars: &[(&str, &str)]) -> BTreeMap<String, String> {
     vars.iter()
         .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
         .collect()
 }
 
-/// A state home of the test's own, so no real `XDG_STATE_HOME` is read or written.
 fn state_home() -> TempDir {
     tempfile::tempdir().expect("a temp state home")
 }
 
-/// Real directories for the writable set, because a boundary canonicalises what
-/// it is given through the filesystem.
+/// Real directories for the writable set, because a boundary canonicalises what it is given.
 struct Ground {
-    /// Held so the directories outlive the ground that names them.
     _root: TempDir,
-    /// The same directory, as the filesystem spells it.
     path: PathBuf,
 }
 
 impl Ground {
-    /// A ground of its own, canonical.
     fn new() -> Ground {
         let root = tempfile::tempdir().expect("a temp ground");
         let path = std::fs::canonicalize(root.path()).expect("the ground resolves");
         Ground { _root: root, path }
     }
 
-    /// A directory under the ground, created and returned canonical.
     fn directory(&self, name: &str) -> PathBuf {
         let directory = self.path.join(name);
         std::fs::create_dir_all(&directory).expect("the directory");
         std::fs::canonicalize(&directory).expect("the directory resolves")
     }
 
-    /// The boundary a run holds, over the ground's workspace.
     fn boundary(&self) -> Boundary {
         let workspace = self.directory("workspace");
         Boundary::from_config(&Config::default(), &workspace, Enforcement::Bubblewrap)
@@ -57,7 +49,6 @@ impl Ground {
     }
 }
 
-/// What a failed bwrap said, or its status when it said nothing.
 fn said(output: &std::process::Output) -> String {
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stderr = stderr.trim();
@@ -67,9 +58,9 @@ fn said(output: &std::process::Output) -> String {
     }
 }
 
-/// Whether this machine can confine a command at all, said loudly when it
-/// cannot: a skip must be visible on a green run, so it is written to the
-/// descriptor rather than through a captured `eprintln!`.
+/// Whether this machine can confine a command at all, said loudly when it cannot: a skip must be
+/// visible on a green run, so it is written to the descriptor rather than through a captured
+/// `eprintln!`.
 fn sandbox() -> Option<()> {
     let problem = match Command::new(bash::BWRAP).arg("--version").output() {
         Err(error) => Some(format!("bwrap not on PATH: {error}")),
@@ -133,8 +124,8 @@ fn a_session_owns_one_directory_named_by_its_guid() {
 
     let guid = session.guid().to_owned();
 
-    // 8-4-4-4-12 lowercase hex, version 4, RFC 4122 variant: a GUID and not a
-    // string that merely looks distinctive.
+    // 8-4-4-4-12 lowercase hex, version 4, RFC 4122 variant: a GUID and not a string that merely
+    // looks distinctive.
     assert_eq!(guid.len(), 36, "a GUID is 36 characters: {guid}");
     let shapes: Vec<usize> = guid.split('-').map(str::len).collect();
     assert_eq!(shapes, vec![8, 4, 4, 4, 12], "{guid}");
@@ -283,8 +274,8 @@ fn two_sessions_are_two_directories() {
         "neither session sits inside the other"
     );
 
-    // The GUID is stable for the life of the session, so the record's `session`
-    // field and the last line of `-v` can both be written from it.
+    // The GUID is stable for the life of the session, so the record's `session` field and the last
+    // line of `-v` can both be written from it.
     let guid = one.guid().to_owned();
     assert_eq!(guid, one.guid());
     assert_eq!(
@@ -428,9 +419,8 @@ fn output_past_the_budget_is_spilled_as_the_bytes_the_command_wrote() {
     .expect("the command runs");
     assert_eq!(outcome.code, Some(0), "stderr: {}", outcome.stderr);
 
-    // This is the caller's decision and not this module's: the output is past
-    // what the run will feed back whole, so it is spilled and only a reference
-    // is printed.
+    // This is the caller's decision and not this module's: the output is past what the run will
+    // feed back whole, so it is spilled and only a reference is printed.
     let budget = 1024usize;
     assert!(
         outcome.stdout.len() > budget,

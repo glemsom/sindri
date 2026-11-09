@@ -1,12 +1,6 @@
-//! Proves the `open` tool decides inside the call: what may be handed to the
-//! host's browser, what is refused, and that every refusal names the allowlist
-//! the model has to correct itself against.
-//!
-//! The escape this module exists for is a symlink to `/`: the string the model
-//! wrote is inside the writable set and carries an allowed extension, so a check
-//! on that string alone lets it through. Every path is therefore judged twice —
-//! as written, and as it resolves — and the tests below fail if either check
-//! goes.
+//! Proves the `open` tool decides inside the call: what may be handed to the host's browser, what
+//! is refused, and that every refusal names the allowlist. A symlink to `/` is why every path is
+//! judged twice — as written and as it resolves — since the string alone sits in the set.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -16,16 +10,11 @@ use sindri_core::open::{EXTENSIONS, Ground, SCHEMES};
 use sindri_core::policy::{Boundary, Enforcement};
 use tempfile::TempDir;
 
-/// The three places a judgement needs: a writable workspace, the session temp
-/// beside it, and a directory outside both that nothing may be opened from.
 struct Tree {
-    /// Held so the directories outlive the ground that names them.
     root: TempDir,
 }
 
 impl Tree {
-    /// A tree of the three directories, each canonical, so a judgement compares
-    /// the filesystem's spelling of a path with the filesystem's spelling.
     fn new() -> Tree {
         let root = tempfile::tempdir().expect("a temp tree");
         for name in ["workspace", "tmp", "outside"] {
@@ -34,29 +23,22 @@ impl Tree {
         Tree { root }
     }
 
-    /// A directory of the tree, canonicalised the way the boundary resolves one.
     fn directory(&self, name: &str) -> PathBuf {
         std::fs::canonicalize(self.root.path().join(name)).expect("the directory resolves")
     }
 
-    /// The workspace: the one writable path, and the directory a relative target
-    /// is read from — the first of the tree's directories, so canonicalising the
-    /// temp does not trail the workspace before it.
     fn workspace(&self) -> PathBuf {
         self.directory("workspace")
     }
 
-    /// The session temp, which §5 puts beside the writable set.
     fn temp(&self) -> PathBuf {
         self.directory("tmp")
     }
 
-    /// A directory the run may not read a target from.
     fn outside(&self) -> PathBuf {
         self.directory("outside")
     }
 
-    /// The boundary a run standing in the workspace holds.
     fn boundary(&self) -> Boundary {
         Boundary::from_config(
             &Config::default(),
@@ -66,14 +48,10 @@ impl Tree {
         .expect("the boundary holds")
     }
 
-    /// The judgement a run makes: the boundary in force, the session temp and the
-    /// directory a relative path is read from.
     fn ground(&self) -> Ground {
         Ground::new(&self.boundary(), &self.temp(), &self.workspace()).expect("the ground resolves")
     }
 
-    /// A file at `path` holding `body`, written through any directory that must
-    /// exist first.
     fn file(&self, path: &Path, body: &str) -> PathBuf {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).expect("the file's directory");
@@ -82,18 +60,15 @@ impl Tree {
         path.to_path_buf()
     }
 
-    /// A symlink at `link` pointing at `target`, which need not exist.
     fn symlink(&self, link: &Path, target: &Path) {
         std::os::unix::fs::symlink(target, link).expect("the symlink");
     }
 
-    /// A file in the workspace named `name`, holding enough to be a file.
     fn in_workspace(&self, name: &str) -> PathBuf {
         self.file(&self.workspace().join(name), "body")
     }
 }
 
-/// The one argv word a decision hands the front end, as a string a test can read.
 fn word(opening: &sindri_core::open::Opening) -> String {
     opening
         .word()

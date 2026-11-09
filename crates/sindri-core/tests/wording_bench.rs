@@ -1,27 +1,6 @@
-//! A bench that decides wording: it prices, section by section, the preamble §9
-//! re-sends every turn and the tool descriptions the model's schema carries, so
-//! the cost of a sentence is read before it is written rather than guessed at
-//! after, and two wordings can be chosen between on evidence.
-//!
-//! THE ESTIMATOR IS AN ESTIMATE, NOT A TOKEN COUNT. Tokens are counted with
-//! `tiktoken-rs`'s cl100k_base: a real byte-pair tokenizer, the GPT-4 family's,
-//! deterministic to the byte. It is not the tokenizer of every model Sindri talks
-//! to — an Anthropic or a Copilot model splits words its own way — so the absolute
-//! number is an estimate. It is the *same* estimate on every run and every
-//! machine, which is what a choice between two wordings needs and all this bench
-//! claims.
-//!
-//! WHAT IS PRICED is what a run pays on every turn: §9's three sections and, when
-//! the repository root carries one, its `AGENTS.md`; then one row per tool a run
-//! with the built-in catalog registers. Every byte of the rendered message
-//! belongs to exactly one section row, so a section added to the preamble is a
-//! row nobody can forget to price.
-//!
-//! Paths are replaced by `<workspace>` before anything is counted: the tree this
-//! bench is compiled in is a fair thing to measure and its absolute path is not,
-//! because a deeper checkout would otherwise cost more than a shorter sentence.
-//! The user's own skills are left out for the same reason — `$HOME` is nobody's
-//! wording — so the catalog measured is the built-ins the binary ships.
+//! A bench that decides wording: it prices the preamble and the tool descriptions a run re-sends
+//! every turn, so the cost of a sentence is read before it is written. The estimator is
+//! cl100k_base, a proxy for every model: an estimate, but the same one on every run and machine.
 
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -33,31 +12,11 @@ use sindri_core::skills::Catalog;
 use sindri_core::tools::{FrontEnd, ToolSet};
 use tiktoken_rs::CoreBPE;
 
-/// The ceiling on the words a run pays every turn, in cl100k_base tokens: §9's
-/// three sections plus every tool description, summed.
-///
-/// THE NUMBER IS THE TABLE'S, NOT A WISH. When this bench landed the rows it
-/// budgets summed to 376, and the budget was that plus about a tenth — thirty-four
-/// tokens, a sentence or two of real prose. The `open` tool then landed (#34) at
-/// 157 tokens, the dearest single row, so the rows sum to 528 and the budget is
-/// that plus about a tenth again: fifty-three tokens, and no more. A sentence
-/// that earns its place fits and a paragraph that does not, does not. Raising it
-/// is allowed; raising it without saying in this comment what bought the tokens
-/// is exactly what the budget exists to prevent. Trimming `open`'s prose — which
-/// names every extension and every scheme it accepts, so a refusal is a reminder
-/// rather than a surprise (§5) — is what would buy them back, a wording decision
-/// this table exists to inform and not to make.
-///
-/// Outside the number, deliberately: the project's own `AGENTS.md`, which §8
-/// puts in the message but no sentence of Sindri's cuts. It is measured and
-/// printed so nobody has to guess what it costs, and left out of the total so a
-/// repository with more house rules than this one does not fail a bench about
-/// wording.
+/// The ceiling on the words a run pays every turn, in cl100k_base tokens: the preamble's sections
+/// plus every tool description, summed. Raising it is allowed; raising it without saying what
+/// bought the tokens is what the budget exists to prevent.
 const BUDGET_TOKENS: usize = 581;
 
-/// The markers the priced sections of the preamble open with, in render order:
-/// §9's three, then the fence §8 wraps the project's own words in — which is
-/// absent from a tree whose repository root carries no `AGENTS.md`.
 const SECTION_MARKERS: [(&str, &str); 4] = [
     ("persona", "## Persona"),
     ("principles", "## Principles"),
@@ -65,20 +24,14 @@ const SECTION_MARKERS: [(&str, &str); 4] = [
     ("project instructions", "<project_instructions>"),
 ];
 
-/// Whether a row's tokens count toward the budget, and why not when they do not.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Counted {
-    /// Part of what a turn pays, so the budget covers it.
     TowardBudget,
-    /// A row repeating rows already counted: the preamble's total is its own
-    /// sections summed.
     RepeatOfRows,
-    /// The repository's own words, which no sentence of Sindri's cuts.
     ProjectsOwnWords,
 }
 
 impl Counted {
-    /// The word the table's last column prints for this row.
     fn label(self) -> &'static str {
         match self {
             Counted::TowardBudget => "budgeted",
@@ -87,27 +40,19 @@ impl Counted {
         }
     }
 
-    /// Whether the row's tokens are part of the budgeted total.
     fn counts(self) -> bool {
         self == Counted::TowardBudget
     }
 }
 
-/// One row of the table: a named portion of what a turn costs, and its price.
 struct Price {
-    /// The name the row prints under, and the name a failure quotes.
     name: String,
-    /// The cl100k_base tokens `text` costs, as the estimator counts them.
     tokens: usize,
-    /// The exact bytes those tokens are counted from — the one number here that
-    /// is not an estimate.
     bytes: usize,
-    /// Whether the row counts toward the budget.
     counted: Counted,
 }
 
 impl Price {
-    /// The price of `text`, named `name`.
     fn of(name: impl Into<String>, text: &str, counted: Counted) -> Price {
         let tokens = tokenizer().encode_with_special_tokens(text).len();
         Price {
@@ -118,7 +63,6 @@ impl Price {
         }
     }
 
-    /// The row as the table prints it.
     fn print(&self) {
         println!(
             "bench: {:<22} {:>5} tok {:>6} B  {}",
@@ -130,18 +74,12 @@ impl Price {
     }
 }
 
-/// Everything one turn re-sends, priced: the preamble as it renders for this
-/// tree, and every tool a run with the built-in catalog registers.
 struct Measure {
-    /// The preamble section by section, then the whole of it.
     preamble: Vec<Price>,
-    /// One row per registered tool, named after the tool.
     tools: Vec<Price>,
 }
 
 impl Measure {
-    /// Prices the wording this tree would really send: its own `AGENTS.md`, its
-    /// own boundary, and the skills the binary ships.
     fn take() -> Measure {
         let root = repo_root();
         let rendered = normalize(&Preamble::for_workspace(&root).render(), &root);
@@ -182,14 +120,12 @@ impl Measure {
         Measure { preamble, tools }
     }
 
-    /// Every row, in the order the table prints them.
     fn rows(&self) -> impl Iterator<Item = &Price> {
         self.preamble.iter().chain(self.tools.iter())
     }
 
-    /// What the budget covers: the budgeted rows, summed. A tokenizer that merged
-    /// two rows into one token would make the message itself a little cheaper
-    /// than this sum, never dearer, so the budget is never quietly generous.
+    /// A tokenizer that merged two rows into one token would make the message cheaper than this
+    /// sum, never dearer, so the budget is never quietly generous.
     fn budgeted_total(&self) -> usize {
         self.rows()
             .filter(|row| row.counted.counts())
@@ -197,8 +133,6 @@ impl Measure {
             .sum()
     }
 
-    /// The table: every row with its price, then the total against the budget.
-    /// Printed under `--nocapture`, which is how `make bench` runs it.
     fn print(&self) {
         println!(
             "bench: estimator cl100k_base (tiktoken-rs), a proxy for every model: token counts are estimates"
@@ -222,12 +156,10 @@ impl Measure {
     }
 }
 
-/// The section that is measured but never budgeted, because it is the
-/// repository's own words rather than Sindri's.
 const PROJECT_INSTRUCTIONS: &str = "project instructions";
 
-/// The estimator, loaded once per test binary: the BPE's ranks are megabytes and
-/// parsing them twice would be the only slow thing in this bench.
+/// The estimator, loaded once per test binary: the BPE's ranks are megabytes, and parsing them
+/// twice would be the only slow thing in this bench.
 fn tokenizer() -> &'static CoreBPE {
     static TOKENIZER: OnceLock<CoreBPE> = OnceLock::new();
     TOKENIZER.get_or_init(|| {
@@ -235,8 +167,6 @@ fn tokenizer() -> &'static CoreBPE {
     })
 }
 
-/// The repository root this bench prices: the tree it is compiled in, so the
-/// `AGENTS.md` measured is the one a run here would really be sent.
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
@@ -244,15 +174,15 @@ fn repo_root() -> PathBuf {
         .expect("the workspace root above this crate")
 }
 
-/// `text` with this machine's checkout path taken out of it: the table is a
-/// property of the wording, and where a tree happens to live is not.
+/// `text` with this machine's checkout path taken out of it: the table is a property of the
+/// wording, and where a tree happens to live is not.
 fn normalize(text: &str, root: &Path) -> String {
     text.replace(&root.display().to_string(), "<workspace>")
 }
 
-/// The preamble cut into the sections §9 and §8 name, each slice starting at its
-/// marker and ending where the next one starts, so the slices concatenated are
-/// the whole message and no byte is left unpriced.
+/// The preamble cut into the sections the markers name, each slice starting at its marker and
+/// ending where the next one starts, so the slices concatenated are the whole message and no byte
+/// is left unpriced.
 fn sections(rendered: &str) -> Vec<(&'static str, &str)> {
     let mut starts: Vec<(&'static str, usize)> = SECTION_MARKERS[..3]
         .iter()

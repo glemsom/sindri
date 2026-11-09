@@ -1,11 +1,6 @@
-//! What a batch run reports to whoever scripted it: §15's object, one field after
-//! another in a fixed order, a field the run knows nothing about left out rather
-//! than written as `null`, and the exit code read off the stop reason and from
-//! nowhere else.
-//!
-//! Every run here is a scripted model and a scripted tool, so no test reaches a
-//! network or spends a second: what a call cost is a number a test states, and
-//! the report's `command_ms` and `output_bytes` are those numbers summed.
+//! What a batch run reports to whoever scripted it: the object, one field after another in a fixed
+//! order, a field the run knows nothing about left out rather than written as `null`, and the exit
+//! code read off the stop reason and from nowhere else.
 
 use std::time::Duration;
 
@@ -18,7 +13,6 @@ use sindri_core::run::{
     Acted, Call, Executor, Exit, Limits, Loaded, Reply, Request, Responder, Run, State, Stop,
 };
 
-/// A model that says one thing and asks for nothing.
 struct Says(&'static str);
 
 impl Responder for Says {
@@ -28,7 +22,6 @@ impl Responder for Says {
     }
 }
 
-/// A model whose every request fails, in the one line a failed run prints.
 struct Fails;
 
 impl Responder for Fails {
@@ -42,7 +35,6 @@ impl Responder for Fails {
     }
 }
 
-/// A model that asks for one more command every turn, so no turn is final.
 struct Loopy;
 
 impl Responder for Loopy {
@@ -55,8 +47,6 @@ impl Responder for Loopy {
     }
 }
 
-/// A tool that costs the run one wall clock and one output size, whatever it is
-/// asked, and refuses nothing.
 struct Costs;
 
 impl Executor for Costs {
@@ -70,7 +60,6 @@ impl Executor for Costs {
     }
 }
 
-/// The sink a run's fragments land in when nothing is watching them.
 struct Quiet;
 
 impl Deltas for Quiet {
@@ -79,7 +68,6 @@ impl Deltas for Quiet {
     fn reasoning(&mut self, _fragment: &str) {}
 }
 
-/// The facts a report is given that the run itself does not hold.
 fn facts<'a>(session: &'a str, model: &'a str) -> Facts<'a> {
     Facts {
         session,
@@ -90,7 +78,6 @@ fn facts<'a>(session: &'a str, model: &'a str) -> Facts<'a> {
     }
 }
 
-/// The report of `run`, driven to whatever stop reason it reaches.
 fn reported<R: Responder, A: Executor>(prompt: &str, responder: R, executor: A) -> Outcome {
     let mut run = Run::new(prompt, responder, executor);
     let mut quiet = Quiet;
@@ -106,10 +93,9 @@ fn reported<R: Responder, A: Executor>(prompt: &str, responder: R, executor: A) 
     .expect("a stopped run has an outcome")
 }
 
-/// The field names of `json` at the object's own depth, in the order the bytes
-/// write them: `serde_json::Value` sorts an object's keys, so the order is read
-/// off the line itself rather than through a map that has forgotten it. A string
-/// is a key when a colon follows it and a value otherwise.
+/// The field names of `json` at the object's own depth, in the order the bytes write them:
+/// `serde_json::Value` sorts an object's keys, so the order is read off the line itself. A string
+/// is a key when a colon follows it.
 fn keys(json: &str) -> Vec<String> {
     let mut keys = Vec::new();
     let mut depth = 0usize;

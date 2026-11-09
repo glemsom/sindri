@@ -1,10 +1,6 @@
-//! What the seam between the run loop and a wire promises: a turn's own words are
-//! what the wire is asked, the answer's text is what the run answers with, a
-//! refusal stops the run in the one line safe to print, and thinking is asked for
-//! only when the run asked for it.
-//!
-//! The wire is the recorded bytes a fixture holds and the backoff waits for
-//! nothing, so a test here reaches no network and spends no time.
+//! What the seam between the run loop and a wire promises: a turn's own words are what the wire is
+//! asked, the answer's text is what the run answers with, a refusal stops the run in the one line
+//! safe to print, and thinking is asked for only when the run asked for it.
 
 use sindri_core::asking::Asking;
 use sindri_core::provider::transport::{Canned, Replay};
@@ -13,28 +9,20 @@ use sindri_core::redact::{Redacted, SecretSet};
 use sindri_core::run::{Acted, Call, Executor, Loaded, Run, State, Stop};
 use sindri_core::wire::Wire;
 
-/// An Anthropic Messages reply, as the wire streamed it: two text fragments that
-/// make one answer.
 const ANTHROPIC: &str = include_str!("fixtures/providers/anthropic_stream.sse");
 
-/// What a wire says when the request itself was wrong, so no retry can help.
 const BAD_REQUEST: &str = r#"{"error":{"message":"unknown model","type":"invalid_request_error"}}"#;
 
-/// A client over `replay` that waits for nothing.
 fn client_over(replay: &Replay) -> Client {
     Client::over(replay.clone(), SecretSet::default()).waits(|_| {})
 }
 
-/// The ask a front end builds from its config: a wire, a served name, a
-/// credential and the preamble that is re-sent every turn.
 fn ask() -> Ask {
     Ask::new(Wire::Anthropic, "claude-sonnet-4-6")
         .key("sk-ant-recorded")
         .preamble("## Persona\n\nYou are Sindri.")
 }
 
-/// A tool the loop never reaches in these tests: a reply that asks for no call
-/// is a complete answer, so nothing is executed.
 struct Unreached;
 
 impl Executor for Unreached {
@@ -46,11 +34,8 @@ impl Executor for Unreached {
     }
 }
 
-/// A sink that keeps what streamed, so a test sees the fragments and not only the
-/// folded answer.
 #[derive(Debug, Default)]
 struct Transcript {
-    /// Every text fragment, joined.
     text: String,
 }
 
@@ -62,7 +47,6 @@ impl Deltas for Transcript {
     fn reasoning(&mut self, _fragment: &str) {}
 }
 
-/// The request body the wire was sent, as the replay read it.
 fn body_for(asking: Asking, replay: &Replay) -> String {
     let mut run = Run::new("triage this", asking, Unreached);
     let mut transcript = Transcript::default();

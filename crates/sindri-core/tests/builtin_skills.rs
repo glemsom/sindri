@@ -1,7 +1,6 @@
-//! Proves the built-in skills are compiled into the binary rather than read from
-//! a path: they appear in a catalog under the `builtin` scope, they parse under
-//! the same discovery a run uses, and they survive their source directory being
-//! taken away from under a process that starts afterwards.
+//! Proves the built-in skills are compiled into the binary rather than read from a path: they
+//! appear in a catalog under the `builtin` scope, they parse under the discovery a run uses, and
+//! they survive their source directory being taken away.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -9,8 +8,6 @@ use std::process::Command;
 use sindri_core::skills::{Catalog, Scope, Shadowing};
 use tempfile::TempDir;
 
-/// A workspace in no repository at all, with a home beside it, so every skill a
-/// catalog holds here is one the binary itself carries.
 fn empty_world() -> (TempDir, PathBuf, PathBuf) {
     let root = tempfile::tempdir().expect("a temp dir");
     let workspace = root.path().join("workspace");
@@ -117,23 +114,16 @@ fn a_repo_skill_takes_the_name_and_the_listing_names_the_builtin_it_shadowed() {
     );
 }
 
-/// The directory the built-ins are written in, as this build saw it. The text is
-/// already compiled in, so this is where a person edits a skill and never where
-/// a run reads one.
+/// The directory the built-ins are written in, as this build saw it: the text is already compiled
+/// in, so this is where a person edits a skill and never where a run reads one.
 const SOURCE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/skills");
 
-/// The variable that turns the test binary into the proof's own child process.
 const PROOF_CHILD: &str = "SINDRI_BUILTIN_PROOF_CHILD";
 
-/// The test's name, which is what `--exact` names when the child is spawned.
 const PROOF_TEST: &str = "removing_the_source_directory_leaves_the_builtin_in_a_fresh_process";
 
-/// Puts the source directory back when the test is done with it, whether it ends
-/// by returning or by panicking.
 struct Restore {
-    /// Where the directory was moved to.
     from: PathBuf,
-    /// Where it belongs.
     to: PathBuf,
 }
 
@@ -191,9 +181,9 @@ fn removing_the_source_directory_leaves_the_builtin_in_a_fresh_process() {
     assert!(source.is_dir(), "the source directory is back where it was");
 }
 
-/// The child's whole job: start from nothing, discover, and print what the
-/// catalog holds. It exits rather than returning, so the harness never reports on
-/// a run whose only purpose is to answer this question.
+/// The child's whole job: start from nothing, discover, and print what the catalog holds. It exits
+/// rather than returning, so the harness never reports on a run whose only purpose is to answer
+/// this question.
 fn prove_the_builtin_survives() -> ! {
     let (_root, workspace, home) = empty_world();
     let catalog = Catalog::discover(&workspace, Some(&home));

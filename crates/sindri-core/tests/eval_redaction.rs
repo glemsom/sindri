@@ -1,19 +1,6 @@
-//! The redaction walk of ADR-0011: every `Entry` variant is written with a known
-//! secret planted in every field that can hold one, the transcript is read back,
-//! and no field of any variant carries the secret out (§13, §16).
-//!
-//! The walk destructures each variant without a `..`, so a field added later stops
-//! this test from building rather than riding out unwatched: the promise is that
-//! every field a record writes is covered, and a walk that quietly skipped the new
-//! field would be the hole it exists to close.
-//!
-//! The lines are held to a golden as well as to the secret's absence: the mask is
-//! the only thing a reader may find where a secret was, and a line that stopped
-//! writing a field is a fact a diff should name. `SINDRI_BLESS=1` rewrites the
-//! golden, and it is the only way one moves.
-//!
-//! An eval is judged by `make evals` and never by `make test`, which is why the
-//! test here is ignored: the stage that owns a failure is the stage that prints it.
+//! The redaction walk: every `Entry` variant is written with a known secret in every field that can
+//! hold one, and the transcript is read back against a golden only `SINDRI_BLESS=1` moves. The walk
+//! destructures each variant without a `..`, so a field added later stops it building.
 
 use std::time::Duration;
 
@@ -25,41 +12,28 @@ use sindri_core::run::{Acted, Call, Exit, Limits};
 use sindri_core::session::Session;
 use sindri_core::wire::Wire;
 
-/// The literal planted in every field. Its shape says what it is, so a reader of a
-/// failure knows the string is the harness's and not a line the code invented.
 const SECRET: &str = "hunter2-eval";
 
-/// What a secret is written as, spelled out here rather than imported: a test that
-/// read the constant could not tell a mask from a mask that never changed.
+/// What a secret is written as, spelled out rather than imported: a test that read the constant
+/// could not tell a mask from a mask that never changed.
 const MASK: &str = "«redacted»";
 
-/// Where the accepted lines live: beside the test that compares them.
 const GOLDENS: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/tests/fixtures/evals/redaction/entries.jsonl"
 );
 
-/// The variable that rewrites the golden instead of comparing it.
 const BLESS: &str = "SINDRI_BLESS";
 
-/// A workspace, a state home and the dials the record is opened with, all the
-/// test's own: no real `HOME` or `XDG_STATE_HOME` is read or written.
 struct Ground {
-    /// Held so the directories outlive the paths that name them.
     _root: tempfile::TempDir,
-    /// The one directory the run stands in.
     workspace: std::path::PathBuf,
-    /// The state home the session directory is made under.
     state: std::path::PathBuf,
-    /// The dials the run obeys.
     limits: Limits,
-    /// Every literal the record must never write down.
     secrets: SecretSet,
 }
 
 impl Ground {
-    /// A ground with an empty workspace, an empty state home, and `SECRET` among
-    /// the literals the record must not carry.
     fn new() -> Ground {
         let root = tempfile::tempdir().expect("a temp ground");
         let workspace = root.path().join("workspace");
@@ -76,13 +50,10 @@ impl Ground {
         }
     }
 
-    /// A session directory of this ground's state home.
     fn session(&self) -> Session {
         Session::create(&self.state).expect("a session")
     }
 
-    /// A record opened on `session`, held to the unsafe boundary because nothing a
-    /// transcript says is a fact about a sandbox.
     fn record(&self, session: &Session) -> Record {
         let boundary =
             Boundary::from_config(&Config::default(), &self.workspace, Enforcement::Unsafe)
@@ -104,8 +75,6 @@ impl Ground {
     }
 }
 
-/// Every field of `entry`, named as the transcript names it: the destructuring
-/// leaves no `..`, so a variant that gains a field stops this from building.
 fn walk(entry: &Entry) -> Vec<(&'static str, String)> {
     match entry {
         Entry::Turn { turn } => vec![("turn", turn.to_string())],
@@ -142,14 +111,12 @@ fn walk(entry: &Entry) -> Vec<(&'static str, String)> {
     }
 }
 
-/// Whether a field is one the secret was planted in, which is every field that
-/// carries words the run was handed and none of the numbers or the verdict.
 fn planted(field: &str) -> bool {
     matches!(field, "name" | "arguments" | "text")
 }
 
-/// The transcript the walk reads, written through the record a run writes through so
-/// the redaction happens where the production path applies it and never in this test.
+/// The transcript the walk reads, written through the record a run writes through, so redaction
+/// happens on the production path and never in this test.
 fn written(ground: &Ground) -> Vec<String> {
     let session = ground.session();
     let mut record = ground.record(&session);
@@ -190,7 +157,6 @@ fn written(ground: &Ground) -> Vec<String> {
         .collect()
 }
 
-/// Holds the walk's lines to the golden, or rewrites it when `bless` says so.
 fn hold(lines: &[String]) {
     let wrote = format!("{}\n", lines.join("\n"));
     if std::env::var_os(BLESS).is_some() {
@@ -208,7 +174,6 @@ fn hold(lines: &[String]) {
     );
 }
 
-/// The first line two transcripts disagree on, with its number and both sides.
 fn named_diff(accepted: &str, wrote: &str) -> String {
     for (at, (left, right)) in accepted
         .lines()

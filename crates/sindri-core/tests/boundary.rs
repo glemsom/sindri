@@ -1,7 +1,6 @@
-//! Proves the boundary is one value whose views cannot disagree: the `bash` tool
-//! description the model is given, the bytes `doctor` prints, the policy block a
-//! session record stores and the fact the rail draws are all read off it, and
-//! the rendered bytes are the same on every route and every run.
+//! Proves the boundary is one value whose views cannot disagree: the `bash` tool description the
+//! model is given, the bytes `doctor` prints, the policy block a session record stores and the fact
+//! the rail draws are all read off it.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -10,14 +9,12 @@ use sindri_core::config::{Config, Flags};
 use sindri_core::policy::{Boundary, BoundaryError, Enforcement, MAX_TIMEOUT_SECONDS, WritableSet};
 use tempfile::TempDir;
 
-/// An environment a test can hold as data, instead of mutating the process's.
 fn environment(vars: &[(&str, &str)]) -> BTreeMap<String, String> {
     vars.iter()
         .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
         .collect()
 }
 
-/// A config home holding one `config.toml` with `text` in it.
 fn config_home(text: &str) -> TempDir {
     let home = tempfile::tempdir().expect("a temp dir");
     let directory = home.path().join("sindri");
@@ -26,20 +23,17 @@ fn config_home(text: &str) -> TempDir {
     home
 }
 
-/// The config one precedence resolves to: file, then environment, then flags.
 fn resolved(home: &Path, vars: &[(&str, &str)], flags: Flags) -> Config {
     let mut environment = environment(vars);
     environment.insert(String::from("XDG_CONFIG_HOME"), home.display().to_string());
     Config::resolve(&environment, flags).expect("the config resolves")
 }
 
-/// Real directories on disk, because a canonical path is resolved through the
-/// filesystem rather than tidied as a string: a set of paths that do not exist
-/// is refused, so a test that wants one has to make it.
+/// Real directories on disk, because a canonical path is resolved through the filesystem rather
+/// than tidied as a string: a set of paths that do not exist is refused, so a test that wants one
+/// has to make it.
 struct Ground {
-    /// Held so the directories outlive the ground that names them.
     _root: TempDir,
-    /// The same directory, as the filesystem spells it.
     path: PathBuf,
 }
 
@@ -50,21 +44,17 @@ impl Ground {
         Ground { _root: root, path }
     }
 
-    /// A directory under the ground, created and returned canonical.
     fn directory(&self, name: &str) -> PathBuf {
         let directory = self.path.join(name);
         std::fs::create_dir_all(&directory).expect("the directory");
         std::fs::canonicalize(&directory).expect("the directory resolves")
     }
 
-    /// The workspace a run stands in.
     fn workspace(&self) -> PathBuf {
         self.directory("workspace")
     }
 }
 
-/// The boundary a run holds, from the config in force and the workspace it
-/// stands in.
 fn boundary(config: &Config, workspace: &Path, enforcement: Enforcement) -> Boundary {
     Boundary::from_config(config, workspace, enforcement).expect("the boundary holds")
 }
@@ -112,8 +102,8 @@ fn the_description_names_every_writable_path_the_timeout_and_the_budgets() {
         Enforcement::Bubblewrap,
     );
 
-    // The worked example, written out: an independent statement of what the
-    // model is told, so the renderer cannot drift into saying something else.
+    // The worked example, written out: an independent statement of what the model is told, so the
+    // renderer cannot drift into saying something else.
     let paths = format!("  {}\n  {}", data.display(), workspace.display());
     let expected = format!(
         "Run a command with `bash`.\n\n\
@@ -186,9 +176,9 @@ fn the_same_boundary_reached_by_file_environment_or_flags_renders_identical_byte
     let workspace = ground.workspace();
     let (data, logs) = (data.display().to_string(), logs.display().to_string());
 
-    // The same two extra paths, spelled through each route in the precedence,
-    // and in a different order each time: the set is sorted, so the order the
-    // route happened to name them in never reaches the model.
+    // The same two extra paths through each route in the precedence, in a different order each
+    // time: the set is sorted, so the order a route happened to name them in never reaches the
+    // model.
     let through_file = boundary(
         &resolved(
             config_home(&format!(
@@ -417,8 +407,7 @@ fn a_path_nested_inside_another_is_refused_naming_both() {
     let data = ground.directory("data");
     let cache = ground.directory("data/cache");
 
-    // Both orders: the set is sorted, so a caller cannot slip a nested path in
-    // by naming it first.
+    // Both orders: the set is sorted, so a caller cannot slip a nested path in by naming it first.
     for paths in [[&data, &cache], [&cache, &data]] {
         let error = WritableSet::new(paths).expect_err("a nested path grants nothing new");
         let message = error.to_string();

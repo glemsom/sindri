@@ -1,9 +1,6 @@
-//! Proves the preamble is a function of the workspace and of nothing else: a
-//! build whose catalog offers skills, and one whose catalog offers none, must
-//! render the very same bytes, while the tool sets either side of it differ.
-//!
-//! Every fixture is a temp tree with its own `.git` marker, so the repository
-//! root a preamble reads `AGENTS.md` from is never the tree these tests live in.
+//! Proves the preamble is a function of the workspace and of nothing else: a build whose catalog
+//! offers skills and one whose offers none must render the same bytes, while the tool sets differ.
+//! Every fixture is a temp tree with its own `.git`, so the root read is never this tree.
 
 use std::path::{Path, PathBuf};
 
@@ -14,14 +11,11 @@ use sindri_core::skills::Catalog;
 use sindri_core::tools::{FrontEnd, ToolSet};
 use tempfile::TempDir;
 
-/// A tree a preamble, a catalog and a boundary are all read from: a repository
-/// root holding a `.git` marker, a workspace inside it, and a home beside it.
 struct Tree {
     root: TempDir,
 }
 
 impl Tree {
-    /// A tree with nothing in it beyond the three directories a fixture needs.
     fn new() -> Tree {
         let root = tempfile::tempdir().expect("a temp dir");
         let tree = Tree { root };
@@ -31,43 +25,33 @@ impl Tree {
         tree
     }
 
-    /// An `AGENTS.md` holding `text`, written into `directory`.
     fn agents(&self, directory: &Path, text: &str) {
         std::fs::create_dir_all(directory).expect("the directory");
         std::fs::write(directory.join("AGENTS.md"), text).expect("the instructions");
     }
 
-    /// A path inside the tree, whether or not anything is there yet.
     fn at(&self, relative: &str) -> PathBuf {
         self.root.path().join(relative)
     }
 
-    /// `~` for this fixture.
     fn home(&self) -> PathBuf {
         self.at("home")
     }
 
-    /// The repository root: the directory holding `.git`.
     fn repo(&self) -> PathBuf {
         self.at("repo")
     }
 
-    /// The directory a run stands in.
     fn workspace(&self) -> PathBuf {
         self.at("repo/work/deep")
     }
 }
 
-/// The boundary a run in `workspace` holds, from a config that names no
-/// exception.
 fn boundary(workspace: &Path) -> Boundary {
     Boundary::from_config(&Config::default(), workspace, Enforcement::Bubblewrap)
         .expect("the boundary holds")
 }
 
-/// The two things a front end sends for a workspace, assembled through the same
-/// public seams a run assembles them through: the system message, and the tool
-/// set the model's schema will hold.
 fn assembled(workspace: &Path, catalog: &Catalog) -> (String, ToolSet) {
     (
         Preamble::for_workspace(workspace).render(),
@@ -79,9 +63,9 @@ fn assembled(workspace: &Path, catalog: &Catalog) -> (String, ToolSet) {
 fn a_catalog_offering_no_skill_leaves_the_preamble_byte_identical() {
     let tree = Tree::new();
 
-    // One workspace, two builds of it: the real one, whose built-ins are compiled
-    // in, and a build carrying no skill support at all. Nothing on disk differs
-    // between them, so nothing but the tool set can.
+    // One workspace, two builds of it: the real one, whose built-ins are compiled in, and a build
+    // carrying no skill support at all. Nothing on disk differs between them, so nothing but the
+    // tool set can.
     let offering = Catalog::discover(&tree.workspace(), Some(&tree.home()));
     let no_skill_support =
         Catalog::discover_with_builtin(&tree.workspace(), Some(&tree.home()), &[]);

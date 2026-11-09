@@ -1,6 +1,6 @@
-//! Proves a config save touches only the keys it was handed, through a staged
-//! temp file renamed into place: a person's comments and key order survive, the
-//! file lands owner-only, and a save that cannot land leaves the old one whole.
+//! Proves a config save touches only the keys it was handed, through a staged temp file renamed
+//! into place: a person's comments and key order survive, the file lands owner-only, and a save
+//! that cannot land leaves the old one whole.
 
 use std::collections::BTreeMap;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -11,7 +11,6 @@ use sindri_core::provider::Route;
 use sindri_core::wire::Wire;
 use tempfile::TempDir;
 
-/// A config home holding one `config.toml` with `text` in it, as a person left it.
 fn config_home(text: &str) -> TempDir {
     let home = tempfile::tempdir().expect("a temp dir");
     let directory = home.path().join("sindri");
@@ -20,22 +19,18 @@ fn config_home(text: &str) -> TempDir {
     home
 }
 
-/// A config home with no `config.toml` in it at all: a first run.
 fn bare_home() -> TempDir {
     tempfile::tempdir().expect("a temp dir")
 }
 
-/// The one file inside a config home.
 fn file_in(home: &TempDir) -> PathBuf {
     home.path().join("sindri").join("config.toml")
 }
 
-/// The file's text, read the way any other reader would read it.
 fn read(path: &Path) -> String {
     std::fs::read_to_string(path).expect("a readable config")
 }
 
-/// The permission bits a file carries, without the file-type bits beside them.
 fn mode(path: &Path) -> u32 {
     std::fs::metadata(path)
         .expect("a file to stat")
@@ -44,7 +39,6 @@ fn mode(path: &Path) -> u32 {
         & 0o777
 }
 
-/// Every name in a directory, sorted, so a leftover temp file cannot hide.
 fn names_in(directory: &Path) -> Vec<String> {
     let mut names: Vec<String> = std::fs::read_dir(directory)
         .expect("a readable directory")
@@ -60,8 +54,6 @@ fn names_in(directory: &Path) -> Vec<String> {
     names
 }
 
-/// A file a person wrote: comments above keys and beside them, keys in an order
-/// no serializer would choose, and a blank line where they wanted one.
 const HAND_WRITTEN: &str = "\
 # My settings, and my notes on them. The comments are the point.
 status = false   # OSC 7501 reporting, off until I trust it
@@ -75,8 +67,6 @@ max_turns = 250
 thinking = true
 ";
 
-/// [`HAND_WRITTEN`] after one edit, and not one byte of anything else: the
-/// comments stay, the order stays, and the touched line keeps its neighbours.
 const HAND_WRITTEN_AFTER_ONE_MODEL: &str = "\
 # My settings, and my notes on them. The comments are the point.
 status = false   # OSC 7501 reporting, off until I trust it
@@ -111,8 +101,6 @@ fn a_file_with_comments_and_unusual_key_order_keeps_both() {
     );
 }
 
-/// The line numbers that differ between two texts that hold the same number of
-/// lines, so a test can say exactly which lines a save rewrote.
 fn differing_lines(before: &str, after: &str) -> Vec<usize> {
     let before: Vec<&str> = before.lines().collect();
     let after: Vec<&str> = after.lines().collect();
@@ -328,8 +316,8 @@ fn a_save_whose_rename_cannot_land_discards_what_it_staged() {
     let home = bare_home();
     let directory = home.path().join("sindri");
     std::fs::create_dir_all(&directory).expect("the sindri directory");
-    // A rename cannot land on a directory that already holds something, which is
-    // the one failure a test can force *after* the new bytes are staged.
+    // A rename cannot land on a directory that already holds something, which is the one failure a
+    // test can force *after* the new bytes are staged.
     let path = directory.join("config.toml");
     std::fs::create_dir(&path).expect("a directory where the file would be");
     std::fs::write(path.join("mine.toml"), HAND_WRITTEN).expect("the config that was there");
@@ -387,7 +375,6 @@ fn a_file_that_is_not_toml_is_never_rewritten() {
     );
 }
 
-/// Every key in the schema, set at once, as the save is handed them.
 fn every_key_touched() -> Flags {
     Flags {
         provider: Some(Wire::Anthropic),
@@ -438,10 +425,9 @@ fn a_save_writes_the_keys_the_schema_has_and_invents_none() {
     );
 }
 
-/// The working directory a test stands in, put back when the test ends, so a
-/// repo-local `.sindri.toml` can be planted under the process's own feet.
+/// The working directory a test stands in, put back when the test ends, so a repo-local
+/// `.sindri.toml` can be planted under the process's own feet.
 struct Standing {
-    /// Where the process stood before, which is where it is put back.
     previous: PathBuf,
 }
 
@@ -523,8 +509,6 @@ fn a_save_writes_the_file_the_environment_points_at() {
     );
 }
 
-/// The keys a settings screen touched, and the text a reader left each row holding: the
-/// patch `Enter` hands the one save.
 fn touched(pairs: &[(&'static str, &str)]) -> Touched {
     let mut touched = Touched::new();
     for (key, text) in pairs {
@@ -689,8 +673,8 @@ fn every_key_a_screen_shows_is_the_text_a_save_of_it_reads_back() {
     let written = every_key_touched();
     let shown = Config::from(written.clone());
 
-    // The one key a screen may not show: a secret is masked wherever it is drawn,
-    // so its row is a mask and never the text a file would hold.
+    // The one key a screen may not show: a secret is masked wherever it is drawn, so its row is a
+    // mask and never the text a file would hold.
     let mut readers = Vec::new();
     for key in Config::KEYS {
         if key != "api_key" {
