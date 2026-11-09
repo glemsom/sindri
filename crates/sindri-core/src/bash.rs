@@ -1,34 +1,6 @@
-//! The `bash` tool is the only way a run acts: one command string, run by a
-//! shell, confined by the boundary in force, its output and its verdict brought
-//! back as one value.
-//!
-//! [`invocation`] is how a boundary becomes an argv, and it is a pure function:
-//! the `Boundary` — the writable set, the enforcement — and a session temp handed
-//! in, and out comes the process that expresses exactly that boundary. No call
-//! site assembles a flag of its own, so what confines a command cannot drift from
-//! the policy the model was told.
-//!
-//! A sandboxed command runs in unprivileged bubblewrap: the host root read-only,
-//! the writable set bound over itself where the model was told it is, the session
-//! temp bound and mapped to `TMPDIR`, and the network kept, because §5 sends
-//! search, fetch and HTTP through this shell — the boundary is one on writes and
-//! not on reads. Its environment is cleared down to that `TMPDIR` and a fixed
-//! `PATH`, so a credential in this process's environment cannot reach a command
-//! that could send it anywhere. An `unsafe` run is the other half of the
-//! two-valued fact: nothing between it and the user's own privileges, inheriting
-//! environment and cwd.
-//!
-//! [`run`] spawns that argv and waits, until the per-call timeout expires, when
-//! it kills the command and the outcome says `timed_out` — `--die-with-parent`
-//! being what takes the whole sandbox with it — or until the user's word arrives,
-//! when it kills the process group the command leads and the outcome says
-//! `cancelled` (§4).
-//!
-//! The session temp is an input and not a thing this module makes:
-//! [`crate::session`] creates it, adopts it and clears it away, and nothing here
-//! creates, adopts or clears it a second time.
-//! The run's budgets and the record are not here either — an outcome is what a
-//! budget is spent from and what a record is written about.
+//! The `bash` tool is the only way a run acts: one command string, run by a shell, confined by
+//! the boundary in force. The network is kept on purpose, because search, fetch and HTTP run
+//! through this shell: the boundary is on writes and not on reads.
 
 use std::error::Error;
 use std::fmt;
@@ -45,54 +17,41 @@ use serde::Serialize;
 use crate::policy::{Boundary, BoundaryError, Enforcement};
 use crate::run::Cancel;
 
-/// The shell every command string is handed to.
 pub const SHELL: &str = "/bin/sh";
 
-/// The `PATH` a sandboxed command gets, fixed so two calls see one shell.
 pub const SANDBOX_PATH: &str = "/usr/local/bin:/usr/bin:/bin";
 
-/// The program that creates the sandbox.
 pub const BWRAP: &str = "bwrap";
 
-/// The variable the session temp is mapped to inside the sandbox.
 pub const TEMP_VARIABLE: &str = "TMPDIR";
 
-/// The longest the wait naps between polls: short enough that a call which ends
-/// at once is back at once, long enough that a long one costs nothing.
+/// Short enough that a call which ends at once is back at once, long enough that a long one
+/// costs nothing.
 const MAX_NAP: Duration = Duration::from_millis(25);
 
-/// How long a reader gets to see the end of its pipe once the command has
-/// ended, so a grandchild left holding the pipe cannot hold the call open.
+/// How long a reader gets to see the end of its pipe once the command has ended: a grandchild
+/// left holding it cannot hold the call open.
 const PIPE_GRACE: Duration = Duration::from_millis(250);
 
-/// The signal a stopped command is stopped with: no code to report, and no way
-/// for the command to have a last word about it.
 const SIGKILL: i32 = 9;
 
-/// One argv: the program and the arguments, in the order they are spawned.
-///
-/// It has no public constructor, so the only route to a command's argv is
-/// [`invocation`]: a call site cannot hand-assemble a boundary of its own.
+/// One argv, the program and its arguments. It has no public constructor, so the only route to a
+/// command's argv is `invocation`: a call site cannot hand-assemble a boundary of its own.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Invocation {
-    /// The program to spawn.
     program: String,
-    /// Its arguments.
     args: Vec<String>,
 }
 
 impl Invocation {
-    /// The program to spawn.
     pub fn program(&self) -> &str {
         &self.program
     }
 
-    /// Its arguments, in the order they are spawned.
     pub fn args(&self) -> &[String] {
         &self.args
     }
 
-    /// The whole argv, program first.
     pub fn argv(&self) -> Vec<String> {
         std::iter::once(self.program.clone())
             .chain(self.args.iter().cloned())
@@ -100,47 +59,27 @@ impl Invocation {
     }
 }
 
-/// What one command did.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Outcome {
-    /// How the command was confined, so the JSON and the rail say `unsafe`.
     pub enforcement: Enforcement,
-    /// The exit code, or nothing when a signal killed the command. Left out of
-    /// the JSON rather than written as `null` (spec §15).
+    /// The exit code, or nothing when a signal killed it: left out of the JSON rather than
+    /// written as `null`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code: Option<i32>,
-    /// Whether the per-call timeout killed the command.
     pub timed_out: bool,
-    /// Whether the user's word stopped the command while it ran (§4).
     pub cancelled: bool,
-    /// What the command wrote to stdout.
     pub stdout: String,
-    /// What the command wrote to stderr.
     pub stderr: String,
 }
 
-/// Why a command could not be run.
 #[derive(Debug)]
 pub enum BashError {
-    /// The boundary cannot be held, which is a usage error rather than a
-    /// best effort.
     Boundary(BoundaryError),
-    /// The session temp is not absolute.
-    TempNotAbsolute {
-        /// The path as it was given.
-        path: PathBuf,
-    },
-    /// The command could not be started or waited for.
-    Process {
-        /// The program that would not run.
-        program: String,
-        /// Why it would not.
-        reason: String,
-    },
+    TempNotAbsolute { path: PathBuf },
+    Process { program: String, reason: String },
 }
 
 impl BashError {
-    /// The exit code a front end reports.
     pub fn exit_code(&self) -> u8 {
         match self {
             BashError::Boundary(_) | BashError::TempNotAbsolute { .. } => 2,
@@ -171,12 +110,6 @@ impl From<BoundaryError> for BashError {
     }
 }
 
-/// The argv that expresses `boundary` for one command: the boundary turned into
-/// the process that enforces it, so no call site assembles a flag of its own.
-///
-/// It is a pure function — the boundary, the session temp and the command in, an
-/// argv out — which is what lets the whole confinement be read and reviewed as a
-/// value, and checked against golden vectors with no kernel involved.
 pub fn invocation(
     boundary: &Boundary,
     session_temp: &Path,
@@ -200,9 +133,8 @@ pub fn invocation(
     let temp = session_temp.display().to_string();
     let mut args: Vec<String> = Vec::new();
 
-    // The network is kept on purpose: search and fetch run through this shell, so
-    // the boundary is on writes and not on reads. `--die-with-parent` makes the
-    // timeout kill the whole sandbox; `--new-session` keeps it off the terminal.
+    // `--die-with-parent` is what lets a timeout kill the whole sandbox, and `--new-session`
+    // is what keeps it off the terminal.
     args.extend(
         [
             "--unshare-all",
@@ -220,8 +152,8 @@ pub fn invocation(
         args.extend([String::from("--bind"), path.clone(), path]);
     }
 
-    // The session temp is mapped here and never created: this module does not
-    // make it, adopt it or clear it away.
+    // The session temp is mapped and never created here: `session` makes it, adopts it and
+    // clears it away.
     args.extend([
         String::from("--bind"),
         temp.clone(),
@@ -245,16 +177,6 @@ pub fn invocation(
     })
 }
 
-/// Runs one command under `boundary` and brings back what it did, until it ends
-/// or until the user's word arrives on `cancel`.
-///
-/// The argv comes from [`invocation`] and from nowhere else, so what confines the
-/// command is the boundary and not this function's own opinion of it. The call is
-/// waited for until the per-call timeout expires, at which point the command is
-/// killed — bubblewrap's `--die-with-parent` takes the whole sandbox with it — and
-/// the outcome says `timed_out`. A cancellation is the other kill and the louder
-/// one: the command's whole process group goes, so an unsafe run's own children
-/// stop with it, and the outcome says `cancelled` (§4, ADR-0006).
 pub fn run(
     boundary: &Boundary,
     session_temp: &Path,
@@ -264,11 +186,8 @@ pub fn run(
     let invocation = invocation(boundary, session_temp, command)?;
     let program = invocation.program().to_owned();
 
-    // No stdin: a command that reads one would hang the run.
-
-    // The command leads a process group of its own, so one kill takes everything
-    // it started: `--die-with-parent` for a sandboxed command's process, the
-    // group for an unsafe one's children.
+    // No stdin: a command that reads one would hang the run. It leads a process group of its
+    // own, so one kill takes everything it started.
     let mut child = Command::new(&program)
         .args(invocation.args())
         .stdin(Stdio::null())
@@ -325,41 +244,35 @@ pub fn run(
     })
 }
 
-/// Stops a command and everything it started: the process group it leads, killed
-/// outright, so no child an unsafe run's own command started outlives the call
-/// that made it (§4). A sandboxed command needs it too — a kill that reaches
-/// only the sandbox's edge is a command still working inside it.
+/// Kills the process group outright, so no child a command started outlives the call. A
+/// sandboxed command needs it too: a kill that reaches only the sandbox's edge leaves a
+/// command still working inside it.
 fn stop(child: &mut Child) {
     let Ok(pid) = i32::try_from(child.id()) else {
         let _ = child.kill();
         return;
     };
-    // The negative pid names the group. One the kernel has already reaped has
-    // nothing left to signal: a kill that lost a race, not a failure.
+    // The negative pid names the group. One the kernel already reaped has nothing left to
+    // signal: a kill that lost a race, not a failure.
     unsafe {
         kill(-pid, SIGKILL);
     }
 }
 
 unsafe extern "C" {
-    /// `kill(2)`, declared here as `run` declares `signal(2)`: one syscall that
-    /// names a process group, so the module keeps naming no crate to stop a
-    /// command.
+    /// `kill(2)`, declared here so the module names no crate to stop a command: one syscall that
+    /// names a process group.
     fn kill(pid: i32, signal: i32) -> i32;
 }
 
-/// One of a command's output streams, read by a thread of its own so a command
-/// that fills both cannot block on the one nobody is reading, and collected into
-/// a sink the call can take whether or not the reader has finished.
+/// A stream read by a thread of its own, so a command that fills both cannot block on the one
+/// nobody is reading, and collected into a sink the call can take whether or not the read ended.
 struct Pipe {
-    /// The bytes read so far.
     sink: Arc<Mutex<Vec<u8>>>,
-    /// The thread reading them.
     reader: JoinHandle<()>,
 }
 
 impl Pipe {
-    /// Starts reading `pipe` to its end.
     fn drain<R: Read + Send + 'static>(pipe: Option<R>) -> Pipe {
         let sink = Arc::new(Mutex::new(Vec::new()));
         let collected = Arc::clone(&sink);
@@ -383,7 +296,6 @@ impl Pipe {
         Pipe { sink, reader }
     }
 
-    /// The bytes read so far, after a grace for the reader to reach the end.
     fn finish(self) -> Vec<u8> {
         let deadline = Instant::now() + PIPE_GRACE;
         while !self.reader.is_finished() && Instant::now() < deadline {
@@ -400,24 +312,19 @@ mod tests {
     use super::*;
     use crate::config::Config;
 
-    /// Real directories, because the writable set is canonicalised through the
-    /// filesystem rather than tidied as a string.
+    /// Real directories, because the writable set is canonicalised through the filesystem.
     struct Ground {
-        /// Held so the directories outlive the ground that names them.
         _root: TempDir,
-        /// The same directory, as the filesystem spells it.
         path: PathBuf,
     }
 
     impl Ground {
-        /// A ground of its own, canonical.
         fn new() -> Ground {
             let root = tempfile::tempdir().expect("a temp ground");
             let path = std::fs::canonicalize(root.path()).expect("the ground resolves");
             Ground { _root: root, path }
         }
 
-        /// A directory under the ground, created and returned canonical.
         fn directory(&self, name: &str) -> PathBuf {
             let directory = self.path.join(name);
             std::fs::create_dir_all(&directory).expect("the directory");
@@ -425,8 +332,7 @@ mod tests {
         }
     }
 
-    /// A boundary over the ground's workspace plus `extra`, named in the order
-    /// given so a test can show the order does not reach the argv.
+    /// `extra` is named in the order given, so a test can show the order does not reach the argv.
     fn boundary(ground: &Ground, extra: &[&str], enforcement: Enforcement) -> Boundary {
         let workspace = ground.directory("workspace");
         let config = Config {
@@ -441,8 +347,8 @@ mod tests {
         Boundary::from_config(&config, &workspace, enforcement).expect("the boundary holds")
     }
 
-    /// A session temp that is not on this machine, which is the point: the argv
-    /// is rendered from the value and never from what the filesystem says.
+    /// Not on this machine on purpose: the argv is rendered from the value and never from what
+    /// the filesystem says.
     const TEMP: &str = "/run/sindri/7f3c/tmp";
 
     #[test]

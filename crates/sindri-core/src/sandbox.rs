@@ -1,27 +1,6 @@
-//! Boot proves the sandbox once, before a turn or a record is made, so that a
-//! machine which cannot confine a command is discovered at the start of a run
-//! and not in the middle of one. Boot proves it once, and a card names the
-//! failing check when the sandbox the boundary describes cannot be made.
-//!
-//! The proof is a real bubblewrap invocation and not a fact read off the
-//! filesystem: the checks are the three `scripts/sandbox-probe.sh` distinguishes,
-//! in its order — bubblewrap on `PATH`, bubblewrap that answers for itself, and
-//! bubblewrap that creates the sandbox — and the third one runs the argv
-//! [`crate::bash::invocation`] builds from the boundary in force, so what boot
-//! proves is the sandbox the run's own commands will get and not a rehearsal of
-//! something else. A check that fails is named in its own words, with what it
-//! said, because a raw argv is a thing only this program's author can read.
-//!
-//! A refusal is a [`Card`]: the failing check, what it said and the one thing a
-//! person can do about it, rendered as plain lines. The terminal UI's frame
-//! paints those same lines as a card (§12, #36) and cannot make a different
-//! statement about why the run will not start; batch mode prints them on stderr,
-//! because stdout is the answer's alone, and the front end exits 3 (§15).
-//!
-//! There is no fallback here and nowhere else either: a sandbox that cannot be
-//! made stops the run. The one route to unconfined execution is `--yolo-unsafe`
-//! literally on the command line, and a run that took it has no sandbox to prove,
-//! so [`prove`] passes it with an empty [`Proof`] rather than a green one.
+//! Boot proves the sandbox once, before a turn or a record is made, with a real bubblewrap
+//! invocation, so what boot proves is the sandbox the run's own commands will get. There is no
+//! fallback, and the one route to unconfined execution is `--yolo-unsafe` on the command line.
 
 use std::error::Error;
 use std::fmt;
@@ -32,32 +11,24 @@ use std::process::{Command, Output, Stdio};
 use crate::bash::{self, BWRAP};
 use crate::policy::{Boundary, Enforcement};
 
-/// §15's sandbox/setup failure, which is the code a card is reported by.
 pub const EXIT_CODE: u8 = 3;
 
-/// The command the proof runs inside the sandbox: the smallest thing that proves
-/// it starts, so a failure is the sandbox's and not its work's.
+/// The smallest thing that proves the sandbox starts: a failure is then the sandbox's.
 const PROBE: &str = "true";
 
-/// One of the checks a boot proof runs, in the order it runs them: the three the
-/// shell probe of `scripts/sandbox-probe.sh` distinguishes, so a person reading
-/// either one reads the same three names.
+/// The three checks `scripts/sandbox-probe.sh` distinguishes, in its order, so a person reading
+/// either one reads the same names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Check {
-    /// There is a bubblewrap to run at all.
     Installed,
-    /// And it answers for itself: a binary that cannot report a version is a
-    /// broken install, which is a thing someone can fix rather than an absent
-    /// capability.
+    /// A binary that cannot report a version is a broken install — a thing someone can fix —
+    /// rather than an absent capability.
     Runs,
-    /// And the kernel lets it create the sandbox: unprivileged user namespaces,
-    /// which some kernels forbid and which no retry can supply.
+    /// Unprivileged user namespaces, which some kernels forbid and no retry can supply.
     Namespaces,
 }
 
 impl Check {
-    /// The check in its own words: what the card names and what a person greps
-    /// for, in the shell probe and here alike.
     pub fn name(self) -> &'static str {
         match self {
             Check::Installed => "bubblewrap is on PATH",
@@ -66,8 +37,6 @@ impl Check {
         }
     }
 
-    /// What a person can do about this check failing: the one thing the card
-    /// offers, and the escape hatch named where it is the remaining route.
     pub fn remedy(self) -> &'static str {
         match self {
             Check::Installed => {
@@ -91,16 +60,12 @@ impl fmt::Display for Check {
     }
 }
 
-/// What boot proved: the checks that passed, in the order they ran, so a run can
-/// say which sandbox it has rather than that it has one.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Proof {
-    /// The checks that passed. Empty for a run that asked for no sandbox.
     checks: Vec<Check>,
 }
 
 impl Proof {
-    /// The checks that passed, in the order they ran.
     pub fn checks(&self) -> &[Check] {
         &self.checks
     }
@@ -121,22 +86,15 @@ impl fmt::Display for Proof {
     }
 }
 
-/// The card a sandbox that cannot be created becomes: the check that failed, in
-/// its own words, what it said, and the one thing a person can do about it.
-///
-/// It renders as plain lines — no colour, no width, no terminal — because the
-/// frame (#36) paints these lines and batch mode prints them, and two surfaces
-/// must not be able to say two different things about why nothing ran.
+/// Plain lines — no colour, no width, no terminal — because the frame paints these lines and
+/// batch mode prints them, and two surfaces must not say two things about why nothing ran.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Card {
-    /// The check that did not pass.
     check: Check,
-    /// What that check said, in its own words, on one line.
     said: String,
 }
 
 impl Card {
-    /// The card for a check that did not pass, carrying what it said.
     fn new(check: Check, said: impl Into<String>) -> Card {
         Card {
             check,
@@ -144,17 +102,14 @@ impl Card {
         }
     }
 
-    /// The check that did not pass, which is the name the card reports.
     pub fn check(&self) -> Check {
         self.check
     }
 
-    /// What that check said, as one line: empty when it said nothing.
     pub fn said(&self) -> &str {
         &self.said
     }
 
-    /// The exit code a front end reports a card by (§15's setup failure).
     pub fn exit_code(&self) -> u8 {
         EXIT_CODE
     }
@@ -176,22 +131,12 @@ impl fmt::Display for Card {
 
 impl Error for Card {}
 
-/// Proves the sandbox `boundary` describes, with the `bwrap` this machine has on
-/// `PATH`, and hands back the checks it passed.
-///
-/// It is called once at boot, before a turn and before a record, so a machine
-/// that cannot confine a command is a card at the start of a run rather than a
-/// fallback in the middle of one.
 pub fn prove(boundary: &Boundary, session_temp: &Path) -> Result<Proof, Card> {
     prove_with(Path::new(BWRAP), boundary, session_temp)
 }
 
-/// Proves it with the `bwrap` at `bwrap`: the same three checks, over a program
-/// named rather than looked up.
-///
-/// That name is the seam `scripts/sandbox-probe-test.sh` reaches through a
-/// `PATH` of its own: a stand-in is a machine that refuses on demand, so all
-/// three refusals are provable without a broken kernel.
+/// The same three checks over a program named rather than looked up: the seam a test reaches
+/// with a stand-in that refuses on demand, so every refusal is provable without a broken kernel.
 pub fn prove_with(bwrap: &Path, boundary: &Boundary, session_temp: &Path) -> Result<Proof, Card> {
     if boundary.enforcement() == Enforcement::Unsafe {
         return Ok(Proof { checks: Vec::new() });
@@ -224,9 +169,8 @@ pub fn prove_with(bwrap: &Path, boundary: &Boundary, session_temp: &Path) -> Res
     Ok(Proof { checks })
 }
 
-/// Runs `program` with `args`, capturing what it said: no stdin, because a check
-/// has nothing to type at it, and both streams piped, because a refusal's words
-/// are the card's.
+/// No stdin, because a check has nothing to type at it, and both streams piped, because a
+/// refusal's words are the card's.
 fn ask(program: &Path, args: &[String]) -> std::io::Result<Output> {
     Command::new(program)
         .args(args)
@@ -234,8 +178,6 @@ fn ask(program: &Path, args: &[String]) -> std::io::Result<Output> {
         .output()
 }
 
-/// What a failed check said, as one line: its stderr when it wrote one, its
-/// stdout when it did not, and the status when it wrote neither.
 fn said_of(output: &Output) -> String {
     let (stderr, stdout) = (
         String::from_utf8_lossy(&output.stderr).into_owned(),
@@ -256,8 +198,8 @@ fn said_of(output: &Output) -> String {
     }
 }
 
-/// `words` on one line: trimmed, and every run of whitespace between words
-/// collapsed to one space, so a card's second line stays a line.
+/// Trimmed, with every run of whitespace collapsed to one space, so a card's second line stays
+/// a line.
 fn one_line(words: &str) -> String {
     words.split_whitespace().collect::<Vec<&str>>().join(" ")
 }
@@ -274,13 +216,9 @@ mod tests {
     use crate::config::Config;
     use std::time::{Duration, Instant};
 
-    /// The proof, asked for again if the stand-in was reported busy.
-    ///
     /// `ETXTBSY` is what the kernel answers when a file is open for writing anywhere at the
     /// moment it is executed, and every stand-in here is a file this process wrote a moment
-    /// earlier: under a suite where each test binary forks at once, that is a fact about the
-    /// instant and never about the stand-in. So a busy one is asked again; a stand-in that is
-    /// really broken answers something else, and fails the test exactly as before.
+    /// earlier: so a busy one is asked again, and one that is really broken still fails.
     fn proved(bwrap: &Path, boundary: &Boundary, session_temp: &Path) -> Result<Proof, Card> {
         let deadline = Instant::now() + Duration::from_secs(5);
         loop {
@@ -295,24 +233,16 @@ mod tests {
         }
     }
 
-    /// A stand-in `bwrap` on disk: the machine a test hands the proof instead of
-    /// this one's own, so every refusal is provable where the real bwrap works.
-    ///
-    /// It answers `--version` as its `version` branch says, writes the argv it
-    /// was handed for the sandbox check to `spoken`, and then does what its
-    /// `creating` branch says. Shell, because a stand-in is a process too.
+    /// A stand-in `bwrap` on disk, so every refusal is provable where the real bwrap works. It
+    /// answers `--version` as `version` says, keeps the argv it was handed in `spoken`, and
+    /// then does what `creating` says.
     struct Machine {
-        /// Held so the script outlives the proof that runs it.
         _root: TempDir,
-        /// The stand-in itself, executable.
         bwrap: PathBuf,
-        /// Where the sandbox check's argv is kept.
         spoken: PathBuf,
     }
 
     impl Machine {
-        /// A machine whose `bwrap` is `creating` after answering `--version` with
-        /// `version`.
         fn new(version: &str, creating: &str) -> Machine {
             let root = tempfile::tempdir().expect("a temp machine");
             let bwrap = root.path().join("bwrap");
@@ -332,13 +262,11 @@ mod tests {
             }
         }
 
-        /// A machine whose bubblewrap makes the sandbox it was asked for.
         fn working() -> Machine {
             Machine::new("echo 'bubblewrap 0.12.0 (stand-in)'\nexit 0", "exit 0")
         }
 
-        /// A machine whose kernel will not let bubblewrap unshare: the shape a
-        /// hosted runner has, with AppArmor forbidding user namespaces.
+        /// The shape a hosted runner has, with AppArmor forbidding user namespaces.
         fn restricted() -> Machine {
             Machine::new(
                 "echo 'bubblewrap 0.12.0 (stand-in)'\nexit 0",
@@ -346,8 +274,7 @@ mod tests {
             )
         }
 
-        /// A machine whose bwrap cannot report its own version: a broken install
-        /// rather than an absent capability.
+        /// A broken install rather than an absent capability.
         fn broken() -> Machine {
             Machine::new(
                 "echo 'bwrap: cannot execute: Exec format error' >&2\nexit 1",
@@ -355,7 +282,6 @@ mod tests {
             )
         }
 
-        /// The argv the stand-in was handed for the sandbox check, word by word.
         fn handed(&self) -> Vec<String> {
             std::fs::read_to_string(&self.spoken)
                 .expect("the stand-in kept the argv it was handed")
@@ -365,20 +291,15 @@ mod tests {
         }
     }
 
-    /// The ground a boundary stands on: a workspace and a session temp, both real
-    /// directories, because the writable set is canonicalised through the
-    /// filesystem and never tidied as a string.
+    /// A workspace and a session temp, both real directories, because the writable set is
+    /// canonicalised through the filesystem and never tidied as a string.
     struct Ground {
-        /// Held so the directories outlive the boundary that names them.
         _root: TempDir,
-        /// The workspace, canonical.
         workspace: PathBuf,
-        /// The session temp, canonical.
         temp: PathBuf,
     }
 
     impl Ground {
-        /// An empty workspace and an empty temp.
         fn new() -> Ground {
             let root = tempfile::tempdir().expect("a temp ground");
             let workspace = root.path().join("workspace");
@@ -393,7 +314,6 @@ mod tests {
             }
         }
 
-        /// The boundary a run holds on this ground, confined as `enforcement` says.
         fn boundary(&self, enforcement: Enforcement) -> Boundary {
             Boundary::from_config(&Config::default(), &self.workspace, enforcement)
                 .expect("the boundary holds")
@@ -567,8 +487,7 @@ mod tests {
     #[test]
     fn an_unsafe_run_has_no_sandbox_to_prove() {
         let ground = Ground::new();
-        // A bwrap that refuses everything, so a proof that ran anything at all
-        // would hand back a card instead of a pass.
+        // A bwrap that refuses everything, so a proof that ran anything would hand back a card.
         let machine = Machine::restricted();
 
         let proof = proved(

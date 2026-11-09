@@ -1,20 +1,6 @@
-//! Policy is the boundary in force, and every tool description derived from it:
-//! the writable set, the per-call timeout and the budgets a run spends.
-//!
-//! One `Boundary` value holds all of it, so the four surfaces that show it — the
-//! `bash` tool's description, the bytes `doctor` prints, the policy block a
-//! session record stores and the sandbox fact the rail draws — are views of one
-//! value rather than four copies free to drift. The description is rendered from
-//! the fields it holds and from nothing else: never hand-written, never read out
-//! of a file, so the boundary the model is told about is the boundary enforced.
-//!
-//! The writable set's invariants are the type's, not a convention: a set is
-//! canonical, absolute, distinct, non-nested and never `/`, and a set that
-//! breaks one is refused with a message naming the path that broke it.
-//! Enforcement is two-valued, so a run is either in bubblewrap or unsafe and
-//! there is no third thing any surface could say. The escape hatch is an
-//! argument to the constructor and nothing else: it has no config key and no
-//! environment variable, so it dies with the invocation that asked for it.
+//! One `Boundary` value holds the boundary in force, so every surface that shows it is a view of
+//! one value rather than a copy free to drift. The escape hatch is an argument to the constructor
+//! and nothing else — no config key, no environment variable — so it dies with its invocation.
 
 use std::error::Error;
 use std::fmt;
@@ -25,33 +11,23 @@ use serde::Serialize;
 
 use crate::config::Config;
 
-/// The per-call timeout a run gets when the config names none, in seconds.
 pub const DEFAULT_TIMEOUT_SECONDS: u64 = 120;
 
-/// The ceiling on the per-call timeout, in seconds: a longer value is refused
-/// rather than clamped, because a clamp is a boundary nobody was told about.
 pub const MAX_TIMEOUT_SECONDS: u64 = 3_600;
 
-/// The command wall clock a run gets when the config names none, in
-/// milliseconds.
 pub const DEFAULT_COMMAND_BUDGET_MS: u64 = 3_600_000;
 
-/// The command output a run gets when the config names none, in bytes.
 pub const DEFAULT_OUTPUT_BUDGET_BYTES: u64 = 8 * 1024 * 1024;
 
-/// How a run's commands are confined, as the two-valued fact it is: there is no
-/// third state, so no surface can report one and the model cannot be told one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Enforcement {
-    /// Unprivileged bubblewrap, with the writable set mapped writable.
     Bubblewrap,
     /// The `--yolo-unsafe` escape hatch: no bubblewrap at all.
     Unsafe,
 }
 
 impl Enforcement {
-    /// The word the record and the JSON use, which is the word the spec uses.
     pub fn word(self) -> &'static str {
         match self {
             Enforcement::Bubblewrap => "bubblewrap",
@@ -59,7 +35,6 @@ impl Enforcement {
         }
     }
 
-    /// The word the rail uses, where the fact shares a ledger's narrow column.
     pub fn rail_label(self) -> &'static str {
         match self {
             Enforcement::Bubblewrap => "bwrap",
@@ -74,25 +49,16 @@ impl fmt::Display for Enforcement {
     }
 }
 
-/// The paths a run may write: canonical, absolute, distinct, non-nested and
-/// never `/`, held in one sorted order so two routes to the same set — a file, a
-/// variable, a flag — render one description rather than two spellings of it.
+/// The paths a run may write, held in one sorted order so two routes to the same set — a file,
+/// a variable, a flag — render one description rather than two spellings of it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WritableSet {
-    /// The canonical paths, sorted, so the order a caller named them in cannot
-    /// reach the model.
     paths: Vec<PathBuf>,
 }
 
 impl WritableSet {
-    /// Reads a set of paths, resolving each one through the filesystem, and
-    /// refuses the set — naming the path that broke it — when any invariant
-    /// fails.
-    ///
-    /// Canonical is read against the filesystem, not as string tidying: a path
-    /// is resolved through its symlinks and its `..`, so two spellings of one
-    /// directory are one directory. A path that cannot be resolved does not
-    /// exist, and a run cannot be granted a directory that is not there.
+    /// Canonical is read against the filesystem and not as string tidying: a path is resolved
+    /// through its symlinks and its `..`, so two spellings of one directory are one directory.
     pub fn new<I, P>(paths: I) -> Result<WritableSet, BoundaryError>
     where
         I: IntoIterator<Item = P>,
@@ -117,9 +83,8 @@ impl WritableSet {
             resolved.push(canonical);
         }
 
-        // Sorting is what makes the order of the routes irrelevant, and it is
-        // also what lets both later checks read adjacent pairs only: a duplicate
-        // lands beside its twin, and a path's ancestor always sorts before it.
+        // Both checks below read adjacent pairs only because of this sort: a duplicate lands
+        // beside its twin, and a path's ancestor always sorts before it.
         resolved.sort();
 
         for pair in resolved.windows(2) {
@@ -142,40 +107,23 @@ impl WritableSet {
         Ok(WritableSet { paths: resolved })
     }
 
-    /// The paths, in the one order the set holds them.
     pub fn paths(&self) -> &[PathBuf] {
         &self.paths
     }
 }
 
-/// The boundary in force for a run: what may be written, how long a call may
-/// take, what the run may spend in total, and how its commands are confined.
-///
-/// Every surface reads this value and nothing restates it, which is what makes
-/// the model's description, `doctor`'s output and the record agree by
-/// construction instead of by review.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Boundary {
-    /// The paths a run may write.
     writable: WritableSet,
-    /// The per-call timeout, in seconds.
     timeout_seconds: u64,
-    /// The run's command wall clock, in milliseconds.
     command_budget_ms: u64,
-    /// The run's command output, in bytes.
     output_budget_bytes: u64,
-    /// How the run's commands are confined.
     enforcement: Enforcement,
 }
 
 impl Boundary {
-    /// The boundary a run holds: the workspace the run stands in plus every
-    /// extra path the config named, with the limits the config sets and the
-    /// documented defaults where it is silent.
-    ///
-    /// `enforcement` is the invocation's own fact. It is an argument because the
-    /// escape hatch is not persistable — there is no key and no variable that
-    /// could reach it — so a caller cannot arrive at `Unsafe` by configuration.
+    /// `enforcement` is an argument because the escape hatch is not persistable: no key and no
+    /// variable could reach it, so a caller cannot arrive at it by configuration.
     pub fn from_config(
         config: &Config,
         workspace: &Path,
@@ -205,36 +153,28 @@ impl Boundary {
         })
     }
 
-    /// The paths a run may write.
     pub fn writable(&self) -> &WritableSet {
         &self.writable
     }
 
-    /// The per-call timeout, in seconds.
     pub fn timeout_seconds(&self) -> u64 {
         self.timeout_seconds
     }
 
-    /// The run's command wall clock, in milliseconds.
     pub fn command_budget_ms(&self) -> u64 {
         self.command_budget_ms
     }
 
-    /// The run's command output, in bytes.
     pub fn output_budget_bytes(&self) -> u64 {
         self.output_budget_bytes
     }
 
-    /// How the run's commands are confined.
     pub fn enforcement(&self) -> Enforcement {
         self.enforcement
     }
 
-    /// The `bash` tool's description: the boundary in force, rendered from the
-    /// fields this value holds and from nothing else.
-    ///
-    /// Nothing here is read from the clock, the environment or a hash map, so
-    /// two runs of one boundary render one string, byte for byte.
+    /// Rendered from the fields and from nothing else: no clock, no environment, no hash map,
+    /// so two runs of one boundary render one string, byte for byte.
     pub fn description(&self) -> String {
         let mut lines: Vec<String> =
             vec![String::from("Run a command with `bash`."), String::new()];
@@ -272,15 +212,11 @@ impl Boundary {
         lines.join("\n")
     }
 
-    /// The bytes `doctor` prints: the description the model sees, because a
-    /// diagnostic that described the boundary differently would be the drift
-    /// this value exists to prevent.
+    /// The description the model sees, so a diagnostic cannot describe the boundary differently.
     pub fn doctor_description(&self) -> String {
         self.description()
     }
 
-    /// The policy block a session record stores: the same boundary in the same
-    /// words, including the description bytes the model was given verbatim.
     pub fn record_policy(&self) -> PolicyRecord {
         PolicyRecord {
             enforcement: self.enforcement,
@@ -298,69 +234,25 @@ impl Boundary {
     }
 }
 
-/// The policy block of a session record: the boundary a run held, in the shape a
-/// later reader — `sessions show`, `jq`, the rail — reads it back from.
-///
-/// Field order is fixed, so the JSON two runs write for one boundary is the same
-/// JSON.
+/// Field order is fixed, so the JSON two runs write for one boundary is the same JSON.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct PolicyRecord {
-    /// How the run's commands were confined.
     pub enforcement: Enforcement,
-    /// The writable set, as the filesystem spells it.
     pub writable: Vec<String>,
-    /// The per-call timeout, in seconds.
     pub timeout_seconds: u64,
-    /// The run's command wall clock, in milliseconds.
     pub command_budget_ms: u64,
-    /// The run's command output, in bytes.
     pub output_budget_bytes: u64,
-    /// The bytes the model was given, verbatim.
     pub description: String,
 }
 
-/// Why a boundary cannot be held. Every one of them names the thing that broke
-/// it, so a run that refuses a policy says which path or which limit to fix.
 #[derive(Debug)]
 pub enum BoundaryError {
-    /// A path that is not absolute, which grants nothing because it means
-    /// nothing without a directory to be relative to.
-    NotAbsolute {
-        /// The path as it was given.
-        path: PathBuf,
-    },
-    /// A path the filesystem will not resolve, so there is no directory to
-    /// grant.
-    Unresolvable {
-        /// The path as it was given.
-        path: PathBuf,
-        /// Why it would not resolve.
-        reason: String,
-    },
-    /// The root directory, which as a writable path is every path.
-    Root {
-        /// The path, which is `/`.
-        path: PathBuf,
-    },
-    /// One path given twice, which is a set that is not a set.
-    Duplicate {
-        /// The path that appeared twice.
-        path: PathBuf,
-    },
-    /// A path inside another, which grants nothing the outer one does not.
-    Nested {
-        /// The inner path, which is the one to drop.
-        path: PathBuf,
-        /// The path that already contains it.
-        inside: PathBuf,
-    },
-    /// A per-call timeout above the ceiling, refused rather than clamped.
-    TimeoutAboveCeiling {
-        /// The timeout the config asked for, in seconds.
-        seconds: u64,
-        /// The largest timeout a run may be given, in seconds.
-        ceiling: u64,
-    },
+    NotAbsolute { path: PathBuf },
+    Unresolvable { path: PathBuf, reason: String },
+    Root { path: PathBuf },
+    Duplicate { path: PathBuf },
+    Nested { path: PathBuf, inside: PathBuf },
+    TimeoutAboveCeiling { seconds: u64, ceiling: u64 },
 }
 
 impl fmt::Display for BoundaryError {
