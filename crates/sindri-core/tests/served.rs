@@ -1,8 +1,6 @@
-//! What a wire says it serves, asked through the real listing wires of every
-//! dialect §10 names, against catalogues recorded from the two vendors. Nothing
-//! here reaches the network: the transport hands back the recorded bytes, so
-//! the parsing and the request are the ones a live run would make and only the
-//! socket is missing.
+//! What a wire says it serves, asked through the real listing wires of every dialect, against
+//! catalogues recorded from the two vendors. Nothing reaches the network: the transport hands back
+//! recorded bytes, so the parsing and the request are a live run's and only the socket is missing.
 
 use std::sync::{Arc, Mutex};
 
@@ -15,26 +13,16 @@ use sindri_core::provider::{Ask, Client, Credential};
 use sindri_core::redact::SecretSet;
 use sindri_core::wire::Wire;
 
-/// An Anthropic `GET /v1/models` catalogue, cursor-paged fields and all.
 const ANTHROPIC_MODELS: &str = include_str!("fixtures/providers/anthropic_models.json");
-/// An OpenAI `GET /v1/models` catalogue.
 const OPENAI_MODELS: &str = include_str!("fixtures/providers/openai_models.json");
-/// An Anthropic Messages reply, so a run can be seen to start after a wire
-/// that had no catalogue to give.
 const ANTHROPIC_STREAM: &str = include_str!("fixtures/providers/anthropic_stream.sse");
-/// A gateway's answer where a wire offers no listing at all.
 const NO_LISTING: &str =
     r#"{"error":{"message":"this gateway has no model catalogue","type":"not_implemented"}}"#;
 
-/// The identifiers the recorded Anthropic catalogue holds, named once so an
-/// assertion reads as the wire's own list rather than as one this test made up.
 const SONNET: &str = "claude-sonnet-4-6";
-/// The second of them, in the order the wire listed.
 const HAIKU: &str = "claude-haiku-4-5";
-/// The first identifier the recorded OpenAI catalogue holds.
 const GPT_5: &str = "gpt-5";
 
-/// A client over `replay`, waiting for nothing.
 fn client_over(replay: &Replay) -> Client {
     Client::over(replay.clone(), SecretSet::default()).waits(|_| {})
 }
@@ -95,14 +83,12 @@ fn a_gateway_base_url_is_where_the_listing_is_read() {
     assert_eq!(listing.at().base_url(), Some("https://gateway.example/v1"));
 }
 
-/// A transport that lets the wire move while a request is in flight: the reply
-/// is the recorded one, but the pair in force changes on the way past, which is
-/// what a provider row edited during a fetch does.
+/// A transport that lets the wire move while a request is in flight: the reply is the recorded one,
+/// but the pair in force changes on the way past, which is what a provider row edited during a
+/// fetch does.
 #[derive(Clone)]
 struct Moving {
-    /// The transport that answers.
     inner: Replay,
-    /// What happens once the request is out and before the reply lands.
     meanwhile: Arc<dyn Fn() + Send + Sync>,
 }
 
@@ -142,8 +128,6 @@ impl HttpClientExt for Moving {
     }
 }
 
-/// The pair in force, as a front end holds it: written while a listing is in
-/// flight and read again when it lands.
 #[derive(Clone)]
 struct Cell(Arc<Mutex<Where>>);
 
@@ -152,7 +136,6 @@ impl Cell {
         Self(Arc::new(Mutex::new(pair.clone())))
     }
 
-    /// The pair to ask, then, later, to read again.
     fn now(&self) -> Where {
         self.0
             .lock()
@@ -160,7 +143,6 @@ impl Cell {
             .clone()
     }
 
-    /// A client over a transport that moves the pair to `moved` mid-flight.
     fn client(&self, replay: &Replay, moved: &Where) -> Client {
         let cell = self.0.clone();
         let moved = moved.clone();
@@ -250,7 +232,6 @@ fn a_listing_that_lands_after_the_base_url_moved_is_discarded() {
     );
 }
 
-/// A listing asked with a recorded reply of `status`, or with no reply at all.
 fn listing_over(
     replies: impl IntoIterator<Item = Canned>,
     credential: Credential,

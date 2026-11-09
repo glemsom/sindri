@@ -1,16 +1,6 @@
-//! What the run loop promises: a turn is one request and the calls it asks for,
-//! a complete answer stops it as `final`, the turn cap and the two run-scoped
-//! budgets stop it as their own reason, and the reason is one of five words.
-//!
-//! The `skill` tool is proved here too, at the seam the loop hands a call to:
-//! one load per conversation, the files beside the body in the wrapper, and
-//! `already_loaded` and no body after that, whichever door loaded it.
-//!
-//! Nothing here reaches a network or spends a second: the model is a script of
-//! replies and the tools are a script of costs, so a run of two hundred and
-//! fifty turns and a run that exhausts an hour of wall clock both finish inside
-//! one test. The budgets are proved by the costs a test states, not by sleeping
-//! through them.
+//! What the run loop promises: a turn is one request and the calls it asks for, a complete answer
+//! stops it as `final`, and the turn cap and the two run-scoped budgets stop it as their own
+//! reason. The model is a script of replies, the tools a script of costs: no network, no sleep.
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -31,11 +21,8 @@ use sindri_core::skills::Catalog;
 use sindri_core::tools::{FrontEnd, ToolSet};
 use sindri_core::wire::Wire;
 
-/// A sink that keeps what streamed, so a test can see the fragments a front end
-/// would have drawn and not only the folded answer.
 #[derive(Debug, Default)]
 struct Transcript {
-    /// Every text fragment, joined.
     text: String,
 }
 
@@ -47,18 +34,12 @@ impl Deltas for Transcript {
     fn reasoning(&mut self, _fragment: &str) {}
 }
 
-/// A model under a test's control: the replies a test canned, in order, the
-/// last one repeating so "every turn asks for one more command" is said once;
-/// every request it was given, kept; and every reply streamed to the sink.
 struct Scripted {
-    /// The replies still to hand out.
     replies: Mutex<VecDeque<Reply>>,
-    /// Every request, in order, shared with the test.
     seen: Arc<Mutex<Vec<Request>>>,
 }
 
 impl Scripted {
-    /// A model answering `replies` in order, then repeating the last.
     fn answering(replies: impl IntoIterator<Item = Reply>) -> Scripted {
         Scripted {
             replies: Mutex::new(replies.into_iter().collect()),
@@ -66,8 +47,6 @@ impl Scripted {
         }
     }
 
-    /// The log of requests, shared with the test so it can read them after the
-    /// loop has taken the model.
     fn log(&self) -> Arc<Mutex<Vec<Request>>> {
         Arc::clone(&self.seen)
     }
@@ -91,18 +70,14 @@ impl Responder for Scripted {
     }
 }
 
-/// One command the loop is asked to run, as a test asks for one.
 fn command(line: &str) -> Call {
     Call::new("bash", format!(r#"{{"command":"{line}"}}"#))
 }
 
-/// A model that always asks for one more command, so no turn is ever final.
 fn loopy() -> Reply {
     Reply::asking("more", [command("true")])
 }
 
-/// What one ask spent, as the wire reported it: the input a conversation is, and
-/// the output the answer cost.
 fn spent(input: Option<u64>, output: Option<u64>) -> Usage {
     Usage {
         input,
@@ -111,28 +86,19 @@ fn spent(input: Option<u64>, output: Option<u64>) -> Usage {
     }
 }
 
-/// The tools a test hands the loop: what one call costs the run, whether calls
-/// fail instead of acting, and what runs when a call lands.
 struct Tools {
-    /// The wall clock one call costs.
     elapsed: Duration,
-    /// The output bytes one call costs.
     bytes: u64,
-    /// Whether every call fails instead of acting.
     broken: bool,
-    /// What runs when a call lands, which is how a test cancels a run mid-turn.
     during: Option<Box<dyn Fn() + Send + Sync>>,
-    /// Every call, in order.
     seen: Arc<Mutex<Vec<Call>>>,
 }
 
 impl Tools {
-    /// Tools that act at no cost.
     fn cheap() -> Tools {
         Tools::costing(Duration::ZERO, 0)
     }
 
-    /// Tools where one call costs `elapsed` and `bytes`.
     fn costing(elapsed: Duration, bytes: u64) -> Tools {
         Tools {
             elapsed,
@@ -143,7 +109,6 @@ impl Tools {
         }
     }
 
-    /// Tools that fail every call.
     fn broken() -> Tools {
         Tools {
             broken: true,
@@ -151,20 +116,16 @@ impl Tools {
         }
     }
 
-    /// This executor, with `during` run when a call lands.
     fn during(mut self, during: impl Fn() + Send + Sync + 'static) -> Tools {
         self.during = Some(Box::new(during));
         self
     }
 
-    /// The log of calls, shared with the test so it can read them after the
-    /// loop has taken the executor.
     fn ledger(&self) -> Arc<Mutex<Vec<Call>>> {
         Arc::clone(&self.seen)
     }
 }
 
-/// Every call an executor was given, in order, read off the shared log.
 fn calls(ledger: &Arc<Mutex<Vec<Call>>>) -> Vec<Call> {
     ledger.lock().expect("the log is not poisoned").clone()
 }
@@ -190,7 +151,6 @@ impl Executor for Tools {
     }
 }
 
-/// Every request a model was given, in order, read off the shared log.
 fn requests(log: &Arc<Mutex<Vec<Request>>>) -> Vec<Request> {
     log.lock().expect("the log is not poisoned").clone()
 }
@@ -380,8 +340,6 @@ fn a_running_run_says_running_and_the_stop_set_is_five_words() {
     run.turn(&mut Transcript::default());
     assert_eq!(run.state().word(), "final");
 
-    // The closed set, in the words the record and the JSON use, against the
-    // one mapping from a stop reason to an exit code.
     let closed: Vec<(State, &str, u8)> = vec![
         (State::Running, "running", 0),
         (State::Stopped(Stop::Final), "final", 0),
@@ -418,7 +376,6 @@ fn a_running_run_says_running_and_the_stop_set_is_five_words() {
     );
 }
 
-/// A model that answers completely, however often it is asked.
 struct Complete;
 
 impl Responder for Complete {
@@ -428,14 +385,12 @@ impl Responder for Complete {
     }
 }
 
-// `raise(3)`, so a test can send itself the signal a terminal's `^C` sends: the
-// one use of the C library here, because a signal cannot be faked and a fake is
-// not what the rule about `^C` is about.
+// `raise(3)`, so a test can send itself the signal a terminal's `^C` sends: a signal cannot be
+// faked, and a fake is not what the rule about `^C` is about.
 unsafe extern "C" {
     fn raise(signal: i32) -> i32;
 }
 
-/// The signal a terminal sends when the user presses `^C`.
 const SIGINT: i32 = 2;
 
 #[test]
@@ -495,9 +450,8 @@ fn the_output_bytes_are_a_budget_of_the_whole_run() {
 
 #[test]
 fn two_turns_of_half_an_hour_spend_the_run_an_hour_budget() {
-    // Turn-scoped budgets would let this run go on forever: every call is half
-    // an hour, which is inside the hour. Run-scoped, the second turn spends the
-    // last of it and there is no third.
+    // Turn-scoped budgets would let this run go on forever: every call is half an hour, inside the
+    // hour. Run-scoped, the second turn spends the last of it and there is no third.
     let limits = Limits::new(250, Duration::from_secs(60 * 60), 8 * 1024 * 1024);
     let model = Scripted::answering([Reply::asking("working", [command("true")])]);
     let log = model.log();
@@ -549,8 +503,7 @@ fn cancellation_wins_over_a_budget_spent_in_the_same_turn() {
 
 #[test]
 fn the_budget_that_fired_first_wins_over_the_turn_cap() {
-    // The budget is spent inside turn one, so it lands before the next turn's
-    // cap check can speak.
+    // The budget is spent inside turn one, so it lands before the next turn's cap check can speak.
     let limits = Limits::new(1, Duration::from_secs(60 * 60), 8 * 1024 * 1024);
     let mut run = Run::new(
         "work",
@@ -645,8 +598,8 @@ fn a_second_load_of_one_skill_is_already_loaded() {
 
 #[test]
 fn a_sigint_stops_the_run_as_cancelled_with_nothing_on_stdout() {
-    // `^C` lands while the request is in flight, and the wire then hands back a
-    // complete answer: the user's word still wins, so the answer is not printed.
+    // `^C` lands while the request is in flight, and the wire then hands back a complete answer:
+    // the user's word still wins, so the answer is not printed.
     struct Interrupted;
 
     impl Responder for Interrupted {
@@ -684,8 +637,8 @@ fn a_stopped_run_starts_no_further_turn() {
     assert_eq!(requests(&log).len(), 1, "no request after the stop landed");
 }
 
-/// A boundary over a real directory, because the writable set is canonicalised
-/// through the filesystem rather than tidied as a string.
+/// A boundary over a real directory, because the writable set is canonicalised through the
+/// filesystem rather than tidied as a string.
 fn ground() -> (tempfile::TempDir, PathBuf, Boundary) {
     let root = tempfile::tempdir().expect("a temp ground");
     let workspace = std::fs::canonicalize(root.path()).expect("the ground resolves");
@@ -705,8 +658,8 @@ fn the_config_names_the_turn_cap_and_the_boundary_names_the_budgets() {
     let limits = Limits::from_config(&configured, &boundary);
 
     assert_eq!(limits.max_turns(), 7, "the cap is the config's to set");
-    // The two numbers, written out rather than restated from the constants the
-    // code uses, so this test can disagree with the code.
+    // The two numbers written out rather than restated from the constants the code uses, so this
+    // test can disagree with the code.
     assert_eq!(limits.clock(), Duration::from_secs(60 * 60));
     assert_eq!(limits.output(), 8 * 1024 * 1024);
     assert_eq!(
@@ -764,10 +717,6 @@ fn the_bash_executor_counts_the_bytes_its_command_wrote() {
     assert!(acted.elapsed > Duration::ZERO, "a command took some time");
 }
 
-/// The executor knows how a call ended, so the verdict is a value the run hands on and
-/// never a sentence a front end reads back out of the text: the command's own code, a
-/// code that is not zero, a signal that leaves no code at all, and the timeout that
-/// killed the command it names (§4, §12).
 #[test]
 fn the_bash_executor_says_how_the_call_ended() {
     let (_root, workspace, boundary) = ground();
@@ -795,8 +744,8 @@ fn the_bash_executor_says_how_the_call_ended() {
         "a signal leaves no code to report"
     );
 
-    // One second is the shortest per-call timeout a policy allows, and a command that
-    // outlives it is killed rather than waited out.
+    // One second is the shortest per-call timeout a policy allows, and a command that outlives it
+    // is killed rather than waited out.
     let impatient = Boundary::from_config(
         &Config {
             timeout: Some(1),
@@ -835,24 +784,14 @@ fn a_bash_call_that_names_no_command_is_an_error() {
     );
 }
 
-/// A workspace that holds one skill on disk, with files beside its `SKILL.md`,
-/// so a load can be checked for the body it hands back and the neighbours it
-/// names. The skill is in the repository scope, one directory above the
-/// workspace, which is where discovery has to find it.
 struct SkillGround {
-    /// Keeps the tree alive for as long as the test.
     _root: tempfile::TempDir,
-    /// The directory the run stands in.
     workspace: PathBuf,
-    /// The boundary in force over that workspace.
     boundary: Boundary,
-    /// The session temp a sandboxed command sees.
     temp: PathBuf,
 }
 
 impl SkillGround {
-    /// A tree with one skill named `deploy`, whose body refers to two files
-    /// beside it: one at its top and one in a subdirectory.
     fn new() -> SkillGround {
         let root = tempfile::tempdir().expect("a temp ground");
         let repo = root.path().join("repo");
@@ -884,24 +823,18 @@ impl SkillGround {
         }
     }
 
-    /// The catalog a run standing in this workspace discovers.
     fn catalog(&self) -> Catalog {
         Catalog::discover_with_builtin(&self.workspace, None, &[])
     }
 
-    /// The `skill` tool over this ground's catalog.
     fn shell(&self) -> Shell {
         Shell::new(self.boundary.clone(), &self.temp, self.catalog())
     }
 
-    /// A `skill` call naming `name`.
     fn load(&self, name: &str) -> Call {
         Call::new("skill", format!(r#"{{"name":"{name}"}}"#))
     }
 
-    /// The `skill` tool with a recorder around it, so a test can read what the
-    /// model was told and not only what it asked for: the loop keeps the calls,
-    /// and the answer is what this ticket is about.
     fn recorded(&self) -> (Recorded, Arc<Mutex<Vec<String>>>) {
         let seen = Arc::new(Mutex::new(Vec::new()));
         (
@@ -914,12 +847,8 @@ impl SkillGround {
     }
 }
 
-/// The `skill` tool, with every answer it gave kept in a log the test reads
-/// afterwards.
 struct Recorded {
-    /// The tool itself, which is the seam under test.
     shell: Shell,
-    /// What each call answered, in order.
     seen: Arc<Mutex<Vec<String>>>,
 }
 
@@ -934,7 +863,6 @@ impl Executor for Recorded {
     }
 }
 
-/// Every answer the skill tool gave, in order.
 fn answers(log: &Arc<Mutex<Vec<String>>>) -> Vec<String> {
     log.lock().expect("the log is not poisoned").clone()
 }
@@ -1195,8 +1123,8 @@ fn a_builtin_skill_loads_from_the_binary_and_lists_no_files_beside_it() {
     );
 }
 
-/// Waits until `path` exists, and says whether it ever did: a command is made to say
-/// it has started by writing a file, so no test guesses with a sleep.
+/// Waits until `path` exists, and says whether it ever did: a command is made to say it has started
+/// by writing a file, so no test guesses with a sleep.
 fn started_at(path: &Path) -> bool {
     let deadline = std::time::Instant::now() + Duration::from_secs(10);
     while std::time::Instant::now() < deadline {

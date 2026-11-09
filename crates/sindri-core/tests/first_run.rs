@@ -1,6 +1,6 @@
-//! Proves the first run needs no file: the API-key row is a value, not a line
-//! printed from inside a front end, and it names the variable the key comes
-//! from, the exact file it will be written to and that file's mode.
+//! Proves the first run needs no file: the API-key row is a value, not a line printed from inside a
+//! front end, and it names the variable the key comes from, the exact file it will be written to
+//! and that file's mode.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -57,9 +57,6 @@ fn a_row_for_a_wire_that_needs_no_key_names_no_variable() {
     assert!(!row.contains("ANTHROPIC_API_KEY"), "{row}");
 }
 
-/// An environment a test can hold as data: a config home with no `config.toml`
-/// in it, and the variables named, so the process's own environment is never
-/// touched and the real `$HOME` is never read.
 fn first_run_environment(home: &Path, vars: &[(&str, &str)]) -> BTreeMap<String, String> {
     let mut environment: BTreeMap<String, String> = vars
         .iter()
@@ -69,7 +66,6 @@ fn first_run_environment(home: &Path, vars: &[(&str, &str)]) -> BTreeMap<String,
     environment
 }
 
-/// A config home with nothing in it at all: the first run of a fresh install.
 fn bare_home() -> TempDir {
     tempfile::tempdir().expect("a temp dir")
 }

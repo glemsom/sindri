@@ -1,9 +1,6 @@
-//! Proves the Copilot sign-in with no socket and no GitHub account: the code a
-//! person is shown, the wait between polls, the owner-only file the session is
-//! kept in, a session refreshed when it expires, and the wording a revoked one
-//! comes back with. Every one of them is driven through a transport, a store and
-//! a callback this test owns, and the replies are the shapes GitHub was recorded
-//! answering with rather than anything invented about the flow.
+//! Proves the Copilot sign-in with no socket and no GitHub account: the code a person is shown, the
+//! wait between polls, the owner-only file the session is kept in, a session refreshed when it
+//! expires, and the wording a revoked one comes back with.
 
 use std::collections::BTreeMap;
 use std::os::unix::fs::PermissionsExt;
@@ -19,33 +16,22 @@ use sindri_core::redact::{MASK, SecretSet};
 use sindri_core::wire::Wire;
 use tempfile::TempDir;
 
-/// A Copilot session in a Responses-shaped reply, which is the route the dialect
-/// takes for a model identifier that asks for it.
 const RESPONSES: &str = include_str!("fixtures/providers/openai_responses_stream.sse");
 
-/// The device code GitHub hands out, as the flow was recorded asking for one.
 const DEVICE_CODE: &str = r#"{"device_code":"3584cd8a","user_code":"ABCD-1234","verification_uri":"https://github.com/login/device","interval":1,"expires_in":900}"#;
 
-/// GitHub's own answer while the code has not been entered yet.
 const PENDING: &str = r#"{"error":"authorization_pending"}"#;
 
-/// The GitHub token the device flow ends with.
 const GITHUB_TOKEN: &str = "gho_recorded_github_token";
 
-/// The answer that carries it.
 const ACCESS_TOKEN: &str = r#"{"access_token":"gho_recorded_github_token"}"#;
 
-/// The Copilot session the token is exchanged for, good until 2096.
 const LIVE_SESSION: &str = "tid=recorded_copilot_session";
 
-/// The exchange, as Copilot Answers it.
 const LIVE: &str = r#"{"token":"tid=recorded_copilot_session","expires_at":4000000000,"endpoints":{"api":"https://api.githubcopilot.com"}}"#;
 
-/// The session that same exchange answered with in 1970: a token on file that a
-/// run has to refresh before it can ask.
 const SPENT: &str = r#"{"token":"tid=spent_copilot_session","expires_at":1,"endpoints":{"api":"https://api.githubcopilot.com"}}"#;
 
-/// The permission bits a path carries, without the file-type bits beside them.
 fn mode(path: &Path) -> u32 {
     std::fs::metadata(path)
         .expect("a path to stat")
@@ -54,7 +40,6 @@ fn mode(path: &Path) -> u32 {
         & 0o777
 }
 
-/// An environment a test can hold as data, pointed at `home`.
 fn environment(home: &TempDir) -> BTreeMap<String, String> {
     let mut vars = BTreeMap::new();
     vars.insert(
@@ -64,15 +49,11 @@ fn environment(home: &TempDir) -> BTreeMap<String, String> {
     vars
 }
 
-/// A store in the directory the environment names, whose requests `replay`
-/// answers: the seam the front end builds, with the network taken out.
 fn store(home: &TempDir, replay: &Replay) -> Store {
     let dir = store_dir(&environment(home)).expect("a config home is named");
     Store::over(replay.clone(), dir)
 }
 
-/// A sign-in's three answers as GitHub was recorded giving them, plus whatever
-/// comes after them.
 fn sign_in_replies(exchange: &'static str) -> Vec<Canned> {
     vec![
         Canned::reply(200, DEVICE_CODE),
@@ -81,7 +62,6 @@ fn sign_in_replies(exchange: &'static str) -> Vec<Canned> {
     ]
 }
 
-/// How many times the flow asked GitHub whether the code had been entered.
 fn polls(replay: &Replay) -> usize {
     replay
         .requests()

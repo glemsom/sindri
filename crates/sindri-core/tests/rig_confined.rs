@@ -1,29 +1,16 @@
-//! Proves rig is confined to one module tree by reading the source rather than
-//! trusting a convention: every file under `src/` is scanned for the name, and
-//! only the provider seam may carry it — the run loop is Sindri's own driver
-//! over its own two seams (ADR-0016), so it needs no allowance at all.
-//!
-//! A name is read in code, not in prose: a line's `//` comment is dropped before
-//! the scan, so a module may explain rig in words while never calling it. The
-//! names counted are `rig`, `rig_core`, `rig_reqwest` and every other `rig_*`
-//! or `rig-*` word, which is what an import of the library looks like.
-//!
-//! The positive half matters as much as the negative one: a tree where nothing
-//! names rig would pass a purely negative test while the seam did nothing.
+//! Proves rig is confined to one module tree by reading the source, not by trusting a convention:
+//! every file under `src/` is scanned, only the provider seam may carry the name, and comments are
+//! dropped so a module may explain rig without calling it.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// The module tree allowed to name rig, as the path of its file and of its
-/// directory: the provider seam, and nothing else (§10, ADR-0016).
 const ALLOWED: [&str; 2] = ["src/provider.rs", "src/provider/"];
 
-/// Whether `word` is rig's name: the bare crate or any crate of its family.
 fn names_rig(word: &str) -> bool {
     word == "rig" || word.starts_with("rig_") || word.starts_with("rig-")
 }
 
-/// Every `rig` word in `source`, with `//` comments dropped first.
 fn rig_words(source: &str) -> Vec<String> {
     source
         .lines()
@@ -37,7 +24,6 @@ fn rig_words(source: &str) -> Vec<String> {
         .collect()
 }
 
-/// Every Rust file under `root/src`, in a stable order.
 fn sources(root: &Path) -> Vec<PathBuf> {
     let mut found = Vec::new();
     let mut pending = vec![root.join("src")];
@@ -56,8 +42,6 @@ fn sources(root: &Path) -> Vec<PathBuf> {
     found
 }
 
-/// Whether `path`, relative to the crate root, may name rig: the exact file, or
-/// anything under an allowed directory.
 fn allowed(path: &Path) -> bool {
     let relative = path.to_string_lossy().replace('\\', "/");
     ALLOWED

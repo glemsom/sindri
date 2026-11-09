@@ -1,13 +1,6 @@
-//! Proves the boundary is the one enforced: real commands in a real sandbox,
-//! where a write inside the writable set lands, a write outside it is refused by
-//! the kernel, the host root is read-only, a call past the per-call timeout is
-//! killed and says `timed_out`, and an unsafe run is confined by nothing at all.
-//!
-//! These tests need a kernel that lets an unprivileged process unshare a user
-//! namespace, which a hosted runner may forbid. When it does they skip loudly —
-//! the reason on stderr, where a green run still shows it — because a silent pass
-//! over code nothing ran is the one lie this tier must not tell
-//! (`scripts/sandbox-probe.sh` is the precedent).
+//! Proves the boundary is the one enforced, with real commands in a real sandbox: a write inside
+//! the writable set lands, one outside it is refused by the kernel, and a call past the per-call
+//! timeout is killed. A kernel that forbids unprivileged user namespaces makes these skip loudly.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -20,48 +13,39 @@ use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::run::Cancel;
 use tempfile::TempDir;
 
-/// Real directories, because the writable set is canonicalised through the
-/// filesystem and a set that does not exist is refused.
+/// Real directories, because the writable set is canonicalised through the filesystem and a set
+/// that does not exist is refused.
 struct Ground {
-    /// Held so the directories outlive the ground that names them.
     _root: TempDir,
-    /// The same directory, as the filesystem spells it.
     path: PathBuf,
 }
 
 impl Ground {
-    /// A ground of its own, canonical.
     fn new() -> Ground {
         let root = tempfile::tempdir().expect("a temp ground");
         let path = std::fs::canonicalize(root.path()).expect("the ground resolves");
         Ground { _root: root, path }
     }
 
-    /// A directory under the ground, created and returned canonical.
     fn directory(&self, name: &str) -> PathBuf {
         let directory = self.path.join(name);
         std::fs::create_dir_all(&directory).expect("the directory");
         std::fs::canonicalize(&directory).expect("the directory resolves")
     }
 
-    /// The workspace a run stands in, which is the writable set's first path.
     fn workspace(&self) -> PathBuf {
         self.directory("workspace")
     }
 
-    /// The session temp: a path this test creates and owns, handed in as an
-    /// input, which is exactly the relationship the module has to it.
     fn temp(&self) -> PathBuf {
         self.directory("temp")
     }
 
-    /// A directory outside the writable set, which a command must not write.
     fn outside(&self) -> PathBuf {
         self.directory("outside")
     }
 }
 
-/// The boundary a run holds, over the ground's workspace.
 fn boundary(ground: &Ground, enforcement: Enforcement, timeout_seconds: u64) -> Boundary {
     let config = Config {
         timeout: Some(timeout_seconds),
@@ -70,7 +54,6 @@ fn boundary(ground: &Ground, enforcement: Enforcement, timeout_seconds: u64) -> 
     Boundary::from_config(&config, &ground.workspace(), enforcement).expect("the boundary holds")
 }
 
-/// What a failed bwrap said, or its status when it said nothing.
 fn said(output: &std::process::Output) -> String {
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stderr = stderr.trim();
@@ -80,9 +63,9 @@ fn said(output: &std::process::Output) -> String {
     }
 }
 
-/// Whether this machine can confine a command at all, said loudly when it
-/// cannot. Written to the descriptor rather than through `eprintln!`, because a
-/// passing test's output is captured and a skip must be seen on a green run.
+/// Whether this machine can confine a command at all, said loudly when it cannot. Written to the
+/// descriptor rather than through `eprintln!`, because a passing test's output is captured and a
+/// skip must be seen.
 fn sandbox() -> Option<()> {
     let problem = match Command::new(bash::BWRAP).arg("--version").output() {
         Err(error) => Some(format!("bwrap not on PATH: {error}")),
@@ -111,7 +94,6 @@ fn sandbox() -> Option<()> {
     None
 }
 
-/// A command that reads one path, as the shell would spell it.
 fn quoted(path: &Path) -> String {
     format!("'{}'", path.display())
 }
@@ -314,8 +296,8 @@ fn an_unsafe_run_says_unsafe_in_the_outcome_the_json_and_the_rail() {
     assert_eq!(json["code"], serde_json::Value::from(0));
 }
 
-/// Waits until `path` exists, and says whether it ever did: a command is made to
-/// say it has started by writing a file, so a test never guesses with a sleep.
+/// Waits until `path` exists, and says whether it ever did: a command is made to say it has started
+/// by writing a file, so a test never guesses with a sleep.
 fn waited_for(path: &Path) -> bool {
     let deadline = Instant::now() + Duration::from_secs(10);
     while Instant::now() < deadline {
@@ -337,9 +319,9 @@ fn a_cancel_kills_the_command_in_flight_and_the_child_it_started() {
     let cancel = Cancel::new();
     let interrupted = cancel.clone();
 
-    // A `sleep` left in the background is what proves the *group* was killed: a
-    // shell that `exec`s one command is one pid, and killing one pid would pass a
-    // test that a `Ctrl-C` on a run of two commands would not.
+    // A `sleep` left in the background is what proves the *group* was killed: a shell that `exec`s
+    // one command is one pid, and killing one pid would pass a test that a `Ctrl-C` on a run of two
+    // commands would not.
     let command = format!("sleep 30 & echo $! > {}; wait", quoted(&pidfile));
     let started = Instant::now();
     let calling = {
@@ -386,8 +368,8 @@ fn a_cancel_kills_a_sandboxed_command_before_it_can_write() {
     }
     let ground = Ground::new();
     let boundary = boundary(&ground, Enforcement::Bubblewrap, 120);
-    // Both files are in the writable set: a sandboxed command may write there, so a
-    // file that is missing is one a kill stopped and not one the kernel refused.
+    // Both files are in the writable set: a sandboxed command may write there, so a file that is
+    // missing is one a kill stopped and not one the kernel refused.
     let writable = ground.workspace();
     let temp = ground.temp();
     let late = writable.join("late.txt");
@@ -395,9 +377,8 @@ fn a_cancel_kills_a_sandboxed_command_before_it_can_write() {
     let cancel = Cancel::new();
     let interrupted = cancel.clone();
 
-    // The command says it started and then writes, two seconds later, a file the
-    // kernel would let it write: a kill that stopped only at the sandbox's edge
-    // would leave that file behind.
+    // The command says it started and then writes, two seconds later, a file the kernel would let
+    // it write: a kill that stopped only at the sandbox's edge would leave that file behind.
     let command = format!(
         "touch {}; sleep 2; echo late > {}",
         quoted(&started_file),

@@ -1,29 +1,18 @@
-//! Proves the core cannot link a terminal, by walking the dependency graph that
-//! `cargo metadata` resolves rather than trusting a comment or a convention.
-//!
-//! Every edge kind counts, dev-dependencies included: a core test that reached
-//! for crossterm would mean the core had already learnt what a terminal is.
-//!
-//! The resolve is filtered to the host the toolchain pins, which keeps the check
-//! hermetic: an unfiltered `cargo metadata` insists on downloading every
-//! platform's dependencies, and the banned crates are platform-independent.
+//! Proves the core cannot link a terminal, by walking the dependency graph `cargo metadata`
+//! resolves rather than trusting a comment: every edge kind counts, dev-dependencies included, and
+//! the resolve is filtered to the pinned host so the check stays offline.
 
 use std::collections::{HashMap, VecDeque};
 use std::process::Command;
 
 use serde_json::Value;
 
-/// The crates that would tell the core what a terminal or a command line is.
 const BANNED: [&str; 3] = ["ratatui", "clap", "crossterm"];
 
-/// The platform the devbox toolchain pins, so the resolve stays offline.
 const PLATFORM: &str = "x86_64-unknown-linux-gnu";
 
-/// The resolved graph, in the only two shapes this test needs from it.
 struct Graph {
-    /// Package id to package name, for every package the workspace resolves.
     names: HashMap<String, String>,
-    /// Package id to the ids it depends on directly, of any edge kind.
     edges: HashMap<String, Vec<String>>,
 }
 
@@ -89,8 +78,6 @@ impl Graph {
         id.as_str()
     }
 
-    /// Every path from `root` to a package whose name is in `BANNED`, as
-    /// `root -> … -> offender` breadcrumbs, so a failure names its own cause.
     fn paths_to_banned(&self, root: &str) -> Vec<String> {
         let root = self.id_of(root).to_owned();
         let mut came_from: HashMap<String, Option<String>> = HashMap::new();

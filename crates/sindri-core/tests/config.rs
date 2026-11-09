@@ -1,6 +1,5 @@
-//! Proves the config is one file whose keys layer file, then `SINDRI_*`
-//! environment, then flags, and that nothing else is ever read: the facts §11
-//! of the spec turns into an exit code.
+//! Proves the config is one file whose keys layer file, then `SINDRI_*` environment, then flags,
+//! and that nothing else is ever read.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -10,14 +9,12 @@ use sindri_core::provider::Route;
 use sindri_core::wire::Wire;
 use tempfile::TempDir;
 
-/// An environment a test can hold as data, instead of mutating the process's.
 fn environment(vars: &[(&str, &str)]) -> BTreeMap<String, String> {
     vars.iter()
         .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
         .collect()
 }
 
-/// A config home holding one `config.toml` with `text` in it.
 fn config_home(text: &str) -> TempDir {
     let home = tempfile::tempdir().expect("a temp dir");
     let directory = home.path().join("sindri");
@@ -26,17 +23,15 @@ fn config_home(text: &str) -> TempDir {
     home
 }
 
-/// The whole precedence, resolved against a config home and an environment.
 fn resolved(home: &Path, vars: &[(&str, &str)], flags: Flags) -> Result<Config, ConfigError> {
     let mut environment = environment(vars);
     environment.insert(String::from("XDG_CONFIG_HOME"), home.display().to_string());
     Config::resolve(&environment, flags)
 }
 
-/// One worked example of every key in the schema, spelled as the file spells it.
-///
-/// This is the independent source of truth for the key list: if the schema grows
-/// a key and this table does not, the drift test below says so.
+/// One worked example of every key in the schema, spelled as the file spells it: the independent
+/// source of truth for the key list, so a schema that grows a key and a table that does not is a
+/// failure below.
 const EXAMPLES: [(&str, &str); 15] = [
     ("provider", "\"openai\""),
     ("model", "\"claude-sonnet-4-5\""),
@@ -270,10 +265,9 @@ fn debug_never_prints_the_api_key() {
     );
 }
 
-/// The working directory a test stands in, put back when the test ends, so a
-/// repo-local `.sindri.toml` can be planted under the process's own feet.
+/// The working directory a test stands in, put back when the test ends, so a repo-local
+/// `.sindri.toml` can be planted under the process's own feet.
 struct Standing {
-    /// Where the process stood before, which is where it is put back.
     previous: PathBuf,
 }
 

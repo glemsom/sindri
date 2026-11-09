@@ -1,10 +1,6 @@
-//! Proves redaction is a type rather than a habit: a `SecretSet` of literal
-//! strings and a `Redacted` newtype whose `Display`, `Debug` and `Serialize`
-//! all scrub, so a secret cannot leave the core by being printed.
-//!
-//! The four windows §11 names are the record, the JSON, the verbose stream and
-//! the provider's own error text. Three of them are not written yet, so what is
-//! proved here is the type's guarantee directly: bytes in, scrubbed bytes out.
+//! Proves redaction is a type rather than a habit: a `SecretSet` of literal strings and a
+//! `Redacted` newtype whose `Display`, `Debug` and `Serialize` all scrub, so a secret cannot leave
+//! the core by being printed. Bytes in, scrubbed bytes out — the type's guarantee, proved directly.
 
 use serde::Serialize;
 use sindri_core::config::Config;
@@ -13,18 +9,13 @@ use sindri_core::provider::{Ask, Client, Verdict};
 use sindri_core::redact::{Redacted, SecretSet};
 use sindri_core::wire::Wire;
 
-/// What a secret is written as wherever a value leaves core, spelled out here
-/// rather than imported, because a test that read the constant could not tell
-/// a mask from a mask that never changed.
+/// What a secret is written as, spelled out rather than imported, because a test that read the
+/// constant could not tell a mask from a mask that never changed.
 const MASK: &str = "«redacted»";
 
-/// One entry as a window would serialize it: a kind, and a body that has to
-/// scrub itself because the type will not hold a secret.
 #[derive(Debug, Serialize)]
 struct Entry {
-    /// What the entry is.
     kind: String,
-    /// What it says, which is where a secret would otherwise be.
     body: Redacted,
 }
 

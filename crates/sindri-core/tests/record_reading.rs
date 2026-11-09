@@ -1,15 +1,6 @@
-//! Proves a session directory reads back as the run it recorded: every session
-//! the state home holds, newest first, and the one session a whole GUID or an
-//! unambiguous prefix names, where a prefix that names more than one names none.
-//!
-//! Most directories here are written by hand rather than by [`Record::open`], so
-//! the reader is proved against files no writer in this build produced: that is
-//! what a session another version of `sindri` left behind looks like, and a
-//! field the reader does not know has to cost nothing (§13, ADR-0007). One test
-//! opens a record with this build's own writer and reads it back, because a
-//! field the two spell differently would otherwise read as nothing at all. Every
-//! state home is a temp directory of the test's own, so no real
-//! `XDG_STATE_HOME` is read or written.
+//! Proves a session directory reads back as the run it recorded: every session the state home
+//! holds, newest first, and the one session a whole GUID or an unambiguous prefix names. Most
+//! directories are written by hand, so the reader is proved against files no writer here made.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -25,16 +16,12 @@ use sindri_core::session::{Session, sessions_root};
 use sindri_core::wire::Wire;
 use tempfile::TempDir;
 
-/// A state home of the test's own, and the session directories written under it.
 struct Ground {
-    /// Held so the directory outlives the paths that name it.
     _root: TempDir,
-    /// `$XDG_STATE_HOME`, as the reader is handed it.
     home: PathBuf,
 }
 
 impl Ground {
-    /// A state home holding no session at all.
     fn empty() -> Ground {
         let root = tempfile::tempdir().expect("a temp state home");
         let home = root.path().join("state");
@@ -42,7 +29,6 @@ impl Ground {
         Ground { _root: root, home }
     }
 
-    /// Every variable the reader resolves a state home from.
     fn variables(&self) -> BTreeMap<String, String> {
         BTreeMap::from([(
             String::from("XDG_STATE_HOME"),
@@ -50,13 +36,10 @@ impl Ground {
         )])
     }
 
-    /// `$XDG_STATE_HOME/sindri/sessions`, which is where every session lives.
     fn sessions(&self) -> PathBuf {
         sessions_root(&self.variables()).expect("a sessions root")
     }
 
-    /// A session directory named `guid`, whose document says it started at
-    /// `start` and stopped with `stopped`.
     fn session(&self, guid: &str, start: &str, stopped: &str) -> PathBuf {
         let directory = self.sessions().join(guid);
         std::fs::create_dir_all(directory.join("tmp")).expect("a session temp");
@@ -83,8 +66,8 @@ impl Ground {
 #[test]
 fn every_session_the_state_home_holds_reads_newest_first() {
     let state = Ground::empty();
-    // Named so the directory's own order and the GUID's order both differ from
-    // the order the run's own start puts them in.
+    // Named so the directory's own order and the GUID's order both differ from the order the run's
+    // own start puts them in.
     state.session("1111-bbbb", "2024-03-01T00:00:00Z", "final");
     state.session("2222-aaaa", "2024-01-01T00:00:00Z", "final");
     state.session("3333-cccc", "2024-02-01T00:00:00Z", "cancelled");
@@ -195,9 +178,8 @@ fn a_prefix_no_session_carries_is_absent() {
 
 #[test]
 fn a_run_that_was_recorded_reads_back_as_the_run_it_was() {
-    // The reader against this build's own writer, which is the one shape no
-    // hand-written fixture can stand in for: a field the two spell differently
-    // would read as nothing at all.
+    // The reader against this build's own writer, which is the one shape no hand-written fixture
+    // can stand in for: a field the two spell differently would read as nothing at all.
     let state = Ground::empty();
     let workspace = state.home.join("workspace");
     std::fs::create_dir_all(&workspace).expect("a workspace");
@@ -211,8 +193,8 @@ fn a_run_that_was_recorded_reads_back_as_the_run_it_was() {
         Facts {
             wire: Wire::Copilot,
             model: "a-model-read-off-the-wire",
-            // Copilot serves two endpoints and this name asks for neither, so
-            // the route is the one its dialect answers by habit.
+            // Copilot serves two endpoints and this name asks for neither, so the route is the one
+            // its dialect answers by habit.
             route: Some(Route::Chat),
             thinking: false,
             boundary: &boundary,

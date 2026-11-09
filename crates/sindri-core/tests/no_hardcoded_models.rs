@@ -1,60 +1,22 @@
-//! Proves no model list is remembered anywhere in the tree, by reading every
-//! Rust source and looking for the one shape a remembered list has: several
-//! model identifiers written out as string literals, either as the elements of
-//! a bracketed collection or joined inside a single literal.
-//!
-//! Reading rather than trusting a convention is the same trick the rig
-//! confinement test uses, and for the same reason: a `const MODELS: &[&str]`
-//! is one convenient line away at all times, and no reviewer should have to
-//! catch it. §10 says served names are read off the wire and never invented, so
-//! a list of them in source is the invention §10 forbids.
-//!
-//! What an identifier looks like is decided by shape and not by vendor: a word
-//! that starts with a lower-case letter, runs to four characters or more of
-//! letters, digits, dots, dashes, slashes, colons and underscores, and carries
-//! at least one digit. A vendor's own names are all of that shape, and so is a
-//! list someone wrote by hand.
-//!
-//! Comments are dropped before the scan, so a module may name a model in prose
-//! — a doc example, a hint, an explanation — while holding no list of them. The
-//! scan is deliberately blunt in three ways: it reads `[` as the only
-//! collection (a hardcoded list in a tuple is out of scope), it wants two
-//! identifiers before it calls one a list (a single default model is config's
-//! business, §11, not a list), and it does not resolve `include_str!` (a
-//! catalogue belongs in a recorded fixture, where the scan does not look).
+//! Proves no model list is remembered anywhere in the tree, by reading every Rust source and
+//! looking for the one shape a remembered list has: several model identifiers written out as string
+//! literals, either as the elements of a bracketed collection or joined inside a single literal.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// A bracketed collection being read: where it opened, how many identifiers it
-/// holds, and whether anything in it is neither a literal nor the glue that
-/// wraps one.
 struct Collection {
-    /// The line the `[` is on, which is what a violation reports.
     line: usize,
-    /// How many of its own elements are model identifiers.
     identifiers: usize,
-    /// Whether every element is a literal or glue, and so the collection is a
-    /// list of names rather than a list of things that hold one.
     literals_only: bool,
 }
 
-/// The words that wrap a literal without making it something else: a list
-/// spelled `["a".to_owned(), "b".into()]` or `[String::from("a"), …]` is still a
-/// list written out by hand.
 const GLUE: [&str; 6] = ["String", "from", "into", "to_owned", "to_string", "vec"];
 
-/// Whether `word` wraps a literal rather than being one of the collection's
-/// own elements.
 fn is_glue(word: &str) -> bool {
     GLUE.contains(&word)
 }
 
-/// Whether `token` is the shape a served model name has, decided by shape and
-/// never by a vendor's prefix: a lower-case word that starts with a letter,
-/// runs to four characters or more, and carries a digit. A pair of these is a
-/// list of models; a number with a unit (`120s`, `3600000ms`) opens with a
-/// digit and cannot be mistaken for one, and neither can a path.
 fn is_model_shaped(token: &str) -> bool {
     token.len() >= 4
         && token.starts_with(|character: char| character.is_ascii_lowercase())
@@ -66,10 +28,6 @@ fn is_model_shaped(token: &str) -> bool {
         })
 }
 
-/// Every model identifier `text` holds, in the order it holds them: one ends
-/// where a character no identifier carries begins, so a list reads the same
-/// whether it was spelled as separate literals, as JSON, or as one joined
-/// string.
 fn named(text: &str) -> Vec<&str> {
     text.split(|character: char| {
         !(character.is_ascii_lowercase()
@@ -80,13 +38,10 @@ fn named(text: &str) -> Vec<&str> {
     .collect()
 }
 
-/// How many model identifiers `text` holds.
 fn identifiers(text: &str) -> usize {
     named(text).len()
 }
 
-/// The offset of the `"` that opens a raw string at `index`, when `index` is
-/// on the `r` of one: `r"`, `r#"`, `r##"` and their byte-string kin.
 fn raw_quote(bytes: &[u8], index: usize) -> Option<usize> {
     if bytes.get(index) != Some(&b'r') {
         return None;
@@ -100,8 +55,8 @@ fn raw_quote(bytes: &[u8], index: usize) -> Option<usize> {
     (bytes.get(quote) == Some(&b'"')).then_some(quote)
 }
 
-/// How many bytes the `'` at `index` opens: one for a lifetime, and the whole
-/// literal for a character, so a `'"'` cannot open a string.
+/// How many bytes the `'` at `index` opens: one for a lifetime, and the whole literal for a
+/// character, so a `'"'` cannot open a string.
 fn character_width(bytes: &[u8], index: usize) -> usize {
     match bytes.get(index + 1) {
         Some(b'\\') => bytes
@@ -115,11 +70,9 @@ fn character_width(bytes: &[u8], index: usize) -> usize {
     }
 }
 
-/// `source` with its comments and character literals replaced by spaces: the
-/// same bytes at the same offsets, so a line number found here is the line
-/// number in the file. A string literal is copied whole, because a `//` inside
-/// one is a URL and not a comment, and prose in a comment may name whatever it
-/// likes.
+/// `source` with its comments and character literals replaced by spaces, at the same offsets, so a
+/// line number found here is the line number in the file. A string literal is copied whole, because
+/// a `//` inside one is a URL and not a comment.
 fn masked(source: &str) -> String {
     let bytes = source.as_bytes();
     let mut out = vec![b' '; bytes.len()];
@@ -162,14 +115,13 @@ fn masked(source: &str) -> String {
     String::from_utf8(out).expect("masking keeps the text valid")
 }
 
-/// The line `offset` falls on, counted from one.
 fn line_at(source: &str, offset: usize) -> usize {
     source[..offset].matches('\n').count() + 1
 }
 
-/// The body of the string literal opening at `open`, and the offset just past
-/// its closing quote. Raw strings are read as raw, so a body holding quotes
-/// cannot desynchronise the scan of everything after it.
+/// The body of the string literal opening at `open`, and the offset just past its closing quote,
+/// with raw strings read as raw so a body holding quotes cannot desynchronise the scan of
+/// everything after it.
 fn literal(source: &str, open: usize) -> (usize, usize) {
     let bytes = source.as_bytes();
     let hashes = bytes[..open]
@@ -196,9 +148,6 @@ fn literal(source: &str, open: usize) -> (usize, usize) {
     (open + 1, bytes.len())
 }
 
-/// The lines of `source` that hold a model list written out by hand: a bracket
-/// holding two or more string literals of that shape, or one literal spelling
-/// two identifiers.
 fn remembered(source: &str) -> Vec<usize> {
     let text = masked(source);
     let bytes = text.as_bytes();
@@ -264,9 +213,6 @@ fn remembered(source: &str) -> Vec<usize> {
     found
 }
 
-/// Every Rust source of the workspace, skipping what a build leaves behind and
-/// every dot directory, so a worktree nested in the repository is not read
-/// twice.
 fn sources(root: &Path) -> Vec<PathBuf> {
     let mut found = Vec::new();
     let mut pending = vec![root.to_path_buf()];
@@ -288,7 +234,6 @@ fn sources(root: &Path) -> Vec<PathBuf> {
     found
 }
 
-/// The workspace root: the crate this test belongs to, two directories up.
 fn workspace() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")

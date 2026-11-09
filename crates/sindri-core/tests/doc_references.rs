@@ -1,28 +1,17 @@
 //! Pins the two rules an ADR keeps: its file is named `NNNN-<lowercase-slug>.md`, and a document
-//! that cites `ADR-NNNN` either names a record the tree holds or marks the number `(retired)`, so
-//! no reader is sent after a name that is gone.
-//!
-//! The files are read at run time rather than pasted in at build time, because the documentation is
-//! deliberately not an input a compiler watches: the no-relink proof touches it precisely to show
-//! that the binary does not move.
+//! citing `ADR-NNNN` either names a record the tree holds or marks the number `(retired)`. Files
+//! are read at run time, because documentation is not an input the compiler watches.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// One ADR, as the tree holds it: the file it lives in, the number it is known by, and the slug
-/// that follows the number.
 struct Adr {
-    /// The file name inside `docs/adr/`, which is what a failure quotes.
     file: String,
-    /// The leading digits of `file`, which is what a document cites it by.
     number: String,
-    /// What `file` says after `NNNN-`, without the extension — empty when it says nothing.
     slug: String,
 }
 
 impl Adr {
-    /// The record a file name claims to be, read as it is rather than judged: a name that breaks
-    /// the convention still yields the number and slug it opens with, so the complaint can say why.
     fn named(file: &str) -> Adr {
         let stem = file.strip_suffix(".md").unwrap_or(file);
         let (number, slug) = stem.split_once('-').unwrap_or((stem, ""));
@@ -34,25 +23,20 @@ impl Adr {
     }
 }
 
-/// One document that may cite an ADR: the path a failure quotes, and the text read from it.
 struct Document {
-    /// The path the document is read from, as a failure names it.
     name: String,
     body: String,
 }
 
-/// One ADR citation: the number a document names, and whether the citation marks it retired.
 struct Citation {
     number: String,
     retired: bool,
 }
 
-/// The repository root, as the crate's manifest path reaches it.
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// One document read whole, so the references it makes can be checked.
 fn read(root: &Path, name: &str) -> Document {
     let path = root.join(name);
     let body = fs::read_to_string(&path)
@@ -95,7 +79,6 @@ fn adrs(root: &Path) -> Vec<Adr> {
     adrs
 }
 
-/// Every document allowed to cite an ADR: the agents' own file, the glossary, and every record.
 fn citing_documents(root: &Path, records: &[Adr]) -> Vec<Document> {
     let mut documents = vec![read(root, "AGENTS.md"), read(root, "GLOSSARY.md")];
     for adr in records {
@@ -104,8 +87,6 @@ fn citing_documents(root: &Path, records: &[Adr]) -> Vec<Document> {
     documents
 }
 
-/// Every ADR the text cites, with the one form a document may name an ADR the tree no longer
-/// holds in — `(retired)` after the number.
 fn cited_adrs(text: &str) -> Vec<Citation> {
     let mut cited = Vec::new();
     let mut rest = text;
@@ -123,8 +104,6 @@ fn cited_adrs(text: &str) -> Vec<Citation> {
     cited
 }
 
-/// Every citation the documents make that the records the tree holds do not allow: a number with
-/// no file and no `(retired)` marker, or a live number wearing one.
 fn citation_complaints(records: &[Adr], documents: &[Document]) -> Vec<String> {
     let mut complaints = Vec::new();
     for document in documents {
@@ -147,14 +126,11 @@ fn citation_complaints(records: &[Adr], documents: &[Document]) -> Vec<String> {
     complaints
 }
 
-/// Every citation complaint a whole tree earns: its records listed, then read as documents and
-/// judged as names.
 fn citation_complaints_in(root: &Path) -> Vec<String> {
     let records = adrs(root);
     citation_complaints(&records, &citing_documents(root, &records))
 }
 
-/// Every record whose name the convention `NNNN-<lowercase-slug>.md` rejects, and why.
 fn adr_name_complaints(adrs: &[Adr]) -> Vec<String> {
     let mut complaints = Vec::new();
     for adr in adrs {
@@ -185,8 +161,6 @@ fn adr_name_complaints(adrs: &[Adr]) -> Vec<String> {
     complaints
 }
 
-/// A tree written for one case: the files it names, under a temporary root, so the walk the guard
-/// does can be fed a name the real tree does not hold.
 fn tree(files: &[(&str, &str)]) -> tempfile::TempDir {
     let root = tempfile::tempdir().expect("a temp tree");
     for (name, body) in files {

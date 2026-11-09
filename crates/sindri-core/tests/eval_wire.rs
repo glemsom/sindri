@@ -1,21 +1,6 @@
-//! The bytes each wire sends, pinned: one ask per dialect and route goes out
-//! through the replay transport, the request the transport was handed is read
-//! back, and its method, endpoint, headers and body are compared against the
-//! golden checked in beside this file (§10, §16).
-//!
-//! What a request says is the wire library's prose and not this crate's, so a
-//! library that quietly renames a field or drops a header is exactly the change
-//! no reader finds in a changelog: pinning the payload turns a dependency bump
-//! into a diff that names itself. The credential is scrubbed out of what is
-//! compared, so no golden holds a key — and a request that moved the key to
-//! another header still shows up as a diff rather than passing in silence.
-//!
-//! `SINDRI_BLESS=1` rewrites a golden instead of comparing it, which is the only
-//! way one moves: deliberately, in the commit that changed the wire.
-//!
-//! An eval is judged by `make evals` and never by `make test`, which is why every
-//! test here is ignored: the stage that owns a failure is the stage that prints
-//! it, and a `make test` that failed first would hide the eval behind itself.
+//! The bytes each wire sends, pinned: one ask per dialect and route goes out through the replay
+//! transport, and its method, endpoint, headers and body are compared against a golden beside this
+//! file. What a request says is the library's prose, so a bump that renames a field names itself.
 
 use serde_json::{Map, Value, json};
 use sindri_core::provider::transport::{Canned, Replay};
@@ -23,29 +8,16 @@ use sindri_core::provider::{Ask, Client, Route};
 use sindri_core::redact::SecretSet;
 use sindri_core::wire::Wire;
 
-/// The literals the asks below are credentialed with. It is not a real key and it is
-/// planted on purpose: the golden must hold the mask where the key rode.
 const KEY: &str = "sk-eval-recorded";
 
-/// Where the accepted payloads live: beside the test that compares them, one file
-/// per case.
 const GOLDENS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/evals/wire");
 
-/// The variable that rewrites a golden instead of comparing it, as the mermaid
-/// corpus's bless is spelled: one word for every eval in the tree.
 const BLESS: &str = "SINDRI_BLESS";
 
-/// An Anthropic Messages reply, recorded mid-stream.
 const ANTHROPIC: &str = include_str!("fixtures/providers/anthropic_stream.sse");
-/// An OpenAI Responses reply, reasoning summarized before the answer.
 const OPENAI_RESPONSES: &str = include_str!("fixtures/providers/openai_responses_stream.sse");
-/// A chat-completions reply, recorded from the wire that serves that route.
 const CHAT: &str = include_str!("fixtures/providers/copilot_chat_stream.sse");
 
-/// Every payload this crate sends, named as its golden is: the ask that produces a
-/// request, and the recorded reply that lets the ask finish. One case per dialect and
-/// route the run can choose, because a route is a different body and not a different
-/// word for the same one (§10).
 fn cases() -> Vec<(&'static str, Ask, &'static str)> {
     vec![
         (
@@ -100,13 +72,9 @@ fn cases() -> Vec<(&'static str, Ask, &'static str)> {
     ]
 }
 
-/// The request `ask` sends, as the artefact a golden holds: the method, the endpoint
-/// the bytes went to, every header with the credential scrubbed, and the body parsed
-/// so it compares as the fields it is rather than as one long line.
-///
-/// `x-request-id` is left out: the library mints one per request, so it is a fact
-/// about a request and never about the payload, and a golden that held it would fail
-/// on every run.
+/// The request `ask` sends, as the artefact a golden holds: method, endpoint, headers with the
+/// credential scrubbed, and the body parsed. `x-request-id` is left out, because the library mints
+/// one per request and a golden that held it would fail on every run.
 fn artefact(ask: &Ask, reply: &'static str, secrets: &SecretSet) -> Value {
     let replay = Replay::new([Canned::stream(reply)]);
     let client = Client::over(replay.clone(), secrets.clone());
@@ -147,8 +115,6 @@ fn artefact(ask: &Ask, reply: &'static str, secrets: &SecretSet) -> Value {
     })
 }
 
-/// The first line two payloads disagree on, with its number and both sides, because a
-/// diff nobody can read is a test nobody fixes.
 fn diff(accepted: &str, sent: &str) -> String {
     for (at, (left, right)) in accepted
         .lines()
@@ -167,8 +133,6 @@ fn diff(accepted: &str, sent: &str) -> String {
     )
 }
 
-/// Holds `wrote` to the golden `case` names, or rewrites that golden when `bless` says
-/// so.
 fn hold(case: &str, wrote: &str) {
     let path = format!("{GOLDENS}/{case}.json");
     if std::env::var_os(BLESS).is_some() {
