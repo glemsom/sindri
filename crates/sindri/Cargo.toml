@@ -32,7 +32,7 @@ sindri-core = { path = "../sindri-core" }
 syntect = { version = "5.3", default-features = false, features = ["default-fancy"] }
 
 [dev-dependencies]
-# It hard-codes the `.snap` extension, which is why a frame's fixture carries one.
+# `insta` hard-codes the `.snap` extension, which is why a frame's fixture carries one.
 insta = "1.49"
 # rustix already binds this crate's terminal: a second binding to the same termios would be
 # two ways to talk to one tty.

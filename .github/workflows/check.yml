@@ -1,16 +1,13 @@
-# CI runs `make check` in the same devbox shell a developer uses, so there is no second,
-# weaker definition of what "done" means.
+# CI runs `make check` in the same devbox shell a developer uses: one command, one set of
+# stages, so there is no second, weaker definition of what "done" means.
 
-# This image cannot contain: Ubuntu 24.04 ships AppArmor's
-# `kernel.apparmor_restrict_unprivileged_userns=1`, so `bwrap --unshare-all` is refused,
-# and the sandbox stage prints `... SKIPPED` over a job that stays green on purpose.
+# This runner refuses confinement: Ubuntu 24.04 ships AppArmor's
+# `kernel.apparmor_restrict_unprivileged_userns=1`, so `bwrap --unshare-all` is refused and
+# the sandbox stage prints `... SKIPPED` over a job that stays green.
 
 # Where a sandbox cannot be made, the suites that are not about sandboxing still prove the
 # batch contract with every child handed `--yolo-unsafe`, printing `skip batch:` to name
 # the tier that run left uncovered.
-
-# 22.04 would run the tier, but it is leaving the hosted fleet, so coverage bought there
-# would vanish without a word; here the tier runs the day a runner allows it.
 
 name: check
 
@@ -41,7 +38,9 @@ jobs:
       - name: Check out the tree
         uses: actions/checkout@v4
 
-      # Pinned to a commit rather than a tag, so the code CI runs cannot change under us.
+      # devbox needs Nix underneath it, and the action turns on the `nix-command` and
+      # `flakes` features devbox expects. Pinned to a commit, not a tag, so the code CI
+      # runs cannot change under us.
       - name: Install Nix
         uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
 
@@ -67,8 +66,6 @@ jobs:
       - name: Materialise the devbox shell
         run: devbox install
 
-      # One command on purpose: a stage per step would be a second definition of done that
-      # could drift from the first. Its stage lines are relayed to the job summary below.
       - name: make check, inside a devbox shell
         shell: bash
         run: |
