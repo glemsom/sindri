@@ -1,33 +1,6 @@
-//! One frame rendered at a fixed size into the text a fixture holds: the harness
-//! behind `assert_frame`, which paints the code the terminal is painted, writes
-//! down every cell's glyph and the ink it is in, and holds the result to the
-//! accepted picture beside it.
-//!
-//! A fixture is text, and its lines are the screen's: a header naming the frame and
-//! the size it was drawn at, and then one line per row — the row's number, its
-//! glyphs between two bars, and the ink of each run of cells from the left edge.
-//!
-//!     boot at 120x40
-//!     00 |                                    ...                              | plain:120
-//!     39 |Enter send · ? keys                                                    | muted:10 dim:3 muted:6 plain:101
-//!
-//! The bars are why a row of blank cells keeps its width in a file an editor may
-//! touch: nothing a cell holds hides behind a trailing space. The inks are names —
-//! `dim`, `muted`, `accent`, `ok`, `err`, `plain` for a cell the terminal draws in
-//! whatever ink its reader chose, and `mark` for a cell the reader's mark covers —
-//! and never colours, so a palette change cannot break a fixture and a fixture cannot
-//! smuggle in a theme (ADR-0012, #50).
-//!
-//! A fixture's file is a `.snap` and not the `.txt` ADR-0012 first named, because
-//! `insta` compares and blesses it and hard-codes that extension
-//! (`insta-1.49.0/src/runtime.rs:298`). The frame inside the file is the text below
-//! the metadata fence, and the amendment to that ADR records the deviation.
-//!
-//! What this harness refuses to guess at, rather than freeze half a picture: a cell
-//! holds one glyph in one column, and a cell is drawn in an `Ink` and nothing else.
-//! A wide glyph eats its neighbour, a cell can arrive with no glyph at all, and a
-//! cell can be painted a colour, a background or a modifier that is not an ink. Each
-//! of those stops the test with a message naming the cell.
+//! A fixture line is one row of the screen: its number, its glyphs between two bars, and the ink of
+//! each run of cells from the left edge, so a row of blanks keeps its width in a file an editor may
+//! touch. The files are `.snap` because `insta` compares and blesses them and takes no other extension.
 
 use std::path::PathBuf;
 
@@ -55,23 +28,15 @@ use sindri_core::redact::SecretSet;
 use sindri_core::run::{Exit, State as RunState, Stop};
 use sindri_core::wire::Wire;
 
-/// Where the accepted pictures live: beside the tests that compare them, one file
-/// per frame and size (ADR-0012).
 const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
 
-/// The GUID of the session every frame of a run here is drawn for: the whole of it, because
-/// the stats screen is the one place a reader can see all thirty-six characters.
 pub const GUID: &str = "9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61";
 
-/// A recorded Anthropic `GET /v1/models` catalogue, so the `/model` screen's picture is
-/// painted from names a wire really served rather than from a list written down here (#48,
-/// §10).
+/// A recorded Anthropic `GET /v1/models` listing, so the `/model` screen is painted from names a
+/// wire really served rather than from a list written down here.
 const SERVED: &str =
     include_str!("../../../sindri-core/tests/fixtures/providers/anthropic_models.json");
 
-/// Renders the frame `name` at `cols` columns by `rows` rows and holds it to the
-/// fixture that is the accepted picture of it, naming the first cell that differs
-/// before `insta` is given the last word.
 pub fn assert_frame(name: &str, cols: u16, rows: u16) {
     let fixture = format!("{name}-{cols}x{rows}");
     let drawn = drawn(name, cols, rows);
@@ -82,8 +47,8 @@ pub fn assert_frame(name: &str, cols: u16, rows: u16) {
         println!("{drawn}");
     }
 
-    // The cell before the line: a frame is a picture, and `insta`'s diff of one says
-    // which rows moved rather than which cell is wrong.
+    // The cell before the line: `insta`'s diff of a frame says which rows moved and never
+    // which cell is wrong.
     if let Some(picture) = accepted(&fixture)
         && let Some(differed) = first_difference(&picture, &drawn)
     {
@@ -99,9 +64,6 @@ pub fn assert_frame(name: &str, cols: u16, rows: u16) {
     println!("\ncheck: frame {fixture} ... ok");
 }
 
-/// The frame a fixture's name stands for: the one place a name and the facts it is
-/// painted from are written down together, so the file, the test that holds it and
-/// `make frame F=…` cannot disagree about what `boot` is.
 fn named(name: &str) -> View {
     match name {
         "boot" => View::boot(),
@@ -136,12 +98,9 @@ fn named(name: &str) -> View {
         "markdown-inline" => construct(inline()),
         "markdown-link" => construct(link()),
         "markdown-table-narrow" => construct(narrow()),
-        // The live marker's answer is still arriving — three of its four fragments have
-        // landed — because a marker carrying elapsed time is for a turn that has not
-        // finished speaking.
+        // The same answer in both, three of its four fragments under the live marker and all of it
+        // under the settled one; nine point four seconds is under ten, so that marker keeps its decimal.
         "pulse-live" => with_pulse(Pulse::live(4_200), &PULSE_ANSWER[..3]),
-        // Nine point four seconds rather than twelve: the value is under ten, so the
-        // marker keeps its decimal where a duration past ten is whole seconds.
         "pulse-settled" => with_pulse(Pulse::settled(&Stop::Final, 9_400), &PULSE_ANSWER),
         "queue" => queue(),
         "keys" => {
@@ -159,9 +118,6 @@ fn named(name: &str) -> View {
         "settings-refused" => refused(),
         "stats" => stats(),
         "footer" => View::boot(),
-        // The picture is taller than the band, so it is never placed: a block the band
-        // does not hold whole keeps its words, which is also what lets the fixture be
-        // glyphs and inks rather than an escape sequence.
         "picture" => pictured(),
         "mark" => {
             let mut view = View::of(transcript(), Scroll::Tail);
@@ -175,20 +131,9 @@ fn named(name: &str) -> View {
     }
 }
 
-/// The frame §12's picture block is drawn on: an answer whose first picture is a source outside
-/// the workspace, refused with the caption that says why, and whose second is a picture a
-/// hundred rows tall on a band of thirty-seven.
-///
-/// It is held at the top of the answer, because that is where the block's own row is: a block
-/// taller than the band is never placed — a placement writes into every row of it, and the rows
-/// past the band's bottom belong to the composer under it — so what the frame shows is the block
-/// as the layout makes it, its words in dim ink and the gutter rows under them.
-///
-/// The workspace is `tests/fixtures/pictures`, holding the tall drawing the answer names, so the
-/// block is measured from a file the frame really read and measured without a pixel spent on it;
-/// the refused source is a real diagram one directory above it, kept there for this frame alone
-/// and not borrowed from the mermaid corpus, so the caption is the refusal this product gives
-/// rather than one made up for a fixture, and it does not move when the corpus does (#55, §12).
+/// The frame a picture block is drawn on, held at the top of the answer: the block is taller than the
+/// band, so it is never placed and its words stand alone. The refused source is a real diagram one
+/// directory above the workspace, so the caption is the refusal this product gives.
 fn pictured() -> View {
     let workspace = PathBuf::from(FIXTURES).join("pictures");
 
@@ -198,9 +143,6 @@ fn pictured() -> View {
             "![a diagram outside the workspace](../outside-the-workspace.svg)\n\n![a tall field]\
              (tall.svg)",
         )],
-        // Far enough back that the band starts at the top of the answer, which is the row the
-        // tall picture's block begins on: the block is a hundred rows and the band is
-        // thirty-seven.
         Scroll::Back(70),
     );
     view.set_workspace(workspace);
@@ -209,13 +151,6 @@ fn pictured() -> View {
     view
 }
 
-/// The frame the `/model` screen is drawn on: `/model` typed and sent, and the listing the
-/// wire answered with handed in the moment it lands.
-///
-/// The names are read through the same listing code a live wire goes through, from the
-/// catalogue recorded off the wire — so the picture holds two served names, a selection on
-/// the first of them, and the wire's own prose beside each, and holds no name this tree
-/// invented (§10).
 fn model_screen() -> View {
     let replay = Replay::new([Canned::reply(200, SERVED)]);
     let at = Where::own(Wire::Anthropic);
@@ -229,66 +164,47 @@ fn model_screen() -> View {
     view
 }
 
-/// One construct of §12's markdown as the picture of it: an answer holding nothing but
-/// that construct, at the tail of a transcript with no history around it, so what the
-/// frame shows is the construct and not the entry above it.
 fn construct(text: &str) -> View {
     View::of(vec![answer(1, text)], Scroll::Tail)
 }
 
-/// §12's heading rows: an h1 under one blank row and bold, an h2 bold, an h3 bold and
-/// dim, and h4 down to h6 plain — the four renderings of one construct in one picture.
 fn headings() -> &'static str {
     "# Markdown rendering\n\n## Headings, tables and highlighted code\n\n### A rule the \
      fixtures hold\n\n#### A fourth level\n\n##### A fifth level\n\n###### A sixth level"
 }
 
-/// §12's list rows: a bullet per item with two spaces per depth, and an ordered list
-/// numbered from the number it starts at.
 fn lists() -> &'static str {
     "- a bullet per item\n- two spaces per depth\n  - a nested item\n    - and one \
      deeper\n- an ordered list underneath\n  1. numbered from one\n  2. and hung under \
      their own words when they wrap"
 }
 
-/// §12's table row: `│` between the columns, a `─` rule under the header, no outer
-/// border.
 fn table() -> &'static str {
     "| construct | rendering |\n| --- | --- |\n| heading | bold, one blank row \
      above |\n| table | columns joined by a bar, a rule under the header |\n| code | a \
      bar down its left and the language's tag |"
 }
 
-/// §12's quote row: a `▏` bar in dim ink down every row of what was quoted.
 fn quoted() -> &'static str {
     "> A fence still open while streaming renders as a code block, so a half-written \
      diagram never costs a raster pass and never flickers while it is being typed."
 }
 
-/// §12's code rows: a `▏` gutter with the language's tag and `syntect`'s highlighting,
-/// and a block whose language no syntax definition names drawn plain and silently.
 fn code() -> &'static str {
     "```rust\nfn main() {\n    let fence = Fence::open();\n    fence.words();\n}\n```\n\n\
      ```frobnicate\nthis language names no syntax definition\n```"
 }
 
-/// §12's inline rows: a run of inline code set reversed, inside a paragraph that wraps
-/// around it.
 fn inline() -> &'static str {
     "Run `make check` before the gate: it is the definition of done, and `make frame \
      F=boot-120x40` is how a look is eyeballed before it is blessed."
 }
 
-/// §12's link row: the words the link was written over, and the URL in dim ink when the
-/// URL says something the words did not.
 fn link() -> &'static str {
     "The command is `/export` [in the spec](https://example.test/spec#12), and \
      [§16](§16) is where the gate is written down."
 }
 
-/// A table wider than the forty columns it is drawn in, every column of it long enough
-/// to wrap: the picture of §12's promise that a narrow band loses columns and never
-/// content.
 fn narrow() -> &'static str {
     "| a heading of the first level is bold and stands under one blank row wherever it \
      stands | a table wider than the band it is drawn in wraps inside its cells and keeps \
@@ -296,15 +212,8 @@ fn narrow() -> &'static str {
      language's tag and highlighted by syntect |"
 }
 
-/// The frame the `@` picker is drawn on: a workspace of the test's own — a temp directory
-/// holding the tree below — with the screen opened through the key a reader presses, so the
-/// picture is a walk of a real workspace and not eight rows made up for a fixture.
-///
-/// The tree is a product's: a `.gitignore` naming what is built and what is a note of
-/// somebody's, one file it ignores and a directory it ignores whole, and enough files for
-/// §12's eight rows to end before the workspace does. The directory is the walk's and never
-/// the picture's: every row is a path relative to it, so nothing of a temp directory's name
-/// is frozen into a fixture (ticket #47).
+/// A workspace of the test's own, opened through the `@` key: every row is a path relative to the
+/// temp directory, so nothing of a temp directory's name is frozen into a fixture.
 fn picking() -> View {
     let root = tempfile::tempdir().expect("a temp workspace");
     for file in [
@@ -319,8 +228,6 @@ fn picking() -> View {
         "crates/sindri/src/rows.rs",
         "crates/sindri/src/view.rs",
         "crates/sindri/tests/frames.rs",
-        // A file the `.gitignore` names and a directory it ignores whole: neither is a row,
-        // and the picture of the picker is only right if they are absent from it.
         "notes.local.md",
         "target/debug/sindri",
     ] {
@@ -338,10 +245,6 @@ fn picking() -> View {
     view
 }
 
-/// The config the settings fixture opens on: what a person's own file and environment
-/// would have left in force — a secret among the rows, and keys that say nothing because
-/// nothing speaks for them — because the screen's promise is that it shows the config as it
-/// resolved and writes only the rows a reader wrote into (ticket #49).
 fn in_force() -> Config {
     Config {
         provider: Some(Wire::Anthropic),
@@ -356,10 +259,6 @@ fn in_force() -> Config {
     }
 }
 
-/// The frame of a visit a value was refused: the screen walked to `max_turns`, emptied,
-/// typed into, and handed the refusal the core's own save gives for it — so the picture is
-/// of a refusal this product can still produce, rather than one typed into a fixture. The
-/// save is refused before it stages anything, so the path it is given is written by nothing.
 fn refused() -> View {
     let mut view = View::boot();
     view.open_settings(&in_force());
@@ -390,14 +289,6 @@ fn refused() -> View {
     view
 }
 
-/// The frame the stats screen is drawn on: a stopped run's facts and record handed in, two
-/// skills loaded through the command a reader loads them with, and `/stats` typed to open the
-/// screen — so the picture is the whole of what one run gives a reader, and not a grid of
-/// sample rows.
-///
-/// The workspace is a temp directory holding the two `SKILL.md` files the catalog offers: the
-/// loaded set is the frame's own, and a name put there by hand would be a name no body was
-/// ever handed over for.
 fn stats() -> View {
     let root = tempfile::tempdir().expect("a temp workspace");
     for name in ["bash", "records"] {
@@ -432,8 +323,6 @@ fn stats() -> View {
     view
 }
 
-/// The record the stopped run of a stats frame wrote: the same run `facts` draws, so the
-/// screen and the rail beside it are one picture of one run rather than two.
 pub fn document() -> SessionDocument {
     SessionDocument {
         session: String::from(GUID),
@@ -474,21 +363,12 @@ pub fn document() -> SessionDocument {
     }
 }
 
-/// The frame a run is in: the entries it has written, where the transcript is scrolled to,
-/// and the facts the rail draws them beside (#46).
 fn running(entries: Vec<Entry>, scroll: Scroll) -> View {
     let mut view = View::of(entries, scroll);
     view.set_facts(facts());
     view
 }
 
-/// The facts a run's rail draws: one of each of §46's blocks, with a workspace, a branch
-/// and a session temp as long as the real ones are — the transcript's six turns, so the
-/// rail and the history beside it are one picture of one run.
-///
-/// A frame of chrome alone — boot, a draft being typed, the `?` screen — is handed no
-/// facts and draws no rail: a frame knows what it was given, and nothing invents the rest
-/// (§15).
 pub fn facts() -> Facts {
     Facts {
         wire: Some(String::from("anthropic")),
@@ -513,19 +393,10 @@ pub fn facts() -> Facts {
     }
 }
 
-/// The first turn of the run `transcript` holds, as the entries it opened with: what a
-/// rail frame is drawn beside, because the rail is the subject of those five pictures.
 fn opening() -> Vec<Entry> {
     transcript().into_iter().take(4).collect()
 }
 
-/// The entries a transcript frame is painted from: three turns of a run, each with the
-/// call it asked for, what that call answered and the answer the turn ended with — so a
-/// frame holds every shape a row takes, and enough of them to run past the foot of the
-/// band and be scrolled.
-///
-/// The facts are the ones this ticket's own module header states, because a fixture is
-/// a picture of a real frame rather than a grid of sample text.
 fn transcript() -> Vec<Entry> {
     vec![
         Entry::Turn { turn: 1 },
@@ -632,15 +503,6 @@ fn transcript() -> Vec<Entry> {
     ]
 }
 
-/// The frame a run is in the middle of: the history the transcript frame holds, a sixth
-/// turn opened on it, and the thought and the answer of that turn landing a fragment at a
-/// time — through `Deltas`, the same door the wire streams them through, so a picture of
-/// a stream is made the way a stream is made (#43).
-///
-/// The answer is left with its code fence still open, which is the one markdown rule this
-/// ticket keeps (ADR-0008): from the fence down, the tail is drawn as code and never as
-/// prose that ate the rest of the answer — and #52 keeps that rule when it replaces the
-/// plain rendering.
 fn streaming() -> View {
     let mut entries = transcript();
     entries.push(Entry::Turn { turn: 6 });
@@ -666,9 +528,6 @@ fn streaming() -> View {
     view
 }
 
-/// The words the pulse frames' newest answer is made of, a fragment at a time: the same
-/// answer in both pictures, so the difference the eye approves between them is the marker
-/// and nothing else.
 const PULSE_ANSWER: [&str; 4] = [
     "A braille marker at the head of the newest answer carries the run's elapsed ",
     "time, one step every 80 ms, and settles on the verdict it stopped with — ",
@@ -676,13 +535,6 @@ const PULSE_ANSWER: [&str; 4] = [
     "The rows under it keep the answer's own gutter, held open and blank.",
 ];
 
-/// The frame a run is in while its newest answer is landing, wearing `pulse` at that
-/// answer's head: a settled turn above, a turn opened on it, and that turn's thought and
-/// answer streamed through the same `Deltas` door the wire streams them through, so the
-/// picture of a marker is made the way a marker is made (#39).
-///
-/// The answer is long enough to wrap past its first row, which is what shows the marker
-/// sitting at the head of one row and the answer's own gutter holding the rest.
 fn with_pulse(pulse: Pulse, said: &[&str]) -> View {
     let mut entries = opening();
     entries.push(Entry::Turn { turn: 2 });
@@ -700,14 +552,6 @@ fn with_pulse(pulse: Pulse, said: &[&str]) -> View {
     view
 }
 
-/// The frame a run is in with prompts waiting behind it: three sent while the run was
-/// live, queued the way the terminal queues one — a draft, `Enter`, and the prompt the
-/// composer hands back enqueued instead of run — and a fourth being typed under the count
-/// (§12, #42).
-///
-/// It is the picture of what `Enter` during a run comes to: the prompt was neither run
-/// beside the one in flight nor thrown away, and the row above the composer says how many
-/// are waiting while the box the reader is typing in keeps its place.
 fn queue() -> View {
     let mut view = running(transcript(), Scroll::Tail);
     for prompt in [
@@ -725,12 +569,6 @@ fn queue() -> View {
     view
 }
 
-/// The entries a verdict frame is painted from: four calls settled four ways — the
-/// four states §12 gives a tool row — so a reader of the fixture sees what `✓ exit 0`,
-/// `✗ exit N`, `✗ timed out` and `✗ cancelled` look like before meeting them in a run.
-///
-/// The two that printed nothing printed nothing because there was nothing to print: a
-/// command the timeout killed and one the user's word stopped never reached their output.
 fn calls() -> Vec<Entry> {
     vec![
         Entry::Turn { turn: 1 },
@@ -773,7 +611,6 @@ fn calls() -> Vec<Entry> {
     ]
 }
 
-/// A call as the run writes one: the tool the model named and the arguments it wrote.
 fn call(turn: u32, name: &str, arguments: &str) -> Entry {
     Entry::Call {
         turn,
@@ -782,7 +619,6 @@ fn call(turn: u32, name: &str, arguments: &str) -> Entry {
     }
 }
 
-/// What came back from a call: the verdict that ended it, and what it printed.
 fn result(turn: u32, name: &str, exit: Exit, text: &str, bytes: u64, elapsed_ms: u64) -> Entry {
     Entry::Result {
         turn,
@@ -794,7 +630,6 @@ fn result(turn: u32, name: &str, exit: Exit, text: &str, bytes: u64, elapsed_ms:
     }
 }
 
-/// The turn's answer: what the model said once the calls it asked for were done.
 fn answer(turn: u32, text: &str) -> Entry {
     Entry::Assistant {
         turn,
@@ -802,9 +637,8 @@ fn answer(turn: u32, text: &str) -> Entry {
     }
 }
 
-/// A composer holding `lines`, typed a line at a time: a fixture's draft is built
-/// through the same keys a reader's fingers send, so a picture of the composer cannot
-/// be made a way the product cannot.
+/// A composer typed a line at a time through the same keys a reader's fingers send, so a picture
+/// of the draft cannot be of a state the product cannot reach.
 fn draft(lines: &[&str]) -> Composer {
     let mut composer = Composer::new();
     for (index, line) in lines.iter().enumerate() {
@@ -816,9 +650,6 @@ fn draft(lines: &[&str]) -> Composer {
     composer
 }
 
-/// The frame `name` at `cols` by `rows`, as the text a fixture holds: painted through
-/// a headless backend, because a look that cannot be rendered without a terminal
-/// cannot be a test (ADR-0012).
 fn drawn(name: &str, cols: u16, rows: u16) -> String {
     let mut view = named(name);
     let mut terminal =
@@ -829,7 +660,6 @@ fn drawn(name: &str, cols: u16, rows: u16) -> String {
     text(name, completed.buffer)
 }
 
-/// A painted buffer, as the fixture text that holds it.
 fn text(name: &str, buffer: &Buffer) -> String {
     let area = buffer.area;
     let mut text = format!("{name} at {}x{}", area.width, area.height);
@@ -863,8 +693,6 @@ fn text(name: &str, buffer: &Buffer) -> String {
     text
 }
 
-/// The one glyph a cell holds, as a fixture can carry it: one character, which is one
-/// column of the screen.
 fn glyph(cell: &Cell, x: u16, y: u16) -> char {
     let symbol = cell.symbol();
     let mut characters = symbol.chars();
@@ -878,8 +706,6 @@ fn glyph(cell: &Cell, x: u16, y: u16) -> char {
     }
 }
 
-/// The picture a fixture holds, or nothing when no fixture was blessed yet: the
-/// file's first fence is `insta`'s metadata, and the frame is the text below it.
 fn accepted(fixture: &str) -> Option<String> {
     let path = PathBuf::from(FIXTURES).join(format!("{fixture}.snap"));
     let text = std::fs::read_to_string(path).ok()?;
@@ -891,8 +717,6 @@ fn accepted(fixture: &str) -> Option<String> {
     Some(frame.join("\n"))
 }
 
-/// The first thing a fixture and a frame disagree about: the first cell, said with
-/// both glyphs and both inks, or the first line that is not a row at all.
 fn first_difference(picture: &str, drawn: &str) -> Option<String> {
     let picture: Vec<&str> = picture.lines().collect();
     let drawn: Vec<&str> = drawn.lines().collect();
@@ -919,8 +743,6 @@ fn first_difference(picture: &str, drawn: &str) -> Option<String> {
     })
 }
 
-/// The first cell two rows disagree about, named by row, column, and both glyphs
-/// with the ink each of them is in.
 fn differing_cell(expected: &Row, actual: &Row) -> String {
     let columns = expected.glyphs.len().max(actual.glyphs.len());
     for column in 0..columns {
@@ -938,7 +760,6 @@ fn differing_cell(expected: &Row, actual: &Row) -> String {
     )
 }
 
-/// One cell of a row as a failure says it: its glyph and the ink it is in.
 fn cell(row: &Row, column: usize) -> String {
     match (row.glyphs.get(column), row.looks.get(column)) {
         (Some(glyph), Some(look)) => format!("{glyph:?} in {}", look.name()),
@@ -946,17 +767,12 @@ fn cell(row: &Row, column: usize) -> String {
     }
 }
 
-/// One row of a fixture, as the cells it stands for.
 struct Row {
-    /// The row number the fixture wrote, which is the row a reader counts.
     number: u16,
-    /// The glyph in every column, left to right.
     glyphs: Vec<char>,
-    /// The look of every column, left to right.
     looks: Vec<Look>,
 }
 
-/// The row a fixture line holds, or nothing when the line is not a row.
 fn row_of(line: &str) -> Option<Row> {
     let (number, rest) = line.split_once(' ')?;
     let (glyphs, runs) = rest.strip_prefix('|')?.rsplit_once('|')?;
@@ -969,10 +785,6 @@ fn row_of(line: &str) -> Option<Row> {
     })
 }
 
-/// The look of every cell a run list names, left to right: `plain:40 accent:4`, the
-/// runs summing to the width of the row they belong to. A cell set in a face says both
-/// names — `plain+bold:6`, `dim+bold:4` — because a look is two names and a fixture
-/// writes down what it paints.
 fn looks_in(runs: &str) -> Option<Vec<Look>> {
     let mut looks = Vec::new();
     for run in runs.split_whitespace() {
