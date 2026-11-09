@@ -1,17 +1,6 @@
-//! What boot does when the sandbox cannot be made, measured where a script
-//! measures it: the built binary is spawned with a stand-in `bwrap` first on
-//! `PATH`, and its stderr, its stdout and its exit code are read back.
-//!
-//! A stand-in is a machine that refuses on demand — the way
-//! `scripts/sandbox-probe-test.sh` fakes one — so all three failures §6 can meet
-//! are provable here without a broken kernel: no bubblewrap at all, a bubblewrap
-//! that cannot report its version, and a kernel that forbids unprivileged user
-//! namespaces. Every child gets `env_clear`, so nothing of this process's
-//! environment reaches the binary except the variables a test names.
-//!
-//! The last test reads the tree instead of running it: it holds the sentence
-//! that only the command line can reach `unsafe`, by naming the one function in
-//! the front end that may write that variant.
+//! What boot does when the sandbox cannot be made, measured where a script measures it: the binary is spawned with a
+//! stand-in `bwrap` first on `PATH`, and its stderr, stdout and exit code read back. A stand-in is a machine that
+//! refuses on demand, so all three failures are provable here without a broken kernel.
 
 use std::fs::Permissions;
 use std::net::TcpListener;
@@ -21,21 +10,15 @@ use std::process::{Command, Output};
 
 use tempfile::TempDir;
 
-/// A workspace, a config home and a state home, all of the test's own, and the
-/// directory a stand-in `bwrap` is written into.
 struct Ground {
     /// Held so the directories outlive the paths that name them.
     _root: TempDir,
-    /// The one directory the run stands in.
     workspace: PathBuf,
-    /// The config home, which holds no file unless a test writes one.
     config: PathBuf,
-    /// The state home the session directory is made under.
     state: PathBuf,
 }
 
 impl Ground {
-    /// A ground with an empty workspace and empty homes.
     fn new() -> Ground {
         let root = tempfile::tempdir().expect("a temp ground");
         let ground = Ground {
@@ -50,8 +33,6 @@ impl Ground {
         ground
     }
 
-    /// A machine whose `bwrap` is the script `body`, first on `PATH`, with the
-    /// real `/usr/bin` and `/bin` behind it so only bubblewrap is faked.
     fn machine(&self, body: &str) -> String {
         let bin = self.config.join("machine");
         std::fs::create_dir_all(&bin).expect("a machine directory");
@@ -62,17 +43,12 @@ impl Ground {
         format!("{}:/usr/bin:/bin", bin.display())
     }
 
-    /// A machine with no bubblewrap anywhere: a `PATH` of one empty directory.
     fn without_bwrap(&self) -> String {
         let empty = self.config.join("no-bwrap");
         std::fs::create_dir_all(&empty).expect("an empty machine directory");
         empty.display().to_string()
     }
 
-    /// A child pointed at this ground and nowhere else: no inherited environment,
-    /// the workspace as its working directory, and everything a run needs to get
-    /// as far as boot — a wire nothing answers on, so a run that gets past boot
-    /// fails at its first ask rather than hanging.
     fn command(&self, path: &str) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_sindri"));
         command
@@ -89,9 +65,6 @@ impl Ground {
         command
     }
 
-    /// Whether any session under the state home holds a record: a run that boot
-    /// refused wrote none, and the session directory — the ground its temp is
-    /// mapped from, which boot needs before it can prove anything — may stand.
     fn recorded(&self) -> bool {
         let sessions = self.state.join("sindri").join("sessions");
         let Ok(entries) = std::fs::read_dir(sessions) else {
@@ -102,7 +75,6 @@ impl Ground {
             .any(|entry| entry.path().join("session.json").exists())
     }
 
-    /// The one file a config home holds, written as a test words it.
     fn write_config(&self, text: &str) {
         let sindri = self.config.join("sindri");
         std::fs::create_dir_all(&sindri).expect("a config directory");
@@ -110,8 +82,8 @@ impl Ground {
     }
 }
 
-/// A URL nothing answers on: a loopback port that was bound and let go, so a run
-/// that reaches the wire is refused at once instead of waiting out a timeout.
+/// A URL nothing answers on: a loopback port that was bound and let go, so a run that reaches the wire is
+/// refused at once instead of waiting out a timeout.
 fn closed_wire() -> String {
     let listener = TcpListener::bind("127.0.0.1:0").expect("a loopback port");
     let port = listener.local_addr().expect("a bound address").port();
@@ -119,21 +91,16 @@ fn closed_wire() -> String {
     format!("http://127.0.0.1:{port}")
 }
 
-/// A bwrap that reports a version and whose kernel will not let it unshare: the
-/// machine a hosted runner is.
 const RESTRICTED: &str = "if [ \"${1:-}\" = --version ]; then\n  \
                           echo 'bubblewrap 0.12.0 (stand-in)'\n  exit 0\nfi\n\
                           echo 'bwrap: setting up uid map: Permission denied' >&2\nexit 1";
 
-/// A bwrap that cannot report its own version: a broken install.
 const BROKEN: &str = "echo 'bwrap: cannot execute: Exec format error' >&2\nexit 1";
 
-/// A stream as a reader sees it.
 fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
-/// Runs `command` to its end.
 fn run(command: &mut Command) -> Output {
     command.output().expect("the binary should run")
 }
@@ -294,13 +261,12 @@ fn a_machine_that_can_make_a_sandbox_proves_it_before_the_first_turn() {
         text(&output.stdout)
     );
     match output.status.code() {
-        // The proof passed and the run went on to a wire that is not there.
         Some(1) => assert!(
             err.contains("sandbox proved (3 checks)"),
             "boot proved the sandbox the run then used: {err}"
         ),
-        // The proof ran and the kernel refused it: a host without unprivileged
-        // user namespaces is a card that says so, never a run that pretends.
+        // The proof ran and the kernel refused it: a host without unprivileged user namespaces is a card
+        // that says so, never a run that pretends.
         Some(3) => assert!(
             err.contains("cannot create the sandbox: bubblewrap creates an unprivileged sandbox"),
             "a machine that forbids the sandbox is named as the one that did: {err}"
@@ -309,8 +275,7 @@ fn a_machine_that_can_make_a_sandbox_proves_it_before_the_first_turn() {
     }
 }
 
-/// `Enforcement::Unsafe` in the two crates' sources, as the file it is written in
-/// and the function that writes it.
+/// `Enforcement::Unsafe` in the two crates' sources, as the file it is written in and the function that writes it.
 fn unsafe_sites() -> Vec<(String, String)> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut found: Vec<(String, String)> = Vec::new();
@@ -344,8 +309,6 @@ fn unsafe_sites() -> Vec<(String, String)> {
     found
 }
 
-/// The name of the `fn` a line sits in, found by walking back to the nearest
-/// declaration above it.
 fn enclosing(lines: &[&str], at: usize) -> String {
     lines[..=at]
         .iter()
@@ -371,9 +334,8 @@ fn enforcement_becomes_unsafe_only_where_the_command_line_flag_is_read() {
         "the scan reads the tree it means to: {sites:?}"
     );
 
-    // In the front end, one function may write the variant, and it is the one
-    // that reads `--yolo-unsafe` off this invocation: every other route to it
-    // would be a fallback nobody asked for.
+    // In the front end, one function may write the variant, and it is the one that reads `--yolo-unsafe` off
+    // this invocation: every other route to it would be a fallback nobody asked for.
     let front_end: Vec<&(String, String)> = sites
         .iter()
         .filter(|(file, _)| file.starts_with("crates/sindri/src"))
@@ -389,9 +351,9 @@ fn enforcement_becomes_unsafe_only_where_the_command_line_flag_is_read() {
         "and it is the flag's own constructor"
     );
 
-    // In the core, the variant is read in the three modules that hold the fact —
-    // the one that defines it, the one that enforces it and the one that proves
-    // it — and in no module that could arrive at it from a file or a variable.
+    // In the core the variant is read in the three modules that hold the fact — the one that defines it, the
+    // one that enforces it and the one that proves it — and in no module that could arrive at it from a
+    // file or a variable.
     let core: Vec<&(String, String)> = sites
         .iter()
         .filter(|(file, _)| file.starts_with("crates/sindri-core/src"))

@@ -1,10 +1,6 @@
-//! The `/stats` screen from the outside: the facts the rail gives up, drawn whole on the
-//! frame's whole band — opened by a `/stats` line, closed by `Esc`, and painted instead of the
-//! bands under it rather than over them.
-//!
-//! The screen's own rows and its layout are the module's to prove (`src/stats.rs` reads them
-//! without a buffer); what is proved here is the frame's half: that a reader can reach the
-//! screen, that it draws what the frame was handed, and that it is a screen and not a band.
+//! `/stats` from the outside: opened by a `/stats` line, closed by `Esc`, and painted instead of the bands
+//! under it rather than over them. The screen's own rows are the module's to prove; the frame's half is
+//! that a reader can reach the screen and that it draws what the frame was handed.
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -19,7 +15,6 @@ mod fixture; // one frame rendered at a fixed size into the text a fixture holds
 
 use fixture::{GUID, document, facts};
 
-/// The rows of the frame as a reader sees it, every cell of every row.
 fn painted(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
     let mut terminal = Terminal::new(TestBackend::new(cols, rows)).expect("a terminal");
     terminal
@@ -40,8 +35,6 @@ fn painted(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
         .collect()
 }
 
-/// The frame a screen is opened on: a run's facts and its record handed in, and `/stats` typed
-/// and sent the way a reader opens it.
 fn opened() -> View {
     let mut view = View::boot();
     view.set_facts(facts());

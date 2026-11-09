@@ -1,26 +1,6 @@
-//! What `sindri doctor` reports to a person at a prompt, measured where a
-//! script measures it: the built binary is spawned in a workspace, a config home
-//! and a state home of the test's own, and its stdout, its stderr and its exit
-//! code are read back as bytes.
-//!
-//! The description's bytes are an eval and not a test (§16): `eval_doctor` spawns
-//! this binary, cuts the description out of its stdout, and holds it to the bytes
-//! the `bash` tool a run registers renders, so a doctor that re-rendered the
-//! boundary in its own words fails there rather than passing by agreeing with
-//! itself. What is left here is what the report says and what it costs. Every child
-//! gets `env_clear`, so nothing of this process's environment reaches the binary.
-//!
-//! A failing sandbox check is reachable without a broken kernel by putting a
-//! stand-in `bwrap` first on `PATH`, the way `scripts/sandbox-probe-test.sh`
-//! fakes a machine: one that refuses to unshare, and one that records the argv it
-//! was handed so the proof can be shown to be a real invocation.
-//!
-//! The tests that read the report off this machine's own `PATH` do not require it
-//! to be able to make a sandbox: `doctor` prints the whole report either way and
-//! ends `0` over a sandbox it proved and `3` over one the kernel refused (§15, §3),
-//! and that a host may forbid the second is a fact about the host rather than a
-//! verdict on the report. What is not relaxed is the description's bytes — nor the
-//! card, which a faked machine proves where this one may not.
+//! What `sindri doctor` reports to a person at a prompt, measured where a script measures it: the built binary is
+//! spawned in a workspace and homes of the test's own, and its stdout, stderr and exit code read back as bytes.
+//! A failing sandbox check is reachable without a broken kernel by putting a stand-in `bwrap` first on `PATH`.
 
 use std::fs::Permissions;
 use std::os::unix::fs::PermissionsExt;
@@ -29,20 +9,15 @@ use std::process::{Command, Output};
 
 use tempfile::TempDir;
 
-/// A workspace, a config home and a state home, all of the test's own.
 struct Ground {
     /// Held so the directories outlive the paths that name them.
     _root: TempDir,
-    /// The one directory the run stands in.
     workspace: PathBuf,
-    /// The config home, which holds no file unless a test writes one.
     config: PathBuf,
-    /// The state home, which doctor writes nothing into.
     state: PathBuf,
 }
 
 impl Ground {
-    /// A ground with an empty workspace and empty homes.
     fn new() -> Ground {
         let root = tempfile::tempdir().expect("a temp ground");
         let ground = Ground {
@@ -57,8 +32,6 @@ impl Ground {
         ground
     }
 
-    /// A skill directory `SKILL.md` under `scope`, written with the frontmatter
-    /// the core reads.
     fn skill(&self, scope: &Path, name: &str, description: &str) {
         let directory = scope.join(name);
         std::fs::create_dir_all(&directory).expect("a skill directory");
@@ -69,16 +42,12 @@ impl Ground {
         .expect("a SKILL.md");
     }
 
-    /// A skill in the `repo` scope: the `.agents/skills` of the workspace, which
-    /// is the repository root because the temp tree has no `.git`.
     fn repo_skill(&self, name: &str, description: &str) {
         let scope = self.workspace.join(".agents").join("skills");
         std::fs::create_dir_all(&scope).expect("a repo scope");
         self.skill(&scope, name, description);
     }
 
-    /// A `SKILL.md` under the repo scope that will not parse: no frontmatter at
-    /// all, which is refused at its first line.
     fn broken_repo_skill(&self, name: &str) -> PathBuf {
         let directory = self.workspace.join(".agents").join("skills").join(name);
         std::fs::create_dir_all(&directory).expect("a skill directory");
@@ -87,21 +56,16 @@ impl Ground {
         file
     }
 
-    /// A skill in the `user` scope: `$HOME/.agents/skills`, and `HOME` is the
-    /// config home here.
     fn user_skill(&self, name: &str, description: &str) {
         let scope = self.config.join(".agents").join("skills");
         std::fs::create_dir_all(&scope).expect("a user scope");
         self.skill(&scope, name, description);
     }
 
-    /// The one directory a scope's skill lies in, as a stand-in bwrap's world.
     fn user_skill_path(&self, name: &str) -> PathBuf {
         self.config.join(".agents").join("skills").join(name)
     }
 
-    /// A machine whose `bwrap` is the script `body`, first on `PATH`, with the
-    /// real `/usr/bin` and `/bin` behind it so only bubblewrap is faked.
     fn machine(&self, body: &str) -> String {
         let bin = self.config.join("machine");
         std::fs::create_dir_all(&bin).expect("a machine directory");
@@ -112,9 +76,6 @@ impl Ground {
         format!("{}:/usr/bin:/bin", bin.display())
     }
 
-    /// A child pointed at this ground and nowhere else: no inherited environment,
-    /// the workspace as its working directory, and no key, because a diagnostic
-    /// answers without one.
     fn command(&self, path: &str) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_sindri"));
         command
@@ -128,7 +89,6 @@ impl Ground {
     }
 }
 
-/// The session directories the state home holds, which a diagnostic keeps none of.
 fn kept_sessions(ground: &Ground) -> Vec<String> {
     let root = ground.state.join("sindri").join("sessions");
     let Ok(entries) = std::fs::read_dir(root) else {
@@ -140,28 +100,20 @@ fn kept_sessions(ground: &Ground) -> Vec<String> {
         .collect()
 }
 
-/// A bwrap that reports a version and whose kernel will not let it unshare.
 const RESTRICTED: &str = "if [ \"${1:-}\" = --version ]; then\n  \
                           echo 'bubblewrap 0.12.0 (stand-in)'\n  exit 0\nfi\n\
                           echo 'bwrap: setting up uid map: Permission denied' >&2\nexit 1";
 
-/// A stream as a reader sees it.
 fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
-/// Runs `command` to its end.
 fn run(command: &mut Command) -> Output {
     command.output().expect("the binary should run")
 }
 
-/// Asserts that `doctor` answered with a report rather than a refusal of its own:
-/// `0` over a sandbox this machine proved, and `3` over one its kernel would not
-/// let it make — the report is whole in both, with the card printed under a
-/// `sandbox failed` row (§15, §3). Which of the two this host is, is the host's
-/// fact; the card itself is read in
-/// `a_sandbox_check_that_fails_is_named_in_a_card_and_exits_three`, from a machine
-/// that refuses on demand.
+/// Asserts that `doctor` answered with a report rather than a refusal of its own: `0` over a sandbox this
+/// machine proved, and `3` over one its kernel would not let it make — the report is whole in both.
 fn a_report_was_made(output: &Output) {
     assert!(
         matches!(output.status.code(), Some(0) | Some(3)),
@@ -172,8 +124,6 @@ fn a_report_was_made(output: &Output) {
     );
 }
 
-/// The one line of the report `name` is listed on, so a row is read whole rather
-/// than by the substring that happened to be asserted.
 fn row<'a>(stdout: &'a str, name: &str) -> &'a str {
     stdout
         .lines()
@@ -218,7 +168,6 @@ fn every_skill_found_is_listed_with_the_scope_it_came_from() {
     );
 }
 
-/// The one line of the report that says which skill took a name, and from whom.
 fn shadow<'a>(stdout: &'a str, name: &str) -> &'a str {
     stdout
         .lines()
@@ -309,8 +258,8 @@ fn a_sandbox_check_that_fails_is_named_in_a_card_and_exits_three() {
 #[test]
 fn the_proof_is_a_real_bubblewrap_invocation_rather_than_a_version_probe() {
     let ground = Ground::new();
-    // A stand-in that records every argv it is handed, so what the proof ran is
-    // read back rather than assumed.
+    // A stand-in that records every argv it is handed, so what the proof ran is read back rather than
+    // assumed.
     let log = ground.config.join("argv.log");
     let body = format!(
         "echo \"$@\" >> {}\n\

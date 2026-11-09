@@ -1,14 +1,10 @@
-//! The mode stack's contract, walked rather than eyeballed: one key table per mode
-//! with no key bound twice in one of them, a screen that answers only its own keys,
-//! and the two keys that carry a rule — `?` that opens the keys and `↑` that the
-//! queue shares with the draft — resolving exactly where ADR-0017 and §12 say.
+//! The mode stack's contract: one key table per mode with no key bound twice in one of them, a screen that
+//! answers only its own keys, and `?` and `↑` resolving where the tables say they do.
 
 use sindri::composer::{Composer, Key, Outcome};
 use sindri::keys::{Act, Mode};
 use sindri::view::View;
 
-/// A draft holding `text`, typed a line at a time: the composer is built through the
-/// same keys a reader's fingers send, so a frame here is one the product can make.
 fn typed(lines: &[&str]) -> Composer {
     let mut composer = Composer::new();
     for (index, line) in lines.iter().enumerate() {
@@ -20,9 +16,6 @@ fn typed(lines: &[&str]) -> Composer {
     composer
 }
 
-/// A view a run is live in and prompts are waiting in: `prompts` typed and sent while
-/// nothing could run them, in the order a reader types them, and then `draft`'s lines
-/// typed into the box underneath — so a test starts where the reader is.
 fn waiting(draft: &[&str], prompts: &[&str]) -> View {
     let mut view = View::boot();
     for prompt in prompts {
@@ -152,8 +145,8 @@ fn a_question_mark_with_a_draft_typed_is_a_glyph_and_not_a_screen() {
 
 #[test]
 fn a_screen_answers_its_own_keys_and_swallows_the_drafts() {
-    // The screen is opened on an empty draft, because that is the only place `?` is a
-    // key: from there, a glyph that reached the draft under it would show.
+    // The screen is opened on an empty draft, because that is the only place `?` is a key: from there a
+    // glyph that reached the draft under it would show.
     let mut view = View::boot();
     view.key(Key::Char('?'));
 
@@ -184,9 +177,9 @@ fn a_screen_answers_its_own_keys_and_swallows_the_drafts() {
 
 #[test]
 fn the_up_arrows_one_arm_is_bound_in_one_row_of_one_table() {
-    // The draft's `↑` is `Act::Up`, and it has to resolve in exactly one row: the queue's
-    // recall and the row above the caret are one act. A screen's `↑` is its own act — a
-    // list's selection is not a caret — and this rule does not reach it.
+    // The draft's `↑` is `Act::Up` in exactly one row: the queue's recall and the row above the caret are
+    // one act. A screen's `↑` is its own act — a list's selection is not a caret — and this rule does
+    // not reach it.
     let bound: Vec<(Mode, Key)> = Mode::ALL
         .iter()
         .flat_map(|mode| mode.table().iter().map(move |binding| (*mode, binding)))

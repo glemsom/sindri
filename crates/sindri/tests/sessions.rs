@@ -1,12 +1,6 @@
-//! Proves what `sindri sessions` hands a person and a script: `list` newest
-//! first, `show` from a whole id or an unambiguous prefix, and `--json` in the
-//! files' own shape — measured where a script measures it, by spawning the built
-//! binary and reading its stdout, its stderr and its exit code as bytes.
-//!
-//! Every session here is written into a temp `XDG_STATE_HOME` of the test's own,
-//! by hand and not by a run, so the fixture is a directory exactly as §13
-//! describes it and no test needs a network, a key or a real config. Every child
-//! gets `env_clear`, so nothing of the test process's environment reaches it.
+//! What `sindri sessions` hands a person and a script: `list` newest first, `show` from a whole id or an
+//! unambiguous prefix, and `--json` in the files' own shape, read back as bytes from the spawned binary.
+//! Every session is a temp `XDG_STATE_HOME` written by hand, so no test needs a network, a key or a config.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -14,16 +8,13 @@ use std::process::{Command, Output};
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
-/// A state home of the test's own, and the session directories written in it.
 struct State {
     /// Held so the directory outlives the paths that name it.
     _root: TempDir,
-    /// `$XDG_STATE_HOME`, as the child is handed it.
     home: PathBuf,
 }
 
 impl State {
-    /// A state home holding no session at all.
     fn empty() -> State {
         let root = tempfile::tempdir().expect("a temp state home");
         let home = root.path().join("state");
@@ -31,13 +22,10 @@ impl State {
         State { _root: root, home }
     }
 
-    /// `$XDG_STATE_HOME/sindri/sessions`, which is where every session lives.
     fn sessions(&self) -> PathBuf {
         self.home.join("sindri").join("sessions")
     }
 
-    /// A session directory named `guid`, whose document says it asked `model`
-    /// with `wire`, started at `start`, and stopped with `stopped`.
     fn session(&self, guid: &str, wire: &str, model: &str, start: &str, stopped: &str) -> PathBuf {
         let directory = self.sessions().join(guid);
         std::fs::create_dir_all(directory.join("tmp")).expect("a session temp");
@@ -69,14 +57,11 @@ impl State {
         directory
     }
 
-    /// `session`'s transcript, one compact entry per line, as §13 writes it.
     fn transcript(&self, session: &Path, entries: &[Value]) {
         let text: String = entries.iter().map(|entry| format!("{entry}\n")).collect();
         std::fs::write(session.join("transcript.jsonl"), text).expect("a transcript");
     }
 
-    /// `session`'s status documents, one compact document per line, as §14
-    /// writes them.
     fn statuses(&self, session: &Path, documents: &[Value]) {
         let text: String = documents
             .iter()
@@ -85,7 +70,6 @@ impl State {
         std::fs::write(session.join("status.json"), text).expect("a status file");
     }
 
-    /// `sindri`, pointed at this state home and at nothing else.
     fn sindri(&self, args: &[&str]) -> Output {
         Command::new(env!("CARGO_BIN_EXE_sindri"))
             .env_clear()
@@ -96,7 +80,6 @@ impl State {
     }
 }
 
-/// A stream as a reader sees it.
 fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
@@ -104,8 +87,8 @@ fn text(bytes: &[u8]) -> String {
 #[test]
 fn sessions_list_names_every_session_newest_first() {
     let state = State::empty();
-    // Named so the directory's order, the GUID's order and the start's order are
-    // three different orders: only a listing by the run's own start passes.
+    // Named so the directory's order, the GUID's order and the start's order are three different orders:
+    // only a listing by the run's own start passes.
     state.session(
         "11111111-0000-4000-8000-000000000001",
         "anthropic",
@@ -155,16 +138,12 @@ fn sessions_list_names_every_session_newest_first() {
         text(&listed.stderr)
     );
 }
-/// Three recorded runs, one of which shares a long prefix with another, so a
-/// prefix rule has something to be unambiguous and something to be ambiguous
-/// about.
+
 const FIRST: &str = "3f2b8c1a-4d5e-4f60-9a1b-000000000001";
 const SECOND: &str = "3f2b8c1a-4d5e-4f60-9a1b-000000000002";
 const THIRD: &str = "7a1c9d2e-6b7c-4d8e-8f90-000000000003";
 
 impl State {
-    /// The three runs [`FIRST`], [`SECOND`] and [`THIRD`]: the first is the
-    /// newest, so it is the one a `show` with no id reads back.
     fn three_runs() -> State {
         let state = State::empty();
         state.session(
@@ -191,8 +170,6 @@ impl State {
         state
     }
 
-    /// [`FIRST`]'s directory, with a turn, a call, its result and the assistant's
-    /// answer, and one status document about the turn.
     fn first_run_records(&self) -> PathBuf {
         let directory = self.session(
             FIRST,
@@ -417,9 +394,9 @@ fn show_json_hands_on_the_files_in_their_own_shape() {
         "2024-03-01T00:00:00Z",
         "final",
     );
-    // A field this build never writes, and a kind of entry it has no variant for: both
-    // are a newer `sindri` talking to an older reader, and both survive only if the files
-    // are handed on as bytes rather than re-encoded through this build's types.
+    // A field this build never writes and a kind of entry it has no variant for: a newer `sindri` talking
+    // to an older reader, and both survive only if the files are handed on as bytes rather than
+    // re-encoded through this build's types.
     let document = std::fs::read_to_string(directory.join("session.json"))
         .expect("a session document")
         .replace(
