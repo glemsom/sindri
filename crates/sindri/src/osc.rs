@@ -1,14 +1,3 @@
-//! Escape sequences that carry words out of the terminal are written here — the copy
-//! that puts words on a clipboard, and the status that says what a run is doing — so
-//! the interface never spells one out at a call site.
-//!
-//! A sequence is built as bytes and handed back: the writing belongs to whoever owns the
-//! tty (§14), which is this crate's terminal and not the core, and a [`Teller`] is that
-//! writer — the one place a status meets a stream. That is also what makes a copy work
-//! over SSH — the bytes go down the same wire the frame does, and the terminal at the near
-//! end owns the clipboard, so no `xclip`, `wl-copy` or `pbcopy` has to be installed, found
-//! or trusted (§12, §17).
-
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -16,10 +5,8 @@ use std::time::Instant;
 use sindri_core::records::{Status, Told};
 use sindri_core::status::Throttle;
 
-/// The bytes a copy leaves by: `OSC 52 ; c ; <base64> ST`, which every terminal that
-/// speaks OSC 52 reads as "put these words in the reader's clipboard" (§12). `c` is the
-/// system clipboard; the payload is base64 because the sequence carries no raw bytes of
-/// its own, and it ends with ST rather than BEL so no terminal rings on a copy.
+/// `OSC 52 ; c ; <base64> ST`: the terminal at the far end owns the clipboard, so a copy
+/// needs no `xclip` and works over SSH. ST rather than BEL, so no terminal rings on a copy.
 pub fn copy(text: &str) -> Vec<u8> {
     let mut sequence = Vec::from(&b"\x1b]52;c;"[..]);
     sequence.extend_from_slice(base64(text.as_bytes()).as_bytes());
@@ -27,18 +14,9 @@ pub fn copy(text: &str) -> Vec<u8> {
     sequence
 }
 
-/// The bytes a status leaves by: `OSC 7501 ; <document> ST`, which a terminal that
-/// speaks OSC 7501 reads as what the run is doing and every other terminal ignores at
-/// the cost of a pipe (§14).
-///
-/// The payload is the status document itself — the same four facts `status.json` keeps,
-/// in the same shape — so the two windows onto a run cannot disagree about it, and no
-/// field can be read as another: a workspace named `weird;dir` would otherwise split a
-/// semicolon-separated sequence into fields it never meant.
-///
-/// It is written unqueried and always: a detection query needs a stdin read a filter
-/// does not do and false-negatives on the terminals we run in, so the sequence goes out
-/// whether the terminal wants it or not, and an unsupported terminal drops it.
+/// `OSC 7501 ; <document> ST`, the document being the JSON `status.json` holds: a reader takes
+/// it whole after the single `;`, so a workspace named `weird;dir` cannot split it. Written
+/// unqueried and always, because a detection query needs a stdin read a filter does not do.
 pub fn status(report: &Status) -> Vec<u8> {
     let mut sequence = Vec::from(&b"\x1b]7501;"[..]);
     sequence.extend_from_slice(&report.json());
@@ -46,11 +24,7 @@ pub fn status(report: &Status) -> Vec<u8> {
     sequence
 }
 
-/// `text` as base64, the standard alphabet, padded: the one encoding an OSC 52 reader
-/// decodes, written here rather than taken as a dependency because it is twelve lines and
-/// a crate for them would be a crate for everything.
 fn base64(text: &[u8]) -> String {
-    /// The alphabet RFC 4648 names, in the order it names it.
     const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
     let mut encoded = String::with_capacity(text.len().div_ceil(3) * 4);
@@ -62,8 +36,7 @@ fn base64(text: &[u8]) -> String {
                 let index = (triple >> (18 - seat * 6)) & 0x3f;
                 encoded.push(char::from(ALPHABET[index as usize]));
             } else {
-                // A group of one or two bytes is padded out to four seats: the decoder a
-                // terminal uses counts seats and drops the padding.
+                // A group of one or two bytes is padded to four seats: the decoder counts seats.
                 encoded.push('=');
             }
         }
@@ -71,25 +44,16 @@ fn base64(text: &[u8]) -> String {
     encoded
 }
 
-/// A terminal that is told what the run is doing: the sequence, §14's pace and the one
-/// stream, so a front end hands over a fact and spells nothing out.
-///
-/// The clock is `Instant::now`, because a pace is worth nothing but in real time; what
-/// is *decided* about the pace is the core's [`Throttle`], which takes its clock as an
-/// argument so a test can walk a second in microseconds.
+/// The clock is `Instant::now`, because a pace is worth nothing but in real time; what is
+/// decided about the pace is the core's [`Throttle`], which takes its clock as an argument.
 pub struct Teller<W: Write> {
-    /// Where the sequences go, when they go anywhere at all.
     stream: W,
-    /// The one switch: the `status` key, on by default (§11, §14).
     on: bool,
-    /// The workspace the reports are about, whose name is its last component.
     workspace: PathBuf,
-    /// What has been told, and what the pace is holding.
     said: Throttle,
 }
 
 impl<W: Write> Teller<W> {
-    /// A teller on `stream`, on when `on`, about a run standing in `workspace`.
     pub fn new(stream: W, on: bool, workspace: &Path) -> Teller<W> {
         Teller {
             stream,
@@ -99,14 +63,11 @@ impl<W: Write> Teller<W> {
         }
     }
 
-    /// Throws §14's one switch, read again when a settings visit rewrote it: a `status`
-    /// key turned off mid-launch stops the telling at the next report, which is what a
-    /// reader who just turned it off expects (ADR-0009).
+    /// A `status` key turned off mid-launch stops the telling at the next report.
     pub fn switch(&mut self, on: bool) {
         self.on = on;
     }
 
-    /// Says what the run is doing now, if the switch is on and the pace allows it.
     pub fn say(&mut self, told: Told) -> io::Result<()> {
         if !self.on {
             return Ok(());
@@ -118,9 +79,8 @@ impl<W: Write> Teller<W> {
         }
     }
 
-    /// Says the report a rate limit withheld, once its second is up: a front end with a
-    /// clock in its hand calls this whenever it wakes, so a withheld report is said late
-    /// rather than lost (§14).
+    /// Says the report the pace withheld: a front end with a clock calls this whenever it
+    /// wakes, so a withheld report is said late rather than lost.
     pub fn due(&mut self) -> io::Result<()> {
         if !self.on {
             return Ok(());
@@ -131,8 +91,8 @@ impl<W: Write> Teller<W> {
         }
     }
 
-    /// Writes one report and pushes it out: a status nobody reads is worthless, and a
-    /// terminal waiting for the rest of a sequence reads the frame as a smear.
+    /// Flushed, because a terminal waiting for the rest of a sequence reads the frame as a
+    /// smear.
     fn write(&mut self, report: &Status) -> io::Result<()> {
         self.stream.write_all(&status(report))?;
         self.stream.flush()
@@ -141,9 +101,6 @@ impl<W: Write> Teller<W> {
 
 #[cfg(test)]
 mod tests {
-    //! What a copy really writes, in bytes: the sequence is a wire format, and a wire
-    //! format checked against a re-run of its own encoder would pass whatever it did.
-
     use super::*;
 
     use sindri_core::redact::SecretSet;
@@ -208,9 +165,7 @@ mod tests {
 
     #[test]
     fn a_workspace_named_with_a_semicolon_cannot_split_the_sequence() {
-        // A reader splits the sequence at the single `;` after the number and takes the
-        // rest whole, so a directory called `weird;dir` is a character inside the document
-        // rather than a field boundary the sequence never meant.
+        // A reader splits at the single `;` after the number, so `weird;dir` stays a character.
         let sequence = String::from_utf8(status(&Status::new(
             Told::Idle,
             Path::new("/work/weird;dir"),

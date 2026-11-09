@@ -1,27 +1,3 @@
-//! The stats screen: the facts the rail gives up, drawn whole on the frame's whole band.
-//!
-//! The rail is thirty-two columns wide and has to choose, so the route the wire answered on,
-//! what the run has spent in tokens, when it started, when and why it stopped, the whole GUID,
-//! the whole temp and the whole workspace have no home on it. This screen is that home, opened
-//! by `/stats` and closed by `Esc`: a ledger of the same facts, grouped into the rail's blocks
-//! and then into the blocks it cannot hold, laid out in the fewest columns that hold them and
-//! never more than the band has room for a column of.
-//!
-//! It reads what the frame was handed and nothing else — the rail's `Facts` for the run's meters
-//! and its session, which the rail already derives and which this screen must not derive a second
-//! time; the record for everything else the run wrote down; and the loaded-skill set for the
-//! names — so the screen and the rail beside it cannot disagree about one run. A fact the run
-//! knows nothing about is not drawn: no route for a wire that serves one endpoint, no cache
-//! before the wire reported one, no end or exit while the run is going, no branch or commit
-//! off a checkout.
-//!
-//! The layout is a pure function of the blocks and the band, so what a band of a given size
-//! yields is read by a test without a buffer: the screen a band is drawn as places the blocks and
-//! counts what did not fit, and [`Stats::paint`] writes the cells that placement describes.
-//!
-//! Why the screen exists at all, and why it is `/stats` and not `/status`, is ADR-0019's; the
-//! acceptance criteria are the ticket's. What this module holds is the drawing of them.
-
 use std::path::Path;
 
 use ratatui::buffer::Buffer;
@@ -31,56 +7,43 @@ use sindri_core::records::SessionDocument;
 use crate::ink::Ink;
 use crate::rail::{Facts, head, label_row, more, put, tail, tokens, value_room};
 
-/// The columns a column of this screen is never narrower than: a label field, its leaders and
-/// enough value to read is forty columns, and a band that cannot hold one gets one anyway.
+/// A band that cannot hold one gets one anyway.
 const MIN_COLUMN: u16 = 40;
 
-/// What lies between two columns: one gap, so the value against one column's edge does not run
-/// into the label at the next one's. It is not the rail's gap — that one separates two facts on
-/// one row — and a column's row is the rail's own, field and leaders and all.
+/// Not the rail's gap, which separates two facts on one row: this one sits between columns.
 const COLUMN_GAP: u16 = 2;
 
-/// The stats a frame was handed: the rail's facts, the run's record and the names it has
-/// loaded, grouped into the blocks the screen draws in the order it reads them.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Stats {
-    /// The blocks, in the order the screen reads them, each with the facts the run knows.
     blocks: Vec<Block>,
 }
 
-/// One block of the screen: the word it is headed by and the facts under it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Block {
-    /// The word the block is headed by.
     label: &'static str,
-    /// The facts the block holds, in the order it reads them.
     rows: Vec<Fact>,
 }
 
-/// One fact of a block: a label and the value beside it, or a name standing on its own.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Fact {
-    /// The label the fact is read by, and nothing when it is a name and no more.
+    /// `None` when the fact is a name and no more.
     label: Option<&'static str>,
-    /// The value, before the column it lands in cuts it.
     value: Value,
 }
 
-/// A value's own cut rule, which is the whole of what a column may do to it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Value {
-    /// A word the run wrote down whole: drawn whole or not at all.
+    /// Drawn whole or not at all.
     Word(String),
-    /// A path, which a narrow column cuts at its head and marks with `…/`.
+    /// A narrow column cuts it at its head and marks the cut with `…/`.
     Path(String),
-    /// A name, which a narrow column cuts at its tail and marks with `…`.
+    /// A narrow column cuts it at its tail and marks the cut with `…`.
     Name(String),
 }
 
 impl Value {
-    /// The value as a column `columns` wide draws it, or nothing when it has no rule that
-    /// leaves anything to read: a word too wide for its room is not drawn in part, and a path
-    /// or a name cut to nothing says nothing.
+    /// A word too wide for its room is not drawn in part, and a path or a name cut to nothing
+    /// says nothing.
     fn drawn(&self, columns: usize) -> Option<String> {
         let text = match self {
             Value::Word(word) => word.clone(),
@@ -92,7 +55,6 @@ impl Value {
 }
 
 impl Fact {
-    /// A row of a fixed word: a wire, a turn count, a spend, an instant.
     fn word(label: &'static str, value: impl Into<String>) -> Fact {
         Fact {
             label: Some(label),
@@ -100,7 +62,6 @@ impl Fact {
         }
     }
 
-    /// A row of a path: the workspace the run stands in, and the temp it was given.
     fn path(label: &'static str, path: &Path) -> Fact {
         Fact {
             label: Some(label),
@@ -108,7 +69,6 @@ impl Fact {
         }
     }
 
-    /// A row of a name: the model the run was served, and a skill it has loaded.
     fn name(label: &'static str, name: impl Into<String>) -> Fact {
         Fact {
             label: Some(label),
@@ -116,8 +76,6 @@ impl Fact {
         }
     }
 
-    /// A row of a name and no label: a skill the run has loaded, read by its own word from
-    /// the column's left edge rather than by a field it would only repeat.
     fn bare(name: impl Into<String>) -> Fact {
         Fact {
             label: None,
@@ -125,9 +83,6 @@ impl Fact {
         }
     }
 
-    /// The row as a column `width` columns wide draws it, or nothing when its value has no room
-    /// there. A row with no label is a name standing on its own, so its value takes the whole
-    /// column rather than starting after a field it does not use.
     fn drawn(&self, width: u16) -> Option<Drawn> {
         let room = match self.label {
             None => usize::from(width),
@@ -140,50 +95,33 @@ impl Fact {
     }
 }
 
-/// One row of the screen as it is drawn: the label in its field and the value, already cut to
-/// the column it lands in.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Drawn {
-    /// The label, and nothing when the row is a name on its own.
     label: Option<String>,
-    /// The value the row is read by.
     value: String,
 }
 
-/// One block as a column holds it: the heading and the rows under it, whole.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Placed {
-    /// The word the block is headed by.
     pub label: &'static str,
-    /// Its rows, in order.
     pub rows: Vec<Drawn>,
 }
 
-/// One column of the screen: where it starts, how wide it is, and the blocks it holds.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Column {
-    /// The column's left-hand edge.
     pub x: u16,
-    /// The columns it may draw in.
     pub width: u16,
-    /// The blocks it holds, top to bottom, whole.
     pub blocks: Vec<Placed>,
 }
 
-/// The screen a band of a given size is drawn as: the columns that hold anything, and how many
-/// rows the band could not hold at all.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Screen {
-    /// The columns holding a block, left to right.
     pub columns: Vec<Column>,
-    /// The rows the band could not hold, which its last column counts.
+    /// Counted by its last column.
     pub went: usize,
 }
 
 impl Stats {
-    /// The screen a frame's three values come to: the rail's facts for the meters and the
-    /// session, the record for everything the run wrote down, and the names loaded so far.
-    ///
     /// A block the run knows nothing about is not a block: a frame handed no fact and no record
     /// has nothing to draw, which is the title and no row.
     pub fn of(facts: &Facts, document: &SessionDocument, skills: &[String]) -> Stats {
@@ -271,8 +209,6 @@ impl Stats {
         }
     }
 
-    /// The cells this screen is drawn as: every block a column of `area` holds, whole, and the
-    /// count of the rows the band could not hold.
     pub fn paint(&self, area: Rect, buffer: &mut Buffer) {
         let screen = self.screen(area);
         for column in &screen.columns {
@@ -301,8 +237,6 @@ impl Stats {
         );
     }
 
-    /// The blocks this screen holds, in the order the screen reads them: what a test reads the
-    /// grouping and the size of each block by, with no band and no buffer.
     #[cfg(test)]
     fn blocks(&self) -> impl ExactSizeIterator<Item = (&'static str, usize)> {
         self.blocks
@@ -310,18 +244,9 @@ impl Stats {
             .map(|block| (block.label, block.rows.len()))
     }
 
-    /// The screen a band of `area` is drawn as: the blocks flowed into the fewest columns that
-    /// hold them all, and never more than the band has room for.
-    ///
-    /// A band that holds every row in one column draws one, however wide it is: the columns
-    /// are there for the room they add, so a wider band narrows nothing. Only a band too small
-    /// for the rows it was handed takes more columns, and only then does it count what the last
-    /// of them could not hold — in the row above the count's own, because the count is a row of
-    /// the band like any other.
-    ///
-    /// A block's facts are whole, and so is the order they are read in: a band that gives one
-    /// up gives up every block after it, so what the last column counts is the tail of the
-    /// screen rather than a hole in the middle of it.
+    /// The columns are there for the room they add, so a wider band never narrows one; and a
+    /// block's facts are whole, so a band that gives one up gives up every block after it, and
+    /// the last column counts the tail of the screen rather than a hole in the middle of it.
     fn screen(&self, area: Rect) -> Screen {
         if area.width == 0 || area.height == 0 || self.blocks.is_empty() {
             return Screen::default();
@@ -340,7 +265,6 @@ impl Stats {
         }
     }
 
-    /// The blocks flowed into `count` columns `width` wide, with `rows` rows of room each.
     fn flow(&self, area: Rect, count: usize, width: u16, rows: u16) -> Screen {
         let mut columns: Vec<Column> = (0..count)
             .map(|at| Column {
@@ -386,16 +310,12 @@ impl Stats {
         Screen { columns, went }
     }
 
-    /// The most columns a band `width` wide has room for: as many as hold a column of the least
-    /// width this screen draws one at, and never more than there are blocks to fill them.
     fn columns(&self, width: u16) -> usize {
         let holds = (width.saturating_add(COLUMN_GAP)) / (MIN_COLUMN + COLUMN_GAP);
         usize::from(holds.max(1)).min(self.blocks.len())
     }
 }
 
-/// The columns each of `count` columns of a band `width` wide is drawn in: the band's width
-/// less the gaps between them, shared out whole and never narrower than nothing.
 fn column_width(width: u16, count: usize) -> u16 {
     let Some(count) = u16::try_from(count).ok().filter(|count| *count > 0) else {
         return 0;
@@ -406,9 +326,6 @@ fn column_width(width: u16, count: usize) -> u16 {
         .unwrap_or(0)
 }
 
-/// Writes one row into `column` at `y`: a name standing on its own from the column's left
-/// edge, or a label in the field, its leaders out to the value, and the value against the
-/// column's right-hand edge.
 fn drawn_row(buffer: &mut Buffer, column: &Column, y: u16, row: &Drawn) {
     let Some(label) = &row.label else {
         put(buffer, column.x, y, &row.value, Ink::Muted);
@@ -426,11 +343,6 @@ fn drawn_row(buffer: &mut Buffer, column: &Column, y: u16, row: &Drawn) {
 
 #[cfg(test)]
 mod tests {
-    //! The screen's own rules, one test each: every fact the run knows has its row, a fact it
-    //! knows nothing about has none, a narrow column cuts what the run cut and nothing else,
-    //! and what a band cannot hold is counted rather than drawn in part. The placement is read
-    //! as the value it is, so only the count's row is asked of a buffer.
-
     use std::path::PathBuf;
 
     use sindri_core::policy::{Enforcement, PolicyRecord};
@@ -442,20 +354,14 @@ mod tests {
     use super::*;
     use crate::rail::Ctx;
 
-    /// The GUID of the session the screen's run is writing: the whole of it, because the
-    /// screen is the one place a reader can see all thirty-six characters.
     const GUID: &str = "9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61";
 
-    /// The directory the run stands in.
     const WORKSPACE: &str = "/home/glemsom/src/sindri";
 
-    /// The served name a real run is given, which the rail and the screen both have to cut.
     const SERVED: &str = "claude-sonnet-4-5-20250929";
 
-    /// A gateway's name, which runs past any column a frame holds.
     const GATEWAY: &str = "anthropic.claude-3-5-sonnet-20241022-v2:0";
 
-    /// A band at the origin: the room a frame hands the screen.
     fn band(width: u16, height: u16) -> Rect {
         Rect {
             x: 0,
@@ -465,14 +371,12 @@ mod tests {
         }
     }
 
-    /// The session temp of a run, which carries the session's whole GUID.
     fn temp() -> PathBuf {
         PathBuf::from(format!(
             "/home/glemsom/.local/state/sindri/sessions/{GUID}/tmp"
         ))
     }
 
-    /// The facts a rail draws, as a run that has taken six turns holds them.
     fn facts() -> Facts {
         Facts {
             wire: Some(String::from("anthropic")),
@@ -493,8 +397,6 @@ mod tests {
         }
     }
 
-    /// The record a stopped run wrote, as the core holds it: filled in by hand so the screen's
-    /// wiring is read off the run's own fields and not off a real run.
     fn document() -> SessionDocument {
         SessionDocument {
             session: String::from(GUID),
@@ -533,8 +435,6 @@ mod tests {
         }
     }
 
-    /// The screen a frame draws, as the rows a reader reads it by: each block's heading and
-    /// then its rows, a row's label and value as one line.
     fn read(screen: &Screen) -> Vec<String> {
         screen
             .columns
@@ -551,7 +451,6 @@ mod tests {
             .collect()
     }
 
-    /// One row of a painted buffer as the glyphs it holds.
     fn glyphs(buffer: &Buffer, y: u16) -> String {
         (buffer.area.x..buffer.area.right())
             .map(|x| {
