@@ -1,57 +1,6 @@
-//! The terminal UI's contract with the terminal it draws on: the alternate screen it
-//! takes and gives back, raw mode with flow control off, the keys it reads and the
-//! sequences it writes back, and a refusal at exit 2 when there is no terminal to do
-//! any of that on (§3).
-//!
-//! The terminal itself is the one thing this crate owns and the core may not name
-//! (ADR-0005): the alternate screen, raw mode, the keys read off the tty and the
-//! sequences written back to it all live in this module, and what a frame holds is
-//! the core's business rather than the terminal's.
-//!
-//! The loop is a loop that waits. One frame is painted when the screen is taken — the
-//! boot frame, empty transcript and all (§12) — and after it a key arrives as bytes
-//! from `read`, so a launch with nobody at the keyboard writes nothing further: there
-//! is no timer, no tick and no repaint, which is what §12's "an idle frame is never
-//! drawn" means as code. The one exception is a run in flight: the marker at the head of
-//! its newest answer is a clock, so while a run is live the wait is one step of the pulse
-//! and a frame that ran out of time is a frame whose marker has moved. The run stopping is
-//! what ends it — the settled marker is drawn once and the wait goes back to forever (#39).
-//! A key that arrives is decoded here, because a key is more than
-//! a byte — `Shift+Enter` is `CSI 13;2u` under the protocol §17 assumes — and a paste is
-//! more than a key: it is a burst of bytes, or a bracketed paste (`ESC[200~ … ESC[201~`)
-//! when the terminal offers one, and it reaches the composer as one edit with its line
-//! breaks kept.
-//!
-//! A launch also says what it is doing, over OSC 7501 and on the terminal it owns: `idle`
-//! while nothing is in flight, the turn count while a run asks, and the stop reason when it
-//! lands (§14). The pace a report is told at is the core's, the writing is this module's,
-//! and the frame's own step is the clock a withheld report waits for.
-//!
-//! A prompt that leaves the composer starts a run, and the run is driven on a thread of its
-//! own: the loop must stay asleep in `poll` for a key while a request is in flight, so the
-//! fragments the wire lands are woken into this loop through the same pipe a signal uses
-//! and painted as they arrive (§4, §12). Nothing of what a run decides is here — it is one
-//! `launch`, assembled and driven the way batch mode's is — and what is here is the
-//! terminal's half: when to paint, and when to give the screen back.
-//!
-//! A prompt sent while a run is live cannot be answered now, so it waits in the frame's queue
-//! above the composer and runs once that run stops, in the order it was typed (§12): `Enter`
-//! is never a key that throws a prompt away, which is the one thing a reader would take as
-//! the product losing their words.
-//!
-//! Two of the `/` commands are the terminal's to finish rather than the frame's (§12): the
-//! model name a screen chose is written into the config through the one owner-only save
-//! (ADR-0009), and the names the `/model` screen offers are asked of the wire — a request,
-//! so on a thread of its own, landing in the frame the way a run's fragments land. What a
-//! command means is not decided here: the frame reads the line and hands back an outcome,
-//! and this is the half that owns a socket and a file.
-//!
-//! `Ctrl-C` and a `SIGINT` from outside are one path. Raw mode means the terminal sends `^C`
-//! as a byte and no signal, so the two arrive at different doors — the decoder here and the
-//! handler in `signal` — and both set the run's own cancellation flag, which stops the run
-//! when the request in flight does and kills the command it is in flight with (§4). The
-//! draft stays where it was on either, because a prompt half-written when a run dies is the
-//! one the reader was writing (§12).
+//! The one place the terminal is owned: raw mode with flow control off, without which
+//! `Ctrl-Q` never arrives, the alternate screen taken and given back on every path out
+//! including a panic, and a launch with no terminal refused before any of it.
 
 use std::fs::File;
 use std::io::{self, IsTerminal, Read, Write};
@@ -89,51 +38,34 @@ use crate::launch::{Launch, Refusal, Turns};
 use crate::osc::Teller;
 use crate::signal::{Signals, Wake};
 
-/// Spec §15's usage error: a launch that cannot be a run, a screen a launch cannot
-/// draw on.
+/// A launch that cannot be a run, or a screen it cannot draw on: exit 2.
 const USAGE: u8 = 2;
 
-/// Spec §15's setup failure: a terminal that will not take the screen or will not
-/// give a key back.
+/// A terminal that will not take the screen or will not give a key back: exit 3.
 const SETUP: u8 = 3;
 
-/// Spec §15's cancellation: a launch the user's own word ended, which is the code a
-/// `SIGINT` out of nowhere has always meant.
+/// The user's own word from outside the keyboard: the code a `SIGINT` has always meant.
 const CANCELLED: u8 = 130;
 
-/// Take the alternate screen, hide the cursor so the first frame is not drawn around a
-/// caret sitting wherever the last shell left it, and ask for bracketed paste — so a
-/// pasted prompt arrives as one sequence and not as a burst of keystrokes (§12).
+/// Takes the alternate screen with the cursor hidden, so the first frame is not drawn
+/// around a caret the last shell left, and asks for bracketed paste so a paste is one edit.
 const TAKE_SCREEN: &[u8] = b"\x1b[?1049h\x1b[?25l\x1b[?2004h";
 
-/// Give the alternate screen back, stop asking for bracketed paste first, and put the
-/// cursor back last, so a shell gets a terminal that looks the way it did.
+/// Gives the screen back with bracketed paste off first and the cursor last, so a shell
+/// gets the terminal it had.
 const GIVE_BACK_SCREEN: &[u8] = b"\x1b[?2004l\x1b[?25h\x1b[?1049l";
 
-/// §11's key for the model a run asks: the one row `/model` writes, named here so the write
-/// reads as the schema's key rather than as a word that happens to match it.
 const MODEL: &str = "model";
 
-/// `CSI 16 t`: the one question a launch puts to its terminal, asking how many pixels one
-/// cell of it is. A terminal that knows answers `CSI 6 ; height ; width t`; one that does
-/// not says nothing at all, which is why the wait below is bounded (§12, ADR-0003).
+/// `CSI 16 t`: asks how many pixels one cell is. A terminal that knows answers
+/// `CSI 6 ; height ; width t` and one that cannot says nothing, hence the bounded wait.
 const ASK_CELL: &[u8] = b"\x1b[16t";
 
-/// How long the terminal is given to answer the cell question. A terminal that answers
-/// takes microseconds and one that cannot never will, so this is only ever the cost of a
-/// terminal that says nothing — and it is paid once, before the first frame.
 const REPLY_WAIT: Duration = Duration::from_millis(120);
 
-/// Hands `view` the pictures its terminal places, decided from the two things the terminal
-/// says it is: one that speaks Kitty is handed the pictures its frames draw from, and one that
-/// does not is handed none, which is what leaves it the words a picture is spoken of as (§12,
-/// ADR-0003).
-///
-/// `term` and `program` are `TERM` and `TERM_PROGRAM`, read off the environment by the launch
-/// and never off the tty: the launch has spent its one round trip on the cell size, and a
-/// second question before the first frame would buy a fact that decides only whether a picture
-/// is drawn. They are arguments rather than reads because a test has no environment to set: it
-/// hands the function the two facts and reads the frame it gets back.
+/// Hands `view` the pictures its terminal places: a Kitty terminal gets the pictures its
+/// frames draw from and any other gets none, which leaves it the words. `term` and `program`
+/// are arguments rather than reads so a test need not set an environment.
 fn hand_pictures(view: &mut View, cell: CellSize, term: Option<&str>, program: Option<&str>) {
     view.set_pictures(match picture::speaks_kitty(term, program) {
         true => Pictures::kitty(cell),
@@ -141,15 +73,12 @@ fn hand_pictures(view: &mut View, cell: CellSize, term: Option<&str>, program: O
     });
 }
 
-/// The terminal UI: takes the screen, holds it until `Ctrl-Q` or the user's own word, gives
-/// it back.
 pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     if let Some(reason) = missing_terminal() {
         return crate::refuse(&reason, USAGE);
     }
-    // Opened before the screen is taken: a `SIGINT` that arrives between raw mode and the
-    // loop has to be a cancellation, and not a process dying with the terminal left raw and
-    // the alternate screen up.
+    // Opened before the screen is taken: a `SIGINT` that arrives between raw mode and the loop
+    // has to be a cancellation, not a process dying with the terminal left raw and the screen up.
     let signals = match Signals::install() {
         Ok(signals) => signals,
         Err(error) => {
@@ -171,8 +100,8 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
             return crate::refuse(&format!("the terminal would not go raw: {error}"), SETUP);
         }
     };
-    // The cell size asked before the first frame, and a launch with no terminal never reaches
-    // this line. A key typed while the launch waited is handed to the loop rather than dropped.
+    // The cell size is asked before the first frame, and a key typed while the launch waited is
+    // handed to the loop rather than dropped.
     let (cell_size, typed) = probed_cell(&terminal);
     let mut view = View::boot();
     view.set_cell_size(cell_size);
@@ -195,8 +124,8 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
         }
     };
     view.set_workspace(workspace.clone());
-    // Read the way `launch` reads it, so the name `/skill:name` accepts and a name a run
-    // could call come from one catalog.
+    // Read the way `launch` reads it, so the name `/skill:name` accepts and a name a run could
+    // call come from one catalog.
     view.set_home(crate::launch::home());
     let mut canvas = match canvas(&terminal) {
         Ok(canvas) => canvas,
@@ -232,8 +161,8 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
         &typed,
         &mut telling,
     );
-    // Given back before a word is said about the ending: a refusal is a line for the shell,
-    // and not a smear over a frame.
+    // Given back before a word is said about the ending: a refusal is a line for the shell, and
+    // not a smear over a frame.
     drop(screen);
     match keys {
         Ok(Ending::Quit) => ExitCode::SUCCESS,
@@ -243,21 +172,12 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     }
 }
 
-/// How a launch ended: the ways the loop stops, and the one thing a prompt can be refused.
 enum Ending {
-    /// `Ctrl-Q`, or a terminal that went away and left nothing to quit from: the user's own
-    /// key, and the exit code a key of theirs has.
     Quit,
-    /// The user's word from outside the keyboard: the run it stopped has ended, the screen is
-    /// given back, and §15's cancellation code is the launch's.
     Cancelled,
-    /// A prompt that could not start a run at all: the reason is said once the screen is back,
-    /// because a launch with no run to draw has no frame to say it on.
     Refused(Refusal),
 }
 
-/// What a launch with no prompt is short of when it is short of a terminal: the
-/// stream that is not one, and the thing a person can do about it.
 fn missing_terminal() -> Option<String> {
     if !io::stdout().is_terminal() {
         return Some(String::from(
@@ -274,25 +194,16 @@ fn missing_terminal() -> Option<String> {
     None
 }
 
-/// The terminal this front end draws on, held as the two fds it really is — the one
-/// keys arrive on and the one frames leave by — so a test can hand in a
-/// pseudo-terminal and read what a person would have seen.
 struct Terminal {
-    /// Where keys come from: the terminal's input side, whose termios is raw mode.
     keys: File,
-    /// Where frames go: the terminal's output side, the alternate screen.
     screen: File,
 }
 
 impl Terminal {
-    /// This process's own standard input and output, which `run` has already
-    /// refused to build a UI on unless both are terminals.
     fn stdio() -> io::Result<Terminal> {
         Terminal::pair(io::stdin().as_fd(), io::stdout().as_fd())
     }
 
-    /// A terminal from the two ends a caller names, taken as copies so this value
-    /// owns no descriptor the rest of the process still reads and writes.
     fn pair(keys: BorrowedFd<'_>, screen: BorrowedFd<'_>) -> io::Result<Terminal> {
         Ok(Terminal {
             keys: File::from(keys.try_clone_to_owned()?),
@@ -301,26 +212,23 @@ impl Terminal {
     }
 }
 
-/// The screen a launch holds: taking one is what puts the terminal in raw mode, and
-/// dropping it is what gives the terminal back. A guard rather than two calls, so
-/// there is no path — a `?`, an early return, a panic — that can forget half.
+/// The screen a launch holds: taking one puts the terminal in raw mode and dropping it gives
+/// the terminal back. A guard, so no `?`, early return or panic can forget half of it.
 struct Screen;
 
 impl Screen {
-    /// Takes the alternate screen and raw mode together, remembering the state that
-    /// replacing them is a change to.
     fn take(terminal: &Terminal) -> io::Result<Screen> {
         guard_panics();
         let saved = tcgetattr(&terminal.keys)?;
         let mut raw = saved.clone();
         raw.make_raw();
-        // `make_raw` clears flow control too, and this stays because the day raw mode is
-        // spelled differently is the day `Ctrl-Q` stops arriving.
+        // `make_raw` clears flow control too, and this stays because the day raw mode is spelled
+        // differently is the day `Ctrl-Q` stops arriving.
         raw.input_modes.remove(InputModes::IXON);
         tcsetattr(&terminal.keys, OptionalActions::Now, &raw)?;
 
-        // Handed to the panic hook as well, so the screen is given back even when the
-        // unwinding that follows runs no guard.
+        // Handed to the panic hook as well, so the screen is given back even when the unwinding
+        // that follows runs no guard.
         let restore = Restore {
             keys: terminal.keys.try_clone()?,
             screen: terminal.screen.try_clone()?,
@@ -341,23 +249,17 @@ impl Drop for Screen {
     }
 }
 
-/// The screen frames are painted through: ratatui's canvas over this terminal's output
-/// side. It is taken once, because a canvas that remembered nothing would rewrite every
-/// cell of the frame on every key, and a frame is drawn once per change rather than
-/// whole.
+/// The screen frames are painted through, taken once: a canvas that remembered nothing would
+/// rewrite every cell of the frame on every key.
 type Canvas<'a> = ratatui::Terminal<CrosstermBackend<&'a File>>;
 
-/// A canvas over this terminal's output side, remembering what it last drew.
 fn canvas(terminal: &Terminal) -> io::Result<Canvas<'_>> {
     ratatui::Terminal::new(CrosstermBackend::new(&terminal.screen))
 }
 
-/// The same canvas at a size already known, so nothing is asked of the operating system. A test
-/// holds both ends of a pseudo-terminal whose size it set itself, so the answer is the test's to
-/// give: crossterm answers a size question by opening `/dev/tty` and, with none to open, by
-/// running `tput` — and under a suite's parallel threads that `fork` can be refused for want of
-/// process slots, which arrives here as a terminal that could not be measured rather than as the
-/// resource it was (§16).
+/// The same canvas at a size already known, so nothing is asked of the operating system.
+/// crossterm answers a size question by opening `/dev/tty` and, with none to open, by running
+/// `tput`, whose `fork` a suite's parallel threads can have refused for want of process slots.
 #[cfg(test)]
 fn canvas_at(terminal: &Terminal, area: ratatui::layout::Rect) -> io::Result<Canvas<'_>> {
     ratatui::Terminal::with_options(
@@ -368,14 +270,8 @@ fn canvas_at(terminal: &Terminal, area: ratatui::layout::Rect) -> io::Result<Can
     )
 }
 
-/// Paints the frame the view holds now: at launch the boot frame, and afterwards one
-/// frame per key that changed what it holds.
-///
-/// It goes through `View::paint` — the seam the fixture harness renders through
-/// (ADR-0012) — onto this terminal's own output side, so what a reader sees and what a
-/// golden frame holds are one picture and not two. The caret is the terminal's own
-/// cursor and never a cell of the frame: an ink names a foreground and nothing else, so
-/// a caret drawn as a cell would be a tinted letter and nothing at all on a space.
+/// Paints the frame the view holds now. The caret is the terminal's own cursor and never a
+/// cell: an ink names a foreground, so a caret drawn as a cell is invisible on a space.
 fn paint(canvas: &mut Canvas<'_>, view: &mut View) -> io::Result<()> {
     canvas.draw(|frame| {
         view.paint(frame.area(), frame.buffer_mut());
@@ -386,18 +282,9 @@ fn paint(canvas: &mut Canvas<'_>, view: &mut View) -> io::Result<()> {
     Ok(())
 }
 
-/// Reads the terminal until the launch ends, one event at a time, and repaints when an
-/// event changed what the frame holds.
-///
-/// The loop waits in `poll` and paints nothing while it waits: a launch with nobody at the
-/// keyboard asks the kernel for bytes and sleeps, so an idle frame is not skipped, it is
-/// never drawn (§12). Three things can end that wait — a key on the terminal, a signal, and
-/// a run with something to say — and all three are fds, so one wait covers them and no timer
-/// is needed to make a fragment, a cancellation or a keystroke arrive.
-///
-/// `typed` is what the cell probe read off the terminal before the loop started: a reader's
-/// keys, answered here rather than left in a buffer nothing reads. `telling` is what the run
-/// in flight says about itself, written by the one thing here that owns a tty (§14).
+/// Reads the terminal until the launch ends, one event at a time, and paints only when an
+/// event changed the frame: the wait sleeps in `poll` and draws nothing meanwhile, so an idle
+/// frame is never drawn. A key, a signal and a live run's fragment are all fds in that wait.
 #[allow(
     clippy::too_many_arguments,
     reason = "the one seam every mode's key is handed through, plus the teller the run is announced to"
@@ -447,31 +334,29 @@ fn keys(
             PollFd::new(&terminal.keys, PollFlags::IN),
             PollFd::new(&waiting, PollFlags::IN),
         ];
-        // A run in flight is the only clock this loop has: its marker steps once per 80 ms, so
-        // the wait is that long while one is live and forever while none is.
+        // A run in flight is the only clock this loop has: its marker steps once per 80 ms, so the
+        // wait is that long while one is live and forever while none is.
         let step = running
             .is_some()
             .then(|| Timespec::try_from(Duration::from_millis(pulse::STEP_MS)).ok())
             .flatten();
         match poll(&mut fds, step.as_ref()) {
-            // A signal is not a failure: the pipe it pings says what arrived.
             Ok(_) | Err(rustix::io::Errno::INTR) => {}
             Err(error) => return Err(std::io::Error::from(error)),
         }
         let keyed = fds[0].revents().contains(PollFlags::IN);
         let woken = fds[1].revents().contains(PollFlags::IN);
 
-        // The pace has no other clock: a report withheld past its window is said late, never
-        // lost.
+        // The pace has no other clock: a report withheld past its window is said late, never lost.
         telling.due()?;
 
         if let Some(flight) = &running {
             view.set_pulse(Some(Pulse::live(flight.elapsed_ms())));
         }
 
-        // Read every pass and not only the pass the pipe woke: the word is a flag that is
-        // never cleared and the byte is only what wakes the loop, so a `SIGINT` that landed
-        // while the loop was awake for something else raised a byte a drain may have taken.
+        // Read every pass and not only the pass the pipe woke: the word is a flag that is never
+        // cleared and the byte is only what wakes the loop, so a `SIGINT` that landed while the
+        // loop was awake for something else raised a byte a drain may have taken.
         if signals.arrived() && !interrupted {
             interrupted = true;
             if let Some(flight) = &running {
@@ -483,8 +368,8 @@ fn keys(
             wake.drain();
             served(canvas, view, &mut asking)?;
             if take(canvas, view, &mut running, telling)? && !interrupted {
-                // A launch the user's own word ended starts nothing: the queue waits for a
-                // reader who still wants it.
+                // A launch the user's own word ended starts nothing: the queue waits for a reader
+                // who still wants it.
                 if let Some(ending) =
                     resume(canvas, view, &mut running, cli, config, &wake, telling)?
                 {
@@ -493,16 +378,16 @@ fn keys(
             }
         }
 
-        // Given back only with nothing left to stop: leaving while a run is live is a screen
-        // over a run that is not coming back.
+        // Given back only with nothing left to stop: leaving while a run is live is a screen over a
+        // run that is not coming back.
         if interrupted && running.is_none() {
             return Ok(Ending::Cancelled);
         }
 
         if keyed {
             let count = Read::read(&mut &terminal.keys, &mut read)?;
-            // The terminal went away: there is nothing left to quit from, and the guard gives
-            // the screen back all the same.
+            // The terminal went away: there is nothing left to quit from, and the guard gives the
+            // screen back all the same.
             if count == 0 {
                 return Ok(Ending::Quit);
             }
@@ -526,36 +411,27 @@ fn keys(
             }
         }
 
-        // Not an idle frame: a live run's marker has stepped, so the frame that drew the last
-        // glyph is now wrong.
+        // Not an idle frame: a live run's marker has stepped, so the frame that drew the last glyph
+        // is now wrong.
         if !keyed && !woken && running.is_some() {
             paint(canvas, view)?;
         }
     }
 }
 
-/// The run in flight: the flag the user's word lands on, the reports the loop has not taken
-/// yet, and the thread that will end — held together so one `Ctrl-C` and one `SIGINT` reach
-/// the same three.
 struct Running {
-    /// The cancellation the loop reads and a command in flight hears (§4).
     cancel: Cancel,
-    /// What the run has said that the frame has not been told.
     pending: Arc<Mutex<Vec<Report>>>,
-    /// The thread driving it to a stop reason.
     thread: JoinHandle<()>,
-    /// When the run started, which is where the marker's elapsed time is measured from.
     started: Instant,
 }
 
 impl Running {
-    /// Drives `prompt` in its own thread: the fragment a wire lands is pushed where the loop
-    /// takes it and the loop is pinged through the pipe a signal uses, so a run's words
-    /// arrive as a keystroke does and nothing polls for them.
+    /// Drives `prompt` in its own thread: the fragment a wire lands is pushed where the loop takes
+    /// it, and the loop is pinged through the pipe a signal uses, so nothing polls for it.
     fn start(launch: Launch, prompt: Prompt, wake: Arc<Wake>) -> Running {
         let cancel = Cancel::new();
         let pending = Arc::new(Mutex::new(Vec::new()));
-        // Two handles on one list of reports, one per trait the run writes through.
         let mut reports = Reports {
             pending: Arc::clone(&pending),
             wake: Arc::clone(&wake),
@@ -567,8 +443,8 @@ impl Running {
         let interrupted = cancel.clone();
         let started = Instant::now();
         let thread = thread::spawn(move || {
-            // `drive` failing leaves no stop reason, which the loop cannot do: the marker
-            // settles on the refusal rather than turning for a run nobody is driving.
+            // `drive` failing leaves no stop reason, which the loop cannot do: the marker settles
+            // on the refusal rather than turning for a run nobody is driving.
             let (turns, stop) =
                 match launch.drive(prompt.text(), &mut reports, &mut turns, interrupted) {
                     Ok(outcome) => (outcome.turns(), outcome.stopped().clone()),
@@ -577,8 +453,8 @@ impl Running {
                         Stop::Error(SecretSet::default().redact(refusal.message())),
                     ),
                 };
-            // Read here, where the run stopped, and carried to the frame: a frame that read
-            // the clock when it painted would put a different number beside the same verdict.
+            // Read here, where the run stopped, and carried to the frame: a frame that read the
+            // clock when it painted would put a different number beside the same verdict.
             let elapsed_ms = millis(started.elapsed());
             reports.push(Report::Stopped {
                 stop,
@@ -594,63 +470,40 @@ impl Running {
         }
     }
 
-    /// The user's word: the run stops when the request in flight does, and the command it is
-    /// in flight with is killed now (§4).
+    /// The user's word: the run stops when the request in flight does, and the command it is in
+    /// flight with is killed now.
     fn cancel(&self) {
         self.cancel.now();
     }
 
-    /// How long this run has been going, which is the number its live marker is painted from.
     fn elapsed_ms(&self) -> u64 {
         millis(self.started.elapsed())
     }
 }
 
-/// A span of time as whole milliseconds, which is the unit §12's durations are said in.
 fn millis(span: Duration) -> u64 {
     u64::try_from(span.as_millis()).unwrap_or(u64::MAX)
 }
 
-/// One thing the run thread has to say to the frame: a fragment of the turn in flight, which
-/// the frame draws where it lands, and the end of the run, which only the loop needs.
 enum Report {
-    /// A fragment of the answer.
     Text(String),
-    /// A fragment of the reasoning, which has its own gutter and ink (§4, §12).
     Reasoning(String),
-    /// What the run is doing, in §14's five words and the facts they are built from: that
-    /// it is asking the model in this turn, which the frame has nothing to draw but a
-    /// terminal wants to know.
     Told(Told),
-    /// The facts the run holds, as its rail draws them: handed when the run opens, as each
-    /// turn ends and when it stops.
     Facts(Facts),
-    /// The record the run has written, handed beside those facts: what the stats screen draws
-    /// that no rail column holds.
     Record(SessionDocument),
-    /// The run stopped, and with what: the marker settles on the verdict and the duration
-    /// the run reported, which are the two facts §12 settles a pulse on (#39).
     Stopped {
-        /// Why the run ended, from the core's closed set of stop reasons.
         stop: Stop,
-        /// How long it had been running when it stopped, read at the stop itself.
         elapsed_ms: u64,
-        /// How many turns it had started, which is the count its last status names.
         turns: u32,
     },
 }
 
-/// The run's own door into the frame, as the run thread holds it: every fragment lands in the
-/// list the loop takes from, and the loop is pinged once so what landed is painted.
 struct Reports {
-    /// What has landed and not been taken.
     pending: Arc<Mutex<Vec<Report>>>,
-    /// The pipe the loop waits on.
     wake: Arc<Wake>,
 }
 
 impl Reports {
-    /// Leaves `report` for the loop and wakes it.
     fn push(&mut self, report: Report) {
         lock(&self.pending).push(report);
         self.wake.raise();
@@ -668,14 +521,9 @@ impl Deltas for Reports {
 }
 
 impl Turns for Reports {
-    /// A turn ended and asked for calls, so the run's next ask is the news a status bar
-    /// wants: the count it carries moves on, and the frame says so by drawing the answer the
-    /// turn left (§14).
-    ///
-    /// A turn that asked for no call ended the run, and the stop reason is the word a
-    /// terminal is owed: "asking the model in turn 2" would be a status about a turn this run
-    /// will never start. The calls themselves are run inside the turn, so the one state that
-    /// cannot be said from here is `blocked` (see `Told::Waiting`).
+    /// A turn that asked for calls keeps the run going, so the count a status bar wants moves on; a
+    /// turn that asked for none ended the run, and the stop reason is the word a terminal is owed,
+    /// since "asking the model" would be a status about a turn this run will never start.
     fn turn(&mut self, ended: &Exchange) {
         if !ended.calls.is_empty() {
             self.push(Report::Told(Told::Asking {
@@ -693,14 +541,9 @@ impl Turns for Reports {
     }
 }
 
-/// Takes everything the run in flight has left and puts it on the frame, and says whether the
-/// run has ended.
-///
-/// A run that ended is a composer that is idle again — so the next `Ctrl-C` is the key that
-/// clears the draft and not one that cancels nothing (§12) — and a thread that is joined
-/// rather than left for the process to exit under. What the last turn said stays on the frame
-/// as the live entry until the next run starts: the record is where a settled turn is kept,
-/// and putting its entries on the frame is the transcript's (ADR-0007, ADR-0008).
+/// Takes everything the run left and puts it on the frame, and says whether the run ended. A run
+/// that ended leaves the composer idle, so the next `Ctrl-C` clears the draft instead of
+/// cancelling nothing, and its thread is joined rather than left for the process to exit under.
 fn take(
     canvas: &mut Canvas<'_>,
     view: &mut View,
@@ -741,8 +584,7 @@ fn take(
         }
     }
     if let Some((ref stop, elapsed_ms, turns)) = stopped {
-        // Said at once, whatever the pace would say about a turn: a stop reason is a change
-        // of state.
+        // Said at once, whatever the pace says about a turn: a stop reason is a change of state.
         telling.say(Told::Stopped {
             turn: turns,
             stop: stop.clone(),
@@ -762,15 +604,8 @@ fn take(
     Ok(stopped.is_some())
 }
 
-/// Answers one event, and says whether the launch ends there: the one place an event becomes
-/// a repaint, a run, or an exit.
-///
-/// Which key means what is not decided here. The mode stack decides that — one row of one
-/// table per mode — and this function is left with what the terminal does about the outcome
-/// it is handed: paint the frame, start the run a prompt asks for, cancel the run in
-/// flight, write the words an `OSC` 52 carries to the terminal, or give the screen back. A
-/// new key is a row in a table, and a new screen is a mode, with no arm added to this
-/// function for either.
+/// Answers one event, and says whether the launch ends there: the one place an event becomes a
+/// repaint, a run or an exit. Which key means what is the mode stack's decision, not this one's.
 #[allow(
     clippy::too_many_arguments,
     reason = "the one seam #43, #48, #50 and #56 each hand their value through"
@@ -789,8 +624,8 @@ fn answer(
     telling: &mut Teller<File>,
 ) -> io::Result<Option<Ending>> {
     let key = match event {
-        // A paste is one edit and never a key, so nothing inside one can send: the
-        // composer is handed the whole text with its line breaks in it.
+        // A paste is one edit and never a key, so nothing inside one can send: the composer is
+        // handed the whole text with its line breaks in it.
         Event::Paste(text) => {
             view.paste(&text);
             paint(canvas, view)?;
@@ -804,8 +639,8 @@ fn answer(
             paint(canvas, view)?;
             Ok(None)
         }
-        // The flag an outside `SIGINT` sets too: the keyboard and the signal are one path, and
-        // the run cannot tell them apart.
+        // The flag an outside `SIGINT` sets too: the keyboard and the signal are one path, and the
+        // run cannot tell them apart.
         Outcome::Cancel => {
             if let Some(flight) = running {
                 flight.cancel();
@@ -817,15 +652,15 @@ fn answer(
             let sent = send(prompt, canvas, view, running, cli, config, wake, telling)?;
             Ok(sent)
         }
-        // The keys a reader touched go through the core's owner-only atomic save, and the
-        // launch's config is resolved again so the next prompt runs on what the visit left. A
-        // value the schema refuses comes back naming its key, with nothing written at all.
+        // The keys a reader touched go through the core's owner-only atomic save, and the launch's
+        // config is resolved again so the next prompt runs on what the visit left. A value the
+        // schema refuses comes back naming its key, with nothing written at all.
         Outcome::Save(touched) => {
             match persist(environment, &touched, cli.flags()) {
                 Ok(fresh) => {
                     *config = fresh;
-                    // The one switch, as the visit left it: a `status` key turned off here
-                    // stops the telling at the next report rather than at the next launch.
+                    // The one switch, as the visit left it: a `status` key turned off here stops
+                    // the telling at the next report rather than at the next launch.
                     telling.switch(config.tells_status());
                     view.saved();
                 }
@@ -834,15 +669,15 @@ fn answer(
             paint(canvas, view)?;
             Ok(None)
         }
-        // Written here because this module is the one that owns the tty, and nothing is
-        // repainted: a copy changes no cell of the frame.
+        // Written here because this module is the one that owns the tty, and nothing is repainted:
+        // a copy changes no cell of the frame.
         Outcome::Copy(words) => {
             tell(&terminal.screen, &crate::osc::copy(&words))?;
             Ok(None)
         }
-        // Written through the settings modal's own save — atomic, 0600, patching only the
-        // `model` key — and the config resolved again. A file that will not take it refuses the
-        // launch: a name silently not written is a silence this front end must not keep.
+        // Written through the settings modal's own save — atomic, 0600, patching only the `model`
+        // key — and the config resolved again. A file that will not take it refuses the launch: a
+        // name silently not written is a silence this front end must not keep.
         Outcome::Model(name) => {
             let mut touched = Touched::new();
             touched.set(MODEL, name);
@@ -858,8 +693,7 @@ fn answer(
                 )))),
             }
         }
-        // The frame holds no config, so the screen is seeded here, from the one the launch
-        // resolved.
+        // The frame holds no config, so the screen is seeded from the one the launch resolved.
         Outcome::Settings => {
             view.open_settings(config);
             paint(canvas, view)?;
@@ -874,39 +708,35 @@ fn answer(
     }
 }
 
-/// A wire being asked what it serves, on a thread of its own: `/model` opens its screen at
-/// once and the names land in the frame when they land, because a request takes as long as
-/// it takes and the loop owes a key its answer now (§10, §12).
+/// A wire being asked what it serves, on a thread of its own: `/model` opens its screen at once
+/// and the names land when they land, because the loop owes a key its answer now.
 struct Asking {
-    /// Where the listing lands, or `None` while the request is still out.
     landing: Arc<Mutex<Option<Listing>>>,
-    /// The thread that asked, joined once the answer is on the frame.
     thread: JoinHandle<()>,
 }
 
-/// Asks the wire the config names what it serves, and pings the loop through the pipe a
-/// signal uses when the answer is in: one more fd the loop waits on, and no timer.
+/// Asks the wire the config names what it serves, and pings the loop through the pipe a signal
+/// uses when the answer is in: one more fd the loop waits on, and no timer.
 fn ask(config: &Config, wake: &Arc<Wake>) -> Option<Asking> {
     let config = config.clone();
     let landing = Arc::new(Mutex::new(None));
     let answer = Arc::clone(&landing);
     let wake = Arc::clone(wake);
     let thread = thread::spawn(move || {
-        // A launch with no wire is one `main` refused before the screen was taken, so the
-        // only answer this thread can leave is a listing.
+        // A launch with no wire is one `main` refused before the screen was taken, so the only
+        // answer this thread can leave is a listing.
         if let Some(listing) = crate::launch::served(&config) {
             *lock(&answer) = Some(listing);
             wake.raise();
         }
     });
-    // Joined by `served`, not here: nothing blocks, and what the frame paints now is the
-    // screen saying it is asking.
+    // Joined by `served`, not here: nothing blocks, and what the frame paints now is the screen
+    // saying it is asking.
     Some(Asking { landing, thread })
 }
 
-/// Puts the names a wire answered with on the frame, and drops the thread that asked them:
-/// the `/model` screen is painted once with the listing it was waiting for, the way a run's
-/// fragments are painted as they land (§10, §12).
+/// Puts the names a wire answered with on the frame, and drops the thread that asked them: the
+/// `/model` screen is painted once with the listing it was waiting for.
 fn served(canvas: &mut Canvas<'_>, view: &mut View, asking: &mut Option<Asking>) -> io::Result<()> {
     let landed = match asking.as_ref() {
         Some(flight) => lock(&flight.landing).take(),
@@ -923,12 +753,9 @@ fn served(canvas: &mut Canvas<'_>, view: &mut View, asking: &mut Option<Asking>)
     Ok(())
 }
 
-/// Starts the run a sent draft asks for, as a launch of its own and a thread of its own, and
-/// says whether the launch ends instead.
-///
-/// A launch that cannot run at all ends the launch rather than being drawn: a frame has no
-/// band for a refusal yet, and a screen that swallowed the reason nothing ran would be the one
-/// silence this front end must not keep (§15).
+/// Starts the run a sent draft asks for, on a thread of its own, and says whether the launch ends
+/// instead. A launch that cannot run at all ends the launch rather than being drawn: a screen that
+/// swallowed the reason nothing ran would be the one silence this front end must not keep.
 #[allow(
     clippy::too_many_arguments,
     reason = "the one seam a prompt starts a run through, and the teller it is announced to"
@@ -955,20 +782,17 @@ fn send(
     view.settle();
     view.set_state(State::Running);
     *running = Some(Running::start(launch, prompt, Arc::clone(wake)));
-    // The marker before the run has said anything: the first step of the cycle and no time on
-    // the clock yet, so the frame a prompt is sent from already says a run has begun.
+    // The marker before the run has said anything: the first step of the cycle and no time on the
+    // clock yet, so the frame a prompt is sent from already says a run has begun.
     view.set_pulse(Some(Pulse::live(0)));
     paint(canvas, view)?;
     telling.say(Told::Asking { turn: 1 })?;
     Ok(None)
 }
 
-/// Starts the next prompt the queue is holding, once the run before it has stopped: one
-/// prompt per stop, oldest first, which is what §12's "in order" means as a run.
-///
-/// A queue with nothing waiting starts nothing, and the launch goes back to waiting for a
-/// key. A launch that cannot run at all ends the launch here as it does from a key — the
-/// prompt is already out of the queue, and a reason nothing ran is still said.
+/// Starts the next prompt the queue is holding, once the run before it has stopped: one prompt
+/// per stop, oldest first. A launch that cannot run at all ends the launch here as it does from
+/// a key — the prompt is already out of the queue, and a reason nothing ran is still said.
 #[allow(
     clippy::too_many_arguments,
     reason = "the same seam `send` is, plus the prompt a run that stopped left queued"
@@ -988,48 +812,35 @@ fn resume(
     send(prompt, canvas, view, running, cli, config, wake, telling)
 }
 
-/// What the terminal sent, once the bytes that carry it are whole.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Event {
-    /// One key, however many bytes it took to say.
     Key(Key),
-    /// A pasted prompt: one edit, its line breaks kept, and no way to send it.
     Paste(String),
 }
 
-/// What reading one sequence out of the bytes came to: a whole event, a sequence that
-/// only changed what the next one means, or a sequence whose last bytes are still on
-/// their way.
 enum Step {
     Event(Event),
     Taken,
     Waiting,
 }
 
-/// `ESC`, the byte every sequence but a control one starts with.
 const ESCAPE: u8 = 0x1b;
 
-/// `ESC [ 2 0 1 ~`: the sequence that ends a bracketed paste, so everything before it is
-/// one paste.
+/// `ESC [ 2 0 1 ~`: the sequence that ends a bracketed paste, so all before it is one paste.
 const PASTE_END: &[u8] = b"\x1b[201~";
 
-/// The bytes a key arrives as, kept until the sequence they start is complete: a key is
-/// more than a byte (§17), and a terminal is free to send one in as many reads as it
-/// likes.
+/// The bytes a key arrives as, kept until the sequence they start is complete: a terminal is
+/// free to send one key in as many reads as it likes.
 struct Decoder {
-    /// Bytes read but not yet answered by an event.
     pending: Vec<u8>,
-    /// Whether the newest read was one byte, which is the only thing that tells the
-    /// `Enter` key from a paste's line break, and a bare `ESC` from the first byte of a
-    /// sequence: a burst of bytes is a paste or a sequence, and no keyboard puts two
-    /// keys in one read.
+    /// Whether the newest read was one byte, which is the only thing that tells the `Enter` key
+    /// from a paste's line break, and a bare `ESC` from the first byte of a sequence: no keyboard
+    /// puts two keys in one read.
     alone: bool,
-    /// Whether the bytes arriving now are a bracketed paste, up to `PASTE_END`.
     pasting: bool,
 }
 
 impl Decoder {
-    /// A decoder holding nothing: the state a launch's first read starts from.
     fn new() -> Decoder {
         Decoder {
             pending: Vec::new(),
@@ -1038,14 +849,11 @@ impl Decoder {
         }
     }
 
-    /// Hands over the bytes of one read, as `read` gave them up.
     fn push(&mut self, bytes: &[u8]) {
         self.pending.extend_from_slice(bytes);
         self.alone = bytes.len() == 1;
     }
 
-    /// The next event the bytes hold, or nothing when the sequence at their front is
-    /// still incomplete — whatever it holds stays pending for the next read.
     fn next(&mut self) -> Option<Event> {
         loop {
             let step = if self.pasting {
@@ -1061,14 +869,13 @@ impl Decoder {
         }
     }
 
-    /// The next key the bytes hold, one byte or one sequence at a time.
     fn one(&mut self) -> Step {
         let Some(&byte) = self.pending.first() else {
             return Step::Waiting;
         };
         // An `ESC` that arrived alone is the Esc key: a sequence that opens with it brings the
-        // bytes saying which, and waiting for one a keyboard may never send is a screen nobody
-        // can close.
+        // bytes saying which, and waiting for one a keyboard may never send is a screen nobody can
+        // close.
         if byte == ESCAPE && self.pending.len() == 1 && self.alone {
             self.take(1);
             return Step::Event(Event::Key(Key::Escape));
@@ -1078,8 +885,8 @@ impl Decoder {
         }
         if byte >= 0x80 {
             if byte < 0xc0 {
-                // A byte that starts no glyph: nothing types one, and a decoder that
-                // waited on it would never answer the key behind it.
+                // A byte that starts no glyph: nothing types one, and a decoder that waited on it
+                // would never answer the key behind it.
                 self.take(1);
                 return Step::Taken;
             }
@@ -1093,10 +900,9 @@ impl Decoder {
             0x03 => Key::Cancel,
             0x15 => Key::Clear,
             0x18 => Key::Drop,
-            // `Tab` is the byte raw mode leaves of it; `Shift+Tab` is the `ESC [ Z` below.
             b'\t' => Key::Tab,
-            // `Ctrl-Q`, which is why flow control has to be off: a terminal left with
-            // `IXON` eats this byte instead of sending it.
+            // `Ctrl-Q`, which is why flow control has to be off: a terminal left with `IXON` eats
+            // this byte instead of sending it.
             0x11 => Key::Quit,
             0x19 => Key::Copy,
             0x7f | 0x08 => Key::Backspace,
@@ -1104,9 +910,9 @@ impl Decoder {
             // sending one, and `Enter` is the carriage return below.
             b'\n' => Key::Newline,
             b'\r' if self.alone => Key::Enter,
-            // A carriage return that came with more of its burst, before or after it, is
-            // a paste's line break: a clipboard's newline reaches a terminal as the byte
-            // its Enter key would send, and no line break in a paste may send.
+            // A carriage return that came with more of its burst, before or after it, is a paste's
+            // line break: a clipboard's newline reaches a terminal as the byte its Enter key would
+            // send, and no line break in a paste may send.
             b'\r' => Key::Newline,
             0x20..=0x7e => Key::Char(char::from(byte)),
             _ => return Step::Taken,
@@ -1114,15 +920,13 @@ impl Decoder {
         Step::Event(Event::Key(key))
     }
 
-    /// One escape sequence off the front of the bytes: the keys §17's protocol and the
-    /// arrows spell, and the sequence that opens a bracketed paste.
     fn escape(&mut self) -> Step {
         match self.pending.get(1) {
             None => Step::Waiting,
             Some(b'[') => self.control(),
             Some(b'O') => {
-                // The older single-shift arrows: `ESC O A` is the up arrow under a terminal
-                // that does not speak the protocol.
+                // The older single-shift arrows: `ESC O A` is the up arrow under a terminal that
+                // does not speak the protocol.
                 let Some(&last) = self.pending.get(2) else {
                     return Step::Waiting;
                 };
@@ -1140,8 +944,6 @@ impl Decoder {
         }
     }
 
-    /// A control sequence, `ESC [ …`, answered at its final byte — which is how a key of
-    /// more than one byte is read whole whatever the terminal split it into.
     fn control(&mut self) -> Step {
         let Some(last_at) = self.pending[2..]
             .iter()
@@ -1162,8 +964,8 @@ impl Decoder {
             (b'B', _) => Step::Event(Event::Key(Key::Down)),
             (b'C', _) => Step::Event(Event::Key(Key::Right)),
             (b'D', _) => Step::Event(Event::Key(Key::Left)),
-            // `Shift+Tab` is `CSI Z` on every terminal, and `CSI 1;2Z` under one that
-            // says which modifier it held.
+            // `Shift+Tab` is `CSI Z` on every terminal, and `CSI 1;2Z` under one that says which
+            // modifier it held.
             (b'Z', _) => Step::Event(Event::Key(Key::BackTab)),
             (b'H', _) | (b'~', "1") | (b'~', "7") => Step::Event(Event::Key(Key::Home)),
             (b'F', _) | (b'~', "4") | (b'~', "8") => Step::Event(Event::Key(Key::End)),
@@ -1179,9 +981,9 @@ impl Decoder {
         }
     }
 
-    /// The bracketed paste that is arriving: everything up to the sequence that ends it,
-    /// as one edit. Until that sequence lands there is no event at all, which is what
-    /// makes a line break inside a paste unable to send it.
+    /// The bracketed paste that is arriving: everything up to the sequence that ends it, as one
+    /// edit. Until that sequence lands there is no event at all, which is what makes a line break
+    /// inside a paste unable to send it.
     fn pasted(&mut self) -> Step {
         let Some(end) = find(&self.pending, PASTE_END) else {
             return Step::Waiting;
@@ -1192,9 +994,9 @@ impl Decoder {
         Step::Event(Event::Paste(text))
     }
 
-    /// One glyph off the front of the bytes, or nothing while its last bytes are still
-    /// on their way: a paste in a language this keyboard is not in arrives a read at a
-    /// time, and half a glyph is not a glyph.
+    /// One glyph off the front of the bytes, or nothing while its last bytes are still on their
+    /// way: a paste in a language this keyboard is not in arrives a read at a time, and half a
+    /// glyph is not a glyph.
     fn glyph(&mut self) -> Option<char> {
         let width = match self.pending.first() {
             Some(0xc0..=0xdf) => 2,
@@ -1212,16 +1014,14 @@ impl Decoder {
         glyph
     }
 
-    /// Drops `count` bytes off the front of what is pending.
     fn take(&mut self, count: usize) {
         self.pending.drain(..count);
     }
 }
 
-/// Whether a control sequence's parameters say the shift key was held: the modifiers are
-/// the last field, one more than a mask of shift, alt, ctrl and super.
+/// Whether a control sequence's parameters say the shift key was held: the modifiers are the
+/// last field, one more than a mask of shift, alt, ctrl and super.
 fn shifted(params: &str) -> bool {
-    /// The bit that says shift was held, in the protocol's modifier mask.
     const SHIFT: u32 = 1;
 
     let modifiers = params.rsplit(';').next().unwrap_or_default();
@@ -1231,7 +1031,6 @@ fn shifted(params: &str) -> bool {
         .is_ok_and(|held| held.saturating_sub(1) & SHIFT != 0)
 }
 
-/// The key an arrow's final byte names, from either spelling of the arrows.
 fn arrow(last: u8) -> Option<Key> {
     match last {
         b'A' => Some(Key::Up),
@@ -1242,14 +1041,11 @@ fn arrow(last: u8) -> Option<Key> {
     }
 }
 
-/// The key a kitty-protocol report names: `CSI <code> ; <modifiers> u`, where the
-/// modifiers are one more than a mask of shift, alt, ctrl and super. Only the reports
-/// this frame's map needs are answered — the `Enter` that sends and the two that break a
-/// line — because a key nobody answers is not a key.
+/// The key a kitty-protocol report names: `CSI <code> ; <modifiers> u`. Only the reports this
+/// frame's map needs are answered — the `Enter` that sends and the two that break a line —
+/// because a key nobody answers is not a key.
 fn reported(params: &str) -> Option<Key> {
-    /// The bit that says shift was held, in the protocol's modifier mask.
     const SHIFT: u32 = 1;
-    /// The bit that says ctrl was held.
     const CTRL: u32 = 4;
 
     let (code, modifiers) = params.split_once(';').unwrap_or((params, "1"));
@@ -1266,42 +1062,36 @@ fn reported(params: &str) -> Option<Key> {
     }
 }
 
-/// Where `needle` first appears in `bytes`, which is how a bracketed paste finds the
-/// sequence that ends it.
 fn find(bytes: &[u8], needle: &[u8]) -> Option<usize> {
     bytes
         .windows(needle.len())
         .position(|window| window == needle)
 }
 
-/// What the terminal is to be given back as: the state raw mode replaced and the two
-/// fds it is put back through, held where a panic hook can reach them, because an
-/// unwinding path runs no guard this module owns.
+/// What the terminal is to be given back as: the state raw mode replaced and the two fds it is
+/// put back through, held where a panic hook can reach them, because an unwinding path runs no
+/// guard this module owns.
 static GIVE_BACK: Mutex<Option<Restore>> = Mutex::new(None);
 
-/// The state to put back, and the terminal it goes to.
 struct Restore {
-    /// The terminal's input side, whose termios raw mode changed.
     keys: File,
-    /// The terminal's output side, where the alternate screen was taken.
     screen: File,
-    /// The terminal's state before raw mode.
     saved: Termios,
 }
 
 impl Restore {
-    /// Puts the terminal back: the screen is left first, so nothing that follows —
-    /// a panic message included — is drawn on a screen that is about to be somebody
-    /// else's, and then the state raw mode replaced is restored.
+    /// Puts the terminal back: the screen is left first, so nothing that follows — a panic message
+    /// included — is drawn on a screen that is about to be somebody else's, and then the state raw
+    /// mode replaced is restored.
     fn put_back(self) {
         let _ = tell(&self.screen, GIVE_BACK_SCREEN);
         let _ = tcsetattr(&self.keys, OptionalActions::Now, &self.saved);
     }
 }
 
-/// Gives the terminal back, exactly once, whichever of the guard and the panic hook
-/// asks first: the state is taken out of the static, so the second ask finds nothing
-/// and a shell is never handed a half-restored terminal twice.
+/// Gives the terminal back, exactly once, whichever of the guard and the panic hook asks first:
+/// the state is taken out of the static, so the second ask finds nothing and a shell is never
+/// handed a half-restored terminal twice.
 fn give_back() {
     let taken = lock(&GIVE_BACK).take();
     if let Some(restore) = taken {
@@ -1309,22 +1099,19 @@ fn give_back() {
     }
 }
 
-/// A panic hook, in the shape `std::panic` hands out and takes back: what the hook
-/// this module installs keeps of the one it replaced, so a panic still gets reported.
+/// A panic hook, in the shape `std::panic` hands out and takes back: what the hook this module
+/// installs keeps of the one it replaced, so a panic still gets reported.
 type Hook = Box<dyn Fn(&PanicHookInfo<'_>) + Send + Sync>;
 
-/// Installs, once, the hook that gives the terminal back when a panic unwinds past
-/// the guard: a terminal left raw and blank is a shell nobody can type in, and an
-/// unwinding path runs no guard at all.
+/// Installs, once, the hook that gives the terminal back when a panic unwinds past the guard: a
+/// terminal left raw and blank is a shell nobody can type in.
 fn guard_panics() {
-    /// Whether this process has a hook of this module's yet.
     static INSTALLED: Once = Once::new();
-    /// The hook this one replaced, which is still what reports a panic.
     static REPLACED: OnceLock<Hook> = OnceLock::new();
 
     INSTALLED.call_once(|| {
-        // The replaced hook is called rather than dropped: a terminal given back is no reason
-        // for a panic to go unreported.
+        // The replaced hook is called rather than dropped: a terminal given back is no reason for a
+        // panic to go unreported.
         let _ = REPLACED.set(panic::take_hook());
         panic::set_hook(Box::new(|raised| {
             give_back();
@@ -1335,13 +1122,9 @@ fn guard_panics() {
     });
 }
 
-/// The pixel size of one cell, as this launch's terminal reports it, and the bytes the
-/// terminal sent that were not the answer and are therefore a reader's keys (§12, ADR-0003).
-///
-/// Three answers, in the order of what they cost. The kernel's own `winsize` carries the
-/// window's pixels on a terminal that fills it, and costs no round trip at all. `CSI 16 t` is
-/// one write and one bounded wait, for the terminals that do not fill it. And a terminal that
-/// will not say is drawn at the nominal cell rather than holding the launch open.
+/// The pixel size of one cell, as this launch's terminal reports it, and the bytes that were not
+/// the answer and are therefore a reader's keys. Three answers, cheapest first: `winsize`, then
+/// `CSI 16 t`, then the nominal cell rather than a launch held open.
 fn probed_cell(terminal: &Terminal) -> (CellSize, Vec<u8>) {
     if let Some(cell) = tcgetwinsize(&terminal.screen).ok().and_then(of_winsize) {
         return (cell, Vec::new());
@@ -1364,9 +1147,8 @@ fn probed_cell(terminal: &Terminal) -> (CellSize, Vec<u8>) {
     (cell.unwrap_or(CellSize::NOMINAL), typed)
 }
 
-/// The cell size a terminal's own `winsize` implies, when it carries pixels: the window's
-/// pixels over the cells it holds. A terminal that reports no pixels, or fewer pixels than it
-/// has cells, has not said, and `None` says so.
+/// The cell size a terminal's own `winsize` implies, when it carries pixels. A terminal that
+/// reports no pixels, or fewer pixels than it has cells, has not said, and `None` says so.
 fn of_winsize(size: Winsize) -> Option<CellSize> {
     let (cols, rows) = (size.ws_col, size.ws_row);
     let (xpixel, ypixel) = (size.ws_xpixel, size.ws_ypixel);
@@ -1379,8 +1161,8 @@ fn of_winsize(size: Winsize) -> Option<CellSize> {
     ))
 }
 
-/// The cell size a terminal's answer carries, read off the bytes it sent, beside the bytes
-/// that were not that answer — a key typed while the launch waited is a key, not a reply.
+/// The cell size a terminal's answer carries, beside the bytes that were not that answer — a key
+/// typed while the launch waited is a key, not a reply.
 fn cell_reply(bytes: &[u8]) -> (Option<CellSize>, Vec<u8>) {
     let mut cell = None;
     let mut typed = Vec::with_capacity(bytes.len());
@@ -1399,7 +1181,6 @@ fn cell_reply(bytes: &[u8]) -> (Option<CellSize>, Vec<u8>) {
     (cell, typed)
 }
 
-/// A `CSI 6 ; height ; width t` answer at the front of `bytes`, and how many bytes it took.
 fn cell_at(bytes: &[u8]) -> Option<(usize, CellSize)> {
     const OPENING: &[u8] = b"\x1b[6;";
     let params = bytes.strip_prefix(OPENING)?;
@@ -1411,27 +1192,25 @@ fn cell_at(bytes: &[u8]) -> Option<(usize, CellSize)> {
     ))
 }
 
-/// Writes a sequence out and flushes it: a frame that sat in a buffer is a frame
-/// nobody saw, and a screen given back only at exit is a terminal left blank when
-/// the process dies.
+/// Writes a sequence out and flushes it: a frame that sat in a buffer is a frame nobody saw, and
+/// a screen given back only at exit is a terminal left blank when the process dies.
 fn tell(out: &File, sequence: &[u8]) -> io::Result<()> {
     let mut out = out;
     out.write_all(sequence)?;
     out.flush()
 }
 
-/// A lock held for the length of one statement: a panic hook that blocked on a
-/// poisoned lock would nest the panic it was called to clean up after.
+/// A lock held for the length of one statement: a panic hook that blocked on a poisoned lock
+/// would nest the panic it was called to clean up after.
 fn lock<T>(held: &Mutex<T>) -> MutexGuard<'_, T> {
     held.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 #[cfg(test)]
 mod tests {
-    //! The one contract an integration test cannot reach from outside the process: a
-    //! panic unwinds past no guard this module owns, so the hook is proved here, on a
-    //! pseudo-terminal of this process's own, where a panic can be raised and caught
-    //! on purpose and the terminal's state read back afterwards.
+    //! The one contract an integration test cannot reach from outside the process: a panic unwinds
+    //! past no guard this module owns, so the hook is proved here, on a pseudo-terminal of this
+    //! process's own, where a panic can be raised and caught and the terminal's state read back.
 
     use std::panic;
     use std::path::PathBuf;
@@ -1446,18 +1225,12 @@ mod tests {
 
     use super::*;
 
-    /// A pseudo-terminal the test holds both ends of: the slave stands in for both
-    /// standard streams a launch would be handed, and the master is where the
-    /// sequences a launch writes come back.
     struct Pty {
-        /// The end nobody in the program reads, where what it drew lands.
         master: File,
-        /// The end the program takes as its terminal.
         slave: File,
     }
 
     impl Pty {
-        /// A fresh pseudo-terminal, nobody's controlling terminal.
         fn open() -> Pty {
             let master = openpt(OpenptFlags::RDWR | OpenptFlags::NOCTTY).expect("a pseudoterminal");
             grantpt(&master).expect("the slave is granted");
@@ -1472,7 +1245,6 @@ mod tests {
             }
         }
 
-        /// Everything written to the terminal since the last read of it.
         fn drawn(&mut self) -> String {
             let mut drawn = [0u8; 4096];
             let mut master = &self.master;
@@ -1480,7 +1252,6 @@ mod tests {
             String::from_utf8_lossy(&drawn[..count]).into_owned()
         }
 
-        /// The size this terminal reports, cells and pixels both.
         fn resize(&self, cols: u16, rows: u16, xpixel: u16, ypixel: u16) {
             tcsetwinsize(
                 &self.slave,
@@ -1495,30 +1266,25 @@ mod tests {
         }
 
         /// Whether the launch has written nothing at all: a master with no byte waiting is a
-        /// terminal nobody spoke to, and asking that question must not block the way a read
-        /// would.
+        /// terminal nobody spoke to, and asking that question must not block the way a read would.
         fn silent(&mut self) -> bool {
             let mut fds = [PollFd::new(&self.master, PollFlags::IN)];
             let wait = Timespec::try_from(Duration::from_millis(20)).expect("a span");
             poll(&mut fds, Some(&wait)).is_ok() && !fds[0].revents().contains(PollFlags::IN)
         }
 
-        /// The terminal's state, as the program left it.
         fn attrs(&self) -> Termios {
             tcgetattr(&self.slave).expect("the terminal's state")
         }
     }
 
-    /// The size a test's frame is painted at: a pseudo-terminal holds no size of its own until
-    /// one is set, and a canvas that asks for one instead of being told would put a question to
-    /// the environment that the test already has the answer to.
     fn painted_at() -> ratatui::layout::Rect {
         ratatui::layout::Rect::new(0, 0, 80, 24)
     }
 
     /// A canvas a test paints through is the shape the test gave it, not the shape the terminal
-    /// reports: the size is an argument, so no `/dev/tty` is opened and no `tput` is spawned to
-    /// answer a question a pseudo-terminal was never going to answer anyway (§16).
+    /// reports: no `/dev/tty` is opened and no `tput` is spawned to answer a question a
+    /// pseudo-terminal was never going to answer anyway.
     #[test]
     fn a_canvas_told_its_size_is_the_shape_it_was_told() {
         let pty = Pty::open();
@@ -1539,8 +1305,8 @@ mod tests {
         );
     }
 
-    /// ADR-0003's cheap half: a terminal that fills its `winsize`'s pixel fields is asked
-    /// nothing, because the kernel's own answer is the whole of what a picture needs.
+    /// A terminal that fills its `winsize`'s pixel fields is asked nothing, because the kernel's
+    /// own answer is the whole of what a picture needs.
     #[test]
     fn a_terminal_that_reports_its_pixels_is_asked_no_question() {
         let mut pty = Pty::open();
@@ -1562,10 +1328,9 @@ mod tests {
         );
     }
 
-    /// ADR-0003's amendment at the one place the environment is turned into a frame: the two
-    /// facts the terminal gives reach the view, so a terminal that speaks Kitty is handed the
-    /// pictures its frames draw from and one that speaks no protocol is handed none — the
-    /// frame it paints is the words of a picture, whole (§12).
+    /// The two facts the terminal gives reach the view, so a terminal that speaks Kitty is handed
+    /// the pictures its frames draw from and one that speaks no protocol is handed none — the frame
+    /// it paints is the words of a picture, whole.
     #[test]
     fn a_terminal_that_speaks_kitty_is_handed_pictures_and_one_that_speaks_none_is_handed_none() {
         let cell = CellSize::new(10, 20);
@@ -1587,8 +1352,6 @@ mod tests {
         );
     }
 
-    /// The other answer: a terminal that reports no pixels is asked, and one that says
-    /// nothing is drawn at the nominal cell rather than holding the launch open.
     #[test]
     fn a_terminal_that_answers_nothing_is_drawn_at_the_nominal_cell() {
         let mut pty = Pty::open();
@@ -1610,8 +1373,6 @@ mod tests {
         );
     }
 
-    /// And the answer, read for what it says: `CSI 6 ; height ; width t`, with whatever a
-    /// reader typed while the launch waited kept beside it rather than swallowed.
     #[test]
     fn the_answer_is_read_off_the_bytes_the_terminal_sent_and_the_keys_beside_it_kept() {
         let (cell, typed) = cell_reply(b"a\x1b[6;18;9tb");
@@ -1665,8 +1426,8 @@ mod tests {
             "the alternate screen was given back while the guard was still alive: {drawn:?}"
         );
 
-        // The guard is dropped after the panic has already been cleaned up after, and
-        // a terminal handed back twice is a shell with its state overwritten.
+        // The guard is dropped after the panic has already been cleaned up after, and a terminal
+        // handed back twice is a shell with its state overwritten.
         drop(screen);
         assert_eq!(
             pty.attrs().input_modes.bits(),
@@ -1689,14 +1450,12 @@ mod tests {
             Scroll::Tail,
         );
 
-        // No mark, so `Ctrl-Y` copies the last answer: the words go down the wire the frame
-        // does, which is what makes a copy work over SSH.
+        // No mark, so `Ctrl-Y` copies the last answer: the words go down the wire the frame does,
+        // which is what makes a copy work over SSH.
         let cli = Cli::parse_from(["sindri"]);
         let mut config = sindri_core::config::Config::default();
         let environment = std::collections::BTreeMap::new();
         let wake = Arc::new(Wake::open().expect("a wake"));
-        // A teller on the frame's own terminal, which writes nothing: neither key here is a
-        // report.
         let mut telling = Teller::new(
             pty.slave
                 .try_clone()
@@ -1730,8 +1489,6 @@ mod tests {
         );
     }
 
-    /// The config home a settings test writes into: one `config.toml` a person left with a
-    /// comment and a model in it, and the environment that points at it.
     fn config_home(
         text: &str,
     ) -> (
@@ -1751,7 +1508,6 @@ mod tests {
         (home, environment)
     }
 
-    /// The row a settings screen's keys act on, as a reader walks to it.
     fn walk_to(view: &mut View, key: &str) {
         for _ in 0..sindri_core::config::Config::KEYS.len() {
             let row = view
@@ -1780,8 +1536,6 @@ mod tests {
         let mut view = View::boot();
         view.open_settings(&config);
         let wake = Arc::new(Wake::open().expect("a wake"));
-        // A teller on the frame's own terminal; neither key here is a report, so it writes
-        // nothing.
         let mut telling = Teller::new(
             pty.slave
                 .try_clone()
@@ -1833,14 +1587,12 @@ mod tests {
     }
 
     mod decoding {
-        //! The bytes a terminal really sends, read as the keys the composer's map
-        //! answers: a sequence that arrives in pieces, a paste that arrives as a burst,
-        //! and the bracketed paste §17's protocol wraps one in — none of them guessed at.
+        //! The bytes a terminal really sends, read as the keys the composer's map answers:
+        //! a sequence that arrives in pieces, a paste that arrives as a burst, and the
+        //! bracketed paste one is wrapped in.
 
         use super::super::*;
 
-        /// Every event the decoder answers for the bytes, pushed the way `read` hands
-        /// them over: one chunk at a time.
         fn events(chunks: &[&[u8]]) -> Vec<Event> {
             let mut decoder = Decoder::new();
             let mut events = Vec::new();
@@ -1853,7 +1605,6 @@ mod tests {
             events
         }
 
-        /// The one event the bytes come to, or a failure naming what came instead.
         fn event(bytes: &[u8]) -> Event {
             let mut all = events(&[bytes]);
             assert_eq!(
@@ -1864,7 +1615,6 @@ mod tests {
             all.pop().expect("the event")
         }
 
-        /// A key, as the event that carries it.
         fn key(key: Key) -> Event {
             Event::Key(key)
         }
