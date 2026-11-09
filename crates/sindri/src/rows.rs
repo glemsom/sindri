@@ -1,64 +1,6 @@
-//! The transcript's rows: one entry of the core's records laid out as the rows it is
-//! drawn as, each row a run of glyphs in one ink, kept in a cache beside the width it
-//! was laid out at (ADR-0008). Rendering lives in this front end and not in the core
-//! because an entry is a fact and never a rendering (ADR-0007), and because the core
-//! may not name a terminal at all (ADR-0005).
-//!
-//! The unit is the entry. A [`Rows`] holds every entry it was handed, each with the
-//! rows it was laid out as or with nothing when this cache has never laid it out, so a
-//! height is free once an entry has been seen, a streaming tick that changes one entry
-//! re-lays that entry alone, and a width change drops what the cache held and reflows
-//! on the next paint — once, because a paint lays an entry out to draw it and then
-//! keeps the answer.
-//!
-//! The turn in flight is the exception that proves the rule: a [`Stream`] is no fact
-//! (ADR-0007), so [`Rows::live`] hands the cache the rows it is drawn as right now and
-//! the cache holds them as its last entry — the live one — laid out again from the stream
-//! whenever a fragment has landed and never laid out from an entry, because there is no
-//! entry yet. A fact landing retires it, so what a turn said is drawn from the entries it
-//! settled into and is never on the screen twice.
-//!
-//! What a band of rows shows is [`Rows::window`]: the entries it intersects, with how
-//! much of each is inside it. The window is measured from the tail backwards, so
-//! following the newest row never asks how tall the history is — it lays out the
-//! entries it shows and stops at the first row that fills the band, which is §12's
-//! rule that only on-screen rows are laid out.
-//!
-//! What that buys is the plain case and what it costs is the scrolled one, and the
-//! decision is this: a window is a row offset from the tail, so resolving one walks
-//! the entries between the tail and the window and lays out every one of them on the
-//! way. Each is laid out once and kept, so the whole history scrolled through costs
-//! one layout per entry and scrolling it again costs none — but a reader who jumps a
-//! long way back through a history this process has never drawn pays for what they
-//! jumped over. Heights come from the cache when it has them and from a layout when it
-//! does not, and nothing asks for all of them: [`Rows::height`] is the one door to
-//! measuring a whole transcript, it lays out every entry the cache has never seen, and
-//! #50's marking and `↓ 4 new rows` are what will spend it. The window never does.
-//!
-//! An answer and a thought are the two things the model says, and each is drawn in its
-//! own gutter and its own ink (§4): an answer from the two blank columns that #39's pulse
-//! will sit in, and a thought inside the hairline rule that says it was said to the
-//! side. Markdown is #52's, and it replaces the plain rendering below; the one rule
-//! that outlives it is ADR-0008's — a fenced block is drawn as code until its closing
-//! fence arrives, so a fence still streaming is a code block and never prose that ate
-//! the rest of the answer.
-//!
-//! `Call` and `Result` rows are deliberately plain here. What a tool row says — `✓ exit
-//! 0`, `✗ exit N`, `✗ timed out`, `✗ cancelled` — and the faded ink §12 paints tool
-//! calls in are ticket #40's contract: it changes these two shapes and their golden
-//! frame in the same commit, and nothing else has to move with it.
-//!
-//! A call is one row. It opens naming the call in the faded ink §12 paints tool calls
-//! in, and it settles saying what happened to it — `✓ exit 0`, `✗ exit N`, `✗ timed out`,
-//! `✗ cancelled` — the check or the cross in `ok`/`err` and the call's name beside it.
-//! The verdict is a fact the core carries (ADR-0007), never a sentence this file reads
-//! back out of the text, so the picture cannot say a call succeeded because the words
-//! under it happened to begin with `exit 0`.
-//!
-//! The record keeps two entries, a call and its result, and the picture keeps one row:
-//! a result settles the row the call it answers opened rather than opening a line under
-//! it, which is why [`Rows::settle`] exists — the row is laid again, alone, and the
-//! history above and below it keeps what it was drawn as (ADR-0008).
+//! The rows an entry is drawn as, cached beside the width and the surface they were
+//! laid out at: either one changing drops them all, because a row's height is a fact
+//! about that measurement and about nothing else.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -72,54 +14,37 @@ use crate::picture::{self, Surface};
 use crate::pulse::Head;
 use crate::stream::Stream;
 
-/// How far a body sits inside the row that names it, and how far an answer is printed
-/// from the frame's left edge: one step, the step a past run is read back with too, so
-/// a call and what it answered read as one thing said in two rows rather than as two
-/// entries that happened to follow each other. An answer's own gutter is this margin
-/// held open and blank — the two columns the marker at the head of the newest answer
-/// takes the place of, on the one row it heads (#39).
+/// How far a body sits inside the row that names it, and the blank gutter an answer is
+/// printed from — the columns the newest answer's marker takes the place of.
 const INDENT: &str = "  ";
 
-/// The gutter a thought row opens with: a hairline down the left of the prose the run
-/// reasoned, so a thought reads as something said beside the answer and not as part of
-/// it (§12). Two columns wide, which is the margin an answer is set from, so the two
-/// kinds of row line up under each other.
+/// The hairline a thought opens with: two columns, the margin an answer is set from,
+/// so the two kinds of row line up.
 const THOUGHT: &str = "│ ";
 
-/// The glyph a call opens with, before anything has happened to it: a row that claims
-/// nothing and is drawn all the same, because a call in flight is a row of the
-/// transcript and not a gap in it.
+/// The glyph a call opens with, before anything has happened to it.
 const PENDING: char = '…';
 
-/// The glyph a call that finished well settles on, and the one a call that did not: the
-/// whole difference between §12's four states is this pair, the words beside them and
-/// the ink they are drawn in.
+/// The glyphs a settled call wears, well and otherwise.
 const CHECK: char = '✓';
 const CROSS: char = '✗';
 
-/// The glyph a turn opens with, repeated to the right edge: the transcript's own
-/// hairline, one column wide, so a long history reads as a ledger with dividers in it
-/// rather than as one wall of prose.
+/// The glyph a turn's divider fills the width with.
 const HAIRLINE: char = '─';
 
-/// One row of the transcript: the runs of glyphs it is made of, each in its own ink,
-/// and never wider than the width it was laid out at — bar the one glyph that is itself
-/// wider than that whole width, which a one-column band would meet and no layout can
-/// split.
+/// One row of the transcript: never wider than the width it was laid out at, bar the
+/// one glyph that is itself wider than that whole width and that no layout can split.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Row {
-    /// The runs of glyphs, left to right, each written in the look it was given.
     spans: Vec<(String, Look)>,
-    /// The picture this row stands on, when it is the first row of a block a picture is drawn
-    /// over: what the paint places, and the reason the row's own words are the ones a copy of
-    /// the block takes (§12, #55). A row of prose is no picture at all.
+    /// The picture this row stands on, when it is the first row of a block one is drawn
+    /// over: the placement goes to the terminal, the row's words are what a copy takes.
     picture: Option<picture::Picture>,
 }
 
 impl Row {
-    /// A row of `spans`, each run of glyphs drawn in its own ink. A run of no glyphs is
-    /// no run at all: it is dropped here, so a band too narrow to hold a gutter beside
-    /// one glyph of prose leaves no empty span behind for a reader to puzzle at.
+    /// A span of no glyphs is dropped here, so a band too narrow to hold a gutter beside
+    /// one glyph of prose leaves no empty span behind.
     pub fn of<V, I>(spans: I) -> Row
     where
         V: Into<Look>,
@@ -135,23 +60,15 @@ impl Row {
         }
     }
 
-    /// The same row with `picture` drawn over the block it stands on: what the first row of a
-    /// picture's block becomes once the picture has been measured, because the words are what
-    /// the block copies as and the placement is what the terminal reads (§12, #55).
     pub fn pictured_over(mut self, picture: picture::Picture) -> Row {
         self.picture = Some(picture);
         self
     }
 
-    /// The picture this row stands on, and nothing for a row of prose: what the band places
-    /// over the rows the block reserved, and what the copy reads the words of instead of the
-    /// bytes (§12, #55).
     pub fn picture(&self) -> Option<&picture::Picture> {
         self.picture.as_ref()
     }
 
-    /// A row that says nothing: the blank row two blocks of markdown stand apart by,
-    /// which is still a row of the transcript and not a gap in it.
     pub fn blank() -> Row {
         Row {
             spans: Vec::new(),
@@ -159,22 +76,15 @@ impl Row {
         }
     }
 
-    /// The columns this row takes when it is drawn.
     pub fn width(&self) -> u16 {
         let columns: usize = self.spans.iter().map(|(text, _)| glyphs(text)).sum();
         u16::try_from(columns).unwrap_or(u16::MAX)
     }
 
-    /// The runs of glyphs this row is made of, left to right, each with the ink it is
-    /// written in: what a caller reads a laid-out row back as — the words a picture
-    /// copies, the gutter a test holds a row to — without a second way to lay one out.
     pub fn spans(&self) -> &[(String, Look)] {
         &self.spans
     }
 
-    /// This row set one gutter further in: the margin an entry is printed from, which
-    /// a markdown row knows nothing of and the entry that asked for it knows the whole
-    /// of (§12's answer gutter). A row of nothing stays a row of nothing.
     pub fn indented(&self, gutter: &str, ink: Ink) -> Row {
         if self.spans.is_empty() {
             return self.clone();
@@ -188,15 +98,10 @@ impl Row {
         }
     }
 
-    /// The glyphs this row is made of, left to right, with no ink: the line a mark reads
-    /// the words it covers out of, and the cells a mark's columns are counted in (§12).
     pub fn glyphs(&self) -> String {
         self.spans.iter().map(|(text, _)| text.as_str()).collect()
     }
 
-    /// Draws this row across the top row of `area`, from its left edge and clipped at
-    /// its right one: a row is laid out at a width and drawn at that width or narrower,
-    /// so the band's right edge is where a row stops and never where it runs over.
     pub fn paint(&self, area: Rect, buffer: &mut Buffer) {
         let mut x = area.x;
         for (text, look) in &self.spans {
@@ -210,20 +115,10 @@ impl Row {
     }
 }
 
-/// One entry laid out at `cols` columns: the rows it is drawn as, which is the whole of
-/// what the cache holds for it.
-///
-/// Every variant is facts the entry carries and nothing it does not: the tool, the
-/// arguments as the wire wrote them, the words the model answered with. Markdown inside
-/// an answer is #38's, the pulse at the head of the newest one is #39's, and the tool
-/// row's own contract is #40's.
 pub fn layout(entry: &Entry, cols: u16) -> Vec<Row> {
     layout_on(entry, cols, &Surface::none())
 }
 
-/// The same entry laid out on a `surface`: where a picture's source is resolved, how big a
-/// cell is, and whether this terminal places one — the three facts that say how many rows an
-/// `src` in an answer takes (§12, #55).
 pub fn layout_on(entry: &Entry, cols: u16, surface: &Surface) -> Vec<Row> {
     let cols = cols.max(1);
     match entry {
@@ -251,9 +146,6 @@ pub fn layout_on(entry: &Entry, cols: u16, surface: &Surface) -> Vec<Row> {
     }
 }
 
-/// The rows a thought is drawn as: the prose the run reasoned, set inside the rule
-/// §12 gives reasoning and read in the ink secondary prose is read in, so what a run
-/// said to itself is legible as thinking and never mistaken for the answer.
 pub(crate) fn thought(text: &str, cols: u16) -> Vec<Row> {
     let (gutter, room) = margin(THOUGHT, cols);
     wrap(text, room)
@@ -262,27 +154,13 @@ pub(crate) fn thought(text: &str, cols: u16) -> Vec<Row> {
         .collect()
 }
 
-/// The rows an answer is drawn as on a `surface`: its markdown, laid out by [`markdown`] and
-/// set in the gutter an answer is printed from — its own margin held open and blank, because
-/// an answer is the thing being read and needs no rule beside it. The surface is where a
-/// picture's source is resolved, how big a cell is and whether this terminal places one, which
-/// are the three facts that say how many rows an `src` in the answer takes (§12, #55).
-///
-/// What the constructs look like is `markdown`'s, because the layout is the product and
-/// the ticket that wrote it (#52) owns all of it: a heading's weight, a table's rule, a
-/// code block's gutter and its highlighting. That moved ADR-0008's rule with the parse: a
-/// fence the wire has not closed yet ends the text with the block still open, and
-/// `markdown` draws it as the code block it is rather than as prose that ate the rest of
-/// the answer.
-///
-/// The one thing this file still does to the rows is set them in the answer's gutter, and
-/// on the one row the run's marker heads (#39) to stand the marker in that gutter instead:
-/// the mark is drawn from the frame's left edge and the words of that row begin after it,
-/// so the row the marker heads loses the columns the gutter held and no more.
+/// The rows an answer is drawn as, set in the answer's gutter — except the row the
+/// run's marker heads, which stands the marker in that gutter, so that row alone loses
+/// the columns the gutter held and no more.
 pub(crate) fn answer_on(text: &str, cols: u16, head: Option<&Head>, surface: &Surface) -> Vec<Row> {
     let (gutter, room) = margin(INDENT, cols);
-    // The blank column that keeps the marker from running into the prose is the marker's
-    // too; the gutter it stands in the place of is not.
+    // The marker's trailing blank column counts against the width; the gutter it stands
+    // in the place of does not.
     let reserve = match head {
         Some(head) => head
             .width()
@@ -308,12 +186,9 @@ pub(crate) fn answer_on(text: &str, cols: u16, head: Option<&Head>, surface: &Su
     laid
 }
 
-/// The gutter a body opens with at `cols`, and the columns its words have beside it.
-///
-/// The gutter is given up rather than the invariant: a band too narrow to hold the
-/// gutter and one glyph of prose is a band whose rows carry the prose alone, because a
-/// row laid out wider than the width it was laid out for is a row the paint would clip
-/// and whatever copies it would lose.
+/// The gutter a body opens with at `cols`, and the columns its words have beside it: a
+/// band too narrow to hold both the gutter and one glyph gives up the gutter, never the
+/// invariant that no row is laid out wider than the width it was laid out for.
 fn margin(gutter: &str, cols: u16) -> (&str, u16) {
     let width = u16::try_from(glyphs(gutter)).unwrap_or(cols);
     // Two columns, because that is the widest one glyph is: a margin that left less would
@@ -324,24 +199,15 @@ fn margin(gutter: &str, cols: u16) -> (&str, u16) {
     }
 }
 
-/// The row a call opens: the name in the faded ink a tool row is painted in, and the
-/// arguments one step in under it — so a call that has not settled yet names itself and
-/// claims nothing about how it will end.
 fn opening(name: &str, arguments: &str, cols: u16) -> Vec<Row> {
     let mut rows = vec![fitted(vec![(format!("{PENDING} {name}"), Ink::Dim)], cols)];
     rows.extend(body(arguments, cols));
     rows
 }
 
-/// The row a call settles into: what happened to it — the check or the cross in the ink
-/// a finished thing is read in, and its words faded beside it — the call's name, and the
-/// two numbers the run paid for it. §12's row says the exit code and not the command:
-/// what a finished call has to say is how it ended, and a reader who wants the command
-/// has the row above it, where the model asked for it.
-///
-/// A result with no verdict is a line a build wrote before the verdict was a fact
-/// (ADR-0007): the row says the name and the numbers and claims nothing it does not
-/// know, rather than guessing `✓ exit 0` from the text beside it.
+/// A result with no verdict is a line a build wrote before the verdict was a fact: the
+/// row says the name and the numbers rather than guessing `exit 0` from the text beside
+/// it.
 fn settled(
     name: &str,
     exit: Option<Exit>,
@@ -366,20 +232,16 @@ fn settled(
     rows
 }
 
-/// The glyph a verdict settles on: a check for the one that finished well, a cross for
-/// every other way a call can end.
 fn mark(exit: Exit) -> char {
     if exit.is_ok() { CHECK } else { CROSS }
 }
 
-/// The ink a verdict's glyph is drawn in. Two inks and four states: what tells `✗ exit N`
-/// from `✗ timed out` is the words, which are the record's own, and not a shade of red.
+/// Two inks for four states: the words tell `✗ exit N` from `✗ timed out`, never a
+/// shade of red.
 fn ink_of(exit: Exit) -> Ink {
     if exit.is_ok() { Ink::Ok } else { Ink::Err }
 }
 
-/// One row of `spans`, cut at `cols` columns: a row is laid out at a width and never runs
-/// over it, so the run of glyphs the width ends in is cut where the width ends.
 fn fitted(spans: Vec<(String, Ink)>, cols: u16) -> Row {
     let mut room = usize::from(cols.max(1));
     let mut kept = Vec::new();
@@ -397,8 +259,6 @@ fn fitted(spans: Vec<(String, Ink)>, cols: u16) -> Row {
     Row::of(kept)
 }
 
-/// `text` clipped to `room` columns: what a row keeps when what it says is one run of
-/// glyphs with no space in it to break, which a name and its numbers are.
 fn clip(text: &str, room: u16) -> String {
     if glyphs(text) <= usize::from(room) {
         return String::from(text);
@@ -406,9 +266,6 @@ fn clip(text: &str, room: u16) -> String {
     split_at(text, usize::from(room.max(1))).0
 }
 
-/// A body of text as the rows it is drawn as: the entry's own words, wrapped at what the
-/// step in from the left edge leaves of `cols`, and set one step in from the name that
-/// introduced them.
 fn body(text: &str, cols: u16) -> Vec<Row> {
     if text.is_empty() {
         return Vec::new();
@@ -420,8 +277,6 @@ fn body(text: &str, cols: u16) -> Vec<Row> {
         .collect()
 }
 
-/// The divider a turn opens with: the turn, clipped to the band when the band is
-/// narrower than the word, and the hairline filling what is left of the width.
 fn rule(lead: &str, cols: u16) -> Row {
     let lead = clip(lead, cols);
     let filled = usize::from(cols).saturating_sub(glyphs(&lead));
@@ -429,15 +284,10 @@ fn rule(lead: &str, cols: u16) -> Row {
     Row::of([(line, Ink::Dim)])
 }
 
-/// `text` broken into rows no wider than `cols`: words kept whole where they fit, a
-/// word longer than a row broken across rows, and every line break the text has kept,
-/// because the paragraphs of an answer are the writer's and not the layout's.
 fn wrap(text: &str, cols: u16) -> Vec<String> {
     wrap_under(text, cols, cols)
 }
 
-/// `text` broken into rows no wider than `room`, except that its first row is held to
-/// `first` — narrower when a marker heads it — and every row after it to `room`.
 fn wrap_under(text: &str, first: u16, room: u16) -> Vec<String> {
     let first = usize::from(first.max(1));
     let room = usize::from(room.max(1));
@@ -448,8 +298,6 @@ fn wrap_under(text: &str, first: u16, room: u16) -> Vec<String> {
         for word in line.split_whitespace() {
             let mut word = word;
             loop {
-                // The first row is the one a marker can stand on, so it alone is held to a
-                // narrower width than the rest.
                 let limit = if rows.is_empty() { first } else { room };
                 let gap = usize::from(!row.is_empty());
                 if width + gap + glyphs(word) <= limit {
@@ -480,11 +328,7 @@ fn wrap_under(text: &str, first: u16, room: u16) -> Vec<String> {
 }
 
 /// The longest head of `word` that fits in `room` columns, and what is left of it. A
-/// first glyph wider than the room is taken anyway: a row that carried nothing would
-/// break the word nowhere and forever.
-///
-/// `markdown` breaks a word with this too, so a row is measured by one measure and a
-/// word this file calls wide is wide to both.
+/// first glyph wider than the room is taken anyway, or the word would never be broken.
 pub(crate) fn split_at(word: &str, room: usize) -> (String, &str) {
     let mut width = 0;
     for (at, glyph) in word.char_indices() {
@@ -498,28 +342,20 @@ pub(crate) fn split_at(word: &str, room: usize) -> (String, &str) {
     (word.to_owned(), "")
 }
 
-/// The columns a run of glyphs takes: measured and never counted, because a glyph can
-/// be two cells wide and a row is a count of cells.
+/// The columns a run of glyphs takes, measured and never counted: a glyph can be two
+/// cells wide.
 pub(crate) fn glyphs(text: &str) -> usize {
     Span::raw(text).width()
 }
 
-/// Where the transcript's window sits: on the newest row, or holding still some rows
-/// above it while the run goes on below (§12).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Scroll {
-    /// Following the tail, so the newest row is on the band's last row and a fact that
-    /// lands moves the picture.
     #[default]
     Tail,
-    /// Held `rows` rows above the tail, which is where a reader who scrolled back is
-    /// standing and what `↓ 4 new rows` counts its arrivals from.
     Back(u32),
 }
 
 impl Scroll {
-    /// How many rows above the tail this position holds: what a window is measured in,
-    /// and the whole of what the two cases differ by.
     fn back(self) -> u32 {
         match self {
             Scroll::Tail => 0,
@@ -528,80 +364,48 @@ impl Scroll {
     }
 }
 
-/// Every entry a transcript holds, each with the rows it was laid out as, and the width
-/// those rows were laid out at.
-///
-/// A cache rather than a renderer: it is told the entries and the width, and it answers
-/// with rows. What paints them is `view`'s transcript band, so a second front end can
-/// spend the same layout and only the ink would differ.
+/// Every entry a transcript holds, each with the rows it was laid out as at one width,
+/// and nothing it was not drawn as.
 #[derive(Clone, Debug, Default)]
 pub struct Rows {
-    /// The width every laid-out row here was laid out for, and nothing until a frame
-    /// names one.
     cols: u16,
-    /// The entries, in order, each with its rows once they have been laid out.
     held: Vec<Held>,
-    /// How many times an entry has been laid out here, a re-layout after a width change
-    /// included: ADR-0008's three rules are statements about this number, so it is a
-    /// count a test can read rather than one a comment makes.
+    /// How many times an entry has been laid out here: a test reads it, and nothing else
+    /// does.
     lays: usize,
-    /// The surface a picture in an answer is measured against: how many rows a picture takes
-    /// is part of the rows an entry was laid out as, so a frame that changes any of those
-    /// facts drops what this cache holds the same way a width change does (§12, #55).
+    /// What a picture in an answer is measured against, which is part of the rows an entry
+    /// was laid out as.
     surface: Surface,
 }
 
-/// One entry and the rows it was laid out as, or nothing when this cache has never laid
-/// it out at the width it holds.
 #[derive(Clone, Debug)]
 struct Held {
-    /// What this entry is, which is the whole of the difference between a fact and the
-    /// turn the run is still writing.
     what: What,
-    /// What came back, when what this holds is a call whose result has landed: the fact that
-    /// settles the row the call opened. Kept rather than layered over the rows, so a
-    /// width change re-lays the settled row and not the one the call was drawn as while
-    /// it ran. A live entry has no result: nothing has settled a turn still in flight.
+    /// What came back, when this holds a call whose result has landed: kept rather than
+    /// layered over the rows, so a width change re-lays the settled row.
     result: Option<Entry>,
-    /// The rows it is drawn as, once they exist at this width.
     rows: Option<Vec<Row>>,
 }
 
-/// What one entry of the cache is: a fact the run wrote down, or the live entry of the
-/// turn in flight, which is no fact yet (ADR-0007) and which this cache can only lay out
-/// from the stream it is handed.
 #[derive(Clone, Debug)]
 enum What {
-    /// The fact, as the run wrote it: kept here so an entry and its rows cannot be told
-    /// apart by a caller handing in one where the other was expected.
     Fact(Entry),
-    /// The turn in flight, as the fragment count its rows were laid from and the marker
-    /// they wear at their head: laid out from the stream by [`Rows::live`] and by nothing
-    /// else, so the rows of a live entry are always the rows of the fragments that have
-    /// landed and of the mark the run's clock is at.
     Live {
-        /// How many fragments had landed when these rows were laid out.
         revision: u64,
-        /// The marker the newest answer wore, and nothing when the run was not live.
+        /// The marker the newest answer wore: laid into the rows it heads, so a change here
+        /// is a change to the picture.
         head: Option<Head>,
     },
 }
 
 impl Rows {
-    /// A cache that holds no entry and has laid nothing out: the width arrives with the
-    /// first frame, from the band the rows are drawn in.
     pub fn new() -> Rows {
         Rows::default()
     }
 
-    /// Holds one more entry, unlaid: a fact the run has just written, appended where
-    /// the run wrote it.
-    ///
-    /// A result does not open a row of its own — it settles the row the call it answers
-    /// opened, because one call is one row (§12) and a finished call is not a second
-    /// line under the one it started. A result whose call this cache never held, which
-    /// is an older transcript's entry read on its own, has nothing to settle and opens
-    /// a row like any other fact.
+    /// Holds one more entry, unlaid. A result settles the row the call it answers opened
+    /// rather than opening a line under it — unless this cache never held that call, which
+    /// is an older transcript's entry read on its own, and then it opens a row like any other.
     pub fn push(&mut self, entry: Entry) {
         if let Entry::Result { turn, .. } = &entry
             && let Some(at) = self.pending(*turn)
@@ -617,19 +421,9 @@ impl Rows {
         });
     }
 
-    /// Holds the turn in flight as the transcript's live entry: the rows the stream is
-    /// drawn as now, laid again every time a fragment lands and by nobody else, so a
-    /// tick that changes the live entry costs one layout of it and no layouts of the
-    /// history above it (ADR-0008).
-    ///
-    /// A stream that has said nothing holds no live entry — unless a marker heads a run that
-    /// has not spoken yet, which is a row of its own — and one that is asked again without
-    /// having moved is the same picture and costs nothing: the fragment count and the mark
-    /// are what tell the two apart, so a paint that changed nothing does not wrap the same
-    /// text again. The mark counts because it is laid into the rows it heads: an entry held
-    /// with the mark of a step ago would be drawn wearing a clock that has moved on. A width
-    /// change is not a paint that changed nothing — it drops the rows like every other
-    /// entry's — and the next frame lays them out again.
+    /// Holds the turn in flight as the cache's last entry. A stream asked again without
+    /// having moved lays nothing, and the mark counts as movement because it is laid into the
+    /// rows it heads: a held one would wear a clock that has moved on.
     pub fn live(&mut self, stream: &Stream, head: Option<&Head>) {
         if stream.is_empty() && head.is_none() {
             self.retire();
@@ -666,9 +460,6 @@ impl Rows {
         self.lays += 1;
     }
 
-    /// Drops the live entry, if this cache holds one: a fact landing is the end of the
-    /// turn in flight, and the block that was drawn while it streamed is the fact's own
-    /// rows now — so the turn is drawn from what it settled into and never twice.
     fn retire(&mut self) {
         if matches!(
             self.held.last().map(|held| &held.what),
@@ -678,10 +469,8 @@ impl Rows {
         }
     }
 
-    /// The entry a result for `turn` settles: the oldest call of that turn whose own
-    /// result has not landed. Oldest and not newest, because the run writes a call and
-    /// then its result or a wave of calls and then their results, and the two orders
-    /// have to pair up the same way.
+    /// The oldest call of `turn` whose result has not landed, because a wave of calls and
+    /// the wave of results that answers it have to pair up in the order both were written.
     fn pending(&self, turn: u32) -> Option<usize> {
         self.held.iter().position(|held| {
             held.result.is_none()
@@ -689,43 +478,30 @@ impl Rows {
         })
     }
 
-    /// Settles the call at `at` with the result that answered it: the row the call
-    /// opened says what happened to it now, and this entry alone is laid out again —
-    /// everything above and below it keeps what it was drawn as (ADR-0008). `at` is an
-    /// index this cache handed out, so a cache that does not hold it has been read wrong.
     pub fn settle(&mut self, at: usize, result: Entry) {
         let held = &mut self.held[at];
         held.result = Some(result);
         held.rows = None;
     }
 
-    /// How many rows this cache holds: the facts it was given and, while a turn is in
-    /// flight, the live entry of that turn as one more — less the results, which settle
-    /// the row the call they answer opened instead of opening one of their own.
     pub fn len(&self) -> usize {
         self.held.len()
     }
 
-    /// Whether this cache holds no entry at all.
     pub fn is_empty(&self) -> bool {
         self.held.is_empty()
     }
 
-    /// The width every row here is laid out at.
     pub fn cols(&self) -> u16 {
         self.cols
     }
 
-    /// How many entries this cache has laid out, counting a re-layout after a width
-    /// change: the instrument a test reads instead of the shape of this code.
     pub fn lays(&self) -> usize {
         self.lays
     }
 
-    /// Tells the cache the width its rows are drawn at. The same width is nothing at
-    /// all, so a paint at an unchanged size re-lays nothing; a different one drops every
-    /// row the cache held, which is the one-width cache ADR-0008 decided on — going back
-    /// to a width is a reflow and not a lookup.
+    /// A different width drops every row: this cache holds one width at a time, so going
+    /// back to a width is a reflow and not a lookup.
     pub fn resize(&mut self, cols: u16) {
         let cols = cols.max(1);
         if cols == self.cols {
@@ -737,10 +513,6 @@ impl Rows {
         }
     }
 
-    /// Tells the cache the surface its pictures are measured against. The same surface is
-    /// nothing at all; a different one drops every row the cache held, because how many rows a
-    /// picture takes is part of the rows an entry was laid out as, and the next paint lays
-    /// them out again once (ADR-0008).
     pub fn retune(&mut self, surface: Surface) {
         if surface == self.surface {
             return;
@@ -751,12 +523,9 @@ impl Rows {
         }
     }
 
-    /// The rows of entry `at`, laid out now if this cache has never laid them out at the
-    /// width it holds and kept for the next paint. `at` is an index this cache handed
-    /// out — the one a [`Piece`] carries — so a cache that does not hold it has been
-    /// read wrong. The live entry is the one entry with no fact behind it: its rows are
-    /// the stream's and [`Rows::live`] is what lays them, so a cache that has not been
-    /// handed a stream draws nothing for it rather than inventing a row.
+    /// The rows of entry `at`, laid out now if they do not exist and kept for the next
+    /// paint. `at` is an index this cache handed out; the live entry has no fact behind it,
+    /// so nothing is drawn for it here.
     pub fn rows(&mut self, at: usize) -> &[Row] {
         let cols = self.cols;
         let held = &self.held[at];
@@ -775,9 +544,8 @@ impl Rows {
         self.held[at].rows.as_deref().unwrap_or_default()
     }
 
-    /// The words of the newest answer this transcript holds, read from the entry and not
-    /// from the rows it was laid out as: a copy of the last answer takes the line breaks
-    /// the model wrote rather than the ones the band wrapped (§12, #50).
+    /// A copy of the last answer takes the line breaks the model wrote, not the ones the
+    /// band wrapped.
     pub fn last_answer(&self) -> Option<String> {
         self.held.iter().rev().find_map(|held| match &held.what {
             What::Fact(Entry::Assistant { text, .. }) => Some(text.to_string()),
@@ -785,11 +553,8 @@ impl Rows {
         })
     }
 
-    /// The transcript's whole height in rows, laying out every entry this cache has
-    /// never seen: the one door to measuring a history, and the trade-off the module's
-    /// header records. A window never needs it — it is here for what counts rows the
-    /// picture does not draw, which is #50's marking and the arrivals below a reader who
-    /// scrolled back.
+    /// The transcript's whole height in rows, laying out every entry this cache has never
+    /// seen: the one door to measuring a history, and a window never needs it.
     pub fn height(&mut self) -> u32 {
         let mut height: u32 = 0;
         for at in 0..self.held.len() {
@@ -798,14 +563,9 @@ impl Rows {
         height
     }
 
-    /// The entries a band of `height` rows at `scroll` intersects, in order, each with
-    /// the rows of it that are inside the band: what the transcript paints, and nothing
-    /// the band never reaches.
-    ///
-    /// The band is the rows `back` to `back + height` above the tail, so an entry is in
-    /// it when that range overlaps the rows the entry fills. Entries are measured from
-    /// the tail backwards and the walk stops as soon as the band is filled, which is why
-    /// a long history costs the entries a reader can see and no others.
+    /// The entries a band of `height` rows at `scroll` intersects, in order. The walk is
+    /// measured from the tail and stops once the band is filled, so a window costs the
+    /// entries between the tail and it, laid out once each.
     pub fn window(&mut self, scroll: Scroll, height: u16) -> Window {
         let back = scroll.back();
         let top = back.saturating_add(u32::from(height));
@@ -836,31 +596,20 @@ impl Rows {
     }
 }
 
-/// What a band of rows shows of the transcript: the entries it intersects, in order,
-/// and how much of each is inside it.
 #[derive(Clone, Debug, Default)]
 pub struct Window {
-    /// The entries the band reaches, top to bottom and contiguous, so a painter walks
-    /// them in order and never has to work out where one starts.
     pieces: Vec<Piece>,
 }
 
 impl Window {
-    /// The entries this window shows, in order.
     pub fn pieces(&self) -> &[Piece] {
         &self.pieces
     }
 }
 
-/// One entry of a window: which entry, how many rows of its top are above the band's
-/// first row, and how many rows of it the band draws from there.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Piece {
-    /// The entry's index in the cache, which is the number [`Rows::rows`] is asked for.
     pub entry: usize,
-    /// How many of the entry's rows are cut off above the band's first row: what makes
-    /// a scroll cut an entry in half rather than count it whole.
     pub skip: u16,
-    /// How many rows of the entry, from `skip` on, the band draws.
     pub rows: u16,
 }
