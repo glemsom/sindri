@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Acceptance test for scripts/audit.sh. Each case builds a throwaway tree holding
-# one violation and asserts the exit code and the `file:line` it names; fixtures
-# live in $TMPDIR because the audit scans every file inside the repo.
 set -uo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -14,8 +11,6 @@ failed=0
 ok() { printf 'ok   %s\n' "$*"; passed=$((passed + 1)); }
 bad() { printf 'FAIL %s\n' "$*"; failed=$((failed + 1)); }
 
-# The one tree that satisfies every rule, carrying no comment at all: each case
-# copies it and breaks one rule.
 clean="$scratch/clean"
 mkdir -p "$clean/crates/demo/src" "$clean/crates/demo/tests"
 cat >"$clean/crates/demo/src/lib.rs" <<'RS'
@@ -35,7 +30,6 @@ fn workspace_reaches_a_declaration() {}
 fn tests_name_the_behaviour() {}
 RS
 
-# run TREE -- runs the audit over TREE, capturing OUT and CODE.
 run() {
   OUT=$(bash "$audit" "$1" 2>&1)
   CODE=$?
@@ -60,7 +54,6 @@ assert_rules() { # desc rule...
     bad "$desc: rules '$got', want '$* '"; printf '  output:\n%s\n' "$OUT"; fi
 }
 
-# No rule reads a comment: a tree that carries none passes every rule.
 run "$clean"
 assert_code 0 "a tree with no comments"
 assert_rules "a tree with no comments" undeclared-test-file test-name
@@ -96,7 +89,6 @@ run "$declared"
 assert_code 0 "nested file a declaration reaches"
 assert_line 'audit: undeclared-test-file ... ok' "nested file a declaration reaches"
 
-# Reach is transitive, and the walk stops where the declarations stop.
 deep="$scratch/undeclared-deep"
 cp -a "$declared" "$deep"
 mkdir -p "$deep/crates/demo/tests/common/deep"
@@ -126,7 +118,6 @@ else
   ok "test-name: 'workspace_…' and 'tests_…' open with no banned opener"
 fi
 
-# Two violations, two independent failures: one broken tree, two FAIL lines.
 both="$scratch/both"
 cp -a "$undeclared" "$both"
 cat >"$both/crates/demo/tests/behaviour.rs" <<'RS'
@@ -139,7 +130,6 @@ for rule in undeclared-test-file test-name; do
   assert_line "audit: $rule ... FAIL" "both rules broken"
 done
 
-# The whole tree as it stands must pass every rule, fast.
 start=$(date +%s%N)
 run "$repo_root"
 elapsed_ms=$(( ($(date +%s%N) - start) / 1000000 ))
