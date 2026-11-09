@@ -1,6 +1,6 @@
-//! A picture an answer points at, resolved to a file inside the workspace and measured into
-//! the cells it takes without spending a pixel: its declared extent — an SVG's, or a raster's
-//! header — divided by the cell. One that leaves the workspace is refused with its reason.
+//! A picture an answer points at: its source resolved inside the workspace, its extent read
+//! from the file rather than drawn from it, and its words kept beside it, because a picture's
+//! block copies as its words and never as its bytes.
 
 use std::path::{Path, PathBuf};
 
@@ -99,7 +99,6 @@ impl Picture {
     }
 }
 
-/// The alternate text an answer wrote over a picture, or the source when it wrote none.
 pub fn words(source: &str, alt: &str) -> String {
     match alt.trim() {
         "" => source.to_owned(),
@@ -112,8 +111,6 @@ pub fn measure(source: &str, room: u16, surface: &Surface) -> Result<Picture, Re
     of(source, Drawn::File(path), room, surface)
 }
 
-/// The picture a drawing of `svg` is, spoken of as `source`: a mermaid fence fitted into the
-/// band like any other picture, with nothing to resolve and no path to read.
 pub fn drawing(source: &str, svg: &str, room: u16, surface: &Surface) -> Result<Picture, Refusal> {
     of(source, Drawn::Drawing(svg.to_owned()), room, surface)
 }
@@ -152,7 +149,6 @@ impl Refusal {
         }
     }
 
-    /// A refusal of the graphics seam, said as a picture this module could not read.
     fn of(refusal: crate::graphics::Refusal) -> Refusal {
         Refusal::Unreadable {
             reason: refusal.message(),
@@ -167,8 +163,8 @@ impl std::fmt::Display for Refusal {
 }
 
 /// Whether this terminal speaks the Kitty graphics protocol, read off `TERM` and
-/// `TERM_PROGRAM`: asking the terminal itself is a round trip this launch has already spent
-/// on the cell size before its first frame.
+/// `TERM_PROGRAM`: asking it costs a round trip this launch has spent on the cell size, and a
+/// terminal naming neither is taken to place no picture, so the words stay whole.
 pub fn speaks_kitty(term: Option<&str>, program: Option<&str>) -> bool {
     let names_a_terminal_that_places_pictures = |word: &str| {
         let word = word.to_ascii_lowercase();

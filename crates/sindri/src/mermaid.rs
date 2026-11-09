@@ -1,6 +1,6 @@
-//! A mermaid fence becomes a picture, or is refused with a reason the caption prints:
-//! `mermaid-rs-renderer` draws the fence's source into an SVG in this process, and a fence
-//! that will not draw is the source it was written as with one sentence under it.
+//! `mermaid-rs-renderer` draws a fence's source into an SVG in this process; one that will not
+//! draw is the source it was written as with one sentence under it. That renderer is a pure-Rust
+//! rewrite whose failure mode is a wrong picture, so a refusal is an answer of its own.
 
 use std::sync::OnceLock;
 use std::sync::mpsc;
@@ -60,11 +60,10 @@ fn warmed() {
     });
 }
 
-/// Two nodes and an edge: nothing to draw, everything the renderer needs to have drawn once.
 const WARM_UP: &str = "flowchart TD\n  A-->B";
 
 impl Diagram {
-    /// Draws `source` within [`BOUND`] wall clock.
+    /// Draws `source` within [`BOUND`].
     pub fn of(source: &str) -> Result<Diagram, Refusal> {
         Diagram::of_within(BOUND, source)
     }

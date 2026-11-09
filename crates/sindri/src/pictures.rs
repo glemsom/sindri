@@ -1,6 +1,6 @@
-//! The pictures a frame has placed, kept by the cells they took and written back as the Kitty
-//! protocol's unicode placeholders: the bytes go to the terminal once per size, and every
-//! render after it draws glyphs that transmit nothing.
+//! The pictures a frame has placed, written back as the Kitty protocol's unicode placeholders:
+//! the bytes go to the terminal once per size, and every render after it draws glyphs that
+//! transmit nothing.
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -20,19 +20,16 @@ use crate::picture::Picture;
 /// protocol's own flag says the terminal already holds.
 type Placed = Rc<RefCell<StatefulProtocol>>;
 
-/// The pictures a frame has drawn, each kept by its source and the cells it took.
 #[derive(Clone, Default)]
 pub struct Pictures {
     picker: Option<Picker>,
     held: HashMap<(String, u16, u16), Placed>,
-    /// What the paint in hand has placed; empty between paints, because a prune takes it.
     shown: HashSet<(String, u16, u16)>,
     /// How many times each source has been made into pixels: the instrument a test reads.
     rasterises: HashMap<String, usize>,
 }
 
 impl Pictures {
-    /// A frame whose terminal places no picture: every source stays the words it was laid out as.
     pub fn none() -> Pictures {
         Pictures::default()
     }
@@ -62,8 +59,8 @@ impl Pictures {
         self.rasterises.get(source).copied().unwrap_or(0)
     }
 
-    /// Drops every picture the paint in hand did not place, so the width the band shows is the
-    /// whole of what this cache holds: a size the band has left is made and sent again when it
+    /// Called once per paint of the band, after its rows are placed: what the paint placed is the
+    /// whole of what this cache holds, so a size the band has left is made and sent again when it
     /// comes back, which is the cost of the bound.
     pub fn retain_shown(&mut self) {
         let shown = std::mem::take(&mut self.shown);

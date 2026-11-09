@@ -1,13 +1,11 @@
-//! An SVG becomes the pixels a picture is drawn in: `usvg` parses and lays it out, `resvg`
-//! and `tiny-skia` rasterise it, and `image` hands the RGBA on to the placement. Nothing here
-//! knows what produced the SVG, so a mermaid fence and a file are drawn by one path.
+//! An SVG becomes the pixels a picture is drawn in: `usvg` parses and lays it out, `resvg` and
+//! `tiny-skia` rasterise it, and `image` hands the RGBA on to the placement that draws it.
 
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-/// The font this binary carries, so a label is drawn whatever the machine has installed:
-/// `usvg` converts text to paths while it parses, and an empty font database drops them
-/// silently. Liberation Sans, under the SIL Open Font License, which travels in `fonts/`.
+/// Liberation Sans, under the SIL Open Font License, which travels beside it in `fonts/`: the
+/// one face a diagram's labels are set in, whatever the machine has installed.
 const LABEL_FONT: &[u8] = include_bytes!("../fonts/LiberationSans-Regular.ttf");
 
 /// The family the bundled font is filed under. A drawing naming a family nothing here
@@ -20,8 +18,7 @@ const LABEL_FAMILY: &str = "Liberation Sans";
 const MAX_COLS: u16 = 200;
 const MAX_ROWS: u16 = 100;
 
-/// The size of one terminal cell in pixels: handed in by the caller and never asked of a
-/// terminal here, because batch mode has none and a test wants a picture it can read.
+/// The size of one terminal cell in pixels, handed in by the caller: nothing here asks a terminal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CellSize {
     width: u32,
@@ -29,7 +26,7 @@ pub struct CellSize {
 }
 
 impl CellSize {
-    /// Ten pixels wide by twenty tall: a 96 dpi terminal in a ten-point monospace face.
+    /// What a terminal that will not say what cell it has is assumed to have: ten by twenty.
     pub const NOMINAL: CellSize = CellSize {
         width: 10,
         height: 20,
@@ -100,14 +97,14 @@ impl Footprint {
 
 #[derive(Debug)]
 pub struct Svg {
+    /// The tree `usvg` laid out. Its own size is the picture's size, so what a footprint measures
+    /// and what the pixels are scaled by can never disagree about how big the picture is.
     tree: usvg::Tree,
     /// How many times this picture has been handed to the renderer: the instrument a test reads.
     rasterises: AtomicUsize,
 }
 
 impl Svg {
-    /// Parses `svg` with the bundled font in the font database, without which a label is
-    /// converted to no paths at all. The parser's own words are what a caption prints.
     pub fn parse(svg: &str) -> Result<Svg, Refusal> {
         let tree = usvg::Tree::from_str(svg, options()).map_err(|error| Refusal::Unreadable {
             reason: error.to_string(),
@@ -118,7 +115,6 @@ impl Svg {
         })
     }
 
-    /// The picture's own extent in pixels, as the SVG declares it.
     pub fn size(&self) -> (u32, u32) {
         let size = self.tree.size();
         (size.width() as u32, size.height() as u32)
@@ -151,8 +147,6 @@ impl Svg {
         self.rasterise_at((width, height))
     }
 
-    /// The picture as `width` by `height` pixels whatever extent it declares, which is what a
-    /// picture fitted into a band's columns is drawn at.
     pub fn rasterise_at(&self, (width, height): (u32, u32)) -> Result<image::RgbaImage, Refusal> {
         let mut pixmap = tiny_skia::Pixmap::new(width, height).ok_or(Refusal::Unrenderable)?;
 
@@ -171,7 +165,6 @@ impl Svg {
             .ok_or(Refusal::Unrenderable)
     }
 
-    /// How many times this picture has been rasterised: the counter a test asserts on.
     pub fn rasterises(&self) -> usize {
         self.rasterises.load(Ordering::Relaxed)
     }
@@ -216,8 +209,8 @@ impl std::fmt::Display for Refusal {
 }
 
 /// The options every parse is done with, made once so a hundred pictures load the font once.
-/// The database holds one bundled font and nothing can load another into it: this crate's
-/// `usvg` is built without the feature that would read the machine's.
+/// A font database with nothing in it does not fail: `usvg` converts a label to no paths and it
+/// vanishes. So one bundled font is loaded, and this crate's `usvg` cannot read the machine's.
 fn options() -> &'static usvg::Options<'static> {
     static OPTIONS: OnceLock<usvg::Options<'static>> = OnceLock::new();
     OPTIONS.get_or_init(|| {
@@ -240,7 +233,8 @@ fn shaped(cols: u16, rows: u16, scale: f64, room: u16) -> (u16, u16) {
     (columns, fitted(f64::from(columns) * ratio, MAX_ROWS))
 }
 
-/// How many whole cells a fitted picture takes: floored, at least one, never over `ceiling`.
+/// How many whole cells a fitted picture takes: never zero, because a picture fitted down to a
+/// sliver is still a cell of the transcript rather than a gap in it.
 fn fitted(cells: f64, ceiling: u16) -> u16 {
     let whole = cells.floor().max(1.0);
     u16::try_from(whole as u64)
@@ -249,7 +243,8 @@ fn fitted(cells: f64, ceiling: u16) -> u16 {
         .max(1)
 }
 
-/// How many cells one axis of `pixels` takes at `cell` pixels a cell, rounded up.
+/// How many cells one axis of `pixels` takes at `cell` pixels a cell, rounded up, and zero only
+/// for a picture with no extent at all.
 fn cells(pixels: f32, cell: u32) -> u16 {
     let whole = (pixels / cell as f32).ceil();
     if whole < 1.0 {
