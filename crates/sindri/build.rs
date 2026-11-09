@@ -1,29 +1,10 @@
-//! Where the binary says it came from: the `git describe` of the commit it was
-//! built at and that commit's own date, handed to the crate as compile-time
-//! constants rather than something the running binary could get wrong.
-//!
-//! Nothing here reads a clock, and nothing here writes the tree it reads. A build
-//! script that stamped the time of the build would make every build a different
-//! binary and an unchanged tree relink, which is the bug ticket #61 exists to
-//! prevent; the commit's date is the only date a reproducible build carries. For
-//! the same reason the dirty check is not `describe --dirty`: that command
-//! refreshes the index, and the index is a file this script watches, so a build
-//! that asked for it could relink itself for nothing. The comparison is made
-//! instead by a `status --porcelain` that keeps its refresh in memory.
-//!
-//! What is watched is what genuinely changes the answer: the ref `HEAD` names, the
-//! index, and the packed refs `describe` walks — never the sources, which `git
-//! describe` cannot see. Watching them is what makes the answer stable: a build
-//! with nothing committed between it and the last one re-runs this script, is told
-//! the same thing, and relinks nothing.
-//!
-//! A tree with no git at all — a source tarball — still builds: the version falls
-//! back to the package version, and the date says plainly that it knows none.
+//! The `git describe` of the commit this was built at, and that commit's own date, handed
+//! to the crate as compile-time constants. Nothing here reads a clock or writes the tree it
+//! reads, so an unchanged tree builds to the same bytes and relinks nothing.
 
 use std::path::PathBuf;
 use std::process::{Command, Output};
 
-/// The commit's date, said this way when the build stands on no commit at all.
 const NO_COMMIT_DATE: &str = "unknown";
 
 fn main() {
@@ -34,8 +15,7 @@ fn main() {
             println!("cargo:rustc-env=SINDRI_DESCRIBE={describe}");
             println!("cargo:rustc-env=SINDRI_COMMIT_DATE={date}");
         }
-        // No git, or git that will not answer: a source tarball is a legitimate
-        // way to have this source, and it must build.
+        // No git, or git that will not answer: a source tarball must build too.
         _ => {
             println!("cargo:rustc-env=SINDRI_DESCRIBE={}", package_version());
             println!("cargo:rustc-env=SINDRI_COMMIT_DATE={NO_COMMIT_DATE}");
@@ -43,15 +23,8 @@ fn main() {
     }
 }
 
-/// `git describe --tags --always`, with git's own `-dirty` suffix when the
-/// working tree differs from `HEAD`.
-///
-/// The suffix is appended here rather than asked for as `--dirty` for one reason,
-/// and it is not a stylistic one: `describe --dirty` refreshes the index while it
-/// compares, whatever git is told about optional locks, and the index is a file
-/// this script watches. A build script that rewrote its own input would make the
-/// next build relink for nothing. `dirty()` makes the same comparison and writes
-/// nothing, so this build reads the tree and leaves it exactly as it found it.
+/// `git describe --tags --always`, with a `-dirty` suffix this script appends itself:
+/// asking git for `--dirty` would rewrite the index the build watches.
 fn describe() -> Option<String> {
     let described = git(&["describe", "--tags", "--always"])?;
     if dirty() {
@@ -60,17 +33,9 @@ fn describe() -> Option<String> {
     Some(described)
 }
 
-/// Whether the working tree differs from `HEAD` — the comparison `describe
-/// --dirty` makes, untracked files aside.
-///
-/// `status` is asked rather than `diff-index --quiet` because only `status`
-/// refreshes the index in memory before it compares. `diff-index` reads the
-/// index's stat data as it stands, so a file that was merely `touch`ed — the very
-/// move the no-relink proof makes — reads as modified while its contents are the
-/// commit's, and the build would call a clean tree dirty. `--no-optional-locks`
-/// keeps the refresh in memory, so the index, which this script watches, is left
-/// exactly where it was. A git that will not answer leaves the tree looking
-/// clean, which is the shape a source tarball takes anyway.
+/// `status` and not `diff-index --quiet`: only `status` refreshes the index in memory
+/// first, so a file merely `touch`ed does not read as modified while its contents are the
+/// commit's. `--no-optional-locks` keeps that refresh from writing the index this watches.
 fn dirty() -> bool {
     let asked = run(&[
         "--no-optional-locks",
@@ -84,23 +49,16 @@ fn dirty() -> bool {
     }
 }
 
-/// The committer date of `HEAD`, short — the date the commit was made, which is
-/// not the day this build happens to run.
 fn commit_date() -> Option<String> {
     git(&["log", "-1", "--format=%cs"])
 }
 
-/// The package's own version, the fallback when there is no commit to describe.
 fn package_version() -> String {
     std::env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| String::from("0.0.0"))
 }
 
-/// Ask cargo to re-run this script when, and only when, git's answer would move.
-///
-/// `git rev-parse --git-path` is what makes this right in a linked worktree,
-/// where `.git` is a file pointing elsewhere: the paths come back where git
-/// actually keeps them. A path that is not there is not watched, so a plain
-/// repository is not made to look like a worktree or the reverse.
+/// `rev-parse --git-path` puts these where git really keeps them in a linked worktree,
+/// where `.git` is a file; a path that is not there is not watched.
 fn watch_what_changes_the_answer() {
     let mut watched: Vec<String> = ["HEAD", "index", "packed-refs"]
         .iter()
@@ -114,7 +72,6 @@ fn watch_what_changes_the_answer() {
     }
 }
 
-/// The absolute path git keeps `name` at, if anything is there.
 fn git_path(name: &str) -> Option<String> {
     let path = PathBuf::from(git(&["rev-parse", "--git-path", name])?);
     let path = if path.is_absolute() {
@@ -125,8 +82,6 @@ fn git_path(name: &str) -> Option<String> {
     Some(path.canonicalize().ok()?.display().to_string())
 }
 
-/// One git command, run where this package's manifest lives, trimmed; nothing
-/// when git is absent, refuses, or says nothing.
 fn git(args: &[&str]) -> Option<String> {
     let output = run(args)?;
     if !output.status.success() {
@@ -136,8 +91,8 @@ fn git(args: &[&str]) -> Option<String> {
     (!said.is_empty()).then_some(said)
 }
 
-/// One git command, run where this package's manifest lives; nothing only when
-/// git could not be run at all — an exit status is an answer here, not a failure.
+/// One git command; nothing only when git could not be run at all — an exit status is an
+/// answer here, not a failure.
 fn run(args: &[&str]) -> Option<Output> {
     let manifest = std::env::var_os("CARGO_MANIFEST_DIR")?;
     Command::new("git")

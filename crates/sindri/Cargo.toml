@@ -8,43 +8,34 @@ rust-version.workspace = true
 [dependencies]
 clap = { version = "4.6.7", features = ["derive"] }
 ignore = "0.4.34"
-# A mermaid fence becomes an SVG in this process, with no JavaScript and no browser to
-# ask for a fact about a glyph (ADR-0003). Its `cli` and `png` features are off: this
-# binary draws nothing itself, and `clap` for a command it does not have is a
-# dependency that would say otherwise.
+# A mermaid fence becomes an SVG in this process, with no browser to ask for a fact about a
+# glyph. `cli` and `png` stay off: this binary draws nothing itself.
 mermaid-rs-renderer = { version = "0.3.1", default-features = false }
-# The picture half of §12 (ADR-0003). `usvg` is built without its system-fonts feature on
-# purpose: the font travels in the binary, and a build that cannot read the machine's fonts
-# is a claim a reader can check rather than one a comment makes.
+# `system-fonts` off on purpose: the font travels in the binary, so a build that cannot read
+# the machine's fonts is a claim a reader can check.
 usvg = { version = "0.47", default-features = false, features = ["text"] }
 resvg = "0.47"
 tiny-skia = "0.12"
-# The buffer a picture leaves as: straight RGBA, which is what a Kitty placement takes. The
-# two formats a workspace picture is written in are named here — a screenshot and a
-# photograph — because a decoder the build does not carry turns a file into a refusal.
+# The two formats a workspace picture is written in, named here: a decoder the build does not
+# carry turns a file into a refusal.
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
-# The placement half of §12: a picture becomes the Kitty protocol's unicode placeholders,
-# transmitted once per size and written as cells after that, which is what keeps a scroll from
-# sending a picture down the wire again (ADR-0008). Its `image-defaults` and `crossterm`
-# features are off: the protocol is named here rather than sniffed, and the decoders this
-# crate carries are the ones it named above.
+# A picture becomes the Kitty protocol's unicode placeholders, transmitted once per size and
+# written as cells after that, which is what keeps a scroll from sending it again.
+# `image-defaults` and `crossterm` stay off: the protocol is named here, not sniffed.
 ratatui-image = { version = "8.1", default-features = false }
 pulldown-cmark = { version = "0.12", default-features = false }
-# The frame: what a look is drawn with, and the same code a fixture renders through
-# ratatui's headless backend, so a golden frame and a reader's screen are one picture.
+# The same code a fixture renders through ratatui's headless backend, so a golden frame and
+# a reader's screen are one picture.
 ratatui = "0.29"
 rustix = { version = "1.1.6", features = ["event", "fs", "termios"] }
 sindri-core = { path = "../sindri-core" }
 syntect = { version = "5.3", default-features = false, features = ["default-fancy"] }
 
 [dev-dependencies]
-# The golden frames of ADR 0012: `insta` compares a rendered frame against the fixture
-# that holds it and blesses a deliberate change. It hard-codes the `.snap` extension,
-# which is why a fixture's file is one, whatever the ADR first named.
+# `insta` hard-codes the `.snap` extension, which is why a frame's fixture carries one.
 insta = "1.49"
-# The tests open a pseudo-terminal to prove what a launch draws and gives back:
-# rustix already binds this crate's terminal, so a second binding to the same
-# termios would be two ways to talk to one tty.
+# rustix already binds this crate's terminal: a second binding to the same termios would be
+# two ways to talk to one tty.
 rustix = { version = "1.1.6", features = ["pty"] }
 serde_json = "1.0"
 tempfile = "3"

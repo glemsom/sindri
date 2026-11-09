@@ -1,40 +1,13 @@
-# CI runs `make check` — the definition of done (spec §16) — in the same devbox
-# shell a developer uses (ADR 0001), so CI cannot drift into a second, weaker
-# definition of what "done" means. Ticket #7 wired this up.
-#
-# RUNNER IMAGE: ubuntu-24.04, GitHub-hosted, x86_64.
-#
-# UNPRIVILEGED USER NAMESPACES ON IT: RESTRICTED. Ubuntu 23.10 and later ship
-# AppArmor's `kernel.apparmor_restrict_unprivileged_userns=1`, and the 24.04
-# image runs that default, so `bwrap --unshare-all` is refused unless the binary
-# carries an AppArmor profile the kernel knows about — which the devbox-supplied
-# bwrap does not. The first real run on this image is expected to say
-# `sandbox tier: skipped (bwrap unavailable)` in the job summary, and to keep the
-# job green, because everything the runner *can* check did pass. That is the
-# whole point of the ticket: the gap is printed where a reader cannot miss it —
-# `check: sandbox ... SKIPPED`, never `... ok`, plus a job-summary block and a
-# warning annotation — rather than dropped or quietly ticked green.
-#
-# The suites whose subject is not the sandbox do not stop at that wall either.
-# Where a run cannot be confined, the batch contract is proved with every child
-# handed `--yolo-unsafe` — the one route past a sandbox that cannot be created —
-# and the suite prints `skip batch: ...`, naming the tier that run left uncovered,
-# so the contract is still checked byte for byte while the gap stays on the page.
-# Doctor's report is read either way: it prints the whole report and ends 0 over a
-# sandbox it proved, 3 over one the kernel refused. A runner that forbids a
-# sandbox must neither redden a job over code it did check nor green a sandbox
-# nothing made.
-#
-# Why 24.04 and not 22.04, where the tier would actually run: 22.04 is the older
-# image and is on its way out of the hosted fleet, so coverage bought there
-# would vanish without a word the day it retires. Written this way, the tier
-# runs the day a runner allows it (a self-hosted runner, or a host with
-# `sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`) and prints its skip
-# the day one does not; nothing in between is silent.
-#
-# NO SECRETS, NO PROVIDER CREDENTIALS: every stage is build-time only, and the
-# job holds `contents: read`. If a stage ever needs a credential, that is a
-# different ticket and a different judgement.
+# CI runs `make check` in the same devbox shell a developer uses: one command, one set of
+# stages, so there is no second, weaker definition of what "done" means.
+
+# This runner refuses confinement: Ubuntu 24.04 ships AppArmor's
+# `kernel.apparmor_restrict_unprivileged_userns=1`, so `bwrap --unshare-all` is refused and
+# the sandbox stage prints `... SKIPPED` over a job that stays green.
+
+# Where a sandbox cannot be made, the suites that are not about sandboxing still prove the
+# batch contract with every child handed `--yolo-unsafe`, printing `skip batch:` to name
+# the tier that run left uncovered.
 
 name: check
 
@@ -47,15 +20,13 @@ on:
 permissions:
   contents: read
 
-# A newer push to the same ref makes the older run's verdict irrelevant, so keep
-# the newest run and let the rest go.
+# A newer push to the same ref makes the older run's verdict irrelevant.
 concurrency:
   group: check-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  # devbox is pinned, so a CI run and a laptop run materialise the same shell.
-  # The toolchain inside it is pinned by devbox.json (Rust 1.99, ADR 0001).
+  # The version a laptop pins too, so both materialise the same shell.
   DEVBOX_VERSION: 0.19.0
 
 jobs:
@@ -67,14 +38,13 @@ jobs:
       - name: Check out the tree
         uses: actions/checkout@v4
 
-      # devbox needs Nix underneath it; the action also enables the
-      # `nix-command` and `flakes` features devbox expects. Pinned to a commit
-      # rather than a tag, so the code CI runs cannot change under us.
+      # devbox needs Nix underneath it, and the action turns on the `nix-command` and
+      # `flakes` features devbox expects. Pinned to a commit, not a tag, so the code CI
+      # runs cannot change under us.
       - name: Install Nix
         uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
 
-      # The devbox release tarball, named by a pinned version. Not the
-      # interactive installer: CI has no one to answer its prompt.
+      # The release tarball, not the interactive installer: CI has no one to answer it.
       - name: Install devbox ${{ env.DEVBOX_VERSION }}
         shell: bash
         run: |
@@ -84,10 +54,8 @@ jobs:
           sudo install -m 0755 "$RUNNER_TEMP/devbox" /usr/local/bin/devbox
           devbox version
 
-      # devbox's init hook keeps rustup and cargo under this directory; caching
-      # it turns a toolchain download into a copy. Keyed on the lockfile and the
-      # manifest, so a toolchain change misses the cache instead of hiding behind
-      # a stale one.
+      # Keyed on the lockfile and the manifest, so a toolchain change misses the cache
+      # instead of hiding behind a stale one.
       - name: Cache the pinned Rust toolchain
         uses: actions/cache@v4
         with:
@@ -98,11 +66,6 @@ jobs:
       - name: Materialise the devbox shell
         run: devbox install
 
-      # `make check` is one command on purpose: fmt, clippy, the four audits, the
-      # tests, the toolchain probe, the sandbox tier, and the two stages that are
-      # still placeholders (they print `MISSING`, ticket #58). Running the stages
-      # as separate steps would be a second definition of done that could drift
-      # from the first. Its stage lines are relayed to the job summary below.
       - name: make check, inside a devbox shell
         shell: bash
         run: |
@@ -111,10 +74,8 @@ jobs:
           devbox run -- make check 2>&1 | tee "$RUNNER_TEMP/check.log" || status=$?
           exit "$status"
 
-      # The verdicts, where a reviewer of the run actually looks. A skipped
-      # sandbox tier must be visible here as a skip: the stage lines are copied
-      # verbatim, `check: sandbox ... SKIPPED` and all, and a warning annotation
-      # marks the run as uncovered in that one tier.
+      # A skipped sandbox tier must be visible where a reviewer looks: the stage lines are
+      # copied verbatim, `... SKIPPED` and all, and a warning marks the uncovered tier.
       - name: Stage verdicts in the job summary
         if: always()
         shell: bash
