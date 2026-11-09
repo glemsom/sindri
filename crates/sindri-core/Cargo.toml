@@ -18,7 +18,6 @@ toml = "0.9"
 toml_edit = "0.22"
 
 [dev-dependencies]
-# The wording bench's estimator (ticket #60): a real BPE, so a section's price is
-# counted by a tokenizer rather than guessed from bytes.
+# A real BPE, so a section's price is counted by a tokenizer rather than guessed from bytes.
 tiktoken-rs = "0.9"
 
