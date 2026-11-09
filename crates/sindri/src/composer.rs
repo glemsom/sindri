@@ -1,191 +1,102 @@
-//! The composer: the draft a prompt is typed into, as a value rather than a widget —
-//! its text and its cursor, the key map that edits it, the two-to-six rows the box
-//! takes and how far it scrolls when the draft outgrows them (§12).
-//!
-//! Nothing here knows what a terminal is (ADR-0005): the terminal hands in a key or a
-//! paste and paints what the value holds, so every rule §12 names — the height, the
-//! scroll offset, what `Ctrl-C` means — is a function of the draft and is proved by a
-//! unit test rather than by an eyeball.
-//!
-//! `State` is the one fact `Ctrl-C`'s rule reads, and whoever owns the run sets it
-//! (#43), so the composer decides what a cancel means and the terminal decides what
-//! to do about it. `Outcome::Send` is the other seam: it carries the draft that just
-//! left the box, and the terminal answers it — by starting the run it asks for, or, with
-//! a run already in flight, by queueing it above the box (#42).
-//!
-//! A paste has no path to `Outcome::Send` at all: `Composer::paste` returns nothing a
-//! run could take, so every line break a clipboard carried stays a line break — which
-//! is the whole of "a pasted prompt arrives as one draft with its line breaks kept".
-
 use sindri_core::config::Touched;
 
-/// The fewest rows the composer's band takes: the hairline and one row of draft.
 pub const MIN_ROWS: u16 = 2;
 
-/// The most rows the band takes. A draft taller than this scrolls instead of growing,
-/// because the transcript above it is the band a run grows into (§12).
 pub const MAX_ROWS: u16 = 6;
 
-/// The band's top row is its edge rather than draft — the hairline a draft is typed
-/// under — so the rows a line of draft can be painted on are this many fewer.
+/// The band's top row is its edge and not draft, so a draft has this many rows fewer to be
+/// painted on than the band is tall.
 pub const HAIRLINE_ROWS: u16 = 1;
 
-/// Whether a run is live, which is the only fact `Ctrl-C`'s rule reads: a key that
-/// moves nothing is not a change the frame has to repaint.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum State {
-    /// No run: `Ctrl-C` has nothing to cancel, so it clears the draft.
     #[default]
     Idle,
-    /// A run, streaming or asking for a tool: `Ctrl-C` cancels it and the draft stays.
     Running,
 }
 
-/// A key this frame's map answers, decoded from the bytes a terminal sends by whoever
-/// owns the terminal: `Shift+Enter` is one of these and not four bytes (§17).
+/// A key decoded from the bytes a terminal sends, so `Ctrl-J` and `Shift+Enter` are one key
+/// here, and a glyph is one press however many bytes it took.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Key {
-    /// A glyph typed, counted as one keypress however many bytes it took.
     Char(char),
-    /// `Enter`: the draft becomes the prompt a run takes.
     Enter,
-    /// `Shift+Enter` or `Ctrl-J`: a line break inside the draft, never a send.
     Newline,
-    /// Backspace: the glyph before the cursor goes.
     Backspace,
-    /// The arrow keys, which move the cursor — `Up` on the first line being where the
-    /// queue's recall sits, which is the queue's decision and not this map's (§12).
     Left,
     Right,
     Up,
     Down,
-    /// `Shift+↑`/`Shift+↓`: the mark grows a whole row up the transcript, or down it
-    /// (§12). The frame's, not the box's: a draft has no mark to grow.
     ShiftUp,
     ShiftDown,
-    /// The keys that travel the cursor to either end of its line.
     Home,
     End,
-    /// `Ctrl-Y`: the words the mark covers leave the terminal, or the newest answer does
-    /// when nothing is marked (§12). A key of the frame's rather than the box's.
     Copy,
-    /// `Ctrl-Q`: the launch ends and the terminal is given back.
     Quit,
-    /// `Ctrl-C`: cancels a run and keeps the draft, or clears it when nothing runs.
     Cancel,
-    /// `Ctrl-X`: drops the newest queued prompt. Not a key of this map's — the queue is
-    /// the frame's and so is the rule (§12) — and listed here because this is the one
-    /// vocabulary the keyboard is decoded into.
     Drop,
-    /// `Ctrl-U`: empties the value a settings row holds, which unsets the key it names. Not
-    /// a key of this map's either — a draft is cleared by `Ctrl-C` when nothing runs — and
-    /// listed here for the same reason `Ctrl-X` is (§12).
     Clear,
-    /// `Tab` and `Shift+Tab`: the row below and the row above at a screen whose rows are
-    /// keys, and the end of the list wrapping round to its other end.
     Tab,
     BackTab,
-    /// `Esc`: closes the screen over the draft. A draft has nothing to close, so the
-    /// composer answers it by leaving the draft alone.
     Escape,
 }
 
-/// A prompt that has left the composer: what `Enter` makes of a draft, and the value
-/// the run loop will take when #43 wires it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Prompt {
-    /// The draft as it was typed, line breaks and all.
     text: String,
 }
 
 impl Prompt {
-    /// The prompt the run is to answer.
     pub fn text(&self) -> &str {
         &self.text
     }
 }
 
-/// What a key did, in the words the terminal acts on: paint, send, quit, cancel.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Outcome {
-    /// The key moved nothing — a key this map has no use for, or a backspace in an
-    /// empty box — so there is nothing to repaint.
     Unchanged,
-    /// The frame changed — the draft, or the screen over it — so what it holds is no
-    /// longer what it did and the terminal has a frame to paint.
     Edited,
-    /// `Enter`, with a draft worth sending in it: the prompt is the terminal's now.
     Send(Prompt),
-    /// `Ctrl-Q`: the launch ends.
     Quit,
-    /// `Ctrl-C` during a run: the run is the thing cancelled, and the draft stays.
     Cancel,
-    /// `Ctrl-Y`: the words that leave the frame, for the terminal to write out by the
-    /// sequence that carries them out of it — the core names no escape (§12, §14).
     Copy(String),
-    /// A model name `Enter` or a `/model <name>` line chose: the terminal writes it into
-    /// the config through the one owner-only save (ADR-0009), because a frame holds a
-    /// value and the file is not one (§11, §12).
     Model(String),
-    /// The `/model` screen is up and has no names yet: the terminal asks the wire what it
-    /// serves and hands the listing back, because asking is a request and a frame makes
-    /// none (§10, ADR-0005).
     Served,
-    /// `Enter` at the settings modal: the keys a reader touched, for the terminal to write
-    /// through the core's one owner-only save (ADR-0009). A frame opens no file.
     Save(Touched),
-    /// `/settings`: the screen is the terminal's to open, because its rows are the config's
-    /// and the frame holds no config — the terminal seeds it from the one it launched with
-    /// (§11, §12).
     Settings,
 }
 
-/// The draft, where the cursor is in it, how far the band has scrolled and whether a
-/// run is live.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Composer {
-    /// The draft as it was typed, line breaks and all: one draft, never one prompt a
-    /// line.
     text: String,
-    /// Where the next glyph lands, as a byte offset into `text` that is always on a
-    /// glyph boundary.
     cursor: usize,
-    /// The first row of the draft the band paints, counted in lines: nothing scrolls
-    /// away while the whole draft fits.
     scroll: usize,
-    /// Whether a run is live.
     state: State,
 }
 
 impl Composer {
-    /// An empty draft, cursor at the start, nothing scrolled: the box a launch opens.
     pub fn new() -> Composer {
         Composer::default()
     }
 
-    /// The draft as it stands.
     pub fn text(&self) -> &str {
         &self.text
     }
 
-    /// Where the cursor is, as a byte offset into the draft.
     pub fn cursor(&self) -> usize {
         self.cursor
     }
 
-    /// Whether a run is live, which is what `Ctrl-C` reads.
     pub fn state(&self) -> State {
         self.state
     }
 
-    /// Says whether a run is live: the run loop sets this when it starts and when it
-    /// stops, and nothing else in the frame may.
+    /// The run loop sets this when a run starts and when it stops, and nothing else in the
+    /// frame may.
     pub fn set_state(&mut self, state: State) {
         self.state = state;
     }
 
-    /// The rows the band takes: one per painted line plus the hairline, never fewer
-    /// than `MIN_ROWS` and never more than `MAX_ROWS`.
     pub fn rows(&self) -> u16 {
         let lines = u16::try_from(self.line_count()).unwrap_or(u16::MAX);
         lines
@@ -193,19 +104,14 @@ impl Composer {
             .clamp(MIN_ROWS, MAX_ROWS)
     }
 
-    /// The draft rows that fit below the hairline: what a taller draft scrolls.
     pub fn visible_rows(&self) -> u16 {
         self.rows().saturating_sub(HAIRLINE_ROWS)
     }
 
-    /// The first draft row painted, counted in lines: nothing while the whole draft
-    /// fits, and a window that follows the cursor once it does not.
     pub fn scroll(&self) -> usize {
         self.scroll
     }
 
-    /// The draft's lines the band can paint, from `scroll` down: what the frame draws,
-    /// top row first.
     pub fn lines(&self) -> Vec<&str> {
         let visible = usize::from(self.visible_rows());
         self.text
@@ -215,9 +121,6 @@ impl Composer {
             .collect()
     }
 
-    /// Where the cursor is, as the row of `lines` it is on and the column of glyphs
-    /// into that row: the cursor is always on a painted row, because every edit and
-    /// every move follows it.
     pub fn caret(&self) -> (u16, u16) {
         let row = self.row(self.cursor);
         let column = self.text[self.line_start(row)..self.cursor].chars().count();
@@ -227,17 +130,10 @@ impl Composer {
         )
     }
 
-    /// Whether the cursor waits on the draft's first line — the fact the queue's `↑`
-    /// turns on, because on that line and with a queue the arrow recalls rather than
-    /// moves (§12).
     pub fn on_first_line(&self) -> bool {
         self.row(self.cursor) == 0
     }
 
-    /// Whether the cursor starts a word — the head of the draft, or a space, a tab or a
-    /// line break behind it. It is the fact `@` turns on, and it is read here rather than
-    /// in a second count of glyphs: a key that opens a screen has to be told from a glyph
-    /// somewhere, and the draft is what knows where the words are.
     pub fn at_word_start(&self) -> bool {
         self.text[..self.cursor]
             .chars()
@@ -245,26 +141,18 @@ impl Composer {
             .is_none_or(char::is_whitespace)
     }
 
-    /// A pasted prompt in one edit: one draft, its line breaks kept. A terminal puts
-    /// `\r\n` or a bare `\r` on the wire for the break a clipboard calls `\n`, so both
-    /// become the `\n` the draft is measured in — and not one of them is the `Enter`
-    /// that sends, because this hands back nothing a run could take.
+    /// A pasted prompt in one edit: a terminal puts `\r\n` or a bare `\r` on the wire for the
+    /// break a clipboard calls `\n`, so both become the `\n` the draft is measured in — and
+    /// neither of them is the `Enter` that sends.
     pub fn paste(&mut self, text: &str) {
         let kept = text.replace("\r\n", "\n").replace('\r', "\n");
         self.insert(&kept);
     }
 
-    /// `↑` on the first line: a queued prompt is the draft again, whole, put in where the
-    /// caret waits so that nothing the reader had already typed is thrown away (§12).
-    ///
-    /// A recalled prompt is a paste that took a detour through the queue: every line
-    /// break it was typed with comes back as one, because a prompt is one entry however
-    /// many lines it carries (§12).
     pub fn recall(&mut self, prompt: Prompt) {
         self.insert(&prompt.text);
     }
 
-    /// Hands the map one key and says what the terminal is to do about it.
     pub fn key(&mut self, key: Key) -> Outcome {
         match key {
             Key::Char(glyph) if glyph.is_control() => Outcome::Unchanged,
@@ -295,13 +183,6 @@ impl Composer {
         }
     }
 
-    /// `Enter`: the draft becomes the prompt a run takes and the box is empty again. A
-    /// draft of nothing but spaces is not a prompt, so the box keeps it and nothing is
-    /// repainted.
-    ///
-    /// What becomes of a prompt when a run is already in flight is not this value's
-    /// business either: the terminal answers the outcome, and a prompt it cannot run now
-    /// waits its turn in the frame's queue rather than being dropped (§12).
     fn send(&mut self) -> Outcome {
         if self.text.trim().is_empty() {
             return Outcome::Unchanged;
@@ -312,10 +193,6 @@ impl Composer {
         Outcome::Send(Prompt { text })
     }
 
-    /// `Ctrl-C`: with a run live it is the run that is cancelled and the draft stays,
-    /// because a prompt half-written when a run dies is the one the reader was
-    /// writing. With no run there is nothing to cancel, so the key clears what is
-    /// typed — and a box already empty is not a change to repaint.
     fn cancel(&mut self) -> Outcome {
         match self.state {
             State::Running => Outcome::Cancel,
@@ -329,8 +206,6 @@ impl Composer {
         }
     }
 
-    /// The outcome an edit leaves behind: a key that moved nothing is not a frame to
-    /// paint again, and §12's idle frame is never drawn.
     fn edited(changed: bool) -> Outcome {
         if changed {
             Outcome::Edited
@@ -339,17 +214,12 @@ impl Composer {
         }
     }
 
-    /// Puts `text` in at the cursor and follows it: one path for a typed glyph, for a
-    /// whole pasted prompt, and for the word a picked path is, so each of them is an edit
-    /// like any other and none of them can leave the caret behind.
     pub fn insert(&mut self, text: &str) {
         self.text.insert_str(self.cursor, text);
         self.cursor += text.len();
         self.follow();
     }
 
-    /// Takes back the glyph before the cursor, whole: a byte would leave a glyph half
-    /// there.
     fn backspace(&mut self) -> bool {
         let before = self.text[..self.cursor].chars().next_back();
         match before {
@@ -385,8 +255,6 @@ impl Composer {
         }
     }
 
-    /// Up a line, keeping the column: the cursor's glyph column is what a reader reads
-    /// as "the same place", and a shorter line ends it.
     fn up(&mut self) -> bool {
         let row = self.row(self.cursor);
         if row == 0 {
@@ -424,9 +292,6 @@ impl Composer {
         changed
     }
 
-    /// Keeps the cursor on a painted row, scrolling the window as little as it can: it
-    /// moves only when the cursor would otherwise leave the band, so a draft being
-    /// typed does not jump a line at a time.
     fn follow(&mut self) {
         let row = self.row(self.cursor);
         let visible = usize::from(self.visible_rows());
@@ -437,20 +302,16 @@ impl Composer {
         }
     }
 
-    /// How many lines the draft has, the empty draft having one: an empty box still
-    /// paints one row of nothing below its hairline.
     fn line_count(&self) -> usize {
         self.text.matches('\n').count() + 1
     }
 
-    /// The line a byte offset is on, counted from the top.
     fn row(&self, offset: usize) -> usize {
         self.text[..offset.min(self.text.len())]
             .matches('\n')
             .count()
     }
 
-    /// Where the byte offset a line starts at.
     fn line_start(&self, row: usize) -> usize {
         let mut start = 0;
         for _ in 0..row {
@@ -462,7 +323,6 @@ impl Composer {
         start
     }
 
-    /// One past the last byte of a line, which is the offset of its break.
     fn line_end(&self, row: usize) -> usize {
         match self.text[self.line_start(row)..].find('\n') {
             Some(index) => self.line_start(row) + index,
@@ -470,13 +330,12 @@ impl Composer {
         }
     }
 
-    /// The glyph column the cursor is in, counted in glyphs rather than bytes so that
-    /// a line of ticks and a line of letters line up as a reader sees them.
+    /// Counted in glyphs and never bytes, so a line of ticks and a line of letters line up as
+    /// a reader sees them.
     fn column(&self, row: usize) -> usize {
         self.text[self.line_start(row)..self.cursor].chars().count()
     }
 
-    /// The offset of `column` glyphs into a line, or its end when the line is shorter.
     fn at_column(&self, row: usize, column: usize) -> usize {
         let end = self.line_end(row);
         let mut at = self.line_start(row);
@@ -492,29 +351,20 @@ impl Composer {
 
 #[cfg(test)]
 mod tests {
-    //! The composer's own rules, one test each: the height two lines make and six
-    //! cap, the window a taller draft scrolls, the paste that keeps its line breaks
-    //! and the `Ctrl-C` that reads the run's state. None of them needs a terminal,
-    //! which is the point of the value (§12, ADR-0005).
 
     use super::*;
 
-    /// A composer holding `text`, cursor at the end: what a draft pasted in one go is,
-    /// and what each test starts from unless it says otherwise.
     fn holding(text: &str) -> Composer {
         let mut composer = Composer::new();
         composer.paste(text);
         composer
     }
 
-    /// A draft of `lines` numbered lines, cursor at the end of the last: a draft the
-    /// band cannot hold whole.
     fn numbered(lines: usize) -> Composer {
         let draft: Vec<String> = (1..=lines).map(|line| line.to_string()).collect();
         holding(&draft.join("\n"))
     }
 
-    /// The prompt an outcome carries, or a failure naming what came instead.
     fn sent(outcome: Outcome) -> String {
         match outcome {
             Outcome::Send(prompt) => prompt.text().to_owned(),

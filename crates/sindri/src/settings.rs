@@ -1,63 +1,23 @@
-//! The settings screen: the config file's keys as one list, the value each of them holds
-//! as the file and the environment resolved it, and a visit that writes only what a reader
-//! touched (§12, ADR-0009).
-//!
-//! Nothing here keeps a schema of its own. The keys are `Config::KEYS`, the toggles are
-//! `Config::TOGGLES`, the text a row starts holding is `Config::text`, and what `Enter`
-//! hands out is a `Touched` — the keys a reader wrote into, with the text each was left
-//! holding. The write is the core's (`Config::save_touched`), which parses that text,
-//! refuses a value that will not do while naming its key, and patches the file in place
-//! through one owner-only rename. So this module decides what a key does to a row and
-//! nothing about what a file is, and the frame that paints the rows is `view`'s — the same
-//! split the picker makes (ADR-0005).
-//!
-//! Two rules are worth saying out loud, because both are about a row rather than a file:
-//!
-//! - **An untouched row is never written.** A row is seeded with the value in force, which
-//!   may have come from the environment or a flag, so writing it back would move a value
-//!   nobody typed into the file and change which layer speaks. Only a row a reader wrote
-//!   into — a glyph, a `Ctrl-U`, a `Space` — is in the patch, which is what "only touched
-//!   fields are written" costs as code.
-//! - **A secret is a mask, not a key.** The `api_key` row shows `Config::text`'s mask while
-//!   the file holds a key, and a row holding the mask is a row nobody has written into yet:
-//!   the first glyph or backspace replaces the mask rather than appending to it, so a mask
-//!   can never be saved as a key (§11, ADR-0011).
-
 use sindri_core::config::{Config, ConfigError, Environment, Flags, Touched};
 use sindri_core::redact::MASK;
 
 use crate::composer::Key;
 
-/// The keys of the config file as the rows of one screen, the row a key would act on, and
-/// the reason the last write did not land.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Settings {
-    /// One row per key of the schema, in the order the schema names them.
     rows: Vec<Row>,
-    /// Which row a typed glyph, `Ctrl-U` and `Space` act on.
     current: usize,
-    /// What the last write was refused for, if it was: the reason, naming the key, that the
-    /// screen says under its rows until the reader writes something else.
     refusal: Option<String>,
 }
 
-/// One key of the schema and the text the row holds for it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Row {
-    /// The key as the file spells it.
     key: &'static str,
-    /// What the row holds: the value in force until a reader writes into it, the mask while
-    /// a secret is set, and whatever the reader has typed since.
     text: String,
-    /// Whether this row is in the patch. A visit that read the screen and typed nothing is
-    /// a visit that writes nothing, however many rows it looked at.
     touched: bool,
 }
 
 impl Settings {
-    /// The screen a reader opens on the config as it resolved: every key in force, from
-    /// whichever layer spoke last, so the list is the truth rather than the file's half of
-    /// it.
     pub fn of(config: &Config) -> Settings {
         Settings {
             rows: Config::KEYS
@@ -73,24 +33,18 @@ impl Settings {
         }
     }
 
-    /// The rows as the screen paints them: the key as the file spells it, and the text it
-    /// holds.
     pub fn rows(&self) -> impl Iterator<Item = (&'static str, &str)> {
         self.rows.iter().map(|row| (row.key, row.text.as_str()))
     }
 
-    /// Which row the keys act on.
     pub fn current(&self) -> usize {
         self.current
     }
 
-    /// Why the last write was refused, if it was: the reason a reader has to see, naming
-    /// the key that has to change (§11).
     pub fn refusal(&self) -> Option<&str> {
         self.refusal.as_deref()
     }
 
-    /// What `Enter` hands the one save: the rows a reader wrote into, and no others.
     pub fn touched(&self) -> Touched {
         let mut touched = Touched::new();
         for row in self.rows.iter().filter(|row| row.touched) {
@@ -99,15 +53,10 @@ impl Settings {
         touched
     }
 
-    /// Records why the write this screen asked for did not land. The rows are left as the
-    /// reader typed them, because the value that has to change is still on the screen.
     pub fn refuse(&mut self, reason: &str) {
         self.refusal = Some(reason.to_owned());
     }
 
-    /// `↓` and `Tab`: the row below, and the first row below the last. The list is a ring
-    /// rather than a wall, because a screen holding every key of a file is a list a reader
-    /// walks to its end and back.
     pub fn down(&mut self) -> bool {
         if self.rows.is_empty() {
             return false;
@@ -116,7 +65,6 @@ impl Settings {
         true
     }
 
-    /// `↑` and `Shift+Tab`: the row above, and the last row above the first.
     pub fn up(&mut self) -> bool {
         if self.rows.is_empty() {
             return false;
@@ -125,11 +73,6 @@ impl Settings {
         true
     }
 
-    /// `Ctrl-U`: the row's value goes, and an empty value is a key the save unsets — which
-    /// is the whole point of emptying one, so the layer below speaks again (§11).
-    ///
-    /// A row already empty is a row with nothing to empty: the key is not pressed for
-    /// nothing, and nothing is repainted.
     pub fn clear(&mut self) -> bool {
         if !self.has_row() {
             return false;
@@ -144,13 +87,8 @@ impl Settings {
         true
     }
 
-    /// `Space`: flips a toggle, and is a glyph everywhere else — because `thinking` is a
-    /// switch and a path or a header is text, and a screen that could not hold a space in a
-    /// path would be a screen that cannot name one.
-    ///
-    /// A toggle with no value flips on: unset is a state of its own and `true` is what a
-    /// reader pressing a switch that is neither on nor off means. `Ctrl-U` is how it goes
-    /// back to unset.
+    /// A toggle holding neither `true` nor `false` flips on: unset is a state of its own,
+    /// and `Ctrl-U` is the only way back to it.
     pub fn space(&mut self) -> bool {
         if !self.has_row() {
             return false;
@@ -168,9 +106,6 @@ impl Settings {
         true
     }
 
-    /// The screen's own map, which is the glyph floor's: a glyph widens the row and a
-    /// backspace takes one back. A value is typed rather than edited, so there is no caret
-    /// here to move and the arrows are the list's.
     pub fn key(&mut self, key: Key) -> bool {
         if !self.has_row() {
             return false;
@@ -182,13 +117,10 @@ impl Settings {
         }
     }
 
-    /// Whether there is a row for a key to act on at all: a screen a frame never opened is a
-    /// screen with no rows, and a key pressed at one is not a key that changes anything.
     fn has_row(&self) -> bool {
         self.rows.get(self.current).is_some()
     }
 
-    /// Writes `glyph` at the end of the row the keys act on.
     fn write(&mut self, glyph: char) -> bool {
         self.unmask();
         let row = &mut self.rows[self.current];
@@ -198,10 +130,8 @@ impl Settings {
         true
     }
 
-    /// A backspace erases the glyph before the end of the row. On a row holding the mask the
-    /// whole mask goes: the secret is not something this screen may hold even for one
-    /// keystroke, so a backspace there unsets the row rather than nibbling a key nobody can
-    /// see.
+    /// A backspace on a row holding the mask unsets it whole: the secret is not something
+    /// this screen may hold even for one keystroke.
     fn backspace(&mut self) -> bool {
         let masked = self.unmask();
         let erased = self.rows[self.current].text.pop().is_some() || masked;
@@ -212,9 +142,8 @@ impl Settings {
         erased
     }
 
-    /// Takes the mask off the row the keys act on, saying whether it was wearing one: a row
-    /// holding the mask holds what the file already has and not what a reader typed, so the
-    /// first glyph replaces the mask rather than being appended to it.
+    /// The mask is what the file holds and not what a reader typed, so the first glyph
+    /// replaces it rather than piling onto it.
     fn unmask(&mut self) -> bool {
         let row = &mut self.rows[self.current];
         let masked = row.text == MASK;
@@ -225,14 +154,6 @@ impl Settings {
     }
 }
 
-/// Writes what a settings modal touched, and hands back the config the next prompt runs on:
-/// the core's one save (owner-only, atomic, only the touched keys) and then the whole
-/// precedence resolved again — file, then environment, then the launch's own flags — so a
-/// prompt sent after a visit runs on the values the visit left rather than the ones the
-/// launch was handed (§11, ADR-0009).
-///
-/// A save that is refused returns the refusal and no config: a bad value is never armed for
-/// the next run, and nothing was written (§11).
 pub fn persist(
     environment: &impl Environment,
     touched: &Touched,
@@ -244,16 +165,9 @@ pub fn persist(
 
 #[cfg(test)]
 mod tests {
-    //! The screen's own rules, one test each: the rows the schema gives it, the value a row
-    //! starts holding, the three keys that change a value, the two that walk the list, and
-    //! the one thing `Enter` may hand out — the rows a reader wrote into and no others. None
-    //! of them opens a file: what a save makes of a patch is `config`'s, and the tests in
-    //! `tests/settings.rs` are where the two meet.
 
     use super::*;
 
-    /// The config a screen opens on: two keys decided, the way a file or the environment
-    /// would have left them, and a secret among them.
     fn decided() -> Config {
         Config {
             model: Some(String::from("claude-sonnet-4-5")),
@@ -263,7 +177,6 @@ mod tests {
         }
     }
 
-    /// The text the screen holds for `key`.
     fn shown(settings: &Settings, key: &str) -> String {
         settings
             .rows()
@@ -272,7 +185,6 @@ mod tests {
             .unwrap_or_else(|| panic!("the screen has a row for {key}"))
     }
 
-    /// The screen with `key`'s row under the keys, walked to as a reader walks it.
     fn at(settings: &mut Settings, key: &str) {
         for _ in 0..settings.rows().count() {
             if settings

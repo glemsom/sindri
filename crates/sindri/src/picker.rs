@@ -1,76 +1,38 @@
-//! The `@` picker: the files of the workspace, walked with `ignore` so what a run could
-//! not read the reader is never offered, ranked by how near they are to the directory the
-//! run stands in, narrowed by a query typed into the screen, and capped at the eight rows
-//! §12 gives the list.
-//!
-//! The walk is the `ignore` crate's and it is `git`'s reading of the tree: a `.gitignore`,
-//! a `.ignore` and a `.git/info/exclude` all apply, so a path a run cannot read is a path
-//! the reader cannot point at — "a file the run can read is a file the reader may point
-//! at" (§12). Two of the crate's defaults are turned around, and both for that sentence:
-//! `hidden(false)`, because a tracked file may be a hidden one (`.github/workflows/ci.yml`
-//! is a file a reader may well point at) and it is `.gitignore`'s business which paths are
-//! offered and not a rule about a leading dot's; and `require_git(false)`, because a
-//! workspace that is no checkout still has a `.gitignore` and honouring it there costs
-//! nothing. The one thing `hidden(false)` lets through that must not be: `.git` itself,
-//! which is skipped by name — it is the walk's own bookkeeping and not a file to point at.
-//!
-//! Nothing here knows what a terminal is (ADR-0005): a key or a glyph comes in, the rows
-//! and the word a selection inserts come out, and the screen that draws them is `view`'s.
+//! The walk is `git`'s reading of the tree, with two of `ignore`'s defaults turned around:
+//! `hidden(false)`, because a tracked file may be a dotfile, and `require_git(false)`,
+//! because a workspace that is no checkout still has a `.gitignore` to honour.
 
 use std::path::Path;
 
 use crate::composer::Key;
 
-/// The most rows the picker offers at once: §12's cap. It is a cap rather than a scrolling
-/// window because a list a reader points at is read rather than scanned, so the list has to
-/// be short enough to read; the query is what reaches the row past the cap.
 pub const CAP: usize = 8;
 
-/// The files the walk found, the query narrowing them, and the row the selection is on.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Picker {
-    /// Every file the walk found, relative to the root, nearest first: the whole written
-    /// down once, because ranking nearest-first needs every candidate to know which is
-    /// nearest, and the query is a filter over this list rather than a second walk.
     files: Vec<String>,
-    /// The glyphs typed into the screen: the query the list is narrowed by.
     query: String,
-    /// Which of the offered rows the selection is on, counted from the nearest.
     selected: usize,
 }
 
 impl Picker {
-    /// Walks `root` for the files a run could read, and ranks them by how near they are to
-    /// it.
-    ///
-    /// The whole workspace is walked once, when the screen opens, and written down: ranking
-    /// nearest-first is a fact about the whole list, so a walk per keystroke would pay for
-    /// the same tree again to draw a shorter list. One walk per `@` is the price of that,
-    /// and §12's cap is a cap on the rows and never on the walk.
     pub fn walk(root: &Path) -> Picker {
         let mut files: Vec<String> = Vec::new();
         let mut walk = ignore::WalkBuilder::new(root);
         walk.hidden(false).require_git(false);
         for entry in walk.build().flatten() {
             let path = entry.path();
-            // A directory is not a path to point at, and the root itself is no row at all.
             if entry.file_type().is_none_or(|kind| kind.is_dir()) {
                 continue;
             }
             let Some(relative) = path.strip_prefix(root).ok().and_then(|rest| rest.to_str()) else {
-                // A path that is not text cannot be written into a draft that is text: the
-                // word a selection inserts would be a different path.
                 continue;
             };
-            // `.git` is the walk's own bookkeeping — a directory in a checkout and a file
-            // in a worktree — and never something a reader points a prompt at.
             if relative.split('/').any(|step| step == GIT_DIRECTORY) {
                 continue;
             }
             files.push(relative.to_owned());
         }
-        // Nearest first, and the path's own order where two files are as near as each
-        // other, so the list a reader sees is the same list every time the screen opens.
         files.sort_by(|one, other| {
             nearness(one)
                 .cmp(&nearness(other))
@@ -83,13 +45,10 @@ impl Picker {
         }
     }
 
-    /// The query as it stands.
     pub fn query(&self) -> &str {
         &self.query
     }
 
-    /// The rows the screen paints: the files the query leaves, nearest first, at most
-    /// [`CAP`] of them.
     pub fn rows(&self) -> Vec<&str> {
         let query = self.query.to_lowercase();
         self.files
@@ -100,17 +59,10 @@ impl Picker {
             .collect()
     }
 
-    /// Which of the offered rows the selection is on.
     pub fn selected(&self) -> usize {
         self.selected
     }
 
-    /// The filter box's own map: a glyph widens the query, a backspace narrows it, and a
-    /// key a filter box has no use for moves nothing. Says whether anything changed.
-    ///
-    /// It is a filter box and not a second draft: the query is narrowed and never composed,
-    /// so it has no caret the arrows travel and no line a `Home` reaches — the arrows are
-    /// the list's, which is the whole of what the screen is for.
     pub fn key(&mut self, key: Key) -> bool {
         match key {
             Key::Char(glyph) if !glyph.is_control() => {
@@ -129,14 +81,12 @@ impl Picker {
         }
     }
 
-    /// `↑`: the row above the selection, if there is one.
     pub fn up(&mut self) -> bool {
         let moved = self.selected > 0;
         self.selected = self.selected.saturating_sub(1);
         moved
     }
 
-    /// `↓`: the row below the selection, if there is one.
     pub fn down(&mut self) -> bool {
         let moved = self.selected.saturating_add(1) < self.rows().len();
         if moved {
@@ -145,9 +95,6 @@ impl Picker {
         moved
     }
 
-    /// What selecting the row under the selection puts in the draft: the path as the run's
-    /// own working directory spells it, safe to hand a shell, and with the space that ends
-    /// the word — the next thing typed is another word of the prompt.
     pub fn word(&self) -> Option<String> {
         let rows = self.rows();
         let path = *rows.get(self.selected)?;
@@ -155,12 +102,9 @@ impl Picker {
     }
 }
 
-/// The word a shell reads back as `path`: bare when the path is spelled in the glyphs a
-/// shell leaves alone, and single-quoted otherwise, every quote inside it spelled `'\''`,
-/// which is the one spelling a single-quoted word cannot swallow.
-///
-/// A path whose first glyph is `-` is spelled from the working directory, `./-v.rs`, because
-/// a word a shell reads as a flag is a word that is not a file.
+/// The one spelling a single-quoted word cannot swallow is `'\''`, so every quote inside it
+/// is written that way. A path whose first glyph is `-` is spelled `./-v.rs`, because a word
+/// a shell reads as a flag is a word that is not a file.
 pub fn shell_word(path: &str) -> String {
     let path = match path.starts_with('-') {
         true => format!("./{path}"),
@@ -180,41 +124,27 @@ pub fn shell_word(path: &str) -> String {
     word
 }
 
-/// The glyphs a shell reads as parts of one word with no quoting at all: a letter, a digit,
-/// and the four marks a path is spelled with.
 fn leaves_alone(glyph: char) -> bool {
     glyph.is_ascii_alphanumeric() || matches!(glyph, '.' | '_' | '-' | '/')
 }
 
-/// The name a checkout keeps its own bookkeeping under, skipped wherever it appears: a
-/// directory in a working tree, a file in a worktree, and no row either way.
+/// The name a checkout keeps its own bookkeeping under — a directory in a working tree, a
+/// file in a worktree — skipped wherever it appears.
 const GIT_DIRECTORY: &str = ".git";
 
-/// How near a file is to the root: one for each directory between them, the file's own name
-/// counting as the nearest thing there is. Two files in one directory are as near as each
-/// other, and the path's own order says which comes first.
 fn nearness(path: &str) -> usize {
     path.matches('/').count()
 }
 
-/// Whether `path` holds `query` as a run of glyphs, in either case: a query is read as a
-/// piece of a path and never as a spelling of it, so `rows.RS` finds `rows.rs`.
 fn holds(path: &str, query: &str) -> bool {
     query.is_empty() || path.to_lowercase().contains(query)
 }
 
 #[cfg(test)]
 mod tests {
-    //! The picker's own rules, one test each: what the walk offers, the order it offers it
-    //! in, the query that narrows it, the cap that ends it, and the word a selection puts
-    //! in the draft. None of them needs a terminal, and none of them needs the network: a
-    //! workspace is a temp directory the test writes.
 
     use super::*;
 
-    /// A workspace of the test's own holding `files`, each written with the directories it
-    /// sits in, and no checkout: a `.gitignore` is honoured in a directory that is no
-    /// repository, which is what a workspace handed to a run often is.
     fn workspace(files: &[&str]) -> tempfile::TempDir {
         let root = tempfile::tempdir().expect("a temp workspace");
         for file in files {
@@ -227,13 +157,10 @@ mod tests {
         root
     }
 
-    /// The rows a picker over `root` offers, as the screen spells them.
     fn offered(picker: &Picker) -> Vec<String> {
         picker.rows().into_iter().map(str::to_owned).collect()
     }
 
-    /// A picker over `root` with `query` typed into it, a glyph at a time: the list a
-    /// reader sees after typing.
     fn narrowed(root: &Path, query: &str) -> Picker {
         let mut picker = Picker::walk(root);
         for glyph in query.chars() {
