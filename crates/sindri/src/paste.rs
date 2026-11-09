@@ -1,24 +1,14 @@
-//! Reading a key off a terminal: the prompt is written first, the terminal's echo
-//! is off while the key is typed, and the value leaves by this function's return
-//! and by nothing else, so it cannot reach a scrollback or a log line.
-//!
-//! A reader that is not a terminal — a pipe, a file, `/dev/null` — has no echo to
-//! turn off, and is read exactly as it is: a paste and a pipe are the same bytes.
+//! A paste and a pipe are the same bytes: a reader that is not a terminal — a pipe, a
+//! file, `/dev/null` — has no echo to turn off and is read exactly as it is.
 
 use std::io::{self, BufRead, IsTerminal, Write};
 
 use rustix::termios::{LocalModes, OptionalActions, Termios, tcgetattr, tcsetattr};
 
-/// What the terminal is asked with, before it is asked to stop echoing.
 const PROMPT: &str = "api key   paste it, then press Enter: ";
 
-/// Asks for the key on stderr and reads one line of it with the terminal's echo
-/// turned off, so the value is not left where anyone can read it over a shoulder.
-/// A terminal echo cannot be turned off on is an error rather than a read: a key
-/// typed where it can be seen is the one thing this function exists to avoid.
-///
-/// The line comes back trimmed: a paste carries the newline that ended it and the
-/// spaces around it, and neither is part of the key.
+/// A terminal whose echo cannot be turned off is an error rather than a read: a key typed
+/// where it can be seen is the one thing this function exists to avoid.
 pub fn ask() -> io::Result<String> {
     let terminal = io::stdin().is_terminal();
     let mut stderr = io::stderr();
@@ -38,16 +28,12 @@ pub fn ask() -> io::Result<String> {
 }
 
 /// The terminal's echo, off for as long as this guard lives and back on when it is
-/// dropped — on a panic too, which is a terminal left silent being a bug nobody
-/// can see.
+/// dropped — on a panic too, a terminal left silent being a bug nobody can see.
 struct Echo {
-    /// The state to put back, or nothing when there was no terminal to silence.
     restore: Option<Termios>,
 }
 
 impl Echo {
-    /// Turns echo off when the reader is a terminal, and does nothing at all when
-    /// it is not: a pipe echoes nothing in the first place.
     fn off(terminal: bool) -> io::Result<Echo> {
         if !terminal {
             return Ok(Echo { restore: None });
