@@ -1334,13 +1334,13 @@ fn a_cancelled_run_settles_as_cancelled_and_the_settled_frame_is_left_alone() {
     );
 
     pty.type_bytes(&[0x03]);
-    wire.release();
 
     assert!(
         drawn.wait_until(|frame| frame.contains("cancelled")),
         "a cancelled run settles as cancelled: {:?}",
         drawn.text()
     );
+    wire.release();
 
     // Settling draws once and nothing after: the run is over, so there is no clock left to
     // wake the loop and the settled frame is the last byte the launch writes.
