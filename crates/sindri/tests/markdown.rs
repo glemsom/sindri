@@ -1,33 +1,23 @@
-//! Markdown laid out as the rows the transcript draws, one construct of §12's table at
-//! a time: the parse is `pulldown-cmark`'s and the rendering is ours, because the
-//! layout is the product and no crate matches it (#52).
-//!
-//! What is held here is the picture at the row: a row's words and the look each run of
-//! them is drawn in, so a heading's weight and a code block's gutter are the assertion
-//! and not an opinion about the code that made them. The frames in `frames` hold the
-//! same constructs as a whole screen at 80 columns; these hold them one at a time.
+//! Markdown laid out as the rows a transcript draws, one construct at a time: `pulldown-cmark` finds
+//! the constructs and this front end decides what each of them looks like, so a heading's weight and
+//! a code block's gutter are held here; a whole screen of them is `frames`'.
 
 use sindri::ink::{Face, Ink, Look};
 use sindri::markdown;
 use sindri::rows::Row;
 
-/// The words a row is drawn with, its gutter and all.
 fn words(row: &Row) -> String {
     row.spans().iter().map(|(text, _)| text.as_str()).collect()
 }
 
-/// The row every construct is drawn as, as its words.
 fn drawn(rows: &[Row]) -> Vec<String> {
     rows.iter().map(words).collect()
 }
 
-/// The looks a row's spans are in, in order.
 fn looks(row: &Row) -> Vec<Look> {
     row.spans().iter().map(|(_, look)| *look).collect()
 }
 
-/// §12's first row of the table: an h1 is bold and stands under one blank row, and the
-/// five levels under it are set in the weight and the ink their own row asks for.
 #[test]
 fn a_heading_is_bold_and_an_h1_stands_under_one_blank_row() {
     let rows = markdown::rows(
@@ -78,8 +68,6 @@ fn a_heading_is_bold_and_an_h1_stands_under_one_blank_row() {
     }
 }
 
-/// The h1's blank row is above the heading itself and not only above the block before
-/// it: an answer that opens on a heading opens on one blank row.
 #[test]
 fn an_answer_that_opens_on_an_h1_opens_on_a_blank_row() {
     let rows = markdown::rows("# The fence rule", 40);
@@ -87,9 +75,6 @@ fn an_answer_that_opens_on_an_h1_opens_on_a_blank_row() {
     assert_eq!(rows[0].width(), 0, "the blank row says nothing at all");
 }
 
-/// §12's inline rows: a run of inline code is set reversed, and a link says its words
-/// and then the URL in dim ink when the URL is not those words — so what a reader sees
-/// is what the writer wrote, and a bare `[keys](keys)` says `keys` once.
 #[test]
 fn inline_code_is_reversed_and_a_link_names_the_url_the_words_hide() {
     let rows = markdown::rows(
@@ -125,9 +110,6 @@ fn inline_code_is_reversed_and_a_link_names_the_url_the_words_hide() {
     );
 }
 
-/// Inline code keeps its own spacing: `a  b` is two spaces of code and not a word
-/// boundary, so a run of code is written as it was written and broken at the row's edge
-/// and nowhere else.
 #[test]
 fn inline_code_keeps_the_spacing_it_was_written_with() {
     let rows = markdown::rows("call `a  b` now", 40);
@@ -141,8 +123,6 @@ fn inline_code_keeps_the_spacing_it_was_written_with() {
     );
 }
 
-/// §12's unordered row: a `•` per item and two spaces per depth, so a list of lists is
-/// read as a shape before it is read as words.
 #[test]
 fn a_bullet_marks_each_item_and_two_spaces_mark_each_depth() {
     let rows = markdown::rows("- one\n- two\n  - inner\n- three", 40);
@@ -161,10 +141,6 @@ fn a_bullet_marks_each_item_and_two_spaces_mark_each_depth() {
     }
 }
 
-/// §12's ordered row: `1.` numbering per item, in the order the items were written and
-/// from the number the list starts at, with the same two spaces per depth — and a
-/// second row of a wrapped item set under the item's own words rather than under its
-/// number.
 #[test]
 fn an_ordered_list_numbers_its_items_and_hangs_its_wrapped_rows_under_them() {
     let rows = markdown::rows("3. three\n4. four\n5. a fifth item long enough to wrap", 20);
@@ -180,9 +156,6 @@ fn an_ordered_list_numbers_its_items_and_hangs_its_wrapped_rows_under_them() {
     );
 }
 
-/// §12's quote row: a `▏` bar down the left of what was quoted, in dim ink, on every
-/// row the quote wraps into — the bar is a fact about the block and not a glyph of its
-/// first line.
 #[test]
 fn a_blockquote_sets_its_words_behind_a_dim_bar() {
     let rows = markdown::rows("> a fence still open is a code block, never prose", 24);
@@ -204,9 +177,6 @@ fn a_blockquote_sets_its_words_behind_a_dim_bar() {
     }
 }
 
-/// §12's code row: a `▏` gutter carrying the language's tag, the code inside it drawn
-/// with the spacing it was written with, and its words set in the ink their kind is read
-/// in — `syntect` decides what kind a word is, and this front end decides which ink.
 #[test]
 fn a_code_block_is_guttered_by_its_language_and_highlighted() {
     let rows = markdown::rows("```rust\nfn main() {\n    let x = 1;\n}\n```", 40);
@@ -240,9 +210,6 @@ fn a_code_block_is_guttered_by_its_language_and_highlighted() {
     );
 }
 
-/// A language no syntax definition names is drawn plain and says nothing about it: the
-/// block is still a block, its tag is still its tag, and a wire that streams a language
-/// this build has never heard of costs the run no error (§12).
 #[test]
 fn a_language_no_syntax_definition_names_is_drawn_plain_and_says_nothing() {
     let rows = markdown::rows("```frobnicate\nlet x = 1; # not rust\n```", 40);
@@ -260,9 +227,6 @@ fn a_language_no_syntax_definition_names_is_drawn_plain_and_says_nothing() {
     );
 }
 
-/// ADR-0008's rule, kept when the plain rendering goes: a fence the wire has not closed
-/// yet is a code block and never prose that ate the rest of the answer — the block stays
-/// open to the end of the text and is drawn as the block it opened.
 #[test]
 fn a_fence_still_open_at_the_end_of_the_text_is_a_code_block() {
     let rows = markdown::rows("the rule is one boolean:\n```rust\nfn main() {", 40);
@@ -278,11 +242,6 @@ fn a_fence_still_open_at_the_end_of_the_text_is_a_code_block() {
     );
 }
 
-/// §12's picture row, as far as a layout with no surface can show it: a mermaid fence the
-/// renderer draws is drawn here as the code it was written as — the words its block copies as,
-/// and all a reader whose terminal places no picture sees — with nothing under it, because
-/// there is nothing to say. What a frame that *does* place pictures adds over these rows is
-/// `pictures`' (#55).
 #[test]
 fn a_mermaid_fence_that_draws_is_drawn_as_the_source_it_was_written_as() {
     let rows = markdown::rows("```mermaid\nflowchart TD\n  A-->B\n```", 200);
@@ -293,9 +252,6 @@ fn a_mermaid_fence_that_draws_is_drawn_as_the_source_it_was_written_as() {
     );
 }
 
-/// #54's refusal row: a mermaid fence the renderer will not read shows its source with one
-/// sentence under it naming the reason, because a reader looking at a diagram that did not
-/// draw cannot otherwise tell a fence they wrote badly from a build that cannot draw it.
 #[test]
 fn a_mermaid_fence_that_will_not_draw_shows_its_source_under_the_reason() {
     let rows = drawn(&markdown::rows("```mermaid\nnot a diagram\n```", 200));
@@ -311,10 +267,6 @@ fn a_mermaid_fence_that_will_not_draw_shows_its_source_under_the_reason() {
     );
 }
 
-/// ADR-0008's rule on the picture side: a fence whose closing line has not arrived is not a
-/// diagram yet. The proof is the source itself — the same prose that comes back with a
-/// reason once the fence closes comes back with none while it is open, which is only
-/// possible if the renderer was never asked.
 #[test]
 fn a_mermaid_fence_still_streaming_names_no_reason_because_nothing_was_asked() {
     let closed = drawn(&markdown::rows("```mermaid\nnot a diagram\n```", 200));
@@ -335,9 +287,6 @@ fn a_mermaid_fence_still_streaming_names_no_reason_because_nothing_was_asked() {
     );
 }
 
-/// §12's table row: `│` between the columns, a `─` rule under the header and no outer
-/// border, so a table reads as a block of the answer rather than as a box drawn around
-/// one.
 #[test]
 fn a_table_rules_one_line_under_its_header_and_draws_no_outer_border() {
     let rows = markdown::rows(
@@ -362,9 +311,6 @@ fn a_table_rules_one_line_under_its_header_and_draws_no_outer_border() {
     }
 }
 
-/// The 200-column table at 40 columns, which is §12's own promise: it wraps inside its
-/// cells rather than reflowing into a paragraph, it never loses a word, and it draws one
-/// rule under its header however many rows it takes.
 #[test]
 fn a_table_wider_than_the_room_wraps_inside_its_cells_and_keeps_every_word() {
     let text = "| a heading is bold | a code block is guttered by its language | an unknown \

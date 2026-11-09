@@ -1,25 +1,6 @@
-//! The mermaid corpus, held to the fact that each diagram *is* a picture: every
-//! diagram type a fence is really written as is drawn in this process and the
-//! drawing is measured in cells, which is what the front end needs of it before a
-//! pixel is spent (§12, §16, ADR-0003).
-//!
-//! What is held is the drawing and never the fence: a fence that parses is proved
-//! elsewhere, and the corpus is here because a renderer's breadth is a claim the
-//! package makes and nothing else in the suite would notice if a diagram type
-//! stopped drawing.
-//!
-//! The comparison is deliberately not byte for byte. `mermaid-rs-renderer` measures
-//! every label against the fonts installed on the machine (`fontdb`'s system load,
-//! which it offers no way to replace), so the same fence is a different SVG, with
-//! different widths and different wrapping, on a machine with different fonts: a
-//! golden of it is a golden of the box that blessed it. What travels with this
-//! binary is the font a *picture* is drawn in (ADR-0003), and that is the half the
-//! goldens can hold — so the drawing is proved here to exist, to be whole, and to
-//! measure, and its geometry goes back into a golden the day the renderer lets a
-//! font be supplied.
-//!
-//! An eval is judged by `make evals` and never by `make test`, which is why the
-//! test here is ignored: the stage that owns a failure is the stage that prints it.
+//! Every fence in the corpus is drawn here and measured, and held to that and not to a
+//! golden: the renderer measures each label against the machine's fonts and offers no way to
+//! supply one, so a golden of it would be a golden of the box that blessed it.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -31,12 +12,9 @@ use sindri::mermaid::Diagram;
 /// because there is no golden beside it any more.
 const CORPUS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/mermaid");
 
-/// How long this eval waits for one fence: its own patience, deliberately not
-/// `mermaid::BOUND`, because a bound on a stall a reader feels says nothing about what a
-/// corpus costs on a shared runner.
+/// A shared runner's patience, not a reader's: `mermaid::BOUND` bounds a stall a person feels.
 const EVAL_BOUND: Duration = Duration::from_secs(30);
 
-/// The corpus, in name order, so two runs of the test walk the same fences.
 fn corpus() -> Vec<PathBuf> {
     let mut fences: Vec<PathBuf> = std::fs::read_dir(CORPUS)
         .unwrap_or_else(|error| panic!("the corpus at {CORPUS} is readable: {error}"))
@@ -47,13 +25,11 @@ fn corpus() -> Vec<PathBuf> {
     fences
 }
 
-/// The fence `path` holds, or a panic naming the file that is not readable.
 fn source(path: &Path) -> String {
     std::fs::read_to_string(path)
         .unwrap_or_else(|error| panic!("{} is readable: {error}", path.display()))
 }
 
-/// `fence.mmd` as a test names it, which is how a failure says which fence it was.
 fn named(path: &Path) -> String {
     path.file_stem()
         .expect("a corpus file has a name")
@@ -71,8 +47,8 @@ fn every_fence_in_the_corpus_is_drawn_as_a_picture_that_measures() {
         fences.len()
     );
 
-    // The first draw in a process pays the renderer's start-up as well as the drawing, and
-    // that is no fence's cost: one is drawn untimed so every number below is a drawing.
+    // The first draw in a process pays the renderer's start-up as well as the drawing,
+    // so one is drawn untimed and every number below is a drawing.
     let _ = Diagram::of_within(EVAL_BOUND, &source(&fences[0]));
 
     let mut failures = Vec::new();
@@ -134,8 +110,6 @@ fn every_fence_in_the_corpus_is_drawn_as_a_picture_that_measures() {
     );
 }
 
-/// The beginning and the end of a drawing, so a failure says what the SVG actually was
-/// rather than printing a whole one.
 fn head_and_tail(svg: &str) -> String {
     let head: String = svg.chars().take(60).collect();
     let tail: String = {

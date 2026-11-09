@@ -1,15 +1,6 @@
-//! What a picture an answer points at comes to: a source resolved inside the workspace is
-//! measured into the cells it takes and placed over them through the Kitty protocol, and one
-//! that leaves the workspace — or is not there at all — is refused with the reason the
-//! caption prints in its place (§12, #55).
-//!
-//! Nothing here has a terminal. A placement is asserted as the glyphs it puts in the cells of a
-//! buffer ratatui's headless backend hands back — the placeholders of a picture the terminal
-//! holds, and the protocol's transmission header in the cell that sends one — and a cost, a
-//! raster made, is read off the counter the placement keeps, so the three rules ADR-0008 laid
-//! down are numbers a test can hold rather than a reading of the code. What the header count is
-//! not is a wire: no byte leaves this process, and the count says only that no cell of a frame
-//! carries a transmission.
+//! Nothing here has a terminal: a placement is asserted as the glyphs in a buffer ratatui's
+//! headless backend hands back, and a transmission count is a reading of that buffer and not a
+//! wire — no byte leaves this process.
 
 use std::path::{Path, PathBuf};
 
@@ -30,9 +21,6 @@ use sindri::view::View;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
 
-/// A directory with a workspace inside it, and one picture in that workspace: the file a
-/// run's own commands could have read, and so the file an answer may point the reader at.
-/// What is outside it — the directory above — is what a refusal is about.
 fn workspace(width: u32, height: u32) -> (tempfile::TempDir, PathBuf) {
     let root = tempfile::tempdir().expect("a directory to stand in");
     let inside = root.path().join("ws");
@@ -41,22 +29,15 @@ fn workspace(width: u32, height: u32) -> (tempfile::TempDir, PathBuf) {
     (root, inside)
 }
 
-/// One picture written at `path`: a plain field of colour, because nothing here reads its
-/// pixels — what a picture looks like is `graphics`' business.
 fn shoot(path: &Path, width: u32, height: u32) {
     let picture = RgbaImage::from_pixel(width, height, Rgba([120, 80, 200, 255]));
     picture.save(path).expect("a picture on disk");
 }
 
-/// The surface a picture is measured on: the workspace a source is resolved inside, the cell
-/// it is drawn at, and whether the terminal places what it is handed.
 fn surface(workspace: &Path) -> Surface {
     Surface::of(Some(workspace), CellSize::new(10, 20), true)
 }
 
-/// §12's first picture: a source inside the workspace is found, and measured into the cells
-/// the band's width leaves it. The source as it was written is what the picture is kept by,
-/// so the same words in two answers are one picture (ADR-0008).
 #[test]
 fn a_picture_inside_the_workspace_is_measured_as_the_cells_it_takes() {
     let (_root, workspace) = workspace(40, 40);
@@ -81,9 +62,6 @@ fn a_picture_inside_the_workspace_is_measured_as_the_cells_it_takes() {
     );
 }
 
-/// A source wider than the band is the ordinary case, and it is measured into the cells the
-/// band has rather than refused: a block wider than its row would be clipped by the paint
-/// and lost from whatever copies it (§12).
 #[test]
 fn a_picture_wider_than_the_band_is_measured_into_the_columns_the_band_has() {
     let (_root, workspace) = workspace(400, 200);
@@ -98,8 +76,6 @@ fn a_picture_wider_than_the_band_is_measured_into_the_columns_the_band_has() {
     );
 }
 
-/// An SVG is measured by the size it declares, with no renderer asked for it: the same
-/// promise ADR-0003 makes of a mermaid fence holds for a drawing an answer points at.
 #[test]
 fn a_drawing_inside_the_workspace_is_measured_by_the_size_it_declares() {
     let (_root, workspace) = workspace(40, 40);
@@ -121,9 +97,6 @@ fn a_drawing_inside_the_workspace_is_measured_by_the_size_it_declares() {
     );
 }
 
-/// The refusal §12 asks for by name: a picture is drawn from a file the run could read, and
-/// a file outside the workspace is not one. It is said as a reason and not as a silence,
-/// because a picture that vanished is the failure the caption exists for.
 #[test]
 fn a_picture_outside_the_workspace_is_refused_with_the_reason_the_caption_prints() {
     let (root, workspace) = workspace(40, 40);
@@ -143,8 +116,6 @@ fn a_picture_outside_the_workspace_is_refused_with_the_reason_the_caption_prints
     }
 }
 
-/// And a source that resolves nowhere is refused with what the read said, because a mistyped
-/// path and a file the run may not read are two things a reader acts on differently.
 #[test]
 fn a_picture_that_is_not_there_is_refused_with_the_reason_the_read_gave() {
     let (_root, workspace) = workspace(40, 40);
@@ -159,9 +130,6 @@ fn a_picture_that_is_not_there_is_refused_with_the_reason_the_read_gave() {
     );
 }
 
-/// A frame nobody told where it stands draws no picture rather than one from a directory
-/// nobody named: the workspace is the whole of what makes a source a file the run could
-/// read (§12).
 #[test]
 fn a_frame_with_no_workspace_refuses_the_picture_and_says_what_it_lacks() {
     let refusal = picture::measure("shot.png", 80, &Surface::none())
@@ -174,8 +142,6 @@ fn a_frame_with_no_workspace_refuses_the_picture_and_says_what_it_lacks() {
     );
 }
 
-/// §12's block: a picture is spoken of as the words an answer wrote over it, and as its
-/// source when it wrote none — a picture with no words would copy as nothing at all.
 #[test]
 fn a_picture_is_spoken_of_as_its_alternate_text_or_as_its_source() {
     assert_eq!(
@@ -190,13 +156,6 @@ fn a_picture_is_spoken_of_as_its_alternate_text_or_as_its_source() {
     );
 }
 
-/// §12's block: a picture takes the cells it was measured into, and the words it is spoken of
-/// as stand at the head of them — so a reader of a terminal that places the picture sees the
-/// picture, and a reader of one that does not sees what it was of.
-///
-/// The words are laid out as prose and not one run, so an alt text longer than the band wraps
-/// onto the block's own rows instead of running over its edge: a row is whole or it is not
-/// written (§12).
 #[test]
 fn a_picture_is_laid_out_as_the_rows_it_takes_with_its_words_at_the_head() {
     let (_root, workspace) = workspace(40, 40);
@@ -239,8 +198,6 @@ fn a_picture_is_laid_out_as_the_rows_it_takes_with_its_words_at_the_head() {
     );
 }
 
-/// A picture's words are its own even when the answer wrote none: the source is what it is
-/// spoken of as, because a picture with no words at all would copy as nothing.
 #[test]
 fn a_picture_written_with_no_alternate_text_is_spoken_of_as_its_source() {
     let (_root, workspace) = workspace(40, 40);
@@ -256,9 +213,6 @@ fn a_picture_written_with_no_alternate_text_is_spoken_of_as_its_source() {
     );
 }
 
-/// A terminal that places no picture is given the words and no rows reserved for a picture it
-/// cannot draw: a block of rows nothing fills is a hole in the transcript, and a hole is not
-/// the honest way to say that a picture is not drawn (§12).
 #[test]
 fn a_terminal_that_places_no_picture_is_given_the_words_and_no_rows_for_it() {
     let (_root, workspace) = workspace(40, 40);
@@ -282,8 +236,6 @@ fn a_terminal_that_places_no_picture_is_given_the_words_and_no_rows_for_it() {
     );
 }
 
-/// And a picture that is refused says so where it would have stood, in the words the refusal
-/// was measured in: a picture that vanished is the failure the caption exists for (§12).
 #[test]
 fn a_refused_picture_is_a_row_saying_why_it_was_not_drawn() {
     let (root, workspace) = workspace(40, 40);
@@ -302,10 +254,6 @@ fn a_refused_picture_is_a_row_saying_why_it_was_not_drawn() {
     );
 }
 
-/// A picture's words are held to the band like any other words: an alt text wider than it
-/// wraps instead of running over the edge, and a refusal's caption — which is longer than any
-/// alt text a writer would type — does the same, so a copy of the block never takes half a
-/// word (§12).
 #[test]
 fn a_picture_whose_words_are_wider_than_the_band_wraps_and_is_never_cut() {
     let (_root, taken) = workspace(40, 40);
@@ -343,18 +291,12 @@ fn a_picture_whose_words_are_wider_than_the_band_wraps_and_is_never_cut() {
     );
 }
 
-/// The screen every frame below is painted at: wide enough for the rail beside the band, and
-/// tall enough for an answer holding a picture's whole block.
 const SCREEN: (u16, u16) = (100, 30);
 
-/// The cell a launch probes once and keeps for the length of the launch (§12, ADR-0003).
 fn cell() -> CellSize {
     CellSize::new(10, 20)
 }
 
-/// The frame an answer is drawn on: the workspace it stands in, the cell the launch measured,
-/// and whether its terminal places a picture at all — the three facts a picture's rows are
-/// measured against.
 fn frame(workspace: &Path, text: &str, draws: bool) -> View {
     let mut view = View::of(
         vec![Entry::Assistant {
@@ -371,7 +313,6 @@ fn frame(workspace: &Path, text: &str, draws: bool) -> View {
     view
 }
 
-/// The frame `view` paints at `size`, as the buffer a terminal would be handed.
 fn painted_at(view: &mut View, size: (u16, u16)) -> Buffer {
     let (cols, rows) = size;
     let mut terminal =
@@ -382,16 +323,15 @@ fn painted_at(view: &mut View, size: (u16, u16)) -> Buffer {
     completed.buffer.clone()
 }
 
-/// The glyph a Kitty placement writes into every cell it covers, and the only thing on a
-/// screen that says a picture is placed there rather than written about.
+/// The glyph a Kitty placement writes into every cell it covers: the one thing on a screen
+/// that says a picture is placed there rather than written about.
 const PLACEHOLDER: char = '\u{10EEEE}';
 
-/// The first chunk of the protocol's transmission, which is what a terminal is told once and
-/// never again for one picture (ADR-0008): the glyphs a cell holds when the placement is the
-/// one that sends the picture rather than one that points at what the terminal already holds.
+/// The first chunk of the protocol's transmission, which a terminal is told once and never
+/// again for one picture: the glyph a cell holds when the placement sends the picture rather
+/// than pointing at what the terminal already holds.
 const TRANSMIT: &str = "_Gq=2,";
 
-/// The rows of `buffer` a picture is drawn over, top to bottom.
 fn pictured_rows(buffer: &Buffer) -> Vec<u16> {
     let area = buffer.area;
     (area.y..area.bottom())
@@ -405,14 +345,8 @@ fn pictured_rows(buffer: &Buffer) -> Vec<u16> {
         .collect()
 }
 
-/// The transmission headers `buffer` carries, counted as the cells whose glyphs hold the
-/// protocol's first chunk: the bytes a terminal is sent when this buffer is written out, and
-/// the count a scroll and a repaint must leave where it was (ADR-0008).
-///
-/// It is a reading of the painted buffer and not of a wire — nothing here has a terminal to
-/// write one to. What it holds is that no cell of the frame carries a transmission, which is
-/// the whole of what a frame can do about a picture the terminal already holds; it does not
-/// count the bytes of one, and it does not say what a terminal does with them.
+/// The cells whose glyphs hold the protocol's first chunk, counted: what a buffer sends when it is
+/// written out, and the count a scroll and a repaint must leave where it was.
 fn transmission_headers(buffer: &Buffer) -> usize {
     let area = buffer.area;
     let mut count = 0;
@@ -428,9 +362,6 @@ fn transmission_headers(buffer: &Buffer) -> usize {
     count
 }
 
-/// §12's picture, drawn: a source inside the workspace reaches the terminal as the Kitty
-/// protocol's placeholders over the rows its block reserved, and the paint that first shows it
-/// is the one that carries its transmission header.
 #[test]
 fn a_picture_inside_the_workspace_is_placed_over_the_rows_it_takes() {
     let (_root, workspace) = workspace(400, 200);
@@ -457,9 +388,6 @@ fn a_picture_inside_the_workspace_is_placed_over_the_rows_it_takes() {
     );
 }
 
-/// ADR-0008's second rule as a cost: a picture already placed is never transmitted again. A
-/// repaint of the same frame carries the placeholders and no transmission header, because the
-/// protocol's own flag says the terminal holds what the first paint sent it.
 #[test]
 fn a_picture_painted_a_second_time_carries_no_transmission_header() {
     let (_root, workspace) = workspace(400, 200);
@@ -491,8 +419,6 @@ fn a_picture_painted_a_second_time_carries_no_transmission_header() {
     );
 }
 
-/// The same rule where a scroll puts it: a placement moved down the band is the picture the
-/// terminal holds, written again at another row — no header, no raster.
 #[test]
 fn a_picture_placed_again_after_a_scroll_carries_no_transmission_header() {
     let (_root, workspace) = workspace(400, 200);
@@ -533,9 +459,6 @@ fn a_picture_placed_again_after_a_scroll_carries_no_transmission_header() {
     );
 }
 
-/// ADR-0008's third rule: a resize re-rasterises only what is visible. A width change drops
-/// every row the cache held, so the next paint lays out the entries the band reaches and no
-/// others — and a picture becomes pixels only when its block is on the screen.
 #[test]
 fn a_resize_rasterises_only_the_picture_the_band_goes_on_to_show() {
     let (_root, workspace) = workspace(800, 200);
@@ -588,11 +511,6 @@ fn a_resize_rasterises_only_the_picture_the_band_goes_on_to_show() {
     );
 }
 
-/// §12's third rule as the cost it is: the cache holds the pictures the band shows and drops
-/// the ones it has left, so dragging a width across a range does not keep a full raster per
-/// size for ever. The size the band no longer shows is gone — going back to it makes the
-/// picture again — while the size it does show is still held, so a repaint of it transmits
-/// nothing and #55's "a scroll never re-transmits" survives the bound.
 #[test]
 fn a_resize_keeps_the_picture_the_band_shows_and_drops_the_size_it_has_left() {
     let (_root, workspace) = workspace(800, 200);
@@ -648,9 +566,6 @@ fn a_resize_keeps_the_picture_the_band_shows_and_drops_the_size_it_has_left() {
     );
 }
 
-/// §12's copy rule: a picture's block copies as its words and never as the bytes it is drawn
-/// from. `Ctrl-Y` hands out the rows the block was laid out as, so the cells a reader marked
-/// give `a purple field` and no escape sequence, no placeholder and no base64.
 #[test]
 fn a_picture_block_copied_out_of_the_band_is_its_words_and_never_its_bytes() {
     let (_root, workspace) = workspace(400, 200);
@@ -661,8 +576,6 @@ fn a_picture_block_copied_out_of_the_band_is_its_words_and_never_its_bytes() {
         .expect("the picture is on the screen");
 
     view.drag(Cell::new(drawn, 0), Cell::new(drawn, SCREEN.0 - 1));
-    // The mark and the cells `Ctrl-Y` hands out are one value, one paint apart at
-    // the most.
     painted_at(&mut view, SCREEN);
     let taken = match view.key(Key::Copy) {
         Outcome::Copy(words) => words,
@@ -680,9 +593,6 @@ fn a_picture_block_copied_out_of_the_band_is_its_words_and_never_its_bytes() {
     );
 }
 
-/// §12's absence over refusal: a terminal that speaks no Kitty is given the words, whole, and
-/// no row reserved for a picture it cannot draw. The frame is the frame a reader without
-/// pictures would have had — nothing truncated, nothing half-drawn, no transmission header.
 #[test]
 fn a_terminal_that_speaks_no_kitty_is_given_the_words_and_an_uncorrupted_frame() {
     let (_root, workspace) = workspace(400, 200);
@@ -718,10 +628,6 @@ fn a_terminal_that_speaks_no_kitty_is_given_the_words_and_an_uncorrupted_frame()
     );
 }
 
-/// The terminal is asked what it is by its own name, once, before the first frame: a terminal
-/// that speaks Kitty is handed the pictures its frames draw from, and one that does not is
-/// handed none. `KITTY_WINDOW_ID` is not the question — the terminal that names itself in
-/// `TERM` is the terminal that speaks the protocol.
 #[test]
 fn a_terminal_that_names_itself_as_one_that_places_pictures_is_told_so() {
     for term in [
@@ -752,10 +658,6 @@ fn a_terminal_that_names_itself_as_one_that_places_pictures_is_told_so() {
     }
 }
 
-/// §12's other picture, and the one the milestone is judged on: a mermaid fence that draws is
-/// a diagram, and the diagram is placed over the source its block stands on — the source being
-/// what the block copies as, and what a reader whose terminal places no picture is left with
-/// (ADR-0003).
 #[test]
 fn a_mermaid_fence_that_draws_is_a_block_the_diagram_is_placed_over() {
     let (_root, workspace) = workspace(40, 40);
@@ -791,9 +693,6 @@ fn a_mermaid_fence_that_draws_is_a_block_the_diagram_is_placed_over() {
     );
 }
 
-/// ADR-0008's rule, held from the other side: a fence whose closing line has not arrived is
-/// not a diagram, so nothing is measured for it and no cell is claimed by a picture that does
-/// not exist yet.
 #[test]
 fn a_mermaid_fence_still_streaming_claims_no_cells_for_a_picture() {
     let (_root, workspace) = workspace(40, 40);
@@ -816,9 +715,6 @@ fn a_mermaid_fence_still_streaming_claims_no_cells_for_a_picture() {
     );
 }
 
-/// The two pictures a frame draws are placed and kept apart: a diagram and an image in one
-/// answer are two cache entries, each drawn where its own block is, and neither is mistaken for
-/// the other by the cells it takes.
 #[test]
 fn a_diagram_and_an_image_in_one_answer_are_placed_each_over_its_own_block() {
     let (_root, workspace) = workspace(400, 200);
