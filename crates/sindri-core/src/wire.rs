@@ -1,5 +1,6 @@
-//! The wire is a provider dialect and its endpoint: anthropic, openai, copilot.
-//! Served names are read off it and kept beside the pair that produced them.
+//! The wire is a provider dialect and its endpoint: anthropic, openai, copilot. What a
+//! wire says it serves is read off it, and kept beside the pair that produced it, never
+//! invented here.
 
 use std::fmt;
 
@@ -7,24 +8,17 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde::de::Error as _;
 
-/// A provider dialect, from the closed set the parser accepts. A fourth wire
-/// cannot be invented in the interface, because there is no word for it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Wire {
-    /// Anthropic Messages.
     Anthropic,
-    /// OpenAI Chat Completions, and Responses where the name demands it.
     Openai,
-    /// GitHub Copilot, behind its own OAuth token store.
     Copilot,
 }
 
 impl Wire {
-    /// The words the parser accepts, in the order the provider row offers them.
     pub const WORDS: [&'static str; 3] = ["anthropic", "openai", "copilot"];
 
-    /// The word for this dialect: what the config file holds and the row shows.
     pub fn word(self) -> &'static str {
         match self {
             Wire::Anthropic => "anthropic",
@@ -33,8 +27,8 @@ impl Wire {
         }
     }
 
-    /// The variable this dialect's own key is read from, for the dialect that has
-    /// one: a Copilot session is never an API key, it is a sign-in (§10).
+    /// The variable this dialect's own key is read from, or `None`: a Copilot session is
+    /// never an API key, it is a sign-in.
     pub fn credential_variable(self) -> Option<&'static str> {
         match self {
             Wire::Anthropic => Some("ANTHROPIC_API_KEY"),
@@ -43,7 +37,6 @@ impl Wire {
         }
     }
 
-    /// The dialect a word names, or `None` when the word is not one of the three.
     pub fn from_word(word: &str) -> Option<Wire> {
         match word {
             "anthropic" => Some(Wire::Anthropic),

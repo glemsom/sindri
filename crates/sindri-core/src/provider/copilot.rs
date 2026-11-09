@@ -1,23 +1,3 @@
-//! The Copilot sign-in: rig's OAuth device flow, the code a person is asked to
-//! enter, and the owner-only file the session it keeps is written to.
-//!
-//! A Copilot session is not an API key and is never read back as one (§10): it
-//! lives in `$XDG_CONFIG_HOME/sindri/auth/copilot.json`, owner-only, while §11's
-//! `config.toml` stays the only file `api_key` is ever read from. Nothing here
-//! prints a record: [`Store::secrets`] holds every credential the record keeps,
-//! and it is the set a `Redacted` scrubs through, so the session and the GitHub
-//! token behind it leave through the mask or not at all (ADR-0011).
-//!
-//! The flow runs through seams a test owns — the transport a sign-in's requests
-//! travel over, the file the record is kept in, and the callback that shows the
-//! code — so the code, the wait between polls, the `0600` file, a transparent
-//! refresh and a revoked session are all proved with no socket and no account.
-//!
-//! What a resolve failure means is decided here rather than by the library's
-//! wording: a store holding nothing, a sign-in the wire will not take, and a
-//! store that will not open are three different next steps, and each is said in
-//! Sindri's own words so a run can print it and go no further (§10, §15).
-
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -31,37 +11,25 @@ use super::Credential;
 use crate::config::{self, ConfigError, Environment};
 use crate::redact::{Redacted, SecretSet};
 
-/// The command that makes any of this fixable, spelled once so the failure a run
-/// prints and the row a sign-in ends with cannot drift apart.
 pub const LOGIN: &str = "sindri auth login copilot";
 
-/// The one mode a sign-in is kept at: owner-only, because every byte of the
-/// record is a credential. The store writes it; a test asserts it against the
-/// file on disk rather than trusting this number.
+/// Owner-only, because every byte of the record is a credential.
 pub const MODE: u32 = 0o600;
 
-/// The record's Copilot session, as the record rig keeps spells the field.
 const SESSION_FIELD: &str = "token";
 
-/// The GitHub token that session was exchanged for, in the same record.
 const GITHUB_FIELD: &str = "github_token";
 
-/// The one status a wire refuses a credential with, which is a sign-in gone bad
-/// rather than a wire gone quiet.
+/// A wire refuses a credential with these: a sign-in gone bad, not a wire gone quiet.
 const REFUSED: [u16; 2] = [401, 403];
 
-/// The code a person is asked to enter, and where to enter it: the one thing a
-/// sign-in shows while it waits.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DeviceCode {
-    /// Where the person goes.
     pub verification_uri: String,
-    /// What they type there.
     pub user_code: String,
 }
 
 impl fmt::Display for DeviceCode {
-    /// One line a person can follow, code included.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             formatter,
@@ -71,27 +39,15 @@ impl fmt::Display for DeviceCode {
     }
 }
 
-/// Why a Copilot session could not be resolved, as a fact a person can act on
-/// rather than as a library's error: a sign-in that never happened, one the wire
-/// will not take, and a store that will not open are three different next steps.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SignIn {
-    /// The store holds no sign-in at all.
     Absent,
-    /// A sign-in is on file and the wire would not take it, so a new one is what
-    /// fixes it and no retry will.
     Revoked,
-    /// The sign-in could not be checked: the store would not open, or GitHub
-    /// could not be reached.
     Unavailable(Redacted),
-    /// A sign-in was attempted and did not finish: the code expired, the person
-    /// denied it, or the exchange was refused.
     Denied(Redacted),
 }
 
 impl SignIn {
-    /// One line naming what happened and the command that fixes it, safe to
-    /// print because a reason is carried scrubbed.
     pub fn message(&self) -> Redacted {
         match self {
             SignIn::Absent => {
@@ -111,22 +67,15 @@ impl fmt::Display for SignIn {
     }
 }
 
-/// The sign-in itself: the record rig keeps on disk, and the transport its
-/// requests travel over.
 #[derive(Clone)]
 pub struct Store {
-    /// rig's store of records: one owner-only file per provider, written whole
-    /// or not at all, with a lock another process waits on rather than racing
-    /// a refresh with.
+    /// rig's store of records: one owner-only file per provider, written whole or not
+    /// at all, with a lock another process waits on rather than racing a refresh with.
     records: FileTokenStore,
-    /// How a sign-in's requests travel: the network in a run, a replay in a test.
     transport: DynHttpClient,
 }
 
 impl Store {
-    /// A store over the files in `dir`, whose requests travel through
-    /// `transport`: the network, or a replay a test substitutes so the flow is
-    /// proved with no socket.
     pub fn over(transport: impl HttpClientExt + Clone + 'static, dir: impl Into<PathBuf>) -> Store {
         Store {
             records: FileTokenStore::new(dir),
@@ -134,7 +83,6 @@ impl Store {
         }
     }
 
-    /// The store the environment points at, sending over the network.
     pub fn resolve(environment: &impl Environment) -> Result<Store, ConfigError> {
         Ok(Store::over(
             rig_reqwest::ReqwestClient::default(),
@@ -142,14 +90,12 @@ impl Store {
         ))
     }
 
-    /// The one file the record is kept in, for a row to name and a test to stat.
     pub fn path(&self) -> PathBuf {
         self.records.path(PROVIDER_NAME)
     }
 
-    /// A session to ask the wire with, refreshed when the one on file has
-    /// expired: a run never sees an expiry, and never starts a sign-in of its own
-    /// because a run has no one to show a code to.
+    /// A session to ask the wire with, refreshed when the one on file has expired: a run
+    /// never starts a sign-in of its own, because it has no one to show a code to.
     pub fn session(&self) -> Result<Credential, SignIn> {
         let record = self.record();
         let secrets = secrets_of(&record);
@@ -164,9 +110,9 @@ impl Store {
         }
     }
 
-    /// Sign in with the device flow, showing the code through `show` as GitHub
-    /// hands it over, and keep the session it ends with. Blocks until GitHub
-    /// answers, which is what the wait between polls is.
+    /// Sign in with the device flow, showing the code through `show` as GitHub hands it
+    /// over, and keep the session it ends with. Blocks while GitHub is polled, which is what
+    /// the wait between polls is.
     pub fn login(&self, show: impl Fn(DeviceCode) + Send + Sync + 'static) -> Result<(), SignIn> {
         let secrets = self.secrets();
         let code = DeviceCodeHandler::new(move |prompt| {
@@ -182,21 +128,16 @@ impl Store {
         })
     }
 
-    /// Every literal the record holds that no window may print: the session and
-    /// the GitHub token behind it, read out of the record as it lies on disk
-    /// rather than from any field this crate happens to know the meaning of.
+    /// Every literal the record holds that no window may print, read out of the record
+    /// as it lies on disk rather than from any field this crate knows the meaning of.
     pub fn secrets(&self) -> SecretSet {
         secrets_of(&self.record())
     }
 
-    /// rig's authenticator over this store's file and transport, showing a code
-    /// through `code` when the device flow is allowed.
     fn authenticator(&self, code: DeviceCodeHandler, device_flow: bool) -> Authenticator {
         Authenticator::new(AuthSource::OAuth, self.records.clone(), code, device_flow)
     }
 
-    /// The record as the store holds it, or `None` when nothing has signed in.
-    /// Read here only to know which credentials to scrub, never to keep.
     fn record(&self) -> Option<serde_json::Value> {
         let text = futures::executor::block_on(self.records.load(PROVIDER_NAME))
             .ok()
@@ -206,7 +147,6 @@ impl Store {
 }
 
 impl fmt::Debug for Store {
-    /// The file, and never a byte of what sits in it.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("Store")
@@ -215,17 +155,10 @@ impl fmt::Debug for Store {
     }
 }
 
-/// The directory a Copilot sign-in is kept in: `$XDG_CONFIG_HOME/sindri/auth`,
-/// beside §11's `config.toml` and a directory of its own, so the file that holds
-/// a key is never the file that holds a sign-in.
 pub fn store_dir(environment: &impl Environment) -> Result<PathBuf, ConfigError> {
     Ok(config::config_path(environment)?.with_file_name("auth"))
 }
 
-/// The row a sign-in ends with: the file the session was written to, the mode of
-/// that file, and that it is never shown again — a value rather than a line
-/// printed from here, so a front end paints the same bytes §11's API-key row is
-/// painted with and a test asserts on them.
 pub fn store_row(path: &Path) -> String {
     format!(
         "copilot session   written to {}, mode {:04o}\n                  \
@@ -235,7 +168,6 @@ pub fn store_row(path: &Path) -> String {
     )
 }
 
-/// The credentials `record` holds, as the set a `Redacted` scrubs through.
 fn secrets_of(record: &Option<serde_json::Value>) -> SecretSet {
     let mut secrets = SecretSet::default();
     for field in [SESSION_FIELD, GITHUB_FIELD] {
@@ -246,13 +178,10 @@ fn secrets_of(record: &Option<serde_json::Value>) -> SecretSet {
     secrets
 }
 
-/// Whether `record` holds a GitHub token: a store with one has signed in before,
-/// so a resolve that fails afterwards failed on a sign-in the wire will not take.
 fn holds_github_token(record: &Option<serde_json::Value>) -> bool {
     field_of(record, GITHUB_FIELD).is_some()
 }
 
-/// One string field of `record`, when the record holds it and it is not empty.
 fn field_of<'record>(
     record: &'record Option<serde_json::Value>,
     field: &str,
@@ -264,7 +193,6 @@ fn field_of<'record>(
         .filter(|value| !value.is_empty())
 }
 
-/// Why a resolve failed, from the error and from what the store held before it.
 fn checked(error: AuthError, had_sign_in: bool, secrets: &SecretSet) -> SignIn {
     match &error {
         AuthError::Http(refusal) if refused(refusal) => SignIn::Revoked,
@@ -276,7 +204,6 @@ fn checked(error: AuthError, had_sign_in: bool, secrets: &SecretSet) -> SignIn {
     }
 }
 
-/// Whether `error` is a wire refusing the credential rather than a wire failing.
 fn refused(error: &HttpError) -> bool {
     error
         .non_success_status()
