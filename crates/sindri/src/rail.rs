@@ -1,36 +1,6 @@
-//! The rail: the run's facts down the frame's right-hand columns, read as a ledger —
-//! a label in a fixed field, dot leaders running out to one hanging edge, a hairline
-//! between blocks — and given up, fact by fact, when the frame is too narrow to hold all
-//! of it.
-//!
-//! The facts are handed in and never reached for: `Facts` is what the core knows about a
-//! run — the dialect it asks over, the name it was served and whether that model thinks,
-//! the turns against the cap, the enforcement in force, the workspace, the branch, the
-//! session's GUID and its temp — and the one fact nothing produces yet is a caller's to
-//! fill, so a rail draws a fact only when somebody handed it one.
-//!
-//! Two shapes and two questions. At a hundred columns and above the rail is 32 columns
-//! down the frame's right-hand edge, one labelled fact per row, and it carries every fact
-//! the frame knows. Below a hundred it is one strip along the bottom of the band, and it
-//! carries a shorter list of its own: the run's size, the model, the confinement and the
-//! branch. [`Facts::split`] is the rule between them: the band the transcript and the
-//! rail share, cut where the width says, so the frame's paint asks for its share rather
-//! than counting columns of its own, and the transcript is laid out at the width the rail
-//! leaves it (ADR-0008).
-//!
-//! Nothing is ever drawn in part. A value with no cut rule of its own that leaves no room
-//! for a leader in its column drops the fact rather than being cut off; a path keeps whole
-//! components and marks the head it left with `…/`; a served name keeps whole
-//! hyphen-separated segments from its head and marks the tail it left with `…`; and what
-//! the room cannot hold is given up in one settled order — temp path, cache hits, session
-//! GUID, branch, skills in force, context size, workspace, turns, wire, thinking, model —
-//! beside a row saying how many went. That is the ledger's order; the sandbox posture is
-//! absent from it because it never goes, and the strip gives its own four facts up from the
-//! tail of its own list instead, where the count of what went is the last item of the row
-//! and so the first thing the room takes. The degradation is a pure function of the room,
-//! not a paint: what the rail keeps and the rows it makes are read by a test without a
-//! buffer, which is how a rule about every frame width from 20 to 200 is proved rather than
-//! eyeballed.
+//! The run's facts down the frame's right-hand columns as a ledger, or on one strip along the
+//! band's bottom row below a hundred. Nothing is drawn in part: a fact that leaves no room
+//! for its leader is given up whole and counted.
 
 use std::path::PathBuf;
 
@@ -43,27 +13,18 @@ use sindri_core::session::Session;
 
 use crate::ink::Ink;
 
-/// §12's 32 columns: what the rail takes from the frame's right-hand edge while the
-/// frame is wide enough to hold a column at all.
 pub const COLUMNS: u16 = 32;
 
-/// The frame width the ledger gives way at: §12 makes the rail one strip *below* a
-/// hundred columns, so a hundred-column frame is the last that holds a column.
+/// The frame width the ledger gives way at: a hundred-column frame is the last that holds one.
 pub const NARROW: u16 = 100;
 
-/// The two shapes the rail is drawn in, chosen by the width of the frame it sits in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Shape {
-    /// §12's 32 columns down the frame's right-hand edge, one labelled fact per row.
     Ledger,
-    /// The same facts on one row along the bottom of the band, which is all a narrow
-    /// frame has room for.
     Strip,
 }
 
 impl Shape {
-    /// The shape a frame `width` columns wide is drawn in: one rule, in one place, so
-    /// the frame's width and the rail's shape cannot be decided twice and disagree.
     pub fn of(width: u16) -> Shape {
         if width < NARROW {
             Shape::Strip
@@ -73,23 +34,20 @@ impl Shape {
     }
 }
 
-/// The columns a label field holds, whatever the label says: §46's contract fixes it at
-/// ten, so the labels start in one column and the runs of leaders start in the next.
+/// The columns a label field holds, whatever the label says, so every label and every run of
+/// leaders starts in one column.
 const FIELD: u16 = 10;
 
-/// The fewest leader dots a ledger row is drawn with: a label butted straight against a
-/// value is not a ledger row, so a value that leaves no room for one drops the fact.
+/// The fewest leader dots a ledger row is drawn with: a value that leaves no room for one
+/// drops the fact.
 const LEADER_MIN: usize = 1;
 
-/// The share of a window at which the rail raises its voice: a run ninety percent
-/// full is one turn from being no room at all, and telling that from the ordinary case is
-/// the one thing the ctx row says twice.
+/// The share of a window at which the rail raises its voice: a run that full is one turn from
+/// being no room at all.
 const FULL: u8 = 90;
 
-/// §46's blocks, top to bottom, each with the facts the contract puts in it: the dialect,
-/// the model it served and whether it thinks, the turns it has taken, the run's size and
-/// the cache's hit rate, where it stands, what it has loaded, how it is confined, and the
-/// session it is writing.
+/// The ledger's blocks, top to bottom, each with the facts that belong in it: the order is a
+/// contract, and a fact's place in it is fixed.
 const BLOCKS: [&[Kind]; 6] = [
     &[Kind::Wire, Kind::Model, Kind::Think],
     &[Kind::Turns, Kind::Ctx, Kind::Cache],
@@ -99,48 +57,32 @@ const BLOCKS: [&[Kind]; 6] = [
     &[Kind::Session, Kind::Temp],
 ];
 
-/// The columns a value may take in the ledger: the rail's own width less the label field
-/// less the one leader a row needs to be a ledger row at all.
 const VALUE: usize = (COLUMNS - FIELD) as usize - LEADER_MIN;
 
-/// The columns a session's GUID is drawn by, wherever the rail draws one: §46's contract
-/// draws the session by its first eight, and no rail column holds a whole GUID.
+/// The columns a session's GUID is drawn by: no rail column holds a whole one.
 const SHORT: usize = 8;
 
-/// The glyph a dot leader is drawn with.
 const LEADER: char = '.';
 
-/// What lies between two facts on the strip's one row, the same gap the footer puts
-/// between its hints.
+/// What lies between two facts on the strip's one row, the gap the footer puts between its
+/// hints.
 const GAP: &str = " · ";
 
-/// The hairline that runs the rail's full width between two blocks.
 const HAIRLINE: char = '─';
 
-/// The run's size, measured once per turn by the wire: the input it last reported, and the
-/// window the config names, when a reader named one.
-///
-/// It is the size the last request carried and never the size of the next one, which grows
-/// by whatever tool results the turn produced, so a run one turn from a full window is a run
-/// whose window is nearly full and no more exactly than that.
+/// The run's size as the last request reported it, and never as the next one will be: whatever
+/// tool results the turn produced are not in it yet, so a run one turn from a full window is
+/// that and no more exactly.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Ctx {
-    /// The input tokens the wire last reported for the run.
     pub size: u64,
-    /// How many tokens the model's window holds, when a reader named one.
     pub window: Option<u64>,
 }
 
 impl Ctx {
-    /// The value the rail draws it as in `shape` — the size in spelled tokens, and the
-    /// window beside it and the share of it the run fills when one is known — and the share
-    /// that value ends in, so the row's text and the ink it is said in come from one
-    /// derivation.
-    ///
-    /// The strip keeps the share and gives up the size when both are known: it is one row
-    /// shared with three other facts, and the number that says how much room the next turn
-    /// has left is the one a reader watches. A frame that knows no window has no share to
-    /// keep, so both shapes draw the size there.
+    /// The value the rail draws, and the share it ends in, from one derivation so a row's text and
+    /// its ink cannot disagree. The strip keeps the share and gives up the size when both are known:
+    /// its one row is shared with three other facts and the share is the one a reader watches.
     fn spelled(&self, shape: Shape) -> (String, Option<Fill>) {
         let Some(fill) = self.fill() else {
             return (tokens(self.size), None);
@@ -157,18 +99,14 @@ impl Ctx {
         (value, Some(fill))
     }
 
-    /// The run's size as the ledger writes it, which is the spelling every drawing of it
-    /// outside the rail's own rows uses: a size and the share of a window it is are one fact
-    /// and are spelled in one place.
+    /// The size as the ledger spells it: every drawing of a size outside the rail's own rows spells
+    /// it here, so a size reads one way wherever it is said.
     pub(crate) fn said(&self) -> String {
         self.spelled(Shape::Ledger).0
     }
 
-    /// How full the window is, when one is known: a window of no tokens is no share of
-    /// anything, which `share` is the one place to say.
-    ///
-    /// The ink is set here and nowhere else, so no paint site holds a second opinion about
-    /// what nearly full means.
+    /// The share of the window the run fills. A window of no tokens is no share of anything, and the
+    /// ink is set here and nowhere else, so no paint site holds a second opinion.
     fn fill(&self) -> Option<Fill> {
         let window = self.window?;
         let percent = share(self.size, window)?;
@@ -184,32 +122,21 @@ impl Ctx {
     }
 }
 
-/// How full the run's window is, and where the rail says so: the tail of the ctx row, which
-/// is the one fact on the rail that says how much room the next turn has left.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Fill {
-    /// How full the window is, in whole percent.
     percent: u8,
-    /// The window it is a share of, in tokens.
     window: u64,
-    /// The ink the share is drawn in: `muted` while there is room, and `accent` once the
-    /// window is nearly full.
     ink: Ink,
 }
 
 impl Fill {
-    /// The share as the rail writes it, `%` and all.
     fn said(&self) -> String {
         format!("{}%", self.percent)
     }
 }
 
-/// The share of a whole that a part is, in whole percent, rounded: capped at a hundred,
-/// because a part already past its whole has no larger share to show and the rail cannot
-/// claim room that is not there. A share of nothing is no percentage at all.
-///
-/// One rule for the two rows that are a percentage of something: the window a run fills, and
-/// the part of its input the provider served from its own cache.
+/// The share of a whole that a part is, in whole percent and capped at a hundred: a part past
+/// its whole has no larger share to show, and a share of nothing is no percentage at all.
 fn share(part: u64, whole: u64) -> Option<u8> {
     if whole == 0 {
         return None;
@@ -218,16 +145,15 @@ fn share(part: u64, whole: u64) -> Option<u8> {
     Some(u8::try_from(percent.min(100)).unwrap_or(100))
 }
 
-/// The size of a run in spelled tokens: whole under a thousand, and three figures with a
-/// unit above it — `948`, `48.2k`, `1.02M` — because no reader counts six digits off a
-/// rail, and a rail column has no room to make them read as one number.
+/// The size of a run in spelled tokens: `948`, `48.2k`, `1.02M`, because a rail column has no
+/// room to make six digits read as one number.
 pub(crate) fn tokens(count: u64) -> String {
     if count < 1_000 {
         return count.to_string();
     }
-    // Tenths of a thousand, and hundredths of a million: the first carries three figures up
-    // to nine hundred and ninety-nine thousand, and the second once rounding takes a count
-    // past four.
+    // Tenths of a thousand, and hundredths of a million: the first carries three figures up to
+    // nine hundred and ninety-nine thousand, and the second once rounding takes a count past
+    // four.
     let tenths = count.saturating_add(50) / 100;
     if tenths < 10_000 {
         return scaled(tenths, 1, "k");
@@ -235,10 +161,9 @@ pub(crate) fn tokens(count: u64) -> String {
     scaled(count.saturating_add(5_000) / 10_000, 2, "M")
 }
 
-/// An amount counted in a unit's smallest shown fraction, drawn as that unit's whole part,
-/// a decimal point and what is left of the fraction: `482` tenths of a thousand is `48.2k`.
-/// A zero left dangling at the end of the decimals is dropped, so two hundred thousand is
-/// `200k` and not `200.0k`.
+/// An amount in a unit's smallest shown fraction, drawn as that unit's whole part, a point and
+/// what is left of the fraction. A zero left dangling goes, so two hundred thousand is `200k`
+/// and not `200.0k`.
 fn scaled(parts: u64, places: u32, unit: &str) -> String {
     let divisor = 10u64.pow(places);
     let whole = parts / divisor;
@@ -250,67 +175,40 @@ fn scaled(parts: u64, places: u32, unit: &str) -> String {
     format!("{whole}.{}{unit}", decimals.trim_end_matches('0'))
 }
 
-/// The facts the rail draws, as the core holds them: the dialect the run asks over and
-/// the model it was served by name, the turns it has opened against the cap it obeys, the
-/// run's size, the cache's hit rate, the workspace and the branch it stands on, the skills
-/// in force, the sandbox posture, and the session's GUID and temp.
-///
-/// A fact the frame knows nothing about is `None` and is not drawn, never guessed at, so a
-/// frame before its first run has no rail at all. The skills in force are the one fact
-/// nothing produces yet, and a caller passes that one in until its ticket lands.
+/// The facts the rail draws, as the core holds them. A fact the frame knows nothing about is
+/// `None` and is not drawn, never guessed at, so a frame before its first run has no rail.
 #[derive(Debug, Default, Clone)]
 pub struct Facts {
-    /// The dialect the run asks over, in the wire's own word: `anthropic`, `openai` or
-    /// `copilot`, and never a fourth.
+    /// The dialect the run asks over, in the wire's own word: `anthropic`, `openai` or `copilot`,
+    /// and never a fourth.
     pub wire: Option<String>,
-    /// The served name of the model the run asks: a model identifier read off the wire and
-    /// never invented, whole here, and cut to its head wherever the rail draws it, because
-    /// no value column holds a dated name.
+    /// The served name of the model, whole here and cut to its head wherever the rail draws it.
     pub model: Option<String>,
-    /// Whether the model thinks before it answers, in the one word the rail draws it
-    /// by: `high` or `off`, and never a third.
     pub think: Option<String>,
-    /// The turns the run has opened, and the cap it obeys.
     pub turns: Option<(u32, u32)>,
-    /// The run's size as the wire last measured it, and the window it is a share of when
-    /// one is known.
     pub ctx: Option<Ctx>,
-    /// How much of the run's input the provider served from its own cache, in whole
-    /// percent (ADR-0010): a hit rate and not a fill, so it gets no meter and no threshold.
+    /// How much of the run's input the provider served from its own cache: a hit rate and not a
+    /// fill, so it gets no meter and no threshold.
     pub cache: Option<u8>,
-    /// The one directory the run stands in.
     pub workspace: Option<PathBuf>,
-    /// The branch that directory's checkout is on, when it is on one.
     pub branch: Option<String>,
-    /// How many skills are in force.
+    /// Nothing produces this fact yet: a caller passes it in until its producer lands.
     pub skills: Option<usize>,
-    /// How the run's commands are confined: the two-valued fact §12 draws.
     pub sandbox: Option<Enforcement>,
-    /// The GUID of the session the run is writing, whole: the rail draws it short.
     pub session: Option<String>,
-    /// The session temp, which the rail draws under that short GUID.
     pub temp: Option<PathBuf>,
 }
 
-/// The rail's share of the band it sits in with the transcript: what the transcript
-/// keeps, and where the rail draws — in which of its two shapes, and in which rectangle.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Share {
-    /// The band the transcript is laid out and painted in.
     pub transcript: Rect,
-    /// The rail's own room and the shape it is drawn in, or nothing when the frame knows
-    /// no fact at all and the transcript keeps the whole band.
+    /// Nothing when the frame knows no fact at all, and the transcript keeps the whole band.
     pub rail: Option<(Shape, Rect)>,
 }
 
 impl Facts {
-    /// The facts a run holds, read off the two values the core keeps them in: the session
-    /// the run is writing, whose GUID and temp the rail draws, and the document the
-    /// record rewrites as facts land — the wire, the model it served and whether it thinks,
-    /// the turns against the cap, the enforcement in force, the workspace and the branch.
-    ///
-    /// The run's size and the cache's hit rate are one ask's report and are handed in by
-    /// [`Facts::measured`], and the skills in force are the one fact left for a caller.
+    /// The facts a run holds, read off the two values the core keeps them in: the session the run is
+    /// writing, and the document the record rewrites as facts land.
     pub fn of(session: &Session, document: &SessionDocument) -> Facts {
         Facts {
             wire: Some(document.wire.word().to_owned()),
@@ -326,14 +224,9 @@ impl Facts {
         }
     }
 
-    /// The size of the conversation as one ask's report measured it — the input that ask
-    /// carried, the window a reader named a share of it, and the part of it the provider
-    /// served from its own cache.
-    ///
-    /// The report is one turn's and never a running total, which is why the document cannot
-    /// hand these in: the `usage` it keeps is every ask summed, and a sum of the inputs grows
-    /// with each turn while the conversation's size is what the newest request carried. A
-    /// report that states no size measures nothing, so the frame is handed back as it was.
+    /// The size one ask's report measured, and the part of its input the provider served from cache.
+    /// The document cannot hand these in: the `usage` it keeps is every ask summed, and a sum of the
+    /// inputs grows with each turn while the conversation's size is what the newest request carried.
     pub fn measured(mut self, ask: &Usage, window: Option<u64>) -> Facts {
         let Some(size) = ask.input else {
             return self;
@@ -343,10 +236,9 @@ impl Facts {
         self
     }
 
-    /// Cuts the band the transcript and the rail share: §12 puts the rail down the frame's
-    /// right-hand 32 columns while the frame is wide enough to hold a column, and on one
-    /// strip along the band's bottom row below a hundred columns. A frame that knows no
-    /// fact draws no rail, and the transcript loses no room to one.
+    /// Cuts the band the transcript and the rail share: 32 columns down the right while the frame is
+    /// wide enough to hold a column, one strip along the band's bottom row below a hundred. A frame
+    /// that knows no fact draws no rail, and the transcript loses no room to one.
     pub fn split(&self, band: Rect) -> Share {
         let shape = Shape::of(band.width);
         if band.width == 0 || band.height == 0 || self.known(shape).is_empty() {
@@ -390,8 +282,6 @@ impl Facts {
         }
     }
 
-    /// Paints the rail into `area` in `shape`: the ledger's rows or the strip's one, in
-    /// the inks a ledger is read in.
     pub fn paint(&self, shape: Shape, area: Rect, buffer: &mut Buffer) {
         if area.width == 0 || area.height == 0 {
             return;
@@ -402,8 +292,6 @@ impl Facts {
         }
     }
 
-    /// The ledger: one fact per row, a label in its field, leaders out to a value against
-    /// the rail's edge, and a hairline between two blocks.
     fn ledger(&self, area: Rect, buffer: &mut Buffer) {
         let kept = self.kept(Shape::Ledger, area);
         let mut y = area.y;
@@ -426,9 +314,6 @@ impl Facts {
         }
     }
 
-    /// The strip: its own four facts on the band's one row, each as its label and its value
-    /// with a gap between them, because a narrow frame has a row to spare and no column.
-    /// What went is counted at the end of the row when the row has room for the count.
     fn strip(&self, area: Rect, buffer: &mut Buffer) {
         let kept = self.kept(Shape::Strip, area);
         let mut x = area.x;
@@ -450,16 +335,9 @@ impl Facts {
         }
     }
 
-    /// The facts this rail keeps and how many it gave up: one whose value will not fit the
-    /// row it is drawn in goes before anything else, and what is left is given up until the
-    /// room holds it.
-    ///
-    /// The shapes part here. The ledger draws every fact it knows, one block after another,
-    /// and gives them up in §12's settled order beside the row that says how many went. The
-    /// strip carries the four facts of its own list and no others, and it gives them up from
-    /// the tail of that list — but the count of what went is the last item of its one row,
-    /// so the room takes the count first, and only then a fact, because a fact a reader can
-    /// see says more than a number that only says how much they cannot.
+    /// The ledger gives its facts up in a settled order beside the row that says how many went; the
+    /// strip gives them up from the tail of its own list, but its count is the last item of its one
+    /// row, so the room takes the count first.
     fn kept(&self, shape: Shape, area: Rect) -> Kept {
         let known = self.known(shape);
         let total = known.len();
@@ -472,9 +350,8 @@ impl Facts {
             Shape::Ledger => &SACRIFICE,
             Shape::Strip => &STRIP_SACRIFICE,
         };
-        // The ledger's count is one of its rows, so the room it takes is part of what the
-        // facts are given up for; the strip's is the last item of its row and is measured
-        // once the facts are in, below.
+        // The ledger's count is one of its rows, so the room it takes is part of what the facts
+        // are given up for; the strip's is measured once the facts are in, below.
         let with_count = shape == Shape::Ledger;
         let mut went = total - kept.len();
         while !holds(&kept, went, with_count, shape, area) {
@@ -482,9 +359,9 @@ impl Facts {
                 .iter()
                 .find_map(|kind| kept.iter().position(|fact| fact.kind == *kind))
             else {
-                // Nothing the shape may give up is left — the ledger keeps the sandbox
-                // posture and the strip the run's size — so a rail narrower than that fact
-                // has nothing left to give up.
+                // Nothing the shape may give up is left — the ledger keeps the sandbox posture and
+                // the strip the run's size — so a rail narrower than that fact has nothing left to
+                // give up.
                 break;
             };
             kept.remove(victim);
@@ -498,10 +375,9 @@ impl Facts {
         }
     }
 
-    /// Every fact this frame knows, in the order the shape it is drawn in reads them, each
-    /// value spelled the way that shape spells it: a session by the first eight of its GUID,
-    /// a path by the tail that fits a value column, a served name by the head, and the run's
-    /// size by the share of its window wherever the strip has room for only one of the two.
+    /// Every fact this frame knows, in the order the shape reads them, each value spelled the way
+    /// that shape spells it: a session by the first eight of its GUID, a path by the tail that fits,
+    /// a served name by the head.
     fn known(&self, shape: Shape) -> Vec<Fact> {
         let short = self.session.as_deref().map(short_id);
         let mut facts = Vec::new();
@@ -565,19 +441,15 @@ impl Facts {
     }
 }
 
-/// One fact as the rail draws it: which of §12's facts it is, which is also the label
-/// its field holds and its place in §12's sacrifice order, and the value beside it.
+/// One fact as the rail draws it: the fact itself, which names its label field and its place in
+/// the sacrifice order, and the value beside it.
 struct Fact {
-    /// Which fact this is.
     kind: Kind,
-    /// The value, in the rail's own words.
     value: String,
-    /// How full the window is, when this fact's value ends in a share of one.
     fill: Option<Fill>,
 }
 
 impl Fact {
-    /// A fact drawn as one run of `muted`: the shape every value but the ctx row's takes.
     fn new(kind: Kind, value: impl Into<String>) -> Fact {
         Fact {
             kind,
@@ -586,8 +458,6 @@ impl Fact {
         }
     }
 
-    /// Writes the value from `x` across a row, the share at its tail in the fill's ink and
-    /// the rest in `muted`, and hands back the column after it.
     fn draw(&self, buffer: &mut Buffer, x: u16, y: u16) -> u16 {
         let Some(fill) = self.fill else {
             return put(buffer, x, y, &self.value, Ink::Muted);
@@ -608,34 +478,23 @@ impl Fact {
     }
 }
 
-/// What the rail keeps and what it gave up: the facts it draws, in the order it reads
-/// them, and the count of those it could not hold.
 struct Kept {
-    /// The facts that survive the room, in the order the shape reads them.
     facts: Vec<Fact>,
-    /// How many of the facts the frame knew the rail could not hold.
     went: usize,
-    /// Whether the strip says how many went, which it does only while its one row has room
-    /// for the count beside the facts it kept. The ledger's count is one of its rows, and
-    /// the band's height is what holds it.
+    /// Whether the strip says how many went: the ledger's count is one of its rows, and the band's
+    /// height is what holds it.
     counted: bool,
 }
 
-/// One row of the ledger, before it is a row of glyphs: a fact, the hairline between two
-/// blocks, or §12's row counting what went. Pure, so the height a set of facts needs is a
-/// number a test reads without a buffer.
+/// One row of the ledger, before it is a row of glyphs.
 enum Row<'a> {
-    /// One labelled fact, drawn in its field with its leaders and its value.
     Fact(&'a Fact),
-    /// The hairline that runs the rail's width between two blocks.
     Hairline,
-    /// The foot of the rail, saying how many facts it gave up.
     Went(usize),
 }
 
-/// The ledger's rows in the order they are read: each block's facts, a hairline between
-/// two blocks that both kept one, and the row that counts what went at the foot when
-/// anything did (§46's block order, §12's `+7 more`).
+/// The ledger's rows in the order they are read, with a hairline between two blocks that both
+/// kept a fact and the count of what went at the foot when anything did.
 fn ledger_rows(kept: &[Fact], went: usize) -> Vec<Row<'_>> {
     let mut rows = Vec::new();
     let mut written = 0;
@@ -659,11 +518,9 @@ fn ledger_rows(kept: &[Fact], went: usize) -> Vec<Row<'_>> {
     rows
 }
 
-/// Whether one fact is drawn whole on a row `width` columns wide: a label in its field, a
-/// value against the edge, and at least one leader between them, because a label butted
-/// straight against a value is not a ledger row. A value that leaves no room for the
-/// leader drops the fact rather than being cut, and so does a value with nothing left in
-/// it — a fact cut to nothing says nothing.
+/// Whether one fact is drawn whole on a row `width` columns wide: a label in its field, a value
+/// against the edge, and at least one leader between them. A value that leaves no room for the
+/// leader, or that is cut to nothing, drops the fact rather than being drawn in part.
 fn fits(fact: &Fact, shape: Shape, width: u16) -> bool {
     let value = fact.value.chars().count();
     if value == 0 {
@@ -675,7 +532,6 @@ fn fits(fact: &Fact, shape: Shape, width: u16) -> bool {
     }
 }
 
-/// Where a fact sits in the strip's list, which is the order the strip reads its facts in.
 fn strip_place(kind: Kind) -> usize {
     STRIP_FACTS
         .iter()
@@ -683,8 +539,6 @@ fn strip_place(kind: Kind) -> usize {
         .unwrap_or(usize::MAX)
 }
 
-/// Whether the room holds what the rail kept: the ledger's rows within the band's height,
-/// or the strip's one row within its width.
 fn holds(facts: &[Fact], went: usize, counted: bool, shape: Shape, area: Rect) -> bool {
     match shape {
         Shape::Ledger => ledger_rows(facts, went).len() <= usize::from(area.height),
@@ -692,8 +546,6 @@ fn holds(facts: &[Fact], went: usize, counted: bool, shape: Shape, area: Rect) -
     }
 }
 
-/// The columns the strip's one row takes, the count of what went included when `counted`
-/// says the row carries one.
 fn strip_columns(facts: &[Fact], went: usize, counted: bool) -> usize {
     let mut taken = 0;
     for (index, fact) in facts.iter().enumerate() {
@@ -711,18 +563,14 @@ fn strip_columns(facts: &[Fact], went: usize, counted: bool) -> usize {
     taken
 }
 
-/// One row of the ledger: the label left in its field, dot leaders filling the room up
-/// to the value, and the value against the rail's right-hand edge — the one hanging edge
-/// §46's contract asks for.
 fn ledger_row(buffer: &mut Buffer, area: Rect, fact: &Fact) {
     let x = label_row(buffer, area, fact.kind.label(), columns(&fact.value));
     fact.draw(buffer, x, area.y);
 }
 
-/// The label of one ledger row in its field and the leaders out to a value `value_width`
-/// columns wide, and the column that value starts at: the rule both the rail and the screen
-/// that widens it draw a row by, so a label sits in the same field and the values end on the
-/// same hanging edge wherever they are read.
+/// The label of one ledger row in its field, the leaders out to a value `value_width` columns
+/// wide, and the column that value starts at: the rule both this rail and the screen that
+/// widens it draw a row by, so values end on one hanging edge wherever they are read.
 pub(crate) fn label_row(buffer: &mut Buffer, area: Rect, label: &str, value_width: usize) -> u16 {
     let start = usize::from(area.width).saturating_sub(value_width);
     let field = format!("{label:<width$}", width = usize::from(FIELD));
@@ -734,31 +582,24 @@ pub(crate) fn label_row(buffer: &mut Buffer, area: Rect, label: &str, value_widt
         .saturating_add(u16::try_from(start).unwrap_or(area.width))
 }
 
-/// The row that says how many facts the room could not hold, in the one wording both shapes
-/// of the rail and the screen that widens it count them by.
-///
-/// The columns a labelled row has left for its value: the row's width less the label's field and
-/// the one leader that makes it a ledger row, which is what a value has to be cut to wherever a
-/// ledger row is drawn.
+/// The row that says how many facts the room could not hold, in the one wording both shapes and
+/// the screen that widens it count them by.
 pub(crate) fn more(count: usize) -> String {
     format!("+{count} more")
 }
 
-/// The columns a labelled row drawn in `width` columns leaves its value: the field and one
-/// leader come off the front, and a value that leaves less than that is not drawn at all.
+/// The columns a labelled row drawn in `width` columns leaves its value: the field and one leader
+/// come off the front, and a value left less than that is not drawn at all.
 pub(crate) fn value_room(width: u16) -> usize {
     usize::from(width).saturating_sub(usize::from(FIELD) + LEADER_MIN)
 }
 
-/// The columns `text` takes: one per glyph, whatever the glyph's bytes say, because a
-/// cell of a frame is one glyph wide and `·` is three bytes and one column.
+/// The columns `text` takes: one per glyph, because a cell is one glyph wide and `·` is three
+/// bytes and one column.
 fn columns(text: &str) -> usize {
     text.chars().count()
 }
 
-/// Writes `text` from `x` across a row, one glyph per cell, in `ink`, and hands back the
-/// column after it: every row here is measured before it is written, so this only has to
-/// stop at the frame's edge.
 pub(crate) fn put(buffer: &mut Buffer, x: u16, y: u16, text: &str, ink: Ink) -> u16 {
     let mut x = x;
     for glyph in text.chars() {
@@ -771,14 +612,9 @@ pub(crate) fn put(buffer: &mut Buffer, x: u16, y: u16, text: &str, ink: Ink) -> 
     x
 }
 
-/// The tail of a path in at most `columns`: as many of the path's own components as fit,
-/// with `…/` in front when the head did not fit beside them.
-///
-/// A state-home path is longer than any rail column, so a rail that printed one whole
-/// would print no temp at all — and the head of a path says less about which temp it is
-/// than its tail does. Nothing is ever cut mid-component: a name with its middle gone is
-/// the `san…` §46 forbids, and a tail that cannot hold even the last component is empty,
-/// which drops the fact.
+/// The tail of a path in at most `columns`, with `…/` in front when the head did not fit. Nothing
+/// is ever cut mid-component: a tail that cannot hold even the last component is empty, which
+/// drops the fact.
 pub(crate) fn tail(path: &str, columns: usize) -> String {
     let parts: Vec<&str> = path.split('/').filter(|part| !part.is_empty()).collect();
     if parts.is_empty() {
@@ -806,17 +642,9 @@ pub(crate) fn tail(path: &str, columns: usize) -> String {
     format!("…/{}", kept.join("/"))
 }
 
-/// The head of a served name in at most `columns`: as many of the name's whole
-/// hyphen-separated segments as fit while the `…` that marks what went is counted in, and
-/// never a segment drawn in part.
-///
-/// A served name runs past any rail column — a dated Anthropic name is twenty-six and a
-/// gateway's is forty-one — and widening the rail only moves the number it fails at. So a
-/// name keeps its head, where the family a reader names lives, and gives up the stamps
-/// that follow it: `claude-sonnet-4-5…` and never `…-20250929`. A gateway that puts its
-/// vendor in front of the family keeps that prefix instead, because the rule is the head.
-/// A name whose first segment does not fit beside its own mark is empty, which drops the
-/// fact.
+/// The head of a served name in at most `columns`: whole hyphen-separated segments, and never a
+/// part of one. A name keeps its head, where the family lives, and gives up its stamps, because
+/// widening the rail only moves the width a name fails at. A head that fits no mark is empty.
 pub(crate) fn head(name: &str, columns: usize) -> String {
     if name.chars().count() <= columns {
         return name.to_owned();
@@ -837,9 +665,8 @@ pub(crate) fn head(name: &str, columns: usize) -> String {
     format!("{}…", kept.join("-"))
 }
 
-/// A session's GUID by its first eight columns, or whole when it is shorter than that:
-/// the first eight name one session directory as well as any other eight columns do, and
-/// no rail column holds thirty-six.
+/// A session's GUID by its first eight columns, or whole when it is shorter: no rail column holds
+/// thirty-six.
 fn short_id(guid: &str) -> &str {
     match guid.char_indices().nth(SHORT) {
         Some((end, _)) => &guid[..end],
@@ -847,38 +674,25 @@ fn short_id(guid: &str) -> &str {
     }
 }
 
-/// Which fact a row of the rail carries.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Kind {
-    /// The dialect the run asks over.
     Wire,
-    /// The model the run asks, by the name its wire served.
     Model,
-    /// Whether the model thinks before it answers.
     Think,
-    /// The turns the run has opened, against the cap it obeys.
     Turns,
-    /// The run's size, as the wire last measured it.
     Ctx,
-    /// How much of the run's input the provider served from its own cache.
     Cache,
-    /// The one directory the run stands in.
     Workspace,
-    /// The branch that directory's checkout is on.
     Branch,
-    /// How many skills are in force.
     Skills,
-    /// How the run's commands are confined.
     Sandbox,
-    /// The GUID of the session the run is writing.
     Session,
-    /// The session's temp.
     Temp,
 }
 
 impl Kind {
-    /// The word the label field holds: the name the ticket's contract gives the fact,
-    /// so the rail and the ticket cannot call one fact two things (#46).
+    /// The word the label field holds, so the rail and the screen that widens it cannot call one fact
+    /// two things.
     fn label(self) -> &'static str {
         match self {
             Kind::Wire => "wire",
@@ -897,21 +711,16 @@ impl Kind {
     }
 }
 
-/// The four facts the strip carries, in the order it reads them: the thing you watch, the
-/// thing you are, the thing that confines you, and the thing you are standing on. The
-/// ledger draws these four inside its own blocks and in its own order; the strip has one
-/// row and a different question on it, so its list is its own.
+/// The four facts the strip carries, in the order it reads them: its one row asks a different
+/// question than the ledger's blocks do, so its list is its own.
 const STRIP_FACTS: [Kind; 4] = [Kind::Ctx, Kind::Model, Kind::Sandbox, Kind::Branch];
 
-/// The order the strip gives its facts up in: [`STRIP_FACTS`] without its head, read from
-/// the tail, so a reader who has to lose one loses the branch they are standing on before
-/// the confinement that holds them, and the run's size — the head, the thing they watch —
-/// is the one it never gives up.
+/// The order the strip gives its facts up in: read from the tail, so the run's size — the head,
+/// the one a reader watches — is what it never gives up.
 const STRIP_SACRIFICE: [Kind; 3] = [Kind::Branch, Kind::Sandbox, Kind::Model];
 
-/// §12's sacrifice order, the first to go first: what the rail gives up as the room
-/// runs out. The sandbox posture is deliberately absent, because §12 says it never
-/// goes, so no loop over this list can reach it.
+/// The rail's sacrifice order, the first to go first. The sandbox posture is deliberately absent,
+/// because it never goes, so no loop over this list can reach it.
 const SACRIFICE: [Kind; 11] = [
     Kind::Temp,
     Kind::Cache,
@@ -928,12 +737,9 @@ const SACRIFICE: [Kind; 11] = [
 
 #[cfg(test)]
 mod tests {
-    //! The rail's own rules, one test each: the order it gives facts up in, the label
-    //! field and its leaders, the blocks and their hairlines, the strip a narrow frame
-    //! gets instead of the columns, and the row that counts what went. None of them
-    //! needs a terminal — where a cell's glyph and ink are the question, the buffer the
-    //! ledger paints into is the answer, and no fixture is asked about a rule a loop can
-    //! state (§12, ADR-0012).
+    //! The rail's own rules, one test each: the order it gives facts up in, the label field and its
+    //! leaders, the blocks and their hairlines, the strip, and the row that counts what went. Where
+    //! a cell's glyph and ink are the question, the buffer the ledger paints into is the answer.
 
     use std::path::Path;
 
@@ -946,8 +752,6 @@ mod tests {
 
     use super::*;
 
-    /// A rectangle at the origin: the band a frame hands the rail, or the room the
-    /// rail takes from it.
     fn band(width: u16, height: u16) -> Rect {
         Rect {
             x: 0,
@@ -957,8 +761,6 @@ mod tests {
         }
     }
 
-    /// One row of a painted buffer as the glyphs it holds, so a ledger row is read the
-    /// way a reader reads it rather than the way it was written.
     fn glyphs(buffer: &Buffer, y: u16) -> String {
         (buffer.area.x..buffer.area.right())
             .map(|x| {
@@ -971,8 +773,6 @@ mod tests {
             .collect()
     }
 
-    /// The runs of ink along one row, left to right, each with the cells it covers: a
-    /// row's inks are stated as the runs an eye sees and not cell by cell.
     fn inks(buffer: &Buffer, y: u16) -> Vec<(Ink, u16)> {
         let mut runs: Vec<(Ink, u16)> = Vec::new();
         for x in buffer.area.x..buffer.area.right() {
@@ -986,19 +786,14 @@ mod tests {
         runs
     }
 
-    /// The name the frame's run was served, as the wire served it: the dated Anthropic
-    /// name a real run is given, which is wider than a value column.
+    /// The dated Anthropic name a real run is served, which is wider than a value column.
     const SERVED: &str = "claude-sonnet-4-5-20250929";
 
-    /// What the rail draws of [`SERVED`]: its head, and the mark saying the date stamp
-    /// went. Written down here because it is the contract the rail is held to.
+    /// What the rail draws of [`SERVED`]: its head, and the mark saying the date stamp went.
     const CUT: &str = "claude-sonnet-4-5…";
 
-    /// The branch the frame's run stands on, as wide as a real one.
     const BRANCH: &str = "spec/1-capability";
 
-    /// The facts a frame of a run holds, as the rails draw them: one of each of §46's
-    /// blocks, with a workspace and a temp as long as the real ones.
     fn frame() -> Facts {
         Facts {
             wire: Some(String::from("anthropic")),
@@ -1023,9 +818,8 @@ mod tests {
         }
     }
 
-    /// §46's contract, as a test states it rather than as the code holds it: every fact
-    /// the rail draws, its label and its value, so a fact's wholeness and the count of
-    /// what went can be read off the screen and not off the module's own tables.
+    /// Every fact the rail draws, its label and its value, stated here and not read off the module's
+    /// own tables, so a test cannot pass by agreeing with the code it is testing.
     const CONTRACT: [(&str, &str); 12] = [
         ("wire", "anthropic"),
         ("model", CUT),
@@ -1041,8 +835,6 @@ mod tests {
         ("temp", "…/9f2c7a41/tmp"),
     ];
 
-    /// The session document a run writes, as the core holds one: filled in by hand so the
-    /// rail's wiring is read off §13's fields and not off a real run.
     fn document(guid: &str) -> SessionDocument {
         SessionDocument {
             session: guid.to_owned(),
@@ -1262,8 +1054,6 @@ mod tests {
         }
     }
 
-    /// The ctx row a value deserves, as the rail draws it: the label in its field, leaders
-    /// out to the rail's edge, and the value against it.
     fn ctx_line(value: &str) -> String {
         let leaders = usize::from(COLUMNS) - usize::from(FIELD) - value.chars().count();
         format!("ctx       {}{value}", ".".repeat(leaders))
@@ -1885,9 +1675,8 @@ mod tests {
         }
     }
 
-    /// The value a row draws beside `label`, read off the painted row: the label's field
-    /// and its leaders skipped and the padding after the value dropped, so a test reads the
-    /// fact the way a reader reads it. A row that draws no such label carries no value.
+    /// The value a row draws beside `label`, read off the painted row: the field and its leaders
+    /// skipped, the padding after the value dropped.
     fn drawn(row: &str, label: &str) -> Option<String> {
         let rest = row.split_once(label)?.1;
         Some(
@@ -1905,9 +1694,8 @@ mod tests {
         assert_no_width_draws_a_name_in_part("anthropic.claude-3-5-sonnet-20241022-v2:0");
     }
 
-    /// One served name at every width the rail is drawn at: whole when it fits, its head
-    /// and the mark that says the rest went when it does not, and never part of it without
-    /// a mark or wider than the row it is drawn in.
+    /// One served name at every width: whole when it fits, its head and the mark when it does not,
+    /// and never a part without a mark or wider than the row it is drawn in.
     fn assert_no_width_draws_a_name_in_part(name: &str) {
         let mut cut = 0;
         for width in 20..=200u16 {
