@@ -1,19 +1,6 @@
-//! The host spawns the opener, because the sandbox has no display: a target the
-//! core has already judged safe is handed to this machine's opener as one argv
-//! word, and to nothing else.
-//!
-//! The split is the whole point of the module. *What* may be opened is a decision
-//! and it lives in [`sindri_core::open`], where no front end can second-guess it;
-//! *that* a process starts, and with which argv, is a fact about the machine the
-//! front end runs on, and it stops here. Nothing in the core forks an opener, and
-//! nothing here decides whether a target is allowed: a target that arrives has
-//! already been judged, and this module's only rule is that it stays one word.
-//!
-//! One word is what makes the argv safe. The target is passed as a single
-//! argument — never a string a shell is handed — so a path holding a space, a
-//! semicolon or a `$(…)` reaches the opener as the name it is. The child is not
-//! waited for, because a browser outlives the frame that opened it, but it is
-//! reaped so a run that opens a page does not leave a process behind.
+//! The opener is this host's, because the sandbox has no display: the core has
+//! already judged the target, and it arrives as one argv word and never through a
+//! shell. The child outlives the frame, so it is reaped rather than waited for.
 
 use std::ffi::{OsStr, OsString};
 use std::fmt;
@@ -214,10 +201,9 @@ mod tests {
     }
 
     impl Opener {
-        /// Spawns the fake opener, retrying while the script it hands over is
-        /// still open for writing somewhere else in this process: a test binary
-        /// runs its tests on threads that fork, so a fixture written a moment ago
-        /// can be `ETXTBSY` for a moment without anything being wrong.
+        /// Spawns the fake opener, retrying while the script it was handed is
+        /// still open for writing elsewhere in this process: tests run on forked
+        /// threads, so a fixture written a moment ago can be `ETXTBSY`.
         fn open_patiently(&self, opening: &Opening) -> Result<(), OpenError> {
             let deadline = Instant::now() + PATIENCE;
             loop {
