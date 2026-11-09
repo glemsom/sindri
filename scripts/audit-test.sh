@@ -158,8 +158,8 @@ for entry in \
 done
 
 citations=(
-  'ADR-0019|cites an ADR'
-  'adr/0019-the-facts-the-rail-gives-up-have-a-screen.md|cites an ADR'
+  'ADR-0020|cites an ADR'
+  'adr/0020-the-artefact-is-one-static-musl-binary.md|cites an ADR'
   'ticket #72|cites an issue number'
   'issue #88|cites an issue number'
   '(#124)|cites an issue number'
@@ -184,7 +184,7 @@ done
 for marker in '///' '//!'; do
   cited="$scratch/cite-${marker//[^A-Za-z0-9]/_}"
   cp -a "$clean" "$cited"
-  write_citation "$cited" crates/demo/src/doc.rs "$marker" 'see ADR-0019 for why'
+  write_citation "$cited" crates/demo/src/doc.rs "$marker" 'see ADR-0020 for why'
   run "$cited"
   assert_code 1 "comment-citation, $marker"
   assert_has 'crates/demo/src/doc.rs:1: cites an ADR' "comment-citation, $marker"
@@ -192,13 +192,13 @@ done
 
 tight="$scratch/comment-citation-tight"
 cp -a "$clean" "$tight"
-printf '%s\n' '## ---' '#see ADR-0019 for why' >"$tight/Makefile"
+printf '%s\n' '## ---' '#see ADR-0020 for why' >"$tight/Makefile"
 run "$tight"
 assert_code 1 "comment-citation, a comment with no space after the #"
 assert_has 'Makefile:2: cites an ADR' "comment-citation, a comment with no space after the #"
 
 for entry in \
-  'scripts/demo.sh|cargo build # see ADR-0019 for why' \
+  'scripts/demo.sh|cargo build # see ADR-0020 for why' \
   'Makefile|check: # ticket #72 repeats it' \
   'Cargo.toml|version = "0.1.0" # issue #88 asked' \
   '.github/workflows/ci.yml|runs-on: ubuntu-24.04 # (#124) copied it'; do
@@ -226,7 +226,7 @@ cp -a "$clean" "$trailing"
 cat >"$trailing/crates/demo/src/field.rs" <<'RS'
 pub const URL: &str = "https://example.test/spec#12";
 
-pub fn field() {} // see ADR-0019 for why
+pub fn field() {} // see ADR-0020 for why
 RS
 run "$trailing"
 assert_code 1 "comment-citation, a trailing comment"

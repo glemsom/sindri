@@ -221,7 +221,7 @@ fn picking() -> View {
         "Cargo.toml",
         "GLOSSARY.md",
         "Makefile",
-        "docs/adr/0019-the-facts-the-rail-gives-up-have-a-screen.md",
+        "docs/adr/0020-the-artefact-is-one-static-musl-binary.md",
         "docs/agents/domain.md",
         "crates/sindri-core/src/records.rs",
         "crates/sindri/src/keys.rs",
