@@ -1,12 +1,6 @@
-//! The `/` commands, from the outside: what a line names, and what each command does to
-//! the frame — a screen opened, a history cleared, a set emptied, a name handed on, the
-//! launch ended (§12, §5).
-//!
-//! Every test here types the line a reader would type, into a frame built the way the
-//! terminal builds one, so the spelling under test is the spelling a reader uses. The two
-//! commands that reach past the frame — the wire a `/model` screen reads and the file a
-//! chosen name is written to — are proved where that machinery lives: `tests/models.rs`
-//! and `tests/tui.rs`.
+//! The `/` commands from the outside: what a line names, and what each does to the frame — a screen opened, a
+//! history cleared, a set emptied, a name handed on, the launch ended. Every test types the line a reader types
+//! into a frame built the way the terminal builds one; the wire and the save behind `/model` are proved elsewhere.
 
 use std::path::Path;
 
@@ -22,27 +16,19 @@ use sindri_core::config::Config;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
 
-/// The size every frame here is painted at: wide enough that nothing is cut, small enough
-/// that a transcript row and a band both fit.
 const SCREEN: (u16, u16) = (80, 24);
 
-/// One line typed into a frame's composer and sent, and what the frame answered: the key
-/// `Enter` is where a command line is read, so this is the only door a test needs.
 fn say(view: &mut View, line: &str) -> Outcome {
     view.paste(line);
     view.key(Key::Enter)
 }
 
-/// The frame a line is typed into at launch: a workspace of the test's own, and no home, so
-/// only the built-in and the repository scopes can offer a skill.
 fn frame(workspace: &Path) -> View {
     let mut view = View::boot();
     view.set_workspace(workspace.to_path_buf());
     view
 }
 
-/// A workspace holding one skill under `.agents/skills`, with `frontmatter` under the two
-/// lines every skill needs: what discovery finds when a person asks for it by name.
 fn workspace_with(name: &str, frontmatter: &str) -> tempfile::TempDir {
     let root = tempfile::tempdir().expect("a temp workspace");
     let directory = root.path().join(".agents/skills").join(name);
@@ -55,7 +41,6 @@ fn workspace_with(name: &str, frontmatter: &str) -> tempfile::TempDir {
     root
 }
 
-/// Everything the frame draws, one line per row: the cells a reader sees, in order.
 fn painted(view: &mut View) -> String {
     let (cols, rows) = SCREEN;
     let mut terminal =
@@ -68,7 +53,6 @@ fn painted(view: &mut View) -> String {
     rows_of(&drawn)
 }
 
-/// A painted buffer as its rows of glyphs, top to bottom.
 fn rows_of(buffer: &Buffer) -> String {
     let area = buffer.area;
     let mut lines: Vec<String> = Vec::new();
@@ -357,9 +341,8 @@ fn the_commands_are_read_off_the_draft_the_reader_typed() {
 
 #[test]
 fn a_frame_with_no_workspace_loads_no_skill() {
-    // A frame that was told no workspace has no catalog to ask, and offering a
-    // skill from a directory no run could read would be naming a name nothing can
-    // load.
+    // A frame told no workspace has no catalog to ask, and offering a skill from a directory no run
+    // could read would name a name nothing can load.
     let mut view = View::boot();
 
     assert_eq!(say(&mut view, "/skill:commit-message"), Outcome::Unchanged);

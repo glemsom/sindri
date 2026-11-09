@@ -1,20 +1,6 @@
-//! What batch mode hands a script, measured where a script measures it: the built
-//! binary is spawned and its stdout, its stderr and its exit code are read back,
-//! so the contract is proved as bytes rather than as a function's return value.
-//!
-//! The wire is a loopback socket serving the bytes a fixture recorded, so the real
-//! client decodes a real event stream and no test needs a network or a key. The
-//! homes are temp directories of the test's own and every child gets `env_clear`
-//! and then this machine's `PATH` — which is where the `bwrap` a run boots with is
-//! found, and is nobody's credential — so nothing else of the test process's
-//! environment, least of all a real key, can reach the binary.
-//!
-//! A machine whose kernel refuses an unprivileged sandbox is not this suite's
-//! subject: the card a run prints instead is `tests/sandbox.rs`'s, so here every
-//! child takes `--yolo-unsafe`, the one route past a sandbox that cannot be created
-//! (§6), and batch mode's contract is still proved byte for byte. Which machine
-//! this is gets said once, on stderr's own descriptor, so a green run still names
-//! the tier it did not carry.
+//! What batch mode hands a script, measured where a script measures it: the built binary is spawned and its
+//! stdout, stderr and exit code read back as bytes, against a loopback socket serving a recorded stream, so no
+//! test needs a network or a key, and every child gets `env_clear` and this machine's `PATH`.
 
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -27,47 +13,32 @@ use std::time::Duration;
 use sindri_core::bash::BWRAP;
 use tempfile::TempDir;
 
-/// An Anthropic Messages reply, as the wire streamed it: two text fragments that
-/// make one answer, and a usage report of eleven tokens in and seven out.
 const ANTHROPIC: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_stream.sse");
 
-/// A Copilot Chat Completions reply, as the dialect streamed it for a name that
-/// asks for no other route: two text fragments and a usage report.
 const COPILOT_CHAT: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/copilot_chat_stream.sse");
 
-/// The same dialect's Responses reply, for a route a person named.
 const COPILOT_RESPONSES: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/openai_responses_stream.sse");
 
-/// The answer the Chat Completions fixture carries.
 const COPILOT_ANSWER: &str = "Hello from Copilot";
 
-/// The Copilot session a signed-in store holds, which is never an api key (§10)
-/// and never printed anywhere a run writes.
+/// A signed-in store's Copilot session: never an api key, and never printed anywhere a run writes.
 const SESSION: &str = "tid=recorded_copilot_session";
 
-/// What a wire says when the request itself was wrong, so no retry can help.
 const BAD_REQUEST: &str = r#"{"error":{"message":"unknown model","type":"invalid_request_error"}}"#;
 
-/// The answer the recorded stream carries, named once so an assertion is about
-/// the answer rather than about a slice of a fixture.
 const ANSWER: &str = "Hello world";
 
-/// One reply a [`Wire`] hands back: the status, the content type and the body.
 #[derive(Clone, Copy)]
 struct Reply {
-    /// The HTTP status, as a wire writes it.
     status: u16,
-    /// The content type, which is what says whether a body is an event stream.
     content_type: &'static str,
-    /// The body, byte for byte.
     body: &'static str,
 }
 
 impl Reply {
-    /// An event stream, as a reply was recorded mid-stream.
     fn stream(body: &'static str) -> Reply {
         Reply {
             status: 200,
@@ -76,7 +47,6 @@ impl Reply {
         }
     }
 
-    /// A refusal, as the wire worded it.
     fn refusal(status: u16, body: &'static str) -> Reply {
         Reply {
             status,
@@ -86,36 +56,25 @@ impl Reply {
     }
 }
 
-/// A wire on a loopback socket: it answers in order, keeps every request for a
-/// later assertion, and can hold a reply until the test lets it go, which is how
-/// a cancellation is made to arrive while a request is in flight.
+/// A loopback wire: it answers in order, keeps every request, and can hold a reply until the test releases it.
 struct Wire {
-    /// The port the socket listens on.
     port: u16,
-    /// Every request, head and body, in the order it arrived.
     seen: Arc<Mutex<Vec<String>>>,
-    /// One message per request served, so a test knows the child is waiting.
     arrived: Receiver<()>,
-    /// The replies it hands out, in order; the last one repeats.
     _replies: Vec<Reply>,
 }
 
 impl Wire {
-    /// A wire answering `replies`, and holding none of them.
     fn answering(replies: Vec<Reply>) -> Wire {
         Wire::start(replies, None)
     }
 
-    /// A wire that answers `replies` only once it is released, one release per
-    /// request, so a test can act while a request is in flight. The sender comes
-    /// back with it.
+    /// A wire that answers only once it is released, one release per request, so a test can act mid-request.
     fn holding(replies: Vec<Reply>) -> (Wire, Sender<()>) {
         let (release, gate) = channel();
         (Wire::start(replies, Some(gate)), release)
     }
 
-    /// The socket, the thread that serves it and the channel that says a request
-    /// has arrived.
     fn start(replies: Vec<Reply>, gate: Option<Receiver<()>>) -> Wire {
         let listener = TcpListener::bind("127.0.0.1:0").expect("a loopback port");
         let port = listener.local_addr().expect("a bound address").port();
@@ -146,19 +105,16 @@ impl Wire {
         }
     }
 
-    /// The base URL a run is pointed at, so no request leaves the machine.
     fn base_url(&self) -> String {
         format!("http://127.0.0.1:{}", self.port)
     }
 
-    /// Waits until the child has a request in flight.
     fn wait_for_request(&self) {
         self.arrived
             .recv_timeout(Duration::from_secs(10))
             .expect("a request should reach the wire");
     }
 
-    /// Every request this wire was sent, in order.
     fn requests(&self) -> Vec<String> {
         self.seen
             .lock()
@@ -167,9 +123,6 @@ impl Wire {
     }
 }
 
-/// The whole of an HTTP request: the head, then the body its `content-length`
-/// promised. The head ends at the first blank line, which is the only place the
-/// two parts can be told apart.
 fn read_request(stream: &mut TcpStream) -> String {
     let mut request = Vec::new();
     let mut buffer = [0u8; 1024];
@@ -200,7 +153,6 @@ fn read_request(stream: &mut TcpStream) -> String {
     String::from_utf8_lossy(&request).into_owned()
 }
 
-/// Where the head ends and its body begins, once the blank line has arrived.
 fn split(request: &[u8]) -> Option<(String, usize)> {
     let end = request
         .windows(4)
@@ -209,8 +161,6 @@ fn split(request: &[u8]) -> Option<(String, usize)> {
     Some((head, request.len() - (end + 4)))
 }
 
-/// One reply, as the socket writes it: its length is given so the client does not
-/// wait for a close to find the end of it.
 fn write_reply(stream: &mut TcpStream, reply: Reply) -> std::io::Result<()> {
     let head = format!(
         "HTTP/1.1 {} OK\r\ncontent-type: {}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
@@ -223,20 +173,15 @@ fn write_reply(stream: &mut TcpStream, reply: Reply) -> std::io::Result<()> {
     stream.flush()
 }
 
-/// A workspace, a config home and a state home, all of the test's own.
 struct Ground {
     /// Held so the directories outlive the paths that name them.
     _root: TempDir,
-    /// The one directory the run stands in.
     workspace: PathBuf,
-    /// The state home the session directory is made under.
     state: PathBuf,
-    /// The config home, which holds no file unless a test writes one.
     config: PathBuf,
 }
 
 impl Ground {
-    /// A ground with an empty workspace and empty homes.
     fn new() -> Ground {
         let root = tempfile::tempdir().expect("a temp ground");
         let workspace = root.path().join("workspace");
@@ -253,15 +198,9 @@ impl Ground {
         }
     }
 
-    /// A child pointed at this ground and at nothing else: the homes of the test's
-    /// own, the workspace as its working directory, and none of this process's
-    /// environment but `PATH` — which is where a `bwrap` is looked up, and which no
-    /// key is ever in. Without it a child finds only what `/bin:/usr/bin` holds, so
-    /// the bubblewrap a devbox or Nix install puts on `PATH` would be invisible to
-    /// the run and every test here would read the card instead of the contract.
-    ///
-    /// Where this machine cannot make a sandbox, the child is also told to run
-    /// unconfined: see [`sandbox_refusal`].
+    /// A child pointed at this ground and at nothing else, with none of this process's environment but
+    /// `PATH`: without it a child finds only `/bin:/usr/bin`, so the bubblewrap a devbox or Nix install puts
+    /// on `PATH` would be invisible and every test here would read the card instead of the contract.
     fn launch(&self) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_sindri"));
         command
@@ -277,8 +216,6 @@ impl Ground {
         command
     }
 
-    /// A child pointed at this ground as an Anthropic run, with the key it is given
-    /// rather than one it has to find.
     fn command(&self) -> Command {
         let mut command = self.launch();
         command
@@ -288,9 +225,6 @@ impl Ground {
         command
     }
 
-    /// The posture every run in this ground boots with, as the record and the JSON
-    /// object name it: the sandbox where this machine can make one, and otherwise
-    /// the escape hatch the run was handed — never a posture the run did not take.
     fn enforcement(&self) -> &'static str {
         match sandbox_refusal() {
             None => "bubblewrap",
@@ -298,7 +232,6 @@ impl Ground {
         }
     }
 
-    /// A child pointed at `wire`, with the prompt already on the command line.
     fn asking(&self, wire: &Wire, prompt: &str) -> Command {
         let mut command = self.command();
         command
@@ -307,7 +240,6 @@ impl Ground {
         command
     }
 
-    /// Every session directory this ground's state home holds.
     fn sessions(&self) -> Vec<PathBuf> {
         let root = self.state.join("sindri").join("sessions");
         let mut found: Vec<PathBuf> = std::fs::read_dir(root)
@@ -322,9 +254,6 @@ impl Ground {
         found
     }
 
-    /// This ground with a Copilot sign-in on file, as `sindri auth login
-    /// copilot` leaves one: owner-only, in its own directory beside the config
-    /// file, holding a session that does not expire.
     fn signed_in(&self) -> &Ground {
         let directory = self.config.join("sindri").join("auth");
         std::fs::create_dir_all(&directory).expect("the auth directory");
@@ -338,8 +267,6 @@ impl Ground {
         self
     }
 
-    /// A child asking `wire` as a signed-in Copilot run: no api key anywhere in
-    /// its environment, and the endpoint pointed at the loopback wire.
     fn copilot(&self, wire: &Wire, prompt: &str) -> Command {
         let mut command = self.launch();
         command
@@ -350,7 +277,6 @@ impl Ground {
         command
     }
 
-    /// The one session this ground holds, which is the one a test's run wrote.
     fn session(&self) -> PathBuf {
         let sessions = self.sessions();
         assert_eq!(sessions.len(), 1, "every run records exactly one session");
@@ -358,22 +284,13 @@ impl Ground {
     }
 }
 
-/// This machine's own `PATH`: what a shell would hand a child, and where the
-/// bubblewrap a run boots with lives.
 fn path() -> String {
     std::env::var("PATH").expect("this machine has a PATH")
 }
 
-/// Why this machine cannot confine a command, or `None` where it can: asked once,
-/// of the machine rather than of the tree, because that is what boot's own proof
-/// asks of it.
-///
-/// A machine that answers no is not this suite's subject. Batch mode's contract is
-/// what these tests prove, and the card a run prints instead of running is
-/// `tests/sandbox.rs`'s, so a child on such a machine is handed `--yolo-unsafe`
-/// (§6) and the contract is still proved. The answer is written to stderr's own
-/// descriptor rather than through `eprintln!`, because a passing test's output is
-/// captured, and a green run must still name the tier it left uncovered.
+/// Why this machine cannot confine a command, or `None` where it can: asked once, of the machine rather than of
+/// the tree. A machine that answers no is handed `--yolo-unsafe`, and the answer goes to stderr's own
+/// descriptor, because a passing test's output is captured and a green run must still name the tier it missed.
 fn sandbox_refusal() -> Option<&'static str> {
     static REFUSAL: OnceLock<Option<String>> = OnceLock::new();
     REFUSAL
@@ -392,11 +309,9 @@ fn sandbox_refusal() -> Option<&'static str> {
         .as_deref()
 }
 
-/// The three checks `scripts/sandbox-probe.sh` makes, made here in its order: a
-/// bubblewrap on `PATH`, one that answers for itself, and one the kernel lets
-/// create a sandbox. The argv keeps the network, as boot's own invocation does, so
-/// a runner that refuses a network namespace alone is not mistaken for a machine
-/// that refuses the sandbox a run would be made in.
+/// The three checks `scripts/sandbox-probe.sh` makes, in its order, keeping the network in the argv as boot's own
+/// invocation does: a runner that refuses a network namespace alone is not a machine that refuses the sandbox
+/// a run would be made in.
 fn probe() -> Option<String> {
     let version = match Command::new(BWRAP).arg("--version").output() {
         Ok(version) => version,
@@ -431,7 +346,6 @@ fn probe() -> Option<String> {
     }
 }
 
-/// What a failed bwrap said, or its status when it said nothing.
 fn said(output: &std::process::Output) -> String {
     let stderr = text(&output.stderr);
     let stderr = stderr.trim();
@@ -441,17 +355,14 @@ fn said(output: &std::process::Output) -> String {
     }
 }
 
-/// A stream as a reader sees it.
 fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
-/// The lines of a stream, without the empty one a trailing newline makes.
 fn lines(output: &str) -> Vec<&str> {
     output.lines().filter(|line| !line.is_empty()).collect()
 }
 
-/// The JSON object a `--format json` run wrote, and its bytes.
 fn object(stdout: &str) -> (serde_json::Value, &str) {
     let line = stdout
         .strip_suffix('\n')
@@ -974,8 +885,8 @@ fn a_signal_stops_the_run_with_nothing_on_stdout() {
 
     wire.wait_for_request();
     signal(&child);
-    // The reply is let go after the signal, so the run sees the user's word
-    // before it can settle as an answer.
+    // The reply is let go after the signal, so the run sees the user's word before it can settle as an
+    // answer.
     std::thread::sleep(Duration::from_millis(100));
     let _ = release.send(());
     let output = child.wait_with_output().expect("the binary should finish");
@@ -988,8 +899,7 @@ fn a_signal_stops_the_run_with_nothing_on_stdout() {
     );
     assert!(output.stdout.is_empty(), "{}", text(&output.stdout));
 
-    // The record is written as the run goes, so a run the user's word stopped is
-    // a session that still reads: the document says why it ended.
+    // The record is written as the run goes, so a run the user's word stopped is a session that still reads.
     let document = std::fs::read_to_string(ground.session().join("session.json"))
         .expect("the session document");
     assert!(
@@ -1023,7 +933,6 @@ fn a_signal_stops_the_run_with_nothing_on_stdout() {
     );
 }
 
-/// Sends `INT` to `child`, as a terminal's `^C` would.
 fn signal(child: &Child) {
     let status = Command::new("kill")
         .args(["-INT", &child.id().to_string()])

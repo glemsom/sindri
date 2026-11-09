@@ -1,8 +1,6 @@
-//! The mark's contract with the clipboard, proved where a reader's eyes are: a drag on a
-//! headless buffer, the frame painted from it, the cells the highlight covers read back
-//! out of that buffer's own glyphs, and those bytes held to what `Ctrl-Y` hands out
-//! (§12, #50). A snapshot of the picture cannot prove this — it would compare the frame
-//! with a copy of itself — so the assertion is between the painted cells and the copy.
+//! The mark's contract with the clipboard, proved where a reader's eyes are: a drag on a headless buffer, the
+//! frame painted from it, the cells the highlight covers read back out of that buffer, and those bytes held
+//! to what `Ctrl-Y` hands out. A snapshot would compare the frame with a copy of itself.
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -16,18 +14,13 @@ use sindri::view::View;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
 
-/// The screen every frame here is painted at: wide enough that a drag cuts columns of
-/// prose rather than of gutters.
 const SCREEN: (u16, u16) = (100, 30);
 
-/// The newer of the two answers, as the model wrote it: what a copy with no mark takes is
-/// this and not the rows it was laid out as, so it is written out once and compared whole.
+/// The newer answer as the model wrote it: what a copy with no mark takes, written out once and compared whole.
 const NEWEST: &str = "A width change drops what the cache held and reflows on the next \
                       paint, once, because a paint lays an entry out to draw it and then \
                       keeps the answer.";
 
-/// The transcript a mark is taken over: two turns of prose long enough to wrap, so a drag
-/// covers rows of words and not a single line of them.
 fn transcript() -> Vec<Entry> {
     vec![
         Entry::Turn { turn: 1 },
@@ -42,7 +35,6 @@ fn transcript() -> Vec<Entry> {
     ]
 }
 
-/// One entry of the answer the model gave on `turn`.
 fn answer(turn: u32, text: &str) -> Entry {
     Entry::Assistant {
         turn,
@@ -50,7 +42,6 @@ fn answer(turn: u32, text: &str) -> Entry {
     }
 }
 
-/// The frame `view` paints, as the buffer a terminal would be handed.
 fn painted(view: &mut View) -> Buffer {
     let (cols, rows) = SCREEN;
     let mut terminal =
@@ -61,8 +52,6 @@ fn painted(view: &mut View) -> Buffer {
     completed.buffer.clone()
 }
 
-/// The glyphs of every cell the mark ink covers, row by row, top to bottom: what a reader
-/// sees the highlight over, read out of the painted cells themselves.
 fn highlighted(buffer: &Buffer) -> String {
     let area = buffer.area;
     let mut rows: Vec<String> = Vec::new();
@@ -73,8 +62,8 @@ fn highlighted(buffer: &Buffer) -> String {
                 .cell((x, y))
                 .unwrap_or_else(|| panic!("row {y}, column {x} is outside the frame it is in"));
             if Ink::of(cell) != Some(Ink::Mark) {
-                // The mark covers one run of cells a row, so the first cell of it that is
-                // not marked ends the run this row carries.
+                // The mark covers one run of cells a row, so the first cell of it that is not marked
+                // ends the run this row carries.
                 if !line.is_empty() {
                     break;
                 }
@@ -89,9 +78,7 @@ fn highlighted(buffer: &Buffer) -> String {
     rows.join("\n")
 }
 
-/// What `Ctrl-Y` hands the terminal: the words the frame says left it, read after the
-/// frame a key has just changed has been painted — which is the order a terminal keeps,
-/// and the order the span a copy reads is refigured in.
+/// What `Ctrl-Y` hands the terminal, read after the frame the key changed has been painted.
 fn copied(view: &mut View) -> String {
     painted(view);
     match view.key(Key::Copy) {
@@ -162,8 +149,7 @@ fn ctrl_y_with_no_mark_copies_the_last_answer() {
 fn ctrl_y_on_a_frame_with_nothing_marked_and_no_answer_hands_out_nothing() {
     let mut view = View::boot();
 
-    // Painted first, because a copy reads the span the last paint drew: a frame nobody
-    // has drawn has no picture for the copy to agree with.
+    // Painted first, because a copy reads the span the last paint drew.
     painted(&mut view);
     let outcome = view.key(Key::Copy);
 

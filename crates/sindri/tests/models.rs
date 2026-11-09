@@ -1,12 +1,6 @@
-//! The `/model` screen: the names the wire serves, ranked as a query is typed into the
-//! screen, and the one `Enter` takes (§10, §12).
-//!
-//! The names here are the wire's own: every listing is read through the real listing code
-//! from a recorded catalogue, so a test cannot pass on a model name this tree made up —
-//! §10's one rule, and the one the no_hardcoded_models scan enforces over the source.
-//!
-//! What happens to a chosen name after the frame hands it on — the owner-only atomic save —
-//! is `tests/tui.rs`'s, where a real file is written and read back.
+//! The `/model` screen: the names the wire serves, ranked as a query is typed, and the one `Enter` takes.
+//! Every listing is read through the real listing code from a recorded catalogue, so no test passes on a name
+//! this tree made up. What happens to a chosen name afterwards is `tests/tui.rs`'s.
 
 use sindri::composer::{Key, Outcome};
 use sindri::keys::Mode;
@@ -18,20 +12,13 @@ use sindri_core::provider::transport::{Canned, Replay};
 use sindri_core::provider::{Client, Credential};
 use sindri_core::redact::SecretSet;
 
-/// A recorded Anthropic `GET /v1/models` catalogue: two served names, as the wire listed
-/// them, in its own order.
 const ANTHROPIC_MODELS: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_models.json");
 
-/// The first identifier the wire listed, named once so an assertion reads as the wire's
-/// list rather than as a name this test invented.
 const FIRST: &str = "claude-sonnet-4-6";
 
-/// The second of the two, and the one a query narrows to.
 const SECOND: &str = "claude-haiku-4-5";
 
-/// The listing a wire that answered hands back, read through the listing code itself from
-/// the recorded catalogue: the names, keeps and drops a live run would get, and no socket.
 fn listed() -> Listing {
     let replay = Replay::new([Canned::reply(200, ANTHROPIC_MODELS)]);
     let at = Where::own(sindri_core::wire::Wire::Anthropic);
@@ -40,8 +27,6 @@ fn listed() -> Listing {
         .served(&at, &Credential::new("sk-ant-recorded"), &at)
 }
 
-/// The listing a wire that could not be asked hands back: no names, and one line saying
-/// where a credential comes from (§10's hint, never a refusal).
 fn silent() -> Listing {
     let at = Where::own(sindri_core::wire::Wire::Anthropic);
     Client::over(Replay::new([]), SecretSet::default())
@@ -49,7 +34,6 @@ fn silent() -> Listing {
         .served(&at, &Credential::none(), &at)
 }
 
-/// The identifiers a screen offers, in the order it offers them.
 fn offered(models: &Models) -> Vec<String> {
     models
         .rows()
@@ -58,7 +42,6 @@ fn offered(models: &Models) -> Vec<String> {
         .collect()
 }
 
-/// A screen with `query` typed into it, a glyph at a time: what a reader sees after typing.
 fn narrowed(query: &str) -> Models {
     let mut models = Models::new();
     models.served(listed());
@@ -102,8 +85,8 @@ fn a_query_narrows_the_rows_as_it_is_typed() {
 
 #[test]
 fn a_name_the_query_starts_ranks_above_one_that_merely_holds_it() {
-    // The wire's order puts `claude-sonnet-4-6` first, so a ranking that only filtered would
-    // keep it first; `4` starts neither name and both hold it.
+    // The wire's order puts `claude-sonnet-4-6` first, so a ranking that only filtered would keep it
+    // first; `4` starts neither name and both hold it.
     let mut models = narrowed("4");
     assert_eq!(
         offered(&models),
@@ -213,8 +196,8 @@ fn the_screen_offers_eight_rows_and_no_more() {
             .collect::<Vec<String>>()
             .join(",")
     );
-    // The recorded reply a wire would have sent, leaked so it is the `'static` text a canned
-    // answer is: this catalogue is one a test wrote, and nothing reads it afterwards.
+    // Leaked so it is the `'static` text a canned answer needs: this catalogue is one a test wrote, and
+    // nothing reads it afterwards.
     let replay = Replay::new([Canned::reply(200, Box::leak(catalogue.into_boxed_str()))]);
     let at = Where::own(sindri_core::wire::Wire::Anthropic);
     let listing = Client::over(replay, SecretSet::default())
@@ -257,8 +240,6 @@ fn a_key_a_filter_box_has_no_use_for_moves_nothing() {
     assert_eq!(models.query(), "");
 }
 
-/// A frame with the `/model` screen up and the wire's names on it: the whole screen arrived
-/// at the way a reader and a terminal arrive at it, one key and one listing at a time.
 fn screen() -> View {
     let mut view = View::boot();
     view.paste("/model");

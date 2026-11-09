@@ -1,9 +1,6 @@
-//! Proves the first run a person actually meets: the binary, no config file at
-//! all, and a key supplied by the environment or pasted on stdin — the API-key
-//! row on stderr, and the pasted value never in anything the program writes.
-//!
-//! Every child gets `env_clear`, so nothing in the test process's own environment
-//! — least of all a real `$HOME` with a real key in it — can reach the binary.
+//! The first run a person meets: the binary, no config file at all, and a key from the environment or
+//! pasted on stdin — the API-key row on stderr, and the pasted value in nothing the program writes.
+//! Every child gets `env_clear`, so no real `$HOME` with a real key in it can reach the binary.
 
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
@@ -12,17 +9,14 @@ use std::process::{Command, Stdio};
 
 use tempfile::TempDir;
 
-/// A binary invocation a test can add to, with no environment inherited.
 fn sindri() -> Command {
     Command::new(env!("CARGO_BIN_EXE_sindri"))
 }
 
-/// A config home with nothing in it: the first run of a fresh install.
 fn bare_home() -> TempDir {
     tempfile::tempdir().expect("a temp dir")
 }
 
-/// A binary invocation pointed at `home` and at nothing else.
 fn first_run(home: &TempDir) -> Command {
     let mut command = sindri();
     command
@@ -32,13 +26,11 @@ fn first_run(home: &TempDir) -> Command {
     command
 }
 
-/// The one file the first run would write.
 fn config_file(home: &TempDir) -> PathBuf {
     home.path().join("sindri").join("config.toml")
 }
 
-/// The row a first run prints, for the config home it was given: an independent
-/// statement of what §11 asks for, not the text the core composes.
+/// What the row should say, worked out from `home` rather than copied from the text the core composes.
 fn expected_row(home: &TempDir) -> String {
     format!(
         "api key   from ANTHROPIC_API_KEY, SINDRI_API_KEY or --api-key\n          \
@@ -47,12 +39,11 @@ fn expected_row(home: &TempDir) -> String {
     )
 }
 
-/// A stream as a reader sees it, for asserting on `contains`.
 fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
-/// The permission bits a file carries, without the file-type bits beside them.
+/// The permission bits alone: `metadata`'s mode also carries the file's type.
 fn mode(path: &Path) -> u32 {
     std::fs::metadata(path)
         .expect("a file to stat")

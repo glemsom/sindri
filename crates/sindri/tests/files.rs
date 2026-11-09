@@ -1,10 +1,6 @@
-//! The `@` picker's contract with a reader, walked rather than eyeballed: the key that opens
-//! the screen and the key that closes it, the glyphs that are the query and the ones that are
-//! still the prompt's, and the word a selection leaves in the draft (§12).
-//!
-//! Every workspace here is a temp directory the test writes, so nothing of this repository
-//! — its own `.gitignore`, its own files, the branch it is on — can decide what a picker
-//! offers, and no test needs the network to walk one.
+//! The `@` picker's contract with a reader, walked rather than eyeballed: the keys that open and close the
+//! screen, the glyphs that are the query and the ones still the prompt's, and the word a selection leaves in
+//! the draft. Every workspace is the test's own, so nothing of this repository decides what a picker offers.
 
 use std::path::Path;
 
@@ -12,8 +8,6 @@ use sindri::composer::{Composer, Key, Outcome};
 use sindri::keys::Mode;
 use sindri::view::View;
 
-/// A workspace of the test's own holding `files`, each written with the directories it sits
-/// in.
 fn workspace(files: &[&str]) -> tempfile::TempDir {
     let root = tempfile::tempdir().expect("a temp workspace");
     for file in files {
@@ -26,21 +20,17 @@ fn workspace(files: &[&str]) -> tempfile::TempDir {
     root
 }
 
-/// The frame a reader's screen is: a boot frame told the directory it stands in, because
-/// the picker walks the workspace and a frame knows only what it was handed.
 fn standing(root: &Path) -> View {
     let mut view = View::boot();
     view.set_workspace(root.to_path_buf());
     view
 }
 
-/// The draft a frame holds, as a reader reads it.
 fn draft(view: &View) -> &str {
     view.composer().text()
 }
 
-/// A frame standing in `root` with a draft typed into it, typed a line at a time: a prompt
-/// is built through the same keys a reader's fingers send.
+/// A frame standing in `root` with `draft` typed through the keys a reader's fingers send.
 fn typing(root: &Path, draft: &str) -> View {
     let mut composer = Composer::new();
     composer.paste(draft);
@@ -183,8 +173,7 @@ fn selecting_a_file_puts_its_path_in_the_draft_and_closes_the_screen() {
 fn a_path_chosen_in_the_middle_of_a_draft_lands_where_the_caret_is() {
     let root = workspace(&["rows.rs"]);
     let mut view = typing(root.path(), "read then say why");
-    // The caret back to just after `read `, which is where a reader pointing at a file is:
-    // the path goes in front of the word already written.
+    // The caret back to just after `read `, where a path goes in front of a word already written.
     for _ in 0.."then say why".len() {
         view.key(Key::Left);
     }

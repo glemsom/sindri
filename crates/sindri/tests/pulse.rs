@@ -1,12 +1,6 @@
-//! The pulse, held to its contract as a value rather than as a picture: the glyph a clock
-//! lands on, the words a duration is said in, and the mark a stopped run settles into
-//! (§12, ticket #39).
-//!
-//! It is tested here, and not only in the golden frames, because a frame holds the one
-//! moment it was painted at and every number in the contract is a boundary no single
-//! picture can reach: a frame shows `4.2s`, and only a test can say what 999 ms reads as,
-//! which glyph is 80 ms later, or that a marker settled at 12.4 s still says 12.4 s a
-//! minute after it stopped.
+//! The pulse as a value rather than as a picture: a frame holds the one moment it was painted at, so the
+//! boundaries — what 999 ms reads as, which glyph is 80 ms later, a marker settled at 12.4 s still saying
+//! 12.4 s a minute on — are reachable only from here.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -18,17 +12,12 @@ use sindri_core::provider::Deltas;
 use sindri_core::redact::SecretSet;
 use sindri_core::run::{Budget, Stop};
 
-/// Every glyph the marker steps through, in the order it steps through them.
 const GLYPHS: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
-/// A run that failed, for the one stop reason that carries words of its own.
 fn failed() -> Stop {
     Stop::Error(SecretSet::default().redact("the wire went away"))
 }
 
-/// The frame `view` paints at `cols` by `rows`, as the text of each row: painted through
-/// `View::paint`, the seam the terminal is handed, so what a test reads is the picture a
-/// reader sees (ADR-0012).
 fn frame(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
     let area = Rect::new(0, 0, cols, rows);
     let mut buffer = Buffer::empty(area);
@@ -49,7 +38,6 @@ fn frame(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
         .collect()
 }
 
-/// A frame whose newest answer is still arriving: the row the marker heads.
 fn answering() -> View {
     let mut view = View::boot();
     view.text(
@@ -170,7 +158,6 @@ fn a_run_that_reached_its_answer_settles_on_a_check_and_the_duration_it_stopped_
         (String::from("✓"), sindri::ink::Ink::Ok)
     );
 
-    // Past ten seconds a duration is whole seconds, so the form drops the decimal.
     assert_eq!(Pulse::settled(&Stop::Final, 12_400).head().text(), "✓ 12s");
 }
 

@@ -1,11 +1,6 @@
-//! The turn in flight, held to §4's two promises through the value the wire will feed:
-//! text and reasoning stream to the front end as they land, each in its own gutter and
-//! its own ink, and the rows a reader has already seen never move under them.
-//!
-//! What is asserted here is the value a fragment lands in (#43 wires the core's
-//! `Deltas` to it), so the picture is held at its rows: a row's words and the ink it is
-//! drawn in, one row at a time. The frame that shows the same turn beside the settled
-//! entries is `frames`' `streaming-120x40`.
+//! The turn in flight, held to the value the wire feeds: text and reasoning stream as they land, each in its own
+//! gutter and ink, and the rows a reader has already seen never move under them. The frame that shows the
+//! same turn beside the settled entries is `frames`' `streaming-120x40`.
 
 use sindri::ink::Ink;
 use sindri::pulse::Pulse;
@@ -13,20 +8,14 @@ use sindri::rows::Row;
 use sindri::stream::{Said, Stream};
 use sindri_core::provider::Deltas;
 
-/// The words a row is drawn with, its gutter and all.
 fn words(row: &Row) -> String {
     row.spans().iter().map(|(text, _)| text.as_str()).collect()
 }
 
-/// The inks a row's spans are drawn in, in order.
 fn inks(row: &Row) -> Vec<Ink> {
     row.spans().iter().map(|(_, look)| look.ink()).collect()
 }
 
-/// §4 and §12's first promise: reasoning and text land in the order they arrive, and
-/// each is drawn in its own gutter and its own ink, so a run that reasons a line,
-/// answers a line and reasons on is read as it was said rather than as two piles — the
-/// thought first and the answer after it, whatever the order really was.
 #[test]
 fn thought_and_answer_fragments_land_in_the_order_they_arrive() {
     let mut stream = Stream::new();
@@ -70,13 +59,6 @@ fn thought_and_answer_fragments_land_in_the_order_they_arrive() {
     );
 }
 
-/// A streaming answer renders incrementally: a fragment re-wraps the row it lands on and
-/// moves no row above it, so an answer grows at the tail and a reader already reading it
-/// is never sent back to the top. And a fence still open — the last thing a
-/// half-streamed answer is
-/// likely to hold — is drawn as code from that line on, never as prose that ate the
-/// rest of the answer (ADR-0008; #52 keeps this rule when it replaces the plain
-/// rendering).
 #[test]
 fn a_streaming_answer_adds_rows_and_a_fence_still_open_is_code() {
     let mut stream = Stream::new();
@@ -116,8 +98,6 @@ fn a_streaming_answer_adds_rows_and_a_fence_still_open_is_code() {
     );
 }
 
-/// Two fragments of one kind, one after the other, are one run: a wire sends a word or
-/// a few characters at a time, and a run per fragment would be a row per fragment.
 #[test]
 fn fragments_of_one_kind_accumulate_into_one_run() {
     let mut stream = Stream::new();
@@ -136,10 +116,6 @@ fn fragments_of_one_kind_accumulate_into_one_run() {
     );
 }
 
-/// §12's pulse sits at the head of the newest answer and nowhere else: a turn that said a
-/// thing, thought, and is answering now wears the marker on the second answer's first row
-/// — the row a reader is about to read — while the first keeps the gutter every answer has
-/// (#39).
 #[test]
 fn the_marker_heads_the_newest_answers_first_row_and_no_other() {
     let mut stream = Stream::new();
@@ -161,10 +137,6 @@ fn the_marker_heads_the_newest_answers_first_row_and_no_other() {
     );
 }
 
-/// A run that has reasoned and not yet answered has no answer to head, so the marker opens
-/// the answer's row under what the turn has said so far: the row exists before its first
-/// fragment does, because a frame waiting on a wire must not look like a frame that is idle
-/// (#39).
 #[test]
 fn a_turn_that_has_only_reasoned_opens_the_answers_row_under_its_thought() {
     let mut stream = Stream::new();

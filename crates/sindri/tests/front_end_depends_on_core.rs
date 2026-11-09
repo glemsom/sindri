@@ -1,24 +1,17 @@
-//! Proves the front end depends on the core, and that the core depends back on
-//! no front end: the edge that makes "no front end owns a decision the core
-//! could make" a compile error rather than a convention.
-//!
-//! The reverse direction is checked on direct edges, which is sufficient: cargo
-//! forbids a cycle, so a path from the core back to the front end would close
-//! one, given the front end already depends on the core.
+//! The edge that makes "no front end owns a decision the core could make" a compile error rather than a
+//! convention. The reverse direction is checked on direct edges, which suffices: cargo forbids a cycle,
+//! and a path from the core back to the front end would close one.
 
 use std::collections::HashMap;
 use std::process::Command;
 
 use serde_json::Value;
 
-/// The platform the devbox toolchain pins, so the resolve stays offline.
+/// The devbox toolchain's platform, so the resolve stays offline.
 const PLATFORM: &str = "x86_64-unknown-linux-gnu";
 
-/// The resolved graph, in the only two shapes these tests need from it.
 struct Graph {
-    /// Package id to package name, for every package the workspace resolves.
     names: HashMap<String, String>,
-    /// Package id to the ids it depends on directly, of any edge kind.
     edges: HashMap<String, Vec<String>>,
 }
 
@@ -82,7 +75,6 @@ impl Graph {
             .unwrap_or_else(|| panic!("the workspace resolves no package named {name}"))
     }
 
-    /// The names of every package `name` depends on directly.
     fn direct_dependencies(&self, name: &str) -> Vec<&str> {
         self.edges
             .get(self.id_of(name))

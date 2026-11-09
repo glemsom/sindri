@@ -1,13 +1,6 @@
-//! The settings modal where it meets the file: a visit that writes only the rows a reader
-//! touched, `Enter` writing at once and the next prompt running on what it left, `Esc`
-//! writing nothing, an emptied row unsetting its key so the environment speaks again, and a
-//! value the schema refuses said on the screen with nothing written at all (§12, §11,
-//! ADR-0009).
-//!
-//! The frame is driven through the keys a reader presses — the mode stack's own tables, the
-//! screen's own map — and the write goes through `settings::persist`, which is the very
-//! function the terminal calls. So every promise here is the product's and none of it is a
-//! test-only path.
+//! The settings modal where it meets the file: a visit writes only the rows a reader touched, `Enter` writes
+//! at once and the next prompt runs on what it left, `Esc` writes nothing, an emptied row unsets its key so
+//! the environment speaks again, and a refused value is said on the screen with nothing written.
 
 use std::collections::BTreeMap;
 use std::os::unix::fs::PermissionsExt;
@@ -20,8 +13,8 @@ use sindri::view::View;
 use sindri_core::config::{Config, Flags, MODE, Touched};
 use tempfile::TempDir;
 
-/// A config file a person wrote: comments above keys and beside them, keys in an order no
-/// serializer would choose, and a blank line where they wanted one.
+/// A config file a person wrote: comments above keys and beside them, keys in an order no serializer would
+/// choose, and a blank line where they wanted one.
 const HAND_WRITTEN: &str = "\
 # My settings, and my notes on them. The comments are the point.
 status = false   # OSC 7501 reporting, off until I trust it
@@ -35,7 +28,6 @@ max_turns = 250
 thinking = true
 ";
 
-/// A config home holding `text` as its one `config.toml`, the way a person left it.
 fn home(text: &str) -> TempDir {
     let home = tempfile::tempdir().expect("a temp dir");
     let directory = home.path().join("sindri");
@@ -44,17 +36,14 @@ fn home(text: &str) -> TempDir {
     home
 }
 
-/// The one file inside a config home.
 fn file_in(home: &TempDir) -> PathBuf {
     home.path().join("sindri").join("config.toml")
 }
 
-/// What the file holds now, read the way any other reader would read it.
 fn read(path: &Path) -> String {
     std::fs::read_to_string(path).expect("a readable config")
 }
 
-/// The environment a launch resolves against: this config home, and nothing else set.
 fn environment(home: &TempDir) -> BTreeMap<String, String> {
     [(
         String::from("XDG_CONFIG_HOME"),
@@ -64,21 +53,16 @@ fn environment(home: &TempDir) -> BTreeMap<String, String> {
     .collect()
 }
 
-/// The config the visit opened on: the file under the environment, resolved the way a
-/// launch resolves it — which is what the screen shows and what the next prompt runs on.
 fn resolved(home: &TempDir) -> Config {
     Config::resolve(&environment(home), Flags::default()).expect("a config that resolves")
 }
 
-/// The frame a reader opens the screen on: the config as it resolved, and the screen over
-/// the draft.
 fn opened(home: &TempDir) -> View {
     let mut view = View::boot();
     view.open_settings(&resolved(home));
     view
 }
 
-/// The screen walked until `key`'s row is the one a key acts on, as a reader walks it.
 fn walk_to(view: &mut View, key: &str) {
     for _ in 0..Config::KEYS.len() {
         if row_key(view.settings()) == Some(key) {
@@ -89,12 +73,10 @@ fn walk_to(view: &mut View, key: &str) {
     panic!("{key} is a key of the schema, so the screen has a row for it");
 }
 
-/// The key the screen's cursor is on, as the screen paints it.
 fn row_key(settings: &Settings) -> Option<&'static str> {
     settings.rows().nth(settings.current()).map(|(key, _)| key)
 }
 
-/// A row's text as the screen holds it.
 fn shown(view: &View, key: &str) -> String {
     view.settings()
         .rows()
@@ -103,14 +85,12 @@ fn shown(view: &View, key: &str) -> String {
         .unwrap_or_else(|| panic!("the screen has a row for {key}"))
 }
 
-/// The text a reader types into the row the keys act on, one glyph at a time.
 fn type_into(view: &mut View, text: &str) {
     for glyph in text.chars() {
         view.key(Key::Char(glyph));
     }
 }
 
-/// The patch `Enter` handed the terminal, or a panic saying the key did not ask for a write.
 fn entered(view: &mut View) -> Touched {
     match view.key(Key::Enter) {
         Outcome::Save(touched) => touched,

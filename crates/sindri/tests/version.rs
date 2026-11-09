@@ -1,18 +1,10 @@
-//! Proves the binary carries where it came from and says it out loud: the `git
-//! describe` of the commit it was built at and that commit's own date, both
-//! compile-time constants, printed by `--version` with no clock anywhere near them.
-//!
-//! The checkout is the independent source of truth here. The test asks git what
-//! the tree stands on and demands the binary say the same thing, so a version
-//! stamped from the wall clock — or one hand-written and forgotten — fails the day
-//! the build is not the commit's day. A tree with no git at all, a source tarball,
-//! has no such truth to compare against, and the test says so rather than passing
-//! on a guess.
+//! The binary says which commit it was built at and that commit's date, both compile-time constants
+//! with no clock near them, and the checkout is what it is held to: a version stamped from the wall
+//! clock fails here, and a source tarball has no checkout to compare against, which the test says.
 
 use std::path::Path;
 use std::process::Command;
 
-/// What the binary prints for `--version`, without its trailing newline.
 fn printed_version() -> String {
     let output = Command::new(env!("CARGO_BIN_EXE_sindri"))
         .arg("--version")
@@ -28,8 +20,6 @@ fn printed_version() -> String {
     printed.trim_end_matches('\n').to_owned()
 }
 
-/// What git says about the checkout this test was built from, or nothing when
-/// there is no checkout to ask: a source tarball carries no history.
 fn git_about_the_checkout() -> Option<(String, String)> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let describe = git(root, &["describe", "--tags", "--always", "--dirty"])?;
@@ -37,7 +27,6 @@ fn git_about_the_checkout() -> Option<(String, String)> {
     Some((describe, date))
 }
 
-/// One git command, in `root`, trimmed; nothing when it fails or prints nothing.
 fn git(root: &Path, args: &[&str]) -> Option<String> {
     let output = Command::new("git")
         .arg("-C")
@@ -53,8 +42,6 @@ fn git(root: &Path, args: &[&str]) -> Option<String> {
     (!said.is_empty()).then_some(said)
 }
 
-/// Today, by the clock the test process runs under — the one date a reproducible
-/// build is forbidden to carry.
 fn today() -> Option<String> {
     let output = Command::new("date").arg("-u").arg("+%F").output().ok()?;
     if !output.status.success() {
