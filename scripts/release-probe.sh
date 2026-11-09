@@ -1,51 +1,6 @@
 #!/usr/bin/env bash
-# The release stage of `make check` (spec §16, ADR 0001; ticket #62): the release
-# path exercised by the gate rather than by hand on release day. It builds the
-# artefact the product ships — a static `x86_64-unknown-linux-musl` binary — and
-# then asserts five things about the bytes it made:
-#
-#   1. static      nothing in it names an ELF interpreter, so it needs no loader
-#                  from the machine it runs on;
-#   2. musl        it defines musl's own `__stdio_exit` and carries no glibc
-#                  marker, which is what `static` alone cannot tell you — a
-#                  statically linked glibc binary is static and is not this;
-#   3. no OpenSSL  neither a symbol nor a string in it names OpenSSL, because a
-#                  musl binary cannot use the GNU NSS resolver and TLS therefore
-#                  goes through rustls (ADR 0001). `openssl-probe` reads an env
-#                  var and is not OpenSSL; `SSL_CTX_new` is;
-#   4. no store    no `/nix/store` path in it: devbox supplies build-time tools
-#                  only, so nothing it built may name the store it came from;
-#   5. it runs     with no devbox, no Nix and no fonts: an empty root, an empty
-#                  environment, no PATH, and the artefact as the only file in it,
-#                  printing what it prints here. A binary that needs a Nix store
-#                  path, a system library or a font to start cannot.
-#
-# The build reuses CARGO_TARGET_DIR, like every other cargo call in the gate: a
-# tree that has already built the artefact pays a freshness check, not a compile.
-# It goes through `zig cc`, the only compiler in the shell that targets musl.
-#
-# Three verdicts, and the exit code is part of the contract:
-#
-#   0   release: ok (N checks)                 the artefact was built and held
-#   77  release: skipped (...)                 the machine would not let it run;
-#                                              the reason is the line above
-#   1   release: FAIL (...)                    it ran and failed
-#
-# One reason to skip, and only one, and it is a fact about the machine rather than
-# the tree: no bwrap, or a kernel that will not let bwrap unshare — the same pair
-# scripts/sandbox-probe.sh skips on. Every other thing the build can want is the
-# shell's own pin (`devbox.json` names `zig` and `cargo-zigbuild`) or the tree's
-# own defect, so a build that cannot link is a FAIL. A skip over it would be a
-# green line no day could ever contradict: the output that excuses the compiler is
-# the output a broken toolchain and a broken tree print alike. A skip is printed,
-# never counted as a pass, and keeps the run's exit 0.
-#
-#     devbox run -- make release
-#     devbox run -- bash scripts/release-probe.sh
 set -uo pipefail
 
-# automake's "skipped" status, chosen so a skip cannot be mistaken for the 0 a
-# stage that ran earns or the 1 a failure earns. `make release` reads it.
 SKIPPED_STATUS=77
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -61,9 +16,6 @@ ok()   { printf 'ok   release: %s\n' "$*"; checks=$((checks + 1)); }
 skip() { printf 'skip release: %s\n' "$*"; }
 bad()  { printf 'FAIL release: %s\n' "$*"; status=1; }
 
-# finish -- the one place the verdict is printed, so there is one wording to grep.
-# A failure outranks a skip: a check that ran and failed must not be excused by a
-# capability the machine lacked later on.
 finish() {
   if ((status)); then
     printf 'release: FAIL (%d checks)\n' "$checks"
@@ -87,12 +39,6 @@ if ! command -v cargo-zigbuild >/dev/null 2>&1; then
   finish
 fi
 
-# 1. The artefact, built the way the product ships it: `cargo zigbuild` puts the C
-#    half of rustls's provider through `zig cc`, which compiles and links for musl.
-#    `-C strip=none` because zig reads the strip zigbuild asks for as
-#    strip-everything, and that would take the symbol table with it — while zig's
-#    own libc arrives with debug info that names the store, so `--strip-debug`
-#    takes those sections and keeps the table.
 if said=$(RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C strip=none" \
     cargo zigbuild --release --target "$target" --package sindri 2>&1); then
   ok "cargo zigbuild --release --target $target --package sindri"
@@ -112,9 +58,6 @@ if ! said=$(strip --strip-debug -- "$artefact" 2>&1); then
   finish
 fi
 
-# 2. Static: a dynamic ELF carries PT_INTERP, hence its interpreter's name. No
-#    readelf needed, and the check is the same one scripts/toolchain-probe.sh
-#    makes of a throwaway crate.
 interpreters=
 for name in ld-musl ld-linux; do
   if grep -qa -- "$name" "$artefact"; then
@@ -129,9 +72,6 @@ else
   ok "artefact is a static ELF: $(basename -- "$artefact")"
 fi
 
-# 3. musl and not glibc: musl defines `__stdio_exit`, which glibc does not have,
-#    and a glibc-linked artefact carries the library's own version string. Both
-#    halves, because either alone can pass a binary that is not this one.
 if [[ ! -s $artefact ]]; then
   bad "artefact is empty: $artefact"
 elif ! symbols=$(nm -- "$artefact" 2>/dev/null) || [[ -z $symbols ]]; then
@@ -144,14 +84,6 @@ else
   ok "artefact is musl, not glibc: it defines __stdio_exit and names no GNU C Library"
 fi
 
-# 4. No OpenSSL: the symbol table and the strings beside it, one pass over both,
-#    because a statically linked libssl would leave its names in either. The
-#    markers are names OpenSSL actually uses, matched at a word boundary and not
-#    merely as substrings: aws-lc-rs is the C half of rustls's provider and it
-#    keeps OpenSSL's *API* names behind its own prefix (`aws_lc_0_47_0_SSL_CTX_new`),
-#    which is BoringSSL saying it speaks the same protocol and is not the library
-#    ADR 0001 forbids. `openssl-probe` reads `SSL_CERT_FILE`; that is a path, not
-#    a symbol, and it is not in this list either.
 openssl_hits=$(
   {
     nm -- "$artefact" 2>/dev/null
@@ -164,9 +96,6 @@ else
   ok 'no OpenSSL symbol or string in the artefact'
 fi
 
-# 5. No Nix store path: devbox supplies build-time tools only, so nothing it built
-#    may name the store it came from. Debug info is the way one arrives here, which
-#    is why the sections above are stripped.
 if store=$(grep -oa '/nix/store/[^[:space:]]*' -- "$artefact" | head -1 | cut -c1-120) &&
    [[ -n $store ]]; then
   bad "the artefact names a store path: $store"
@@ -174,12 +103,6 @@ else
   ok 'no Nix store path in the artefact'
 fi
 
-# 6. It runs with nothing around it. bwrap makes the empty root, `--clearenv`
-#    empties the environment, and the artefact is the only file mounted into it —
-#    so there is no devbox shell, no /nix, no /usr/share/fonts and no dynamic
-#    loader for anything to find. The bytes it prints are compared with the bytes
-#    the same artefact prints here, which is the strongest claim available without
-#    a second machine: same program, same words, nothing to lean on.
 if ! command -v bwrap >/dev/null 2>&1; then
   skip 'bwrap not on PATH'
   bwrap_why='bwrap not on PATH'

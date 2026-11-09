@@ -1,15 +1,4 @@
 #!/usr/bin/env bash
-# The fast audits, in one pass over the tree: no cargo, no compilation, no
-# network. One line per rule, always, and a non-zero exit if any rule failed.
-#
-#     bash scripts/audit.sh [REPO_ROOT]     (default: the script's parent)
-#
-# A file directly under a tests tree is a cargo target and needs no declaration;
-# a nested one must be named by a `mod` that reaches it, resolved the way rustc
-# does. The walk starts at every target and stops where declarations do.
-#
-# Out of scope: `#[path]` and `#[cfg]` are ignored, one `mod` per line is
-# assumed, and `test-name` reads `#[test]` rather than `#[tokio::test]`.
 set -uo pipefail
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -19,9 +8,6 @@ repo_root=$(cd "${1:-$here/..}" && pwd) || {
 }
 cd "$repo_root" || exit 2
 
-# Every Rust file in the tree, relative and in a stable order so two runs agree.
-# A git tree is read through git — tracked plus untracked-but-not-ignored, which
-# skips a build or a devbox shell; anything else is walked directly.
 files=()
 collect() {
   local path
@@ -42,8 +28,6 @@ fi
 
 status=0
 
-# report RULE VIOLATION... -- one line for the rule, always; the violations it
-# found are listed beneath it and never reach into another rule's line.
 report() {
   local rule=$1
   shift
@@ -56,8 +40,6 @@ report() {
   status=1
 }
 
-# is_crate_root FILE -- true when cargo compiles FILE as a crate target: a
-# lib.rs or main.rs, or a file directly under a tests, benches or examples tree.
 is_crate_root() {
   local file=$1 dir=${1%/*}
   [[ $dir == "$file" ]] && dir=.
@@ -70,16 +52,11 @@ is_crate_root() {
   return 1
 }
 
-# owns_directory FILE -- true when FILE's child modules live in the directory
-# FILE sits in rather than in a directory named after it, which is Rust's rule
-# for crate roots and for mod.rs.
 owns_directory() {
   is_crate_root "$1" && return 0
   [[ ${1##*/} == mod.rs ]]
 }
 
-# resolve_mod FILE NAME -- sets RESOLVED to the file `mod NAME;` in FILE names,
-# or to nothing when no such file exists.
 resolve_mod() {
   local file=$1 name=$2 dir
   if owns_directory "$file"; then dir=${file%/*}; else dir=${file%.rs}; fi
@@ -92,7 +69,6 @@ resolve_mod() {
   fi
 }
 
-# Every `mod name;` declaration in the tree, as records of file US line US name.
 decl_lines=()
 read_declarations() {
   ((${#files[@]})) || return 0
@@ -109,13 +85,11 @@ read_declarations() {
 
 violations_undeclared_test_file=()
 
-# A file under a tests tree that no declaration reaches, reported where it lies.
 audit_undeclared_test_file() {
   local -A children=() reached=()
   local -a queue=()
   local record file line name child dir index
 
-  # The walk's edges: every declaration, resolved to the file it names.
   for record in "${decl_lines[@]}"; do
     IFS=$'\x1f' read -r file line name <<<"$record"
     resolve_mod "$file" "$name"
@@ -153,9 +127,6 @@ audit_undeclared_test_file() {
   done
 }
 
-# Every `#[test]` name in the tree, as records of file US line US name. A cfg or
-# a should_panic may sit between the `#[test]` and the `fn`; anything else ends
-# the search.
 test_lines=()
 read_test_names() {
   ((${#files[@]})) || return 0
