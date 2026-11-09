@@ -49,10 +49,8 @@ pub struct Cli {
     #[arg(long = "context-window", value_name = "TOKENS", value_parser = window_tokens)]
     pub context_window: Option<u64>,
 
-    /// Run without a sandbox at all.
-    ///
-    /// No config key and no environment variable: a persisted unsafe setting is one the
-    /// user forgets.
+    /// Run without a sandbox at all: no config key and no environment variable, since a
+    /// persisted unsafe setting is one the user forgets.
     #[arg(long = "yolo-unsafe")]
     pub yolo_unsafe: bool,
 

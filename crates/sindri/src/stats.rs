@@ -244,11 +244,9 @@ impl Stats {
             .map(|block| (block.label, block.rows.len()))
     }
 
-    /// The columns are there for the room they add, so a wider band never narrows one: a band
-    /// that holds every row in one column draws one.
-    ///
-    /// A block's facts are whole, and so is the order: a band that gives one up gives up every
-    /// block after it, so the last column counts the tail of the screen and never a hole in it.
+    /// The columns are there for the room they add, so a wider band never narrows one; and a
+    /// block's facts are whole, so a band that gives one up gives up every block after it, and
+    /// the last column counts the tail of the screen rather than a hole in the middle of it.
     fn screen(&self, area: Rect) -> Screen {
         if area.width == 0 || area.height == 0 || self.blocks.is_empty() {
             return Screen::default();

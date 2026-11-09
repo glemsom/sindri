@@ -1,9 +1,6 @@
 //! A terminal in raw mode sends `^C` as the byte `0x03` and no signal at all, so a key and a
-//! `kill -INT` are two arrivals that must land on one flag.
-//!
-//! The handler writes one byte and does nothing else: anything that allocates, takes a lock
-//! or reads a table is undefined behaviour inside a signal handler. The byte is why the loop
-//! wakes at all — `poll` is never restarted by a signal.
+//! `kill -INT` are two arrivals that land on one flag. The handler writes one byte and nothing
+//! else: anything that allocates, takes a lock or reads a table is undefined behaviour there.
 
 use std::io;
 use std::os::fd::AsRawFd;
@@ -24,6 +21,8 @@ static HANDLER: AtomicI32 = AtomicI32::new(-1);
 /// Never cleared: the launch ends once it is set.
 static ARRIVED: AtomicBool = AtomicBool::new(false);
 
+/// The byte is why the loop wakes at all: `poll` is never restarted by a signal, so a pipe with
+/// a byte in it is a readiness the next `poll` returns.
 pub struct Wake {
     reader: OwnedFd,
     /// Shared, because a run thread and a signal handler both raise one and neither owns it.

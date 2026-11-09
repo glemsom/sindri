@@ -14,12 +14,9 @@ pub fn copy(text: &str) -> Vec<u8> {
     sequence
 }
 
-/// `OSC 7501 ; <document> ST`, where the document is the JSON `status.json` holds: a
-/// semicolon in a workspace name cannot split a sequence a reader takes whole after the
-/// one `;`.
-///
-/// Written unqueried and always: a detection query needs a stdin read a filter does not do,
-/// and a terminal that does not speak it drops the sequence anyway.
+/// `OSC 7501 ; <document> ST`, the document being the JSON `status.json` holds: a reader takes
+/// it whole after the single `;`, so a workspace named `weird;dir` cannot split it. Written
+/// unqueried and always, because a detection query needs a stdin read a filter does not do.
 pub fn status(report: &Status) -> Vec<u8> {
     let mut sequence = Vec::from(&b"\x1b]7501;"[..]);
     sequence.extend_from_slice(&report.json());
