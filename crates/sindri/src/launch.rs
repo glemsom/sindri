@@ -1,22 +1,3 @@
-//! One launch's run, assembled the same way whichever front end asked for it: the session
-//! it is recorded under (§13), the boundary its commands are confined by (§6), the wire it
-//! asks and the loop that drives it to a stop reason — so batch mode and the terminal UI
-//! cannot differ in what a run is (§3, ADR-0005).
-//!
-//! The assembly is the part that must not drift: one secret set, a first request that
-//! proves the sandbox before a turn or a record, a catalog the tool descriptions are
-//! derived from, a record opened before the first turn so a killed run still reads. A front
-//! end that assembled its own would be a second opinion about all of it, so neither does.
-//!
-//! What is left to a front end is its voice and its picture: its own words about the run on
-//! its own stream, and the answer drawn however it draws one. The loop is here because it is
-//! the same loop — a turn asked, the record written as it goes, and a stop reason nobody
-//! gets to disagree with (§15, ADR-0006) — and the fragments of the turn in flight and the
-//! turns that end are handed to whoever the front end gave it.
-//!
-//! The cancellation arrives by value, so it exists before the run does: the flag the user's
-//! word lands on is the one the loop reads and the one a command in flight hears (§4).
-
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -39,27 +20,21 @@ use sindri_core::wire::Wire;
 
 use crate::cli::Cli;
 
-/// §15's setup failure: nothing to run *with* — a session that cannot be made, a boundary
-/// that cannot be held, a sandbox that cannot be proved.
+/// The exit code for a launch that had nothing to run *with*.
 const SETUP: u8 = 3;
 
-/// §15's usage error: no provider and no model to run against, which is a command line or
-/// a config that holds no run.
+/// The exit code for a command line or a config that holds no run.
 const USAGE: u8 = 2;
 
-/// Why a launch cannot run at all: the one line a front end says about it, and §15's code.
+/// What a front end says about a launch that cannot run, and exits with.
 ///
-/// A refusal is not a stop reason: no run started, so no record was written and nothing is
-/// on stdout — it is the launch saying it has nothing to run with (§15).
+/// A refusal is not a stop reason: no run started, so nothing was recorded and stdout is empty.
 pub struct Refusal {
-    /// What is missing or wrong, in one line safe to print.
     message: String,
-    /// The exit code §15 gives it.
     code: u8,
 }
 
 impl Refusal {
-    /// A refusal that says `message` and exits with `code`.
     pub fn new(message: impl Into<String>, code: u8) -> Refusal {
         Refusal {
             message: message.into(),
@@ -67,100 +42,56 @@ impl Refusal {
         }
     }
 
-    /// What is missing or wrong, in one line.
     pub fn message(&self) -> &str {
         &self.message
     }
 
-    /// The exit code §15 gives it.
     pub fn code(&self) -> u8 {
         self.code
     }
 }
 
-/// What a front end is told as a run goes, besides the fragments landing in its
-/// [`Deltas`]: the turn that just ended, so the front end that speaks says so and the one
-/// that draws takes what it needs of it, and the run's facts, so the one that draws a rail
-/// draws the run's own.
 pub trait Turns {
-    /// One turn ended: what the model said, and the calls it asked for.
     fn turn(&mut self, ended: &Exchange);
 
-    /// The facts a rail draws, handed when the run is open, again as each turn ends and
-    /// once when it stops, so a frame moves with the run and settles with it. A front end
-    /// with no rail takes this and draws nothing.
+    /// Handed when the run opens, as each turn ends, and once more when it stops.
     fn facts(&mut self, _facts: rail::Facts) {}
 
-    /// The record the run has written, handed on the same path and at the same moments as the
-    /// facts: what a screen of the run's own facts draws, so it reads the run and never the
-    /// file the run is still writing.
+    /// The record as it stands, handed beside the facts so a screen never reads a file mid-run.
     fn record(&mut self, _document: &SessionDocument) {}
 }
 
-/// A front end with nothing to say about a turn that ended.
 impl Turns for () {
     fn turn(&mut self, _ended: &Exchange) {}
 }
 
-/// What a launch knows about itself before its first turn: the facts `-v` narrates and the
-/// rail's ledger will show (#46), read off the values the run was handed rather than off
-/// the config they came from.
 pub struct Figure {
-    /// The dialect the run asks.
     pub wire: Wire,
-    /// The served name it asks for.
     pub model: String,
-    /// The completion endpoint, for a wire that serves two (§10).
     pub route: Option<Route>,
-    /// How its commands are confined: `bubblewrap` or `unsafe`.
     pub enforcement: Enforcement,
-    /// The one directory it stands in.
     pub workspace: PathBuf,
-    /// The directory its session is recorded in.
     pub session: PathBuf,
-    /// What boot proved about the sandbox, as one line.
     pub proof: String,
 }
 
-/// Everything one run needs, in the order §13 says a session is opened and §6 says the
-/// sandbox is proved: held together so the loop, the record, and the report its stop reason
-/// is written from are one launch and not three readings of a config.
 pub struct Launch {
-    /// The session the run is recorded under, and the temp its commands see.
     session: Session,
-    /// The boundary in force, which the tools were derived from and the record names.
     boundary: Boundary,
-    /// The dials the run obeys.
     limits: Limits,
-    /// The session the run writes itself into as it goes (§13).
     record: Record,
-    /// The wire the run asks, folding each reply into the turn's answer.
     asking: Asking,
-    /// The tools the run acts with.
     shell: Shell,
-    /// The names the model is told it may call, from the one set the tools came from.
     tools: ToolSet,
-    /// The served name the run asks for, which the report names too.
     model: String,
-    /// The dialect it asks.
     wire: Wire,
-    /// The completion endpoint, for a wire that serves two (§10).
     route: Option<Route>,
-    /// The window the config names the run's size a share of, when a reader named one: kept
-    /// here the way the dials are, so the rail asks this run and not the config again.
     context_window: Option<u64>,
-    /// What boot proved about the sandbox, as the one line a front end narrates.
     proof: Proof,
-    /// When the run was opened, which is where its duration is measured from.
     started: Instant,
 }
 
 impl Launch {
-    /// Everything one run needs, or the one line saying why this launch cannot run one.
-    ///
-    /// `front_end` is the set of tools to register: a terminal has somebody to hand a
-    /// target to and batch mode has nobody, so `open` is in one set and absent from the
-    /// other (§2's "absence over refusal", §3).
     pub fn open(cli: &Cli, config: &Config, front_end: FrontEnd) -> Result<Launch, Refusal> {
         let started = Instant::now();
         let (Some(wire), Some(model)) = (config.provider, config.model.clone()) else {
@@ -178,16 +109,14 @@ impl Launch {
             .map_err(|error| Refusal::new(error.to_string(), error.exit_code()))?;
         let boundary = Boundary::from_config(config, &workspace, cli.enforcement())
             .map_err(|error| Refusal::new(error.to_string(), SETUP))?;
-        // A sandbox that cannot be created stops the run here, before a turn or a record:
-        // the alternative is running unconfined without being asked to.
+        // Before a turn or a record: the alternative is a run that proceeds unconfined.
         let proof = sandbox::prove(&boundary, session.temp())
             .map_err(|card| Refusal::new(card.to_string(), card.exit_code()))?;
         let limits = Limits::from_config(config, &boundary);
         let catalog = Catalog::discover(&workspace, home().as_deref());
         let tools = ToolSet::new(&boundary, &catalog, front_end);
         // The store's own literals join the run's secrets, so nothing it holds can reach a
-        // record, the JSON or a line of chatter. A store that cannot be opened is a setup
-        // failure and not a reply.
+        // record, the JSON or a line of chatter.
         let store = match wire {
             Wire::Copilot => Some(
                 Store::resolve(&Process)
@@ -204,8 +133,6 @@ impl Launch {
             client = client.store(store);
         }
         let ask = ask(config, wire, model.clone(), &workspace);
-        // The route is read before the first request leaves, so a run that dies on its
-        // first ask still says where it was.
         let route = ask.route_of();
         let thinking = ask.thinks();
         let asking = Asking::new(client, ask);
@@ -243,8 +170,6 @@ impl Launch {
         })
     }
 
-    /// What this launch knows before its first turn, as one value: the facts `-v` narrates
-    /// and the rail's ledger shows.
     pub fn figure(&self) -> Figure {
         Figure {
             wire: self.wire,
@@ -257,27 +182,15 @@ impl Launch {
         }
     }
 
-    /// The turn cap the run obeys, which a front end says when a run stops on it.
     pub fn max_turns(&self) -> u32 {
         self.limits.max_turns()
     }
 
-    /// The facts a rail draws, as this run holds them now: what the record has written about
-    /// it, the size the wire last stated, and the window this launch was handed — so a frame
-    /// reads the run and never the config the run came from.
     fn facts(&self, measured: &Usage) -> rail::Facts {
         rail::Facts::of(&self.session, self.record.document())
             .measured(measured, self.context_window)
     }
 
-    /// Drives `prompt` to a stop reason: every fragment of the turn in flight lands in
-    /// `deltas`, every turn that ends is handed to `turns`, the facts a rail draws follow the
-    /// run from its open to its stop, and the session is written as it goes and ended
-    /// whatever the run did (§13).
-    ///
-    /// The report's stop reason is read off the loop and never decided here, so no front end
-    /// can hold a second opinion about how a run ended (§15, ADR-0006), and a cancellation
-    /// beats every other trigger because the loop is what compares them (§4).
     pub fn drive(
         mut self,
         prompt: &str,
@@ -293,13 +206,11 @@ impl Launch {
         hand(turns, &self, &measured);
         while run.state().is_running() {
             run.turn(deltas);
-            // The loop hands a front end no hook per entry, so a turn is written whole as
-            // it ends: a call and its result would need the loop to say when they happen.
+            // A turn is written whole as it ends: the loop hands a front end no hook per entry.
             if let Some(exchange) = run.history().last() {
                 note(self.record.turn_started(exchange.turn));
                 note(self.record.answered(exchange.turn, &exchange.text));
-                // The size a rail draws is the input the wire last stated, so a turn whose
-                // report carries none leaves the size the turn before it stated.
+                // A turn whose report carries no size leaves the one the turn before stated.
                 if exchange.usage.input.is_some() {
                     measured = exchange.usage;
                 }
@@ -323,34 +234,17 @@ impl Launch {
                 usage: self.record.document().usage,
             },
         );
-        // The temp is emptied and everything else kept, so a session that ended still
-        // reads beside one that was killed.
+        // The temp is emptied and the rest kept, so an ended session still reads.
         note(self.record.finish());
         outcome.ok_or_else(|| Refusal::new("the run ended with no stop reason to report", SETUP))
     }
 }
 
-/// What a front end is handed of a run at one moment: the facts a rail draws and the record the
-/// run has written, together, because they are two readings of one run at one instant and a
-/// front end that took one without the other could draw a screen the rail beside it disagrees
-/// with.
 fn hand(turns: &mut dyn Turns, launch: &Launch, measured: &Usage) {
     turns.facts(launch.facts(measured));
     turns.record(launch.record.document());
 }
 
-/// The names the wire in force serves, read off it and never invented: what the `/model`
-/// screen offers a reader, kept beside the `(wire, base_url)` pair that produced them
-/// (§10, §12).
-///
-/// It is assembled here for the reason the run's client is: which wire, which endpoint and
-/// which credential are one reading of the config, and a terminal that built its own would
-/// be a second opinion about them. A wire that cannot answer hands back a listing with no
-/// names and one line saying why, which is §10's hint and never a refusal — `/model <name>`
-/// still names a model and the run goes on.
-///
-/// `None` when this launch has no wire at all, which is a config `main` refuses before the
-/// screen is taken: there is nothing to ask and nothing to show.
 pub fn served(config: &Config) -> Option<Listing> {
     let wire = config.provider?;
     let at = match &config.base_url {
@@ -361,12 +255,11 @@ pub fn served(config: &Config) -> Option<Listing> {
         Some(key) => Credential::new(key.clone()),
         None => Credential::none(),
     };
-    // A listing is not a run: there is no session to expand `{session}` to and no record
-    // for the names to land in, so the empty session is what a request outside a run has.
+    // Not a run: with no session to expand `{session}` to, the empty one is what is left.
     let mut client = Client::http(headers(config), String::new(), config.secrets());
     if wire == Wire::Copilot {
-        // A Copilot session is signed in to rather than handed a key. A store that will not
-        // open is left out, so the run asks unauthenticated and the hint says to sign in.
+        // Signed in to rather than handed a key: a store that will not open is left out, and
+        // the listing's hint says to sign in.
         if let Ok(store) = Store::resolve(&Process) {
             client = client.store(store);
         }
@@ -374,9 +267,6 @@ pub fn served(config: &Config) -> Option<Listing> {
     Some(client.served(&at, &credential, &at))
 }
 
-/// The ask a run is built from: the dialect the config named, the served name, the endpoint
-/// when one was set, the credential, and the preamble the workspace stands in front of,
-/// re-sent every turn.
 fn ask(config: &Config, wire: Wire, model: String, workspace: &std::path::Path) -> Ask {
     let mut ask = Ask::new(wire, model).preamble(Preamble::for_workspace(workspace).render());
     if let Some(base_url) = &config.base_url {
@@ -392,9 +282,7 @@ fn ask(config: &Config, wire: Wire, model: String, workspace: &std::path::Path) 
     ask.thinking(config.thinking.unwrap_or(false))
 }
 
-/// The run's extra request headers, as the config writes them: `Name: value`, split at the
-/// first colon. A line with no colon is dropped rather than sent as a name with an empty
-/// value.
+/// A line with no colon is dropped rather than sent as a header with an empty value.
 fn headers(config: &Config) -> Vec<(String, String)> {
     config
         .extra_headers
@@ -407,15 +295,11 @@ fn headers(config: &Config) -> Vec<(String, String)> {
         .collect()
 }
 
-/// The home the user-scope skills come from, when the environment names one. The frame
-/// reads it through here too, so the catalog a `/skill:name` line asks and the catalog a
-/// run's tool is derived from are one directory (§7).
 pub(crate) fn home() -> Option<PathBuf> {
     std::env::var("HOME").ok().map(PathBuf::from)
 }
 
-/// A record that would not write is a diagnostic and not a reason to stop a run that is
-/// already doing what it was asked: the session that remains still reads (§13).
+/// A record that would not write is a diagnostic: the run it belongs to goes on regardless.
 fn note(written: Result<(), impl std::fmt::Display>) {
     if let Err(error) = written {
         eprintln!("sindri: {error}");

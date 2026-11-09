@@ -1,14 +1,3 @@
-//! The Sindri front ends: the terminal UI and batch mode, both driving one core
-//! that owns every decision either of them makes.
-//!
-//! Two paths leave this function. A launch with no prompt is the terminal UI's:
-//! on a terminal it takes the screen, and off one it is a refusal rather than a
-//! guess (§3). A launch with `-b` is batch mode (§3), which resolves the same
-//! first run — an API-key row that says where a key comes from and where it will
-//! be written, a key pasted from a terminal when none was supplied — and then
-//! hands the prompt to the core and writes the answer, the JSON object or the
-//! exit code that §15 gives the run's stop reason.
-
 mod auth; // the one command that signs in rather than runs
 mod batch; // is the Unix filter: a prompt in, the answer and one newline out
 mod cli; // the command line as clap sees it
@@ -31,8 +20,7 @@ use sindri_core::first_run::FirstRun;
 
 use crate::cli::{Cli, Command};
 
-/// Spec §15's usage error: a command line, a prompt or an answer that cannot be
-/// used.
+/// The exit code for a command line, a prompt or an answer that cannot be used.
 const USAGE: u8 = 2;
 
 fn main() -> ExitCode {
@@ -52,15 +40,13 @@ fn main() -> ExitCode {
         Err(error) => return refuse(&error.to_string(), error.exit_code()),
     };
 
-    // The row goes to stderr, because stdout is the answer's alone: a filter's stderr is
-    // the only window a person has on a run that went wrong.
+    // On stderr, because stdout is the answer's alone.
     if asked.is_none() || !first_run.is_ready() || cli.is_verbose() {
         eprintln!("{}", first_run.api_key_row());
     }
 
     if first_run.missing().contains(&"api_key") {
-        // In batch mode a pipe is words to ask and never a credential: a key is pasted
-        // only at a terminal.
+        // A pipe is words to ask and never a credential: a key is pasted only at a terminal.
         if asked.is_some() && !batch::stdin_is_terminal() {
             return refuse(&short_of(&first_run), USAGE);
         }
@@ -99,8 +85,6 @@ fn main() -> ExitCode {
     }
 }
 
-/// What a first run is still short of, said as the config keys it wants and the
-/// two places they can come from: one message, whichever way a key was missing.
 fn short_of(first_run: &FirstRun) -> String {
     let missing = first_run.missing();
     format!(
@@ -111,8 +95,6 @@ fn short_of(first_run: &FirstRun) -> String {
     )
 }
 
-/// The one way this front end says no: the reason on stderr, the code spec §15
-/// gives it, and nothing at all on stdout.
 pub(crate) fn refuse(message: &str, code: u8) -> ExitCode {
     eprintln!("sindri: {message}");
     ExitCode::from(code)
