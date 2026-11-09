@@ -502,8 +502,8 @@ impl View {
         self.composer.set_state(state);
     }
 
-    /// Hands the frame its newest answer's marker. The elapsed time is the caller's: a frame
-    /// holds no clock, and a settled marker keeps the duration the run stopped at.
+    /// Hands the frame its newest answer's marker. The elapsed time is the caller's, because a
+    /// frame holds no clock, and a settled marker keeps the number the run stopped at.
     pub fn set_pulse(&mut self, pulse: Option<Pulse>) {
         self.pulse = pulse;
     }
@@ -537,8 +537,8 @@ impl View {
         self.footer(bands.footer, buffer);
     }
 
-    /// The transcript: the window of rows the cache holds, laid out for this band and for no
-    /// other entry. The turn in flight is the one entry laid out again on every paint.
+    /// The turn in flight is the one entry laid out again on every paint; every other row comes
+    /// from the window of the cache this band reaches.
     fn transcript(&mut self, area: Rect, buffer: &mut Buffer) {
         buffer.set_style(area, Ink::Plain.style());
         self.rows.resize(area.width);
@@ -614,8 +614,6 @@ impl View {
         write(buffer, area, &[(&label, Ink::Dim)]);
     }
 
-    /// The composer: the hairline and the draft's lines below it. The caret is not painted
-    /// here: it is the terminal's cursor, and a cell of a frame is a glyph in an ink.
     fn composer_band(&self, area: Rect, buffer: &mut Buffer) {
         let hairline = Rect { height: 1, ..area };
         for x in hairline.x..hairline.right() {
@@ -734,9 +732,8 @@ impl View {
         }
     }
 
-    /// The `/model` screen: the query, the names it ranks, the selection marked and the wire's
-    /// own prose beside each. A wire that has not answered is one line saying it was asked, and
-    /// one that could not answer is a hint: a model named by hand still runs.
+    /// A wire that has not answered is one line saying it was asked, and one that could not
+    /// answer is a hint rather than a refusal: a model named by hand still runs.
     fn models_screen(&self, area: Rect, buffer: &mut Buffer) {
         buffer.set_style(area, Ink::Plain.style());
         let mut y = area.y;
@@ -788,9 +785,8 @@ impl View {
         }
     }
 
-    /// The settings modal: every key of the config as a row, the value it holds beside it, the
-    /// row a key acts on marked, and a refusal under the list naming the key to change. A value
-    /// too wide for the frame is cut rather than dropped, as the picker's paths are.
+    /// A value too wide for the frame is cut at its right edge rather than dropped, as the
+    /// picker's paths are, and a refusal under the list names the key to change.
     fn settings_screen(&self, area: Rect, buffer: &mut Buffer) {
         buffer.set_style(area, Ink::Plain.style());
         let key_width = Config::KEYS
@@ -983,9 +979,9 @@ fn cut_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)]) {
     }
 }
 
-/// The hints a footer `width` columns wide draws. The table says how many a width is owed
-/// and the row says whether the next fits, counted with the gap that introduces it; a hint
-/// that does not fit ends the row rather than being skipped for a later one.
+/// The hints a footer `width` columns wide draws, in survival order, stopping at the first that
+/// does not fit, gap included: a later and shorter hint is never taken in its place, because the
+/// order is the whole of what the table says.
 fn kept(width: u16) -> Vec<&'static str> {
     let gap = GAP.chars().count();
     let mut kept: Vec<&'static str> = Vec::new();

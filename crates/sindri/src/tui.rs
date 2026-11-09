@@ -270,8 +270,7 @@ fn canvas_at(terminal: &Terminal, area: ratatui::layout::Rect) -> io::Result<Can
     )
 }
 
-/// Paints the frame the view holds now. The caret is the terminal's own cursor and never a
-/// cell: an ink names a foreground, so a caret drawn as a cell is invisible on a space.
+/// Paints the frame the view holds now, and puts the terminal's cursor where the view says.
 fn paint(canvas: &mut Canvas<'_>, view: &mut View) -> io::Result<()> {
     canvas.draw(|frame| {
         view.paint(frame.area(), frame.buffer_mut());
@@ -589,8 +588,8 @@ fn take(
             turn: turns,
             stop: stop.clone(),
         })?;
-        // The last frame the marker is drawn on: the wait goes back to forever once the run is
-        // gone, so settling draws once and nothing after.
+        // The last frame the run itself paints: once it is gone the wait goes back to forever,
+        // and the settled marker stays on the frame for every later paint to draw.
         view.set_pulse(Some(Pulse::settled(stop, elapsed_ms)));
         view.set_state(State::Idle);
         painted = true;
@@ -604,8 +603,8 @@ fn take(
     Ok(stopped.is_some())
 }
 
-/// Answers one event, and says whether the launch ends there: the one place an event becomes a
-/// repaint, a run or an exit. Which key means what is the mode stack's decision, not this one's.
+/// Answers one event, and says whether the launch ends there. Which key means what is the mode
+/// stack's decision; what is here is what the terminal does about the outcome it hands back.
 #[allow(
     clippy::too_many_arguments,
     reason = "the one seam #43, #48, #50 and #56 each hand their value through"
@@ -730,8 +729,8 @@ fn ask(config: &Config, wake: &Arc<Wake>) -> Option<Asking> {
             wake.raise();
         }
     });
-    // Joined by `served`, not here: nothing blocks, and what the frame paints now is the screen
-    // saying it is asking.
+    // Joined by `served`, not here: nothing blocks, and the frame paints the screen asking
+    // until the answer lands.
     Some(Asking { landing, thread })
 }
 
