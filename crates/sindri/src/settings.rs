@@ -87,8 +87,6 @@ impl Settings {
         true
     }
 
-    /// A toggle holding neither `true` nor `false` flips on: unset is a state of its own,
-    /// and `Ctrl-U` is the only way back to it.
     pub fn space(&mut self) -> bool {
         if !self.has_row() {
             return false;
@@ -142,8 +140,8 @@ impl Settings {
         erased
     }
 
-    /// The mask is what the file holds and not what a reader typed, so the first glyph
-    /// replaces it rather than piling onto it.
+    /// The mask is what the file holds and not what a reader typed: the first glyph replaces
+    /// it, and the row holds no value a save may write until one does.
     fn unmask(&mut self) -> bool {
         let row = &mut self.rows[self.current];
         let masked = row.text == MASK;
@@ -165,7 +163,6 @@ pub fn persist(
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
 
     fn decided() -> Config {

@@ -42,8 +42,8 @@ impl Mode {
         }
     }
 
-    /// A table names the keys worth explaining; a key it does not name falls to this. A
-    /// screen has none — nothing is typed into a screen.
+    /// A screen has none — nothing is typed into a screen — where a draft, a query and a
+    /// settings value fall to that text box's own map.
     fn fallback(self) -> Option<Act> {
         match self {
             Mode::Composer => Some(Act::Draft),

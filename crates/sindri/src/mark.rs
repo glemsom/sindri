@@ -137,7 +137,6 @@ fn columns(glyph: char) -> u16 {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
 
     fn band(rows: &[&str]) -> Vec<String> {

@@ -1,6 +1,6 @@
-//! The walk is `git`'s reading of the tree, with two of `ignore`'s defaults turned around:
-//! `hidden(false)`, because a tracked file may be a dotfile, and `require_git(false)`,
-//! because a workspace that is no checkout still has a `.gitignore` to honour.
+//! The walk is the `ignore` crate's, which reads a tree as `git` does, with two of its
+//! defaults turned around: `hidden(false)`, because a tracked file may be a dotfile, and
+//! `require_git(false)`, because a workspace that is no checkout still has a `.gitignore`.
 
 use std::path::Path;
 
@@ -128,8 +128,8 @@ fn leaves_alone(glyph: char) -> bool {
     glyph.is_ascii_alphanumeric() || matches!(glyph, '.' | '_' | '-' | '/')
 }
 
-/// The name a checkout keeps its own bookkeeping under — a directory in a working tree, a
-/// file in a worktree — skipped wherever it appears.
+/// A directory in a working tree and a file in a worktree: a checkout's own bookkeeping and
+/// never something a reader points a prompt at.
 const GIT_DIRECTORY: &str = ".git";
 
 fn nearness(path: &str) -> usize {
@@ -142,7 +142,6 @@ fn holds(path: &str, query: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
 
     fn workspace(files: &[&str]) -> tempfile::TempDir {

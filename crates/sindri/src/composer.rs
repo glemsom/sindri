@@ -4,8 +4,7 @@ pub const MIN_ROWS: u16 = 2;
 
 pub const MAX_ROWS: u16 = 6;
 
-/// The band's top row is its edge and not draft, so a draft has this many rows fewer to be
-/// painted on than the band is tall.
+/// The band's top row is its edge and not draft, so a band of `MIN_ROWS` paints one row.
 pub const HAIRLINE_ROWS: u16 = 1;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -330,8 +329,6 @@ impl Composer {
         }
     }
 
-    /// Counted in glyphs and never bytes, so a line of ticks and a line of letters line up as
-    /// a reader sees them.
     fn column(&self, row: usize) -> usize {
         self.text[self.line_start(row)..self.cursor].chars().count()
     }
@@ -351,7 +348,6 @@ impl Composer {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
 
     fn holding(text: &str) -> Composer {

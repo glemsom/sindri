@@ -51,8 +51,6 @@ impl Ink {
         Look::of(cell).map(Look::ink)
     }
 
-    /// The six that spend a colour are the terminal's own and not RGB values, so a reader's
-    /// theme still shows through them; `mark` spends reverse video, which is no colour at all.
     fn look(self) -> (Color, Color, Modifier) {
         let look = |colour| (colour, Color::Reset, Modifier::empty());
         match self {
@@ -168,7 +166,6 @@ impl From<Ink> for Look {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
 
     #[test]
@@ -208,8 +205,6 @@ mod tests {
                 let mut cell = Cell::default();
                 cell.set_style(look.style());
 
-                // Reverse video over no colour is both `mark` and `plain` reversed, and
-                // `Look::of` reads it back as the mark.
                 if look.style() == mark.style() {
                     assert_eq!(Look::of(&cell), Some(mark));
                     continue;
