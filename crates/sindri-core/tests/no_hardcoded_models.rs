@@ -1,6 +1,6 @@
-//! Proves no model list is remembered anywhere in the tree, by reading every Rust source and
-//! looking for the one shape a remembered list has: several model identifiers written out as string
-//! literals, either as the elements of a bracketed collection or joined inside a single literal.
+//! Proves no model list is remembered anywhere in the tree: every Rust source is read for the shape
+//! a remembered list has, several model identifiers as literals in a bracketed collection or joined
+//! in one. Blunt on purpose — `[` only, two identifiers or more, `include_str!` unresolved.
 
 use std::fs;
 use std::path::{Path, PathBuf};

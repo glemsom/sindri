@@ -122,8 +122,6 @@ const PROOF_CHILD: &str = "SINDRI_BUILTIN_PROOF_CHILD";
 
 const PROOF_TEST: &str = "removing_the_source_directory_leaves_the_builtin_in_a_fresh_process";
 
-/// Puts the source directory back when the test is done with it, whether it ends by returning or by
-/// panicking.
 struct Restore {
     from: PathBuf,
     to: PathBuf,

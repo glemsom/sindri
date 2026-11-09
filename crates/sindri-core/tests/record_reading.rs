@@ -1,6 +1,6 @@
 //! Proves a session directory reads back as the run it recorded: every session the state home
-//! holds, newest first, and the one session a whole GUID or an unambiguous prefix names. Most
-//! directories are written by hand, so the reader is proved against files no writer here made.
+//! holds, newest first, and the one a GUID or an unambiguous prefix names. Most are hand-written,
+//! so the reader meets files no writer here made, where an unknown field costs nothing.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
