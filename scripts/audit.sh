@@ -8,22 +8,30 @@ repo_root=$(cd "${1:-$here/..}" && pwd) || {
 }
 cd "$repo_root" || exit 2
 
-files=()
+rust_files=()
+comment_files=()
 collect() {
   local path
   while IFS= read -r path; do
     path=${path#./}
-    [[ -f $path ]] && files+=("$path")
+    [[ -f $path ]] || continue
+    comment_files+=("$path")
+    [[ $path == *.rs ]] && rust_files+=("$path")
   done < <("$@")
 }
 if git rev-parse --git-dir >/dev/null 2>&1; then
-  collect git ls-files --cached --others --exclude-standard -- '*.rs'
+  collect git ls-files --cached --others --exclude-standard -- \
+    '*.rs' '*.sh' '*Makefile' '*GNUmakefile' '*.mk' '*.toml' '*.yml' '*.yaml'
 else
   collect find . \( -name .git -o -name target -o -name .worktrees -o -name node_modules -o -name vendor \) -prune \
-    -o -type f -name '*.rs' -print
+    -o -type f \( -name '*.rs' -o -name '*.sh' -o -name '*Makefile' -o -name '*GNUmakefile' -o -name '*.mk' \
+      -o -name '*.toml' -o -name '*.yml' -o -name '*.yaml' \) -print
 fi
-if ((${#files[@]})); then
-  mapfile -t files < <(printf '%s\n' "${files[@]}" | LC_ALL=C sort)
+if ((${#comment_files[@]})); then
+  mapfile -t comment_files < <(printf '%s\n' "${comment_files[@]}" | LC_ALL=C sort)
+fi
+if ((${#rust_files[@]})); then
+  mapfile -t rust_files < <(printf '%s\n' "${rust_files[@]}" | LC_ALL=C sort)
 fi
 
 status=0
@@ -71,7 +79,7 @@ resolve_mod() {
 
 decl_lines=()
 read_declarations() {
-  ((${#files[@]})) || return 0
+  ((${#rust_files[@]})) || return 0
   mapfile -t decl_lines < <(awk -v US=$'\x1f' '
     { sub(/\r$/, "") }
     match($0, /^[[:space:]]*(pub([[:space:]]*\([^)]*\))?[[:space:]]+)?mod[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*;/) {
@@ -80,7 +88,7 @@ read_declarations() {
       name = parts[split(decl, parts, /[[:space:]]+/)]
       print FILENAME US FNR US name
     }
-  ' "${files[@]}")
+  ' "${rust_files[@]}")
 }
 
 violations_undeclared_test_file=()
@@ -96,7 +104,7 @@ audit_undeclared_test_file() {
     if [[ -n $RESOLVED ]]; then children[$file]+="$RESOLVED"$'\n'; fi
   done
 
-  for file in "${files[@]}"; do
+  for file in "${rust_files[@]}"; do
     dir=${file%/*}
     if [[ $dir != "$file" && ${dir##*/} == tests ]]; then
       reached[$file]=1
@@ -115,7 +123,7 @@ audit_undeclared_test_file() {
     done <<<"${children[$file]:-}"
   done
 
-  for file in "${files[@]}"; do
+  for file in "${rust_files[@]}"; do
     case $file in
       tests/* | */tests/*) ;;
       *) continue ;;
@@ -129,7 +137,7 @@ audit_undeclared_test_file() {
 
 test_lines=()
 read_test_names() {
-  ((${#files[@]})) || return 0
+  ((${#rust_files[@]})) || return 0
   mapfile -t test_lines < <(awk -v US=$'\x1f' '
     { sub(/\r$/, "") }
     /^[[:space:]]*#\[test\]/ { pending = 1; next }
@@ -142,7 +150,7 @@ read_test_names() {
       next
     }
     pending && $0 !~ /^[[:space:]]*#\[/ { pending = 0 }
-  ' "${files[@]}")
+  ' "${rust_files[@]}")
 }
 
 violations_test_name=()
@@ -174,5 +182,112 @@ report undeclared-test-file "${violations_undeclared_test_file[@]}"
 read_test_names
 audit_test_name
 report test-name "${violations_test_name[@]}"
+
+violations_comment_block=()
+violations_comment_citation=()
+
+audit_comments() {
+  ((${#comment_files[@]})) || return 0
+  local kind file line text
+  while IFS=$'\x1f' read -r kind file line text; do
+    case $kind in
+      block) violations_comment_block+=("$file:$line: $text") ;;
+      cite) violations_comment_citation+=("$file:$line: $text") ;;
+    esac
+  done < <(awk -v US=$'\x1f' '
+    BEGIN { sq = sprintf("%c", 39) }
+
+    # Both scanners count quotes rather than parsing them: a raw string or a character
+    # literal opens a scan this read ends too early, and a line-spanning one desyncs it.
+    function comment_start(line,   i, n, c, quoted) {
+      n = length(line); quoted = 0
+      for (i = 1; i < n; i++) {
+        c = substr(line, i, 1)
+        if (c == "\\") { i++; continue }
+        if (c == "\"") { quoted = !quoted; continue }
+        if (!quoted && substr(line, i, 2) == "//") return i
+      }
+      return 0
+    }
+
+    # A `#` opens a comment at the start of a word: `$#` and `spec#12` are not comments.
+    function hash_start(line,   i, n, c, quote) {
+      n = length(line); quote = ""
+      for (i = 1; i <= n; i++) {
+        c = substr(line, i, 1)
+        if (quote != sq && c == "\\") { i++; continue }
+        if (quote == "") {
+          if (c == sq || c == "\"") { quote = c; continue }
+        } else if (c == quote) {
+          quote = ""; continue
+        }
+        if (quote == "" && c == "#" && (i == 1 || substr(line, i - 1, 1) ~ /[[:space:]]/)) return i
+      }
+      return 0
+    }
+
+    function flush_block() {
+      if (block_lines > 3)
+        print "block" US block_file US block_start US \
+          "a comment block runs " block_lines " lines, want at most 3"
+      block_lines = 0
+    }
+
+    function classify(text,   cited) {
+      if (match(text, /§[[:space:]]*[0-9]+/)) {
+        citation = "cites a spec section"; cited = substr(text, RSTART, RLENGTH)
+      } else if (match(text, /[Aa][Dd][Rr][-/ ]?[0-9]+/)) {
+        citation = "cites an ADR"; cited = substr(text, RSTART, RLENGTH)
+      } else if (match(text, /([Ii]ssue|[Tt]icket)[[:space:]]*#?[[:space:]]*[0-9]+/)) {
+        citation = "cites an issue number"; cited = substr(text, RSTART, RLENGTH)
+      } else if (match(text, /(^|[[:space:]]|\()#[0-9]+/)) {
+        cited = substr(text, RSTART, RLENGTH)
+        if (substr(text, RSTART + RLENGTH, 1) ~ /[A-Za-z0-9_]/) return
+        sub(/^[^#]*/, "", cited)
+        citation = "cites an issue number"
+      } else {
+        return
+      }
+      print "cite" US FILENAME US FNR US citation " (" cited ")"
+    }
+
+    FNR == 1 {
+      flush_block()
+      if ($0 ~ /^#!/) next
+    }
+
+    {
+      sub(/\r$/, "")
+      text = ""; leading = 0
+      if (FILENAME ~ /\.rs$/) {
+        at = comment_start($0)
+        if (at) {
+          text = substr($0, at)
+          sub(/^\/[\/!]*/, "", text)
+          if (substr($0, 1, at - 1) ~ /^[[:space:]]*$/) leading = 1
+        }
+      } else {
+        at = hash_start($0)
+        if (at) {
+          text = substr($0, at)
+          sub(/^#+[ \t]?/, "", text)
+          if (substr($0, 1, at - 1) ~ /^[[:space:]]*$/) leading = 1
+        }
+      }
+      if (leading) {
+        if (!block_lines) { block_start = FNR; block_file = FILENAME }
+        block_lines++
+      } else {
+        flush_block()
+      }
+      if (text != "") classify(text)
+    }
+
+    END { flush_block() }
+  ' "${comment_files[@]}")
+}
+audit_comments
+report comment-block "${violations_comment_block[@]}"
+report comment-citation "${violations_comment_citation[@]}"
 
 exit "$status"
