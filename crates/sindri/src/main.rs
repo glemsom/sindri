@@ -10,7 +10,8 @@ mod osc; // sequences that carry words out of the terminal
 mod paste; // the terminal's echo is off while the key is typed
 mod sessions; // reads past runs back
 mod signal; // the one door an outside `SIGINT` comes through
-mod tui; // the alternate screen it takes and gives back
+mod term; // the terminal as a resource: raw mode, the alternate screen, and the canvas a frame is painted through
+mod tui; // the launch: the loop, the keys it answers, and the endings
 
 use std::process::ExitCode;
 
