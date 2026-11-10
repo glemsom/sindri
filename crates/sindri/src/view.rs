@@ -29,7 +29,7 @@ use crate::pictures::Pictures;
 use crate::pulse::Pulse;
 use crate::queue::Queue;
 use crate::rail::{Boot, Facts, Shape, Share};
-use crate::rows::{Row, Rows, Scroll, wrap_under};
+use crate::rows::{Row, Rows, Scroll, wrap};
 use crate::settings::Settings;
 use crate::stats::Stats;
 use crate::stream::Stream;
@@ -558,7 +558,7 @@ impl View {
             Mode::Files => self.files_screen(body, buffer),
             Mode::Models => self.models_screen(body, buffer),
             Mode::Settings => self.settings_screen(body, buffer),
-            Mode::Stats => self.stats_screen(body, buffer),
+            Mode::Stats => self.stats().paint(body, buffer, &self.palette),
             Mode::Composer | Mode::Keys => self.keys_screen(body, buffer),
         }
     }
@@ -715,7 +715,7 @@ impl View {
         let hang = format!("{:<name_width$}", "");
         let room = area
             .width
-            .saturating_sub(u16::try_from(name_width).unwrap_or(area.width));
+            .saturating_sub(u16::try_from(name_width).unwrap_or(u16::MAX));
         let mut y = area.y;
         for mode in modes {
             if y >= area.bottom() {
@@ -724,7 +724,7 @@ impl View {
             screen_row(buffer, area, y, &[(mode.name(), Ink::Dim)], &self.palette);
             y = y.saturating_add(1);
             for binding in mode.table() {
-                for (at, line) in wrap_under(binding.does, room, room).iter().enumerate() {
+                for (at, line) in wrap(binding.does, room).iter().enumerate() {
                     if y >= area.bottom() {
                         return;
                     }
@@ -872,17 +872,13 @@ impl View {
         // A blank row under the list, so the refusal reads as a verdict on the visit and not as the
         // last key's value.
         y = y.saturating_add(2);
-        for line in wrap_under(refusal, area.width, area.width) {
+        for line in wrap(refusal, area.width) {
             if y >= area.bottom() {
                 return;
             }
             cut_row(buffer, area, y, &[(&line, Ink::Err)], &self.palette);
             y = y.saturating_add(1);
         }
-    }
-
-    fn stats_screen(&self, area: Rect, buffer: &mut Buffer) {
-        self.stats().paint(area, buffer, &self.palette);
     }
 
     fn stats(&self) -> Stats {

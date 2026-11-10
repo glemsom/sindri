@@ -131,7 +131,7 @@ fn footed(buffer: &mut Buffer, card: Rect, palette: &Palette) {
     put(buffer, card.x, y, CORNERS[2], Ink::Dim, palette);
     put(buffer, right - 1, y, CORNERS[3], Ink::Dim, palette);
 
-    let room = u16::try_from(LEAVE.chars().count()).unwrap_or(right);
+    let room = u16::try_from(LEAVE.chars().count()).unwrap_or(u16::MAX);
     let mut x = right.saturating_sub(room + 4);
     if x <= card.x + 1 {
         return;

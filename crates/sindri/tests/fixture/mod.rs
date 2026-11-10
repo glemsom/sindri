@@ -110,7 +110,6 @@ fn named(name: &str) -> View {
             view
         }
         "card" => over_a_run(),
-        "card-narrow" => over_a_run(),
         "files" => picking(),
         "models" => model_screen(),
         "settings" => {

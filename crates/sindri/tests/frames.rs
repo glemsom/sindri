@@ -69,8 +69,8 @@ fn card_120x40_is_a_screen_drawn_over_the_transcript_it_was_opened_from() {
 }
 
 #[test]
-fn card_narrow_40x24_is_a_card_at_a_width_that_bleeds_to_the_frames_edges() {
-    fixture::assert_frame("card-narrow", 40, 24);
+fn card_40x24_is_a_card_at_a_width_that_bleeds_to_the_frames_edges() {
+    fixture::assert_frame("card", 40, 24);
 }
 
 #[test]

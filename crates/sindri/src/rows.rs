@@ -303,7 +303,7 @@ fn rule(lead: &str, cols: u16) -> Row {
     Row::of([(line, Ink::Dim)])
 }
 
-fn wrap(text: &str, cols: u16) -> Vec<String> {
+pub(crate) fn wrap(text: &str, cols: u16) -> Vec<String> {
     wrap_under(text, cols, cols)
 }
 

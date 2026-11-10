@@ -2,7 +2,7 @@
 source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
-card-narrow at 40x24
+card at 40x24
 00 |── ? keys ──────────────────────────────| dim:3 accent:6 dim:31
 01 |  keys                                  | plain:2 dim:4 plain:34
 02 |  Esc                  close this       | plain:2 muted:21 plain:17
