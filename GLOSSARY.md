@@ -118,6 +118,17 @@ The three facts a picture is measured against — the workspace, the pixels in a
 terminal places pictures at all.
 _Avoid_: Context, environment, settings
 
+**Card**:
+The frame a screen is drawn on: a rounded border carrying the screen's name in its top row and
+the key that leaves in its bottom, at most seventy-two columns wide and centred, and — under fifty
+— the whole frame with its title row and no border.
+_Avoid_: Modal, dialog, popup, overlay, sheet
+
+**Scrim**:
+The frame behind a card, painted and dimmed rather than skipped: a reader sees the transcript
+they will return to and sees that no band under the card takes a key.
+_Avoid_: Backdrop, shade, veil, mask
+
 **Path picker**:
 The screen `@` opens: the workspace's files as `git` reads them, nearest first, capped at eight
 rows.

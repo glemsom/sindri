@@ -3,7 +3,7 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 settings-refused at 120x40
-00 |                        ╭─ settings ───────────────────────────────────────────────────────────╮                        | dim:27 accent:8 dim:85
+00 |                        ╭─ /settings ──────────────────────────────────────────────────────────╮                        | dim:27 accent:9 dim:84
 01 |                        │   provider              anthropic                                    │                        | dim:25 plain:1 muted:24 plain:45 dim:25
 02 |                        │   model                 claude-sonnet-4-5                            │                        | dim:25 plain:1 muted:24 plain:45 dim:25
 03 |                        │   route                                                              │                        | dim:25 plain:1 muted:24 plain:45 dim:25
@@ -21,8 +21,8 @@ settings-refused at 120x40
 15 |                        │   ssh_agent                                                          │                        | dim:25 plain:1 muted:24 plain:45 dim:25
 16 |                        │                                                                      │                        | dim:25 plain:70 dim:25
 17 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-18 |                        │ bad value in max_turns: `two hundred` will not parse: invalid digit  │                        | dim:25 plain:1 err:68 plain:1 dim:25
-19 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+18 |                        │ bad value in max_turns: `two hundred` will not parse: invalid digit  │                        | dim:25 plain:1 err:67 plain:2 dim:25
+19 |                        │ found in string                                                      │                        | dim:25 plain:1 err:15 plain:54 dim:25
 20 |                        │                                                                      │                        | dim:25 plain:70 dim:25
 21 |                        │                                                                      │                        | dim:25 plain:70 dim:25
 22 |                        │                                                                      │                        | dim:25 plain:70 dim:25

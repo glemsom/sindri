@@ -3,7 +3,7 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 settings at 120x40
-00 |                        ╭─ settings ───────────────────────────────────────────────────────────╮                        | dim:27 accent:8 dim:85
+00 |                        ╭─ /settings ──────────────────────────────────────────────────────────╮                        | dim:27 accent:9 dim:84
 01 |                        │ › provider              anthropic                                    │                        | dim:25 plain:1 accent:33 plain:36 dim:25
 02 |                        │   model                 claude-sonnet-4-5                            │                        | dim:25 plain:1 muted:24 plain:45 dim:25
 03 |                        │   route                                                              │                        | dim:25 plain:1 muted:24 plain:45 dim:25

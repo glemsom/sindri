@@ -9,23 +9,23 @@ keys at 120x40
 03 |                        │ ?                    close this screen                               │                        | dim:25 plain:1 muted:21 plain:48 dim:25
 04 |                        │ composer                                                             │                        | dim:25 plain:1 dim:8 plain:61 dim:25
 05 |                        │ ?                    the keys, while the draft is empty              │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-06 |                        │ @                                                                    │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-07 |                        │ Enter                send the prompt                                 │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-08 |                        │ Shift+Enter, Ctrl-J  a line break in the draft                       │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-09 |                        │ ↑                    the newest queued prompt, or the line above     │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-10 |                        │ Ctrl-X               drop the newest queued prompt                   │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-11 |                        │ ↓                    the line below                                  │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-12 |                        │ Shift+↓              grow the mark a row down                        │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-13 |                        │ Shift+↑              grow the mark a row up                          │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-14 |                        │ ←                    a glyph left                                    │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-15 |                        │ →                    a glyph right                                   │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-16 |                        │ Home                 the start of the line                           │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-17 |                        │ End                  the end of the line                             │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-18 |                        │ Ctrl-Y               copy the mark, or the last answer               │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-19 |                        │ Backspace            erase the glyph before the caret                │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-20 |                        │ Ctrl-C               cancel the run, or clear the draft              │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-21 |                        │ Ctrl-Q               quit                                            │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-22 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+06 |                        │ @                    the files of the workspace, while it starts a   │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+07 |                        │                      word                                            │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+08 |                        │ Enter                send the prompt                                 │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+09 |                        │ Shift+Enter, Ctrl-J  a line break in the draft                       │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+10 |                        │ ↑                    the newest queued prompt, or the line above     │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+11 |                        │ Ctrl-X               drop the newest queued prompt                   │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+12 |                        │ ↓                    the line below                                  │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+13 |                        │ Shift+↓              grow the mark a row down                        │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+14 |                        │ Shift+↑              grow the mark a row up                          │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+15 |                        │ ←                    a glyph left                                    │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+16 |                        │ →                    a glyph right                                   │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+17 |                        │ Home                 the start of the line                           │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+18 |                        │ End                  the end of the line                             │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+19 |                        │ Ctrl-Y               copy the mark, or the last answer               │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+20 |                        │ Backspace            erase the glyph before the caret                │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+21 |                        │ Ctrl-C               cancel the run, or clear the draft              │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+22 |                        │ Ctrl-Q               quit                                            │                        | dim:25 plain:1 muted:21 plain:48 dim:25
 23 |                        │                                                                      │                        | dim:25 plain:70 dim:25
 24 |                        │                                                                      │                        | dim:25 plain:70 dim:25
 25 |                        │                                                                      │                        | dim:25 plain:70 dim:25

@@ -31,15 +31,16 @@ impl Mode {
         }
     }
 
-    /// The name a screen wears in its card's top border.
-    pub fn title(self) -> &'static str {
+    /// The name a screen wears in its card's top border, and `None` for the draft, which is no
+    /// screen and takes no card.
+    pub fn title(self) -> Option<&'static str> {
         match self {
-            Mode::Composer => "composer",
-            Mode::Keys => "? keys",
-            Mode::Files => "@ files",
-            Mode::Models => "/model",
-            Mode::Settings => "settings",
-            Mode::Stats => "/stats",
+            Mode::Composer => None,
+            Mode::Keys => Some("? keys"),
+            Mode::Files => Some("@ files"),
+            Mode::Models => Some("/model"),
+            Mode::Settings => Some("/settings"),
+            Mode::Stats => Some("/stats"),
         }
     }
 

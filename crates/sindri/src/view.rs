@@ -29,7 +29,7 @@ use crate::pictures::Pictures;
 use crate::pulse::Pulse;
 use crate::queue::Queue;
 use crate::rail::{Boot, Facts, Shape, Share};
-use crate::rows::{Row, Rows, Scroll};
+use crate::rows::{Row, Rows, Scroll, wrap_under};
 use crate::settings::Settings;
 use crate::stats::Stats;
 use crate::stream::Stream;
@@ -545,15 +545,16 @@ impl View {
         self.footer(bands.footer, buffer);
         // A screen is drawn over the frame it was opened from rather than in place of it: the
         // reader sees the transcript they will return to, and sees that it is out of reach.
-        let Some(modal) = self.stack.modal() else {
+        let screen = self.stack.top();
+        let Some(name) = screen.title() else {
             return;
         };
-        let body = card::paint(area, modal.title(), buffer, &self.palette);
-        self.paint_screen(modal, body, buffer);
+        let body = card::paint(area, name, buffer, &self.palette);
+        self.paint_screen(screen, body, buffer);
     }
 
-    fn paint_screen(&mut self, modal: Mode, body: Rect, buffer: &mut Buffer) {
-        match modal {
+    fn paint_screen(&mut self, screen: Mode, body: Rect, buffer: &mut Buffer) {
+        match screen {
             Mode::Files => self.files_screen(body, buffer),
             Mode::Models => self.models_screen(body, buffer),
             Mode::Settings => self.settings_screen(body, buffer),
@@ -700,6 +701,9 @@ impl View {
         (column < area.width && y < bands.composer.bottom()).then_some((x, y))
     }
 
+    /// A description wider than the card wraps under its own column rather than losing its tail:
+    /// the card is narrower than the band was, and a key without the line that explains it is a
+    /// key a reader has to try.
     fn keys_screen(&self, area: Rect, buffer: &mut Buffer) {
         let modes: Vec<Mode> = self.stack.modes().collect();
         let name_width = modes
@@ -708,6 +712,10 @@ impl View {
             .map(|binding| binding.name.chars().count() + KEYS_GAP)
             .max()
             .unwrap_or(0);
+        let hang = format!("{:<name_width$}", "");
+        let room = area
+            .width
+            .saturating_sub(u16::try_from(name_width).unwrap_or(area.width));
         let mut y = area.y;
         for mode in modes {
             if y >= area.bottom() {
@@ -716,18 +724,24 @@ impl View {
             screen_row(buffer, area, y, &[(mode.name(), Ink::Dim)], &self.palette);
             y = y.saturating_add(1);
             for binding in mode.table() {
-                if y >= area.bottom() {
-                    return;
+                for (at, line) in wrap_under(binding.does, room, room).iter().enumerate() {
+                    if y >= area.bottom() {
+                        return;
+                    }
+                    let name = match at {
+                        0 => binding.name,
+                        _ => &hang,
+                    };
+                    let name = format!("{name:<name_width$}");
+                    screen_row(
+                        buffer,
+                        area,
+                        y,
+                        &[(name.as_str(), Ink::Muted), (line, Ink::Plain)],
+                        &self.palette,
+                    );
+                    y = y.saturating_add(1);
                 }
-                let name = format!("{:<name_width$}", binding.name);
-                screen_row(
-                    buffer,
-                    area,
-                    y,
-                    &[(&name, Ink::Muted), (binding.does, Ink::Plain)],
-                    &self.palette,
-                );
-                y = y.saturating_add(1);
             }
         }
     }
@@ -858,10 +872,13 @@ impl View {
         // A blank row under the list, so the refusal reads as a verdict on the visit and not as the
         // last key's value.
         y = y.saturating_add(2);
-        if y >= area.bottom() {
-            return;
+        for line in wrap_under(refusal, area.width, area.width) {
+            if y >= area.bottom() {
+                return;
+            }
+            cut_row(buffer, area, y, &[(&line, Ink::Err)], &self.palette);
+            y = y.saturating_add(1);
         }
-        cut_row(buffer, area, y, &[(refusal, Ink::Err)], &self.palette);
     }
 
     fn stats_screen(&self, area: Rect, buffer: &mut Buffer) {

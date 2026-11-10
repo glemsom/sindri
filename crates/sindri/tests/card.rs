@@ -2,6 +2,8 @@
 //! leaves in its bottom row, the frame behind it painted and dimmed, and the geometry a card takes
 //! at a frame too narrow to hold one.
 
+use std::collections::HashSet;
+
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
@@ -22,10 +24,16 @@ const SCREENS: [Mode; 5] = [
     Mode::Stats,
 ];
 
-fn opened(mode: Mode) -> View {
+/// The name a screen wears in the border of the card it is drawn on.
+fn name(mode: Mode) -> &'static str {
+    mode.title().expect("a screen has a name to wear")
+}
+
+/// `over` with the screen `mode` opened on it, through the key a reader sends.
+fn opened(over: View, mode: Mode) -> View {
     let root = tempfile::tempdir().expect("a temp workspace");
     std::fs::write(root.path().join("rows.rs"), "").expect("a file");
-    let mut view = View::boot();
+    let mut view = over;
     match mode {
         Mode::Keys => {
             view.key(Key::Char('?'));
@@ -53,6 +61,10 @@ fn opened(mode: Mode) -> View {
     view
 }
 
+fn on_screen(mode: Mode) -> View {
+    opened(conversation(), mode)
+}
+
 fn painted(view: &mut View, cols: u16, rows: u16) -> Buffer {
     let mut terminal =
         Terminal::new(TestBackend::new(cols, rows)).expect("a headless screen of that size");
@@ -62,15 +74,8 @@ fn painted(view: &mut View, cols: u16, rows: u16) -> Buffer {
     terminal.backend().buffer().clone()
 }
 
-/// A frame with a run in it, and the draft a reader may have typed into it.
+/// A frame with a run in it and no draft, so every screen opens on its own key.
 fn conversation() -> View {
-    let mut view = spoken();
-    view.paste("a draft behind the card");
-    view
-}
-
-/// The same frame with the draft empty, so every screen opens on its own key.
-fn spoken() -> View {
     let entries = [
         Entry::Turn { turn: 1 },
         Entry::Assistant {
@@ -83,10 +88,23 @@ fn spoken() -> View {
     View::of(entries, sindri::rows::Scroll::Tail)
 }
 
+/// The same frame with a draft typed into it, so the composer band is behind the card too.
+fn drafted() -> View {
+    let mut view = conversation();
+    view.paste("a draft behind the card");
+    view
+}
+
 fn row(buffer: &Buffer, y: u16) -> String {
     let area = buffer.area;
     (area.x..area.right())
         .map(|x| buffer.cell((x, y)).expect("a cell of the row").symbol())
+        .collect()
+}
+
+fn rows(buffer: &Buffer) -> Vec<String> {
+    (buffer.area.y..buffer.area.bottom())
+        .map(|y| row(buffer, y))
         .collect()
 }
 
@@ -97,26 +115,6 @@ fn column_of(buffer: &Buffer, y: u16, glyph: char) -> Option<u16> {
             .cell((*x, y))
             .is_some_and(|cell| cell.symbol() == glyph.to_string())
     })
-}
-
-#[test]
-fn a_card_is_at_most_seventy_two_columns_wide_and_centred() {
-    for (cols, left) in [(120, 24), (100, 14), (73, 0), (72, 0)] {
-        let buffer = painted(&mut opened(Mode::Keys), cols, 24);
-        assert_eq!(
-            column_of(&buffer, 0, '╭'),
-            Some(left),
-            "at {cols} columns a 72-column card stands in column {left}, and the border of \
-             one that is not centred stands somewhere else: {:?}",
-            row(&buffer, 0)
-        );
-        assert_eq!(
-            column_of(&buffer, 0, '╮'),
-            Some(left + 71),
-            "and its right corner is seventy-one columns on from its left one: {:?}",
-            row(&buffer, 0)
-        );
-    }
 }
 
 /// The card's own columns of one row, found by its top row's corners: the frame a card was opened
@@ -139,19 +137,39 @@ fn of_card(buffer: &Buffer, y: u16) -> String {
 }
 
 #[test]
+fn a_card_is_at_most_seventy_two_columns_wide_and_centred() {
+    for (cols, left) in [(120, 24), (100, 14), (73, 0), (72, 0)] {
+        let buffer = painted(&mut on_screen(Mode::Keys), cols, 24);
+        assert_eq!(
+            column_of(&buffer, 0, '╭'),
+            Some(left),
+            "at {cols} columns a 72-column card stands in column {left}, and the border of \
+             one that is not centred stands somewhere else: {:?}",
+            row(&buffer, 0)
+        );
+        assert_eq!(
+            column_of(&buffer, 0, '╮'),
+            Some(left + 71),
+            "and its right corner is seventy-one columns on from its left one: {:?}",
+            row(&buffer, 0)
+        );
+    }
+}
+
+#[test]
 fn a_screen_names_itself_in_the_top_border_and_the_key_that_leaves_in_the_bottom() {
     for mode in SCREENS {
-        let buffer = painted(&mut opened(mode), 120, 40);
+        let buffer = painted(&mut on_screen(mode), 120, 40);
         let top = of_card(&buffer, 0);
         assert!(
             top.starts_with('╭') && top.ends_with('╮'),
             "{} is drawn on a card whose top row is a rounded rule: {top:?}",
-            mode.title()
+            name(mode)
         );
         assert!(
-            top.contains(mode.title()),
+            top.contains(name(mode)),
             "and the row says which screen it is, in {}'s own name: {top:?}",
-            mode.title()
+            name(mode)
         );
 
         let last = buffer.area.bottom() - 1;
@@ -159,7 +177,7 @@ fn a_screen_names_itself_in_the_top_border_and_the_key_that_leaves_in_the_bottom
         assert!(
             bottom.starts_with('╰') && bottom.ends_with('╯'),
             "{} is drawn on a card whose bottom row is a rounded rule: {bottom:?}",
-            mode.title()
+            name(mode)
         );
         assert!(
             bottom.contains("esc"),
@@ -177,7 +195,7 @@ fn a_screen_names_itself_in_the_top_border_and_the_key_that_leaves_in_the_bottom
 
 #[test]
 fn the_frame_behind_a_card_is_painted_and_dimmed() {
-    let mut view = conversation();
+    let mut view = drafted();
     let palette = view.palette();
     let before = painted(&mut view, 120, 40);
 
@@ -213,28 +231,28 @@ fn the_frame_behind_a_card_is_painted_and_dimmed() {
                 Ink::of(drawn, &palette),
                 Some(Ink::Dim),
                 "and it is dimmed, so the reader sees a frame they cannot reach: row {y}, \
-                 column {x} reads back as {:?}",
+                 column {x} is on the band {:?} and reads back as {:?}",
+                drawn.bg,
                 Ink::of(drawn, &palette)
+            );
+            assert_eq!(
+                drawn.bg,
+                before.cell((x, y)).expect("a cell").bg,
+                "and a cell behind the card keeps the band it sits on, at row {y}, column {x}"
             );
         }
     }
 }
 
-fn rows(buffer: &Buffer) -> Vec<String> {
-    (buffer.area.y..buffer.area.bottom())
-        .map(|y| row(buffer, y))
-        .collect()
-}
-
 #[test]
 fn a_frame_under_fifty_columns_draws_the_card_full_bleed_with_its_title_row_and_nothing_else() {
-    let buffer = painted(&mut opened(Mode::Keys), 49, 24);
+    let buffer = painted(&mut on_screen(Mode::Keys), 49, 24);
     let screen = rows(&buffer).join("\n");
 
     let first = &rows(&buffer)[0];
     assert!(
         first.starts_with('─') && first.contains("? keys"),
-        "at forty-nine columns the title row is the card's rule at the frame's own edge: {first:?}"
+        "at forty-nine columns the card is the frame, its title row the first: {first:?}"
     );
     for border in ['╭', '╮', '╰', '╯', '│'] {
         assert!(
@@ -248,14 +266,15 @@ fn a_frame_under_fifty_columns_draws_the_card_full_bleed_with_its_title_row_and_
          either: {screen}"
     );
     assert!(
-        rows(&buffer)[1].contains("keys"),
-        "and the screen's own rows are drawn under the title, full-bleed: {screen}"
+        rows(&buffer)[1].starts_with("  keys"),
+        "and the screen's rows are drawn under the title, inset by the card's own two columns: \
+         {screen}"
     );
 }
 
 #[test]
 fn the_card_covers_the_frame_behind_it_rather_than_letting_it_read_through() {
-    let mut view = conversation();
+    let mut view = drafted();
     view.open_settings(&Config::default());
     let buffer = painted(&mut view, 120, 40);
 
@@ -273,30 +292,45 @@ fn the_card_covers_the_frame_behind_it_rather_than_letting_it_read_through() {
 }
 
 #[test]
+fn the_words_of_a_row_are_never_cut_by_the_card_they_are_drawn_in() {
+    let buffer = painted(&mut on_screen(Mode::Keys), 120, 40);
+    let body: Vec<String> = (1..39).map(|y| of_card(&buffer, y)).collect();
+    let drawn: HashSet<&str> = body.iter().flat_map(|row| row.split_whitespace()).collect();
+
+    for binding in Mode::Composer.table() {
+        for word in binding.does.split_whitespace() {
+            assert!(
+                drawn.contains(word),
+                "the card is 68 columns of body and `{}`'s line is one of the longest, but no \
+                 row of it may lose `{word}`: {body:#?}",
+                binding.name
+            );
+        }
+    }
+}
+
+#[test]
+fn the_reason_a_value_was_refused_is_drawn_whole_however_narrow_the_card() {
+    let mut view = View::boot();
+    view.open_settings(&Config::default());
+    view.refuse("max_turns two hundred will not parse: invalid digit found in string");
+    let buffer = painted(&mut view, 120, 40);
+    let body: Vec<String> = (1..39).map(|y| of_card(&buffer, y)).collect();
+    let drawn: HashSet<&str> = body.iter().flat_map(|row| row.split_whitespace()).collect();
+
+    for word in ["parse:", "invalid", "digit", "found", "string"] {
+        assert!(
+            drawn.contains(word),
+            "a refusal names the key and says why, and the card wraps it rather than cutting the \
+             reason off at `{word}`: {body:#?}"
+        );
+    }
+}
+
+#[test]
 fn no_band_behind_a_card_takes_the_key_the_screen_does_not() {
     for mode in SCREENS {
-        let mut view = spoken();
-        match mode {
-            Mode::Keys => {
-                view.key(Key::Char('?'));
-            }
-            Mode::Files => {
-                let root = tempfile::tempdir().expect("a temp workspace");
-                std::fs::write(root.path().join("rows.rs"), "").expect("a file");
-                view.set_workspace(root.path().to_path_buf());
-                view.key(Key::Char('@'));
-            }
-            Mode::Models => {
-                view.paste("/model");
-                view.key(Key::Enter);
-            }
-            Mode::Settings => view.open_settings(&Config::default()),
-            Mode::Stats => {
-                view.paste("/stats");
-                view.key(Key::Enter);
-            }
-            Mode::Composer => panic!("a draft is not a screen"),
-        }
+        let mut view = opened(conversation(), mode);
         let draft = view.composer().text().to_owned();
 
         for key in [Key::Char('x'), Key::Char('y'), Key::Down, Key::Up] {
@@ -308,7 +342,7 @@ fn no_band_behind_a_card_takes_the_key_the_screen_does_not() {
             draft,
             "{} is drawn over the composer band and takes its keys, so not one of them is the \
              draft's",
-            mode.title()
+            name(mode)
         );
         assert_eq!(
             view.mode(),
