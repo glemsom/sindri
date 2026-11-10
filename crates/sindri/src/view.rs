@@ -15,7 +15,7 @@ use sindri_core::skills::{Catalog, Skill};
 
 use crate::commands::{self, Command};
 use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, Prompt, State};
-use crate::door::Door;
+use crate::door;
 use crate::graphics::CellSize;
 use crate::ink::Ink;
 use crate::keys::{Act, Mode, Stack};
@@ -96,7 +96,8 @@ pub struct View {
     stack: Stack,
     pulse: Option<Pulse>,
     rail: Facts,
-    door: Option<Door>,
+    /// Whether this frame is still the door a launch opened on.
+    door: bool,
     record: Option<SessionDocument>,
     mark: Option<Mark>,
     marked: Span,
@@ -160,7 +161,7 @@ impl View {
     /// door goes with it, because the run it was a door to has been asked.
     pub fn settle(&mut self) {
         self.stream = Stream::new();
-        self.door = None;
+        self.door = false;
     }
 
     pub fn set_workspace(&mut self, workspace: PathBuf) {
@@ -340,7 +341,6 @@ impl View {
         self.mark = None;
         self.marked = Span::default();
         self.loaded.clear();
-        self.door = None;
         Outcome::Edited
     }
 
@@ -520,7 +520,7 @@ impl View {
     /// open and never a guess at what a run would have been.
     pub fn door(&mut self, boot: Boot) {
         self.rail = Facts::boot(boot);
-        self.door = Some(Door::new());
+        self.door = true;
     }
 
     pub fn set_state(&mut self, state: State) {
@@ -553,13 +553,13 @@ impl View {
         let bands = bands(area, self.composer.rows(), self.queue.rows());
         // The rail's share is taken from the transcript's band before the transcript is laid out
         // in what is left: a row's width is the width it is drawn at.
-        let share = self.share(bands.transcript);
+        let share = self.split(bands.transcript);
         if let Some((shape, rail)) = share.rail {
             self.rail.paint(shape, rail, buffer, &self.palette);
         }
         self.transcript(share.transcript, buffer);
-        if let Some(door) = &self.door {
-            door.paint(share.transcript, buffer, &self.palette);
+        if self.door {
+            door::paint(share.transcript, buffer, &self.palette);
         }
         self.queue_band(bands.queue, buffer);
         self.composer_band(bands.composer, buffer);
@@ -568,8 +568,8 @@ impl View {
 
     /// The band the transcript and the rail share. A door is drawn with a ledger beside it or with
     /// no rail at all: a strip is a live run's one row, and no run is live at the door.
-    fn share(&self, band: Rect) -> Share {
-        if self.door.is_some() && Shape::of(band.width) != Shape::Ledger {
+    fn split(&self, band: Rect) -> Share {
+        if self.door && Shape::of(band.width) != Shape::Ledger {
             return Share {
                 transcript: band,
                 rail: None,
@@ -1216,14 +1216,11 @@ mod tests {
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
 
-        let right = match cols >= crate::rail::NARROW {
-            true => cols - crate::rail::COLUMNS,
-            false => cols,
-        };
         let band = crate::view::bands(area, view.composer().rows(), view.queue().rows()).transcript;
-        (band.y..band.bottom())
+        let transcript = view.split(band).transcript;
+        (transcript.y..transcript.bottom())
             .map(|y| {
-                (band.x..right)
+                (transcript.x..transcript.right())
                     .map(|x| buffer.cell((x, y)).expect("a cell of the band").symbol())
                     .collect::<String>()
                     .trim_end()
@@ -1278,6 +1275,24 @@ mod tests {
             Some(Look::plain(Ink::Dim)),
             "and the line that explains it hangs from one column in a quieter ink"
         );
+    }
+
+    #[test]
+    fn a_door_narrower_than_its_lines_wraps_them_whole_and_cuts_no_word() {
+        let wrapped = door(40, 24).join(" ");
+        let words = wrapped.split_whitespace().collect::<Vec<&str>>().join(" ");
+
+        for line in [
+            "An AI agent that is a Unix filter and a terminal UI over one core.",
+            "ask the wire what it serves, and name the one to run",
+            "the keys the config holds, and the value each is set to",
+            "the facts the rail is too narrow to hold",
+        ] {
+            assert!(
+                words.contains(line),
+                "at forty columns the door reads {words:?}, which holds no whole {line:?}"
+            );
+        }
     }
 
     #[test]

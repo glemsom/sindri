@@ -307,7 +307,7 @@ fn wrap(text: &str, cols: u16) -> Vec<String> {
     wrap_under(text, cols, cols)
 }
 
-fn wrap_under(text: &str, first: u16, room: u16) -> Vec<String> {
+pub(crate) fn wrap_under(text: &str, first: u16, room: u16) -> Vec<String> {
     let first = usize::from(first.max(1));
     let room = usize::from(room.max(1));
     let mut rows: Vec<String> = Vec::new();

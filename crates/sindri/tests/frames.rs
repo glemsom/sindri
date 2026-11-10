@@ -9,7 +9,7 @@ fn boot_120x40_is_the_frame_a_launch_opens_on() {
 }
 
 #[test]
-fn boot_80x24_is_that_door_whole_with_no_rail_beside_it() {
+fn boot_80x24_is_every_line_of_the_door_and_no_rail_beside_it() {
     fixture::assert_frame("boot", 80, 24);
 }
 

@@ -213,8 +213,9 @@ pub struct Boot {
     pub enforcement: Enforcement,
 }
 
-/// The facts the rail draws, as the core holds them. A fact the frame knows nothing about is
-/// `None` and is not drawn, never guessed at, so a frame before its first run has no rail.
+/// The facts the rail draws, as the core holds them. A fact nobody can state is `None` and is not
+/// drawn, never guessed at; a fact the launch names but a run has yet to fill is an em dash,
+/// which is a value the frame holds and not an absence. No fact at all and the frame draws no rail.
 #[derive(Debug, Default, Clone)]
 pub struct Facts {
     /// The dialect the run asks over, in the wire's own word: `anthropic`, `openai` or `copilot`,
@@ -233,7 +234,9 @@ pub struct Facts {
     /// Nothing produces this fact yet: a caller passes it in until its producer lands.
     pub skills: Option<usize>,
     pub sandbox: Option<Enforcement>,
+    /// The run's own, and an em dash on a frame that has not run yet.
     pub session: Option<String>,
+    /// The run's own, and an em dash on a frame that has not run yet.
     pub temp: Option<PathBuf>,
 }
 

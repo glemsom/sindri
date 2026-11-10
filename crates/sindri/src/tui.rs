@@ -59,6 +59,21 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
             return crate::refuse(&format!("the terminal could not be taken: {error}"), SETUP);
         }
     };
+    // The same directory `Launch::open` gives a run, read the same way, so a path a reader
+    // picks is one the run's own commands can read. Read before the screen is taken, so a
+    // refusal is a line on the reader's own shell.
+    let workspace = match std::env::current_dir() {
+        Ok(workspace) => workspace,
+        Err(error) => {
+            return crate::refuse(
+                &format!("cannot read the working directory: {error}"),
+                SETUP,
+            );
+        }
+    };
+    // What the run the prompt will ask for is, read behind the reader's own shell rather than
+    // behind a blank frame: the repository is asked for its branch once, before the first paint.
+    let boot = crate::launch::boot(cli, config, &workspace);
     let screen = match Screen::take(&terminal) {
         Ok(screen) => screen,
         Err(error) => {
@@ -84,23 +99,11 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
         named("TERM").as_deref(),
         named("TERM_PROGRAM").as_deref(),
     );
-    // The same directory `Launch::open` gives a run, read the same way, so a path a reader
-    // picks is one the run's own commands can read.
-    let workspace = match std::env::current_dir() {
-        Ok(workspace) => workspace,
-        Err(error) => {
-            return crate::refuse(
-                &format!("cannot read the working directory: {error}"),
-                SETUP,
-            );
-        }
-    };
     view.set_workspace(workspace.clone());
     // Read the way `launch` reads it, so the name `/skill:name` accepts and a name a run could
     // call come from one catalog.
     view.set_home(crate::launch::home());
-    // The door: the frame is told what the run it is about to ask for is, before the first paint.
-    view.door(crate::launch::boot(cli, config, &workspace));
+    view.door(boot);
     let mut canvas = match canvas(&terminal) {
         Ok(canvas) => canvas,
         Err(error) => {
