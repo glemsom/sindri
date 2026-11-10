@@ -99,6 +99,8 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     // Read the way `launch` reads it, so the name `/skill:name` accepts and a name a run could
     // call come from one catalog.
     view.set_home(crate::launch::home());
+    // The door: the frame is told what the run it is about to ask for is, before the first paint.
+    view.door(crate::launch::boot(cli, config, &workspace));
     let mut canvas = match canvas(&terminal) {
         Ok(canvas) => canvas,
         Err(error) => {

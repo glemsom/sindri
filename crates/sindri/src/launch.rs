@@ -65,6 +65,19 @@ impl Turns for () {
     fn turn(&mut self, _ended: &Exchange) {}
 }
 
+/// The run a prompt will ask for, as a launch knows it before a session exists: the wire and the
+/// model the config names, the workspace it stands in and the branch that workspace is on, and the
+/// enforcement every call of the run will be held to.
+pub fn boot(cli: &Cli, config: &Config, workspace: &std::path::Path) -> rail::Boot {
+    rail::Boot {
+        wire: config.provider,
+        model: config.model.clone(),
+        workspace: workspace.to_path_buf(),
+        branch: sindri_core::records::branch(workspace),
+        enforcement: cli.enforcement(),
+    }
+}
+
 pub struct Figure {
     pub wire: Wire,
     pub model: String,
@@ -303,5 +316,77 @@ pub(crate) fn home() -> Option<PathBuf> {
 fn note(written: Result<(), impl std::fmt::Display>) {
     if let Err(error) = written {
         eprintln!("sindri: {error}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use super::*;
+
+    fn git(workspace: &std::path::Path, args: &[&str]) {
+        let ran = std::process::Command::new("git")
+            .arg("-C")
+            .arg(workspace)
+            .args(args)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .env("GIT_AUTHOR_NAME", "sindri")
+            .env("GIT_AUTHOR_EMAIL", "sindri@example.invalid")
+            .env("GIT_COMMITTER_NAME", "sindri")
+            .env("GIT_COMMITTER_EMAIL", "sindri@example.invalid")
+            .status()
+            .expect("git should run");
+        assert!(ran.success(), "git {args:?} failed");
+    }
+
+    #[test]
+    fn the_boot_facts_of_a_config_are_the_run_a_prompt_will_ask_for() {
+        let root = tempfile::tempdir().expect("a temp workspace");
+        git(root.path(), &["init", "--quiet", "-b", "the-branch"]);
+        std::fs::write(root.path().join("a.txt"), "one file\n").expect("a file");
+        git(root.path(), &["add", "a.txt"]);
+        git(root.path(), &["commit", "--quiet", "-m", "one commit"]);
+        let config = Config {
+            provider: Some(Wire::Anthropic),
+            model: Some(String::from("claude-sonnet-4-5")),
+            ..Config::default()
+        };
+
+        let boot = boot(&Cli::parse_from(["sindri"]), &config, root.path());
+
+        assert_eq!(
+            boot.wire,
+            Some(Wire::Anthropic),
+            "the dialect the config names"
+        );
+        assert_eq!(boot.model.as_deref(), Some("claude-sonnet-4-5"));
+        assert_eq!(boot.workspace, root.path());
+        assert_eq!(
+            boot.branch.as_deref(),
+            Some("the-branch"),
+            "read off the repository, which a boot frame asks before any session exists"
+        );
+        assert_eq!(boot.enforcement, Enforcement::Bubblewrap);
+    }
+
+    #[test]
+    fn a_config_that_names_no_run_and_a_workspace_that_is_no_checkout_give_no_fact_at_all() {
+        let root = tempfile::tempdir().expect("a temp workspace");
+        let config = Config {
+            provider: None,
+            model: None,
+            ..Config::default()
+        };
+
+        let boot = boot(&Cli::parse_from(["sindri"]), &config, root.path());
+
+        assert_eq!(
+            (boot.wire, boot.model, boot.branch),
+            (None, None, None),
+            "the door names nothing it cannot know, and a directory that is no checkout has no \
+             branch to name"
+        );
     }
 }

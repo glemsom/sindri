@@ -15,7 +15,7 @@ use sindri::mark;
 use sindri::palette::Palette;
 use sindri::pictures::Pictures;
 use sindri::pulse::Pulse;
-use sindri::rail::{Ctx, Facts};
+use sindri::rail::{Boot, Ctx, Facts};
 use sindri::rows::Scroll;
 use sindri::view::View;
 use sindri_core::config::Config;
@@ -67,7 +67,7 @@ pub fn assert_frame(name: &str, cols: u16, rows: u16) {
 
 fn named(name: &str) -> View {
     match name {
-        "boot" => View::boot(),
+        "boot" => door(),
         "transcript" => running(transcript(), Scroll::Tail),
         "transcript-scrolled" => running(transcript(), Scroll::Back(4)),
         "rail" => running(opening(), Scroll::Tail),
@@ -149,6 +149,21 @@ fn pictured() -> View {
     view.set_workspace(workspace);
     view.set_cell_size(CellSize::new(10, 20));
     view.set_pictures(Pictures::kitty(CellSize::new(10, 20)));
+    view
+}
+
+/// The frame a launch opens on: the config's wire and model, the workspace it stands in and the
+/// branch the repository is on, and the enforcement its policy holds. A session and a temp are a
+/// run's own and no run has opened, so the rail draws an em dash for each.
+fn door() -> View {
+    let mut view = View::boot();
+    view.door(Boot {
+        wire: Some(Wire::Anthropic),
+        model: Some(String::from("claude-sonnet-4-5")),
+        workspace: PathBuf::from("/srv/workspace"),
+        branch: Some(String::from("main")),
+        enforcement: Enforcement::Bubblewrap,
+    });
     view
 }
 

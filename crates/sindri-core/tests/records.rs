@@ -13,7 +13,7 @@ use sindri_core::config::Config;
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::provider::Route;
 use sindri_core::provider::Usage as Ask;
-use sindri_core::records::{Entry, Facts, Record, Status, Told, read_transcript, timestamp};
+use sindri_core::records::{self, Entry, Facts, Record, Status, Told, read_transcript, timestamp};
 use sindri_core::redact::{MASK, SecretSet};
 use sindri_core::run::{Acted, Budget, Call, Exit, Limits, State, Stop};
 use sindri_core::session::Session;
@@ -912,6 +912,30 @@ fn the_document_names_the_branch_and_commit_the_workspace_stands_on() {
         document["commit"],
         json!(head.trim()),
         "the commit is the one the workspace stood on, whole"
+    );
+}
+
+#[test]
+fn the_branch_a_workspace_stands_on_is_read_before_any_run_has_a_record() {
+    let ground = Ground::new();
+    git(&ground.workspace, &["init", "--quiet", "-b", "the-branch"]);
+    std::fs::write(ground.workspace.join("a.txt"), "one file\n").expect("a file");
+    git(&ground.workspace, &["add", "a.txt"]);
+    git(
+        &ground.workspace,
+        &["commit", "--quiet", "-m", "one commit"],
+    );
+    assert_eq!(
+        records::branch(&ground.workspace).as_deref(),
+        Some("the-branch"),
+        "the launch reads the branch off the repository, and no session has to exist for it"
+    );
+
+    git(&ground.workspace, &["checkout", "--quiet", "--detach"]);
+    assert_eq!(
+        records::branch(&ground.workspace),
+        None,
+        "a detached head stands on no branch, and a reader is told nothing rather than `HEAD`"
     );
 }
 

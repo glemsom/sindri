@@ -15,6 +15,7 @@ use sindri_core::skills::{Catalog, Skill};
 
 use crate::commands::{self, Command};
 use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, Prompt, State};
+use crate::door::Door;
 use crate::graphics::CellSize;
 use crate::ink::Ink;
 use crate::keys::{Act, Mode, Stack};
@@ -26,7 +27,7 @@ use crate::picture::Surface;
 use crate::pictures::Pictures;
 use crate::pulse::Pulse;
 use crate::queue::Queue;
-use crate::rail::Facts;
+use crate::rail::{Boot, Facts, Shape, Share};
 use crate::rows::{Row, Rows, Scroll};
 use crate::settings::Settings;
 use crate::stats::Stats;
@@ -95,6 +96,7 @@ pub struct View {
     stack: Stack,
     pulse: Option<Pulse>,
     rail: Facts,
+    door: Option<Door>,
     record: Option<SessionDocument>,
     mark: Option<Mark>,
     marked: Span,
@@ -154,9 +156,11 @@ impl View {
     }
 
     /// The turn in flight is over: what it said is written down as entries, so the live entry
-    /// it was drawn as goes. A frame that kept the stream would draw the same answer twice.
+    /// it was drawn as goes. A frame that kept the stream would draw the same answer twice. The
+    /// door goes with it, because the run it was a door to has been asked.
     pub fn settle(&mut self) {
         self.stream = Stream::new();
+        self.door = None;
     }
 
     pub fn set_workspace(&mut self, workspace: PathBuf) {
@@ -336,6 +340,7 @@ impl View {
         self.mark = None;
         self.marked = Span::default();
         self.loaded.clear();
+        self.door = None;
         Outcome::Edited
     }
 
@@ -510,6 +515,14 @@ impl View {
         self.rail = facts;
     }
 
+    /// The frame a launch opens on: the facts the launch already holds, and the door drawn from
+    /// them. A frame no launch told what the run is draws nothing, so the door is a front end's to
+    /// open and never a guess at what a run would have been.
+    pub fn door(&mut self, boot: Boot) {
+        self.rail = Facts::boot(boot);
+        self.door = Some(Door::new());
+    }
+
     pub fn set_state(&mut self, state: State) {
         self.composer.set_state(state);
     }
@@ -540,14 +553,29 @@ impl View {
         let bands = bands(area, self.composer.rows(), self.queue.rows());
         // The rail's share is taken from the transcript's band before the transcript is laid out
         // in what is left: a row's width is the width it is drawn at.
-        let share = self.rail.split(bands.transcript);
+        let share = self.share(bands.transcript);
         if let Some((shape, rail)) = share.rail {
             self.rail.paint(shape, rail, buffer, &self.palette);
         }
         self.transcript(share.transcript, buffer);
+        if let Some(door) = &self.door {
+            door.paint(share.transcript, buffer, &self.palette);
+        }
         self.queue_band(bands.queue, buffer);
         self.composer_band(bands.composer, buffer);
         self.footer(bands.footer, buffer);
+    }
+
+    /// The band the transcript and the rail share. A door is drawn with a ledger beside it or with
+    /// no rail at all: a strip is a live run's one row, and no run is live at the door.
+    fn share(&self, band: Rect) -> Share {
+        if self.door.is_some() && Shape::of(band.width) != Shape::Ledger {
+            return Share {
+                transcript: band,
+                rail: None,
+            };
+        }
+        self.rail.split(band)
     }
 
     /// The turn in flight is the one entry laid out again on every paint; every other row comes
@@ -1081,7 +1109,7 @@ mod tests {
     use sindri_core::redact::SecretSet;
 
     use super::*;
-    use crate::ink::Look;
+    use crate::ink::{Face, Look};
 
     /// Enough facts that the ledger fills its column top to bottom.
     fn rail() -> Facts {
@@ -1165,6 +1193,154 @@ mod tests {
                 "the footer sits on no band, and column {x} of it sits on one"
             );
         }
+    }
+
+    /// The launch a boot frame is drawn from: a config's wire and model, the workspace the launch
+    /// stands in and its branch, and the enforcement its policy holds.
+    fn boot() -> Boot {
+        Boot {
+            wire: Some(sindri_core::wire::Wire::Anthropic),
+            model: Some(String::from("claude-sonnet-4-5")),
+            workspace: PathBuf::from("/srv/workspace"),
+            branch: Some(String::from("main")),
+            enforcement: Enforcement::Bubblewrap,
+        }
+    }
+
+    /// The rows of the transcript band a boot frame draws, from its left edge and cut where the
+    /// rail's columns begin: the rail has rows of its own, and they are not the door's.
+    fn door(cols: u16, rows: u16) -> Vec<String> {
+        let mut view = View::boot();
+        view.door(boot());
+        let area = screen(cols, rows);
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+
+        let right = match cols >= crate::rail::NARROW {
+            true => cols - crate::rail::COLUMNS,
+            false => cols,
+        };
+        let band = crate::view::bands(area, view.composer().rows(), view.queue().rows()).transcript;
+        (band.y..band.bottom())
+            .map(|y| {
+                (band.x..right)
+                    .map(|x| buffer.cell((x, y)).expect("a cell of the band").symbol())
+                    .collect::<String>()
+                    .trim_end()
+                    .to_owned()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_frame_a_launch_opens_on_is_a_wordmark_a_line_and_three_commands() {
+        assert_eq!(
+            door(120, 40)[..7],
+            [
+                "  sindri",
+                "",
+                "  An AI agent that is a Unix filter and a terminal UI over one core.",
+                "",
+                "  /model     ask the wire what it serves, and name the one to run",
+                "  /settings  the keys the config holds, and the value each is set to",
+                "  /stats     the facts the rail is too narrow to hold",
+            ],
+            "the door is a wordmark, one line saying what the product is, and three commands \
+             with the one line each that explains them, set where an answer goes"
+        );
+    }
+
+    #[test]
+    fn the_door_is_drawn_in_the_ink_of_a_name_and_of_the_commands_under_it() {
+        let palette = Palette::TRUECOLOR;
+        let area = screen(120, 40);
+        let mut view = View::boot();
+        view.door(boot());
+        view.set_palette(palette);
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+
+        let look =
+            |x: u16, y: u16| Look::of(buffer.cell((x, y)).expect("a cell of the band"), &palette);
+        assert_eq!(
+            look(2, 0),
+            Some(Look::new(Ink::Accent, Face::Bold)),
+            "the wordmark is the one bold row of the frame"
+        );
+        assert_eq!(look(2, 2), Some(Look::plain(Ink::Plain)));
+        assert_eq!(
+            look(2, 4),
+            Some(Look::plain(Ink::Accent)),
+            "a command is read as the thing to type"
+        );
+        assert_eq!(
+            look(13, 4),
+            Some(Look::plain(Ink::Dim)),
+            "and the line that explains it hangs from one column in a quieter ink"
+        );
+    }
+
+    #[test]
+    fn eighty_columns_draw_the_door_whole_and_no_rail_beside_it() {
+        let palette = Palette::TRUECOLOR;
+        let wide = door(120, 24);
+        let narrow = door(80, 24);
+        assert_eq!(
+            narrow, wide,
+            "a frame below a hundred columns draws the same door, and nothing of it is clipped"
+        );
+
+        let area = screen(80, 24);
+        let mut view = View::boot();
+        view.door(boot());
+        view.set_palette(palette);
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+        let on_rail = (area.y..area.bottom())
+            .flat_map(|y| (area.x..area.right()).map(move |x| (x, y)))
+            .filter(|(x, y)| {
+                buffer
+                    .cell((*x, *y))
+                    .is_some_and(|cell| cell.bg == palette.band(Band::Rail))
+            })
+            .count();
+        assert_eq!(
+            on_rail, 0,
+            "the boot screen is a door and no rail: a strip is a live run's one row, and no run \
+             is live at the door"
+        );
+    }
+
+    #[test]
+    fn a_run_sent_from_the_door_leaves_the_frame_to_the_conversation() {
+        let mut view = View::boot();
+        assert!(
+            !drawn(&mut view, 120, 40).contains("sindri"),
+            "a frame no launch told what the run is draws no door"
+        );
+
+        view.door(boot());
+        view.settle();
+
+        assert!(
+            !drawn(&mut view, 120, 40).contains("sindri"),
+            "the door is the first paint pass: a run sent from it replaces it, and it is never \
+             drawn again"
+        );
+    }
+
+    fn drawn(view: &mut View, cols: u16, rows: u16) -> String {
+        let area = screen(cols, rows);
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+        (area.y..area.bottom())
+            .map(|y| {
+                (area.x..area.right())
+                    .map(|x| buffer.cell((x, y)).expect("a cell of the frame").symbol())
+                    .collect::<String>()
+            })
+            .collect::<Vec<String>>()
+            .join("\n")
     }
 
     fn screen(cols: u16, rows: u16) -> Rect {
