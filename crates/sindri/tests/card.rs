@@ -10,7 +10,7 @@ use ratatui::buffer::Buffer;
 
 use sindri::composer::Key;
 use sindri::ink::Ink;
-use sindri::keys::Mode;
+use sindri::keys::{Act, Mode};
 use sindri::view::View;
 use sindri_core::config::Config;
 use sindri_core::records::Entry;
@@ -27,6 +27,15 @@ const SCREENS: [Mode; 5] = [
 /// The name a screen wears in the border of the card it is drawn on.
 fn name(mode: Mode) -> &'static str {
     mode.title().expect("a screen has a name to wear")
+}
+
+/// The key the screen's own table binds to leaving it.
+fn leaves(mode: Mode) -> &'static str {
+    mode.table()
+        .iter()
+        .find(|binding| binding.act == Act::Close)
+        .map(|binding| binding.name)
+        .expect("a screen binds one key to leaving it")
 }
 
 /// `over` with the screen `mode` opened on it, through the key a reader sends.
@@ -180,9 +189,10 @@ fn a_screen_names_itself_in_the_top_border_and_the_key_that_leaves_in_the_bottom
             name(mode)
         );
         assert!(
-            bottom.contains("esc"),
-            "and the row says the key that leaves, so the reader need not close the screen to \
-             find out: {bottom:?}"
+            bottom.contains(leaves(mode)),
+            "and the row says `{}`, the key the screen's own table binds to leaving it, so the \
+             reader need not close the screen to find out: {bottom:?}",
+            leaves(mode)
         );
 
         let side = of_card(&buffer, 1);
@@ -350,4 +360,21 @@ fn no_band_behind_a_card_takes_the_key_the_screen_does_not() {
             "and the screen the frame dimmed is still the one in force"
         );
     }
+}
+
+#[test]
+fn a_frame_too_short_for_a_body_still_names_the_screen_and_the_key_that_leaves() {
+    let buffer = painted(&mut on_screen(Mode::Keys), 120, 2);
+
+    assert!(
+        of_card(&buffer, 0).contains("? keys"),
+        "two rows hold the card's top border and its bottom one: {:?}",
+        row(&buffer, 0)
+    );
+    assert!(
+        of_card(&buffer, 1).contains(leaves(Mode::Keys)),
+        "and the bottom border of a card with no body is still the row that says how to leave: \
+         {:?}",
+        row(&buffer, 1)
+    );
 }

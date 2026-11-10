@@ -157,7 +157,7 @@ fn a_frame_handed_no_record_and_no_fact_still_opens_the_screen_with_its_title_an
         "and a frame handed nothing has no row to draw between the card's two sides: {rows:#?}"
     );
     assert!(
-        rows.last().is_some_and(|row| row.contains("esc")),
+        rows.last().is_some_and(|row| row.contains("Esc")),
         "the card's bottom border names the key that leaves, a frame of no row and all: {rows:#?}"
     );
 }

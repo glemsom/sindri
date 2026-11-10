@@ -546,10 +546,10 @@ impl View {
         // A screen is drawn over the frame it was opened from rather than in place of it: the
         // reader sees the transcript they will return to, and sees that it is out of reach.
         let screen = self.stack.top();
-        let Some(name) = screen.title() else {
+        let Some((name, leaves)) = screen.labels() else {
             return;
         };
-        let body = card::paint(area, name, buffer, &self.palette);
+        let body = card::paint(area, name, leaves, buffer, &self.palette);
         self.paint_screen(screen, body, buffer);
     }
 

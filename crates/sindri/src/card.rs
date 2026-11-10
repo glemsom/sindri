@@ -18,27 +18,23 @@ const INSET: u16 = 2;
 /// back, so the card bleeds to the frame's own edges instead.
 const NARROW: u16 = 50;
 
-/// The shortest: two borders and the one row between them.
-const SHORT: u16 = 3;
-
-const LEAVE: &str = "esc";
-
 const CORNERS: [char; 4] = ['╭', '╮', '╰', '╯'];
 
 const RULE: char = '─';
 
 const SIDE: char = '│';
 
-/// Paints a card named `name` into `area`, and returns the band the screen inside it draws in:
-/// the card's columns less its border and inset, and its rows less its border.
-pub fn paint(area: Rect, name: &str, buffer: &mut Buffer, palette: &Palette) -> Rect {
-    if area.width < NARROW || area.height < SHORT {
+/// Paints a card named `name`, whose key that leaves is `leaves`, into `area`, and returns the band
+/// the screen inside it draws in: the card's columns less its border and inset, and its rows less
+/// its border.
+pub fn paint(area: Rect, name: &str, leaves: &str, buffer: &mut Buffer, palette: &Palette) -> Rect {
+    if area.width < NARROW {
         return bleeding(area, name, buffer, palette);
     }
     // A card that is the whole frame has no gutter left to grey, and a scrim painted under it
     // would be covered in the same pass.
     scrim(area, buffer, palette);
-    boxed(area, name, buffer, palette)
+    boxed(area, name, leaves, buffer, palette)
 }
 
 /// Dims every cell of the frame a card is opened from, so no glyph behind it is read at the
@@ -62,7 +58,7 @@ fn grounded(buffer: &mut Buffer, rect: Rect, palette: &Palette) {
     });
 }
 
-fn boxed(area: Rect, name: &str, buffer: &mut Buffer, palette: &Palette) -> Rect {
+fn boxed(area: Rect, name: &str, leaves: &str, buffer: &mut Buffer, palette: &Palette) -> Rect {
     let width = area.width.min(WIDTH);
     let card = Rect {
         x: area.x + (area.width - width) / 2,
@@ -73,18 +69,20 @@ fn boxed(area: Rect, name: &str, buffer: &mut Buffer, palette: &Palette) -> Rect
 
     let last = card.bottom() - 1;
     ruled(buffer, Rect { height: 1, ..card }, palette);
-    for y in card.y + 1..last {
-        put(buffer, card.x, y, SIDE, Ink::Dim, palette);
-        put(buffer, card.right() - 1, y, SIDE, Ink::Dim, palette);
-    }
     headed(buffer, card, name, palette);
-    footed(buffer, card, palette);
+    if area.height > 1 {
+        for y in card.y + 1..last {
+            put(buffer, card.x, y, SIDE, Ink::Dim, palette);
+            put(buffer, card.right() - 1, y, SIDE, Ink::Dim, palette);
+        }
+        footed(buffer, card, leaves, palette);
+    }
 
     Rect {
         x: card.x + INSET,
         y: card.y + 1,
         width: width.saturating_sub(INSET * 2),
-        height: area.height - 2,
+        height: area.height.saturating_sub(2),
     }
 }
 
@@ -117,7 +115,7 @@ fn headed(buffer: &mut Buffer, card: Rect, name: &str, palette: &Palette) {
 }
 
 /// The key that leaves hangs in the bottom row as the name hangs in the top one, at the other end.
-fn footed(buffer: &mut Buffer, card: Rect, palette: &Palette) {
+fn footed(buffer: &mut Buffer, card: Rect, leaves: &str, palette: &Palette) {
     let (y, right) = (card.bottom() - 1, card.right());
     ruled(
         buffer,
@@ -131,14 +129,14 @@ fn footed(buffer: &mut Buffer, card: Rect, palette: &Palette) {
     put(buffer, card.x, y, CORNERS[2], Ink::Dim, palette);
     put(buffer, right - 1, y, CORNERS[3], Ink::Dim, palette);
 
-    let room = u16::try_from(LEAVE.chars().count()).unwrap_or(u16::MAX);
+    let room = u16::try_from(leaves.chars().count()).unwrap_or(u16::MAX);
     let mut x = right.saturating_sub(room + 4);
     if x <= card.x + 1 {
         return;
     }
     put(buffer, x, y, ' ', Ink::Dim, palette);
     x += 1;
-    for glyph in LEAVE.chars() {
+    for glyph in leaves.chars() {
         put(buffer, x, y, glyph, Ink::Muted, palette);
         x += 1;
     }
