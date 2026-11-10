@@ -261,10 +261,15 @@ struct Checkout {
 }
 fn checkout(workspace: &Path) -> Checkout {
     Checkout {
-        branch: git(workspace, &["rev-parse", "--abbrev-ref", "HEAD"])
-            .filter(|name| name != "HEAD"),
+        branch: branch(workspace),
         commit: git(workspace, &["rev-parse", "HEAD"]),
     }
+}
+
+/// The branch `workspace` stands on, for a launch that has no session yet, and `None` where a
+/// checkout stands on none: no repository, a detached head that names itself `HEAD`, or no git.
+pub fn branch(workspace: &Path) -> Option<String> {
+    git(workspace, &["rev-parse", "--abbrev-ref", "HEAD"]).filter(|name| name != "HEAD")
 }
 fn git(workspace: &Path, args: &[&str]) -> Option<String> {
     let output = Command::new("git")

@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+boot at 80x24
+00 |  sindri                                                                        | plain:2 accent+bold:6 plain:72
+01 |                                                                                | plain:80
+02 |  An AI agent that is a Unix filter and a terminal UI over one core.            | plain:80
+03 |                                                                                | plain:80
+04 |  /model     ask the wire what it serves, and name the one to run               | plain:2 accent:11 dim:52 plain:15
+05 |  /settings  the keys the config holds, and the value each is set to            | plain:2 accent:11 dim:55 plain:12
+06 |  /stats     the facts the rail is too narrow to hold                           | plain:2 accent:11 dim:40 plain:27
+07 |                                                                                | plain:80
+08 |                                                                                | plain:80
+09 |                                                                                | plain:80
+10 |                                                                                | plain:80
+11 |                                                                                | plain:80
+12 |                                                                                | plain:80
+13 |                                                                                | plain:80
+14 |                                                                                | plain:80
+15 |                                                                                | plain:80
+16 |                                                                                | plain:80
+17 |                                                                                | plain:80
+18 |                                                                                | plain:80
+19 |                                                                                | plain:80
+20 |                                                                                | plain:80
+21 |────────────────────────────────────────────────────────────────────────────────| dim:80
+22 |                                                                                | plain:80
+23 |Enter send · ? keys                                                             | muted:10 dim:3 muted:6 plain:61

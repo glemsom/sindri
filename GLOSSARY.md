@@ -123,6 +123,14 @@ The screen `@` opens: the workspace's files as `git` reads them, nearest first, 
 rows.
 _Avoid_: File browser, autocomplete, fuzzy finder, file search
 
+**Front door**:
+The frame a launch opens on: the wordmark, one line saying what the product is, and three commands
+with the line that explains each, beside the **rail** of the facts the launch already holds — the
+wire, the model, the workspace, its branch and the enforcement, and an em dash for the session and
+the temp a run has yet to fill. Below a hundred columns it is drawn with no rail. One paint pass,
+and never again.
+_Avoid_: Splash screen, welcome screen, landing page, boot animation
+
 **Stats screen**:
 The screen `/stats` opens: the facts the rail is too narrow to hold — the route, the spend, the
 instants, the whole GUID, the whole temp, the whole workspace — drawn from the record the run wrote

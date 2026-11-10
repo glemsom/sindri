@@ -10,6 +10,7 @@ use sindri_core::policy::Enforcement;
 use sindri_core::provider::Usage;
 use sindri_core::records::SessionDocument;
 use sindri_core::session::Session;
+use sindri_core::wire::Wire;
 
 use crate::ink::Ink;
 use crate::palette::{Band, Palette};
@@ -72,6 +73,10 @@ const SHORT: usize = 8;
 const GAP: &str = " · ";
 
 const HAIRLINE: char = '─';
+
+/// The value a fact a launch can already name but a run has yet to fill is drawn as: an em dash
+/// says the fact is owed and never that it is empty.
+const DASH: &str = "—";
 
 /// The run's size as the last request reported it, and never as the next one will be: whatever
 /// tool results the turn produced are not in it yet, so a run one turn from a full window is
@@ -196,8 +201,21 @@ fn scaled(parts: u64, places: u32, unit: &str) -> String {
     format!("{whole}.{}{unit}", decimals.trim_end_matches('0'))
 }
 
-/// The facts the rail draws, as the core holds them. A fact the frame knows nothing about is
-/// `None` and is not drawn, never guessed at, so a frame before its first run has no rail.
+/// What a launch knows before its first run: the wire and the model the config names, the
+/// workspace and the branch it stands on, and the enforcement the policy will hold. A session, a
+/// temp and a turn count belong to a run and are not here.
+#[derive(Debug, Clone)]
+pub struct Boot {
+    pub wire: Option<Wire>,
+    pub model: Option<String>,
+    pub workspace: PathBuf,
+    pub branch: Option<String>,
+    pub enforcement: Enforcement,
+}
+
+/// The facts the rail draws, as the core holds them. A fact nobody can state is `None` and is not
+/// drawn, never guessed at; a fact the launch names but a run has yet to fill is an em dash,
+/// which is a value the frame holds and not an absence. No fact at all and the frame draws no rail.
 #[derive(Debug, Default, Clone)]
 pub struct Facts {
     /// The dialect the run asks over, in the wire's own word: `anthropic`, `openai` or `copilot`,
@@ -216,7 +234,9 @@ pub struct Facts {
     /// Nothing produces this fact yet: a caller passes it in until its producer lands.
     pub skills: Option<usize>,
     pub sandbox: Option<Enforcement>,
+    /// The run's own, and an em dash on a frame that has not run yet.
     pub session: Option<String>,
+    /// The run's own, and an em dash on a frame that has not run yet.
     pub temp: Option<PathBuf>,
 }
 
@@ -241,6 +261,22 @@ impl Facts {
             branch: document.branch.clone(),
             session: Some(session.guid().to_owned()),
             temp: Some(session.temp().to_path_buf()),
+            ..Facts::default()
+        }
+    }
+
+    /// The facts of the frame a launch opens on, before a session and a document exist. A run's
+    /// own facts — its session, its temp, its turns — are not known yet, and each is an em dash
+    /// rather than a guess at what the run will hold.
+    pub fn boot(boot: Boot) -> Facts {
+        Facts {
+            wire: boot.wire.map(|wire| wire.word().to_owned()),
+            model: boot.model,
+            workspace: Some(boot.workspace),
+            branch: boot.branch,
+            sandbox: Some(boot.enforcement),
+            session: Some(String::from(DASH)),
+            temp: Some(PathBuf::from(DASH)),
             ..Facts::default()
         }
     }
@@ -1094,6 +1130,61 @@ mod tests {
             (None, None, None),
             "a document holds what the run spent summed over every turn, so the size of one \
              ask and the cache's hit rate are handed in and not read off it"
+        );
+    }
+
+    /// The one launch a boot frame is drawn from: a workspace that is no checkout of this test's,
+    /// so a fact nobody can know yet has nowhere to be read from but the rail itself.
+    fn boot() -> Boot {
+        Boot {
+            wire: Some(Wire::Anthropic),
+            model: Some(String::from("claude-sonnet-4-5")),
+            workspace: PathBuf::from("/srv/workspace"),
+            branch: Some(String::from("main")),
+            enforcement: Enforcement::Bubblewrap,
+        }
+    }
+
+    fn rows(facts: &Facts) -> Vec<(String, String)> {
+        facts
+            .known(Shape::Ledger)
+            .iter()
+            .map(|fact| (fact.kind.label().to_owned(), fact.value.text().to_owned()))
+            .collect()
+    }
+
+    #[test]
+    fn the_facts_a_launch_holds_before_a_run_are_what_a_prompt_is_pointed_at() {
+        let facts = Facts::boot(boot());
+
+        assert_eq!(
+            rows(&facts),
+            [
+                ("wire", "anthropic"),
+                ("model", "claude-sonnet-4-5"),
+                ("workspace", "/srv/workspace"),
+                ("branch", "main"),
+                ("sandbox", "bwrap"),
+                ("session", "—"),
+                ("temp", "—"),
+            ]
+            .map(|(label, value)| (label.to_owned(), value.to_owned()))
+            .to_vec(),
+            "the wire, the model, the workspace, the branch and the enforcement are the launch's \
+             own facts, and a session and a temp are a run's: neither exists yet, so each is an em \
+             dash and never a guess"
+        );
+        assert_eq!(
+            (
+                facts.think,
+                facts.turns,
+                facts.ctx,
+                facts.cache,
+                facts.skills
+            ),
+            (None, None, None, None, None),
+            "a launch knows no thinking, no turn count, no size, no hit rate and no skill: they \
+             arrive with a run, and the rail draws nothing rather than guessing at one"
         );
     }
 

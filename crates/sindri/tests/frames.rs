@@ -9,6 +9,11 @@ fn boot_120x40_is_the_frame_a_launch_opens_on() {
 }
 
 #[test]
+fn boot_80x24_is_every_line_of_the_door_and_no_rail_beside_it() {
+    fixture::assert_frame("boot", 80, 24);
+}
+
+#[test]
 fn transcript_120x40_is_a_run_laid_out_at_the_tail() {
     fixture::assert_frame("transcript", 120, 40);
 }

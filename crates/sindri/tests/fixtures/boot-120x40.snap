@@ -3,16 +3,16 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 boot at 120x40
-00 |                                                                                                                        | plain:120
-01 |                                                                                                                        | plain:120
-02 |                                                                                                                        | plain:120
-03 |                                                                                                                        | plain:120
-04 |                                                                                                                        | plain:120
-05 |                                                                                                                        | plain:120
-06 |                                                                                                                        | plain:120
-07 |                                                                                                                        | plain:120
-08 |                                                                                                                        | plain:120
-09 |                                                                                                                        | plain:120
+00 |  sindri                                                                                wire                   anthropic| plain:2 accent+bold:6 plain:80 dim:10 plain:22
+01 |                                                                                        model          claude-sonnet-4-5| plain:88 dim:10 plain:22
+02 |  An AI agent that is a Unix filter and a terminal UI over one core.                    ────────────────────────────────| plain:88 dim:32
+03 |                                                                                        workspace         /srv/workspace| plain:88 dim:10 plain:22
+04 |  /model     ask the wire what it serves, and name the one to run                       branch                      main| plain:2 accent:11 dim:52 plain:23 dim:10 plain:22
+05 |  /settings  the keys the config holds, and the value each is set to                    ────────────────────────────────| plain:2 accent:11 dim:55 plain:20 dim:32
+06 |  /stats     the facts the rail is too narrow to hold                                   sandbox                    bwrap| plain:2 accent:11 dim:40 plain:35 dim:10 plain:22
+07 |                                                                                        ────────────────────────────────| plain:88 dim:32
+08 |                                                                                        session                        —| plain:88 dim:10 plain:22
+09 |                                                                                        temp                           —| plain:88 dim:10 plain:22
 10 |                                                                                                                        | plain:120
 11 |                                                                                                                        | plain:120
 12 |                                                                                                                        | plain:120
