@@ -1,5 +1,6 @@
 mod auth; // the one command that signs in rather than runs
 mod batch; // is the Unix filter: a prompt in, the answer and one newline out
+mod cell; // the cell-size question and the bounded wait for its answer
 mod cli; // the command line as clap sees it
 mod doctor; // the honest window: it proves the sandbox
 mod launch; // one launch's run, assembled the same way whichever front end asked for it
@@ -8,9 +9,11 @@ mod launch; // one launch's run, assembled the same way whichever front end aske
 mod open; // the host spawns the opener, because the sandbox has no display
 mod osc; // sequences that carry words out of the terminal
 mod paste; // the terminal's echo is off while the key is typed
+mod reports; // the threads a run and a wire listing land their reports on, and the pass that takes them
 mod sessions; // reads past runs back
 mod signal; // the one door an outside `SIGINT` comes through
-mod tui; // the alternate screen it takes and gives back
+mod term; // the terminal as a resource: raw mode, the alternate screen, the panic restore, the canvas, and the telling
+mod tui; // the launch: the loop, a key's outcome, where a prompt starts a run, and the endings
 
 use std::process::ExitCode;
 
