@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+card-narrow at 40x24
+00 |── ? keys ──────────────────────────────| dim:3 accent:6 dim:31
+01 |keys                                    | dim:4 plain:36
+02 |Esc                  close this screen  | muted:21 plain:19
+03 |?                    close this screen  | muted:21 plain:19
+04 |composer                                | dim:8 plain:32
+05 |?                                       | muted:21 plain:19
+06 |@                                       | muted:21 plain:19
+07 |Enter                send the prompt    | muted:21 plain:19
+08 |Shift+Enter, Ctrl-J                     | muted:21 plain:19
+09 |↑                                       | muted:21 plain:19
+10 |Ctrl-X                                  | muted:21 plain:19
+11 |↓                    the line below     | muted:21 plain:19
+12 |Shift+↓                                 | muted:21 plain:19
+13 |Shift+↑                                 | muted:21 plain:19
+14 |←                    a glyph left       | muted:21 plain:19
+15 |→                    a glyph right      | muted:21 plain:19
+16 |Home                                    | muted:21 plain:19
+17 |End                  the end of the line| muted:21 plain:19
+18 |Ctrl-Y                                  | muted:21 plain:19
+19 |Backspace                               | muted:21 plain:19
+20 |Ctrl-C                                  | muted:21 plain:19
+21 |Ctrl-Q               quit               | muted:21 plain:19
+22 |                                        | plain:40
+23 |                                        | plain:40

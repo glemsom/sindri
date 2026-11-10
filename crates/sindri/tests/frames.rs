@@ -64,6 +64,16 @@ fn keys_120x40_lists_the_keys_of_the_stack_it_sits_on() {
 }
 
 #[test]
+fn card_120x40_is_a_screen_drawn_over_the_transcript_it_was_opened_from() {
+    fixture::assert_frame("card", 120, 40);
+}
+
+#[test]
+fn card_narrow_40x24_is_a_card_at_a_width_that_bleeds_to_the_frames_edges() {
+    fixture::assert_frame("card-narrow", 40, 24);
+}
+
+#[test]
 fn files_120x40_is_the_eight_files_nearest_the_workspace() {
     fixture::assert_frame("files", 120, 40);
 }

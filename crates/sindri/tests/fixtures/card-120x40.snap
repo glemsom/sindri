@@ -1,0 +1,45 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+card at 120x40
+00 |✓ exit 0  bash  96 bytes╭─ ? keys ─────────────────────────────────────────────────────────────╮               anthropic| dim:27 accent:6 dim:87
+01 |  check: fmt ... ok     │ keys                                                                 │      claude-sonnet-4-5…| dim:25 plain:1 dim:4 plain:65 dim:25
+02 |  check: clippy ... ok  │ Esc                  close this screen                               │                    high| dim:25 plain:1 muted:21 plain:48 dim:25
+03 |  check: test ... ok    │ ?                    close this screen                               │────────────────────────| dim:25 plain:1 muted:21 plain:48 dim:25
+04 |  check: frames ... ok  │ composer                                                             │                6 /  250| dim:25 plain:1 dim:8 plain:61 dim:25
+05 |  What that buys is the │ ?                    the keys, while the draft is empty              │     █░░░░░ 48.2k / 200k| dim:25 plain:1 muted:21 plain:48 dim:25
+06 |  row offset from the ta│ @                                                                    │                     88%| dim:25 plain:1 muted:21 plain:48 dim:25
+07 |  window and lays out ev│ Enter                send the prompt                                 │────────────────────────| dim:25 plain:1 muted:21 plain:48 dim:25
+08 |  the whole history scro│ Shift+Enter, Ctrl-J  a line break in the draft                       │e   …/.worktrees/46-rail| dim:25 plain:1 muted:21 plain:48 dim:25
+09 |  costs none.           │ ↑                    the newest queued prompt, or the line above     │       spec/1-capability| dim:25 plain:1 muted:21 plain:48 dim:25
+10 |turn 5 ─────────────────│ Ctrl-X               drop the newest queued prompt                   │────────────────────────| dim:25 plain:1 muted:21 plain:48 dim:25
+11 |✓ exit 0  bash  128 byte│ ↓                    the line below                                  │                       2| dim:25 plain:1 muted:21 plain:48 dim:25
+12 |  crates/sindri/src/rows│ Shift+↓              grow the mark a row down                        │────────────────────────| dim:25 plain:1 muted:21 plain:48 dim:25
+13 |  crates/sindri/tests/ro│ Shift+↑              grow the mark a row up                          │                   bwrap| dim:25 plain:1 muted:21 plain:48 dim:25
+14 |  The transcript's unit │ ←                    a glyph left                                    │────────────────────────| dim:25 plain:1 muted:21 plain:48 dim:25
+15 |  same run is drawn the │ →                    a glyph right                                   │                9f2c7a41| dim:25 plain:1 muted:21 plain:48 dim:25
+16 |  whatever front end com│ Home                 the start of the line                           │          …/9f2c7a41/tmp| dim:25 plain:1 muted:21 plain:48 dim:25
+17 |                        │ End                  the end of the line                             │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+18 |  construct │ where it s│ Ctrl-Y               copy the mark, or the last answer               │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+19 |  ──────────┼───────────│ Backspace            erase the glyph before the caret                │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+20 |  heading   │ in the ans│ Ctrl-C               cancel the run, or clear the draft              │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+21 |  code      │ behind a b│ Ctrl-Q               quit                                            │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+22 |  table     │ columns jo│                                                                      │                        | dim:25 plain:70 dim:25
+23 |turn 6 ─────────────────│                                                                      │                        | dim:25 plain:70 dim:25
+24 |✓ exit 0  bash  104 byte│                                                                      │                        | dim:25 plain:70 dim:25
+25 |  check: frame calls ...│                                                                      │                        | dim:25 plain:70 dim:25
+26 |  check: frame transcrip│                                                                      │                        | dim:25 plain:70 dim:25
+27 |  A row is one line     │                                                                      │                        | dim:25 plain:70 dim:25
+28 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+29 |  A row says the exit co│                                                                      │                        | dim:25 plain:70 dim:25
+30 |  holds and the command │                                                                      │                        | dim:25 plain:70 dim:25
+31 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+32 |  ▏ rust                │                                                                      │                        | dim:25 plain:70 dim:25
+33 |  ▏ fn main() {         │                                                                      │                        | dim:25 plain:70 dim:25
+34 |  ▏     let row = Row::o│                                                                      │                        | dim:25 plain:70 dim:25
+35 |  ▏     row.paint(area, │                                                                      │                        | dim:25 plain:70 dim:25
+36 |  ▏ }                   │                                                                      │                        | dim:25 plain:70 dim:25
+37 |────────────────────────│                                                                      │────────────────────────| dim:25 plain:70 dim:25
+38 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+39 |Enter send · ? keys · Ct╰──────────────────────────────────────────────────────────────── esc ─╯                        | dim:90 muted:3 dim:27

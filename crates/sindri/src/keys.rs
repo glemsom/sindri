@@ -31,6 +31,18 @@ impl Mode {
         }
     }
 
+    /// The name a screen wears in its card's top border.
+    pub fn title(self) -> &'static str {
+        match self {
+            Mode::Composer => "composer",
+            Mode::Keys => "? keys",
+            Mode::Files => "@ files",
+            Mode::Models => "/model",
+            Mode::Settings => "settings",
+            Mode::Stats => "/stats",
+        }
+    }
+
     pub fn table(self) -> &'static [Binding] {
         match self {
             Mode::Composer => &COMPOSER,

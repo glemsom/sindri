@@ -13,6 +13,7 @@ use sindri_core::records::{Entry, SessionDocument};
 use sindri_core::run::{Load, Loaded};
 use sindri_core::skills::{Catalog, Skill};
 
+use crate::card;
 use crate::commands::{self, Command};
 use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, Prompt, State};
 use crate::door;
@@ -55,11 +56,7 @@ const FLOOR: usize = 2;
 
 const HAIRLINE: char = '─';
 
-const KEYS_MARGIN: u16 = 2;
-
 const KEYS_GAP: usize = 2;
-
-const PICKER_TITLE: &str = "@ files";
 
 const PICKER_QUERY: &str = "query: ";
 
@@ -70,13 +67,7 @@ const PICKER_EMPTY: &str = "no file answers";
 const ROW_MARK: &str = "\u{203a} ";
 const ROW_GAP: &str = "  ";
 
-const SETTINGS_TITLE: &str = "settings";
-
 const SETTINGS_GAP: usize = 2;
-
-const MODELS_TITLE: &str = "/model";
-
-const STATS_TITLE: &str = "/stats";
 
 const MODELS_QUERY: &str = "query: ";
 
@@ -538,18 +529,6 @@ impl View {
     /// composer's rows are measured when the frame is drawn and never cached.
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) {
         buffer.set_style(area, self.palette.ground(None));
-        // A screen is the whole frame: the bands under it are not painted, so no draft a key
-        // cannot reach is on the screen pretending otherwise.
-        if let Some(modal) = self.stack.modal() {
-            match modal {
-                Mode::Files => self.files_screen(area, buffer),
-                Mode::Models => self.models_screen(area, buffer),
-                Mode::Settings => self.settings_screen(area, buffer),
-                Mode::Stats => self.stats_screen(area, buffer),
-                Mode::Composer | Mode::Keys => self.keys_screen(area, buffer),
-            }
-            return;
-        }
         let bands = bands(area, self.composer.rows(), self.queue.rows());
         // The rail's share is taken from the transcript's band before the transcript is laid out
         // in what is left: a row's width is the width it is drawn at.
@@ -564,6 +543,23 @@ impl View {
         self.queue_band(bands.queue, buffer);
         self.composer_band(bands.composer, buffer);
         self.footer(bands.footer, buffer);
+        // A screen is drawn over the frame it was opened from rather than in place of it: the
+        // reader sees the transcript they will return to, and sees that it is out of reach.
+        let Some(modal) = self.stack.modal() else {
+            return;
+        };
+        let body = card::paint(area, modal.title(), buffer, &self.palette);
+        self.paint_screen(modal, body, buffer);
+    }
+
+    fn paint_screen(&mut self, modal: Mode, body: Rect, buffer: &mut Buffer) {
+        match modal {
+            Mode::Files => self.files_screen(body, buffer),
+            Mode::Models => self.models_screen(body, buffer),
+            Mode::Settings => self.settings_screen(body, buffer),
+            Mode::Stats => self.stats_screen(body, buffer),
+            Mode::Composer | Mode::Keys => self.keys_screen(body, buffer),
+        }
     }
 
     /// The band the transcript and the rail share. A door is drawn with a ledger beside it or with
@@ -688,8 +684,8 @@ impl View {
     /// band's edge. The caret is never a cell of the frame: an ink names a foreground only, so
     /// a caret drawn as a cell would be invisible on the space it usually sits on.
     pub fn cursor(&self, area: Rect) -> Option<(u16, u16)> {
-        // No draft is on screen while a screen is open, so there is no cell for the caret to wait
-        // on: it would be a cursor floating over a list.
+        // The draft behind a card is dimmed and takes no key, so a caret there would point at a
+        // cell the reader cannot type into.
         if self.stack.modal().is_some() {
             return None;
         }
@@ -713,15 +709,13 @@ impl View {
             .max()
             .unwrap_or(0);
         let mut y = area.y;
-        screen_row(buffer, area, y, &[("? keys", Ink::Accent)], &self.palette);
         for mode in modes {
-            y = y.saturating_add(1);
             if y >= area.bottom() {
                 return;
             }
             screen_row(buffer, area, y, &[(mode.name(), Ink::Dim)], &self.palette);
+            y = y.saturating_add(1);
             for binding in mode.table() {
-                y = y.saturating_add(1);
                 if y >= area.bottom() {
                     return;
                 }
@@ -733,6 +727,7 @@ impl View {
                     &[(&name, Ink::Muted), (binding.does, Ink::Plain)],
                     &self.palette,
                 );
+                y = y.saturating_add(1);
             }
         }
     }
@@ -742,14 +737,6 @@ impl View {
     /// about hints and facts, and a reader wants the path they are pointing at.
     fn files_screen(&self, area: Rect, buffer: &mut Buffer) {
         let mut y = area.y;
-        screen_row(
-            buffer,
-            area,
-            y,
-            &[(PICKER_TITLE, Ink::Accent)],
-            &self.palette,
-        );
-        y = y.saturating_add(1);
         if y < area.bottom() {
             screen_row(
                 buffer,
@@ -778,7 +765,7 @@ impl View {
             };
             cut_row(
                 buffer,
-                screen_band(area),
+                area,
                 y,
                 &[(marker, ink), (path, ink)],
                 &self.palette,
@@ -790,14 +777,6 @@ impl View {
     /// answer is a hint rather than a refusal: a model named by hand still runs.
     fn models_screen(&self, area: Rect, buffer: &mut Buffer) {
         let mut y = area.y;
-        screen_row(
-            buffer,
-            area,
-            y,
-            &[(MODELS_TITLE, Ink::Accent)],
-            &self.palette,
-        );
-        y = y.saturating_add(1);
         if y < area.bottom() {
             screen_row(
                 buffer,
@@ -838,7 +817,7 @@ impl View {
             let name = format!("{id:<widest$}");
             cut_row(
                 buffer,
-                screen_band(area),
+                area,
                 y,
                 &[(marker, ink), (&name, ink), (label, Ink::Dim)],
                 &self.palette,
@@ -855,15 +834,7 @@ impl View {
             .max()
             .unwrap_or(0);
         let mut y = area.y;
-        screen_row(
-            buffer,
-            area,
-            y,
-            &[(SETTINGS_TITLE, Ink::Accent)],
-            &self.palette,
-        );
         for (at, (key, text)) in self.settings.rows().enumerate() {
-            y = y.saturating_add(1);
             if y >= area.bottom() {
                 return;
             }
@@ -874,11 +845,12 @@ impl View {
             let name = format!("{:<key_width$}", key);
             cut_row(
                 buffer,
-                screen_band(area),
+                area,
                 y,
                 &[(marker, name_ink), (&name, name_ink), (text, value_ink)],
                 &self.palette,
             );
+            y = y.saturating_add(1);
         }
         let Some(refusal) = self.settings.refusal() else {
             return;
@@ -889,29 +861,11 @@ impl View {
         if y >= area.bottom() {
             return;
         }
-        cut_row(
-            buffer,
-            screen_band(area),
-            y,
-            &[(refusal, Ink::Err)],
-            &self.palette,
-        );
+        cut_row(buffer, area, y, &[(refusal, Ink::Err)], &self.palette);
     }
 
     fn stats_screen(&self, area: Rect, buffer: &mut Buffer) {
-        screen_row(
-            buffer,
-            area,
-            area.y,
-            &[(STATS_TITLE, Ink::Accent)],
-            &self.palette,
-        );
-        let body = Rect {
-            y: area.y.saturating_add(1),
-            height: area.height.saturating_sub(1),
-            ..area
-        };
-        self.stats().paint(body, buffer, &self.palette);
+        self.stats().paint(area, buffer, &self.palette);
     }
 
     fn stats(&self) -> Stats {
@@ -1019,21 +973,12 @@ fn screen_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)], pa
         buffer,
         Rect {
             y,
-            ..screen_band(area)
+            height: 1,
+            ..area
         },
         spans,
         palette,
     );
-}
-
-fn screen_band(area: Rect) -> Rect {
-    let margin = KEYS_MARGIN.min(area.width);
-    Rect {
-        x: area.x.saturating_add(margin),
-        width: area.width.saturating_sub(margin),
-        height: 1,
-        ..area
-    }
 }
 
 /// Writes one draft line across a row, cut at its right edge: prose that runs on is cut

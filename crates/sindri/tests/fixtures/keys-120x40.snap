@@ -3,43 +3,43 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 keys at 120x40
-00 |  ? keys                                                                                                                | plain:2 accent:6 plain:112
-01 |  keys                                                                                                                  | plain:2 dim:4 plain:114
-02 |  Esc                  close this screen                                                                                | plain:2 muted:21 plain:97
-03 |  ?                    close this screen                                                                                | plain:2 muted:21 plain:97
-04 |  composer                                                                                                              | plain:2 dim:8 plain:110
-05 |  ?                    the keys, while the draft is empty                                                               | plain:2 muted:21 plain:97
-06 |  @                    the files of the workspace, while it starts a word                                               | plain:2 muted:21 plain:97
-07 |  Enter                send the prompt                                                                                  | plain:2 muted:21 plain:97
-08 |  Shift+Enter, Ctrl-J  a line break in the draft                                                                        | plain:2 muted:21 plain:97
-09 |  ↑                    the newest queued prompt, or the line above                                                      | plain:2 muted:21 plain:97
-10 |  Ctrl-X               drop the newest queued prompt                                                                    | plain:2 muted:21 plain:97
-11 |  ↓                    the line below                                                                                   | plain:2 muted:21 plain:97
-12 |  Shift+↓              grow the mark a row down                                                                         | plain:2 muted:21 plain:97
-13 |  Shift+↑              grow the mark a row up                                                                           | plain:2 muted:21 plain:97
-14 |  ←                    a glyph left                                                                                     | plain:2 muted:21 plain:97
-15 |  →                    a glyph right                                                                                    | plain:2 muted:21 plain:97
-16 |  Home                 the start of the line                                                                            | plain:2 muted:21 plain:97
-17 |  End                  the end of the line                                                                              | plain:2 muted:21 plain:97
-18 |  Ctrl-Y               copy the mark, or the last answer                                                                | plain:2 muted:21 plain:97
-19 |  Backspace            erase the glyph before the caret                                                                 | plain:2 muted:21 plain:97
-20 |  Ctrl-C               cancel the run, or clear the draft                                                               | plain:2 muted:21 plain:97
-21 |  Ctrl-Q               quit                                                                                             | plain:2 muted:21 plain:97
-22 |                                                                                                                        | plain:120
-23 |                                                                                                                        | plain:120
-24 |                                                                                                                        | plain:120
-25 |                                                                                                                        | plain:120
-26 |                                                                                                                        | plain:120
-27 |                                                                                                                        | plain:120
-28 |                                                                                                                        | plain:120
-29 |                                                                                                                        | plain:120
-30 |                                                                                                                        | plain:120
-31 |                                                                                                                        | plain:120
-32 |                                                                                                                        | plain:120
-33 |                                                                                                                        | plain:120
-34 |                                                                                                                        | plain:120
-35 |                                                                                                                        | plain:120
-36 |                                                                                                                        | plain:120
-37 |                                                                                                                        | plain:120
-38 |                                                                                                                        | plain:120
-39 |                                                                                                                        | plain:120
+00 |                        ╭─ ? keys ─────────────────────────────────────────────────────────────╮                        | dim:27 accent:6 dim:87
+01 |                        │ keys                                                                 │                        | dim:25 plain:1 dim:4 plain:65 dim:25
+02 |                        │ Esc                  close this screen                               │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+03 |                        │ ?                    close this screen                               │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+04 |                        │ composer                                                             │                        | dim:25 plain:1 dim:8 plain:61 dim:25
+05 |                        │ ?                    the keys, while the draft is empty              │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+06 |                        │ @                                                                    │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+07 |                        │ Enter                send the prompt                                 │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+08 |                        │ Shift+Enter, Ctrl-J  a line break in the draft                       │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+09 |                        │ ↑                    the newest queued prompt, or the line above     │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+10 |                        │ Ctrl-X               drop the newest queued prompt                   │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+11 |                        │ ↓                    the line below                                  │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+12 |                        │ Shift+↓              grow the mark a row down                        │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+13 |                        │ Shift+↑              grow the mark a row up                          │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+14 |                        │ ←                    a glyph left                                    │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+15 |                        │ →                    a glyph right                                   │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+16 |                        │ Home                 the start of the line                           │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+17 |                        │ End                  the end of the line                             │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+18 |                        │ Ctrl-Y               copy the mark, or the last answer               │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+19 |                        │ Backspace            erase the glyph before the caret                │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+20 |                        │ Ctrl-C               cancel the run, or clear the draft              │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+21 |                        │ Ctrl-Q               quit                                            │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+22 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+23 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+24 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+25 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+26 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+27 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+28 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+29 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+30 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+31 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+32 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+33 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+34 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+35 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+36 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+37 |────────────────────────│                                                                      │────────────────────────| dim:25 plain:70 dim:25
+38 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+39 |Enter send · ? keys · Ct╰──────────────────────────────────────────────────────────────── esc ─╯                        | dim:90 muted:3 dim:27
