@@ -8,8 +8,8 @@ use sindri_core::run::State as RunState;
 use crate::ink::Ink;
 use crate::palette::Palette;
 use crate::rail::{
-    Facts, Fill, Halves, METER, Value, hairline, hanging, head, label_row, lined, more, pair, put,
-    span, tail, tokens, value_room,
+    Facts, Halves, METER, Value, hairline, hanging, head, label_row, more, pair, put, span, tail,
+    tokens, value_room,
 };
 
 /// A band that cannot hold one gets one anyway.
@@ -34,10 +34,7 @@ struct Fact {
     /// `None` when the fact is a name and no more.
     label: Option<&'static str>,
     cut: Cut,
-    text: String,
-    /// The share of the window this fact is, drawn as a meter beside its own glyphs.
-    fill: Option<Fill>,
-    ink: Ink,
+    value: Value,
 }
 
 /// How a narrow column takes a value: whole or not at all, or cut at the end the fact is read
@@ -54,7 +51,7 @@ enum Cut {
 impl Cut {
     /// A word too wide for its room is not drawn in part, and a path or a name cut to nothing
     /// says nothing.
-    fn take(self, text: &str, room: usize) -> Option<String> {
+    fn shorten(self, text: &str, room: usize) -> Option<String> {
         let cut = match self {
             Cut::Word => text.to_owned(),
             Cut::Path => tail(text, room),
@@ -65,51 +62,30 @@ impl Cut {
 }
 
 impl Fact {
-    fn new(label: Option<&'static str>, cut: Cut, text: impl Into<String>) -> Fact {
-        Fact {
-            label,
-            cut,
-            text: text.into(),
-            fill: None,
-            ink: Ink::Plain,
-        }
+    fn new(label: Option<&'static str>, cut: Cut, value: Value) -> Fact {
+        Fact { label, cut, value }
     }
 
     fn word(label: &'static str, text: impl Into<String>) -> Fact {
-        Fact::new(Some(label), Cut::Word, text)
+        Fact::new(Some(label), Cut::Word, Value::new(text))
+    }
+
+    /// A fact whose value is already spelled, meter and ink and all: the size of a run is the one
+    /// fact the rail spells and the screen only widens.
+    fn valued(label: &'static str, value: Value) -> Fact {
+        Fact::new(Some(label), Cut::Word, value)
     }
 
     fn path(label: &'static str, path: &Path) -> Fact {
-        Fact::new(Some(label), Cut::Path, path.to_string_lossy())
+        Fact::new(Some(label), Cut::Path, Value::new(path.to_string_lossy()))
     }
 
     fn name(label: &'static str, name: impl Into<String>) -> Fact {
-        Fact::new(Some(label), Cut::Name, name)
+        Fact::new(Some(label), Cut::Name, Value::new(name))
     }
 
     fn bare(name: impl Into<String>) -> Fact {
-        Fact::new(None, Cut::Name, name)
-    }
-
-    /// A fact whose share of a window is drawn as a meter beside its own glyphs.
-    fn metered(label: &'static str, text: impl Into<String>, fill: Fill) -> Fact {
-        Fact {
-            fill: Some(fill),
-            ..Fact::word(label, text)
-        }
-    }
-
-    /// The same fact in another ink: the one row that says something is moving is read in the
-    /// accent, so the eye lands on it without reading a word.
-    fn inked(mut self, ink: Ink) -> Fact {
-        self.ink = ink;
-        self
-    }
-
-    /// The fact's pair in the half widths its block shares, so every slash in the block lands in
-    /// one column.
-    fn align(&mut self, halves: Halves) {
-        self.text = lined(&self.text, halves);
+        Fact::new(None, Cut::Name, Value::new(name))
     }
 
     fn drawn(&self, width: u16) -> Option<Drawn> {
@@ -117,18 +93,15 @@ impl Fact {
             None => usize::from(width),
             Some(_) => value_room(width),
         };
-        let room = match self.fill {
+        let room = match self.value.meter() {
             None => room,
             Some(_) => room.checked_sub(METER + 1)?,
         };
-        let text = self.cut.take(&self.text, room)?;
-        let value = match self.fill {
-            None => Value::new(text),
-            Some(fill) => Value::metered(text, fill),
-        };
         Some(Drawn {
             label: self.label.map(String::from),
-            value: value.inked(self.ink),
+            value: self
+                .value
+                .respelled(self.cut.shorten(self.value.text(), room)?),
         })
     }
 }
@@ -142,6 +115,9 @@ pub(crate) struct Drawn {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Placed {
     pub label: &'static str,
+    /// Whether a rule stands over this block, which is what a block below the first in its column
+    /// pays for.
+    pub ruled: bool,
     pub rows: Vec<Drawn>,
 }
 
@@ -180,11 +156,7 @@ impl Stats {
             meters.push(Fact::word("turns", pair(turns, cap)));
         }
         if let Some(ctx) = &facts.ctx {
-            let (text, fill) = ctx.said();
-            meters.push(match fill {
-                Some(fill) => Fact::metered("ctx", text, fill),
-                None => Fact::word("ctx", text),
-            });
+            meters.push(Fact::valued("ctx", ctx.said()));
         }
         if let Some(cache) = facts.cache {
             meters.push(Fact::word("cache", format!("{cache}%")));
@@ -217,7 +189,10 @@ impl Stats {
             RunState::Running => Ink::Accent,
             RunState::Stopped(_) => Ink::Plain,
         };
-        let mut stop = vec![Fact::word("stopped", document.stopped.word()).inked(moving)];
+        let mut stop = vec![Fact::valued(
+            "stopped",
+            Value::new(document.stopped.word()).inked(moving),
+        )];
         if let Some(reason) = document.stopped.stop() {
             stop.push(Fact::word("exit", reason.exit_code().to_string()));
         }
@@ -260,8 +235,8 @@ impl Stats {
         let screen = self.screen(area);
         for column in &screen.columns {
             let mut y = area.y;
-            for (index, block) in column.blocks.iter().enumerate() {
-                if index > 0 {
+            for block in &column.blocks {
+                if block.ruled {
                     let rule = Rect {
                         x: column.x,
                         y,
@@ -363,8 +338,10 @@ impl Stats {
             went += block.rows.len() - drawn.len();
             room[place] -= needs(&columns[place]);
             at = place;
+            let ruled = !columns[place].blocks.is_empty();
             columns[place].blocks.push(Placed {
                 label: block.label,
+                ruled,
                 rows: drawn,
             });
         }
@@ -381,9 +358,9 @@ impl Stats {
 /// Spells a block's pairs in one pair of half widths, so every slash in the block lands in one
 /// column and the digits either side of it line up.
 fn aligned(rows: &mut [Fact]) {
-    let shared = Halves::of(rows.iter().map(|row| row.text.as_str()));
+    let shared = Halves::of(rows.iter().map(|row| row.value.text()));
     for row in rows.iter_mut() {
-        row.align(shared);
+        row.value.align(shared);
     }
 }
 
@@ -423,6 +400,7 @@ mod tests {
 
     use super::*;
     use crate::rail::Ctx;
+    use crate::readback::{column_of, inks};
 
     const PALETTE: Palette = Palette::TRUECOLOR;
 
@@ -524,19 +502,6 @@ mod tests {
             .collect()
     }
 
-    fn inks(buffer: &Buffer, y: u16) -> Vec<(Ink, u16)> {
-        let mut runs: Vec<(Ink, u16)> = Vec::new();
-        for x in buffer.area.x..buffer.area.right() {
-            let cell = buffer.cell((x, y)).expect("a cell of the band");
-            let ink = Ink::of(cell, &PALETTE).expect("the screen paints in inks and nothing else");
-            match runs.last_mut() {
-                Some((last, count)) if *last == ink => *count += 1,
-                _ => runs.push((ink, 1)),
-            }
-        }
-        runs
-    }
-
     /// The body of the screen as the frame paints it: the ground under every cell, then the rows.
     fn painted(stats: &Stats, area: Rect) -> Buffer {
         let mut buffer = Buffer::empty(area);
@@ -545,17 +510,14 @@ mod tests {
         buffer
     }
 
-    /// The column a glyph sits in, counted in cells and never in the bytes of a glyph wider than
-    /// one: a pair's slash is the column the two halves of every number in a block are hung on.
-    fn column_of(row: &str, glyph: char) -> Option<usize> {
-        row.chars().position(|drawn| drawn == glyph)
-    }
-
     /// The row a labelled fact of `value` is drawn on in a column `width` wide: its label in the
-    /// ten-column field, and the value against the column's last column.
-    fn drawn_row(label: &str, value: &str, width: u16) -> String {
-        let room = usize::from(width) - 10;
-        format!("{label:<10}{value:>room$}")
+    /// field every label is drawn in, and the value in the room the row leaves it.
+    fn row_of(label: &str, value: &str, width: u16) -> String {
+        format!(
+            "{label:<field$}{value:>room$}",
+            field = usize::from(crate::rail::FIELD),
+            room = value_room(width)
+        )
     }
 
     fn glyphs(buffer: &Buffer, y: u16) -> String {
@@ -848,16 +810,16 @@ mod tests {
 
         assert_eq!(
             glyphs(&buffer, 1),
-            drawn_row("wire", "anthropic", 81),
+            row_of("wire", "anthropic", 81),
             "the label in its field and the value against the column's last column"
         );
         assert_eq!(
             glyphs(&buffer, 2),
-            drawn_row("model", SERVED, 81),
+            row_of("model", SERVED, 81),
             "and a value of another width ends in that same column"
         );
         assert_eq!(
-            inks(&buffer, 1),
+            inks(&buffer, 1, &PALETTE),
             [(Ink::Dim, 10), (Ink::Plain, 71)],
             "the field is `dim` and the value is the fact, so it is `plain`"
         );
@@ -878,7 +840,7 @@ mod tests {
         );
         assert_eq!(
             rows[4],
-            drawn_row("think", "high", 81),
+            row_of("think", "high", 81),
             "the fact above the rule is the last of the run block"
         );
         assert_eq!(
@@ -887,7 +849,7 @@ mod tests {
             "and the rule stands between that fact and the name of the group under it"
         );
         assert_eq!(
-            inks(&buffer, 5),
+            inks(&buffer, 5, &PALETTE),
             [(Ink::Dim, 81)],
             "the rule is drawn in the ink a group's edge is read in, and nothing else is"
         );
@@ -902,13 +864,13 @@ mod tests {
 
         assert_eq!(
             glyphs(&buffer, 8),
-            drawn_row("ctx", "█░░░░░ 48.2k / 200k", 81),
+            row_of("ctx", "█░░░░░ 48.2k / 200k", 81),
             "a quarter of the window fills one of the meter's six cells, beside the size it is \
              a share of"
         );
         assert_eq!(
             glyphs(&buffer, 9),
-            drawn_row("cache", "88%", 81),
+            row_of("cache", "88%", 81),
             "a hit rate has no ceiling to be a share of, so it is the number and no meter"
         );
         assert_eq!(
@@ -934,7 +896,7 @@ mod tests {
             .collect();
         assert_eq!(
             names,
-            [&drawn_row("", "bash", 81), &drawn_row("", "records", 81)],
+            [&row_of("", "bash", 81), &row_of("", "records", 81)],
             "a value is a value however its row is labelled, so a loaded name reads in the \
              column its siblings do: {rows:#?}"
         );

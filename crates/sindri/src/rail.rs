@@ -37,7 +37,7 @@ impl Shape {
 
 /// The columns a label field holds, whatever the label says, so every label starts in one column
 /// and every value hangs from the field's far side.
-const FIELD: u16 = 10;
+pub(crate) const FIELD: u16 = 10;
 
 /// The cells a meter is drawn in: a share of a window is a picture, and six cells is as fine as
 /// one row of a rail can say it.
@@ -83,23 +83,23 @@ pub struct Ctx {
 }
 
 impl Ctx {
-    /// The value the rail draws and the meter the share is drawn as, from one derivation so a
-    /// row's words and its meter cannot disagree. The ledger says the size against its window; the
-    /// strip keeps only the meter, because its one row is shared with three other facts.
-    fn spelled(&self, shape: Shape) -> (String, Option<Fill>) {
+    /// The size and the meter of the share of its window, from one derivation so a row's words and
+    /// its meter cannot disagree. The ledger says the size against its window; the strip keeps only
+    /// the meter, because its one row is shared with three other facts.
+    fn spelled(&self, shape: Shape) -> Value {
         let Some(fill) = self.fill() else {
-            return (tokens(self.size), None);
+            return Value::new(tokens(self.size));
         };
-        let value = match shape {
+        let text = match shape {
             Shape::Ledger => pair(tokens(self.size), tokens(fill.window)),
             Shape::Strip => String::new(),
         };
-        (value, Some(fill))
+        Value::metered(text, fill)
     }
 
-    /// The size against its window and the meter of the share between them: every drawing of a size
-    /// outside the rail's own rows spells it here, so a size reads one way wherever it is said.
-    pub(crate) fn said(&self) -> (String, Option<Fill>) {
+    /// The size against its window and the share between them: every drawing of a size outside the
+    /// rail's own rows spells it here, so a size reads one way wherever it is said.
+    pub(crate) fn said(&self) -> Value {
         self.spelled(Shape::Ledger)
     }
 
@@ -130,17 +130,12 @@ pub(crate) struct Fill {
 }
 
 impl Fill {
-    /// The cells the share fills: rounded to the nearest of the meter's six, and one cell for a
-    /// share the run has any of, so a window it has barely touched does not read as untouched.
+    /// The cells the share fills, rounded to the nearest of the meter's six: a cell is a sixth of
+    /// the window, and a share that fills no sixth of it is a meter with no cell lit.
     fn cells(&self) -> usize {
-        match self.percent {
-            0 => 0,
-            percent => ((usize::from(percent) * METER + 50) / 100).clamp(1, METER),
-        }
+        (usize::from(self.percent) * METER + 50) / 100
     }
 
-    /// The meter, and the column after it: the cells the run fills in the share's own ink, and
-    /// the rest as the track they are read against.
     fn draw(&self, buffer: &mut Buffer, x: u16, y: u16, palette: &Palette) -> u16 {
         let filled = self.cells();
         let mut x = x;
@@ -417,14 +412,9 @@ impl Facts {
             facts.push(Fact::new(Kind::Turns, pair(turns, cap)));
         }
         if let Some(ctx) = &self.ctx {
-            let (value, fill) = ctx.spelled(shape);
-            let value = match fill {
-                Some(fill) => Value::metered(value, fill),
-                None => Value::new(value),
-            };
             facts.push(Fact {
                 kind: Kind::Ctx,
-                value,
+                value: ctx.spelled(shape),
             });
         }
         if let Some(cache) = self.cache {
@@ -480,7 +470,6 @@ pub(crate) struct Value {
 }
 
 impl Value {
-    /// A value of its own glyphs, read in the plain ink.
     pub(crate) fn new(text: impl Into<String>) -> Value {
         Value {
             text: text.into(),
@@ -489,7 +478,6 @@ impl Value {
         }
     }
 
-    /// A value with the share of its window drawn as a meter beside it.
     pub(crate) fn metered(text: impl Into<String>, fill: Fill) -> Value {
         Value {
             fill: Some(fill),
@@ -497,8 +485,8 @@ impl Value {
         }
     }
 
-    /// The same value in another ink: the one fact that says something is moving is read in the
-    /// accent, so the eye lands on it without reading a word.
+    /// The same value in another ink, for the one fact that says something is moving: the eye lands
+    /// on it without reading a word.
     pub(crate) fn inked(mut self, ink: Ink) -> Value {
         self.ink = ink;
         self
@@ -508,12 +496,25 @@ impl Value {
         &self.text
     }
 
-    /// The value's pair in the half widths its group shares, so a slash lands in one column.
-    pub(crate) fn align(&mut self, halves: Halves) {
-        self.text = lined(&self.text, halves);
+    pub(crate) fn meter(&self) -> Option<Fill> {
+        self.fill
     }
 
-    /// The columns the value takes on a row: the meter, the column after it, then the glyphs.
+    /// The same value spelled in another cut: a column that narrows a value's glyphs keeps the
+    /// meter beside them and the ink they are read in.
+    pub(crate) fn respelled(&self, text: String) -> Value {
+        Value {
+            text,
+            ..self.clone()
+        }
+    }
+
+    /// The value's pair in the half widths its group shares, so a slash lands in one column.
+    pub(crate) fn align(&mut self, halves: Halves) {
+        self.text = padded(&self.text, halves);
+    }
+
+    /// The columns the value takes on a row, the column between a meter and its glyphs included.
     pub(crate) fn columns(&self) -> usize {
         let glyphs = span(&self.text);
         match (self.fill, glyphs) {
@@ -523,7 +524,6 @@ impl Value {
         }
     }
 
-    /// Draws the value from `x`, and returns the column after it.
     pub(crate) fn draw(&self, buffer: &mut Buffer, x: u16, y: u16, palette: &Palette) -> u16 {
         let mut x = x;
         if let Some(fill) = self.fill {
@@ -671,7 +671,8 @@ pub(crate) fn hanging(area: Rect, value_width: usize) -> u16 {
         .saturating_add(u16::try_from(start).unwrap_or(area.width))
 }
 
-/// The rule between two fact groups, drawn across `area` in the ink a group's edge is read in.
+/// The rule between two fact groups, which costs the group under it a row of the band it is drawn
+/// on.
 pub(crate) fn hairline(buffer: &mut Buffer, area: Rect, palette: &Palette) {
     let rule: String = std::iter::repeat_n(HAIRLINE, usize::from(area.width)).collect();
     put(buffer, area.x, area.y, &rule, Ink::Dim, palette);
@@ -732,7 +733,7 @@ impl Halves {
 
 /// `3 / 250` in its group's half widths: both halves hang on the slash, and the right one is
 /// filled to the left, so no value carries a space the hanging edge would have to swallow.
-pub(crate) fn lined(spelling: &str, shared: Halves) -> String {
+pub(crate) fn padded(spelling: &str, shared: Halves) -> String {
     let Some((one, two)) = spelling.split_once(" / ") else {
         return spelling.to_owned();
     };
@@ -898,6 +899,7 @@ mod tests {
     use sindri_core::wire::Wire;
 
     use super::*;
+    use crate::readback::{column_of, inks};
 
     const PALETTE: Palette = Palette::TRUECOLOR;
 
@@ -910,12 +912,6 @@ mod tests {
         }
     }
 
-    /// The column a glyph sits in, counted in cells and never in the bytes of a glyph wider than
-    /// one: a pair's slash is the column the two halves of every number in a block are hung on.
-    fn column_of(row: &str, glyph: char) -> Option<usize> {
-        row.chars().position(|drawn| drawn == glyph)
-    }
-
     fn glyphs(buffer: &Buffer, y: u16) -> String {
         (buffer.area.x..buffer.area.right())
             .map(|x| {
@@ -926,19 +922,6 @@ mod tests {
                     .to_owned()
             })
             .collect()
-    }
-
-    fn inks(buffer: &Buffer, y: u16) -> Vec<(Ink, u16)> {
-        let mut runs: Vec<(Ink, u16)> = Vec::new();
-        for x in buffer.area.x..buffer.area.right() {
-            let cell = buffer.cell((x, y)).expect("a cell of the band");
-            let ink = Ink::of(cell, &PALETTE).expect("the rail paints in inks and nothing else");
-            match runs.last_mut() {
-                Some((last, count)) if *last == ink => *count += 1,
-                _ => runs.push((ink, 1)),
-            }
-        }
-        runs
     }
 
     /// The dated Anthropic name a real run is served, which is wider than a value column.
@@ -1254,6 +1237,7 @@ mod tests {
     fn a_run_with_a_window_draws_the_window_and_the_meter_of_the_share_it_fills() {
         for (size, window, value) in [
             (0, 200_000, "░░░░░░ 0 / 200k"),
+            (5_000, 200_000, "░░░░░░ 5k / 200k"),
             (48_200, 0, "48.2k"),
             (48_200, 200_000, "█░░░░░ 48.2k / 200k"),
             (100_000, 1_020_000, "█░░░░░ 100k / 1.02M"),
@@ -1274,9 +1258,9 @@ mod tests {
             assert_eq!(
                 glyphs(&buffer, 0),
                 ctx_line(value),
-                "{size} tokens against a window of {window} is drawn as {value}: a run past \
-                 its window has no larger share to claim, and a window of no tokens is no \
-                 window at all"
+                "{size} tokens against a window of {window} is drawn as {value}: a share under \
+                 half a cell of the meter lights none of it, a run past its window has no larger \
+                 share to claim, and a window of no tokens is no window at all"
             );
         }
     }
@@ -1441,12 +1425,12 @@ mod tests {
             "six blocks, a hairline between two of them, nothing given up at this width"
         );
         assert_eq!(
-            inks(&buffer, 3),
+            inks(&buffer, 3, &PALETTE),
             [(Ink::Dim, 32)],
             "the hairline runs the rail's width"
         );
         assert_eq!(
-            inks(&buffer, 4),
+            inks(&buffer, 4, &PALETTE),
             [(Ink::Dim, 10), (Ink::Plain, 22)],
             "the label field is `dim`, the ground stands between it and the value, and the \
              value is `plain`"
@@ -2052,7 +2036,7 @@ mod tests {
              no run of leaders out to it"
         );
         assert_eq!(
-            inks(&buffer, 0),
+            inks(&buffer, 0, &PALETTE),
             [(Ink::Dim, 10), (Ink::Plain, 22)],
             "the field is `dim` and the value is the fact, so it is `plain`"
         );

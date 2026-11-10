@@ -1287,7 +1287,7 @@ fn a_live_run_draws_the_facts_it_was_handed_and_its_first_turn_moves_them() {
     assert!(
         drawn.wait_until(|frame| {
             rail_reads(frame, "turns", "1 / 250")
-                && rail_reads(frame, "ctx", "11 / 200k")
+                && rail_reads(frame, "ctx", "░░░░░░ 11 / 200k")
                 && rail_reads(frame, "cache", "36%")
         }),
         "the turn the run took is counted against the cap, the size the wire reported is \
@@ -1304,7 +1304,7 @@ fn a_live_run_draws_the_facts_it_was_handed_and_its_first_turn_moves_them() {
     let frame = drawn.text();
     for (label, value) in [
         ("turns", "1 / 250"),
-        ("ctx", "11 / 200k"),
+        ("ctx", "░░░░░░ 11 / 200k"),
         ("cache", "36%"),
         ("workspace", "/workspace"),
         ("branch", "main"),
