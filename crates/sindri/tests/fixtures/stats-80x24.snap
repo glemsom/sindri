@@ -5,25 +5,25 @@ expression: drawn
 stats at 80x24
 00 |  /stats                                                                        | plain:2 accent:6 plain:72
 01 |run                                                                             | dim:3 plain:77
-02 |wire      .............................................................anthropic| dim:71 muted:9
-03 |model     ............................................claude-sonnet-4-5-20250929| dim:54 muted:26
-04 |route     ..................................................................chat| dim:76 muted:4
-05 |think     ..................................................................high| dim:76 muted:4
-06 |meters                                                                          | dim:6 plain:74
-07 |turns     .................................................................6/250| dim:75 muted:5
-08 |ctx       ........................................................48.2k/200k 24%| dim:66 muted:14
-09 |cache     ...................................................................88%| dim:77 muted:3
-10 |spend                                                                           | dim:5 plain:75
-11 |input     .................................................................48.2k| dim:75 muted:5
-12 |output    ..................................................................3.1k| dim:76 muted:4
-13 |total     .................................................................51.3k| dim:75 muted:5
-14 |cached    ...................................................................12k| dim:77 muted:3
-15 |reasoning ...................................................................900| dim:77 muted:3
-16 |place                                                                           | dim:5 plain:75
-17 |workspace ................./home/glemsom/Documents/git/sindri/.worktrees/46-rail| dim:27 muted:53
-18 |branch    .....................................................spec/1-capability| dim:63 muted:17
-19 |commit    ...............................................................16becb5| dim:73 muted:7
-20 |                                                                                | plain:80
-21 |                                                                                | plain:80
-22 |                                                                                | plain:80
+02 |wire                                                                   anthropic| dim:10 plain:70
+03 |model                                                 claude-sonnet-4-5-20250929| dim:10 plain:70
+04 |route                                                                       chat| dim:10 plain:70
+05 |think                                                                       high| dim:10 plain:70
+06 |────────────────────────────────────────────────────────────────────────────────| dim:80
+07 |meters                                                                          | dim:6 plain:74
+08 |turns                                                                   6 /  250| dim:10 plain:70
+09 |ctx                                                          █░░░░░ 48.2k / 200k| dim:10 plain:52 dim:5 plain:13
+10 |cache                                                                        88%| dim:10 plain:70
+11 |────────────────────────────────────────────────────────────────────────────────| dim:80
+12 |spend                                                                           | dim:5 plain:75
+13 |input                                                                      48.2k| dim:10 plain:70
+14 |output                                                                      3.1k| dim:10 plain:70
+15 |total                                                                      51.3k| dim:10 plain:70
+16 |cached                                                                       12k| dim:10 plain:70
+17 |reasoning                                                                    900| dim:10 plain:70
+18 |────────────────────────────────────────────────────────────────────────────────| dim:80
+19 |place                                                                           | dim:5 plain:75
+20 |workspace                  /home/glemsom/Documents/git/sindri/.worktrees/46-rail| dim:10 plain:70
+21 |branch                                                         spec/1-capability| dim:10 plain:70
+22 |commit                                                                   16becb5| dim:10 plain:70
 23 |+9 more                                                                         | muted:7 plain:73

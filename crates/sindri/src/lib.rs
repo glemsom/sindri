@@ -15,6 +15,8 @@ pub mod pictures; // the pictures a frame has placed: every source the terminal 
 pub mod pulse; // the marker at the head of the newest answer: the braille glyph a live run turns
 pub mod queue; // the prompts typed while a run is live, waiting above the composer in the order
 pub mod rail; // the run's facts down the frame's right-hand columns, read as a ledger
+#[cfg(test)]
+mod readback; // what a painted buffer holds, read back: the inks of a row and the column of a glyph
 pub mod rows; // the transcript's rows: one entry of the core's records laid out as the rows it is
 pub mod settings; // the config file's keys as one list, the value each of them holds
 pub mod stats; // the facts the rail gives up, drawn whole on the frame's whole band

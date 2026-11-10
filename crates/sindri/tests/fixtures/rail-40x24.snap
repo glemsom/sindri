@@ -23,7 +23,7 @@ rail at 40x24
 17 |                                        | plain:40
 18 |                                        | plain:40
 19 |                                        | plain:40
-20 |ctx 24% · model claude-sonnet-4-5…      | dim:4 muted:3 dim:9 muted:18 plain:6
+20 |ctx █░░░░░ · model claude-sonnet-4-5…   | dim:4 plain:1 dim:14 plain:21
 21 |────────────────────────────────────────| dim:40
 22 |                                        | plain:40
 23 |Enter send · ? keys                     | muted:10 dim:3 muted:6 plain:21
