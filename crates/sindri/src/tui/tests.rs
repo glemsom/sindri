@@ -1,5 +1,5 @@
-//! The launch's own contracts, kept out of `tui.rs` so a reader of the loop reads a loop: each of
-//! these drives one key's outcome through a pseudo-terminal of this process's own.
+//! The launch's own two contracts, each driving one key's outcome through a pseudo-terminal of
+//! this process's own: a copy written down the wire, and a settings visit whose value is saved.
 
 use std::os::fd::AsFd;
 
@@ -13,30 +13,6 @@ use crate::term::pty::Pty;
 use crate::term::{Terminal, canvas_at, painted_at};
 
 use super::*;
-
-/// The two facts the terminal gives reach the view, so a terminal that speaks Kitty is handed
-/// the pictures its frames draw from and one that speaks no protocol is handed none — the frame
-/// it paints is the words of a picture, whole.
-#[test]
-fn a_terminal_that_speaks_kitty_is_handed_pictures_and_one_that_speaks_none_is_handed_none() {
-    let cell = CellSize::new(10, 20);
-
-    let mut speaks = View::boot();
-    hand_pictures(&mut speaks, cell, Some("xterm-kitty"), None);
-    assert!(
-        speaks.pictures().draws(),
-        "a terminal that names Kitty is handed the pictures its frames draw from"
-    );
-
-    let mut silent = View::boot();
-    silent.set_pictures(Pictures::kitty(cell));
-    hand_pictures(&mut silent, cell, Some("screen-256color"), Some("tmux"));
-    assert!(
-        !silent.pictures().draws(),
-        "and a terminal that names no protocol is handed none, which is the words of a \
-         picture and no placement"
-    );
-}
 
 #[test]
 fn a_copy_leaves_the_terminal_by_osc_52_and_asks_no_clipboard_utility() {

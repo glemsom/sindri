@@ -2,7 +2,7 @@
 //! outcome a key hands back, where a prompt starts a run, and the endings a launch has.
 
 use std::fs::File;
-use std::io::{self, IsTerminal, Read};
+use std::io::{self, Read};
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,9 +11,6 @@ use rustix::event::Timespec;
 use rustix::event::{PollFd, PollFlags, poll};
 use sindri::composer::{Outcome, Prompt, State};
 use sindri::decode::{Decoder, Event};
-use sindri::graphics::CellSize;
-use sindri::picture;
-use sindri::pictures::Pictures;
 use sindri::pulse::{self, Pulse};
 use sindri::settings::persist;
 use sindri::view::View;
@@ -27,7 +24,7 @@ use crate::launch::{Launch, Refusal};
 use crate::osc::Teller;
 use crate::reports::{Asking, Running, ask, served, take};
 use crate::signal::{Signals, Wake};
-use crate::term::{Canvas, Screen, Terminal, canvas, paint, tell};
+use crate::term::{Canvas, Screen, Terminal, canvas, hand_pictures, missing_terminal, paint, tell};
 
 /// A launch that cannot be a run, or a screen it cannot draw on: exit 2.
 const USAGE: u8 = 2;
@@ -39,16 +36,6 @@ const SETUP: u8 = 3;
 const CANCELLED: u8 = 130;
 
 const MODEL: &str = "model";
-
-/// Hands `view` the pictures its terminal places: a Kitty terminal gets the pictures its
-/// frames draw from and any other gets none, which leaves it the words. `term` and `program`
-/// are arguments rather than reads so a test need not set an environment.
-fn hand_pictures(view: &mut View, cell: CellSize, term: Option<&str>, program: Option<&str>) {
-    view.set_pictures(match picture::speaks_kitty(term, program) {
-        true => Pictures::kitty(cell),
-        false => Pictures::none(),
-    });
-}
 
 pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     if let Some(reason) = missing_terminal() {
@@ -153,22 +140,6 @@ enum Ending {
     Quit,
     Cancelled,
     Refused(Refusal),
-}
-
-fn missing_terminal() -> Option<String> {
-    if !io::stdout().is_terminal() {
-        return Some(String::from(
-            "the terminal UI needs a terminal to draw on, and stdout is not one: \
-             give a prompt with -b to run as a filter",
-        ));
-    }
-    if !io::stdin().is_terminal() {
-        return Some(String::from(
-            "the terminal UI needs a terminal to read keys from, and stdin is not one: \
-             give a prompt with -b to run as a filter",
-        ));
-    }
-    None
 }
 
 /// Reads the terminal until the launch ends, one event at a time, and paints only when an

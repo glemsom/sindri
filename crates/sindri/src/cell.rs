@@ -1,6 +1,5 @@
-//! The cell-size question and its bounded wait: how many pixels one cell is, asked of a terminal
-//! that may never answer. Three answers, cheapest first — the kernel's own `winsize`, the
-//! `CSI 16 t` a terminal may leave unanswered, and the nominal cell rather than a launch held open.
+//! The cell-size question and the bounded wait for its answer, asked before the first frame is
+//! painted: a cell measured wrong is a picture placed wrong.
 
 use std::io::Read;
 use std::time::Duration;

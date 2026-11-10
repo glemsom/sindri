@@ -3,13 +3,16 @@
 //! canvas frames are painted through, and the telling a sequence is written out by.
 
 use std::fs::File;
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 use std::os::fd::{AsFd, BorrowedFd};
 use std::panic::{self, PanicHookInfo};
 use std::sync::{Mutex, MutexGuard, Once, OnceLock};
 
 use ratatui::backend::CrosstermBackend;
 use rustix::termios::{InputModes, OptionalActions, Termios, tcgetattr, tcsetattr};
+use sindri::graphics::CellSize;
+use sindri::picture;
+use sindri::pictures::Pictures;
 use sindri::view::View;
 
 /// Takes the alternate screen with the cursor hidden, so the first frame is not drawn
@@ -178,6 +181,39 @@ pub(crate) fn lock<T>(held: &Mutex<T>) -> MutexGuard<'_, T> {
     held.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+/// A launch with no terminal to read a key from or draw on, and the reason it has none: a run
+/// from a pipe is a filter, and `-b` is how a Unix filter is asked for one.
+pub(crate) fn missing_terminal() -> Option<String> {
+    if !io::stdout().is_terminal() {
+        return Some(String::from(
+            "the terminal UI needs a terminal to draw on, and stdout is not one: \
+             give a prompt with -b to run as a filter",
+        ));
+    }
+    if !io::stdin().is_terminal() {
+        return Some(String::from(
+            "the terminal UI needs a terminal to read keys from, and stdin is not one: \
+             give a prompt with -b to run as a filter",
+        ));
+    }
+    None
+}
+
+/// Hands `view` the pictures its terminal places: a Kitty terminal gets the pictures its frames
+/// draw from and any other gets none, which leaves it the words. `term` and `program` are
+/// arguments rather than reads so a test need not set an environment.
+pub(crate) fn hand_pictures(
+    view: &mut View,
+    cell: CellSize,
+    term: Option<&str>,
+    program: Option<&str>,
+) {
+    view.set_pictures(match picture::speaks_kitty(term, program) {
+        true => Pictures::kitty(cell),
+        false => Pictures::none(),
+    });
+}
+
 /// The area a test's canvas is told it has: the shape the test gave it, never the shape the
 /// terminal reports, so nothing is asked of the operating system.
 #[cfg(test)]
@@ -255,8 +291,8 @@ pub(crate) mod pty {
 
 #[cfg(test)]
 mod tests {
-    //! The contracts an integration test cannot reach from outside the process: the screen is a
-    //! guard and a panic hook, and only a panic can prove which of them gives a terminal back.
+    //! The contracts an integration test cannot reach from outside the process: a canvas's shape
+    //! is a test's decision, and the guard and the panic hook both give the terminal back.
 
     use std::panic;
 
@@ -265,6 +301,30 @@ mod tests {
     use crate::term::pty::Pty;
 
     use super::*;
+
+    /// The two facts the terminal gives reach the view, so a terminal that speaks Kitty is handed
+    /// the pictures its frames draw from and one that speaks no protocol is handed none — the frame
+    /// it paints is the words of a picture, whole.
+    #[test]
+    fn a_terminal_that_speaks_kitty_is_handed_pictures_and_one_that_speaks_none_is_handed_none() {
+        let cell = CellSize::new(10, 20);
+
+        let mut speaks = View::boot();
+        hand_pictures(&mut speaks, cell, Some("xterm-kitty"), None);
+        assert!(
+            speaks.pictures().draws(),
+            "a terminal that names Kitty is handed the pictures its frames draw from"
+        );
+
+        let mut silent = View::boot();
+        silent.set_pictures(Pictures::kitty(cell));
+        hand_pictures(&mut silent, cell, Some("screen-256color"), Some("tmux"));
+        assert!(
+            !silent.pictures().draws(),
+            "and a terminal that names no protocol is handed none, which is the words of a \
+             picture and no placement"
+        );
+    }
 
     /// A canvas a test paints through is the shape the test gave it, not the shape the terminal
     /// reports: no `/dev/tty` is opened and no `tput` is spawned to answer a question a

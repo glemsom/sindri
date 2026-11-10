@@ -1,6 +1,6 @@
 //! The threads a run in flight and a wire listing run on, the reports they land, and the pass
-//! that takes them. Nothing here reads a key and nothing here decides what the launch does next:
-//! a run pushes a fragment and raises the pipe a signal uses, and the loop takes it when it wakes.
+//! that takes them: a flight pushes a fragment and raises the pipe a signal uses, and the pass
+//! puts it on the frame when the loop wakes. Nothing here reads a key.
 
 use std::fs::File;
 use std::io;
@@ -39,12 +39,9 @@ impl Running {
         let pending = Arc::new(Mutex::new(Vec::new()));
         let mut reports = Reports {
             pending: Arc::clone(&pending),
-            wake: Arc::clone(&wake),
-        };
-        let mut turns = Reports {
-            pending: Arc::clone(&pending),
             wake,
         };
+        let mut turns = reports.clone();
         let interrupted = cancel.clone();
         let started = Instant::now();
         let thread = thread::spawn(move || {
@@ -103,6 +100,7 @@ enum Report {
     },
 }
 
+#[derive(Clone)]
 struct Reports {
     pending: Arc<Mutex<Vec<Report>>>,
     wake: Arc<Wake>,
