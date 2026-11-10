@@ -7,6 +7,7 @@ use ratatui::layout::Rect;
 
 use sindri::graphics::CellSize;
 use sindri::ink::{Ink, Look};
+use sindri::palette::Palette;
 use sindri::picture::Surface;
 use sindri::pulse::Pulse;
 use sindri::rows::{Row, Rows, Scroll, Window, layout};
@@ -601,15 +602,16 @@ fn result(which: u32, exit: Exit) -> Entry {
 }
 
 fn painted(row: &Row, cols: u16) -> Vec<(char, Look)> {
+    let palette = Palette::TRUECOLOR;
     let area = Rect::new(0, 0, cols, 1);
     let mut buffer = Buffer::empty(area);
-    row.paint(area, &mut buffer);
+    row.paint(area, &mut buffer, &palette);
     (0..row.width())
         .map(|x| {
             let cell = buffer
                 .cell((x, 0))
                 .unwrap_or_else(|| panic!("column {x} is outside the row"));
-            let look = Look::of(cell)
+            let look = Look::of(cell, &palette)
                 .unwrap_or_else(|| panic!("column {x} is drawn in a style that is not a look"));
             let glyph = cell.symbol().chars().next().expect("one glyph a cell");
             (glyph, look)

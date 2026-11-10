@@ -1,5 +1,7 @@
 use ratatui::buffer::Cell;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
+
+use crate::palette::Palette;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Ink {
@@ -39,29 +41,15 @@ impl Ink {
         Ink::ALL.into_iter().find(|ink| ink.name() == name)
     }
 
-    pub fn style(self) -> Style {
-        let (foreground, background, modifier) = self.look();
-        Style::default()
-            .fg(foreground)
-            .bg(background)
-            .add_modifier(modifier)
+    /// The style one cell of this ink is drawn in. It names a foreground and a modifier and
+    /// never a background, so an ink painted onto a band keeps the surface under it.
+    pub fn style(self, palette: &Palette) -> Style {
+        let (foreground, modifier) = palette.ink(self);
+        Style::default().fg(foreground).add_modifier(modifier)
     }
 
-    pub fn of(cell: &Cell) -> Option<Ink> {
-        Look::of(cell).map(Look::ink)
-    }
-
-    fn look(self) -> (Color, Color, Modifier) {
-        let look = |colour| (colour, Color::Reset, Modifier::empty());
-        match self {
-            Ink::Plain => look(Color::Reset),
-            Ink::Dim => look(Color::DarkGray),
-            Ink::Muted => look(Color::Gray),
-            Ink::Accent => look(Color::Cyan),
-            Ink::Ok => look(Color::Green),
-            Ink::Err => look(Color::Red),
-            Ink::Mark => (Color::Reset, Color::Reset, Modifier::REVERSED),
-        }
+    pub fn of(cell: &Cell, palette: &Palette) -> Option<Ink> {
+        Look::of(cell, palette).map(Look::ink)
     }
 }
 
@@ -74,7 +62,7 @@ pub enum Face {
 }
 
 impl Face {
-    const ALL: [Face; 3] = [Face::Plain, Face::Bold, Face::Reversed];
+    pub(crate) const ALL: [Face; 3] = [Face::Plain, Face::Bold, Face::Reversed];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -88,7 +76,7 @@ impl Face {
         Face::ALL.into_iter().find(|face| face.name() == name)
     }
 
-    fn modifier(self) -> Modifier {
+    pub(crate) fn modifier(self) -> Modifier {
         match self {
             Face::Plain => Modifier::empty(),
             Face::Bold => Modifier::BOLD,
@@ -120,8 +108,8 @@ impl Look {
         self.face
     }
 
-    pub fn style(self) -> Style {
-        self.ink.style().add_modifier(self.face.modifier())
+    pub fn style(self, palette: &Palette) -> Style {
+        self.ink.style(palette).add_modifier(self.face.modifier())
     }
 
     pub fn name(self) -> String {
@@ -142,19 +130,8 @@ impl Look {
     /// The ink is found first and the most specific one wins, because only one ink spends a
     /// modifier: reverse video over no colour is both `mark` and `plain` reversed. That is
     /// also why inline code is reversed over `muted` and never over `plain`.
-    pub fn of(cell: &Cell) -> Option<Look> {
-        if cell.underline_color != Color::Reset {
-            return None;
-        }
-        Ink::ALL.into_iter().rev().find_map(|ink| {
-            let (foreground, background, spent) = ink.look();
-            if (foreground, background) != (cell.fg, cell.bg) || !cell.modifier.contains(spent) {
-                return None;
-            }
-            let rest = cell.modifier - spent;
-            let face = Face::ALL.into_iter().find(|face| face.modifier() == rest)?;
-            Some(Look::new(ink, face))
-        })
+    pub fn of(cell: &Cell, palette: &Palette) -> Option<Look> {
+        palette.look_of(cell)
     }
 }
 
@@ -168,54 +145,64 @@ impl From<Ink> for Look {
 mod tests {
     use super::*;
 
+    /// Every spelling a terminal can be handed: the same seven names, drawn in three sets of
+    /// colours, and every one of them read back by the palette it was drawn with.
+    const PALETTES: [Palette; 3] = [Palette::PLAIN, Palette::ANSI, Palette::TRUECOLOR];
+
     #[test]
     fn every_ink_reads_back_as_the_name_it_is_drawn_in() {
-        for ink in Ink::ALL {
-            let mut cell = Cell::default();
-            cell.set_style(ink.style());
+        for palette in PALETTES {
+            for ink in Ink::ALL {
+                let mut cell = Cell::default();
+                cell.set_style(ink.style(&palette));
 
-            assert_eq!(
-                Ink::of(&cell),
-                Some(ink),
-                "a cell drawn in {} is that ink, and a fixture has to be able to say so",
-                ink.name()
-            );
-            assert_eq!(Ink::from_name(ink.name()), Some(ink));
+                assert_eq!(
+                    Ink::of(&cell, &palette),
+                    Some(ink),
+                    "a cell drawn in {} is that ink, and a fixture has to be able to say so",
+                    ink.name()
+                );
+                assert_eq!(Ink::from_name(ink.name()), Some(ink));
+            }
         }
     }
 
     #[test]
     fn a_cell_a_mark_covers_reads_back_as_the_mark_and_no_other_ink() {
-        let mut cell = Cell::default();
-        cell.set_style(Ink::Mark.style());
+        for palette in PALETTES {
+            let mut cell = Cell::default();
+            cell.set_style(Ink::Mark.style(&palette));
 
-        assert_eq!(
-            Ink::of(&cell),
-            Some(Ink::Mark),
-            "the marked cell is in `mark`, which is a name a reader can look up"
-        );
+            assert_eq!(
+                Ink::of(&cell, &palette),
+                Some(Ink::Mark),
+                "the marked cell is in `mark`, which is a name a reader can look up",
+            );
+        }
     }
 
     #[test]
     fn every_look_reads_back_as_the_two_names_it_is_drawn_in() {
-        let mark = Look::plain(Ink::Mark);
-        for ink in Ink::ALL {
-            for face in Face::ALL {
-                let look = Look::new(ink, face);
-                let mut cell = Cell::default();
-                cell.set_style(look.style());
+        for palette in PALETTES {
+            let mark = Look::plain(Ink::Mark);
+            for ink in Ink::ALL {
+                for face in Face::ALL {
+                    let look = Look::new(ink, face);
+                    let mut cell = Cell::default();
+                    cell.set_style(look.style(&palette));
 
-                if look.style() == mark.style() {
-                    assert_eq!(Look::of(&cell), Some(mark));
-                    continue;
+                    if look.style(&palette) == mark.style(&palette) {
+                        assert_eq!(Look::of(&cell, &palette), Some(mark));
+                        continue;
+                    }
+                    assert_eq!(
+                        Look::of(&cell, &palette),
+                        Some(look),
+                        "a cell painted {:?} is that look, and a fixture has to be able to say so",
+                        look.name()
+                    );
+                    assert_eq!(Look::from_name(&look.name()), Some(look));
                 }
-                assert_eq!(
-                    Look::of(&cell),
-                    Some(look),
-                    "a cell painted {:?} is that look, and a fixture has to be able to say so",
-                    look.name()
-                );
-                assert_eq!(Look::from_name(&look.name()), Some(look));
             }
         }
     }

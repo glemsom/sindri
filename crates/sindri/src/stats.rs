@@ -5,6 +5,7 @@ use ratatui::layout::Rect;
 use sindri_core::records::SessionDocument;
 
 use crate::ink::Ink;
+use crate::palette::Palette;
 use crate::rail::{Facts, head, label_row, more, put, tail, tokens, value_room};
 
 /// A band that cannot hold one gets one anyway.
@@ -209,15 +210,15 @@ impl Stats {
         }
     }
 
-    pub fn paint(&self, area: Rect, buffer: &mut Buffer) {
+    pub fn paint(&self, area: Rect, buffer: &mut Buffer, palette: &Palette) {
         let screen = self.screen(area);
         for column in &screen.columns {
             let mut y = area.y;
             for block in &column.blocks {
-                put(buffer, column.x, y, block.label, Ink::Dim);
+                put(buffer, column.x, y, block.label, Ink::Dim, palette);
                 y = y.saturating_add(1);
                 for row in &block.rows {
-                    drawn_row(buffer, column, y, row);
+                    drawn_row(buffer, column, y, row, palette);
                     y = y.saturating_add(1);
                 }
             }
@@ -234,6 +235,7 @@ impl Stats {
             area.bottom() - 1,
             &more(screen.went),
             Ink::Muted,
+            palette,
         );
     }
 
@@ -326,9 +328,9 @@ fn column_width(width: u16, count: usize) -> u16 {
         .unwrap_or(0)
 }
 
-fn drawn_row(buffer: &mut Buffer, column: &Column, y: u16, row: &Drawn) {
+fn drawn_row(buffer: &mut Buffer, column: &Column, y: u16, row: &Drawn, palette: &Palette) {
     let Some(label) = &row.label else {
-        put(buffer, column.x, y, &row.value, Ink::Muted);
+        put(buffer, column.x, y, &row.value, Ink::Muted, palette);
         return;
     };
     let area = Rect {
@@ -337,8 +339,8 @@ fn drawn_row(buffer: &mut Buffer, column: &Column, y: u16, row: &Drawn) {
         width: column.width,
         height: 1,
     };
-    let x = label_row(buffer, area, label, row.value.chars().count());
-    put(buffer, x, y, &row.value, Ink::Muted);
+    let x = label_row(buffer, area, label, row.value.chars().count(), palette);
+    put(buffer, x, y, &row.value, Ink::Muted, palette);
 }
 
 #[cfg(test)]
@@ -352,6 +354,10 @@ mod tests {
     use sindri_core::wire::Wire;
 
     use super::*;
+
+    /// The screen is read back against the palette it was painted with, and a drawn line is a
+    /// seam a reader sees: the one palette that names every cell of a bare buffer is the design's.
+    const PALETTE: Palette = Palette::TRUECOLOR;
     use crate::rail::Ctx;
 
     const GUID: &str = "9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61";
@@ -667,7 +673,7 @@ mod tests {
         );
 
         let mut buffer = Buffer::empty(area);
-        stats.paint(area, &mut buffer);
+        stats.paint(area, &mut buffer, &PALETTE);
         let foot = glyphs(&buffer, area.bottom() - 1);
         assert_eq!(
             foot[61..61 + 8].trim_end(),
@@ -738,7 +744,7 @@ mod tests {
         let stats = Stats::default();
         let mut buffer = Buffer::empty(area);
 
-        stats.paint(area, &mut buffer);
+        stats.paint(area, &mut buffer, &PALETTE);
 
         assert_eq!(
             stats.screen(area),
