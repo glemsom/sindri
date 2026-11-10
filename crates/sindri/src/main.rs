@@ -9,6 +9,7 @@ mod launch; // one launch's run, assembled the same way whichever front end aske
 mod open; // the host spawns the opener, because the sandbox has no display
 mod osc; // sequences that carry words out of the terminal
 mod paste; // the terminal's echo is off while the key is typed
+mod reports; // the threads a run and a wire listing land their reports on, and the pass that takes them
 mod sessions; // reads past runs back
 mod signal; // the one door an outside `SIGINT` comes through
 mod term; // the terminal as a resource: raw mode, the alternate screen, and the canvas a frame is painted through
