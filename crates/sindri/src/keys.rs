@@ -31,6 +31,29 @@ impl Mode {
         }
     }
 
+    /// The two labels a screen wears on its card: its name, and the key its own table binds to
+    /// leaving it. A draft has neither, because it is no screen.
+    pub fn labels(self) -> Option<(&'static str, &'static str)> {
+        let leaves = self
+            .table()
+            .iter()
+            .find(|binding| binding.act == Act::Close)?;
+        Some((self.title()?, leaves.name))
+    }
+
+    /// The name a screen wears in its card's top border, and `None` for the draft, which is no
+    /// screen and takes no card.
+    pub fn title(self) -> Option<&'static str> {
+        match self {
+            Mode::Composer => None,
+            Mode::Keys => Some("? keys"),
+            Mode::Files => Some("@ files"),
+            Mode::Models => Some("/model"),
+            Mode::Settings => Some("/settings"),
+            Mode::Stats => Some("/stats"),
+        }
+    }
+
     pub fn table(self) -> &'static [Binding] {
         match self {
             Mode::Composer => &COMPOSER,

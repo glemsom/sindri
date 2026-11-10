@@ -109,6 +109,7 @@ fn named(name: &str) -> View {
             view.key(Key::Char('?'));
             view
         }
+        "card" => over_a_run(),
         "files" => picking(),
         "models" => model_screen(),
         "settings" => {
@@ -164,6 +165,13 @@ fn door() -> View {
         branch: Some(String::from("main")),
         enforcement: Enforcement::Bubblewrap,
     });
+    view
+}
+
+/// A screen opened over a run, so the card's frame behind it is a transcript a reader was reading.
+fn over_a_run() -> View {
+    let mut view = running(transcript(), Scroll::Tail);
+    view.key(Key::Char('?'));
     view
 }
 

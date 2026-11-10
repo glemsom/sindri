@@ -1,3 +1,4 @@
+pub mod card; // a screen's card: its border, its name, the key that leaves, over the frame it dims
 pub mod commands; // the `/` commands: a draft line the frame answers itself
 pub mod composer; // the draft a prompt is typed into, as a value rather than a widget
 pub mod decode; // the bytes a key arrives as, answered as the key or the paste

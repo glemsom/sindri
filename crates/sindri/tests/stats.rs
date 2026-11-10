@@ -1,6 +1,6 @@
-//! `/stats` from the outside: opened by a `/stats` line, closed by `Esc`, and painted instead of the bands
-//! under it rather than over them. The screen's own rows are the module's to prove; the frame's half is
-//! that a reader can reach the screen and that it draws what the frame was handed.
+//! `/stats` from the outside: opened by a `/stats` line, closed by `Esc`, and drawn on a card over the
+//! bands it was opened from rather than in place of them. The screen's own rows are the module's to
+//! prove; the frame's half is that a reader can reach the screen and that it draws what it was handed.
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -111,22 +111,26 @@ fn a_band_too_short_for_the_rows_counts_the_ones_it_cannot_hold() {
 }
 
 #[test]
-fn the_screen_paints_none_of_the_bands_under_it() {
+fn the_bands_the_screen_stands_over_are_painted_under_its_card() {
     let mut view = opened();
     let rows = painted(&mut view, 120, 40);
-    let screen = rows.join("\n");
+    let last = rows.len() - 1;
 
-    for band in ["Enter send", "? keys", "/ commands"] {
-        assert!(
-            !screen.contains(band),
-            "a screen is the whole frame, so the footer's `{band}` is not painted under it: \
-             {screen}"
-        );
-    }
     assert!(
-        rows.last()
-            .is_some_and(|row| row.trim().is_empty() || !row.contains('─')),
-        "and the composer's hairline is not painted under it either: {screen}"
+        rows[last].starts_with("Enter send"),
+        "the footer is painted in the gutter the card leaves it, so the reader sees the frame \
+         they will return to: {:?}",
+        rows[last]
+    );
+    assert!(
+        rows[last - 2].starts_with('─'),
+        "and so is the composer's band, its hairline running where the gutter reaches it: {:?}",
+        rows[last - 2]
+    );
+    assert!(
+        rows[0].contains("/stats"),
+        "the card is what the eye lands on: {:?}",
+        rows[0]
     );
 }
 
@@ -145,11 +149,16 @@ fn a_frame_handed_no_record_and_no_fact_still_opens_the_screen_with_its_title_an
     );
     assert!(
         rows.first().is_some_and(|row| row.contains("/stats")),
-        "the screen is headed by its own name: {rows:#?}"
+        "the screen is named in the top border of the card it is drawn on: {rows:#?}"
+    );
+    let sides = |row: &str| row.matches('│').count();
+    assert!(
+        rows[1..rows.len() - 1].iter().all(|row| sides(row) == 2),
+        "and a frame handed nothing has no row to draw between the card's two sides: {rows:#?}"
     );
     assert!(
-        rows[1..].iter().all(|row| row.trim().is_empty()),
-        "and a frame handed nothing has no row to draw: {rows:#?}"
+        rows.last().is_some_and(|row| row.contains("Esc")),
+        "the card's bottom border names the key that leaves, a frame of no row and all: {rows:#?}"
     );
 }
 

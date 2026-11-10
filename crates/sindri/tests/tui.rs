@@ -786,10 +786,6 @@ fn row_of(drawn: &str, needle: &str) -> Option<u16> {
         .map(|run| run.row)
 }
 
-fn last(drawn: &str, needle: &str) -> Option<usize> {
-    drawn.rfind(needle)
-}
-
 /// The frame as the terminal holds it after every frame drawn so far: each row that has a glyph on it,
 /// and the last write to a cell winning over the ones before it.
 fn picture(drawn: &str) -> BTreeMap<u16, String> {
@@ -812,6 +808,26 @@ fn picture(drawn: &str) -> BTreeMap<u16, String> {
             (row, text)
         })
         .collect()
+}
+
+/// Whether a row of the screen the terminal holds says `needle`: a card's word is painted over the
+/// frame behind it, and painting the frame again takes it off.
+fn showing(drawn: &str, needle: &str) -> bool {
+    picture(drawn).values().any(|row| row.contains(needle))
+}
+
+/// A row of a screen with the card's border and inset taken off it, so a row of facts is read as
+/// the screen draws it and not as the card frames it.
+fn inside(row: &str) -> &str {
+    row.trim_matches(['\u{2502}', ' '])
+}
+
+/// Whether row `y` of the screen the terminal holds — counted from the escape that put the cursor
+/// there, so the first row is row one — says `needle`.
+fn named(drawn: &str, y: u16, needle: &str) -> bool {
+    picture(drawn)
+        .get(&y)
+        .is_some_and(|row| row.contains(needle))
 }
 
 /// Whether the rail says `value` at the end of the row `label` heads. The blanks between the
@@ -1025,15 +1041,16 @@ fn question_mark_opens_the_keys_screen_and_escape_gives_the_frame_back() {
 
     pty.type_bytes(b"?");
     assert!(
-        drawn.wait_until(|frame| frame.contains("Backspace")),
+        drawn.wait_until(|frame| showing(frame, "Backspace")),
         "the keys screen lists the draft's keys, Backspace among them: {:?}",
         drawn.text()
     );
 
     pty.type_bytes(b"\x1b");
     assert!(
-        drawn.wait_until(|frame| last(frame, "Enter send") > last(frame, "Backspace")),
-        "Esc closed the screen and the composer's footer is back under it: {:?}",
+        drawn.wait_until(|frame| !showing(frame, "Backspace")),
+        "Esc closed the screen, and the frame the card was drawn over is back in its own ink: \
+         {:?}",
         drawn.text()
     );
 
@@ -1367,23 +1384,28 @@ fn the_stats_screen_draws_the_record_the_run_handed_its_frame() {
         "input", "output", "total", "cached", "stopped", "start", "end", "commit",
     ] {
         assert!(
-            drawn.wait_until(|frame| picture(frame).values().any(|row| row.starts_with(label))),
+            drawn.wait_until(|frame| {
+                picture(frame)
+                    .values()
+                    .any(|row| inside(row).starts_with(label))
+            }),
             "the screen draws `{label}`, which is a row only the record the run wrote has: {:?}",
             drawn.text()
         );
     }
     assert!(
-        picture(&drawn.text())
-            .values()
-            .any(|row| row.starts_with("stopped") && row.trim_end().ends_with("final")),
+        picture(&drawn.text()).values().any(|row| {
+            let row = inside(row);
+            row.starts_with("stopped") && row.trim_end().ends_with("final")
+        }),
         "and the record says how the run stopped: {:?}",
         drawn.text()
     );
 
     pty.type_bytes(b"\x1b");
     assert!(
-        drawn.wait_until(|frame| last(frame, "Enter send") > last(frame, "/stats")),
-        "Esc closes the screen, and the composer's bands are painted again under it: {:?}",
+        drawn.wait_until(|frame| !showing(frame, &recorded)),
+        "Esc closes the screen, and the card's rows are the frame it was drawn over again: {:?}",
         drawn.text()
     );
 
@@ -1779,27 +1801,28 @@ fn slash_help_opens_the_keys_in_force_and_slash_settings_its_own_screen() {
     // and the screen that lists every key in force names this one.
     command(&mut pty, &drawn, "/help");
     assert!(
-        drawn.wait_until(|frame| frame.contains("Backspace")),
+        drawn.wait_until(|frame| showing(frame, "Backspace")),
         "`/help` opens the screen that lists the keys in force: {:?}",
         drawn.text()
     );
 
     pty.type_bytes(b"\x1b");
     assert!(
-        drawn.wait_until(|frame| last(frame, "Enter send") > last(frame, "Backspace")),
+        drawn.wait_until(|frame| !showing(frame, "Backspace")),
         "Esc closed the keys screen: {:?}",
         drawn.text()
     );
     command(&mut pty, &drawn, "/settings");
     assert!(
-        drawn.wait_until(|frame| row_of(frame, "settings") == Some(1)),
-        "`/settings` opens its own screen, headed on the frame's first row: {:?}",
+        drawn.wait_until(|frame| named(frame, 1, "settings")),
+        "`/settings` opens its own screen, its name in the top border of the card it is drawn \
+         on: {:?}",
         drawn.text()
     );
 
     pty.type_bytes(b"\x1b");
     assert!(
-        drawn.wait_until(|frame| last(frame, "Enter send") > last(frame, "settings")),
+        drawn.wait_until(|frame| !named(frame, 1, "settings")),
         "Esc closed the settings screen: {:?}",
         drawn.text()
     );
