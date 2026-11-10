@@ -9,6 +9,7 @@ use ratatui::buffer::Buffer;
 use sindri::composer::{Key, Outcome};
 use sindri::ink::Ink;
 use sindri::mark::Cell;
+use sindri::palette::Palette;
 use sindri::rows::Scroll;
 use sindri::view::View;
 use sindri_core::records::Entry;
@@ -52,7 +53,7 @@ fn painted(view: &mut View) -> Buffer {
     completed.buffer.clone()
 }
 
-fn highlighted(buffer: &Buffer) -> String {
+fn highlighted(buffer: &Buffer, palette: &Palette) -> String {
     let area = buffer.area;
     let mut rows: Vec<String> = Vec::new();
     for y in area.y..area.bottom() {
@@ -61,7 +62,7 @@ fn highlighted(buffer: &Buffer) -> String {
             let cell = buffer
                 .cell((x, y))
                 .unwrap_or_else(|| panic!("row {y}, column {x} is outside the frame it is in"));
-            if Ink::of(cell) != Some(Ink::Mark) {
+            if Ink::of(cell, palette) != Some(Ink::Mark) {
                 // The mark covers one run of cells a row, so the first cell of it that is not marked
                 // ends the run this row carries.
                 if !line.is_empty() {
@@ -93,7 +94,7 @@ fn what_the_highlight_covers_is_byte_for_byte_what_the_copy_takes() {
     view.drag(Cell::new(1, 2), Cell::new(6, 80));
 
     let frame = painted(&mut view);
-    let marked = highlighted(&frame);
+    let marked = highlighted(&frame, &view.palette());
     let taken = copied(&mut view);
 
     assert!(
@@ -120,8 +121,8 @@ fn a_redraw_keeps_the_highlight_and_ctrl_y_copies_it_again() {
 
     assert!(!taken.is_empty(), "there was a mark to copy: {before:?}");
     assert_eq!(
-        highlighted(&after),
-        highlighted(&before),
+        highlighted(&after, &view.palette()),
+        highlighted(&before, &view.palette()),
         "a redraw keeps the highlight, because the mark is corners of the band and not a \
          picture of a frame that has been thrown away"
     );

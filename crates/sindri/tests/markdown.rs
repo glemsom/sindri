@@ -4,6 +4,7 @@
 
 use sindri::ink::{Face, Ink, Look};
 use sindri::markdown;
+use sindri::palette::Band;
 use sindri::rows::Row;
 
 fn words(row: &Row) -> String {
@@ -346,5 +347,44 @@ fn a_table_wider_than_the_room_wraps_inside_its_cells_and_keeps_every_word() {
         rules[0].chars().all(|glyph| glyph == '─' || glyph == '┼'),
         "the rule is the header's own row with its words spent as rules: {:?}",
         rules[0]
+    );
+}
+
+#[test]
+fn a_code_fence_sits_in_the_well_and_the_prose_around_it_sits_on_nothing() {
+    let rows = markdown::rows(
+        "prose above\n\n```rust\nfn main() {}\n```\n\nprose below",
+        40,
+    );
+
+    let bands: Vec<(String, Option<Band>)> =
+        rows.iter().map(|row| (words(row), row.band())).collect();
+
+    assert_eq!(
+        bands,
+        vec![
+            (String::from("prose above"), None),
+            (String::new(), None),
+            (String::from("▏ rust"), Some(Band::Well)),
+            (String::from("▏ fn main() {}"), Some(Band::Well)),
+            (String::new(), None),
+            (String::from("prose below"), None),
+        ],
+        "the well holds the fence whole and stops at its edges"
+    );
+}
+
+/// A diagram that will not draw keeps its source in the well, and the sentence saying why sits
+/// under it as prose: the well is the fence's, and not everything the block said.
+#[test]
+fn the_sentence_saying_a_diagram_will_not_draw_is_prose_and_not_code() {
+    let rows = markdown::rows("```mermaid\nnot a diagram\n```", 200);
+    let under: Vec<(String, Option<Band>)> =
+        rows.iter().map(|row| (words(row), row.band())).collect();
+
+    assert_eq!(
+        under[..3].iter().map(|(_, band)| *band).collect::<Vec<_>>(),
+        [Some(Band::Well), Some(Band::Well), None],
+        "the tag and the source are the well's, and the row under them is no code: {under:?}"
     );
 }

@@ -9,6 +9,7 @@ use syntect::parsing::{ParseState, Scope, ScopeStack, SyntaxSet};
 
 use crate::ink::{Face, Ink, Look};
 use crate::mermaid::{self, Fence};
+use crate::palette::Band;
 use crate::picture::{self, Picture, Surface};
 use crate::rows::{Row, glyphs, split_at};
 
@@ -393,11 +394,11 @@ impl Room {
             CodeBlockKind::Fenced(tag) => tag.trim().to_owned(),
             CodeBlockKind::Indented => String::new(),
         };
+        self.code = Some(Code::of(&tag));
         if !tag.is_empty() {
             self.place(&tag, Look::plain(Ink::Dim), false);
             self.flush();
         }
-        self.code = Some(Code::of(&tag));
         // A mermaid fence is a picture and not code: its source is kept so the drawing can be
         // made when the block closes, and so the reason it could not be drawn prints under it.
         if tag.split_whitespace().next() == Some("mermaid") {
@@ -422,6 +423,8 @@ impl Room {
     /// draw — because a diagram that is simply absent cannot be told from a build that cannot draw.
     fn close_code(&mut self) {
         self.flush_if_written();
+        // The fence's own rows are the well's; what is said about it under them is prose.
+        self.code = None;
         if let Some(mermaid) = self.mermaid.take() {
             match mermaid::block(&mermaid.source, mermaid.fence) {
                 mermaid::Block::Refused { caption } => self.caption(&caption),
@@ -440,7 +443,6 @@ impl Room {
             }
         }
         self.lead.pop();
-        self.code = None;
     }
 
     /// Draws `picture` over the block that begins at `at`, growing the block to the picture's
@@ -558,7 +560,12 @@ impl Room {
     fn flush(&mut self) {
         let opening = self.opening();
         self.line.clear();
-        self.push(Row::of(opening));
+        let row = Row::of(opening);
+        // A fence is one block of cells, so the tag and every line under it paint the well.
+        self.push(match self.code.is_some() {
+            true => row.banded(Band::Well),
+            false => row,
+        });
         self.used = 0;
         self.spaced = false;
         self.first = false;

@@ -20,6 +20,7 @@ use crate::ink::Ink;
 use crate::keys::{Act, Mode, Stack};
 use crate::mark::{Cell, Mark, Span};
 use crate::models::Models;
+use crate::palette::{Band, Palette};
 use crate::picker::Picker;
 use crate::picture::Surface;
 use crate::pictures::Pictures;
@@ -105,6 +106,7 @@ pub struct View {
     settings: Settings,
     pictures: Pictures,
     cell_size: CellSize,
+    palette: Palette,
 }
 
 impl View {
@@ -187,6 +189,16 @@ impl View {
 
     pub fn set_cell_size(&mut self, cell_size: CellSize) {
         self.cell_size = cell_size;
+    }
+
+    /// The colours this frame is drawn in, resolved once at boot: a frame that read them itself
+    /// would ask the terminal a question its reader has already answered.
+    pub fn set_palette(&mut self, palette: Palette) {
+        self.palette = palette;
+    }
+
+    pub fn palette(&self) -> Palette {
+        self.palette
     }
 
     pub fn set_pictures(&mut self, pictures: Pictures) {
@@ -512,6 +524,7 @@ impl View {
     /// transcript is, so a resize invalidates it here and the same pass reflows; the
     /// composer's rows are measured when the frame is drawn and never cached.
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) {
+        buffer.set_style(area, self.palette.ground(None));
         // A screen is the whole frame: the bands under it are not painted, so no draft a key
         // cannot reach is on the screen pretending otherwise.
         if let Some(modal) = self.stack.modal() {
@@ -529,7 +542,7 @@ impl View {
         // in what is left: a row's width is the width it is drawn at.
         let share = self.rail.split(bands.transcript);
         if let Some((shape, rail)) = share.rail {
-            self.rail.paint(shape, rail, buffer);
+            self.rail.paint(shape, rail, buffer, &self.palette);
         }
         self.transcript(share.transcript, buffer);
         self.queue_band(bands.queue, buffer);
@@ -540,7 +553,6 @@ impl View {
     /// The turn in flight is the one entry laid out again on every paint; every other row comes
     /// from the window of the cache this band reaches.
     fn transcript(&mut self, area: Rect, buffer: &mut Buffer) {
-        buffer.set_style(area, Ink::Plain.style());
         self.rows.resize(area.width);
         // How many rows a picture takes is part of the rows an entry was laid out as, so the
         // surface reaches the cache before a window is measured.
@@ -563,6 +575,7 @@ impl View {
                         ..area
                     },
                     buffer,
+                    &self.palette,
                 );
                 // Placed after the row's words, because it is drawn over them: a terminal that
                 // places no picture leaves the reader the words.
@@ -599,7 +612,7 @@ impl View {
             let right = left.saturating_add(marked.width()).min(area.right());
             for x in left..right {
                 if let Some(cell) = buffer.cell_mut((x, y)) {
-                    cell.set_style(Ink::Mark.style());
+                    cell.set_style(Ink::Mark.style(&self.palette));
                 }
             }
         }
@@ -611,15 +624,16 @@ impl View {
         let Some(label) = self.queue.label() else {
             return;
         };
-        write(buffer, area, &[(&label, Ink::Dim)]);
+        write(buffer, area, &[(&label, Ink::Dim)], &self.palette);
     }
 
     fn composer_band(&self, area: Rect, buffer: &mut Buffer) {
+        buffer.set_style(area, self.palette.ground(Some(Band::Composer)));
         let hairline = Rect { height: 1, ..area };
         for x in hairline.x..hairline.right() {
             if let Some(cell) = buffer.cell_mut((x, hairline.y)) {
                 cell.set_char(HAIRLINE);
-                cell.set_style(Ink::Dim.style());
+                cell.set_style(Ink::Dim.style(&self.palette));
             }
         }
 
@@ -638,7 +652,7 @@ impl View {
             if y >= draft.bottom() {
                 break;
             }
-            draft_line(buffer, Rect { y, ..draft }, line);
+            draft_line(buffer, Rect { y, ..draft }, line, &self.palette);
         }
     }
 
@@ -663,7 +677,6 @@ impl View {
     }
 
     fn keys_screen(&self, area: Rect, buffer: &mut Buffer) {
-        buffer.set_style(area, Ink::Plain.style());
         let modes: Vec<Mode> = self.stack.modes().collect();
         let name_width = modes
             .iter()
@@ -672,13 +685,13 @@ impl View {
             .max()
             .unwrap_or(0);
         let mut y = area.y;
-        screen_row(buffer, area, y, &[("? keys", Ink::Accent)]);
+        screen_row(buffer, area, y, &[("? keys", Ink::Accent)], &self.palette);
         for mode in modes {
             y = y.saturating_add(1);
             if y >= area.bottom() {
                 return;
             }
-            screen_row(buffer, area, y, &[(mode.name(), Ink::Dim)]);
+            screen_row(buffer, area, y, &[(mode.name(), Ink::Dim)], &self.palette);
             for binding in mode.table() {
                 y = y.saturating_add(1);
                 if y >= area.bottom() {
@@ -690,6 +703,7 @@ impl View {
                     area,
                     y,
                     &[(&name, Ink::Muted), (binding.does, Ink::Plain)],
+                    &self.palette,
                 );
             }
         }
@@ -699,9 +713,14 @@ impl View {
     /// than the frame is cut at its right edge rather than dropped: whole-or-nothing is a rule
     /// about hints and facts, and a reader wants the path they are pointing at.
     fn files_screen(&self, area: Rect, buffer: &mut Buffer) {
-        buffer.set_style(area, Ink::Plain.style());
         let mut y = area.y;
-        screen_row(buffer, area, y, &[(PICKER_TITLE, Ink::Accent)]);
+        screen_row(
+            buffer,
+            area,
+            y,
+            &[(PICKER_TITLE, Ink::Accent)],
+            &self.palette,
+        );
         y = y.saturating_add(1);
         if y < area.bottom() {
             screen_row(
@@ -709,13 +728,14 @@ impl View {
                 area,
                 y,
                 &[(PICKER_QUERY, Ink::Dim), (self.picker.query(), Ink::Muted)],
+                &self.palette,
             );
         }
         let rows = self.picker.rows();
         if rows.is_empty() {
             y = y.saturating_add(1);
             if y < area.bottom() {
-                screen_row(buffer, area, y, &[(PICKER_EMPTY, Ink::Dim)]);
+                screen_row(buffer, area, y, &[(PICKER_EMPTY, Ink::Dim)], &self.palette);
             }
             return;
         }
@@ -728,16 +748,27 @@ impl View {
                 true => (ROW_MARK, Ink::Accent),
                 false => (ROW_GAP, Ink::Plain),
             };
-            cut_row(buffer, screen_band(area), y, &[(marker, ink), (path, ink)]);
+            cut_row(
+                buffer,
+                screen_band(area),
+                y,
+                &[(marker, ink), (path, ink)],
+                &self.palette,
+            );
         }
     }
 
     /// A wire that has not answered is one line saying it was asked, and one that could not
     /// answer is a hint rather than a refusal: a model named by hand still runs.
     fn models_screen(&self, area: Rect, buffer: &mut Buffer) {
-        buffer.set_style(area, Ink::Plain.style());
         let mut y = area.y;
-        screen_row(buffer, area, y, &[(MODELS_TITLE, Ink::Accent)]);
+        screen_row(
+            buffer,
+            area,
+            y,
+            &[(MODELS_TITLE, Ink::Accent)],
+            &self.palette,
+        );
         y = y.saturating_add(1);
         if y < area.bottom() {
             screen_row(
@@ -745,6 +776,7 @@ impl View {
                 area,
                 y,
                 &[(MODELS_QUERY, Ink::Dim), (self.models.query(), Ink::Muted)],
+                &self.palette,
             );
         }
         let rows = self.models.rows();
@@ -757,7 +789,7 @@ impl View {
         if let Some(said) = said {
             y = y.saturating_add(1);
             if y < area.bottom() {
-                screen_row(buffer, area, y, &[(said, Ink::Dim)]);
+                screen_row(buffer, area, y, &[(said, Ink::Dim)], &self.palette);
             }
             return;
         }
@@ -781,6 +813,7 @@ impl View {
                 screen_band(area),
                 y,
                 &[(marker, ink), (&name, ink), (label, Ink::Dim)],
+                &self.palette,
             );
         }
     }
@@ -788,14 +821,19 @@ impl View {
     /// A value too wide for the frame is cut at its right edge rather than dropped, as the
     /// picker's paths are, and a refusal under the list names the key to change.
     fn settings_screen(&self, area: Rect, buffer: &mut Buffer) {
-        buffer.set_style(area, Ink::Plain.style());
         let key_width = Config::KEYS
             .iter()
             .map(|key| key.chars().count() + SETTINGS_GAP)
             .max()
             .unwrap_or(0);
         let mut y = area.y;
-        screen_row(buffer, area, y, &[(SETTINGS_TITLE, Ink::Accent)]);
+        screen_row(
+            buffer,
+            area,
+            y,
+            &[(SETTINGS_TITLE, Ink::Accent)],
+            &self.palette,
+        );
         for (at, (key, text)) in self.settings.rows().enumerate() {
             y = y.saturating_add(1);
             if y >= area.bottom() {
@@ -811,6 +849,7 @@ impl View {
                 screen_band(area),
                 y,
                 &[(marker, name_ink), (&name, name_ink), (text, value_ink)],
+                &self.palette,
             );
         }
         let Some(refusal) = self.settings.refusal() else {
@@ -822,18 +861,29 @@ impl View {
         if y >= area.bottom() {
             return;
         }
-        cut_row(buffer, screen_band(area), y, &[(refusal, Ink::Err)]);
+        cut_row(
+            buffer,
+            screen_band(area),
+            y,
+            &[(refusal, Ink::Err)],
+            &self.palette,
+        );
     }
 
     fn stats_screen(&self, area: Rect, buffer: &mut Buffer) {
-        buffer.set_style(area, Ink::Plain.style());
-        screen_row(buffer, area, area.y, &[(STATS_TITLE, Ink::Accent)]);
+        screen_row(
+            buffer,
+            area,
+            area.y,
+            &[(STATS_TITLE, Ink::Accent)],
+            &self.palette,
+        );
         let body = Rect {
             y: area.y.saturating_add(1),
             height: area.height.saturating_sub(1),
             ..area
         };
-        self.stats().paint(body, buffer);
+        self.stats().paint(body, buffer, &self.palette);
     }
 
     fn stats(&self) -> Stats {
@@ -851,7 +901,7 @@ impl View {
             }
             spans.push((hint, Ink::Muted));
         }
-        write(buffer, area, &spans);
+        write(buffer, area, &spans, &self.palette);
     }
 }
 
@@ -936,7 +986,7 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16) -> Bands {
 
 /// Writes one row of a screen, each span in its own ink. A span that would run past the
 /// frame's right edge is not drawn at all: a screen's row is whole or it is not there.
-fn screen_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)]) {
+fn screen_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)], palette: &Palette) {
     write(
         buffer,
         Rect {
@@ -944,6 +994,7 @@ fn screen_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)]) {
             ..screen_band(area)
         },
         spans,
+        palette,
     );
 }
 
@@ -959,11 +1010,11 @@ fn screen_band(area: Rect) -> Rect {
 
 /// Writes one draft line across a row, cut at its right edge: prose that runs on is cut
 /// rather than dropped, where a hint or a fact is whole or not drawn.
-fn draft_line(buffer: &mut Buffer, area: Rect, line: &str) {
-    cut_row(buffer, area, area.y, &[(line, Ink::Plain)]);
+fn draft_line(buffer: &mut Buffer, area: Rect, line: &str, palette: &Palette) {
+    cut_row(buffer, area, area.y, &[(line, Ink::Plain)], palette);
 }
 
-fn cut_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)]) {
+fn cut_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)], palette: &Palette) {
     let mut x = area.x;
     for (text, ink) in spans {
         for glyph in text.chars() {
@@ -972,7 +1023,7 @@ fn cut_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)]) {
             }
             if let Some(cell) = buffer.cell_mut((x, y)) {
                 cell.set_char(glyph);
-                cell.set_style(ink.style());
+                cell.set_style(ink.style(palette));
             }
             x += 1;
         }
@@ -1004,7 +1055,7 @@ fn wanted(width: u16) -> usize {
         .map_or(FLOOR, |(_, hints)| *hints)
 }
 
-fn write(buffer: &mut Buffer, area: Rect, spans: &[(&str, Ink)]) {
+fn write(buffer: &mut Buffer, area: Rect, spans: &[(&str, Ink)], palette: &Palette) {
     let mut x = area.x;
     for (text, ink) in spans {
         let width = u16::try_from(text.chars().count()).unwrap_or(u16::MAX);
@@ -1014,7 +1065,7 @@ fn write(buffer: &mut Buffer, area: Rect, spans: &[(&str, Ink)]) {
         for glyph in text.chars() {
             if let Some(cell) = buffer.cell_mut((x, area.y)) {
                 cell.set_char(glyph);
-                cell.set_style(ink.style());
+                cell.set_style(ink.style(palette));
             }
             x += 1;
         }
@@ -1023,10 +1074,98 @@ fn write(buffer: &mut Buffer, area: Rect, spans: &[(&str, Ink)]) {
 
 #[cfg(test)]
 mod tests {
-    //! The one thing a golden frame cannot hold: the cell the terminal's cursor is put on. A
-    //! fixture is a buffer of glyphs and inks and a caret is neither.
+    //! What a golden frame cannot hold: the cell the terminal's cursor is put on, and the bands
+    //! under the cells, which a fixture reads by ink and never by background.
+
+    use sindri_core::policy::Enforcement;
+    use sindri_core::redact::SecretSet;
 
     use super::*;
+    use crate::ink::Look;
+
+    /// Enough facts that the ledger fills its column top to bottom.
+    fn rail() -> Facts {
+        Facts {
+            wire: Some(String::from("anthropic")),
+            model: Some(String::from("claude-sonnet-4-5-20250929")),
+            think: Some(String::from("high")),
+            turns: Some((6, 250)),
+            ctx: Some(crate::rail::Ctx {
+                size: 48_200,
+                window: Some(200_000),
+            }),
+            cache: Some(88),
+            workspace: Some(PathBuf::from("/srv/workspace")),
+            branch: Some(String::from("spec/1-capability")),
+            skills: Some(2),
+            sandbox: Some(Enforcement::Bubblewrap),
+            session: Some(String::from("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61")),
+            temp: Some(PathBuf::from("/srv/sessions/9f2c7a41/tmp")),
+        }
+    }
+
+    /// A band is a panel only because a name is read from a foreground and a modifier.
+    #[test]
+    fn the_rail_the_composer_and_a_code_well_are_painted_over_their_own_surface() {
+        let palette = Palette::TRUECOLOR;
+        let mut view = View::of(
+            vec![Entry::Assistant {
+                turn: 1,
+                text: SecretSet::default().redact(
+                    "```rust\nfn main() {\n    fence.words();\n}\n```\n\nand the prose under it",
+                ),
+            }],
+            Scroll::Tail,
+        );
+        view.set_palette(palette);
+        view.set_facts(rail());
+        view.paste("the draft the composer band is drawn from");
+
+        let area = screen(120, 40);
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+
+        let cells = |band: Band| -> Vec<(u16, u16)> {
+            (area.y..area.bottom())
+                .flat_map(|y| (area.x..area.right()).map(move |x| (x, y)))
+                .filter(|(x, y)| {
+                    buffer
+                        .cell((*x, *y))
+                        .is_some_and(|cell| cell.bg == palette.band(band))
+                })
+                .collect()
+        };
+
+        for (band, at_least) in [(Band::Rail, 100), (Band::Composer, 100), (Band::Well, 100)] {
+            let on = cells(band);
+            assert!(
+                on.len() >= at_least,
+                "{band:?} paints a surface under its cells, and it covered {} of them",
+                on.len()
+            );
+            for (x, y) in on {
+                let cell = buffer.cell((x, y)).expect("a cell of the frame");
+                assert!(
+                    Look::of(cell, &palette).is_some(),
+                    "row {y}, column {x} sits on {band:?} and reads back as no ink: in the \
+                     background {:?}, the foreground {:?}",
+                    cell.bg,
+                    cell.fg
+                );
+            }
+        }
+
+        let last = area.bottom() - 1;
+        for x in area.x..area.right() {
+            let cell = buffer.cell((x, last)).expect("a cell of the footer");
+            assert!(
+                [Band::Rail, Band::Composer, Band::Well]
+                    .into_iter()
+                    .all(|band| cell.bg != palette.band(band)),
+                "the footer sits on no band, and column {x} of it sits on one"
+            );
+        }
+    }
 
     fn screen(cols: u16, rows: u16) -> Rect {
         Rect {

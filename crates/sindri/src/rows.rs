@@ -10,6 +10,7 @@ use sindri_core::run::Exit;
 
 use crate::ink::{Ink, Look};
 use crate::markdown;
+use crate::palette::{Band, Palette};
 use crate::picture::{self, Surface};
 use crate::pulse::Head;
 use crate::stream::Stream;
@@ -35,6 +36,9 @@ pub struct Row {
     /// The picture this row stands on, when it is the first row of a block one is drawn
     /// over: the placement goes to the terminal, the row's words are what a copy takes.
     picture: Option<picture::Picture>,
+    /// The band this row sits on, when it is one row of a well: a code fence is a block of
+    /// cells, so each of its rows paints the surface under its words.
+    band: Option<Band>,
 }
 
 impl Row {
@@ -52,7 +56,19 @@ impl Row {
                 .filter(|(text, _)| !text.is_empty())
                 .collect(),
             picture: None,
+            band: None,
         }
+    }
+
+    /// The same row, drawn on `band`: the surface reaches the cells its words leave blank, so a
+    /// well is one block and not a stripe behind its glyphs.
+    pub fn banded(mut self, band: Band) -> Row {
+        self.band = Some(band);
+        self
+    }
+
+    pub fn band(&self) -> Option<Band> {
+        self.band
     }
 
     pub fn pictured_over(mut self, picture: picture::Picture) -> Row {
@@ -68,6 +84,7 @@ impl Row {
         Row {
             spans: Vec::new(),
             picture: None,
+            band: None,
         }
     }
 
@@ -89,6 +106,7 @@ impl Row {
         spans.extend(self.spans.iter().cloned());
         Row {
             picture: self.picture.clone(),
+            band: self.band,
             ..Row::of(spans)
         }
     }
@@ -97,14 +115,17 @@ impl Row {
         self.spans.iter().map(|(text, _)| text.as_str()).collect()
     }
 
-    pub fn paint(&self, area: Rect, buffer: &mut Buffer) {
+    pub fn paint(&self, area: Rect, buffer: &mut Buffer, palette: &Palette) {
+        if let Some(band) = self.band {
+            buffer.set_style(area, palette.ground(Some(band)));
+        }
         let mut x = area.x;
         for (text, look) in &self.spans {
             if x >= area.right() {
                 return;
             }
             let room = usize::from(area.right() - x);
-            let (next, _) = buffer.set_stringn(x, area.y, text, room, look.style());
+            let (next, _) = buffer.set_stringn(x, area.y, text, room, look.style(palette));
             x = next;
         }
     }
@@ -175,7 +196,10 @@ pub(crate) fn answer_on(text: &str, cols: u16, head: Option<&Head>, surface: &Su
             .collect();
         spans.push((String::from(" "), Look::plain(Ink::Plain)));
         spans.extend(first.spans().iter().cloned());
-        laid.push(Row::of(spans));
+        laid.push(Row {
+            band: first.band,
+            ..Row::of(spans)
+        });
     }
     laid.extend(rows.map(|row| row.indented(gutter, Ink::Plain)));
     laid

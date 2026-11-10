@@ -93,6 +93,16 @@ _Avoid_: UI, client, interface
 A colour role asked for by name — dim, muted, accent, ok, err — never a literal colour.
 _Avoid_: Colour, style, RGB
 
+**Palette**:
+The colours the seven inks and the three bands are drawn in, resolved once at boot from what the
+terminal says it can do: one design, spelled in truecolour, in ANSI, or not at all.
+_Avoid_: Theme, scheme, colours
+
+**Band**:
+One of the three places a frame paints a background under its cells — the rail, the composer band,
+the well a code fence sits in. A cell on a band still reads back as its ink.
+_Avoid_: Panel, colour, stripe
+
 **Picture**:
 An image an answer points at, or the diagram a fence becomes — measured into its **footprint** of
 cells before a pixel is spent, drawn as a **placement** over those rows.

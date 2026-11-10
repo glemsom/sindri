@@ -12,6 +12,7 @@ use sindri::composer::{Composer, Key, Outcome};
 use sindri::graphics::CellSize;
 use sindri::ink::Look;
 use sindri::mark;
+use sindri::palette::Palette;
 use sindri::pictures::Pictures;
 use sindri::pulse::Pulse;
 use sindri::rail::{Ctx, Facts};
@@ -652,15 +653,16 @@ fn draft(lines: &[&str]) -> Composer {
 
 fn drawn(name: &str, cols: u16, rows: u16) -> String {
     let mut view = named(name);
+    let palette = view.palette();
     let mut terminal =
         Terminal::new(TestBackend::new(cols, rows)).expect("a headless screen of that size");
     let completed = terminal
         .draw(|frame| view.paint(frame.area(), frame.buffer_mut()))
         .expect("the frame is painted");
-    text(name, completed.buffer)
+    text(name, &palette, completed.buffer)
 }
 
-fn text(name: &str, buffer: &Buffer) -> String {
+fn text(name: &str, palette: &Palette, buffer: &Buffer) -> String {
     let area = buffer.area;
     let mut text = format!("{name} at {}x{}", area.width, area.height);
     for y in area.y..area.bottom() {
@@ -670,7 +672,7 @@ fn text(name: &str, buffer: &Buffer) -> String {
             let cell = buffer
                 .cell((x, y))
                 .unwrap_or_else(|| panic!("row {y}, column {x} is outside the frame it is in"));
-            let look = Look::of(cell).unwrap_or_else(|| {
+            let look = Look::of(cell, palette).unwrap_or_else(|| {
                 panic!(
                     "row {y}, column {x} is drawn in a style that is not a look: \
                      foreground {:?}, background {:?}, modifiers {:?} — a fixture names \

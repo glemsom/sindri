@@ -11,6 +11,7 @@ use rustix::event::Timespec;
 use rustix::event::{PollFd, PollFlags, poll};
 use sindri::composer::{Outcome, Prompt, State};
 use sindri::decode::{Decoder, Event};
+use sindri::palette::Palette;
 use sindri::pulse::{self, Pulse};
 use sindri::settings::persist;
 use sindri::view::View;
@@ -70,6 +71,13 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     let mut view = View::boot();
     view.set_cell_size(cell_size);
     let named = |key: &str| std::env::var(key).ok();
+    // Resolved once, before the first frame: what a terminal can do is a fact of the launch and
+    // not a question every paint asks again.
+    view.set_palette(Palette::probed(
+        named("NO_COLOR").as_deref(),
+        named("TERM").as_deref(),
+        named("COLORTERM").as_deref(),
+    ));
     hand_pictures(
         &mut view,
         cell_size,
