@@ -127,9 +127,6 @@ impl Look {
         Some(Look::new(Ink::from_name(ink)?, face))
     }
 
-    /// The ink is found first and the most specific one wins, because only one ink spends a
-    /// modifier: reverse video over no colour is both `mark` and `plain` reversed. That is
-    /// also why inline code is reversed over `muted` and never over `plain`.
     pub fn of(cell: &Cell, palette: &Palette) -> Option<Look> {
         palette.look_of(cell)
     }
@@ -145,9 +142,7 @@ impl From<Ink> for Look {
 mod tests {
     use super::*;
 
-    /// Every spelling a terminal can be handed: the same seven names, drawn in three sets of
-    /// colours, and every one of them read back by the palette it was drawn with.
-    const PALETTES: [Palette; 3] = [Palette::PLAIN, Palette::ANSI, Palette::TRUECOLOR];
+    const PALETTES: [Palette; 3] = [Palette::SLOTS, Palette::ANSI, Palette::TRUECOLOR];
 
     #[test]
     fn every_ink_reads_back_as_the_name_it_is_drawn_in() {

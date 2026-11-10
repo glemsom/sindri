@@ -7,7 +7,7 @@ use ratatui::layout::Rect;
 
 use sindri::graphics::CellSize;
 use sindri::ink::{Ink, Look};
-use sindri::palette::Palette;
+use sindri::palette::{Band, Palette};
 use sindri::picture::Surface;
 use sindri::pulse::Pulse;
 use sindri::rows::{Row, Rows, Scroll, Window, layout};
@@ -769,5 +769,22 @@ fn settling_a_call_lays_that_entry_again_and_leaves_the_history_alone() {
         rows.lays(),
         laid + 1,
         "reading the settled row back costs nothing either"
+    );
+}
+
+/// A live answer's first row is the marker's and the answer's together, and a fence that opens the
+/// answer is the well's from that row on: a marker beside a tag is no hole in the panel.
+#[test]
+fn a_fence_that_opens_a_live_answer_keeps_its_well_under_the_marker() {
+    let mut rows = Rows::new();
+    rows.resize(40);
+    let mut stream = Stream::new();
+    stream.text("```rust\nfn main() {\n");
+    rows.live(&stream, Some(&Pulse::live(4_200).head()));
+
+    let laid: Vec<Option<Band>> = rows.rows(0).iter().map(Row::band).collect();
+    assert!(
+        laid.len() > 1 && laid.iter().all(|band| *band == Some(Band::Well)),
+        "the fence opens the answer, so every row of it sits in the well: {laid:?}"
     );
 }

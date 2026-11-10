@@ -1,7 +1,3 @@
-//! The colours the seven inks and the three bands are drawn in, resolved once at boot from what
-//! the terminal says it can do: a frame asks for an ink by name, and only this module holds a
-//! colour.
-
 use ratatui::buffer::Cell;
 use ratatui::style::{Color, Modifier, Style};
 
@@ -34,7 +30,8 @@ struct Bands {
 }
 
 impl Palette {
-    pub const PLAIN: Palette = Palette {
+    /// The terminal's own six slots and no background: what a reader who asked for no colour gets.
+    pub const SLOTS: Palette = Palette {
         inks: Inks {
             plain: (Color::Reset, Modifier::empty()),
             dim: (Color::DarkGray, Modifier::empty()),
@@ -51,6 +48,7 @@ impl Palette {
         },
     };
 
+    /// The design in the colours a terminal with no twenty-four-bit colour has.
     pub const ANSI: Palette = Palette {
         inks: Inks {
             plain: (Color::Indexed(252), Modifier::empty()),
@@ -68,6 +66,7 @@ impl Palette {
         },
     };
 
+    /// The design as it was drawn.
     pub const TRUECOLOR: Palette = Palette {
         inks: Inks {
             plain: (Color::Rgb(206, 212, 221), Modifier::empty()),
@@ -88,7 +87,7 @@ impl Palette {
     /// The palette a terminal is drawn in, from the three facts that say what it can do.
     pub fn probed(no_color: Option<&str>, term: Option<&str>, colorterm: Option<&str>) -> Palette {
         if no_color.is_some() || term == Some("dumb") {
-            return Palette::PLAIN;
+            return Palette::SLOTS;
         }
         match tells_truecolor(term, colorterm) {
             true => Palette::TRUECOLOR,
@@ -108,23 +107,14 @@ impl Palette {
         }
     }
 
-    /// The style every cell of a frame starts as: the plain ink over the terminal's own
-    /// background, so a band that shrank is painted over and not left as a stripe.
-    pub fn blank(&self) -> Style {
+    /// The style the cells of a band start as: the plain ink over the band's own colour, and over
+    /// the terminal's own for a cell on no band. A cell a band's words leave blank is still the
+    /// frame's ink, and a band that shrank leaves no stripe of the frame before it behind.
+    pub fn ground(&self, band: Option<Band>) -> Style {
         let (foreground, modifier) = self.ink(Ink::Plain);
         Style::default()
             .fg(foreground)
-            .bg(Color::Reset)
-            .add_modifier(modifier)
-    }
-
-    /// The style a band's cells start as: the plain ink over the band's surface, so a cell the
-    /// band's words leave blank is still the frame's own ink and not the terminal's.
-    pub fn surface(&self, band: Band) -> Style {
-        let (foreground, modifier) = self.ink(Ink::Plain);
-        Style::default()
-            .fg(foreground)
-            .bg(self.band(band))
+            .bg(band.map_or(Color::Reset, |band| self.band(band)))
             .add_modifier(modifier)
     }
 
@@ -136,9 +126,9 @@ impl Palette {
         }
     }
 
-    /// The look a cell is read back as, against the palette it was drawn with: its ink's
-    /// foreground and modifier, and never its background, so a cell sitting on a band is still
-    /// the name it was painted in.
+    /// The look a cell is read back as, against the palette it was drawn with. The most specific ink
+    /// wins, because only one spends a modifier: reverse video over no colour is both `mark` and
+    /// `plain` reversed. A cell's background is never read, so a rail cell reads back on its surface.
     pub fn look_of(&self, cell: &Cell) -> Option<Look> {
         if cell.underline_color != Color::Reset {
             return None;
@@ -156,6 +146,8 @@ impl Palette {
 }
 
 impl Default for Palette {
+    /// The design as it was drawn: the probe is what decides a terminal cannot hold it, so a frame
+    /// nobody told a palette about draws the one this product is designed in.
     fn default() -> Palette {
         Palette::TRUECOLOR
     }
@@ -167,10 +159,6 @@ pub enum Band {
     Rail,
     Composer,
     Well,
-}
-
-impl Band {
-    pub const ALL: [Band; 3] = [Band::Rail, Band::Composer, Band::Well];
 }
 
 /// Whether the terminal says it draws twenty-four-bit colour: `COLORTERM` is the one variable
@@ -195,22 +183,19 @@ fn tells_truecolor(term: Option<&str>, colorterm: Option<&str>) -> bool {
 mod tests {
     use super::*;
 
-    /// The six slots `ink.rs` used to name, and no background at all: a reader who asked for no
-    /// colour is handed the terminal's own theme, which is the look this product shipped before it
-    /// had one.
     #[test]
     fn a_terminal_told_no_colour_is_given_the_six_slots_and_no_background() {
         let uncoloured = Palette::probed(Some("1"), Some("xterm-256color"), Some("truecolor"));
 
-        assert_eq!(uncoloured, Palette::PLAIN);
+        assert_eq!(uncoloured, Palette::SLOTS);
         assert_eq!(
-            Palette::PLAIN.ink(Ink::Accent).0,
+            Palette::SLOTS.ink(Ink::Accent).0,
             Color::Cyan,
             "an uncoloured terminal keeps the slot it always had, and not the design's accent"
         );
-        for band in Band::ALL {
+        for band in [Band::Rail, Band::Composer, Band::Well] {
             assert_eq!(
-                Palette::PLAIN.band(band),
+                Palette::SLOTS.band(band),
                 Color::Reset,
                 "{band:?} draws no background, because a reader who asked for no colour asked \
                  for their own"
@@ -222,7 +207,7 @@ mod tests {
     fn a_dumb_terminal_is_given_the_six_slots_and_no_background() {
         assert_eq!(
             Palette::probed(None, Some("dumb"), None),
-            Palette::PLAIN,
+            Palette::SLOTS,
             "a terminal that says it is dumb can hold no colour at all"
         );
     }
@@ -241,8 +226,6 @@ mod tests {
         );
     }
 
-    /// The one design in two spellings: the six coloured inks are coloured in both, the pair a name
-    /// is read from is one, and a terminal that names no truecolor is never handed a second look.
     #[test]
     fn a_terminal_naming_no_truecolor_is_given_the_same_design_in_ansi() {
         let ansi = Palette::probed(None, Some("screen-256color"), None);
@@ -276,7 +259,7 @@ mod tests {
                 }
             }
         }
-        for band in Band::ALL {
+        for band in [Band::Rail, Band::Composer, Band::Well] {
             assert!(
                 matches!(ansi.band(band), Color::Indexed(_)),
                 "{band:?} keeps the design's three steps and spells them in ANSI"
@@ -284,12 +267,10 @@ mod tests {
         }
     }
 
-    /// Two inks over one foreground and modifier are one name a reader can see and two a fixture
-    /// can write, so the seven are told apart by the pair a name is read from.
     #[test]
     fn no_two_inks_resolve_to_one_foreground_and_modifier() {
         for (spelling, palette) in [
-            ("plain", Palette::PLAIN),
+            ("slots", Palette::SLOTS),
             ("ansi", Palette::ANSI),
             ("truecolor", Palette::TRUECOLOR),
         ] {
@@ -308,12 +289,9 @@ mod tests {
         }
     }
 
-    /// A cell is its ink's foreground and modifier and never its background: that is what lets a
-    /// band be a panel, where a rail cell is `dim` on the rail's surface and still reads back as
-    /// `dim`.
     #[test]
     fn a_cell_is_read_back_by_its_foreground_and_never_its_background() {
-        for palette in [Palette::PLAIN, Palette::ANSI, Palette::TRUECOLOR] {
+        for palette in [Palette::SLOTS, Palette::ANSI, Palette::TRUECOLOR] {
             for ink in Ink::ALL {
                 for band in [
                     None,

@@ -354,11 +354,9 @@ mod tests {
     use sindri_core::wire::Wire;
 
     use super::*;
-
-    /// The screen is read back against the palette it was painted with, and a drawn line is a
-    /// seam a reader sees: the one palette that names every cell of a bare buffer is the design's.
-    const PALETTE: Palette = Palette::TRUECOLOR;
     use crate::rail::Ctx;
+
+    const PALETTE: Palette = Palette::TRUECOLOR;
 
     const GUID: &str = "9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61";
 

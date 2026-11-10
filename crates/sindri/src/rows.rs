@@ -117,7 +117,7 @@ impl Row {
 
     pub fn paint(&self, area: Rect, buffer: &mut Buffer, palette: &Palette) {
         if let Some(band) = self.band {
-            buffer.set_style(area, palette.surface(band));
+            buffer.set_style(area, palette.ground(Some(band)));
         }
         let mut x = area.x;
         for (text, look) in &self.spans {
@@ -196,7 +196,10 @@ pub(crate) fn answer_on(text: &str, cols: u16, head: Option<&Head>, surface: &Su
             .collect();
         spans.push((String::from(" "), Look::plain(Ink::Plain)));
         spans.extend(first.spans().iter().cloned());
-        laid.push(Row::of(spans));
+        laid.push(Row {
+            band: first.band,
+            ..Row::of(spans)
+        });
     }
     laid.extend(rows.map(|row| row.indented(gutter, Ink::Plain)));
     laid

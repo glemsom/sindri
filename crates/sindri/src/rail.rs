@@ -287,7 +287,7 @@ impl Facts {
         if area.width == 0 || area.height == 0 {
             return;
         }
-        buffer.set_style(area, palette.surface(Band::Rail));
+        buffer.set_style(area, palette.ground(Some(Band::Rail)));
         match shape {
             Shape::Ledger => self.ledger(area, buffer, palette),
             Shape::Strip => self.strip(area, buffer, palette),
@@ -773,8 +773,6 @@ mod tests {
 
     use super::*;
 
-    /// The rail is read back against the palette it was painted with: the cells a band's words
-    /// leave blank are the plain ink over the rail's surface, so this is the one a reader is shown.
     const PALETTE: Palette = Palette::TRUECOLOR;
 
     fn band(width: u16, height: u16) -> Rect {

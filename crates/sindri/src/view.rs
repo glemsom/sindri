@@ -524,9 +524,7 @@ impl View {
     /// transcript is, so a resize invalidates it here and the same pass reflows; the
     /// composer's rows are measured when the frame is drawn and never cached.
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) {
-        // Every cell starts as the plain ink over the terminal's own background, so a band that
-        // shrank is painted over and not left behind as a stripe of the frame before it.
-        buffer.set_style(area, self.palette.blank());
+        buffer.set_style(area, self.palette.ground(None));
         // A screen is the whole frame: the bands under it are not painted, so no draft a key
         // cannot reach is on the screen pretending otherwise.
         if let Some(modal) = self.stack.modal() {
@@ -630,7 +628,7 @@ impl View {
     }
 
     fn composer_band(&self, area: Rect, buffer: &mut Buffer) {
-        buffer.set_style(area, self.palette.surface(Band::Composer));
+        buffer.set_style(area, self.palette.ground(Some(Band::Composer)));
         let hairline = Rect { height: 1, ..area };
         for x in hairline.x..hairline.right() {
             if let Some(cell) = buffer.cell_mut((x, hairline.y)) {
@@ -1085,8 +1083,7 @@ mod tests {
     use super::*;
     use crate::ink::Look;
 
-    /// The facts a rail of a frame under test is drawn from: enough of them that the ledger fills
-    /// its column top to bottom.
+    /// Enough facts that the ledger fills its column top to bottom.
     fn rail() -> Facts {
         Facts {
             wire: Some(String::from("anthropic")),
@@ -1107,9 +1104,7 @@ mod tests {
         }
     }
 
-    /// The three bands are painted under the cells they hold, and every cell on one still reads
-    /// back as the ink it was drawn in: a band is a panel only because a name is read from a
-    /// foreground and a modifier, and never from a background.
+    /// A band is a panel only because a name is read from a foreground and a modifier.
     #[test]
     fn the_rail_the_composer_and_a_code_well_are_painted_over_their_own_surface() {
         let palette = Palette::TRUECOLOR;
@@ -1164,7 +1159,7 @@ mod tests {
         for x in area.x..area.right() {
             let cell = buffer.cell((x, last)).expect("a cell of the footer");
             assert!(
-                Band::ALL
+                [Band::Rail, Band::Composer, Band::Well]
                     .into_iter()
                     .all(|band| cell.bg != palette.band(band)),
                 "the footer sits on no band, and column {x} of it sits on one"

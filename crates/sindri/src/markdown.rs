@@ -423,6 +423,8 @@ impl Room {
     /// draw — because a diagram that is simply absent cannot be told from a build that cannot draw.
     fn close_code(&mut self) {
         self.flush_if_written();
+        // The fence's own rows are the well's; what is said about it under them is prose.
+        self.code = None;
         if let Some(mermaid) = self.mermaid.take() {
             match mermaid::block(&mermaid.source, mermaid.fence) {
                 mermaid::Block::Refused { caption } => self.caption(&caption),
@@ -441,7 +443,6 @@ impl Room {
             }
         }
         self.lead.pop();
-        self.code = None;
     }
 
     /// Draws `picture` over the block that begins at `at`, growing the block to the picture's

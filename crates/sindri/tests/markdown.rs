@@ -350,8 +350,6 @@ fn a_table_wider_than_the_room_wraps_inside_its_cells_and_keeps_every_word() {
     );
 }
 
-/// A fence is one block of cells: its tag's row and every line under it sit in the well, and the
-/// prose on either side of it sits on none.
 #[test]
 fn a_code_fence_sits_in_the_well_and_the_prose_around_it_sits_on_nothing() {
     let rows = markdown::rows(
@@ -373,5 +371,20 @@ fn a_code_fence_sits_in_the_well_and_the_prose_around_it_sits_on_nothing() {
             (String::from("prose below"), None),
         ],
         "the well holds the fence whole and stops at its edges"
+    );
+}
+
+/// A diagram that will not draw keeps its source in the well, and the sentence saying why sits
+/// under it as prose: the well is the fence's, and not everything the block said.
+#[test]
+fn the_sentence_saying_a_diagram_will_not_draw_is_prose_and_not_code() {
+    let rows = markdown::rows("```mermaid\nnot a diagram\n```", 200);
+    let under: Vec<(String, Option<Band>)> =
+        rows.iter().map(|row| (words(row), row.band())).collect();
+
+    assert_eq!(
+        under[..3].iter().map(|(_, band)| *band).collect::<Vec<_>>(),
+        [Some(Band::Well), Some(Band::Well), None],
+        "the tag and the source are the well's, and the row under them is no code: {under:?}"
     );
 }
