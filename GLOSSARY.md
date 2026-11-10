@@ -103,6 +103,11 @@ One of the three places a frame paints a background under its cells — the rail
 the well a code fence sits in. A cell on a band still reads back as its ink.
 _Avoid_: Panel, colour, stripe
 
+**Meter**:
+The six cells a share of a window is drawn as, filled to the share: a ceiling can be a meter, and a
+hit rate — which has no ceiling — never is.
+_Avoid_: Bar, gauge, progress bar, sparkline
+
 **Picture**:
 An image an answer points at, or the diagram a fence becomes — measured into its **footprint** of
 cells before a pixel is spent, drawn as a **placement** over those rows.

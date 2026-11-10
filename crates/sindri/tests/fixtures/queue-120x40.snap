@@ -3,23 +3,23 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 queue at 120x40
-00 |  check: fmt ... ok                                                                     wire      .............anthropic| plain:88 dim:23 muted:9
-01 |  check: clippy ... ok                                                                  model     ....claude-sonnet-4-5…| plain:88 dim:14 muted:18
-02 |  check: test ... ok                                                                    think     ..................high| plain:88 dim:28 muted:4
+00 |  check: fmt ... ok                                                                     wire                   anthropic| plain:88 dim:10 plain:22
+01 |  check: clippy ... ok                                                                  model         claude-sonnet-4-5…| plain:88 dim:10 plain:22
+02 |  check: test ... ok                                                                    think                       high| plain:88 dim:10 plain:22
 03 |  check: frames ... ok                                                                  ────────────────────────────────| plain:88 dim:32
-04 |  What that buys is the plain case and what it costs is the scrolled one: a window is a turns     .................6/250| plain:88 dim:27 muted:5
-05 |  row offset from the tail, so resolving one walks the entries between the tail and the ctx       ........48.2k/200k 24%| plain:88 dim:18 muted:14
-06 |  window and lays out every one of them on the way. Each is laid out once and kept, so  cache     ...................88%| plain:88 dim:29 muted:3
+04 |  What that buys is the plain case and what it costs is the scrolled one: a window is a turns                   6 /  250| plain:88 dim:10 plain:22
+05 |  row offset from the tail, so resolving one walks the entries between the tail and the ctx          █░░░░░ 48.2k / 200k| plain:88 dim:10 plain:4 dim:5 plain:13
+06 |  window and lays out every one of them on the way. Each is laid out once and kept, so  cache                        88%| plain:88 dim:10 plain:22
 07 |  the whole history scrolled through costs one layout per entry and scrolling it again  ────────────────────────────────| plain:88 dim:32
-08 |  costs none.                                                                           workspace ..…/.worktrees/46-rail| plain:88 dim:12 muted:20
-09 |turn 5 ─────────────────────────────────────────────────────────────────────────────────branch    .....spec/1-capability| dim:103 muted:17
+08 |  costs none.                                                                           workspace   …/.worktrees/46-rail| plain:88 dim:10 plain:22
+09 |turn 5 ─────────────────────────────────────────────────────────────────────────────────branch         spec/1-capability| dim:98 plain:22
 10 |✓ exit 0  bash  128 bytes · 9 ms                                                        ────────────────────────────────| ok:1 dim:31 plain:56 dim:32
-11 |  crates/sindri/src/rows.rs | 412 +++++++++++++                                         skills    .....................2| plain:88 dim:31 muted:1
+11 |  crates/sindri/src/rows.rs | 412 +++++++++++++                                         skills                         2| plain:88 dim:10 plain:22
 12 |  crates/sindri/tests/rows.rs | 198 +++++++++                                           ────────────────────────────────| plain:88 dim:32
-13 |  The transcript's unit is the entry. An entry never carries a formatted line, so the   sandbox   .................bwrap| plain:88 dim:27 muted:5
+13 |  The transcript's unit is the entry. An entry never carries a formatted line, so the   sandbox                    bwrap| plain:88 dim:10 plain:22
 14 |  same run is drawn the same way by the TUI, by a reader of the transcript and by       ────────────────────────────────| plain:88 dim:32
-15 |  whatever front end comes next.                                                        session   ..............9f2c7a41| plain:88 dim:24 muted:8
-16 |                                                                                        temp      ........…/9f2c7a41/tmp| plain:88 dim:18 muted:14
+15 |  whatever front end comes next.                                                        session                 9f2c7a41| plain:88 dim:10 plain:22
+16 |                                                                                        temp              …/9f2c7a41/tmp| plain:88 dim:10 plain:22
 17 |  construct │ where it stands                                                                                           | plain:120
 18 |  ──────────┼───────────────────────────                                                                                | plain:2 dim:38 plain:80
 19 |  heading   │ in the answer's own gutter                                                                                | plain:120

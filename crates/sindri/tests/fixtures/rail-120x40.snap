@@ -3,23 +3,23 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 rail at 120x40
-00 |turn 1 ─────────────────────────────────────────────────────────────────────────────────wire      .............anthropic| dim:111 muted:9
-01 |✓ exit 0  bash  412 bytes · 23 ms                                                       model     ....claude-sonnet-4-5…| ok:1 dim:32 plain:55 dim:14 muted:18
-02 |  src/rows.rs: the glyph a turn opens with                                              think     ..................high| plain:88 dim:28 muted:4
+00 |turn 1 ─────────────────────────────────────────────────────────────────────────────────wire                   anthropic| dim:98 plain:22
+01 |✓ exit 0  bash  412 bytes · 23 ms                                                       model         claude-sonnet-4-5…| ok:1 dim:32 plain:55 dim:10 plain:22
+02 |  src/rows.rs: the glyph a turn opens with                                              think                       high| plain:88 dim:10 plain:22
 03 |  src/rows.rs: a word longer than a row is broken                                       ────────────────────────────────| plain:88 dim:32
-04 |  Rendering lives in the front end and not in the core, because an entry is a fact and  turns     .................6/250| plain:88 dim:27 muted:5
-05 |  never a rendering: the TUI and any reader draw one run from one value, and the core   ctx       ........48.2k/200k 24%| plain:88 dim:18 muted:14
-06 |  may not name a terminal at all.                                                       cache     ...................88%| plain:88 dim:29 muted:3
+04 |  Rendering lives in the front end and not in the core, because an entry is a fact and  turns                   6 /  250| plain:88 dim:10 plain:22
+05 |  never a rendering: the TUI and any reader draw one run from one value, and the core   ctx          █░░░░░ 48.2k / 200k| plain:88 dim:10 plain:4 dim:5 plain:13
+06 |  may not name a terminal at all.                                                       cache                        88%| plain:88 dim:10 plain:22
 07 |                                                                                        ────────────────────────────────| plain:88 dim:32
-08 |                                                                                        workspace ..…/.worktrees/46-rail| plain:88 dim:12 muted:20
-09 |                                                                                        branch    .....spec/1-capability| plain:88 dim:15 muted:17
+08 |                                                                                        workspace   …/.worktrees/46-rail| plain:88 dim:10 plain:22
+09 |                                                                                        branch         spec/1-capability| plain:88 dim:10 plain:22
 10 |                                                                                        ────────────────────────────────| plain:88 dim:32
-11 |                                                                                        skills    .....................2| plain:88 dim:31 muted:1
+11 |                                                                                        skills                         2| plain:88 dim:10 plain:22
 12 |                                                                                        ────────────────────────────────| plain:88 dim:32
-13 |                                                                                        sandbox   .................bwrap| plain:88 dim:27 muted:5
+13 |                                                                                        sandbox                    bwrap| plain:88 dim:10 plain:22
 14 |                                                                                        ────────────────────────────────| plain:88 dim:32
-15 |                                                                                        session   ..............9f2c7a41| plain:88 dim:24 muted:8
-16 |                                                                                        temp      ........…/9f2c7a41/tmp| plain:88 dim:18 muted:14
+15 |                                                                                        session                 9f2c7a41| plain:88 dim:10 plain:22
+16 |                                                                                        temp              …/9f2c7a41/tmp| plain:88 dim:10 plain:22
 17 |                                                                                                                        | plain:120
 18 |                                                                                                                        | plain:120
 19 |                                                                                                                        | plain:120

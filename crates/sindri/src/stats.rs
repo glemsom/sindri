@@ -3,10 +3,14 @@ use std::path::Path;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use sindri_core::records::SessionDocument;
+use sindri_core::run::State as RunState;
 
 use crate::ink::Ink;
 use crate::palette::Palette;
-use crate::rail::{Facts, head, label_row, more, put, tail, tokens, value_room};
+use crate::rail::{
+    Facts, Fill, Halves, METER, Value, hairline, hanging, head, label_row, lined, more, pair, put,
+    span, tail, tokens, value_room,
+};
 
 /// A band that cannot hold one gets one anyway.
 const MIN_COLUMN: u16 = 40;
@@ -29,59 +33,83 @@ struct Block {
 struct Fact {
     /// `None` when the fact is a name and no more.
     label: Option<&'static str>,
-    value: Value,
+    cut: Cut,
+    text: String,
+    /// The share of the window this fact is, drawn as a meter beside its own glyphs.
+    fill: Option<Fill>,
+    ink: Ink,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum Value {
-    /// Drawn whole or not at all.
-    Word(String),
-    /// A narrow column cuts it at its head and marks the cut with `…/`.
-    Path(String),
-    /// A narrow column cuts it at its tail and marks the cut with `…`.
-    Name(String),
+/// How a narrow column takes a value: whole or not at all, or cut at the end the fact is read
+/// from and marked where the cut lands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Cut {
+    Word,
+    /// Cut at its head, marked with `…/`: the tail of a path is what a reader is looking for.
+    Path,
+    /// Cut at its tail, marked with `…`: the head of a served name is what a reader is looking for.
+    Name,
 }
 
-impl Value {
+impl Cut {
     /// A word too wide for its room is not drawn in part, and a path or a name cut to nothing
     /// says nothing.
-    fn drawn(&self, columns: usize) -> Option<String> {
-        let text = match self {
-            Value::Word(word) => word.clone(),
-            Value::Path(path) => tail(path, columns),
-            Value::Name(name) => head(name, columns),
+    fn take(self, text: &str, room: usize) -> Option<String> {
+        let cut = match self {
+            Cut::Word => text.to_owned(),
+            Cut::Path => tail(text, room),
+            Cut::Name => head(text, room),
         };
-        (!text.is_empty() && text.chars().count() <= columns).then_some(text)
+        (!cut.is_empty() && span(&cut) <= room).then_some(cut)
     }
 }
 
 impl Fact {
-    fn word(label: &'static str, value: impl Into<String>) -> Fact {
+    fn new(label: Option<&'static str>, cut: Cut, text: impl Into<String>) -> Fact {
         Fact {
-            label: Some(label),
-            value: Value::Word(value.into()),
+            label,
+            cut,
+            text: text.into(),
+            fill: None,
+            ink: Ink::Plain,
         }
+    }
+
+    fn word(label: &'static str, text: impl Into<String>) -> Fact {
+        Fact::new(Some(label), Cut::Word, text)
     }
 
     fn path(label: &'static str, path: &Path) -> Fact {
-        Fact {
-            label: Some(label),
-            value: Value::Path(path.to_string_lossy().into_owned()),
-        }
+        Fact::new(Some(label), Cut::Path, path.to_string_lossy())
     }
 
     fn name(label: &'static str, name: impl Into<String>) -> Fact {
-        Fact {
-            label: Some(label),
-            value: Value::Name(name.into()),
-        }
+        Fact::new(Some(label), Cut::Name, name)
     }
 
     fn bare(name: impl Into<String>) -> Fact {
+        Fact::new(None, Cut::Name, name)
+    }
+
+    /// A fact whose share of a window is drawn as a meter beside its own glyphs.
+    fn metered(label: &'static str, text: impl Into<String>, fill: Fill) -> Fact {
         Fact {
-            label: None,
-            value: Value::Name(name.into()),
+            fill: Some(fill),
+            ..Fact::word(label, text)
         }
+    }
+
+    /// The same fact in another ink: the one row that says something is moving is read in the
+    /// accent, so the eye lands on it without reading a word.
+    fn inked(mut self, ink: Ink) -> Fact {
+        self.ink = ink;
+        self
+    }
+
+    /// The fact's pair in the half widths its block shares, so every slash in the block lands in
+    /// one column.
+    fn align(&mut self, halves: Halves) {
+        self.text = lined(&self.text, halves);
     }
 
     fn drawn(&self, width: u16) -> Option<Drawn> {
@@ -89,9 +117,18 @@ impl Fact {
             None => usize::from(width),
             Some(_) => value_room(width),
         };
+        let room = match self.fill {
+            None => room,
+            Some(_) => room.checked_sub(METER + 1)?,
+        };
+        let text = self.cut.take(&self.text, room)?;
+        let value = match self.fill {
+            None => Value::new(text),
+            Some(fill) => Value::metered(text, fill),
+        };
         Some(Drawn {
             label: self.label.map(String::from),
-            value: self.value.drawn(room)?,
+            value: value.inked(self.ink),
         })
     }
 }
@@ -99,7 +136,7 @@ impl Fact {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Drawn {
     label: Option<String>,
-    value: String,
+    value: Value,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -140,14 +177,19 @@ impl Stats {
 
         let mut meters = Vec::new();
         if let Some((turns, cap)) = facts.turns {
-            meters.push(Fact::word("turns", format!("{turns}/{cap}")));
+            meters.push(Fact::word("turns", pair(turns, cap)));
         }
         if let Some(ctx) = &facts.ctx {
-            meters.push(Fact::word("ctx", ctx.said()));
+            let (text, fill) = ctx.said();
+            meters.push(match fill {
+                Some(fill) => Fact::metered("ctx", text, fill),
+                None => Fact::word("ctx", text),
+            });
         }
         if let Some(cache) = facts.cache {
             meters.push(Fact::word("cache", format!("{cache}%")));
         }
+        aligned(&mut meters);
 
         let spent = document.usage;
         let mut spend = Vec::new();
@@ -171,7 +213,11 @@ impl Stats {
             place.push(Fact::word("commit", commit.clone()));
         }
 
-        let mut stop = vec![Fact::word("stopped", document.stopped.word())];
+        let moving = match document.stopped {
+            RunState::Running => Ink::Accent,
+            RunState::Stopped(_) => Ink::Plain,
+        };
+        let mut stop = vec![Fact::word("stopped", document.stopped.word()).inked(moving)];
         if let Some(reason) = document.stopped.stop() {
             stop.push(Fact::word("exit", reason.exit_code().to_string()));
         }
@@ -214,7 +260,17 @@ impl Stats {
         let screen = self.screen(area);
         for column in &screen.columns {
             let mut y = area.y;
-            for block in &column.blocks {
+            for (index, block) in column.blocks.iter().enumerate() {
+                if index > 0 {
+                    let rule = Rect {
+                        x: column.x,
+                        y,
+                        width: column.width,
+                        height: 1,
+                    };
+                    hairline(buffer, rule, palette);
+                    y = y.saturating_add(1);
+                }
                 put(buffer, column.x, y, block.label, Ink::Dim, palette);
                 y = y.saturating_add(1);
                 for row in &block.rows {
@@ -293,7 +349,11 @@ impl Stats {
             let height = u16::try_from(drawn.len())
                 .unwrap_or(u16::MAX)
                 .saturating_add(1);
-            let Some(place) = (at..count).find(|column| room[*column] >= height) else {
+            // A block below the first in its column is separated from it by a rule, and the rule
+            // takes a row of the column it stands in.
+            let needs = |column: &Column| height + u16::from(!column.blocks.is_empty());
+            let Some(place) = (at..count).find(|column| room[*column] >= needs(&columns[*column]))
+            else {
                 went += self.blocks[index..]
                     .iter()
                     .map(|block| block.rows.len())
@@ -301,7 +361,7 @@ impl Stats {
                 break;
             };
             went += block.rows.len() - drawn.len();
-            room[place] -= height;
+            room[place] -= needs(&columns[place]);
             at = place;
             columns[place].blocks.push(Placed {
                 label: block.label,
@@ -318,6 +378,15 @@ impl Stats {
     }
 }
 
+/// Spells a block's pairs in one pair of half widths, so every slash in the block lands in one
+/// column and the digits either side of it line up.
+fn aligned(rows: &mut [Fact]) {
+    let shared = Halves::of(rows.iter().map(|row| row.text.as_str()));
+    for row in rows.iter_mut() {
+        row.align(shared);
+    }
+}
+
 fn column_width(width: u16, count: usize) -> u16 {
     let Some(count) = u16::try_from(count).ok().filter(|count| *count > 0) else {
         return 0;
@@ -329,18 +398,17 @@ fn column_width(width: u16, count: usize) -> u16 {
 }
 
 fn drawn_row(buffer: &mut Buffer, column: &Column, y: u16, row: &Drawn, palette: &Palette) {
-    let Some(label) = &row.label else {
-        put(buffer, column.x, y, &row.value, Ink::Muted, palette);
-        return;
-    };
     let area = Rect {
         x: column.x,
         y,
         width: column.width,
         height: 1,
     };
-    let x = label_row(buffer, area, label, row.value.chars().count(), palette);
-    put(buffer, x, y, &row.value, Ink::Muted, palette);
+    let x = match &row.label {
+        Some(label) => label_row(buffer, area, label, row.value.columns(), palette),
+        None => hanging(area, row.value.columns()),
+    };
+    row.value.draw(buffer, x, y, palette);
 }
 
 #[cfg(test)]
@@ -446,13 +514,48 @@ mod tests {
             .flat_map(|column| column.blocks.iter())
             .flat_map(|block| {
                 std::iter::once(block.label.to_owned()).chain(block.rows.iter().map(|row| {
+                    let words: Vec<&str> = row.value.text().split_whitespace().collect();
                     match &row.label {
-                        None => row.value.clone(),
-                        Some(label) => format!("{label} {}", row.value),
+                        None => words.join(" "),
+                        Some(label) => format!("{label} {}", words.join(" ")),
                     }
                 }))
             })
             .collect()
+    }
+
+    fn inks(buffer: &Buffer, y: u16) -> Vec<(Ink, u16)> {
+        let mut runs: Vec<(Ink, u16)> = Vec::new();
+        for x in buffer.area.x..buffer.area.right() {
+            let cell = buffer.cell((x, y)).expect("a cell of the band");
+            let ink = Ink::of(cell, &PALETTE).expect("the screen paints in inks and nothing else");
+            match runs.last_mut() {
+                Some((last, count)) if *last == ink => *count += 1,
+                _ => runs.push((ink, 1)),
+            }
+        }
+        runs
+    }
+
+    /// The body of the screen as the frame paints it: the ground under every cell, then the rows.
+    fn painted(stats: &Stats, area: Rect) -> Buffer {
+        let mut buffer = Buffer::empty(area);
+        buffer.set_style(area, PALETTE.ground(None));
+        stats.paint(area, &mut buffer, &PALETTE);
+        buffer
+    }
+
+    /// The column a glyph sits in, counted in cells and never in the bytes of a glyph wider than
+    /// one: a pair's slash is the column the two halves of every number in a block are hung on.
+    fn column_of(row: &str, glyph: char) -> Option<usize> {
+        row.chars().position(|drawn| drawn == glyph)
+    }
+
+    /// The row a labelled fact of `value` is drawn on in a column `width` wide: its label in the
+    /// ten-column field, and the value against the column's last column.
+    fn drawn_row(label: &str, value: &str, width: u16) -> String {
+        let room = usize::from(width) - 10;
+        format!("{label:<10}{value:>room$}")
     }
 
     fn glyphs(buffer: &Buffer, y: u16) -> String {
@@ -502,8 +605,8 @@ mod tests {
                 "route chat",
                 "think high",
                 "meters",
-                "turns 6/250",
-                "ctx 48.2k/200k 24%",
+                "turns 6 / 250",
+                "ctx 48.2k / 200k",
                 "cache 88%",
                 "spend",
                 "input 48.2k",
@@ -527,7 +630,7 @@ mod tests {
                 "records",
                 "session",
                 "session 9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61",
-                "temp …/state/sindri/sessions/9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61/tmp",
+                "temp …/.local/state/sindri/sessions/9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61/tmp",
             ],
             "every fact on the ticket's table has its row, drawn whole, and nothing on the \
              band went"
@@ -617,7 +720,7 @@ mod tests {
             for block in &column.blocks {
                 for row in &block.rows {
                     assert!(
-                        row.value.chars().count()
+                        row.value.columns()
                             + match row.label {
                                 None => 0,
                                 Some(_) => usize::from(column.width) - value_room(column.width),
@@ -732,6 +835,143 @@ mod tests {
                     .iter()
                     .any(|row| row == "session 9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61"),
                 "so the GUID is drawn in all thirty-six characters on a wide band too"
+            );
+        }
+    }
+
+    #[test]
+    fn a_row_sets_its_label_dim_and_its_value_plain_on_the_columns_hanging_edge() {
+        let stats = Stats::of(&facts(), &document(), &[]);
+        let area = band(81, 40);
+
+        let buffer = painted(&stats, area);
+
+        assert_eq!(
+            glyphs(&buffer, 1),
+            drawn_row("wire", "anthropic", 81),
+            "the label in its field and the value against the column's last column"
+        );
+        assert_eq!(
+            glyphs(&buffer, 2),
+            drawn_row("model", SERVED, 81),
+            "and a value of another width ends in that same column"
+        );
+        assert_eq!(
+            inks(&buffer, 1),
+            [(Ink::Dim, 10), (Ink::Plain, 71)],
+            "the field is `dim` and the value is the fact, so it is `plain`"
+        );
+    }
+
+    #[test]
+    fn a_hairline_separates_two_fact_groups() {
+        let stats = Stats::of(&facts(), &document(), &[]);
+        let area = band(81, 40);
+
+        let buffer = painted(&stats, area);
+
+        let rows: Vec<String> = (0..area.height).map(|y| glyphs(&buffer, y)).collect();
+        let rule = "─".repeat(usize::from(area.width));
+        assert_eq!(
+            rows[5], rule,
+            "the run block is closed by a rule across the column: {rows:#?}"
+        );
+        assert_eq!(
+            rows[4],
+            drawn_row("think", "high", 81),
+            "the fact above the rule is the last of the run block"
+        );
+        assert_eq!(
+            rows[6].trim_end(),
+            "meters",
+            "and the rule stands between that fact and the name of the group under it"
+        );
+        assert_eq!(
+            inks(&buffer, 5),
+            [(Ink::Dim, 81)],
+            "the rule is drawn in the ink a group's edge is read in, and nothing else is"
+        );
+    }
+
+    #[test]
+    fn a_share_of_a_window_is_a_meter_and_a_hit_rate_is_no_meter_at_all() {
+        let stats = Stats::of(&facts(), &document(), &[]);
+        let area = band(81, 40);
+
+        let buffer = painted(&stats, area);
+
+        assert_eq!(
+            glyphs(&buffer, 8),
+            drawn_row("ctx", "█░░░░░ 48.2k / 200k", 81),
+            "a quarter of the window fills one of the meter's six cells, beside the size it is \
+             a share of"
+        );
+        assert_eq!(
+            glyphs(&buffer, 9),
+            drawn_row("cache", "88%", 81),
+            "a hit rate has no ceiling to be a share of, so it is the number and no meter"
+        );
+        assert_eq!(
+            column_of(&glyphs(&buffer, 7), '/'),
+            column_of(&glyphs(&buffer, 8), '/'),
+            "and the turns above the size line their slash up with it, so the digits either \
+             side are a column"
+        );
+    }
+
+    #[test]
+    fn a_name_with_no_label_of_its_own_hangs_on_the_same_edge() {
+        let names = [String::from("bash"), String::from("records")];
+        let stats = Stats::of(&facts(), &document(), &names);
+        let area = band(81, 40);
+
+        let buffer = painted(&stats, area);
+
+        let rows: Vec<String> = (0..area.height).map(|y| glyphs(&buffer, y)).collect();
+        let names: Vec<&String> = rows
+            .iter()
+            .filter(|row| row.trim() == "bash" || row.trim() == "records")
+            .collect();
+        assert_eq!(
+            names,
+            [&drawn_row("", "bash", 81), &drawn_row("", "records", 81)],
+            "a value is a value however its row is labelled, so a loaded name reads in the \
+             column its siblings do: {rows:#?}"
+        );
+    }
+
+    #[test]
+    fn the_fact_that_says_the_run_is_moving_wears_the_accent() {
+        let moving = SessionDocument {
+            stopped: RunState::Running,
+            end: None,
+            ..document()
+        };
+        let area = band(81, 40);
+
+        for (stopped, ink) in [
+            (RunState::Running, Ink::Accent),
+            (RunState::Stopped(Stop::Final), Ink::Plain),
+        ] {
+            let document = SessionDocument {
+                stopped,
+                ..moving.clone()
+            };
+            let stats = Stats::of(&facts(), &document, &[]);
+            let buffer = painted(&stats, area);
+
+            let row = (0..area.height)
+                .find(|y| glyphs(&buffer, *y).trim_end().starts_with("stopped"))
+                .expect("the screen draws the state the run stopped in");
+            let at = u16::try_from(81 - "running".len()).expect("a column of the row");
+            assert_eq!(
+                Ink::of(
+                    buffer.cell((at, row)).expect("a cell of the state"),
+                    &PALETTE
+                ),
+                Some(ink),
+                "a run still going is the one fact on the screen that says something is \
+                 happening, so it is read in the accent and not in the plain ink"
             );
         }
     }

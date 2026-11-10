@@ -814,10 +814,20 @@ fn picture(drawn: &str) -> BTreeMap<u16, String> {
         .collect()
 }
 
+/// Whether the rail says `value` at the end of the row `label` heads. The blanks between the
+/// glyphs are the layout's and not the fact's, so they are dropped from both sides: a block pads
+/// its pairs into one slash column, and a path shorter than its column is drawn whole.
 fn rail_reads(drawn: &str, label: &str, value: &str) -> bool {
-    picture(drawn)
-        .values()
-        .any(|row| row.contains(&format!("{label} ")) && row.ends_with(value))
+    fn tightened(text: &str) -> String {
+        text.chars()
+            .filter(|glyph| !glyph.is_whitespace())
+            .collect()
+    }
+    let asked = tightened(value);
+    picture(drawn).values().any(|row| {
+        row.split_once(&format!("{label} "))
+            .is_some_and(|(_, rest)| tightened(rest).ends_with(&asked))
+    })
 }
 
 /// The cell the last frame left the caret on: typing paints one glyph per frame, so where the caret
@@ -1237,7 +1247,7 @@ fn a_live_run_draws_the_facts_it_was_handed_and_its_first_turn_moves_them() {
     ask(&mut pty, &drawn, &wire);
 
     assert!(
-        drawn.wait_until(|frame| rail_reads(frame, "turns", "0/250")),
+        drawn.wait_until(|frame| rail_reads(frame, "turns", "0 / 250")),
         "the frame a run's first turn is in flight from draws the facts the run was \
          opened with, and the cap with no turn spent: {:?}",
         drawn.text()
@@ -1276,8 +1286,8 @@ fn a_live_run_draws_the_facts_it_was_handed_and_its_first_turn_moves_them() {
 
     assert!(
         drawn.wait_until(|frame| {
-            rail_reads(frame, "turns", "1/250")
-                && rail_reads(frame, "ctx", "11/200k 0%")
+            rail_reads(frame, "turns", "1 / 250")
+                && rail_reads(frame, "ctx", "11 / 200k")
                 && rail_reads(frame, "cache", "36%")
         }),
         "the turn the run took is counted against the cap, the size the wire reported is \
@@ -1293,8 +1303,8 @@ fn a_live_run_draws_the_facts_it_was_handed_and_its_first_turn_moves_them() {
 
     let frame = drawn.text();
     for (label, value) in [
-        ("turns", "1/250"),
-        ("ctx", "11/200k 0%"),
+        ("turns", "1 / 250"),
+        ("ctx", "11 / 200k"),
         ("cache", "36%"),
         ("workspace", "/workspace"),
         ("branch", "main"),
