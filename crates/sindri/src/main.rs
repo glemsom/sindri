@@ -1,5 +1,6 @@
 mod auth; // the one command that signs in rather than runs
 mod batch; // is the Unix filter: a prompt in, the answer and one newline out
+mod cell; // the cell-size question and the bounded wait for its answer
 mod cli; // the command line as clap sees it
 mod doctor; // the honest window: it proves the sandbox
 mod launch; // one launch's run, assembled the same way whichever front end asked for it
