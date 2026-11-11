@@ -155,8 +155,8 @@ hit rate — which has no ceiling — never is.
 _Avoid_: Bar, gauge, progress bar, sparkline
 
 **Picture**:
-An image an answer points at, or the diagram a fence becomes — measured into its **footprint** of
-cells before a pixel is spent, drawn as a **placement** over those rows.
+An image an answer points at, the diagram a fence becomes, or **Sindri's face** — measured into its
+**footprint** of cells before a pixel is spent, drawn as a **placement** over those rows.
 _Avoid_: Image (that is the `src`), graphic, thumbnail, raster (one way of drawing one)
 
 **Surface**:
@@ -165,9 +165,9 @@ terminal places pictures at all.
 _Avoid_: Context, environment, settings
 
 **Sindri's face**:
-The picture of Sindri the **artefact** carries beside the bundled font, measured from its own header
-into a **footprint** and drawn over those cells — decoration, so a terminal that places no picture
-is given no cells and no words for it, and the **face** an ink wears has nothing to do with it.
+The picture of Sindri that travels in the **artefact** beside the bundled font, measured from its
+own header into a **footprint** and drawn over those cells — decoration, so a terminal that places
+no picture is given no cells and no words for it. Not the **face** an ink wears.
 _Avoid_: Logo, avatar, mascot, icon
 
 **Card**:

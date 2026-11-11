@@ -39,11 +39,15 @@ fn surface(workspace: &Path) -> Surface {
     Surface::of(Some(workspace), CellSize::new(10, 20), true)
 }
 
+/// A surface with no workspace in it, which is all a picture the binary carries is measured
+/// against: the pixels in a cell, and whether this terminal places one at all.
+fn carried(draws: bool) -> Surface {
+    Surface::of(None, cell(), draws)
+}
+
 #[test]
 fn a_face_that_travels_in_the_binary_is_measured_from_its_own_header() {
-    let places_pictures = Surface::of(None, CellSize::new(10, 20), true);
-
-    let measured = face::measure(Ceiling::across(80), &places_pictures)
+    let measured = face::measure(Ceiling::across(80), &carried(true))
         .expect("a terminal that places pictures is given the face");
 
     assert_eq!(
@@ -66,9 +70,7 @@ fn a_face_that_travels_in_the_binary_is_measured_from_its_own_header() {
 
 #[test]
 fn a_face_too_tall_for_its_band_gives_way_on_rows_and_never_on_shape() {
-    let places_pictures = Surface::of(None, CellSize::new(10, 20), true);
-
-    let measured = face::measure(Ceiling::new(40, 12), &places_pictures)
+    let measured = face::measure(Ceiling::new(40, 12), &carried(true))
         .expect("a band too short for the face's own height is still a band it is drawn in");
 
     assert_eq!(
@@ -91,10 +93,8 @@ fn a_face_too_tall_for_its_band_gives_way_on_rows_and_never_on_shape() {
 
 #[test]
 fn a_terminal_that_places_no_picture_is_given_no_cells_and_no_words_for_the_face() {
-    let words_only = Surface::of(None, cell(), false);
-
     assert!(
-        face::measure(Ceiling::new(40, 12), &words_only).is_none(),
+        face::measure(Ceiling::new(40, 12), &carried(false)).is_none(),
         "the face is decoration, so a frame that places no picture reserves no cell for it and \
          has no caption to say it is missing"
     );
@@ -426,7 +426,7 @@ fn transmission_headers(buffer: &Buffer) -> usize {
 
 #[test]
 fn a_face_is_placed_over_the_footprint_it_was_measured_into_and_made_once_per_size() {
-    let measured = face::measure(Ceiling::new(40, 12), &Surface::of(None, cell(), true))
+    let measured = face::measure(Ceiling::new(40, 12), &carried(true))
         .expect("the face is measured with no workspace and no file on disk");
     let mut pictures = Pictures::kitty(cell());
     let block = Rect {

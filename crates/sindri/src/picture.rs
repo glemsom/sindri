@@ -80,9 +80,8 @@ impl Picture {
     }
 
     /// The pixels of this picture at the cells it was measured into, or nothing when what it was
-    /// measured from cannot be decoded — a file gone since it was measured, or bytes that are not
-    /// a picture. A raster is scaled by a filter that averages rather than drops, because nearest
-    /// neighbour loses whole letters of a screenshot fitted into a band.
+    /// measured from cannot be decoded: a file gone, or bytes that are not a picture. A raster is
+    /// scaled by a filter that averages rather than drops, because nearest loses whole letters.
     pub fn rasterise(&self, cell: CellSize) -> Option<image::RgbaImage> {
         let (width, height) = self.pixels(cell);
         let drawing = match &self.drawn {
@@ -174,6 +173,12 @@ impl Refusal {
             reason: refusal.message(),
         }
     }
+
+    fn unreadable(error: impl std::fmt::Display) -> Refusal {
+        Refusal::Unreadable {
+            reason: error.to_string(),
+        }
+    }
 }
 
 impl std::fmt::Display for Refusal {
@@ -224,28 +229,24 @@ fn resolve(source: &str, workspace: Option<&Path>) -> Result<PathBuf, Refusal> {
 /// The extent `drawn` declares: an SVG's own, or a raster's header read without decoding it,
 /// whether that raster is a file or the bytes the binary carries.
 fn extent(drawn: &Drawn) -> Result<(u32, u32), Refusal> {
-    let unreadable = |reason: String| Refusal::Unreadable { reason };
     match drawn {
         Drawn::Drawing(svg) => measured(svg),
         Drawn::File(path) if is_svg(path) => {
-            let svg =
-                std::fs::read_to_string(path).map_err(|error| unreadable(error.to_string()))?;
+            let svg = std::fs::read_to_string(path).map_err(Refusal::unreadable)?;
             measured(&svg)
         }
-        Drawn::File(path) => {
-            image::image_dimensions(path).map_err(|error| unreadable(error.to_string()))
-        }
-        Drawn::Carried(bytes) => header(bytes).map_err(unreadable),
+        Drawn::File(path) => image::image_dimensions(path).map_err(Refusal::unreadable),
+        Drawn::Carried(bytes) => header(bytes),
     }
 }
 
 /// The extent a raster's header declares, read off the first bytes of it rather than by
 /// decoding pixels: a carried picture is measured before anything is made of it.
-fn header(bytes: &[u8]) -> Result<(u32, u32), String> {
+fn header(bytes: &[u8]) -> Result<(u32, u32), Refusal> {
     let reader = image::ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
-        .map_err(|error| error.to_string())?;
-    reader.into_dimensions().map_err(|error| error.to_string())
+        .map_err(Refusal::unreadable)?;
+    reader.into_dimensions().map_err(Refusal::unreadable)
 }
 
 /// A raster at the pixels of the footprint it was measured into.
