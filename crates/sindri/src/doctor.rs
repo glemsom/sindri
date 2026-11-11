@@ -9,16 +9,18 @@ use sindri_core::session::{self, Session};
 use sindri_core::skills::{Catalog, Diagnostic, Listing};
 use sindri_core::tools::{BASH, FrontEnd, ToolSet};
 
+use sindri::pen;
+
 use crate::cli::Cli;
 use crate::refuse;
 
 /// The exit code a failed check is reported by.
 const SETUP: u8 = 3;
 
-const LABEL: usize = 14;
+const LABEL: u16 = 14;
 
 /// `builtin` is the longest of the three scopes, and the shadowing line's verb is as wide.
-const SCOPE_COLUMN: usize = 9;
+const SCOPE_COLUMN: u16 = 9;
 
 pub fn run(cli: &Cli) -> ExitCode {
     let config = match Config::resolve(&Process, cli.flags()) {
@@ -126,17 +128,16 @@ fn skills(listing: &[Listing]) -> Vec<String> {
     }];
     let widest = listing
         .iter()
-        .map(|entry| entry.name.chars().count())
+        .map(|entry| pen::cells(&entry.name))
         .max()
         .unwrap_or(0);
     for entry in listing {
         lines.push(
             format!(
-                "  {:<SCOPE$}{:<widest$}  {}",
-                entry.scope.word(),
-                entry.name,
+                "  {}{}  {}",
+                pen::pad(entry.scope.word(), SCOPE_COLUMN),
+                pen::pad(&entry.name, widest),
                 entry.description,
-                SCOPE = SCOPE_COLUMN
             )
             .trim_end()
             .to_owned(),
@@ -150,11 +151,10 @@ fn skills(listing: &[Listing]) -> Vec<String> {
             };
             lines.push(
                 format!(
-                    "  {:<SCOPE$}{:<widest$}  {} wins over {worse_off}",
-                    "shadows",
-                    lost.name,
+                    "  {}{}  {} wins over {worse_off}",
+                    pen::pad("shadows", SCOPE_COLUMN),
+                    pen::pad(&lost.name, widest),
                     lost.winner.word(),
-                    SCOPE = SCOPE_COLUMN
                 )
                 .trim_end()
                 .to_owned(),
@@ -166,15 +166,15 @@ fn skills(listing: &[Listing]) -> Vec<String> {
 
 fn diagnostics(diagnostics: &[Diagnostic]) -> Vec<String> {
     let mut lines = vec![format!("diagnostics ({})", diagnostics.len())];
-    let widest = diagnostics
+    let where_it_lies: Vec<String> = diagnostics.iter().map(where_it_lies).collect();
+    let widest = where_it_lies
         .iter()
-        .map(|diagnostic| diagnostic.path.display().to_string().chars().count() + 2)
+        .map(|at| pen::cells(at))
         .max()
         .unwrap_or(0);
-    for diagnostic in diagnostics {
-        let where_it_lies = format!("{}:{}", diagnostic.path.display(), diagnostic.line);
+    for (at, diagnostic) in where_it_lies.iter().zip(diagnostics) {
         lines.push(
-            format!("  {where_it_lies:<widest$}  {}", diagnostic.message)
+            format!("  {}  {}", pen::pad(at, widest), diagnostic.message)
                 .trim_end()
                 .to_owned(),
         );
@@ -182,8 +182,12 @@ fn diagnostics(diagnostics: &[Diagnostic]) -> Vec<String> {
     lines
 }
 
+fn where_it_lies(diagnostic: &Diagnostic) -> String {
+    format!("{}:{}", diagnostic.path.display(), diagnostic.line)
+}
+
 fn fact(label: &str, value: &str) -> String {
-    format!("{label:<LABEL$}{value}")
+    format!("{}{value}", pen::pad(label, LABEL))
 }
 
 /// A run's scratch is a session's temp, so doctor borrows exactly that and keeps nothing: a

@@ -1,5 +1,7 @@
 use sindri_core::config::Touched;
 
+use crate::pen;
+
 pub const MIN_ROWS: u16 = 2;
 
 pub const MAX_ROWS: u16 = 6;
@@ -122,7 +124,7 @@ impl Composer {
 
     pub fn caret(&self) -> (u16, u16) {
         let row = self.row(self.cursor);
-        let column = self.text[self.line_start(row)..self.cursor].chars().count();
+        let column = self.column(row);
         (
             u16::try_from(row.saturating_sub(self.scroll)).unwrap_or(u16::MAX),
             u16::try_from(column).unwrap_or(u16::MAX),
@@ -329,18 +331,27 @@ impl Composer {
         }
     }
 
+    /// The column the cursor sits in, counted in cells: a wide glyph moves it two.
     fn column(&self, row: usize) -> usize {
-        self.text[self.line_start(row)..self.cursor].chars().count()
+        usize::from(pen::cells(&self.text[self.line_start(row)..self.cursor]))
     }
 
+    /// The offset in `row` nearest to `column` without passing it: a wide glyph the column lands
+    /// inside is not taken, so the cursor keeps the side of it it came from.
     fn at_column(&self, row: usize, column: usize) -> usize {
         let end = self.line_end(row);
         let mut at = self.line_start(row);
-        for _ in 0..column {
-            match self.text[at..end].chars().next() {
-                Some(glyph) => at += glyph.len_utf8(),
-                None => break,
+        let mut reached = 0;
+        while reached < column {
+            let Some(glyph) = self.text[at..end].chars().next() else {
+                break;
+            };
+            let width = usize::from(pen::cell(glyph));
+            if reached + width > column {
+                break;
             }
+            reached += width;
+            at += glyph.len_utf8();
         }
         at
     }
@@ -377,6 +388,25 @@ mod tests {
 
         assert_eq!(composer.text(), "hello");
         assert_eq!(composer.cursor(), 5);
+    }
+
+    #[test]
+    fn moving_between_the_lines_of_a_draft_keeps_the_caret_in_the_cells_it_was_in() {
+        let mut composer = holding("日x\nab");
+        assert_eq!(
+            composer.caret(),
+            (1, 2),
+            "the second line is two cells wide"
+        );
+
+        composer.key(Key::Up);
+
+        assert_eq!(
+            composer.caret(),
+            (0, 2),
+            "the caret comes back to the cell it left from, and never past the last glyph of \
+             the line it lands in"
+        );
     }
 
     #[test]

@@ -5,7 +5,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use unicode_width::UnicodeWidthStr;
 
-use crate::ink::Ink;
+use crate::ink::{Ink, Look};
 use crate::palette::Palette;
 
 /// How much of a run a row has no room for.
@@ -22,16 +22,41 @@ pub fn cells(text: &str) -> u16 {
     u16::try_from(text.width()).unwrap_or(u16::MAX)
 }
 
-/// Writes `spans` from `row`'s left edge, each in its own ink, advancing by measured columns and
+/// The columns one `glyph` takes, counted the way a row of it is drawn.
+pub fn cell(glyph: char) -> u16 {
+    cells(glyph.encode_utf8(&mut [0; 4]))
+}
+
+/// `columns` blanks: the run a value hangs from, and the one a name is padded out to.
+pub fn blank(columns: u16) -> String {
+    " ".repeat(usize::from(columns))
+}
+
+/// `text` followed by the blanks that bring it out to `columns`, measured by what it draws. A run
+/// already wider than its column is left whole, because the pen pads and never cuts.
+pub fn pad(text: &str, columns: u16) -> String {
+    let mut padded = String::from(text);
+    padded.push_str(&blank(columns.saturating_sub(cells(text))));
+    padded
+}
+
+/// Writes `spans` from `row`'s left edge, each in its own look, advancing by measured columns and
 /// so leaving two behind every wide glyph.
-pub fn write(buffer: &mut Buffer, row: Rect, spans: &[(&str, Ink)], clip: Clip, palette: &Palette) {
+pub fn write<S: AsRef<str>, D: Copy + Into<Look>>(
+    buffer: &mut Buffer,
+    row: Rect,
+    spans: &[(S, D)],
+    clip: Clip,
+    palette: &Palette,
+) {
     if clip == Clip::Whole && width(spans) > row.width {
         return;
     }
     let mut x = row.x;
-    for (text, ink) in spans {
+    for (text, look) in spans {
+        let look: Look = (*look).into();
         let room = usize::from(row.right().saturating_sub(x));
-        let (next, _) = buffer.set_stringn(x, row.y, text, room, ink.style(palette));
+        let (next, _) = buffer.set_stringn(x, row.y, text.as_ref(), room, look.style(palette));
         x = next;
     }
 }
@@ -53,7 +78,12 @@ pub fn rule(buffer: &mut Buffer, row: Rect, fill: char, ink: Ink, palette: &Pale
 
 /// Hangs `spans` on `row`'s far edge, so the last cell of the run is the row's last: a run the row
 /// has no room for is refused whole and hangs nowhere.
-pub fn hang(buffer: &mut Buffer, row: Rect, spans: &[(&str, Ink)], palette: &Palette) {
+pub fn hang<S: AsRef<str>, D: Copy + Into<Look>>(
+    buffer: &mut Buffer,
+    row: Rect,
+    spans: &[(S, D)],
+    palette: &Palette,
+) {
     let width = width(spans);
     if width > row.width {
         return;
@@ -63,10 +93,10 @@ pub fn hang(buffer: &mut Buffer, row: Rect, spans: &[(&str, Ink)], palette: &Pal
 }
 
 /// The columns a run of spans takes: every span measured by what it draws.
-fn width(spans: &[(&str, Ink)]) -> u16 {
+fn width<S: AsRef<str>, D>(spans: &[(S, D)]) -> u16 {
     spans
         .iter()
-        .map(|(text, _)| cells(text))
+        .map(|(text, _)| cells(text.as_ref()))
         .fold(0, u16::saturating_add)
 }
 
@@ -105,6 +135,8 @@ mod tests {
         assert_eq!(cells("keys"), 4);
         assert_eq!(cells("日本"), 4);
         assert_eq!(cells("e\u{301}"), 1);
+        assert_eq!(cell('日'), 2, "one glyph is measured as the run it is in");
+        assert_eq!(cell('e'), 1);
     }
 
     #[test]
@@ -150,6 +182,35 @@ mod tests {
             symbol(&roomy, 2),
             "a",
             "the glyph after a wide one starts in the column the wide one left"
+        );
+    }
+
+    #[test]
+    fn a_run_is_padded_out_to_the_column_it_hangs_from() {
+        assert_eq!(
+            blank(3),
+            "   ",
+            "a hanging column is blanks and nothing else"
+        );
+        assert_eq!(
+            pad("keys", 6),
+            "keys  ",
+            "two blanks bring four columns out to six"
+        );
+        assert_eq!(
+            pad("日本", 6),
+            "日本  ",
+            "two wide glyphs spend four of the six, so two blanks are left and not four"
+        );
+        assert_eq!(
+            cells(&pad("日本", 6)),
+            6,
+            "and the padded run reaches the column it was given, whatever it is made of"
+        );
+        assert_eq!(
+            pad("keys", 2),
+            "keys",
+            "a run wider than its column is left whole: the pen pads and never cuts"
         );
     }
 
