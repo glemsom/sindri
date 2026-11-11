@@ -6,6 +6,7 @@ pub mod door; // the frame a launch opens on: a wordmark, what the product is, a
 pub mod graphics; // an SVG becomes the pixels a picture is drawn in
 pub mod ink; // the look a cell is drawn in, asked for by name: the ink it is in
 pub mod keys; // the mode stack and one key table per mode
+pub mod ledger; // the run's facts and the one way each value is spelled
 pub mod mark; // the cells a reader has marked, and the words they hold
 pub mod markdown; // markdown becomes the rows a transcript entry is drawn as
 pub mod mermaid; // a mermaid fence becomes a picture, or is refused with a reason the caption can print
@@ -17,7 +18,7 @@ pub mod picture; // a picture an answer points at, resolved to a file inside the
 pub mod pictures; // the pictures a frame has placed: every source the terminal was told about
 pub mod pulse; // the marker at the head of the newest answer: the braille glyph a live run turns
 pub mod queue; // the prompts typed while a run is live, waiting above the composer in the order
-pub mod rail; // the run's facts down the frame's right-hand columns, read as a ledger
+pub mod rail; // the ledger's facts drawn down the frame's right-hand columns, or on one strip
 #[cfg(test)]
 mod readback; // what a painted buffer holds, read back: the inks of a row and the column of a glyph
 pub mod rows; // the transcript's rows: one entry of the core's records laid out as the rows it is

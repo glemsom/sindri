@@ -61,6 +61,19 @@ pub fn write<S: AsRef<str>, D: Copy + Into<Look>>(
     }
 }
 
+/// Writes `text` from column `x` of row `y` and answers the column after it: the run is measured
+/// by what it draws, so a wide glyph leaves the column behind it blank and is never cut in half.
+pub fn run(buffer: &mut Buffer, x: u16, y: u16, text: &str, ink: Ink, palette: &Palette) -> u16 {
+    let row = Rect {
+        x,
+        y,
+        width: buffer.area.right().saturating_sub(x),
+        height: 1,
+    };
+    write(buffer, row, &[(text, ink)], Clip::Edge, palette);
+    x.saturating_add(cells(text))
+}
+
 /// Writes a one-cell `glyph` at a column of a row, in an ink.
 pub fn glyph(buffer: &mut Buffer, x: u16, y: u16, glyph: char, ink: Ink, palette: &Palette) {
     if let Some(cell) = buffer.cell_mut((x, y)) {

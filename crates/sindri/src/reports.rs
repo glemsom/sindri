@@ -9,8 +9,8 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use sindri::composer::{Prompt, State};
+use sindri::ledger::Facts;
 use sindri::pulse::Pulse;
-use sindri::rail::Facts;
 use sindri::view::View;
 use sindri_core::config::Config;
 use sindri_core::provider::Deltas;
