@@ -119,7 +119,7 @@ impl Row {
 
     pub fn paint(&self, area: Rect, buffer: &mut Buffer, palette: &Palette) {
         if let Some(band) = self.band {
-            buffer.set_style(area, palette.ground(Some(band)));
+            pen::claim(buffer, area, palette.ground(Some(band)));
         }
         pen::write(buffer, area, &self.spans, Clip::Edge, palette);
     }
@@ -132,7 +132,7 @@ pub fn layout(entry: &Entry, cols: u16) -> Vec<Row> {
 pub fn layout_on(entry: &Entry, cols: u16, surface: &Surface) -> Vec<Row> {
     let cols = cols.max(1);
     match entry {
-        Entry::Turn { turn } => vec![rule(&format!("turn {turn} "), cols)],
+        Entry::Turn { turn } => vec![divider(&format!("turn {turn} "), cols)],
         Entry::Call {
             name, arguments, ..
         } => opening(&name.to_string(), &arguments.to_string(), cols),
@@ -290,10 +290,12 @@ fn body(text: &str, cols: u16) -> Vec<Row> {
         .collect()
 }
 
-fn rule(lead: &str, cols: u16) -> Row {
+/// The row between one turn and the next: the words naming the turn, and the pen's fill out to the
+/// row's edge.
+fn divider(lead: &str, cols: u16) -> Row {
     let lead = clip(lead, cols);
-    let filled = usize::from(cols.saturating_sub(pen::cells(&lead)));
-    let line = format!("{lead}{}", HAIRLINE.to_string().repeat(filled));
+    let filled = cols.saturating_sub(pen::cells(&lead));
+    let line = format!("{lead}{}", pen::filled(filled, HAIRLINE));
     Row::of([(line, Ink::Dim)])
 }
 

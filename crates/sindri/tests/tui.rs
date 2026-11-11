@@ -19,6 +19,8 @@ use rustix::pty::{OpenptFlags, grantpt, openpt, ptsname, unlockpt};
 use rustix::termios::{InputModes, LocalModes, Termios, Winsize, tcgetattr, tcsetwinsize};
 use tempfile::TempDir;
 
+use sindri::pen;
+
 /// How long a frame is given to arrive before a test calls it absent: generous,
 /// because a test that is merely slow must not read as a program that never drew.
 const PATIENCE: Duration = Duration::from_secs(10);
@@ -1474,7 +1476,7 @@ fn an_outside_sigint_stops_the_run_and_gives_the_terminal_back() {
 /// while a run is live leaves when it goes into the queue instead of dying with the draft.
 fn queue(pty: &mut Pty, drawn: &Drawn, prompt: &str) {
     pty.type_bytes(prompt.as_bytes());
-    let typed = u16::try_from(prompt.chars().count()).expect("a prompt narrower than a frame") + 1;
+    let typed = pen::cells(prompt) + 1;
     assert!(
         drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == typed)),
         "{prompt:?} is in the box, the caret one column past its last glyph: {:?}",
@@ -1662,7 +1664,7 @@ fn up_on_the_first_line_takes_the_newest_queued_prompt_back() {
 /// send, so a command line is only sent by letting the draft land first.
 fn command(pty: &mut Pty, drawn: &Drawn, line: &str) {
     pty.type_bytes(line.as_bytes());
-    let column = line.chars().count() as u16 + 1;
+    let column = pen::cells(line) + 1;
     assert!(
         drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, at)| at == column)),
         "the command line is the draft before it is sent, so the caret waits one column \

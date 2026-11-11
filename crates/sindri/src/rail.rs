@@ -5,12 +5,13 @@ use ratatui::layout::Rect;
 
 use crate::ledger::{self, Facts, Rail};
 use crate::palette::{Band, Palette};
+use crate::pen;
 
 pub fn paint(facts: &Facts, rail: Rail, area: Rect, buffer: &mut Buffer, palette: &Palette) {
     if area.width == 0 || area.height == 0 {
         return;
     }
-    buffer.set_style(area, palette.ground(Some(Band::Rail)));
+    pen::claim(buffer, area, palette.ground(Some(Band::Rail)));
     ledger::draw(&ledger::rows(facts, rail.into(), area), buffer, palette);
 }
 
@@ -68,11 +69,11 @@ mod tests {
     /// The row a ctx fact of `value` is drawn on: its label in the ten-column field, and the value
     /// against the rail's last column.
     fn ctx_line(value: &str) -> String {
-        let room = usize::from(COLUMNS) - usize::from(FIELD);
+        let at = pen::hanging(band(COLUMNS, 1), pen::cells(value)).expect("a rail that holds it");
         format!(
-            "{:<width$}{value:>room$}",
-            "ctx",
-            width = usize::from(FIELD)
+            "{}{}{value}",
+            pen::pad("ctx", FIELD),
+            pen::blank(at.saturating_sub(FIELD))
         )
     }
 
@@ -224,7 +225,7 @@ mod tests {
                 "{size} tokens of two hundred thousand fills {filled} of the meter's six cells"
             );
             // the meter stands where a value of "178k / 200k" leaves it, one column from the edge
-            let at = usize::from(COLUMNS) - METER - 1 - "178k / 200k".len();
+            let at = usize::from(COLUMNS) - METER - 1 - usize::from(pen::cells("178k / 200k"));
             for cell in 0..METER {
                 let column = u16::try_from(at + cell).unwrap_or(u16::MAX);
                 let drawn = Ink::of(

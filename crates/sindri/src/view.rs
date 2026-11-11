@@ -530,7 +530,7 @@ impl View {
     /// transcript is, so a resize invalidates it here and the same pass reflows; the
     /// composer's rows are measured when the frame is drawn and never cached.
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) {
-        buffer.set_style(area, self.palette.ground(None));
+        pen::claim(buffer, area, self.palette.ground(None));
         let bands = bands(area, self.composer.rows(), self.queue.rows());
         // The rail's share is taken from the transcript's band before the transcript is laid out
         // in what is left: a row's width is the width it is drawn at.
@@ -637,11 +637,16 @@ impl View {
             }
             let left = area.x.saturating_add(marked.left());
             let right = left.saturating_add(marked.width()).min(area.right());
-            for x in left..right {
-                if let Some(cell) = buffer.cell_mut((x, y)) {
-                    cell.set_style(Ink::Mark.style(&self.palette));
-                }
-            }
+            pen::claim(
+                buffer,
+                Rect {
+                    x: left,
+                    y,
+                    width: right.saturating_sub(left),
+                    height: 1,
+                },
+                Ink::Mark.style(&self.palette),
+            );
         }
     }
 
@@ -655,7 +660,7 @@ impl View {
     }
 
     fn composer_band(&self, area: Rect, buffer: &mut Buffer) {
-        buffer.set_style(area, self.palette.ground(Some(Band::Composer)));
+        pen::claim(buffer, area, self.palette.ground(Some(Band::Composer)));
         pen::rule(
             buffer,
             Rect { height: 1, ..area },
@@ -1133,15 +1138,16 @@ mod tests {
         }
 
         let last = area.bottom() - 1;
-        for x in area.x..area.right() {
-            let cell = buffer.cell((x, last)).expect("a cell of the footer");
-            assert!(
-                [Band::Rail, Band::Composer, Band::Well]
-                    .into_iter()
-                    .all(|band| cell.bg != palette.band(band)),
-                "the footer sits on no band, and column {x} of it sits on one"
-            );
-        }
+        let banded = (area.x..area.right()).find(|x| {
+            let cell = buffer.cell((*x, last)).expect("a cell of the footer");
+            [Band::Rail, Band::Composer, Band::Well]
+                .into_iter()
+                .any(|band| cell.bg == palette.band(band))
+        });
+        assert_eq!(
+            banded, None,
+            "the footer sits on no band, and column {banded:?} of it sits on one"
+        );
     }
 
     /// The launch a boot frame is drawn from: a config's wire and model, the workspace the launch
@@ -1473,7 +1479,7 @@ mod tests {
 
         assert_eq!(
             drawn_row(&buffer, 1),
-            format!("  query: {}  ", "x".repeat(29)),
+            format!("  query: {}  ", pen::filled(29, 'x')),
             "a forty-column frame gives the card's body thirty-six, so the query is cut at the body's last column rather than dropped or drawn past it"
         );
     }
@@ -1516,7 +1522,7 @@ mod tests {
     fn a_caret_run_past_the_bands_edge_has_no_cell_to_wait_on() {
         let view = View::typing({
             let mut composer = Composer::new();
-            composer.paste(&"x".repeat(60));
+            composer.paste(&pen::filled(60, 'x'));
             composer
         });
 

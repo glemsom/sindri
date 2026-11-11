@@ -805,27 +805,17 @@ impl Part {
 fn labelled(area: Rect, fact: &Fact) -> Row {
     let mut parts = Vec::new();
     if let Some(label) = fact.label {
-        parts.push((area.x, Part::Run(field(label), Ink::Dim)));
+        parts.push((area.x, Part::Run(pen::pad(label, FIELD), Ink::Dim)));
     }
-    parts.push((
-        hanging(area, fact.value.columns()),
-        Part::Value(fact.value.clone()),
-    ));
+    let x = pen::hanging(area, pen::columns(fact.value.columns()))
+        .expect("a fact is fitted to the row it is laid in");
+    parts.push((x, Part::Value(fact.value.clone())));
     Row { y: area.y, parts }
-}
-
-/// A label padded out to the field, so every label starts in one column.
-fn field(label: &str) -> String {
-    format!("{label:<width$}", width = usize::from(FIELD))
 }
 
 /// The rule between two blocks, which costs the block under it a row of the band it is drawn on.
 fn hairline_row(area: Rect) -> Row {
-    Row::run(area.x, area.y, hairline_glyphs(area.width), Ink::Dim)
-}
-
-fn hairline_glyphs(width: u16) -> String {
-    std::iter::repeat_n(HAIRLINE, usize::from(width)).collect()
+    Row::run(area.x, area.y, pen::filled(area.width, HAIRLINE), Ink::Dim)
 }
 
 /// The strip's one row: its facts read left to right with a gap between two, and the count of what
@@ -1376,14 +1366,6 @@ fn column_width(width: u16, count: usize) -> u16 {
         .saturating_sub(COLUMN_GAP.saturating_mul(count - 1))
         .checked_div(count)
         .unwrap_or(0)
-}
-
-/// The column a value `value_width` columns wide starts at in a row `area` wide: the one hanging
-/// edge, which a labelled row and a row that is a value and no label share.
-pub(crate) fn hanging(area: Rect, value_width: usize) -> u16 {
-    let start = usize::from(area.width).saturating_sub(value_width);
-    area.x
-        .saturating_add(u16::try_from(start).unwrap_or(area.width))
 }
 
 /// The columns a labelled row drawn in `width` columns leaves its value: the field comes off the
@@ -1985,9 +1967,26 @@ mod tests {
     fn painted(facts: &Facts, area: Rect) -> Buffer {
         let palette = Palette::TRUECOLOR;
         let mut buffer = Buffer::empty(area);
-        buffer.set_style(area, palette.ground(None));
+        pen::claim(&mut buffer, area, palette.ground(None));
         draw(&rows(facts, Shape::Screen, area), &mut buffer, &palette);
         buffer
+    }
+
+    /// A row `width` columns wide with `value` hanging on its far edge, the way a fact whose value
+    /// is its own name is drawn.
+    fn hanging_row(value: &str, width: u16) -> String {
+        let at = pen::hanging(band(width, 1), pen::cells(value)).expect("a row that holds it");
+        format!("{}{value}", pen::blank(at))
+    }
+
+    /// A labelled row `width` columns wide: the label in the field and its value on the far edge.
+    fn labelled_row(label: &str, value: &str, width: u16) -> String {
+        let at = pen::hanging(band(width, 1), pen::cells(value)).expect("a row that holds it");
+        format!(
+            "{}{}{value}",
+            pen::pad(label, FIELD),
+            pen::blank(at.saturating_sub(FIELD))
+        )
     }
 
     /// One row of a painted band, as a reader sees its glyphs.
@@ -2223,10 +2222,7 @@ mod tests {
             .collect();
         assert_eq!(
             names,
-            [
-                format!("{:>room$}", "bash", room = 81),
-                format!("{:>room$}", "records", room = 81),
-            ],
+            [hanging_row("bash", 81), hanging_row("records", 81)],
             "a value is a value however its row is labelled, so a loaded name reads on the \
              column its siblings hang on"
         );
@@ -2281,13 +2277,7 @@ mod tests {
         let wire = glyphs(&buffer, 1);
         assert_eq!(
             wire,
-            format!(
-                "{:<field$}{:>room$}",
-                "wire",
-                "anthropic",
-                field = 10,
-                room = 71
-            ),
+            labelled_row("wire", "anthropic", 81),
             "the label in its field and the value against the column's last column"
         );
         assert_eq!(
@@ -2308,7 +2298,7 @@ mod tests {
         );
         assert_eq!(
             glyphs(&buffer, 5),
-            "─".repeat(usize::from(area.width)),
+            pen::filled(area.width, '─'),
             "the rule spans the column between the run's last fact and the name of the block \
              under it"
         );
@@ -2330,16 +2320,11 @@ mod tests {
 
         let buffer = painted(&run(), area);
 
-        let meter = format!("{FULL_CELL}{}", EMPTY_CELL.to_string().repeat(METER - 1));
+        let empty = u16::try_from(METER - 1).expect("the meter's cells fit a row");
+        let meter = format!("{FULL_CELL}{}", pen::filled(empty, EMPTY_CELL));
         assert_eq!(
             glyphs(&buffer, 8),
-            format!(
-                "{:<field$}{:>room$}",
-                "ctx",
-                format!("{meter} 48.2k / 200k"),
-                field = 10,
-                room = 71
-            ),
+            labelled_row("ctx", &format!("{meter} 48.2k / 200k"), 81),
             "a quarter of the window fills one of the meter's six cells, beside the size it is \
              a share of"
         );
@@ -2462,7 +2447,7 @@ mod tests {
 
     #[test]
     fn the_ledger_lays_its_blocks_in_the_order_they_are_read_with_a_hairline_between_two() {
-        let hairline = "─".repeat(usize::from(COLUMNS));
+        let hairline = pen::filled(COLUMNS, '─');
 
         assert_eq!(
             laid(&frame(), Shape::Ledger, band(COLUMNS, 17)),
@@ -2507,7 +2492,7 @@ mod tests {
 
     #[test]
     fn a_band_too_short_gives_facts_up_in_the_sacrifice_order_and_the_last_row_counts_what_went() {
-        let hairline = "─".repeat(usize::from(COLUMNS));
+        let hairline = pen::filled(COLUMNS, '─');
 
         assert_eq!(
             laid(&frame(), Shape::Ledger, band(COLUMNS, 8)),

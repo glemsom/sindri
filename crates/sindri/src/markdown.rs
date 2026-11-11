@@ -359,7 +359,7 @@ impl Room {
             let row = joined(line, &widths);
             self.push(row);
         }
-        self.push(rule(&widths));
+        self.push(header_rule(&widths));
         for cells in table.body() {
             for line in lines_of(cells, &widths) {
                 let row = joined(&line, &widths);
@@ -374,7 +374,10 @@ impl Room {
             .enumerate()
         {
             if at == 1 {
-                self.push(Row::of([("─".repeat(available), Look::plain(Ink::Dim))]));
+                self.push(Row::of([(
+                    pen::filled(pen::columns(available), '─'),
+                    Look::plain(Ink::Dim),
+                )]));
             }
             for cell in cells {
                 for line in lines_of(std::slice::from_ref(cell), &[available]) {
@@ -900,7 +903,7 @@ fn joined(line: &[Cell], widths: &[usize]) -> Row {
             false => width.saturating_sub(measured(cell)),
         };
         if pad > 0 {
-            spans.push((" ".repeat(pad), Look::plain(Ink::Plain)));
+            spans.push((pen::blank(pen::columns(pad)), Look::plain(Ink::Plain)));
         }
     }
     Row::of(spans)
@@ -908,13 +911,13 @@ fn joined(line: &[Cell], widths: &[usize]) -> Row {
 
 /// The rule under a header: the header's own row with every word spent as `─` and every bar
 /// as `┼`, so the rule is exactly as wide as the row above it.
-fn rule(widths: &[usize]) -> Row {
+fn header_rule(widths: &[usize]) -> Row {
     let mut text = String::new();
     for (at, width) in widths.iter().enumerate() {
         if at > 0 {
             text.push_str("─┼─");
         }
-        text.push_str(&"─".repeat(*width));
+        text.push_str(&pen::filled(pen::columns(*width), '─'));
     }
     Row::of([(text, Ink::Dim)])
 }
