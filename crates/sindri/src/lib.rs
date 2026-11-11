@@ -11,6 +11,7 @@ pub mod markdown; // markdown becomes the rows a transcript entry is drawn as
 pub mod mermaid; // a mermaid fence becomes a picture, or is refused with a reason the caption can print
 pub mod models; // the names the wire serves, ranked as a query is typed into the screen
 pub mod palette; // the colours the seven inks and the three bands are drawn in, resolved once at boot
+pub mod pen; // the one place a glyph run is written into a frame, and the one place a string's width is measured
 pub mod picker; // the files of the workspace, walked with `ignore`
 pub mod picture; // a picture an answer points at, resolved to a file inside the workspace and measured
 pub mod pictures; // the pictures a frame has placed: every source the terminal was told about

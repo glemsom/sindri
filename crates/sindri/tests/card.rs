@@ -7,10 +7,12 @@ use std::collections::HashSet;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
 
 use sindri::composer::Key;
 use sindri::ink::Ink;
 use sindri::keys::{Act, Mode};
+use sindri::palette::Palette;
 use sindri::view::View;
 use sindri_core::config::Config;
 use sindri_core::records::Entry;
@@ -376,5 +378,42 @@ fn a_frame_too_short_for_a_body_still_names_the_screen_and_the_key_that_leaves()
         "and the bottom border of a card with no body is still the row that says how to leave: \
          {:?}",
         row(&buffer, 1)
+    );
+}
+
+#[test]
+fn a_name_too_wide_for_its_row_is_cut_at_the_right_edge_and_a_key_too_wide_hangs_nowhere() {
+    let mut buffer = Buffer::empty(Rect::new(0, 0, 80, 6));
+    let name = "n".repeat(200);
+    let leaves = "k".repeat(100);
+    sindri::card::paint(
+        buffer.area,
+        &name,
+        &leaves,
+        &mut buffer,
+        &Palette::TRUECOLOR,
+    );
+
+    let top = row(&buffer, 0).trim().to_owned();
+    assert!(
+        top.starts_with("╭─ nnn") && top.ends_with("──╮"),
+        "a name longer than the row is cut at the row's right edge, which the corner still \
+         holds: {top:?}"
+    );
+    assert!(
+        top.matches('n').count() < name.len(),
+        "and the name is cut rather than drawn past it: {} of {} glyphs are drawn",
+        top.matches('n').count(),
+        name.len()
+    );
+
+    let bottom = row(&buffer, 5).trim().to_owned();
+    assert!(
+        bottom.starts_with('╰') && bottom.ends_with('╯'),
+        "the key that leaves hangs in the bottom row: {bottom:?}"
+    );
+    assert!(
+        !bottom.contains('k'),
+        "a key the row has no room for is refused whole rather than cut: {bottom:?}"
     );
 }
