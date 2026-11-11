@@ -1,9 +1,8 @@
 //! The card every screen is drawn on: a rounded border carrying the screen's name in its top row
 //! and the key that leaves in its bottom row, over the frame it was opened from, dimmed.
 
-use ratatui::buffer::{Buffer, Cell};
+use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::style::Modifier;
 
 use crate::ink::Ink;
 use crate::palette::Palette;
@@ -48,21 +47,13 @@ pub fn paint(area: Rect, name: &str, leaves: &str, buffer: &mut Buffer, palette:
 /// strength the screen drew it. A cell keeps its background, because a band is the surface a cell
 /// sits on and the grey says the words are out of reach, not that the band has gone.
 fn scrim(area: Rect, buffer: &mut Buffer, palette: &Palette) {
-    let (foreground, _) = palette.ink(Ink::Dim);
-    each(area, buffer, |cell| {
-        cell.set_fg(foreground);
-        cell.modifier = Modifier::empty();
-    });
+    pen::wash(buffer, area, Ink::Dim.style(palette));
 }
 
 /// A card's own cells start at the frame's ground: neither a band nor a transcript behind it is
 /// read through the card that covers it.
 fn grounded(buffer: &mut Buffer, rect: Rect, palette: &Palette) {
-    let style = palette.ground(None);
-    each(rect, buffer, |cell| {
-        cell.reset();
-        cell.set_style(style);
-    });
+    pen::ground(buffer, rect, palette.ground(None));
 }
 
 fn boxed(area: Rect, name: &str, leaves: &str, buffer: &mut Buffer, palette: &Palette) -> Rect {
@@ -124,9 +115,8 @@ fn corners(
 }
 
 fn sides(buffer: &mut Buffer, card: Rect, y: u16, palette: &Palette) {
-    for x in [card.x, card.right() - 1] {
-        pen::glyph(buffer, x, y, SIDE, Ink::Dim, palette);
-    }
+    pen::glyph(buffer, card.x, y, SIDE, Ink::Dim, palette);
+    pen::glyph(buffer, card.right() - 1, y, SIDE, Ink::Dim, palette);
 }
 
 /// The key that leaves hangs in the bottom row as the name hangs in the top one, at the other end.
@@ -166,14 +156,4 @@ fn labelled(buffer: &mut Buffer, row: Rect, name: &str, palette: &Palette) {
         Clip::Edge,
         palette,
     );
-}
-
-fn each(area: Rect, buffer: &mut Buffer, mut edit: impl FnMut(&mut Cell)) {
-    for y in area.y..area.bottom() {
-        for x in area.x..area.right() {
-            if let Some(cell) = buffer.cell_mut((x, y)) {
-                edit(cell);
-            }
-        }
-    }
 }

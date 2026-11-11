@@ -410,7 +410,7 @@ fn a_key_the_bottom_row_has_no_room_for_is_refused_whole() {
     let bottom = row(&buffer, 5).trim().to_owned();
     assert_eq!(
         bottom,
-        format!("╰{}╯", "─".repeat(70)),
+        format!("╰{}╯", sindri::pen::filled(70, '─')),
         "a key no card row holds is refused whole rather than cut, and the row is its rule"
     );
 }

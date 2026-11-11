@@ -5,6 +5,7 @@ use ratatui::buffer::Buffer;
 
 use crate::ink::Ink;
 use crate::palette::Palette;
+use crate::pen;
 
 /// The ink of each run of cells along `y`, left to right, with the columns the run covers.
 pub(crate) fn inks(buffer: &Buffer, y: u16, palette: &Palette) -> Vec<(Ink, u16)> {
@@ -22,8 +23,9 @@ pub(crate) fn inks(buffer: &Buffer, y: u16, palette: &Palette) -> Vec<(Ink, u16)
     runs
 }
 
-/// The column `glyph` sits in, counted in cells and never in the bytes of a glyph wider than one:
-/// a meter's own cells are three bytes each, and a slash past them is still one column along.
-pub(crate) fn column_of(row: &str, glyph: char) -> Option<usize> {
-    row.chars().position(|drawn| drawn == glyph)
+/// The column `glyph` sits in, measured by the run before it and never by the glyphs it is made
+/// of: a meter's own cells are not one column each, and a slash past them is still one along.
+pub(crate) fn column_of(row: &str, glyph: char) -> Option<u16> {
+    let at = row.find(glyph)?;
+    Some(pen::cells(&row[..at]))
 }

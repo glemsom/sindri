@@ -6,6 +6,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use sindri::composer::Key;
+use sindri::pen;
 use sindri::pulse::{Pulse, STEP_MS, format_duration, pulse_glyph};
 use sindri::view::View;
 use sindri_core::provider::Deltas;
@@ -195,14 +196,14 @@ fn a_cancelled_run_settles_as_cancelled_and_never_as_a_failure() {
 }
 
 #[test]
-fn the_widest_marker_asks_for_one_cell_and_fourteen_characters() {
+fn the_widest_marker_asks_for_one_cell_and_fourteen_columns() {
     let widest = Pulse::settled(&Stop::Cancelled, 5_000);
 
     assert_eq!(widest.words(), "cancelled 5.0s");
     assert_eq!(
-        widest.words().chars().count(),
+        pen::cells(&widest.words()),
         14,
-        "fourteen characters is the most any marker says beside its glyph"
+        "fourteen columns is the most any marker says beside its glyph"
     );
     assert_eq!(widest.head().width(), 16);
 }
@@ -251,7 +252,7 @@ fn a_marker_survives_a_narrow_frame() {
         "the whole mark, in a frame with room to spare for it: {:?}",
         rows[0]
     );
-    assert!(rows[0].chars().count() <= 24, "and no cell past the frame");
+    assert!(pen::cells(&rows[0]) <= 24, "and no cell past the frame");
 }
 
 #[test]

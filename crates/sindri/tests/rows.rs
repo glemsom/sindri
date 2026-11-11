@@ -8,6 +8,7 @@ use ratatui::layout::Rect;
 use sindri::graphics::CellSize;
 use sindri::ink::{Ink, Look};
 use sindri::palette::{Band, Palette};
+use sindri::pen;
 use sindri::picture::Surface;
 use sindri::pulse::Pulse;
 use sindri::rows::{Row, Rows, Scroll, Window, layout};
@@ -366,7 +367,7 @@ fn a_thought_and_an_answer_each_keep_their_own_gutter_and_ink() {
     }
 
     assert_eq!(
-        thought[0].spans()[0].0.chars().count(),
+        pen::cells(&thought[0].spans()[0].0),
         2,
         "a thought's gutter is the width of an answer's"
     );

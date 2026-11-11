@@ -1,8 +1,10 @@
-//! The pen: the one place a run of glyphs is written into a frame, and the one place a string's
-//! width is measured — a wide glyph two cells wherever it is drawn, a narrow one one.
+//! The pen: the one place a run of glyphs is written into a frame, the one place a string's width is
+//! measured — a wide glyph two cells wherever it is drawn, a narrow one one — and the one place a
+//! row is filled to its edge or a run is hung on it.
 
-use ratatui::buffer::Buffer;
+use ratatui::buffer::{Buffer, Cell};
 use ratatui::layout::Rect;
+use ratatui::style::{Modifier, Style};
 use unicode_width::UnicodeWidthStr;
 
 use crate::ink::{Ink, Look};
@@ -27,9 +29,15 @@ pub fn cell(glyph: char) -> u16 {
     cells(glyph.encode_utf8(&mut [0; 4]))
 }
 
+/// `columns` of one `glyph`: the run a row fills to its edge with, and the one a name is padded
+/// out to. The pen spells a repeated run and no caller does.
+pub fn filled(columns: u16, glyph: char) -> String {
+    std::iter::repeat_n(glyph, usize::from(columns)).collect()
+}
+
 /// `columns` blanks: the run a value hangs from, and the one a name is padded out to.
 pub fn blank(columns: u16) -> String {
-    " ".repeat(usize::from(columns))
+    filled(columns, ' ')
 }
 
 /// `text` followed by the blanks that bring it out to `columns`, measured by what it draws. A run
@@ -76,17 +84,57 @@ pub fn run(buffer: &mut Buffer, x: u16, y: u16, text: &str, ink: Ink, palette: &
 
 /// Writes a one-cell `glyph` at a column of a row, in an ink.
 pub fn glyph(buffer: &mut Buffer, x: u16, y: u16, glyph: char, ink: Ink, palette: &Palette) {
-    if let Some(cell) = buffer.cell_mut((x, y)) {
+    each(Rect::new(x, y, 1, 1), buffer, |cell| {
         cell.set_char(glyph);
         cell.set_style(ink.style(palette));
+    });
+}
+
+/// Claims every cell of `area` in `style` and leaves each one its glyph and its own background: the
+/// scrim a card dims the frame behind it with.
+pub fn wash(buffer: &mut Buffer, area: Rect, style: Style) {
+    let claimed = style.remove_modifier(Modifier::all());
+    each(area, buffer, |cell| {
+        cell.set_style(claimed);
+    });
+}
+
+/// Blanks every cell of `area` to `style`: the ground a card covers a frame with, so no glyph the
+/// frame behind it drew is read through it.
+pub fn ground(buffer: &mut Buffer, area: Rect, style: Style) {
+    each(area, buffer, |cell| {
+        cell.reset();
+        cell.set_style(style);
+    });
+}
+
+/// Every cell of `area`, top to bottom and left to right: the one loop that walks cells, so a
+/// module that draws or paints a frame asks the pen for it.
+fn each(area: Rect, buffer: &mut Buffer, mut edit: impl FnMut(&mut Cell)) {
+    for y in area.y..area.bottom() {
+        for x in area.x..area.right() {
+            if let Some(cell) = buffer.cell_mut((x, y)) {
+                edit(cell);
+            }
+        }
     }
 }
 
 /// Fills `row` edge to edge with a one-cell `fill`, in an ink.
 pub fn rule(buffer: &mut Buffer, row: Rect, fill: char, ink: Ink, palette: &Palette) {
-    for x in row.x..row.right() {
-        glyph(buffer, x, row.y, fill, ink, palette);
-    }
+    write(
+        buffer,
+        row,
+        &[(filled(row.width, fill), ink)],
+        Clip::Edge,
+        palette,
+    );
+}
+
+/// The column a run `width` columns wide starts at when it hangs on `row`'s far edge, and none when
+/// the row has no room for it: the one hanging column a fact's value and a card's key both ask.
+pub fn hanging(row: Rect, width: u16) -> Option<u16> {
+    (width <= row.width).then(|| row.right() - width)
 }
 
 /// Hangs `spans` on `row`'s far edge, so the last cell of the run is the row's last: a run the row
@@ -97,11 +145,9 @@ pub fn hang<S: AsRef<str>, D: Copy + Into<Look>>(
     spans: &[(S, D)],
     palette: &Palette,
 ) {
-    let width = width(spans);
-    if width > row.width {
+    let Some(x) = hanging(row, width(spans)) else {
         return;
-    }
-    let x = row.right() - width;
+    };
     write(buffer, Rect { x, ..row }, spans, Clip::Edge, palette);
 }
 
@@ -120,7 +166,7 @@ mod tests {
 
     use super::*;
     use crate::ink::Ink;
-    use crate::palette::Palette;
+    use crate::palette::{Band, Palette};
 
     const PALETTE: Palette = Palette::TRUECOLOR;
 
@@ -199,6 +245,79 @@ mod tests {
     }
 
     #[test]
+    fn a_wash_claims_a_rows_ink_and_keeps_the_surface_and_the_glyphs_under_it() {
+        let mut row = row_of(4);
+        let area = row.area;
+        row.set_style(area, PALETTE.ground(Some(Band::Rail)));
+        write(&mut row, area, &[("keys", Ink::Mark)], Clip::Edge, &PALETTE);
+
+        wash(&mut row, area, Ink::Dim.style(&PALETTE));
+
+        assert_eq!(
+            drawn(&row),
+            "keys",
+            "the glyphs a wash passes over are still the row's"
+        );
+        assert_eq!(
+            crate::readback::inks(&row, 0, &PALETTE),
+            [(Ink::Dim, 4)],
+            "and each of them reads back as the ink the wash claimed, the mark's face gone with it"
+        );
+        assert_eq!(
+            row.cell((0, 0)).expect("a cell of the row").bg,
+            PALETTE.band(Band::Rail),
+            "a band is the surface a cell sits on, so a wash leaves it alone"
+        );
+    }
+
+    #[test]
+    fn a_ground_blanks_a_row_and_lays_the_surface_it_is_given() {
+        let mut row = row_of(4);
+        let area = row.area;
+        write(
+            &mut row,
+            area,
+            &[("keys", Ink::Accent)],
+            Clip::Edge,
+            &PALETTE,
+        );
+
+        ground(&mut row, area, PALETTE.ground(Some(Band::Composer)));
+
+        assert_eq!(
+            drawn(&row),
+            "    ",
+            "no glyph of the frame a ground covers is read through it"
+        );
+        assert_eq!(crate::readback::inks(&row, 0, &PALETTE), [(Ink::Plain, 4)]);
+        assert_eq!(
+            row.cell((0, 0)).expect("a cell of the row").bg,
+            PALETTE.band(Band::Composer),
+            "and the surface it was given is the one the row sits on"
+        );
+    }
+
+    #[test]
+    fn a_row_fills_to_its_edge_with_one_glyph_and_one_run() {
+        assert_eq!(filled(4, '─'), "────", "four columns of the one glyph");
+        assert_eq!(
+            cells(&filled(4, '─')),
+            4,
+            "and the run draws in the columns it was given"
+        );
+        assert_eq!(
+            blank(3),
+            filled(3, ' '),
+            "a run of blanks is the same fill in a space"
+        );
+        assert_eq!(
+            filled(0, '─'),
+            "",
+            "a row of no columns holds no run at all"
+        );
+    }
+
+    #[test]
     fn a_run_is_padded_out_to_the_column_it_hangs_from() {
         assert_eq!(
             blank(3),
@@ -245,6 +364,32 @@ mod tests {
             drawn(&row),
             "       esc",
             "three columns wide in ten starts in the seventh"
+        );
+    }
+
+    #[test]
+    fn a_run_hangs_on_its_rows_far_edge_and_nowhere_the_row_has_no_room() {
+        let row = Rect::new(0, 0, 10, 1);
+        assert_eq!(
+            hanging(row, 3),
+            Some(7),
+            "three columns wide in ten starts in the seventh"
+        );
+        assert_eq!(
+            hanging(row, 10),
+            Some(0),
+            "a run as wide as its row starts at the row's own first column"
+        );
+        assert_eq!(
+            hanging(row, 11),
+            None,
+            "a run the row has no room for hangs on no column at all"
+        );
+        let offset = Rect::new(4, 2, 10, 1);
+        assert_eq!(
+            hanging(offset, 3),
+            Some(11),
+            "a row that starts partway along a frame hangs from its own far edge"
         );
     }
 

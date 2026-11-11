@@ -637,11 +637,15 @@ impl View {
             }
             let left = area.x.saturating_add(marked.left());
             let right = left.saturating_add(marked.width()).min(area.right());
-            for x in left..right {
-                if let Some(cell) = buffer.cell_mut((x, y)) {
-                    cell.set_style(Ink::Mark.style(&self.palette));
-                }
-            }
+            buffer.set_style(
+                Rect {
+                    x: left,
+                    y,
+                    width: right.saturating_sub(left),
+                    height: 1,
+                },
+                Ink::Mark.style(&self.palette),
+            );
         }
     }
 
@@ -1473,7 +1477,7 @@ mod tests {
 
         assert_eq!(
             drawn_row(&buffer, 1),
-            format!("  query: {}  ", "x".repeat(29)),
+            format!("  query: {}  ", pen::filled(29, 'x')),
             "a forty-column frame gives the card's body thirty-six, so the query is cut at the body's last column rather than dropped or drawn past it"
         );
     }
@@ -1516,7 +1520,7 @@ mod tests {
     fn a_caret_run_past_the_bands_edge_has_no_cell_to_wait_on() {
         let view = View::typing({
             let mut composer = Composer::new();
-            composer.paste(&"x".repeat(60));
+            composer.paste(&pen::filled(60, 'x'));
             composer
         });
 

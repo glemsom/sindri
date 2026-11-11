@@ -68,12 +68,8 @@ mod tests {
     /// The row a ctx fact of `value` is drawn on: its label in the ten-column field, and the value
     /// against the rail's last column.
     fn ctx_line(value: &str) -> String {
-        let room = usize::from(COLUMNS) - usize::from(FIELD);
-        format!(
-            "{:<width$}{value:>room$}",
-            "ctx",
-            width = usize::from(FIELD)
-        )
+        let room = COLUMNS - FIELD - pen::cells(value);
+        format!("{}{}{value}", pen::pad("ctx", FIELD), pen::blank(room))
     }
 
     fn frame() -> Facts {
@@ -224,7 +220,7 @@ mod tests {
                 "{size} tokens of two hundred thousand fills {filled} of the meter's six cells"
             );
             // the meter stands where a value of "178k / 200k" leaves it, one column from the edge
-            let at = usize::from(COLUMNS) - METER - 1 - "178k / 200k".len();
+            let at = usize::from(COLUMNS) - METER - 1 - usize::from(pen::cells("178k / 200k"));
             for cell in 0..METER {
                 let column = u16::try_from(at + cell).unwrap_or(u16::MAX);
                 let drawn = Ink::of(
