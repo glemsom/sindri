@@ -4,13 +4,13 @@
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::text::Span;
 use sindri_core::records::Entry;
 use sindri_core::run::Exit;
 
 use crate::ink::{Ink, Look};
 use crate::markdown;
 use crate::palette::{Band, Palette};
+use crate::pen::{self, Clip};
 use crate::picture::{self, Surface};
 use crate::pulse::Head;
 use crate::stream::Stream;
@@ -89,8 +89,10 @@ impl Row {
     }
 
     pub fn width(&self) -> u16 {
-        let columns: usize = self.spans.iter().map(|(text, _)| glyphs(text)).sum();
-        u16::try_from(columns).unwrap_or(u16::MAX)
+        self.spans
+            .iter()
+            .map(|(text, _)| pen::cells(text))
+            .fold(0, u16::saturating_add)
     }
 
     pub fn spans(&self) -> &[(String, Look)] {
@@ -119,15 +121,7 @@ impl Row {
         if let Some(band) = self.band {
             buffer.set_style(area, palette.ground(Some(band)));
         }
-        let mut x = area.x;
-        for (text, look) in &self.spans {
-            if x >= area.right() {
-                return;
-            }
-            let room = usize::from(area.right() - x);
-            let (next, _) = buffer.set_stringn(x, area.y, text, room, look.style(palette));
-            x = next;
-        }
+        pen::write(buffer, area, &self.spans, Clip::Edge, palette);
     }
 }
 
@@ -181,7 +175,7 @@ pub(crate) fn answer_on(text: &str, cols: u16, head: Option<&Head>, surface: &Su
         Some(head) => head
             .width()
             .saturating_add(1)
-            .saturating_sub(u16::try_from(glyphs(gutter)).unwrap_or(u16::MAX)),
+            .saturating_sub(pen::cells(gutter)),
         None => 0,
     };
     let mut rows = markdown::rows_on(text, room, reserve, surface).into_iter();
@@ -209,7 +203,7 @@ pub(crate) fn answer_on(text: &str, cols: u16, head: Option<&Head>, surface: &Su
 /// band too narrow to hold both the gutter and one glyph gives up the gutter, never the
 /// invariant that no row is laid out wider than the width it was laid out for.
 fn margin(gutter: &str, cols: u16) -> (&str, u16) {
-    let width = u16::try_from(glyphs(gutter)).unwrap_or(cols);
+    let width = pen::cells(gutter);
     // Two columns, because that is the widest one glyph is: a margin that left less would
     // cost a row the whole width it was laid out for.
     match cols > width.saturating_add(1) {
@@ -269,7 +263,7 @@ fn fitted(spans: Vec<(String, Ink)>, cols: u16) -> Row {
             break;
         }
         let (head, rest) = split_at(&text, room);
-        room = room.saturating_sub(glyphs(&head));
+        room = room.saturating_sub(usize::from(pen::cells(&head)));
         kept.push((head, ink));
         if !rest.is_empty() {
             break;
@@ -279,7 +273,7 @@ fn fitted(spans: Vec<(String, Ink)>, cols: u16) -> Row {
 }
 
 fn clip(text: &str, room: u16) -> String {
-    if glyphs(text) <= usize::from(room) {
+    if pen::cells(text) <= room {
         return String::from(text);
     }
     split_at(text, usize::from(room.max(1))).0
@@ -298,7 +292,7 @@ fn body(text: &str, cols: u16) -> Vec<Row> {
 
 fn rule(lead: &str, cols: u16) -> Row {
     let lead = clip(lead, cols);
-    let filled = usize::from(cols).saturating_sub(glyphs(&lead));
+    let filled = usize::from(cols.saturating_sub(pen::cells(&lead)));
     let line = format!("{lead}{}", HAIRLINE.to_string().repeat(filled));
     Row::of([(line, Ink::Dim)])
 }
@@ -319,13 +313,13 @@ pub(crate) fn wrap_under(text: &str, first: u16, room: u16) -> Vec<String> {
             loop {
                 let limit = if rows.is_empty() { first } else { room };
                 let gap = usize::from(!row.is_empty());
-                if width + gap + glyphs(word) <= limit {
+                if width + gap + usize::from(pen::cells(word)) <= limit {
                     if gap == 1 {
                         row.push(' ');
                         width += 1;
                     }
                     row.push_str(word);
-                    width += glyphs(word);
+                    width += usize::from(pen::cells(word));
                     break;
                 }
                 if !row.is_empty() {
@@ -352,19 +346,13 @@ pub(crate) fn split_at(word: &str, room: usize) -> (String, &str) {
     let mut width = 0;
     for (at, glyph) in word.char_indices() {
         let mut encoded = [0; 4];
-        let wide = glyphs(glyph.encode_utf8(&mut encoded));
+        let wide = usize::from(pen::cells(glyph.encode_utf8(&mut encoded)));
         if at > 0 && width + wide > room {
             return (word[..at].to_owned(), &word[at..]);
         }
         width += wide;
     }
     (word.to_owned(), "")
-}
-
-/// The columns a run of glyphs takes, measured and never counted: a glyph can be two
-/// cells wide.
-pub(crate) fn glyphs(text: &str) -> usize {
-    Span::raw(text).width()
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

@@ -10,8 +10,9 @@ use syntect::parsing::{ParseState, Scope, ScopeStack, SyntaxSet};
 use crate::ink::{Face, Ink, Look};
 use crate::mermaid::{self, Fence};
 use crate::palette::Band;
+use crate::pen;
 use crate::picture::{self, Picture, Surface};
-use crate::rows::{Row, glyphs, split_at};
+use crate::rows::{Row, split_at};
 
 /// The parser's options: GFM tables on, because CommonMark leaves tables out. No other extension
 /// is enabled, so a footnote, a strikethrough and a task list parse as plain prose.
@@ -300,7 +301,7 @@ impl Room {
         loop {
             let room = self.room();
             let gap = usize::from(space && self.used > 0);
-            if self.used + gap + glyphs(rest) <= room {
+            if self.used + gap + usize::from(pen::cells(rest)) <= room {
                 if gap == 1 {
                     let at = self.block;
                     self.extend(" ", at);
@@ -328,7 +329,7 @@ impl Room {
         if text.is_empty() {
             return;
         }
-        self.used = self.used.saturating_add(glyphs(text));
+        self.used = self.used.saturating_add(usize::from(pen::cells(text)));
         match self.line.last_mut() {
             Some((last, at)) if *at == look => last.push_str(text),
             _ => self.line.push((String::from(text), look)),
@@ -577,7 +578,7 @@ impl Room {
             let innermost = at + 1 == self.marks.len();
             let text = match innermost && self.first {
                 true => mark.clone(),
-                false => " ".repeat(glyphs(mark)),
+                false => " ".repeat(usize::from(pen::cells(mark))),
             };
             spans.push((text, Look::plain(Ink::Plain)));
         }
@@ -599,8 +600,16 @@ impl Room {
     /// The columns a word of the block in hand has: at least one, because a row that could hold
     /// nothing would break every word into nothing forever.
     fn room(&self) -> usize {
-        let bars: usize = self.lead.iter().map(|(text, _)| glyphs(text)).sum();
-        let marks: usize = self.marks.iter().map(|mark| glyphs(mark)).sum();
+        let bars: usize = self
+            .lead
+            .iter()
+            .map(|(text, _)| usize::from(pen::cells(text)))
+            .sum();
+        let marks: usize = self
+            .marks
+            .iter()
+            .map(|mark| usize::from(pen::cells(mark)))
+            .sum();
         // The reserve holds only while no row has been written: a marker stands beside the
         // first row alone.
         let reserve = match self.rows.is_empty() {
@@ -911,5 +920,7 @@ fn rule(widths: &[usize]) -> Row {
 }
 
 fn measured(cell: &[(String, Look)]) -> usize {
-    cell.iter().map(|(text, _)| glyphs(text)).sum()
+    cell.iter()
+        .map(|(text, _)| usize::from(pen::cells(text)))
+        .sum()
 }

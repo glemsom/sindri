@@ -744,9 +744,9 @@ impl View {
         }
     }
 
-    /// The `@` picker: the query, then the rows it leaves, the selection marked. A path wider
-    /// than the frame is cut at its right edge rather than dropped: whole-or-nothing is a rule
-    /// about hints and facts, and a reader wants the path they are pointing at.
+    /// The `@` picker: the query, then the rows it leaves, the selection marked. A query or a path
+    /// wider than the frame is cut at its right edge rather than dropped: whole-or-nothing is a
+    /// rule about hints and facts, and a reader wants the value they are pointing at.
     fn files_screen(&self, area: Rect, buffer: &mut Buffer) {
         let mut y = area.y;
         if y < area.bottom() {

@@ -1,3 +1,5 @@
+use crate::pen;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cell {
     pub row: u16,
@@ -65,7 +67,7 @@ impl Marked {
     }
 
     pub fn width(&self) -> u16 {
-        u16::try_from(self.glyphs.chars().count()).unwrap_or(u16::MAX)
+        pen::cells(&self.glyphs)
     }
 
     pub fn glyphs(&self) -> &str {
@@ -128,11 +130,9 @@ fn marked_row(row: u16, line: &str, from: u16, to: u16) -> Option<Marked> {
     })
 }
 
-/// A glyph can be two cells wide and a band counts cells and never glyphs, so a mark's
-/// cells are measured the way the row was laid out.
 fn columns(glyph: char) -> u16 {
     let mut encoded = [0; 4];
-    u16::try_from(crate::rows::glyphs(glyph.encode_utf8(&mut encoded))).unwrap_or(1)
+    pen::cells(glyph.encode_utf8(&mut encoded))
 }
 
 #[cfg(test)]
@@ -159,6 +159,26 @@ mod tests {
             span.rows()[0].left(),
             2,
             "and the row begins where the drag did"
+        );
+    }
+
+    #[test]
+    fn a_mark_over_a_wide_glyph_is_as_wide_as_the_cells_the_glyph_occupies() {
+        let lines = band(&["  日本語"]);
+
+        let span = Span::of(Mark::drag(Cell::new(0, 2), Cell::new(0, 7)), &lines);
+
+        assert_eq!(span.text(), "日本語");
+        assert_eq!(
+            span.rows()[0].left(),
+            2,
+            "the mark begins in the column the first wide glyph does"
+        );
+        assert_eq!(
+            span.rows()[0].width(),
+            6,
+            "three wide glyphs cover six cells, and a highlight two cells short of the words \
+             it says are marked is a lie about the copy"
         );
     }
 

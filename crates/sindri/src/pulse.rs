@@ -1,7 +1,7 @@
-use ratatui::text::Span;
 use sindri_core::run::Stop;
 
 use crate::ink::Ink;
+use crate::pen;
 
 /// Also the wait a live run gives the loop in `tui`.
 pub const STEP_MS: u64 = 80;
@@ -101,12 +101,10 @@ impl Head {
     }
 
     pub fn width(&self) -> u16 {
-        let columns: usize = self
-            .spans
+        self.spans
             .iter()
-            .map(|(text, _)| Span::raw(text.as_str()).width())
-            .sum();
-        u16::try_from(columns).unwrap_or(u16::MAX)
+            .map(|(text, _)| pen::cells(text))
+            .fold(0, u16::saturating_add)
     }
 
     pub fn text(&self) -> String {

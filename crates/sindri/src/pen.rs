@@ -5,8 +5,19 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use unicode_width::UnicodeWidthStr;
 
-use crate::ink::Ink;
+use crate::ink::{Ink, Look};
 use crate::palette::Palette;
+
+/// What a run of glyphs is drawn in: an ink, or an ink and the face it wears.
+pub trait Drawn: Copy {
+    fn look(self) -> Look;
+}
+
+impl<T: Copy + Into<Look>> Drawn for T {
+    fn look(self) -> Look {
+        self.into()
+    }
+}
 
 /// How much of a run a row has no room for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -31,16 +42,23 @@ pub fn pad(text: &str, columns: u16) -> String {
     padded
 }
 
-/// Writes `spans` from `row`'s left edge, each in its own ink, advancing by measured columns and
+/// Writes `spans` from `row`'s left edge, each in its own look, advancing by measured columns and
 /// so leaving two behind every wide glyph.
-pub fn write(buffer: &mut Buffer, row: Rect, spans: &[(&str, Ink)], clip: Clip, palette: &Palette) {
+pub fn write<S: AsRef<str>, D: Drawn>(
+    buffer: &mut Buffer,
+    row: Rect,
+    spans: &[(S, D)],
+    clip: Clip,
+    palette: &Palette,
+) {
     if clip == Clip::Whole && width(spans) > row.width {
         return;
     }
     let mut x = row.x;
     for (text, ink) in spans {
         let room = usize::from(row.right().saturating_sub(x));
-        let (next, _) = buffer.set_stringn(x, row.y, text, room, ink.style(palette));
+        let (next, _) =
+            buffer.set_stringn(x, row.y, text.as_ref(), room, ink.look().style(palette));
         x = next;
     }
 }
@@ -62,7 +80,12 @@ pub fn rule(buffer: &mut Buffer, row: Rect, fill: char, ink: Ink, palette: &Pale
 
 /// Hangs `spans` on `row`'s far edge, so the last cell of the run is the row's last: a run the row
 /// has no room for is refused whole and hangs nowhere.
-pub fn hang(buffer: &mut Buffer, row: Rect, spans: &[(&str, Ink)], palette: &Palette) {
+pub fn hang<S: AsRef<str>, D: Drawn>(
+    buffer: &mut Buffer,
+    row: Rect,
+    spans: &[(S, D)],
+    palette: &Palette,
+) {
     let width = width(spans);
     if width > row.width {
         return;
@@ -72,10 +95,10 @@ pub fn hang(buffer: &mut Buffer, row: Rect, spans: &[(&str, Ink)], palette: &Pal
 }
 
 /// The columns a run of spans takes: every span measured by what it draws.
-fn width(spans: &[(&str, Ink)]) -> u16 {
+fn width<S: AsRef<str>, D: Drawn>(spans: &[(S, D)]) -> u16 {
     spans
         .iter()
-        .map(|(text, _)| cells(text))
+        .map(|(text, _)| cells(text.as_ref()))
         .fold(0, u16::saturating_add)
 }
 
