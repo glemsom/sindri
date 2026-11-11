@@ -168,6 +168,35 @@ fn every_skill_found_is_listed_with_the_scope_it_came_from() {
     );
 }
 
+/// The column a row's description begins in, counted in cells: a wide glyph takes two.
+fn column_of(line: &str, description: &str) -> usize {
+    let at = line
+        .find(description)
+        .unwrap_or_else(|| panic!("the row does not say {description:?}: {line}"));
+    ratatui::text::Span::raw(&line[..at]).width()
+}
+
+#[test]
+fn a_name_of_wide_glyphs_leaves_the_column_every_description_starts_in() {
+    let ground = Ground::new();
+    ground.repo_skill("日本語", "the row that says so");
+    ground.repo_skill("review", "read the diff before you commit it");
+    let path = std::env::var("PATH").expect("this machine has a PATH");
+
+    let output = run(ground.command(&path).args(["doctor"]));
+    let out = text(&output.stdout);
+    a_report_was_made(&output);
+
+    let wide = row(&out, "日本語");
+    let ascii = row(&out, "review");
+    assert_eq!(
+        column_of(wide, "the row that says so"),
+        column_of(ascii, "read the diff before you commit it"),
+        "a name is padded out to the column the longest one leaves by what it draws, so every \
+         description starts in one column: {wide:?} against {ascii:?}"
+    );
+}
+
 fn shadow<'a>(stdout: &'a str, name: &str) -> &'a str {
     stdout
         .lines()
