@@ -145,6 +145,7 @@ impl From<Ink> for Look {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::palette::Band;
 
     const PALETTES: [Palette; 3] = [Palette::SLOTS, Palette::ANSI, Palette::TRUECOLOR];
 
@@ -190,14 +191,25 @@ mod tests {
             "the face a look is drawn in is its name"
         );
         for palette in PALETTES {
-            let mut cell = Cell::default();
-            cell.set_style(faint.style(&palette));
+            for band in [
+                None,
+                Some(Band::Rail),
+                Some(Band::Composer),
+                Some(Band::Well),
+            ] {
+                let mut cell = Cell::default();
+                cell.set_style(faint.style(&palette));
+                if let Some(band) = band {
+                    cell.set_style(Style::default().bg(palette.band(band)));
+                }
 
-            assert_eq!(
-                Look::of(&cell, &palette),
-                Some(faint),
-                "a faint accent is a look a fixture can name, so it reads back as itself"
-            );
+                assert_eq!(
+                    Look::of(&cell, &palette),
+                    Some(faint),
+                    "a faint accent written on {band:?} is a look a fixture can name, so it reads \
+                     back as itself"
+                );
+            }
         }
         assert_eq!(Look::from_name("accent+faint"), Some(faint));
     }

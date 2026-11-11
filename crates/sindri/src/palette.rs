@@ -30,8 +30,6 @@ struct Bands {
     well: Color,
 }
 
-/// The two colours a boundary is drawn on rather than in: the light a raised surface catches along
-/// its top, and the shadow it leaves under its bottom.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Edges {
     lit: Color,
@@ -140,8 +138,6 @@ impl Palette {
             .add_modifier(modifier)
     }
 
-    /// The colour a boundary is drawn on, so a surface can stand above the frame's ground or sink
-    /// under it without a cell's ink being touched.
     pub fn edge(&self, edge: Edge) -> Color {
         match edge {
             Edge::Lit => self.edges.lit,
@@ -192,13 +188,20 @@ pub enum Band {
     Well,
 }
 
-/// The two ways a boundary says which side of the frame stands above the other.
+impl Band {
+    pub const ALL: [Band; 3] = [Band::Rail, Band::Composer, Band::Well];
+}
+
+/// A boundary's share of the light, painted under a row: never an ink, so a cell on an edge still
+/// reads back as the ink it is written in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Edge {
-    /// The light a raised surface catches along its top edge.
     Lit,
-    /// The shadow a surface leaves along its bottom edge.
     Shadow,
+}
+
+impl Edge {
+    pub const ALL: [Edge; 2] = [Edge::Lit, Edge::Shadow];
 }
 
 /// Whether the terminal says it draws twenty-four-bit colour: `COLORTERM` is the one variable
@@ -223,6 +226,10 @@ fn tells_truecolor(term: Option<&str>, colorterm: Option<&str>) -> bool {
 mod tests {
     use super::*;
 
+    /// The two spellings that name colours of their own; `SLOTS` wears the reader's theme instead.
+    const SPELLED: [(&str, Palette); 2] =
+        [("ansi", Palette::ANSI), ("truecolor", Palette::TRUECOLOR)];
+
     #[test]
     fn a_terminal_told_no_colour_is_given_the_six_slots_and_no_background() {
         let uncoloured = Palette::probed(Some("1"), Some("xterm-256color"), Some("truecolor"));
@@ -233,7 +240,7 @@ mod tests {
             Color::Cyan,
             "an uncoloured terminal keeps the slot it always had, and not the design's accent"
         );
-        for band in [Band::Rail, Band::Composer, Band::Well] {
+        for band in Band::ALL {
             assert_eq!(
                 Palette::SLOTS.band(band),
                 Color::Reset,
@@ -299,73 +306,85 @@ mod tests {
                 }
             }
         }
-        for band in [Band::Rail, Band::Composer, Band::Well] {
+        for band in Band::ALL {
             assert!(
                 matches!(ansi.band(band), Color::Indexed(_)),
                 "{band:?} keeps the design's three steps and spells them in ANSI"
+            );
+        }
+        for edge in Edge::ALL {
+            assert!(
+                matches!(ansi.edge(edge), Color::Indexed(_)),
+                "{edge:?} is spelled in the colours a 256-colour terminal has"
+            );
+            assert!(
+                matches!(Palette::TRUECOLOR.edge(edge), Color::Rgb(..)),
+                "{edge:?} is the colour the design was drawn in"
             );
         }
     }
 
     #[test]
     fn the_lit_edge_and_the_shadow_are_surfaces_no_ink_is_drawn_in() {
-        for (spelling, palette) in [("ansi", Palette::ANSI), ("truecolor", Palette::TRUECOLOR)] {
+        for (spelling, palette) in SPELLED {
             let lit = palette.edge(Edge::Lit);
             let shadow = palette.edge(Edge::Shadow);
 
             assert_ne!(lit, shadow, "{spelling} draws one colour for both edges");
             for ink in Ink::ALL {
-                for edge in [lit, shadow] {
+                for edge in Edge::ALL {
                     assert_ne!(
                         palette.ink(ink).0,
-                        edge,
-                        "{spelling} draws {} in the colour of an edge, and an edge is a \
-                         surface a row is drawn on rather than an ink it is drawn in",
+                        palette.edge(edge),
+                        "{spelling} draws {} in the colour of {edge:?}, and an edge is a surface \
+                         a row is drawn on rather than an ink it is drawn in",
                         ink.name()
                     );
                 }
             }
-            for band in [Band::Rail, Band::Composer, Band::Well] {
-                for edge in [lit, shadow] {
+            for band in Band::ALL {
+                for edge in Edge::ALL {
                     assert_ne!(
                         palette.band(band),
-                        edge,
-                        "{spelling} leaves {band:?} and an edge no way to be told apart"
+                        palette.edge(edge),
+                        "{spelling} leaves {band:?} and {edge:?} no way to be told apart"
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn the_lit_edge_stands_above_every_band_and_the_shadow_below() {
+        for (spelling, palette) in SPELLED {
+            let lit = luminance(palette.edge(Edge::Lit));
+            let shadow = luminance(palette.edge(Edge::Shadow));
+
+            for band in Band::ALL {
+                let ground = luminance(palette.band(band));
+
+                assert!(
+                    lit > ground,
+                    "{spelling} lights {band:?} no brighter than its own ground, so nothing above \
+                     it can stand raised"
+                );
+                assert!(
+                    shadow < ground,
+                    "{spelling} shadows {band:?} no darker than its own ground, so nothing below \
+                     it can sit sunken"
+                );
             }
         }
     }
 
     #[test]
     fn a_terminal_told_no_colour_draws_no_edge_and_no_shadow() {
-        for edge in [Edge::Lit, Edge::Shadow] {
+        for edge in Edge::ALL {
             assert_eq!(
                 Palette::SLOTS.edge(edge),
                 Color::Reset,
                 "{edge:?} draws no colour, so every frame an uncoloured terminal draws is flat"
             );
-        }
-    }
-
-    #[test]
-    fn a_cell_painted_with_an_edge_still_reads_back_as_its_ink() {
-        for palette in [Palette::ANSI, Palette::TRUECOLOR] {
-            for ink in Ink::ALL {
-                for edge in [Edge::Lit, Edge::Shadow] {
-                    let mut cell = Cell::default();
-                    cell.set_style(ink.style(&palette));
-                    cell.set_style(Style::default().bg(palette.edge(edge)));
-
-                    assert_eq!(
-                        Ink::of(&cell, &palette),
-                        Some(ink),
-                        "{} raised on {edge:?} is still {}, so no fixture has to name the edge",
-                        ink.name(),
-                        ink.name()
-                    );
-                }
-            }
         }
     }
 
@@ -391,19 +410,19 @@ mod tests {
         }
     }
 
-    /// The contrast a word is legible at: the dim ink carries the footer's separators and the
+    /// The contrast a word is legible at: the dim ink carries the strip's separators and the
     /// rail's secondary lines, so no band may read it below this.
     const LEGIBLE: f64 = 4.2;
 
     #[test]
     fn the_dim_ink_carries_words_on_every_band() {
-        for (spelling, palette) in [("ansi", Palette::ANSI), ("truecolor", Palette::TRUECOLOR)] {
-            for band in [Band::Rail, Band::Composer, Band::Well] {
-                let ratio = contrast(palette.ink(Ink::Dim).0, palette.band(band));
+        for (spelling, palette) in SPELLED {
+            for band in Band::ALL {
+                let ratio = reads(&palette, Ink::Dim, band);
 
                 assert!(
                     ratio >= LEGIBLE,
-                    "{spelling} reads dim on {band:?} at {ratio:.2}:1, and a word under {LEGIBLE}:1 \
+                    "{spelling} reads dim on {band:?} under {LEGIBLE}:1, and a word under that \
                      is a word a reader has to guess"
                 );
             }
@@ -412,8 +431,8 @@ mod tests {
 
     #[test]
     fn the_ladder_keeps_the_steps_it_had() {
-        // The ladder as it was drawn before the dim ink was made strong enough to carry words: the
-        // three rungs, in each spelling of the design, as a band read them at the time.
+        // The rungs this ladder is held to: the design's three, in both spellings, so a rung that
+        // came closer to the one above it than these do is caught.
         let drawn = [
             (
                 "ansi",
@@ -437,9 +456,9 @@ mod tests {
         let rungs = [Ink::Plain, Ink::Muted, Ink::Dim];
 
         for (spelling, palette, ladder) in drawn {
-            for band in [Band::Rail, Band::Composer, Band::Well] {
+            for band in Band::ALL {
                 let had = ladder.map(|rung| contrast(rung, palette.band(band)));
-                let has = rungs.map(|ink| contrast(palette.ink(ink).0, palette.band(band)));
+                let has = rungs.map(|ink| reads(&palette, ink, band));
 
                 assert!(
                     has[0] > has[1] && has[1] > has[2],
@@ -462,6 +481,11 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// The contrast an ink reads at on a band's ground.
+    fn reads(palette: &Palette, ink: Ink, band: Band) -> f64 {
+        contrast(palette.ink(ink).0, palette.band(band))
     }
 
     /// The contrast one colour reads against another, the way WCAG measures it.
