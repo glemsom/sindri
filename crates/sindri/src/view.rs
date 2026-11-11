@@ -659,9 +659,9 @@ impl View {
         screen_row(buffer, area, area.y, &[(&label, Ink::Dim)], &self.palette);
     }
 
-    /// The composer is a raised panel rather than a stripe: the lit edge along its top row, the
-    /// shadow under its bottom, and the band's ground ramping between them, one claim per row so no
-    /// cell loses the ink it was written in.
+    /// The composer is a raised surface and not a flat band: the lit edge along its top row, the
+    /// shadow under its bottom, and the ground ramping between them — one claim per row, so no cell
+    /// loses the ink it was written in.
     fn composer_band(&self, area: Rect, buffer: &mut Buffer) {
         for row in 0..area.height {
             pen::claim(
@@ -1077,6 +1077,7 @@ mod tests {
     use ratatui::style::Color;
 
     use super::*;
+    use crate::composer::{MAX_ROWS, MIN_ROWS};
     use crate::ink::{Face, Look};
     use crate::palette::{Band, Edge};
 
@@ -1116,17 +1117,8 @@ mod tests {
     }
 
     /// The surface one cell of a frame sits on.
-    fn bg(buffer: &Buffer, x: u16, y: u16) -> Color {
+    fn under(buffer: &Buffer, x: u16, y: u16) -> Color {
         buffer.cell((x, y)).expect("a cell of the frame").bg
-    }
-
-    /// The grounds a `height`-row band of `band` is drawn on: the rail and the well are one colour,
-    /// and the composer is a raised panel ramping from its lit top to the shadow under it.
-    fn grounds(palette: &Palette, band: Band, height: u16) -> Vec<Color> {
-        match band {
-            Band::Composer => (0..height).map(|row| palette.step(row, height)).collect(),
-            band => vec![palette.band(band)],
-        }
     }
 
     /// A frame holding a draft of `lines` lines painted in `palette` at `cols` by `rows`, and the
@@ -1154,22 +1146,22 @@ mod tests {
                 for row in 0..band.height {
                     for x in band.x..band.right() {
                         assert_eq!(
-                            bg(&buffer, x, band.y + row),
+                            under(&buffer, x, band.y + row),
                             palette.step(row, band.height),
                             "row {row} of the {} at {cols}x{rows} sits on no step of the ramp, \
-                             so the band is not one panel",
+                             so the band is not one raised surface",
                             band.height
                         );
                     }
                 }
                 assert_eq!(
-                    bg(&buffer, band.x, band.y),
+                    under(&buffer, band.x, band.y),
                     palette.edge(Edge::Lit),
                     "the top row of the {} at {cols}x{rows} is not the lit edge",
                     band.height
                 );
                 assert_eq!(
-                    bg(&buffer, band.x, band.bottom() - 1),
+                    under(&buffer, band.x, band.bottom() - 1),
                     palette.edge(Edge::Shadow),
                     "the bottom row of the {} at {cols}x{rows} is not the shadow",
                     band.height
@@ -1179,22 +1171,22 @@ mod tests {
     }
 
     #[test]
-    fn a_two_row_band_and_a_six_row_band_each_read_as_one_panel() {
+    fn no_band_is_lit_twice_or_shadowed_twice_at_either_end_of_its_height() {
         let palette = Palette::TRUECOLOR;
         for lines in [1, 5] {
             let (buffer, band) = panel(palette, lines, 120, 40);
             let lit_and_shadowed = |edge: Edge| -> Vec<u16> {
                 (band.y..band.bottom())
                     .filter(|y| {
-                        (band.x..band.right()).all(|x| bg(&buffer, x, *y) == palette.edge(edge))
+                        (band.x..band.right()).all(|x| under(&buffer, x, *y) == palette.edge(edge))
                     })
                     .collect()
             };
 
             assert_eq!(
                 band.height,
-                if lines == 1 { 2 } else { 6 },
-                "the draft of {lines} lines is not a {} panel",
+                if lines == 1 { MIN_ROWS } else { MAX_ROWS },
+                "the draft of {lines} lines is not a band of {} rows",
                 band.height
             );
             assert_eq!(
@@ -1212,7 +1204,7 @@ mod tests {
             for y in band.y..band.bottom() {
                 for x in band.x..band.right() {
                     assert_ne!(
-                        bg(&buffer, x, y),
+                        under(&buffer, x, y),
                         Color::Reset,
                         "row {y} of the {}-row band leaves column {x} on the frame's own ground, \
                          so a stripe of the frame is read behind the panel",
@@ -1242,7 +1234,7 @@ mod tests {
         for y in band.y..band.bottom() {
             for x in band.x..band.right() {
                 assert_eq!(
-                    bg(&buffer, x, y),
+                    under(&buffer, x, y),
                     Color::Reset,
                     "row {y} of a frame with no colour draws a ground at column {x}"
                 );
@@ -1251,17 +1243,17 @@ mod tests {
     }
 
     #[test]
-    fn sixty_columns_show_the_panel_and_lose_no_hint_from_the_footer() {
+    fn sixty_columns_show_the_raised_band_and_lose_no_hint_from_the_footer() {
         let palette = Palette::TRUECOLOR;
         let (buffer, band) = panel(palette, 1, 60, 24);
 
         assert_eq!(
-            bg(&buffer, band.x, band.y),
+            under(&buffer, band.x, band.y),
             palette.edge(Edge::Lit),
             "a sixty-column frame draws no lit edge along the top of the composer"
         );
         assert_eq!(
-            bg(&buffer, band.x, band.bottom() - 1),
+            under(&buffer, band.x, band.bottom() - 1),
             palette.edge(Edge::Shadow),
             "a sixty-column frame leaves no shadow under the composer"
         );
@@ -1272,9 +1264,9 @@ mod tests {
         );
     }
 
-    /// A band is a panel only because a name is read from a foreground and a modifier.
+    /// A band is a surface only because a name is read from a foreground and a modifier.
     #[test]
-    fn the_rail_the_composer_and_a_code_well_are_painted_over_their_own_surface() {
+    fn the_rail_and_a_code_well_are_painted_over_their_own_surface() {
         let palette = Palette::TRUECOLOR;
         let mut view = View::of(
             vec![Entry::Assistant {
@@ -1293,22 +1285,18 @@ mod tests {
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
 
-        let composer_height = bands(area, view.composer().rows(), view.queue().rows())
-            .composer
-            .height;
         let cells = |band: Band| -> Vec<(u16, u16)> {
-            let on = grounds(&palette, band, composer_height);
             (area.y..area.bottom())
                 .flat_map(|y| (area.x..area.right()).map(move |x| (x, y)))
                 .filter(|(x, y)| {
                     buffer
                         .cell((*x, *y))
-                        .is_some_and(|cell| on.contains(&cell.bg))
+                        .is_some_and(|cell| cell.bg == palette.band(band))
                 })
                 .collect()
         };
 
-        for (band, at_least) in [(Band::Rail, 100), (Band::Composer, 100), (Band::Well, 100)] {
+        for (band, at_least) in [(Band::Rail, 100), (Band::Well, 100)] {
             let on = cells(band);
             assert!(
                 on.len() >= at_least,
@@ -1330,7 +1318,7 @@ mod tests {
         let last = area.bottom() - 1;
         let banded = (area.x..area.right()).find(|x| {
             let cell = buffer.cell((*x, last)).expect("a cell of the footer");
-            [Band::Rail, Band::Composer, Band::Well]
+            [Band::Rail, Band::Well]
                 .into_iter()
                 .any(|band| cell.bg == palette.band(band))
         });

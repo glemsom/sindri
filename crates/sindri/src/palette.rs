@@ -1,6 +1,7 @@
 use ratatui::buffer::Cell;
 use ratatui::style::{Color, Modifier, Style};
 
+use crate::composer;
 use crate::ink::{Face, Ink, Look};
 
 /// The colours one spelling of the design is drawn in: three palettes, one design, and never a
@@ -32,15 +33,13 @@ struct Bands {
 
 /// The grounds a raised surface's face is drawn in, one per row from the lit edge along its top to
 /// the shadow under its bottom: every height a band takes is drawn from this one ladder, so the band
-/// reads as one panel.
+/// reads as one raised surface.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Ramp {
     steps: [Color; STEPS],
 }
 
-/// The rungs a ramp holds: a step for every row a raised band can be drawn across, the composer's
-/// six-row ceiling.
-const STEPS: usize = 6;
+const STEPS: usize = composer::MAX_ROWS as usize;
 
 impl Palette {
     /// The terminal's own six slots, no background and no edge: what a reader who asked for no
@@ -144,8 +143,8 @@ impl Palette {
         }
     }
 
-    /// The style the cells of a band start as: the plain ink over the band's own colour, and over
-    /// the terminal's own for a cell on no band. A cell a band's words leave blank is still the
+    /// The style the cells of a flat band start as: the plain ink over the band's own colour, and
+    /// over the terminal's own for a cell on no band. A cell a band's words leave blank is still the
     /// frame's ink, and a band that shrank leaves no stripe of the frame before it behind.
     pub fn ground(&self, band: Option<Band>) -> Style {
         self.paint(band.map_or(Color::Reset, |band| self.band(band)))
@@ -172,11 +171,9 @@ impl Palette {
         }
     }
 
-    /// The ground the `row`th row of a raised surface `rows` rows tall sits on: the ramp runs from
-    /// the lit edge along its top to the shadow under its bottom, and every row between the two is
-    /// darker than the row above it.
+    /// The ground the `row`th row of a raised surface `rows` rows tall sits on.
     pub fn step(&self, row: u16, rows: u16) -> Color {
-        self.ramp.steps[at(row, rows)]
+        self.ramp.steps[step_at(row, rows)]
     }
 
     pub fn band(&self, band: Band) -> Color {
@@ -238,9 +235,10 @@ impl Edge {
     pub const ALL: [Edge; 2] = [Edge::Lit, Edge::Shadow];
 }
 
-/// The step of the ramp the `row`th of `rows` rows lands on: the two ends are drawn at every height,
-/// so no surface is lit twice and none is shadowed twice.
-fn at(row: u16, rows: u16) -> usize {
+/// The step of the ramp the `row`th of `rows` rows lands on: both ends are drawn at every height a
+/// band takes, so none is lit twice and none is shadowed twice. A surface taller than the ramp has
+/// fewer steps than rows and repeats one, and a surface of one row is drawn lit.
+fn step_at(row: u16, rows: u16) -> usize {
     let span = usize::from(rows.saturating_sub(1));
     match span {
         0 => 0,
@@ -431,18 +429,18 @@ mod tests {
                 assert_eq!(
                     palette.step(0, rows),
                     palette.edge(Edge::Lit),
-                    "{spelling} draws no lit edge along the top of a {rows}-row panel"
+                    "{spelling} draws no lit edge along the top of a raised band of {rows} rows"
                 );
                 assert_eq!(
                     palette.step(rows - 1, rows),
                     palette.edge(Edge::Shadow),
-                    "{spelling} leaves no shadow under the bottom of a {rows}-row panel"
+                    "{spelling} leaves no shadow under a raised band of {rows} rows"
                 );
                 for row in 1..rows {
                     assert!(
                         luminance(palette.step(row, rows)) < luminance(palette.step(row - 1, rows)),
-                        "{spelling} ramps a {rows}-row panel to no darker ground at row {row}, so \
-                         two of its rows are drawn in one"
+                        "{spelling} ramps a raised band of {rows} rows to no darker ground at row\
+                         {row}, so two of its rows are drawn in one"
                     );
                 }
             }
@@ -450,13 +448,24 @@ mod tests {
     }
 
     #[test]
-    fn the_band_a_panel_is_drawn_on_is_a_step_of_its_ramp() {
+    fn a_three_row_band_is_the_lit_edge_its_own_ground_and_the_shadow() {
         for (spelling, palette) in SPELLED {
             assert_eq!(
                 palette.step(1, 3),
                 palette.band(Band::Composer),
-                "{spelling} draws no three-row panel: a lit edge, the composer's own ground, and \
-                 the shadow under it"
+                "{spelling} gives a raised band of three rows no composer ground to draw its face \
+                 on: a lit edge, the band's own colour, and the shadow under it"
+            );
+        }
+    }
+
+    #[test]
+    fn a_surface_with_one_row_has_no_room_for_both_ends_and_is_drawn_lit() {
+        for (spelling, palette) in SPELLED {
+            assert_eq!(
+                palette.step(0, 1),
+                palette.edge(Edge::Lit),
+                "{spelling} lights no one-row band, and a shadow would leave it no top at all"
             );
         }
     }
@@ -468,7 +477,8 @@ mod tests {
                 assert_eq!(
                     Palette::SLOTS.step(row, rows),
                     Color::Reset,
-                    "row {row} of a {rows}-row panel draws no ground, so the frame stays flat"
+                    "row {row} of a raised band of {rows} rows draws no ground, so the frame stays \
+                     flat"
                 );
             }
         }
