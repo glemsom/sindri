@@ -129,15 +129,25 @@ _Avoid_: UI, client, interface
 A colour role asked for by name — dim, muted, accent, ok, err — never a literal colour.
 _Avoid_: Colour, style, RGB
 
+**Face**:
+The one weight an ink can wear beyond its colour — plain, bold, reversed, faint — so the accent
+dimmed is a face on the accent and never a second ink.
+_Avoid_: Style, emphasis, attribute
+
 **Palette**:
-The colours the seven inks and the three bands are drawn in, resolved once at boot from what the
-terminal says it can do: one design, spelled in truecolour, in ANSI, or not at all.
+The colours the seven inks, the three bands and the two edges are drawn in, resolved once at boot
+from what the terminal says it can do: one design, spelled in truecolour, in ANSI, or not at all.
 _Avoid_: Theme, scheme, colours
 
 **Band**:
 One of the three places a frame paints a background under its cells — the rail, the composer band,
 the well a code fence sits in. A cell on a band still reads back as its ink.
 _Avoid_: Panel, colour, stripe
+
+**Edge**:
+The light a raised surface catches along its top and the shadow it leaves under its bottom: two
+colours a boundary is drawn on, beside the three bands, and never an ink.
+_Avoid_: Border, elevation, highlight
 
 **Meter**:
 The six cells a share of a window is drawn as, filled to the share: a ceiling can be a meter, and a

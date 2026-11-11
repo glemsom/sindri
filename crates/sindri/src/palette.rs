@@ -9,6 +9,7 @@ use crate::ink::{Face, Ink, Look};
 pub struct Palette {
     inks: Inks,
     bands: Bands,
+    edges: Edges,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -29,8 +30,15 @@ struct Bands {
     well: Color,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Edges {
+    lit: Color,
+    shadow: Color,
+}
+
 impl Palette {
-    /// The terminal's own six slots and no background: what a reader who asked for no colour gets.
+    /// The terminal's own six slots, no background and no edge: what a reader who asked for no
+    /// colour gets, and every frame drawn in it is flat.
     pub const SLOTS: Palette = Palette {
         inks: Inks {
             plain: (Color::Reset, Modifier::empty()),
@@ -46,14 +54,18 @@ impl Palette {
             composer: Color::Reset,
             well: Color::Reset,
         },
+        edges: Edges {
+            lit: Color::Reset,
+            shadow: Color::Reset,
+        },
     };
 
     /// The design in the colours a terminal with no twenty-four-bit colour has.
     pub const ANSI: Palette = Palette {
         inks: Inks {
-            plain: (Color::Indexed(252), Modifier::empty()),
-            dim: (Color::Indexed(240), Modifier::empty()),
-            muted: (Color::Indexed(246), Modifier::empty()),
+            plain: (Color::Indexed(255), Modifier::empty()),
+            dim: (Color::Indexed(246), Modifier::empty()),
+            muted: (Color::Indexed(250), Modifier::empty()),
             accent: (Color::Indexed(179), Modifier::empty()),
             ok: (Color::Indexed(108), Modifier::empty()),
             err: (Color::Indexed(174), Modifier::empty()),
@@ -64,14 +76,18 @@ impl Palette {
             composer: Color::Indexed(236),
             well: Color::Indexed(234),
         },
+        edges: Edges {
+            lit: Color::Indexed(237),
+            shadow: Color::Indexed(233),
+        },
     };
 
     /// The design as it was drawn.
     pub const TRUECOLOR: Palette = Palette {
         inks: Inks {
-            plain: (Color::Rgb(206, 212, 221), Modifier::empty()),
-            dim: (Color::Rgb(88, 96, 106), Modifier::empty()),
-            muted: (Color::Rgb(140, 149, 160), Modifier::empty()),
+            plain: (Color::Rgb(233, 241, 251), Modifier::empty()),
+            dim: (Color::Rgb(141, 149, 159), Modifier::empty()),
+            muted: (Color::Rgb(181, 189, 199), Modifier::empty()),
             accent: (Color::Rgb(226, 168, 96), Modifier::empty()),
             ok: (Color::Rgb(140, 184, 132), Modifier::empty()),
             err: (Color::Rgb(208, 104, 106), Modifier::empty()),
@@ -81,6 +97,10 @@ impl Palette {
             rail: Color::Rgb(26, 30, 36),
             composer: Color::Rgb(32, 37, 44),
             well: Color::Rgb(20, 23, 28),
+        },
+        edges: Edges {
+            lit: Color::Rgb(48, 54, 64),
+            shadow: Color::Rgb(12, 14, 18),
         },
     };
 
@@ -116,6 +136,13 @@ impl Palette {
             .fg(foreground)
             .bg(band.map_or(Color::Reset, |band| self.band(band)))
             .add_modifier(modifier)
+    }
+
+    pub fn edge(&self, edge: Edge) -> Color {
+        match edge {
+            Edge::Lit => self.edges.lit,
+            Edge::Shadow => self.edges.shadow,
+        }
     }
 
     pub fn band(&self, band: Band) -> Color {
@@ -161,6 +188,22 @@ pub enum Band {
     Well,
 }
 
+impl Band {
+    pub const ALL: [Band; 3] = [Band::Rail, Band::Composer, Band::Well];
+}
+
+/// A boundary's share of the light, painted under a row: never an ink, so a cell on an edge still
+/// reads back as the ink it is written in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Edge {
+    Lit,
+    Shadow,
+}
+
+impl Edge {
+    pub const ALL: [Edge; 2] = [Edge::Lit, Edge::Shadow];
+}
+
 /// Whether the terminal says it draws twenty-four-bit colour: `COLORTERM` is the one variable
 /// that says so outright, and a few terminals name it in `TERM` instead.
 fn tells_truecolor(term: Option<&str>, colorterm: Option<&str>) -> bool {
@@ -183,6 +226,10 @@ fn tells_truecolor(term: Option<&str>, colorterm: Option<&str>) -> bool {
 mod tests {
     use super::*;
 
+    /// The two spellings that name colours of their own; `SLOTS` wears the reader's theme instead.
+    const SPELLED: [(&str, Palette); 2] =
+        [("ansi", Palette::ANSI), ("truecolor", Palette::TRUECOLOR)];
+
     #[test]
     fn a_terminal_told_no_colour_is_given_the_six_slots_and_no_background() {
         let uncoloured = Palette::probed(Some("1"), Some("xterm-256color"), Some("truecolor"));
@@ -193,7 +240,7 @@ mod tests {
             Color::Cyan,
             "an uncoloured terminal keeps the slot it always had, and not the design's accent"
         );
-        for band in [Band::Rail, Band::Composer, Band::Well] {
+        for band in Band::ALL {
             assert_eq!(
                 Palette::SLOTS.band(band),
                 Color::Reset,
@@ -259,10 +306,84 @@ mod tests {
                 }
             }
         }
-        for band in [Band::Rail, Band::Composer, Band::Well] {
+        for band in Band::ALL {
             assert!(
                 matches!(ansi.band(band), Color::Indexed(_)),
                 "{band:?} keeps the design's three steps and spells them in ANSI"
+            );
+        }
+        for edge in Edge::ALL {
+            assert!(
+                matches!(ansi.edge(edge), Color::Indexed(_)),
+                "{edge:?} is spelled in the colours a 256-colour terminal has"
+            );
+            assert!(
+                matches!(Palette::TRUECOLOR.edge(edge), Color::Rgb(..)),
+                "{edge:?} is the colour the design was drawn in"
+            );
+        }
+    }
+
+    #[test]
+    fn the_lit_edge_and_the_shadow_are_surfaces_no_ink_is_drawn_in() {
+        for (spelling, palette) in SPELLED {
+            let lit = palette.edge(Edge::Lit);
+            let shadow = palette.edge(Edge::Shadow);
+
+            assert_ne!(lit, shadow, "{spelling} draws one colour for both edges");
+            for ink in Ink::ALL {
+                for edge in Edge::ALL {
+                    assert_ne!(
+                        palette.ink(ink).0,
+                        palette.edge(edge),
+                        "{spelling} draws {} in the colour of {edge:?}, and an edge is a surface \
+                         a row is drawn on rather than an ink it is drawn in",
+                        ink.name()
+                    );
+                }
+            }
+            for band in Band::ALL {
+                for edge in Edge::ALL {
+                    assert_ne!(
+                        palette.band(band),
+                        palette.edge(edge),
+                        "{spelling} leaves {band:?} and {edge:?} no way to be told apart"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_lit_edge_stands_above_every_band_and_the_shadow_below() {
+        for (spelling, palette) in SPELLED {
+            let lit = luminance(palette.edge(Edge::Lit));
+            let shadow = luminance(palette.edge(Edge::Shadow));
+
+            for band in Band::ALL {
+                let ground = luminance(palette.band(band));
+
+                assert!(
+                    lit > ground,
+                    "{spelling} lights {band:?} no brighter than its own ground, so nothing above \
+                     it can stand raised"
+                );
+                assert!(
+                    shadow < ground,
+                    "{spelling} shadows {band:?} no darker than its own ground, so nothing below \
+                     it can sit sunken"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_terminal_told_no_colour_draws_no_edge_and_no_shadow() {
+        for edge in Edge::ALL {
+            assert_eq!(
+                Palette::SLOTS.edge(edge),
+                Color::Reset,
+                "{edge:?} draws no colour, so every frame an uncoloured terminal draws is flat"
             );
         }
     }
@@ -286,6 +407,126 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    /// The contrast a word is legible at: the dim ink carries the strip's separators and the
+    /// rail's secondary lines, so no band may read it below this.
+    const LEGIBLE: f64 = 4.2;
+
+    #[test]
+    fn the_dim_ink_carries_words_on_every_band() {
+        for (spelling, palette) in SPELLED {
+            for band in Band::ALL {
+                let ratio = reads(&palette, Ink::Dim, band);
+
+                assert!(
+                    ratio >= LEGIBLE,
+                    "{spelling} reads dim on {band:?} under {LEGIBLE}:1, and a word under that \
+                     is a word a reader has to guess"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_ladder_keeps_the_steps_it_had() {
+        // The rungs this ladder is held to: the design's three, in both spellings, so a rung that
+        // came closer to the one above it than these do is caught.
+        let drawn = [
+            (
+                "ansi",
+                Palette::ANSI,
+                [
+                    Color::Indexed(252),
+                    Color::Indexed(246),
+                    Color::Indexed(240),
+                ],
+            ),
+            (
+                "truecolor",
+                Palette::TRUECOLOR,
+                [
+                    Color::Rgb(206, 212, 221),
+                    Color::Rgb(140, 149, 160),
+                    Color::Rgb(88, 96, 106),
+                ],
+            ),
+        ];
+        let rungs = [Ink::Plain, Ink::Muted, Ink::Dim];
+
+        for (spelling, palette, ladder) in drawn {
+            for band in Band::ALL {
+                let had = ladder.map(|rung| contrast(rung, palette.band(band)));
+                let has = rungs.map(|ink| reads(&palette, ink, band));
+
+                assert!(
+                    has[0] > has[1] && has[1] > has[2],
+                    "{spelling} reads plain, muted and dim on {band:?} as {has:?}, which is no \
+                     ladder a reader can climb"
+                );
+                assert!(
+                    has[0] - has[1] >= had[0] - had[1],
+                    "{spelling} brings plain and muted {:?} contrast points closer on {band:?} \
+                     than the {} it was drawn at",
+                    has[0] - has[1],
+                    had[0] - had[1]
+                );
+                assert!(
+                    has[1] - has[2] >= had[1] - had[2],
+                    "{spelling} brings muted and dim {:?} contrast points closer on {band:?} \
+                     than the {} it was drawn at",
+                    has[1] - has[2],
+                    had[1] - had[2]
+                );
+            }
+        }
+    }
+
+    /// The contrast an ink reads at on a band's ground.
+    fn reads(palette: &Palette, ink: Ink, band: Band) -> f64 {
+        contrast(palette.ink(ink).0, palette.band(band))
+    }
+
+    /// The contrast one colour reads against another, the way WCAG measures it.
+    fn contrast(one: Color, other: Color) -> f64 {
+        let (one, other) = (luminance(one), luminance(other));
+        let (high, low) = if one > other {
+            (one, other)
+        } else {
+            (other, one)
+        };
+        (high + 0.05) / (low + 0.05)
+    }
+
+    /// The relative luminance of a colour, from the channels it is spelled in.
+    fn luminance(color: Color) -> f64 {
+        let [red, green, blue] = spelled(color).map(|channel| {
+            let channel = f64::from(channel) / 255.0;
+            match channel <= 0.03928 {
+                true => channel / 12.92,
+                false => ((channel + 0.055) / 1.055).powf(2.4),
+            }
+        });
+        0.2126 * red + 0.7152 * green + 0.0722 * blue
+    }
+
+    /// The channels a colour is spelled in, so a ratio can be measured: the terminal's own sixteen
+    /// slots are the reader's colours and not this design's, and no ratio here is about them.
+    fn spelled(color: Color) -> [u8; 3] {
+        match color {
+            Color::Rgb(red, green, blue) => [red, green, blue],
+            Color::Indexed(at @ 16..=231) => {
+                let at = at - 16;
+                let step = [0, 95, 135, 175, 215, 255];
+                [
+                    step[usize::from(at / 36)],
+                    step[usize::from(at % 36 / 6)],
+                    step[usize::from(at % 6)],
+                ]
+            }
+            Color::Indexed(at @ 232..=255) => [8 + 10 * (at - 232); 3],
+            other => panic!("{other:?} is a slot this design does not draw and cannot measure"),
         }
     }
 

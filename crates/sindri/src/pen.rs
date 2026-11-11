@@ -176,7 +176,7 @@ mod tests {
 
     use super::*;
     use crate::ink::{Face, Ink, Look};
-    use crate::palette::{Band, Palette};
+    use crate::palette::{Band, Edge, Palette};
 
     const PALETTE: Palette = Palette::TRUECOLOR;
 
@@ -315,6 +315,35 @@ mod tests {
             PALETTE.band(Band::Rail),
             "a band is the surface a cell sits on, so a wash leaves it alone"
         );
+    }
+
+    #[test]
+    fn a_row_raised_on_an_edge_still_reads_back_as_the_inks_written_on_it() {
+        for palette in [Palette::ANSI, Palette::TRUECOLOR] {
+            for edge in Edge::ALL {
+                let mut row = row_of(4);
+                let area = row.area;
+                write(
+                    &mut row,
+                    area,
+                    &[("keys", Ink::Muted)],
+                    Clip::Edge,
+                    &palette,
+                );
+                claim(&mut row, area, Style::default().bg(palette.edge(edge)));
+
+                assert_eq!(
+                    crate::readback::inks(&row, 0, &palette),
+                    [(Ink::Muted, 4)],
+                    "an edge is the surface a row is raised on, so no fixture has to name it"
+                );
+                assert_eq!(
+                    row.cell((0, 0)).expect("a cell of the row").bg,
+                    palette.edge(edge),
+                    "and the edge it was given is the surface the row sits on"
+                );
+            }
+        }
     }
 
     #[test]
