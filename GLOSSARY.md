@@ -37,29 +37,31 @@ _Avoid_: Progress, notice, indicator
 **Ledger**:
 The one module that holds a run's **facts**, the one way each **value** is spelled, and the rows the
 facts are laid out in — the size in tokens, the pair whose halves line up on a slash, the meter a
-share fills and the ink it is read in, the head of a name, the tail of a path, the em dash a fact is
-owed, the first eight of a GUID, the blocks and the order they are read in, the hairline between two
-that both kept a fact, the order facts are given up in, and the row that counts what went. No drawing
-spells a fact for itself, and no drawing decides where one goes: a fact reads one way wherever it is
-said.
+share fills and the ink it is read in, the cut of a value to the room its row leaves it — the head of
+a name, the tail of a path, the whole of a word — the em dash a fact is owed, the first eight of a
+GUID, the blocks and the order they are read in, the hairline between two that both kept a fact, the
+order facts are given up in, the row that counts what went, and the columns a **stats screen**
+widens them to. No drawing spells a fact for itself, and no drawing decides where one goes: a fact
+reads one way wherever it is said.
 _Avoid_: Facts module, layout module, status bar, sidebar
 
 **Rail**:
-The ledger's adapter to a frame: a band in, the rows the ledger lays there drawn, and no rule of its
-own about which fact goes where.
+The ledger's adapter to a frame: a band and the shape it is drawn in, the rows the ledger lays there
+drawn, and no rule of its own about which fact goes where.
 _Avoid_: Status bar, sidebar, panel, dock
 
 **Strip**:
 The shape the rail draws below a hundred columns: the ledger's row along a band's bottom row, read
-left to right with a gap between two facts and its count at the end. The other shape is the
-ledger's own column, beside the transcript.
+left to right with a gap between two facts and its count at the end. The other shape the rail draws
+is the ledger's own column, beside the transcript; the **stats screen** is the ledger widened.
 _Avoid_: Status line, footer bar, ticker
 
 **Fact**:
-One named thing a run holds, drawn as a label and a **value**: the wire, the served name, thinking,
-the turns, the window, the cache, the workspace, the branch, the skills, the sandbox, the session,
-the temp. A fact nobody can state is absent rather than blank, and a fact a launch names and a run
-has yet to fill is an em dash.
+One named thing a run holds, drawn as a label and a **value**: the wire, the served name, the route,
+thinking, the turns, the window, the cache, the spend, the workspace, the branch, the commit, the
+skills, the sandbox, the state a run stopped in and its instants, the session, the temp. A fact
+nobody can state is absent rather than blank, a fact a launch names and a run has yet to fill is an
+em dash, and a value that is its own name — a loaded skill — hangs where its siblings' values do.
 _Avoid_: Row, field, item, stat
 
 **Value**:
@@ -179,7 +181,8 @@ _Avoid_: Splash screen, welcome screen, landing page, boot animation
 **Stats screen**:
 The screen `/stats` opens: the facts the rail is too narrow to hold — the route, the spend, the
 instants, the whole GUID, the whole temp, the whole workspace — drawn from the record the run wrote
-and the facts it was handed, and settled rather than live.
+and the facts it was handed, and settled rather than live. It is the ledger's second adapter: the
+band in, and the rows the ledger widens into as many columns as hold a whole one.
 _Avoid_: Status screen, dashboard, details, inspector
 
 **Artefact**:

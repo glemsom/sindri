@@ -1,6 +1,6 @@
-//! The run's facts, the one way each of them is spelled and the rows they are laid out in: the
-//! wire, the served name, thinking, the turns, the window and its meter, the cache, the workspace,
-//! the branch, the skills, the sandbox, the session and the temp.
+//! The run's facts, the one way each of them is spelled and the rows they are laid out in: what the
+//! wire, the record and the launch say, and what the rail and the screen draw of it, cut to the room
+//! each row leaves.
 
 use std::path::PathBuf;
 
@@ -27,9 +27,29 @@ fn drawn(text: &str) -> usize {
 /// The frame width the ledger gives way at: a hundred-column frame is the last that holds one.
 pub const NARROW: u16 = 100;
 
-/// The shapes a fact is read in: the ledger's column beside a transcript, which has room for a pair
-/// beside its meter; the strip along a band's bottom row, which has room for the meter; and the
-/// screen, which is the same ledger widened to as many columns as the band holds a whole one in.
+/// The two shapes a frame's rail is drawn in: the ledger's column beside a transcript, which has
+/// room for a pair beside its meter, and the strip along a band's bottom row, which has room for
+/// the meter.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Rail {
+    Ledger,
+    Strip,
+}
+
+impl Rail {
+    /// The rail a frame `width` columns wide draws: the strip below a hundred columns, and the
+    /// ledger's column from a hundred up.
+    pub fn of(width: u16) -> Rail {
+        if width < NARROW {
+            Rail::Strip
+        } else {
+            Rail::Ledger
+        }
+    }
+}
+
+/// What a drawing reads its facts in: one of the rail's shapes, or the screen, which is the same
+/// ledger widened to as many columns as the band holds a whole one in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Shape {
     Ledger,
@@ -37,12 +57,11 @@ pub enum Shape {
     Screen,
 }
 
-impl Shape {
-    pub fn of(width: u16) -> Shape {
-        if width < NARROW {
-            Shape::Strip
-        } else {
-            Shape::Ledger
+impl From<Rail> for Shape {
+    fn from(rail: Rail) -> Shape {
+        match rail {
+            Rail::Ledger => Shape::Ledger,
+            Rail::Strip => Shape::Strip,
         }
     }
 }
@@ -227,8 +246,6 @@ pub struct Facts {
     pub cache: Option<u8>,
     pub workspace: Option<PathBuf>,
     pub branch: Option<String>,
-    /// Nothing produces this fact yet: a caller passes it in until its producer lands.
-    pub skills: Option<usize>,
     pub sandbox: Option<Enforcement>,
     /// The run's own, and an em dash on a frame that has not run yet.
     pub session: Option<String>,
@@ -242,8 +259,8 @@ pub struct Facts {
     pub start: Option<String>,
     pub end: Option<String>,
     pub stopped: Option<State>,
-    /// The skills the run loaded, whole: a rail column has room for how many and the screen for
-    /// every name.
+    /// The skills the run loaded, in load order: a rail column has room for how many and the screen
+    /// for every name.
     pub loaded: Vec<String>,
 }
 
@@ -584,30 +601,22 @@ const SACRIFICE: [Kind; 11] = [
 pub struct Share {
     pub transcript: Rect,
     /// Nothing when the frame knows no fact at all, and the transcript keeps the whole band.
-    pub rail: Option<(Shape, Rect)>,
+    pub rail: Option<(Rail, Rect)>,
 }
 
 /// Cuts the band the transcript and the rail share: thirty-two columns down the right while the
 /// frame is wide enough to hold a column, one strip along the band's bottom row below a hundred. A
 /// frame that knows no fact draws no rail, and the transcript loses no room to one.
 pub fn split(facts: &Facts, band: Rect) -> Share {
-    let shape = Shape::of(band.width);
-    if band.width == 0 || band.height == 0 || known(facts, shape).is_empty() {
+    let shape = Rail::of(band.width);
+    if band.width == 0 || band.height == 0 || known(facts, shape.into()).is_empty() {
         return Share {
             transcript: band,
             rail: None,
         };
     }
     let (transcript, rail) = match shape {
-        // A screen is drawn on the band it is handed: it takes no column of the frame and no rail
-        // stands beside it.
-        Shape::Screen => {
-            return Share {
-                transcript: band,
-                rail: None,
-            };
-        }
-        Shape::Ledger => {
+        Rail::Ledger => {
             let columns = COLUMNS.min(band.width);
             let x = band.x.saturating_add(band.width - columns);
             (
@@ -623,7 +632,7 @@ pub fn split(facts: &Facts, band: Rect) -> Share {
                 },
             )
         }
-        Shape::Strip => (
+        Rail::Strip => (
             Rect {
                 height: band.height - 1,
                 ..band
@@ -647,7 +656,8 @@ pub fn split(facts: &Facts, band: Rect) -> Share {
 pub(crate) fn rows(facts: &Facts, shape: Shape, area: Rect) -> Vec<Row> {
     match shape {
         Shape::Screen => sheet_rows(facts, area),
-        Shape::Ledger | Shape::Strip => rail_rows(facts, shape, area),
+        Shape::Ledger => rail_rows(facts, Rail::Ledger, area),
+        Shape::Strip => rail_rows(facts, Rail::Strip, area),
     }
 }
 
@@ -663,10 +673,10 @@ pub(crate) fn draw(rows: &[Row], buffer: &mut Buffer, palette: &Palette) {
 
 /// The ledger's rows, or the strip's one: the blocks the rail reads, a hairline between two that
 /// both kept a fact, and the count of what went in a row of its own.
-fn rail_rows(facts: &Facts, shape: Shape, area: Rect) -> Vec<Row> {
-    let kept = kept(facts, shape, area);
-    match shape {
-        Shape::Ledger | Shape::Screen => ledger_lines(&kept.facts, kept.went)
+fn rail_rows(facts: &Facts, rail: Rail, area: Rect) -> Vec<Row> {
+    let kept = kept(facts, rail, area);
+    match rail {
+        Rail::Ledger => ledger_lines(&kept.facts, kept.went)
             .into_iter()
             .take(usize::from(area.height))
             .enumerate()
@@ -684,7 +694,7 @@ fn rail_rows(facts: &Facts, shape: Shape, area: Rect) -> Vec<Row> {
                 }
             })
             .collect(),
-        Shape::Strip => vec![strip(&kept, area)],
+        Rail::Strip => vec![strip(&kept, area)],
     }
 }
 
@@ -753,7 +763,6 @@ impl Row {
         }
     }
 
-    /// The row of the band this row stands on.
     pub(crate) fn y(&self) -> u16 {
         self.y
     }
@@ -960,27 +969,31 @@ enum Line<'a> {
 /// The ledger gives its facts up in a settled order beside the row that says how many went; the
 /// strip gives them up from the tail of its own list, but its count is the last item of its one
 /// row, so the room takes the count first.
-fn kept(facts: &Facts, shape: Shape, area: Rect) -> Kept {
-    let known = known(facts, shape);
+fn kept(facts: &Facts, rail: Rail, area: Rect) -> Kept {
+    let known = known(facts, rail.into());
     let total = known.len();
     let mut kept: Vec<Fact> = known
         .into_iter()
-        .filter(|fact| shape == Shape::Ledger || STRIP_FACTS.contains(&fact.kind))
+        .filter(|fact| rail == Rail::Ledger || STRIP_FACTS.contains(&fact.kind))
         .filter_map(|fact| {
-            let fitted = fact.fitted(room_for(&fact, shape, area.width))?;
-            let holds = shape != Shape::Strip || strip_item(&fitted) <= usize::from(area.width);
+            let room = match rail {
+                Rail::Ledger => value_columns(&fact, area.width),
+                Rail::Strip => VALUE,
+            };
+            let fitted = fact.fitted(room)?;
+            let holds = rail != Rail::Strip || strip_item(&fitted) <= usize::from(area.width);
             holds.then_some(fitted)
         })
         .collect();
-    let order: &[Kind] = match shape {
-        Shape::Ledger | Shape::Screen => &SACRIFICE,
-        Shape::Strip => &STRIP_SACRIFICE,
+    let order: &[Kind] = match rail {
+        Rail::Ledger => &SACRIFICE,
+        Rail::Strip => &STRIP_SACRIFICE,
     };
     // The ledger's count is one of its rows, so the room it takes is part of what the facts are
     // given up for; the strip's is measured once the facts are in, below.
-    let with_count = shape == Shape::Ledger;
+    let with_count = rail == Rail::Ledger;
     let mut went = total - kept.len();
-    while !holds(&kept, went, with_count, shape, area) {
+    while !holds(&kept, went, with_count, rail, area) {
         let Some(victim) = order
             .iter()
             .find_map(|kind| kept.iter().position(|fact| fact.kind == *kind))
@@ -992,7 +1005,7 @@ fn kept(facts: &Facts, shape: Shape, area: Rect) -> Kept {
         kept.remove(victim);
         went = went.saturating_add(1);
     }
-    let counted = went > 0 && holds(&kept, went, true, shape, area);
+    let counted = went > 0 && holds(&kept, went, true, rail, area);
     Kept {
         facts: kept,
         went,
@@ -1053,11 +1066,12 @@ fn known(facts: &Facts, shape: Shape) -> Vec<Fact> {
     {
         stated.push(Fact::new(Kind::Commit, commit.clone()));
     }
-    if let Some(skills) = facts.skills.filter(|_| shape != Shape::Screen) {
-        stated.push(Fact::new(Kind::Skills, skills.to_string()));
-    }
-    for name in facts.loaded.iter().filter(|_| shape == Shape::Screen) {
-        stated.push(Fact::bare(Kind::Skills, name.clone()));
+    if shape == Shape::Screen {
+        for name in &facts.loaded {
+            stated.push(Fact::bare(Kind::Skills, name.clone()));
+        }
+    } else if !facts.loaded.is_empty() {
+        stated.push(Fact::new(Kind::Skills, facts.loaded.len().to_string()));
     }
     if shape == Shape::Screen
         && let Some(state) = &facts.stopped
@@ -1145,14 +1159,12 @@ fn ledger_lines(kept: &[Fact], went: usize) -> Vec<Line<'_>> {
     lines
 }
 
-/// The columns a fact's value is cut to on one row of `shape` in a band `width` wide: the whole
-/// column for a value with no label field in front of it, the room a labelled row leaves beside the
-/// field, and a rail column's value room for the strip's one row.
-fn room_for(fact: &Fact, shape: Shape, width: u16) -> usize {
-    match (shape, fact.label) {
-        (Shape::Strip, _) => VALUE,
-        (_, None) => usize::from(width),
-        (_, Some(_)) => value_room(width),
+/// The columns a fact's value is cut to on one row `width` wide: the whole column for a value with
+/// no label field in front of it, and the room a labelled row leaves beside the field.
+fn value_columns(fact: &Fact, width: u16) -> usize {
+    match fact.label {
+        None => usize::from(width),
+        Some(_) => value_room(width),
     }
 }
 
@@ -1169,12 +1181,10 @@ fn strip_place(kind: Kind) -> usize {
         .unwrap_or(usize::MAX)
 }
 
-fn holds(facts: &[Fact], went: usize, counted: bool, shape: Shape, area: Rect) -> bool {
-    match shape {
-        Shape::Ledger | Shape::Screen => {
-            ledger_lines(facts, went).len() <= usize::from(area.height)
-        }
-        Shape::Strip => strip_columns(facts, went, counted) <= usize::from(area.width),
+fn holds(facts: &[Fact], went: usize, counted: bool, rail: Rail, area: Rect) -> bool {
+    match rail {
+        Rail::Ledger => ledger_lines(facts, went).len() <= usize::from(area.height),
+        Rail::Strip => strip_columns(facts, went, counted) <= usize::from(area.width),
     }
 }
 
@@ -1317,7 +1327,7 @@ fn flow(
     for (index, (label, facts)) in blocks.iter().enumerate() {
         let drawn: Vec<Fact> = facts
             .iter()
-            .filter_map(|fact| fact.fitted(room_for(fact, Shape::Screen, width)))
+            .filter_map(|fact| fact.fitted(value_columns(fact, width)))
             .collect();
         if drawn.is_empty() {
             went += facts.len();
@@ -1456,9 +1466,9 @@ mod tests {
                 facts.turns,
                 facts.ctx,
                 facts.cache,
-                facts.skills
+                facts.loaded.len()
             ),
-            (None, None, None, None, None),
+            (None, None, None, None, 0),
             "a launch knows no thinking, no turn count, no size, no hit rate and no skill: they \
              arrive with a run, and no drawing guesses at one"
         );
@@ -1512,8 +1522,8 @@ mod tests {
             "and the temp the sandbox maps to TMPDIR"
         );
         assert_eq!(
-            (facts.ctx, facts.cache, facts.skills),
-            (None, None, None),
+            (facts.ctx, facts.cache, facts.loaded.len()),
+            (None, None, 0),
             "a document holds what the run spent summed over every turn, so the size of one \
              ask and the cache's hit rate are handed in and not read off it"
         );
@@ -1871,7 +1881,7 @@ mod tests {
                 "/home/glemsom/Documents/git/sindri/.worktrees/46-rail",
             )),
             branch: Some(String::from("spec/1-capability")),
-            skills: Some(2),
+            loaded: vec![String::from("bash"), String::from("records")],
             sandbox: Some(Enforcement::Bubblewrap),
             session: Some(String::from("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61")),
             temp: Some(PathBuf::from(
@@ -2050,20 +2060,20 @@ mod tests {
         );
         let area = band(40, 40);
 
-        let read = read(&facts, area);
+        let drawn = read(&facts, area);
 
         assert!(
-            read.contains(&String::from("model anthropic.claude-3-5-sonnet…")),
-            "a served name too long for its column keeps its head and marks the tail: {read:?}"
+            drawn.contains(&String::from("model anthropic.claude-3-5-sonnet…")),
+            "a served name too long for its column keeps its head and marks the tail: {drawn:?}"
         );
         assert!(
-            read.contains(&String::from("a-skill-name-that-runs-past-any-column…")),
-            "a loaded name is cut the same way: {read:?}"
+            drawn.contains(&String::from("a-skill-name-that-runs-past-any-column…")),
+            "a loaded name is cut the same way: {drawn:?}"
         );
         assert!(
-            !read.iter().any(|row| row.starts_with("session ")),
+            !drawn.iter().any(|row| row.starts_with("session ")),
             "the GUID is thirty-six columns and the row holds thirty, so it is not drawn in \
-             part: {read:?}"
+             part: {drawn:?}"
         );
         for row in rows(&facts, Shape::Screen, area) {
             for (at, part) in row.parts() {
@@ -2297,6 +2307,17 @@ mod tests {
              are a column"
         );
         assert_eq!(
+            glyphs(&buffer, 5),
+            "─".repeat(usize::from(area.width)),
+            "the rule spans the column between the run's last fact and the name of the block \
+             under it"
+        );
+        assert!(
+            glyphs(&buffer, 4).trim_end().starts_with("think"),
+            "the fact above the rule is the last of the run block"
+        );
+        assert_eq!(glyphs(&buffer, 6).trim_end(), "meters");
+        assert_eq!(
             inks(&buffer, 5, &Palette::TRUECOLOR),
             [(Ink::Dim, 81)],
             "the rule between two blocks is drawn in the ink a block's edge is read in"
@@ -2508,17 +2529,16 @@ mod tests {
     #[test]
     fn the_ledger_and_the_strip_give_up_the_same_fact_for_the_same_reason() {
         for width in 20..=200u16 {
-            let shape = Shape::of(width);
-            let room = match shape {
-                Shape::Ledger => COLUMNS,
-                Shape::Strip => width,
-                Shape::Screen => unreachable!("a frame's width names a rail's shape"),
+            let rail = Rail::of(width);
+            let room = match rail {
+                Rail::Ledger => COLUMNS,
+                Rail::Strip => width,
             };
 
             assert_eq!(
-                laid(&unnamed(), shape, band(room, 2)),
+                laid(&unnamed(), rail.into(), band(room, 2)),
                 [stated(&[(0, "+1 more")])],
-                "at {width} columns a name no column can hold whole is given up by the {shape:?} \
+                "at {width} columns a name no column can hold whole is given up by the {rail:?} \
                  and counted, and never drawn in part"
             );
         }
@@ -2536,14 +2556,13 @@ mod tests {
     #[test]
     fn no_row_is_laid_past_the_band_it_is_drawn_in() {
         for width in 20..=200u16 {
-            let shape = Shape::of(width);
-            let room = match shape {
-                Shape::Ledger => COLUMNS,
-                Shape::Strip => width,
-                Shape::Screen => unreachable!("a frame's width names a rail's shape"),
+            let rail = Rail::of(width);
+            let room = match rail {
+                Rail::Ledger => COLUMNS,
+                Rail::Strip => width,
             };
             for height in 1..=20 {
-                assert_laid_inside(&frame(), shape, band(room, height), room);
+                assert_laid_inside(&frame(), rail.into(), band(room, height), room);
             }
         }
     }
@@ -2578,7 +2597,7 @@ mod tests {
             Share {
                 transcript: band(88, 37),
                 rail: Some((
-                    Shape::Ledger,
+                    Rail::Ledger,
                     Rect {
                         x: 88,
                         ..band(COLUMNS, 37)
@@ -2592,7 +2611,7 @@ mod tests {
             Share {
                 transcript: band(99, 20),
                 rail: Some((
-                    Shape::Strip,
+                    Rail::Strip,
                     Rect {
                         y: 20,
                         height: 1,
@@ -2619,14 +2638,14 @@ mod tests {
     #[test]
     fn a_hundred_columns_is_the_last_frame_the_ledger_is_a_column_in() {
         assert_eq!(
-            Shape::of(100),
-            Shape::Ledger,
+            Rail::of(100),
+            Rail::Ledger,
             "the strip is what a frame below a hundred columns gets, so a hundred still holds the \
              ledger"
         );
-        assert_eq!(Shape::of(99), Shape::Strip, "and ninety-nine is below it");
-        assert_eq!(Shape::of(20), Shape::Strip, "the narrowest frame there is");
-        assert_eq!(Shape::of(200), Shape::Ledger, "the widest");
+        assert_eq!(Rail::of(99), Rail::Strip, "and ninety-nine is below it");
+        assert_eq!(Rail::of(20), Rail::Strip, "the narrowest frame there is");
+        assert_eq!(Rail::of(200), Rail::Ledger, "the widest");
     }
 
     #[test]
@@ -2694,20 +2713,19 @@ mod tests {
     fn assert_no_width_lays_a_name_in_part(name: &str) {
         let mut cut = 0;
         for width in 20..=200u16 {
-            let shape = Shape::of(width);
-            let room = match shape {
-                Shape::Ledger => COLUMNS,
-                Shape::Strip => width,
-                Shape::Screen => unreachable!("a frame's width names a rail's shape"),
+            let rail = Rail::of(width);
+            let room = match rail {
+                Rail::Ledger => COLUMNS,
+                Rail::Strip => width,
             };
+            let shape = Shape::from(rail);
             let facts = Facts {
                 model: Some(String::from(name)),
                 ..Facts::default()
             };
-            let fits_in = match shape {
-                Shape::Ledger => value_room(COLUMNS),
-                Shape::Strip => VALUE,
-                Shape::Screen => unreachable!("a frame's width names a rail's shape"),
+            let fits_in = match rail {
+                Rail::Ledger => value_room(COLUMNS),
+                Rail::Strip => VALUE,
             };
             let value = rows(&facts, shape, band(room, 1))
                 .iter()

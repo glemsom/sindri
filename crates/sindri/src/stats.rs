@@ -7,6 +7,5 @@ use crate::ledger::{self, Facts, Shape};
 use crate::palette::Palette;
 
 pub fn paint(facts: &Facts, area: Rect, buffer: &mut Buffer, palette: &Palette) {
-    // The ledger lays no more rows than the band holds, so no row is written past its bottom.
     ledger::draw(&ledger::rows(facts, Shape::Screen, area), buffer, palette);
 }

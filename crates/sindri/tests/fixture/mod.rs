@@ -408,7 +408,7 @@ pub fn facts() -> Facts {
             "/home/glemsom/Documents/git/sindri/.worktrees/46-rail",
         )),
         branch: Some(String::from("spec/1-capability")),
-        skills: Some(2),
+        loaded: vec![String::from("bash"), String::from("records")],
         sandbox: Some(Enforcement::Bubblewrap),
         session: Some(String::from(GUID)),
         temp: Some(PathBuf::from(

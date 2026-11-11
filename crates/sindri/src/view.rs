@@ -20,7 +20,7 @@ use crate::door;
 use crate::graphics::CellSize;
 use crate::ink::Ink;
 use crate::keys::{Act, Mode, Stack};
-use crate::ledger::{Boot, Facts, Shape, Share};
+use crate::ledger::{Boot, Facts, Rail, Share};
 use crate::mark::{Cell, Mark, Span};
 use crate::models::Models;
 use crate::palette::{Band, Palette};
@@ -568,7 +568,7 @@ impl View {
     /// The band the transcript and the rail share. A door is drawn with a ledger beside it or with
     /// no rail at all: a strip is a live run's one row, and no run is live at the door.
     fn split(&self, band: Rect) -> Share {
-        if self.door && Shape::of(band.width) != Shape::Ledger {
+        if self.door && Rail::of(band.width) != Rail::Ledger {
             return Share {
                 transcript: band,
                 rail: None,
@@ -1073,7 +1073,7 @@ mod tests {
             cache: Some(88),
             workspace: Some(PathBuf::from("/srv/workspace")),
             branch: Some(String::from("spec/1-capability")),
-            skills: Some(2),
+            loaded: vec![String::from("bash"), String::from("records")],
             sandbox: Some(Enforcement::Bubblewrap),
             session: Some(String::from("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61")),
             temp: Some(PathBuf::from("/srv/sessions/9f2c7a41/tmp")),
