@@ -5,12 +5,13 @@ use ratatui::layout::Rect;
 
 use crate::ledger::{self, Facts, Rail};
 use crate::palette::{Band, Palette};
+use crate::pen;
 
 pub fn paint(facts: &Facts, rail: Rail, area: Rect, buffer: &mut Buffer, palette: &Palette) {
     if area.width == 0 || area.height == 0 {
         return;
     }
-    buffer.set_style(area, palette.ground(Some(Band::Rail)));
+    pen::claim(buffer, area, palette.ground(Some(Band::Rail)));
     ledger::draw(&ledger::rows(facts, rail.into(), area), buffer, palette);
 }
 
@@ -68,8 +69,12 @@ mod tests {
     /// The row a ctx fact of `value` is drawn on: its label in the ten-column field, and the value
     /// against the rail's last column.
     fn ctx_line(value: &str) -> String {
-        let room = COLUMNS - FIELD - pen::cells(value);
-        format!("{}{}{value}", pen::pad("ctx", FIELD), pen::blank(room))
+        let at = pen::hanging(band(COLUMNS, 1), pen::cells(value)).expect("a rail that holds it");
+        format!(
+            "{}{}{value}",
+            pen::pad("ctx", FIELD),
+            pen::blank(at.saturating_sub(FIELD))
+        )
     }
 
     fn frame() -> Facts {

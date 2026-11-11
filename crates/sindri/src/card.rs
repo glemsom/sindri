@@ -115,8 +115,9 @@ fn corners(
 }
 
 fn sides(buffer: &mut Buffer, card: Rect, y: u16, palette: &Palette) {
-    pen::glyph(buffer, card.x, y, SIDE, Ink::Dim, palette);
-    pen::glyph(buffer, card.right() - 1, y, SIDE, Ink::Dim, palette);
+    for x in [card.x, card.right() - 1] {
+        pen::glyph(buffer, x, y, SIDE, Ink::Dim, palette);
+    }
 }
 
 /// The key that leaves hangs in the bottom row as the name hangs in the top one, at the other end.

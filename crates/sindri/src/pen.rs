@@ -24,13 +24,19 @@ pub fn cells(text: &str) -> u16 {
     u16::try_from(text.width()).unwrap_or(u16::MAX)
 }
 
+/// A count of columns as a row's own arithmetic carries it: one wider than any row can be drawn in
+/// is the widest a row holds.
+pub fn columns(columns: usize) -> u16 {
+    u16::try_from(columns).unwrap_or(u16::MAX)
+}
+
 /// The columns one `glyph` takes, counted the way a row of it is drawn.
 pub fn cell(glyph: char) -> u16 {
     cells(glyph.encode_utf8(&mut [0; 4]))
 }
 
 /// `columns` of one `glyph`: the run a row fills to its edge with, and the one a name is padded
-/// out to. The pen spells a repeated run and no caller does.
+/// out to.
 pub fn filled(columns: u16, glyph: char) -> String {
     std::iter::repeat_n(glyph, usize::from(columns)).collect()
 }
@@ -90,13 +96,18 @@ pub fn glyph(buffer: &mut Buffer, x: u16, y: u16, glyph: char, ink: Ink, palette
     });
 }
 
-/// Claims every cell of `area` in `style` and leaves each one its glyph and its own background: the
-/// scrim a card dims the frame behind it with.
-pub fn wash(buffer: &mut Buffer, area: Rect, style: Style) {
-    let claimed = style.remove_modifier(Modifier::all());
+/// Claims every cell of `area` in `style`, leaving each one its glyph, its own background and the
+/// face it wore: a frame's ground, and a mark over a row of it.
+pub fn claim(buffer: &mut Buffer, area: Rect, style: Style) {
     each(area, buffer, |cell| {
-        cell.set_style(claimed);
+        cell.set_style(style);
     });
+}
+
+/// Claims every cell of `area` in `style` with every face it wore stripped, so a mark under a scrim
+/// is read as the words it says and not as a mark.
+pub fn wash(buffer: &mut Buffer, area: Rect, style: Style) {
+    claim(buffer, area, style.remove_modifier(Modifier::all()));
 }
 
 /// Blanks every cell of `area` to `style`: the ground a card covers a frame with, so no glyph the
@@ -108,8 +119,7 @@ pub fn ground(buffer: &mut Buffer, area: Rect, style: Style) {
     });
 }
 
-/// Every cell of `area`, top to bottom and left to right: the one loop that walks cells, so a
-/// module that draws or paints a frame asks the pen for it.
+/// Every cell of `area`, top to bottom and left to right.
 fn each(area: Rect, buffer: &mut Buffer, mut edit: impl FnMut(&mut Cell)) {
     for y in area.y..area.bottom() {
         for x in area.x..area.right() {
@@ -132,7 +142,7 @@ pub fn rule(buffer: &mut Buffer, row: Rect, fill: char, ink: Ink, palette: &Pale
 }
 
 /// The column a run `width` columns wide starts at when it hangs on `row`'s far edge, and none when
-/// the row has no room for it: the one hanging column a fact's value and a card's key both ask.
+/// the row has no room for it: a fact's value and a card's key hang from this one answer.
 pub fn hanging(row: Rect, width: u16) -> Option<u16> {
     (width <= row.width).then(|| row.right() - width)
 }
@@ -165,7 +175,7 @@ mod tests {
     use ratatui::layout::Rect;
 
     use super::*;
-    use crate::ink::Ink;
+    use crate::ink::{Face, Ink, Look};
     use crate::palette::{Band, Palette};
 
     const PALETTE: Palette = Palette::TRUECOLOR;
@@ -241,6 +251,43 @@ mod tests {
             symbol(&roomy, 2),
             "a",
             "the glyph after a wide one starts in the column the wide one left"
+        );
+    }
+
+    #[test]
+    fn a_claim_keeps_the_face_a_cell_wore_and_a_wash_strips_it() {
+        let bold = Look::new(Ink::Accent, Face::Bold);
+        let mut claimed = row_of(4);
+        let area = claimed.area;
+        write(&mut claimed, area, &[("keys", bold)], Clip::Edge, &PALETTE);
+        claim(&mut claimed, area, Ink::Dim.style(&PALETTE));
+
+        assert_eq!(
+            Look::of(claimed.cell((0, 0)).expect("a cell of the row"), &PALETTE),
+            Some(Look::new(Ink::Dim, Face::Bold)),
+            "a claim is the ink it was given over the face the cell already wore"
+        );
+
+        let mut washed = row_of(4);
+        write(&mut washed, area, &[("keys", bold)], Clip::Edge, &PALETTE);
+        wash(&mut washed, area, Ink::Dim.style(&PALETTE));
+
+        assert_eq!(
+            Look::of(washed.cell((0, 0)).expect("a cell of the row"), &PALETTE),
+            Some(Look::new(Ink::Dim, Face::Plain)),
+            "and a wash takes the face with it, so a mark under a scrim reads as its words"
+        );
+    }
+
+    #[test]
+    fn a_count_of_columns_wider_than_any_row_holds_is_the_widest_a_row_holds() {
+        assert_eq!(columns(0), 0);
+        assert_eq!(columns(32), 32, "a count a row can hold is that count");
+        assert_eq!(
+            columns(usize::MAX),
+            u16::MAX,
+            "and a run wider than any row is the widest a row's own arithmetic carries, never a \
+             wrap to nothing"
         );
     }
 

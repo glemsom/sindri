@@ -1,6 +1,5 @@
 //! The pen is the one module that writes a glyph into a cell, measures a column, fills a row to its
-//! edge and hangs a run on one. A copy is what a habit leaves behind, so each of those is a search
-//! of the tree with a test behind it rather than a convention nobody rereads.
+//! edge and hangs a run on one, and each of those is a search of the tree with a test behind it.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -11,21 +10,23 @@ struct Source {
 }
 
 impl Source {
-    fn names(&self, needle: &str) -> bool {
-        self.body.contains(needle)
-    }
-
     /// The file and the line of every `needle` in it, as a search would report them, so a failure
     /// says where the copy is and not only that one exists.
-    fn found(&self, needle: &str) -> Vec<String> {
+    fn naming<'a>(&'a self, needle: &'a str) -> impl Iterator<Item = String> + 'a {
         self.body
             .lines()
             .enumerate()
-            .filter(|(_, line)| line.contains(needle))
-            .map(|(at, _)| format!("{}:{}", self.name, at + 1))
-            .collect()
+            .filter(move |(_, line)| line.contains(needle))
+            .map(move |(at, _)| format!("{}:{}", self.name, at + 1))
+    }
+
+    fn names(&self, needle: &str) -> bool {
+        self.naming(needle).next().is_some()
     }
 }
+
+/// The one module a search may find.
+const PEN: &str = "src/pen.rs";
 
 fn front_end() -> Vec<Source> {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
@@ -63,25 +64,30 @@ fn walk(directory: &Path, sources: &mut Vec<Source>) {
 fn everywhere(sources: &[Source], needle: &str) -> Vec<String> {
     sources
         .iter()
-        .flat_map(|source| source.found(needle))
+        .flat_map(|source| source.naming(needle))
         .collect()
 }
-
-/// The one module a search may find, which is the pen.
-const PEN: &str = "src/pen.rs";
 
 #[test]
 fn the_pen_is_the_only_module_that_writes_a_glyph_into_a_cell() {
     let sources = front_end();
     for writing in ["cell_mut(", "set_stringn(", "set_char("] {
         let found = everywhere(&sources, writing);
-        assert!(!found.is_empty(), "the pen writes a glyph with {writing}");
+        assert!(!found.is_empty(), "the pen writes a cell with {writing}");
         assert!(
             found.iter().all(|at| at.starts_with(PEN)),
             "one module writes a glyph into a cell, and it is the pen: {writing} is written in \
              {found:?}"
         );
     }
+
+    let styled = everywhere(&sources, "buffer.set_style(");
+    assert_eq!(
+        styled,
+        Vec::<String>::new(),
+        "a band's ground and a mark over a row are the pen's claim, and an area of a frame styled \
+         without it is the second way to claim one: {styled:?}"
+    );
 }
 
 #[test]
@@ -96,15 +102,11 @@ fn no_module_but_the_pen_answers_a_column_by_counting_glyphs() {
          the pen is the one module that measures"
     );
 
-    let padded: Vec<String> = sources
-        .iter()
-        .flat_map(|source| {
-            ["{:<", "{:>", "{:^"]
-                .into_iter()
-                .flat_map(|width| source.found(width))
-                .collect::<Vec<String>>()
-        })
-        .collect();
+    let padded = everywhere(&sources, "{:<")
+        .into_iter()
+        .chain(everywhere(&sources, "{:>"))
+        .chain(everywhere(&sources, "{:^"))
+        .collect::<Vec<String>>();
     assert_eq!(
         padded,
         Vec::<String>::new(),
@@ -152,10 +154,20 @@ fn no_caller_names_a_layout_or_a_spelling_of_the_rail() {
         "the rail is asked to paint and named for nothing else: {named:?}"
     );
     assert!(
-        named[0].starts_with("src/view.rs")
-            && sources
-                .iter()
-                .any(|source| { source.name == "src/view.rs" && source.names("rail::paint") }),
+        sources
+            .iter()
+            .any(|source| source.name == "src/view.rs" && source.names("rail::paint")),
         "and the one caller is the frame's own paint pass: {named:?}"
+    );
+
+    let exports = everywhere(&sources, "pub fn ")
+        .into_iter()
+        .filter(|at| at.starts_with("src/rail.rs"))
+        .collect::<Vec<String>>();
+    assert_eq!(
+        exports.len(),
+        1,
+        "the rail spells nothing a caller could name: it paints, and that is all it exports: \
+         {exports:?}"
     );
 }

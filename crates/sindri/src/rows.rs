@@ -119,7 +119,7 @@ impl Row {
 
     pub fn paint(&self, area: Rect, buffer: &mut Buffer, palette: &Palette) {
         if let Some(band) = self.band {
-            buffer.set_style(area, palette.ground(Some(band)));
+            pen::claim(buffer, area, palette.ground(Some(band)));
         }
         pen::write(buffer, area, &self.spans, Clip::Edge, palette);
     }

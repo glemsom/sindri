@@ -807,16 +807,10 @@ fn labelled(area: Rect, fact: &Fact) -> Row {
     if let Some(label) = fact.label {
         parts.push((area.x, Part::Run(pen::pad(label, FIELD), Ink::Dim)));
     }
-    if let Some(x) = pen::hanging(area, as_columns(fact.value.columns())) {
-        parts.push((x, Part::Value(fact.value.clone())));
-    }
+    let x = pen::hanging(area, pen::columns(fact.value.columns()))
+        .expect("a fact is fitted to the row it is laid in");
+    parts.push((x, Part::Value(fact.value.clone())));
     Row { y: area.y, parts }
-}
-
-/// A run's columns as a row's own arithmetic counts them: a value wider than any row can be drawn
-/// in is the widest a row can hold.
-fn as_columns(columns: usize) -> u16 {
-    u16::try_from(columns).unwrap_or(u16::MAX)
 }
 
 /// The rule between two blocks, which costs the block under it a row of the band it is drawn on.
@@ -1973,7 +1967,7 @@ mod tests {
     fn painted(facts: &Facts, area: Rect) -> Buffer {
         let palette = Palette::TRUECOLOR;
         let mut buffer = Buffer::empty(area);
-        buffer.set_style(area, palette.ground(None));
+        pen::claim(&mut buffer, area, palette.ground(None));
         draw(&rows(facts, Shape::Screen, area), &mut buffer, &palette);
         buffer
     }
@@ -1981,16 +1975,18 @@ mod tests {
     /// A row `width` columns wide with `value` hanging on its far edge, the way a fact whose value
     /// is its own name is drawn.
     fn hanging_row(value: &str, width: u16) -> String {
-        format!(
-            "{}{value}",
-            pen::blank(width.saturating_sub(pen::cells(value)))
-        )
+        let at = pen::hanging(band(width, 1), pen::cells(value)).expect("a row that holds it");
+        format!("{}{value}", pen::blank(at))
     }
 
     /// A labelled row `width` columns wide: the label in the field and its value on the far edge.
     fn labelled_row(label: &str, value: &str, width: u16) -> String {
-        let room = width - FIELD - pen::cells(value);
-        format!("{}{}{value}", pen::pad(label, FIELD), pen::blank(room))
+        let at = pen::hanging(band(width, 1), pen::cells(value)).expect("a row that holds it");
+        format!(
+            "{}{}{value}",
+            pen::pad(label, FIELD),
+            pen::blank(at.saturating_sub(FIELD))
+        )
     }
 
     /// One row of a painted band, as a reader sees its glyphs.

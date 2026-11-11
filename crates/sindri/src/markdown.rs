@@ -375,7 +375,7 @@ impl Room {
         {
             if at == 1 {
                 self.push(Row::of([(
-                    pen::filled(u16::try_from(available).unwrap_or(u16::MAX), '─'),
+                    pen::filled(pen::columns(available), '─'),
                     Look::plain(Ink::Dim),
                 )]));
             }
@@ -903,8 +903,7 @@ fn joined(line: &[Cell], widths: &[usize]) -> Row {
             false => width.saturating_sub(measured(cell)),
         };
         if pad > 0 {
-            let blank = u16::try_from(pad).unwrap_or(u16::MAX);
-            spans.push((pen::blank(blank), Look::plain(Ink::Plain)));
+            spans.push((pen::blank(pen::columns(pad)), Look::plain(Ink::Plain)));
         }
     }
     Row::of(spans)
@@ -918,7 +917,7 @@ fn header_rule(widths: &[usize]) -> Row {
         if at > 0 {
             text.push_str("─┼─");
         }
-        text.push_str(&pen::filled(u16::try_from(*width).unwrap_or(u16::MAX), '─'));
+        text.push_str(&pen::filled(pen::columns(*width), '─'));
     }
     Row::of([(text, Ink::Dim)])
 }
