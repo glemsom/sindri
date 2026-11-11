@@ -166,24 +166,24 @@ fn skills(listing: &[Listing]) -> Vec<String> {
 
 fn diagnostics(diagnostics: &[Diagnostic]) -> Vec<String> {
     let mut lines = vec![format!("diagnostics ({})", diagnostics.len())];
-    let widest = diagnostics
+    let where_it_lies: Vec<String> = diagnostics.iter().map(where_it_lies).collect();
+    let widest = where_it_lies
         .iter()
-        .map(|diagnostic| pen::cells(&diagnostic.path.display().to_string()) + 2)
+        .map(|at| pen::cells(at))
         .max()
         .unwrap_or(0);
-    for diagnostic in diagnostics {
-        let where_it_lies = format!("{}:{}", diagnostic.path.display(), diagnostic.line);
+    for (at, diagnostic) in where_it_lies.iter().zip(diagnostics) {
         lines.push(
-            format!(
-                "  {}  {}",
-                pen::pad(&where_it_lies, widest),
-                diagnostic.message
-            )
-            .trim_end()
-            .to_owned(),
+            format!("  {}  {}", pen::pad(at, widest), diagnostic.message)
+                .trim_end()
+                .to_owned(),
         );
     }
     lines
+}
+
+fn where_it_lies(diagnostic: &Diagnostic) -> String {
+    format!("{}:{}", diagnostic.path.display(), diagnostic.line)
 }
 
 fn fact(label: &str, value: &str) -> String {

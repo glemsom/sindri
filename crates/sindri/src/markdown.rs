@@ -578,7 +578,7 @@ impl Room {
             let innermost = at + 1 == self.marks.len();
             let text = match innermost && self.first {
                 true => mark.clone(),
-                false => " ".repeat(usize::from(pen::cells(mark))),
+                false => pen::blank(pen::cells(mark)),
             };
             spans.push((text, Look::plain(Ink::Plain)));
         }

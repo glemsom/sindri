@@ -346,8 +346,7 @@ impl Composer {
             let Some(glyph) = self.text[at..end].chars().next() else {
                 break;
             };
-            let mut encoded = [0; 4];
-            let width = usize::from(pen::cells(glyph.encode_utf8(&mut encoded)));
+            let width = usize::from(pen::cell(glyph));
             if reached + width > column {
                 break;
             }

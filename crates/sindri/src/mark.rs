@@ -114,7 +114,7 @@ fn marked_row(row: u16, line: &str, from: u16, to: u16) -> Option<Marked> {
     let mut kept: Vec<(u16, char)> = Vec::new();
     let mut column = 0u16;
     for glyph in line.chars() {
-        let width = columns(glyph);
+        let width = pen::cell(glyph);
         let end = column.saturating_add(width);
         if end > from && column <= to {
             kept.push((column, glyph));
@@ -128,11 +128,6 @@ fn marked_row(row: u16, line: &str, from: u16, to: u16) -> Option<Marked> {
         left: kept[first].0,
         glyphs: kept[first..=last].iter().map(|(_, glyph)| *glyph).collect(),
     })
-}
-
-fn columns(glyph: char) -> u16 {
-    let mut encoded = [0; 4];
-    pen::cells(glyph.encode_utf8(&mut encoded))
 }
 
 #[cfg(test)]

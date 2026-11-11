@@ -713,7 +713,7 @@ impl View {
             .map(|binding| pen::cells(binding.name) + KEYS_GAP)
             .max()
             .unwrap_or(0);
-        let hang = pen::pad("", name_width);
+        let hang = pen::blank(name_width);
         let room = area.width.saturating_sub(name_width);
         let mut y = area.y;
         for mode in modes {
@@ -1008,7 +1008,7 @@ fn cut_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)], palet
     );
 }
 
-/// Writes the hints `area` has room for, in survival order, as one row drawn through the pen.
+/// One row of hints, in survival order.
 fn hints_row(buffer: &mut Buffer, area: Rect, hints: &[&str], palette: &Palette) {
     let mut spans: Vec<(&str, Ink)> = Vec::new();
     for (index, hint) in kept(hints, area.width).into_iter().enumerate() {
@@ -1325,15 +1325,7 @@ mod tests {
         let area = Rect::new(0, 0, width, 1);
         let mut buffer = Buffer::empty(area);
         hints_row(&mut buffer, area, hints, &palette);
-        let drawn: String = (area.x..area.right())
-            .map(|x| {
-                buffer
-                    .cell((x, area.y))
-                    .expect("a cell of the row")
-                    .symbol()
-            })
-            .collect();
-        drawn.trim_end().to_owned()
+        drawn_row(&buffer, area.y).trim_end().to_owned()
     }
 
     fn footer(cols: u16, rows: u16) -> String {
@@ -1341,10 +1333,7 @@ mod tests {
         let area = screen(cols, rows);
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
-        let y = area.bottom() - 1;
-        (area.x..area.right())
-            .map(|x| buffer.cell((x, y)).expect("a cell of the frame").symbol())
-            .collect()
+        drawn_row(&buffer, area.bottom() - 1)
     }
 
     #[test]

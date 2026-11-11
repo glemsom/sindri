@@ -345,8 +345,7 @@ pub(crate) fn wrap_under(text: &str, first: u16, room: u16) -> Vec<String> {
 pub(crate) fn split_at(word: &str, room: usize) -> (String, &str) {
     let mut width = 0;
     for (at, glyph) in word.char_indices() {
-        let mut encoded = [0; 4];
-        let wide = usize::from(pen::cells(glyph.encode_utf8(&mut encoded)));
+        let wide = usize::from(pen::cell(glyph));
         if at > 0 && width + wide > room {
             return (word[..at].to_owned(), &word[at..]);
         }

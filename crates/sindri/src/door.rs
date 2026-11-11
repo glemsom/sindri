@@ -83,7 +83,7 @@ fn rows(room: u16) -> Vec<Row> {
         .max()
         .unwrap_or(0)
         + HANG;
-    let hang = pen::pad("", column);
+    let hang = pen::blank(column);
     for (command, said) in COMMANDS {
         let hanging = room.saturating_sub(column);
         let mut lines = wrap_under(said, hanging, hanging).into_iter();

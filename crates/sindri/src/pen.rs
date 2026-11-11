@@ -8,17 +8,6 @@ use unicode_width::UnicodeWidthStr;
 use crate::ink::{Ink, Look};
 use crate::palette::Palette;
 
-/// What a run of glyphs is drawn in: an ink, or an ink and the face it wears.
-pub trait Drawn: Copy {
-    fn look(self) -> Look;
-}
-
-impl<T: Copy + Into<Look>> Drawn for T {
-    fn look(self) -> Look {
-        self.into()
-    }
-}
-
 /// How much of a run a row has no room for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Clip {
@@ -33,18 +22,27 @@ pub fn cells(text: &str) -> u16 {
     u16::try_from(text.width()).unwrap_or(u16::MAX)
 }
 
-/// `text` followed by the blanks that bring it out to `columns`, measured by what it draws: a run
-/// hangs from its column because a wide glyph leaves one blank fewer behind it. A run already
-/// wider than its column is left whole, because the pen pads and never cuts.
+/// The columns one `glyph` takes, counted the way a row of it is drawn.
+pub fn cell(glyph: char) -> u16 {
+    cells(glyph.encode_utf8(&mut [0; 4]))
+}
+
+/// `columns` blanks: the run a value hangs from, and the one a name is padded out to.
+pub fn blank(columns: u16) -> String {
+    " ".repeat(usize::from(columns))
+}
+
+/// `text` followed by the blanks that bring it out to `columns`, measured by what it draws. A run
+/// already wider than its column is left whole, because the pen pads and never cuts.
 pub fn pad(text: &str, columns: u16) -> String {
     let mut padded = String::from(text);
-    padded.push_str(&" ".repeat(usize::from(columns.saturating_sub(cells(text)))));
+    padded.push_str(&blank(columns.saturating_sub(cells(text))));
     padded
 }
 
 /// Writes `spans` from `row`'s left edge, each in its own look, advancing by measured columns and
 /// so leaving two behind every wide glyph.
-pub fn write<S: AsRef<str>, D: Drawn>(
+pub fn write<S: AsRef<str>, D: Copy + Into<Look>>(
     buffer: &mut Buffer,
     row: Rect,
     spans: &[(S, D)],
@@ -55,10 +53,10 @@ pub fn write<S: AsRef<str>, D: Drawn>(
         return;
     }
     let mut x = row.x;
-    for (text, ink) in spans {
+    for (text, look) in spans {
+        let look: Look = (*look).into();
         let room = usize::from(row.right().saturating_sub(x));
-        let (next, _) =
-            buffer.set_stringn(x, row.y, text.as_ref(), room, ink.look().style(palette));
+        let (next, _) = buffer.set_stringn(x, row.y, text.as_ref(), room, look.style(palette));
         x = next;
     }
 }
@@ -80,7 +78,7 @@ pub fn rule(buffer: &mut Buffer, row: Rect, fill: char, ink: Ink, palette: &Pale
 
 /// Hangs `spans` on `row`'s far edge, so the last cell of the run is the row's last: a run the row
 /// has no room for is refused whole and hangs nowhere.
-pub fn hang<S: AsRef<str>, D: Drawn>(
+pub fn hang<S: AsRef<str>, D: Copy + Into<Look>>(
     buffer: &mut Buffer,
     row: Rect,
     spans: &[(S, D)],
@@ -95,7 +93,7 @@ pub fn hang<S: AsRef<str>, D: Drawn>(
 }
 
 /// The columns a run of spans takes: every span measured by what it draws.
-fn width<S: AsRef<str>, D: Drawn>(spans: &[(S, D)]) -> u16 {
+fn width<S: AsRef<str>, D>(spans: &[(S, D)]) -> u16 {
     spans
         .iter()
         .map(|(text, _)| cells(text.as_ref()))
@@ -137,6 +135,8 @@ mod tests {
         assert_eq!(cells("keys"), 4);
         assert_eq!(cells("日本"), 4);
         assert_eq!(cells("e\u{301}"), 1);
+        assert_eq!(cell('日'), 2, "one glyph is measured as the run it is in");
+        assert_eq!(cell('e'), 1);
     }
 
     #[test]
@@ -187,6 +187,11 @@ mod tests {
 
     #[test]
     fn a_run_is_padded_out_to_the_column_it_hangs_from() {
+        assert_eq!(
+            blank(3),
+            "   ",
+            "a hanging column is blanks and nothing else"
+        );
         assert_eq!(
             pad("keys", 6),
             "keys  ",
