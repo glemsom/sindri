@@ -59,16 +59,19 @@ pub enum Face {
     Plain,
     Bold,
     Reversed,
+    /// The accent at half its weight, so a face can recede without a second ink being named.
+    Faint,
 }
 
 impl Face {
-    pub(crate) const ALL: [Face; 3] = [Face::Plain, Face::Bold, Face::Reversed];
+    pub(crate) const ALL: [Face; 4] = [Face::Plain, Face::Bold, Face::Reversed, Face::Faint];
 
     pub fn name(self) -> &'static str {
         match self {
             Face::Plain => "plain",
             Face::Bold => "bold",
             Face::Reversed => "reversed",
+            Face::Faint => "faint",
         }
     }
 
@@ -81,6 +84,7 @@ impl Face {
             Face::Plain => Modifier::empty(),
             Face::Bold => Modifier::BOLD,
             Face::Reversed => Modifier::REVERSED,
+            Face::Faint => Modifier::DIM,
         }
     }
 }
@@ -174,6 +178,28 @@ mod tests {
                 "the marked cell is in `mark`, which is a name a reader can look up",
             );
         }
+    }
+
+    #[test]
+    fn the_accent_drawn_faint_reads_back_as_the_accent_drawn_faint() {
+        let faint = Look::new(Ink::Accent, Face::Faint);
+
+        assert_eq!(
+            faint.name(),
+            "accent+faint",
+            "the face a look is drawn in is its name"
+        );
+        for palette in PALETTES {
+            let mut cell = Cell::default();
+            cell.set_style(faint.style(&palette));
+
+            assert_eq!(
+                Look::of(&cell, &palette),
+                Some(faint),
+                "a faint accent is a look a fixture can name, so it reads back as itself"
+            );
+        }
+        assert_eq!(Look::from_name("accent+faint"), Some(faint));
     }
 
     #[test]
