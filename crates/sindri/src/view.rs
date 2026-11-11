@@ -20,6 +20,7 @@ use crate::door;
 use crate::graphics::CellSize;
 use crate::ink::Ink;
 use crate::keys::{Act, Mode, Stack};
+use crate::ledger::{Boot, Facts, Shape};
 use crate::mark::{Cell, Mark, Span};
 use crate::models::Models;
 use crate::palette::{Band, Palette};
@@ -29,7 +30,7 @@ use crate::picture::Surface;
 use crate::pictures::Pictures;
 use crate::pulse::Pulse;
 use crate::queue::Queue;
-use crate::rail::{Boot, Facts, Shape, Share};
+use crate::rail::{self, Share};
 use crate::rows::{Row, Rows, Scroll, wrap};
 use crate::settings::Settings;
 use crate::stats::Stats;
@@ -535,7 +536,7 @@ impl View {
         // in what is left: a row's width is the width it is drawn at.
         let share = self.split(bands.transcript);
         if let Some((shape, rail)) = share.rail {
-            self.rail.paint(shape, rail, buffer, &self.palette);
+            rail::paint(&self.rail, shape, rail, buffer, &self.palette);
         }
         self.transcript(share.transcript, buffer);
         if self.door {
@@ -573,7 +574,7 @@ impl View {
                 rail: None,
             };
         }
-        self.rail.split(band)
+        rail::split(&self.rail, band)
     }
 
     /// The turn in flight is the one entry laid out again on every paint; every other row comes
@@ -1063,7 +1064,7 @@ mod tests {
             model: Some(String::from("claude-sonnet-4-5-20250929")),
             think: Some(String::from("high")),
             turns: Some((6, 250)),
-            ctx: Some(crate::rail::Ctx {
+            ctx: Some(crate::ledger::Ctx {
                 size: 48_200,
                 window: Some(200_000),
             }),

@@ -32,6 +32,26 @@ _Avoid_: Verdict (that one is the wire's), status, outcome, result
 the command, the prompt or the answer.
 _Avoid_: Progress, notice, indicator
 
+## The facts
+
+**Ledger**:
+The one module that holds a run's **facts** and the one way each **value** is spelled — the size in
+tokens, the pair whose halves line up on a slash, the meter a share fills and the ink it is read in,
+the head of a name, the tail of a path, the em dash a fact is owed, the first eight of a GUID. No
+drawing spells a fact for itself, so a fact reads one way wherever it is said.
+_Avoid_: Facts module, status bar, sidebar (the rail is what draws it)
+
+**Fact**:
+One named thing a run holds, drawn as a label and a **value**: the wire, the served name, thinking,
+the turns, the window, the cache, the workspace, the branch, the skills, the sandbox, the session,
+the temp. A fact nobody can state is absent rather than blank, and a fact a launch names and a run
+has yet to fill is an em dash.
+_Avoid_: Row, field, item, stat
+
+**Value**:
+The glyphs one fact is drawn as, the meter beside a share of a window, and the ink it is read in.
+_Avoid_: Text, string, cell
+
 ## Confinement
 
 **Writable set**:

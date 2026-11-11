@@ -6,11 +6,12 @@ use sindri_core::records::SessionDocument;
 use sindri_core::run::State as RunState;
 
 use crate::ink::Ink;
-use crate::palette::Palette;
-use crate::rail::{
-    Facts, Halves, METER, Value, hairline, hanging, head, label_row, more, pair, put, span, tail,
-    tokens, value_room,
+use crate::ledger::{
+    Facts, Halves, Kind, METER, Shape, Value, head, hit_rate, more, pair, tail, tokens,
 };
+use crate::palette::Palette;
+use crate::pen;
+use crate::rail::{hairline, hanging, label_row, value_room};
 
 /// A band that cannot hold one gets one anyway.
 const MIN_COLUMN: u16 = 40;
@@ -57,7 +58,7 @@ impl Cut {
             Cut::Path => tail(text, room),
             Cut::Name => head(text, room),
         };
-        (!cut.is_empty() && span(&cut) <= room).then_some(cut)
+        (!cut.is_empty() && usize::from(pen::cells(&cut)) <= room).then_some(cut)
     }
 }
 
@@ -139,27 +140,29 @@ impl Stats {
     /// A block the run knows nothing about is not a block: a frame handed no fact and no record
     /// has nothing to draw, which is the title and no row.
     pub fn of(facts: &Facts, document: &SessionDocument, skills: &[String]) -> Stats {
-        let mut run = vec![
-            Fact::word("wire", document.wire.word()),
-            Fact::name("model", document.model.clone()),
-        ];
+        let mut run = Vec::new();
+        if let Some(wire) = &facts.wire {
+            run.push(Fact::word(Kind::Wire.label(), wire.clone()));
+        }
+        if let Some(model) = &facts.model {
+            run.push(Fact::name(Kind::Model.label(), model.clone()));
+        }
         if let Some(route) = document.route {
             run.push(Fact::word("route", route.word()));
         }
-        run.push(Fact::word(
-            "think",
-            if document.thinking { "high" } else { "off" },
-        ));
+        if let Some(think) = &facts.think {
+            run.push(Fact::word(Kind::Think.label(), think.clone()));
+        }
 
         let mut meters = Vec::new();
         if let Some((turns, cap)) = facts.turns {
-            meters.push(Fact::word("turns", pair(turns, cap)));
+            meters.push(Fact::word(Kind::Turns.label(), pair(turns, cap)));
         }
         if let Some(ctx) = &facts.ctx {
-            meters.push(Fact::valued("ctx", ctx.said()));
+            meters.push(Fact::valued(Kind::Ctx.label(), ctx.spelled(Shape::Ledger)));
         }
         if let Some(cache) = facts.cache {
-            meters.push(Fact::word("cache", format!("{cache}%")));
+            meters.push(Fact::word(Kind::Cache.label(), hit_rate(cache)));
         }
         aligned(&mut meters);
 
@@ -177,9 +180,12 @@ impl Stats {
             }
         }
 
-        let mut place = vec![Fact::path("workspace", &document.workspace)];
-        if let Some(branch) = &document.branch {
-            place.push(Fact::word("branch", branch.clone()));
+        let mut place = Vec::new();
+        if let Some(workspace) = &facts.workspace {
+            place.push(Fact::path(Kind::Workspace.label(), workspace));
+        }
+        if let Some(branch) = &facts.branch {
+            place.push(Fact::word(Kind::Branch.label(), branch.clone()));
         }
         if let Some(commit) = &document.commit {
             place.push(Fact::word("commit", commit.clone()));
@@ -201,16 +207,20 @@ impl Stats {
             stop.push(Fact::word("end", end.clone()));
         }
 
-        let confine = vec![Fact::word("sandbox", document.enforcement.word())];
+        let confine = facts
+            .sandbox
+            .map(|enforcement| Fact::word(Kind::Sandbox.label(), enforcement.word()))
+            .into_iter()
+            .collect();
 
         let names: Vec<Fact> = skills.iter().map(Fact::bare).collect();
 
         let mut session = Vec::new();
         if let Some(guid) = &facts.session {
-            session.push(Fact::word("session", guid.clone()));
+            session.push(Fact::word(Kind::Session.label(), guid.clone()));
         }
         if let Some(temp) = &facts.temp {
-            session.push(Fact::path("temp", temp));
+            session.push(Fact::path(Kind::Temp.label(), temp));
         }
 
         Stats {
@@ -246,7 +256,7 @@ impl Stats {
                     hairline(buffer, rule, palette);
                     y = y.saturating_add(1);
                 }
-                put(buffer, column.x, y, block.label, Ink::Dim, palette);
+                pen::run(buffer, column.x, y, block.label, Ink::Dim, palette);
                 y = y.saturating_add(1);
                 for row in &block.rows {
                     drawn_row(buffer, column, y, row, palette);
@@ -260,7 +270,7 @@ impl Stats {
         if screen.went == 0 || area.height == 0 {
             return;
         }
-        put(
+        pen::run(
             buffer,
             column.x,
             area.bottom() - 1,
@@ -399,7 +409,7 @@ mod tests {
     use sindri_core::wire::Wire;
 
     use super::*;
-    use crate::rail::Ctx;
+    use crate::ledger::Ctx;
     use crate::readback::{column_of, inks};
 
     const PALETTE: Palette = Palette::TRUECOLOR;
@@ -619,7 +629,15 @@ mod tests {
             ..document()
         };
 
-        let stats = Stats::of(&Facts::default(), &document, &[]);
+        let facts = Facts {
+            wire: Some(String::from("anthropic")),
+            model: Some(String::from("claude-sonnet")),
+            think: Some(String::from("off")),
+            workspace: Some(PathBuf::from(WORKSPACE)),
+            sandbox: Some(Enforcement::Bubblewrap),
+            ..Facts::default()
+        };
+        let stats = Stats::of(&facts, &document, &[]);
         let screen = stats.screen(band(81, 40));
         let rows = read(&screen);
 
@@ -649,13 +667,49 @@ mod tests {
     }
 
     #[test]
-    fn a_narrow_column_cuts_a_path_at_its_head_and_a_name_at_its_tail_and_draws_no_other_part() {
-        let document = SessionDocument {
-            model: String::from(GATEWAY),
-            ..document()
+    fn the_screen_draws_the_facts_the_ledger_holds_and_never_reads_one_off_the_record_again() {
+        let elsewhere = Facts {
+            wire: Some(String::from("openai")),
+            model: Some(String::from("gpt-5")),
+            think: Some(String::from("off")),
+            branch: Some(String::from("main")),
+            ..facts()
         };
-        let long = String::from("a-skill-name-that-runs-past-any-column-here");
-        let stats = Stats::of(&facts(), &document, &[long]);
+
+        let rows = read(&Stats::of(&elsewhere, &document(), &[]).screen(band(81, 40)));
+
+        assert!(
+            rows.contains(&String::from("wire openai")),
+            "the record says anthropic and the ledger says openai, and the screen draws what \
+             the ledger holds: {rows:?}"
+        );
+        assert!(rows.contains(&String::from("model gpt-5")), "{rows:?}");
+        assert!(rows.contains(&String::from("think off")), "{rows:?}");
+        assert!(rows.contains(&String::from("branch main")), "{rows:?}");
+
+        let blank = Facts {
+            model: None,
+            ..elsewhere
+        };
+        let rows = read(&Stats::of(&blank, &document(), &[]).screen(band(81, 40)));
+
+        assert!(
+            !rows.iter().any(|row| row.starts_with("model ")),
+            "a served name the ledger does not hold has no row, whatever the record names: \
+             {rows:?}"
+        );
+    }
+
+    #[test]
+    fn a_narrow_column_cuts_a_path_at_its_head_and_a_name_at_its_tail_and_draws_no_other_part() {
+        let stats = Stats::of(
+            &Facts {
+                model: Some(String::from(GATEWAY)),
+                ..facts()
+            },
+            &document(),
+            &[String::from("a-skill-name-that-runs-past-any-column-here")],
+        );
 
         let screen = stats.screen(band(40, 40));
         let rows = read(&screen);

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use sindri::rail;
+use sindri::ledger;
 use sindri_core::asking::Asking;
 use sindri_core::config::{Config, Process};
 use sindri_core::outcome::{Facts as Reported, Outcome};
@@ -55,7 +55,7 @@ pub trait Turns {
     fn turn(&mut self, ended: &Exchange);
 
     /// Handed when the run opens, as each turn ends, and once more when it stops.
-    fn facts(&mut self, _facts: rail::Facts) {}
+    fn facts(&mut self, _facts: ledger::Facts) {}
 
     /// The record as it stands, handed beside the facts so a screen never reads a file mid-run.
     fn record(&mut self, _document: &SessionDocument) {}
@@ -68,8 +68,8 @@ impl Turns for () {
 /// The run a prompt will ask for, as a launch knows it before a session exists: the wire and the
 /// model the config names, the workspace it stands in and the branch that workspace is on, and the
 /// enforcement every call of the run will be held to.
-pub fn boot(cli: &Cli, config: &Config, workspace: &std::path::Path) -> rail::Boot {
-    rail::Boot {
+pub fn boot(cli: &Cli, config: &Config, workspace: &std::path::Path) -> ledger::Boot {
+    ledger::Boot {
         wire: config.provider,
         model: config.model.clone(),
         workspace: workspace.to_path_buf(),
@@ -199,8 +199,8 @@ impl Launch {
         self.limits.max_turns()
     }
 
-    fn facts(&self, measured: &Usage) -> rail::Facts {
-        rail::Facts::of(&self.session, self.record.document())
+    fn facts(&self, measured: &Usage) -> ledger::Facts {
+        ledger::Facts::of(&self.session, self.record.document())
             .measured(measured, self.context_window)
     }
 

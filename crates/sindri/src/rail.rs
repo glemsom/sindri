@@ -1,56 +1,22 @@
-//! The run's facts down the frame's right-hand columns as a ledger, or on one strip along the
+//! The ledger's facts down the frame's right-hand columns as a ledger, or on one strip along the
 //! band's bottom row below a hundred. Nothing is drawn in part: a fact whose value leaves no room
 //! for it is given up whole and counted.
 
-use std::path::PathBuf;
-
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use sindri_core::policy::Enforcement;
-use sindri_core::provider::Usage;
-use sindri_core::records::SessionDocument;
-use sindri_core::session::Session;
-use sindri_core::wire::Wire;
 
 use crate::ink::Ink;
+use crate::ledger::{
+    Facts, Halves, Kind, Shape, Value, head, hit_rate, more, pair, short_id, tail,
+};
 use crate::palette::{Band, Palette};
+use crate::pen;
 
 pub const COLUMNS: u16 = 32;
-
-/// The frame width the ledger gives way at: a hundred-column frame is the last that holds one.
-pub const NARROW: u16 = 100;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Shape {
-    Ledger,
-    Strip,
-}
-
-impl Shape {
-    pub fn of(width: u16) -> Shape {
-        if width < NARROW {
-            Shape::Strip
-        } else {
-            Shape::Ledger
-        }
-    }
-}
 
 /// The columns a label field holds, whatever the label says, so every label starts in one column
 /// and every value hangs from the field's far side.
 pub(crate) const FIELD: u16 = 10;
-
-/// The cells a meter is drawn in: a share of a window is a picture, and six cells is as fine as
-/// one row of a rail can say it.
-pub(crate) const METER: usize = 6;
-
-/// The cell a meter is full of, and the cell it has yet to fill.
-const FULL_CELL: char = '█';
-const EMPTY_CELL: char = '░';
-
-/// The share of a window at which the rail raises its voice: a run that full is one turn from
-/// being no room at all.
-const FULL: u8 = 90;
 
 /// The ledger's blocks, top to bottom, each with the facts that belong in it: the order is a
 /// contract, and a fact's place in it is fixed.
@@ -65,180 +31,11 @@ const BLOCKS: [&[Kind]; 6] = [
 
 const VALUE: usize = (COLUMNS - FIELD) as usize;
 
-/// The columns a session's GUID is drawn by: no rail column holds a whole one.
-const SHORT: usize = 8;
-
 /// What lies between two facts on the strip's one row, the gap the footer puts between its
 /// hints.
 const GAP: &str = " · ";
 
 const HAIRLINE: char = '─';
-
-/// The value a fact a launch can already name but a run has yet to fill is drawn as: an em dash
-/// says the fact is owed and never that it is empty.
-const DASH: &str = "—";
-
-/// The run's size as the last request reported it, and never as the next one will be: whatever
-/// tool results the turn produced are not in it yet, so a run one turn from a full window is
-/// that and no more exactly.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Ctx {
-    pub size: u64,
-    pub window: Option<u64>,
-}
-
-impl Ctx {
-    /// The size and the meter of the share of its window, from one derivation so a row's words and
-    /// its meter cannot disagree. The ledger says the size against its window; the strip keeps only
-    /// the meter, because its one row is shared with three other facts.
-    fn spelled(&self, shape: Shape) -> Value {
-        let Some(fill) = self.fill() else {
-            return Value::new(tokens(self.size));
-        };
-        let text = match shape {
-            Shape::Ledger => pair(tokens(self.size), tokens(fill.window)),
-            Shape::Strip => String::new(),
-        };
-        Value::metered(text, fill)
-    }
-
-    /// The size against its window and the share between them: every drawing of a size outside the
-    /// rail's own rows spells it here, so a size reads one way wherever it is said.
-    pub(crate) fn said(&self) -> Value {
-        self.spelled(Shape::Ledger)
-    }
-
-    /// The share of the window the run fills. A window of no tokens is no share of anything, and the
-    /// ink is set here and nowhere else, so no paint site holds a second opinion.
-    fn fill(&self) -> Option<Fill> {
-        let window = self.window?;
-        let percent = share(self.size, window)?;
-        Some(Fill {
-            percent,
-            window,
-            ink: if percent >= FULL {
-                Ink::Accent
-            } else {
-                Ink::Plain
-            },
-        })
-    }
-}
-
-/// The share of a window a run fills, as the meter that draws it: the percent the pair of numbers
-/// cannot say in one glance, and the ink the filled cells are read in.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct Fill {
-    percent: u8,
-    window: u64,
-    ink: Ink,
-}
-
-impl Fill {
-    /// The cells the share fills, rounded to the nearest of the meter's six: a cell is a sixth of
-    /// the window, and a share that fills no sixth of it is a meter with no cell lit.
-    fn cells(&self) -> usize {
-        (usize::from(self.percent) * METER + 50) / 100
-    }
-
-    fn draw(&self, buffer: &mut Buffer, x: u16, y: u16, palette: &Palette) -> u16 {
-        let filled = self.cells();
-        let mut x = x;
-        for cell in 0..METER {
-            let (glyph, ink) = match cell < filled {
-                true => (FULL_CELL, self.ink),
-                false => (EMPTY_CELL, Ink::Dim),
-            };
-            x = put(buffer, x, y, &glyph.to_string(), ink, palette);
-        }
-        x
-    }
-}
-
-/// A number in two parts, a space either side of its slash: the digits read as a share of a whole
-/// and not as one word, and the slash gets a column of its own to be read in.
-pub(crate) fn pair(left: impl std::fmt::Display, right: impl std::fmt::Display) -> String {
-    format!("{left} / {right}")
-}
-
-/// The share of a whole that a part is, in whole percent and capped at a hundred: a part past
-/// its whole has no larger share to show, and a share of nothing is no percentage at all.
-fn share(part: u64, whole: u64) -> Option<u8> {
-    if whole == 0 {
-        return None;
-    }
-    let percent = (u128::from(part) * 100 + u128::from(whole) / 2) / u128::from(whole);
-    Some(u8::try_from(percent.min(100)).unwrap_or(100))
-}
-
-/// The size of a run in spelled tokens: `948`, `48.2k`, `1.02M`, because a rail column has no
-/// room to make six digits read as one number.
-pub(crate) fn tokens(count: u64) -> String {
-    if count < 1_000 {
-        return count.to_string();
-    }
-    // Tenths of a thousand, and hundredths of a million: the first carries three figures up to
-    // nine hundred and ninety-nine thousand, and the second once rounding takes a count past
-    // four.
-    let tenths = count.saturating_add(50) / 100;
-    if tenths < 10_000 {
-        return scaled(tenths, 1, "k");
-    }
-    scaled(count.saturating_add(5_000) / 10_000, 2, "M")
-}
-
-/// An amount in a unit's smallest shown fraction, drawn as that unit's whole part, a point and
-/// what is left of the fraction. A zero left dangling goes, so two hundred thousand is `200k`
-/// and not `200.0k`.
-fn scaled(parts: u64, places: u32, unit: &str) -> String {
-    let divisor = 10u64.pow(places);
-    let whole = parts / divisor;
-    let fraction = parts % divisor;
-    if fraction == 0 {
-        return format!("{whole}{unit}");
-    }
-    let decimals = format!("{fraction:0width$}", width = places as usize);
-    format!("{whole}.{}{unit}", decimals.trim_end_matches('0'))
-}
-
-/// What a launch knows before its first run: the wire and the model the config names, the
-/// workspace and the branch it stands on, and the enforcement the policy will hold. A session, a
-/// temp and a turn count belong to a run and are not here.
-#[derive(Debug, Clone)]
-pub struct Boot {
-    pub wire: Option<Wire>,
-    pub model: Option<String>,
-    pub workspace: PathBuf,
-    pub branch: Option<String>,
-    pub enforcement: Enforcement,
-}
-
-/// The facts the rail draws, as the core holds them. A fact nobody can state is `None` and is not
-/// drawn, never guessed at; a fact the launch names but a run has yet to fill is an em dash,
-/// which is a value the frame holds and not an absence. No fact at all and the frame draws no rail.
-#[derive(Debug, Default, Clone)]
-pub struct Facts {
-    /// The dialect the run asks over, in the wire's own word: `anthropic`, `openai` or `copilot`,
-    /// and never a fourth.
-    pub wire: Option<String>,
-    /// The served name of the model, whole here and cut to its head wherever the rail draws it.
-    pub model: Option<String>,
-    pub think: Option<String>,
-    pub turns: Option<(u32, u32)>,
-    pub ctx: Option<Ctx>,
-    /// How much of the run's input the provider served from its own cache: a hit rate and not a
-    /// fill, so it gets no meter and no threshold.
-    pub cache: Option<u8>,
-    pub workspace: Option<PathBuf>,
-    pub branch: Option<String>,
-    /// Nothing produces this fact yet: a caller passes it in until its producer lands.
-    pub skills: Option<usize>,
-    pub sandbox: Option<Enforcement>,
-    /// The run's own, and an em dash on a frame that has not run yet.
-    pub session: Option<String>,
-    /// The run's own, and an em dash on a frame that has not run yet.
-    pub temp: Option<PathBuf>,
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Share {
@@ -247,329 +44,205 @@ pub struct Share {
     pub rail: Option<(Shape, Rect)>,
 }
 
-impl Facts {
-    /// The facts a run holds, read off the two values the core keeps them in: the session the run is
-    /// writing, and the document the record rewrites as facts land.
-    pub fn of(session: &Session, document: &SessionDocument) -> Facts {
-        Facts {
-            wire: Some(document.wire.word().to_owned()),
-            model: Some(document.model.clone()),
-            think: Some(if document.thinking { "high" } else { "off" }.to_owned()),
-            turns: Some((document.turns, document.dials.max_turns)),
-            sandbox: Some(document.enforcement),
-            workspace: Some(document.workspace.clone()),
-            branch: document.branch.clone(),
-            session: Some(session.guid().to_owned()),
-            temp: Some(session.temp().to_path_buf()),
-            ..Facts::default()
-        }
-    }
-
-    /// The facts of the frame a launch opens on, before a session and a document exist. A run's
-    /// own facts — its session, its temp, its turns — are not known yet, and each is an em dash
-    /// rather than a guess at what the run will hold.
-    pub fn boot(boot: Boot) -> Facts {
-        Facts {
-            wire: boot.wire.map(|wire| wire.word().to_owned()),
-            model: boot.model,
-            workspace: Some(boot.workspace),
-            branch: boot.branch,
-            sandbox: Some(boot.enforcement),
-            session: Some(String::from(DASH)),
-            temp: Some(PathBuf::from(DASH)),
-            ..Facts::default()
-        }
-    }
-
-    /// The size one ask's report measured, and the part of its input the provider served from cache.
-    /// The document cannot hand these in: the `usage` it keeps is every ask summed, and a sum of the
-    /// inputs grows with each turn while the conversation's size is what the newest request carried.
-    pub fn measured(mut self, ask: &Usage, window: Option<u64>) -> Facts {
-        let Some(size) = ask.input else {
-            return self;
+/// Cuts the band the transcript and the rail share: 32 columns down the right while the frame is
+/// wide enough to hold a column, one strip along the band's bottom row below a hundred. A frame
+/// that knows no fact draws no rail, and the transcript loses no room to one.
+pub fn split(facts: &Facts, band: Rect) -> Share {
+    let shape = Shape::of(band.width);
+    if band.width == 0 || band.height == 0 || known(facts, shape).is_empty() {
+        return Share {
+            transcript: band,
+            rail: None,
         };
-        self.ctx = Some(Ctx { size, window });
-        self.cache = ask.cached_input.and_then(|cached| share(cached, size));
-        self
     }
-
-    /// Cuts the band the transcript and the rail share: 32 columns down the right while the frame is
-    /// wide enough to hold a column, one strip along the band's bottom row below a hundred. A frame
-    /// that knows no fact draws no rail, and the transcript loses no room to one.
-    pub fn split(&self, band: Rect) -> Share {
-        let shape = Shape::of(band.width);
-        if band.width == 0 || band.height == 0 || self.known(shape).is_empty() {
-            return Share {
-                transcript: band,
-                rail: None,
-            };
-        }
-        let (transcript, rail) = match shape {
-            Shape::Ledger => {
-                let columns = COLUMNS.min(band.width);
-                let x = band.x.saturating_add(band.width - columns);
-                (
-                    Rect {
-                        width: band.width - columns,
-                        ..band
-                    },
-                    Rect {
-                        x,
-                        height: band.height,
-                        width: columns,
-                        ..band
-                    },
-                )
-            }
-            Shape::Strip => (
+    let (transcript, rail) = match shape {
+        Shape::Ledger => {
+            let columns = COLUMNS.min(band.width);
+            let x = band.x.saturating_add(band.width - columns);
+            (
                 Rect {
-                    height: band.height - 1,
+                    width: band.width - columns,
                     ..band
                 },
                 Rect {
-                    y: band.y.saturating_add(band.height - 1),
-                    height: 1,
+                    x,
+                    height: band.height,
+                    width: columns,
                     ..band
                 },
-            ),
-        };
-        Share {
-            transcript,
-            rail: Some((shape, rail)),
+            )
         }
+        Shape::Strip => (
+            Rect {
+                height: band.height - 1,
+                ..band
+            },
+            Rect {
+                y: band.y.saturating_add(band.height - 1),
+                height: 1,
+                ..band
+            },
+        ),
+    };
+    Share {
+        transcript,
+        rail: Some((shape, rail)),
     }
+}
 
-    pub fn paint(&self, shape: Shape, area: Rect, buffer: &mut Buffer, palette: &Palette) {
-        if area.width == 0 || area.height == 0 {
+pub fn paint(facts: &Facts, shape: Shape, area: Rect, buffer: &mut Buffer, palette: &Palette) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+    buffer.set_style(area, palette.ground(Some(Band::Rail)));
+    match shape {
+        Shape::Ledger => ledger(facts, area, buffer, palette),
+        Shape::Strip => strip(facts, area, buffer, palette),
+    }
+}
+
+fn ledger(facts: &Facts, area: Rect, buffer: &mut Buffer, palette: &Palette) {
+    let kept = kept(facts, Shape::Ledger, area);
+    let mut y = area.y;
+    for row in ledger_rows(&kept.facts, kept.went) {
+        if y >= area.bottom() {
             return;
         }
-        buffer.set_style(area, palette.ground(Some(Band::Rail)));
-        match shape {
-            Shape::Ledger => self.ledger(area, buffer, palette),
-            Shape::Strip => self.strip(area, buffer, palette),
+        match row {
+            Row::Fact(fact) => ledger_row(buffer, Rect { y, ..area }, fact, palette),
+            Row::Hairline => hairline(buffer, Rect { y, ..area }, palette),
+            Row::Went(went) => {
+                pen::run(buffer, area.x, y, &more(went), Ink::Muted, palette);
+            }
         }
+        y = y.saturating_add(1);
     }
+}
 
-    fn ledger(&self, area: Rect, buffer: &mut Buffer, palette: &Palette) {
-        let kept = self.kept(Shape::Ledger, area);
-        let mut y = area.y;
-        for row in ledger_rows(&kept.facts, kept.went) {
-            if y >= area.bottom() {
-                return;
-            }
-            match row {
-                Row::Fact(fact) => ledger_row(buffer, Rect { y, ..area }, fact, palette),
-                Row::Hairline => hairline(buffer, Rect { y, ..area }, palette),
-                Row::Went(went) => {
-                    put(buffer, area.x, y, &more(went), Ink::Muted, palette);
-                }
-            }
-            y = y.saturating_add(1);
+fn strip(facts: &Facts, area: Rect, buffer: &mut Buffer, palette: &Palette) {
+    let kept = kept(facts, Shape::Strip, area);
+    let mut x = area.x;
+    for (index, fact) in kept.facts.iter().enumerate() {
+        if index > 0 {
+            x = pen::run(buffer, x, area.y, GAP, Ink::Dim, palette);
         }
+        x = pen::run(buffer, x, area.y, fact.kind.label(), Ink::Dim, palette);
+        x = pen::run(buffer, x, area.y, " ", Ink::Dim, palette);
+        x = fact.value.draw(buffer, x, area.y, palette);
     }
-
-    fn strip(&self, area: Rect, buffer: &mut Buffer, palette: &Palette) {
-        let kept = self.kept(Shape::Strip, area);
-        let mut x = area.x;
-        for (index, fact) in kept.facts.iter().enumerate() {
-            if index > 0 {
-                x = put(buffer, x, area.y, GAP, Ink::Dim, palette);
-            }
-            x = put(buffer, x, area.y, fact.kind.label(), Ink::Dim, palette);
-            x = put(buffer, x, area.y, " ", Ink::Dim, palette);
-            x = fact.value.draw(buffer, x, area.y, palette);
+    // A strip too narrow to hold the count beside the facts it keeps is the one rail
+    // without one.
+    if kept.counted {
+        if !kept.facts.is_empty() {
+            x = pen::run(buffer, x, area.y, GAP, Ink::Dim, palette);
         }
-        // A strip too narrow to hold the count beside the facts it keeps is the one rail
-        // without one.
-        if kept.counted {
-            if !kept.facts.is_empty() {
-                x = put(buffer, x, area.y, GAP, Ink::Dim, palette);
-            }
-            put(buffer, x, area.y, &more(kept.went), Ink::Muted, palette);
-        }
+        pen::run(buffer, x, area.y, &more(kept.went), Ink::Muted, palette);
     }
+}
 
-    /// The ledger gives its facts up in a settled order beside the row that says how many went; the
-    /// strip gives them up from the tail of its own list, but its count is the last item of its one
-    /// row, so the room takes the count first.
-    fn kept(&self, shape: Shape, area: Rect) -> Kept {
-        let known = self.known(shape);
-        let total = known.len();
-        let mut kept: Vec<Fact> = known
-            .into_iter()
-            .filter(|fact| shape == Shape::Ledger || STRIP_FACTS.contains(&fact.kind))
-            .filter(|fact| fits(fact, shape, area.width))
-            .collect();
-        let order: &[Kind] = match shape {
-            Shape::Ledger => &SACRIFICE,
-            Shape::Strip => &STRIP_SACRIFICE,
+/// The ledger gives its facts up in a settled order beside the row that says how many went; the
+/// strip gives them up from the tail of its own list, but its count is the last item of its one
+/// row, so the room takes the count first.
+fn kept(facts: &Facts, shape: Shape, area: Rect) -> Kept {
+    let known = known(facts, shape);
+    let total = known.len();
+    let mut kept: Vec<Fact> = known
+        .into_iter()
+        .filter(|fact| shape == Shape::Ledger || STRIP_FACTS.contains(&fact.kind))
+        .filter(|fact| fits(fact, shape, area.width))
+        .collect();
+    let order: &[Kind] = match shape {
+        Shape::Ledger => &SACRIFICE,
+        Shape::Strip => &STRIP_SACRIFICE,
+    };
+    // The ledger's count is one of its rows, so the room it takes is part of what the facts
+    // are given up for; the strip's is measured once the facts are in, below.
+    let with_count = shape == Shape::Ledger;
+    let mut went = total - kept.len();
+    while !holds(&kept, went, with_count, shape, area) {
+        let Some(victim) = order
+            .iter()
+            .find_map(|kind| kept.iter().position(|fact| fact.kind == *kind))
+        else {
+            // Nothing the shape may give up is left — the ledger keeps the sandbox posture and
+            // the strip the run's size — so a rail narrower than that fact has nothing left to
+            // give up.
+            break;
         };
-        // The ledger's count is one of its rows, so the room it takes is part of what the facts
-        // are given up for; the strip's is measured once the facts are in, below.
-        let with_count = shape == Shape::Ledger;
-        let mut went = total - kept.len();
-        while !holds(&kept, went, with_count, shape, area) {
-            let Some(victim) = order
-                .iter()
-                .find_map(|kind| kept.iter().position(|fact| fact.kind == *kind))
-            else {
-                // Nothing the shape may give up is left — the ledger keeps the sandbox posture and
-                // the strip the run's size — so a rail narrower than that fact has nothing left to
-                // give up.
-                break;
-            };
-            kept.remove(victim);
-            went = went.saturating_add(1);
-        }
-        let counted = went > 0 && holds(&kept, went, true, shape, area);
-        Kept {
-            facts: kept,
-            went,
-            counted,
-        }
+        kept.remove(victim);
+        went = went.saturating_add(1);
     }
-
-    /// Every fact this frame knows, in the order the shape reads them, each value spelled the way
-    /// that shape spells it: a session by the first eight of its GUID, a path by the tail that fits,
-    /// a served name by the head.
-    fn known(&self, shape: Shape) -> Vec<Fact> {
-        let short = self.session.as_deref().map(short_id);
-        let mut facts = Vec::new();
-        if let Some(wire) = &self.wire {
-            facts.push(Fact::new(Kind::Wire, wire.clone()));
-        }
-        if let Some(model) = &self.model {
-            facts.push(Fact::new(Kind::Model, head(model, VALUE)));
-        }
-        if let Some(think) = &self.think {
-            facts.push(Fact::new(Kind::Think, think.clone()));
-        }
-        if let Some((turns, cap)) = self.turns {
-            facts.push(Fact::new(Kind::Turns, pair(turns, cap)));
-        }
-        if let Some(ctx) = &self.ctx {
-            facts.push(Fact {
-                kind: Kind::Ctx,
-                value: ctx.spelled(shape),
-            });
-        }
-        if let Some(cache) = self.cache {
-            facts.push(Fact::new(Kind::Cache, format!("{cache}%")));
-        }
-        if let Some(workspace) = &self.workspace {
-            let value = tail(&workspace.to_string_lossy(), VALUE);
-            if !value.is_empty() {
-                facts.push(Fact::new(Kind::Workspace, value));
-            }
-        }
-        if let Some(branch) = &self.branch {
-            facts.push(Fact::new(Kind::Branch, branch.clone()));
-        }
-        if let Some(skills) = self.skills {
-            facts.push(Fact::new(Kind::Skills, skills.to_string()));
-        }
-        if let Some(sandbox) = self.sandbox {
-            facts.push(Fact::new(Kind::Sandbox, sandbox.rail_label().to_owned()));
-        }
-        if let Some(short) = short {
-            facts.push(Fact::new(Kind::Session, short.to_owned()));
-        }
-        if let Some(temp) = &self.temp {
-            let path = temp.to_string_lossy();
-            // The temp's path carries the session's whole GUID, so it is drawn under the
-            // eight-column name the session row above it uses.
-            let named = match (short, self.session.as_deref()) {
-                (Some(short), Some(guid)) => path.replace(guid, short),
-                _ => path.into_owned(),
-            };
-            let value = tail(&named, VALUE);
-            if !value.is_empty() {
-                facts.push(Fact::new(Kind::Temp, value));
-            }
-        }
-        match shape {
-            Shape::Ledger => aligned(&mut facts),
-            Shape::Strip => facts.sort_by_key(|fact| strip_place(fact.kind)),
-        }
-        facts
+    let counted = went > 0 && holds(&kept, went, true, shape, area);
+    Kept {
+        facts: kept,
+        went,
+        counted,
     }
 }
 
-/// A value as a row draws it: its own glyphs, the meter a share of a window is drawn as beside
-/// them, and the ink the glyphs are read in. The rule lives here and nowhere else, so the ledger,
-/// the strip and the screen that widens them place and colour a value alike.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Value {
-    text: String,
-    fill: Option<Fill>,
-    ink: Ink,
-}
-
-impl Value {
-    pub(crate) fn new(text: impl Into<String>) -> Value {
-        Value {
-            text: text.into(),
-            fill: None,
-            ink: Ink::Plain,
+/// Every fact this frame knows, in the order the shape reads them, each value spelled the way
+/// that shape spells it: a session by the first eight of its GUID, a path by the tail that fits,
+/// a served name by the head.
+fn known(facts: &Facts, shape: Shape) -> Vec<Fact> {
+    let short = facts.session.as_deref().map(short_id);
+    let mut rows = Vec::new();
+    if let Some(wire) = &facts.wire {
+        rows.push(Fact::new(Kind::Wire, wire.clone()));
+    }
+    if let Some(model) = &facts.model {
+        rows.push(Fact::new(Kind::Model, head(model, VALUE)));
+    }
+    if let Some(think) = &facts.think {
+        rows.push(Fact::new(Kind::Think, think.clone()));
+    }
+    if let Some((turns, cap)) = facts.turns {
+        rows.push(Fact::new(Kind::Turns, pair(turns, cap)));
+    }
+    if let Some(ctx) = &facts.ctx {
+        rows.push(Fact {
+            kind: Kind::Ctx,
+            value: ctx.spelled(shape),
+        });
+    }
+    if let Some(cache) = facts.cache {
+        rows.push(Fact::new(Kind::Cache, hit_rate(cache)));
+    }
+    if let Some(workspace) = &facts.workspace {
+        let value = tail(&workspace.to_string_lossy(), VALUE);
+        if !value.is_empty() {
+            rows.push(Fact::new(Kind::Workspace, value));
         }
     }
-
-    pub(crate) fn metered(text: impl Into<String>, fill: Fill) -> Value {
-        Value {
-            fill: Some(fill),
-            ..Value::new(text)
+    if let Some(branch) = &facts.branch {
+        rows.push(Fact::new(Kind::Branch, branch.clone()));
+    }
+    if let Some(skills) = facts.skills {
+        rows.push(Fact::new(Kind::Skills, skills.to_string()));
+    }
+    if let Some(sandbox) = facts.sandbox {
+        rows.push(Fact::new(Kind::Sandbox, sandbox.rail_label().to_owned()));
+    }
+    if let Some(short) = short {
+        rows.push(Fact::new(Kind::Session, short.to_owned()));
+    }
+    if let Some(temp) = &facts.temp {
+        let path = temp.to_string_lossy();
+        // The temp's path carries the session's whole GUID, so it is drawn under the
+        // eight-column name the session row above it uses.
+        let named = match (short, facts.session.as_deref()) {
+            (Some(short), Some(guid)) => path.replace(guid, short),
+            _ => path.into_owned(),
+        };
+        let value = tail(&named, VALUE);
+        if !value.is_empty() {
+            rows.push(Fact::new(Kind::Temp, value));
         }
     }
-
-    /// The same value in another ink, for the one fact that says something is moving: the eye lands
-    /// on it without reading a word.
-    pub(crate) fn inked(mut self, ink: Ink) -> Value {
-        self.ink = ink;
-        self
+    match shape {
+        Shape::Ledger => aligned(&mut rows),
+        Shape::Strip => rows.sort_by_key(|fact| strip_place(fact.kind)),
     }
-
-    pub(crate) fn text(&self) -> &str {
-        &self.text
-    }
-
-    pub(crate) fn meter(&self) -> Option<Fill> {
-        self.fill
-    }
-
-    /// The same value spelled in another cut: a column that narrows a value's glyphs keeps the
-    /// meter beside them and the ink they are read in.
-    pub(crate) fn respelled(&self, text: String) -> Value {
-        Value {
-            text,
-            ..self.clone()
-        }
-    }
-
-    /// The value's pair in the half widths its group shares, so a slash lands in one column.
-    pub(crate) fn align(&mut self, halves: Halves) {
-        self.text = padded(&self.text, halves);
-    }
-
-    /// The columns the value takes on a row, the column between a meter and its glyphs included.
-    pub(crate) fn columns(&self) -> usize {
-        let glyphs = span(&self.text);
-        match (self.fill, glyphs) {
-            (None, glyphs) => glyphs,
-            (Some(_), 0) => METER,
-            (Some(_), glyphs) => METER + 1 + glyphs,
-        }
-    }
-
-    pub(crate) fn draw(&self, buffer: &mut Buffer, x: u16, y: u16, palette: &Palette) -> u16 {
-        let mut x = x;
-        if let Some(fill) = self.fill {
-            x = fill.draw(buffer, x, y, palette);
-            if !self.text.is_empty() {
-                x = put(buffer, x, y, " ", self.ink, palette);
-            }
-        }
-        put(buffer, x, y, &self.text, self.ink, palette)
-    }
+    rows
 }
 
 /// One fact as the rail draws it: the fact itself, which names its label field and its place in
@@ -638,7 +311,7 @@ fn fits(fact: &Fact, shape: Shape, room: u16) -> bool {
     }
     match shape {
         Shape::Ledger => value <= value_room(room),
-        Shape::Strip => span(fact.kind.label()) + 1 + value <= usize::from(room),
+        Shape::Strip => columns(fact.kind.label()) + 1 + value <= usize::from(room),
     }
 }
 
@@ -660,15 +333,15 @@ fn strip_columns(facts: &[Fact], went: usize, counted: bool) -> usize {
     let mut taken = 0;
     for (index, fact) in facts.iter().enumerate() {
         if index > 0 {
-            taken += span(GAP);
+            taken += columns(GAP);
         }
-        taken += span(fact.kind.label()) + 1 + fact.value.columns();
+        taken += columns(fact.kind.label()) + 1 + fact.value.columns();
     }
     if counted {
         if !facts.is_empty() {
-            taken += span(GAP);
+            taken += columns(GAP);
         }
-        taken += span(&more(went));
+        taken += columns(&more(went));
     }
     taken
 }
@@ -695,7 +368,7 @@ pub(crate) fn label_row(
     palette: &Palette,
 ) -> u16 {
     let field = format!("{label:<width$}", width = usize::from(FIELD));
-    put(buffer, area.x, area.y, &field, Ink::Dim, palette);
+    pen::run(buffer, area.x, area.y, &field, Ink::Dim, palette);
     hanging(area, value_width)
 }
 
@@ -711,13 +384,7 @@ pub(crate) fn hanging(area: Rect, value_width: usize) -> u16 {
 /// on.
 pub(crate) fn hairline(buffer: &mut Buffer, area: Rect, palette: &Palette) {
     let rule: String = std::iter::repeat_n(HAIRLINE, usize::from(area.width)).collect();
-    put(buffer, area.x, area.y, &rule, Ink::Dim, palette);
-}
-
-/// The row that says how many facts the room could not hold, in the one wording both shapes and
-/// the screen that widens it count them by.
-pub(crate) fn more(count: usize) -> String {
-    format!("+{count} more")
+    pen::run(buffer, area.x, area.y, &rule, Ink::Dim, palette);
 }
 
 /// The columns a labelled row drawn in `width` columns leaves its value: the field comes off the
@@ -726,10 +393,9 @@ pub(crate) fn value_room(width: u16) -> usize {
     usize::from(width).saturating_sub(usize::from(FIELD))
 }
 
-/// The columns `text` takes: one per glyph, because a cell is one glyph wide and `·` is three
-/// bytes and one column.
-pub(crate) fn span(text: &str) -> usize {
-    text.chars().count()
+/// The columns `text` draws in, from the pen that draws it.
+pub(crate) fn columns(text: &str) -> usize {
+    usize::from(pen::cells(text))
 }
 
 /// Spells each block's pairs in one pair of half widths, so every slash in the block lands in one
@@ -744,153 +410,6 @@ fn aligned(facts: &mut [Fact]) {
         );
         for fact in facts.iter_mut().filter(|fact| block.contains(&fact.kind)) {
             fact.value.align(shared);
-        }
-    }
-}
-
-/// The columns a group's pairs share: the widest half either side of the slash, so a block's
-/// numbers are read as a column of numbers and a column of wholes.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) struct Halves {
-    left: usize,
-    right: usize,
-}
-
-impl Halves {
-    pub(crate) fn of<'a>(spellings: impl Iterator<Item = &'a str>) -> Halves {
-        spellings
-            .filter_map(|spelling| spelling.split_once(" / "))
-            .fold(Halves::default(), |shared, (one, two)| Halves {
-                left: shared.left.max(span(one)),
-                right: shared.right.max(span(two)),
-            })
-    }
-}
-
-/// `3 / 250` in its group's half widths: both halves hang on the slash, and the right one is
-/// filled to the left, so no value carries a space the hanging edge would have to swallow.
-pub(crate) fn padded(spelling: &str, shared: Halves) -> String {
-    let Some((one, two)) = spelling.split_once(" / ") else {
-        return spelling.to_owned();
-    };
-    let (left, right) = (shared.left, shared.right);
-    format!("{one:>left$} / {two:>right$}")
-}
-
-pub(crate) fn put(
-    buffer: &mut Buffer,
-    x: u16,
-    y: u16,
-    text: &str,
-    ink: Ink,
-    palette: &Palette,
-) -> u16 {
-    let mut x = x;
-    for glyph in text.chars() {
-        if let Some(cell) = buffer.cell_mut((x, y)) {
-            cell.set_char(glyph);
-            cell.set_style(ink.style(palette));
-        }
-        x = x.saturating_add(1);
-    }
-    x
-}
-
-/// The tail of a path in at most `columns`, with `…/` in front when the head did not fit. Nothing
-/// is ever cut mid-component: a tail that cannot hold even the last component is empty, which
-/// drops the fact.
-pub(crate) fn tail(path: &str, columns: usize) -> String {
-    let parts: Vec<&str> = path.split('/').filter(|part| !part.is_empty()).collect();
-    if parts.is_empty() {
-        return path.to_owned();
-    }
-    let mut kept: Vec<&str> = Vec::new();
-    for (index, part) in parts.iter().enumerate().rev() {
-        let width = kept
-            .iter()
-            .map(|kept| kept.chars().count() + 1)
-            .sum::<usize>()
-            + part.chars().count()
-            + if index > 0 { 2 } else { 0 };
-        if width > columns {
-            break;
-        }
-        kept.insert(0, part);
-    }
-    if kept.is_empty() {
-        return String::new();
-    }
-    if kept.len() == parts.len() {
-        return path.to_owned();
-    }
-    format!("…/{}", kept.join("/"))
-}
-
-/// The head of a served name in at most `columns`: whole hyphen-separated segments, and never a
-/// part of one. A name keeps its head, where the family lives, and gives up its stamps, because
-/// widening the rail only moves the width a name fails at. A head that fits no mark is empty.
-pub(crate) fn head(name: &str, columns: usize) -> String {
-    if name.chars().count() <= columns {
-        return name.to_owned();
-    }
-    let mut kept: Vec<&str> = Vec::new();
-    let mut width = 0;
-    for (index, part) in name.split('-').enumerate() {
-        let next = width + part.chars().count() + usize::from(index > 0);
-        if next + 1 > columns {
-            break;
-        }
-        kept.push(part);
-        width = next;
-    }
-    if kept.is_empty() {
-        return String::new();
-    }
-    format!("{}…", kept.join("-"))
-}
-
-/// A session's GUID by its first eight columns, or whole when it is shorter: no rail column holds
-/// thirty-six.
-fn short_id(guid: &str) -> &str {
-    match guid.char_indices().nth(SHORT) {
-        Some((end, _)) => &guid[..end],
-        None => guid,
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Kind {
-    Wire,
-    Model,
-    Think,
-    Turns,
-    Ctx,
-    Cache,
-    Workspace,
-    Branch,
-    Skills,
-    Sandbox,
-    Session,
-    Temp,
-}
-
-impl Kind {
-    /// The word the label field holds, so the rail and the screen that widens it cannot call one fact
-    /// two things.
-    fn label(self) -> &'static str {
-        match self {
-            Kind::Wire => "wire",
-            Kind::Model => "model",
-            Kind::Think => "think",
-            Kind::Turns => "turns",
-            Kind::Ctx => "ctx",
-            Kind::Cache => "cache",
-            Kind::Workspace => "workspace",
-            Kind::Branch => "branch",
-            Kind::Skills => "skills",
-            Kind::Sandbox => "sandbox",
-            Kind::Session => "session",
-            Kind::Temp => "temp",
         }
     }
 }
@@ -925,16 +444,12 @@ mod tests {
     //! hanging edge, the blocks and their hairlines, the strip, and the row that counts what went. Where
     //! a cell's glyph and ink are the question, the buffer the ledger paints into is the answer.
 
-    use std::path::Path;
+    use std::path::PathBuf;
 
-    use sindri_core::policy::PolicyRecord;
-    use sindri_core::provider::Usage as Report;
-    use sindri_core::records::{Dials, SessionDocument, Usage};
-    use sindri_core::run::State as RunState;
-    use sindri_core::session::Session;
-    use sindri_core::wire::Wire;
+    use sindri_core::policy::Enforcement;
 
     use super::*;
+    use crate::ledger::{Ctx, FULL_CELL, METER, tokens};
     use crate::readback::{column_of, inks};
 
     const PALETTE: Palette = Palette::TRUECOLOR;
@@ -967,6 +482,17 @@ mod tests {
     const CUT: &str = "claude-sonnet-4-5…";
 
     const BRANCH: &str = "spec/1-capability";
+
+    /// The row a ctx fact of `value` is drawn on: its label in the ten-column field, and the value
+    /// against the rail's last column.
+    fn ctx_line(value: &str) -> String {
+        let room = usize::from(COLUMNS) - usize::from(FIELD);
+        format!(
+            "{:<width$}{value:>room$}",
+            "ctx",
+            width = usize::from(FIELD)
+        )
+    }
 
     fn frame() -> Facts {
         Facts {
@@ -1009,41 +535,9 @@ mod tests {
         ("temp", "…/9f2c7a41/tmp"),
     ];
 
-    fn document(guid: &str) -> SessionDocument {
-        SessionDocument {
-            session: guid.to_owned(),
-            wire: Wire::Anthropic,
-            model: String::from("claude-sonnet"),
-            enforcement: Enforcement::Bubblewrap,
-            policy: PolicyRecord {
-                enforcement: Enforcement::Bubblewrap,
-                writable: vec![String::from("/home/glemsom/src/sindri")],
-                timeout_seconds: 120,
-                command_budget_ms: 3_600_000,
-                output_budget_bytes: 8 * 1024 * 1024,
-                description: String::from("the boundary the model was told about"),
-            },
-            workspace: PathBuf::from("/home/glemsom/src/sindri"),
-            branch: Some(String::from("spec/1-capability")),
-            commit: Some(String::from("16becb5")),
-            dials: Dials {
-                max_turns: 250,
-                command_budget_ms: 3_600_000,
-                output_budget_bytes: 8 * 1024 * 1024,
-            },
-            start: String::from("2026-01-01T00:00:00Z"),
-            end: None,
-            turns: 3,
-            usage: Usage::default(),
-            stopped: RunState::Running,
-            route: None,
-            thinking: false,
-        }
-    }
-
     #[test]
     fn the_ledger_takes_the_right_hand_columns_and_the_strip_the_bands_bottom_row() {
-        let wide = frame().split(band(120, 37));
+        let wide = split(&frame(), band(120, 37));
         assert_eq!(
             wide.transcript,
             band(88, 37),
@@ -1061,7 +555,7 @@ mod tests {
             "and the rail draws down the frame's right-hand edge, band high"
         );
 
-        let narrow = frame().split(band(99, 21));
+        let narrow = split(&frame(), band(99, 21));
         assert_eq!(
             narrow.transcript,
             band(99, 20),
@@ -1083,7 +577,7 @@ mod tests {
 
     #[test]
     fn a_frame_that_knows_no_fact_leaves_the_whole_band_to_the_transcript() {
-        let share = Facts::default().split(band(120, 37));
+        let share = split(&Facts::default(), band(120, 37));
 
         assert_eq!(
             share.transcript,
@@ -1091,207 +585,6 @@ mod tests {
             "a rail with nothing in it is not drawn, and nothing narrows for it"
         );
         assert_eq!(share.rail, None, "there is no rail row to see");
-    }
-
-    #[test]
-    fn the_facts_a_session_holds_are_the_ones_the_rail_draws_it_by() {
-        let root = tempfile::tempdir().expect("a temp state home");
-        let session = Session::create(root.path()).expect("a session");
-        let document = document(session.guid());
-
-        let facts = Facts::of(&session, &document);
-
-        assert_eq!(
-            facts.wire.as_deref(),
-            Some("anthropic"),
-            "the dialect the document was written for, in the wire's own word"
-        );
-        assert_eq!(facts.model.as_deref(), Some("claude-sonnet"));
-        assert_eq!(facts.turns, Some((3, 250)), "the turns opened, and the cap");
-        assert_eq!(facts.sandbox, Some(Enforcement::Bubblewrap));
-        assert_eq!(
-            facts.workspace.as_deref(),
-            Some(Path::new("/home/glemsom/src/sindri")),
-            "the directory the run stood in"
-        );
-        assert_eq!(facts.branch.as_deref(), Some("spec/1-capability"));
-        assert_eq!(
-            facts.session.as_deref(),
-            Some(session.guid()),
-            "the session's own GUID, which the rail draws short"
-        );
-        assert_eq!(
-            facts.temp.as_deref(),
-            Some(session.temp()),
-            "and the temp the sandbox maps to TMPDIR"
-        );
-        assert_eq!(
-            (facts.ctx, facts.cache, facts.skills),
-            (None, None, None),
-            "a document holds what the run spent summed over every turn, so the size of one \
-             ask and the cache's hit rate are handed in and not read off it"
-        );
-    }
-
-    /// The one launch a boot frame is drawn from: a workspace that is no checkout of this test's,
-    /// so a fact nobody can know yet has nowhere to be read from but the rail itself.
-    fn boot() -> Boot {
-        Boot {
-            wire: Some(Wire::Anthropic),
-            model: Some(String::from("claude-sonnet-4-5")),
-            workspace: PathBuf::from("/srv/workspace"),
-            branch: Some(String::from("main")),
-            enforcement: Enforcement::Bubblewrap,
-        }
-    }
-
-    fn rows(facts: &Facts) -> Vec<(String, String)> {
-        facts
-            .known(Shape::Ledger)
-            .iter()
-            .map(|fact| (fact.kind.label().to_owned(), fact.value.text().to_owned()))
-            .collect()
-    }
-
-    #[test]
-    fn the_facts_a_launch_holds_before_a_run_are_what_a_prompt_is_pointed_at() {
-        let facts = Facts::boot(boot());
-
-        assert_eq!(
-            rows(&facts),
-            [
-                ("wire", "anthropic"),
-                ("model", "claude-sonnet-4-5"),
-                ("workspace", "/srv/workspace"),
-                ("branch", "main"),
-                ("sandbox", "bwrap"),
-                ("session", "—"),
-                ("temp", "—"),
-            ]
-            .map(|(label, value)| (label.to_owned(), value.to_owned()))
-            .to_vec(),
-            "the wire, the model, the workspace, the branch and the enforcement are the launch's \
-             own facts, and a session and a temp are a run's: neither exists yet, so each is an em \
-             dash and never a guess"
-        );
-        assert_eq!(
-            (
-                facts.think,
-                facts.turns,
-                facts.ctx,
-                facts.cache,
-                facts.skills
-            ),
-            (None, None, None, None, None),
-            "a launch knows no thinking, no turn count, no size, no hit rate and no skill: they \
-             arrive with a run, and the rail draws nothing rather than guessing at one"
-        );
-    }
-
-    #[test]
-    fn the_size_and_the_cache_a_turns_report_carries_are_the_facts_the_rail_draws() {
-        let root = tempfile::tempdir().expect("a temp state home");
-        let session = Session::create(root.path()).expect("a session");
-        let document = document(session.guid());
-        let asked = Report {
-            input: Some(48_200),
-            cached_input: Some(12_050),
-            ..Report::default()
-        };
-        let uncached = Report {
-            input: Some(48_200),
-            ..Report::default()
-        };
-
-        let facts = Facts::of(&session, &document).measured(&asked, None);
-
-        assert_eq!(
-            facts.ctx,
-            Some(Ctx {
-                size: 48_200,
-                window: None
-            }),
-            "the input the turn carried, and no window until a reader names one"
-        );
-        assert_eq!(
-            facts.cache,
-            Some(25),
-            "a quarter of every input token came from the provider's own cache"
-        );
-
-        assert_eq!(
-            Facts::of(&session, &document)
-                .measured(&uncached, None)
-                .cache,
-            None,
-            "a report that names no cached token has no hit rate to draw"
-        );
-    }
-
-    #[test]
-    fn a_report_that_states_no_size_measures_nothing() {
-        let root = tempfile::tempdir().expect("a temp state home");
-        let session = Session::create(root.path()).expect("a session");
-        let document = document(session.guid());
-        let reported = Report {
-            input: Some(48_200),
-            cached_input: Some(4_820),
-            ..Report::default()
-        };
-
-        assert_eq!(
-            Facts::of(&session, &document)
-                .measured(&reported, Some(200_000))
-                .ctx,
-            Some(Ctx {
-                size: 48_200,
-                window: Some(200_000)
-            }),
-            "the window a reader named, beside the size this report measured"
-        );
-
-        assert_eq!(
-            (
-                Facts::of(&session, &document)
-                    .measured(&Report::default(), Some(200_000))
-                    .ctx,
-                Facts::of(&session, &document)
-                    .measured(&Report::default(), None)
-                    .cache
-            ),
-            (None, None),
-            "a report that carries no token is no size to be a share of a window and no \
-             input to make a hit rate of, so the row is absent rather than nought"
-        );
-    }
-
-    #[test]
-    fn the_facts_a_session_holds_say_whether_the_model_thinks() {
-        for (thinking, word) in [(true, "high"), (false, "off")] {
-            let root = tempfile::tempdir().expect("a temp state home");
-            let session = Session::create(root.path()).expect("a session");
-            let mut document = document(session.guid());
-            document.thinking = thinking;
-
-            let facts = Facts::of(&session, &document);
-
-            assert_eq!(
-                facts.think.as_deref(),
-                Some(word),
-                "a document that says {thinking} is drawn as {word} and never a third word"
-            );
-        }
-    }
-
-    /// The row a ctx fact of `value` is drawn on: its label in the ten-column field, and the value
-    /// against the rail's last column.
-    fn ctx_line(value: &str) -> String {
-        let room = usize::from(COLUMNS) - usize::from(FIELD);
-        format!(
-            "{:<width$}{value:>room$}",
-            "ctx",
-            width = usize::from(FIELD)
-        )
     }
 
     #[test]
@@ -1314,7 +607,13 @@ mod tests {
             };
             let mut buffer = Buffer::empty(band(COLUMNS, 1));
 
-            facts.paint(Shape::Ledger, band(COLUMNS, 1), &mut buffer, &PALETTE);
+            paint(
+                &facts,
+                Shape::Ledger,
+                band(COLUMNS, 1),
+                &mut buffer,
+                &PALETTE,
+            );
 
             assert_eq!(
                 glyphs(&buffer, 0),
@@ -1344,7 +643,13 @@ mod tests {
             };
             let mut buffer = Buffer::empty(band(COLUMNS, 1));
 
-            facts.paint(Shape::Ledger, band(COLUMNS, 1), &mut buffer, &PALETTE);
+            paint(
+                &facts,
+                Shape::Ledger,
+                band(COLUMNS, 1),
+                &mut buffer,
+                &PALETTE,
+            );
 
             assert_eq!(
                 glyphs(&buffer, 0),
@@ -1373,7 +678,13 @@ mod tests {
             };
             let mut ledger = Buffer::empty(band(COLUMNS, 1));
 
-            facts.paint(Shape::Ledger, band(COLUMNS, 1), &mut ledger, &PALETTE);
+            paint(
+                &facts,
+                Shape::Ledger,
+                band(COLUMNS, 1),
+                &mut ledger,
+                &PALETTE,
+            );
 
             let filled = meter.chars().filter(|cell| *cell == FULL_CELL).count();
             assert_eq!(
@@ -1404,7 +715,7 @@ mod tests {
 
             let mut strip = Buffer::empty(band(40, 1));
 
-            facts.paint(Shape::Strip, band(40, 1), &mut strip, &PALETTE);
+            paint(&facts, Shape::Strip, band(40, 1), &mut strip, &PALETTE);
 
             assert_eq!(
                 Ink::of(strip.cell((4, 0)).expect("a cell of the meter"), &PALETTE),
@@ -1421,7 +732,13 @@ mod tests {
         unknown.ctx = None;
         let mut roomy = Buffer::empty(band(COLUMNS, 17));
 
-        unknown.paint(Shape::Ledger, band(COLUMNS, 17), &mut roomy, &PALETTE);
+        paint(
+            &unknown,
+            Shape::Ledger,
+            band(COLUMNS, 17),
+            &mut roomy,
+            &PALETTE,
+        );
 
         let rows: Vec<String> = (0..17).map(|y| glyphs(&roomy, y)).collect();
         assert_eq!(
@@ -1446,10 +763,10 @@ mod tests {
         let band = band(COLUMNS, 8);
         let mut tight = Buffer::empty(band);
 
-        frame().paint(Shape::Ledger, band, &mut tight, &PALETTE);
+        paint(&frame(), Shape::Ledger, band, &mut tight, &PALETTE);
         let with = glyphs(&tight, 7);
 
-        unknown.paint(Shape::Ledger, band, &mut tight, &PALETTE);
+        paint(&unknown, Shape::Ledger, band, &mut tight, &PALETTE);
         let without = glyphs(&tight, 7);
 
         assert_eq!(
@@ -1471,7 +788,13 @@ mod tests {
         };
         let mut buffer = Buffer::empty(band(COLUMNS, 3));
 
-        facts.paint(Shape::Ledger, band(COLUMNS, 3), &mut buffer, &PALETTE);
+        paint(
+            &facts,
+            Shape::Ledger,
+            band(COLUMNS, 3),
+            &mut buffer,
+            &PALETTE,
+        );
 
         let rows: Vec<String> = (0..3).map(|y| glyphs(&buffer, y)).collect();
         assert_eq!(
@@ -1489,7 +812,13 @@ mod tests {
     fn the_ledger_reads_its_blocks_in_the_contracts_order_with_a_hairline_between_two() {
         let mut buffer = Buffer::empty(band(COLUMNS, 17));
 
-        frame().paint(Shape::Ledger, band(COLUMNS, 17), &mut buffer, &PALETTE);
+        paint(
+            &frame(),
+            Shape::Ledger,
+            band(COLUMNS, 17),
+            &mut buffer,
+            &PALETTE,
+        );
 
         let rows: Vec<String> = (0..17).map(|y| glyphs(&buffer, y)).collect();
         assert_eq!(
@@ -1537,36 +866,19 @@ mod tests {
         };
         let mut buffer = Buffer::empty(band(COLUMNS, 2));
 
-        facts.paint(Shape::Ledger, band(COLUMNS, 2), &mut buffer, &PALETTE);
+        paint(
+            &facts,
+            Shape::Ledger,
+            band(COLUMNS, 2),
+            &mut buffer,
+            &PALETTE,
+        );
 
         assert_eq!(
             (glyphs(&buffer, 0).trim_end(), glyphs(&buffer, 1).trim_end()),
             ("model              claude-sonnet", ""),
             "a rail handed no wire has no wire row, and nothing went, so no row counts it"
         );
-    }
-
-    #[test]
-    fn the_facts_of_a_run_take_the_dialect_its_document_names() {
-        let root = tempfile::tempdir().expect("a temp state home");
-        let session = Session::create(root.path()).expect("a session");
-
-        for (wire, word) in [
-            (Wire::Anthropic, "anthropic"),
-            (Wire::Openai, "openai"),
-            (Wire::Copilot, "copilot"),
-        ] {
-            let mut document = document(session.guid());
-            document.wire = wire;
-
-            let facts = Facts::of(&session, &document);
-
-            assert_eq!(
-                facts.wire.as_deref(),
-                Some(word),
-                "the dialect the document names, in the word the rail draws it by"
-            );
-        }
     }
 
     #[test]
@@ -1582,7 +894,13 @@ mod tests {
             };
             let mut buffer = Buffer::empty(band(COLUMNS, 1));
 
-            facts.paint(Shape::Ledger, band(COLUMNS, 1), &mut buffer, &PALETTE);
+            paint(
+                &facts,
+                Shape::Ledger,
+                band(COLUMNS, 1),
+                &mut buffer,
+                &PALETTE,
+            );
 
             assert_eq!(
                 glyphs(&buffer, 0),
@@ -1600,7 +918,13 @@ mod tests {
         };
         let mut buffer = Buffer::empty(band(COLUMNS, 2));
 
-        facts.paint(Shape::Ledger, band(COLUMNS, 2), &mut buffer, &PALETTE);
+        paint(
+            &facts,
+            Shape::Ledger,
+            band(COLUMNS, 2),
+            &mut buffer,
+            &PALETTE,
+        );
 
         assert_eq!(
             glyphs(&buffer, 0),
@@ -1622,7 +946,13 @@ mod tests {
         };
         let mut ledger = Buffer::empty(band(COLUMNS, 1));
 
-        facts.paint(Shape::Ledger, band(COLUMNS, 1), &mut ledger, &PALETTE);
+        paint(
+            &facts,
+            Shape::Ledger,
+            band(COLUMNS, 1),
+            &mut ledger,
+            &PALETTE,
+        );
 
         assert_eq!(
             glyphs(&ledger, 0),
@@ -1632,7 +962,7 @@ mod tests {
 
         let mut strip = Buffer::empty(band(40, 1));
 
-        facts.paint(Shape::Strip, band(40, 1), &mut strip, &PALETTE);
+        paint(&facts, Shape::Strip, band(40, 1), &mut strip, &PALETTE);
 
         assert_eq!(
             glyphs(&strip, 0).trim_end(),
@@ -1649,7 +979,13 @@ mod tests {
         };
         let mut ledger = Buffer::empty(band(COLUMNS, 2));
 
-        facts.paint(Shape::Ledger, band(COLUMNS, 2), &mut ledger, &PALETTE);
+        paint(
+            &facts,
+            Shape::Ledger,
+            band(COLUMNS, 2),
+            &mut ledger,
+            &PALETTE,
+        );
 
         assert_eq!(
             glyphs(&ledger, 0),
@@ -1663,7 +999,7 @@ mod tests {
 
         let mut strip = Buffer::empty(band(40, 1));
 
-        facts.paint(Shape::Strip, band(40, 1), &mut strip, &PALETTE);
+        paint(&facts, Shape::Strip, band(40, 1), &mut strip, &PALETTE);
 
         assert_eq!(
             glyphs(&strip, 0).trim_end(),
@@ -1673,10 +1009,16 @@ mod tests {
     }
 
     #[test]
-    fn a_band_too_short_for_every_block_gives_facts_up_in_a12s_order() {
+    fn a_band_too_short_for_every_block_gives_facts_up_in_the_sacrifice_order() {
         let mut buffer = Buffer::empty(band(COLUMNS, 8));
 
-        frame().paint(Shape::Ledger, band(COLUMNS, 8), &mut buffer, &PALETTE);
+        paint(
+            &frame(),
+            Shape::Ledger,
+            band(COLUMNS, 8),
+            &mut buffer,
+            &PALETTE,
+        );
 
         let rows: Vec<String> = (0..8).map(|y| glyphs(&buffer, y)).collect();
         assert_eq!(
@@ -1700,7 +1042,13 @@ mod tests {
     fn a_band_that_can_only_hold_the_model_block_draws_the_model_without_its_think_row() {
         let mut buffer = Buffer::empty(band(COLUMNS, 4));
 
-        frame().paint(Shape::Ledger, band(COLUMNS, 4), &mut buffer, &PALETTE);
+        paint(
+            &frame(),
+            Shape::Ledger,
+            band(COLUMNS, 4),
+            &mut buffer,
+            &PALETTE,
+        );
 
         let rows: Vec<String> = (0..4).map(|y| glyphs(&buffer, y)).collect();
         assert_eq!(
@@ -1726,7 +1074,13 @@ mod tests {
         };
         let mut ledger = Buffer::empty(band(COLUMNS, 1));
 
-        facts.paint(Shape::Ledger, band(COLUMNS, 1), &mut ledger, &PALETTE);
+        paint(
+            &facts,
+            Shape::Ledger,
+            band(COLUMNS, 1),
+            &mut ledger,
+            &PALETTE,
+        );
 
         assert_eq!(
             glyphs(&ledger, 0),
@@ -1737,7 +1091,7 @@ mod tests {
 
         let mut strip = Buffer::empty(band(40, 1));
 
-        facts.paint(Shape::Strip, band(40, 1), &mut strip, &PALETTE);
+        paint(&facts, Shape::Strip, band(40, 1), &mut strip, &PALETTE);
 
         assert_eq!(
             glyphs(&strip, 0).trim_end(),
@@ -1751,7 +1105,7 @@ mod tests {
     fn forty_columns_hold_the_fact_a_reader_watches_and_the_model_they_are() {
         let mut buffer = Buffer::empty(band(40, 1));
 
-        frame().paint(Shape::Strip, band(40, 1), &mut buffer, &PALETTE);
+        paint(&frame(), Shape::Strip, band(40, 1), &mut buffer, &PALETTE);
 
         assert_eq!(
             glyphs(&buffer, 0),
@@ -1770,7 +1124,7 @@ mod tests {
         });
         let mut buffer = Buffer::empty(band(99, 1));
 
-        facts.paint(Shape::Strip, band(99, 1), &mut buffer, &PALETTE);
+        paint(&facts, Shape::Strip, band(99, 1), &mut buffer, &PALETTE);
 
         assert_eq!(
             glyphs(&buffer, 0).trim_end(),
@@ -1784,7 +1138,7 @@ mod tests {
     fn the_strip_gives_its_facts_up_from_the_tail_of_its_own_list() {
         let mut counted = Buffer::empty(band(47, 1));
 
-        frame().paint(Shape::Strip, band(47, 1), &mut counted, &PALETTE);
+        paint(&frame(), Shape::Strip, band(47, 1), &mut counted, &PALETTE);
 
         assert_eq!(
             glyphs(&counted, 0).trim_end(),
@@ -1794,7 +1148,13 @@ mod tests {
 
         let mut facts_win = Buffer::empty(band(60, 1));
 
-        frame().paint(Shape::Strip, band(60, 1), &mut facts_win, &PALETTE);
+        paint(
+            &frame(),
+            Shape::Strip,
+            band(60, 1),
+            &mut facts_win,
+            &PALETTE,
+        );
 
         assert_eq!(
             glyphs(&facts_win, 0).trim_end(),
@@ -1812,7 +1172,7 @@ mod tests {
         };
         let mut buffer = Buffer::empty(band(40, 1));
 
-        one.paint(Shape::Strip, band(40, 1), &mut buffer, &PALETTE);
+        paint(&one, Shape::Strip, band(40, 1), &mut buffer, &PALETTE);
 
         assert_eq!(
             glyphs(&buffer, 0).trim_end(),
@@ -1820,7 +1180,7 @@ mod tests {
             "the one fact the frame knows is drawn, and no count stands where nothing went"
         );
 
-        let none = Facts::default().split(band(40, 24));
+        let none = split(&Facts::default(), band(40, 24));
 
         assert_eq!(none.rail, None, "a frame that knows no fact draws no strip");
         assert_eq!(
@@ -1835,7 +1195,7 @@ mod tests {
         };
         let mut buffer = Buffer::empty(band(40, 1));
 
-        elsewhere.paint(Shape::Strip, band(40, 1), &mut buffer, &PALETTE);
+        paint(&elsewhere, Shape::Strip, band(40, 1), &mut buffer, &PALETTE);
 
         assert_eq!(
             glyphs(&buffer, 0).trim_end(),
@@ -1884,7 +1244,7 @@ mod tests {
                 Shape::Strip => band(width, 1),
             };
             let mut buffer = Buffer::empty(area);
-            frame().paint(shape, area, &mut buffer, &PALETTE);
+            paint(&frame(), shape, area, &mut buffer, &PALETTE);
             let rows: Vec<String> = (0..area.height).map(|y| glyphs(&buffer, y)).collect();
 
             let mut went = 0;
@@ -1916,9 +1276,9 @@ mod tests {
                 Shape::Strip,
                 "at {width} columns the ledger dropped the {more} row it had room to draw"
             );
-            let drawn = span(screen.trim_end());
+            let drawn = columns(screen.trim_end());
             assert!(
-                drawn + span(GAP) + span(&more) > usize::from(width),
+                drawn + columns(GAP) + columns(&more) > usize::from(width),
                 "at {width} columns the strip dropped the {more} count it had room to draw \
                  beside the {drawn} columns it kept"
             );
@@ -1960,7 +1320,7 @@ mod tests {
             };
             let mut buffer = Buffer::empty(area);
 
-            facts.paint(shape, area, &mut buffer, &PALETTE);
+            paint(&facts, shape, area, &mut buffer, &PALETTE);
             let row = glyphs(&buffer, 0);
             let Some(value) = drawn(&row, "model") else {
                 continue;
@@ -2005,7 +1365,7 @@ mod tests {
         // without the room deciding any of it.
         let mut buffer = Buffer::empty(band(220, 1));
 
-        frame().paint(Shape::Strip, band(220, 1), &mut buffer, &PALETTE);
+        paint(&frame(), Shape::Strip, band(220, 1), &mut buffer, &PALETTE);
 
         assert_eq!(
             glyphs(&buffer, 0).trim_end(),
@@ -2016,7 +1376,7 @@ mod tests {
 
         let mut narrower = Buffer::empty(band(88, 1));
 
-        frame().paint(Shape::Strip, band(88, 1), &mut narrower, &PALETTE);
+        paint(&frame(), Shape::Strip, band(88, 1), &mut narrower, &PALETTE);
 
         assert_eq!(
             glyphs(&narrower, 0).trim_end(),
@@ -2028,8 +1388,7 @@ mod tests {
 
     #[test]
     fn a_fact_is_drawn_in_the_words_the_rail_reads_it_in() {
-        let facts: Vec<(&str, String)> = frame()
-            .known(Shape::Ledger)
+        let facts: Vec<(&str, String)> = known(&frame(), Shape::Ledger)
             .into_iter()
             .map(|fact| (fact.kind.label(), fact.value.text().to_owned()))
             .collect();
@@ -2056,55 +1415,6 @@ mod tests {
     }
 
     #[test]
-    fn a_path_keeps_the_components_that_fit_and_marks_the_elision_in_front() {
-        assert_eq!(
-            tail("/glemsom/src/sindri", VALUE),
-            "/glemsom/src/sindri",
-            "a path that fits is drawn whole, with no mark to explain"
-        );
-        assert_eq!(
-            tail("/very/long/path/that/cannot/fit/whole", VALUE),
-            "…/cannot/fit/whole",
-            "a path that does not fit keeps its tail and says the head went"
-        );
-        assert_eq!(
-            tail("/the-name-that-will-not-fit-anywhere", VALUE),
-            "",
-            "no component fits the column, so the fact has no value to draw"
-        );
-    }
-
-    #[test]
-    fn a_served_name_keeps_the_segments_that_fit_and_marks_the_cut_at_its_tail() {
-        assert_eq!(
-            head("claude-sonnet-4-5-20250929", VALUE),
-            "claude-sonnet-4-5…",
-            "a dated name keeps the family a reader can name, and marks the date stamp it \
-             left behind"
-        );
-        assert_eq!(
-            head("claude-sonnet-4-5", VALUE),
-            "claude-sonnet-4-5",
-            "a name that fits is drawn whole, with no mark to explain"
-        );
-        assert_eq!(
-            head("anthropic.claude-3-5-sonnet-20241022-v2:0", VALUE),
-            "anthropic.claude-3-5…",
-            "a gateway name is cut at a segment boundary, and never mid-segment"
-        );
-        assert_eq!(
-            head("claude-sonnet-4-5-20250929", "claude".len() + 1),
-            "claude…",
-            "the mark takes a column of its own, so the head stops one short of the room"
-        );
-        assert_eq!(
-            head("aservednamethatnobreaksanywhere", VALUE),
-            "",
-            "a name whose first segment does not fit beside the mark has no head to keep"
-        );
-    }
-
-    #[test]
     fn a_ledger_row_sets_its_label_dim_and_its_value_plain_on_one_hanging_edge() {
         let facts = Facts {
             model: Some(String::from("claude-sonnet")),
@@ -2113,7 +1423,13 @@ mod tests {
         };
         let mut buffer = Buffer::empty(band(COLUMNS, 2));
 
-        facts.paint(Shape::Ledger, band(COLUMNS, 2), &mut buffer, &PALETTE);
+        paint(
+            &facts,
+            Shape::Ledger,
+            band(COLUMNS, 2),
+            &mut buffer,
+            &PALETTE,
+        );
 
         assert_eq!(
             glyphs(&buffer, 0),
@@ -2143,7 +1459,7 @@ mod tests {
             };
             let mut buffer = Buffer::empty(area);
 
-            frame().paint(shape, area, &mut buffer, &PALETTE);
+            paint(&frame(), shape, area, &mut buffer, &PALETTE);
 
             let screen: Vec<String> = (0..area.height).map(|y| glyphs(&buffer, y)).collect();
             assert!(
@@ -2169,7 +1485,13 @@ mod tests {
         };
         let mut buffer = Buffer::empty(band(COLUMNS, 3));
 
-        facts.paint(Shape::Ledger, band(COLUMNS, 3), &mut buffer, &PALETTE);
+        paint(
+            &facts,
+            Shape::Ledger,
+            band(COLUMNS, 3),
+            &mut buffer,
+            &PALETTE,
+        );
 
         let rows: Vec<String> = (0..3).map(|y| glyphs(&buffer, y)).collect();
         assert_eq!(
@@ -2203,7 +1525,7 @@ mod tests {
     }
 
     #[test]
-    fn the_rail_gives_facts_up_in_the_order_a12_settled_and_the_sandbox_never_goes() {
+    fn the_rail_gives_facts_up_in_the_sacrifice_order_and_the_sandbox_never_goes() {
         let order: Vec<&str> = SACRIFICE.iter().map(|kind| kind.label()).collect();
 
         assert_eq!(
