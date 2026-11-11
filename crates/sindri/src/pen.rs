@@ -1,5 +1,5 @@
 //! The pen: the one place a run of glyphs is written into a frame, and the one place a string's
-//! width is measured — so a wide glyph takes two cells wherever it is drawn and a narrow one.
+//! width is measured — a wide glyph two cells wherever it is drawn, a narrow one one.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -7,12 +7,6 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::ink::Ink;
 use crate::palette::Palette;
-
-/// The columns `text` takes on a row, measured rather than counted: a wide glyph is two cells and
-/// a combining mark is none.
-pub fn cells(text: &str) -> u16 {
-    u16::try_from(text.width()).unwrap_or(u16::MAX)
-}
 
 /// How much of a run a row has no room for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,19 +17,16 @@ pub enum Clip {
     Edge,
 }
 
-/// Writes `spans` from `row`'s left edge, each in its own ink, and answers whether the whole run
-/// landed: the columns it advances are measured, so a wide glyph leaves two behind it.
-pub fn write(
-    buffer: &mut Buffer,
-    row: Rect,
-    spans: &[(&str, Ink)],
-    clip: Clip,
-    palette: &Palette,
-) -> bool {
-    let width: u32 = spans.iter().map(|(text, _)| u32::from(cells(text))).sum();
-    let fits = width <= u32::from(row.width);
-    if clip == Clip::Whole && !fits {
-        return false;
+/// The columns `text` takes on a row: a wide glyph two cells, a combining mark none.
+pub fn cells(text: &str) -> u16 {
+    u16::try_from(text.width()).unwrap_or(u16::MAX)
+}
+
+/// Writes `spans` from `row`'s left edge, each in its own ink, advancing by measured columns and
+/// so leaving two behind every wide glyph.
+pub fn write(buffer: &mut Buffer, row: Rect, spans: &[(&str, Ink)], clip: Clip, palette: &Palette) {
+    if clip == Clip::Whole && width(spans) > row.width {
+        return;
     }
     let mut x = row.x;
     for (text, ink) in spans {
@@ -43,30 +34,40 @@ pub fn write(
         let (next, _) = buffer.set_stringn(x, row.y, text, room, ink.style(palette));
         x = next;
     }
-    fits
 }
 
-/// Fills `row` with `glyph` in `ink`, from its left edge to its last column.
-pub fn rule(buffer: &mut Buffer, row: Rect, glyph: char, ink: Ink, palette: &Palette) {
-    let fill: String = std::iter::repeat_n(glyph, usize::from(row.width)).collect();
-    write(buffer, row, &[(&fill, ink)], Clip::Edge, palette);
-}
-
-/// Hangs `spans` on `row`'s far edge, so the last cell of the run is the row's last, and answers
-/// the column it starts in: a run the row has no room for is refused whole and hangs nowhere.
-pub fn hang(
-    buffer: &mut Buffer,
-    row: Rect,
-    spans: &[(&str, Ink)],
-    palette: &Palette,
-) -> Option<u16> {
-    let width: u32 = spans.iter().map(|(text, _)| u32::from(cells(text))).sum();
-    let start = u32::from(row.right()).checked_sub(width)?;
-    if start < u32::from(row.x) {
-        return None;
+/// Writes a one-cell `glyph` at a column of a row, in an ink.
+pub fn glyph(buffer: &mut Buffer, x: u16, y: u16, glyph: char, ink: Ink, palette: &Palette) {
+    if let Some(cell) = buffer.cell_mut((x, y)) {
+        cell.set_char(glyph);
+        cell.set_style(ink.style(palette));
     }
-    let x = u16::try_from(start).ok()?;
-    write(buffer, Rect { x, ..row }, spans, Clip::Whole, palette).then_some(x)
+}
+
+/// Fills `row` edge to edge with a one-cell `fill`, in an ink.
+pub fn rule(buffer: &mut Buffer, row: Rect, fill: char, ink: Ink, palette: &Palette) {
+    for x in row.x..row.right() {
+        glyph(buffer, x, row.y, fill, ink, palette);
+    }
+}
+
+/// Hangs `spans` on `row`'s far edge, so the last cell of the run is the row's last: a run the row
+/// has no room for is refused whole and hangs nowhere.
+pub fn hang(buffer: &mut Buffer, row: Rect, spans: &[(&str, Ink)], palette: &Palette) {
+    let width = width(spans);
+    if width > row.width {
+        return;
+    }
+    let x = row.right() - width;
+    write(buffer, Rect { x, ..row }, spans, Clip::Edge, palette);
+}
+
+/// The columns a run of spans takes: every span measured by what it draws.
+fn width(spans: &[(&str, Ink)]) -> u16 {
+    spans
+        .iter()
+        .map(|(text, _)| cells(text))
+        .fold(0, u16::saturating_add)
 }
 
 #[cfg(test)]
@@ -85,9 +86,9 @@ mod tests {
     }
 
     /// `buffer`'s one row written as `spans`, the way the card writes a row of its own.
-    fn run(buffer: &mut Buffer, spans: &[(&str, Ink)], clip: Clip) -> bool {
+    fn run(buffer: &mut Buffer, spans: &[(&str, Ink)], clip: Clip) {
         let row = buffer.area;
-        write(buffer, row, spans, clip, &PALETTE)
+        write(buffer, row, spans, clip, &PALETTE);
     }
 
     fn symbol(buffer: &Buffer, x: u16) -> &str {
@@ -96,14 +97,7 @@ mod tests {
 
     fn drawn(buffer: &Buffer) -> String {
         let area = buffer.area;
-        (area.x..area.right())
-            .map(|x| {
-                buffer
-                    .cell((x, area.y))
-                    .expect("a cell of the row")
-                    .symbol()
-            })
-            .collect()
+        (area.x..area.right()).map(|x| symbol(buffer, x)).collect()
     }
 
     #[test]
@@ -116,32 +110,26 @@ mod tests {
     #[test]
     fn a_run_the_row_has_no_room_for_is_refused_whole() {
         let mut narrow = row_of(3);
-        assert!(
-            !run(&mut narrow, &[("keys", Ink::Plain)], Clip::Whole),
-            "three columns hold no four-column run"
-        );
+        run(&mut narrow, &[("keys", Ink::Plain)], Clip::Whole);
         assert_eq!(
             drawn(&narrow),
             "   ",
-            "and the run is refused whole rather than drawn in part"
+            "three columns hold no four-column run, and it is refused whole rather than cut"
         );
 
         let mut roomy = row_of(4);
-        assert!(run(&mut roomy, &[("keys", Ink::Plain)], Clip::Whole));
+        run(&mut roomy, &[("keys", Ink::Plain)], Clip::Whole);
         assert_eq!(drawn(&roomy), "keys");
     }
 
     #[test]
     fn a_run_is_cut_at_the_rows_right_edge() {
         let mut row = row_of(3);
-        assert!(
-            !run(&mut row, &[("keys", Ink::Plain)], Clip::Edge),
-            "a cut run did not land whole"
-        );
+        run(&mut row, &[("keys", Ink::Plain)], Clip::Edge);
         assert_eq!(
             drawn(&row),
             "key",
-            "and what the row has room for is drawn, up to its last column"
+            "what the row has room for is drawn, up to its last column"
         );
     }
 
@@ -149,7 +137,6 @@ mod tests {
     fn a_wide_glyph_leaves_two_columns_behind_it() {
         let mut row = row_of(3);
         run(&mut row, &[("日本", Ink::Plain)], Clip::Edge);
-        assert_eq!(symbol(&row, 0), "日");
         assert_eq!(
             drawn(&row),
             "日  ",
@@ -179,19 +166,19 @@ mod tests {
     fn a_value_hangs_on_the_rows_far_edge() {
         let mut row = row_of(10);
         let area = row.area;
+        hang(&mut row, area, &[("esc", Ink::Muted)], &PALETTE);
         assert_eq!(
-            hang(&mut row, area, &[("esc", Ink::Muted)], &PALETTE),
-            Some(7),
+            drawn(&row),
+            "       esc",
             "three columns wide in ten starts in the seventh"
         );
-        assert_eq!(drawn(&row), "       esc");
     }
 
     #[test]
     fn a_value_the_row_cannot_hold_hangs_nowhere() {
         let mut row = row_of(2);
         let area = row.area;
-        assert_eq!(hang(&mut row, area, &[("esc", Ink::Muted)], &PALETTE), None);
+        hang(&mut row, area, &[("esc", Ink::Muted)], &PALETTE);
         assert_eq!(
             drawn(&row),
             "  ",

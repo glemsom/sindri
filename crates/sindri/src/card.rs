@@ -19,15 +19,17 @@ const INSET: u16 = 2;
 /// back, so the card bleeds to the frame's own edges instead.
 const NARROW: u16 = 50;
 
-/// The columns the key that leaves keeps clear of the corner it hangs against: the corner's own
+/// The columns the key that leaves keeps clear at each end of the bottom row: the corner's own
 /// column and one of rule.
 const LEAVES_INSET: u16 = 2;
 
-const CORNERS: [&str; 4] = ["╭", "╮", "╰", "╯"];
+const TOP: (char, char) = ('╭', '╮');
+
+const BOTTOM: (char, char) = ('╰', '╯');
 
 const RULE: char = '─';
 
-const SIDE: &str = "│";
+const SIDE: char = '│';
 
 /// Paints a card named `name`, whose key that leaves is `leaves`, into `area`, and returns the band
 /// the screen inside it draws in: the card's columns less its border and inset, and its rows less
@@ -107,14 +109,23 @@ fn bleeding(area: Rect, name: &str, buffer: &mut Buffer, palette: &Palette) -> R
 
 fn headed(buffer: &mut Buffer, card: Rect, name: &str, palette: &Palette) {
     labelled(buffer, Rect { height: 1, ..card }, name, palette);
-    for (x, corner) in [(card.x, CORNERS[0]), (card.right() - 1, CORNERS[1])] {
-        glyph(buffer, x, card.y, corner, palette);
-    }
+    corners(buffer, card, card.y, TOP, palette);
+}
+
+fn corners(
+    buffer: &mut Buffer,
+    card: Rect,
+    y: u16,
+    (left, right): (char, char),
+    palette: &Palette,
+) {
+    pen::glyph(buffer, card.x, y, left, Ink::Dim, palette);
+    pen::glyph(buffer, card.right() - 1, y, right, Ink::Dim, palette);
 }
 
 fn sides(buffer: &mut Buffer, card: Rect, y: u16, palette: &Palette) {
     for x in [card.x, card.right() - 1] {
-        glyph(buffer, x, y, SIDE, palette);
+        pen::glyph(buffer, x, y, SIDE, Ink::Dim, palette);
     }
 }
 
@@ -126,13 +137,12 @@ fn footed(buffer: &mut Buffer, card: Rect, leaves: &str, palette: &Palette) {
         ..card
     };
     pen::rule(buffer, row, RULE, Ink::Dim, palette);
-    for (x, corner) in [(card.x, CORNERS[2]), (card.right() - 1, CORNERS[3])] {
-        glyph(buffer, x, row.y, corner, palette);
-    }
+    corners(buffer, card, row.y, BOTTOM, palette);
     pen::hang(
         buffer,
         Rect {
-            width: card.width.saturating_sub(LEAVES_INSET),
+            x: card.x + LEAVES_INSET,
+            width: card.width.saturating_sub(LEAVES_INSET * 2),
             ..row
         },
         &[(" ", Ink::Dim), (leaves, Ink::Muted), (" ", Ink::Dim)],
@@ -148,27 +158,12 @@ fn labelled(buffer: &mut Buffer, row: Rect, name: &str, palette: &Palette) {
         buffer,
         Rect {
             x: row.x + INSET,
-            width: row.width.saturating_sub(INSET * 2 + 1),
+            width: row.width.saturating_sub(INSET + 1),
             height: 1,
             ..row
         },
         &[(" ", Ink::Dim), (name, Ink::Accent), (" ", Ink::Dim)],
         Clip::Edge,
-        palette,
-    );
-}
-
-fn glyph(buffer: &mut Buffer, x: u16, y: u16, glyph: &str, palette: &Palette) {
-    pen::write(
-        buffer,
-        Rect {
-            x,
-            y,
-            width: 1,
-            height: 1,
-        },
-        &[(glyph, Ink::Dim)],
-        Clip::Whole,
         palette,
     );
 }

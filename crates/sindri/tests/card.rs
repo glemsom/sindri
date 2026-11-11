@@ -382,38 +382,50 @@ fn a_frame_too_short_for_a_body_still_names_the_screen_and_the_key_that_leaves()
 }
 
 #[test]
-fn a_name_too_wide_for_its_row_is_cut_at_the_right_edge_and_a_key_too_wide_hangs_nowhere() {
+fn a_name_too_wide_for_its_row_is_cut_at_the_rows_right_edge() {
     let mut buffer = Buffer::empty(Rect::new(0, 0, 80, 6));
     let name = "n".repeat(200);
-    let leaves = "k".repeat(100);
-    sindri::card::paint(
-        buffer.area,
-        &name,
-        &leaves,
-        &mut buffer,
-        &Palette::TRUECOLOR,
-    );
+    sindri::card::paint(buffer.area, &name, "", &mut buffer, &Palette::TRUECOLOR);
 
     let top = row(&buffer, 0).trim().to_owned();
     assert!(
-        top.starts_with("╭─ nnn") && top.ends_with("──╮"),
-        "a name longer than the row is cut at the row's right edge, which the corner still \
-         holds: {top:?}"
+        top.starts_with("╭─ nnn") && top.ends_with("n╮"),
+        "a name longer than the row runs to the last column the border leaves and stops there: \
+         {top:?}"
     );
     assert!(
         top.matches('n').count() < name.len(),
-        "and the name is cut rather than drawn past it: {} of {} glyphs are drawn",
+        "and the rest of it is not drawn: {} of {} glyphs are",
         top.matches('n').count(),
         name.len()
     );
+}
+
+#[test]
+fn a_key_the_bottom_row_has_no_room_for_is_refused_whole() {
+    let mut buffer = Buffer::empty(Rect::new(0, 0, 80, 6));
+    let leaves = "k".repeat(100);
+    sindri::card::paint(buffer.area, "?", &leaves, &mut buffer, &Palette::TRUECOLOR);
 
     let bottom = row(&buffer, 5).trim().to_owned();
-    assert!(
-        bottom.starts_with('╰') && bottom.ends_with('╯'),
-        "the key that leaves hangs in the bottom row: {bottom:?}"
+    assert_eq!(
+        bottom,
+        format!("╰{}╯", "─".repeat(70)),
+        "a key no card row holds is refused whole rather than cut, and the row is its rule"
     );
-    assert!(
-        !bottom.contains('k'),
-        "a key the row has no room for is refused whole rather than cut: {bottom:?}"
+}
+
+#[test]
+fn a_key_as_wide_as_the_bottom_row_allows_keeps_the_corners_it_hangs_between() {
+    let mut buffer = Buffer::empty(Rect::new(0, 0, 80, 6));
+    let leaves = "k".repeat(66);
+    sindri::card::paint(buffer.area, "?", &leaves, &mut buffer, &Palette::TRUECOLOR);
+
+    let bottom = row(&buffer, 5).trim().to_owned();
+    assert_eq!(
+        bottom,
+        format!("╰─ {} ─╯", "k".repeat(66)),
+        "the widest key the bottom row holds hangs between a column of rule and the corners, \
+         which it does not cover"
     );
 }

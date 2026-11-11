@@ -129,16 +129,6 @@ The frame behind a card, painted and dimmed rather than skipped: a reader sees t
 they will return to and sees that no band under the card takes a key.
 _Avoid_: Backdrop, shade, veil, mask
 
-**Pen**:
-The one module a styled run of glyphs is written into a frame through, and the one that answers how
-many cells a string takes: by display width, so a wide glyph is two cells and a combining mark none.
-_Avoid_: Writer, printer, renderer, text buffer
-
-**Clip**:
-How much of a run the row has no room for: whole refuses all of it, edge cuts it at the row's last
-column. The pen carries both, and the caller names the one its row can live with.
-_Avoid_: Truncate, overflow, wrap, ellipsis
-
 **Path picker**:
 The screen `@` opens: the workspace's files as `git` reads them, nearest first, capped at eight
 rows.
