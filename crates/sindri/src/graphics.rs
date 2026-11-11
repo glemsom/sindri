@@ -55,6 +55,27 @@ impl Default for CellSize {
     }
 }
 
+/// The cells a picture may take: the columns and rows of the band it is drawn in. A picture in
+/// an answer is measured under a ceiling as tall as any transcript, and one drawn in a band of a
+/// few rows is measured under the rows that band has.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Ceiling {
+    cols: u16,
+    rows: u16,
+}
+
+impl Ceiling {
+    pub fn new(cols: u16, rows: u16) -> Ceiling {
+        Ceiling { cols, rows }
+    }
+
+    /// A ceiling `cols` columns across and as tall as a transcript: what a picture in an answer
+    /// is measured under, where only the whole band can make it give way on its rows.
+    pub fn across(cols: u16) -> Ceiling {
+        Ceiling::new(cols, MAX_ROWS)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Footprint {
     cols: u16,
@@ -70,18 +91,26 @@ impl Footprint {
         self.rows
     }
 
-    /// The cells a picture `width` by `height` pixels takes fitted into a band `room` columns
-    /// across: one scale on both axes, shrunk and never grown, so the shape is kept. The
-    /// ceiling on rows is the one place it gives way, and a picture with no extent is refused.
-    pub fn fit(width: u32, height: u32, cell: CellSize, room: u16) -> Result<Footprint, Refusal> {
+    /// The cells a picture `width` by `height` pixels takes fitted under a `ceiling`: one scale
+    /// on both axes, shrunk and never grown, so the shape is kept. The ceiling on rows is the one
+    /// place it gives way, and a picture with no extent is refused.
+    pub fn fit(
+        width: u32,
+        height: u32,
+        cell: CellSize,
+        ceiling: Ceiling,
+    ) -> Result<Footprint, Refusal> {
         let cols = cells(width as f32, cell.width());
         let rows = cells(height as f32, cell.height());
         if cols == 0 || rows == 0 {
             return Err(Refusal::Sizeless);
         }
-        let room = room.clamp(1, MAX_COLS);
-        let scale = (f64::from(room) / f64::from(cols))
-            .min(f64::from(MAX_ROWS) / f64::from(rows))
+        let room = Ceiling::new(
+            ceiling.cols.clamp(1, MAX_COLS),
+            ceiling.rows.clamp(1, MAX_ROWS),
+        );
+        let scale = (f64::from(room.cols) / f64::from(cols))
+            .min(f64::from(room.rows) / f64::from(rows))
             .min(1.0);
         let (cols, rows) = shaped(cols, rows, scale, room);
         Ok(Footprint { cols, rows })
@@ -227,10 +256,10 @@ fn options() -> &'static usvg::Options<'static> {
 
 /// The whole cells a scaled picture takes: its rows are the drawn ratio read at the columns it
 /// actually got, not the ones the scale asked for, so a picture is never taller than its shape.
-fn shaped(cols: u16, rows: u16, scale: f64, room: u16) -> (u16, u16) {
+fn shaped(cols: u16, rows: u16, scale: f64, room: Ceiling) -> (u16, u16) {
     let ratio = f64::from(rows) / f64::from(cols);
-    let columns = fitted(f64::from(cols) * scale, room);
-    (columns, fitted(f64::from(columns) * ratio, MAX_ROWS))
+    let columns = fitted(f64::from(cols) * scale, room.cols);
+    (columns, fitted(f64::from(columns) * ratio, room.rows))
 }
 
 /// How many whole cells a fitted picture takes: never zero, because a picture fitted down to a

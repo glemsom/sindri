@@ -11,7 +11,8 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use sindri::composer::{Key, Outcome};
-use sindri::graphics::CellSize;
+use sindri::face;
+use sindri::graphics::{Ceiling, CellSize};
 use sindri::mark::Cell;
 use sindri::markdown;
 use sindri::picture::{self, Surface};
@@ -39,10 +40,71 @@ fn surface(workspace: &Path) -> Surface {
 }
 
 #[test]
+fn a_face_that_travels_in_the_binary_is_measured_from_its_own_header() {
+    let places_pictures = Surface::of(None, CellSize::new(10, 20), true);
+
+    let measured = face::measure(Ceiling::across(80), &places_pictures)
+        .expect("a terminal that places pictures is given the face");
+
+    assert_eq!(
+        (measured.cols(), measured.rows()),
+        (80, 50),
+        "795 by 989 pixels at a 10 by 20 cell is eighty cells by fifty, read off its header \
+         with no workspace and no file to look in"
+    );
+    assert_eq!(
+        measured.pixels(CellSize::new(10, 20)),
+        (800, 1000),
+        "and the pixels it is drawn at are the footprint it was measured into"
+    );
+    assert_eq!(
+        measured.source(),
+        "face.png",
+        "the face is filed under a name of its own, which is what a placement is held by"
+    );
+}
+
+#[test]
+fn a_face_too_tall_for_its_band_gives_way_on_rows_and_never_on_shape() {
+    let places_pictures = Surface::of(None, CellSize::new(10, 20), true);
+
+    let measured = face::measure(Ceiling::new(40, 12), &places_pictures)
+        .expect("a band too short for the face's own height is still a band it is drawn in");
+
+    assert_eq!(
+        (measured.cols(), measured.rows()),
+        (19, 11),
+        "eighty cells by fifty fitted under forty columns and twelve rows is nineteen by eleven"
+    );
+    assert!(
+        measured.cols() < 80,
+        "the columns give way with the rows, because one scale is spent on both axes"
+    );
+    let (width, height) = measured.pixels(CellSize::new(10, 20));
+    let shape = f64::from(width) / f64::from(height);
+    assert!(
+        (shape - 795.0 / 989.0).abs() < 0.1,
+        "and what is drawn keeps the face's shape of {}, not the band's: {shape}",
+        795.0 / 989.0
+    );
+}
+
+#[test]
+fn a_terminal_that_places_no_picture_is_given_no_cells_and_no_words_for_the_face() {
+    let words_only = Surface::of(None, cell(), false);
+
+    assert!(
+        face::measure(Ceiling::new(40, 12), &words_only).is_none(),
+        "the face is decoration, so a frame that places no picture reserves no cell for it and \
+         has no caption to say it is missing"
+    );
+}
+
+#[test]
 fn a_picture_inside_the_workspace_is_measured_as_the_cells_it_takes() {
     let (_root, workspace) = workspace(40, 40);
 
-    let measured = picture::measure("shot.png", 80, &surface(&workspace))
+    let measured = picture::measure("shot.png", Ceiling::across(80), &surface(&workspace))
         .expect("a picture inside the workspace is one the reader may point at");
 
     assert_eq!(
@@ -66,7 +128,7 @@ fn a_picture_inside_the_workspace_is_measured_as_the_cells_it_takes() {
 fn a_picture_wider_than_the_band_is_measured_into_the_columns_the_band_has() {
     let (_root, workspace) = workspace(400, 200);
 
-    let measured = picture::measure("shot.png", 20, &surface(&workspace))
+    let measured = picture::measure("shot.png", Ceiling::across(20), &surface(&workspace))
         .expect("a wide picture is fitted, not refused");
 
     assert_eq!(
@@ -87,7 +149,7 @@ fn a_drawing_inside_the_workspace_is_measured_by_the_size_it_declares() {
     )
     .expect("a drawing on disk");
 
-    let measured = picture::measure("plan.svg", 80, &surface(&workspace))
+    let measured = picture::measure("plan.svg", Ceiling::across(80), &surface(&workspace))
         .expect("a drawing inside the workspace is a picture");
 
     assert_eq!(
@@ -105,7 +167,7 @@ fn a_picture_outside_the_workspace_is_refused_with_the_reason_the_caption_prints
         .expect("a link out of the workspace");
 
     for source in ["/etc/hostname", "../outside.png", "link.png"] {
-        let refusal = picture::measure(source, 80, &surface(&workspace))
+        let refusal = picture::measure(source, Ceiling::across(80), &surface(&workspace))
             .expect_err("a picture outside the workspace is not drawn");
 
         assert!(
@@ -120,7 +182,7 @@ fn a_picture_outside_the_workspace_is_refused_with_the_reason_the_caption_prints
 fn a_picture_that_is_not_there_is_refused_with_the_reason_the_read_gave() {
     let (_root, workspace) = workspace(40, 40);
 
-    let refusal = picture::measure("absent.png", 80, &surface(&workspace))
+    let refusal = picture::measure("absent.png", Ceiling::across(80), &surface(&workspace))
         .expect_err("a picture that is not there is not drawn");
 
     assert!(
@@ -132,7 +194,7 @@ fn a_picture_that_is_not_there_is_refused_with_the_reason_the_read_gave() {
 
 #[test]
 fn a_frame_with_no_workspace_refuses_the_picture_and_says_what_it_lacks() {
-    let refusal = picture::measure("shot.png", 80, &Surface::none())
+    let refusal = picture::measure("shot.png", Ceiling::across(80), &Surface::none())
         .expect_err("a frame with no workspace has nowhere to look");
 
     assert!(
@@ -363,6 +425,46 @@ fn transmission_headers(buffer: &Buffer) -> usize {
 }
 
 #[test]
+fn a_face_is_placed_over_the_footprint_it_was_measured_into_and_made_once_per_size() {
+    let measured = face::measure(Ceiling::new(40, 12), &Surface::of(None, cell(), true))
+        .expect("the face is measured with no workspace and no file on disk");
+    let mut pictures = Pictures::kitty(cell());
+    let block = Rect {
+        x: 0,
+        y: 0,
+        width: measured.cols(),
+        height: measured.rows(),
+    };
+
+    let mut first = Buffer::empty(Rect::new(0, 0, 60, 30));
+    pictures.place(&measured, cell(), block, &mut first);
+    let mut again = Buffer::empty(Rect::new(0, 0, 60, 30));
+    pictures.place(&measured, cell(), block, &mut again);
+
+    assert_eq!(
+        pictured_rows(&first).len(),
+        usize::from(measured.rows()),
+        "the placement covers the rows of the footprint it was measured into, {} of them",
+        measured.rows()
+    );
+    assert_eq!(
+        transmission_headers(&first),
+        1,
+        "and the terminal is told about it once, from the first cell of the block"
+    );
+    assert_eq!(
+        transmission_headers(&again),
+        0,
+        "a repaint writes the placeholders of what the terminal already holds"
+    );
+    assert_eq!(
+        pictures.rasterises("face.png"),
+        1,
+        "the face is made into pixels once for the size it was measured into"
+    );
+}
+
+#[test]
 fn a_picture_inside_the_workspace_is_placed_over_the_rows_it_takes() {
     let (_root, workspace) = workspace(400, 200);
     let mut view = frame(&workspace, "before ![a purple field](shot.png) after", true);
@@ -422,7 +524,7 @@ fn a_picture_painted_a_second_time_carries_no_transmission_header() {
 #[test]
 fn a_picture_placed_again_after_a_scroll_carries_no_transmission_header() {
     let (_root, workspace) = workspace(400, 200);
-    let measured = picture::measure("shot.png", 60, &surface(&workspace))
+    let measured = picture::measure("shot.png", Ceiling::across(60), &surface(&workspace))
         .expect("a picture inside the workspace");
     let mut pictures = Pictures::kitty(cell());
     let block = Rect {

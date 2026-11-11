@@ -164,6 +164,12 @@ The three facts a picture is measured against — the workspace, the pixels in a
 terminal places pictures at all.
 _Avoid_: Context, environment, settings
 
+**Sindri's face**:
+The picture of Sindri the **artefact** carries beside the bundled font, measured from its own header
+into a **footprint** and drawn over those cells — decoration, so a terminal that places no picture
+is given no cells and no words for it, and the **face** an ink wears has nothing to do with it.
+_Avoid_: Logo, avatar, mascot, icon
+
 **Card**:
 The frame a screen is drawn on: a rounded border carrying the screen's name in its top row and
 the key that leaves in its bottom, at most seventy-two columns wide and centred, and — under fifty

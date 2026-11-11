@@ -1,10 +1,11 @@
-//! A picture an answer points at: its source resolved inside the workspace, its extent read
-//! from the file rather than drawn from it, and its words kept beside it, because a picture's
-//! block copies as its words and never as its bytes.
+//! A picture an answer points at, or one the binary carries: its source resolved inside the
+//! workspace or held as bytes, its extent read from its header rather than drawn from it, and its
+//! words kept beside it, because a picture's block copies as its words and never as its bytes.
 
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
-use crate::graphics::{CellSize, Footprint, Svg};
+use crate::graphics::{Ceiling, CellSize, Footprint, Svg};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Surface {
@@ -53,6 +54,9 @@ pub enum Drawn {
     /// The SVG a mermaid fence's source became, kept as text rather than as a parsed tree: a
     /// row is copied and compared like any other value, so the drawing is parsed when drawn.
     Drawing(String),
+    /// The bytes the binary carries: a picture that travels with the product, so no workspace
+    /// has to hold it and no path can be moved or deleted out from under it.
+    Carried(&'static [u8]),
 }
 
 impl Picture {
@@ -75,21 +79,21 @@ impl Picture {
         )
     }
 
-    /// The pixels of this picture at the cells it was measured into, or nothing when the file
-    /// has gone since it was measured. A raster is scaled by a filter that averages rather than
-    /// drops, because nearest neighbour loses whole letters of a screenshot fitted into a band.
+    /// The pixels of this picture at the cells it was measured into, or nothing when what it was
+    /// measured from cannot be decoded — a file gone since it was measured, or bytes that are not
+    /// a picture. A raster is scaled by a filter that averages rather than drops, because nearest
+    /// neighbour loses whole letters of a screenshot fitted into a band.
     pub fn rasterise(&self, cell: CellSize) -> Option<image::RgbaImage> {
         let (width, height) = self.pixels(cell);
         let drawing = match &self.drawn {
             Drawn::Drawing(svg) => svg.clone(),
             Drawn::File(path) if is_svg(path) => std::fs::read_to_string(path).ok()?,
-            Drawn::File(path) => {
-                let picture = image::open(path).ok()?;
-                return Some(
-                    picture
-                        .resize_exact(width, height, image::imageops::FilterType::Triangle)
-                        .to_rgba8(),
-                );
+            Drawn::File(path) => return Some(raster(image::open(path).ok()?, (width, height))),
+            Drawn::Carried(bytes) => {
+                return Some(raster(
+                    image::load_from_memory(bytes).ok()?,
+                    (width, height),
+                ));
             }
         };
         Svg::parse(&drawing)
@@ -106,18 +110,34 @@ pub fn words(source: &str, alt: &str) -> String {
     }
 }
 
-pub fn measure(source: &str, room: u16, surface: &Surface) -> Result<Picture, Refusal> {
+pub fn measure(source: &str, ceiling: Ceiling, surface: &Surface) -> Result<Picture, Refusal> {
     let path = resolve(source, surface.workspace())?;
-    of(source, Drawn::File(path), room, surface)
+    of(source, Drawn::File(path), ceiling, surface)
 }
 
-pub fn drawing(source: &str, svg: &str, room: u16, surface: &Surface) -> Result<Picture, Refusal> {
-    of(source, Drawn::Drawing(svg.to_owned()), room, surface)
+pub fn drawing(
+    source: &str,
+    svg: &str,
+    ceiling: Ceiling,
+    surface: &Surface,
+) -> Result<Picture, Refusal> {
+    of(source, Drawn::Drawing(svg.to_owned()), ceiling, surface)
 }
 
-fn of(source: &str, drawn: Drawn, room: u16, surface: &Surface) -> Result<Picture, Refusal> {
+/// A picture the binary carries, measured against `ceiling` with no workspace and nothing to
+/// resolve: the bytes are the source, so no path can be outside a workspace or gone.
+pub fn carried(
+    source: &str,
+    bytes: &'static [u8],
+    ceiling: Ceiling,
+    surface: &Surface,
+) -> Result<Picture, Refusal> {
+    of(source, Drawn::Carried(bytes), ceiling, surface)
+}
+
+fn of(source: &str, drawn: Drawn, ceiling: Ceiling, surface: &Surface) -> Result<Picture, Refusal> {
     let (width, height) = extent(&drawn)?;
-    let footprint = Footprint::fit(width, height, surface.cell(), room).map_err(Refusal::of)?;
+    let footprint = Footprint::fit(width, height, surface.cell(), ceiling).map_err(Refusal::of)?;
     Ok(Picture {
         source: source.to_owned(),
         drawn,
@@ -201,7 +221,8 @@ fn resolve(source: &str, workspace: Option<&Path>) -> Result<PathBuf, Refusal> {
     }
 }
 
-/// The extent `drawn` declares: an SVG's own, or a raster's header read without decoding it.
+/// The extent `drawn` declares: an SVG's own, or a raster's header read without decoding it,
+/// whether that raster is a file or the bytes the binary carries.
 fn extent(drawn: &Drawn) -> Result<(u32, u32), Refusal> {
     let unreadable = |reason: String| Refusal::Unreadable { reason };
     match drawn {
@@ -214,7 +235,24 @@ fn extent(drawn: &Drawn) -> Result<(u32, u32), Refusal> {
         Drawn::File(path) => {
             image::image_dimensions(path).map_err(|error| unreadable(error.to_string()))
         }
+        Drawn::Carried(bytes) => header(bytes).map_err(unreadable),
     }
+}
+
+/// The extent a raster's header declares, read off the first bytes of it rather than by
+/// decoding pixels: a carried picture is measured before anything is made of it.
+fn header(bytes: &[u8]) -> Result<(u32, u32), String> {
+    let reader = image::ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()
+        .map_err(|error| error.to_string())?;
+    reader.into_dimensions().map_err(|error| error.to_string())
+}
+
+/// A raster at the pixels of the footprint it was measured into.
+fn raster(picture: image::DynamicImage, (width, height): (u32, u32)) -> image::RgbaImage {
+    picture
+        .resize_exact(width, height, image::imageops::FilterType::Triangle)
+        .to_rgba8()
 }
 
 fn measured(svg: &str) -> Result<(u32, u32), Refusal> {

@@ -1,7 +1,7 @@
 //! The picture's own contract, held to SVG strings a fence would produce: measured in cells
 //! before a pixel is spent, and then drawn at the pixels the cell was measured against.
 
-use sindri::graphics::{CellSize, Footprint, Refusal, Svg};
+use sindri::graphics::{Ceiling, CellSize, Footprint, Refusal, Svg};
 use sindri::view::View;
 
 const NAMESPACE: &str = "http://www.w3.org/2000/svg";
@@ -185,7 +185,8 @@ fn a_picture_no_transcript_has_room_for_is_refused_by_its_size_and_costs_no_pixe
 
 #[test]
 fn a_picture_wider_than_the_band_is_fitted_into_it_and_keeps_its_proportions() {
-    let fitted = Footprint::fit(400, 200, CellSize::new(10, 20), 20).expect("a picture fits");
+    let fitted = Footprint::fit(400, 200, CellSize::new(10, 20), Ceiling::across(20))
+        .expect("a picture fits");
 
     assert_eq!(
         (fitted.cols(), fitted.rows()),
@@ -193,7 +194,8 @@ fn a_picture_wider_than_the_band_is_fitted_into_it_and_keeps_its_proportions() {
         "40 by 10 cells of picture fitted into 20 columns is 20 by 5: one scale for both axes"
     );
 
-    let small = Footprint::fit(40, 40, CellSize::new(10, 20), 80).expect("a picture fits");
+    let small =
+        Footprint::fit(40, 40, CellSize::new(10, 20), Ceiling::across(80)).expect("a picture fits");
 
     assert_eq!(
         (small.cols(), small.rows()),
@@ -201,7 +203,8 @@ fn a_picture_wider_than_the_band_is_fitted_into_it_and_keeps_its_proportions() {
         "a picture is fitted down to a band and never up to one"
     );
 
-    let tall = Footprint::fit(100, 100_000, CellSize::new(10, 20), 80).expect("a picture fits");
+    let tall = Footprint::fit(100, 100_000, CellSize::new(10, 20), Ceiling::across(80))
+        .expect("a picture fits");
 
     assert!(
         tall.rows() <= 100 && tall.cols() <= 80,
@@ -213,7 +216,7 @@ fn a_picture_wider_than_the_band_is_fitted_into_it_and_keeps_its_proportions() {
 fn a_picture_longer_in_one_direction_than_the_other_keeps_the_shape_it_was_drawn_in() {
     let cell = CellSize::new(10, 20);
 
-    let long = Footprint::fit(30, 5_000, cell, 80).expect("a picture fits");
+    let long = Footprint::fit(30, 5_000, cell, Ceiling::across(80)).expect("a picture fits");
 
     assert_eq!(
         (long.cols(), long.rows()),
@@ -223,7 +226,7 @@ fn a_picture_longer_in_one_direction_than_the_other_keeps_the_shape_it_was_drawn
          have spent on a picture squashed from three columns to one"
     );
 
-    let beyond = Footprint::fit(100, 100_000, cell, 80).expect("a picture fits");
+    let beyond = Footprint::fit(100, 100_000, cell, Ceiling::across(80)).expect("a picture fits");
 
     assert_eq!(
         (beyond.cols(), beyond.rows()),
@@ -232,7 +235,7 @@ fn a_picture_longer_in_one_direction_than_the_other_keeps_the_shape_it_was_drawn
          transcript has: the ceiling is the one place the shape is not kept"
     );
 
-    let flat = Footprint::fit(10_000, 20, cell, 80).expect("a picture fits");
+    let flat = Footprint::fit(10_000, 20, cell, Ceiling::across(80)).expect("a picture fits");
 
     assert_eq!(
         (flat.cols(), flat.rows()),
@@ -244,7 +247,8 @@ fn a_picture_longer_in_one_direction_than_the_other_keeps_the_shape_it_was_drawn
 
 #[test]
 fn a_picture_with_no_extent_at_all_is_refused_by_the_fit() {
-    let refusal = Footprint::fit(0, 0, CellSize::new(10, 20), 80).expect_err("nothing to draw");
+    let refusal = Footprint::fit(0, 0, CellSize::new(10, 20), Ceiling::across(80))
+        .expect_err("nothing to draw");
 
     assert_eq!(
         refusal,
@@ -256,7 +260,8 @@ fn a_picture_with_no_extent_at_all_is_refused_by_the_fit() {
 #[test]
 fn a_picture_is_drawn_at_the_size_the_band_fitted_it_into() {
     let svg = Svg::parse(&diagram(400, 200)).expect("the diagram parses");
-    let fitted = Footprint::fit(400, 200, CellSize::new(10, 20), 20).expect("a picture fits");
+    let fitted = Footprint::fit(400, 200, CellSize::new(10, 20), Ceiling::across(20))
+        .expect("a picture fits");
 
     let pixels = svg
         .rasterise_at(fitted.pixels(CellSize::new(10, 20)))
