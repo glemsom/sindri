@@ -584,12 +584,14 @@ pub fn split(facts: &Facts, band: Rect) -> Share {
 }
 
 /// The rows `shape` lays on `area`, in the order it reads them: every run a row draws and the column
-/// of the band each starts at.
+/// of the band each starts at. No more rows are laid than the band holds, so a shape with nothing
+/// left to give up loses its count rather than its floor.
 pub(crate) fn rows(facts: &Facts, shape: Shape, area: Rect) -> Vec<Row> {
     let kept = kept(facts, shape, area);
     match shape {
         Shape::Ledger => ledger_lines(&kept.facts, kept.went)
             .into_iter()
+            .take(usize::from(area.height))
             .map(|line| match line {
                 Line::Fact(fact) => labelled(area, fact),
                 Line::Hairline => hairline_row(area),
@@ -621,7 +623,6 @@ impl Row {
         }
     }
 
-    /// Adds a part at `x` and answers the column after it.
     fn push(&mut self, x: u16, part: Part) -> u16 {
         let next = x.saturating_add(part.columns());
         self.parts.push((x, part));
@@ -635,15 +636,14 @@ impl Row {
 }
 
 impl Part {
-    /// The columns this part takes on its row.
     pub(crate) fn columns(&self) -> u16 {
-        match self {
-            Part::Run(text, _) => pen::cells(text),
-            Part::Value(value) => u16::try_from(value.columns()).unwrap_or(u16::MAX),
-        }
+        let columns = match self {
+            Part::Run(text, _) => drawn(text),
+            Part::Value(value) => value.columns(),
+        };
+        u16::try_from(columns).unwrap_or(u16::MAX)
     }
 
-    /// Writes this part at a column of a row.
     pub(crate) fn draw(&self, buffer: &mut Buffer, x: u16, y: u16, palette: &Palette) {
         match self {
             Part::Run(text, ink) => {
@@ -680,7 +680,6 @@ fn hairline_row(area: Rect) -> Row {
     Row::run(area.x, hairline_glyphs(area.width), Ink::Dim)
 }
 
-/// The run of glyphs a rule one row wide of `width` columns is drawn as.
 fn hairline_glyphs(width: u16) -> String {
     std::iter::repeat_n(HAIRLINE, usize::from(width)).collect()
 }
@@ -782,45 +781,45 @@ fn kept(facts: &Facts, shape: Shape, area: Rect) -> Kept {
 /// served name by the head.
 fn known(facts: &Facts, shape: Shape) -> Vec<Fact> {
     let short = facts.session.as_deref().map(short_id);
-    let mut rows = Vec::new();
+    let mut stated = Vec::new();
     if let Some(wire) = &facts.wire {
-        rows.push(Fact::new(Kind::Wire, wire.clone()));
+        stated.push(Fact::new(Kind::Wire, wire.clone()));
     }
     if let Some(model) = &facts.model {
-        rows.push(Fact::new(Kind::Model, head(model, VALUE)));
+        stated.push(Fact::new(Kind::Model, head(model, VALUE)));
     }
     if let Some(think) = &facts.think {
-        rows.push(Fact::new(Kind::Think, think.clone()));
+        stated.push(Fact::new(Kind::Think, think.clone()));
     }
     if let Some((turns, cap)) = facts.turns {
-        rows.push(Fact::new(Kind::Turns, pair(turns, cap)));
+        stated.push(Fact::new(Kind::Turns, pair(turns, cap)));
     }
     if let Some(ctx) = &facts.ctx {
-        rows.push(Fact {
+        stated.push(Fact {
             kind: Kind::Ctx,
             value: ctx.spelled(shape),
         });
     }
     if let Some(cache) = facts.cache {
-        rows.push(Fact::new(Kind::Cache, hit_rate(cache)));
+        stated.push(Fact::new(Kind::Cache, hit_rate(cache)));
     }
     if let Some(workspace) = &facts.workspace {
         let value = tail(&workspace.to_string_lossy(), VALUE);
         if !value.is_empty() {
-            rows.push(Fact::new(Kind::Workspace, value));
+            stated.push(Fact::new(Kind::Workspace, value));
         }
     }
     if let Some(branch) = &facts.branch {
-        rows.push(Fact::new(Kind::Branch, branch.clone()));
+        stated.push(Fact::new(Kind::Branch, branch.clone()));
     }
     if let Some(skills) = facts.skills {
-        rows.push(Fact::new(Kind::Skills, skills.to_string()));
+        stated.push(Fact::new(Kind::Skills, skills.to_string()));
     }
     if let Some(sandbox) = facts.sandbox {
-        rows.push(Fact::new(Kind::Sandbox, sandbox.rail_label().to_owned()));
+        stated.push(Fact::new(Kind::Sandbox, sandbox.rail_label().to_owned()));
     }
     if let Some(short) = short {
-        rows.push(Fact::new(Kind::Session, short.to_owned()));
+        stated.push(Fact::new(Kind::Session, short.to_owned()));
     }
     if let Some(temp) = &facts.temp {
         let path = temp.to_string_lossy();
@@ -832,14 +831,14 @@ fn known(facts: &Facts, shape: Shape) -> Vec<Fact> {
         };
         let value = tail(&named, VALUE);
         if !value.is_empty() {
-            rows.push(Fact::new(Kind::Temp, value));
+            stated.push(Fact::new(Kind::Temp, value));
         }
     }
     match shape {
-        Shape::Ledger => aligned(&mut rows),
-        Shape::Strip => rows.sort_by_key(|fact| strip_place(fact.kind)),
+        Shape::Ledger => aligned(&mut stated),
+        Shape::Strip => stated.sort_by_key(|fact| strip_place(fact.kind)),
     }
-    rows
+    stated
 }
 
 /// The ledger's rows in the order they are read, with a hairline between two blocks that both kept
@@ -875,11 +874,16 @@ fn fits(fact: &Fact, shape: Shape, room: u16) -> bool {
     if value == 0 {
         return false;
     }
-    let room = match shape {
-        Shape::Ledger => value_room(room),
-        Shape::Strip => usize::from(room).saturating_sub(drawn(fact.kind.label()) + 1),
-    };
-    value <= room
+    match shape {
+        Shape::Ledger => value <= value_room(room),
+        Shape::Strip => strip_item(fact) <= usize::from(room),
+    }
+}
+
+/// The columns one fact takes on the strip's row: its label, the column between the two, and the
+/// value beside them.
+fn strip_item(fact: &Fact) -> usize {
+    drawn(fact.kind.label()) + 1 + fact.value.columns()
 }
 
 fn strip_place(kind: Kind) -> usize {
@@ -902,7 +906,7 @@ fn strip_columns(facts: &[Fact], went: usize, counted: bool) -> usize {
         if index > 0 {
             taken += drawn(GAP);
         }
-        taken += drawn(fact.kind.label()) + 1 + fact.value.columns();
+        taken += strip_item(fact);
     }
     if counted {
         if !facts.is_empty() {
@@ -914,8 +918,8 @@ fn strip_columns(facts: &[Fact], went: usize, counted: bool) -> usize {
 }
 
 /// The label of one row in its field, and the column a value `value_width` columns wide starts at:
-/// the rule both the ledger's shapes and the screen that widens it draw a row by, so values end on
-/// one hanging edge wherever they are read.
+/// the rule the screen that widens the ledger draws a row by, so values end on one hanging edge
+/// wherever they are read.
 pub(crate) fn label_row(
     buffer: &mut Buffer,
     area: Rect,
@@ -1418,7 +1422,7 @@ mod tests {
     }
 
     #[test]
-    fn the_ledger_lays_its_blocks_in_the_contracts_order_with_a_hairline_between_two() {
+    fn the_ledger_lays_its_blocks_in_the_order_they_are_read_with_a_hairline_between_two() {
         let hairline = "─".repeat(usize::from(COLUMNS));
 
         assert_eq!(
@@ -1485,47 +1489,64 @@ mod tests {
 
     #[test]
     fn the_ledger_and_the_strip_give_up_the_same_fact_for_the_same_reason() {
-        let unnamed = Facts {
+        for width in 20..=200u16 {
+            let shape = Shape::of(width);
+            let room = match shape {
+                Shape::Ledger => COLUMNS,
+                Shape::Strip => width,
+            };
+
+            assert_eq!(
+                laid(&unnamed(), shape, band(room, 2)),
+                [stated(&[(0, "+1 more")])],
+                "at {width} columns a name no column can hold whole is given up by the {shape:?} \
+                 and counted, and never drawn in part"
+            );
+        }
+    }
+
+    /// One fact whose value fits no value column, whatever the room: a served name with no hyphen
+    /// to break at.
+    fn unnamed() -> Facts {
+        Facts {
             model: Some(String::from("aservednamethatnobreaksanywhere")),
             ..Facts::default()
-        };
-
-        assert_eq!(
-            laid(&unnamed, Shape::Ledger, band(COLUMNS, 2)),
-            [stated(&[(0, "+1 more")])],
-            "a name cut to nothing says nothing, so the ledger drops it and counts it"
-        );
-        assert_eq!(
-            laid(&unnamed, Shape::Strip, band(40, 1)),
-            [stated(&[(0, "+1 more")])],
-            "and the strip gives up the same fact, in the same words"
-        );
+        }
     }
 
     #[test]
     fn no_row_is_laid_past_the_band_it_is_drawn_in() {
         for width in 20..=200u16 {
             let shape = Shape::of(width);
-            let (room, height) = match shape {
-                Shape::Ledger => (COLUMNS, 40),
-                Shape::Strip => (width, 1),
+            let room = match shape {
+                Shape::Ledger => COLUMNS,
+                Shape::Strip => width,
             };
-            let laid = rows(&frame(), shape, band(room, height));
+            for height in 1..=20 {
+                assert_laid_inside(&frame(), shape, band(room, height), room);
+            }
+        }
+    }
 
-            assert!(
-                laid.len() <= usize::from(height),
-                "at {width} columns the {shape:?} lays {} rows on a band {height} high",
-                laid.len()
-            );
-            for row in &laid {
-                for (at, part) in row.parts() {
-                    assert!(
-                        usize::from(*at) + usize::from(part.columns()) <= usize::from(room),
-                        "at {width} columns the {shape:?} lays a part running from {at} for {} \
-                         columns on a band {room} wide",
-                        part.columns()
-                    );
-                }
+    /// Every row a shape lays on `area` starts inside the band and ends inside it, and the band's
+    /// height holds them all.
+    fn assert_laid_inside(facts: &Facts, shape: Shape, area: Rect, room: u16) {
+        let laid = rows(facts, shape, area);
+
+        assert!(
+            laid.len() <= usize::from(area.height),
+            "the {shape:?} lays {} rows on a band {} high and {room} wide",
+            laid.len(),
+            area.height
+        );
+        for row in &laid {
+            for (at, part) in row.parts() {
+                assert!(
+                    usize::from(*at) + usize::from(part.columns()) <= usize::from(room),
+                    "the {shape:?} lays a part running from {at} for {} columns on a band {room} \
+                     wide.",
+                    part.columns()
+                );
             }
         }
     }

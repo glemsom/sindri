@@ -11,6 +11,7 @@ pub fn paint(facts: &Facts, shape: Shape, area: Rect, buffer: &mut Buffer, palet
         return;
     }
     buffer.set_style(area, palette.ground(Some(Band::Rail)));
+    // The ledger lays no more rows than the band holds, so no row is written past its bottom.
     for (offset, row) in ledger::rows(facts, shape, area).iter().enumerate() {
         let y = area
             .y
