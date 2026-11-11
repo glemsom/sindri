@@ -3,23 +3,15 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
-use crate::ledger::{self, Facts, Shape};
+use crate::ledger::{self, Facts, Rail};
 use crate::palette::{Band, Palette};
 
-pub fn paint(facts: &Facts, shape: Shape, area: Rect, buffer: &mut Buffer, palette: &Palette) {
+pub fn paint(facts: &Facts, rail: Rail, area: Rect, buffer: &mut Buffer, palette: &Palette) {
     if area.width == 0 || area.height == 0 {
         return;
     }
     buffer.set_style(area, palette.ground(Some(Band::Rail)));
-    // The ledger lays no more rows than the band holds, so no row is written past its bottom.
-    for (offset, row) in ledger::rows(facts, shape, area).iter().enumerate() {
-        let y = area
-            .y
-            .saturating_add(u16::try_from(offset).unwrap_or(u16::MAX));
-        for (x, part) in row.parts() {
-            part.draw(buffer, *x, y, palette);
-        }
-    }
+    ledger::draw(&ledger::rows(facts, rail.into(), area), buffer, palette);
 }
 
 #[cfg(test)]
@@ -99,12 +91,13 @@ mod tests {
                 "/home/glemsom/Documents/git/sindri/.worktrees/46-rail",
             )),
             branch: Some(String::from("spec/1-capability")),
-            skills: Some(2),
+            loaded: vec![String::from("bash"), String::from("records")],
             sandbox: Some(Enforcement::Bubblewrap),
             session: Some(String::from("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61")),
             temp: Some(PathBuf::from(
                 "/home/glemsom/.local/state/sindri/sessions/9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61/tmp",
             )),
+            ..Facts::default()
         }
     }
 
@@ -147,7 +140,7 @@ mod tests {
 
             paint(
                 &facts,
-                Shape::Ledger,
+                Rail::Ledger,
                 band(COLUMNS, 1),
                 &mut buffer,
                 &PALETTE,
@@ -183,7 +176,7 @@ mod tests {
 
             paint(
                 &facts,
-                Shape::Ledger,
+                Rail::Ledger,
                 band(COLUMNS, 1),
                 &mut buffer,
                 &PALETTE,
@@ -218,7 +211,7 @@ mod tests {
 
             paint(
                 &facts,
-                Shape::Ledger,
+                Rail::Ledger,
                 band(COLUMNS, 1),
                 &mut ledger,
                 &PALETTE,
@@ -253,7 +246,7 @@ mod tests {
 
             let mut strip = Buffer::empty(band(40, 1));
 
-            paint(&facts, Shape::Strip, band(40, 1), &mut strip, &PALETTE);
+            paint(&facts, Rail::Strip, band(40, 1), &mut strip, &PALETTE);
 
             assert_eq!(
                 Ink::of(strip.cell((4, 0)).expect("a cell of the meter"), &PALETTE),
@@ -272,7 +265,7 @@ mod tests {
 
         paint(
             &unknown,
-            Shape::Ledger,
+            Rail::Ledger,
             band(COLUMNS, 17),
             &mut roomy,
             &PALETTE,
@@ -301,10 +294,10 @@ mod tests {
         let band = band(COLUMNS, 8);
         let mut tight = Buffer::empty(band);
 
-        paint(&frame(), Shape::Ledger, band, &mut tight, &PALETTE);
+        paint(&frame(), Rail::Ledger, band, &mut tight, &PALETTE);
         let with = glyphs(&tight, 7);
 
-        paint(&unknown, Shape::Ledger, band, &mut tight, &PALETTE);
+        paint(&unknown, Rail::Ledger, band, &mut tight, &PALETTE);
         let without = glyphs(&tight, 7);
 
         assert_eq!(
@@ -328,7 +321,7 @@ mod tests {
 
         paint(
             &facts,
-            Shape::Ledger,
+            Rail::Ledger,
             band(COLUMNS, 3),
             &mut buffer,
             &PALETTE,
@@ -352,7 +345,7 @@ mod tests {
 
         paint(
             &frame(),
-            Shape::Ledger,
+            Rail::Ledger,
             band(COLUMNS, 17),
             &mut buffer,
             &PALETTE,
@@ -406,7 +399,7 @@ mod tests {
 
         paint(
             &facts,
-            Shape::Ledger,
+            Rail::Ledger,
             band(COLUMNS, 2),
             &mut buffer,
             &PALETTE,
@@ -434,7 +427,7 @@ mod tests {
 
             paint(
                 &facts,
-                Shape::Ledger,
+                Rail::Ledger,
                 band(COLUMNS, 1),
                 &mut buffer,
                 &PALETTE,
@@ -458,7 +451,7 @@ mod tests {
 
         paint(
             &facts,
-            Shape::Ledger,
+            Rail::Ledger,
             band(COLUMNS, 2),
             &mut buffer,
             &PALETTE,
@@ -486,7 +479,7 @@ mod tests {
 
         paint(
             &facts,
-            Shape::Ledger,
+            Rail::Ledger,
             band(COLUMNS, 1),
             &mut ledger,
             &PALETTE,
@@ -500,7 +493,7 @@ mod tests {
 
         let mut strip = Buffer::empty(band(40, 1));
 
-        paint(&facts, Shape::Strip, band(40, 1), &mut strip, &PALETTE);
+        paint(&facts, Rail::Strip, band(40, 1), &mut strip, &PALETTE);
 
         assert_eq!(
             glyphs(&strip, 0).trim_end(),
@@ -519,7 +512,7 @@ mod tests {
 
         paint(
             &facts,
-            Shape::Ledger,
+            Rail::Ledger,
             band(COLUMNS, 2),
             &mut ledger,
             &PALETTE,
@@ -537,7 +530,7 @@ mod tests {
 
         let mut strip = Buffer::empty(band(40, 1));
 
-        paint(&facts, Shape::Strip, band(40, 1), &mut strip, &PALETTE);
+        paint(&facts, Rail::Strip, band(40, 1), &mut strip, &PALETTE);
 
         assert_eq!(
             glyphs(&strip, 0).trim_end(),
@@ -552,7 +545,7 @@ mod tests {
 
         paint(
             &frame(),
-            Shape::Ledger,
+            Rail::Ledger,
             band(COLUMNS, 8),
             &mut buffer,
             &PALETTE,
@@ -582,7 +575,7 @@ mod tests {
 
         paint(
             &frame(),
-            Shape::Ledger,
+            Rail::Ledger,
             band(COLUMNS, 4),
             &mut buffer,
             &PALETTE,
@@ -614,7 +607,7 @@ mod tests {
 
         paint(
             &facts,
-            Shape::Ledger,
+            Rail::Ledger,
             band(COLUMNS, 1),
             &mut ledger,
             &PALETTE,
@@ -629,7 +622,7 @@ mod tests {
 
         let mut strip = Buffer::empty(band(40, 1));
 
-        paint(&facts, Shape::Strip, band(40, 1), &mut strip, &PALETTE);
+        paint(&facts, Rail::Strip, band(40, 1), &mut strip, &PALETTE);
 
         assert_eq!(
             glyphs(&strip, 0).trim_end(),
@@ -643,7 +636,7 @@ mod tests {
     fn forty_columns_hold_the_fact_a_reader_watches_and_the_model_they_are() {
         let mut buffer = Buffer::empty(band(40, 1));
 
-        paint(&frame(), Shape::Strip, band(40, 1), &mut buffer, &PALETTE);
+        paint(&frame(), Rail::Strip, band(40, 1), &mut buffer, &PALETTE);
 
         assert_eq!(
             glyphs(&buffer, 0),
@@ -662,7 +655,7 @@ mod tests {
         });
         let mut buffer = Buffer::empty(band(99, 1));
 
-        paint(&facts, Shape::Strip, band(99, 1), &mut buffer, &PALETTE);
+        paint(&facts, Rail::Strip, band(99, 1), &mut buffer, &PALETTE);
 
         assert_eq!(
             glyphs(&buffer, 0).trim_end(),
@@ -676,7 +669,7 @@ mod tests {
     fn the_strip_gives_its_facts_up_from_the_tail_of_its_own_list() {
         let mut counted = Buffer::empty(band(47, 1));
 
-        paint(&frame(), Shape::Strip, band(47, 1), &mut counted, &PALETTE);
+        paint(&frame(), Rail::Strip, band(47, 1), &mut counted, &PALETTE);
 
         assert_eq!(
             glyphs(&counted, 0).trim_end(),
@@ -686,13 +679,7 @@ mod tests {
 
         let mut facts_win = Buffer::empty(band(60, 1));
 
-        paint(
-            &frame(),
-            Shape::Strip,
-            band(60, 1),
-            &mut facts_win,
-            &PALETTE,
-        );
+        paint(&frame(), Rail::Strip, band(60, 1), &mut facts_win, &PALETTE);
 
         assert_eq!(
             glyphs(&facts_win, 0).trim_end(),
@@ -710,7 +697,7 @@ mod tests {
         };
         let mut buffer = Buffer::empty(band(40, 1));
 
-        paint(&one, Shape::Strip, band(40, 1), &mut buffer, &PALETTE);
+        paint(&one, Rail::Strip, band(40, 1), &mut buffer, &PALETTE);
 
         assert_eq!(
             glyphs(&buffer, 0).trim_end(),
@@ -724,7 +711,7 @@ mod tests {
         };
         let mut buffer = Buffer::empty(band(40, 1));
 
-        paint(&elsewhere, Shape::Strip, band(40, 1), &mut buffer, &PALETTE);
+        paint(&elsewhere, Rail::Strip, band(40, 1), &mut buffer, &PALETTE);
 
         assert_eq!(
             glyphs(&buffer, 0).trim_end(),
@@ -737,13 +724,13 @@ mod tests {
     #[test]
     fn no_fact_is_ever_drawn_partially_at_any_width_between_twenty_and_two_hundred() {
         for width in 20..=200u16 {
-            let shape = Shape::of(width);
-            let area = match shape {
-                Shape::Ledger => band(COLUMNS, 40),
-                Shape::Strip => band(width, 1),
+            let rail = Rail::of(width);
+            let area = match rail {
+                Rail::Ledger => band(COLUMNS, 40),
+                Rail::Strip => band(width, 1),
             };
             let mut buffer = Buffer::empty(area);
-            paint(&frame(), shape, area, &mut buffer, &PALETTE);
+            paint(&frame(), rail, area, &mut buffer, &PALETTE);
             let rows: Vec<String> = (0..area.height).map(|y| glyphs(&buffer, y)).collect();
 
             let mut went = 0;
@@ -771,8 +758,8 @@ mod tests {
                 continue;
             }
             assert_eq!(
-                shape,
-                Shape::Strip,
+                rail,
+                Rail::Strip,
                 "at {width} columns the ledger dropped the {more} row it had room to draw"
             );
             let drawn = columns(screen.trim_end());
@@ -790,7 +777,7 @@ mod tests {
         // without the room deciding any of it.
         let mut buffer = Buffer::empty(band(220, 1));
 
-        paint(&frame(), Shape::Strip, band(220, 1), &mut buffer, &PALETTE);
+        paint(&frame(), Rail::Strip, band(220, 1), &mut buffer, &PALETTE);
 
         assert_eq!(
             glyphs(&buffer, 0).trim_end(),
@@ -801,7 +788,7 @@ mod tests {
 
         let mut narrower = Buffer::empty(band(88, 1));
 
-        paint(&frame(), Shape::Strip, band(88, 1), &mut narrower, &PALETTE);
+        paint(&frame(), Rail::Strip, band(88, 1), &mut narrower, &PALETTE);
 
         assert_eq!(
             glyphs(&narrower, 0).trim_end(),
@@ -822,7 +809,7 @@ mod tests {
 
         paint(
             &facts,
-            Shape::Ledger,
+            Rail::Ledger,
             band(COLUMNS, 2),
             &mut buffer,
             &PALETTE,
@@ -849,14 +836,14 @@ mod tests {
     #[test]
     fn no_width_of_rail_draws_a_run_of_leaders() {
         for width in 20..=200u16 {
-            let shape = Shape::of(width);
-            let area = match shape {
-                Shape::Ledger => band(COLUMNS, 40),
-                Shape::Strip => band(width, 1),
+            let rail = Rail::of(width);
+            let area = match rail {
+                Rail::Ledger => band(COLUMNS, 40),
+                Rail::Strip => band(width, 1),
             };
             let mut buffer = Buffer::empty(area);
 
-            paint(&frame(), shape, area, &mut buffer, &PALETTE);
+            paint(&frame(), rail, area, &mut buffer, &PALETTE);
 
             let screen: Vec<String> = (0..area.height).map(|y| glyphs(&buffer, y)).collect();
             assert!(
@@ -884,7 +871,7 @@ mod tests {
 
         paint(
             &facts,
-            Shape::Ledger,
+            Rail::Ledger,
             band(COLUMNS, 3),
             &mut buffer,
             &PALETTE,

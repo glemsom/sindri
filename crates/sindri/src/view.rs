@@ -20,7 +20,7 @@ use crate::door;
 use crate::graphics::CellSize;
 use crate::ink::Ink;
 use crate::keys::{Act, Mode, Stack};
-use crate::ledger::{Boot, Facts, Shape, Share};
+use crate::ledger::{Boot, Facts, Rail, Share};
 use crate::mark::{Cell, Mark, Span};
 use crate::models::Models;
 use crate::palette::{Band, Palette};
@@ -33,7 +33,7 @@ use crate::queue::Queue;
 use crate::rail;
 use crate::rows::{Row, Rows, Scroll, wrap};
 use crate::settings::Settings;
-use crate::stats::Stats;
+use crate::stats;
 use crate::stream::Stream;
 
 /// The hints in survival order, most valuable first: the order a narrower footer gives
@@ -560,7 +560,7 @@ impl View {
             Mode::Files => self.files_screen(body, buffer),
             Mode::Models => self.models_screen(body, buffer),
             Mode::Settings => self.settings_screen(body, buffer),
-            Mode::Stats => self.stats().paint(body, buffer, &self.palette),
+            Mode::Stats => stats::paint(&self.stats(), body, buffer, &self.palette),
             Mode::Composer | Mode::Keys => self.keys_screen(body, buffer),
         }
     }
@@ -568,7 +568,7 @@ impl View {
     /// The band the transcript and the rail share. A door is drawn with a ledger beside it or with
     /// no rail at all: a strip is a live run's one row, and no run is live at the door.
     fn split(&self, band: Rect) -> Share {
-        if self.door && Shape::of(band.width) != Shape::Ledger {
+        if self.door && Rail::of(band.width) != Rail::Ledger {
             return Share {
                 transcript: band,
                 rail: None,
@@ -880,11 +880,13 @@ impl View {
         }
     }
 
-    fn stats(&self) -> Stats {
+    /// The facts the screen draws: the ones the frame holds, and the ones the record wrote. A
+    /// frame with no record has no screen, because what a run spent is the record's to say.
+    fn stats(&self) -> Facts {
         let Some(document) = &self.record else {
-            return Stats::default();
+            return Facts::default();
         };
-        Stats::of(&self.rail, document, self.loaded.names())
+        self.rail.clone().recorded(document, self.loaded.names())
     }
 
     fn footer(&self, area: Rect, buffer: &mut Buffer) {
@@ -1071,10 +1073,11 @@ mod tests {
             cache: Some(88),
             workspace: Some(PathBuf::from("/srv/workspace")),
             branch: Some(String::from("spec/1-capability")),
-            skills: Some(2),
+            loaded: vec![String::from("bash"), String::from("records")],
             sandbox: Some(Enforcement::Bubblewrap),
             session: Some(String::from("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61")),
             temp: Some(PathBuf::from("/srv/sessions/9f2c7a41/tmp")),
+            ..Facts::default()
         }
     }
 
