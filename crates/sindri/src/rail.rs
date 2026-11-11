@@ -12,14 +12,7 @@ pub fn paint(facts: &Facts, shape: Shape, area: Rect, buffer: &mut Buffer, palet
     }
     buffer.set_style(area, palette.ground(Some(Band::Rail)));
     // The ledger lays no more rows than the band holds, so no row is written past its bottom.
-    for (offset, row) in ledger::rows(facts, shape, area).iter().enumerate() {
-        let y = area
-            .y
-            .saturating_add(u16::try_from(offset).unwrap_or(u16::MAX));
-        for (x, part) in row.parts() {
-            part.draw(buffer, *x, y, palette);
-        }
-    }
+    ledger::draw(&ledger::rows(facts, shape, area), buffer, palette);
 }
 
 #[cfg(test)]
@@ -105,6 +98,7 @@ mod tests {
             temp: Some(PathBuf::from(
                 "/home/glemsom/.local/state/sindri/sessions/9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61/tmp",
             )),
+            ..Facts::default()
         }
     }
 
@@ -741,6 +735,7 @@ mod tests {
             let area = match shape {
                 Shape::Ledger => band(COLUMNS, 40),
                 Shape::Strip => band(width, 1),
+                Shape::Screen => unreachable!("a frame's width names a rail's shape"),
             };
             let mut buffer = Buffer::empty(area);
             paint(&frame(), shape, area, &mut buffer, &PALETTE);
@@ -853,6 +848,7 @@ mod tests {
             let area = match shape {
                 Shape::Ledger => band(COLUMNS, 40),
                 Shape::Strip => band(width, 1),
+                Shape::Screen => unreachable!("a frame's width names a rail's shape"),
             };
             let mut buffer = Buffer::empty(area);
 

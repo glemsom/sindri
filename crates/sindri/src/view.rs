@@ -33,7 +33,7 @@ use crate::queue::Queue;
 use crate::rail;
 use crate::rows::{Row, Rows, Scroll, wrap};
 use crate::settings::Settings;
-use crate::stats::Stats;
+use crate::stats;
 use crate::stream::Stream;
 
 /// The hints in survival order, most valuable first: the order a narrower footer gives
@@ -560,7 +560,7 @@ impl View {
             Mode::Files => self.files_screen(body, buffer),
             Mode::Models => self.models_screen(body, buffer),
             Mode::Settings => self.settings_screen(body, buffer),
-            Mode::Stats => self.stats().paint(body, buffer, &self.palette),
+            Mode::Stats => stats::paint(&self.stats(), body, buffer, &self.palette),
             Mode::Composer | Mode::Keys => self.keys_screen(body, buffer),
         }
     }
@@ -880,11 +880,13 @@ impl View {
         }
     }
 
-    fn stats(&self) -> Stats {
+    /// The facts the screen draws: the ones the frame holds, and the ones the record wrote. A
+    /// frame with no record has no screen, because what a run spent is the record's to say.
+    fn stats(&self) -> Facts {
         let Some(document) = &self.record else {
-            return Stats::default();
+            return Facts::default();
         };
-        Stats::of(&self.rail, document, self.loaded.names())
+        self.rail.clone().recorded(document, self.loaded.names())
     }
 
     fn footer(&self, area: Rect, buffer: &mut Buffer) {
@@ -1075,6 +1077,7 @@ mod tests {
             sandbox: Some(Enforcement::Bubblewrap),
             session: Some(String::from("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61")),
             temp: Some(PathBuf::from("/srv/sessions/9f2c7a41/tmp")),
+            ..Facts::default()
         }
     }
 
