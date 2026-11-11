@@ -7,6 +7,7 @@ use std::sync::OnceLock;
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use syntect::parsing::{ParseState, Scope, ScopeStack, SyntaxSet};
 
+use crate::graphics::Ceiling;
 use crate::ink::{Face, Ink, Look};
 use crate::mermaid::{self, Fence};
 use crate::palette::Band;
@@ -433,9 +434,9 @@ impl Room {
             match mermaid::block(&mermaid.source, mermaid.fence) {
                 mermaid::Block::Refused { caption } => self.caption(&caption),
                 mermaid::Block::Picture(diagram) if self.surface.draws() => {
-                    let room = u16::try_from(self.room()).unwrap_or(u16::MAX);
+                    let ceiling = Ceiling::across(u16::try_from(self.room()).unwrap_or(u16::MAX));
                     let measured =
-                        picture::drawing(diagram.source(), diagram.svg(), room, &self.surface);
+                        picture::drawing(diagram.source(), diagram.svg(), ceiling, &self.surface);
                     match measured {
                         Ok(measured) => self.pictured(mermaid.at, &measured),
                         Err(refusal) => self.caption(&refusal.message()),
@@ -529,8 +530,8 @@ impl Room {
         self.gap();
         let words = picture::words(&source, &alt);
         let look = Look::plain(Ink::Dim);
-        let room = u16::try_from(self.room()).unwrap_or(u16::MAX);
-        match picture::measure(&source, room, &self.surface) {
+        let ceiling = Ceiling::across(u16::try_from(self.room()).unwrap_or(u16::MAX));
+        match picture::measure(&source, ceiling, &self.surface) {
             Err(refusal) => {
                 self.prose(&words, look);
                 self.flush_if_written();
