@@ -2608,6 +2608,7 @@ dependencies = [
  "syntect",
  "tempfile",
  "tiny-skia",
+ "unicode-width 0.2.0",
  "usvg",
 ]
 

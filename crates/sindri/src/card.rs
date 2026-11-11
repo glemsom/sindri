@@ -7,6 +7,7 @@ use ratatui::style::Modifier;
 
 use crate::ink::Ink;
 use crate::palette::Palette;
+use crate::pen::{self, Clip};
 
 /// The widest a card is drawn: the columns past it are the scrim's.
 const WIDTH: u16 = 72;
@@ -18,7 +19,13 @@ const INSET: u16 = 2;
 /// back, so the card bleeds to the frame's own edges instead.
 const NARROW: u16 = 50;
 
-const CORNERS: [char; 4] = ['╭', '╮', '╰', '╯'];
+/// The columns the key that leaves keeps clear at each end of the bottom row: the corner's own
+/// column and one of rule.
+const LEAVES_INSET: u16 = 2;
+
+const TOP: (char, char) = ('╭', '╮');
+
+const BOTTOM: (char, char) = ('╰', '╯');
 
 const RULE: char = '─';
 
@@ -68,12 +75,11 @@ fn boxed(area: Rect, name: &str, leaves: &str, buffer: &mut Buffer, palette: &Pa
     grounded(buffer, card, palette);
 
     let last = card.bottom() - 1;
-    ruled(buffer, Rect { height: 1, ..card }, palette);
+    pen::rule(buffer, Rect { height: 1, ..card }, RULE, Ink::Dim, palette);
     headed(buffer, card, name, palette);
     if area.height > 1 {
         for y in card.y + 1..last {
-            put(buffer, card.x, y, SIDE, Ink::Dim, palette);
-            put(buffer, card.right() - 1, y, SIDE, Ink::Dim, palette);
+            sides(buffer, card, y, palette);
         }
         footed(buffer, card, leaves, palette);
     }
@@ -91,7 +97,7 @@ fn boxed(area: Rect, name: &str, leaves: &str, buffer: &mut Buffer, palette: &Pa
 fn bleeding(area: Rect, name: &str, buffer: &mut Buffer, palette: &Palette) -> Rect {
     grounded(buffer, area, palette);
     let head = Rect { height: 1, ..area };
-    ruled(buffer, head, palette);
+    pen::rule(buffer, head, RULE, Ink::Dim, palette);
     labelled(buffer, head, name, palette);
     Rect {
         x: area.x.saturating_add(INSET),
@@ -103,66 +109,63 @@ fn bleeding(area: Rect, name: &str, buffer: &mut Buffer, palette: &Palette) -> R
 
 fn headed(buffer: &mut Buffer, card: Rect, name: &str, palette: &Palette) {
     labelled(buffer, Rect { height: 1, ..card }, name, palette);
-    put(buffer, card.x, card.y, CORNERS[0], Ink::Dim, palette);
-    put(
-        buffer,
-        card.right() - 1,
-        card.y,
-        CORNERS[1],
-        Ink::Dim,
-        palette,
-    );
+    corners(buffer, card, card.y, TOP, palette);
+}
+
+fn corners(
+    buffer: &mut Buffer,
+    card: Rect,
+    y: u16,
+    (left, right): (char, char),
+    palette: &Palette,
+) {
+    pen::glyph(buffer, card.x, y, left, Ink::Dim, palette);
+    pen::glyph(buffer, card.right() - 1, y, right, Ink::Dim, palette);
+}
+
+fn sides(buffer: &mut Buffer, card: Rect, y: u16, palette: &Palette) {
+    for x in [card.x, card.right() - 1] {
+        pen::glyph(buffer, x, y, SIDE, Ink::Dim, palette);
+    }
 }
 
 /// The key that leaves hangs in the bottom row as the name hangs in the top one, at the other end.
 fn footed(buffer: &mut Buffer, card: Rect, leaves: &str, palette: &Palette) {
-    let (y, right) = (card.bottom() - 1, card.right());
-    ruled(
+    let row = Rect {
+        y: card.bottom() - 1,
+        height: 1,
+        ..card
+    };
+    pen::rule(buffer, row, RULE, Ink::Dim, palette);
+    corners(buffer, card, row.y, BOTTOM, palette);
+    pen::hang(
         buffer,
         Rect {
-            y,
-            height: 1,
-            ..card
+            x: card.x + LEAVES_INSET,
+            width: card.width.saturating_sub(LEAVES_INSET * 2),
+            ..row
         },
+        &[(" ", Ink::Dim), (leaves, Ink::Muted), (" ", Ink::Dim)],
         palette,
     );
-    put(buffer, card.x, y, CORNERS[2], Ink::Dim, palette);
-    put(buffer, right - 1, y, CORNERS[3], Ink::Dim, palette);
-
-    let room = u16::try_from(leaves.chars().count()).unwrap_or(u16::MAX);
-    let mut x = right.saturating_sub(room + 4);
-    if x <= card.x + 1 {
-        return;
-    }
-    put(buffer, x, y, ' ', Ink::Dim, palette);
-    x += 1;
-    for glyph in leaves.chars() {
-        put(buffer, x, y, glyph, Ink::Muted, palette);
-        x += 1;
-    }
-    put(buffer, x, y, ' ', Ink::Dim, palette);
 }
 
 fn labelled(buffer: &mut Buffer, row: Rect, name: &str, palette: &Palette) {
-    let room = row.width.saturating_sub(INSET * 2 + 1);
-    let name: String = name.chars().take(usize::from(room)).collect();
     if name.is_empty() {
         return;
     }
-    let mut x = row.x + INSET;
-    put(buffer, x, row.y, ' ', Ink::Dim, palette);
-    x += 1;
-    for glyph in name.chars() {
-        put(buffer, x, row.y, glyph, Ink::Accent, palette);
-        x += 1;
-    }
-    put(buffer, x, row.y, ' ', Ink::Dim, palette);
-}
-
-fn ruled(buffer: &mut Buffer, row: Rect, palette: &Palette) {
-    for x in row.x..row.right() {
-        put(buffer, x, row.y, RULE, Ink::Dim, palette);
-    }
+    pen::write(
+        buffer,
+        Rect {
+            x: row.x + INSET,
+            width: row.width.saturating_sub(INSET + 1),
+            height: 1,
+            ..row
+        },
+        &[(" ", Ink::Dim), (name, Ink::Accent), (" ", Ink::Dim)],
+        Clip::Edge,
+        palette,
+    );
 }
 
 fn each(area: Rect, buffer: &mut Buffer, mut edit: impl FnMut(&mut Cell)) {
@@ -172,12 +175,5 @@ fn each(area: Rect, buffer: &mut Buffer, mut edit: impl FnMut(&mut Cell)) {
                 edit(cell);
             }
         }
-    }
-}
-
-fn put(buffer: &mut Buffer, x: u16, y: u16, glyph: char, ink: Ink, palette: &Palette) {
-    if let Some(cell) = buffer.cell_mut((x, y)) {
-        cell.set_char(glyph);
-        cell.set_style(ink.style(palette));
     }
 }
