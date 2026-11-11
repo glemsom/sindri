@@ -135,8 +135,9 @@ dimmed is a face on the accent and never a second ink.
 _Avoid_: Style, emphasis, attribute
 
 **Palette**:
-The colours the seven inks, the three bands and the two edges are drawn in, resolved once at boot
-from what the terminal says it can do: one design, spelled in truecolour, in ANSI, or not at all.
+The colours the seven inks, the three bands and the ramp a raised surface is drawn on, resolved once
+at boot from what the terminal says it can do: one design, spelled in truecolour, in ANSI, or not at
+all.
 _Avoid_: Theme, scheme, colours
 
 **Band**:
@@ -145,9 +146,14 @@ the well a code fence sits in. A cell on a band still reads back as its ink.
 _Avoid_: Panel, colour, stripe
 
 **Edge**:
-The light a raised surface catches along its top and the shadow it leaves under its bottom: two
-colours a boundary is drawn on, beside the three bands, and never an ink.
+The light a raised surface catches along its top and the shadow it leaves under its bottom: the two
+ends of a ramp, beside the three bands, and never an ink.
 _Avoid_: Border, elevation, highlight
+
+**Ramp**:
+The grounds a raised surface's face is drawn in, one per row, from the lit edge along its top to the
+shadow under its bottom, so a band of any height reads as one panel and its cells keep their ink.
+_Avoid_: Gradient, fade, shading
 
 **Meter**:
 The six cells a share of a window is drawn as, filled to the share: a ceiling can be a meter, and a
