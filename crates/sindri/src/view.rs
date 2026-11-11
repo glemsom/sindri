@@ -20,7 +20,7 @@ use crate::door;
 use crate::graphics::CellSize;
 use crate::ink::Ink;
 use crate::keys::{Act, Mode, Stack};
-use crate::ledger::{Boot, Facts, Shape};
+use crate::ledger::{Boot, Facts, Shape, Share};
 use crate::mark::{Cell, Mark, Span};
 use crate::models::Models;
 use crate::palette::{Band, Palette};
@@ -30,7 +30,7 @@ use crate::picture::Surface;
 use crate::pictures::Pictures;
 use crate::pulse::Pulse;
 use crate::queue::Queue;
-use crate::rail::{self, Share};
+use crate::rail;
 use crate::rows::{Row, Rows, Scroll, wrap};
 use crate::settings::Settings;
 use crate::stats::Stats;
@@ -574,7 +574,7 @@ impl View {
                 rail: None,
             };
         }
-        rail::split(&self.rail, band)
+        crate::ledger::split(&self.rail, band)
     }
 
     /// The turn in flight is the one entry laid out again on every paint; every other row comes

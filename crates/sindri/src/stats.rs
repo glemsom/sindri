@@ -7,16 +7,16 @@ use sindri_core::run::State as RunState;
 
 use crate::ink::Ink;
 use crate::ledger::{
-    Facts, Halves, Kind, METER, Shape, Value, head, hit_rate, more, pair, tail, tokens,
+    Facts, Halves, Kind, METER, Shape, Value, hairline, hanging, head, hit_rate, label_row, more,
+    pair, tail, tokens, value_room,
 };
 use crate::palette::Palette;
 use crate::pen;
-use crate::rail::{hairline, hanging, label_row, value_room};
 
 /// A band that cannot hold one gets one anyway.
 const MIN_COLUMN: u16 = 40;
 
-/// Not the rail's gap, which separates two facts on one row: this one sits between columns.
+/// Not the strip's gap, which separates two facts on one row: this one sits between columns.
 const COLUMN_GAP: u16 = 2;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -409,7 +409,7 @@ mod tests {
     use sindri_core::wire::Wire;
 
     use super::*;
-    use crate::ledger::Ctx;
+    use crate::ledger::{Ctx, FIELD};
     use crate::readback::{column_of, inks};
 
     const PALETTE: Palette = Palette::TRUECOLOR;
@@ -525,7 +525,7 @@ mod tests {
     fn row_of(label: &str, value: &str, width: u16) -> String {
         format!(
             "{label:<field$}{value:>room$}",
-            field = usize::from(crate::rail::FIELD),
+            field = usize::from(FIELD),
             room = value_room(width)
         )
     }
