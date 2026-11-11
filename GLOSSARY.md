@@ -35,11 +35,25 @@ _Avoid_: Progress, notice, indicator
 ## The facts
 
 **Ledger**:
-The one module that holds a run's **facts** and the one way each **value** is spelled — the size in
-tokens, the pair whose halves line up on a slash, the meter a share fills and the ink it is read in,
-the head of a name, the tail of a path, the em dash a fact is owed, the first eight of a GUID. No
-drawing spells a fact for itself, so a fact reads one way wherever it is said.
-_Avoid_: Facts module, status bar, sidebar (the rail is what draws it)
+The one module that holds a run's **facts**, the one way each **value** is spelled, and the rows the
+facts are laid out in — the size in tokens, the pair whose halves line up on a slash, the meter a
+share fills and the ink it is read in, the head of a name, the tail of a path, the em dash a fact is
+owed, the first eight of a GUID, the blocks and the order they are read in, the hairline between two
+that both kept a fact, the order facts are given up in, and the row that counts what went. No drawing
+spells a fact for itself, and no drawing decides where one goes: a fact reads one way wherever it is
+said.
+_Avoid_: Facts module, layout module, status bar, sidebar
+
+**Rail**:
+The ledger's adapter to a frame: a band in, the rows the ledger lays there drawn, and no rule of its
+own about which fact goes where.
+_Avoid_: Status bar, sidebar, panel, dock
+
+**Strip**:
+The shape the rail draws below a hundred columns: the ledger's row along a band's bottom row, read
+left to right with a gap between two facts and its count at the end. The other shape is the
+ledger's own column, beside the transcript.
+_Avoid_: Status line, footer bar, ticker
 
 **Fact**:
 One named thing a run holds, drawn as a label and a **value**: the wire, the served name, thinking,

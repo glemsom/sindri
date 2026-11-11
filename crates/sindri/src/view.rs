@@ -20,7 +20,7 @@ use crate::door;
 use crate::graphics::CellSize;
 use crate::ink::Ink;
 use crate::keys::{Act, Mode, Stack};
-use crate::ledger::{Boot, Facts, Shape};
+use crate::ledger::{Boot, Facts, Shape, Share, split};
 use crate::mark::{Cell, Mark, Span};
 use crate::models::Models;
 use crate::palette::{Band, Palette};
@@ -30,7 +30,7 @@ use crate::picture::Surface;
 use crate::pictures::Pictures;
 use crate::pulse::Pulse;
 use crate::queue::Queue;
-use crate::rail::{self, Share};
+use crate::rail;
 use crate::rows::{Row, Rows, Scroll, wrap};
 use crate::settings::Settings;
 use crate::stats::Stats;
@@ -534,7 +534,7 @@ impl View {
         let bands = bands(area, self.composer.rows(), self.queue.rows());
         // The rail's share is taken from the transcript's band before the transcript is laid out
         // in what is left: a row's width is the width it is drawn at.
-        let share = self.split(bands.transcript);
+        let share = self.share(bands.transcript);
         if let Some((shape, rail)) = share.rail {
             rail::paint(&self.rail, shape, rail, buffer, &self.palette);
         }
@@ -567,14 +567,14 @@ impl View {
 
     /// The band the transcript and the rail share. A door is drawn with a ledger beside it or with
     /// no rail at all: a strip is a live run's one row, and no run is live at the door.
-    fn split(&self, band: Rect) -> Share {
+    fn share(&self, band: Rect) -> Share {
         if self.door && Shape::of(band.width) != Shape::Ledger {
             return Share {
                 transcript: band,
                 rail: None,
             };
         }
-        rail::split(&self.rail, band)
+        split(&self.rail, band)
     }
 
     /// The turn in flight is the one entry laid out again on every paint; every other row comes
@@ -1163,7 +1163,7 @@ mod tests {
         view.paint(area, &mut buffer);
 
         let band = crate::view::bands(area, view.composer().rows(), view.queue().rows()).transcript;
-        let transcript = view.split(band).transcript;
+        let transcript = view.share(band).transcript;
         (transcript.y..transcript.bottom())
             .map(|y| {
                 (transcript.x..transcript.right())
