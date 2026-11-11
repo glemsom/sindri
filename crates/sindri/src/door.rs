@@ -7,6 +7,7 @@ use ratatui::layout::Rect;
 
 use crate::ink::{Face, Ink, Look};
 use crate::palette::Palette;
+use crate::pen;
 use crate::rows::{Row, wrap_under};
 
 /// The columns the door is set from: the gutter an answer is set in.
@@ -31,7 +32,7 @@ const COMMANDS: [(&str, &str); 3] = [
 
 /// The columns between a command and the line that explains it: enough that the three lines start
 /// in one column whatever the width of the command they hang from.
-const HANG: usize = 2;
+const HANG: u16 = 2;
 
 /// Paints the door into the band the transcript is drawn in, indented as an answer is. A line
 /// wider than the band wraps under its own column, so a narrow frame is never shown half a word.
@@ -78,26 +79,21 @@ fn rows(room: u16) -> Vec<Row> {
 
     let column = COMMANDS
         .iter()
-        .map(|(command, _)| command.chars().count())
+        .map(|(command, _)| pen::cells(command))
         .max()
         .unwrap_or(0)
         + HANG;
+    let hang = pen::pad("", column);
     for (command, said) in COMMANDS {
-        let hanging = usize::from(room).saturating_sub(column);
-        let hanging = u16::try_from(hanging).unwrap_or(room);
+        let hanging = room.saturating_sub(column);
         let mut lines = wrap_under(said, hanging, hanging).into_iter();
         if let Some(first) = lines.next() {
             rows.push(Row::of([
-                (format!("{command:<column$}"), Look::plain(Ink::Accent)),
+                (pen::pad(command, column), Look::plain(Ink::Accent)),
                 (first, Look::plain(Ink::Dim)),
             ]));
         }
-        rows.extend(lines.map(|line| {
-            Row::of([(
-                format!("{}{line}", " ".repeat(column)),
-                Look::plain(Ink::Dim),
-            )])
-        }));
+        rows.extend(lines.map(|line| Row::of([(format!("{hang}{line}"), Look::plain(Ink::Dim))])));
     }
     rows
 }

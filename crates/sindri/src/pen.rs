@@ -22,6 +22,15 @@ pub fn cells(text: &str) -> u16 {
     u16::try_from(text.width()).unwrap_or(u16::MAX)
 }
 
+/// `text` followed by the blanks that bring it out to `columns`, measured by what it draws: a run
+/// hangs from its column because a wide glyph leaves one blank fewer behind it. A run already
+/// wider than its column is left whole, because the pen pads and never cuts.
+pub fn pad(text: &str, columns: u16) -> String {
+    let mut padded = String::from(text);
+    padded.push_str(&" ".repeat(usize::from(columns.saturating_sub(cells(text)))));
+    padded
+}
+
 /// Writes `spans` from `row`'s left edge, each in its own ink, advancing by measured columns and
 /// so leaving two behind every wide glyph.
 pub fn write(buffer: &mut Buffer, row: Rect, spans: &[(&str, Ink)], clip: Clip, palette: &Palette) {
@@ -150,6 +159,30 @@ mod tests {
             symbol(&roomy, 2),
             "a",
             "the glyph after a wide one starts in the column the wide one left"
+        );
+    }
+
+    #[test]
+    fn a_run_is_padded_out_to_the_column_it_hangs_from() {
+        assert_eq!(
+            pad("keys", 6),
+            "keys  ",
+            "two blanks bring four columns out to six"
+        );
+        assert_eq!(
+            pad("日本", 6),
+            "日本  ",
+            "two wide glyphs spend four of the six, so two blanks are left and not four"
+        );
+        assert_eq!(
+            cells(&pad("日本", 6)),
+            6,
+            "and the padded run reaches the column it was given, whatever it is made of"
+        );
+        assert_eq!(
+            pad("keys", 2),
+            "keys",
+            "a run wider than its column is left whole: the pen pads and never cuts"
         );
     }
 

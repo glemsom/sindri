@@ -23,6 +23,7 @@ use crate::keys::{Act, Mode, Stack};
 use crate::mark::{Cell, Mark, Span};
 use crate::models::Models;
 use crate::palette::{Band, Palette};
+use crate::pen::{self, Clip};
 use crate::picker::Picker;
 use crate::picture::Surface;
 use crate::pictures::Pictures;
@@ -56,7 +57,7 @@ const FLOOR: usize = 2;
 
 const HAIRLINE: char = '─';
 
-const KEYS_GAP: usize = 2;
+const KEYS_GAP: u16 = 2;
 
 const PICKER_QUERY: &str = "query: ";
 
@@ -67,7 +68,7 @@ const PICKER_EMPTY: &str = "no file answers";
 const ROW_MARK: &str = "\u{203a} ";
 const ROW_GAP: &str = "  ";
 
-const SETTINGS_GAP: usize = 2;
+const SETTINGS_GAP: u16 = 2;
 
 const MODELS_QUERY: &str = "query: ";
 
@@ -75,7 +76,7 @@ const MODELS_ASKING: &str = "asking the wire what it serves";
 
 const MODELS_EMPTY: &str = "no served name answers";
 
-const NAMES_GAP: usize = 2;
+const NAMES_GAP: u16 = 2;
 
 #[derive(Debug, Default, Clone)]
 pub struct View {
@@ -649,18 +650,18 @@ impl View {
         let Some(label) = self.queue.label() else {
             return;
         };
-        write(buffer, area, &[(&label, Ink::Dim)], &self.palette);
+        screen_row(buffer, area, area.y, &[(&label, Ink::Dim)], &self.palette);
     }
 
     fn composer_band(&self, area: Rect, buffer: &mut Buffer) {
         buffer.set_style(area, self.palette.ground(Some(Band::Composer)));
-        let hairline = Rect { height: 1, ..area };
-        for x in hairline.x..hairline.right() {
-            if let Some(cell) = buffer.cell_mut((x, hairline.y)) {
-                cell.set_char(HAIRLINE);
-                cell.set_style(Ink::Dim.style(&self.palette));
-            }
-        }
+        pen::rule(
+            buffer,
+            Rect { height: 1, ..area },
+            HAIRLINE,
+            Ink::Dim,
+            &self.palette,
+        );
 
         let draft = Rect {
             y: area.y.saturating_add(HAIRLINE_ROWS),
@@ -709,13 +710,11 @@ impl View {
         let name_width = modes
             .iter()
             .flat_map(|mode| mode.table())
-            .map(|binding| binding.name.chars().count() + KEYS_GAP)
+            .map(|binding| pen::cells(binding.name) + KEYS_GAP)
             .max()
             .unwrap_or(0);
-        let hang = format!("{:<name_width$}", "");
-        let room = area
-            .width
-            .saturating_sub(u16::try_from(name_width).unwrap_or(u16::MAX));
+        let hang = pen::pad("", name_width);
+        let room = area.width.saturating_sub(name_width);
         let mut y = area.y;
         for mode in modes {
             if y >= area.bottom() {
@@ -729,10 +728,9 @@ impl View {
                         return;
                     }
                     let name = match at {
-                        0 => binding.name,
-                        _ => &hang,
+                        0 => pen::pad(binding.name, name_width),
+                        _ => hang.clone(),
                     };
-                    let name = format!("{name:<name_width$}");
                     screen_row(
                         buffer,
                         area,
@@ -752,7 +750,7 @@ impl View {
     fn files_screen(&self, area: Rect, buffer: &mut Buffer) {
         let mut y = area.y;
         if y < area.bottom() {
-            screen_row(
+            cut_row(
                 buffer,
                 area,
                 y,
@@ -792,7 +790,7 @@ impl View {
     fn models_screen(&self, area: Rect, buffer: &mut Buffer) {
         let mut y = area.y;
         if y < area.bottom() {
-            screen_row(
+            cut_row(
                 buffer,
                 area,
                 y,
@@ -816,7 +814,7 @@ impl View {
         }
         let widest = rows
             .iter()
-            .map(|(id, _)| id.chars().count() + NAMES_GAP)
+            .map(|(id, _)| pen::cells(id) + NAMES_GAP)
             .max()
             .unwrap_or(0);
         for (at, (id, label)) in rows.iter().enumerate() {
@@ -828,7 +826,7 @@ impl View {
                 true => (ROW_MARK, Ink::Accent),
                 false => (ROW_GAP, Ink::Plain),
             };
-            let name = format!("{id:<widest$}");
+            let name = pen::pad(id, widest);
             cut_row(
                 buffer,
                 area,
@@ -844,7 +842,7 @@ impl View {
     fn settings_screen(&self, area: Rect, buffer: &mut Buffer) {
         let key_width = Config::KEYS
             .iter()
-            .map(|key| key.chars().count() + SETTINGS_GAP)
+            .map(|key| pen::cells(key) + SETTINGS_GAP)
             .max()
             .unwrap_or(0);
         let mut y = area.y;
@@ -856,7 +854,7 @@ impl View {
                 true => (ROW_MARK, Ink::Accent, Ink::Accent),
                 false => (ROW_GAP, Ink::Muted, Ink::Plain),
             };
-            let name = format!("{:<key_width$}", key);
+            let name = pen::pad(key, key_width);
             cut_row(
                 buffer,
                 area,
@@ -889,14 +887,7 @@ impl View {
     }
 
     fn footer(&self, area: Rect, buffer: &mut Buffer) {
-        let mut spans: Vec<(&str, Ink)> = Vec::new();
-        for (index, hint) in kept(area.width).into_iter().enumerate() {
-            if index > 0 {
-                spans.push((GAP, Ink::Dim));
-            }
-            spans.push((hint, Ink::Muted));
-        }
-        write(buffer, area, &spans, &self.palette);
+        hints_row(buffer, area, &HINTS, &self.palette);
     }
 }
 
@@ -979,10 +970,10 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16) -> Bands {
     }
 }
 
-/// Writes one row of a screen, each span in its own ink. A span that would run past the
-/// frame's right edge is not drawn at all: a screen's row is whole or it is not there.
+/// Writes one row of a screen, each span in its own ink. A row the frame's right edge has no room
+/// for is not drawn at all: a screen's row is whole or it is not there.
 fn screen_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)], palette: &Palette) {
-    write(
+    pen::write(
         buffer,
         Rect {
             y,
@@ -990,6 +981,7 @@ fn screen_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)], pa
             ..area
         },
         spans,
+        Clip::Whole,
         palette,
     );
 }
@@ -1000,32 +992,44 @@ fn draft_line(buffer: &mut Buffer, area: Rect, line: &str, palette: &Palette) {
     cut_row(buffer, area, area.y, &[(line, Ink::Plain)], palette);
 }
 
+/// Writes one row cut at the frame's right edge: a value that runs on is cut, where a hint or a
+/// fact is whole or not drawn.
 fn cut_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)], palette: &Palette) {
-    let mut x = area.x;
-    for (text, ink) in spans {
-        for glyph in text.chars() {
-            if x >= area.right() {
-                return;
-            }
-            if let Some(cell) = buffer.cell_mut((x, y)) {
-                cell.set_char(glyph);
-                cell.set_style(ink.style(palette));
-            }
-            x += 1;
+    pen::write(
+        buffer,
+        Rect {
+            y,
+            height: 1,
+            ..area
+        },
+        spans,
+        Clip::Edge,
+        palette,
+    );
+}
+
+/// Writes the hints `area` has room for, in survival order, as one row drawn through the pen.
+fn hints_row(buffer: &mut Buffer, area: Rect, hints: &[&str], palette: &Palette) {
+    let mut spans: Vec<(&str, Ink)> = Vec::new();
+    for (index, hint) in kept(hints, area.width).into_iter().enumerate() {
+        if index > 0 {
+            spans.push((GAP, Ink::Dim));
         }
+        spans.push((hint, Ink::Muted));
     }
+    pen::write(buffer, area, &spans, Clip::Whole, palette);
 }
 
 /// The hints a footer `width` columns wide draws, in survival order, stopping at the first that
 /// does not fit, gap included: a later and shorter hint is never taken in its place, because the
 /// order is the whole of what the table says.
-fn kept(width: u16) -> Vec<&'static str> {
-    let gap = GAP.chars().count();
-    let mut kept: Vec<&'static str> = Vec::new();
-    let mut taken = 0;
-    for hint in HINTS.iter().take(wanted(width)) {
-        let room = hint.chars().count() + if kept.is_empty() { 0 } else { gap };
-        if taken + room > usize::from(width) {
+fn kept<'a>(hints: &[&'a str], width: u16) -> Vec<&'a str> {
+    let gap = pen::cells(GAP);
+    let mut kept: Vec<&'a str> = Vec::new();
+    let mut taken: u16 = 0;
+    for hint in hints.iter().take(wanted(width)) {
+        let room = pen::cells(hint) + if kept.is_empty() { 0 } else { gap };
+        if taken.saturating_add(room) > width {
             break;
         }
         taken += room;
@@ -1039,23 +1043,6 @@ fn wanted(width: u16) -> usize {
         .iter()
         .find(|(from, _)| width >= *from)
         .map_or(FLOOR, |(_, hints)| *hints)
-}
-
-fn write(buffer: &mut Buffer, area: Rect, spans: &[(&str, Ink)], palette: &Palette) {
-    let mut x = area.x;
-    for (text, ink) in spans {
-        let width = u16::try_from(text.chars().count()).unwrap_or(u16::MAX);
-        if x.saturating_add(width) > area.right() {
-            return;
-        }
-        for glyph in text.chars() {
-            if let Some(cell) = buffer.cell_mut((x, area.y)) {
-                cell.set_char(glyph);
-                cell.set_style(ink.style(palette));
-            }
-            x += 1;
-        }
-    }
 }
 
 #[cfg(test)]
@@ -1325,6 +1312,30 @@ mod tests {
         }
     }
 
+    fn drawn_row(buffer: &Buffer, y: u16) -> String {
+        let area = buffer.area;
+        (area.x..area.right())
+            .map(|x| buffer.cell((x, y)).expect("a cell of the row").symbol())
+            .collect()
+    }
+
+    /// The hints a footer `width` columns wide draws from `hints`, as the row is left.
+    fn hints_drawn(hints: &[&str], width: u16) -> String {
+        let palette = Palette::TRUECOLOR;
+        let area = Rect::new(0, 0, width, 1);
+        let mut buffer = Buffer::empty(area);
+        hints_row(&mut buffer, area, hints, &palette);
+        let drawn: String = (area.x..area.right())
+            .map(|x| {
+                buffer
+                    .cell((x, area.y))
+                    .expect("a cell of the row")
+                    .symbol()
+            })
+            .collect();
+        drawn.trim_end().to_owned()
+    }
+
     fn footer(cols: u16, rows: u16) -> String {
         let mut view = View::boot();
         let area = screen(cols, rows);
@@ -1407,6 +1418,24 @@ mod tests {
     }
 
     #[test]
+    fn a_footer_hint_holding_a_wide_glyph_is_not_drawn_past_the_rows_edge() {
+        let hints = ["Enter", "日本"];
+
+        assert_eq!(
+            hints_drawn(&hints, 10),
+            "Enter",
+            "ten columns hold the first hint and neither the gap nor the four the wide one \
+             takes, so it is given up whole rather than drawn over the row's edge"
+        );
+        assert_eq!(
+            hints_drawn(&hints, 12),
+            "Enter · 日 本",
+            "and where the row does hold it, each wide glyph is drawn in the two columns it \
+             occupies and the row ends at its last one"
+        );
+    }
+
+    #[test]
     fn a_hint_the_row_has_no_room_for_is_not_drawn_at_all() {
         // Narrower than any frame a footer is drawn at, the row wins over the floor: a hint is
         // whole or not drawn, and the gap that would have introduced it goes with it.
@@ -1437,6 +1466,26 @@ mod tests {
     }
 
     #[test]
+    fn a_query_wider_than_the_body_is_cut_at_its_edge_and_not_dropped() {
+        let mut view = View::boot();
+        view.set_workspace(std::env::temp_dir());
+        view.key(Key::Char('@'));
+        for _ in 0..60 {
+            view.key(Key::Char('x'));
+        }
+
+        let area = screen(40, 12);
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+
+        assert_eq!(
+            drawn_row(&buffer, 1),
+            format!("  query: {}  ", "x".repeat(29)),
+            "a forty-column frame gives the card's body thirty-six, so the query is cut at the body's last column rather than dropped or drawn past it"
+        );
+    }
+
+    #[test]
     fn a_screen_has_no_caret_for_the_terminal_to_put_anywhere() {
         let mut view = View::boot();
         let area = screen(40, 12);
@@ -1452,6 +1501,21 @@ mod tests {
             None,
             "a screen is the whole frame and has no draft in it, so the caret is not left \
              floating over a list"
+        );
+    }
+
+    #[test]
+    fn a_draft_holding_a_wide_glyph_puts_the_caret_in_the_column_the_glyph_occupies() {
+        let view = View::typing({
+            let mut composer = Composer::new();
+            composer.paste("日本");
+            composer
+        });
+
+        assert_eq!(
+            view.cursor(screen(40, 12)),
+            Some((4, 10)),
+            "two wide glyphs take four columns, so the caret waits in the fourth"
         );
     }
 
