@@ -153,7 +153,8 @@ _Avoid_: Border, elevation, highlight
 
 **Ramp**:
 The grounds a raised surface's face is drawn in, one per row, from the lit edge along its top to the
-shadow under its bottom, so a band of any height reads as one panel and its cells keep their ink.
+shadow under its bottom, so a band of any height reads as one raised surface and its cells keep
+their ink.
 _Avoid_: Gradient, fade, shading
 
 **Meter**:

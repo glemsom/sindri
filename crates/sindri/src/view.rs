@@ -1123,11 +1123,11 @@ mod tests {
 
     /// A frame holding a draft of `lines` lines painted in `palette` at `cols` by `rows`, and the
     /// band the composer was drawn in.
-    fn panel(palette: Palette, lines: usize, cols: u16, rows: u16) -> (Buffer, Rect) {
+    fn composer(palette: Palette, lines: usize, cols: u16, rows: u16) -> (Buffer, Rect) {
         let draft: Vec<String> = (1..=lines).map(|line| line.to_string()).collect();
-        let mut composer = Composer::new();
-        composer.paste(&draft.join("\n"));
-        let mut view = View::typing(composer);
+        let mut typed = Composer::new();
+        typed.paste(&draft.join("\n"));
+        let mut view = View::typing(typed);
         view.set_palette(palette);
         let area = screen(cols, rows);
         let mut buffer = Buffer::empty(area);
@@ -1141,7 +1141,7 @@ mod tests {
         let palette = Palette::TRUECOLOR;
         for lines in 1..=5 {
             for (cols, rows) in [(120, 40), (60, 24)] {
-                let (buffer, band) = panel(palette, lines, cols, rows);
+                let (buffer, band) = composer(palette, lines, cols, rows);
 
                 for row in 0..band.height {
                     for x in band.x..band.right() {
@@ -1174,7 +1174,7 @@ mod tests {
     fn no_band_is_lit_twice_or_shadowed_twice_at_either_end_of_its_height() {
         let palette = Palette::TRUECOLOR;
         for lines in [1, 5] {
-            let (buffer, band) = panel(palette, lines, 120, 40);
+            let (buffer, band) = composer(palette, lines, 120, 40);
             let lit_and_shadowed = |edge: Edge| -> Vec<u16> {
                 (band.y..band.bottom())
                     .filter(|y| {
@@ -1186,7 +1186,8 @@ mod tests {
             assert_eq!(
                 band.height,
                 if lines == 1 { MIN_ROWS } else { MAX_ROWS },
-                "the draft of {lines} lines is not a band of {} rows",
+                "the draft of {lines} lines is a band of {} rows, so this draws neither end of \
+                 the heights a band takes",
                 band.height
             );
             assert_eq!(
@@ -1207,7 +1208,7 @@ mod tests {
                         under(&buffer, x, y),
                         Color::Reset,
                         "row {y} of the {}-row band leaves column {x} on the frame's own ground, \
-                         so a stripe of the frame is read behind the panel",
+                         so the frame is read through its own raised band",
                         band.height
                     );
                 }
@@ -1217,8 +1218,8 @@ mod tests {
 
     #[test]
     fn the_ramp_moves_the_surface_under_the_cells_and_never_the_ink() {
-        let (coloured, coloured_band) = panel(Palette::TRUECOLOR, 3, 120, 40);
-        let (flat, flat_band) = panel(Palette::SLOTS, 3, 120, 40);
+        let (coloured, coloured_band) = composer(Palette::TRUECOLOR, 3, 120, 40);
+        let (flat, flat_band) = composer(Palette::SLOTS, 3, 120, 40);
 
         assert_eq!(
             looks(&coloured, &Palette::TRUECOLOR),
@@ -1230,7 +1231,7 @@ mod tests {
 
     #[test]
     fn a_frame_with_no_colour_draws_the_composer_as_a_flat_band() {
-        let (buffer, band) = panel(Palette::SLOTS, 5, 120, 40);
+        let (buffer, band) = composer(Palette::SLOTS, 5, 120, 40);
         for y in band.y..band.bottom() {
             for x in band.x..band.right() {
                 assert_eq!(
@@ -1243,9 +1244,23 @@ mod tests {
     }
 
     #[test]
+    fn a_frame_with_one_row_to_give_the_composer_draws_it_lit() {
+        let palette = Palette::TRUECOLOR;
+        let (buffer, band) = composer(palette, 1, 60, 2);
+
+        assert_eq!(band.height, 1, "a two-row frame gives the composer one row");
+        assert_eq!(
+            under(&buffer, band.x, band.y),
+            palette.edge(Edge::Lit),
+            "one row has no room for both ends, so it is drawn lit and never on the frame's own \
+             ground"
+        );
+    }
+
+    #[test]
     fn sixty_columns_show_the_raised_band_and_lose_no_hint_from_the_footer() {
         let palette = Palette::TRUECOLOR;
-        let (buffer, band) = panel(palette, 1, 60, 24);
+        let (buffer, band) = composer(palette, 1, 60, 24);
 
         assert_eq!(
             under(&buffer, band.x, band.y),
@@ -1260,7 +1275,7 @@ mod tests {
         assert_eq!(
             drawn_row(&buffer, buffer.area.bottom() - 1).trim_end(),
             "Enter send · ? keys",
-            "the panel takes no row the footer had, and the floor of hints is still drawn"
+            "the raised band takes no row the footer had, and its floor of hints is drawn"
         );
     }
 

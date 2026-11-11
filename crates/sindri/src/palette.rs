@@ -267,6 +267,7 @@ fn tells_truecolor(term: Option<&str>, colorterm: Option<&str>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::composer::{MAX_ROWS, MIN_ROWS};
 
     /// The two spellings that name colours of their own; `SLOTS` wears the reader's theme instead.
     const SPELLED: [(&str, Palette); 2] =
@@ -419,13 +420,10 @@ mod tests {
         }
     }
 
-    /// The heights a raised band takes: two at rest, six at the ceiling a growing draft reaches.
-    const HEIGHTS: [u16; 5] = [2, 3, 4, 5, 6];
-
     #[test]
     fn a_raised_surface_ramps_from_the_lit_edge_down_to_the_shadow() {
         for (spelling, palette) in SPELLED {
-            for rows in HEIGHTS {
+            for rows in MIN_ROWS..=MAX_ROWS {
                 assert_eq!(
                     palette.step(0, rows),
                     palette.edge(Edge::Lit),
@@ -472,7 +470,7 @@ mod tests {
 
     #[test]
     fn a_surface_drawn_in_no_colour_ramps_nowhere() {
-        for rows in HEIGHTS {
+        for rows in MIN_ROWS..=MAX_ROWS {
             for row in 0..rows {
                 assert_eq!(
                     Palette::SLOTS.step(row, rows),
