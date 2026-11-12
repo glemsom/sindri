@@ -293,6 +293,40 @@ fn lines(path: &Path) -> Vec<Value> {
 }
 
 #[test]
+fn the_prompt_the_run_was_asked_is_the_first_entry_of_its_transcript() {
+    let ground = Ground::new();
+    let session = ground.session();
+    let mut record = ground.record(&session);
+
+    record.asked("triage this").expect("a prompt is recorded");
+    record.turn_started(1).expect("a turn start is recorded");
+    record
+        .answered(1, "one file.")
+        .expect("an answer is recorded");
+
+    let written = lines(&session.directory().join("transcript.jsonl"));
+    assert_eq!(
+        written,
+        vec![
+            json!({"kind": "prompt", "text": "triage this"}),
+            json!({"kind": "turn", "turn": 1}),
+            json!({"kind": "assistant", "turn": 1, "text": "one file."}),
+        ],
+        "what was asked is written before what came back: {written:?}"
+    );
+
+    let transcript = read_transcript(session.directory()).expect("the transcript reads");
+    assert_eq!(
+        transcript.entries().first(),
+        Some(&Entry::Prompt {
+            text: SecretSet::default().redact("triage this"),
+        }),
+        "and it reads back as the reader's own words"
+    );
+    assert_eq!(transcript.skipped(), 0, "nothing was skipped");
+}
+
+#[test]
 fn a_turn_start_writes_one_entry_and_moves_the_turn_count() {
     let ground = Ground::new();
     let session = ground.session();
@@ -545,6 +579,9 @@ fn no_line_of_the_record_carries_a_secret() {
     let mut record = ground.record(&session);
     let call = Call::new("bash", r#"{"command": "echo hunter2"}"#);
 
+    record
+        .asked("the key is hunter2, so triage this")
+        .expect("a prompt is recorded");
     record.turn_started(1).expect("a turn start is recorded");
     record.called(1, &call).expect("a call is recorded");
     record
@@ -570,8 +607,8 @@ fn no_line_of_the_record_carries_a_secret() {
         "the record is a window that cannot carry a secret: {written}"
     );
     assert!(
-        written.matches(MASK).count() >= 3,
-        "the arguments, the output and the answer are all masked: {written}"
+        written.matches(MASK).count() >= 4,
+        "the prompt, the arguments, the output and the answer are all masked: {written}"
     );
 }
 

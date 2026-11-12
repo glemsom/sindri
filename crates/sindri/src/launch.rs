@@ -215,6 +215,8 @@ impl Launch {
             .limits(self.limits)
             .tools(&self.tools)
             .cancel(cancel);
+        // Ahead of the turn loop, so the transcript opens with the words it answers.
+        note(self.record.asked(prompt));
         let mut measured = Usage::default();
         hand(turns, &self, &measured);
         while run.state().is_running() {

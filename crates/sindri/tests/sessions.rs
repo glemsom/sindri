@@ -170,6 +170,19 @@ impl State {
         state
     }
 
+    /// One finished run holding exactly the entries a test names, written by hand.
+    fn recording(&self, entries: &[Value]) -> PathBuf {
+        let directory = self.session(
+            FIRST,
+            "anthropic",
+            "a-model-read-off-the-wire",
+            "2024-03-01T00:00:00Z",
+            "final",
+        );
+        self.transcript(&directory, entries);
+        directory
+    }
+
     fn first_run_records(&self) -> PathBuf {
         let directory = self.session(
             FIRST,
@@ -253,6 +266,91 @@ fn sessions_show_reads_one_run_back_from_its_whole_guid() {
         text(&shown.stderr).is_empty(),
         "nothing is said on stderr: {}",
         text(&shown.stderr)
+    );
+}
+
+#[test]
+fn sessions_show_says_what_was_asked_before_it_says_what_came_back() {
+    let state = State::empty();
+    state.recording(&[
+        json!({"kind": "prompt", "text": "triage this"}),
+        json!({"kind": "turn", "turn": 1}),
+        json!({"kind": "assistant", "turn": 1, "text": "Hello world"}),
+    ]);
+
+    let shown = state.sindri(&["sessions", "show", FIRST]);
+
+    assert_eq!(
+        shown.status.code(),
+        Some(0),
+        "reading a run back is not a failure"
+    );
+    let said = text(&shown.stdout);
+    let asked = said
+        .find("triage this")
+        .unwrap_or_else(|| panic!("the reading says what was asked: {said}"));
+    let answered = said
+        .find("Hello world")
+        .unwrap_or_else(|| panic!("and what came back: {said}"));
+    assert!(
+        asked < answered,
+        "the prompt is printed ahead of the answer it got: {said}"
+    );
+}
+
+#[test]
+fn show_json_hands_on_the_prompt_beside_the_answer() {
+    let state = State::empty();
+    state.recording(&[
+        json!({"kind": "prompt", "text": "triage this"}),
+        json!({"kind": "turn", "turn": 1}),
+        json!({"kind": "assistant", "turn": 1, "text": "Hello world"}),
+    ]);
+
+    let shown = state.sindri(&["sessions", "show", FIRST, "--json"]);
+
+    assert_eq!(shown.status.code(), Some(0));
+    let said = text(&shown.stdout);
+    let printed: Value = serde_json::from_str(&said).expect("stdout is one JSON object");
+    assert_eq!(
+        printed["transcript"][0]["text"], "triage this",
+        "the prompt is the first entry the record holds: {said}"
+    );
+    assert_eq!(
+        printed["transcript"][2]["text"], "Hello world",
+        "and the answer still follows it: {said}"
+    );
+}
+
+#[test]
+fn a_record_written_before_the_prompt_was_a_fact_reads_with_no_prompt_line() {
+    let state = State::empty();
+    state.recording(&[
+        json!({"kind": "turn", "turn": 1}),
+        json!({"kind": "assistant", "turn": 1, "text": "Hello world"}),
+    ]);
+
+    let shown = state.sindri(&["sessions", "show", FIRST]);
+
+    assert_eq!(shown.status.code(), Some(0), "an older record still reads");
+    let said = text(&shown.stdout);
+    assert!(
+        said.contains("Hello world") && said.contains("turn 1"),
+        "everything else in the transcript reads as it did: {said}"
+    );
+    assert!(
+        !said.contains("prompt"),
+        "a prompt the record does not hold is absent rather than blank: {said}"
+    );
+
+    let as_json = state.sindri(&["sessions", "show", FIRST, "--json"]);
+    assert_eq!(as_json.status.code(), Some(0));
+    let said = text(&as_json.stdout);
+    let printed: Value = serde_json::from_str(&said).expect("stdout is one JSON object");
+    assert_eq!(
+        printed["transcript"].as_array().map(Vec::len),
+        Some(2),
+        "and the object hands on the two entries the file holds: {said}"
     );
 }
 

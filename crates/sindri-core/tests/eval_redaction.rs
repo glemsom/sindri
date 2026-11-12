@@ -108,6 +108,7 @@ fn walk(entry: &Entry) -> Vec<(&'static str, String)> {
         Entry::Assistant { turn, text } => {
             vec![("turn", turn.to_string()), ("text", text.to_string())]
         }
+        Entry::Prompt { text } => vec![("text", text.to_string())],
     }
 }
 
@@ -122,6 +123,9 @@ fn written(ground: &Ground) -> Vec<String> {
     let mut record = ground.record(&session);
     let call = Call::new(SECRET, format!(r#"{{"command": "echo {SECRET}"}}"#));
 
+    record
+        .asked(&format!("the key is {SECRET}, so triage this"))
+        .expect("a prompt is recorded");
     record.turn_started(1).expect("a turn start is recorded");
     record.called(1, &call).expect("a call is recorded");
     record
