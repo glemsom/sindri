@@ -134,8 +134,8 @@ fn footed(buffer: &mut Buffer, card: Rect, leaves: &str, palette: &Palette) {
         height: 1,
         ..card
     };
-    pen::rule(buffer, row, RULE, palette.plain_edge(), palette);
-    corners(buffer, card, row.y, BOTTOM, palette.plain_edge(), palette);
+    pen::rule(buffer, row, RULE, palette.dim_edge(), palette);
+    corners(buffer, card, row.y, BOTTOM, palette.dim_edge(), palette);
     pen::hang(
         buffer,
         Rect {
@@ -148,13 +148,14 @@ fn footed(buffer: &mut Buffer, card: Rect, leaves: &str, palette: &Palette) {
     );
 }
 
-/// The name hangs in the edge row the card takes the keys by, so the name is drawn in the accent
-/// the row is drawn in: the blanks either side of it are the row's own rule.
+/// The name hangs in the edge row the card takes the keys by, so it is the accent dimmed no more
+/// than the row it hangs in, and the blanks either side of it are that row's own rule.
 fn labelled(buffer: &mut Buffer, row: Rect, name: &str, palette: &Palette) {
     if name.is_empty() {
         return;
     }
     let edge = palette.accent_edge();
+    let named = Look::new(Ink::Accent, edge.face());
     pen::write(
         buffer,
         Rect {
@@ -163,7 +164,7 @@ fn labelled(buffer: &mut Buffer, row: Rect, name: &str, palette: &Palette) {
             height: 1,
             ..row
         },
-        &[(" ", edge), (name, edge), (" ", edge)],
+        &[(" ", edge), (name, named), (" ", edge)],
         Clip::Edge,
         palette,
     );

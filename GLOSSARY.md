@@ -154,7 +154,7 @@ _Avoid_: Border, elevation, highlight
 **Accent edge**:
 The accent in the faint face along the edge row of the one surface that takes the keys — the
 composer at rest, the card while a screen is open — where every surface that takes none keeps the
-dim rule, and a terminal that draws no colour is given neither. Not an **edge**: an edge is the
+dim edge, and a terminal that draws no colour is given neither. Not an **edge**: an edge is the
 ground a row is raised on, and this is the ink written on it.
 _Avoid_: Focus ring, highlight, active border
 

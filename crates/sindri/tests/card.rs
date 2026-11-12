@@ -254,6 +254,34 @@ fn every_screen_open_over_the_frame_carries_the_accent_on_the_edge_row_of_its_ca
 }
 
 #[test]
+fn a_card_drawn_in_no_colour_keeps_the_accent_on_its_name_and_draws_no_accent_edge() {
+    let palette = Palette::SLOTS;
+    let mut view = on_screen(Mode::Keys);
+    view.set_palette(palette);
+    let buffer = painted(&mut view, 120, 40);
+    let top = row(&buffer, 0);
+    let left = column_of(&buffer, 0, '╭').expect("a left corner");
+    let named_at = top
+        .find(name(Mode::Keys))
+        .expect("the screen's own name in the edge row of its card");
+    let named_at = sindri::pen::cells(&top[..named_at]);
+
+    assert_eq!(
+        look(&buffer, &palette, left, 0),
+        Look::plain(Ink::Dim),
+        "the card's edge row is the dim edge it always drew: a reader who asked for no colour is \
+         given no accent edge to see, and their focus is carried by the card's border and the \
+         scrim"
+    );
+    assert_eq!(
+        look(&buffer, &palette, named_at, 0),
+        Look::plain(Ink::Accent),
+        "and the name that row carries is the accent it always was, so every screen such a \
+         terminal draws is the screen it drew before: {top:?}"
+    );
+}
+
+#[test]
 fn the_frame_behind_a_card_is_painted_and_dimmed() {
     let mut view = drafted();
     let palette = view.palette();

@@ -680,7 +680,7 @@ impl View {
             buffer,
             Rect { height: 1, ..area },
             HAIRLINE,
-            self.edge_row(),
+            self.composer_edge(),
             &self.palette,
         );
 
@@ -704,11 +704,11 @@ impl View {
     }
 
     /// The look the composer's edge row is drawn in: the accent while the draft takes the keys, and
-    /// the plain edge while a screen is open over it.
-    fn edge_row(&self) -> Look {
+    /// the dim edge while a screen is open over it.
+    fn composer_edge(&self) -> Look {
         match self.stack.modal() {
             None => self.palette.accent_edge(),
-            Some(_) => self.palette.plain_edge(),
+            Some(_) => self.palette.dim_edge(),
         }
     }
 
@@ -1262,7 +1262,7 @@ mod tests {
     }
 
     #[test]
-    fn the_ramp_moves_the_surface_under_the_cells_and_never_the_ink() {
+    fn the_ramp_moves_the_surface_under_the_cells_and_adds_no_ink_but_the_accent_edge() {
         let (coloured, band) = composer(Palette::TRUECOLOR, 3, 120, 40);
         let (flat, flat_band) = composer(Palette::SLOTS, 3, 120, 40);
         assert_eq!(band, flat_band);
@@ -1304,8 +1304,6 @@ mod tests {
             let mut buffer = Buffer::empty(area);
             view.paint(area, &mut buffer);
             let band = bands(area, view.composer().rows(), view.queue().rows()).composer;
-            // The card is as tall as the frame and covers the composer down to its last row, so
-            // the edge row the reader still sees is the one in the card's two gutters.
             let (left, right) = card_columns(&buffer);
             assert!(
                 band.x < left && right + 1 < band.right(),
@@ -1314,12 +1312,15 @@ mod tests {
                 band.x,
                 band.right()
             );
+            // The card is as tall as the frame and covers the composer down to its last row, so
+            // the composer's edge row is read in the card's two gutters, where the scrim would
+            // have left an accent bright rather than dimmed.
             for x in (band.x..left).chain(right + 1..band.right()) {
                 assert_eq!(
                     look_at(&buffer, &palette, x, band.y),
-                    palette.plain_edge(),
-                    "column {x} of the composer's edge row under {} is not the plain edge, and \
-                     the card is the surface that takes the keys",
+                    palette.dim_edge(),
+                    "column {x} of the composer's edge row under {} is not the dim edge, and the \
+                     card is the surface that takes the keys",
                     mode.name()
                 );
             }

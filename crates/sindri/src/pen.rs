@@ -7,7 +7,7 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use unicode_width::UnicodeWidthStr;
 
-use crate::ink::{Ink, Look};
+use crate::ink::Look;
 use crate::palette::Palette;
 
 /// How much of a run a row has no room for.
@@ -77,14 +77,21 @@ pub fn write<S: AsRef<str>, D: Copy + Into<Look>>(
 
 /// Writes `text` from column `x` of row `y` and answers the column after it: the run is measured
 /// by what it draws, so a wide glyph leaves the column behind it blank and is never cut in half.
-pub fn run(buffer: &mut Buffer, x: u16, y: u16, text: &str, ink: Ink, palette: &Palette) -> u16 {
+pub fn run(
+    buffer: &mut Buffer,
+    x: u16,
+    y: u16,
+    text: &str,
+    look: impl Into<Look>,
+    palette: &Palette,
+) -> u16 {
     let row = Rect {
         x,
         y,
         width: buffer.area.right().saturating_sub(x),
         height: 1,
     };
-    write(buffer, row, &[(text, ink)], Clip::Edge, palette);
+    write(buffer, row, &[(text, look.into())], Clip::Edge, palette);
     x.saturating_add(cells(text))
 }
 
