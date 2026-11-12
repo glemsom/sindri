@@ -2,14 +2,16 @@
 //! event-stream decoding, against replies recorded from the two providers. Nothing reaches the
 //! network: the transport hands back recorded bytes, so only the socket is missing.
 
+use serde_json::{Value, json};
 use sindri_core::provider::transport::{Canned, Http, Replay};
-use sindri_core::provider::{Ask, Client, Credential, Deltas, Verdict};
+use sindri_core::provider::{Ask, Client, Credential, Deltas, Earlier, Route, Verdict};
 use sindri_core::redact::SecretSet;
 use sindri_core::wire::Wire;
 
 const ANTHROPIC: &str = include_str!("fixtures/providers/anthropic_stream.sse");
 const ANTHROPIC_TRUNCATED: &str = include_str!("fixtures/providers/anthropic_truncated.sse");
 const OPENAI_RESPONSES: &str = include_str!("fixtures/providers/openai_responses_stream.sse");
+const CHAT: &str = include_str!("fixtures/providers/copilot_chat_stream.sse");
 const BAD_REQUEST: &str = r#"{"error":{"message":"unknown model","type":"invalid_request_error"}}"#;
 
 #[derive(Debug, Default)]
@@ -244,5 +246,81 @@ fn a_credential_is_never_printed() {
     assert_eq!(
         Credential::new("sk-do-not-print-me"),
         Credential::new("sk-do-not-print-me")
+    );
+}
+
+fn turned(prompt: &str, answer: &str) -> Earlier {
+    Earlier::new(prompt, answer)
+}
+
+fn sent_body(replay: &Replay) -> Value {
+    serde_json::from_str(&replay.requests()[0].body).expect("a wire's body is JSON")
+}
+
+#[test]
+fn an_openai_ask_on_the_responses_route_replays_the_turns_that_ended_before_it() {
+    let replay = Replay::new([Canned::stream(OPENAI_RESPONSES)]);
+    let ask = Ask::new(Wire::Openai, "gpt-5")
+        .key("sk-recorded")
+        .prompt("what is my name?")
+        .earlier([turned("hi my name is Glenn", "nice to meet you, Glenn")]);
+
+    client_over(&replay)
+        .ask(&ask, &mut Transcript::default())
+        .expect("a recorded reply answers");
+
+    let body = sent_body(&replay);
+    assert_eq!(
+        body["input"],
+        json!([
+            {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "hi my name is Glenn"}]
+            },
+            {
+                "type": "message",
+                "role": "assistant",
+                "id": "msg_rig_1",
+                "status": "completed",
+                "content": [
+                    {
+                        "type": "output_text",
+                        "text": "nice to meet you, Glenn",
+                        "annotations": []
+                    }
+                ]
+            },
+            {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "what is my name?"}]
+            },
+        ]),
+        "the earlier prompt and its answer are the route's own messages, ahead of the new prompt"
+    );
+}
+
+#[test]
+fn an_openai_ask_on_the_chat_route_replays_them_the_way_that_route_spells_them() {
+    let replay = Replay::new([Canned::stream(CHAT)]);
+    let ask = Ask::new(Wire::Openai, "gpt-4o")
+        .key("sk-recorded")
+        .prompt("what is my name?")
+        .route(Route::Chat)
+        .earlier([turned("hi my name is Glenn", "nice to meet you, Glenn")]);
+
+    client_over(&replay)
+        .ask(&ask, &mut Transcript::default())
+        .expect("a recorded reply answers");
+
+    assert_eq!(
+        sent_body(&replay)["messages"],
+        json!([
+            {"role": "user", "content": "hi my name is Glenn"},
+            {"role": "assistant", "content": "nice to meet you, Glenn"},
+            {"role": "user", "content": "what is my name?"},
+        ]),
+        "the same conversation reads the same on either route"
     );
 }

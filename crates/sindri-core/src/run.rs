@@ -343,9 +343,12 @@ impl Reply {
     }
 }
 
+/// One turn as it ended: the prompt it was asked with beside the answer it got, the calls it
+/// asked for and what the ask spent.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Exchange {
     pub turn: u32,
+    pub prompt: String,
     pub text: String,
     pub calls: Vec<Call>,
     pub usage: Usage,
@@ -355,6 +358,7 @@ pub struct Exchange {
 pub struct Request {
     turn: u32,
     prompt: String,
+    earlier: Vec<Exchange>,
     history: Vec<Exchange>,
     skills: Vec<String>,
     tools: Vec<String>,
@@ -367,6 +371,11 @@ impl Request {
 
     pub fn prompt(&self) -> &str {
         &self.prompt
+    }
+
+    /// The prompts that ended before this run, each beside the answer it got, in order.
+    pub fn earlier(&self) -> &[Exchange] {
+        &self.earlier
     }
 
     pub fn history(&self) -> &[Exchange] {
@@ -436,6 +445,7 @@ pub struct Run<R, A> {
     spent: Spent,
     turns: u32,
     skills: Loaded,
+    earlier: Vec<Exchange>,
     history: Vec<Exchange>,
     answer: Option<String>,
     state: State,
@@ -453,6 +463,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
             spent: Spent::default(),
             turns: 0,
             skills: Loaded::default(),
+            earlier: Vec::new(),
             history: Vec::new(),
             answer: None,
             state: State::Running,
@@ -470,6 +481,14 @@ impl<R: Responder, A: Executor> Run<R, A> {
             .iter()
             .map(|tool| String::from(tool.name()))
             .collect();
+        self
+    }
+
+    /// The prompts that ended before this run, each beside the answer it got, handed to every
+    /// request of the run so a wire is asked with the conversation the prompt joins rather than
+    /// with the prompt alone.
+    pub fn earlier(mut self, earlier: impl IntoIterator<Item = Exchange>) -> Self {
+        self.earlier = earlier.into_iter().collect();
         self
     }
 
@@ -515,6 +534,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
 
     pub fn clear_history(&mut self) {
         self.history.clear();
+        self.earlier.clear();
         self.skills.clear();
     }
 
@@ -546,6 +566,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
         };
         self.history.push(Exchange {
             turn: self.turns,
+            prompt: self.prompt.clone(),
             text: reply.text.clone(),
             calls: reply.calls.clone(),
             usage: reply.usage,
@@ -588,6 +609,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
         Request {
             turn: self.turns,
             prompt: self.prompt.clone(),
+            earlier: self.earlier.clone(),
             history: self.history.clone(),
             skills: self.skills.names().to_vec(),
             tools: self.tools.clone(),

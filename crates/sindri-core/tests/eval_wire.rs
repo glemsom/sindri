@@ -4,7 +4,7 @@
 
 use serde_json::{Map, Value, json};
 use sindri_core::provider::transport::{Canned, Replay};
-use sindri_core::provider::{Ask, Client, Route};
+use sindri_core::provider::{Ask, Client, Earlier, Route};
 use sindri_core::redact::SecretSet;
 use sindri_core::wire::Wire;
 
@@ -60,6 +60,30 @@ fn cases() -> Vec<(&'static str, Ask, &'static str)> {
                 .preamble("You are a shell.")
                 .prompt("Say hello"),
             CHAT,
+        ),
+        (
+            "anthropic-replayed",
+            Ask::new(Wire::Anthropic, "claude-sonnet-4-6")
+                .key(KEY)
+                .preamble("You are a shell.")
+                .earlier([
+                    Earlier::new("hi my name is Glenn", "nice to meet you, Glenn"),
+                    Earlier::new("is it raining?", "it is raining"),
+                ])
+                .prompt("what is my name?"),
+            ANTHROPIC,
+        ),
+        (
+            "openai-responses-replayed",
+            Ask::new(Wire::Openai, "gpt-5")
+                .key(KEY)
+                .preamble("You are a shell.")
+                .earlier([
+                    Earlier::new("hi my name is Glenn", "nice to meet you, Glenn"),
+                    Earlier::new("is it raining?", "it is raining"),
+                ])
+                .prompt("what is my name?"),
+            OPENAI_RESPONSES,
         ),
         (
             "gateway-responses",

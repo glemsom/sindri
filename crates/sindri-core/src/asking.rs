@@ -4,7 +4,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::provider::{Ask, Client, Deltas, Failure};
+use crate::provider::{Ask, Client, Deltas, Earlier, Failure};
 use crate::records::Usage;
 use crate::run::{Reply, Request, Responder};
 
@@ -32,7 +32,15 @@ impl Asking {
     }
 
     fn ask(&self, request: &Request) -> Ask {
-        self.ask.clone().prompt(request.prompt())
+        self.ask
+            .clone()
+            .earlier(
+                request
+                    .earlier()
+                    .iter()
+                    .map(|ended| Earlier::new(ended.prompt.as_str(), ended.text.as_str())),
+            )
+            .prompt(request.prompt())
     }
 }
 

@@ -1,0 +1,72 @@
+{
+  "body": {
+    "input": [
+      {
+        "content": [
+          {
+            "text": "hi my name is Glenn",
+            "type": "input_text"
+          }
+        ],
+        "role": "user",
+        "type": "message"
+      },
+      {
+        "content": [
+          {
+            "annotations": [],
+            "text": "nice to meet you, Glenn",
+            "type": "output_text"
+          }
+        ],
+        "id": "msg_rig_2",
+        "role": "assistant",
+        "status": "completed",
+        "type": "message"
+      },
+      {
+        "content": [
+          {
+            "text": "is it raining?",
+            "type": "input_text"
+          }
+        ],
+        "role": "user",
+        "type": "message"
+      },
+      {
+        "content": [
+          {
+            "annotations": [],
+            "text": "it is raining",
+            "type": "output_text"
+          }
+        ],
+        "id": "msg_rig_4",
+        "role": "assistant",
+        "status": "completed",
+        "type": "message"
+      },
+      {
+        "content": [
+          {
+            "text": "what is my name?",
+            "type": "input_text"
+          }
+        ],
+        "role": "user",
+        "type": "message"
+      }
+    ],
+    "instructions": "You are a shell.",
+    "model": "gpt-5",
+    "stream": true
+  },
+  "headers": {
+    "accept": "text/event-stream",
+    "authorization": "Bearer «redacted»",
+    "content-type": "application/json"
+  },
+  "method": "POST",
+  "url": "https://api.openai.com/v1/responses"
+}

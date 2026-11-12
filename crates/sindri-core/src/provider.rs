@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use futures::StreamExt as _;
 use rig_core::Model;
-use rig_core::completion::message::AssistantContent;
+use rig_core::completion::message::{AssistantContent, Message};
 use rig_core::completion::{
     CompletionRequest, CompletionResponse, Effort, GenerationOptions, Reasoning,
 };
@@ -56,6 +56,23 @@ impl fmt::Debug for Credential {
     }
 }
 
+/// A prompt beside the answer it got, which a later ask replays ahead of its own prompt so a wire
+/// is asked with the conversation and not only with the newest words.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Earlier {
+    prompt: String,
+    answer: String,
+}
+
+impl Earlier {
+    pub fn new(prompt: impl Into<String>, answer: impl Into<String>) -> Earlier {
+        Earlier {
+            prompt: prompt.into(),
+            answer: answer.into(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ask {
     wire: Wire,
@@ -63,6 +80,7 @@ pub struct Ask {
     base_url: Option<String>,
     credential: Credential,
     preamble: Option<String>,
+    earlier: Vec<Earlier>,
     prompt: String,
     thinking: bool,
     route: Option<Route>,
@@ -76,6 +94,7 @@ impl Ask {
             base_url: None,
             credential: Credential::none(),
             preamble: None,
+            earlier: Vec::new(),
             prompt: String::new(),
             thinking: false,
             route: None,
@@ -89,6 +108,17 @@ impl Ask {
 
     pub fn preamble(mut self, preamble: impl Into<String>) -> Self {
         self.preamble = Some(preamble.into());
+        self
+    }
+
+    /// The prompts that ended before this ask, each beside the answer it got, replayed ahead of
+    /// its own prompt as the dialect's own messages, in order. A prompt with no answer is not
+    /// replayed: every dialect refuses an empty message.
+    pub fn earlier(mut self, earlier: impl IntoIterator<Item = Earlier>) -> Self {
+        self.earlier = earlier
+            .into_iter()
+            .filter(|ended| !ended.answer.trim().is_empty())
+            .collect();
         self
     }
 
@@ -136,8 +166,21 @@ impl Ask {
         endpoint
     }
 
+    /// Each earlier prompt and its answer, as the dialect's own messages, in order.
+    fn replayed(&self) -> Vec<Message> {
+        self.earlier
+            .iter()
+            .flat_map(|ended| {
+                [
+                    Message::user(ended.prompt.clone()),
+                    Message::assistant(ended.answer.clone()),
+                ]
+            })
+            .collect()
+    }
+
     fn request(&self) -> CompletionRequest {
-        let mut request = CompletionRequest::new(self.prompt.clone());
+        let mut request = CompletionRequest::new(self.prompt.clone()).messages(self.replayed());
         if let Some(preamble) = &self.preamble {
             request = request.preamble(preamble.clone());
         }
