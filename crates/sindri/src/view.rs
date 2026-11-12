@@ -536,16 +536,16 @@ impl View {
         // The rail's share is taken from the transcript's band before the transcript is laid out
         // in what is left: a row's width is the width it is drawn at.
         let share = self.split(bands.transcript);
-        if let Some((shape, rail)) = share.rail {
-            // The face is decoration over the rail's top rows, and the facts are laid under it: a
-            // strip is one row and no band, and a terminal that places no picture reserves none.
+        if let Some((shape, band)) = share.rail {
+            // A strip is one row of facts and no band, and a terminal that places no picture is
+            // handed no cells: the face is drawn only where a rail reserved rows for it.
             let picture = match shape {
-                Rail::Ledger => face::over(rail.area.width, &self.surface()),
+                Rail::Ledger => face::over_rail(band.area.width, &self.surface()),
                 Rail::Strip => None,
             };
             let band = match &picture {
-                Some(picture) => rail.with_picture(picture.cols(), picture.rows()),
-                None => rail,
+                Some(picture) => band.with_picture(picture.cols(), picture.rows()),
+                None => band,
             };
             rail::paint(&self.rail, shape, band, buffer, &self.palette);
             if let (Some(picture), Some(cells)) = (&picture, band.picture) {

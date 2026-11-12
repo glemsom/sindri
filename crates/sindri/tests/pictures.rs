@@ -8,12 +8,12 @@ use image::{Rgba, RgbaImage};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 
 use sindri::composer::{Key, Outcome};
 use sindri::face;
 use sindri::graphics::{Ceiling, CellSize};
-use sindri::ledger::{COLUMNS, Ctx, Facts};
+use sindri::ledger::{self, COLUMNS, Ctx, Facts};
 use sindri::mark::Cell;
 use sindri::markdown;
 use sindri::picture::{self, Surface};
@@ -399,13 +399,7 @@ const TRANSMIT: &str = "_Gq=2,";
 fn pictured_rows(buffer: &Buffer) -> Vec<u16> {
     let area = buffer.area;
     (area.y..area.bottom())
-        .filter(|y| {
-            (area.x..area.right()).any(|x| {
-                buffer
-                    .cell((x, *y))
-                    .is_some_and(|cell| cell.symbol().contains(PLACEHOLDER))
-            })
-        })
+        .filter(|y| !pictured_cols(buffer, *y).is_empty())
         .collect()
 }
 
@@ -474,14 +468,23 @@ fn railed(draws: bool) -> View {
     view
 }
 
-/// The rail's band at `(cols, rows)`: the last thirty-two columns beside a transcript, from the
-/// frame's first row down to the composer's.
+/// The band the transcript and the rail share in a `cols` by `rows` frame: everything above the
+/// two rows the composer rests at and the one the footer takes.
+fn shared_band(cols: u16, rows: u16) -> Rect {
+    Rect {
+        x: 0,
+        y: 0,
+        width: cols,
+        height: rows - 3,
+    }
+}
+
+/// The rail's own columns of that band: the last thirty-two, down the frame's right-hand edge.
 fn rail_band(cols: u16, rows: u16) -> Rect {
     Rect {
         x: cols - COLUMNS,
-        y: 0,
         width: COLUMNS,
-        height: rows - 3,
+        ..shared_band(cols, rows)
     }
 }
 
@@ -924,12 +927,13 @@ fn the_face_is_placed_over_the_top_rows_of_the_rail_above_the_first_block() {
         let mut view = railed(true);
         let painted = painted_at(&mut view, (cols, 40));
         let rail = rail_band(cols, 40);
-        let face = face::over(rail.width, &carried(true)).expect("the face a rail holds");
+        let face = face::over_rail(rail.width, &carried(true)).expect("the face a rail holds");
 
         assert_eq!(
             pictured_rows(&painted),
             (rail.y..rail.y + face.rows()).collect::<Vec<u16>>(),
-            "the face is drawn in the {cols}-column frame's top rows, {} of them from the rail's              first row",
+            "the face is drawn in the {cols}-column frame's top rows, {} of them, from the rail's first \
+             row",
             face.rows()
         );
         for y in rail.y..rail.y + face.rows() {
@@ -1049,7 +1053,8 @@ fn the_face_is_capped_at_twelve_rows_and_keeps_its_shape() {
     let surface = carried(true);
 
     for cols in [32, 40, 60, 120] {
-        let measured = face::over(cols, &surface).expect("a rail a terminal places pictures in");
+        let measured =
+            face::over_rail(cols, &surface).expect("a rail a terminal places pictures in");
         assert_eq!(
             (measured.cols(), measured.rows()),
             (19, 11),
@@ -1058,7 +1063,7 @@ fn the_face_is_capped_at_twelve_rows_and_keeps_its_shape() {
         );
     }
 
-    let narrow = face::over(16, &surface).expect("a narrow rail draws it too");
+    let narrow = face::over_rail(16, &surface).expect("a narrow rail draws it too");
     assert_eq!(
         (narrow.cols(), narrow.rows()),
         (16, 10),
@@ -1066,7 +1071,7 @@ fn the_face_is_capped_at_twelve_rows_and_keeps_its_shape() {
     );
 
     for cols in [8, 16, 32, 64, 200] {
-        let measured = face::over(cols, &surface).expect("a rail of any width draws the face");
+        let measured = face::over_rail(cols, &surface).expect("a rail of any width draws the face");
         assert!(
             measured.rows() <= face::CAP,
             "a {cols}-column rail draws the face in {} rows, over the twelve it is capped at",
@@ -1079,5 +1084,34 @@ fn the_face_is_capped_at_twelve_rows_and_keeps_its_shape() {
             "and what is drawn keeps the face's shape of {}, not the rail's: {shape}",
             795.0 / 989.0
         );
+    }
+}
+
+#[test]
+fn the_placement_covers_the_band_the_ledger_reserved_for_it_and_no_cell_outside_it() {
+    for cols in [100, 120] {
+        let mut view = railed(true);
+        let painted = painted_at(&mut view, (cols, 40));
+        let rail = rail_band(cols, 40);
+        let face = face::over_rail(rail.width, &carried(true)).expect("the face a rail holds");
+        let reserved = ledger::split(&railed_facts(), shared_band(cols, 40))
+            .rail
+            .expect("a frame this wide holds a ledger")
+            .1
+            .with_picture(face.cols(), face.rows())
+            .picture
+            .expect("the cells the rail reserved for the face");
+
+        for y in rail.y..rail.bottom() {
+            for x in rail.x..rail.right() {
+                let covered = pictured_cols(&painted, y).contains(&x);
+                assert_eq!(
+                    covered,
+                    reserved.contains(Position::new(x, y)),
+                    "row {y}, column {x} of the {cols}-column frame is covered by the placement \
+                     {covered}, and the reserved band is {reserved:?}"
+                );
+            }
+        }
     }
 }

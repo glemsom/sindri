@@ -18,7 +18,7 @@ pub const CAP: u16 = 12;
 
 /// The face as a rail `cols` columns wide draws it over its top rows: measured into the columns it
 /// is given and never taller than [`CAP`].
-pub fn over(cols: u16, surface: &Surface) -> Option<Picture> {
+pub fn over_rail(cols: u16, surface: &Surface) -> Option<Picture> {
     measure(Ceiling::new(cols, CAP), surface)
 }
 

@@ -222,6 +222,12 @@ mod tests {
                 "row {y} of the band the picture is drawn over holds a fact, which the face \
                  would be drawn across"
             );
+            assert_eq!(
+                under(&buffer, area.x, y),
+                PALETTE.edge(Edge::Lit),
+                "the lit rule down the rail's boundary gives way to the picture at row {y}, so \
+                 the rail stops short of its own top"
+            );
         }
         assert_eq!(
             glyphs(&buffer, 11).trim_end(),
