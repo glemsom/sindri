@@ -182,7 +182,9 @@ _Avoid_: Context, environment, settings
 **Sindri's face**:
 The picture of Sindri that travels in the **artefact** beside the bundled font, measured from its
 own header into a **footprint** and drawn over those cells — decoration, so a terminal that places
-no picture is given no cells and no words for it. Not the **face** an ink wears.
+no picture is given no cells and no words for it. A reader turns it off in the config, and a frame
+with it off reserves no band: the facts stand from the **rail**'s first row. Not the **face** an ink
+wears.
 _Avoid_: Logo, avatar, mascot, icon
 
 **Card**:

@@ -101,9 +101,19 @@ pub struct View {
     loaded: Loaded,
     home: Option<PathBuf>,
     settings: Settings,
+    face: Face,
     pictures: Pictures,
     cell_size: CellSize,
     palette: Palette,
+}
+
+/// Whether a frame is drawn with Sindri's face over its rail: on unless a launch's config turns
+/// it off, because a reader on a slow link pays for every picture placed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum Face {
+    #[default]
+    Drawn,
+    Hidden,
 }
 
 impl View {
@@ -198,6 +208,10 @@ impl View {
 
     pub fn palette(&self) -> Palette {
         self.palette
+    }
+
+    pub fn set_face(&mut self, drawn: bool) {
+        self.face = if drawn { Face::Drawn } else { Face::Hidden };
     }
 
     pub fn set_pictures(&mut self, pictures: Pictures) {
@@ -540,8 +554,10 @@ impl View {
             // A strip is one row of facts and no band, and a terminal that places no picture is
             // handed no cells: the face is drawn only where a rail reserved rows for it.
             let picture = match shape {
-                Rail::Ledger => face::over_rail(band.area.width, &self.surface()),
-                Rail::Strip => None,
+                Rail::Ledger if self.face == Face::Drawn => {
+                    face::over_rail(band.area.width, &self.surface())
+                }
+                Rail::Ledger | Rail::Strip => None,
             };
             let band = match &picture {
                 Some(picture) => band.with_picture(picture.cols(), picture.rows()),

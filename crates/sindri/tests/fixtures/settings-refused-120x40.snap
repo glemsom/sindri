@@ -18,12 +18,12 @@ settings-refused at 120x40
 12 |                        │   command_budget_ms                                                  │                        | dim:25 plain:1 muted:24 plain:45 dim:25
 13 |                        │   output_budget_bytes                                                │                        | dim:25 plain:1 muted:24 plain:45 dim:25
 14 |                        │   status                                                             │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-15 |                        │   ssh_agent                                                          │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-16 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+15 |                        │   face                  true                                         │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+16 |                        │   ssh_agent                                                          │                        | dim:25 plain:1 muted:24 plain:45 dim:25
 17 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-18 |                        │ bad value in max_turns: `two hundred` will not parse: invalid digit  │                        | dim:25 plain:1 err:67 plain:2 dim:25
-19 |                        │ found in string                                                      │                        | dim:25 plain:1 err:15 plain:54 dim:25
-20 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+18 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+19 |                        │ bad value in max_turns: `two hundred` will not parse: invalid digit  │                        | dim:25 plain:1 err:67 plain:2 dim:25
+20 |                        │ found in string                                                      │                        | dim:25 plain:1 err:15 plain:54 dim:25
 21 |                        │                                                                      │                        | dim:25 plain:70 dim:25
 22 |                        │                                                                      │                        | dim:25 plain:70 dim:25
 23 |                        │                                                                      │                        | dim:25 plain:70 dim:25

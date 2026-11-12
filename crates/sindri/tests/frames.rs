@@ -212,3 +212,13 @@ fn footer_99x24_is_the_first_width_down_to_the_two_that_never_go() {
 fn footer_60x24_is_the_floor_the_hints_never_fall_below() {
     fixture::assert_frame("footer", 60, 24);
 }
+
+#[test]
+fn face_120x40_is_the_face_over_the_rails_top_rows() {
+    fixture::assert_frame("face", 120, 40);
+}
+
+#[test]
+fn face_off_120x40_is_the_facts_from_the_rails_first_row_and_no_band() {
+    fixture::assert_frame("face-off", 120, 40);
+}

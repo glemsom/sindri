@@ -38,6 +38,14 @@ const CANCELLED: u8 = 130;
 
 const MODEL: &str = "model";
 
+/// The frame a launch opens on, as far as the config alone decides it: the face is a setting, so a
+/// launch that turns it off reserves no row for it and pays for no picture on a slow link.
+fn opened(config: &Config) -> View {
+    let mut view = View::boot();
+    view.set_face(config.draws_face());
+    view
+}
+
 pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     if let Some(reason) = missing_terminal() {
         return crate::refuse(&reason, USAGE);
@@ -83,7 +91,7 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     // The cell size is asked before the first frame, and a key typed while the launch waited is
     // handed to the loop rather than dropped.
     let (cell_size, typed) = probed_cell(&terminal);
-    let mut view = View::boot();
+    let mut view = opened(config);
     view.set_cell_size(cell_size);
     let named = |key: &str| std::env::var(key).ok();
     // Resolved once, before the first frame: what a terminal can do is a fact of the launch and
@@ -350,6 +358,7 @@ fn answer(
                     // The one switch, as the visit left it: a `status` key turned off here stops
                     // the telling at the next report rather than at the next launch.
                     telling.switch(config.tells_status());
+                    view.set_face(config.draws_face());
                     view.saved();
                 }
                 Err(error) => view.refuse(&error.to_string()),
