@@ -9,6 +9,11 @@ because an ordinary one would blur two things this project keeps apart.
 One invocation of the agent loop for one prompt, from the first request to a stop reason.
 _Avoid_: Job, task, query, conversation
 
+**Prompt**:
+The reader's own words a run was asked with: the first fact of the session's transcript, and what the
+wire is asked last, after the turns that came before it.
+_Avoid_: Query, question, input, message (that one is the wire's)
+
 **Turn**:
 One request to the model and the tool calls it asks for. Not a unit of progress.
 _Avoid_: Step, iteration, wave

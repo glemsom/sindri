@@ -157,8 +157,6 @@ pub fn layout_on(entry: &Entry, cols: u16, surface: &Surface) -> Vec<Row> {
     }
 }
 
-/// The reader's own words, under the row that names them: set from the margin an answer is set
-/// from, so a prompt and the answer it got line up.
 fn asked(text: &str, cols: u16) -> Vec<Row> {
     let (gutter, room) = margin(INDENT, cols);
     let mut rows = vec![divider("prompt ", cols)];

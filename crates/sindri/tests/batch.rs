@@ -461,6 +461,49 @@ fn a_run_records_the_prompt_it_was_asked() {
     );
 }
 
+/// What a secret is written as, spelled out rather than imported: a test that read the constant
+/// could not tell a mask from a mask that never changed.
+const MASK: &str = "«redacted»";
+
+#[test]
+fn a_secret_in_the_prompt_is_masked_in_the_record_and_where_it_is_shown() {
+    let ground = Ground::new();
+    let wire = Wire::answering(vec![Reply::stream(ANTHROPIC)]);
+    let key = "sk-ant-the-recorded-one";
+
+    ground
+        .asking(&wire, &format!("use {key} to call the wire"))
+        .output()
+        .expect("the binary should run");
+
+    let transcript =
+        std::fs::read_to_string(ground.session().join("transcript.jsonl")).expect("the transcript");
+    assert!(
+        !transcript.contains(key),
+        "the record is a window that cannot carry a secret: {transcript}"
+    );
+    assert!(
+        transcript.contains(&format!("use {MASK} to call the wire")),
+        "and the words it does carry are masked whole: {transcript}"
+    );
+
+    let shown = ground
+        .launch()
+        .args(["sessions", "show"])
+        .output()
+        .expect("the binary should run");
+    assert_eq!(shown.status.code(), Some(0));
+    let said = text(&shown.stdout);
+    assert!(
+        said.contains(&format!("use {MASK} to call the wire")),
+        "and showing the run back says the same: {said}"
+    );
+    assert!(
+        !said.contains(key),
+        "with nothing of the secret in it: {said}"
+    );
+}
+
 #[test]
 fn a_run_records_the_thinking_its_ask_sends() {
     for (launched, thinks) in [(Some("true"), true), (Some("false"), false), (None, false)] {
