@@ -273,6 +273,9 @@ fn every_row_fits_the_width_it_was_laid_out_for() {
             turn: 1,
             text: secrets.redact(""),
         },
+        Entry::Prompt {
+            text: secrets.redact("a prompt whose words are longer than the band it is drawn in"),
+        },
         Entry::Reasoning {
             turn: 1,
             text: secrets
@@ -292,6 +295,30 @@ fn every_row_fits_the_width_it_was_laid_out_for() {
             }
         }
     }
+}
+
+#[test]
+fn the_readers_own_words_are_drawn_under_the_row_that_names_them() {
+    let secrets = SecretSet::default();
+    let rows = layout(
+        &Entry::Prompt {
+            text: secrets.redact("triage this"),
+        },
+        40,
+    );
+
+    assert!(
+        words(&rows[0]).starts_with("prompt "),
+        "the row that names the prompt says whose words these are: {:?}",
+        rows[0]
+    );
+    assert_eq!(rows[0].width(), 40, "and runs to the band's width");
+    assert_eq!(
+        words(&rows[1]),
+        "  triage this",
+        "the words sit in the margin an answer is set from"
+    );
+    assert_eq!(inks(&rows[1]), [Ink::Plain, Ink::Plain]);
 }
 
 #[test]

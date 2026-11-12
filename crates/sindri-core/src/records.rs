@@ -45,6 +45,9 @@ pub enum Entry {
         turn: u32,
         text: Redacted,
     },
+    Prompt {
+        text: Redacted,
+    },
 }
 pub struct Facts<'a> {
     pub wire: Wire,
@@ -175,6 +178,11 @@ impl Record {
         self.append(Entry::Turn { turn })?;
         self.document.turns = turn;
         self.write_document()
+    }
+    pub fn asked(&mut self, text: &str) -> Result<(), RecordError> {
+        self.append(Entry::Prompt {
+            text: self.secrets.redact(text),
+        })
     }
     pub fn called(&mut self, turn: u32, call: &Call) -> Result<(), RecordError> {
         self.append(Entry::Call {

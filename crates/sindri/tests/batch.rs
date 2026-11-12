@@ -430,8 +430,34 @@ fn a_run_that_answered_records_its_turn_and_why_it_stopped() {
         .collect();
     assert_eq!(
         kinds,
-        ["turn", "assistant"],
-        "the turn, then the answer: {transcript}"
+        ["prompt", "turn", "assistant"],
+        "what was asked, the turn, then the answer: {transcript}"
+    );
+}
+
+#[test]
+fn a_run_records_the_prompt_it_was_asked() {
+    let ground = Ground::new();
+    let wire = Wire::answering(vec![Reply::stream(ANTHROPIC)]);
+
+    ground
+        .asking(&wire, "triage this")
+        .output()
+        .expect("the binary should run");
+
+    let transcript =
+        std::fs::read_to_string(ground.session().join("transcript.jsonl")).expect("the transcript");
+    let first: serde_json::Value = serde_json::from_str(
+        transcript
+            .lines()
+            .next()
+            .unwrap_or_else(|| panic!("a recorded run writes something: {transcript}")),
+    )
+    .expect("an entry");
+    assert_eq!(
+        first,
+        serde_json::json!({"kind": "prompt", "text": "triage this"}),
+        "the words the reader asked are the record's own first fact: {transcript}"
     );
 }
 

@@ -185,6 +185,7 @@ fn entry_lines(entry: &Entry) -> Vec<String> {
         Entry::Assistant { turn, text } => {
             under(format!("  assistant in turn {turn}"), &text.to_string())
         }
+        Entry::Prompt { text } => under(String::from("  prompt"), &text.to_string()),
     }
 }
 

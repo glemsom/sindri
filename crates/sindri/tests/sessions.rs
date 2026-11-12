@@ -257,6 +257,111 @@ fn sessions_show_reads_one_run_back_from_its_whole_guid() {
 }
 
 #[test]
+fn sessions_show_says_what_was_asked_before_it_says_what_came_back() {
+    let state = State::empty();
+    let directory = state.session(
+        FIRST,
+        "anthropic",
+        "a-model-read-off-the-wire",
+        "2024-03-01T00:00:00Z",
+        "final",
+    );
+    state.transcript(
+        &directory,
+        &[
+            json!({"kind": "prompt", "text": "triage this"}),
+            json!({"kind": "turn", "turn": 1}),
+            json!({"kind": "assistant", "turn": 1, "text": "Hello world"}),
+        ],
+    );
+
+    let shown = state.sindri(&["sessions", "show", FIRST]);
+
+    assert_eq!(
+        shown.status.code(),
+        Some(0),
+        "reading a run back is not a failure"
+    );
+    let said = text(&shown.stdout);
+    let asked = said
+        .find("triage this")
+        .unwrap_or_else(|| panic!("the reading says what was asked: {said}"));
+    let answered = said
+        .find("Hello world")
+        .unwrap_or_else(|| panic!("and what came back: {said}"));
+    assert!(
+        said[asked..].starts_with("triage this") && asked < answered,
+        "the prompt is printed ahead of the answer it got: {said}"
+    );
+}
+
+#[test]
+fn show_json_hands_on_the_prompt_beside_the_answer() {
+    let state = State::empty();
+    let directory = state.session(
+        FIRST,
+        "anthropic",
+        "a-model-read-off-the-wire",
+        "2024-03-01T00:00:00Z",
+        "final",
+    );
+    state.transcript(
+        &directory,
+        &[
+            json!({"kind": "prompt", "text": "triage this"}),
+            json!({"kind": "turn", "turn": 1}),
+            json!({"kind": "assistant", "turn": 1, "text": "Hello world"}),
+        ],
+    );
+
+    let shown = state.sindri(&["sessions", "show", FIRST, "--json"]);
+
+    assert_eq!(shown.status.code(), Some(0));
+    let said = text(&shown.stdout);
+    let printed: Value = serde_json::from_str(&said).expect("stdout is one JSON object");
+    assert_eq!(
+        printed["transcript"][0]["text"], "triage this",
+        "the prompt is the first entry the record holds: {said}"
+    );
+    assert_eq!(
+        printed["transcript"][2]["text"], "Hello world",
+        "and the answer still follows it: {said}"
+    );
+}
+
+#[test]
+fn a_record_written_before_the_prompt_was_a_fact_reads_with_none() {
+    let state = State::empty();
+    let directory = state.session(
+        FIRST,
+        "anthropic",
+        "a-model-read-off-the-wire",
+        "2024-03-01T00:00:00Z",
+        "final",
+    );
+    state.transcript(
+        &directory,
+        &[
+            json!({"kind": "turn", "turn": 1}),
+            json!({"kind": "assistant", "turn": 1, "text": "Hello world"}),
+        ],
+    );
+
+    let shown = state.sindri(&["sessions", "show", FIRST]);
+
+    assert_eq!(shown.status.code(), Some(0), "an older record still reads");
+    let said = text(&shown.stdout);
+    assert!(
+        said.contains("Hello world") && said.contains("turn 1"),
+        "everything else in the transcript reads as it did: {said}"
+    );
+    assert!(
+        !said.contains("prompt"),
+        "a prompt the record does not hold is absent rather than blank: {said}"
+    );
+}
+
+#[test]
 fn sessions_show_reads_a_run_back_from_an_unambiguous_prefix() {
     let state = State::three_runs();
 

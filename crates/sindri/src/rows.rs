@@ -153,7 +153,21 @@ pub fn layout_on(entry: &Entry, cols: u16, surface: &Surface) -> Vec<Row> {
         ),
         Entry::Assistant { text, .. } => answer_on(&text.to_string(), cols, None, surface),
         Entry::Reasoning { text, .. } => thought(&text.to_string(), cols),
+        Entry::Prompt { text } => asked(&text.to_string(), cols),
     }
+}
+
+/// The reader's own words, under the row that names them: set from the margin an answer is set
+/// from, so a prompt and the answer it got line up.
+fn asked(text: &str, cols: u16) -> Vec<Row> {
+    let (gutter, room) = margin(INDENT, cols);
+    let mut rows = vec![divider("prompt ", cols)];
+    rows.extend(
+        wrap(text, room)
+            .into_iter()
+            .map(|line| Row::of([(gutter.to_owned(), Ink::Plain), (line, Ink::Plain)])),
+    );
+    rows
 }
 
 pub(crate) fn thought(text: &str, cols: u16) -> Vec<Row> {
