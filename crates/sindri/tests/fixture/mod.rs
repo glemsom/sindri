@@ -1,4 +1,4 @@
-//! A fixture line is one row of the screen: its number, its glyphs between two bars, and the ink of
+//! A fixture line is one row of the screen: its number, its glyphs between two bars, and the look of
 //! each run of cells from the left edge, so a row of blanks keeps its width in a file an editor may
 //! touch. The files are `.snap` because `insta` compares and blesses them and takes no other extension.
 
@@ -7,13 +7,14 @@ use std::path::PathBuf;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::{Buffer, Cell};
-
+use ratatui::layout::Rect;
 use sindri::composer::{Composer, Key, Outcome};
 use sindri::graphics::CellSize;
-use sindri::ink::Look;
+use sindri::ink::{Faces, Ink, Look};
 use sindri::ledger::{Boot, Ctx, Facts};
 use sindri::mark;
 use sindri::palette::Palette;
+use sindri::pen::{self, Clip};
 use sindri::pictures::{PLACEHOLDER, Pictures};
 use sindri::pulse::Pulse;
 use sindri::rows::Scroll;
@@ -840,4 +841,34 @@ fn looks_in(runs: &str) -> Option<Vec<Look>> {
         looks.extend(std::iter::repeat_n(look, usize::from(count)));
     }
     Some(looks)
+}
+
+#[test]
+fn a_cell_wearing_two_faces_is_written_and_read_back_as_the_one_name_it_has() {
+    let palette = Palette::TRUECOLOR;
+    let emphasis = Look::new(Ink::Accent, Faces::BOLD.and(Faces::ITALIC));
+    let linked = Look::new(Ink::Muted, Faces::ITALIC).underlined(Ink::Dim);
+    let area = Rect::new(0, 0, 2, 1);
+    let mut buffer = Buffer::empty(area);
+    pen::write(
+        &mut buffer,
+        area,
+        &[("a", emphasis), ("b", linked)],
+        Clip::Whole,
+        &palette,
+    );
+
+    let drawn = text("two-faces", &palette, &buffer);
+    let written = drawn.lines().nth(1).expect("the one row of the frame");
+    assert_eq!(
+        written,
+        format!(
+            "00 |ab| {}:1 {}:1",
+            "accent+bold+italic", "muted+italic~dim"
+        ),
+        "the faces a cell wears and the line under it are written in one order, so one frame has \
+         one picture of it"
+    );
+    let row = row_of(written).expect("the row the fixture wrote is the row it reads back");
+    assert_eq!(row.looks, [emphasis, linked]);
 }

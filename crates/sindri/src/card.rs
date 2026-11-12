@@ -155,7 +155,7 @@ fn labelled(buffer: &mut Buffer, row: Rect, name: &str, palette: &Palette) {
         return;
     }
     let edge = palette.accent_edge();
-    let named = Look::new(Ink::Accent, edge.face());
+    let named = Look::new(Ink::Accent, edge.faces());
     pen::write(
         buffer,
         Rect {

@@ -1393,9 +1393,8 @@ mod tests {
 
             for y in area.y..area.bottom() {
                 for x in area.x..area.right() {
-                    assert_ne!(
-                        look_at(&buffer, &palette, x, y).face(),
-                        Face::Faint,
+                    assert!(
+                        !look_at(&buffer, &palette, x, y).faces().has(Face::Faint),
                         "row {y}, column {x} is dimmed to say it takes the keys, and a reader who \
                          asked for no colour is given focus by the card's border and the scrim"
                     );
