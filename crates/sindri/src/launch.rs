@@ -221,7 +221,7 @@ impl Launch {
         let mut run = Run::new(prompt, self.asking.clone(), self.shell.clone())
             .limits(self.limits)
             .tools(&self.tools)
-            .earlier(earlier.to_vec())
+            .earlier(earlier.iter().cloned())
             .cancel(cancel);
         // Ahead of the turn loop, so the transcript opens with the words it answers.
         note(self.record.asked(prompt));

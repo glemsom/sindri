@@ -348,6 +348,54 @@ fn a_run_stopped_on_the_turn_cap_keeps_the_words_of_the_turn_it_ended() {
 }
 
 #[test]
+fn a_run_stopped_on_an_error_keeps_the_words_of_the_turn_it_ended() {
+    struct Breaks;
+
+    impl Responder for Breaks {
+        fn respond(&self, request: &Request, _deltas: &mut dyn Deltas) -> Result<Reply, Failure> {
+            match request.turn() {
+                1 => Ok(Reply::asking("working", [command("true")])),
+                _ => Err(Failure::unconfigured(Wire::Openai)),
+            }
+        }
+    }
+
+    let mut run = Run::new("work", Breaks, Tools::cheap());
+
+    let state = run.drive(&mut Transcript::default());
+
+    assert_eq!(state.word(), "error");
+    assert_eq!(
+        run.kept().text,
+        "working",
+        "a run that broke still joins with the turn that ended before it broke"
+    );
+}
+
+#[test]
+fn a_run_stopped_on_its_clock_budget_keeps_the_words_of_the_turn_it_ended() {
+    let mut run = Run::new(
+        "work",
+        Scripted::answering([Reply::asking("working", [command("one")])]),
+        Tools::costing(Duration::from_secs(40 * 60), 0),
+    )
+    .limits(Limits::new(
+        250,
+        Duration::from_secs(60 * 60),
+        8 * 1024 * 1024,
+    ));
+
+    let state = run.drive(&mut Transcript::default());
+
+    assert_eq!(state.word(), "budget");
+    assert_eq!(
+        run.kept().text,
+        "working",
+        "a run that spent its budget still joins with the turn that ended before it"
+    );
+}
+
+#[test]
 fn a_run_that_got_no_answer_keeps_the_words_it_was_asked_with_alone() {
     let mut run = Run::new(
         "read the failing test",

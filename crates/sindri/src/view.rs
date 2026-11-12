@@ -89,6 +89,7 @@ pub struct View {
     stream: Stream,
     queue: Queue,
     conversation: Conversation,
+    superseded: bool,
     stack: Stack,
     pulse: Option<Pulse>,
     rail: Facts,
@@ -161,14 +162,18 @@ impl View {
         &self.stream
     }
 
-    pub fn conversation(&self) -> &Conversation {
-        &self.conversation
+    /// The prompts the run a draft is about to start joins, in the order they ended.
+    pub fn earlier(&self) -> Vec<Exchange> {
+        self.conversation.exchanges().to_vec()
     }
 
     /// Keeps the prompt the run that stopped was asked with beside the answer it got, so the prompt
-    /// after it joins the conversation at the turn it was asked.
+    /// after it joins the conversation at the turn it was asked — unless `/new` was pressed while
+    /// that run was in flight, whose words belong to the conversation it emptied.
     pub fn kept(&mut self, ended: &Exchange) {
-        self.conversation.join(ended.clone());
+        if !self.superseded {
+            self.conversation.join(ended.clone());
+        }
     }
 
     /// The turn in flight is over: what it said is written down as entries, so the live entry
@@ -177,6 +182,7 @@ impl View {
     pub fn settle(&mut self) {
         self.stream = Stream::new();
         self.door = false;
+        self.superseded = false;
     }
 
     pub fn set_workspace(&mut self, workspace: PathBuf) {
@@ -361,6 +367,7 @@ impl View {
         self.marked = Span::default();
         self.loaded.clear();
         self.conversation.clear();
+        self.superseded = true;
         Outcome::Edited
     }
 

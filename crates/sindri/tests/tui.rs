@@ -39,6 +39,30 @@ const ANSWER_WORDS: [&str; 2] = ["Hello", "world"];
 /// above them repaints them in fragments.
 const ANSWER_SAID: &str = "Hello world";
 
+/// The turns a request's body carries, in the order the wire reads them: each one's role and its
+/// words, so a test asserts what a wire was asked rather than the bytes that asked it.
+fn replayed(request: &str) -> Vec<(String, String)> {
+    let (_, body) = request
+        .split_once("\r\n\r\n")
+        .expect("a request's head and its body");
+    let body: serde_json::Value = serde_json::from_str(body).expect("a wire's body is JSON");
+    body["messages"]
+        .as_array()
+        .expect("a body carries messages")
+        .iter()
+        .map(|message| {
+            (
+                String::from(message["role"].as_str().unwrap_or_default()),
+                String::from(message["content"][0]["text"].as_str().unwrap_or_default()),
+            )
+        })
+        .collect()
+}
+
+fn said(role: &str, words: &str) -> (String, String) {
+    (String::from(role), String::from(words))
+}
+
 /// `CSI 16 t`, the one question a picture asks a terminal: report the size of a cell in pixels.
 /// A terminal answers `CSI 6;height;width t` and this launch is never answered, so it settles for
 /// the nominal cell — which is what makes the question visible as the bytes it is.
@@ -1948,20 +1972,19 @@ fn a_second_prompt_in_one_launch_is_asked_with_the_first_beside_its_answer() {
 
     let asked = wire.requests();
     assert_eq!(asked.len(), 2, "two prompts, two requests: {asked:?}");
-    assert!(
-        !asked[0].contains(ANSWER_SAID),
-        "the first prompt of a launch carries nothing from before it: {}",
-        asked[0]
+    assert_eq!(
+        replayed(&asked[0]),
+        [said("user", "hi my name is Glenn")],
+        "the first prompt of a launch is asked with nothing before it"
     );
-    assert!(
-        asked[1].contains("hi my name is Glenn"),
-        "the second carries the first prompt ahead of it: {}",
-        asked[1]
-    );
-    assert!(
-        asked[1].contains(ANSWER_SAID),
-        "beside the answer the first prompt got: {}",
-        asked[1]
+    assert_eq!(
+        replayed(&asked[1]),
+        [
+            said("user", "hi my name is Glenn"),
+            said("assistant", ANSWER_SAID),
+            said("user", "what is my name?"),
+        ],
+        "the second carries the first prompt and the answer it got ahead of it"
     );
 
     wire.release();
@@ -1993,16 +2016,15 @@ fn a_prompt_queued_behind_a_live_run_joins_the_conversation_at_the_turn_it_was_a
 
     let asked = wire.requests();
     assert_eq!(asked.len(), 2, "two prompts, two requests: {asked:?}");
-    assert!(
-        asked[1].contains("hi my name is Glenn"),
+    assert_eq!(
+        replayed(&asked[1]),
+        [
+            said("user", "hi my name is Glenn"),
+            said("assistant", ANSWER_SAID),
+            said("user", "what is my name?"),
+        ],
         "the queued prompt joins the conversation at the turn it was asked, behind the prompt it \
-         waited on: {}",
-        asked[1]
-    );
-    assert!(
-        asked[1].contains(ANSWER_SAID),
-        "and behind the answer that turn got: {}",
-        asked[1]
+         waited on and the answer that turn got"
     );
 
     wire.release();
@@ -2037,15 +2059,55 @@ fn slash_new_empties_what_the_next_prompt_is_asked_with() {
 
     let asked = wire.requests();
     assert_eq!(asked.len(), 2, "two prompts, two requests: {asked:?}");
-    assert!(
-        !asked[1].contains("hi my name is Glenn"),
-        "`/new` starts the conversation again, so nothing of the prompt before it is carried: {}",
-        asked[1]
+    assert_eq!(
+        replayed(&asked[1]),
+        [said("user", "what is my name?")],
+        "`/new` starts the conversation again, so nothing of the prompt before it or the answer it \
+         got is carried"
     );
+
+    wire.release();
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+}
+
+#[test]
+fn slash_new_under_a_live_run_keeps_the_turns_it_superseded_out_of_the_next_prompt() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
     assert!(
-        !asked[1].contains(ANSWER_SAID),
-        "and nothing of the answer it got: {}",
-        asked[1]
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    ask_words(&mut pty, &drawn, &wire, "hi my name is Glenn");
+    queue(&mut pty, &drawn, "what is my name?");
+
+    command(&mut pty, &drawn, "/new");
+    assert!(
+        drawn.wait_until(|frame| !showing(frame, "hi my name is Glenn")),
+        "`/new` is answered with the frame cleared, so the run it superseded is left where it \
+         was: {:?}",
+        drawn.text()
+    );
+
+    wire.release();
+    assert!(
+        wire.wait_for_prompt("what is my name?"),
+        "the queued prompt becomes the run after it: {:?}",
+        wire.requests()
+    );
+
+    let asked = wire.requests();
+    assert_eq!(asked.len(), 2, "two prompts, two requests: {asked:?}");
+    assert_eq!(
+        replayed(&asked[1]),
+        [said("user", "what is my name?")],
+        "the run `/new` superseded belongs to the conversation it emptied, so the turn it ends on \
+         is never carried into the one that replaced it"
     );
 
     wire.release();

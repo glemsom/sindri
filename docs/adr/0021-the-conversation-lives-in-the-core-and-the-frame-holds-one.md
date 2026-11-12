@@ -4,7 +4,8 @@ A launch in the TUI holds one conversation: two prompts typed into it reach the 
 the second asked after the first prompt and its answer, `/new` empties what is carried, and the
 launch that ends takes it away. The type is `sindri_core::conversation::Conversation`, in the core
 and beside `Run`, and the instance is held by the frame: `View` keeps it, hands it to the launch a
-prompt starts, and takes the exchange each run stops with.
+prompt starts, and takes the exchange each run stops with. `/new` empties it and marks the run it
+superseded, so that run reaches its own stop reason and its words still never reach the next request.
 
 **Where it lives is decided by the glossary, not by convenience.** A conversation is a decision —
 which words the wire is asked with is as much a decision as which wire to ask — and the core is the
@@ -34,9 +35,11 @@ already gives such a prompt the words alone, and it is not a prompt anybody may 
 ## What a reader is held to
 
 - Nothing a front end assembles reaches a request as history: a request is asked with
-  `Conversation::kept`, and batch mode is asked with none, so it stays one prompt, one request.
+  `Conversation::exchanges`, and batch mode is asked with none, so it stays one prompt, one request.
 - `/new` empties the conversation with the loaded-skill set and the transcript, and never stops the
-  run in flight: the run it superseded still reaches its own stop reason and joins as it ended.
+  run in flight: that run still reaches its own stop reason, and what it ended on belongs to the
+  conversation `/new` emptied, so it is never carried into the one that replaced it — the prompt
+  typed after it is asked with nothing from before the reader's `/new`.
 - A run stopped on anything but a final answer — error, budget, cancelled, max turns — still joins
   with the turns that ended before it stopped, or with its prompt alone when none did.
 - The conversation is emptied by the launch that ends, so no state directory and no record learns a

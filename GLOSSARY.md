@@ -13,7 +13,8 @@ _Avoid_: Job, task, query, conversation
 The prompts one launch has already had answered, each beside the answer it got, and what the run that
 joins next is asked after: it outlives the run that filled it and the launch that ends takes it away,
 and `/new` empties it. A queued prompt joins it at the turn it was asked, and a run that stopped on
-anything but a final answer still joins with what it ended on.
+anything but a final answer still joins with what it ended on — except one `/new` superseded, whose
+words went with the conversation it emptied.
 _Avoid_: Chat, thread, memory, context, history (that one is a run's own turns)
 
 **Prompt**:

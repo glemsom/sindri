@@ -17,7 +17,7 @@ fn ended(prompt: &str, text: &str) -> Exchange {
 
 fn replayed(conversation: &Conversation) -> Vec<(&str, &str)> {
     conversation
-        .kept()
+        .exchanges()
         .iter()
         .map(|kept| (kept.prompt.as_str(), kept.text.as_str()))
         .collect()
@@ -27,7 +27,6 @@ fn replayed(conversation: &Conversation) -> Vec<(&str, &str)> {
 fn a_conversation_that_has_held_no_prompt_hands_the_run_that_joins_it_nothing() {
     let conversation = Conversation::new();
 
-    assert!(conversation.is_empty());
     assert_eq!(
         replayed(&conversation),
         [],
@@ -46,7 +45,11 @@ fn a_prompt_joins_beside_the_answer_it_got() {
         [("hi my name is Glenn", "nice to meet you, Glenn")],
         "the words asked and the words they got, whole"
     );
-    assert_eq!(conversation.len(), 1, "one prompt is one exchange");
+    assert_eq!(
+        conversation.exchanges().len(),
+        1,
+        "one prompt is one exchange"
+    );
 }
 
 #[test]
@@ -93,7 +96,7 @@ fn starting_over_empties_what_the_run_that_joins_next_is_asked_with() {
     conversation.clear();
 
     assert!(
-        conversation.is_empty(),
+        conversation.exchanges().is_empty(),
         "`/new` starts the conversation again"
     );
     assert_eq!(

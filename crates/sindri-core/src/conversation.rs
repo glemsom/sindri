@@ -15,16 +15,8 @@ impl Conversation {
     }
 
     /// The prompts a run joining now is asked after, in the order they ended.
-    pub fn kept(&self) -> &[Exchange] {
+    pub fn exchanges(&self) -> &[Exchange] {
         &self.kept
-    }
-
-    pub fn len(&self) -> usize {
-        self.kept.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.kept.is_empty()
     }
 
     pub fn join(&mut self, kept: Exchange) {
