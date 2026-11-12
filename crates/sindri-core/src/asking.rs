@@ -34,12 +34,10 @@ impl Asking {
     fn ask(&self, request: &Request) -> Ask {
         self.ask
             .clone()
-            .earlier(
-                request
-                    .earlier()
-                    .iter()
-                    .map(|ended| Earlier::new(ended.prompt.as_str(), ended.text.as_str())),
-            )
+            .earlier(request.earlier().iter().map(|ended| Earlier {
+                prompt: ended.prompt.clone(),
+                answer: ended.text.clone(),
+            }))
             .prompt(request.prompt())
     }
 }

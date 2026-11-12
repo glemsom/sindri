@@ -249,10 +249,6 @@ fn a_credential_is_never_printed() {
     );
 }
 
-fn turned(prompt: &str, answer: &str) -> Earlier {
-    Earlier::new(prompt, answer)
-}
-
 fn sent_body(replay: &Replay) -> Value {
     serde_json::from_str(&replay.requests()[0].body).expect("a wire's body is JSON")
 }
@@ -263,7 +259,10 @@ fn an_openai_ask_on_the_responses_route_replays_the_turns_that_ended_before_it()
     let ask = Ask::new(Wire::Openai, "gpt-5")
         .key("sk-recorded")
         .prompt("what is my name?")
-        .earlier([turned("hi my name is Glenn", "nice to meet you, Glenn")]);
+        .earlier([Earlier {
+            prompt: String::from("hi my name is Glenn"),
+            answer: String::from("nice to meet you, Glenn"),
+        }]);
 
     client_over(&replay)
         .ask(&ask, &mut Transcript::default())
@@ -308,7 +307,10 @@ fn an_openai_ask_on_the_chat_route_replays_them_the_way_that_route_spells_them()
         .key("sk-recorded")
         .prompt("what is my name?")
         .route(Route::Chat)
-        .earlier([turned("hi my name is Glenn", "nice to meet you, Glenn")]);
+        .earlier([Earlier {
+            prompt: String::from("hi my name is Glenn"),
+            answer: String::from("nice to meet you, Glenn"),
+        }]);
 
     client_over(&replay)
         .ask(&ask, &mut Transcript::default())
@@ -321,6 +323,6 @@ fn an_openai_ask_on_the_chat_route_replays_them_the_way_that_route_spells_them()
             {"role": "assistant", "content": "nice to meet you, Glenn"},
             {"role": "user", "content": "what is my name?"},
         ]),
-        "the same conversation reads the same on either route"
+        "the same prompts read the same on either route"
     );
 }

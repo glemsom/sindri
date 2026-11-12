@@ -255,10 +255,16 @@ fn a_turn_that_ended_with_no_answer_is_not_sent_as_an_empty_message() {
                 "role": "assistant",
                 "content": [{"type": "text", "text": "nice to meet you, Glenn"}]
             },
-            {"role": "user", "content": [{"type": "text", "text": "what is my name?"}]},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "what is the weather?"},
+                    {"type": "text", "text": "what is my name?"},
+                ]
+            },
         ]),
-        "a prompt that got no answer is no turn that ended, and an empty message is refused by \
-         every dialect"
+        "a prompt that got no answer travels alone — no empty message, because every dialect \
+         refuses one — and the dialect merges the two user turns it leaves side by side"
     );
 }
 

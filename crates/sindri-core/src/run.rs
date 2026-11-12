@@ -343,8 +343,6 @@ impl Reply {
     }
 }
 
-/// One turn as it ended: the prompt it was asked with beside the answer it got, the calls it
-/// asked for and what the ask spent.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Exchange {
     pub turn: u32,
@@ -373,7 +371,6 @@ impl Request {
         &self.prompt
     }
 
-    /// The prompts that ended before this run, each beside the answer it got, in order.
     pub fn earlier(&self) -> &[Exchange] {
         &self.earlier
     }
@@ -484,9 +481,8 @@ impl<R: Responder, A: Executor> Run<R, A> {
         self
     }
 
-    /// The prompts that ended before this run, each beside the answer it got, handed to every
-    /// request of the run so a wire is asked with the conversation the prompt joins rather than
-    /// with the prompt alone.
+    /// The prompts that ended before this run, each beside the answer it got: a wire is asked with
+    /// the exchange the new prompt joins, not with its own words alone.
     pub fn earlier(mut self, earlier: impl IntoIterator<Item = Exchange>) -> Self {
         self.earlier = earlier.into_iter().collect();
         self

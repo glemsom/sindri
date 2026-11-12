@@ -67,8 +67,14 @@ fn cases() -> Vec<(&'static str, Ask, &'static str)> {
                 .key(KEY)
                 .preamble("You are a shell.")
                 .earlier([
-                    Earlier::new("hi my name is Glenn", "nice to meet you, Glenn"),
-                    Earlier::new("is it raining?", "it is raining"),
+                    Earlier {
+                        prompt: String::from("hi my name is Glenn"),
+                        answer: String::from("nice to meet you, Glenn"),
+                    },
+                    Earlier {
+                        prompt: String::from("is it raining?"),
+                        answer: String::from("it is raining"),
+                    },
                 ])
                 .prompt("what is my name?"),
             ANTHROPIC,
@@ -79,8 +85,14 @@ fn cases() -> Vec<(&'static str, Ask, &'static str)> {
                 .key(KEY)
                 .preamble("You are a shell.")
                 .earlier([
-                    Earlier::new("hi my name is Glenn", "nice to meet you, Glenn"),
-                    Earlier::new("is it raining?", "it is raining"),
+                    Earlier {
+                        prompt: String::from("hi my name is Glenn"),
+                        answer: String::from("nice to meet you, Glenn"),
+                    },
+                    Earlier {
+                        prompt: String::from("is it raining?"),
+                        answer: String::from("it is raining"),
+                    },
                 ])
                 .prompt("what is my name?"),
             OPENAI_RESPONSES,
