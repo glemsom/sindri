@@ -15,13 +15,14 @@ use sindri::picture;
 use sindri::pictures::Pictures;
 use sindri::view::View;
 
-/// Takes the alternate screen with the cursor hidden, so the first frame is not drawn
-/// around a caret the last shell left, and asks for bracketed paste so a paste is one edit.
-const TAKE_SCREEN: &[u8] = b"\x1b[?1049h\x1b[?25l\x1b[?2004h";
+/// Takes the alternate screen with the cursor hidden, so the first frame is not drawn around a
+/// caret the last shell left, asks for bracketed paste so a paste is one edit, and pushes the key
+/// protocol's disambiguation so `Shift+Enter` is told from `Enter`, on the terminal's own stack.
+const TAKE_SCREEN: &[u8] = b"\x1b[?1049h\x1b[?25l\x1b[?2004h\x1b[>1u";
 
-/// Gives the screen back with bracketed paste off first and the cursor last, so a shell
-/// gets the terminal it had.
-const GIVE_BACK_SCREEN: &[u8] = b"\x1b[?2004l\x1b[?25h\x1b[?1049l";
+/// Gives the screen back: the key protocol popped first, then bracketed paste off, then the
+/// cursor, so a shell gets the terminal it had.
+const GIVE_BACK_SCREEN: &[u8] = b"\x1b[<u\x1b[?2004l\x1b[?25h\x1b[?1049l";
 
 pub(crate) struct Terminal {
     pub(crate) keys: File,
@@ -125,9 +126,9 @@ struct Restore {
 }
 
 impl Restore {
-    /// Puts the terminal back: the screen is left first, so nothing that follows — a panic message
-    /// included — is drawn on a screen that is about to be somebody else's, and then the state raw
-    /// mode replaced is restored.
+    /// Puts the terminal back: the key protocol is popped and the screen left first, so nothing
+    /// that follows — a panic message included — is drawn on a screen about to be somebody else's,
+    /// and then the state raw mode replaced is restored.
     fn put_back(self) {
         let _ = tell(&self.screen, GIVE_BACK_SCREEN);
         let _ = tcsetattr(&self.keys, OptionalActions::Now, &self.saved);
@@ -380,6 +381,14 @@ mod tests {
         assert!(
             drawn.contains(std::str::from_utf8(GIVE_BACK_SCREEN).expect("a printable sequence")),
             "the alternate screen was given back while the guard was still alive: {drawn:?}"
+        );
+        assert!(
+            drawn
+                .find("\u{1b}[<u")
+                .zip(drawn.find("\u{1b}[?1049l"))
+                .is_some_and(|(keys, screen)| keys < screen),
+            "and the key protocol was given back before the screen was, by the hook and not \
+             only by the guard: {drawn:?}"
         );
 
         // The guard is dropped after the panic has already been cleaned up after, and a terminal

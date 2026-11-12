@@ -68,6 +68,13 @@ fn said(role: &str, words: &str) -> (String, String) {
 /// the nominal cell — which is what makes the question visible as the bytes it is.
 const ASK_CELL: &[u8] = b"\x1b[16t";
 
+/// `CSI > 1 u` pushes the key protocol with `disambiguate escape codes` set: the flag that makes
+/// `Shift+Enter` a report of its own rather than the byte the `Enter` key sends.
+const ASK_KEYS: &[u8] = b"\x1b[>1u";
+
+/// `CSI < u` pops that push, so the shell gets back the terminal it lent.
+const GIVE_BACK_KEYS: &[u8] = b"\x1b[<u";
+
 const SERVED: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_models.json");
 
@@ -376,6 +383,21 @@ impl Drawn {
         false
     }
 
+    /// What has been drawn once the terminal has gone quiet, and no later than the patience: an
+    /// idle launch paints nothing more, so two frames are compared once theirs have landed.
+    fn settled(&self) -> Vec<u8> {
+        let mut last = self.bytes().len();
+        let deadline = Instant::now() + PATIENCE;
+        loop {
+            thread::sleep(Duration::from_millis(50));
+            let now = self.bytes().len();
+            if now == last || Instant::now() >= deadline {
+                return self.bytes();
+            }
+            last = now;
+        }
+    }
+
     fn wait_for(&self, needle: &[u8]) -> bool {
         let deadline = Instant::now() + PATIENCE;
         while Instant::now() < deadline {
@@ -476,9 +498,14 @@ fn text(bytes: &[u8]) -> String {
 }
 
 fn contains(haystack: &[u8], needle: &[u8]) -> bool {
-    haystack
+    at(haystack, needle).is_some()
+}
+
+/// Where a sequence first sits in the bytes a terminal was written, and `None` if it was not.
+fn at(bytes: &[u8], needle: &[u8]) -> Option<usize> {
+    bytes
         .windows(needle.len())
-        .any(|window| window == needle)
+        .position(|window| window == needle)
 }
 
 /// The pixels in a cell are the one thing a launch asks the terminal rather than draws into it, so it
@@ -524,6 +551,45 @@ fn the_cell_size_is_asked_of_the_terminal_once_however_many_frames_it_paints() {
             .is_some_and(|(asked_at, boot_at)| asked_at < boot_at),
         "and it was asked before the first frame was painted, so the frame was drawn at \
          an answer rather than at a guess"
+    );
+}
+
+#[test]
+fn the_key_protocol_is_asked_for_before_the_first_frame_and_given_back_first_on_the_way_out() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    let bytes = drawn.bytes();
+    let (screen, ask, frame) = (
+        at(&bytes, b"\x1b[?1049h"),
+        at(&bytes, ASK_KEYS),
+        at(&bytes, b"Enter send"),
+    );
+    assert!(
+        matches!((screen, ask, frame), (Some(screen), Some(ask), Some(_)) if screen < ask),
+        "the key protocol is asked for when the screen is taken and before the frame is drawn, \
+         and these came at {screen:?}, {ask:?} and {frame:?}"
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+    assert!(
+        drawn.wait_for(GIVE_BACK_KEYS),
+        "the protocol is given back: {:?}",
+        drawn.text()
+    );
+
+    let bytes = drawn.bytes();
+    let (given_back, screen) = (at(&bytes, GIVE_BACK_KEYS), at(&bytes, b"\x1b[?1049l"));
+    assert!(
+        matches!((given_back, screen), (Some(given_back), Some(screen)) if given_back < screen),
+        "and it is given back first: the screen goes after the protocol, and these came at \
+         {given_back:?} and {screen:?}"
     );
 }
 
@@ -962,7 +1028,78 @@ fn a_paste_that_arrives_as_a_burst_is_one_draft_too() {
 }
 
 #[test]
-fn shift_enter_from_the_kitty_protocol_breaks_the_line_rather_than_sending() {
+fn a_reported_ctrl_enter_breaks_the_line_rather_than_sending() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(b"one");
+    pty.type_bytes(b"\x1b[13;5u");
+    pty.type_bytes(b"two");
+
+    assert!(
+        drawn.wait_until(|frame| composer_rows(frame) == Some(3)),
+        "Ctrl+Enter is a line break and not the key that sends: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0));
+}
+
+#[test]
+fn a_key_the_protocol_reports_by_name_is_the_key_the_terminal_speaks() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(b"abc");
+    assert!(
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == GUTTER + 4)),
+        "three glyphs typed, so the caret waits one column past the last: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(b"\x1b[106;5u");
+
+    assert!(
+        drawn.wait_until(|frame| composer_rows(frame) == Some(3)),
+        "the reported Ctrl-J broke the line rather than sending it: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(b"\x1b[99;5u");
+
+    assert!(
+        drawn.wait_until(|frame| {
+            composer_rows(frame) == Some(2)
+                && caret_at(frame).is_some_and(|(_, column)| column == GUTTER + 1)
+        }),
+        "the reported Ctrl-C cleared the draft the byte would have cleared: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(b"\x1b[113;5u");
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "and the reported Ctrl-Q still quits: {:?}",
+        drawn.text()
+    );
+}
+
+#[test]
+fn a_reported_shift_enter_breaks_the_line_rather_than_sending() {
     let ground = Ground::new();
     let (session, mut pty, drawn) = Session::open(&ground);
 
@@ -984,6 +1121,44 @@ fn shift_enter_from_the_kitty_protocol_breaks_the_line_rather_than_sending() {
 
     pty.type_bytes(&[0x11]);
     assert_eq!(session.wait().code(), Some(0));
+}
+
+#[test]
+fn a_terminal_that_reports_nothing_is_handed_the_same_frame_and_the_same_draft() {
+    let ground = Ground::new();
+
+    let reported = drafted(&ground, &[b"one", b"\x1b[13;2u", b"two"]);
+    let spoken = drafted(&ground, &[b"one", b"\n", b"two"]);
+
+    assert_eq!(
+        reported, spoken,
+        "a terminal that speaks no protocol is handed the frame the one that does is handed"
+    );
+}
+
+/// The frame a launch holds once a draft is typed into it as the given keys, and the launch quit:
+/// two spells of one draft are compared on what a terminal was written.
+fn drafted(ground: &Ground, keys: &[&[u8]]) -> String {
+    let (session, mut pty, drawn) = Session::open(ground);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    for key in keys {
+        pty.type_bytes(key);
+    }
+    assert!(
+        drawn.wait_until(|frame| composer_rows(frame) == Some(3)),
+        "two lines of draft: {:?}",
+        drawn.text()
+    );
+    let frame = String::from_utf8_lossy(&drawn.settled()).into_owned();
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0));
+
+    frame
 }
 
 #[test]
