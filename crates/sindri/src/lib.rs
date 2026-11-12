@@ -5,7 +5,7 @@ pub mod decode; // the bytes a key arrives as, answered as the key or the paste
 pub mod door; // the frame a launch opens on: a wordmark, what the product is, and three commands
 pub mod face; // the picture the binary carries: Sindri's face, measured and never said in words
 pub mod graphics; // an SVG becomes the pixels a picture is drawn in
-pub mod ink; // the look a cell is drawn in, asked for by name: the ink it is in
+pub mod ink; // the look a cell is drawn in, asked for by name: its ink, its faces, its underline
 pub mod keys; // the mode stack and one key table per mode
 pub mod ledger; // the run's facts, the one way each value is spelled, and the rows they are laid out in
 pub mod mark; // the cells a reader has marked, and the words they hold

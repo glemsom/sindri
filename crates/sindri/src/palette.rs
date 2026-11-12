@@ -2,7 +2,7 @@ use ratatui::buffer::Cell;
 use ratatui::style::{Color, Modifier, Style};
 
 use crate::composer;
-use crate::ink::{Face, Ink, Look};
+use crate::ink::{Face, Faces, Ink, Look};
 
 /// The colours one spelling of the design is drawn in: three palettes, one design, and never a
 /// second look for a terminal that names fewer colours than another.
@@ -209,22 +209,38 @@ impl Palette {
         }
     }
 
+    /// The colour an ink is drawn in, and never the face it wears: the colour the line under a
+    /// cell is drawn in, read back to the ink it is.
+    pub fn colour(&self, ink: Ink) -> Color {
+        self.ink(ink).0
+    }
+
     /// The look a cell is read back as, against the palette it was drawn with. The most specific ink
     /// wins, because only one spends a modifier: reverse video over no colour is both `mark` and
     /// `plain` reversed. A cell's background is never read, so a rail cell reads back on its surface.
     pub fn look_of(&self, cell: &Cell) -> Option<Look> {
-        if cell.underline_color != Color::Reset {
+        let underlined = cell.modifier.contains(Modifier::UNDERLINED);
+        if !underlined && cell.underline_color != Color::Reset {
             return None;
         }
+        let underline = match underlined {
+            true => Some(self.ink_of(cell.underline_color)?),
+            false => None,
+        };
         Ink::ALL.into_iter().rev().find_map(|ink| {
             let (foreground, spent) = self.ink(ink);
             if foreground != cell.fg || !cell.modifier.contains(spent) {
                 return None;
             }
-            let rest = cell.modifier - spent;
-            let face = Face::ALL.into_iter().find(|face| face.modifier() == rest)?;
-            Some(Look::new(ink, face))
+            let look = Look::new(ink, Faces::of_modifier(cell.modifier - spent)?);
+            Some(underline.map_or(look, |underline| look.underlined(underline)))
         })
+    }
+
+    /// The ink a colour is drawn in: the first ink that draws it, because a palette whose inks
+    /// share a colour still has to read the line under a cell back as one of them.
+    fn ink_of(&self, colour: Color) -> Option<Ink> {
+        Ink::ALL.into_iter().find(|ink| self.colour(*ink) == colour)
     }
 }
 

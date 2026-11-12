@@ -145,9 +145,15 @@ A colour role asked for by name — dim, muted, accent, ok, err — never a lite
 _Avoid_: Colour, style, RGB
 
 **Face**:
-The one weight an ink can wear beyond its colour — plain, bold, reversed, faint — so the accent
-dimmed is a face on the accent and never a second ink.
+One of the weights an ink can wear beyond its colour — bold, italic, reversed, faint — and a look
+wears a set of them, so the accent dimmed is a face on the accent, a strong word inside a heading
+wears two, and neither is a second ink. A look that wears none is `plain`.
 _Avoid_: Style, emphasis, attribute
+
+**Underline**:
+The line a look draws under the cells it is written in, in an ink of its own and never a face: a link
+will wear one, and a cell that carries one still reads back as its ink and its faces.
+_Avoid_: Rule (that one fills a row), decoration, border
 
 **Palette**:
 The colours the seven inks, the three bands and the ramp a raised surface is drawn on, resolved once

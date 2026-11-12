@@ -7,13 +7,14 @@ use std::path::PathBuf;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::{Buffer, Cell};
-
+use ratatui::layout::Rect;
 use sindri::composer::{Composer, Key, Outcome};
 use sindri::graphics::CellSize;
-use sindri::ink::Look;
+use sindri::ink::{Faces, Ink, Look};
 use sindri::ledger::{Boot, Ctx, Facts};
 use sindri::mark;
 use sindri::palette::Palette;
+use sindri::pen::{self, Clip};
 use sindri::pictures::{PLACEHOLDER, Pictures};
 use sindri::pulse::Pulse;
 use sindri::rows::Scroll;
@@ -840,4 +841,28 @@ fn looks_in(runs: &str) -> Option<Vec<Look>> {
         looks.extend(std::iter::repeat_n(look, usize::from(count)));
     }
     Some(looks)
+}
+
+#[test]
+fn a_cell_wearing_two_faces_is_written_and_read_back_as_the_one_name_it_has() {
+    let palette = Palette::TRUECOLOR;
+    let emphasis = Look::new(Ink::Accent, Faces::BOLD.and(Faces::ITALIC));
+    let area = Rect::new(0, 0, 2, 1);
+    let mut buffer = Buffer::empty(area);
+    pen::write(
+        &mut buffer,
+        area,
+        &[("ab", emphasis)],
+        Clip::Whole,
+        &palette,
+    );
+
+    let drawn = text("two-faces", &palette, &buffer);
+    let written = drawn.lines().nth(1).expect("the one row of the frame");
+    assert_eq!(
+        written, "00 |ab| accent+bold+italic:2",
+        "a cell wearing two faces is written in one order, so one frame has one picture"
+    );
+    let row = row_of(written).expect("the row the fixture wrote is the row it reads back");
+    assert_eq!(row.looks, [emphasis, emphasis]);
 }
