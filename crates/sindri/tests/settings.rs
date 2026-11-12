@@ -296,8 +296,37 @@ fn space_flips_a_toggle_and_the_file_holds_the_word_it_was_flipped_to() {
     assert_eq!(
         read(&path),
         HAND_WRITTEN.replace("thinking = true", "thinking = false"),
-        "Space is a switch on the three keys that hold one, and the line it flips is the \
+        "Space is a switch on the keys that hold one, and the line it flips is the \
          only line that moves"
+    );
+}
+
+#[test]
+fn the_face_is_shown_on_the_screen_and_the_word_it_is_flipped_to_is_written() {
+    let text = format!("{HAND_WRITTEN}face = false\n");
+    let home = home(&text);
+    let path = file_in(&home);
+    let mut view = opened(&home);
+    walk_to(&mut view, "face");
+
+    assert_eq!(
+        shown(&view, "face"),
+        "false",
+        "the row holds the value in force, which is what a reader turns over"
+    );
+
+    view.key(Key::Char(' '));
+    let touched = entered(&mut view);
+    settings::persist(&environment(&home), &touched, Flags::default()).expect("the write");
+
+    assert_eq!(
+        read(&path),
+        text.replace("face = false", "face = true"),
+        "Space flips the face as it flips every other toggle, and the one line moves"
+    );
+    assert!(
+        resolved(&home).draws_face(),
+        "and the config the prompt after the visit runs on draws the face again"
     );
 }
 

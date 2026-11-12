@@ -341,7 +341,7 @@ mod tests {
             shown(&settings, "extra_writable_paths"),
             format!("/a{}b", ' '),
             "a path may hold a space, and a screen that could not type one could not name a \
-             path: only the schema's three toggles flip"
+             path: only the schema's own toggles flip"
         );
     }
 

@@ -32,7 +32,7 @@ fn resolved(home: &Path, vars: &[(&str, &str)], flags: Flags) -> Result<Config, 
 /// One worked example of every key in the schema, spelled as the file spells it: the independent
 /// source of truth for the key list, so a schema that grows a key and a table that does not is a
 /// failure below.
-const EXAMPLES: [(&str, &str); 15] = [
+const EXAMPLES: [(&str, &str); 16] = [
     ("provider", "\"openai\""),
     ("model", "\"claude-sonnet-4-5\""),
     ("route", "\"responses\""),
@@ -47,6 +47,7 @@ const EXAMPLES: [(&str, &str); 15] = [
     ("command_budget_ms", "3600000"),
     ("output_budget_bytes", "8388608"),
     ("status", "true"),
+    ("face", "false"),
     ("ssh_agent", "false"),
 ];
 
@@ -112,11 +113,69 @@ fn every_key_in_the_schema_is_accepted() {
     assert_eq!(config.command_budget_ms, Some(3_600_000));
     assert_eq!(config.output_budget_bytes, Some(8_388_608));
     assert_eq!(config.status, Some(true));
+    assert!(
+        !config.draws_face(),
+        "a file that turns the face off is read as the frame's own answer"
+    );
     assert_eq!(config.ssh_agent, Some(false));
     assert_eq!(config.thinking, Some(true));
     assert_eq!(
         config.extra_headers,
         Some(vec![String::from("X-Gateway-Session: {session}")])
+    );
+}
+
+#[test]
+fn the_face_is_drawn_unless_the_config_says_otherwise_and_its_key_sits_beside_status() {
+    let keys = Config::KEYS.to_vec();
+    let at = keys
+        .iter()
+        .position(|key| *key == "face")
+        .expect("the schema names the face");
+
+    assert_eq!(
+        (keys.get(at.wrapping_sub(1)), keys.get(at + 1)),
+        (Some(&"status"), Some(&"ssh_agent")),
+        "the face is spelled beside the status key and the agent's, the two switches it keeps \
+         company with: {keys:?}"
+    );
+    assert!(
+        Config::TOGGLES.contains(&"face"),
+        "a key that holds on or off is one the settings screen's space flips"
+    );
+    assert!(
+        Config::default().draws_face(),
+        "a config nothing has spoken for draws the face, so a launch that says nothing is a \
+         frame like every other"
+    );
+}
+
+#[test]
+fn an_exported_false_turns_the_face_off_for_one_launch_and_no_longer() {
+    let home = config_home("");
+    let exported = resolved(home.path(), &[("SINDRI_FACE", "false")], Flags::default())
+        .expect("an exported false is a value the schema holds");
+    assert!(
+        !exported.draws_face(),
+        "the environment is the door a face is turned off at for one launch"
+    );
+
+    let after = resolved(home.path(), &[], Flags::default()).expect("the config loads");
+    assert!(
+        after.draws_face(),
+        "and the next launch is the file's own answer, which said nothing"
+    );
+}
+
+#[test]
+fn an_exported_true_turns_the_face_back_on_over_a_file_that_turned_it_off() {
+    let home = config_home("face = false\n");
+    let exported = resolved(home.path(), &[("SINDRI_FACE", "true")], Flags::default())
+        .expect("the config loads");
+
+    assert!(
+        exported.draws_face(),
+        "the environment is read above the file, as every other flag is"
     );
 }
 

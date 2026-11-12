@@ -14,7 +14,7 @@ use sindri::ink::Look;
 use sindri::ledger::{Boot, Ctx, Facts};
 use sindri::mark;
 use sindri::palette::Palette;
-use sindri::pictures::Pictures;
+use sindri::pictures::{PLACEHOLDER, Pictures};
 use sindri::pulse::Pulse;
 use sindri::rows::Scroll;
 use sindri::view::View;
@@ -71,6 +71,8 @@ fn named(name: &str) -> View {
         "transcript" => running(transcript(), Scroll::Tail),
         "transcript-scrolled" => running(transcript(), Scroll::Back(4)),
         "rail" => running(opening(), Scroll::Tail),
+        "face" => faced(true),
+        "face-off" => faced(false),
         "streaming" => streaming(),
         "calls" => running(calls(), Scroll::Tail),
         "typing" => View::typing(draft(&["why does the retry test fail"])),
@@ -150,6 +152,17 @@ fn pictured() -> View {
     view.set_workspace(workspace);
     view.set_cell_size(CellSize::new(10, 20));
     view.set_pictures(Pictures::kitty(CellSize::new(10, 20)));
+    view
+}
+
+/// A frame whose terminal places pictures, with the rail's facts where the face is drawn: the
+/// picture over the rail's top rows with the switch on, and the facts from the rail's first row
+/// with it off.
+fn faced(face: bool) -> View {
+    let mut view = running(opening(), Scroll::Tail);
+    view.set_cell_size(CellSize::new(10, 20));
+    view.set_pictures(Pictures::kitty(CellSize::new(10, 20)));
+    view.set_face(face);
     view
 }
 
@@ -279,6 +292,7 @@ fn in_force() -> Config {
         max_turns: Some(250),
         timeout: Some(120),
         api_key: Some(String::from("sk-not-a-real-key")),
+        face: Some(true),
         ..Config::default()
     }
 }
@@ -719,8 +733,14 @@ fn text(name: &str, palette: &Palette, buffer: &Buffer) -> String {
     text
 }
 
+/// The glyph one cell of the frame is written as. The cells a picture covers hold the protocol's
+/// sequence and the placeholders behind it rather than a glyph, so they are written as the blank
+/// of the band it is drawn on: a picture is not glyphs, and its rows are what a frame shows.
 fn glyph(cell: &Cell, x: u16, y: u16) -> char {
     let symbol = cell.symbol();
+    if cell.skip || symbol.contains(PLACEHOLDER) || symbol.contains('\u{1b}') {
+        return ' ';
+    }
     let mut characters = symbol.chars();
     match (characters.next(), characters.next()) {
         (Some(glyph), None) => glyph,

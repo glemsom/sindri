@@ -391,6 +391,7 @@ fn every_key_touched() -> Flags {
         command_budget_ms: Some(3_600_000),
         output_budget_bytes: Some(8_388_608),
         status: Some(true),
+        face: Some(false),
         ssh_agent: Some(false),
     }
 }

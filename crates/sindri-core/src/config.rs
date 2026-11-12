@@ -29,10 +29,11 @@ pub struct Config {
     pub command_budget_ms: Option<u64>,
     pub output_budget_bytes: Option<u64>,
     pub status: Option<bool>,
+    pub face: Option<bool>,
     pub ssh_agent: Option<bool>,
 }
 impl Config {
-    pub const KEYS: [&'static str; 15] = [
+    pub const KEYS: [&'static str; 16] = [
         "provider",
         "model",
         "route",
@@ -47,11 +48,15 @@ impl Config {
         "command_budget_ms",
         "output_budget_bytes",
         "status",
+        "face",
         "ssh_agent",
     ];
-    pub const TOGGLES: [&'static str; 3] = ["thinking", "status", "ssh_agent"];
+    pub const TOGGLES: [&'static str; 4] = ["thinking", "status", "face", "ssh_agent"];
     pub fn tells_status(&self) -> bool {
         self.status.unwrap_or(true)
+    }
+    pub fn draws_face(&self) -> bool {
+        self.face.unwrap_or(true)
     }
     pub fn load_from(path: &Path) -> Result<Config, ConfigError> {
         let text = match std::fs::read_to_string(path) {
@@ -180,6 +185,7 @@ impl Config {
             "command_budget_ms" => number_or_empty(self.command_budget_ms),
             "output_budget_bytes" => number_or_empty(self.output_budget_bytes),
             "status" => on_or_empty(self.status),
+            "face" => on_or_empty(self.face),
             "ssh_agent" => on_or_empty(self.ssh_agent),
             _ => String::new(),
         }
@@ -200,6 +206,7 @@ impl Config {
             command_budget_ms: self.command_budget_ms.or(lower.command_budget_ms),
             output_budget_bytes: self.output_budget_bytes.or(lower.output_budget_bytes),
             status: self.status.or(lower.status),
+            face: self.face.or(lower.face),
             ssh_agent: self.ssh_agent.or(lower.ssh_agent),
         }
     }
@@ -220,6 +227,7 @@ impl Config {
             command_budget_ms: spoken_parsed(environment, "SINDRI_COMMAND_BUDGET_MS")?,
             output_budget_bytes: spoken_parsed(environment, "SINDRI_OUTPUT_BUDGET_BYTES")?,
             status: spoken_parsed(environment, "SINDRI_STATUS")?,
+            face: spoken_parsed(environment, "SINDRI_FACE")?,
             ssh_agent: spoken_parsed(environment, "SINDRI_SSH_AGENT")?,
         })
     }
@@ -260,6 +268,7 @@ impl fmt::Debug for Config {
             .field("command_budget_ms", &self.command_budget_ms)
             .field("output_budget_bytes", &self.output_budget_bytes)
             .field("status", &self.status)
+            .field("face", &self.face)
             .field("ssh_agent", &self.ssh_agent)
             .finish()
     }
@@ -280,6 +289,7 @@ pub struct Flags {
     pub command_budget_ms: Option<u64>,
     pub output_budget_bytes: Option<u64>,
     pub status: Option<bool>,
+    pub face: Option<bool>,
     pub ssh_agent: Option<bool>,
 }
 impl Flags {
@@ -342,6 +352,9 @@ impl Flags {
         if let Some(value) = self.status {
             write_key(document, "status", Value::from(value));
         }
+        if let Some(value) = self.face {
+            write_key(document, "face", Value::from(value));
+        }
         if let Some(value) = self.ssh_agent {
             write_key(document, "ssh_agent", Value::from(value));
         }
@@ -365,6 +378,7 @@ impl From<Flags> for Config {
             command_budget_ms: flags.command_budget_ms,
             output_budget_bytes: flags.output_budget_bytes,
             status: flags.status,
+            face: flags.face,
             ssh_agent: flags.ssh_agent,
         }
     }
@@ -387,6 +401,7 @@ impl fmt::Debug for Flags {
             .field("command_budget_ms", &self.command_budget_ms)
             .field("output_budget_bytes", &self.output_budget_bytes)
             .field("status", &self.status)
+            .field("face", &self.face)
             .field("ssh_agent", &self.ssh_agent)
             .finish()
     }
@@ -436,6 +451,7 @@ impl Touched {
                 "command_budget_ms" => flags.command_budget_ms = Some(parsed(key, text)?),
                 "output_budget_bytes" => flags.output_budget_bytes = Some(parsed(key, text)?),
                 "status" => flags.status = Some(parsed(key, text)?),
+                "face" => flags.face = Some(parsed(key, text)?),
                 "ssh_agent" => flags.ssh_agent = Some(parsed(key, text)?),
                 _ => {
                     return Err(ConfigError::BadValue {

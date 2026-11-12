@@ -17,7 +17,7 @@ use sindri::ledger::{self, COLUMNS, Ctx, Facts};
 use sindri::mark::Cell;
 use sindri::markdown;
 use sindri::picture::{self, Surface};
-use sindri::pictures::Pictures;
+use sindri::pictures::{PLACEHOLDER, Pictures};
 use sindri::rows::{Row, Scroll};
 use sindri::view::View;
 use sindri_core::policy::Enforcement;
@@ -386,10 +386,6 @@ fn painted_at(view: &mut View, size: (u16, u16)) -> Buffer {
         .expect("the frame is painted");
     completed.buffer.clone()
 }
-
-/// The glyph a Kitty placement writes into every cell it covers: the one thing on a screen
-/// that says a picture is placed there rather than written about.
-const PLACEHOLDER: char = '\u{10EEEE}';
 
 /// The first chunk of the protocol's transmission, which a terminal is told once and never
 /// again for one picture: the glyph a cell holds when the placement sends the picture rather
@@ -1025,6 +1021,44 @@ fn below_a_hundred_columns_no_face_is_drawn_and_the_strip_is_the_row_it_was() {
             with, without,
             "and the strip a terminal that places pictures draws is the row every terminal is \
              drawn, cell for cell"
+        );
+    }
+}
+
+#[test]
+fn a_frame_the_face_is_turned_off_for_is_the_frame_a_terminal_that_places_no_picture_draws() {
+    for cols in [100, 120] {
+        let rail = rail_band(cols, 40);
+        let mut turned_off = railed(true);
+        turned_off.set_face(false);
+        let off = painted_at(&mut turned_off, (cols, 40));
+        let mut placeless = railed(false);
+        let placeless = painted_at(&mut placeless, (cols, 40));
+
+        assert!(
+            pictured_rows(&off).is_empty(),
+            "a frame the config turned the face off for is given no cell of it"
+        );
+        assert_eq!(
+            rail_row(&off, rail, rail.y).trim_end(),
+            "wire                   anthropic",
+            "the facts stand from the rail's first row, and the row under them is the second \
+             fact: no band is reserved for a face that is not drawn"
+        );
+        assert_eq!(
+            off, placeless,
+            "and every cell of the {cols}-column frame is the one a terminal that places no \
+             picture draws"
+        );
+
+        turned_off.set_face(true);
+        let back_on = painted_at(&mut turned_off, (cols, 40));
+        let face = face::over_rail(rail.width, &carried(true)).expect("a face the rail holds");
+        assert_eq!(
+            pictured_rows(&back_on).len(),
+            usize::from(face.rows()),
+            "a frame the setting is turned back on for draws the face again, over the rows it \
+             reserved before"
         );
     }
 }
