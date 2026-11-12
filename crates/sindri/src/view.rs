@@ -7,10 +7,11 @@ use std::path::PathBuf;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use sindri_core::config::{Config, Touched};
+use sindri_core::conversation::Conversation;
 use sindri_core::provider::Deltas;
 use sindri_core::provider::served::Listing;
 use sindri_core::records::{Entry, SessionDocument};
-use sindri_core::run::{Load, Loaded};
+use sindri_core::run::{Exchange, Load, Loaded};
 use sindri_core::skills::{Catalog, Skill};
 
 use crate::card;
@@ -87,6 +88,8 @@ pub struct View {
     composer: Composer,
     stream: Stream,
     queue: Queue,
+    conversation: Conversation,
+    superseded: bool,
     stack: Stack,
     pulse: Option<Pulse>,
     rail: Facts,
@@ -159,12 +162,27 @@ impl View {
         &self.stream
     }
 
+    /// The prompts the run a draft is about to start joins, in the order they ended.
+    pub fn earlier(&self) -> Vec<Exchange> {
+        self.conversation.exchanges().to_vec()
+    }
+
+    /// Keeps the prompt the run that stopped was asked with beside the answer it got, so the prompt
+    /// after it joins the conversation at the turn it was asked — unless `/new` was pressed while
+    /// that run was in flight, whose words belong to the conversation it emptied.
+    pub fn kept(&mut self, ended: &Exchange) {
+        if !self.superseded {
+            self.conversation.join(ended.clone());
+        }
+    }
+
     /// The turn in flight is over: what it said is written down as entries, so the live entry
-    /// it was drawn as goes. A frame that kept the stream would draw the same answer twice. The
-    /// door goes with it, because the run it was a door to has been asked.
+    /// it was drawn as goes, and the door with it. A run starting now is asked under the
+    /// conversation that stands, so whatever `/new` superseded is behind it.
     pub fn settle(&mut self) {
         self.stream = Stream::new();
         self.door = false;
+        self.superseded = false;
     }
 
     pub fn set_workspace(&mut self, workspace: PathBuf) {
@@ -338,8 +356,8 @@ impl View {
     }
 
     /// `/new`: the conversation starts again — rows, turn in flight, marker and mark — and the
-    /// loaded-skill set goes with the history. A run in flight is superseded and never stopped,
-    /// so its session keeps saying `running` and it reaches its own stop reason.
+    /// loaded-skill set and the turns before it go with it. A run in flight is superseded and never
+    /// stopped: it reaches its own stop reason, and joins nothing.
     fn start_over(&mut self) -> Outcome {
         self.rows = Rows::new();
         self.scroll = Scroll::Tail;
@@ -348,6 +366,8 @@ impl View {
         self.mark = None;
         self.marked = Span::default();
         self.loaded.clear();
+        self.conversation.clear();
+        self.superseded = true;
         Outcome::Edited
     }
 

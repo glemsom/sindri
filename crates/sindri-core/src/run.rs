@@ -513,6 +513,19 @@ impl<R: Responder, A: Executor> Run<R, A> {
         &self.history
     }
 
+    /// The exchange a conversation keeps for this run: the prompt it was asked with beside the words
+    /// of the turn it ended on, and those words alone when no turn ended before it stopped.
+    pub fn kept(&self) -> Exchange {
+        let last = self.history.last();
+        Exchange {
+            turn: self.turns,
+            prompt: self.prompt.clone(),
+            text: last.map(|ended| ended.text.clone()).unwrap_or_default(),
+            calls: last.map(|ended| ended.calls.clone()).unwrap_or_default(),
+            usage: last.map(|ended| ended.usage).unwrap_or_default(),
+        }
+    }
+
     pub fn skills(&self) -> &[String] {
         self.skills.names()
     }

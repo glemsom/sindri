@@ -400,6 +400,30 @@ fn a_prompt_is_answered_on_stdout_with_exactly_one_newline() {
 }
 
 #[test]
+fn a_batch_run_asks_one_prompt_and_carries_nothing_from_before_it() {
+    let ground = Ground::new();
+    let wire = Wire::answering(vec![Reply::stream(ANTHROPIC)]);
+
+    ground
+        .asking(&wire, "triage this")
+        .output()
+        .expect("the binary should run");
+
+    let asked = wire.requests();
+    assert_eq!(asked.len(), 1, "one prompt is one request: {asked:?}");
+    let (_, body) = asked[0]
+        .split_once("\r\n\r\n")
+        .expect("the request's head and its body");
+    let body: serde_json::Value = serde_json::from_str(body).expect("a wire's body is JSON");
+    assert_eq!(
+        body["messages"].as_array().map(Vec::len),
+        Some(1),
+        "and the one message in it is the prompt: {}",
+        asked[0]
+    );
+}
+
+#[test]
 fn a_run_that_answered_records_its_turn_and_why_it_stopped() {
     let ground = Ground::new();
     let wire = Wire::answering(vec![Reply::stream(ANTHROPIC)]);

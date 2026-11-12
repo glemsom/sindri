@@ -34,7 +34,12 @@ pub(crate) struct Running {
 impl Running {
     /// Drives `prompt` in its own thread: the fragment a wire lands is pushed where the loop takes
     /// it, and the loop is pinged through the pipe a signal uses, so nothing polls for it.
-    pub(crate) fn start(launch: Launch, prompt: Prompt, wake: Arc<Wake>) -> Running {
+    pub(crate) fn start(
+        launch: Launch,
+        prompt: Prompt,
+        earlier: Vec<Exchange>,
+        wake: Arc<Wake>,
+    ) -> Running {
         let cancel = Cancel::new();
         let pending = Arc::new(Mutex::new(Vec::new()));
         let mut reports = Reports {
@@ -47,14 +52,19 @@ impl Running {
         let thread = thread::spawn(move || {
             // `drive` failing leaves no stop reason, which the loop cannot do: the marker settles
             // on the refusal rather than turning for a run nobody is driving.
-            let (turns, stop) =
-                match launch.drive(prompt.text(), &mut reports, &mut turns, interrupted) {
-                    Ok(outcome) => (outcome.turns(), outcome.stopped().clone()),
-                    Err(refusal) => (
-                        0,
-                        Stop::Error(SecretSet::default().redact(refusal.message())),
-                    ),
-                };
+            let (turns, stop) = match launch.drive(
+                prompt.text(),
+                &earlier,
+                &mut reports,
+                &mut turns,
+                interrupted,
+            ) {
+                Ok(outcome) => (outcome.turns(), outcome.stopped().clone()),
+                Err(refusal) => (
+                    0,
+                    Stop::Error(SecretSet::default().redact(refusal.message())),
+                ),
+            };
             // Read here, where the run stopped, and carried to the frame: a frame that read the
             // clock when it painted would put a different number beside the same verdict.
             let elapsed_ms = millis(started.elapsed());
@@ -93,6 +103,7 @@ enum Report {
     Told(Told),
     Facts(Facts),
     Record(SessionDocument),
+    Kept(Exchange),
     Stopped {
         stop: Stop,
         elapsed_ms: u64,
@@ -142,6 +153,10 @@ impl Turns for Reports {
     fn record(&mut self, document: &SessionDocument) {
         self.push(Report::Record(document.clone()));
     }
+
+    fn kept(&mut self, kept: &Exchange) {
+        self.push(Report::Kept(kept.clone()));
+    }
 }
 
 /// Takes everything the run left and puts it on the frame, and says whether the run ended. A run
@@ -179,6 +194,8 @@ pub(crate) fn take(
                 view.set_record(&document);
                 painted = true;
             }
+            // No cell: the transcript already drew the exchange it keeps.
+            Report::Kept(kept) => view.kept(&kept),
             Report::Stopped {
                 stop,
                 elapsed_ms,
