@@ -596,12 +596,60 @@ const SACRIFICE: [Kind; 11] = [
     Kind::Model,
 ];
 
+/// The rail's band as a picture cuts it: the cells a picture is drawn over at the top of the rail
+/// and the rows the ledger's own rows are laid in beneath them. A rail that draws no picture
+/// reserves nothing and gives the facts its whole band.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RailBand {
+    /// Every row the rail paints: its ground and its edges are drawn over all of it.
+    pub area: Rect,
+    /// The cells the picture covers, centred in the rail's columns, and nothing when none is drawn.
+    pub picture: Option<Rect>,
+    /// The rows the facts are laid in: the band under the picture, or the whole band.
+    pub facts: Rect,
+}
+
+impl RailBand {
+    /// The rail's whole band, with no row of it reserved.
+    pub fn of(area: Rect) -> RailBand {
+        RailBand {
+            area,
+            picture: None,
+            facts: area,
+        }
+    }
+
+    /// The same band with a picture `cols` by `rows` drawn over its top, centred in its columns, and
+    /// every fact laid beneath it. A picture larger than the band is cut to it rather than drawn
+    /// past the rail's own rows.
+    pub fn with_picture(mut self, cols: u16, rows: u16) -> RailBand {
+        let cols = cols.min(self.area.width);
+        let rows = rows.min(self.area.height);
+        let x = self
+            .area
+            .x
+            .saturating_add(self.area.width.saturating_sub(cols) / 2);
+        self.picture = Some(Rect {
+            x,
+            y: self.area.y,
+            width: cols,
+            height: rows,
+        });
+        self.facts = Rect {
+            y: self.area.y.saturating_add(rows),
+            height: self.area.height.saturating_sub(rows),
+            ..self.area
+        };
+        self
+    }
+}
+
 /// What the transcript and the rail share of a band.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Share {
     pub transcript: Rect,
     /// Nothing when the frame knows no fact at all, and the transcript keeps the whole band.
-    pub rail: Option<(Rail, Rect)>,
+    pub rail: Option<(Rail, RailBand)>,
 }
 
 /// Cuts the band the transcript and the rail share: thirty-two columns down the right while the
@@ -646,7 +694,7 @@ pub fn split(facts: &Facts, band: Rect) -> Share {
     };
     Share {
         transcript,
-        rail: Some((shape, rail)),
+        rail: Some((shape, RailBand::of(rail))),
     }
 }
 
@@ -2583,10 +2631,10 @@ mod tests {
                 transcript: band(88, 37),
                 rail: Some((
                     Rail::Ledger,
-                    Rect {
+                    RailBand::of(Rect {
                         x: 88,
                         ..band(COLUMNS, 37)
-                    }
+                    })
                 )),
             },
             "a hundred columns and up holds a ledger down the frame's right-hand edge, band high"
@@ -2597,14 +2645,59 @@ mod tests {
                 transcript: band(99, 20),
                 rail: Some((
                     Rail::Strip,
-                    Rect {
+                    RailBand::of(Rect {
                         y: 20,
                         height: 1,
                         ..band(99, 1)
-                    }
+                    })
                 )),
             },
             "below a hundred the strip takes the band's bottom row and no columns"
+        );
+    }
+
+    #[test]
+    fn the_band_under_a_picture_centres_it_and_lays_the_facts_beneath_the_rows_it_takes() {
+        let area = band(COLUMNS, 37);
+        assert_eq!(
+            RailBand::of(area).with_picture(19, 11),
+            RailBand {
+                area,
+                picture: Some(Rect {
+                    x: 6,
+                    y: 0,
+                    width: 19,
+                    height: 11,
+                }),
+                facts: Rect {
+                    y: 11,
+                    height: 26,
+                    ..area
+                },
+            },
+            "a nineteen-cell picture is centred in the rail's thirty-two columns, and the facts \
+             take every row under it"
+        );
+        assert_eq!(
+            RailBand::of(area).picture,
+            None,
+            "and a band with no picture drawn over it reserves no row"
+        );
+    }
+
+    #[test]
+    fn a_picture_larger_than_the_band_is_cut_to_it_rather_than_laid_outside_the_rail() {
+        let area = band(COLUMNS, 4);
+        let band = RailBand::of(area).with_picture(40, 9);
+
+        assert_eq!(
+            band.picture,
+            Some(area),
+            "a picture wider and taller than the band is drawn over the whole of it"
+        );
+        assert_eq!(
+            band.facts.height, 0,
+            "and leaves the facts no row, so none is laid outside the rail"
         );
     }
 

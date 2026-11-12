@@ -3,11 +3,12 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
-use crate::ledger::{self, Facts, Rail};
+use crate::ledger::{self, Facts, Rail, RailBand};
 use crate::palette::{Band, Edge, Palette};
 use crate::pen;
 
-pub fn paint(facts: &Facts, rail: Rail, area: Rect, buffer: &mut Buffer, palette: &Palette) {
+pub fn paint(facts: &Facts, rail: Rail, band: RailBand, buffer: &mut Buffer, palette: &Palette) {
+    let area = band.area;
     if area.width == 0 || area.height == 0 {
         return;
     }
@@ -15,7 +16,11 @@ pub fn paint(facts: &Facts, rail: Rail, area: Rect, buffer: &mut Buffer, palette
     if rail == Rail::Ledger {
         elevation(buffer, area, palette);
     }
-    ledger::draw(&ledger::rows(facts, rail.into(), area), buffer, palette);
+    ledger::draw(
+        &ledger::rows(facts, rail.into(), band.facts),
+        buffer,
+        palette,
+    );
 }
 
 /// The two ends a ledger's band carries light at: the rule down the column it meets the
@@ -58,6 +63,11 @@ mod tests {
     }
 
     const PALETTE: Palette = Palette::TRUECOLOR;
+
+    /// The rail painted over its whole band, with no picture drawn above the facts.
+    fn paint(facts: &Facts, rail: Rail, area: Rect, buffer: &mut Buffer, palette: &Palette) {
+        super::paint(facts, rail, RailBand::of(area), buffer, palette);
+    }
 
     fn band(width: u16, height: u16) -> Rect {
         Rect {
@@ -181,6 +191,48 @@ mod tests {
             Some(Ink::Dim),
             "the label's first glyph stands on the lit rule and is read as the dim ink, because \
              an edge is a surface a cell is drawn on and never an ink it is drawn in"
+        );
+    }
+
+    #[test]
+    fn a_picture_over_the_rails_top_rows_is_drawn_on_the_rails_ground_and_no_fact_stands_there() {
+        let area = band(COLUMNS, 17);
+        let mut buffer = Buffer::empty(area);
+
+        super::paint(
+            &frame(),
+            Rail::Ledger,
+            RailBand::of(area).with_picture(19, 11),
+            &mut buffer,
+            &PALETTE,
+        );
+
+        for y in area.y..area.y + 11 {
+            for x in area.x + 1..area.right() {
+                assert_eq!(
+                    under(&buffer, x, y),
+                    PALETTE.band(Band::Rail),
+                    "row {y}, column {x} of the band the picture is drawn over is not the rail's \
+                     own ground: the face would stand on the frame and not on the rail"
+                );
+            }
+            assert_eq!(
+                glyphs(&buffer, y).trim_end(),
+                "",
+                "row {y} of the band the picture is drawn over holds a fact, which the face \
+                 would be drawn across"
+            );
+            assert_eq!(
+                under(&buffer, area.x, y),
+                PALETTE.edge(Edge::Lit),
+                "the lit rule down the rail's boundary gives way to the picture at row {y}, so \
+                 the rail stops short of its own top"
+            );
+        }
+        assert_eq!(
+            glyphs(&buffer, 11).trim_end(),
+            "wire                   anthropic",
+            "and the first block stands on the row under the picture"
         );
     }
 
