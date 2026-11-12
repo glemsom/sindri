@@ -208,8 +208,8 @@ impl Launch {
             .measured(measured, self.context_window)
     }
 
-    /// Drives `prompt` and nothing before it: the turns a launch has already ended are handed in as
-    /// `earlier`, so a wire is asked with what a reader said before this prompt.
+    /// Drives `prompt` on the turns a launch has already ended, so the wire is asked with what the
+    /// reader said before this prompt and not with its own words alone.
     pub fn drive(
         mut self,
         prompt: &str,

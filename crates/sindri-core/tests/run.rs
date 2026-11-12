@@ -373,6 +373,27 @@ fn a_run_stopped_on_an_error_keeps_the_words_of_the_turn_it_ended() {
 }
 
 #[test]
+fn a_run_stopped_on_cancellation_keeps_the_words_of_the_turn_it_ended() {
+    let cancel = Cancel::new();
+    let interrupting = cancel.clone();
+    let mut run = Run::new(
+        "work",
+        Scripted::answering([Reply::asking("working", [command("one")])]),
+        Tools::cheap().during(move || interrupting.now()),
+    )
+    .cancel(cancel);
+
+    let state = run.drive(&mut Transcript::default());
+
+    assert_eq!(state.word(), "cancelled");
+    assert_eq!(
+        run.kept().text,
+        "working",
+        "a run the reader stopped still joins with the turn that ended before it"
+    );
+}
+
+#[test]
 fn a_run_stopped_on_its_clock_budget_keeps_the_words_of_the_turn_it_ended() {
     let mut run = Run::new(
         "work",

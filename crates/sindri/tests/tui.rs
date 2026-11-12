@@ -2006,16 +2006,23 @@ fn a_prompt_queued_behind_a_live_run_joins_the_conversation_at_the_turn_it_was_a
 
     ask_words(&mut pty, &drawn, &wire, "hi my name is Glenn");
     queue(&mut pty, &drawn, "what is my name?");
+    queue(&mut pty, &drawn, "and where do I live?");
 
     wire.release();
     assert!(
         wire.wait_for_prompt("what is my name?"),
-        "the queued prompt becomes the run after it: {:?}",
+        "the prompt queued first becomes the run after it: {:?}",
+        wire.requests()
+    );
+    wire.release();
+    assert!(
+        wire.wait_for_prompt("and where do I live?"),
+        "and the one behind it starts next: {:?}",
         wire.requests()
     );
 
     let asked = wire.requests();
-    assert_eq!(asked.len(), 2, "two prompts, two requests: {asked:?}");
+    assert_eq!(asked.len(), 3, "three prompts, three requests: {asked:?}");
     assert_eq!(
         replayed(&asked[1]),
         [
@@ -2023,11 +2030,21 @@ fn a_prompt_queued_behind_a_live_run_joins_the_conversation_at_the_turn_it_was_a
             said("assistant", ANSWER_SAID),
             said("user", "what is my name?"),
         ],
-        "the queued prompt joins the conversation at the turn it was asked, behind the prompt it \
+        "each queued prompt joins the conversation at the turn it was asked, behind the prompt it \
          waited on and the answer that turn got"
     );
+    assert_eq!(
+        replayed(&asked[2]),
+        [
+            said("user", "hi my name is Glenn"),
+            said("assistant", ANSWER_SAID),
+            said("user", "what is my name?"),
+            said("assistant", ANSWER_SAID),
+            said("user", "and where do I live?"),
+        ],
+        "and behind the turns the queue ran before it, in the order it ran them"
+    );
 
-    wire.release();
     pty.type_bytes(&[0x11]);
     assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
 }
@@ -2108,6 +2125,47 @@ fn slash_new_under_a_live_run_keeps_the_turns_it_superseded_out_of_the_next_prom
         [said("user", "what is my name?")],
         "the run `/new` superseded belongs to the conversation it emptied, so the turn it ends on \
          is never carried into the one that replaced it"
+    );
+
+    wire.release();
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+}
+
+#[test]
+fn a_cancelled_run_leaves_the_turn_it_ended_in_what_the_next_prompt_carries() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    ask_words(&mut pty, &drawn, &wire, "hi my name is Glenn");
+    pty.type_bytes(&[0x03]);
+    wire.release();
+    assert!(
+        drawn.wait_until(|frame| frame.contains('\u{2717}')),
+        "the run the reader stopped has settled as stopped: {:?}",
+        drawn.text()
+    );
+
+    ask_words(&mut pty, &drawn, &wire, "what is my name?");
+
+    let asked = wire.requests();
+    assert_eq!(asked.len(), 2, "two prompts, two requests: {asked:?}");
+    assert_eq!(
+        replayed(&asked[1]),
+        [
+            said("user", "hi my name is Glenn"),
+            said("assistant", ANSWER_SAID),
+            said("user", "what is my name?"),
+        ],
+        "a stop that is not final leaves the turn that ended before it in what the next prompt \
+         carries"
     );
 
     wire.release();

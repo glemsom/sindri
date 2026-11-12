@@ -177,8 +177,8 @@ impl View {
     }
 
     /// The turn in flight is over: what it said is written down as entries, so the live entry
-    /// it was drawn as goes. A frame that kept the stream would draw the same answer twice. The
-    /// door goes with it, because the run it was a door to has been asked.
+    /// it was drawn as goes, and the door with it. A run starting now is asked under the
+    /// conversation that stands, so whatever `/new` superseded is behind it.
     pub fn settle(&mut self) {
         self.stream = Stream::new();
         self.door = false;
@@ -356,8 +356,8 @@ impl View {
     }
 
     /// `/new`: the conversation starts again — rows, turn in flight, marker and mark — and the
-    /// loaded-skill set goes with the history. A run in flight is superseded and never stopped,
-    /// so its session keeps saying `running` and it reaches its own stop reason.
+    /// loaded-skill set and the turns before it go with it. A run in flight is superseded and never
+    /// stopped: it reaches its own stop reason, and joins nothing.
     fn start_over(&mut self) -> Outcome {
         self.rows = Rows::new();
         self.scroll = Scroll::Tail;

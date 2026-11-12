@@ -2,10 +2,11 @@
 
 A launch in the TUI holds one conversation: two prompts typed into it reach the wire as two requests,
 the second asked after the first prompt and its answer, `/new` empties what is carried, and the
-launch that ends takes it away. The type is `sindri_core::conversation::Conversation`, in the core
-and beside `Run`, and the instance is held by the frame: `View` keeps it, hands it to the launch a
-prompt starts, and takes the exchange each run stops with. `/new` empties it and marks the run it
-superseded, so that run reaches its own stop reason and its words still never reach the next request.
+launch that ends takes it away. **It lives in the core**: the type is
+`sindri_core::conversation::Conversation`, beside `Run`, and only an instance of it belongs to a
+front end — `View` keeps one, hands it to the launch a prompt starts, and takes the exchange each run
+stops with. `/new` empties it and marks the run it superseded, so that run reaches its own stop reason
+and its words still never reach the next request.
 
 **Where it lives is decided by the glossary, not by convenience.** A conversation is a decision —
 which words the wire is asked with is as much a decision as which wire to ask — and the core is the
