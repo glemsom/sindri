@@ -1166,7 +1166,7 @@ fn recorded(state: &std::path::Path, needle: &str) -> bool {
     false
 }
 
-/// The columns the composer sets a draft in: the gutter the sigil opens it from.
+/// The columns the composer sets a draft in, before the first of its words.
 const GUTTER: u16 = 2;
 
 /// Types a draft and sends it, and waits until the run it started has a request in flight. The caret

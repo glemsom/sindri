@@ -569,7 +569,7 @@ impl View {
     /// composer's rows are measured when the frame is drawn and never cached.
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) {
         pen::claim(buffer, area, self.palette.ground(None));
-        self.measure(area.width);
+        self.composer.set_room(View::room(area.width));
         let bands = bands(area, self.composer.rows(), self.queue.rows());
         // The rail's share is taken from the transcript's band before the transcript is laid out
         // in what is left: a row's width is the width it is drawn at.
@@ -743,11 +743,9 @@ impl View {
             height: area.height.saturating_sub(HAIRLINE_ROWS),
             ..area
         };
-        // An empty draft says what the band can do there, in the ink a reader has not written in:
-        // the first glyph they type takes its place.
-        let (rows, ink, clip) = match self.composer.text().is_empty() {
-            true => (vec![PLACEHOLDER], Ink::Dim, Clip::Whole),
-            false => (self.composer.lines(), Ink::Plain, Clip::Edge),
+        let (rows, ink) = match self.composer.text().is_empty() {
+            true => (vec![PLACEHOLDER], Ink::Dim),
+            false => (self.composer.lines(), Ink::Plain),
         };
         for (row, line) in rows.iter().enumerate() {
             let Some(offset) = u16::try_from(row).ok() else {
@@ -764,8 +762,7 @@ impl View {
                 buffer,
                 Rect { y, ..draft },
                 opens,
-                &[(*line, ink)],
-                clip,
+                (*line, ink),
                 &self.palette,
             );
         }
@@ -783,13 +780,12 @@ impl View {
     /// Where the terminal's own cursor belongs, and nothing when the caret has run past the
     /// band's edge. The caret is never a cell of the frame: an ink names a foreground only, so
     /// a caret drawn as a cell would be invisible on the space it usually sits on.
-    pub fn cursor(&mut self, area: Rect) -> Option<(u16, u16)> {
+    pub fn cursor(&self, area: Rect) -> Option<(u16, u16)> {
         // The draft behind a card is dimmed and takes no key, so a caret there would point at a
         // cell the reader cannot type into.
         if self.stack.modal().is_some() {
             return None;
         }
-        self.measure(area.width);
         let bands = bands(area, self.composer.rows(), self.queue.rows());
         let (row, column) = self.composer.caret();
         let y = bands
@@ -797,15 +793,19 @@ impl View {
             .y
             .checked_add(HAIRLINE_ROWS)?
             .checked_add(row)?;
-        let x = area.x.checked_add(pen::cells(SIGIL))?.checked_add(column)?;
-        (x < area.right() && y < bands.composer.bottom()).then_some((x, y))
+        // A caret past the band's last cell waits on that cell, the way a terminal keeps the cursor
+        // at its right margin rather than giving it up.
+        let x = area
+            .x
+            .checked_add(pen::cells(INDENT))?
+            .checked_add(column)?
+            .min(area.right().saturating_sub(1));
+        (area.width > 0 && y < bands.composer.bottom()).then_some((x, y))
     }
 
-    /// Hands the draft the columns it is drawn in, before the band it is drawn on is placed: the
-    /// band's rows are a fact about how the draft wraps, and the width is what it wraps at.
-    fn measure(&mut self, width: u16) {
-        self.composer
-            .set_room(width.saturating_sub(pen::cells(SIGIL)));
+    /// The columns the draft's words have: the band's width less the gutter an answer is set from.
+    fn room(width: u16) -> u16 {
+        width.saturating_sub(pen::cells(INDENT))
     }
 
     /// A description wider than the card wraps under its own column rather than losing its tail:
@@ -1094,23 +1094,13 @@ fn screen_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)], pa
     );
 }
 
-/// Writes one row of the draft: the gutter an answer is set from, the sigil that opens the draft
-/// standing in it, and the row's own words beside it.
-fn draft_row(
-    buffer: &mut Buffer,
-    area: Rect,
-    opens: bool,
-    words: &[(&str, Ink)],
-    clip: Clip,
-    palette: &Palette,
-) {
+/// Writes one row of the draft. The sigil opens the first row and every row a wrap gave the draft
+/// keeps the gutter blank under it, so the draft's first column is the answer's on all of them.
+fn draft_row(buffer: &mut Buffer, area: Rect, opens: bool, words: (&str, Ink), palette: &Palette) {
     let gutter = match opens {
         true => SIGIL,
         false => INDENT,
     };
-    let mut spans: Vec<(&str, Ink)> = Vec::with_capacity(words.len() + 1);
-    spans.push((gutter, Ink::Dim));
-    spans.extend(words.iter().copied());
     pen::write(
         buffer,
         Rect {
@@ -1118,8 +1108,8 @@ fn draft_row(
             height: 1,
             ..area
         },
-        &spans,
-        clip,
+        &[(gutter, Ink::Dim), words],
+        Clip::Edge,
         palette,
     );
 }
@@ -1973,7 +1963,7 @@ mod tests {
             composer.paste("first line\nsecond line");
             composer
         };
-        let mut view = View::typing(composer);
+        let view = View::typing(composer);
         let area = screen(40, 12);
 
         assert_eq!(view.composer().rows(), 3);
@@ -2091,11 +2081,12 @@ mod tests {
 
         let band = bands(area, view.composer().rows(), view.queue().rows()).composer;
         let (empty, _) = place_of(&buffer, PLACEHOLDER);
+        let gutter = pen::cells(INDENT);
         assert!(
-            empty.ends_with(&pen::filled(120 - pen::cells(PLACEHOLDER) - 2, ' ')),
+            empty.ends_with(&pen::filled(120 - gutter - pen::cells(PLACEHOLDER), ' ')),
             "the placeholder {PLACEHOLDER:?} is not the words of the empty band: {empty:?}"
         );
-        let column = 2 + pen::cells(PLACEHOLDER) - 1;
+        let column = gutter + pen::cells(PLACEHOLDER) - 1;
         assert_eq!(
             look_at(&buffer, &palette, column, band.y + HAIRLINE_ROWS),
             Look::plain(Ink::Dim),
@@ -2183,7 +2174,7 @@ mod tests {
 
     #[test]
     fn a_draft_holding_a_wide_glyph_puts_the_caret_in_the_column_the_glyph_occupies() {
-        let mut view = View::typing({
+        let view = View::typing({
             let mut composer = Composer::new();
             composer.paste("日本");
             composer
@@ -2197,25 +2188,51 @@ mod tests {
         );
     }
 
+    /// Where the caret a frame `cols` by `rows` wide puts the terminal's cursor, in a frame the
+    /// view has painted: the band's rows are a fact about the width, so nothing is asked before it.
+    fn caret_at(composer: Composer, cols: u16, rows: u16) -> Option<(u16, u16)> {
+        let mut view = View::typing(composer);
+        let area = screen(cols, rows);
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+        view.cursor(area)
+    }
+
     #[test]
     fn the_caret_follows_the_draft_onto_the_row_the_wrap_gave_it() {
-        let mut view = View::typing({
+        let asking = || {
             let mut composer = Composer::new();
             composer.paste(&pen::filled(60, 'x'));
             composer
-        });
+        };
 
         assert_eq!(
-            view.cursor(screen(40, 12)),
+            caret_at(asking(), 40, 12),
             Some((24, 10)),
             "a thirty-eight column room holds thirty-eight glyphs of a draft of sixty, so the \
              caret waits twenty-two columns into the band's second row rather than off the \
              frame"
         );
         assert_eq!(
-            view.cursor(screen(80, 12)),
+            caret_at(asking(), 80, 12),
             Some((62, 10)),
             "and a frame wide enough to hold the draft shows it on the one row it takes"
+        );
+    }
+
+    #[test]
+    fn a_caret_past_a_full_row_waits_on_the_bands_last_cell() {
+        let asking = || {
+            let mut composer = Composer::new();
+            composer.paste(&pen::filled(38, 'x'));
+            composer
+        };
+
+        assert_eq!(
+            caret_at(asking(), 40, 12),
+            Some((39, 10)),
+            "a draft that fills the row's thirty-eight columns leaves the caret no cell after it, \
+             and a terminal keeps its cursor on the last one rather than giving it up"
         );
     }
 }

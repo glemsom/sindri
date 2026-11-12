@@ -75,9 +75,11 @@ pub fn write<S: AsRef<str>, D: Copy + Into<Look>>(
     for (text, look) in spans {
         let look: Look = (*look).into();
         let room = usize::from(row.right().saturating_sub(x));
+        let ground = buffer.cell((x, row.y)).map(|cell| cell.style());
         let (next, _) = buffer.set_stringn(x, row.y, text.as_ref(), room, look.style(palette));
-        // A wide glyph hides the cell after it and resets it, which would read the band a row sits
-        // on through that cell: the run holding one is claimed again in the look it was written in.
+        // `set_stringn` resets the cell a wide glyph hides, ground and all, which would read the band
+        // the row sits on through the hole it leaves: the run is claimed in the look it was written
+        // in, over the ground the cell had before it.
         if wide(text.as_ref()) {
             claim(
                 buffer,
@@ -87,7 +89,7 @@ pub fn write<S: AsRef<str>, D: Copy + Into<Look>>(
                     width: next.saturating_sub(x),
                     height: 1,
                 },
-                look.style(palette),
+                ground.unwrap_or_default().patch(look.style(palette)),
             );
         }
         x = next;
@@ -311,6 +313,34 @@ mod tests {
             Some(Look::new(Ink::Dim, Face::Plain)),
             "and a wash takes the face with it, so a mark under a scrim reads as its words"
         );
+    }
+
+    #[test]
+    fn a_wide_glyph_leaves_no_cell_of_the_band_between_it_and_the_next_one() {
+        let mut row = row_of(4);
+        let area = row.area;
+        row.set_style(area, PALETTE.ground(Some(Band::Composer)));
+        write(
+            &mut row,
+            area,
+            &[("日本", Ink::Plain)],
+            Clip::Edge,
+            &PALETTE,
+        );
+
+        for x in area.x..area.right() {
+            let cell = row.cell((x, 0)).expect("a cell of the row");
+            assert_eq!(
+                cell.bg,
+                PALETTE.band(Band::Composer),
+                "column {x} is read through to the terminal's own ground: a wide glyph hides the \
+                 cell after it and resets it, and the band a row sits on goes with it"
+            );
+            assert!(
+                Look::of(cell, &PALETTE).is_some(),
+                "column {x} reads back as no ink a fixture could name"
+            );
+        }
     }
 
     #[test]
