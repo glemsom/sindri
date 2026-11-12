@@ -254,19 +254,40 @@ fn arrow(last: u8) -> Option<Key> {
     }
 }
 
-/// The key a kitty-protocol report names: `CSI <code> ; <modifiers> u`. Only the reports this
-/// frame's map needs are answered — the `Enter` that sends and the two that break a line —
-/// because a key nobody answers is not a key.
+/// The key a protocol report names: `CSI <code> ; <modifiers> u`. Only the reports this frame's
+/// map has an answer for are answered, because a key nobody answers is not a key.
 fn reported(params: &str) -> Option<Key> {
     let (code, modifiers) = params.split_once(';').unwrap_or((params, "1"));
     let code: u32 = code.parse().ok()?;
     let modifiers = held(modifiers)?;
-    match (code, modifiers) {
-        (13, 0) => Some(Key::Enter),
-        (9, 0) => Some(Key::Tab),
-        (9, held) if held & SHIFT != 0 => Some(Key::BackTab),
-        (13, held) if held & SHIFT != 0 => Some(Key::Newline),
-        (106, held) if held & CTRL != 0 => Some(Key::Newline),
+    // Alt, super and hyper name no act of this frame's, so a report holding one is not a key.
+    if modifiers & !(SHIFT | CTRL) != 0 {
+        return None;
+    }
+    let shift = modifiers & SHIFT != 0;
+    let ctrl = modifiers & CTRL != 0;
+    match code {
+        13 if modifiers == 0 => Some(Key::Enter),
+        13 if shift || ctrl => Some(Key::Newline),
+        9 if modifiers == 0 => Some(Key::Tab),
+        9 if shift => Some(Key::BackTab),
+        27 if modifiers == 0 => Some(Key::Escape),
+        // `Ctrl-H` is the byte `Backspace` has always been sent as, and the report names the same key.
+        127 | 104 if modifiers == 0 || ctrl => Some(Key::Backspace),
+        _ if ctrl => control_key(code),
+        _ => None,
+    }
+}
+
+/// The key a `Ctrl` and one letter name: the bytes a raw terminal sends for them, reported by name.
+fn control_key(code: u32) -> Option<Key> {
+    match code {
+        99 => Some(Key::Cancel),
+        106 => Some(Key::Newline),
+        113 => Some(Key::Quit),
+        117 => Some(Key::Clear),
+        120 => Some(Key::Drop),
+        121 => Some(Key::Copy),
         _ => None,
     }
 }

@@ -61,8 +61,60 @@ fn shift_enter_under_the_kitty_protocol_breaks_the_line() {
 }
 
 #[test]
+fn ctrl_enter_under_the_kitty_protocol_breaks_the_line() {
+    assert_eq!(
+        event(b"\x1b[13;5u"),
+        key(Key::Newline),
+        "Ctrl+Enter is a line break of the draft, and never the key that sends one"
+    );
+}
+
+#[test]
 fn a_kitty_enter_report_without_a_modifier_still_sends() {
     assert_eq!(event(b"\x1b[13u"), key(Key::Enter));
+}
+
+#[test]
+fn a_reported_key_is_the_key_the_byte_beside_it_would_be() {
+    // A terminal asked for the protocol reports the keys that name no glyph as `CSI code;mods u`,
+    // so every key the frame answers has to be answered in that spelling too.
+    for (bytes, named) in [
+        (&b"\x1b[99;5u"[..], Key::Cancel),
+        (&b"\x1b[113;5u"[..], Key::Quit),
+        (&b"\x1b[120;5u"[..], Key::Drop),
+        (&b"\x1b[121;5u"[..], Key::Copy),
+        (&b"\x1b[117;5u"[..], Key::Clear),
+        (&b"\x1b[106;5u"[..], Key::Newline),
+        (&b"\x1b[104;5u"[..], Key::Backspace),
+        (&b"\x1b[127u"[..], Key::Backspace),
+        (&b"\x1b[27u"[..], Key::Escape),
+        (&b"\x1b[9u"[..], Key::Tab),
+        (&b"\x1b[9;2u"[..], Key::BackTab),
+    ] {
+        assert_eq!(
+            event(bytes),
+            key(named),
+            "a report of {:?} is that key and no other",
+            String::from_utf8_lossy(bytes)
+        );
+    }
+}
+
+#[test]
+fn a_report_nobody_answers_is_not_a_key() {
+    assert!(
+        events(&[b"\x1b[97;5u"]).is_empty(),
+        "Ctrl-A names no act, and a report of it is not a glyph of the draft either"
+    );
+    assert!(
+        events(&[b"\x1b[13;3u"]).is_empty(),
+        "Alt+Enter names no act: a line break nobody asked for is worse than none"
+    );
+    assert_eq!(
+        events(&[b"\x1b[97;5u", b"a"]),
+        vec![key(Key::Char('a'))],
+        "the key behind a report nobody answers is still read"
+    );
 }
 
 #[test]
