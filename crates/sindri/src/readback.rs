@@ -1,7 +1,8 @@
 //! What a painted buffer holds, read back the way a test asks about it: the ink runs of one row,
-//! and the column a glyph sits in.
+//! the surface under one cell, and the column a glyph sits in.
 
 use ratatui::buffer::Buffer;
+use ratatui::style::Color;
 
 use crate::ink::Ink;
 use crate::palette::Palette;
@@ -21,6 +22,15 @@ pub(crate) fn inks(buffer: &Buffer, y: u16, palette: &Palette) -> Vec<(Ink, u16)
         }
     }
     runs
+}
+
+/// The surface the cell at `x`, `y` sits on: the ground under it, and never the ink it is written
+/// in, which is what a fixture names.
+pub(crate) fn under(buffer: &Buffer, x: u16, y: u16) -> Color {
+    buffer
+        .cell((x, y))
+        .unwrap_or_else(|| panic!("row {y}, column {x} is outside the band"))
+        .bg
 }
 
 /// The column `glyph` sits in, measured by the run before it and never by the glyphs it is made

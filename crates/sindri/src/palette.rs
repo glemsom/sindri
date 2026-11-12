@@ -156,6 +156,12 @@ impl Palette {
         self.paint(self.step(row, rows))
     }
 
+    /// The style a cell of one end of the ramp is claimed in: the plain ink over that edge, so a
+    /// cell on an edge still reads back as the ink it is written in.
+    pub fn edged(&self, edge: Edge) -> Style {
+        self.paint(self.edge(edge))
+    }
+
     fn paint(&self, background: Color) -> Style {
         let (foreground, modifier) = self.ink(Ink::Plain);
         Style::default()
@@ -394,6 +400,22 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    #[test]
+    fn the_three_bands_are_three_elevations_the_composer_highest_and_the_well_lowest() {
+        for (spelling, palette) in SPELLED {
+            let composer = luminance(palette.band(Band::Composer));
+            let rail = luminance(palette.band(Band::Rail));
+            let well = luminance(palette.band(Band::Well));
+
+            assert!(
+                composer > rail && rail > well,
+                "{spelling} draws the composer, the rail and the well at {composer}, {rail} and \
+                 {well}: three bands a frame paints, three elevations, and the well the darkest \
+                 ground of them"
+            );
         }
     }
 

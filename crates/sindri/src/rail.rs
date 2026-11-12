@@ -4,7 +4,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use crate::ledger::{self, Facts, Rail};
-use crate::palette::{Band, Palette};
+use crate::palette::{Band, Edge, Palette};
 use crate::pen;
 
 pub fn paint(facts: &Facts, rail: Rail, area: Rect, buffer: &mut Buffer, palette: &Palette) {
@@ -12,7 +12,26 @@ pub fn paint(facts: &Facts, rail: Rail, area: Rect, buffer: &mut Buffer, palette
         return;
     }
     pen::claim(buffer, area, palette.ground(Some(Band::Rail)));
+    if rail == Rail::Ledger {
+        elevation(buffer, area, palette);
+    }
     ledger::draw(&ledger::rows(facts, rail.into(), area), buffer, palette);
+}
+
+/// The two ends a ledger's band carries light at: the rule down the column it meets the
+/// transcript on, which is the rail's own column and never one the transcript gave up, and the
+/// shadow under its last row.
+fn elevation(buffer: &mut Buffer, area: Rect, palette: &Palette) {
+    pen::claim(buffer, Rect { width: 1, ..area }, palette.edged(Edge::Lit));
+    pen::claim(
+        buffer,
+        Rect {
+            y: area.bottom() - 1,
+            height: 1,
+            ..area
+        },
+        palette.edged(Edge::Shadow),
+    );
 }
 
 #[cfg(test)]
@@ -22,13 +41,16 @@ mod tests {
 
     use std::path::PathBuf;
 
+    use ratatui::style::Color;
+
     use sindri_core::policy::Enforcement;
 
     use super::*;
     use crate::ink::Ink;
     use crate::ledger::{COLUMNS, Ctx, FIELD, FULL_CELL, GAP, METER, tokens};
+    use crate::palette::Edge;
     use crate::pen;
-    use crate::readback::{column_of, inks};
+    use crate::readback::{column_of, inks, under};
 
     /// The columns `text` draws in, which is the pen's question and not a count of its glyphs.
     fn columns(text: &str) -> usize {
@@ -118,6 +140,88 @@ mod tests {
         ("session", "9f2c7a41"),
         ("temp", "…/9f2c7a41/tmp"),
     ];
+
+    #[test]
+    fn a_ledger_is_lit_along_its_boundary_and_shadowed_under_its_last_row() {
+        let area = band(COLUMNS, 8);
+        let mut buffer = Buffer::empty(area);
+
+        paint(&frame(), Rail::Ledger, area, &mut buffer, &PALETTE);
+
+        for y in area.y..area.bottom() - 1 {
+            assert_eq!(
+                under(&buffer, area.x, y),
+                PALETTE.edge(Edge::Lit),
+                "row {y} of the ledger draws no lit rule on its boundary with the transcript, \
+                 so the rail is a fill beside a fill"
+            );
+        }
+        for x in area.x..area.right() {
+            assert_eq!(
+                under(&buffer, x, area.bottom() - 1),
+                PALETTE.edge(Edge::Shadow),
+                "column {x} of the ledger's last row is not the shadow the band leaves under \
+                 itself"
+            );
+        }
+    }
+
+    #[test]
+    fn a_fact_standing_on_the_lit_rule_reads_back_as_the_ink_it_is_written_in() {
+        let area = band(COLUMNS, 1);
+        let mut buffer = Buffer::empty(area);
+
+        paint(&frame(), Rail::Ledger, area, &mut buffer, &PALETTE);
+
+        let first = buffer
+            .cell((area.x, area.y))
+            .expect("the label's first column");
+        assert_eq!(
+            Ink::of(first, &PALETTE),
+            Some(Ink::Dim),
+            "the label's first glyph stands on the lit rule and is read as the dim ink, because \
+             an edge is a surface a cell is drawn on and never an ink it is drawn in"
+        );
+    }
+
+    #[test]
+    fn the_strip_is_one_row_of_the_rails_ground_and_draws_no_elevation() {
+        for width in [40, 80, 99] {
+            let area = band(width, 1);
+            let mut buffer = Buffer::empty(area);
+
+            paint(&frame(), Rail::Strip, area, &mut buffer, &PALETTE);
+
+            for x in area.x..area.right() {
+                assert_eq!(
+                    under(&buffer, x, area.y),
+                    PALETTE.band(Band::Rail),
+                    "column {x} of a {width}-column strip is not the rail's own ground: one row \
+                     has no room for both ends of the ramp, and no boundary to draw a rule on"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_rail_drawn_in_no_colour_draws_no_edge() {
+        for (shape, area) in [(Rail::Ledger, band(COLUMNS, 8)), (Rail::Strip, band(40, 1))] {
+            let mut buffer = Buffer::empty(area);
+
+            paint(&frame(), shape, area, &mut buffer, &Palette::SLOTS);
+
+            for y in area.y..area.bottom() {
+                for x in area.x..area.right() {
+                    assert_eq!(
+                        under(&buffer, x, y),
+                        Color::Reset,
+                        "row {y}, column {x} of a {shape:?} is given a ground, and a reader who \
+                         asked for no colour asked for their own"
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn a_runs_size_is_spelled_in_tokens_and_never_counted_out() {
