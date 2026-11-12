@@ -311,6 +311,62 @@ fn a_run_handed_nothing_asks_with_nothing_from_before_it() {
 }
 
 #[test]
+fn a_run_keeps_its_prompt_beside_the_answer_it_got() {
+    let model = Scripted::answering([
+        Reply::asking("let me read the test", [command("true")]),
+        Reply::answer("it was the retry"),
+    ]);
+    let mut run = Run::new("why does the retry test fail?", model, Tools::cheap());
+
+    run.drive(&mut Transcript::default());
+
+    let kept = run.kept();
+    assert_eq!(
+        kept.prompt, "why does the retry test fail?",
+        "the words this run was asked with"
+    );
+    assert_eq!(
+        kept.text, "it was the retry",
+        "beside the turn it ended on, and never the words of a turn before it"
+    );
+}
+
+#[test]
+fn a_run_stopped_on_the_turn_cap_keeps_the_words_of_the_turn_it_ended() {
+    let mut run = Run::new("loop", Scripted::answering([loopy()]), Tools::cheap())
+        .limits(Limits::new(2, Duration::from_secs(3_600), 8 * 1024 * 1024));
+
+    let state = run.drive(&mut Transcript::default());
+
+    assert_eq!(state.word(), "max_turns", "a stop that is not final");
+    let kept = run.kept();
+    assert_eq!(kept.prompt, "loop");
+    assert_eq!(
+        kept.text, "more",
+        "the turns that ended before that stop still join the conversation"
+    );
+}
+
+#[test]
+fn a_run_that_got_no_answer_keeps_the_words_it_was_asked_with_alone() {
+    let mut run = Run::new(
+        "read the failing test",
+        Scripted::answering([Reply::answer("too late")]),
+        Tools::cheap(),
+    );
+    run.canceller().now();
+
+    run.drive(&mut Transcript::default());
+
+    let kept = run.kept();
+    assert_eq!(kept.prompt, "read the failing test");
+    assert_eq!(
+        kept.text, "",
+        "a prompt whose answer never came keeps no words it did not get"
+    );
+}
+
+#[test]
 fn a_complete_answer_stops_the_run_as_final_with_exit_zero() {
     let mut run = Run::new(
         "say hi",

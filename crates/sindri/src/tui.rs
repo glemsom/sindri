@@ -433,7 +433,8 @@ fn send(
     };
     view.settle();
     view.set_state(State::Running);
-    *running = Some(Running::start(launch, prompt, Arc::clone(wake)));
+    let earlier = view.conversation().kept().to_vec();
+    *running = Some(Running::start(launch, prompt, earlier, Arc::clone(wake)));
     // The marker before the run has said anything: the first step of the cycle and no time on the
     // clock yet, so the frame a prompt is sent from already says a run has begun.
     view.set_pulse(Some(Pulse::live(0)));

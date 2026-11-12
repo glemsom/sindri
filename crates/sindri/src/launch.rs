@@ -54,6 +54,10 @@ impl Refusal {
 pub trait Turns {
     fn turn(&mut self, ended: &Exchange);
 
+    /// Handed once, when the run stops: the prompt it was asked with beside the answer it got, which
+    /// is what a conversation keeps for the prompt after it.
+    fn kept(&mut self, _kept: &Exchange) {}
+
     /// Handed when the run opens, as each turn ends, and once more when it stops.
     fn facts(&mut self, _facts: ledger::Facts) {}
 
@@ -204,9 +208,12 @@ impl Launch {
             .measured(measured, self.context_window)
     }
 
+    /// Drives `prompt` and nothing before it: the turns a launch has already ended are handed in as
+    /// `earlier`, so a wire is asked with what a reader said before this prompt.
     pub fn drive(
         mut self,
         prompt: &str,
+        earlier: &[Exchange],
         deltas: &mut dyn Deltas,
         turns: &mut dyn Turns,
         cancel: Cancel,
@@ -214,6 +221,7 @@ impl Launch {
         let mut run = Run::new(prompt, self.asking.clone(), self.shell.clone())
             .limits(self.limits)
             .tools(&self.tools)
+            .earlier(earlier.to_vec())
             .cancel(cancel);
         // Ahead of the turn loop, so the transcript opens with the words it answers.
         note(self.record.asked(prompt));
@@ -234,6 +242,7 @@ impl Launch {
             }
         }
 
+        turns.kept(&run.kept());
         let state = run.state();
         let usage = self.asking.spent();
         note(self.record.spent(usage));

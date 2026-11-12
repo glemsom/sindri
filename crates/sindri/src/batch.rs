@@ -110,7 +110,7 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
             turns: 0,
             telling: &mut telling,
         };
-        match launch.drive(&prompt, &mut quiet, &mut spoken, cancel) {
+        match launch.drive(&prompt, &[], &mut quiet, &mut spoken, cancel) {
             Ok(outcome) => outcome,
             Err(refusal) => return refuse(refusal.message(), refusal.code()),
         }

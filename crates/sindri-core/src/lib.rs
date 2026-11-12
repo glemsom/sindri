@@ -1,6 +1,7 @@
 pub mod asking;
 pub mod bash;
 pub mod config;
+pub mod conversation;
 pub mod first_run;
 pub mod open;
 pub mod outcome;

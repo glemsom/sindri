@@ -9,6 +9,13 @@ because an ordinary one would blur two things this project keeps apart.
 One invocation of the agent loop for one prompt, from the first request to a stop reason.
 _Avoid_: Job, task, query, conversation
 
+**Conversation**:
+The prompts one launch has already had answered, each beside the answer it got, and what the run that
+joins next is asked after: it outlives the run that filled it and the launch that ends takes it away,
+and `/new` empties it. A queued prompt joins it at the turn it was asked, and a run that stopped on
+anything but a final answer still joins with what it ended on.
+_Avoid_: Chat, thread, memory, context, history (that one is a run's own turns)
+
 **Prompt**:
 The reader's own words a run was asked with: the first fact of the session's transcript, and what the
 wire is asked last, after the turns that came before it.

@@ -35,6 +35,10 @@ const ANSWER_CACHED: &str =
 /// changed, so a test looks for both halves and never for one run of words.
 const ANSWER_WORDS: [&str; 2] = ["Hello", "world"];
 
+/// Those two halves as one answer: a request's body carries the words whole, where a frame
+/// above them repaints them in fragments.
+const ANSWER_SAID: &str = "Hello world";
+
 /// `CSI 16 t`, the one question a picture asks a terminal: report the size of a cell in pixels.
 /// A terminal answers `CSI 6;height;width t` and this launch is never answered, so it settles for
 /// the nominal cell — which is what makes the question visible as the bytes it is.
@@ -1104,15 +1108,32 @@ fn recorded(state: &std::path::Path, needle: &str) -> bool {
 /// Types a draft and sends it, and waits until the run it started has a request in flight. The caret
 /// is what the draft is waited on and not the words: a glyph typed is a glyph painted, so a caret
 /// past the last of them is the one drawing that says the whole draft is in the box.
-fn ask(pty: &mut Pty, drawn: &Drawn, wire: &Wire) {
-    pty.type_bytes(b"triage this");
+fn ask_words(pty: &mut Pty, drawn: &Drawn, wire: &Wire, words: &str) {
+    pty.type_bytes(words.as_bytes());
+    let typed = pen::cells(words) + 1;
     assert!(
-        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == 12)),
-        "eleven glyphs typed, so the caret waits one column past the last: {:?}",
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == typed)),
+        "{words:?} typed, so the caret waits one column past its last glyph: {:?}",
         drawn.text()
     );
     pty.type_bytes(b"\r");
     wire.wait_for_request();
+}
+
+fn ask(pty: &mut Pty, drawn: &Drawn, wire: &Wire) {
+    ask_words(pty, drawn, wire, "triage this");
+}
+
+/// Waits for the recorded answer and for the run that said it to stop, so a test types its next key
+/// into a launch whose run has settled: the words land while the run is still live, and the settled
+/// marker is the check a live one has not drawn.
+fn answered(drawn: &Drawn) {
+    assert!(
+        drawn.wait_until(|frame| ANSWER_WORDS.iter().all(|word| frame.contains(word))
+            && frame.contains('\u{2713}')),
+        "the run answered and stopped: {:?}",
+        drawn.text()
+    );
 }
 
 #[test]
@@ -1903,6 +1924,131 @@ fn slash_new_clears_the_frame_and_leaves_the_session_it_superseded_running() {
         drawn.text()
     );
 
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+}
+
+#[test]
+fn a_second_prompt_in_one_launch_is_asked_with_the_first_beside_its_answer() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    ask_words(&mut pty, &drawn, &wire, "hi my name is Glenn");
+    wire.release();
+    answered(&drawn);
+
+    ask_words(&mut pty, &drawn, &wire, "what is my name?");
+
+    let asked = wire.requests();
+    assert_eq!(asked.len(), 2, "two prompts, two requests: {asked:?}");
+    assert!(
+        !asked[0].contains(ANSWER_SAID),
+        "the first prompt of a launch carries nothing from before it: {}",
+        asked[0]
+    );
+    assert!(
+        asked[1].contains("hi my name is Glenn"),
+        "the second carries the first prompt ahead of it: {}",
+        asked[1]
+    );
+    assert!(
+        asked[1].contains(ANSWER_SAID),
+        "beside the answer the first prompt got: {}",
+        asked[1]
+    );
+
+    wire.release();
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+}
+
+#[test]
+fn a_prompt_queued_behind_a_live_run_joins_the_conversation_at_the_turn_it_was_asked() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    ask_words(&mut pty, &drawn, &wire, "hi my name is Glenn");
+    queue(&mut pty, &drawn, "what is my name?");
+
+    wire.release();
+    assert!(
+        wire.wait_for_prompt("what is my name?"),
+        "the queued prompt becomes the run after it: {:?}",
+        wire.requests()
+    );
+
+    let asked = wire.requests();
+    assert_eq!(asked.len(), 2, "two prompts, two requests: {asked:?}");
+    assert!(
+        asked[1].contains("hi my name is Glenn"),
+        "the queued prompt joins the conversation at the turn it was asked, behind the prompt it \
+         waited on: {}",
+        asked[1]
+    );
+    assert!(
+        asked[1].contains(ANSWER_SAID),
+        "and behind the answer that turn got: {}",
+        asked[1]
+    );
+
+    wire.release();
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+}
+
+#[test]
+fn slash_new_empties_what_the_next_prompt_is_asked_with() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    ask_words(&mut pty, &drawn, &wire, "hi my name is Glenn");
+    wire.release();
+    answered(&drawn);
+
+    command(&mut pty, &drawn, "/new");
+    assert!(
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == 1)),
+        "the command line left the composer, so it was answered before a key followed it: {:?}",
+        drawn.text()
+    );
+
+    ask_words(&mut pty, &drawn, &wire, "what is my name?");
+
+    let asked = wire.requests();
+    assert_eq!(asked.len(), 2, "two prompts, two requests: {asked:?}");
+    assert!(
+        !asked[1].contains("hi my name is Glenn"),
+        "`/new` starts the conversation again, so nothing of the prompt before it is carried: {}",
+        asked[1]
+    );
+    assert!(
+        !asked[1].contains(ANSWER_SAID),
+        "and nothing of the answer it got: {}",
+        asked[1]
+    );
+
+    wire.release();
     pty.type_bytes(&[0x11]);
     assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
 }

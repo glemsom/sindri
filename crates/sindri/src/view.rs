@@ -7,10 +7,11 @@ use std::path::PathBuf;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use sindri_core::config::{Config, Touched};
+use sindri_core::conversation::Conversation;
 use sindri_core::provider::Deltas;
 use sindri_core::provider::served::Listing;
 use sindri_core::records::{Entry, SessionDocument};
-use sindri_core::run::{Load, Loaded};
+use sindri_core::run::{Exchange, Load, Loaded};
 use sindri_core::skills::{Catalog, Skill};
 
 use crate::card;
@@ -87,6 +88,7 @@ pub struct View {
     composer: Composer,
     stream: Stream,
     queue: Queue,
+    conversation: Conversation,
     stack: Stack,
     pulse: Option<Pulse>,
     rail: Facts,
@@ -157,6 +159,16 @@ impl View {
 
     pub fn stream(&self) -> &Stream {
         &self.stream
+    }
+
+    pub fn conversation(&self) -> &Conversation {
+        &self.conversation
+    }
+
+    /// Keeps the prompt the run that stopped was asked with beside the answer it got, so the prompt
+    /// after it joins the conversation at the turn it was asked.
+    pub fn kept(&mut self, ended: &Exchange) {
+        self.conversation.join(ended.clone());
     }
 
     /// The turn in flight is over: what it said is written down as entries, so the live entry
@@ -348,6 +360,7 @@ impl View {
         self.mark = None;
         self.marked = Span::default();
         self.loaded.clear();
+        self.conversation.clear();
         Outcome::Edited
     }
 
