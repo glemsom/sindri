@@ -142,7 +142,7 @@ _Avoid_: Theme, scheme, colours
 
 **Band**:
 One of the three places a frame paints a background under its cells — the rail, the composer band,
-the well the transcript is set in and a code fence sits in. A raised band is drawn on a ramp and a
+the well the transcript and each code fence in it sit in. A raised band is drawn on a ramp and a
 flat one in a single colour. A cell on a band still reads back as its ink.
 _Avoid_: Panel, colour, stripe
 

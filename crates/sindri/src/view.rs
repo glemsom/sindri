@@ -1330,6 +1330,14 @@ mod tests {
             let share = view.split(bands.transcript);
             let (shape, rail) = share.rail.expect("a frame this wide holds a ledger");
             assert_eq!(shape, Rail::Ledger);
+            assert_eq!(
+                share.transcript.right(),
+                rail.x,
+                "the transcript loses a column to the lit rule: it ends at column {} and the rail \
+                 begins at {}",
+                share.transcript.right(),
+                rail.x
+            );
 
             for y in share.transcript.y..share.transcript.bottom() {
                 for x in share.transcript.x..share.transcript.right() {

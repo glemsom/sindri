@@ -13,14 +13,15 @@ pub fn paint(facts: &Facts, rail: Rail, area: Rect, buffer: &mut Buffer, palette
     }
     pen::claim(buffer, area, palette.ground(Some(Band::Rail)));
     if rail == Rail::Ledger {
-        boundary(buffer, area, palette);
+        elevation(buffer, area, palette);
     }
     ledger::draw(&ledger::rows(facts, rail.into(), area), buffer, palette);
 }
 
-/// The column the rail meets the transcript on, lit down the rail's own first column so the
-/// transcript loses none, and the shadow the band leaves under its own last row.
-fn boundary(buffer: &mut Buffer, area: Rect, palette: &Palette) {
+/// The two ends a ledger's band carries light at: the rule down the column it meets the
+/// transcript on, which is the rail's own column and never one the transcript gave up, and the
+/// shadow under its last row.
+fn elevation(buffer: &mut Buffer, area: Rect, palette: &Palette) {
     pen::claim(buffer, Rect { width: 1, ..area }, palette.edged(Edge::Lit));
     pen::claim(
         buffer,
