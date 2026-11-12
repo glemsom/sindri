@@ -17,7 +17,7 @@ use sindri::ledger::{self, COLUMNS, Ctx, Facts};
 use sindri::mark::Cell;
 use sindri::markdown;
 use sindri::picture::{self, Surface};
-use sindri::pictures::Pictures;
+use sindri::pictures::{PLACEHOLDER, Pictures};
 use sindri::rows::{Row, Scroll};
 use sindri::view::View;
 use sindri_core::policy::Enforcement;
@@ -386,10 +386,6 @@ fn painted_at(view: &mut View, size: (u16, u16)) -> Buffer {
         .expect("the frame is painted");
     completed.buffer.clone()
 }
-
-/// The glyph a Kitty placement writes into every cell it covers: the one thing on a screen
-/// that says a picture is placed there rather than written about.
-const PLACEHOLDER: char = '\u{10EEEE}';
 
 /// The first chunk of the protocol's transmission, which a terminal is told once and never
 /// again for one picture: the glyph a cell holds when the placement sends the picture rather

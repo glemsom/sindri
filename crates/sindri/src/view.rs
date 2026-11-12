@@ -107,8 +107,7 @@ pub struct View {
     palette: Palette,
 }
 
-/// Whether a frame is drawn with Sindri's face over its rail: on unless a launch's config turns
-/// it off, because a reader on a slow link pays for every picture placed.
+/// Whether a frame is drawn with Sindri's face over its rail.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum Face {
     #[default]

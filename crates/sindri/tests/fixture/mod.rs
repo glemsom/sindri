@@ -14,7 +14,7 @@ use sindri::ink::Look;
 use sindri::ledger::{Boot, Ctx, Facts};
 use sindri::mark;
 use sindri::palette::Palette;
-use sindri::pictures::Pictures;
+use sindri::pictures::{PLACEHOLDER, Pictures};
 use sindri::pulse::Pulse;
 use sindri::rows::Scroll;
 use sindri::view::View;
@@ -157,7 +157,7 @@ fn pictured() -> View {
 
 /// A frame whose terminal places pictures, with the rail's facts where the face is drawn: the
 /// picture over the rail's top rows with the switch on, and the facts from the rail's first row
-/// with it off, which is the frame a terminal that places no picture is given.
+/// with it off.
 fn faced(face: bool) -> View {
     let mut view = running(opening(), Scroll::Tail);
     view.set_cell_size(CellSize::new(10, 20));
@@ -751,9 +751,6 @@ fn glyph(cell: &Cell, x: u16, y: u16) -> char {
         ),
     }
 }
-
-/// The glyph a Kitty placement writes into every cell it covers.
-const PLACEHOLDER: char = '\u{10EEEE}';
 
 fn accepted(fixture: &str) -> Option<String> {
     let path = PathBuf::from(FIXTURES).join(format!("{fixture}.snap"));

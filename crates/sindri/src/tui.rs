@@ -38,8 +38,7 @@ const CANCELLED: u8 = 130;
 
 const MODEL: &str = "model";
 
-/// The frame a launch opens on, as far as the config alone decides it: the face is a setting, so a
-/// launch that turns it off reserves no row for it and pays for no picture on a slow link.
+/// The frame a launch opens on, as far as the config alone decides it.
 fn opened(config: &Config) -> View {
     let mut view = View::boot();
     view.set_face(config.draws_face());
@@ -355,8 +354,9 @@ fn answer(
             match persist(environment, &touched, cli.flags()) {
                 Ok(fresh) => {
                     *config = fresh;
-                    // The one switch, as the visit left it: a `status` key turned off here stops
-                    // the telling at the next report rather than at the next launch.
+                    // Both switches, as the visit left them: `status` turned off here stops the
+                    // telling at the next report, and `face` turned off repaints the frame without
+                    // one, rather than at the next launch.
                     telling.switch(config.tells_status());
                     view.set_face(config.draws_face());
                     view.saved();

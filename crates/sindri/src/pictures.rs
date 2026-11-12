@@ -20,6 +20,10 @@ use crate::picture::Picture;
 /// protocol's own flag says the terminal already holds.
 type Placed = Rc<RefCell<StatefulProtocol>>;
 
+/// The glyph a Kitty placement writes into every cell it covers: the one thing on a screen that
+/// says a picture is placed there rather than written about.
+pub const PLACEHOLDER: char = '\u{10EEEE}';
+
 #[derive(Clone, Default)]
 pub struct Pictures {
     picker: Option<Picker>,

@@ -8,7 +8,7 @@ use clap::Parser;
 use sindri::composer::Key;
 use sindri::graphics::CellSize;
 use sindri::ledger::Boot;
-use sindri::pictures::Pictures;
+use sindri::pictures::{PLACEHOLDER, Pictures};
 use sindri::rows::Scroll;
 use sindri_core::policy::Enforcement;
 use sindri_core::records::Entry;
@@ -169,10 +169,6 @@ fn enter_at_the_settings_modal_writes_the_file_and_the_next_prompt_runs_on_it() 
          prompt — the run `send` starts from this very value — runs on it"
     );
 }
-
-/// The one glyph a Kitty placement writes into every cell it covers, which is what says a picture
-/// is on the frame rather than written about.
-const PLACEHOLDER: char = '\u{10EEEE}';
 
 const FRAME: (u16, u16) = (120, 40);
 
