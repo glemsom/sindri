@@ -267,10 +267,7 @@ impl Look {
             None => (name, Faces::PLAIN),
         };
         let look = Look::new(Ink::from_name(ink)?, faces);
-        Some(match underline {
-            Some(underline) => look.underlined(underline),
-            None => look,
-        })
+        Some(underline.map_or(look, |underline| look.underlined(underline)))
     }
 
     pub fn of(cell: &Cell, palette: &Palette) -> Option<Look> {
@@ -445,27 +442,48 @@ mod tests {
         }
     }
 
+    /// Every set the four faces compose, from the one a look wearing none has up to all four.
+    fn sets_of_faces() -> impl Iterator<Item = Faces> {
+        (0u8..16).map(|worn| {
+            [Face::Bold, Face::Italic, Face::Reversed, Face::Faint]
+                .into_iter()
+                .enumerate()
+                .filter(|(bit, _)| worn & (1 << bit) != 0)
+                .fold(Faces::PLAIN, |set, (_, face)| set.and(Faces::wearing(face)))
+        })
+    }
+
     #[test]
-    fn every_look_reads_back_as_the_names_it_is_drawn_in() {
+    fn every_set_of_faces_reads_back_as_the_look_it_is_drawn_in() {
         for palette in PALETTES {
-            let mark = Look::plain(Ink::Mark);
             for ink in Ink::ALL {
-                for face in Face::ALL {
-                    let look = Look::new(ink, face);
+                for faces in sets_of_faces() {
+                    let look = Look::new(ink, faces);
                     let mut cell = Cell::default();
                     cell.set_style(look.style(&palette));
+                    let read = Look::of(&cell, &palette).expect("every cell painted is a look");
 
-                    if look.style(&palette) == mark.style(&palette) {
-                        assert_eq!(Look::of(&cell, &palette), Some(mark));
-                        continue;
-                    }
                     assert_eq!(
-                        Look::of(&cell, &palette),
-                        Some(look),
-                        "a cell painted {:?} is that look, and a fixture has to be able to say so",
+                        read.style(&palette),
+                        look.style(&palette),
+                        "a cell painted {:?} reads back as a look drawn another way, so the name a \
+                         fixture writes is not the picture it holds",
                         look.name()
                     );
-                    assert_eq!(Look::from_name(&look.name()), Some(look));
+                    // Reverse video is the mark ink's, so an ink the palette draws in the mark's
+                    // colour wears it as the mark: one picture, and so one name for it.
+                    if palette.colour(ink) != palette.colour(Ink::Mark)
+                        || !faces.has(Face::Reversed)
+                    {
+                        assert_eq!(
+                            read,
+                            look,
+                            "a cell painted {:?} is that look, and a look nothing turns round is \
+                             not the mark",
+                            look.name()
+                        );
+                    }
+                    assert_eq!(Look::from_name(&read.name()), Some(read));
                 }
             }
         }
