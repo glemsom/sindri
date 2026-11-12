@@ -36,7 +36,7 @@ grown at 120x40
 30 |                                                                                                                        | plain:120
 31 |                                                                                                                        | plain:120
 32 |                                                                                                                        | plain:120
-33 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+33 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:120
 34 |read the transcript, then the failing test,                                                                             | plain:120
 35 |then the patch, and say which line of the                                                                               | plain:120
 36 |patch the test disagrees with. Keep it to                                                                               | plain:120

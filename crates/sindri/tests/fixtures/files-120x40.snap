@@ -3,7 +3,7 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 files at 120x40
-00 |                        ╭─ @ files ────────────────────────────────────────────────────────────╮                        | dim:27 accent:7 dim:86
+00 |                        ╭─ @ files ────────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
 01 |                        │ query:                                                               │                        | dim:25 plain:1 dim:7 plain:62 dim:25
 02 |                        │ › .gitignore                                                         │                        | dim:25 plain:1 accent:12 plain:57 dim:25
 03 |                        │   Cargo.toml                                                         │                        | dim:25 plain:70 dim:25

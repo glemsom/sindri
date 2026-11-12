@@ -3,7 +3,7 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 models at 120x40
-00 |                        ╭─ /model ─────────────────────────────────────────────────────────────╮                        | dim:27 accent:6 dim:87
+00 |                        ╭─ /model ─────────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
 01 |                        │ query:                                                               │                        | dim:25 plain:1 dim:7 plain:62 dim:25
 02 |                        │ › claude-sonnet-4-6  Claude Sonnet 4.6                               │                        | dim:25 plain:1 accent:21 dim:17 plain:31 dim:25
 03 |                        │   claude-haiku-4-5   Claude Haiku 4.5                                │                        | dim:25 plain:22 dim:16 plain:32 dim:25

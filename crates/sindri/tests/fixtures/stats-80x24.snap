@@ -3,7 +3,7 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 stats at 80x24
-00 |    ╭─ /stats ─────────────────────────────────────────────────────────────╮    | dim:7 accent:6 dim:67
+00 |    ╭─ /stats ─────────────────────────────────────────────────────────────╮    | dim:4 accent+faint:72 dim:4
 01 |    │ run                                                                  │    | dim:5 plain:1 dim:3 plain:66 dim:5
 02 |    │ wire                                                       anthropic │    | dim:5 plain:1 dim:10 plain:59 dim:5
 03 |    │ model                                     claude-sonnet-4-5-20250929 │    | dim:5 plain:1 dim:10 plain:59 dim:5

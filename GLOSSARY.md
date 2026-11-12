@@ -151,6 +151,13 @@ The light a raised surface catches along its top and its side, and the shadow it
 bottom: the two ends of a ramp, beside the three bands, and never an ink.
 _Avoid_: Border, elevation, highlight
 
+**Accent edge**:
+The accent in the faint face along the edge row of the one surface that takes the keys — the
+composer at rest, the card while a screen is open — where every surface that takes none keeps the
+dim rule, and a terminal that draws no colour is given neither. Not an **edge**: an edge is the
+ground a row is raised on, and this is the ink written on it.
+_Avoid_: Focus ring, highlight, active border
+
 **Ramp**:
 The grounds a raised surface's face is drawn in, one per row, from the lit edge along its top to the
 shadow under its bottom, so a band of any height reads as one raised surface and its cells keep

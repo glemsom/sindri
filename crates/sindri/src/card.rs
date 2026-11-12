@@ -4,7 +4,7 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
-use crate::ink::Ink;
+use crate::ink::{Ink, Look};
 use crate::palette::Palette;
 use crate::pen::{self, Clip};
 
@@ -66,7 +66,13 @@ fn boxed(area: Rect, name: &str, leaves: &str, buffer: &mut Buffer, palette: &Pa
     grounded(buffer, card, palette);
 
     let last = card.bottom() - 1;
-    pen::rule(buffer, Rect { height: 1, ..card }, RULE, Ink::Dim, palette);
+    pen::rule(
+        buffer,
+        Rect { height: 1, ..card },
+        RULE,
+        palette.accent_edge(),
+        palette,
+    );
     headed(buffer, card, name, palette);
     if area.height > 1 {
         for y in card.y + 1..last {
@@ -88,7 +94,7 @@ fn boxed(area: Rect, name: &str, leaves: &str, buffer: &mut Buffer, palette: &Pa
 fn bleeding(area: Rect, name: &str, buffer: &mut Buffer, palette: &Palette) -> Rect {
     grounded(buffer, area, palette);
     let head = Rect { height: 1, ..area };
-    pen::rule(buffer, head, RULE, Ink::Dim, palette);
+    pen::rule(buffer, head, RULE, palette.accent_edge(), palette);
     labelled(buffer, head, name, palette);
     Rect {
         x: area.x.saturating_add(INSET),
@@ -100,7 +106,7 @@ fn bleeding(area: Rect, name: &str, buffer: &mut Buffer, palette: &Palette) -> R
 
 fn headed(buffer: &mut Buffer, card: Rect, name: &str, palette: &Palette) {
     labelled(buffer, Rect { height: 1, ..card }, name, palette);
-    corners(buffer, card, card.y, TOP, palette);
+    corners(buffer, card, card.y, TOP, palette.accent_edge(), palette);
 }
 
 fn corners(
@@ -108,10 +114,11 @@ fn corners(
     card: Rect,
     y: u16,
     (left, right): (char, char),
+    look: Look,
     palette: &Palette,
 ) {
-    pen::glyph(buffer, card.x, y, left, Ink::Dim, palette);
-    pen::glyph(buffer, card.right() - 1, y, right, Ink::Dim, palette);
+    pen::glyph(buffer, card.x, y, left, look, palette);
+    pen::glyph(buffer, card.right() - 1, y, right, look, palette);
 }
 
 fn sides(buffer: &mut Buffer, card: Rect, y: u16, palette: &Palette) {
@@ -127,8 +134,8 @@ fn footed(buffer: &mut Buffer, card: Rect, leaves: &str, palette: &Palette) {
         height: 1,
         ..card
     };
-    pen::rule(buffer, row, RULE, Ink::Dim, palette);
-    corners(buffer, card, row.y, BOTTOM, palette);
+    pen::rule(buffer, row, RULE, palette.plain_edge(), palette);
+    corners(buffer, card, row.y, BOTTOM, palette.plain_edge(), palette);
     pen::hang(
         buffer,
         Rect {
@@ -141,10 +148,13 @@ fn footed(buffer: &mut Buffer, card: Rect, leaves: &str, palette: &Palette) {
     );
 }
 
+/// The name hangs in the edge row the card takes the keys by, so the name is drawn in the accent
+/// the row is drawn in: the blanks either side of it are the row's own rule.
 fn labelled(buffer: &mut Buffer, row: Rect, name: &str, palette: &Palette) {
     if name.is_empty() {
         return;
     }
+    let edge = palette.accent_edge();
     pen::write(
         buffer,
         Rect {
@@ -153,7 +163,7 @@ fn labelled(buffer: &mut Buffer, row: Rect, name: &str, palette: &Palette) {
             height: 1,
             ..row
         },
-        &[(" ", Ink::Dim), (name, Ink::Accent), (" ", Ink::Dim)],
+        &[(" ", edge), (name, edge), (" ", edge)],
         Clip::Edge,
         palette,
     );

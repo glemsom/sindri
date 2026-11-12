@@ -40,6 +40,6 @@ mark at 120x40
 34 |  ▏     let row = Row::of(spans);                                                                                       | plain:2 dim:2 plain:4 accent:3 plain:109
 35 |  ▏     row.paint(area, buffer);                                                                                        | plain:2 dim:2 plain:116
 36 |  ▏ }                                                                                                                   | plain:2 dim:2 plain:116
-37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:120
 38 |                                                                                                                        | plain:120
 39 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · / commands · @ files · ↑ queue                                      | muted:10 dim:3 muted:6 dim:3 muted:13 dim:3 muted:11 dim:3 muted:10 dim:3 muted:7 dim:3 muted:7 plain:38

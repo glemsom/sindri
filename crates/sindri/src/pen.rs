@@ -88,11 +88,19 @@ pub fn run(buffer: &mut Buffer, x: u16, y: u16, text: &str, ink: Ink, palette: &
     x.saturating_add(cells(text))
 }
 
-/// Writes a one-cell `glyph` at a column of a row, in an ink.
-pub fn glyph(buffer: &mut Buffer, x: u16, y: u16, glyph: char, ink: Ink, palette: &Palette) {
+/// Writes a one-cell `glyph` at a column of a row, in a look.
+pub fn glyph(
+    buffer: &mut Buffer,
+    x: u16,
+    y: u16,
+    glyph: char,
+    look: impl Into<Look>,
+    palette: &Palette,
+) {
+    let look: Look = look.into();
     each(Rect::new(x, y, 1, 1), buffer, |cell| {
         cell.set_char(glyph);
-        cell.set_style(ink.style(palette));
+        cell.set_style(look.style(palette));
     });
 }
 
@@ -130,12 +138,12 @@ fn each(area: Rect, buffer: &mut Buffer, mut edit: impl FnMut(&mut Cell)) {
     }
 }
 
-/// Fills `row` edge to edge with a one-cell `fill`, in an ink.
-pub fn rule(buffer: &mut Buffer, row: Rect, fill: char, ink: Ink, palette: &Palette) {
+/// Fills `row` edge to edge with a one-cell `fill`, in a look.
+pub fn rule(buffer: &mut Buffer, row: Rect, fill: char, look: impl Into<Look>, palette: &Palette) {
     write(
         buffer,
         row,
-        &[(filled(row.width, fill), ink)],
+        &[(filled(row.width, fill), look.into())],
         Clip::Edge,
         palette,
     );
