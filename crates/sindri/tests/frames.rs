@@ -104,6 +104,16 @@ fn stats_80x24_is_that_screen_on_a_band_that_counts_the_rows_it_cannot_hold() {
 }
 
 #[test]
+fn empty_120x40_is_the_band_with_nothing_in_it_saying_what_it_can_do() {
+    fixture::assert_frame("empty", 120, 40);
+}
+
+#[test]
+fn wrapped_80x24_is_a_draft_wider_than_the_band_set_under_the_gutter() {
+    fixture::assert_frame("wrapped", 80, 24);
+}
+
+#[test]
 fn typing_120x40_is_a_composer_at_its_two_row_floor() {
     fixture::assert_frame("typing", 120, 40);
 }

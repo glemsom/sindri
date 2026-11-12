@@ -16,7 +16,7 @@ use sindri_core::skills::{Catalog, Skill};
 
 use crate::card;
 use crate::commands::{self, Command};
-use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, Prompt, State};
+use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, PLACEHOLDER, Prompt, State};
 use crate::door;
 use crate::face;
 use crate::graphics::CellSize;
@@ -33,7 +33,7 @@ use crate::pictures::Pictures;
 use crate::pulse::Pulse;
 use crate::queue::Queue;
 use crate::rail;
-use crate::rows::{Row, Rows, Scroll, wrap};
+use crate::rows::{INDENT, Row, Rows, Scroll, wrap};
 use crate::settings::Settings;
 use crate::stats;
 use crate::stream::Stream;
@@ -59,6 +59,10 @@ const STEPS: [(u16, usize); 2] = [(120, 7), (100, 5)];
 const FLOOR: usize = 2;
 
 const HAIRLINE: char = '─';
+
+/// The sigil that opens the draft, standing in the gutter an answer is set from — `rows::INDENT`
+/// columns wide, so the reader's own words begin where the run's do.
+const SIGIL: &str = "\u{203a} ";
 
 const KEYS_GAP: u16 = 2;
 
@@ -565,6 +569,7 @@ impl View {
     /// composer's rows are measured when the frame is drawn and never cached.
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) {
         pen::claim(buffer, area, self.palette.ground(None));
+        self.composer.set_room(View::room(area.width));
         let bands = bands(area, self.composer.rows(), self.queue.rows());
         // The rail's share is taken from the transcript's band before the transcript is laid out
         // in what is left: a row's width is the width it is drawn at.
@@ -738,7 +743,11 @@ impl View {
             height: area.height.saturating_sub(HAIRLINE_ROWS),
             ..area
         };
-        for (row, line) in self.composer.lines().iter().enumerate() {
+        let (rows, ink) = match self.composer.text().is_empty() {
+            true => (vec![PLACEHOLDER], Ink::Dim),
+            false => (self.composer.lines(), Ink::Plain),
+        };
+        for (row, line) in rows.iter().enumerate() {
             let Some(offset) = u16::try_from(row).ok() else {
                 break;
             };
@@ -748,7 +757,14 @@ impl View {
             if y >= draft.bottom() {
                 break;
             }
-            draft_line(buffer, Rect { y, ..draft }, line, &self.palette);
+            let opens = row == 0 && self.composer.scroll() == 0;
+            draft_row(
+                buffer,
+                Rect { y, ..draft },
+                opens,
+                (*line, ink),
+                &self.palette,
+            );
         }
     }
 
@@ -777,8 +793,19 @@ impl View {
             .y
             .checked_add(HAIRLINE_ROWS)?
             .checked_add(row)?;
-        let x = area.x.checked_add(column)?;
-        (column < area.width && y < bands.composer.bottom()).then_some((x, y))
+        // A caret past the band's last cell waits on that cell, the way a terminal keeps the cursor
+        // at its right margin rather than giving it up.
+        let x = area
+            .x
+            .checked_add(pen::cells(INDENT))?
+            .checked_add(column)?
+            .min(area.right().saturating_sub(1));
+        (area.width > 0 && y < bands.composer.bottom()).then_some((x, y))
+    }
+
+    /// The columns the draft's words have: the band's width less the gutter an answer is set from.
+    fn room(width: u16) -> u16 {
+        width.saturating_sub(pen::cells(INDENT))
     }
 
     /// A description wider than the card wraps under its own column rather than losing its tail:
@@ -1067,10 +1094,24 @@ fn screen_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)], pa
     );
 }
 
-/// Writes one draft line across a row, cut at its right edge: prose that runs on is cut
-/// rather than dropped, where a hint or a fact is whole or not drawn.
-fn draft_line(buffer: &mut Buffer, area: Rect, line: &str, palette: &Palette) {
-    cut_row(buffer, area, area.y, &[(line, Ink::Plain)], palette);
+/// Writes one row of the draft. The sigil opens the first row and every row a wrap gave the draft
+/// keeps the gutter blank under it, so the draft's first column is the answer's on all of them.
+fn draft_row(buffer: &mut Buffer, area: Rect, opens: bool, words: (&str, Ink), palette: &Palette) {
+    let gutter = match opens {
+        true => SIGIL,
+        false => INDENT,
+    };
+    pen::write(
+        buffer,
+        Rect {
+            y: area.y,
+            height: 1,
+            ..area
+        },
+        &[(gutter, Ink::Dim), words],
+        Clip::Edge,
+        palette,
+    );
 }
 
 /// Writes one row cut at the frame's right edge: a value that runs on is cut, where a hint or a
@@ -1137,7 +1178,7 @@ mod tests {
     use ratatui::style::Color;
 
     use super::*;
-    use crate::composer::{MAX_ROWS, MIN_ROWS};
+    use crate::composer::{MAX_ROWS, MIN_ROWS, PLACEHOLDER};
     use crate::ink::{Face, Look};
     use crate::palette::{Band, Edge};
     use crate::readback::under;
@@ -1926,7 +1967,170 @@ mod tests {
         let area = screen(40, 12);
 
         assert_eq!(view.composer().rows(), 3);
-        assert_eq!(view.cursor(area), Some((11, 10)));
+        assert_eq!(
+            view.cursor(area),
+            Some((13, 10)),
+            "the caret's column is the one it takes in the draft, and the draft is set two \
+             columns in"
+        );
+    }
+
+    /// The row holding `words`, and the column of its first glyph: what the frame drew, read back
+    /// from the cells rather than from the constants the frame was drawn from.
+    fn place_of(buffer: &Buffer, words: &str) -> (String, u16) {
+        let area = buffer.area;
+        for y in area.y..area.bottom() {
+            let row = drawn_row(buffer, y);
+            if row.contains(words) {
+                let at = row.find(words).expect("the row the words begin on");
+                let column = pen::cells(&row[..at]);
+                return (row, column);
+            }
+        }
+        panic!("no row of the frame draws {words:?}");
+    }
+
+    #[test]
+    fn the_draft_is_set_in_the_column_an_answer_is_set_in_behind_a_sigil() {
+        let palette = Palette::TRUECOLOR;
+        let mut view = View::of(
+            vec![Entry::Assistant {
+                turn: 1,
+                text: SecretSet::default().redact("an answer opens here"),
+            }],
+            Scroll::Tail,
+        );
+        view.set_palette(palette);
+        view.paste("a draft opens here");
+
+        let area = screen(120, 40);
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+
+        let (answered, answer_column) = place_of(&buffer, "an answer opens here");
+        let (drafted, draft_column) = place_of(&buffer, "a draft opens here");
+        assert_eq!(
+            draft_column, answer_column,
+            "the answer is set from column {answer_column} ({answered:?}) and the draft from \
+             {draft_column} ({drafted:?}), so the reader's own words do not line up with the \
+             run's"
+        );
+        let gutter: String = drafted.chars().take(usize::from(draft_column)).collect();
+        assert_eq!(
+            gutter, "\u{203a} ",
+            "the columns before the draft are not the sigil that opens it in the gutter"
+        );
+    }
+
+    /// A row's glyphs, each wide one taken once although it is drawn in two cells.
+    fn drawn_glyphs(buffer: &Buffer, y: u16) -> String {
+        let area = buffer.area;
+        let mut glyphs = String::new();
+        let mut x = area.x;
+        while x < area.right() {
+            let symbol = buffer.cell((x, y)).expect("a cell of the row").symbol();
+            glyphs.push_str(symbol);
+            let wide = symbol.chars().next().map_or(1, pen::cell);
+            x = x.saturating_add(wide.max(1));
+        }
+        glyphs
+    }
+
+    /// The rows the composer band draws under its edge row, as the frame left them.
+    fn draft_rows(buffer: &Buffer, band: Rect) -> Vec<String> {
+        (band.y.saturating_add(HAIRLINE_ROWS)..band.bottom())
+            .map(|y| drawn_glyphs(buffer, y).trim_end().to_owned())
+            .collect()
+    }
+
+    #[test]
+    fn a_draft_wider_than_the_band_wraps_under_the_gutter_and_never_splits_a_wide_glyph() {
+        let palette = Palette::TRUECOLOR;
+        let mut view = View::boot();
+        view.set_palette(palette);
+        view.paste(&pen::filled(60, '日'));
+
+        let area = screen(60, 24);
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+
+        let band = bands(area, view.composer().rows(), view.queue().rows()).composer;
+        let wide = |count| pen::filled(count, '日');
+        assert_eq!(
+            draft_rows(&buffer, band),
+            [
+                format!("\u{203a} {}", wide(29)),
+                format!("  {}", wide(29)),
+                format!("  {}", wide(2)),
+            ],
+            "a fifty-eight column room holds twenty-nine wide glyphs, and the sixtieth glyph \
+             begins the third row of the draft with the gutter beside it"
+        );
+        assert_eq!(band.height, 4, "three rows of draft and the band's edge");
+    }
+
+    #[test]
+    fn an_empty_draft_says_what_the_band_can_do_in_the_dim_ink_until_a_glyph_arrives() {
+        let palette = Palette::TRUECOLOR;
+        let mut view = View::boot();
+        view.set_palette(palette);
+
+        let area = screen(120, 40);
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+
+        let band = bands(area, view.composer().rows(), view.queue().rows()).composer;
+        let (empty, _) = place_of(&buffer, PLACEHOLDER);
+        let gutter = pen::cells(INDENT);
+        assert!(
+            empty.ends_with(&pen::filled(120 - gutter - pen::cells(PLACEHOLDER), ' ')),
+            "the placeholder {PLACEHOLDER:?} is not the words of the empty band: {empty:?}"
+        );
+        let column = gutter + pen::cells(PLACEHOLDER) - 1;
+        assert_eq!(
+            look_at(&buffer, &palette, column, band.y + HAIRLINE_ROWS),
+            Look::plain(Ink::Dim),
+            "the placeholder is not drawn in the dim ink"
+        );
+
+        view.key(Key::Char('a'));
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+        assert!(
+            !drawn_row(&buffer, band.y + HAIRLINE_ROWS).contains(PLACEHOLDER),
+            "the placeholder outlived the first glyph the reader typed"
+        );
+    }
+
+    #[test]
+    fn a_card_covers_the_composer_and_leaves_it_readable_and_out_of_reach() {
+        let palette = Palette::TRUECOLOR;
+        let mut view = View::boot();
+        view.set_palette(palette);
+        view.paste("a draft of mine");
+        view.screen(Mode::Keys);
+
+        let area = screen(120, 40);
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+
+        let band = bands(area, view.composer().rows(), view.queue().rows()).composer;
+        let (drawn, column) = place_of(&buffer, "a draft of mine");
+        assert_eq!(
+            column, 2,
+            "the draft under the card is still set in the gutter: {drawn:?}"
+        );
+        assert_eq!(
+            look_at(&buffer, &palette, column, band.y + HAIRLINE_ROWS),
+            Look::plain(Ink::Dim),
+            "the scrim reads the draft down rather than taking it away: a reader sees the words \
+             they will return to"
+        );
+        assert_eq!(
+            view.cursor(area),
+            None,
+            "and no caret waits in a band that takes no key"
+        );
     }
 
     #[test]
@@ -1978,24 +2182,57 @@ mod tests {
 
         assert_eq!(
             view.cursor(screen(40, 12)),
-            Some((4, 10)),
-            "two wide glyphs take four columns, so the caret waits in the fourth"
+            Some((6, 10)),
+            "two wide glyphs take four columns, so the caret waits in the fourth from the \
+             gutter the draft is set in"
+        );
+    }
+
+    /// Where the caret a frame `cols` by `rows` wide puts the terminal's cursor, in a frame the
+    /// view has painted: the band's rows are a fact about the width, so nothing is asked before it.
+    fn caret_at(composer: Composer, cols: u16, rows: u16) -> Option<(u16, u16)> {
+        let mut view = View::typing(composer);
+        let area = screen(cols, rows);
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+        view.cursor(area)
+    }
+
+    #[test]
+    fn the_caret_follows_the_draft_onto_the_row_the_wrap_gave_it() {
+        let asking = || {
+            let mut composer = Composer::new();
+            composer.paste(&pen::filled(60, 'x'));
+            composer
+        };
+
+        assert_eq!(
+            caret_at(asking(), 40, 12),
+            Some((24, 10)),
+            "a thirty-eight column room holds thirty-eight glyphs of a draft of sixty, so the \
+             caret waits twenty-two columns into the band's second row rather than off the \
+             frame"
+        );
+        assert_eq!(
+            caret_at(asking(), 80, 12),
+            Some((62, 10)),
+            "and a frame wide enough to hold the draft shows it on the one row it takes"
         );
     }
 
     #[test]
-    fn a_caret_run_past_the_bands_edge_has_no_cell_to_wait_on() {
-        let view = View::typing({
+    fn a_caret_past_a_full_row_waits_on_the_bands_last_cell() {
+        let asking = || {
             let mut composer = Composer::new();
-            composer.paste(&pen::filled(60, 'x'));
+            composer.paste(&pen::filled(38, 'x'));
             composer
-        });
+        };
 
         assert_eq!(
-            view.cursor(screen(40, 12)),
-            None,
-            "column 60 is off a 40-column frame"
+            caret_at(asking(), 40, 12),
+            Some((39, 10)),
+            "a draft that fills the row's thirty-eight columns leaves the caret no cell after it, \
+             and a terminal keeps its cursor on the last one rather than giving it up"
         );
-        assert_eq!(view.cursor(screen(80, 12)), Some((60, 10)));
     }
 }

@@ -25,5 +25,5 @@ footer at 60x24
 19 |                                                            | plain:60
 20 |                                                            | plain:60
 21 |────────────────────────────────────────────────────────────| accent+faint:60
-22 |                                                            | plain:60
+22 |› what should the run do?                                   | dim:25 plain:35
 23 |Enter send · ? keys                                         | muted:10 dim:3 muted:6 plain:41

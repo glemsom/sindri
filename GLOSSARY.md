@@ -22,6 +22,13 @@ The reader's own words a run was asked with: the first fact of the session's tra
 wire is asked last, after the turns that came before it.
 _Avoid_: Query, question, input, message (that one is the wire's)
 
+**Draft**:
+The words a reader is typing, before they are a prompt: set in the gutter an answer is set in,
+opened by the sigil that stands in it, and wrapped under that gutter when a line is wider than the
+band. An empty draft says what the band can do there in a dim placeholder, and the first glyph a
+reader types takes it away.
+_Avoid_: Text box, buffer, field
+
 **Turn**:
 One request to the model and the tool calls it asks for. Not a unit of progress.
 _Avoid_: Step, iteration, wave

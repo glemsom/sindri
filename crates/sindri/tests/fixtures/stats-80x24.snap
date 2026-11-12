@@ -25,5 +25,5 @@ stats at 80x24
 19 |    │                                                                      │    | dim:5 plain:70 dim:5
 20 |ctx │                                                                      │lity| dim:5 plain:70 dim:5
 21 |────│                                                                      │────| dim:5 plain:70 dim:5
-22 |    │ +12 more                                                             │    | dim:5 plain:1 muted:8 plain:61 dim:5
+22 |› wh│ +12 more                                                             │    | dim:5 plain:1 muted:8 plain:61 dim:5
 23 |Ente╰──────────────────────────────────────────────────────────────── Esc ─╯    | dim:70 muted:3 dim:7

@@ -41,5 +41,5 @@ stats at 120x40
 35 |                        │                                                              records │                        | dim:25 plain:70 dim:25
 36 |                        │                                                                      │                        | dim:25 plain:70 dim:25
 37 |────────────────────────│                                                                      │────────────────────────| dim:25 plain:70 dim:25
-38 |                        │ +2 more                                                              │                        | dim:25 plain:1 muted:7 plain:62 dim:25
+38 |› what should the run do│ +2 more                                                              │                        | dim:25 plain:1 muted:7 plain:62 dim:25
 39 |Enter send · ? keys · Ct╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 muted:3 dim:27

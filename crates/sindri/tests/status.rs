@@ -484,8 +484,9 @@ fn a_frame_tells_its_terminal_that_a_run_is_working_and_then_done() {
     // line break and sends nothing. No `?` in the draft either: that key opens a screen.
     pty.type_bytes(b"triage this");
     assert!(
-        drawn.wait_until(|stream| caret_column(stream) == Some(12)),
-        "eleven glyphs typed, so the caret waits one column past the last: {:?}",
+        drawn.wait_until(|stream| caret_column(stream) == Some(14)),
+        "eleven glyphs typed in the draft's third column, so the caret waits one column past \
+         the last: {:?}",
         text(&drawn.bytes())
     );
     pty.type_bytes(b"\r");

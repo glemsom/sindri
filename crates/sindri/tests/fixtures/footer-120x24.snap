@@ -25,5 +25,5 @@ footer at 120x24
 19 |                                                                                                                        | plain:120
 20 |                                                                                                                        | plain:120
 21 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:120
-22 |                                                                                                                        | plain:120
+22 |› what should the run do?                                                                                               | dim:25 plain:95
 23 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · / commands · @ files · ↑ queue                                      | muted:10 dim:3 muted:6 dim:3 muted:13 dim:3 muted:11 dim:3 muted:10 dim:3 muted:7 dim:3 muted:7 plain:38
