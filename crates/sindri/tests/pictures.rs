@@ -13,12 +13,14 @@ use ratatui::layout::Rect;
 use sindri::composer::{Key, Outcome};
 use sindri::face;
 use sindri::graphics::{Ceiling, CellSize};
+use sindri::ledger::{COLUMNS, Ctx, Facts};
 use sindri::mark::Cell;
 use sindri::markdown;
 use sindri::picture::{self, Surface};
 use sindri::pictures::Pictures;
 use sindri::rows::{Row, Scroll};
 use sindri::view::View;
+use sindri_core::policy::Enforcement;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
 
@@ -405,6 +407,82 @@ fn pictured_rows(buffer: &Buffer) -> Vec<u16> {
             })
         })
         .collect()
+}
+
+/// The columns of row `y` a placement covers: the cell the protocol writes its sequence into, and
+/// the cells it skips behind that one. It is the picture's whole width and no cell more.
+fn pictured_cols(buffer: &Buffer, y: u16) -> Vec<u16> {
+    let area = buffer.area;
+    (area.x..area.right())
+        .filter(|x| {
+            buffer
+                .cell((*x, y))
+                .is_some_and(|cell| cell.skip || cell.symbol().contains(PLACEHOLDER))
+        })
+        .collect()
+}
+
+/// The rail's columns of row `y`, as a frame draws them.
+fn rail_row(buffer: &Buffer, rail: Rect, y: u16) -> String {
+    (rail.x..rail.right())
+        .map(|x| {
+            buffer
+                .cell((x, y))
+                .unwrap_or_else(|| panic!("column {x} of the rail, row {y}, is outside the frame"))
+                .symbol()
+                .to_owned()
+        })
+        .collect()
+}
+
+/// The twelve facts a rail draws, in the six blocks it reads them in, and no run's own spend: the
+/// facts that stand under the face, whole.
+fn railed_facts() -> Facts {
+    Facts {
+        wire: Some(String::from("anthropic")),
+        model: Some(String::from("claude-sonnet-4-5-20250929")),
+        think: Some(String::from("high")),
+        turns: Some((6, 250)),
+        ctx: Some(Ctx {
+            size: 48_200,
+            window: Some(200_000),
+        }),
+        cache: Some(88),
+        workspace: Some(PathBuf::from(
+            "/home/glemsom/Documents/git/sindri/.worktrees/46-rail",
+        )),
+        branch: Some(String::from("spec/1-capability")),
+        loaded: vec![String::from("bash"), String::from("records")],
+        sandbox: Some(Enforcement::Bubblewrap),
+        session: Some(String::from("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61")),
+        temp: Some(PathBuf::from(
+            "/home/glemsom/.local/state/sindri/sessions/9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61/tmp",
+        )),
+        ..Facts::default()
+    }
+}
+
+/// A frame whose rail carries the twelve facts, and a transcript of nothing: the rail is the picture
+/// a face is drawn over.
+fn railed(draws: bool) -> View {
+    let mut view = View::of(Vec::new(), Scroll::Tail);
+    view.set_cell_size(cell());
+    view.set_facts(railed_facts());
+    if draws {
+        view.set_pictures(Pictures::kitty(cell()));
+    }
+    view
+}
+
+/// The rail's band at `(cols, rows)`: the last thirty-two columns beside a transcript, from the
+/// frame's first row down to the composer's.
+fn rail_band(cols: u16, rows: u16) -> Rect {
+    Rect {
+        x: cols - COLUMNS,
+        y: 0,
+        width: COLUMNS,
+        height: rows - 3,
+    }
 }
 
 /// The cells whose glyphs hold the protocol's first chunk, counted: what a buffer sends when it is
@@ -838,4 +916,168 @@ fn a_diagram_and_an_image_in_one_answer_are_placed_each_over_its_own_block() {
         2,
         "and each was transmitted once, from its own first cell"
     );
+}
+
+#[test]
+fn the_face_is_placed_over_the_top_rows_of_the_rail_above_the_first_block() {
+    for cols in [100, 120] {
+        let mut view = railed(true);
+        let painted = painted_at(&mut view, (cols, 40));
+        let rail = rail_band(cols, 40);
+        let face = face::over(rail.width, &carried(true)).expect("the face a rail holds");
+
+        assert_eq!(
+            pictured_rows(&painted),
+            (rail.y..rail.y + face.rows()).collect::<Vec<u16>>(),
+            "the face is drawn in the {cols}-column frame's top rows, {} of them from the rail's              first row",
+            face.rows()
+        );
+        for y in rail.y..rail.y + face.rows() {
+            let columns = pictured_cols(&painted, y);
+            assert_eq!(
+                (columns.first().copied(), columns.len()),
+                (
+                    Some(rail.x + (rail.width - face.cols()) / 2),
+                    usize::from(face.cols())
+                ),
+                "row {y} of the face is {} columns centred in the rail's own columns: {columns:?}",
+                face.cols()
+            );
+            assert!(
+                !rail_row(&painted, rail, y).contains('─'),
+                "row {y} of the face has a hairline drawn through it: {:?}",
+                rail_row(&painted, rail, y)
+            );
+        }
+
+        for y in rail.y + face.rows()..rail.bottom() {
+            assert!(
+                pictured_cols(&painted, y).is_empty(),
+                "row {y} of the rail stands under the face and holds a cell of it: {:?}",
+                pictured_cols(&painted, y)
+            );
+        }
+
+        let first = rail.y + face.rows();
+        assert_eq!(
+            rail_row(&painted, rail, first).trim_end(),
+            "wire                   anthropic",
+            "the first block stands on the row under the face, whole"
+        );
+        assert_eq!(
+            rail_row(&painted, rail, first + 1).trim_end(),
+            "model         claude-sonnet-4-5…",
+            "and the block under it reads in the contract's order, under the face and not over it"
+        );
+    }
+}
+
+#[test]
+fn every_fact_the_rail_drew_without_a_face_is_drawn_whole_below_one() {
+    for cols in [100, 120] {
+        let rail = rail_band(cols, 40);
+        let mut bare = railed(false);
+        let without = painted_at(&mut bare, (cols, 40));
+        let mut faced = railed(true);
+        let with = painted_at(&mut faced, (cols, 40));
+
+        let stated = |buffer: &Buffer, from: u16| -> Vec<String> {
+            (from..rail.bottom())
+                .map(|y| rail_row(buffer, rail, y).trim_end().to_owned())
+                .filter(|row| !row.is_empty())
+                .collect()
+        };
+        let under = u16::try_from(pictured_rows(&with).len()).expect("the band's rows");
+
+        assert_eq!(
+            stated(&with, rail.y + under),
+            stated(&without, rail.y),
+            "the {cols}-column frame draws the same twelve facts under the face that it drew \
+             from the rail's first row: none is given up to the face"
+        );
+        assert!(
+            !stated(&with, rail.y + under)
+                .iter()
+                .any(|row| row.contains("more")),
+            "and none is counted as gone, so the rail grows no row saying one went: {:?}",
+            stated(&with, rail.y + under)
+        );
+    }
+}
+
+#[test]
+fn below_a_hundred_columns_no_face_is_drawn_and_the_strip_is_the_row_it_was() {
+    for cols in [40, 80, 99] {
+        let mut faced = railed(true);
+        let with = painted_at(&mut faced, (cols, 24));
+        let mut bare = railed(false);
+        let without = painted_at(&mut bare, (cols, 24));
+
+        assert!(
+            pictured_rows(&with).is_empty(),
+            "a {cols}-column frame draws one row of facts and no face: it has no band to reserve"
+        );
+        assert_eq!(
+            with, without,
+            "and the strip a terminal that places pictures draws is the row every terminal is \
+             drawn, cell for cell"
+        );
+    }
+}
+
+#[test]
+fn a_terminal_that_places_no_picture_draws_the_facts_from_the_rails_first_row() {
+    for cols in [100, 120] {
+        let mut view = railed(false);
+        let painted = painted_at(&mut view, (cols, 40));
+        let rail = rail_band(cols, 40);
+
+        assert!(
+            pictured_rows(&painted).is_empty(),
+            "a terminal that places no picture is given no cell of the face"
+        );
+        assert_eq!(
+            rail_row(&painted, rail, rail.y).trim_end(),
+            "wire                   anthropic",
+            "the facts stand from the rail's first row, as they did before the face was drawn"
+        );
+    }
+}
+
+#[test]
+fn the_face_is_capped_at_twelve_rows_and_keeps_its_shape() {
+    let surface = carried(true);
+
+    for cols in [32, 40, 60, 120] {
+        let measured = face::over(cols, &surface).expect("a rail a terminal places pictures in");
+        assert_eq!(
+            (measured.cols(), measured.rows()),
+            (19, 11),
+            "a rail {cols} columns wide draws the face nineteen cells by eleven: the twelve rows \
+             it may take are what binds, so a wider rail draws it no larger"
+        );
+    }
+
+    let narrow = face::over(16, &surface).expect("a narrow rail draws it too");
+    assert_eq!(
+        (narrow.cols(), narrow.rows()),
+        (16, 10),
+        "and a rail narrower than the face fits it into the sixteen columns it has"
+    );
+
+    for cols in [8, 16, 32, 64, 200] {
+        let measured = face::over(cols, &surface).expect("a rail of any width draws the face");
+        assert!(
+            measured.rows() <= face::CAP,
+            "a {cols}-column rail draws the face in {} rows, over the twelve it is capped at",
+            measured.rows()
+        );
+        let (width, height) = measured.pixels(cell());
+        let shape = f64::from(width) / f64::from(height);
+        assert!(
+            (shape - 795.0 / 989.0).abs() < 0.06,
+            "and what is drawn keeps the face's shape of {}, not the rail's: {shape}",
+            795.0 / 989.0
+        );
+    }
 }

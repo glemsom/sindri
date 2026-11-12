@@ -17,6 +17,7 @@ use crate::card;
 use crate::commands::{self, Command};
 use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, Prompt, State};
 use crate::door;
+use crate::face;
 use crate::graphics::CellSize;
 use crate::ink::{Ink, Look};
 use crate::keys::{Act, Mode, Stack};
@@ -536,7 +537,20 @@ impl View {
         // in what is left: a row's width is the width it is drawn at.
         let share = self.split(bands.transcript);
         if let Some((shape, rail)) = share.rail {
-            rail::paint(&self.rail, shape, rail, buffer, &self.palette);
+            // The face is decoration over the rail's top rows, and the facts are laid under it: a
+            // strip is one row and no band, and a terminal that places no picture reserves none.
+            let picture = match shape {
+                Rail::Ledger => face::over(rail.area.width, &self.surface()),
+                Rail::Strip => None,
+            };
+            let band = match &picture {
+                Some(picture) => rail.with_picture(picture.cols(), picture.rows()),
+                None => rail,
+            };
+            rail::paint(&self.rail, shape, band, buffer, &self.palette);
+            if let (Some(picture), Some(cells)) = (&picture, band.picture) {
+                self.pictures.place(picture, self.cell_size, cells, buffer);
+            }
         }
         self.transcript(share.transcript, buffer);
         if self.door {
@@ -1456,7 +1470,8 @@ mod tests {
 
             let bands = bands(area, view.composer().rows(), view.queue().rows());
             let share = view.split(bands.transcript);
-            let (shape, rail) = share.rail.expect("a frame this wide holds a ledger");
+            let (shape, band) = share.rail.expect("a frame this wide holds a ledger");
+            let rail = band.area;
             assert_eq!(shape, Rail::Ledger);
             assert_eq!(
                 share.transcript.right(),
