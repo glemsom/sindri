@@ -7,7 +7,7 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use unicode_width::UnicodeWidthStr;
 
-use crate::ink::{Ink, Look};
+use crate::ink::Look;
 use crate::palette::Palette;
 
 /// How much of a run a row has no room for.
@@ -77,22 +77,37 @@ pub fn write<S: AsRef<str>, D: Copy + Into<Look>>(
 
 /// Writes `text` from column `x` of row `y` and answers the column after it: the run is measured
 /// by what it draws, so a wide glyph leaves the column behind it blank and is never cut in half.
-pub fn run(buffer: &mut Buffer, x: u16, y: u16, text: &str, ink: Ink, palette: &Palette) -> u16 {
+pub fn run(
+    buffer: &mut Buffer,
+    x: u16,
+    y: u16,
+    text: &str,
+    look: impl Into<Look>,
+    palette: &Palette,
+) -> u16 {
     let row = Rect {
         x,
         y,
         width: buffer.area.right().saturating_sub(x),
         height: 1,
     };
-    write(buffer, row, &[(text, ink)], Clip::Edge, palette);
+    write(buffer, row, &[(text, look.into())], Clip::Edge, palette);
     x.saturating_add(cells(text))
 }
 
-/// Writes a one-cell `glyph` at a column of a row, in an ink.
-pub fn glyph(buffer: &mut Buffer, x: u16, y: u16, glyph: char, ink: Ink, palette: &Palette) {
+/// Writes a one-cell `glyph` at a column of a row, in a look.
+pub fn glyph(
+    buffer: &mut Buffer,
+    x: u16,
+    y: u16,
+    glyph: char,
+    look: impl Into<Look>,
+    palette: &Palette,
+) {
+    let look: Look = look.into();
     each(Rect::new(x, y, 1, 1), buffer, |cell| {
         cell.set_char(glyph);
-        cell.set_style(ink.style(palette));
+        cell.set_style(look.style(palette));
     });
 }
 
@@ -130,12 +145,12 @@ fn each(area: Rect, buffer: &mut Buffer, mut edit: impl FnMut(&mut Cell)) {
     }
 }
 
-/// Fills `row` edge to edge with a one-cell `fill`, in an ink.
-pub fn rule(buffer: &mut Buffer, row: Rect, fill: char, ink: Ink, palette: &Palette) {
+/// Fills `row` edge to edge with a one-cell `fill`, in a look.
+pub fn rule(buffer: &mut Buffer, row: Rect, fill: char, look: impl Into<Look>, palette: &Palette) {
     write(
         buffer,
         row,
-        &[(filled(row.width, fill), ink)],
+        &[(filled(row.width, fill), look.into())],
         Clip::Edge,
         palette,
     );

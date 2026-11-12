@@ -24,6 +24,6 @@ rail at 80x24
 18 |                                                                                | plain:80
 19 |                                                                                | plain:80
 20 |ctx █░░░░░ · model claude-sonnet-4-5… · sandbox bwrap · branch spec/1-capability| dim:4 plain:1 dim:14 plain:18 dim:11 plain:5 dim:10 plain:17
-21 |────────────────────────────────────────────────────────────────────────────────| dim:80
+21 |────────────────────────────────────────────────────────────────────────────────| accent+faint:80
 22 |                                                                                | plain:80
 23 |Enter send · ? keys                                                             | muted:10 dim:3 muted:6 plain:61

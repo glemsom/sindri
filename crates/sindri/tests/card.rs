@@ -10,7 +10,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use sindri::composer::Key;
-use sindri::ink::Ink;
+use sindri::ink::{Face, Ink, Look};
 use sindri::keys::{Act, Mode};
 use sindri::palette::Palette;
 use sindri::view::View;
@@ -104,6 +104,12 @@ fn drafted() -> View {
     let mut view = conversation();
     view.paste("a draft behind the card");
     view
+}
+
+/// The look the cell at `x`, `y` of the frame reads back as.
+fn look(buffer: &Buffer, palette: &Palette, x: u16, y: u16) -> Look {
+    Look::of(buffer.cell((x, y)).expect("a cell of the frame"), palette)
+        .expect("every cell of a frame is drawn in a look")
 }
 
 fn row(buffer: &Buffer, y: u16) -> String {
@@ -203,6 +209,76 @@ fn a_screen_names_itself_in_the_top_border_and_the_key_that_leaves_in_the_bottom
             "and the rows between them are the card's two sides: {side:?}"
         );
     }
+}
+
+#[test]
+fn every_screen_open_over_the_frame_carries_the_accent_on_the_edge_row_of_its_card() {
+    let palette = Palette::TRUECOLOR;
+    let faint = Look::new(Ink::Accent, Face::Faint);
+
+    for (cols, rows) in [(120, 40), (40, 24)] {
+        for mode in SCREENS {
+            let buffer = painted(&mut on_screen(mode), cols, rows);
+            let top = row(&buffer, 0);
+            // A card too narrow to hold a border is the whole frame, and one that holds it is
+            // drawn between its corners with the frame it dimmed either side of it.
+            let left = column_of(&buffer, 0, '╭').unwrap_or(0);
+            let right = column_of(&buffer, 0, '╮').unwrap_or(cols - 1);
+            assert!(
+                top.contains(name(mode)),
+                "{} is drawn on the card's edge row: {top:?}",
+                name(mode)
+            );
+            for column in left..=right {
+                assert_eq!(
+                    look(&buffer, &palette, column, 0),
+                    faint,
+                    "column {column} of {}'s edge row at {cols} columns is not the accent drawn \
+                     faint, and the card is the surface that takes the keys: {top:?}",
+                    name(mode)
+                );
+            }
+
+            let last = buffer.area.bottom() - 1;
+            for column in left..=right {
+                assert_ne!(
+                    look(&buffer, &palette, column, last),
+                    faint,
+                    "column {column} of the row that says how to leave {} carries the accent too, \
+                     and one card lights one row",
+                    name(mode)
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn a_card_drawn_in_no_colour_keeps_the_accent_on_its_name_and_draws_no_accent_edge() {
+    let palette = Palette::SLOTS;
+    let mut view = on_screen(Mode::Keys);
+    view.set_palette(palette);
+    let buffer = painted(&mut view, 120, 40);
+    let top = row(&buffer, 0);
+    let left = column_of(&buffer, 0, '╭').expect("a left corner");
+    let named_at = top
+        .find(name(Mode::Keys))
+        .expect("the screen's own name in the edge row of its card");
+    let named_at = sindri::pen::cells(&top[..named_at]);
+
+    assert_eq!(
+        look(&buffer, &palette, left, 0),
+        Look::plain(Ink::Dim),
+        "the card's edge row is the dim edge it always drew: a reader who asked for no colour is \
+         given no accent edge to see, and their focus is carried by the card's border and the \
+         scrim"
+    );
+    assert_eq!(
+        look(&buffer, &palette, named_at, 0),
+        Look::plain(Ink::Accent),
+        "and the name that row carries is the accent it always was, so every screen such a \
+         terminal draws is the screen it drew before: {top:?}"
+    );
 }
 
 #[test]

@@ -170,6 +170,25 @@ impl Palette {
             .add_modifier(modifier)
     }
 
+    /// The look an edge row is drawn in while its surface takes the keys: the accent in the faint
+    /// face, and the dim edge for a palette that draws no edge at all.
+    pub fn accent_edge(&self) -> Look {
+        match self.draws_edge() {
+            true => Look::new(Ink::Accent, Face::Faint),
+            false => self.dim_edge(),
+        }
+    }
+
+    /// The look an edge row is drawn in while its surface takes no keys.
+    pub fn dim_edge(&self) -> Look {
+        Look::plain(Ink::Dim)
+    }
+
+    /// Whether this palette draws an edge at all.
+    fn draws_edge(&self) -> bool {
+        self.edge(Edge::Lit) != Color::Reset
+    }
+
     pub fn edge(&self, edge: Edge) -> Color {
         match edge {
             Edge::Lit => self.ramp.steps[0],
@@ -511,6 +530,40 @@ mod tests {
                 Palette::SLOTS.edge(edge),
                 Color::Reset,
                 "{edge:?} draws no colour, so every frame an uncoloured terminal draws is flat"
+            );
+        }
+    }
+
+    #[test]
+    fn the_accent_edge_is_the_accent_drawn_faint_and_a_terminal_with_no_colour_is_given_none() {
+        let faint = Look::new(Ink::Accent, Face::Faint);
+
+        assert_eq!(
+            Palette::SLOTS.accent_edge(),
+            Palette::SLOTS.dim_edge(),
+            "a reader who asked for no colour is given no accent edge: their focus is carried by \
+             the card's border and the scrim, and never by a colour they asked away"
+        );
+        assert_eq!(
+            Palette::SLOTS.dim_edge(),
+            Look::plain(Ink::Dim),
+            "a surface that takes no keys keeps the dim ink its edge row has always been drawn in"
+        );
+        for (spelling, palette) in SPELLED {
+            assert_eq!(
+                palette.accent_edge(),
+                faint,
+                "{spelling} draws the accent edge as something other than the accent in the faint \
+                 face, and a second ink is what this design never adds"
+            );
+            assert_eq!(palette.dim_edge(), Look::plain(Ink::Dim));
+
+            let mut cell = Cell::default();
+            cell.set_style(palette.accent_edge().style(&palette));
+            assert_eq!(
+                Look::of(&cell, &palette),
+                Some(faint),
+                "the accent edge {spelling} draws reads back as no look a fixture can name"
             );
         }
     }

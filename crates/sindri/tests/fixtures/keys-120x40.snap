@@ -3,7 +3,7 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 keys at 120x40
-00 |                        ╭─ ? keys ─────────────────────────────────────────────────────────────╮                        | dim:27 accent:6 dim:87
+00 |                        ╭─ ? keys ─────────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
 01 |                        │ keys                                                                 │                        | dim:25 plain:1 dim:4 plain:65 dim:25
 02 |                        │ Esc                  close this screen                               │                        | dim:25 plain:1 muted:21 plain:48 dim:25
 03 |                        │ ?                    close this screen                               │                        | dim:25 plain:1 muted:21 plain:48 dim:25

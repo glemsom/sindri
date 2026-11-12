@@ -18,7 +18,7 @@ use crate::commands::{self, Command};
 use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, Prompt, State};
 use crate::door;
 use crate::graphics::CellSize;
-use crate::ink::Ink;
+use crate::ink::{Ink, Look};
 use crate::keys::{Act, Mode, Stack};
 use crate::ledger::{Boot, Facts, Rail, Share};
 use crate::mark::{Cell, Mark, Span};
@@ -680,7 +680,7 @@ impl View {
             buffer,
             Rect { height: 1, ..area },
             HAIRLINE,
-            Ink::Dim,
+            self.composer_edge(),
             &self.palette,
         );
 
@@ -700,6 +700,15 @@ impl View {
                 break;
             }
             draft_line(buffer, Rect { y, ..draft }, line, &self.palette);
+        }
+    }
+
+    /// The look the composer's edge row is drawn in: the accent while the draft takes the keys, and
+    /// the dim edge while a screen is open over it.
+    fn composer_edge(&self) -> Look {
+        match self.stack.modal() {
+            None => self.palette.accent_edge(),
+            Some(_) => self.palette.dim_edge(),
         }
     }
 
@@ -1106,17 +1115,34 @@ mod tests {
         }
     }
 
-    /// Every cell of `buffer` read back in `palette`, as the look a fixture would name it.
-    fn looks(buffer: &Buffer, palette: &Palette) -> Vec<String> {
-        let area = buffer.area;
-        (area.y..area.bottom())
-            .flat_map(|y| (area.x..area.right()).map(move |x| (x, y)))
-            .map(|(x, y)| {
-                Look::of(buffer.cell((x, y)).expect("a cell of the frame"), palette)
-                    .unwrap_or_else(|| panic!("row {y}, column {x} reads back as no look"))
-                    .name()
-            })
-            .collect()
+    /// The look the cell at `x`, `y` of the frame reads back as.
+    fn look_at(buffer: &Buffer, palette: &Palette, x: u16, y: u16) -> Look {
+        Look::of(buffer.cell((x, y)).expect("a cell of the frame"), palette)
+            .unwrap_or_else(|| panic!("row {y}, column {x} reads back as no look"))
+    }
+
+    /// The columns between the two corners of the card drawn in `buffer`, which are the columns
+    /// of the frame under it.
+    fn card_columns(buffer: &Buffer) -> (u16, u16) {
+        let mut corners = (None, None);
+        for x in buffer.area.x..buffer.area.right() {
+            let glyph = buffer
+                .cell((x, buffer.area.y))
+                .expect("a cell of the card's edge row")
+                .symbol();
+            match glyph {
+                "╭" => corners.0 = Some(x),
+                "╮" => corners.1 = Some(x),
+                _ => {}
+            }
+        }
+        let (Some(left), Some(right)) = corners else {
+            panic!(
+                "the card's edge row has two corners: {:?}",
+                drawn_row(buffer, buffer.area.y)
+            );
+        };
+        (left, right)
     }
 
     /// A frame holding a draft of `lines` lines painted in `palette` at `cols` by `rows`, and the
@@ -1169,6 +1195,27 @@ mod tests {
     }
 
     #[test]
+    fn the_composer_that_takes_the_keys_lights_its_edge_row_with_the_accent() {
+        let palette = Palette::TRUECOLOR;
+        let faint = Look::new(Ink::Accent, Face::Faint);
+        for lines in 1..=5 {
+            for (cols, rows) in [(120, 40), (60, 24)] {
+                let (buffer, band) = composer(palette, lines, cols, rows);
+
+                for x in band.x..band.right() {
+                    assert_eq!(
+                        look_at(&buffer, &palette, x, band.y),
+                        faint,
+                        "column {x} of the {} row composer's edge row at {cols} columns is not the \
+                        accent drawn faint, and the draft is the surface that takes the keys",
+                        band.height
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn no_band_is_lit_twice_or_shadowed_twice_at_either_end_of_its_height() {
         let palette = Palette::TRUECOLOR;
         for lines in [1, 5] {
@@ -1215,16 +1262,97 @@ mod tests {
     }
 
     #[test]
-    fn the_ramp_moves_the_surface_under_the_cells_and_never_the_ink() {
-        let (coloured, coloured_band) = composer(Palette::TRUECOLOR, 3, 120, 40);
+    fn the_ramp_moves_the_surface_under_the_cells_and_adds_no_ink_but_the_accent_edge() {
+        let (coloured, band) = composer(Palette::TRUECOLOR, 3, 120, 40);
         let (flat, flat_band) = composer(Palette::SLOTS, 3, 120, 40);
+        assert_eq!(band, flat_band);
 
-        assert_eq!(
-            looks(&coloured, &Palette::TRUECOLOR),
-            looks(&flat, &Palette::SLOTS),
-            "a frame drawn in colour writes no ink a frame drawn in none does not"
-        );
-        assert_eq!(coloured_band, flat_band);
+        let area = coloured.area;
+        for y in area.y..area.bottom() {
+            for x in area.x..area.right() {
+                let takes_keys = y == band.y && (band.x..band.right()).contains(&x);
+                if takes_keys {
+                    continue;
+                }
+                assert_eq!(
+                    look_at(&coloured, &Palette::TRUECOLOR, x, y),
+                    look_at(&flat, &Palette::SLOTS, x, y),
+                    "row {y}, column {x} is read in a colour a frame drawn in none is not: the \
+                     ramp is a surface, and the accent edge on the composer's own edge row is the \
+                     one ink the draft that takes the keys adds"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_composer_gives_the_accent_up_while_a_screen_takes_the_keys() {
+        let palette = Palette::TRUECOLOR;
+        for mode in [
+            Mode::Keys,
+            Mode::Files,
+            Mode::Models,
+            Mode::Settings,
+            Mode::Stats,
+        ] {
+            let mut view = View::boot();
+            view.set_palette(palette);
+            view.paste("the draft behind the card");
+            view.screen(mode);
+
+            let area = screen(120, 40);
+            let mut buffer = Buffer::empty(area);
+            view.paint(area, &mut buffer);
+            let band = bands(area, view.composer().rows(), view.queue().rows()).composer;
+            let (left, right) = card_columns(&buffer);
+            assert!(
+                band.x < left && right + 1 < band.right(),
+                "the card leaves the composer's edge row visible in its gutters at {left} and \
+                 {right}, and the band it covers reaches from {} to {}",
+                band.x,
+                band.right()
+            );
+            // The card is as tall as the frame and covers the composer down to its last row, so
+            // the composer's edge row is read in the card's two gutters, where the scrim would
+            // have left an accent bright rather than dimmed.
+            for x in (band.x..left).chain(right + 1..band.right()) {
+                assert_eq!(
+                    look_at(&buffer, &palette, x, band.y),
+                    palette.dim_edge(),
+                    "column {x} of the composer's edge row under {} is not the dim edge, and the \
+                     card is the surface that takes the keys",
+                    mode.name()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_frame_with_no_colour_draws_no_accent_edge_on_any_surface() {
+        let palette = Palette::SLOTS;
+        for open in [None, Some(Mode::Keys)] {
+            let mut view = View::boot();
+            view.set_palette(palette);
+            view.paste("the draft the composer band is drawn from");
+            if let Some(mode) = open {
+                view.screen(mode);
+            }
+
+            let area = screen(120, 40);
+            let mut buffer = Buffer::empty(area);
+            view.paint(area, &mut buffer);
+
+            for y in area.y..area.bottom() {
+                for x in area.x..area.right() {
+                    assert_ne!(
+                        look_at(&buffer, &palette, x, y).face(),
+                        Face::Faint,
+                        "row {y}, column {x} is dimmed to say it takes the keys, and a reader who \
+                         asked for no colour is given focus by the card's border and the scrim"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
