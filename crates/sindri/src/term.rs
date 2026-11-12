@@ -126,9 +126,9 @@ struct Restore {
 }
 
 impl Restore {
-    /// Puts the terminal back: the screen is left first, so nothing that follows — a panic message
-    /// included — is drawn on a screen that is about to be somebody else's, and then the state raw
-    /// mode replaced is restored.
+    /// Puts the terminal back: the key protocol is popped and the screen left first, so nothing
+    /// that follows — a panic message included — is drawn on a screen about to be somebody else's,
+    /// and then the state raw mode replaced is restored.
     fn put_back(self) {
         let _ = tell(&self.screen, GIVE_BACK_SCREEN);
         let _ = tcsetattr(&self.keys, OptionalActions::Now, &self.saved);

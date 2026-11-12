@@ -24,6 +24,12 @@ const SHIFT: u32 = 1;
 
 const CTRL: u32 = 4;
 
+/// Alt, super, hyper and meta: no act of this frame's is held with one of them.
+const UNANSWERED: u32 = 2 | 8 | 16 | 32;
+
+/// Caps lock and num lock, which a report carries beside the keys held and which name no key.
+const LOCKS: u32 = 64 | 128;
+
 /// `ESC [ 2 0 1 ~`: the sequence that ends a bracketed paste, so all before it is one paste.
 const PASTE_END: &[u8] = b"\x1b[201~";
 
@@ -96,26 +102,16 @@ impl Decoder {
             };
         }
         self.take(1);
+        // A carriage return that came with more of its burst, before or after it, is a paste's line
+        // break: a clipboard's newline reaches a terminal as the byte its Enter key would send, and
+        // no line break in a paste may send.
         let key = match byte {
-            0x03 => Key::Cancel,
-            0x15 => Key::Clear,
-            0x18 => Key::Drop,
-            b'\t' => Key::Tab,
-            // `Ctrl-Q`, which is why flow control has to be off: a terminal left with `IXON` eats
-            // this byte instead of sending it.
-            0x11 => Key::Quit,
-            0x19 => Key::Copy,
-            0x7f | 0x08 => Key::Backspace,
-            // `Ctrl-J` is the plain newline every terminal sends: it breaks a line rather than
-            // sending one, and `Enter` is the carriage return below.
-            b'\n' => Key::Newline,
             b'\r' if self.alone => Key::Enter,
-            // A carriage return that came with more of its burst, before or after it, is a paste's
-            // line break: a clipboard's newline reaches a terminal as the byte its Enter key would
-            // send, and no line break in a paste may send.
             b'\r' => Key::Newline,
-            0x20..=0x7e => Key::Char(char::from(byte)),
-            _ => return Step::Taken,
+            _ => match control(byte) {
+                Some(key) => key,
+                None => return Step::Taken,
+            },
         };
         Step::Event(Event::Key(key))
     }
@@ -254,14 +250,38 @@ fn arrow(last: u8) -> Option<Key> {
     }
 }
 
+/// The key one byte names, when it names one: what a control byte is read as, whether it reached
+/// the loop as a byte or as a report that spells it out.
+fn control(byte: u8) -> Option<Key> {
+    match byte {
+        0x03 => Some(Key::Cancel),
+        0x15 => Some(Key::Clear),
+        0x18 => Some(Key::Drop),
+        b'\t' => Some(Key::Tab),
+        // `Ctrl-Q`, which is why flow control has to be off: a terminal left with `IXON` eats this
+        // byte instead of sending it.
+        0x11 => Some(Key::Quit),
+        0x19 => Some(Key::Copy),
+        0x7f | 0x08 => Some(Key::Backspace),
+        // `Ctrl-J` is the plain newline every terminal sends: it breaks a line rather than sending
+        // one, and `Enter` is the carriage return `Ctrl-M` is.
+        b'\n' => Some(Key::Newline),
+        b'\r' => Some(Key::Enter),
+        ESCAPE => Some(Key::Escape),
+        0x20..=0x7e => Some(Key::Char(char::from(byte))),
+        _ => None,
+    }
+}
+
 /// The key a protocol report names: `CSI <code> ; <modifiers> u`. Only the reports this frame's
 /// map has an answer for are answered, because a key nobody answers is not a key.
 fn reported(params: &str) -> Option<Key> {
+    // A report says which glyph a layout's shift makes of the key after a colon, and the key
+    // before it is the one the frame answers.
     let (code, modifiers) = params.split_once(';').unwrap_or((params, "1"));
-    let code: u32 = code.parse().ok()?;
-    let modifiers = held(modifiers)?;
-    // Alt, super and hyper name no act of this frame's, so a report holding one is not a key.
-    if modifiers & !(SHIFT | CTRL) != 0 {
+    let code: u32 = code.split(':').next()?.parse().ok()?;
+    let modifiers = held(modifiers)? & !LOCKS;
+    if modifiers & UNANSWERED != 0 {
         return None;
     }
     let shift = modifiers & SHIFT != 0;
@@ -272,22 +292,15 @@ fn reported(params: &str) -> Option<Key> {
         9 if modifiers == 0 => Some(Key::Tab),
         9 if shift => Some(Key::BackTab),
         27 if modifiers == 0 => Some(Key::Escape),
-        // `Ctrl-H` is the byte `Backspace` has always been sent as, and the report names the same key.
-        127 | 104 if modifiers == 0 || ctrl => Some(Key::Backspace),
-        _ if ctrl => control_key(code),
+        127 if modifiers == 0 || ctrl => Some(Key::Backspace),
+        _ if ctrl => control(control_byte(code)?),
         _ => None,
     }
 }
 
-/// The key a `Ctrl` and one letter name: the bytes a raw terminal sends for them, reported by name.
-fn control_key(code: u32) -> Option<Key> {
-    match code {
-        99 => Some(Key::Cancel),
-        106 => Some(Key::Newline),
-        113 => Some(Key::Quit),
-        117 => Some(Key::Clear),
-        120 => Some(Key::Drop),
-        121 => Some(Key::Copy),
-        _ => None,
-    }
+/// The byte a `Ctrl` and one key name, for the keys a control byte is the key's own code with its
+/// three high bits taken off: the letters, and the six punctuation keys that share their range.
+fn control_byte(code: u32) -> Option<u8> {
+    let key = u8::try_from(code).ok()?;
+    matches!(key, b'a'..=b'z' | b'@' | b'[' | b'\\' | b']' | b'^' | b'_').then(|| key & 0x1f)
 }

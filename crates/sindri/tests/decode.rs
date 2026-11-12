@@ -56,12 +56,12 @@ fn ctrl_j_is_the_newline_every_terminal_sends() {
 }
 
 #[test]
-fn shift_enter_under_the_kitty_protocol_breaks_the_line() {
+fn a_reported_shift_enter_breaks_the_line() {
     assert_eq!(event(b"\x1b[13;2u"), key(Key::Newline));
 }
 
 #[test]
-fn ctrl_enter_under_the_kitty_protocol_breaks_the_line() {
+fn a_reported_ctrl_enter_breaks_the_line() {
     assert_eq!(
         event(b"\x1b[13;5u"),
         key(Key::Newline),
@@ -70,7 +70,7 @@ fn ctrl_enter_under_the_kitty_protocol_breaks_the_line() {
 }
 
 #[test]
-fn a_kitty_enter_report_without_a_modifier_still_sends() {
+fn a_reported_enter_without_a_modifier_still_sends() {
     assert_eq!(event(b"\x1b[13u"), key(Key::Enter));
 }
 
@@ -86,6 +86,9 @@ fn a_reported_key_is_the_key_the_byte_beside_it_would_be() {
         (&b"\x1b[117;5u"[..], Key::Clear),
         (&b"\x1b[106;5u"[..], Key::Newline),
         (&b"\x1b[104;5u"[..], Key::Backspace),
+        (&b"\x1b[109;5u"[..], Key::Enter),
+        (&b"\x1b[105;5u"[..], Key::Tab),
+        (&b"\x1b[91;5u"[..], Key::Escape),
         (&b"\x1b[127u"[..], Key::Backspace),
         (&b"\x1b[27u"[..], Key::Escape),
         (&b"\x1b[9u"[..], Key::Tab),
@@ -98,6 +101,33 @@ fn a_reported_key_is_the_key_the_byte_beside_it_would_be() {
             String::from_utf8_lossy(bytes)
         );
     }
+}
+
+#[test]
+fn a_lock_a_report_carries_beside_its_modifiers_names_no_other_key() {
+    // A report's modifier field carries the locks the keyboard is in as well as the keys held, and
+    // a reader with caps lock on still types `Ctrl-C` rather than a key nobody answers.
+    assert_eq!(
+        event(b"\x1b[99;69u"),
+        key(Key::Cancel),
+        "caps lock and Ctrl"
+    );
+    assert_eq!(event(b"\x1b[113;133u"), key(Key::Quit), "num lock and Ctrl");
+    assert_eq!(
+        event(b"\x1b[13;66u"),
+        key(Key::Newline),
+        "caps lock and Shift"
+    );
+}
+
+#[test]
+fn a_report_of_an_alternate_key_is_the_key_before_the_colon() {
+    assert_eq!(
+        event(b"\x1b[13:13;2u"),
+        key(Key::Newline),
+        "a report says which glyph a layout makes of the key after a colon, and the key \
+         before it is the one the frame answers"
+    );
 }
 
 #[test]

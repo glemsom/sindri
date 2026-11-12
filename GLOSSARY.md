@@ -251,7 +251,7 @@ What a launch asks of its terminal when it takes the screen, so a key that names
 a report of itself rather than as a byte: `Shift+Enter` breaks a line where `Enter` sends one. It is
 pushed on the terminal's own stack and popped first on every way out, and a terminal that speaks none
 is handed the same frame and the same keys.
-_Avoid_: Kitty protocol, keyboard enhancement, CSI u, key encoding
+_Avoid_: Keyboard enhancement, CSI u, key encoding
 
 **Artefact**:
 The one file the product ships, static and `x86_64-unknown-linux-musl`, built and held by the
