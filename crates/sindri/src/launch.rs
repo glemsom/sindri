@@ -274,17 +274,10 @@ impl Launch {
     }
 
     /// Whether a run on this session would still be the run its record names. A session records one
-    /// wire, one model, one route and one boundary, so a config that differs in anything but the two
-    /// keys a frame reads decides a different run, and a session of its own with it.
+    /// wire, one model, one route, one boundary and one set of dials, so a config that decides
+    /// another run is the end of it.
     pub fn runs_on(&self, config: &Config) -> bool {
-        fn run_deciding(config: &Config) -> Config {
-            Config {
-                status: None,
-                face: None,
-                ..config.clone()
-            }
-        }
-        run_deciding(&self.config) == run_deciding(config)
+        self.config.decides_the_same_run(config)
     }
 }
 

@@ -1117,7 +1117,7 @@ fn document(state: &std::path::Path) -> String {
     document_in(directory)
 }
 
-/// The facts a session's transcript holds, one entry per line, in the order they were written.
+/// The entries a session's transcript holds, one line each, in the order they were written.
 fn transcript(directory: &Path) -> Vec<serde_json::Value> {
     std::fs::read_to_string(directory.join("transcript.jsonl"))
         .expect("the session's transcript")
@@ -1132,7 +1132,7 @@ fn prompts(directory: &Path) -> Vec<String> {
     transcript(directory)
         .iter()
         .filter(|entry| entry["kind"] == "prompt")
-        .filter_map(|entry| Some(String::from(entry["text"].as_str()?)))
+        .map(|entry| String::from(entry["text"].as_str().expect("a prompt is words")))
         .collect()
 }
 
@@ -1142,7 +1142,7 @@ fn model_of(request: &str) -> String {
         .split_once("\r\n\r\n")
         .expect("a request's head and its body");
     let body: serde_json::Value = serde_json::from_str(body).expect("a wire's body is JSON");
-    String::from(body["model"].as_str().unwrap_or_default())
+    String::from(body["model"].as_str().expect("a request names the model"))
 }
 
 fn guid(state: &std::path::Path) -> String {
@@ -2167,7 +2167,8 @@ fn a_file_in_the_session_temp_outlives_the_next_prompt_and_goes_when_the_launch_
     );
     assert!(
         scratch.is_file(),
-        "the file survives the prompt after it, because the session it was written in is the one          the next prompt runs in: {}",
+        "the file survives the prompt after it, because the session it was written in is the one the \
+         next prompt runs in: {}",
         scratch.display()
     );
 
@@ -2177,6 +2178,11 @@ fn a_file_in_the_session_temp_outlives_the_next_prompt_and_goes_when_the_launch_
     assert!(
         !scratch.exists(),
         "and it is gone when the launch ends, with the conversation it was scratch for"
+    );
+    assert_eq!(
+        directories(&ground.state).len(),
+        1,
+        "both prompts ran in the one session whose temp the file was written in"
     );
     assert!(
         directory.join("session.json").is_file(),
@@ -2243,6 +2249,17 @@ fn two_prompts_in_one_launch_leave_one_session_that_counts_both() {
         prompts(&found[0]),
         ["hi my name is Glenn", "what is my name?"],
         "the session's transcript shows both prompts, in the order they were asked"
+    );
+    let listing = ground
+        .command()
+        .args(["sessions", "list"])
+        .output()
+        .expect("the listing runs on the state home the launch wrote");
+    assert_eq!(
+        text(&listing.stdout).lines().count(),
+        1,
+        "`sessions list` shows one entry for a launch that asked two prompts: {}",
+        text(&listing.stdout)
     );
 }
 

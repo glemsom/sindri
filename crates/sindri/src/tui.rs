@@ -136,7 +136,7 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     let mut config = config.clone();
     // The session is the launch's and not a run's: the first prompt opens it, every prompt after runs
     // in it, and it ends with the launch.
-    let mut held: Option<Launch> = None;
+    let mut launch: Option<Launch> = None;
     let keys = keys(
         &terminal,
         &mut canvas,
@@ -147,14 +147,14 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
         &signals,
         &typed,
         &mut telling,
-        &mut held,
+        &mut launch,
     );
     // Given back before a word is said about the ending: a refusal is a line for the shell, and
     // not a smear over a frame.
     drop(screen);
     // The conversation the session held is over, so its temp goes before the process does.
-    if let Some(mut launch) = held.take() {
-        launch.close();
+    if let Some(mut ending) = launch.take() {
+        ending.close();
     }
     match keys {
         Ok(Ending::Quit) => ExitCode::SUCCESS,
@@ -187,7 +187,7 @@ fn keys(
     signals: &Signals,
     typed: &[u8],
     telling: &mut Teller<File>,
-    held: &mut Option<Launch>,
+    launch: &mut Option<Launch>,
 ) -> io::Result<Ending> {
     let mut decoder = Decoder::new();
     let mut read = [0u8; 4096];
@@ -212,7 +212,7 @@ fn keys(
             environment,
             &wake,
             telling,
-            held,
+            launch,
         )? {
             return Ok(ending);
         }
@@ -257,14 +257,14 @@ fn keys(
         if woken {
             wake.drain();
             served(canvas, view, &mut asking)?;
-            if take(canvas, view, &mut running, telling, held)? && !interrupted {
+            if take(canvas, view, &mut running, telling, launch)? && !interrupted {
                 // A launch the user's own word ended starts nothing: the queue waits for a reader
                 // who still wants it.
                 if let Some(ending) = resume(
                     canvas,
                     view,
                     &mut running,
-                    held,
+                    launch,
                     cli,
                     config,
                     &wake,
@@ -302,7 +302,7 @@ fn keys(
                     environment,
                     &wake,
                     telling,
-                    held,
+                    launch,
                 )? {
                     return Ok(ending);
                 }
@@ -335,7 +335,7 @@ fn answer(
     environment: &impl Environment,
     wake: &Arc<Wake>,
     telling: &mut Teller<File>,
-    held: &mut Option<Launch>,
+    launch: &mut Option<Launch>,
 ) -> io::Result<Option<Ending>> {
     let key = match event {
         // A paste is one edit and never a key, so nothing inside one can send: the composer is
@@ -364,7 +364,7 @@ fn answer(
         }
         Outcome::Send(prompt) => {
             let sent = send(
-                prompt, canvas, view, running, held, cli, config, wake, telling,
+                prompt, canvas, view, running, launch, cli, config, wake, telling,
             )?;
             Ok(sent)
         }
@@ -438,7 +438,7 @@ fn send(
     canvas: &mut Canvas<'_>,
     view: &mut View,
     running: &mut Option<Running>,
-    held: &mut Option<Launch>,
+    launch: &mut Option<Launch>,
     cli: &Cli,
     config: &Config,
     wake: &Arc<Wake>,
@@ -449,8 +449,8 @@ fn send(
         paint(canvas, view)?;
         return Ok(None);
     }
-    let launch = match held.take() {
-        Some(launch) if launch.runs_on(config) => launch,
+    let launching = match launch.take() {
+        Some(held) if held.runs_on(config) => held,
         // The session a launch holds records one wire, model, route and boundary: a config that names
         // another is the end of that session, and the prompt after it opens the next.
         ended => {
@@ -458,7 +458,7 @@ fn send(
                 ended.close();
             }
             match Launch::open(cli, config, FrontEnd::Terminal) {
-                Ok(launch) => launch,
+                Ok(opened) => opened,
                 Err(refusal) => return Ok(Some(Ending::Refused(refusal))),
             }
         }
@@ -466,7 +466,7 @@ fn send(
     view.settle();
     view.set_state(State::Running);
     *running = Some(Running::start(
-        launch,
+        launching,
         prompt,
         view.earlier(),
         Arc::clone(wake),
@@ -490,7 +490,7 @@ fn resume(
     canvas: &mut Canvas<'_>,
     view: &mut View,
     running: &mut Option<Running>,
-    held: &mut Option<Launch>,
+    launch: &mut Option<Launch>,
     cli: &Cli,
     config: &mut Config,
     wake: &Arc<Wake>,
@@ -500,7 +500,7 @@ fn resume(
         return Ok(None);
     };
     send(
-        prompt, canvas, view, running, held, cli, config, wake, telling,
+        prompt, canvas, view, running, launch, cli, config, wake, telling,
     )
 }
 

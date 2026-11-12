@@ -164,13 +164,13 @@ impl Turns for Reports {
 
 /// Takes everything the run left and puts it on the frame, and says whether the run ended. A run
 /// that ended leaves the composer idle and its thread is joined rather than left for the process to
-/// exit under — which is where the launch the run held is taken back, for the prompt after it.
+/// exit under — which is where the launch the run ran on is taken back, for the prompt after it.
 pub(crate) fn take(
     canvas: &mut Canvas<'_>,
     view: &mut View,
     running: &mut Option<Running>,
     telling: &mut Teller<File>,
-    held: &mut Option<Launch>,
+    launch: &mut Option<Launch>,
 ) -> io::Result<bool> {
     let Some(flight) = running.as_ref() else {
         return Ok(false);
@@ -219,11 +219,11 @@ pub(crate) fn take(
         view.set_state(State::Idle);
         painted = true;
         if let Some(flight) = running.take()
-            && let Ok(launch) = flight.thread.join()
+            && let Ok(taken) = flight.thread.join()
         {
             // A run that panicked took its launch with it, so the next prompt opens a session of its
             // own rather than running on one nothing knows the state of.
-            *held = Some(launch);
+            *launch = Some(taken);
         }
     }
     if painted {

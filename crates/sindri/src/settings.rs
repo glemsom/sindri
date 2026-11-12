@@ -1,5 +1,5 @@
 use sindri_core::config::{Config, ConfigError, Environment, Flags, Touched};
-use sindri_core::first_run::FirstRun;
+use sindri_core::first_run;
 use sindri_core::redact::MASK;
 
 use crate::composer::Key;
@@ -153,16 +153,16 @@ impl Settings {
     }
 }
 
-/// Writes the rows a reader touched and hands back the config a launch runs on: resolved the way
-/// `main` resolves it, so the credential a wire's own variable holds is still the launch's and a
-/// prompt after the save is not refused for want of one.
+/// Writes the rows a reader touched and hands back the config a launch runs on, resolved the way the
+/// launch resolved it: `Config::resolve` alone would drop the credential a wire's own variable holds,
+/// and the prompt after the save would be refused for want of one.
 pub fn persist(
     environment: &impl Environment,
     touched: &Touched,
     flags: Flags,
 ) -> Result<Config, ConfigError> {
     Config::save_touched(environment, touched)?;
-    FirstRun::resolve(environment, flags).map(|first_run| first_run.config().clone())
+    first_run::resolved(environment, flags)
 }
 
 #[cfg(test)]

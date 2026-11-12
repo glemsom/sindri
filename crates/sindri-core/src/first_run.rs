@@ -26,24 +26,33 @@ pub struct FirstRun {
     config: Config,
     path: std::path::PathBuf,
 }
+/// The config a launch runs on: what the flags, the environment and the file resolve to, with the
+/// credential the wire's own variable holds folded in. Every resolution a launch makes comes through
+/// here, because `Config::resolve` alone reads no credential variable and a run would be refused.
+pub fn resolved(environment: &impl Environment, flags: Flags) -> Result<Config, ConfigError> {
+    let file = Config::load(environment)?;
+    let above = Config::from(flags).above(Config::from_environment(environment)?);
+    let wire_key = above
+        .provider
+        .or(file.provider)
+        .and_then(Wire::credential_variable)
+        .and_then(|name| config::spoken(environment, name));
+    let key = above
+        .api_key
+        .clone()
+        .or(wire_key)
+        .or_else(|| file.api_key.clone());
+    let mut config = above.above(file);
+    config.api_key = key;
+    Ok(config)
+}
 impl FirstRun {
     pub fn resolve(environment: &impl Environment, flags: Flags) -> Result<FirstRun, ConfigError> {
         let path = config_path(environment)?;
-        let file = Config::load_from(&path)?;
-        let above = Config::from(flags).above(Config::from_environment(environment)?);
-        let wire_key = above
-            .provider
-            .or(file.provider)
-            .and_then(Wire::credential_variable)
-            .and_then(|name| config::spoken(environment, name));
-        let key = above
-            .api_key
-            .clone()
-            .or(wire_key)
-            .or_else(|| file.api_key.clone());
-        let mut config = above.above(file);
-        config.api_key = key;
-        Ok(FirstRun { config, path })
+        Ok(FirstRun {
+            config: resolved(environment, flags)?,
+            path,
+        })
     }
     pub fn config(&self) -> &Config {
         &self.config

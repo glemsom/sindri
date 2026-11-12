@@ -55,6 +55,19 @@ impl Config {
     pub fn tells_status(&self) -> bool {
         self.status.unwrap_or(true)
     }
+    /// Whether a run under this config would be the same run as under `other`. Only `status` and
+    /// `face` decide nothing a run does — a frame reads them — so a config differing in any other key
+    /// names another run, and a session that recorded the one is not the session of the other.
+    pub fn decides_the_same_run(&self, other: &Config) -> bool {
+        fn run_only(config: &Config) -> Config {
+            Config {
+                status: None,
+                face: None,
+                ..config.clone()
+            }
+        }
+        run_only(self) == run_only(other)
+    }
     pub fn draws_face(&self) -> bool {
         self.face.unwrap_or(true)
     }
