@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use futures::StreamExt as _;
 use rig_core::Model;
-use rig_core::completion::message::AssistantContent;
+use rig_core::completion::message::{AssistantContent, Message};
 use rig_core::completion::{
     CompletionRequest, CompletionResponse, Effort, GenerationOptions, Reasoning,
 };
@@ -56,6 +56,13 @@ impl fmt::Debug for Credential {
     }
 }
 
+/// A prompt beside the answer it got.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Earlier {
+    pub prompt: String,
+    pub answer: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ask {
     wire: Wire,
@@ -63,6 +70,7 @@ pub struct Ask {
     base_url: Option<String>,
     credential: Credential,
     preamble: Option<String>,
+    earlier: Vec<Earlier>,
     prompt: String,
     thinking: bool,
     route: Option<Route>,
@@ -76,6 +84,7 @@ impl Ask {
             base_url: None,
             credential: Credential::none(),
             preamble: None,
+            earlier: Vec::new(),
             prompt: String::new(),
             thinking: false,
             route: None,
@@ -89,6 +98,11 @@ impl Ask {
 
     pub fn preamble(mut self, preamble: impl Into<String>) -> Self {
         self.preamble = Some(preamble.into());
+        self
+    }
+
+    pub fn earlier(mut self, earlier: impl IntoIterator<Item = Earlier>) -> Self {
+        self.earlier = earlier.into_iter().collect();
         self
     }
 
@@ -136,8 +150,21 @@ impl Ask {
         endpoint
     }
 
+    /// Every dialect refuses an empty message, so a prompt that got no answer travels alone: the
+    /// words that were asked are not given up with the answer that never came.
+    fn replayed(&self) -> Vec<Message> {
+        let mut messages = Vec::new();
+        for ended in &self.earlier {
+            messages.push(Message::user(ended.prompt.clone()));
+            if !ended.answer.trim().is_empty() {
+                messages.push(Message::assistant(ended.answer.clone()));
+            }
+        }
+        messages
+    }
+
     fn request(&self) -> CompletionRequest {
-        let mut request = CompletionRequest::new(self.prompt.clone());
+        let mut request = CompletionRequest::new(self.prompt.clone()).messages(self.replayed());
         if let Some(preamble) = &self.preamble {
             request = request.preamble(preamble.clone());
         }

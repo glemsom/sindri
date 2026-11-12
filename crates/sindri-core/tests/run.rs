@@ -14,8 +14,8 @@ use sindri_core::policy::{
 use sindri_core::provider::{Deltas, Failure, Usage};
 use sindri_core::redact::{Redacted, SecretSet};
 use sindri_core::run::{
-    Acted, Budget, Call, Cancel, Executor, Exit, Limits, Load, Loaded, Reply, Request, Responder,
-    Run, Shell, State, Stop,
+    Acted, Budget, Call, Cancel, Exchange, Executor, Exit, Limits, Load, Loaded, Reply, Request,
+    Responder, Run, Shell, State, Stop,
 };
 use sindri_core::skills::Catalog;
 use sindri_core::tools::{FrontEnd, ToolSet};
@@ -207,6 +207,24 @@ fn a_turns_exchange_carries_what_that_turns_ask_spent_and_not_the_total() {
 }
 
 #[test]
+fn a_turns_exchange_holds_the_prompt_the_run_was_asked() {
+    let mut run = Run::new(
+        "count the files",
+        Scripted::answering([Reply::answer("twelve")]),
+        Tools::cheap(),
+    );
+
+    run.drive(&mut Transcript::default());
+
+    assert_eq!(
+        run.history()[0].prompt,
+        "count the files",
+        "a turn is the prompt beside the answer it got, so an exchange keeps the reader's own \
+         words and not only what came back"
+    );
+}
+
+#[test]
 fn an_ask_that_reported_no_input_leaves_the_size_unknown_rather_than_zero() {
     let mut run = Run::new(
         "say hi",
@@ -233,6 +251,62 @@ fn an_ask_that_reported_no_input_leaves_the_size_unknown_rather_than_zero() {
         history[1].usage,
         Usage::default(),
         "a reply built without a spend carries nothing spent"
+    );
+}
+
+fn ended(turn: u32, prompt: &str, text: &str) -> Exchange {
+    Exchange {
+        turn,
+        prompt: String::from(prompt),
+        text: String::from(text),
+        calls: Vec::new(),
+        usage: Usage::default(),
+    }
+}
+
+#[test]
+fn a_run_handed_the_turns_that_came_before_it_hands_them_to_every_request() {
+    let model = Scripted::answering([Reply::answer("Glenn")]);
+    let log = model.log();
+    let mut run = Run::new("what is my name?", model, Tools::cheap()).earlier(vec![
+        ended(1, "hi my name is Glenn", "nice to meet you, Glenn"),
+        ended(2, "is it raining?", "it is raining"),
+    ]);
+
+    run.drive(&mut Transcript::default());
+
+    let seen = requests(&log);
+    assert_eq!(
+        seen[0].prompt(),
+        "what is my name?",
+        "the prompt this run was started with is still its own"
+    );
+    let replayed: Vec<(&str, &str)> = seen[0]
+        .earlier()
+        .iter()
+        .map(|ended| (ended.prompt.as_str(), ended.text.as_str()))
+        .collect();
+    assert_eq!(
+        replayed,
+        [
+            ("hi my name is Glenn", "nice to meet you, Glenn"),
+            ("is it raining?", "it is raining")
+        ],
+        "the turns that ended before it are handed over in the order they ended"
+    );
+}
+
+#[test]
+fn a_run_handed_nothing_asks_with_nothing_from_before_it() {
+    let model = Scripted::answering([Reply::answer("hello")]);
+    let log = model.log();
+    let mut run = Run::new("say hi", model, Tools::cheap());
+
+    run.drive(&mut Transcript::default());
+
+    assert!(
+        requests(&log)[0].earlier().is_empty(),
+        "batch mode asks one prompt and carries nothing, exactly as it does today"
     );
 }
 
@@ -581,6 +655,31 @@ fn clearing_the_history_forgets_the_loaded_skills() {
     let seen = requests(&log);
     assert!(seen[1].skills().is_empty(), "the next turn loads nothing");
     assert!(seen[1].history().is_empty(), "and remembers nothing");
+}
+
+#[test]
+fn clearing_the_history_forgets_the_turns_the_run_was_handed_but_not_the_prompt() {
+    let model = Scripted::answering([Reply::answer("hello")]);
+    let log = model.log();
+    let mut run = Run::new("say hi", model, Tools::cheap()).earlier(vec![ended(
+        1,
+        "hi my name is Glenn",
+        "nice to meet you",
+    )]);
+
+    run.clear_history();
+    run.drive(&mut Transcript::default());
+
+    let seen = requests(&log);
+    assert!(
+        seen[0].earlier().is_empty(),
+        "a cleared history is asked with nothing from before it"
+    );
+    assert_eq!(
+        seen[0].prompt(),
+        "say hi",
+        "and the prompt this run was started with is still the prompt"
+    );
 }
 
 #[test]

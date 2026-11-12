@@ -2,11 +2,12 @@
 //! asked, the answer's text is what the run answers with, a refusal stops the run in the one line
 //! safe to print, and thinking is asked for only when the run asked for it.
 
+use serde_json::{Value, json};
 use sindri_core::asking::Asking;
 use sindri_core::provider::transport::{Canned, Replay};
-use sindri_core::provider::{Ask, Client, Deltas};
+use sindri_core::provider::{Ask, Client, Deltas, Usage};
 use sindri_core::redact::{Redacted, SecretSet};
-use sindri_core::run::{Acted, Call, Executor, Loaded, Run, State, Stop};
+use sindri_core::run::{Acted, Call, Exchange, Executor, Loaded, Run, State, Stop};
 use sindri_core::wire::Wire;
 
 const ANTHROPIC: &str = include_str!("fixtures/providers/anthropic_stream.sse");
@@ -45,6 +46,21 @@ impl Deltas for Transcript {
     }
 
     fn reasoning(&mut self, _fragment: &str) {}
+}
+
+fn turned(turn: u32, prompt: &str, answer: &str) -> Exchange {
+    Exchange {
+        turn,
+        prompt: String::from(prompt),
+        text: String::from(answer),
+        calls: Vec::new(),
+        usage: Usage::default(),
+    }
+}
+
+fn asked(replay: &Replay) -> Value {
+    let requests = replay.requests();
+    serde_json::from_str(&requests[0].body).expect("a wire's body is JSON")
 }
 
 fn body_for(asking: Asking, replay: &Replay) -> String {
@@ -174,5 +190,95 @@ fn thinking_is_asked_for_when_the_run_asked_for_it_and_never_otherwise() {
     assert!(
         thought.contains("thinking"),
         "and a run that asked for it says so in the request: {thought}"
+    );
+}
+
+#[test]
+fn the_turns_that_ended_before_a_run_are_asked_ahead_of_its_prompt() {
+    let replay = Replay::new([Canned::stream(ANTHROPIC)]);
+    let mut run = Run::new(
+        "what is my name?",
+        Asking::new(client_over(&replay), ask()),
+        Unreached,
+    )
+    .earlier(vec![
+        turned(1, "hi my name is Glenn", "nice to meet you, Glenn"),
+        turned(2, "is it raining?", "it is raining"),
+    ]);
+
+    run.drive(&mut Transcript::default());
+
+    let body = asked(&replay);
+    assert_eq!(
+        body["messages"],
+        json!([
+            {"role": "user", "content": [{"type": "text", "text": "hi my name is Glenn"}]},
+            {
+                "role": "assistant",
+                "content": [{"type": "text", "text": "nice to meet you, Glenn"}]
+            },
+            {"role": "user", "content": [{"type": "text", "text": "is it raining?"}]},
+            {"role": "assistant", "content": [{"type": "text", "text": "it is raining"}]},
+            {"role": "user", "content": [{"type": "text", "text": "what is my name?"}]},
+        ]),
+        "each prompt rides beside the answer it got, in the order they ended, with the new \
+         prompt last"
+    );
+    assert_eq!(
+        body["system"].as_array().map(Vec::len),
+        Some(1),
+        "the preamble stays one system message, not one per turn: {}",
+        body["system"]
+    );
+}
+
+#[test]
+fn a_turn_that_ended_with_no_answer_is_not_sent_as_an_empty_message() {
+    let replay = Replay::new([Canned::stream(ANTHROPIC)]);
+    let mut run = Run::new(
+        "what is my name?",
+        Asking::new(client_over(&replay), ask()),
+        Unreached,
+    )
+    .earlier(vec![
+        turned(1, "hi my name is Glenn", "nice to meet you, Glenn"),
+        turned(2, "what is the weather?", ""),
+    ]);
+
+    run.drive(&mut Transcript::default());
+
+    assert_eq!(
+        asked(&replay)["messages"],
+        json!([
+            {"role": "user", "content": [{"type": "text", "text": "hi my name is Glenn"}]},
+            {
+                "role": "assistant",
+                "content": [{"type": "text", "text": "nice to meet you, Glenn"}]
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "what is the weather?"},
+                    {"type": "text", "text": "what is my name?"},
+                ]
+            },
+        ]),
+        "a prompt that got no answer travels alone — no empty message, because every dialect \
+         refuses one — and the dialect merges the two user turns it leaves side by side"
+    );
+}
+
+#[test]
+fn a_run_handed_nothing_asks_exactly_what_it_asked_before() {
+    let replay = Replay::new([Canned::stream(ANTHROPIC)]);
+
+    let body = body_for(Asking::new(client_over(&replay), ask()), &replay);
+
+    assert_eq!(
+        asked(&replay)["messages"],
+        json!([
+            {"role": "user", "content": [{"type": "text", "text": "triage this"}]},
+        ]),
+        "one prompt and nothing ahead of it: {body}"
     );
 }
