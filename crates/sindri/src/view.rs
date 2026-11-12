@@ -23,7 +23,7 @@ use crate::keys::{Act, Mode, Stack};
 use crate::ledger::{Boot, Facts, Rail, Share};
 use crate::mark::{Cell, Mark, Span};
 use crate::models::Models;
-use crate::palette::Palette;
+use crate::palette::{Band, Palette};
 use crate::pen::{self, Clip};
 use crate::picker::Picker;
 use crate::picture::Surface;
@@ -577,9 +577,11 @@ impl View {
         crate::ledger::split(&self.rail, band)
     }
 
-    /// The turn in flight is the one entry laid out again on every paint; every other row comes
-    /// from the window of the cache this band reaches.
+    /// The transcript is drawn in the well, the darkest of the three bands. The turn in flight is
+    /// the one entry laid out again on every paint; every other row comes from the window of the
+    /// cache this band reaches.
     fn transcript(&mut self, area: Rect, buffer: &mut Buffer) {
+        pen::claim(buffer, area, self.palette.ground(Some(Band::Well)));
         self.rows.resize(area.width);
         // How many rows a picture takes is part of the rows an entry was laid out as, so the
         // surface reaches the cache before a window is measured.
@@ -1080,6 +1082,7 @@ mod tests {
     use crate::composer::{MAX_ROWS, MIN_ROWS};
     use crate::ink::{Face, Look};
     use crate::palette::{Band, Edge};
+    use crate::readback::under;
 
     /// Enough facts that the ledger fills its column top to bottom.
     fn rail() -> Facts {
@@ -1114,11 +1117,6 @@ mod tests {
                     .name()
             })
             .collect()
-    }
-
-    /// The surface one cell of a frame sits on.
-    fn under(buffer: &Buffer, x: u16, y: u16) -> Color {
-        buffer.cell((x, y)).expect("a cell of the frame").bg
     }
 
     /// A frame holding a draft of `lines` lines painted in `palette` at `cols` by `rows`, and the
@@ -1230,6 +1228,37 @@ mod tests {
     }
 
     #[test]
+    fn a_frame_with_no_colour_draws_no_band_and_no_elevation() {
+        let palette = Palette::SLOTS;
+        let mut view = View::of(
+            vec![Entry::Assistant {
+                turn: 1,
+                text: SecretSet::default().redact("```rust\nfn main() {}\n```\n\nand prose"),
+            }],
+            Scroll::Tail,
+        );
+        view.set_palette(palette);
+        view.set_facts(rail());
+        view.paste("the draft");
+
+        let area = screen(120, 40);
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+
+        for y in area.y..area.bottom() {
+            for x in area.x..area.right() {
+                assert_eq!(
+                    under(&buffer, x, y),
+                    Color::Reset,
+                    "row {y}, column {x} of a frame with no colour is given a ground: a reader \
+                     who asked for no colour asked for their own, and every frame they read is \
+                     flat"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn a_frame_with_no_colour_draws_the_composer_as_a_flat_band() {
         let (buffer, band) = composer(Palette::SLOTS, 5, 120, 40);
         for y in band.y..band.bottom() {
@@ -1277,6 +1306,64 @@ mod tests {
             "Enter send · ? keys",
             "the raised band takes no row the footer had, and its floor of hints is drawn"
         );
+    }
+
+    #[test]
+    fn the_transcript_sits_in_the_well_and_the_rail_beside_it_carries_the_light() {
+        let palette = Palette::TRUECOLOR;
+        for (cols, rows) in [(120, 40), (100, 40)] {
+            let mut view = View::of(
+                vec![Entry::Assistant {
+                    turn: 1,
+                    text: SecretSet::default().redact("the transcript the rail is drawn beside"),
+                }],
+                Scroll::Tail,
+            );
+            view.set_palette(palette);
+            view.set_facts(rail());
+
+            let area = screen(cols, rows);
+            let mut buffer = Buffer::empty(area);
+            view.paint(area, &mut buffer);
+
+            let bands = bands(area, view.composer().rows(), view.queue().rows());
+            let share = view.split(bands.transcript);
+            let (shape, rail) = share.rail.expect("a frame this wide holds a ledger");
+            assert_eq!(shape, Rail::Ledger);
+
+            for y in share.transcript.y..share.transcript.bottom() {
+                for x in share.transcript.x..share.transcript.right() {
+                    assert_eq!(
+                        under(&buffer, x, y),
+                        palette.band(Band::Well),
+                        "row {y}, column {x} of the transcript at {cols} columns sits on no well, \
+                         so the transcript is no elevation"
+                    );
+                }
+            }
+            for y in rail.y..rail.bottom() - 1 {
+                assert_eq!(
+                    under(&buffer, rail.x, y),
+                    palette.edge(Edge::Lit),
+                    "row {y} of the rail at {cols} columns draws no lit rule on its boundary \
+                     with the transcript"
+                );
+                assert_eq!(
+                    under(&buffer, rail.x + 1, y),
+                    palette.band(Band::Rail),
+                    "row {y} of the rail at {cols} columns is lit past its boundary column, so \
+                     the rail is no surface of its own"
+                );
+            }
+            for x in rail.x..rail.right() {
+                assert_eq!(
+                    under(&buffer, x, rail.bottom() - 1),
+                    palette.edge(Edge::Shadow),
+                    "column {x} of the rail's last row at {cols} columns is not the shadow under \
+                     the band"
+                );
+            }
+        }
     }
 
     /// A band is a surface only because a name is read from a foreground and a modifier.
