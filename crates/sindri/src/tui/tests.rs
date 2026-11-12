@@ -49,6 +49,7 @@ fn a_copy_leaves_the_terminal_by_osc_52_and_asks_no_clipboard_utility() {
     );
     let mut running = None;
     let mut asking = None;
+    let mut held = None;
     let ended = answer(
         &terminal,
         &mut canvas,
@@ -61,6 +62,7 @@ fn a_copy_leaves_the_terminal_by_osc_52_and_asks_no_clipboard_utility() {
         &environment,
         &wake,
         &mut telling,
+        &mut held,
     )
     .expect("the copy is written");
 
@@ -129,6 +131,7 @@ fn enter_at_the_settings_modal_writes_the_file_and_the_next_prompt_runs_on_it() 
     );
     let mut running = None;
     let mut asking = None;
+    let mut held = None;
 
     walk_to(&mut view, "model");
     view.key(Key::Clear);
@@ -147,6 +150,7 @@ fn enter_at_the_settings_modal_writes_the_file_and_the_next_prompt_runs_on_it() 
         &environment,
         &wake,
         &mut telling,
+        &mut held,
     )
     .expect("the write is made");
 
@@ -253,6 +257,7 @@ fn a_settings_visit_that_turns_the_face_off_repaints_the_frame_it_leaves_without
     );
     let mut running = None;
     let mut asking = None;
+    let mut held = None;
 
     view.open_settings(&config);
     walk_to(&mut view, "face");
@@ -269,6 +274,7 @@ fn a_settings_visit_that_turns_the_face_off_repaints_the_frame_it_leaves_without
         &environment,
         &wake,
         &mut telling,
+        &mut held,
     )
     .expect("the write is made");
 

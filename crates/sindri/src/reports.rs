@@ -27,13 +27,14 @@ use crate::term::{Canvas, lock, paint};
 pub(crate) struct Running {
     cancel: Cancel,
     pending: Arc<Mutex<Vec<Report>>>,
-    thread: JoinHandle<()>,
+    thread: JoinHandle<Launch>,
     started: Instant,
 }
 
 impl Running {
     /// Drives `prompt` in its own thread: the fragment a wire lands is pushed where the loop takes
-    /// it, and the loop is pinged through the pipe a signal uses, so nothing polls for it.
+    /// it, and the loop is pinged through the pipe a signal uses, so nothing polls for it. The thread
+    /// hands the launch back when the run stops, so the prompt after it runs in the same session.
     pub(crate) fn start(
         launch: Launch,
         prompt: Prompt,
@@ -50,6 +51,7 @@ impl Running {
         let interrupted = cancel.clone();
         let started = Instant::now();
         let thread = thread::spawn(move || {
+            let mut launch = launch;
             // `drive` failing leaves no stop reason, which the loop cannot do: the marker settles
             // on the refusal rather than turning for a run nobody is driving.
             let (turns, stop) = match launch.drive(
@@ -73,6 +75,7 @@ impl Running {
                 elapsed_ms,
                 turns,
             });
+            launch
         });
         Running {
             cancel,
@@ -160,13 +163,14 @@ impl Turns for Reports {
 }
 
 /// Takes everything the run left and puts it on the frame, and says whether the run ended. A run
-/// that ended leaves the composer idle, so the next `Ctrl-C` clears the draft instead of
-/// cancelling nothing, and its thread is joined rather than left for the process to exit under.
+/// that ended leaves the composer idle and its thread is joined rather than left for the process to
+/// exit under — which is where the launch the run held is taken back, for the prompt after it.
 pub(crate) fn take(
     canvas: &mut Canvas<'_>,
     view: &mut View,
     running: &mut Option<Running>,
     telling: &mut Teller<File>,
+    held: &mut Option<Launch>,
 ) -> io::Result<bool> {
     let Some(flight) = running.as_ref() else {
         return Ok(false);
@@ -214,8 +218,12 @@ pub(crate) fn take(
         view.set_pulse(Some(Pulse::settled(stop, elapsed_ms)));
         view.set_state(State::Idle);
         painted = true;
-        if let Some(flight) = running.take() {
-            let _ = flight.thread.join();
+        if let Some(flight) = running.take()
+            && let Ok(launch) = flight.thread.join()
+        {
+            // A run that panicked took its launch with it, so the next prompt opens a session of its
+            // own rather than running on one nothing knows the state of.
+            *held = Some(launch);
         }
     }
     if painted {

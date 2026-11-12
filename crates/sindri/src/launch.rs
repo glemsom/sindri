@@ -103,14 +103,14 @@ pub struct Launch {
     model: String,
     wire: Wire,
     route: Option<Route>,
+    config: Config,
     context_window: Option<u64>,
+    measured: Usage,
     proof: Proof,
-    started: Instant,
 }
 
 impl Launch {
     pub fn open(cli: &Cli, config: &Config, front_end: FrontEnd) -> Result<Launch, Refusal> {
-        let started = Instant::now();
         let (Some(wire), Some(model)) = (config.provider, config.model.clone()) else {
             return Err(Refusal::new(
                 "a run needs a provider and a model: set them in the config or in the environment",
@@ -181,9 +181,10 @@ impl Launch {
             model,
             wire,
             route,
+            config: config.clone(),
             context_window: config.context_window,
+            measured: Usage::default(),
             proof,
-            started,
         })
     }
 
@@ -203,21 +204,23 @@ impl Launch {
         self.limits.max_turns()
     }
 
-    fn facts(&self, measured: &Usage) -> ledger::Facts {
+    fn facts(&self) -> ledger::Facts {
         ledger::Facts::of(&self.session, self.record.document())
-            .measured(measured, self.context_window)
+            .measured(&self.measured, self.context_window)
     }
 
-    /// Drives `prompt` on the turns a launch has already ended, so the wire is asked with what the
-    /// reader said before this prompt and not with its own words alone.
+    /// Drives `prompt` on the turns this launch has already ended. The session it writes is the one
+    /// the prompt before it wrote: the record counts the turns of both, and the temp a command wrote
+    /// in is still there.
     pub fn drive(
-        mut self,
+        &mut self,
         prompt: &str,
         earlier: &[Exchange],
         deltas: &mut dyn Deltas,
         turns: &mut dyn Turns,
         cancel: Cancel,
     ) -> Result<Outcome, Refusal> {
+        let started = Instant::now();
         let mut run = Run::new(prompt, self.asking.clone(), self.shell.clone())
             .limits(self.limits)
             .tools(&self.tools)
@@ -225,20 +228,23 @@ impl Launch {
             .cancel(cancel);
         // Ahead of the turn loop, so the transcript opens with the words it answers.
         note(self.record.asked(prompt));
-        let mut measured = Usage::default();
-        hand(turns, &self, &measured);
+        note(self.record.began());
+        // The turns the session counted before this prompt, which this run's own are numbered after.
+        let counted = self.record.document().turns;
+        hand(turns, self);
         while run.state().is_running() {
             run.turn(deltas);
             // A turn is written whole as it ends: the loop hands a front end no hook per entry.
             if let Some(exchange) = run.history().last() {
-                note(self.record.turn_started(exchange.turn));
-                note(self.record.answered(exchange.turn, &exchange.text));
+                let turn = counted + exchange.turn;
+                note(self.record.turn_started(turn));
+                note(self.record.answered(turn, &exchange.text));
                 // A turn whose report carries no size leaves the one the turn before stated.
                 if exchange.usage.input.is_some() {
-                    measured = exchange.usage;
+                    self.measured = exchange.usage;
                 }
                 turns.turn(exchange);
-                hand(turns, &self, &measured);
+                hand(turns, self);
             }
         }
 
@@ -247,25 +253,43 @@ impl Launch {
         let usage = self.asking.spent();
         note(self.record.spent(usage));
         note(self.record.stopped(&state));
-        hand(turns, &self, &measured);
+        hand(turns, self);
         let outcome = Outcome::of(
             &run,
             Reported {
                 session: self.session.guid(),
                 model: &self.model,
                 enforcement: self.boundary.enforcement(),
-                duration: self.started.elapsed(),
+                duration: started.elapsed(),
                 usage: self.record.document().usage,
             },
         );
-        // The temp is emptied and the rest kept, so an ended session still reads.
-        note(self.record.finish());
         outcome.ok_or_else(|| Refusal::new("the run ended with no stop reason to report", SETUP))
+    }
+
+    /// The conversation the session held is over: its temp goes and the directory, the record and the
+    /// spill are kept, so a launch that ended still reads.
+    pub fn close(&mut self) {
+        note(self.record.finish());
+    }
+
+    /// Whether a run on this session would still be the run its record names. A session records one
+    /// wire, one model, one route and one boundary, so a config that differs in anything but the two
+    /// keys a frame reads decides a different run, and a session of its own with it.
+    pub fn runs_on(&self, config: &Config) -> bool {
+        fn run_deciding(config: &Config) -> Config {
+            Config {
+                status: None,
+                face: None,
+                ..config.clone()
+            }
+        }
+        run_deciding(&self.config) == run_deciding(config)
     }
 }
 
-fn hand(turns: &mut dyn Turns, launch: &Launch, measured: &Usage) {
-    turns.facts(launch.facts(measured));
+fn hand(turns: &mut dyn Turns, launch: &Launch) {
+    turns.facts(launch.facts());
     turns.record(launch.record.document());
 }
 

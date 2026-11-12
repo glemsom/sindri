@@ -134,6 +134,9 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     // Replaced by a visit to the settings modal: the file is written once and resolved again,
     // so the prompt after the visit runs on what it holds.
     let mut config = config.clone();
+    // The session is the launch's and not a run's: the first prompt opens it, every prompt after runs
+    // in it, and it ends with the launch.
+    let mut held: Option<Launch> = None;
     let keys = keys(
         &terminal,
         &mut canvas,
@@ -144,10 +147,15 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
         &signals,
         &typed,
         &mut telling,
+        &mut held,
     );
     // Given back before a word is said about the ending: a refusal is a line for the shell, and
     // not a smear over a frame.
     drop(screen);
+    // The conversation the session held is over, so its temp goes before the process does.
+    if let Some(mut launch) = held.take() {
+        launch.close();
+    }
     match keys {
         Ok(Ending::Quit) => ExitCode::SUCCESS,
         Ok(Ending::Cancelled) => ExitCode::from(CANCELLED),
@@ -167,7 +175,7 @@ enum Ending {
 /// frame is never drawn. A key, a signal and a live run's fragment are all fds in that wait.
 #[allow(
     clippy::too_many_arguments,
-    reason = "the one seam every mode's key is handed through, plus the teller the run is announced to"
+    reason = "the one seam every mode's key is handed through, the teller a run is announced to, and the launch the session lasts on"
 )]
 fn keys(
     terminal: &Terminal,
@@ -179,6 +187,7 @@ fn keys(
     signals: &Signals,
     typed: &[u8],
     telling: &mut Teller<File>,
+    held: &mut Option<Launch>,
 ) -> io::Result<Ending> {
     let mut decoder = Decoder::new();
     let mut read = [0u8; 4096];
@@ -203,6 +212,7 @@ fn keys(
             environment,
             &wake,
             telling,
+            held,
         )? {
             return Ok(ending);
         }
@@ -247,12 +257,19 @@ fn keys(
         if woken {
             wake.drain();
             served(canvas, view, &mut asking)?;
-            if take(canvas, view, &mut running, telling)? && !interrupted {
+            if take(canvas, view, &mut running, telling, held)? && !interrupted {
                 // A launch the user's own word ended starts nothing: the queue waits for a reader
                 // who still wants it.
-                if let Some(ending) =
-                    resume(canvas, view, &mut running, cli, config, &wake, telling)?
-                {
+                if let Some(ending) = resume(
+                    canvas,
+                    view,
+                    &mut running,
+                    held,
+                    cli,
+                    config,
+                    &wake,
+                    telling,
+                )? {
                     return Ok(ending);
                 }
             }
@@ -285,6 +302,7 @@ fn keys(
                     environment,
                     &wake,
                     telling,
+                    held,
                 )? {
                     return Ok(ending);
                 }
@@ -317,6 +335,7 @@ fn answer(
     environment: &impl Environment,
     wake: &Arc<Wake>,
     telling: &mut Teller<File>,
+    held: &mut Option<Launch>,
 ) -> io::Result<Option<Ending>> {
     let key = match event {
         // A paste is one edit and never a key, so nothing inside one can send: the composer is
@@ -344,7 +363,9 @@ fn answer(
             Ok(None)
         }
         Outcome::Send(prompt) => {
-            let sent = send(prompt, canvas, view, running, cli, config, wake, telling)?;
+            let sent = send(
+                prompt, canvas, view, running, held, cli, config, wake, telling,
+            )?;
             Ok(sent)
         }
         // The keys a reader touched go through the core's owner-only atomic save, and the launch's
@@ -406,8 +427,8 @@ fn answer(
 }
 
 /// Starts the run a sent draft asks for, on a thread of its own, and says whether the launch ends
-/// instead. A launch that cannot run at all ends the launch rather than being drawn: a screen that
-/// swallowed the reason nothing ran would be the one silence this front end must not keep.
+/// instead. A session the launch already holds is the one it runs in, and one that cannot run at all
+/// ends the launch rather than being drawn: a screen that swallowed the reason would be one silence.
 #[allow(
     clippy::too_many_arguments,
     reason = "the one seam a prompt starts a run through, and the teller it is announced to"
@@ -417,6 +438,7 @@ fn send(
     canvas: &mut Canvas<'_>,
     view: &mut View,
     running: &mut Option<Running>,
+    held: &mut Option<Launch>,
     cli: &Cli,
     config: &Config,
     wake: &Arc<Wake>,
@@ -427,9 +449,19 @@ fn send(
         paint(canvas, view)?;
         return Ok(None);
     }
-    let launch = match Launch::open(cli, config, FrontEnd::Terminal) {
-        Ok(launch) => launch,
-        Err(refusal) => return Ok(Some(Ending::Refused(refusal))),
+    let launch = match held.take() {
+        Some(launch) if launch.runs_on(config) => launch,
+        // The session a launch holds records one wire, model, route and boundary: a config that names
+        // another is the end of that session, and the prompt after it opens the next.
+        ended => {
+            if let Some(mut ended) = ended {
+                ended.close();
+            }
+            match Launch::open(cli, config, FrontEnd::Terminal) {
+                Ok(launch) => launch,
+                Err(refusal) => return Ok(Some(Ending::Refused(refusal))),
+            }
+        }
     };
     view.settle();
     view.set_state(State::Running);
@@ -458,6 +490,7 @@ fn resume(
     canvas: &mut Canvas<'_>,
     view: &mut View,
     running: &mut Option<Running>,
+    held: &mut Option<Launch>,
     cli: &Cli,
     config: &mut Config,
     wake: &Arc<Wake>,
@@ -466,7 +499,9 @@ fn resume(
     let Some(prompt) = view.dequeue() else {
         return Ok(None);
     };
-    send(prompt, canvas, view, running, cli, config, wake, telling)
+    send(
+        prompt, canvas, view, running, held, cli, config, wake, telling,
+    )
 }
 
 #[cfg(test)]

@@ -111,8 +111,10 @@ _Avoid_: Endpoint, API, mode, protocol
 ## Sessions and skills
 
 **Session**:
-One recorded run's directory, named by its GUID: session document, transcript, status documents,
-temp.
+The directory one recorded conversation is kept in, named by its GUID: session document, transcript,
+status documents, temp. A launch in the terminal holds one for as long as it holds a conversation, so
+its record grows with every prompt and its temp goes when the launch ends; a batch run is one
+conversation of one prompt, and so one session.
 _Avoid_: Conversation, chat, history
 
 **Skill**:

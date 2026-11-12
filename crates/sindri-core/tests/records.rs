@@ -669,6 +669,37 @@ fn every_stop_reason_writes_its_own_word_and_nothing_else() {
 }
 
 #[test]
+fn a_run_joining_the_record_says_a_run_is_in_flight_again_and_owns_no_end() {
+    let ground = Ground::new();
+    let session = ground.session();
+    let mut record = ground.record(&session);
+    record.turn_started(1).expect("a turn start is recorded");
+    record
+        .stopped(&State::Stopped(Stop::Final))
+        .expect("the run stops");
+    let settled = json(&session.directory().join("session.json"));
+
+    record.began().expect("a second run joins the session");
+
+    let document = json(&session.directory().join("session.json"));
+    assert_eq!(
+        document["stopped"],
+        json!("running"),
+        "the session holds a run again, so it is not a session that ended: {document}"
+    );
+    assert!(
+        document.get("end").is_none(),
+        "and the end the run before reached is not the end of this one: {document}"
+    );
+    assert_eq!(document["start"], settled["start"], "a session begins once");
+    assert_eq!(
+        document["turns"],
+        json!(1),
+        "the turns the session already ended are kept, not started again"
+    );
+}
+
+#[test]
 fn a_running_run_that_is_asked_to_stop_is_not_given_an_end() {
     let ground = Ground::new();
     let session = ground.session();
