@@ -67,12 +67,42 @@ pub enum Outcome {
     Settings,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// What the band says an empty draft can do there, in the dim ink: it leaves on the first glyph a
+/// reader types. It names no key, because the footer is where a key is named.
+pub const PLACEHOLDER: &str = "what should the run do?";
+
+/// The columns a draft is wrapped at before a frame has measured it: a draft drawn nowhere wraps
+/// nowhere, and the frame hands it its room before the band is placed.
+const UNMEASURED: u16 = u16::MAX;
+
+/// One row of the draft as it is drawn: the bytes it covers, and where the break the reader typed
+/// under it ends, so a wrap and a break are told apart.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Place {
+    start: usize,
+    end: usize,
+    line_end: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Composer {
     text: String,
     cursor: usize,
     scroll: usize,
     state: State,
+    room: u16,
+}
+
+impl Default for Composer {
+    fn default() -> Composer {
+        Composer {
+            text: String::new(),
+            cursor: 0,
+            scroll: 0,
+            state: State::Idle,
+            room: UNMEASURED,
+        }
+    }
 }
 
 impl Composer {
@@ -98,41 +128,129 @@ impl Composer {
         self.state = state;
     }
 
+    /// The columns the frame gives the draft's words: the band's width less the gutter its sigil
+    /// stands in. The frame hands it over before the band is placed, so a draft wraps at the width
+    /// it is drawn at and at no other.
+    pub fn set_room(&mut self, room: u16) {
+        self.room = room;
+    }
+
     pub fn rows(&self) -> u16 {
-        let lines = u16::try_from(self.line_count()).unwrap_or(u16::MAX);
-        lines
-            .saturating_add(HAIRLINE_ROWS)
-            .clamp(MIN_ROWS, MAX_ROWS)
+        let rows = u16::try_from(self.places().len()).unwrap_or(u16::MAX);
+        rows.saturating_add(HAIRLINE_ROWS).clamp(MIN_ROWS, MAX_ROWS)
     }
 
     pub fn visible_rows(&self) -> u16 {
         self.rows().saturating_sub(HAIRLINE_ROWS)
     }
 
+    /// The first row the band draws: the scroll the caret gave the draft, and never past the last
+    /// row the band has room for.
     pub fn scroll(&self) -> usize {
+        let rows = self.places().len();
         self.scroll
+            .min(rows.saturating_sub(usize::from(self.visible_rows())))
     }
 
     pub fn lines(&self) -> Vec<&str> {
         let visible = usize::from(self.visible_rows());
-        self.text
-            .split('\n')
-            .skip(self.scroll)
+        let places = self.places();
+        places
+            .iter()
+            .skip(self.scroll())
             .take(visible)
+            .map(|place| &self.text[place.start..place.end])
             .collect()
     }
 
     pub fn caret(&self) -> (u16, u16) {
-        let row = self.row(self.cursor);
-        let column = self.column(row);
+        let places = self.places();
+        let row = self.place(&places, self.cursor);
+        let column = pen::cells(&self.text[places[row].start..self.cursor]);
         (
-            u16::try_from(row.saturating_sub(self.scroll)).unwrap_or(u16::MAX),
-            u16::try_from(column).unwrap_or(u16::MAX),
+            u16::try_from(row.saturating_sub(self.scroll())).unwrap_or(u16::MAX),
+            column,
         )
     }
 
     pub fn on_first_line(&self) -> bool {
-        self.row(self.cursor) == 0
+        self.place(&self.places(), self.cursor) == 0
+    }
+
+    /// The rows the draft is drawn as at the room the frame measured, top to bottom: a row ends at
+    /// the last cell of it that does not cut a glyph, and after the last blank of it when one came
+    /// before, so a word is not broken in half.
+    fn places(&self) -> Vec<Place> {
+        let room = usize::from(self.room.max(1));
+        let mut places: Vec<Place> = Vec::new();
+        for (start, line_end) in self.hard_lines() {
+            let mut at = start;
+            loop {
+                let end = self.row_end(at, line_end, room);
+                places.push(Place {
+                    start: at,
+                    end,
+                    line_end,
+                });
+                at = end;
+                if at >= line_end {
+                    break;
+                }
+            }
+        }
+        places
+    }
+
+    /// The breaks the reader typed, and never the wraps the room gave them.
+    fn hard_lines(&self) -> Vec<(usize, usize)> {
+        let mut lines = Vec::new();
+        let mut start = 0;
+        for (at, glyph) in self.text.char_indices() {
+            if glyph == '\n' {
+                lines.push((start, at));
+                start = at + 1;
+            }
+        }
+        lines.push((start, self.text.len()));
+        lines
+    }
+
+    /// Where the row beginning at `at` ends.
+    fn row_end(&self, at: usize, line_end: usize, room: usize) -> usize {
+        let mut width = 0;
+        let mut blank = None;
+        let mut stop = at;
+        for (offset, glyph) in self.text[at..line_end].char_indices() {
+            let wide = usize::from(pen::cell(glyph));
+            if width + wide > room {
+                break;
+            }
+            width += wide;
+            stop = at + offset + glyph.len_utf8();
+            if glyph == ' ' {
+                blank = Some(stop);
+            }
+        }
+        match blank {
+            Some(blank) if stop < line_end => blank,
+            _ if stop > at => stop,
+            // A glyph wider than the whole room is taken anyway, or no row would ever advance.
+            _ => {
+                at + self.text[at..line_end]
+                    .chars()
+                    .next()
+                    .map_or(0, char::len_utf8)
+            }
+        }
+    }
+
+    /// The row of `places` the offset `at` waits in: the first row that reaches it, so a caret at a
+    /// row's last cell is drawn there and not at the first cell of the row below.
+    fn place(&self, places: &[Place], at: usize) -> usize {
+        places
+            .iter()
+            .position(|place| at <= place.end && place.start <= at)
+            .unwrap_or_else(|| places.len().saturating_sub(1))
     }
 
     pub fn at_word_start(&self) -> bool {
@@ -257,36 +375,42 @@ impl Composer {
     }
 
     fn up(&mut self) -> bool {
-        let row = self.row(self.cursor);
+        let places = self.places();
+        let row = self.place(&places, self.cursor);
         if row == 0 {
             return false;
         }
-        self.cursor = self.at_column(row - 1, self.column(row));
+        let column = self.column(places[row]);
+        self.cursor = self.at_column(places[row - 1], column);
         self.follow();
         true
     }
 
     fn down(&mut self) -> bool {
-        let row = self.row(self.cursor);
-        if row + 1 >= self.line_count() {
+        let places = self.places();
+        let row = self.place(&places, self.cursor);
+        if row + 1 >= places.len() {
             return false;
         }
-        self.cursor = self.at_column(row + 1, self.column(row));
+        let column = self.column(places[row]);
+        self.cursor = self.at_column(places[row + 1], column);
         self.follow();
         true
     }
 
     fn home(&mut self) -> bool {
-        let row = self.row(self.cursor);
-        let start = self.line_start(row);
+        let places = self.places();
+        let row = self.place(&places, self.cursor);
+        let start = places[row].start;
         let changed = start != self.cursor;
         self.cursor = start;
         changed
     }
 
     fn end(&mut self) -> bool {
-        let row = self.row(self.cursor);
-        let end = self.line_end(row);
+        let places = self.places();
+        let row = self.place(&places, self.cursor);
+        let end = places[row].end;
         let changed = end != self.cursor;
         self.cursor = end;
         self.follow();
@@ -294,7 +418,8 @@ impl Composer {
     }
 
     fn follow(&mut self) {
-        let row = self.row(self.cursor);
+        let places = self.places();
+        let row = self.place(&places, self.cursor);
         let visible = usize::from(self.visible_rows());
         if row < self.scroll {
             self.scroll = row;
@@ -303,47 +428,19 @@ impl Composer {
         }
     }
 
-    fn line_count(&self) -> usize {
-        self.text.matches('\n').count() + 1
+    /// The column the cursor sits in, counted in cells from the row's first one: a wide glyph moves
+    /// it two.
+    fn column(&self, place: Place) -> usize {
+        usize::from(pen::cells(&self.text[place.start..self.cursor]))
     }
 
-    fn row(&self, offset: usize) -> usize {
-        self.text[..offset.min(self.text.len())]
-            .matches('\n')
-            .count()
-    }
-
-    fn line_start(&self, row: usize) -> usize {
-        let mut start = 0;
-        for _ in 0..row {
-            match self.text[start..].find('\n') {
-                Some(index) => start += index + 1,
-                None => return self.text.len(),
-            }
-        }
-        start
-    }
-
-    fn line_end(&self, row: usize) -> usize {
-        match self.text[self.line_start(row)..].find('\n') {
-            Some(index) => self.line_start(row) + index,
-            None => self.text.len(),
-        }
-    }
-
-    /// The column the cursor sits in, counted in cells: a wide glyph moves it two.
-    fn column(&self, row: usize) -> usize {
-        usize::from(pen::cells(&self.text[self.line_start(row)..self.cursor]))
-    }
-
-    /// The offset in `row` nearest to `column` without passing it: a wide glyph the column lands
+    /// The offset in `place` nearest to `column` without passing it: a wide glyph the column lands
     /// inside is not taken, so the cursor keeps the side of it it came from.
-    fn at_column(&self, row: usize, column: usize) -> usize {
-        let end = self.line_end(row);
-        let mut at = self.line_start(row);
+    fn at_column(&self, place: Place, column: usize) -> usize {
+        let mut at = place.start;
         let mut reached = 0;
         while reached < column {
-            let Some(glyph) = self.text[at..end].chars().next() else {
+            let Some(glyph) = self.text[at..place.end].chars().next() else {
                 break;
             };
             let width = usize::from(pen::cell(glyph));
@@ -632,6 +729,117 @@ mod tests {
             composer.cursor(),
             0,
             "column zero is the first line's start"
+        );
+    }
+
+    #[test]
+    fn a_draft_wider_than_the_room_wraps_where_its_words_end() {
+        let mut composer = Composer::new();
+        composer.set_room(10);
+        composer.paste("one two three four");
+
+        assert_eq!(
+            composer.lines(),
+            vec!["one two ", "three four"],
+            "ten columns hold neither `three` nor the blank before it on the first row, so the \
+             draft wraps on the blank rather than inside a word"
+        );
+        assert_eq!(
+            composer.rows(),
+            3,
+            "two rows of draft and the band's one row of edge"
+        );
+    }
+
+    #[test]
+    fn the_caret_wraps_onto_the_row_below_it_when_the_room_runs_out() {
+        let mut composer = Composer::new();
+        composer.set_room(10);
+        composer.paste("one two three four");
+
+        assert_eq!(
+            composer.caret(),
+            (1, 10),
+            "the draft's last glyph is ten cells into the row the wrap gave it"
+        );
+        for _ in 0..3 {
+            composer.key(Key::Left);
+        }
+        assert_eq!(
+            composer.caret(),
+            (1, 7),
+            "and the caret walks back along that row"
+        );
+        composer.key(Key::Home);
+        composer.key(Key::Up);
+        composer.key(Key::End);
+        assert_eq!(
+            composer.caret(),
+            (0, 8),
+            "a row of the draft ends where its words do, and not where the draft does"
+        );
+    }
+
+    #[test]
+    fn an_arrow_moves_between_the_rows_the_wrap_gave_the_draft() {
+        let mut composer = Composer::new();
+        composer.set_room(10);
+        composer.paste("one two three four");
+
+        assert_eq!(composer.key(Key::Up), Outcome::Edited);
+        assert_eq!(
+            composer.caret(),
+            (0, 8),
+            "the row above holds eight cells, so the caret stops at its end rather than \
+             leaving the draft"
+        );
+        assert_eq!(
+            composer.key(Key::Down),
+            Outcome::Edited,
+            "and comes back down to the row the wrap gave the draft"
+        );
+        assert_eq!(
+            composer.caret(),
+            (1, 8),
+            "in the column it left from, not the one the long row ended in"
+        );
+    }
+
+    #[test]
+    fn a_word_wider_than_the_room_is_broken_where_a_glyph_ends() {
+        let mut composer = Composer::new();
+        composer.set_room(5);
+        composer.paste("日本語です");
+
+        assert_eq!(
+            composer.lines(),
+            vec!["日本", "語で", "す"],
+            "two wide glyphs fill five columns and the fifth is left blank, so no glyph is drawn \
+             half on one row and half on the next"
+        );
+        assert_eq!(composer.rows(), 4);
+    }
+
+    #[test]
+    fn a_draft_taller_than_the_band_scrolls_by_the_rows_the_wrap_gave_it() {
+        let mut composer = Composer::new();
+        composer.set_room(4);
+        composer.paste("abcdefghijklmnopqrstuvwxyz");
+
+        assert_eq!(
+            composer.rows(),
+            MAX_ROWS,
+            "seven rows of draft are drawn in the five the band has room for"
+        );
+        assert_eq!(
+            composer.scroll(),
+            2,
+            "so the band shows the rows from the third on"
+        );
+        assert_eq!(
+            composer.lines(),
+            vec!["ijkl", "mnop", "qrst", "uvwx", "yz"],
+            "which are the rows the caret's own is the last of"
         );
     }
 

@@ -24,6 +24,11 @@ pub fn cells(text: &str) -> u16 {
     u16::try_from(text.width()).unwrap_or(u16::MAX)
 }
 
+/// Whether `text` holds a glyph wider than one cell: the one case that hides the cell after it.
+fn wide(text: &str) -> bool {
+    text.chars().any(|glyph| cell(glyph) > 1)
+}
+
 /// A count of columns as a row's own arithmetic carries it: one wider than any row can be drawn in
 /// is the widest a row holds.
 pub fn columns(columns: usize) -> u16 {
@@ -71,6 +76,20 @@ pub fn write<S: AsRef<str>, D: Copy + Into<Look>>(
         let look: Look = (*look).into();
         let room = usize::from(row.right().saturating_sub(x));
         let (next, _) = buffer.set_stringn(x, row.y, text.as_ref(), room, look.style(palette));
+        // A wide glyph hides the cell after it and resets it, which would read the band a row sits
+        // on through that cell: the run holding one is claimed again in the look it was written in.
+        if wide(text.as_ref()) {
+            claim(
+                buffer,
+                Rect {
+                    x,
+                    y: row.y,
+                    width: next.saturating_sub(x),
+                    height: 1,
+                },
+                look.style(palette),
+            );
+        }
         x = next;
     }
 }

@@ -37,9 +37,9 @@ grown at 120x40
 31 |                                                                                                                        | plain:120
 32 |                                                                                                                        | plain:120
 33 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:120
-34 |read the transcript, then the failing test,                                                                             | plain:120
-35 |then the patch, and say which line of the                                                                               | plain:120
-36 |patch the test disagrees with. Keep it to                                                                               | plain:120
-37 |one sentence and quote the line you mean,                                                                               | plain:120
-38 |the way the report does.                                                                                                | plain:120
+34 |› read the transcript, then the failing test,                                                                           | dim:2 plain:118
+35 |  then the patch, and say which line of the                                                                             | dim:2 plain:118
+36 |  patch the test disagrees with. Keep it to                                                                             | dim:2 plain:118
+37 |  one sentence and quote the line you mean,                                                                             | dim:2 plain:118
+38 |  the way the report does.                                                                                              | dim:2 plain:118
 39 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · / commands · @ files · ↑ queue                                      | muted:10 dim:3 muted:6 dim:3 muted:13 dim:3 muted:11 dim:3 muted:10 dim:3 muted:7 dim:3 muted:7 plain:38

@@ -25,5 +25,5 @@ markdown-lists at 80x24
 19 |                                                                                | plain:80
 20 |                                                                                | plain:80
 21 |────────────────────────────────────────────────────────────────────────────────| accent+faint:80
-22 |                                                                                | plain:80
+22 |› what should the run do?                                                       | dim:25 plain:55
 23 |Enter send · ? keys                                                             | muted:10 dim:3 muted:6 plain:61

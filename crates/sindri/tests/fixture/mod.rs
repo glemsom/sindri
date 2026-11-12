@@ -76,7 +76,13 @@ fn named(name: &str) -> View {
         "face-off" => faced(false),
         "streaming" => streaming(),
         "calls" => running(calls(), Scroll::Tail),
+        "empty" => View::boot(),
         "typing" => View::typing(draft(&["why does the retry test fail"])),
+        "wrapped" => View::typing(draft(&[
+            "the draft is set where an answer is set, and a line of it wider than the band wraps \
+             under the gutter — 日本語 keeps both its columns — while a line the reader broke is \
+             one row of its own.",
+        ])),
         "grown" => View::typing(draft(&[
             "read the transcript, then the failing test,",
             "then the patch, and say which line of the",

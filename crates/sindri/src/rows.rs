@@ -17,7 +17,7 @@ use crate::stream::Stream;
 
 /// How far a body sits inside the row that names it, and the blank gutter an answer is
 /// printed from — the columns the newest answer's marker takes the place of.
-const INDENT: &str = "  ";
+pub(crate) const INDENT: &str = "  ";
 
 /// The hairline a thought opens with: two columns, the margin an answer is set from,
 /// so the two kinds of row line up.
