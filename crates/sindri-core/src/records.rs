@@ -174,6 +174,15 @@ impl Record {
     pub fn document(&self) -> &SessionDocument {
         &self.document
     }
+    /// A run joins the session this record keeps: the session is in flight again, and the end the
+    /// run before it reached is not this one's. The turns it already counted stay counted.
+    pub fn began(&mut self) -> Result<(), RecordError> {
+        self.document.stopped = State::Running;
+        self.document.end = None;
+        self.write_document()
+    }
+    /// The session's turn, which is what the document counts and what the transcript is numbered by:
+    /// a turn a later prompt takes is numbered after the turns every prompt before it ended.
     pub fn turn_started(&mut self, turn: u32) -> Result<(), RecordError> {
         self.append(Entry::Turn { turn })?;
         self.document.turns = turn;
@@ -237,9 +246,8 @@ impl Record {
         let path = self.session.directory().join(TRANSCRIPT);
         write_line(&mut self.transcript, &path, &entry)
     }
-    pub fn finish(self) -> Result<(), SessionError> {
-        let mut session = self.session;
-        session.finish()
+    pub fn finish(&mut self) -> Result<(), SessionError> {
+        self.session.finish()
     }
     fn write_document(&mut self) -> Result<(), RecordError> {
         let directory = self.session.directory();

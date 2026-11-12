@@ -77,7 +77,7 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
         Ok(prompt) => prompt,
         Err(usage) => return refuse(&usage, USAGE),
     };
-    let launch = match Launch::open(cli, config, FrontEnd::Batch) {
+    let mut launch = match Launch::open(cli, config, FrontEnd::Batch) {
         Ok(launch) => launch,
         Err(refusal) => return refuse(refusal.message(), refusal.code()),
     };
@@ -115,6 +115,8 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
             Err(refusal) => return refuse(refusal.message(), refusal.code()),
         }
     };
+    // One run is one session's whole conversation: its temp goes once the run has stopped.
+    launch.close();
     // Said at once, so a run that ended inside a second of starting still says it ended.
     quietly(telling.say(Told::Stopped {
         turn: outcome.turns(),

@@ -1093,7 +1093,7 @@ fn question_mark_opens_the_keys_screen_and_escape_gives_the_frame_back() {
     );
 }
 
-fn document(state: &std::path::Path) -> String {
+fn directories(state: &std::path::Path) -> Vec<PathBuf> {
     let sessions = state.join("sindri").join("sessions");
     let mut found: Vec<PathBuf> = std::fs::read_dir(&sessions)
         .map(|entries| {
@@ -1104,8 +1104,45 @@ fn document(state: &std::path::Path) -> String {
         })
         .unwrap_or_default();
     found.sort();
-    let directory = found.first().expect("the launch recorded a session");
+    found
+}
+
+fn document_in(directory: &Path) -> String {
     std::fs::read_to_string(directory.join("session.json")).expect("the session document")
+}
+
+fn document(state: &std::path::Path) -> String {
+    let found = directories(state);
+    let directory = found.first().expect("the launch recorded a session");
+    document_in(directory)
+}
+
+/// The entries a session's transcript holds, one line each, in the order they were written.
+fn transcript(directory: &Path) -> Vec<serde_json::Value> {
+    std::fs::read_to_string(directory.join("transcript.jsonl"))
+        .expect("the session's transcript")
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| serde_json::from_str(line).expect("a transcript's line is JSON"))
+        .collect()
+}
+
+/// The prompts a session was asked, in the order they were asked.
+fn prompts(directory: &Path) -> Vec<String> {
+    transcript(directory)
+        .iter()
+        .filter(|entry| entry["kind"] == "prompt")
+        .map(|entry| String::from(entry["text"].as_str().expect("a prompt is words")))
+        .collect()
+}
+
+/// The model a request's body names, which is the name the wire was asked with.
+fn model_of(request: &str) -> String {
+    let (_, body) = request
+        .split_once("\r\n\r\n")
+        .expect("a request's head and its body");
+    let body: serde_json::Value = serde_json::from_str(body).expect("a wire's body is JSON");
+    String::from(body["model"].as_str().expect("a request names the model"))
 }
 
 fn guid(state: &std::path::Path) -> String {
@@ -1418,6 +1455,14 @@ fn the_stats_screen_draws_the_record_the_run_handed_its_frame() {
         drawn.text()
     );
 
+    ask_words(&mut pty, &drawn, &wire, "and what did you just say?");
+    wire.release();
+    assert!(
+        turn_counted(&ground.state, 2),
+        "a second prompt ran on the session the first one opened: {}",
+        document(&ground.state)
+    );
+
     let recorded = guid(&ground.state);
     command(&mut pty, &drawn, "/stats");
 
@@ -1448,6 +1493,17 @@ fn the_stats_screen_draws_the_record_the_run_handed_its_frame() {
         "and the record says how the run stopped: {:?}",
         drawn.text()
     );
+    for (label, value) in [("turns", "2 / 250"), ("input", "22")] {
+        assert!(
+            picture(&drawn.text()).values().any(|row| {
+                let row = inside(row);
+                row.starts_with(label) && row.contains(value)
+            }),
+            "the screen draws `{label} {value}`, the session's own count and not the second \
+             prompt's alone: {:?}",
+            drawn.text()
+        );
+    }
 
     pty.type_bytes(b"\x1b");
     assert!(
@@ -1487,6 +1543,9 @@ fn an_outside_sigint_stops_the_run_and_gives_the_terminal_back() {
     let interrupted = session.interrupt();
     assert!(interrupted, "the signal was delivered to the launch");
 
+    // The signal and the wire's answer are two roads into the same run, and the run stops on an
+    // answer that lands first: the word is given time to be heard before the answer is let go.
+    thread::sleep(Duration::from_millis(200));
     wire.release();
     let status = session.wait();
     assert_eq!(
@@ -1504,6 +1563,22 @@ fn an_outside_sigint_stops_the_run_and_gives_the_terminal_back() {
         recorded(&ground.state, r#""stopped": "cancelled""#),
         "and the record says what stopped the run: {}",
         document(&ground.state)
+    );
+    assert!(
+        recorded(&ground.state, r#""end":"#),
+        "a launch the user's word ended settles its record with an end: {}",
+        document(&ground.state)
+    );
+    let directory = directories(&ground.state)
+        .into_iter()
+        .next()
+        .expect("the interrupted launch kept its session");
+    assert_eq!(
+        std::fs::read_dir(directory.join("tmp"))
+            .expect("the session's temp")
+            .count(),
+        0,
+        "and empties the temp as a run that stopped does, keeping the session it recorded"
     );
     let given_back = pty.attrs();
     assert!(
@@ -1833,6 +1908,87 @@ fn slash_model_with_a_name_sets_a_model_the_wire_never_offered() {
     assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
 }
 
+/// A launch that takes its model from the config file alone: the environment outranks the file, so a
+/// `/model` the file holds is the name the next run is asked with only where nothing exported one.
+fn reading_the_model_from_the_config(ground: &Ground, wire: &Wire) -> (Session, Pty, Drawn) {
+    let mut command = ground.command();
+    command
+        .arg("--yolo-unsafe")
+        .env_remove("SINDRI_MODEL")
+        .env("SINDRI_BASE_URL", wire.base_url());
+    Session::starting(command)
+}
+
+#[test]
+fn a_model_chosen_mid_launch_supersedes_the_session_and_the_next_prompt_runs_on_it() {
+    let ground = Ground::new();
+    let config = a_readers_config(&ground);
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = reading_the_model_from_the_config(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask_words(&mut pty, &drawn, &wire, "hi my name is Glenn");
+    wire.release();
+    assert!(
+        turn_counted(&ground.state, 1),
+        "the first prompt is recorded: {}",
+        document(&ground.state)
+    );
+    assert_eq!(
+        model_of(&wire.requests()[0]),
+        FIRST_SERVED,
+        "the model the config named is the one the first prompt was asked with"
+    );
+
+    command(&mut pty, &drawn, "/model claude-haiku-4-5");
+    written_model(&config, SECOND_SERVED);
+
+    ask_words(&mut pty, &drawn, &wire, "what is my name?");
+
+    let asked = wire.requests();
+    assert_eq!(asked.len(), 2, "two prompts, two requests: {asked:?}");
+    assert_eq!(
+        model_of(&asked[1]),
+        SECOND_SERVED,
+        "the prompt after the visit is asked with the name the visit wrote"
+    );
+
+    wire.release();
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+
+    let found = directories(&ground.state);
+    assert_eq!(
+        found.len(),
+        2,
+        "a session records one wire, one model and one route, so a run under another model is a \
+         session of its own: {found:?}"
+    );
+    let mut named: Vec<String> = found
+        .iter()
+        .map(|directory| document_in(directory))
+        .map(|said| {
+            let document: serde_json::Value =
+                serde_json::from_str(&said).expect("the session document is JSON");
+            String::from(
+                document["model"]
+                    .as_str()
+                    .expect("a document names its model"),
+            )
+        })
+        .collect();
+    named.sort();
+    assert_eq!(
+        named,
+        [SECOND_SERVED, FIRST_SERVED],
+        "each record names the model its own turns were asked with, and no record names two"
+    );
+}
+
 #[test]
 fn slash_help_opens_the_keys_in_force_and_slash_settings_its_own_screen() {
     let ground = Ground::new();
@@ -1905,7 +2061,210 @@ fn slash_quit_quits_as_ctrl_q_does() {
 }
 
 #[test]
-fn slash_new_clears_the_frame_and_leaves_the_session_it_superseded_running() {
+fn the_rail_keeps_its_session_its_turns_and_its_size_across_two_prompts() {
+    let ground = Ground::new();
+    let wire = Wire::holding_a_cached_reply();
+    let mut launch = ground.command();
+    launch
+        .arg("--yolo-unsafe")
+        .env("SINDRI_BASE_URL", wire.base_url())
+        .env("SINDRI_CONTEXT_WINDOW", "200000");
+    let (session, mut pty, drawn) = Session::starting(launch);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask(&mut pty, &drawn, &wire);
+    let recorded = guid(&ground.state);
+    assert!(
+        drawn.wait_until(|frame| rail_reads(frame, "session", &recorded[..8])
+            && rail_reads(frame, "turns", "0 / 250")),
+        "the session the first prompt opened is the fact the rail begins with: {:?}",
+        drawn.text()
+    );
+
+    wire.release();
+    assert!(
+        drawn.wait_until(|frame| {
+            rail_reads(frame, "turns", "1 / 250") && rail_reads(frame, "ctx", "░░░░░░ 11 / 200k")
+        }),
+        "the turn that ended is counted and the size it reported is drawn: {:?}",
+        drawn.text()
+    );
+
+    ask_words(&mut pty, &drawn, &wire, "what is my name?");
+
+    let frame = drawn.text();
+    let temp = format!("{}/tmp", &recorded[..8]);
+    for (label, value) in [
+        ("session", &recorded[..8]),
+        ("temp", &temp),
+        ("turns", "1 / 250"),
+        ("ctx", "░░░░░░ 11 / 200k"),
+    ] {
+        assert!(
+            rail_reads(&frame, label, value),
+            "the second prompt's frame keeps `{label} {value}`: the session the prompt works in, \
+             the temp it writes in, the turn it counts and the size it last measured do not begin \
+             again: {frame:?}"
+        );
+    }
+
+    wire.release();
+    assert!(
+        drawn.wait_until(|frame| rail_reads(frame, "turns", "2 / 250")),
+        "the second prompt's turn is counted on the same session, so the rail reads two: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+    assert_eq!(
+        directories(&ground.state).len(),
+        1,
+        "and both prompts are one session on disk"
+    );
+}
+
+#[test]
+fn a_file_in_the_session_temp_outlives_the_next_prompt_and_goes_when_the_launch_ends() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    ask_words(&mut pty, &drawn, &wire, "hi my name is Glenn");
+    let directory = directories(&ground.state)
+        .into_iter()
+        .next()
+        .expect("the prompt the launch answered opened a session");
+    let scratch = directory.join("tmp").join("scratch.txt");
+    std::fs::write(&scratch, "kept\n").expect("a file in the session temp");
+    wire.release();
+    assert!(
+        turn_counted(&ground.state, 1),
+        "the run settled: {}",
+        document_in(&directory)
+    );
+    assert!(
+        scratch.is_file(),
+        "the temp the prompt's commands wrote in is not emptied when that prompt ends"
+    );
+
+    ask_words(&mut pty, &drawn, &wire, "what is my name?");
+    wire.release();
+    assert!(
+        turn_counted(&ground.state, 2),
+        "the second prompt's run settled: {}",
+        document_in(&directory)
+    );
+    assert!(
+        scratch.is_file(),
+        "the file survives the prompt after it, because the session it was written in is the one the \
+         next prompt runs in: {}",
+        scratch.display()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+
+    assert!(
+        !scratch.exists(),
+        "and it is gone when the launch ends, with the conversation it was scratch for"
+    );
+    assert_eq!(
+        directories(&ground.state).len(),
+        1,
+        "both prompts ran in the one session whose temp the file was written in"
+    );
+    assert!(
+        directory.join("session.json").is_file(),
+        "the record the launch wrote is kept: {}",
+        directory.display()
+    );
+}
+
+/// Waits until the record of the one session a launch holds counts `turns`, so a test sends its next
+/// prompt into a session whose last run has stopped.
+fn turn_counted(state: &std::path::Path, turns: u32) -> bool {
+    recorded(state, &format!(r#""turns": {turns}"#))
+}
+
+#[test]
+fn two_prompts_in_one_launch_leave_one_session_that_counts_both() {
+    let ground = Ground::new();
+    let wire = Wire::holding_a_cached_reply();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    ask_words(&mut pty, &drawn, &wire, "hi my name is Glenn");
+    wire.release();
+    assert!(
+        turn_counted(&ground.state, 1),
+        "the first prompt's run is written as the session's first turn: {}",
+        document(&ground.state)
+    );
+    ask_words(&mut pty, &drawn, &wire, "what is my name?");
+    wire.release();
+    assert!(
+        turn_counted(&ground.state, 2),
+        "the second prompt's turn is counted on the same record, not in a record of its own: {}",
+        document(&ground.state)
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+
+    let found = directories(&ground.state);
+    assert_eq!(
+        found.len(),
+        1,
+        "two prompts in one launch are one session: {found:?}"
+    );
+    let recorded: serde_json::Value =
+        serde_json::from_str(&document_in(&found[0])).expect("the session document is JSON");
+    assert_eq!(
+        recorded["turns"],
+        serde_json::json!(2),
+        "the record counts both turns: {recorded}"
+    );
+    assert_eq!(
+        recorded["usage"],
+        serde_json::json!({"input": 22, "output": 14, "total": 36, "cached_input": 8}),
+        "and sums what both asks spent: {recorded}"
+    );
+    assert_eq!(
+        prompts(&found[0]),
+        ["hi my name is Glenn", "what is my name?"],
+        "the session's transcript shows both prompts, in the order they were asked"
+    );
+    let listing = ground
+        .command()
+        .args(["sessions", "list"])
+        .output()
+        .expect("the listing runs on the state home the launch wrote");
+    assert_eq!(
+        text(&listing.stdout).lines().count(),
+        1,
+        "`sessions list` shows one entry for a launch that asked two prompts: {}",
+        text(&listing.stdout)
+    );
+}
+
+#[test]
+fn slash_new_clears_the_frame_and_leaves_the_session_it_holds_alone() {
     let ground = Ground::new();
     let wire = Wire::holding();
     let (session, mut pty, drawn) = Session::asking(&ground, &wire);
@@ -1928,12 +2287,12 @@ fn slash_new_clears_the_frame_and_leaves_the_session_it_superseded_running() {
     let said = document(&ground.state);
     assert!(
         said.contains("\"stopped\": \"running\""),
-        "a session `/new` superseded keeps saying `running`, because it did not stop — it \
-         was left: {said}"
+        "`/new` empties the frame and never the session it holds, so the run in flight is still \
+         the one the record says is running: {said}"
     );
     assert!(
         !said.contains("\"end\":"),
-        "and it is given no end it did not reach: {said}"
+        "and the session is given no end it has not reached: {said}"
     );
     assert!(
         wire.requests().len() == 1,
@@ -2086,6 +2445,18 @@ fn slash_new_empties_what_the_next_prompt_is_asked_with() {
     wire.release();
     pty.type_bytes(&[0x11]);
     assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+    let found = directories(&ground.state);
+    assert_eq!(
+        found.len(),
+        1,
+        "and the prompt `/new` made the first of a conversation is still the launch's session: \
+         {found:?}"
+    );
+    assert_eq!(
+        prompts(&found[0]),
+        ["hi my name is Glenn", "what is my name?"],
+        "a record of the launch, holding both prompts it asked"
+    );
 }
 
 #[test]
@@ -2146,10 +2517,24 @@ fn a_cancelled_run_leaves_the_turn_it_ended_in_what_the_next_prompt_carries() {
 
     ask_words(&mut pty, &drawn, &wire, "hi my name is Glenn");
     pty.type_bytes(&[0x03]);
+    // The key and the wire's answer are two roads into one run: a glyph typed after it is the proof
+    // the cancel was answered, because the loop answers one key before the next.
+    pty.type_bytes(b"x");
+    assert!(
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == 2)),
+        "the cancel was answered, so the draft has the glyph typed after it: {:?}",
+        drawn.text()
+    );
     wire.release();
     assert!(
         drawn.wait_until(|frame| frame.contains('\u{2717}')),
         "the run the reader stopped has settled as stopped: {:?}",
+        drawn.text()
+    );
+    pty.type_bytes(&[0x03]);
+    assert!(
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == 1)),
+        "the run ended, so Ctrl-C is the idle key and clears the proof from the draft: {:?}",
         drawn.text()
     );
 

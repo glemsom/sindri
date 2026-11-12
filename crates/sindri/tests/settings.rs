@@ -159,6 +159,33 @@ fn enter_writes_at_once_and_the_next_prompt_runs_on_the_value_it_wrote() {
 }
 
 #[test]
+fn a_save_keeps_the_credential_the_wire_its_own_variable_gave_the_launch() {
+    let home = home("provider = \"anthropic\"\nmodel = \"old-model\"\n");
+    let mut environment = environment(&home);
+    environment.insert(
+        String::from("ANTHROPIC_API_KEY"),
+        String::from("sk-ant-from-the-wires-variable"),
+    );
+    let mut view = View::boot();
+    view.open_settings(&Config::resolve(&environment, Flags::default()).expect("a config"));
+    walk_to(&mut view, "model");
+    view.key(Key::Clear);
+    type_into(&mut view, "claude-sonnet-4-5");
+
+    let touched = entered(&mut view);
+    let fresh =
+        settings::persist(&environment, &touched, Flags::default()).expect("the write lands");
+
+    assert_eq!(
+        fresh.api_key.as_deref(),
+        Some("sk-ant-from-the-wires-variable"),
+        "the config a prompt after a save runs on is resolved the way the launch resolved it, so \
+         the credential its wire's own variable holds is still there: a launch that lost it could \
+         run no prompt at all"
+    );
+}
+
+#[test]
 fn enter_writes_once_and_a_visit_that_touched_nothing_writes_at_all() {
     let home = home(HAND_WRITTEN);
     let path = file_in(&home);

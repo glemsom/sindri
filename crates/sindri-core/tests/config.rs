@@ -612,3 +612,62 @@ fn yolo_unsafe_is_neither_a_key_nor_a_variable() {
         "no variable can persist an unsafe setting, so this one sets nothing"
     );
 }
+
+#[test]
+fn two_configs_that_differ_only_in_what_a_frame_reads_decide_the_same_run() {
+    let run = Config {
+        provider: Some(Wire::Anthropic),
+        model: Some(String::from("claude-sonnet-4-5")),
+        ..Config::default()
+    };
+
+    for (key, other) in [
+        (
+            "status",
+            Config {
+                status: Some(false),
+                ..run.clone()
+            },
+        ),
+        (
+            "face",
+            Config {
+                face: Some(false),
+                ..run.clone()
+            },
+        ),
+    ] {
+        assert!(
+            run.decides_the_same_run(&other),
+            "`{key}` is drawn on a frame and asked of no wire, so it decides no run"
+        );
+    }
+
+    for key in Config::KEYS
+        .iter()
+        .filter(|key| !["status", "face"].contains(key))
+    {
+        let mut other = run.clone();
+        match *key {
+            "provider" => other.provider = Some(Wire::Openai),
+            "model" => other.model = Some(String::from("claude-haiku-4-5")),
+            "route" => other.route = Some(Route::Responses),
+            "base_url" => other.base_url = Some(String::from("https://gateway.test/v1")),
+            "api_key" => other.api_key = Some(String::from("sk-another-key")),
+            "thinking" => other.thinking = Some(true),
+            "extra_writable_paths" => other.extra_writable_paths = Some(vec![PathBuf::from("/w")]),
+            "extra_headers" => other.extra_headers = Some(vec![String::from("x-one: 1")]),
+            "context_window" => other.context_window = Some(200_000),
+            "max_turns" => other.max_turns = Some(7),
+            "timeout" => other.timeout = Some(30),
+            "command_budget_ms" => other.command_budget_ms = Some(1_000),
+            "output_budget_bytes" => other.output_budget_bytes = Some(1_024),
+            "ssh_agent" => other.ssh_agent = Some(true),
+            other => panic!("`{other}` is a key this test does not set"),
+        }
+        assert!(
+            !run.decides_the_same_run(&other),
+            "`{key}` decides the run a session records, so another value of it is another run"
+        );
+    }
+}
