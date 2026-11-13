@@ -165,7 +165,7 @@ _Avoid_: Style, emphasis, attribute
 
 **Underline**:
 The line a look draws under the cells it is written in, in an ink of its own and never a face: a link
-will wear one, and a cell that carries one still reads back as its ink and its faces.
+wears one, and a cell that carries one still reads back as its ink and its faces.
 _Avoid_: Rule (that one fills a row), decoration, border
 
 **Link**:

@@ -4,6 +4,7 @@ use std::time::Instant;
 use sindri::ledger;
 use sindri_core::asking::Asking;
 use sindri_core::config::{Config, Process};
+use sindri_core::open::Ground;
 use sindri_core::outcome::{Facts as Reported, Outcome};
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::preamble::Preamble;
@@ -198,6 +199,17 @@ impl Launch {
             session: self.session.directory().to_path_buf(),
             proof: self.proof.to_string(),
         }
+    }
+
+    /// Where this run stands when it judges a target: the writable set, the session temp and the
+    /// workspace a relative path is read from, which is the judgement a frame draws a path by.
+    pub fn ground(&self) -> Option<Ground> {
+        Ground::new(
+            &self.boundary,
+            self.session.temp(),
+            &self.record.document().workspace,
+        )
+        .ok()
     }
 
     pub fn max_turns(&self) -> u32 {

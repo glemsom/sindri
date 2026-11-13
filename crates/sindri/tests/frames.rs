@@ -164,7 +164,7 @@ fn markdown_emphasis_80x24_is_bold_italic_both_and_both_inside_a_heading() {
 }
 
 #[test]
-fn markdown_link_80x24_is_a_link_that_prints_the_url_its_words_hide() {
+fn markdown_link_80x24_is_a_link_drawn_as_its_words_and_a_path_the_run_judged_openable() {
     fixture::assert_frame("markdown-link", 80, 24);
 }
 

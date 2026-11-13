@@ -19,6 +19,10 @@ use crate::rows::{Row, split_at};
 /// is enabled, so a footnote, a strikethrough and a task list parse as plain prose.
 const OPTIONS: Options = Options::ENABLE_TABLES;
 
+/// The ink the line under a way's words is drawn in: an ink of its own and never a face, in the
+/// ink a fact beside the prose is read in, so the words keep the colour the block gave them.
+const WAY: Ink = Ink::Dim;
+
 pub fn rows(text: &str, cols: u16) -> Vec<Row> {
     rows_under(text, cols, 0)
 }
@@ -41,6 +45,35 @@ pub fn rows_on(text: &str, cols: u16, reserve: u16, surface: &Surface) -> Vec<Ro
         room.event(event, &text[span]);
     }
     room.finish()
+}
+
+/// A tool row's words laid as the rows a body is drawn as, with the run of `path` a way to
+/// `destination`: a path wider than the row is broken over two rows, each carrying the whole
+/// destination. Nothing is laid when the words do not hold the path.
+pub fn named(text: &str, cols: u16, path: &str, destination: &str) -> Option<Vec<Row>> {
+    if path.is_empty() {
+        return None;
+    }
+    let mut room = Room::new(cols.max(1), &Surface::none());
+    let plain = Look::plain(Ink::Plain);
+    let marked = plain.underlined(WAY);
+    let mut named = false;
+    for line in text.split('\n') {
+        let mut rest = line;
+        while let Some(at) = rest.find(path) {
+            let (before, from) = rest.split_at(at);
+            let (way, after) = from.split_at(path.len());
+            room.prose(before, plain);
+            room.link = Some((destination.to_owned(), way.to_owned()));
+            room.prose(way, marked);
+            room.link = None;
+            rest = after;
+            named = true;
+        }
+        room.prose(rest, plain);
+        room.flush();
+    }
+    named.then_some(room.rows)
 }
 
 fn syntaxes() -> &'static SyntaxSet {
@@ -103,6 +136,14 @@ impl Rule {
     }
 }
 
+/// One run of the row in hand that is a way to somewhere: the column it begins at past the words'
+/// own edge, the columns it covers, and where it goes.
+struct Laid {
+    left: usize,
+    width: usize,
+    destination: String,
+}
+
 /// The room a block is being laid out in, and the rows it has been laid out as so far.
 /// The gutters a construct adds are subtracted from the room before a word is placed and
 /// never after, so no row this writes runs over the width and gets clipped by the paint.
@@ -131,9 +172,11 @@ struct Room {
     /// as the widest cell the table holds.
     table: Option<Table>,
     rule: Option<Rule>,
-    /// The link being said: its destination and the words said over it, so the URL is printed
-    /// only when it says something the words did not.
+    /// The link being said: its destination and the words said over it.
     link: Option<(String, String)>,
+    /// The runs of the row in hand that are ways to somewhere, measured from the words' own left
+    /// edge: laid as the words land, so a link that wraps is a run on each row it wrote.
+    laid: Vec<Laid>,
     /// The columns the first row gives up to a marker laid at the frame's left edge, and
     /// nothing once that row has been written.
     reserve: usize,
@@ -160,6 +203,7 @@ impl Room {
             first: true,
             blank: true,
             link: None,
+            laid: Vec::new(),
             code: None,
             mermaid: None,
             table: None,
@@ -253,6 +297,10 @@ impl Room {
                 }
                 None => {
                     let worn = self.block.wearing(self.worn());
+                    let linked = match self.link.is_some() {
+                        true => worn.underlined(WAY),
+                        false => worn,
+                    };
                     match &mut self.table {
                         // A cell is measured only once the whole table has been read.
                         Some(table) => table.text(&text, worn),
@@ -264,7 +312,7 @@ impl Room {
                                 if let Some((_, said)) = &mut self.link {
                                     said.push_str(&text);
                                 }
-                                self.prose(&text, worn);
+                                self.prose(&text, linked);
                             }
                         },
                     }
@@ -372,10 +420,9 @@ impl Room {
             let gap = usize::from(space && self.used > 0);
             if self.used + gap + usize::from(pen::cells(rest)) <= room {
                 if gap == 1 {
-                    let at = self.block;
-                    self.extend(" ", at);
+                    self.between(look);
                 }
-                self.extend(rest, look);
+                self.linked(rest, look);
                 return;
             }
             if self.used > 0 {
@@ -384,13 +431,63 @@ impl Room {
                 continue;
             }
             let (head, tail) = split_at(rest, room);
-            self.extend(&head, look);
+            self.linked(&head, look);
             self.flush();
             rest = tail;
             space = false;
             if rest.is_empty() {
                 return;
             }
+        }
+    }
+
+    /// The space between two words: the block's own, unless it stands between two words of one
+    /// way, where the way's look carries it so a link's line and the cells a reader opens are one.
+    fn between(&mut self, look: Look) {
+        match self.reaches() {
+            true => {
+                self.extend(" ", look);
+                if let Some(run) = self.laid.last_mut() {
+                    run.width = run.width.saturating_add(1);
+                }
+            }
+            false => {
+                let at = self.block;
+                self.extend(" ", at);
+            }
+        }
+    }
+
+    /// Whether the way being said already covers the column the next word begins at, which is
+    /// what makes the space before it the way's own rather than the block's.
+    fn reaches(&self) -> bool {
+        let Some((destination, _)) = &self.link else {
+            return false;
+        };
+        self.laid.last().is_some_and(|run| {
+            run.destination == *destination && run.left.saturating_add(run.width) == self.used
+        })
+    }
+
+    /// Extends the row in hand with `text`, and — while a way is being said — the cells it lands
+    /// on are that way's: a run is kept per row, so a link wider than the band is one run on each
+    /// row it wrote and each carries the whole destination.
+    fn linked(&mut self, text: &str, look: Look) {
+        let left = self.used;
+        let width = usize::from(pen::cells(text));
+        self.extend(text, look);
+        let Some((destination, _)) = &self.link else {
+            return;
+        };
+        match self.laid.last_mut() {
+            Some(run) if run.destination == *destination && run.left + run.width == left => {
+                run.width = run.width.saturating_add(width);
+            }
+            _ => self.laid.push(Laid {
+                left,
+                width,
+                destination: destination.clone(),
+            }),
         }
     }
 
@@ -584,14 +681,18 @@ impl Room {
         self.first = false;
     }
 
-    /// A destination that says something else follows the link's words; a link written over
-    /// its own URL says it once.
+    /// A link closes: its words are the whole of it, and the destination travels beside the row
+    /// they were written on. A cell is measured whole before a row of it is drawn, so the words a
+    /// table holds are followed by the destination — the one place it is said at all.
     fn close_link(&mut self) {
         let Some((dest, said)) = self.link.take() else {
             return;
         };
-        if said.trim() != dest {
-            self.place(&dest, Look::plain(Ink::Dim), true);
+        if said.trim() == dest {
+            return;
+        }
+        if let Some(table) = &mut self.table {
+            table.text(&format!(" {dest}"), Look::plain(WAY));
         }
     }
 
@@ -649,7 +750,15 @@ impl Room {
         if let Some(rule) = &mut self.rule {
             rule.wrote(self.used);
         }
-        let row = Row::of(self.spans());
+        let gutter = self.columns();
+        let mut row = Row::of(self.spans());
+        for run in std::mem::take(&mut self.laid) {
+            row = row.linking(
+                u16::try_from(gutter.saturating_add(run.left)).unwrap_or(u16::MAX),
+                u16::try_from(run.width).unwrap_or(u16::MAX),
+                run.destination,
+            );
+        }
         self.line.clear();
         // A fence is one block of cells, so the tag and every line under it paint the well.
         self.push(match self.code.is_some() {
@@ -666,6 +775,15 @@ impl Room {
         let mut spans = self.gutter();
         spans.extend(self.line.iter().cloned());
         spans
+    }
+
+    /// The columns the words of the row in hand are set past: the gutter the block gives them up
+    /// to, which a way it names is measured from.
+    fn columns(&self) -> usize {
+        self.gutter()
+            .iter()
+            .map(|(text, _)| usize::from(pen::cells(text)))
+            .sum()
     }
 
     /// The columns every row of the block in hand gives up before its words: the bars it is

@@ -2,9 +2,12 @@
 //! the constructs and this front end decides what each of them looks like, so a heading's weight and
 //! a code block's gutter are held here; a whole screen of them is `frames`'.
 
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
 use sindri::ink::{Face, Faces, Ink, Look};
+use sindri::link::Links;
 use sindri::markdown;
-use sindri::palette::Band;
+use sindri::palette::{Band, Palette};
 use sindri::rows::Row;
 
 fn words(row: &Row) -> String {
@@ -199,37 +202,186 @@ fn a_heading_that_opens_an_item_hangs_its_rule_under_the_items_gutter() {
 }
 
 #[test]
-fn inline_code_is_reversed_and_a_link_names_the_url_the_words_hide() {
-    let rows = markdown::rows(
-        "run `make check` first, see [the gate](https://example.test/gate) and [keys](keys).",
-        80,
+fn inline_code_is_reversed_over_muted() {
+    let rows = markdown::rows("run `make check` first", 80);
+
+    assert_eq!(drawn(&rows), ["run make check first"]);
+    assert!(
+        wears(
+            &rows[0],
+            "make check",
+            Look::new(Ink::Muted, Face::Reversed)
+        ),
+        "a run of inline code is reversed over `muted`, so that it is not the mark's \
+         own look: {:?}",
+        rows[0].spans()
     );
+}
+
+/// The line a way's words are drawn under.
+fn way() -> Look {
+    Look::plain(Ink::Plain).underlined(Ink::Dim)
+}
+
+/// The ways `rows` name, painted one to a frame row from its first.
+fn ways(rows: &[Row]) -> Links {
+    let mut buffer = Buffer::empty(Rect::new(0, 0, 120, u16::try_from(rows.len()).unwrap()));
+    let mut links = Links::none();
+    for (at, row) in rows.iter().enumerate() {
+        let area = Rect::new(0, u16::try_from(at).unwrap(), 120, 1);
+        row.paint(area, &mut buffer, &Palette::TRUECOLOR, &mut links);
+    }
+    links
+}
+
+#[test]
+fn a_link_is_drawn_as_its_words_marked_and_its_destination_travels_beside_the_row() {
+    let rows = markdown::rows("see [the gate](https://example.test/gate) now", 40);
+
     assert_eq!(
         drawn(&rows),
-        ["run make check first, see the gate https://example.test/gate and keys."],
-        "the link's words stand where they were written and the URL follows them"
+        ["see the gate now"],
+        "the link is the words it was written as, and the URL is not said beside them"
+    );
+    assert!(
+        wears(&rows[0], "the gate", way()),
+        "the words are marked with the line a way wears, so the row reads as a way to \
+         somewhere: {:?}",
+        rows[0].spans()
     );
 
-    let spans = rows[0].spans();
-    assert!(
-        spans.contains(&(
-            String::from("make check"),
-            Look::new(Ink::Muted, Face::Reversed)
-        )),
-        "a run of inline code is reversed over `muted`, so that it is not the mark's \
-         own look: {spans:?}"
-    );
-    assert!(
-        spans.contains(&(
-            String::from("https://example.test/gate"),
-            Look::plain(Ink::Dim)
-        )),
-        "the URL is read in the ink a fact beside the prose is read in: {spans:?}"
+    let links = ways(&rows);
+    assert_eq!(
+        links.at(0, 4),
+        Some("https://example.test/gate"),
+        "the words' first cell opens the destination the words were written over"
     );
     assert_eq!(
-        drawn(&rows)[0].matches("keys").count(),
-        1,
-        "a link whose words are its URL says them once: {spans:?}"
+        links.at(0, 11),
+        Some("https://example.test/gate"),
+        "and a cell the link's own space covers is the way's too"
+    );
+    assert_eq!(
+        links.at(0, 12),
+        None,
+        "no cell past the words is a way there"
+    );
+    assert_eq!(
+        links.at(0, 3),
+        None,
+        "nor the space before them: a way begins at its own words"
+    );
+}
+
+#[test]
+fn a_link_whose_words_wrap_is_one_destination_on_each_row() {
+    let rows = markdown::rows(
+        "see [a gate that is named over two rows](https://example.test/gate)",
+        20,
+    );
+
+    assert_eq!(
+        drawn(&rows),
+        ["see a gate that is", "named over two rows"],
+        "the words stand where they were written, and no URL follows them"
+    );
+    let ways = ways(&rows);
+    assert_eq!(
+        ways.at(0, 4),
+        Some("https://example.test/gate"),
+        "the row the first of the words was written on names the destination"
+    );
+    assert_eq!(
+        ways.at(0, 17),
+        Some("https://example.test/gate"),
+        "and so does the cell its last word ends on"
+    );
+    assert_eq!(
+        ways.at(0, 18),
+        None,
+        "and the way ends there, before the row does"
+    );
+    assert_eq!(
+        ways.at(0, 3),
+        None,
+        "and the words before the link are no way there"
+    );
+    assert_eq!(
+        ways.at(1, 0),
+        Some("https://example.test/gate"),
+        "the row the link was written on next carries the whole destination too, never half \
+         of it"
+    );
+    assert_eq!(
+        ways.at(1, 18),
+        Some("https://example.test/gate"),
+        "and its last cell is the way's own"
+    );
+    assert_eq!(
+        ways.at(1, 19),
+        None,
+        "and the way ends where its last word does"
+    );
+}
+
+#[test]
+fn a_link_inside_a_quote_carries_its_destination_past_the_quotes_bar() {
+    let rows = markdown::rows("> see [the gate](https://example.test/gate)", 40);
+
+    assert_eq!(drawn(&rows), ["▏ see the gate"]);
+    let links = ways(&rows);
+    assert_eq!(
+        links.at(0, 6),
+        Some("https://example.test/gate"),
+        "the way begins where the words it covers do, past the bar the quote is set behind"
+    );
+    assert_eq!(
+        links.at(0, 5),
+        None,
+        "never on the bar the words were moved past"
+    );
+}
+
+#[test]
+fn a_link_a_table_holds_is_followed_by_the_destination_it_cannot_carry() {
+    let rows = markdown::rows(
+        "| a link |\n| --- |\n| [the gate](https://example.test/gate) |",
+        60,
+    );
+
+    assert_eq!(
+        drawn(&rows).last().map(String::as_str),
+        Some("the gate https://example.test/gate"),
+        "a cell is measured whole before a row of it is drawn, so the words there are followed \
+         by the destination: {rows:?}"
+    );
+    assert!(
+        ways(&rows).is_empty(),
+        "and no cell of a table is a way there, because no cell could be handed one"
+    );
+}
+
+#[test]
+fn a_link_whose_words_spell_its_destination_says_it_once() {
+    let rows = markdown::rows(
+        "read [https://example.test/spec](https://example.test/spec)",
+        60,
+    );
+
+    assert_eq!(
+        drawn(&rows),
+        ["read https://example.test/spec"],
+        "a link written over its own URL says the destination once, as its words"
+    );
+    assert!(
+        wears(&rows[0], "https://example.test/spec", way()),
+        "and the words are the way there: {:?}",
+        rows[0].spans()
+    );
+    assert_eq!(
+        ways(&rows).at(0, 5),
+        Some("https://example.test/spec"),
+        "so a reader opens the destination from the words that spell it"
     );
 }
 

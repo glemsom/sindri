@@ -2,7 +2,7 @@
 //! each run of cells from the left edge, so a row of blanks keeps its width in a file an editor may
 //! touch. The files are `.snap` because `insta` compares and blesses them and takes no other extension.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -20,7 +20,8 @@ use sindri::pulse::Pulse;
 use sindri::rows::Scroll;
 use sindri::view::View;
 use sindri_core::config::Config;
-use sindri_core::policy::{Enforcement, PolicyRecord};
+use sindri_core::open::Ground;
+use sindri_core::policy::{Boundary, Enforcement, PolicyRecord};
 use sindri_core::provider::Route;
 use sindri_core::provider::served::Where;
 use sindri_core::provider::transport::{Canned, Replay};
@@ -107,7 +108,7 @@ fn named(name: &str) -> View {
         "markdown-code" => construct(code()),
         "markdown-inline" => construct(inline()),
         "markdown-emphasis" => construct(emphasised()),
-        "markdown-link" => construct(link()),
+        "markdown-link" => ways(),
         "markdown-table-narrow" => construct(narrow()),
         // The same answer in both, three of its four fragments under the live marker and all of it
         // under the settled one; nine point four seconds is under ten, so that marker keeps its decimal.
@@ -254,9 +255,35 @@ fn emphasised() -> &'static str {
      fence\n```"
 }
 
-fn link() -> &'static str {
-    "The command is `/export` [in the spec](https://example.test/spec#12), and \
-     [§16](§16) is where the gate is written down."
+/// An answer's ways and the paths a call names: a link is its words with the destination travelling
+/// beside the row, a link written over its own URL says it once, and a path a call names is a way to
+/// the file the run judged openable — the one it did not is drawn as the words it was written as.
+fn ways() -> View {
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("the tree the product is built in");
+    let mut view = View::of(
+        vec![
+            answer(
+                1,
+                "The command is `/export` [in the spec](https://example.test/spec#12), and \
+                 [§16](§16) is where the gate is written down.",
+            ),
+            call(2, "open", r#"{"path": "GLOSSARY.md"}"#),
+            call(3, "open", r#"{"path": "site.html"}"#),
+        ],
+        Scroll::Tail,
+    );
+    view.set_ground(Some(ground(workspace)));
+    view
+}
+
+/// The ground a run standing in `workspace` judges a target from.
+fn ground(workspace: &std::path::Path) -> Ground {
+    let boundary = Boundary::from_config(&Config::default(), workspace, Enforcement::Unsafe)
+        .expect("the boundary holds");
+    Ground::new(&boundary, workspace, workspace).expect("the ground resolves")
 }
 
 fn narrow() -> &'static str {

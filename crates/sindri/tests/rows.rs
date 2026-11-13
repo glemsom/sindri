@@ -12,8 +12,11 @@ use sindri::palette::{Band, Palette};
 use sindri::pen;
 use sindri::picture::Surface;
 use sindri::pulse::Pulse;
-use sindri::rows::{Row, Rows, Scroll, Window, layout};
+use sindri::rows::{Row, Rows, Scroll, Window, layout, layout_on};
 use sindri::stream::Stream;
+use sindri_core::config::Config;
+use sindri_core::open::Ground;
+use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::provider::Deltas;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
@@ -628,6 +631,141 @@ fn result(which: u32, exit: Exit) -> Entry {
         elapsed_ms: 2,
         exit: Some(exit),
     }
+}
+
+fn named(which: u32, name: &str, arguments: &str) -> Entry {
+    Entry::Call {
+        turn: which,
+        name: SecretSet::default().redact(name),
+        arguments: SecretSet::default().redact(arguments),
+    }
+}
+
+/// The ground a run standing in `workspace` judges a target from: the writable set, the session
+/// temp and the directory a relative path is read from, all resolved.
+fn ground(workspace: &std::path::Path) -> Ground {
+    let boundary = Boundary::from_config(&Config::default(), workspace, Enforcement::Unsafe)
+        .expect("the boundary holds");
+    Ground::new(&boundary, workspace, workspace).expect("the ground resolves")
+}
+
+/// The line a way's words are drawn under.
+fn way() -> Look {
+    Look::plain(Ink::Plain).underlined(Ink::Dim)
+}
+
+#[test]
+fn a_path_a_call_names_is_a_way_to_the_file_the_run_judged_it_openable_as() {
+    let tree = tempfile::tempdir().expect("a temp workspace");
+    std::fs::write(tree.path().join("notes.html"), "body").expect("the file");
+    let entry = named(1, "open", r#"{"path":"notes.html"}"#);
+
+    let rows = layout_on(&entry, 40, &Surface::none(), Some(&ground(tree.path())));
+
+    assert_eq!(
+        said(&painted(&rows[1], 40)),
+        r#"  {"path":"notes.html"}"#,
+        "the call's arguments are laid as they were written, set in a body's gutter"
+    );
+    assert!(
+        painted(&rows[1], 40)[11..21]
+            .iter()
+            .all(|(_, look)| *look == way()),
+        "the path's own cells wear the line a way wears: {:?}",
+        painted(&rows[1], 40)
+    );
+
+    let resolved = std::fs::canonicalize(tree.path().join("notes.html")).expect("the file");
+    let destination = format!("file://{}", resolved.display());
+    let (_, links) = laid(&rows[1], Rect::new(0, 0, 40, 1));
+    assert_eq!(
+        links.at(0, 11),
+        Some(destination.as_str()),
+        "the path's first cell opens the file the judgement resolved it to"
+    );
+    assert_eq!(
+        links.at(0, 20),
+        Some(destination.as_str()),
+        "and so does its last"
+    );
+    assert_eq!(
+        links.at(0, 21),
+        None,
+        "and no cell past the path is a way to the file"
+    );
+    assert_eq!(
+        links.at(0, 10),
+        None,
+        "nor the quote the path was written after"
+    );
+}
+
+#[test]
+fn a_path_wider_than_the_body_is_one_destination_on_each_row() {
+    let tree = tempfile::tempdir().expect("a temp workspace");
+    let long = "a-note-on-the-ways-a-row-is-drawn-and-the-file-it-names.html";
+    std::fs::write(tree.path().join(long), "body").expect("the file");
+    let entry = named(1, "open", &format!(r#"{{"path":"{long}"}}"#));
+
+    let rows = layout_on(&entry, 30, &Surface::none(), Some(&ground(tree.path())));
+
+    assert!(
+        rows.len() > 2,
+        "a path wider than the body is broken over two rows: {:?}",
+        rows.iter().map(Row::glyphs).collect::<Vec<String>>()
+    );
+    let resolved = std::fs::canonicalize(tree.path().join(long)).expect("the file");
+    let destination = format!("file://{}", resolved.display());
+    let area = Rect::new(0, 0, 30, u16::try_from(rows.len()).unwrap());
+    let mut buffer = Buffer::empty(area);
+    let mut links = Links::none();
+    for (at, row) in rows[1..].iter().enumerate() {
+        row.paint(
+            Rect {
+                y: u16::try_from(at).unwrap(),
+                height: 1,
+                ..area
+            },
+            &mut buffer,
+            &Palette::TRUECOLOR,
+            &mut links,
+        );
+    }
+    let destinations: Vec<&str> = (0..u16::try_from(rows.len() - 1).unwrap())
+        .filter_map(|y| links.at(y, 4))
+        .collect();
+    assert!(
+        destinations.len() > 1,
+        "the path is drawn over more than one row: {destinations:?}"
+    );
+    assert!(
+        destinations
+            .iter()
+            .all(|said| *said == destination.as_str()),
+        "and each row it was broken over carries the whole destination, never half of it: \
+         {destinations:?}"
+    );
+}
+
+#[test]
+fn a_path_a_call_names_that_the_run_would_have_refused_is_drawn_as_it_is_today() {
+    let tree = tempfile::tempdir().expect("a temp workspace");
+    let entry = named(1, "open", r#"{"path":"outside.html"}"#);
+
+    let judged = layout_on(&entry, 40, &Surface::none(), Some(&ground(tree.path())));
+    let plain = layout(&entry, 40);
+
+    assert_eq!(
+        painted(&judged[1], 40),
+        painted(&plain[1], 40),
+        "a file the run would have refused is drawn exactly as the frame draws it with no \
+         judgement at all: the words and no line under them"
+    );
+    let (_, links) = laid(&judged[1], Rect::new(0, 0, 40, 1));
+    assert!(
+        links.is_empty(),
+        "and no cell of the row is a way to anywhere"
+    );
 }
 
 fn painted(row: &Row, cols: u16) -> Vec<(char, Look)> {
