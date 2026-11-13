@@ -211,6 +211,13 @@ pub fn description(boundary: &Boundary) -> String {
     lines.join("\n")
 }
 
+/// The path a call's arguments name, as it was written: a judgement resolves the path and keeps
+/// nothing of the words it came from, and a frame that draws those words finds them here.
+pub fn named_path(arguments: &str) -> Option<String> {
+    let named: Value = serde_json::from_str(arguments.trim()).ok()?;
+    written(&named, "path").map(str::to_owned)
+}
+
 fn written<'a>(arguments: &'a Value, key: &str) -> Option<&'a str> {
     arguments
         .get(key)?

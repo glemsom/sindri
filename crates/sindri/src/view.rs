@@ -8,6 +8,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use sindri_core::config::{Config, Touched};
 use sindri_core::conversation::Conversation;
+use sindri_core::open::Ground;
 use sindri_core::provider::Deltas;
 use sindri_core::provider::served::Listing;
 use sindri_core::records::{Entry, SessionDocument};
@@ -104,6 +105,7 @@ pub struct View {
     mark: Option<Mark>,
     marked: Span,
     workspace: Option<PathBuf>,
+    ground: Option<Ground>,
     picker: Picker,
     models: Models,
     loaded: Loaded,
@@ -195,6 +197,12 @@ impl View {
 
     pub fn set_workspace(&mut self, workspace: PathBuf) {
         self.workspace = Some(workspace);
+    }
+
+    /// The place a run judges a target from: a launch opens with the first prompt, so a frame drawn
+    /// before one names no ground and draws every path as the words it was written as.
+    pub fn set_ground(&mut self, ground: Option<Ground>) {
+        self.ground = ground;
     }
 
     pub fn picker(&self) -> &Picker {
@@ -652,6 +660,7 @@ impl View {
         // How many rows a picture takes is part of the rows an entry was laid out as, so the
         // surface reaches the cache before a window is measured.
         self.rows.retune(self.surface());
+        self.rows.stand(self.ground.as_ref());
         // Laid into the rows it heads rather than painted over them: the answer's first row is
         // wrapped around it, and the prose it introduces is never cut by the mark.
         let head = self.pulse.as_ref().map(Pulse::head);

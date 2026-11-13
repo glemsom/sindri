@@ -48,6 +48,19 @@ answer: a terminal nobody can vouch for is handed the same frame and no bytes bu
 band under it takes no key, so a frame with a card over it gives up the ways it laid: no cell a reader
 cannot reach is a way to somewhere.
 
+**A link is its words.** The renderer says a link as the words it was written as and nothing after
+them: a destination is not a glyph, so the URL that used to follow a link's words is gone, and a
+destination the words already spell is said once because the words are the only place it is said.
+The words wear the underline — the mark of a run of cells that is a way to somewhere, and never the
+weight a strong word is given.
+
+**A path a call names is a way to the file the run judged openable.** The `open` tool's call row
+names its target in the words of its arguments, so those cells are laid as a way to a `file:` URL of
+the path the judgement resolved, and the frame asks the run's own judgement for it: `Ground::judge`
+is the one rule that says whether a reader may be handed a target, and a frame that drew its own
+would be a second opinion nobody asked for. A frame laid with no ground — the door, a session read
+back from a record — and a target the judgement refuses are drawn exactly as they were.
+
 ## What a reader is held to
 
 - A row that names no destination is drawn exactly as it was, and a destination costs the frame no
@@ -59,3 +72,7 @@ cannot reach is a way to somewhere.
 - A frame with a screen open over it is no way to anywhere.
 - A destination is written as the terminal's hyperlink and never as glyphs, so a copy of the frame
   takes the words and no address.
+- A link is its words, marked with the line a way wears; a destination its words already spell is not
+  said again beside them, and a link that wraps carries the whole destination on each row it wrote.
+- A path a call names is a way to the file only where the run judged it openable, and a row the
+  judgement refuses is drawn as it was.

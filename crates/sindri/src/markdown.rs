@@ -9,6 +9,7 @@ use syntect::parsing::{ParseState, Scope, ScopeStack, SyntaxSet};
 
 use crate::graphics::Ceiling;
 use crate::ink::{Face, Faces, Ink, Look};
+use crate::link::Way;
 use crate::mermaid::{self, Fence};
 use crate::palette::Band;
 use crate::pen;
@@ -18,6 +19,10 @@ use crate::rows::{Row, split_at};
 /// The parser's options: GFM tables on, because CommonMark leaves tables out. No other extension
 /// is enabled, so a footnote, a strikethrough and a task list parse as plain prose.
 const OPTIONS: Options = Options::ENABLE_TABLES;
+
+/// The line under a way's words, in the ink a fact beside the prose is read in: an ink of its own
+/// and never a face, so the words keep the colour the block gave them.
+const UNDERLINE: Ink = Ink::Dim;
 
 pub fn rows(text: &str, cols: u16) -> Vec<Row> {
     rows_under(text, cols, 0)
@@ -41,6 +46,46 @@ pub fn rows_on(text: &str, cols: u16, reserve: u16, surface: &Surface) -> Vec<Ro
         room.event(event, &text[span]);
     }
     room.finish()
+}
+
+/// A tool row's body laid as the rows it is drawn as, with the path it names a way to the file the
+/// run judged: a path wider than the row is broken over two rows, each carrying the whole
+/// destination. Nothing is laid when the words do not name the path.
+pub fn body(text: &str, cols: u16, way: &Way) -> Option<Vec<Row>> {
+    if way.written().is_empty() {
+        return None;
+    }
+    let mut room = Room::new(cols.max(1), &Surface::none());
+    let plain = Look::plain(Ink::Plain);
+    let marked = plain.underlined(UNDERLINE);
+    let mut named = false;
+    for line in text.split('\n') {
+        let mut rest = line;
+        while let Some(at) = as_a_value(rest, way.written()) {
+            let (before, from) = rest.split_at(at);
+            let (named_words, after) = from.split_at(way.written().len());
+            room.prose(before, plain);
+            room.destination = Some(way.destination().to_owned());
+            room.prose(named_words, marked);
+            room.destination = None;
+            rest = after;
+            named = true;
+        }
+        room.prose(rest, plain);
+        room.flush();
+    }
+    named.then_some(room.rows)
+}
+
+/// Where `text` writes `path` as the value of the `path` a call names rather than as a word that
+/// spells it: a call writes its arguments as JSON, and the cells a way is drawn on are the ones the
+/// run read the path from, never a value that happens to say the same.
+fn as_a_value(text: &str, path: &str) -> Option<usize> {
+    let key = text.find("\"path\"")?;
+    let after = &text[key..];
+    let at = key + after.find(':')? + after[after.find(':')?..].find(path)?;
+    let quoted = text[..at].ends_with('"') && text[at + path.len()..].starts_with('"');
+    quoted.then_some(at)
 }
 
 fn syntaxes() -> &'static SyntaxSet {
@@ -103,6 +148,14 @@ impl Rule {
     }
 }
 
+/// One run of the row in hand that is a way to somewhere: the column it begins at past the words'
+/// own edge, the columns it covers, and where it goes.
+struct Laid {
+    left: usize,
+    width: usize,
+    destination: String,
+}
+
 /// The room a block is being laid out in, and the rows it has been laid out as so far.
 /// The gutters a construct adds are subtracted from the room before a word is placed and
 /// never after, so no row this writes runs over the width and gets clipped by the paint.
@@ -131,9 +184,11 @@ struct Room {
     /// as the widest cell the table holds.
     table: Option<Table>,
     rule: Option<Rule>,
-    /// The link being said: its destination and the words said over it, so the URL is printed
-    /// only when it says something the words did not.
-    link: Option<(String, String)>,
+    /// The destination the words in hand are a way to, while a link is being said.
+    destination: Option<String>,
+    /// The runs of the row in hand that are ways to somewhere, measured from the words' own left
+    /// edge: laid as the words land, so a link that wraps is a run on each row it wrote.
+    laid: Vec<Laid>,
     /// The columns the first row gives up to a marker laid at the frame's left edge, and
     /// nothing once that row has been written.
     reserve: usize,
@@ -159,7 +214,8 @@ impl Room {
             lists: Vec::new(),
             first: true,
             blank: true,
-            link: None,
+            destination: None,
+            laid: Vec::new(),
             code: None,
             mermaid: None,
             table: None,
@@ -253,19 +309,19 @@ impl Room {
                 }
                 None => {
                     let worn = self.block.wearing(self.worn());
+                    let linked = match self.destination.is_some() {
+                        true => worn.underlined(UNDERLINE),
+                        false => worn,
+                    };
+                    let way = self.destination.clone();
                     match &mut self.table {
                         // A cell is measured only once the whole table has been read.
-                        Some(table) => table.text(&text, worn),
+                        Some(table) => table.text(&text, linked, way.as_deref()),
                         // A picture's words are kept aside for the row it is spoken of on:
                         // they are the block's, not the paragraph's.
                         None => match &mut self.image {
                             Some((_, alt)) => alt.push_str(&text),
-                            None => {
-                                if let Some((_, said)) = &mut self.link {
-                                    said.push_str(&text);
-                                }
-                                self.prose(&text, worn);
-                            }
+                            None => self.prose(&text, linked),
                         },
                     }
                 }
@@ -274,9 +330,13 @@ impl Room {
             // `muted` rather than over no colour, because `mark` is reverse over no colour
             // and the two would otherwise be one look.
             Event::Code(text) => {
-                let reversed = Look::new(Ink::Muted, Face::Reversed);
+                let reversed = match self.destination.is_some() {
+                    true => Look::new(Ink::Muted, Face::Reversed).underlined(UNDERLINE),
+                    false => Look::new(Ink::Muted, Face::Reversed),
+                };
+                let way = self.destination.clone();
                 match &mut self.table {
-                    Some(table) => table.text(&text, reversed),
+                    Some(table) => table.text(&text, reversed, way.as_deref()),
                     None => {
                         self.place(&text, reversed, self.spaced);
                         self.spaced = false;
@@ -288,15 +348,20 @@ impl Room {
             }
             Event::End(TagEnd::Image) => self.close_image(),
             Event::Start(Tag::Link { dest_url, .. }) => {
-                self.link = Some((String::from(&*dest_url), String::new()));
+                self.destination = Some(String::from(&*dest_url));
             }
-            Event::End(TagEnd::Link) => self.close_link(),
+            Event::End(TagEnd::Link) => self.destination = None,
             // A soft break is the line the source was wrapped on, not one the writer drew:
             // the paragraph is reflowed to the room.
             Event::SoftBreak => {
                 let worn = self.block.wearing(self.worn());
+                let linked = match self.destination.is_some() {
+                    true => worn.underlined(UNDERLINE),
+                    false => worn,
+                };
+                let way = self.destination.clone();
                 match &mut self.table {
-                    Some(table) => table.text(" ", worn),
+                    Some(table) => table.text(" ", linked, way.as_deref()),
                     None => match &mut self.image {
                         Some((_, alt)) => alt.push(' '),
                         None => self.spaced = true,
@@ -372,10 +437,9 @@ impl Room {
             let gap = usize::from(space && self.used > 0);
             if self.used + gap + usize::from(pen::cells(rest)) <= room {
                 if gap == 1 {
-                    let at = self.block;
-                    self.extend(" ", at);
+                    self.between();
                 }
-                self.extend(rest, look);
+                self.linked(rest, look);
                 return;
             }
             if self.used > 0 {
@@ -384,13 +448,64 @@ impl Room {
                 continue;
             }
             let (head, tail) = split_at(rest, room);
-            self.extend(&head, look);
+            self.linked(&head, look);
             self.flush();
             rest = tail;
             space = false;
             if rest.is_empty() {
                 return;
             }
+        }
+    }
+
+    /// The space between two words: the block's own, and between two words of one way the block's
+    /// with the line a way wears, so a link's line and the cells a reader opens are one.
+    fn between(&mut self) {
+        match self.reaches() {
+            true => {
+                let at = self.block.underlined(UNDERLINE);
+                self.extend(" ", at);
+                if let Some(run) = self.laid.last_mut() {
+                    run.width = run.width.saturating_add(1);
+                }
+            }
+            false => {
+                let at = self.block;
+                self.extend(" ", at);
+            }
+        }
+    }
+
+    /// Whether the way being said already covers the column the next word begins at, which is
+    /// what makes the space before it the way's own rather than the block's.
+    fn reaches(&self) -> bool {
+        let Some(destination) = &self.destination else {
+            return false;
+        };
+        self.laid.last().is_some_and(|run| {
+            run.destination == *destination && run.left.saturating_add(run.width) == self.used
+        })
+    }
+
+    /// Extends the row in hand with `text`, and — while a way is being said — the cells it lands
+    /// on are that way's: a run is kept per row, so a link wider than the band is one run on each
+    /// row it wrote and each carries the whole destination.
+    fn linked(&mut self, text: &str, look: Look) {
+        let left = self.used;
+        let width = usize::from(pen::cells(text));
+        self.extend(text, look);
+        let Some(destination) = &self.destination else {
+            return;
+        };
+        match self.laid.last_mut() {
+            Some(run) if run.destination == *destination && run.left + run.width == left => {
+                run.width = run.width.saturating_add(width);
+            }
+            _ => self.laid.push(Laid {
+                left,
+                width,
+                destination: destination.clone(),
+            }),
         }
     }
 
@@ -423,9 +538,8 @@ impl Room {
             return;
         };
 
-        let head = table.lines(&widths);
-        for line in &head {
-            let row = joined(line, &widths);
+        for line in table.lines(&widths) {
+            let row = joined(&line, &widths);
             self.guttered(row);
         }
         let rule = header_rule(&widths);
@@ -584,17 +698,6 @@ impl Room {
         self.first = false;
     }
 
-    /// A destination that says something else follows the link's words; a link written over
-    /// its own URL says it once.
-    fn close_link(&mut self) {
-        let Some((dest, said)) = self.link.take() else {
-            return;
-        };
-        if said.trim() != dest {
-            self.place(&dest, Look::plain(Ink::Dim), true);
-        }
-    }
-
     /// A picture closes: the block it is, spoken of as its words on the first of its rows and
     /// measured into the cells it takes under them. The words are written even where the terminal
     /// places the picture over them, because they are what a copy of the block takes.
@@ -649,7 +752,15 @@ impl Room {
         if let Some(rule) = &mut self.rule {
             rule.wrote(self.used);
         }
-        let row = Row::of(self.spans());
+        let gutter = self.columns();
+        let mut row = Row::of(self.spans());
+        for run in std::mem::take(&mut self.laid) {
+            row = row.linking(
+                u16::try_from(gutter.saturating_add(run.left)).unwrap_or(u16::MAX),
+                u16::try_from(run.width).unwrap_or(u16::MAX),
+                run.destination,
+            );
+        }
         self.line.clear();
         // A fence is one block of cells, so the tag and every line under it paint the well.
         self.push(match self.code.is_some() {
@@ -666,6 +777,15 @@ impl Room {
         let mut spans = self.gutter();
         spans.extend(self.line.iter().cloned());
         spans
+    }
+
+    /// The columns the words of the row in hand are set past: the gutter the block gives them up
+    /// to, which a way it names is measured from.
+    fn columns(&self) -> usize {
+        self.gutter()
+            .iter()
+            .map(|(text, _)| usize::from(pen::cells(text)))
+            .sum()
     }
 
     /// The columns every row of the block in hand gives up before its words: the bars it is
@@ -691,10 +811,9 @@ impl Room {
             self.push(row);
             return;
         }
-        let mut spans = self.gutter();
+        let gutter = Row::of(self.gutter());
         self.first = false;
-        spans.extend(row.spans().iter().cloned());
-        self.push(Row::of(spans));
+        self.push(gutter.followed_by(&row));
     }
 
     fn flush_if_written(&mut self) {
@@ -871,15 +990,24 @@ struct Table {
     head: Vec<Cell>,
     rows: Vec<Vec<Cell>>,
     row: Vec<Cell>,
-    cell: Vec<(String, Look)>,
+    cell: Cell,
     heading: bool,
 }
 
-type Cell = Vec<(String, Look)>;
+type Cell = Vec<Said>;
+
+/// One run of a cell's words, and where it goes when it is a way somewhere: a cell is measured
+/// whole before a row of it is drawn, so what it names travels with the words it was written as.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Said {
+    text: String,
+    look: Look,
+    destination: Option<String>,
+}
 
 impl Table {
     /// A cell's words, worn bold while the header is being read.
-    fn text(&mut self, text: &str, look: Look) {
+    fn text(&mut self, text: &str, look: Look, destination: Option<&str>) {
         if text.is_empty() {
             return;
         }
@@ -887,7 +1015,17 @@ impl Table {
             true => look.wearing(Faces::BOLD),
             false => look,
         };
-        self.cell.push((String::from(text), look));
+        let destination = destination.map(str::to_owned);
+        match self.cell.last_mut() {
+            Some(said) if said.look == look && said.destination == destination => {
+                said.text.push_str(text);
+            }
+            _ => self.cell.push(Said {
+                text: String::from(text),
+                look,
+                destination,
+            }),
+        }
     }
 
     fn close_cell(&mut self) {
@@ -923,7 +1061,7 @@ impl Table {
             .unwrap_or(0)
     }
 
-    fn lines(&self, widths: &[usize]) -> Vec<Vec<Cell>> {
+    fn lines(&self, widths: &[usize]) -> Vec<Vec<Row>> {
         lines_of(&self.head, widths)
     }
 
@@ -967,22 +1105,21 @@ fn fit(naturals: &[usize], budget: usize) -> Option<Vec<usize>> {
     Some(widths)
 }
 
-fn lines_of(cells: &[Cell], widths: &[usize]) -> Vec<Vec<Cell>> {
-    let wrapped: Vec<Vec<Cell>> = widths
+fn lines_of(cells: &[Cell], widths: &[usize]) -> Vec<Vec<Row>> {
+    let wrapped: Vec<Vec<Row>> = widths
         .iter()
         .enumerate()
         .map(|(at, width)| {
             // A picture's height is not a column's width, so this room has no surface for
             // one: a cell is measured for the words that fit it.
             let mut room = Room::new(u16::try_from(*width).unwrap_or(u16::MAX), &Surface::none());
-            for (text, look) in cells.get(at).into_iter().flatten() {
-                room.prose(text, *look);
+            for said in cells.get(at).into_iter().flatten() {
+                room.destination = said.destination.clone();
+                room.prose(&said.text, said.look);
             }
+            room.destination = None;
             room.flush_if_written();
             room.rows
-                .into_iter()
-                .map(|row| row.spans().to_vec())
-                .collect::<Vec<Cell>>()
         })
         .collect();
     let tall = wrapped.iter().map(Vec::len).max().unwrap_or(0);
@@ -990,36 +1127,36 @@ fn lines_of(cells: &[Cell], widths: &[usize]) -> Vec<Vec<Cell>> {
         .map(|line| {
             wrapped
                 .iter()
-                .map(|cell| cell.get(line).cloned().unwrap_or_default())
+                .map(|cell| cell.get(line).cloned().unwrap_or_else(Row::blank))
                 .collect()
         })
         .collect()
 }
 
-fn joined(line: &[Cell], widths: &[usize]) -> Row {
-    let mut spans: Vec<(String, Look)> = Vec::new();
+fn joined(line: &[Row], widths: &[usize]) -> Row {
+    let mut row = Row::blank();
     for (at, width) in widths.iter().enumerate() {
         if at > 0 {
-            spans.extend(
-                Row::of([(String::from(" │ "), Look::plain(Ink::Dim))])
-                    .spans()
-                    .to_vec(),
-            );
+            row = row.followed_by(&Row::of([(String::from(" │ "), Look::plain(Ink::Dim))]));
         }
-        let cell: &[(String, Look)] = line.get(at).map(Vec::as_slice).unwrap_or_default();
-        spans.extend(cell.iter().cloned());
+        let cell = line.get(at);
+        let wrote = cell.map_or(0, Row::width);
+        if let Some(cell) = cell {
+            row = row.followed_by(cell);
+        }
         // The last column keeps no blank past its words: padding it would draw cells that
         // say nothing, and a row is a run of glyphs and not a box.
         let last = at + 1 == widths.len();
         let pad = match last {
             true => 0,
-            false => width.saturating_sub(measured(cell)),
+            false => width.saturating_sub(usize::from(wrote)),
         };
         if pad > 0 {
-            spans.push((pen::blank(pen::columns(pad)), Look::plain(Ink::Plain)));
+            let blank = pen::blank(pen::columns(pad));
+            row = row.followed_by(&Row::of([(blank, Look::plain(Ink::Plain))]));
         }
     }
-    Row::of(spans)
+    row
 }
 
 /// The rule under a header: the header's own row with every word spent as `─` and every bar
@@ -1035,8 +1172,8 @@ fn header_rule(widths: &[usize]) -> Row {
     Row::of([(text, Look::plain(Ink::Dim))])
 }
 
-fn measured(cell: &[(String, Look)]) -> usize {
+fn measured(cell: &[Said]) -> usize {
     cell.iter()
-        .map(|(text, _)| usize::from(pen::cells(text)))
+        .map(|said| usize::from(pen::cells(&said.text)))
         .sum()
 }

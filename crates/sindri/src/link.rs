@@ -1,6 +1,8 @@
 //! The terminal's own hyperlink: a run of cells can be a way to somewhere, and the way is written
 //! around that run by the backend that draws the frame, because no cell carries a destination.
 
+use std::path::Path;
+
 /// The oldest VTE that places a hyperlink: 0.50, said as a terminal says it.
 const OLDEST_VTE: u32 = 5000;
 
@@ -65,6 +67,53 @@ impl Links {
 
     pub fn is_empty(&self) -> bool {
         self.laid.is_empty()
+    }
+}
+
+/// The destination a judged file is a way to: the terminal's own `file` URL, spelled as a URI so
+/// a path with a space in it is one word to the terminal that opens it.
+fn destination(path: &Path) -> String {
+    let mut url = String::from("file://");
+    for glyph in path.display().to_string().chars() {
+        match glyph {
+            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '.' | '_' | '~' | '/' | ':' | '@' => {
+                url.push(glyph);
+            }
+            other => {
+                for byte in other.to_string().bytes() {
+                    url.push_str(&format!("%{byte:02X}"));
+                }
+            }
+        }
+    }
+    url
+}
+
+/// The words of a tool row that are a way to a file, and where they go: the path as the call wrote
+/// it, which is how the row's cells are found, and the destination the run's judgement made of it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Way {
+    written: String,
+    destination: String,
+}
+
+impl Way {
+    /// The path a call wrote and the file the run judged those words to be: the destination is made
+    /// from the file, so a way is never two strings in an order somebody has to remember.
+    pub fn of(written: impl Into<String>, path: &Path) -> Way {
+        Way {
+            written: written.into(),
+            destination: destination(path),
+        }
+    }
+
+    /// The path as the words it was written with.
+    pub fn written(&self) -> &str {
+        &self.written
+    }
+
+    pub fn destination(&self) -> &str {
+        &self.destination
     }
 }
 
@@ -160,6 +209,24 @@ mod tests {
             "the columns between two runs name no destination"
         );
         assert_eq!(links.at(0, 7), Some("two"));
+    }
+
+    #[test]
+    fn a_file_is_a_way_to_the_path_it_resolved_to_spelled_as_one_uri_word() {
+        assert_eq!(
+            destination(Path::new("/workspace/notes.html")),
+            "file:///workspace/notes.html"
+        );
+        assert_eq!(
+            destination(Path::new("/workspace/my notes.html")),
+            "file:///workspace/my%20notes.html",
+            "a space in a path is escaped, or the terminal reads two words where there is one"
+        );
+        assert_eq!(
+            destination(Path::new("/workspace/100% done.md")),
+            "file:///workspace/100%25%20done.md",
+            "and so is the character an escape begins with"
+        );
     }
 
     #[test]

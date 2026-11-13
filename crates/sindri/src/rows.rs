@@ -4,11 +4,13 @@
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use sindri_core::open::{self, Ground, Opening};
 use sindri_core::records::Entry;
 use sindri_core::run::Exit;
+use sindri_core::tools::OPEN;
 
 use crate::ink::{Ink, Look};
-use crate::link::{Link, Links};
+use crate::link::{Link, Links, Way};
 use crate::markdown;
 use crate::palette::{Band, Palette};
 use crate::pen::{self, Clip};
@@ -133,6 +135,22 @@ impl Row {
         }
     }
 
+    /// This row with `other`'s words set after its own, and the ways `other` names moved past the
+    /// columns this row covers: two cells of a table are one row, and each keeps its own ways.
+    pub(crate) fn followed_by(self, other: &Row) -> Row {
+        let shifts = self.width();
+        let mut spans = self.spans;
+        spans.extend(other.spans.iter().cloned());
+        let mut links = self.links;
+        links.extend(other.links.iter().map(|link| link.shifted(shifts)));
+        Row {
+            spans,
+            links,
+            picture: self.picture,
+            band: self.band,
+        }
+    }
+
     pub fn glyphs(&self) -> String {
         self.spans.iter().map(|(text, _)| text.as_str()).collect()
     }
@@ -147,16 +165,19 @@ impl Row {
 }
 
 pub fn layout(entry: &Entry, cols: u16) -> Vec<Row> {
-    layout_on(entry, cols, &Surface::none())
+    layout_on(entry, cols, &Surface::none(), None)
 }
 
-pub fn layout_on(entry: &Entry, cols: u16, surface: &Surface) -> Vec<Row> {
+/// The same entry on a `surface`, with the `ground` a run judges a target from: a path a call names
+/// is a way only where that judgement holds it openable, and a frame handed none lays every path as
+/// the words it was written as.
+pub fn layout_on(entry: &Entry, cols: u16, surface: &Surface, ground: Option<&Ground>) -> Vec<Row> {
     let cols = cols.max(1);
     match entry {
         Entry::Turn { turn } => vec![divider(&format!("turn {turn} "), cols)],
         Entry::Call {
             name, arguments, ..
-        } => opening(&name.to_string(), &arguments.to_string(), cols),
+        } => opening(&name.to_string(), &arguments.to_string(), cols, ground),
         Entry::Result {
             name,
             text,
@@ -251,10 +272,24 @@ fn margin(gutter: &str, cols: u16) -> (&str, u16) {
     }
 }
 
-fn opening(name: &str, arguments: &str, cols: u16) -> Vec<Row> {
+fn opening(name: &str, arguments: &str, cols: u16, ground: Option<&Ground>) -> Vec<Row> {
     let mut rows = vec![fitted(vec![(format!("{PENDING} {name}"), Ink::Dim)], cols)];
-    rows.extend(body(arguments, cols));
+    rows.extend(body(arguments, cols, way(name, arguments, ground)));
     rows
+}
+
+/// The way a call names, when the run judged it one: the path as its words were written, which is
+/// how the row's cells are found, and the file the judgement resolved them to. A call that names
+/// nothing the run would open is no way at all.
+fn way(name: &str, arguments: &str, ground: Option<&Ground>) -> Option<Way> {
+    if name != OPEN {
+        return None;
+    }
+    let written = open::named_path(arguments)?;
+    match ground?.judge(arguments).ok()? {
+        Opening::File(path) => Some(Way::of(written, &path)),
+        Opening::Url(_) => None,
+    }
 }
 
 /// A result with no verdict is a line a build wrote before the verdict was a fact: the
@@ -280,7 +315,7 @@ fn settled(
         None => fitted(vec![(named, Ink::Dim)], cols),
     };
     let mut rows = vec![header];
-    rows.extend(body(text, cols));
+    rows.extend(body(text, cols, None));
     rows
 }
 
@@ -318,15 +353,25 @@ fn clip(text: &str, room: u16) -> String {
     split_at(text, usize::from(room.max(1))).0
 }
 
-fn body(text: &str, cols: u16) -> Vec<Row> {
+/// The words of a tool's arguments or its result, set in the gutter a body is set from. A body
+/// that names a way to a file is laid with that path's own cells a way there, and every other
+/// body is laid as the wrapping lays it.
+fn body(text: &str, cols: u16, way: Option<Way>) -> Vec<Row> {
     if text.is_empty() {
         return Vec::new();
     }
     let (gutter, room) = margin(INDENT, cols);
-    wrap(text, room)
-        .into_iter()
-        .map(|line| Row::of([(gutter.to_owned(), Ink::Plain), (line, Ink::Plain)]))
-        .collect()
+    let named = way.and_then(|way| markdown::body(text, room, &way));
+    match named {
+        Some(rows) => rows
+            .into_iter()
+            .map(|row| row.indented(gutter, Ink::Plain))
+            .collect(),
+        None => wrap(text, room)
+            .into_iter()
+            .map(|line| Row::of([(gutter.to_owned(), Ink::Plain), (line, Ink::Plain)]))
+            .collect(),
+    }
 }
 
 /// The row between one turn and the next: the words naming the turn, and the pen's fill out to the
@@ -423,6 +468,7 @@ pub struct Rows {
     /// What a picture in an answer is measured against — the cell, and whether this terminal
     /// places one — because how many rows a picture takes is part of the rows it was laid out as.
     surface: Surface,
+    ground: Option<Ground>,
 }
 
 #[derive(Clone, Debug)]
@@ -555,9 +601,17 @@ impl Rows {
             return;
         }
         self.cols = cols;
-        for held in &mut self.held {
-            held.rows = None;
+        self.unlay();
+    }
+
+    /// Where the run stands when it judges a target: a ground that arrives or moves drops every
+    /// row, because whether a path a call names is a way is a fact of that row.
+    pub fn stand(&mut self, ground: Option<&Ground>) {
+        if ground == self.ground.as_ref() {
+            return;
         }
+        self.ground = ground.cloned();
+        self.unlay();
     }
 
     pub fn retune(&mut self, surface: Surface) {
@@ -565,6 +619,12 @@ impl Rows {
             return;
         }
         self.surface = surface;
+        self.unlay();
+    }
+
+    /// Drops every row: a fact a row was laid out against has moved, and a row is only a drawing
+    /// of the facts that made it.
+    fn unlay(&mut self) {
         for held in &mut self.held {
             held.rows = None;
         }
@@ -584,7 +644,7 @@ impl Rows {
         if held.rows.is_none()
             && let Some(fact) = fact
         {
-            let rows = layout_on(fact, cols, &self.surface);
+            let rows = layout_on(fact, cols, &self.surface, self.ground.as_ref());
             self.lays += 1;
             self.held[at].rows = Some(rows);
         }

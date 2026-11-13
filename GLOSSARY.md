@@ -104,6 +104,12 @@ _Avoid_: Allowed paths, whitelist, mounts
 Per-session scratch mapped to `TMPDIR`, alive as long as the session, unseen by any other run.
 _Avoid_: Tmpdir, scratch dir, work dir
 
+**Ground**:
+Where a run stands when it judges a target: the writable set, the session temp and the directory a
+relative path is read from, held resolved and sorted. The frame asks the same ground before it draws
+a path a call names as a way to the file, so a reader is never handed a target the run would refuse.
+_Avoid_: Context, environment, base path, root
+
 ## Words from the wire
 
 **Wire**:
@@ -165,7 +171,7 @@ _Avoid_: Style, emphasis, attribute
 
 **Underline**:
 The line a look draws under the cells it is written in, in an ink of its own and never a face: a link
-will wear one, and a cell that carries one still reads back as its ink and its faces.
+wears one, and a cell that carries one still reads back as its ink and its faces.
 _Avoid_: Rule (that one fills a row), decoration, border
 
 **Link**:

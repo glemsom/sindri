@@ -472,6 +472,8 @@ fn send(
         }
     };
     view.settle();
+    // The ground a path a call names is drawn against is the one the run it starts will judge by.
+    view.set_ground(launching.ground());
     view.set_state(State::Running);
     *running = Some(Running::start(
         launching,

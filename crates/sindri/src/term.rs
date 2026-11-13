@@ -437,6 +437,12 @@ mod tests {
     use sindri::palette::Palette;
     use sindri::pen::{self, Clip};
 
+    use sindri_core::config::Config;
+    use sindri_core::open::Ground;
+    use sindri_core::policy::{Boundary, Enforcement};
+    use sindri_core::records::Entry;
+    use sindri_core::redact::SecretSet;
+
     use crate::term::pty::Pty;
 
     use super::*;
@@ -484,6 +490,13 @@ mod tests {
                 &Palette::TRUECOLOR,
             );
         }
+        handed(buffer, links, places)
+    }
+
+    /// The bytes a terminal at the far end of a pseudo-terminal is handed for a frame and the ways
+    /// it names, told whether that terminal places a hyperlink.
+    fn handed(buffer: Buffer, links: Links, places: bool) -> String {
+        let area = *buffer.area();
         let mut pty = Pty::open();
         let mut backend = Backend::new(
             pty.slave
@@ -498,6 +511,19 @@ mod tests {
         backend.flush().expect("a written row");
         drop(backend);
         pty.drawn()
+    }
+
+    /// The ground a run judges a target from in this test: the tree the product is built in, whose
+    /// `GLOSSARY.md` is a file a call can name and be judged against.
+    fn ground() -> Ground {
+        let workspace = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .nth(2)
+            .expect("the tree the product is built in");
+        let boundary =
+            Boundary::from_config(&Config::default(), workspace, Enforcement::Bubblewrap)
+                .expect("the boundary holds");
+        Ground::new(&boundary, workspace, workspace).expect("the ground resolves")
     }
 
     /// The ways `links` name, laid at frame row 0: how a row hands the frame what it names.
@@ -536,6 +562,14 @@ mod tests {
             said.push(words);
         }
         said
+    }
+
+    /// What a terminal reads of a frame as words alone: the ways it opens and closes are not words.
+    fn words(drawn: &str) -> String {
+        spoken(drawn)
+            .into_iter()
+            .filter(|said| said != "closes" && !said.starts_with("opens "))
+            .collect()
     }
 
     /// One escape sequence and the bytes after it: an OSC runs to its `ST`, a CSI to the byte that
@@ -657,6 +691,58 @@ mod tests {
             launch.drawn(),
             canvas.drawn(),
             "the cursor the view hands the canvas is placed, and the frame beside it is the frame"
+        );
+    }
+
+    #[test]
+    fn a_terminal_that_places_no_hyperlink_reads_a_link_and_a_path_as_their_words() {
+        let area = Rect::new(0, 0, 60, 4);
+        let mut frame = Buffer::empty(area);
+        let mut links = Links::none();
+        let answer = sindri::markdown::rows("see [the gate](https://example.test/gate)", 60);
+        let call = sindri::rows::layout_on(
+            &Entry::Call {
+                turn: 1,
+                name: SecretSet::default().redact("open"),
+                arguments: SecretSet::default().redact(r#"{"path": "GLOSSARY.md"}"#),
+            },
+            60,
+            &sindri::picture::Surface::none(),
+            Some(&ground()),
+        );
+        for (y, row) in answer.iter().chain(call.iter()).enumerate() {
+            row.paint(
+                Rect {
+                    y: u16::try_from(y).unwrap(),
+                    height: 1,
+                    ..area
+                },
+                &mut frame,
+                &Palette::TRUECOLOR,
+                &mut links,
+            );
+        }
+
+        let places = handed(frame.clone(), links.clone(), true);
+        let silent = handed(frame, links, false);
+
+        assert_eq!(
+            words(&silent),
+            words(&places),
+            "a terminal that places no hyperlink reads every one of these rows as the words the \
+             frame drew, and a terminal that places one reads the same words"
+        );
+        assert!(
+            !silent.contains("\x1b]8;"),
+            "and it is handed no sequence at all: {silent:?}"
+        );
+        assert!(
+            places.contains("\x1b]8;;https://example.test/gate\x1b\\"),
+            "where the terminal that places one is handed the destination around the words"
+        );
+        assert!(
+            places.contains("\x1b]8;;file://"),
+            "and the path a call names is handed the file it was judged against"
         );
     }
 
