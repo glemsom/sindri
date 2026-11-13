@@ -277,3 +277,18 @@ fn a_key_after_a_paste_is_read_again() {
         "the paste ends where its sequence ends, and the next key is a key"
     );
 }
+
+#[test]
+fn a_terminal_that_reports_focus_is_heard_as_the_window_being_read_and_left() {
+    assert_eq!(
+        event(b"\x1b[I"),
+        Event::Focus(true),
+        "`CSI I` is the report a terminal sends when its window becomes the one being read, \
+         and it is no key: nothing a reader types arrives as it"
+    );
+    assert_eq!(
+        event(b"\x1b[O"),
+        Event::Focus(false),
+        "and `CSI O` is the report that nobody is looking"
+    );
+}

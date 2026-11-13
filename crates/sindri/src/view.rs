@@ -118,6 +118,16 @@ pub struct View {
     /// The destinations this frame names: what travels beside its cells, never in them, because
     /// no cell carries one.
     links: Links,
+    focus: Focus,
+}
+
+/// Whether the terminal reports this window as the one being read. A terminal that never reports
+/// is being read, so a frame drawn where no report ever arrives is the frame it has always been.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum Focus {
+    #[default]
+    Focused,
+    Away,
 }
 
 /// Whether a frame is drawn with Sindri's face over its rail.
@@ -570,6 +580,15 @@ impl View {
         self.composer.set_state(state);
     }
 
+    /// What the terminal's focus report says: the one surface that takes the keys lets its accent
+    /// edge go while nobody is looking, and takes it up again when the reader comes back.
+    pub fn set_focused(&mut self, focused: bool) {
+        self.focus = match focused {
+            true => Focus::Focused,
+            false => Focus::Away,
+        };
+    }
+
     /// The destinations this frame names, laid on the rows it drew.
     pub fn links(&self) -> &Links {
         &self.links
@@ -625,7 +644,7 @@ impl View {
         };
         // The band under a card takes no key, so the frame under it is no way to anywhere.
         self.links = Links::none();
-        let body = card::paint(area, name, leaves, buffer, &self.palette);
+        let body = card::paint(area, name, leaves, buffer, self.edge(), &self.palette);
         self.paint_screen(screen, body, buffer);
     }
 
@@ -794,8 +813,17 @@ impl View {
     /// the dim edge while a screen is open over it.
     fn composer_edge(&self) -> Look {
         match self.stack.modal() {
-            None => self.palette.accent_edge(),
+            None => self.edge(),
             Some(_) => self.palette.dim_edge(),
+        }
+    }
+
+    /// The look the one surface that takes the keys draws its edge row in: the accent while this
+    /// window is the one being read, and the dim edge while nobody is reading it.
+    fn edge(&self) -> Look {
+        match self.focus {
+            Focus::Focused => self.palette.accent_edge(),
+            Focus::Away => self.palette.dim_edge(),
         }
     }
 
@@ -1437,6 +1465,42 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// The look the composer's edge row is drawn in, in the frame the view paints now.
+    fn edge_row(view: &mut View, palette: &Palette) -> Look {
+        let area = screen(120, 40);
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+        let band = bands(area, view.composer().rows(), view.queue().rows()).composer;
+        look_at(&buffer, palette, band.x, band.y)
+    }
+
+    #[test]
+    fn the_accent_edge_recedes_while_the_window_is_unfocused_and_returns_when_it_is_focused() {
+        let palette = Palette::TRUECOLOR;
+        let mut view = View::boot();
+        view.set_palette(palette);
+        view.paste("the draft the composer band is drawn from");
+        let lit = edge_row(&mut view, &palette);
+
+        view.set_focused(false);
+        let away = edge_row(&mut view, &palette);
+
+        view.set_focused(true);
+        let back = edge_row(&mut view, &palette);
+
+        assert_eq!(
+            lit,
+            palette.accent_edge(),
+            "a window nobody has reported on is the one being read, so its edge is the accent"
+        );
+        assert_eq!(
+            away,
+            palette.dim_edge(),
+            "and the accent recedes while the terminal says nobody is looking"
+        );
+        assert_eq!(back, lit, "and returns when the reader comes back");
     }
 
     #[test]

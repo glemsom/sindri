@@ -7,6 +7,8 @@ use crate::composer::Key;
 pub enum Event {
     Key(Key),
     Paste(String),
+    /// Whether the terminal says this window is the one being read: a report and never a key.
+    Focus(bool),
 }
 
 /// What one look at the front of the bytes came to: an event, bytes consumed that answer
@@ -159,6 +161,10 @@ impl Decoder {
             // `Shift+Tab` is `CSI Z` on every terminal, and `CSI 1;2Z` under one that says which
             // modifier it held.
             (b'Z', _) => Step::Event(Event::Key(Key::BackTab)),
+            // `CSI I` and `CSI O`, the reports a terminal sends when its window becomes the one
+            // being read and when it stops: neither names a glyph, so neither is a key.
+            (b'I', _) => Step::Event(Event::Focus(true)),
+            (b'O', _) => Step::Event(Event::Focus(false)),
             (b'H', _) | (b'~', "1") | (b'~', "7") => Step::Event(Event::Key(Key::Home)),
             (b'F', _) | (b'~', "4") | (b'~', "8") => Step::Event(Event::Key(Key::End)),
             (b'~', "200") => {

@@ -25,9 +25,17 @@ use crate::osc;
 /// protocol's disambiguation so `Shift+Enter` is told from `Enter`, on the terminal's own stack.
 const TAKE_SCREEN: &[u8] = b"\x1b[?1049h\x1b[?25l\x1b[?2004h\x1b[>1u";
 
+/// `CSI ? 1004 h`: the terminal reports which of its windows is the one being read, which is the
+/// only way a frame knows its accent edge has nobody looking at it. Asked of a terminal that takes
+/// the window's sequences, and of no other.
+const ASK_FOCUS: &[u8] = b"\x1b[?1004h";
+
 /// Gives the screen back: the key protocol popped first, then bracketed paste off, then the
 /// cursor, so a shell gets the terminal it had.
 const GIVE_BACK_SCREEN: &[u8] = b"\x1b[<u\x1b[?2004l\x1b[?25h\x1b[?1049l";
+
+/// `CSI ? 1004 l`: the report is given up, or a shell is left sending one.
+const GIVE_UP_FOCUS: &[u8] = b"\x1b[?1004l";
 
 pub(crate) struct Terminal {
     pub(crate) keys: File,
@@ -52,7 +60,9 @@ impl Terminal {
 pub(crate) struct Screen;
 
 impl Screen {
-    pub(crate) fn take(terminal: &Terminal) -> io::Result<Screen> {
+    /// `window` is whether the terminal takes the sequences a window is written with: the screen is
+    /// taken either way, and a terminal that takes none is asked for no report and handed no mark.
+    pub(crate) fn take(terminal: &Terminal, window: bool) -> io::Result<Screen> {
         guard_panics();
         let saved = tcgetattr(&terminal.keys)?;
         let mut raw = saved.clone();
@@ -68,9 +78,14 @@ impl Screen {
             keys: terminal.keys.try_clone()?,
             screen: terminal.screen.try_clone()?,
             saved,
+            window,
         };
         *lock(&GIVE_BACK) = Some(restore);
-        if let Err(error) = tell(&terminal.screen, TAKE_SCREEN) {
+        let mut taking = TAKE_SCREEN.to_vec();
+        if window {
+            taking.extend_from_slice(ASK_FOCUS);
+        }
+        if let Err(error) = tell(&terminal.screen, &taking) {
             give_back();
             return Err(error);
         }
@@ -242,6 +257,7 @@ struct Restore {
     keys: File,
     screen: File,
     saved: Termios,
+    window: bool,
 }
 
 impl Restore {
@@ -249,7 +265,14 @@ impl Restore {
     /// that follows — a panic message included — is drawn on a screen about to be somebody else's,
     /// and then the state raw mode replaced is restored.
     fn put_back(self) {
-        let _ = tell(&self.screen, GIVE_BACK_SCREEN);
+        let mut giving = GIVE_BACK_SCREEN.to_vec();
+        if self.window {
+            giving.extend_from_slice(GIVE_UP_FOCUS);
+            // A mark outlives the process that set it, so the run it named is over whichever way
+            // this launch ends: a panic that unwinds past the guard still takes it away.
+            giving.extend(osc::progress(false));
+        }
+        let _ = tell(&self.screen, &giving);
         let _ = tcsetattr(&self.keys, OptionalActions::Now, &self.saved);
     }
 }
@@ -375,12 +398,12 @@ pub(crate) mod pty {
             }
         }
 
-        /// Every byte the terminal has been handed: what the first read waits for, and then
-        /// everything else it says, because one read of a pseudo-terminal is as much as had
-        /// arrived and a frame is several writes.
+        /// Every byte the terminal has been handed and nothing it says next: one read is as much as
+        /// had arrived and a frame is several writes, so the reads go on until the terminal is
+        /// silent — and never wait for a word it does not owe.
         pub(crate) fn drawn(&mut self) -> String {
             let mut drawn = Vec::new();
-            loop {
+            while !self.silent() {
                 let mut chunk = [0u8; 4096];
                 let mut master = &self.master;
                 let count = master.read(&mut chunk).expect("the terminal's screen");
@@ -388,9 +411,6 @@ pub(crate) mod pty {
                     break;
                 }
                 drawn.extend_from_slice(&chunk[..count]);
-                if self.silent() {
-                    break;
-                }
             }
             String::from_utf8_lossy(&drawn).into_owned()
         }
@@ -446,6 +466,10 @@ mod tests {
     use crate::term::pty::Pty;
 
     use super::*;
+
+    /// The guard a taken screen is held in is one for the whole process, so the tests that take one
+    /// hold this too: two screens at once is one of them given back down the other's terminal.
+    static ONE_SCREEN: Mutex<()> = Mutex::new(());
 
     /// The two facts the terminal gives reach the view, so a terminal that speaks Kitty is handed
     /// the pictures its frames draw from and one that speaks no protocol is handed none — the frame
@@ -782,12 +806,60 @@ mod tests {
     }
 
     #[test]
+    fn a_terminal_that_takes_the_window_sequences_is_asked_for_its_focus_and_gives_it_up() {
+        let _one_screen = lock(&ONE_SCREEN);
+        let mut pty = Pty::open();
+        let terminal =
+            Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
+        let screen = Screen::take(&terminal, true).expect("the screen is taken");
+
+        let asked = pty.drawn();
+        assert!(
+            asked.contains("\x1b[?1004h"),
+            "the terminal is asked to report which window is being read: {asked:?}"
+        );
+
+        drop(screen);
+        let given = pty.drawn();
+        assert!(
+            given.contains("\x1b[?1004l"),
+            "and gives the report up on the way out, or a shell is left sending reports: {given:?}"
+        );
+        assert!(
+            given.contains("\x1b]9;4;0\x1b\\"),
+            "and the mark is taken away with it, because a mark a killed run left is a mark \
+             nobody can clear: {given:?}"
+        );
+    }
+
+    #[test]
+    fn a_terminal_that_takes_none_of_the_window_sequences_is_asked_for_nothing() {
+        let _one_screen = lock(&ONE_SCREEN);
+        let mut pty = Pty::open();
+        let terminal =
+            Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
+        let screen = Screen::take(&terminal, false).expect("the screen is taken");
+        let asked = pty.drawn();
+
+        drop(screen);
+        let given = pty.drawn();
+
+        for drawn in [asked, given] {
+            assert!(
+                !drawn.contains("1004") && !drawn.contains("\x1b]9;"),
+                "a terminal nobody can vouch for is handed no sequence but the screen's own: \
+                 {drawn:?}"
+            );
+        }
+    }
+
+    #[test]
     fn a_panic_gives_the_terminal_back_before_the_guard_can() {
         let mut pty = Pty::open();
         let before = pty.attrs();
         let terminal =
             Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
-        let screen = Screen::take(&terminal).expect("the screen is taken");
+        let screen = Screen::take(&terminal, false).expect("the screen is taken");
 
         assert!(
             !pty.attrs().local_modes.contains(LocalModes::ICANON),

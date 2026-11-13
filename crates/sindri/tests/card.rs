@@ -282,6 +282,23 @@ fn a_card_drawn_in_no_colour_keeps_the_accent_on_its_name_and_draws_no_accent_ed
 }
 
 #[test]
+fn a_card_drawn_in_a_window_nobody_is_reading_keeps_the_dim_edge() {
+    let palette = Palette::TRUECOLOR;
+    let mut view = on_screen(Mode::Keys);
+    view.set_palette(palette);
+    view.set_focused(false);
+    let buffer = painted(&mut view, 120, 40);
+    let left = column_of(&buffer, 0, '╭').expect("a left corner");
+
+    assert_eq!(
+        look(&buffer, &palette, left, 0),
+        palette.dim_edge(),
+        "the card is the surface that takes the keys, and it lights its edge for a reader who is \
+         reading it: nobody is, so the edge recedes and the card's border carries it"
+    );
+}
+
+#[test]
 fn the_frame_behind_a_card_is_painted_and_dimmed() {
     let mut view = drafted();
     let palette = view.palette();
@@ -461,7 +478,15 @@ fn a_frame_too_short_for_a_body_still_names_the_screen_and_the_key_that_leaves()
 fn a_name_too_wide_for_its_row_is_cut_at_the_rows_right_edge() {
     let mut buffer = Buffer::empty(Rect::new(0, 0, 80, 6));
     let name = "n".repeat(200);
-    sindri::card::paint(buffer.area, &name, "", &mut buffer, &Palette::TRUECOLOR);
+    let edge = Palette::TRUECOLOR.accent_edge();
+    sindri::card::paint(
+        buffer.area,
+        &name,
+        "",
+        &mut buffer,
+        edge,
+        &Palette::TRUECOLOR,
+    );
 
     let top = row(&buffer, 0).trim().to_owned();
     assert!(
@@ -481,7 +506,15 @@ fn a_name_too_wide_for_its_row_is_cut_at_the_rows_right_edge() {
 fn a_key_the_bottom_row_has_no_room_for_is_refused_whole() {
     let mut buffer = Buffer::empty(Rect::new(0, 0, 80, 6));
     let leaves = "k".repeat(100);
-    sindri::card::paint(buffer.area, "?", &leaves, &mut buffer, &Palette::TRUECOLOR);
+    let edge = Palette::TRUECOLOR.accent_edge();
+    sindri::card::paint(
+        buffer.area,
+        "?",
+        &leaves,
+        &mut buffer,
+        edge,
+        &Palette::TRUECOLOR,
+    );
 
     let bottom = row(&buffer, 5).trim().to_owned();
     assert_eq!(
@@ -495,7 +528,15 @@ fn a_key_the_bottom_row_has_no_room_for_is_refused_whole() {
 fn a_key_as_wide_as_the_bottom_row_allows_keeps_the_corners_it_hangs_between() {
     let mut buffer = Buffer::empty(Rect::new(0, 0, 80, 6));
     let leaves = "k".repeat(66);
-    sindri::card::paint(buffer.area, "?", &leaves, &mut buffer, &Palette::TRUECOLOR);
+    let edge = Palette::TRUECOLOR.accent_edge();
+    sindri::card::paint(
+        buffer.area,
+        "?",
+        &leaves,
+        &mut buffer,
+        edge,
+        &Palette::TRUECOLOR,
+    );
 
     let bottom = row(&buffer, 5).trim().to_owned();
     assert_eq!(

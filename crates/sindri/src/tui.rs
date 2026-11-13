@@ -23,10 +23,10 @@ use sindri_core::tools::FrontEnd;
 use crate::cell::probed_cell;
 use crate::cli::Cli;
 use crate::launch::{Launch, Refusal};
-use crate::osc::Teller;
 use crate::reports::{Asking, Running, ask, served, take};
 use crate::signal::{Signals, Wake};
 use crate::term::{Canvas, Screen, Terminal, canvas, hand_pictures, missing_terminal, paint, tell};
+use crate::window::{self, Window};
 
 /// A launch that cannot be a run, or a screen it cannot draw on: exit 2.
 const USAGE: u8 = 2;
@@ -82,7 +82,11 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     // What the run the prompt will ask for is, read behind the reader's own shell rather than
     // behind a blank frame: the repository is asked for its branch once, before the first paint.
     let boot = crate::launch::boot(cli, config, &workspace);
-    let screen = match Screen::take(&terminal) {
+    let named = |key: &str| std::env::var(key).ok();
+    // Asked once, before the screen is taken: the terminal that takes the window's sequences is the
+    // one asked to report its focus, and one nobody can vouch for is asked nothing at all.
+    let windowed = window::speaks(named("TERM").as_deref(), named("TERM_PROGRAM").as_deref());
+    let screen = match Screen::take(&terminal, windowed) {
         Ok(screen) => screen,
         Err(error) => {
             return crate::refuse(&format!("the terminal would not go raw: {error}"), SETUP);
@@ -93,7 +97,6 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     let (cell_size, typed) = probed_cell(&terminal);
     let mut view = opened(config);
     view.set_cell_size(cell_size);
-    let named = |key: &str| std::env::var(key).ok();
     // Resolved once, before the first frame: what a terminal can do is a fact of the launch and
     // not a question every paint asks again.
     view.set_palette(Palette::probed(
@@ -128,10 +131,10 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     if let Err(error) = paint(&mut canvas, &mut view) {
         return crate::refuse(&format!("the frame could not be painted: {error}"), SETUP);
     }
-    // One teller for the whole launch, so the pace a status is told at is the launch's: the
+    // One telling for the whole launch, so the pace a status is told at is the launch's: the
     // screen it writes on is a second handle on the descriptor a frame is drawn on.
     let mut telling = match terminal.screen.try_clone() {
-        Ok(screen) => Teller::new(screen, config.tells_status(), &workspace),
+        Ok(screen) => Window::new(screen, config.tells_status(), &workspace, windowed),
         Err(error) => {
             return crate::refuse(&format!("the terminal could not be told: {error}"), SETUP);
         }
@@ -194,7 +197,7 @@ fn keys(
     environment: &impl Environment,
     signals: &Signals,
     typed: &[u8],
-    telling: &mut Teller<File>,
+    telling: &mut Window<File>,
     launch: &mut Option<Launch>,
 ) -> io::Result<Ending> {
     let mut decoder = Decoder::new();
@@ -342,7 +345,7 @@ fn answer(
     config: &mut Config,
     environment: &impl Environment,
     wake: &Arc<Wake>,
-    telling: &mut Teller<File>,
+    telling: &mut Window<File>,
     launch: &mut Option<Launch>,
 ) -> io::Result<Option<Ending>> {
     let key = match event {
@@ -350,6 +353,14 @@ fn answer(
         // handed the whole text with its line breaks in it.
         Event::Paste(text) => {
             view.paste(&text);
+            paint(canvas, view)?;
+            return Ok(None);
+        }
+        // The one report a reader never sent: the frame recedes while nobody is reading it, and a
+        // run that ends while it is away is the one that raises a notification.
+        Event::Focus(focused) => {
+            view.set_focused(focused);
+            telling.focused(focused);
             paint(canvas, view)?;
             return Ok(None);
         }
@@ -386,7 +397,7 @@ fn answer(
                     // Both switches, as the visit left them: `status` turned off here stops the
                     // telling at the next report, and `face` turned off repaints the frame without
                     // one, rather than at the next launch.
-                    telling.switch(config.tells_status());
+                    telling.switch(config.tells_status())?;
                     view.set_face(config.draws_face());
                     view.saved();
                 }
@@ -450,7 +461,7 @@ fn send(
     cli: &Cli,
     config: &Config,
     wake: &Arc<Wake>,
-    telling: &mut Teller<File>,
+    telling: &mut Window<File>,
 ) -> io::Result<Option<Ending>> {
     if running.is_some() {
         view.enqueue(prompt);
@@ -504,7 +515,7 @@ fn resume(
     cli: &Cli,
     config: &mut Config,
     wake: &Arc<Wake>,
-    telling: &mut Teller<File>,
+    telling: &mut Window<File>,
 ) -> io::Result<Option<Ending>> {
     let Some(prompt) = view.dequeue() else {
         return Ok(None);

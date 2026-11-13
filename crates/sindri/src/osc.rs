@@ -1,9 +1,4 @@
-use std::io::{self, Write};
-use std::path::{Path, PathBuf};
-use std::time::Instant;
-
-use sindri_core::records::{Status, Told};
-use sindri_core::status::Throttle;
+use sindri_core::records::Status;
 
 /// `OSC 52 ; c ; <base64> ST`: the terminal at the far end owns the clipboard, so a copy
 /// needs no `xclip` and works over SSH. ST rather than BEL, so no terminal rings on a copy.
@@ -18,9 +13,49 @@ pub fn copy(text: &str) -> Vec<u8> {
 /// same sequence with no destination closes them. A destination is words a wire wrote, so no
 /// glyph of it is written as part of the sequence it is carried in.
 pub fn link(destination: &str) -> Vec<u8> {
-    let mut sequence = Vec::from(&b"\x1b]8;;"[..]);
+    sequence(b"\x1b]8;;", destination)
+}
+
+/// `OSC 2 ; <workspace> — <state> ST`: the title the terminal wears while a launch holds it, so a
+/// reader with six windows open can tell which one a run is working in.
+pub fn title(workspace: &str, state: &str) -> Vec<u8> {
+    sequence(b"\x1b]2;", &format!("{workspace} \u{2014} {state}"))
+}
+
+/// `OSC 9 ; 4 ; 3 ST` for a run that is streaming and `; 0` for one that is not: the terminal's own
+/// progress mark, indeterminate because a run's turns are a count and never a share of anything.
+pub fn progress(marked: bool) -> Vec<u8> {
+    match marked {
+        true => MARK.to_vec(),
+        false => CLEAR.to_vec(),
+    }
+}
+
+/// `OSC 9 ; <words> ST`: the notification a terminal hands the desktop, which draws it beside a
+/// reader who is looking at something else.
+pub fn notification(words: &str) -> Vec<u8> {
+    // The mark shares this sequence and is told apart by the state digit after it, so a body that
+    // opened with one would be read as a mark: the space is what keeps the two apart.
+    let lead = match words.starts_with(|glyph: char| glyph.is_ascii_digit()) {
+        true => " ",
+        false => "",
+    };
+    sequence(b"\x1b]9;", &format!("{lead}{words}"))
+}
+
+/// The mark a streaming run wears.
+const MARK: &[u8] = b"\x1b]9;4;3\x1b\\";
+
+/// The state that takes it away, worn by every run that is not streaming.
+const CLEAR: &[u8] = b"\x1b]9;4;0\x1b\\";
+
+/// A sequence's opening, the words it carries, and `ST` after them. The words are filtered of every
+/// control glyph, because a directory named with an `ESC` would otherwise end the sequence it is
+/// carried in and begin one of its own.
+fn sequence(opening: &[u8], words: &str) -> Vec<u8> {
+    let mut sequence = Vec::from(opening);
     sequence.extend(
-        destination
+        words
             .chars()
             .filter(|glyph| !glyph.is_control())
             .collect::<String>()
@@ -60,65 +95,13 @@ fn base64(text: &[u8]) -> String {
     encoded
 }
 
-/// The clock is `Instant::now`, because a pace is worth nothing but in real time; what is
-/// decided about the pace is the core's [`Throttle`], which takes its clock as an argument.
-pub struct Teller<W: Write> {
-    stream: W,
-    on: bool,
-    workspace: PathBuf,
-    said: Throttle,
-}
-
-impl<W: Write> Teller<W> {
-    pub fn new(stream: W, on: bool, workspace: &Path) -> Teller<W> {
-        Teller {
-            stream,
-            on,
-            workspace: workspace.to_path_buf(),
-            said: Throttle::new(),
-        }
-    }
-
-    /// A `status` key turned off mid-launch stops the telling at the next report.
-    pub fn switch(&mut self, on: bool) {
-        self.on = on;
-    }
-
-    pub fn say(&mut self, told: Told) -> io::Result<()> {
-        if !self.on {
-            return Ok(());
-        }
-        let report = Status::new(told, &self.workspace);
-        match self.said.offer(report, Instant::now()) {
-            Some(report) => self.write(&report),
-            None => Ok(()),
-        }
-    }
-
-    /// Says the report the pace withheld: a front end with a clock calls this whenever it
-    /// wakes, so a withheld report is said late rather than lost.
-    pub fn due(&mut self) -> io::Result<()> {
-        if !self.on {
-            return Ok(());
-        }
-        match self.said.due(Instant::now()) {
-            Some(report) => self.write(&report),
-            None => Ok(()),
-        }
-    }
-
-    /// Flushed, because a terminal waiting for the rest of a sequence reads the frame as a
-    /// smear.
-    fn write(&mut self, report: &Status) -> io::Result<()> {
-        self.stream.write_all(&status(report))?;
-        self.stream.flush()
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::*;
 
+    use sindri_core::records::Told;
     use sindri_core::redact::SecretSet;
     use sindri_core::run::Stop;
 
@@ -151,6 +134,53 @@ mod tests {
             link("https://example.test/\x1b]8;;\x07evil"),
             b"\x1b]8;;https://example.test/]8;;evil\x1b\\".to_vec(),
             "a destination is words the wire wrote: no glyph of it ends the sequence that carries it"
+        );
+    }
+
+    #[test]
+    fn the_title_names_the_workspace_and_the_state() {
+        assert_eq!(
+            title("sindri", "working"),
+            b"\x1b]2;sindri \xe2\x80\x94 working\x1b\\".to_vec(),
+            "OSC 2, the workspace, the state, ST"
+        );
+    }
+
+    #[test]
+    fn a_progress_mark_is_learned_and_cleared_as_the_terminals_own() {
+        assert_eq!(
+            progress(true),
+            b"\x1b]9;4;3\x1b\\".to_vec(),
+            "OSC 9;4, the indeterminate state: a run's turns are a count, never a share of anything"
+        );
+        assert_eq!(
+            progress(false),
+            b"\x1b]9;4;0\x1b\\".to_vec(),
+            "and nought, which is the state that takes the mark away"
+        );
+    }
+
+    #[test]
+    fn a_notification_carries_the_words_and_never_reads_as_the_mark_sharing_its_sequence() {
+        assert_eq!(
+            notification("sindri: answered"),
+            b"\x1b]9;sindri: answered\x1b\\".to_vec(),
+            "OSC 9, the words, ST"
+        );
+        assert_eq!(
+            notification("4;2 done"),
+            b"\x1b]9; 4;2 done\x1b\\".to_vec(),
+            "a body that opened with a state digit would be read as the progress mark, so the \
+             space before it is what keeps the two apart"
+        );
+    }
+
+    #[test]
+    fn a_window_named_with_a_sequence_of_its_own_cannot_end_the_one_it_is_in() {
+        assert_eq!(
+            title("s\x1b]0;pwned\x07", "idle"),
+            b"\x1b]2;s]0;pwned \xe2\x80\x94 idle\x1b\\".to_vec(),
+            "a workspace is a directory name: no glyph of one ends the sequence that carries it"
         );
     }
 
@@ -218,40 +248,6 @@ mod tests {
         let read: serde_json::Value =
             serde_json::from_str(document).expect("the document reads whole");
         assert_eq!(read["workspace"], "weird;dir", "{sequence:?}");
-    }
-
-    #[test]
-    fn a_teller_that_is_off_says_nothing_at_all() {
-        let mut written = Vec::new();
-        let mut teller = Teller::new(&mut written, false, Path::new("/work/sindri"));
-
-        teller.say(Told::Idle).expect("a teller that is off");
-        assert!(written.is_empty(), "nothing was written: {written:?}");
-    }
-
-    #[test]
-    fn a_teller_says_one_state_once() {
-        let mut written = Vec::new();
-        {
-            let mut teller = Teller::new(&mut written, true, Path::new("/work/sindri"));
-            teller
-                .say(Told::Asking { turn: 1 })
-                .expect("the first report");
-            teller
-                .say(Told::Asking { turn: 2 })
-                .expect("a turn inside the second");
-            teller
-                .say(Told::Asking { turn: 1 })
-                .expect("the state already told");
-        }
-        let text = String::from_utf8(written).expect("a sequence is UTF-8");
-
-        assert_eq!(
-            text.matches("\x1b]7501;").count(),
-            1,
-            "one state, said once: {text:?}"
-        );
-        assert!(text.contains("\"turn\":1"), "{text:?}");
     }
 
     #[test]

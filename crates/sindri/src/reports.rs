@@ -20,9 +20,9 @@ use sindri_core::redact::SecretSet;
 use sindri_core::run::{Cancel, Exchange, Stop};
 
 use crate::launch::{Launch, Turns};
-use crate::osc::Teller;
 use crate::signal::Wake;
 use crate::term::{Canvas, lock, paint};
+use crate::window::Window;
 
 pub(crate) struct Running {
     cancel: Cancel,
@@ -169,7 +169,7 @@ pub(crate) fn take(
     canvas: &mut Canvas<'_>,
     view: &mut View,
     running: &mut Option<Running>,
-    telling: &mut Teller<File>,
+    telling: &mut Window<File>,
     launch: &mut Option<Launch>,
 ) -> io::Result<bool> {
     let Some(flight) = running.as_ref() else {

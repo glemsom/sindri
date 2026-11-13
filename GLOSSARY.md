@@ -205,8 +205,9 @@ _Avoid_: Border, elevation, highlight
 **Accent edge**:
 The accent in the faint face along the edge row of the one surface that takes the keys — the
 composer at rest, the card while a screen is open — where every surface that takes none keeps the
-dim edge, and a terminal that draws no colour is given neither. Not an **edge**: an edge is the
-ground a row is raised on, and this is the ink written on it.
+dim edge, and a terminal that draws no colour is given neither. It recedes while the **window** is
+unfocused. Not an **edge**: an edge is the ground a row is raised on, and this is the ink written on
+it.
 _Avoid_: Focus ring, highlight, active border
 
 **Ramp**:
@@ -275,6 +276,27 @@ a report of itself rather than as a byte: `Shift+Enter` breaks a line where `Ent
 pushed on the terminal's own stack and popped first on every way out, and a terminal that speaks none
 is handed the same frame and the same keys.
 _Avoid_: Keyboard enhancement, CSI u, key encoding
+
+**Window**:
+The terminal around the frame, carrying what the run is doing without a cell of its own: the title
+naming the workspace and the state, the **progress mark** a streaming run wears, and the notification
+a run that ended while nobody was looking raises. Written only where the terminal names itself as one
+that takes these sequences, so a reader on a terminal that takes none is handed the same frame and
+the status document alone.
+_Avoid_: Frame (that one is the cells), chrome, shell, terminal title
+
+**Progress mark**:
+The terminal's own indeterminate progress indicator, worn while a run streams and taken away by every
+stop, by a telling turned off, and by the way out — a mark left on a finished run says a run is
+working that has ended.
+_Avoid_: Progress bar (that is a share, and a run's turns are a count), spinner, pulse (that one is
+the marker at the head of an answer)
+
+**Focus**:
+Whether the terminal says this window is the one being read: asked for when the screen is taken and
+given up on the way out, and the one fact the frame draws from it — the accent edge recedes while
+nobody is reading and returns when they are. A terminal that reports nothing is being read.
+_Avoid_: Active, selected, current window
 
 **Artefact**:
 The one file the product ships, static and `x86_64-unknown-linux-musl`, built and held by the
