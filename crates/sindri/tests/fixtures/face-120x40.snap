@@ -3,35 +3,35 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 face at 120x40
-00 |turn 1 ─────────────────────────────────────────────────────────────────────────────────                                | dim:88 plain:32
+00 |turn 1 ─────────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
 01 |✓ exit 0  bash  412 bytes · 23 ms                                                                                       | ok:1 dim:32 plain:87
 02 |  src/rows.rs: the glyph a turn opens with                                                                              | plain:120
 03 |  src/rows.rs: a word longer than a row is broken                                                                       | plain:120
-04 |  Rendering lives in the front end and not in the core, because an entry is a fact and                                  | plain:120
-05 |  never a rendering: the TUI and any reader draw one run from one value, and the core                                   | plain:120
-06 |  may not name a terminal at all.                                                                                       | plain:120
+04 |  Rendering lives in the front end and not in the core, because an entry is                                             | plain:120
+05 |  a fact and never a rendering: the TUI and any reader draw one run from one                                            | plain:120
+06 |  value, and the core may not name a terminal at all.                                                                   | plain:120
 07 |                                                                                                                        | plain:120
 08 |                                                                                                                        | plain:120
 09 |                                                                                                                        | plain:120
 10 |                                                                                                                        | plain:120
-11 |                                                                                        wire                   anthropic| plain:88 dim:10 plain:22
-12 |                                                                                        model         claude-sonnet-4-5…| plain:88 dim:10 plain:22
-13 |                                                                                        think                       high| plain:88 dim:10 plain:22
-14 |                                                                                        ────────────────────────────────| plain:88 dim:32
-15 |                                                                                        turns                   6 /  250| plain:88 dim:10 plain:22
-16 |                                                                                        ctx          █░░░░░ 48.2k / 200k| plain:88 dim:10 plain:4 dim:5 plain:13
-17 |                                                                                        cache                        88%| plain:88 dim:10 plain:22
-18 |                                                                                        ────────────────────────────────| plain:88 dim:32
-19 |                                                                                        workspace   …/.worktrees/46-rail| plain:88 dim:10 plain:22
-20 |                                                                                        branch         spec/1-capability| plain:88 dim:10 plain:22
-21 |                                                                                        ────────────────────────────────| plain:88 dim:32
-22 |                                                                                        skills                         2| plain:88 dim:10 plain:22
-23 |                                                                                        ────────────────────────────────| plain:88 dim:32
-24 |                                                                                        sandbox                    bwrap| plain:88 dim:10 plain:22
-25 |                                                                                        ────────────────────────────────| plain:88 dim:32
-26 |                                                                                        session                 9f2c7a41| plain:88 dim:10 plain:22
-27 |                                                                                        temp              …/9f2c7a41/tmp| plain:88 dim:10 plain:22
-28 |                                                                                                                        | plain:120
+11 |                                                                            ────────────────────────────────────────────| plain:76 dim:44
+12 |                                                                            wire      anthropic                         | plain:76 dim:10 plain:34
+13 |                                                                            model     claude-sonnet-4-5-20250929        | plain:76 dim:10 plain:34
+14 |                                                                            think     high                              | plain:76 dim:10 plain:34
+15 |                                                                                                                        | plain:120
+16 |                                                                            turns                               6 /  250| plain:76 dim:10 plain:34
+17 |                                                                            ctx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
+18 |                                                                            cache                                    88%| plain:76 dim:10 plain:34
+19 |                                                                                                                        | plain:120
+20 |                                                                            workspace …/git/sindri/.worktrees/46-rail   | plain:76 dim:10 plain:34
+21 |                                                                            branch    spec/1-capability                 | plain:76 dim:10 plain:34
+22 |                                                                                                                        | plain:120
+23 |                                                                            skills                                     2| plain:76 dim:10 plain:34
+24 |                                                                                                                        | plain:120
+25 |                                                                            sandbox   bwrap                             | plain:76 dim:10 plain:34
+26 |                                                                                                                        | plain:120
+27 |                                                                            session   9f2c7a41                          | plain:76 dim:10 plain:34
+28 |                                                                            temp      …/sindri/sessions/9f2c7a41/tmp    | plain:76 dim:10 plain:34
 29 |                                                                                                                        | plain:120
 30 |                                                                                                                        | plain:120
 31 |                                                                                                                        | plain:120

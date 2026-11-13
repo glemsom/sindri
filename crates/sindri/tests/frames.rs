@@ -169,12 +169,17 @@ fn markdown_table_narrow_40x24_is_a_wide_table_wrapped_inside_its_cells() {
 }
 
 #[test]
-fn rail_120x40_is_the_ledger_down_the_frames_right_hand_columns() {
+fn rail_160x40_is_a_wide_frames_rail_at_its_ceiling_and_holds_the_served_name_whole() {
+    fixture::assert_frame("rail", 160, 40);
+}
+
+#[test]
+fn rail_120x40_is_the_rail_grown_into_a_wide_frame_with_the_served_name_whole() {
     fixture::assert_frame("rail", 120, 40);
 }
 
 #[test]
-fn rail_100x40_is_the_last_frame_that_holds_a_ledger() {
+fn rail_100x40_is_the_narrowest_frame_that_holds_a_ledger_and_its_value_column_cuts() {
     fixture::assert_frame("rail", 100, 40);
 }
 

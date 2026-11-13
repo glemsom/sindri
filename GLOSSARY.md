@@ -59,21 +59,24 @@ The one module that holds a run's **facts**, the one way each **value** is spell
 facts are laid out in — the size in tokens, the pair whose halves line up on a slash, the meter a
 share fills and the ink it is read in, the cut of a value to the room its row leaves it — the head of
 a name, the tail of a path, the whole of a word — the em dash a fact is owed, the first eight of a
-GUID, the blocks and the order they are read in, the hairline between two that both kept a fact, the
-order facts are given up in, the row that counts what went, and the columns a **stats screen**
-widens them to. No drawing spells a fact for itself, and no drawing decides where one goes: a fact
+GUID, the blocks and the order they are read in, the air between two that both kept a fact, the way a
+value hangs — a number on the row's last column, a word from its label — the order facts are given
+up in, the row that counts what went, and the columns a **stats screen** widens them to. No drawing spells a fact for itself, and no drawing decides where one goes: a fact
 reads one way wherever it is said.
 _Avoid_: Facts module, layout module, status bar, sidebar
 
 **Rail**:
 The ledger's adapter to a frame: a band and the shape it is drawn in, the rows the ledger lays there
-drawn, and no rule of its own about which fact goes where.
+drawn, and no rule of its own about which fact goes where. Its column is a fact about the frame
+between a floor and a ceiling, so a wide frame draws the served name whole, and the one rule it draws
+in its body — under a face — closes the picture it stands above.
 _Avoid_: Status bar, sidebar, panel, dock
 
 **Strip**:
-The shape the rail draws below a hundred columns: the ledger's row along a band's bottom row, read
-left to right with a gap between two facts and its count at the end. The other shape the rail draws
-is the ledger's own column, beside the transcript; the **stats screen** is the ledger widened.
+The shape the rail draws in a frame too narrow to hold a column: the ledger's row along a band's
+bottom row, read left to right with a gap between two facts and its count at the end. The other shape
+the rail draws is the ledger's own column, beside the transcript, from the width that holds the
+transcript's floor beside the rail's; the **stats screen** is the ledger widened.
 _Avoid_: Status line, footer bar, ticker
 
 **Fact**:
@@ -85,7 +88,9 @@ em dash, and a value that is its own name — a loaded skill — hangs where its
 _Avoid_: Row, field, item, stat
 
 **Value**:
-The glyphs one fact is drawn as, the meter beside a share of a window, and the ink it is read in.
+The glyphs one fact is drawn as, the meter beside a share of a window, and the ink it is read in. It
+hangs the way its own shape reads: a number against the row's last column, so the digits of two
+numbers line up, and a word from its label, so the two read as one phrase.
 _Avoid_: Text, string, cell
 
 ## Confinement
@@ -246,8 +251,8 @@ _Avoid_: File browser, autocomplete, fuzzy finder, file search
 The frame a launch opens on: the wordmark, one line saying what the product is, and three commands
 with the line that explains each, beside the **rail** of the facts the launch already holds — the
 wire, the model, the workspace, its branch and the enforcement, and an em dash for the session and
-the temp a run has yet to fill. Below a hundred columns it is drawn with no rail. One paint pass,
-and never again.
+the temp a run has yet to fill. In a frame too narrow for a rail's column it is drawn with no rail.
+One paint pass, and never again.
 _Avoid_: Splash screen, welcome screen, landing page, boot animation
 
 **Stats screen**:

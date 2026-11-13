@@ -3,26 +3,26 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 calls at 120x40
-00 |turn 1 ─────────────────────────────────────────────────────────────────────────────────wire                   anthropic| dim:98 plain:22
-01 |✓ exit 0  bash  64 bytes · 18 ms                                                        model         claude-sonnet-4-5…| ok:1 dim:31 plain:56 dim:10 plain:22
-02 |  src/rows.rs: the check or the cross in `ok`/`err`                                     think                       high| plain:88 dim:10 plain:22
-03 |  The row is drawn from the verdict the record holds.                                   ────────────────────────────────| plain:88 dim:32
-04 |turn 2 ─────────────────────────────────────────────────────────────────────────────────turns                   6 /  250| dim:98 plain:22
-05 |✗ exit 1  bash  96 bytes · 211 ms                                                       ctx          █░░░░░ 48.2k / 200k| err:1 dim:32 plain:55 dim:10 plain:4 dim:5 plain:13
-06 |  warning: unused import: `std::fmt`                                                    cache                        88%| plain:88 dim:10 plain:22
-07 |  --> src/rows.rs:12:5                                                                  ────────────────────────────────| plain:88 dim:32
-08 |  An unused import, and nowhere else to put it.                                         workspace   …/.worktrees/46-rail| plain:88 dim:10 plain:22
-09 |turn 3 ─────────────────────────────────────────────────────────────────────────────────branch         spec/1-capability| dim:98 plain:22
-10 |✗ timed out  bash  0 bytes · 120000 ms                                                  ────────────────────────────────| err:1 dim:37 plain:50 dim:32
-11 |  The call ran past its minute and was killed.                                          skills                         2| plain:88 dim:10 plain:22
-12 |turn 4 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
-13 |✗ cancelled  bash  0 bytes · 3400 ms                                                    sandbox                    bwrap| err:1 dim:35 plain:52 dim:10 plain:22
-14 |  What a verdict says                                                                   ────────────────────────────────| plain:2 plain+bold:19 plain:67 dim:32
-15 |                                                                                        session                 9f2c7a41| plain:88 dim:10 plain:22
-16 |  The run stopped on the user's word: Ctrl-C cancels and keeps the draft, so the row    temp              …/9f2c7a41/tmp| plain:38 muted+reversed:6 plain:44 dim:10 plain:22
-17 |  says ✗ cancelled rather than leaving a spinner turning for a result that will never                                   | plain:7 muted+reversed:11 plain:102
-18 |  come.                                                                                                                 | plain:120
-19 |turn 5 ─────────────────────────────────────────────────────────────────────────────────                                | dim:88 plain:32
+00 |turn 1 ─────────────────────────────────────────────────────────────────────wire      anthropic                         | dim:86 plain:34
+01 |✓ exit 0  bash  64 bytes · 18 ms                                            model     claude-sonnet-4-5-20250929        | ok:1 dim:31 plain:44 dim:10 plain:34
+02 |  src/rows.rs: the check or the cross in `ok`/`err`                         think     high                              | plain:76 dim:10 plain:34
+03 |  The row is drawn from the verdict the record holds.                                                                   | plain:120
+04 |turn 2 ─────────────────────────────────────────────────────────────────────turns                               6 /  250| dim:86 plain:34
+05 |✗ exit 1  bash  96 bytes · 211 ms                                           ctx                      █░░░░░ 48.2k / 200k| err:1 dim:32 plain:43 dim:10 plain:16 dim:5 plain:13
+06 |  warning: unused import: `std::fmt`                                        cache                                    88%| plain:76 dim:10 plain:34
+07 |  --> src/rows.rs:12:5                                                                                                  | plain:120
+08 |  An unused import, and nowhere else to put it.                             workspace …/git/sindri/.worktrees/46-rail   | plain:76 dim:10 plain:34
+09 |turn 3 ─────────────────────────────────────────────────────────────────────branch    spec/1-capability                 | dim:86 plain:34
+10 |✗ timed out  bash  0 bytes · 120000 ms                                                                                  | err:1 dim:37 plain:82
+11 |  The call ran past its minute and was killed.                              skills                                     2| plain:76 dim:10 plain:34
+12 |turn 4 ─────────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
+13 |✗ cancelled  bash  0 bytes · 3400 ms                                        sandbox   bwrap                             | err:1 dim:35 plain:40 dim:10 plain:34
+14 |  What a verdict says                                                                                                   | plain:2 plain+bold:19 plain:99
+15 |                                                                            session   9f2c7a41                          | plain:76 dim:10 plain:34
+16 |  The run stopped on the user's word: Ctrl-C cancels and keeps the draft, sotemp      …/sindri/sessions/9f2c7a41/tmp    | plain:38 muted+reversed:6 plain:32 dim:10 plain:34
+17 |  the row says ✗ cancelled rather than leaving a spinner turning for a                                                  | plain:15 muted+reversed:11 plain:94
+18 |  result that will never come.                                                                                          | plain:120
+19 |turn 5 ─────────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
 20 |… bash                                                                                                                  | dim:6 plain:114
 21 |  {"command": "make check STAGES=test"}                                                                                 | plain:120
 22 |                                                                                                                        | plain:120

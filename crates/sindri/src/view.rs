@@ -1776,7 +1776,7 @@ mod tests {
         let narrow = door(80, 24);
         assert_eq!(
             narrow, wide,
-            "a frame below a hundred columns draws the same door, and nothing of it is clipped"
+            "a frame too narrow for a rail draws the same door, and nothing of it is clipped"
         );
 
         let area = screen(80, 24);
