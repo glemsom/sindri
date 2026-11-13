@@ -55,45 +55,46 @@ pub fn paint(
     if area.width == 0 || area.height == 0 {
         return;
     }
-    let rows = block(area.width);
+    let block = block(area.width);
     // A block wider than the band would be drawn over the rail beside it, so it gives way at the
-    // band's edge: a frame too narrow for a command's own column holds the head of its words.
-    let wide = rows
+    // band's edge: a frame too narrow for a glyph of its words holds the head of them.
+    let columns = block
         .iter()
         .map(Row::width)
         .max()
         .unwrap_or(0)
         .min(area.width);
-    let tall = u16::try_from(rows.len()).unwrap_or(u16::MAX);
+    let lines = u16::try_from(block.len()).unwrap_or(u16::MAX);
     let face = face::over_wordmark(
-        wide,
-        area.height.saturating_sub(tall.saturating_add(GAP)),
+        columns,
+        area.height.saturating_sub(lines.saturating_add(GAP)),
         surface,
     );
-    let over = face
+    let reserved = face
         .as_ref()
         .map_or(0, |picture| picture.rows().saturating_add(GAP));
-    let height = tall.saturating_add(over);
-    let x = area.x.saturating_add(area.width.saturating_sub(wide) / 2);
+    let height = lines.saturating_add(reserved);
+    let x = area
+        .x
+        .saturating_add(area.width.saturating_sub(columns) / 2);
     let mut y = area
         .y
         .saturating_add(area.height.saturating_sub(height) / 2);
     if let Some(face) = &face {
-        let left = x.saturating_add(wide.saturating_sub(face.cols()) / 2);
         pictures.place(
             face,
             cell,
             Rect {
-                x: left,
+                x,
                 y,
                 width: face.cols(),
                 height: face.rows(),
             },
             buffer,
         );
-        y = y.saturating_add(over);
+        y = y.saturating_add(reserved);
     }
-    for row in rows {
+    for row in block {
         if y >= area.bottom() {
             return;
         }
@@ -101,7 +102,7 @@ pub fn paint(
             Rect {
                 x,
                 y,
-                width: wide,
+                width: columns,
                 height: 1,
             },
             buffer,
@@ -124,7 +125,14 @@ fn block(room: u16) -> Vec<Row> {
             .map(|line| Row::of([(line, Look::plain(Ink::Plain))])),
     );
     rows.push(Row::blank());
+    rows.extend(commands(room));
+    rows
+}
 
+/// The three commands as `room` columns are drawn of them: each hanging from its own column with
+/// the line that explains it, and — where the band leaves that line less than the command's own
+/// width — the two set on rows of their own, so no word of either is cut at the edge.
+fn commands(room: u16) -> Vec<Row> {
     let column = COMMANDS
         .iter()
         .map(|(command, _)| pen::cells(command))
@@ -132,8 +140,18 @@ fn block(room: u16) -> Vec<Row> {
         .unwrap_or(0)
         + HANG;
     let hang = pen::blank(column);
+    let mut rows = Vec::new();
     for (command, said) in COMMANDS {
-        let hanging = room.saturating_sub(column);
+        if room < column.saturating_mul(2) {
+            rows.push(Row::of([(String::from(command), Look::plain(Ink::Accent))]));
+            rows.extend(
+                wrap_under(said, room, room)
+                    .into_iter()
+                    .map(|line| Row::of([(line, Look::plain(Ink::Dim))])),
+            );
+            continue;
+        }
+        let hanging = room - column;
         let mut lines = wrap_under(said, hanging, hanging).into_iter();
         if let Some(first) = lines.next() {
             rows.push(Row::of([

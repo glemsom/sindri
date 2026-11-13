@@ -275,7 +275,7 @@ impl View {
 
     /// The surface Sindri's face is measured against: a frame the reader turned the face off for is
     /// handed the surface of a terminal that places no picture, so no row is reserved for one.
-    fn pictured(&self) -> Surface {
+    fn face_surface(&self) -> Surface {
         match self.face {
             Face::Drawn => self.surface(),
             Face::Hidden => Surface::none(),
@@ -625,7 +625,9 @@ impl View {
             // no cells, and a door draws the face over its wordmark: the rail beside it keeps every
             // fact.
             let picture = match shape {
-                Rail::Ledger if !self.door => face::over_rail(band.area.width, &self.pictured()),
+                Rail::Ledger if !self.door => {
+                    face::over_rail(band.area.width, &self.face_surface())
+                }
                 Rail::Ledger | Rail::Strip => None,
             };
             let band = match &picture {
@@ -639,7 +641,7 @@ impl View {
         }
         self.transcript(share.transcript, buffer);
         if self.door {
-            let surface = self.pictured();
+            let surface = self.face_surface();
             door::paint(
                 share.transcript,
                 buffer,
@@ -1775,7 +1777,8 @@ mod tests {
     /// The rows of the transcript band a boot frame draws, from its left edge and cut where the
     /// rail's columns begin: the rail has rows of its own, and they are not the door's.
     fn door(cols: u16, rows: u16) -> Vec<String> {
-        band_of(door_frame(cols, rows, false))
+        let (buffer, band) = door_frame(cols, rows, false);
+        band_of(&buffer, band)
     }
 
     /// The cells a door frame `cols` by `rows` is painted into, and what it draws: a terminal that
@@ -1795,19 +1798,24 @@ mod tests {
         (buffer, view.split(band).transcript)
     }
 
+    /// Whether this cell is no glyph of the door's: one a picture is placed over, or the bytes that
+    /// place it.
+    fn placed(cell: &ratatui::buffer::Cell) -> bool {
+        cell.skip || cell.symbol().contains(PLACED) || cell.symbol().contains('\u{1b}')
+    }
+
     /// The rows of `band` in `buffer` a door frame drew, its left edge first and cut where the
     /// rail's columns begin. A cell a picture is placed over reads as a blank: it is no glyph of
     /// the door's, and the bytes that place it are no word either.
-    fn band_of((buffer, band): (Buffer, Rect)) -> Vec<String> {
+    fn band_of(buffer: &Buffer, band: Rect) -> Vec<String> {
         (band.y..band.bottom())
             .map(|y| {
                 (band.x..band.right())
                     .map(|x| {
                         let cell = buffer.cell((x, y)).expect("a cell of the band");
-                        let symbol = cell.symbol();
-                        match cell.skip || symbol.contains(PLACED) || symbol.contains('\u{1b}') {
+                        match placed(cell) {
                             true => ' ',
-                            false => symbol.chars().next().unwrap_or(' '),
+                            false => cell.symbol().chars().next().unwrap_or(' '),
                         }
                     })
                     .collect::<String>()
@@ -1835,13 +1843,7 @@ mod tests {
     /// glyph every cell of a picture is written as.
     fn pictured_rows(buffer: &Buffer, band: Rect) -> Vec<u16> {
         (band.y..band.bottom())
-            .filter(|y| {
-                (band.x..band.right()).any(|x| {
-                    buffer
-                        .cell((x, *y))
-                        .is_some_and(|cell| cell.skip || cell.symbol().contains(PLACED))
-                })
-            })
+            .filter(|y| (band.x..band.right()).any(|x| buffer.cell((x, *y)).is_some_and(placed)))
             .collect()
     }
 
@@ -1868,17 +1870,31 @@ mod tests {
     fn pictured_columns(buffer: &Buffer, band: Rect, rows: &[u16]) -> (u16, u16) {
         let placed: Vec<u16> = (band.x..band.right())
             .filter(|x| {
-                rows.iter().any(|y| {
-                    buffer
-                        .cell((*x, *y))
-                        .is_some_and(|cell| cell.skip || cell.symbol().contains(PLACED))
-                })
+                rows.iter()
+                    .any(|y| buffer.cell((*x, *y)).is_some_and(placed))
             })
             .collect();
         match (placed.first(), placed.last()) {
             (Some(left), Some(right)) => (*left, *right),
             _ => panic!("no column of the band holds a placement: {placed:?}"),
         }
+    }
+
+    /// The first and last columns of `buffer` inside `band` that a door frame's block holds a glyph
+    /// in: the widest row of it, which is where the block begins and where it ends.
+    fn block_columns(buffer: &Buffer, band: Rect, drawn: &[String]) -> (u16, u16) {
+        let (first, last) = filled_rows(drawn, band);
+        let mut left = band.right();
+        let mut right = band.x;
+        for y in first..=last {
+            if drawn[usize::from(y - band.y)].is_empty() {
+                continue;
+            }
+            let (row_left, row_right) = filled_columns(buffer, band, y);
+            left = left.min(row_left);
+            right = right.max(row_right);
+        }
+        (left, right)
     }
 
     /// The rows of `band` a door frame fills, the first and the last: the block's own rows, with the
@@ -1918,7 +1934,7 @@ mod tests {
     fn the_door_stands_centred_in_the_band_and_no_row_of_it_is_cut_by_the_edge() {
         for (cols, rows) in [(120, 40), (80, 24), (40, 24), (120, 30)] {
             let (buffer, band) = door_frame(cols, rows, false);
-            let drawn = band_of((buffer.clone(), band));
+            let drawn = band_of(&buffer, band);
             let (first, last) = filled_rows(&drawn, band);
 
             assert!(
@@ -1934,16 +1950,7 @@ mod tests {
                  under it, and a door set in a corner is not a door composed"
             );
 
-            let mut left = band.right();
-            let mut right = band.x;
-            for y in first..=last {
-                if drawn[usize::from(y - band.y)].is_empty() {
-                    continue;
-                }
-                let (row_left, row_right) = filled_columns(&buffer, band, y);
-                left = left.min(row_left);
-                right = right.max(row_right);
-            }
+            let (left, right) = block_columns(&buffer, band, &drawn);
             let (before, after) = (left - band.x, band.right() - 1 - right);
             assert!(
                 before.abs_diff(after) <= 1,
@@ -1986,7 +1993,6 @@ mod tests {
     fn the_face_stands_over_the_wordmark_and_the_block_stands_under_it() {
         let (buffer, band) = door_frame(120, 40, true);
         let over = pictured_rows(&buffer, band);
-        let drawn = band_of((buffer.clone(), band));
         let wordmark = (band.y..band.bottom())
             .find(|y| drawn_row(&buffer, *y).contains("sindri"))
             .expect("the door draws the wordmark");
@@ -2007,23 +2013,44 @@ mod tests {
         );
 
         let (over_left, over_right) = pictured_columns(&buffer, band, &over);
-        let (first, last) = filled_rows(&drawn, band);
-        let mut left = band.right();
-        let mut right = band.x;
-        for y in first..=last {
-            if drawn[usize::from(y - band.y)].is_empty() {
-                continue;
-            }
-            let (row_left, row_right) = filled_columns(&buffer, band, y);
-            left = left.min(row_left);
-            right = right.max(row_right);
-        }
-        let middle = |left: u16, right: u16| u32::from(left) + u32::from(right);
-        assert!(
-            middle(over_left, over_right).abs_diff(middle(left, right)) <= 2,
-            "the face is set over the middle of the block it heads: columns {over_left} to \
-             {over_right} of a block from {left} to {right}"
+        let (wordmark_left, _) = filled_columns(&buffer, band, wordmark);
+        assert_eq!(
+            (over_left, over_right),
+            (wordmark_left, wordmark_left + 24),
+            "the face stands over the wordmark the block opens with, its own left edge on the \
+             block's: columns {over_left} to {over_right} over a wordmark from {wordmark_left}"
         );
+    }
+
+    #[test]
+    fn a_frame_too_small_for_the_block_holds_its_head_and_cuts_no_row_across_it() {
+        for (cols, rows, whole) in [(80, 9, (80, 24)), (40, 10, (40, 24)), (24, 12, (24, 24))] {
+            let (buffer, band) = door_frame(cols, rows, false);
+            let drawn = band_of(&buffer, band);
+            let (taller, taller_band) = door_frame(whole.0, whole.1, false);
+            let all = block(&band_of(&taller, taller_band));
+
+            let held = block(&drawn);
+            assert!(
+                held.len() < all.len(),
+                "the band of a {cols} by {rows} frame is too short for the whole block: {} of \
+                 its {} rows",
+                held.len(),
+                all.len()
+            );
+            assert_eq!(
+                held,
+                all[..held.len()],
+                "at {cols} by {rows} the door holds the head of its block: the rows a band cannot \
+                 hold go whole, and no row of it is cut across by the band's edge"
+            );
+            for row in &drawn {
+                assert!(
+                    pen::cells(row) <= band.width,
+                    "a {cols}-column band holds {row:?}, which is wider than it"
+                );
+            }
+        }
     }
 
     #[test]
@@ -2054,29 +2081,38 @@ mod tests {
             pictured_rows(&placeless, placeless_band).is_empty(),
             "a terminal that places no picture is given no cell of the face"
         );
+        let bare = band_of(&placeless, placeless_band);
+        let faced = band_of(&pictured, pictured_band);
         assert_eq!(
-            block(&band_of((placeless, placeless_band))),
-            block(&band_of((pictured, pictured_band))),
-            "and the block it is handed is the one it is handed when the face is drawn: no row \
-             of it is pushed down by rows never reserved"
+            block(&bare),
+            block(&faced),
+            "and the block it is handed is the words the face crowds over, row for row"
+        );
+        assert!(
+            filled_rows(&bare, placeless_band).0 < filled_rows(&faced, pictured_band).0,
+            "the block stands higher where no row is reserved: {} against {}",
+            filled_rows(&bare, placeless_band).0,
+            filled_rows(&faced, pictured_band).0
         );
     }
 
     #[test]
     fn a_door_narrower_than_its_lines_wraps_them_whole_and_cuts_no_word() {
-        let wrapped = door(40, 24).join(" ");
-        let words = wrapped.split_whitespace().collect::<Vec<&str>>().join(" ");
+        for cols in [12, 16, 20, 30, 40, 60] {
+            let wrapped = door(cols, 40).join(" ");
+            let words = wrapped.split_whitespace().collect::<Vec<&str>>().join(" ");
 
-        for line in [
-            "An AI agent that is a Unix filter and a terminal UI over one core.",
-            "ask the wire what it serves, and name the one to run",
-            "the keys the config holds, and the value each is set to",
-            "the facts the rail is too narrow to hold",
-        ] {
-            assert!(
-                words.contains(line),
-                "at forty columns the door reads {words:?}, which holds no whole {line:?}"
-            );
+            for line in [
+                "An AI agent that is a Unix filter and a terminal UI over one core.",
+                "ask the wire what it serves, and name the one to run",
+                "the keys the config holds, and the value each is set to",
+                "the facts the rail is too narrow to hold",
+            ] {
+                assert!(
+                    words.contains(line),
+                    "at {cols} columns the door reads {words:?}, which holds no whole {line:?}"
+                );
+            }
         }
     }
 

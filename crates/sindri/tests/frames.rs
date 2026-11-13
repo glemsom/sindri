@@ -19,7 +19,7 @@ fn boot_face_120x40_is_the_face_over_the_wordmark_with_the_rail_whole_beside_it(
 }
 
 #[test]
-fn boot_face_small_120x14_is_a_door_too_short_for_the_face_it_reserves_no_row_for() {
+fn boot_face_small_120x14_is_the_door_of_a_frame_too_short_for_the_face() {
     fixture::assert_frame("boot-face-small", 120, 14);
 }
 
