@@ -26,6 +26,7 @@ use crate::cli::Cli;
 use crate::launch::{Launch, Refusal};
 use crate::reports::{Asking, Running, ask, served, take};
 use crate::signal::{Signals, Wake};
+use crate::sizing::probed_sizing;
 use crate::term::{Canvas, Screen, Terminal, canvas, hand_pictures, missing_terminal, paint, tell};
 use crate::window::{self, Window};
 
@@ -95,7 +96,7 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     };
     // The cell size is asked before the first frame, and a key typed while the launch waited is
     // handed to the loop rather than dropped.
-    let (cell_size, typed) = probed_cell(&terminal);
+    let (cell_size, mut typed) = probed_cell(&terminal);
     let mut view = opened(config);
     view.set_cell_size(cell_size);
     // Resolved once, before the first frame: what a terminal can do is a fact of the launch and
@@ -111,12 +112,17 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
         named("TERM").as_deref(),
         named("TERM_PROGRAM").as_deref(),
     );
-    // Asked once with the palette: a terminal that draws text at more than one cell is handed the
-    // headings the sizing leaves, and one that says nothing is handed the heading it is handed today.
-    view.set_sizes(size::speaks(
-        named("TERM").as_deref(),
-        named("TERM_PROGRAM").as_deref(),
-    ));
+    // A terminal that names itself after one that draws large text is asked whether it does, and
+    // one that says nothing is handed the spelling its glyphs are.
+    let sizing = match size::speaks(named("TERM").as_deref(), named("TERM_PROGRAM").as_deref()) {
+        true => {
+            let (sizing, keys) = probed_sizing(&terminal);
+            typed.extend(keys);
+            sizing
+        }
+        false => false,
+    };
+    view.set_sizing(sizing);
     // Resolved once with the palette: a terminal that speaks no hyperlink is handed the words
     // and no sequence, and nothing asks again on a key.
     let places = link::speaks(

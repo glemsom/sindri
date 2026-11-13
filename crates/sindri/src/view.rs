@@ -308,8 +308,8 @@ impl View {
             self.workspace.as_deref(),
             self.cell_size,
             self.pictures.draws(),
+            self.sizing,
         )
-        .sizing(self.sizing)
     }
 
     /// The surface Sindri's face is measured against: a frame the reader turned the face off for is
@@ -649,8 +649,8 @@ impl View {
 
     /// Whether the terminal this frame is drawn on sizes text: asked once at boot, because a
     /// heading is laid out as the cells the sizing leaves and never re-laid on a key.
-    pub fn set_sizes(&mut self, sizes: bool) {
-        self.sizing = sizes;
+    pub fn set_sizing(&mut self, sizing: bool) {
+        self.sizing = sizing;
     }
 
     /// Hands the frame its newest answer's marker. The elapsed time is the caller's, because a
@@ -713,12 +713,14 @@ impl View {
             // A heading is drawn as the cells the sizing leaves once the band it stands in is
             // known: one with no row of that band under it is the words it says.
             self.sizes.settle(share.transcript, buffer, &self.palette);
+            self.highlight(share.transcript, buffer);
             return;
         };
         // The band under a card takes no key, so the frame under it is no way to anywhere — and no
         // heading of it is drawn large, because the scrim is read as the words it holds.
         self.links = Links::none();
         self.sizes = Sizes::none();
+        self.highlight(share.transcript, buffer);
         let body = card::paint(area, name, leaves, buffer, self.edge(), &self.palette);
         self.paint_screen(screen, body, buffer);
     }
@@ -783,7 +785,7 @@ impl View {
                 // Gathered only when there is a mark: a mark's cells are counted in the rows this
                 // band draws.
                 if self.mark.is_some() {
-                    lines.push(row.glyphs());
+                    lines.push(row.glyph_columns());
                 }
                 y += 1;
             }
@@ -795,7 +797,6 @@ impl View {
             Some(mark) => Span::of(mark, &lines),
             None => Span::default(),
         };
-        self.highlight(area, buffer);
     }
 
     /// Paints the mark over the rows it covers, from the span `Ctrl-Y` hands out: what is
@@ -2653,7 +2654,7 @@ mod tests {
                 Scroll::Tail,
             );
             view.set_palette(Palette::TRUECOLOR);
-            view.set_sizes(sizes);
+            view.set_sizing(sizes);
             let mut buffer = Buffer::empty(area);
             view.paint(area, &mut buffer);
 
@@ -2678,7 +2679,7 @@ mod tests {
             Scroll::Tail,
         );
         view.set_palette(Palette::TRUECOLOR);
-        view.set_sizes(true);
+        view.set_sizing(true);
         view.key(Key::Char('?'));
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);

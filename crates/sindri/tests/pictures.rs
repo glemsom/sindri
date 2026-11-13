@@ -39,13 +39,13 @@ fn shoot(path: &Path, width: u32, height: u32) {
 }
 
 fn surface(workspace: &Path) -> Surface {
-    Surface::of(Some(workspace), CellSize::new(10, 20), true)
+    Surface::of(Some(workspace), CellSize::new(10, 20), true, false)
 }
 
 /// A surface with no workspace in it, which is all a picture the binary carries is measured
 /// against: the pixels in a cell, and whether this terminal places one at all.
 fn carried(draws: bool) -> Surface {
-    Surface::of(None, cell(), draws)
+    Surface::of(None, cell(), draws, false)
 }
 
 #[test]
@@ -318,7 +318,7 @@ fn a_picture_written_with_no_alternate_text_is_spoken_of_as_its_source() {
 #[test]
 fn a_terminal_that_places_no_picture_is_given_the_words_and_no_rows_for_it() {
     let (_root, workspace) = workspace(40, 40);
-    let words_only = Surface::of(Some(&workspace), CellSize::new(10, 20), false);
+    let words_only = Surface::of(Some(&workspace), CellSize::new(10, 20), false, false);
 
     let rows = markdown::rows_on(
         "before ![a purple field](shot.png) after",
@@ -363,7 +363,7 @@ fn a_picture_whose_words_are_wider_than_the_band_wraps_and_is_never_cut() {
                long lens and no tripod at all";
 
     for draws in [true, false] {
-        let on = Surface::of(Some(&taken), CellSize::new(10, 20), draws);
+        let on = Surface::of(Some(&taken), CellSize::new(10, 20), draws, false);
         let rows = markdown::rows_on(&format!("![{alt}](shot.png)"), 30, 0, &on);
         let said = rows.iter().map(Row::glyphs).collect::<Vec<_>>().join(" ");
 

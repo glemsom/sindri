@@ -3,14 +3,16 @@
 //! canvas frames are painted through, and the telling a sequence is written out by.
 
 use std::fs::File;
-use std::io::{self, IsTerminal, Write};
+use std::io::{self, IsTerminal, Read, Write};
 use std::os::fd::{AsFd, BorrowedFd};
 use std::panic::{self, PanicHookInfo};
 use std::sync::{Mutex, MutexGuard, Once, OnceLock};
+use std::time::Duration;
 
 use ratatui::backend::{Backend as RatatuiBackend, ClearType, CrosstermBackend, WindowSize};
 use ratatui::buffer::Cell;
 use ratatui::layout::{Position, Size};
+use rustix::event::{PollFd, PollFlags, Timespec, poll};
 use rustix::termios::{InputModes, OptionalActions, Termios, tcgetattr, tcsetattr};
 use sindri::graphics::CellSize;
 use sindri::link::Links;
@@ -138,24 +140,29 @@ impl<W: Write> Backend<W> {
 
     /// One run drawn as the sequence that makes it: written in the ink of the cell the diff handed
     /// over, because the sequence draws the words and no cell of them is written.
-    fn large(&mut self, laid: &Laid, ink: &Cell) -> io::Result<()> {
+    fn large(
+        screen: &mut CrosstermBackend<W>,
+        links: &Links,
+        laid: &Laid,
+        ink: &Cell,
+        places: bool,
+    ) -> io::Result<()> {
         let run = laid.run();
         let mut sequence = ink.clone();
         sequence.set_symbol(&String::from_utf8_lossy(&osc::sized(
             run.scale(),
             run.words(),
         )));
-        let destination = match self.places {
-            true => self.links.at(laid.row(), laid.left()).map(String::from),
+        let destination = match places {
+            true => links.at(laid.row(), laid.left()).map(String::from),
             false => None,
         };
         if let Some(destination) = &destination {
-            self.screen.write_all(&osc::link(destination))?;
+            screen.write_all(&osc::link(destination))?;
         }
-        self.screen
-            .draw(std::iter::once((laid.left(), laid.row(), &sequence)))?;
+        screen.draw(std::iter::once((laid.left(), laid.row(), &sequence)))?;
         if destination.is_some() {
-            self.screen.write_all(&osc::link(""))?;
+            screen.write_all(&osc::link(""))?;
         }
         Ok(())
     }
@@ -184,21 +191,26 @@ impl<W: Write> RatatuiBackend for Backend<W> {
     {
         let mut cells: Vec<(u16, u16, &Cell)> = Vec::new();
         let mut naming: Option<String> = None;
-        let mut drawn: Vec<usize> = Vec::new();
+        let mut written: Vec<(u16, u16)> = Vec::new();
         for (x, y, cell) in content {
-            // A cell under a block is the block's: the terminal draws it, and the two rows it
-            // stands on are one glyph.
-            if self.sizes.under(y, x) {
-                continue;
-            }
-            if let Some(at) = self.sizes.above(y, x) {
+            let block = self
+                .sizes
+                .covers(y, x)
+                .map(|laid| (laid.row(), laid.left()));
+            if let Some((row, left)) = block {
+                // The cells of a block are the sequence's on its first row, and the rows under it
+                // are the block's and no cells of the frame at all.
+                if row != y {
+                    continue;
+                }
                 let run = std::mem::take(&mut cells);
                 self.run(naming.as_deref(), &run)?;
                 naming = None;
-                if !drawn.contains(&at) {
-                    drawn.push(at);
-                    let laid = self.sizes.laid()[at].clone();
-                    self.large(&laid, cell)?;
+                if !written.contains(&(row, left))
+                    && let Some(laid) = self.sizes.covers(y, x)
+                {
+                    written.push((row, left));
+                    Backend::<W>::large(&mut self.screen, &self.links, laid, cell, self.places)?;
                 }
                 continue;
             }
@@ -368,6 +380,27 @@ pub(crate) fn tell(out: &File, sequence: &[u8]) -> io::Result<()> {
     out.flush()
 }
 
+/// The time a terminal that will answer a question takes to: one that cannot says nothing, and a
+/// launch is never held open for it.
+pub(crate) const REPLY_WAIT: Duration = Duration::from_millis(120);
+
+/// Writes `ask` and reads whatever the terminal says back within the wait, or nothing at all when
+/// it does not answer. The bytes are the terminal's, and a key typed while it thought is among them.
+pub(crate) fn reply(terminal: &Terminal, ask: &[u8]) -> Option<Vec<u8>> {
+    if tell(&terminal.screen, ask).is_err() {
+        return None;
+    }
+    let wait = Timespec::try_from(REPLY_WAIT).ok()?;
+    let mut fds = [PollFd::new(&terminal.keys, PollFlags::IN)];
+    match poll(&mut fds, Some(&wait)) {
+        Ok(_) if fds[0].revents().contains(PollFlags::IN) => {}
+        _ => return None,
+    }
+    let mut read = [0u8; 64];
+    let count = Read::read(&mut &terminal.keys, &mut read).ok()?;
+    Some(read[..count].to_vec())
+}
+
 /// A lock held for the length of one statement: a panic hook that blocked on a poisoned lock
 /// would nest the panic it was called to clean up after.
 pub(crate) fn lock<T>(held: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -506,6 +539,7 @@ mod tests {
     use sindri::link::{Link, Links};
     use sindri::palette::Palette;
     use sindri::pen::{self, Clip};
+    use sindri::rows::Scroll;
     use sindri::size::{SCALE, Sized};
 
     use sindri_core::config::Config;
@@ -839,6 +873,36 @@ mod tests {
         assert!(
             places.contains("\x1b]8;;file://"),
             "and the path a call names is handed the file it was judged against"
+        );
+    }
+
+    #[test]
+    fn a_frame_whose_terminal_sizes_text_hands_it_the_heading_as_the_sequence_that_draws_it() {
+        let mut pty = Pty::open();
+        let terminal =
+            Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
+        let area = painted_at();
+        let mut canvas = canvas_at(&terminal, area).expect("a canvas over it");
+        let mut view = View::of(
+            vec![Entry::Assistant {
+                turn: 1,
+                text: SecretSet::default().redact("# A gate rule"),
+            }],
+            Scroll::Tail,
+        );
+        view.set_sizing(true);
+
+        paint(&mut canvas, &mut view).expect("a painted frame");
+        drop(canvas);
+
+        let drawn = pty.drawn();
+        assert!(
+            drawn.contains("\x1b]66;s=2;A gate rule\x1b\\"),
+            "the heading is handed the terminal as the one sequence that draws it: {drawn:?}"
+        );
+        assert!(
+            !words(&drawn).contains("A   g a t e"),
+            "and no cell of it is written as the cells the sizing leaves: {drawn:?}"
         );
     }
 

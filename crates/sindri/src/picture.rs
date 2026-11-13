@@ -6,13 +6,14 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
 use crate::graphics::{Ceiling, CellSize, Footprint, Svg};
+use crate::link;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Surface {
     workspace: Option<PathBuf>,
     cell: CellSize,
     draws: bool,
-    sizes: bool,
+    sizing: bool,
 }
 
 impl Surface {
@@ -20,24 +21,19 @@ impl Surface {
         Surface::default()
     }
 
-    pub fn of(workspace: Option<&Path>, cell: CellSize, draws: bool) -> Surface {
+    /// A surface of the facts a row is measured against: the `workspace` a picture is found in, the
+    /// pixels in a `cell`, whether this terminal `draws` pictures, and whether it `sizing`s text.
+    pub fn of(workspace: Option<&Path>, cell: CellSize, draws: bool, sizing: bool) -> Surface {
         Surface {
             workspace: workspace.map(Path::to_path_buf),
             cell,
             draws,
-            sizes: false,
+            sizing,
         }
     }
 
-    /// The same surface on a terminal that draws text at more than one cell: a heading is laid out
-    /// as the footprint the sizing leaves, so the width a row is measured by is the drawn one.
-    pub fn sizing(mut self, sizes: bool) -> Surface {
-        self.sizes = sizes;
-        self
-    }
-
-    pub fn sizes(&self) -> bool {
-        self.sizes
+    pub fn sizing(&self) -> bool {
+        self.sizing
     }
 
     pub fn workspace(&self) -> Option<&Path> {
@@ -204,14 +200,7 @@ impl std::fmt::Display for Refusal {
 /// `TERM_PROGRAM`: asking it costs a round trip this launch has spent on the cell size, and a
 /// terminal naming neither is taken to place no picture, so the words stay whole.
 pub fn speaks_kitty(term: Option<&str>, program: Option<&str>) -> bool {
-    let names_a_terminal_that_places_pictures = |word: &str| {
-        let word = word.to_ascii_lowercase();
-        ["kitty", "ghostty", "wezterm"]
-            .iter()
-            .any(|name| word.contains(name))
-    };
-    term.is_some_and(names_a_terminal_that_places_pictures)
-        || program.is_some_and(names_a_terminal_that_places_pictures)
+    link::named(term, program, &["kitty", "ghostty", "wezterm"])
 }
 
 /// The canonical path of `source` and of `workspace`, so neither `..` nor a symbolic link can

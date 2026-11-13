@@ -207,3 +207,45 @@ fn the_shift_arrows_do_nothing_when_no_mark_has_been_dragged() {
     );
     assert_eq!(view.mark(), None, "and no mark was invented from the key");
 }
+
+#[test]
+fn a_heading_drawn_large_is_marked_in_the_mark_ink_and_copied_as_its_words() {
+    let mut view = View::of(vec![answer(1, "# A gate rule")], Scroll::Tail);
+    view.set_sizing(true);
+    view.drag(Cell::new(0, 0), Cell::new(40, 100));
+
+    let frame = painted(&mut view);
+    let palette = view.palette();
+    let row_of = |y: u16| -> String {
+        (frame.area.x..frame.area.right())
+            .map(|x| buffer_cell(&frame, x, y).symbol().to_owned())
+            .collect()
+    };
+    let heading = (frame.area.y..frame.area.bottom())
+        .find(|y| row_of(*y).contains("A   g a t e"))
+        .expect("the heading is drawn as the cells the sizing leaves");
+
+    for x in frame.area.x..frame.area.right() {
+        let cell = buffer_cell(&frame, x, heading);
+        if cell.symbol().trim().is_empty() {
+            continue;
+        }
+        assert_eq!(
+            Ink::of(cell, &palette),
+            Some(Ink::Mark),
+            "column {x} of the heading is not the mark's, so the mark is drawn somewhere other \
+             than the cells it covers: {:?}",
+            row_of(heading)
+        );
+    }
+    assert!(
+        copied(&mut view).contains("A gate rule"),
+        "and the mark copies the heading as its words"
+    );
+}
+
+fn buffer_cell(frame: &Buffer, x: u16, y: u16) -> &ratatui::buffer::Cell {
+    frame
+        .cell((x, y))
+        .unwrap_or_else(|| panic!("row {y}, column {x} is outside the frame it is in"))
+}

@@ -1,5 +1,3 @@
-use crate::pen;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cell {
     pub row: u16,
@@ -11,6 +9,10 @@ impl Cell {
         Cell { row, column }
     }
 }
+
+/// One glyph of a row as the mark reads it: the column it is drawn from, the glyph, and the columns
+/// it covers — a glyph of a heading drawn at twice the cell is one word over two of them.
+pub type Glyph = (u16, char, u16);
 
 /// Two corners and not the cells they covered: a resize re-lays the band and a scroll
 /// moves it, so a mark that remembered cells would point at whatever came to sit there.
@@ -54,6 +56,7 @@ pub struct Span {
 pub struct Marked {
     row: u16,
     left: u16,
+    width: u16,
     glyphs: String,
 }
 
@@ -66,8 +69,10 @@ impl Marked {
         self.left
     }
 
+    /// The columns of the frame the mark covers, which is the cells its glyphs are drawn in and
+    /// never the glyphs themselves: one of them can be two columns wide.
     pub fn width(&self) -> u16 {
-        pen::cells(&self.glyphs)
+        self.width
     }
 
     pub fn glyphs(&self) -> &str {
@@ -76,7 +81,7 @@ impl Marked {
 }
 
 impl Span {
-    pub fn of(mark: Mark, lines: &[String]) -> Span {
+    pub fn of(mark: Mark, lines: &[Vec<Glyph>]) -> Span {
         let first = mark.anchor.row.min(mark.head.row);
         let last = mark.anchor.row.max(mark.head.row);
         let from = mark.anchor.column.min(mark.head.column);
@@ -110,23 +115,27 @@ impl Span {
     }
 }
 
-fn marked_row(row: u16, line: &str, from: u16, to: u16) -> Option<Marked> {
-    let mut kept: Vec<(u16, char)> = Vec::new();
-    let mut column = 0u16;
-    for glyph in line.chars() {
-        let width = pen::cell(glyph);
-        let end = column.saturating_add(width);
-        if end > from && column <= to {
-            kept.push((column, glyph));
-        }
-        column = end;
-    }
-    let first = kept.iter().position(|(_, glyph)| !glyph.is_whitespace())?;
-    let last = kept.iter().rposition(|(_, glyph)| !glyph.is_whitespace())?;
+fn marked_row(row: u16, line: &[Glyph], from: u16, to: u16) -> Option<Marked> {
+    let kept: Vec<&Glyph> = line
+        .iter()
+        .filter(|(column, _, width)| column.saturating_add(*width) > from && *column <= to)
+        .collect();
+    let first = kept
+        .iter()
+        .position(|(_, glyph, _)| !glyph.is_whitespace())?;
+    let last = kept
+        .iter()
+        .rposition(|(_, glyph, _)| !glyph.is_whitespace())?;
+    let left = kept[first].0;
+    let (end, _, width) = *kept[last];
     Some(Marked {
         row,
-        left: kept[first].0,
-        glyphs: kept[first..=last].iter().map(|(_, glyph)| *glyph).collect(),
+        left,
+        width: end.saturating_add(width).saturating_sub(left),
+        glyphs: kept[first..=last]
+            .iter()
+            .map(|(_, glyph, _)| *glyph)
+            .collect(),
     })
 }
 
@@ -134,8 +143,23 @@ fn marked_row(row: u16, line: &str, from: u16, to: u16) -> Option<Marked> {
 mod tests {
     use super::*;
 
-    fn band(rows: &[&str]) -> Vec<String> {
-        rows.iter().map(|row| String::from(*row)).collect()
+    use crate::pen;
+
+    /// Rows of a band as the mark reads them: every glyph with the column it is drawn from and the
+    /// columns it covers.
+    fn band(rows: &[&str]) -> Vec<Vec<Glyph>> {
+        rows.iter()
+            .map(|row| {
+                let mut column = 0u16;
+                let mut line = Vec::new();
+                for glyph in row.chars() {
+                    let width = pen::cell(glyph);
+                    line.push((column, glyph, width));
+                    column = column.saturating_add(width);
+                }
+                line
+            })
+            .collect()
     }
 
     #[test]

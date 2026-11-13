@@ -5,21 +5,18 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use crate::ink::Look;
+use crate::link;
 use crate::palette::Palette;
 use crate::pen::{self, Clip};
 
 /// The one scale this product asks a terminal for: the two highest headings at twice the cell.
 pub const SCALE: u16 = 2;
 
-/// Whether a terminal draws text at more than one cell, read off `TERM` and `TERM_PROGRAM`: one
+/// Whether a terminal draws text at more than one cell, read off the names it gives itself: one
 /// that names none is handed the heading it is handed today, because a heading spaced out by a
 /// terminal that reads no sizing is worse than a small one.
 pub fn speaks(term: Option<&str>, program: Option<&str>) -> bool {
-    let sizes = |word: &str| {
-        let word = word.to_ascii_lowercase();
-        ["kitty", "ghostty"].iter().any(|name| word.contains(name))
-    };
-    term.is_some_and(sizes) || program.is_some_and(sizes)
+    link::named(term, program, &["kitty", "ghostty"])
 }
 
 /// One run of a row's cells drawn at `scale` times the cell: the columns it covers on its row, the
@@ -47,8 +44,9 @@ impl Sized {
         }
     }
 
-    pub fn left(&self) -> u16 {
-        self.left
+    /// Whether the columns of this run cover the column `at` of the row it is drawn on.
+    pub fn covers(&self, at: u16) -> bool {
+        self.left <= at && at < self.left.saturating_add(self.width)
     }
 
     /// The same run `by` columns further right: a row indented under a gutter moves the cells it
@@ -70,10 +68,6 @@ impl Sized {
 
     pub fn words(&self) -> &str {
         &self.words
-    }
-
-    pub fn look(&self) -> Look {
-        self.look
     }
 
     /// The same words as the cells a scaled glyph leaves: every glyph followed by the columns the
@@ -133,8 +127,7 @@ impl Sizes {
         Sizes::default()
     }
 
-    /// Lays the runs a row names at the frame's row `row`, from the frame's column `left`: a run is
-    /// laid out from its own row's left edge and drawn where the frame puts it.
+    /// Lays the runs a row names at the frame's row `row`, from the column `left` it was drawn at.
     pub fn lay(&mut self, row: u16, left: u16, runs: &[Sized]) {
         self.laid.extend(runs.iter().map(|run| Laid {
             row,
@@ -166,26 +159,14 @@ impl Sizes {
         });
     }
 
-    /// The run whose first row covers the cell at `row`'s `column`, which is the row the block is
-    /// written on. A cell on a row under it is covered by the same block and drawn by nothing.
-    pub fn above(&self, row: u16, column: u16) -> Option<usize> {
-        self.laid
-            .iter()
-            .position(|laid| laid.row == row && laid.covers(row, column))
-    }
-
-    pub fn under(&self, row: u16, column: u16) -> bool {
-        self.laid
-            .iter()
-            .any(|laid| laid.row != row && laid.covers(row, column))
+    /// The run covering the cell at `row`'s `column`: a block is written on its first row, and the
+    /// cells a row under it holds are the block's and drawn by it. Nothing it does not cover.
+    pub fn covers(&self, row: u16, column: u16) -> Option<&Laid> {
+        self.laid.iter().find(|laid| laid.covers(row, column))
     }
 
     pub fn laid(&self) -> &[Laid] {
         &self.laid
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.laid.is_empty()
     }
 }
 
@@ -194,7 +175,6 @@ mod tests {
     use super::*;
 
     use crate::ink::Ink;
-    use crate::palette::Palette;
 
     #[test]
     fn a_run_is_written_as_its_words_and_measured_as_the_cells_they_leave() {
@@ -232,7 +212,7 @@ mod tests {
         sizes.settle(band, &mut buffer, &palette);
 
         assert!(
-            sizes.is_empty(),
+            sizes.laid().is_empty(),
             "a block with no row of the band under it is no block at all"
         );
         assert_eq!(

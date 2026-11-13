@@ -11,12 +11,13 @@ use sindri_core::tools::OPEN;
 
 use crate::ink::{Ink, Look};
 use crate::link::{Link, Links, Way};
+use crate::mark;
 use crate::markdown;
 use crate::palette::{Band, Palette};
 use crate::pen::{self, Clip};
 use crate::picture::{self, Surface};
 use crate::pulse::Head;
-use crate::size::{Sized, Sizes};
+use crate::size::{self, Sized, Sizes};
 use crate::stream::Stream;
 
 /// How far a body sits inside the row that names it, and the blank gutter an answer is
@@ -179,6 +180,26 @@ impl Row {
 
     pub fn glyphs(&self) -> String {
         self.spans.iter().map(|(text, _)| text.as_str()).collect()
+    }
+
+    /// The glyphs this row says, each with the column it is drawn from and the columns it covers: a
+    /// glyph of a run drawn at more than one cell is one word over that many.
+    pub fn glyph_columns(&self) -> Vec<mark::Glyph> {
+        let mut glyphs = Vec::new();
+        let mut column = 0u16;
+        for (text, _) in &self.spans {
+            for glyph in text.chars() {
+                let scale = self
+                    .sizes
+                    .iter()
+                    .find(|run| run.covers(column))
+                    .map_or(1, size::Sized::scale);
+                let width = pen::cell(glyph).saturating_mul(scale);
+                glyphs.push((column, glyph, width));
+                column = column.saturating_add(width);
+            }
+        }
+        glyphs
     }
 
     pub fn paint(

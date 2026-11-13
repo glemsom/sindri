@@ -225,7 +225,7 @@ fn construct(text: &str) -> View {
 /// laid out as the cells the sizing leaves and measured by them.
 fn sized(text: &str) -> View {
     let mut view = construct(text);
-    view.set_sizes(true);
+    view.set_sizing(true);
     view
 }
 

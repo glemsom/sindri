@@ -117,11 +117,24 @@ impl Way {
     }
 }
 
+/// The terminals that speak `OSC 8`, which are the ones a window and a mark are written to as well.
+pub const HYPERLINKS: &[&str] = &[
+    "kitty",
+    "ghostty",
+    "wezterm",
+    "iterm",
+    "vscode",
+    "alacritty",
+    "foot",
+    "contour",
+    "rio",
+];
+
 /// Whether a terminal places a hyperlink, read off the names it gives itself: the ones that speak
 /// `OSC 8`, and no guess at a terminal that may not, because a destination is never drawn. A VTE
 /// terminal says which version it is, and the version that learned `OSC 8` is the oldest that does.
 pub fn speaks(term: Option<&str>, program: Option<&str>, vte: Option<&str>) -> bool {
-    named(term, program)
+    named(term, program, HYPERLINKS)
         || vte.is_some_and(|version| {
             version
                 .trim()
@@ -130,25 +143,13 @@ pub fn speaks(term: Option<&str>, program: Option<&str>, vte: Option<&str>) -> b
         })
 }
 
-/// Whether a terminal names itself after one this product can vouch for: the one read every
-/// capability is asked from, because what a terminal can do is said by the name it gives itself
-/// and never guessed at one that says nothing.
-pub fn named(term: Option<&str>, program: Option<&str>) -> bool {
+/// Whether a terminal names itself after one of `names`: the one read every capability is asked
+/// from, because what a terminal can do is said by the name it gives itself and never guessed at
+/// one that says nothing. Each capability names the terminals it can vouch for.
+pub fn named(term: Option<&str>, program: Option<&str>, names: &[&str]) -> bool {
     let names_one = |word: &str| {
         let word = word.to_ascii_lowercase();
-        [
-            "kitty",
-            "ghostty",
-            "wezterm",
-            "iterm",
-            "vscode",
-            "alacritty",
-            "foot",
-            "contour",
-            "rio",
-        ]
-        .iter()
-        .any(|name| word.contains(name))
+        names.iter().any(|name| word.contains(name))
     };
     term.is_some_and(names_one) || program.is_some_and(names_one)
 }

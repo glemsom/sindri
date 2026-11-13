@@ -1063,7 +1063,7 @@ fn the_sentence_saying_a_diagram_will_not_draw_is_prose_and_not_code() {
 /// The surface a terminal that draws text at more than one cell is measured against: its headings
 /// are laid out as the cells the sizing leaves, and drawn as the words they are.
 fn large() -> Surface {
-    Surface::of(None, CellSize::NOMINAL, false).sizing(true)
+    Surface::of(None, CellSize::NOMINAL, false, true)
 }
 
 #[test]
@@ -1117,7 +1117,7 @@ fn a_terminal_that_draws_no_large_text_is_handed_the_heading_it_is_handed_today(
             said,
             40,
             0,
-            &Surface::of(None, CellSize::NOMINAL, false).sizing(false)
+            &Surface::of(None, CellSize::NOMINAL, false, false)
         )),
         drawn(&markdown::rows_on(said, 40, 0, &Surface::none())),
         "a surface that says the terminal sizes no text is the surface of a terminal that \
@@ -1198,4 +1198,29 @@ fn a_wrapped_large_heading_keeps_one_large_row_to_a_line_and_the_rows_under_it_k
             );
         }
     }
+}
+
+#[test]
+fn a_heading_a_band_leaves_no_whole_cell_for_is_cut_by_its_edge_and_never_by_a_column() {
+    let cut = markdown::rows_on("# 日本", 3, 0, &large());
+    assert_eq!(
+        drawn(&cut),
+        ["", "日", "本", "══"],
+        "a glyph at twice the cell takes four columns and a band three wide holds none of it, so \
+         the heading is drawn as the words it says and ruled under them"
+    );
+    for row in &cut {
+        assert!(
+            row.width() <= 3,
+            "a row ran past the band it was laid out for: {row:?}"
+        );
+    }
+
+    let whole = markdown::rows_on("# 日", 4, 0, &large());
+    assert_eq!(
+        drawn(&whole),
+        ["", "日", "", "════"],
+        "a band four wide holds the glyph and the row under it, so the heading is drawn at twice \
+         the cell and fills the band's edge exactly"
+    );
 }

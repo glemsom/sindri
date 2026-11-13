@@ -1,20 +1,14 @@
 //! The cell-size question and the bounded wait for its answer, asked before the first frame is
 //! painted: a cell measured wrong is a picture placed wrong.
 
-use std::io::Read;
-use std::time::Duration;
-
-use rustix::event::{PollFd, PollFlags, Timespec, poll};
 use rustix::termios::{Winsize, tcgetwinsize};
 use sindri::graphics::CellSize;
 
-use crate::term::{Terminal, tell};
+use crate::term::{Terminal, reply};
 
 /// `CSI 16 t`: asks how many pixels one cell is. A terminal that knows answers
 /// `CSI 6 ; height ; width t` and one that cannot says nothing, hence the bounded wait.
 const ASK_CELL: &[u8] = b"\x1b[16t";
-
-const REPLY_WAIT: Duration = Duration::from_millis(120);
 
 /// The pixel size of one cell, as this launch's terminal reports it, and the bytes that were not
 /// the answer and are therefore a reader's keys. Three answers, cheapest first: `winsize`, then
@@ -23,21 +17,10 @@ pub(crate) fn probed_cell(terminal: &Terminal) -> (CellSize, Vec<u8>) {
     if let Some(cell) = tcgetwinsize(&terminal.screen).ok().and_then(of_winsize) {
         return (cell, Vec::new());
     }
-    if tell(&terminal.screen, ASK_CELL).is_err() {
-        return (CellSize::NOMINAL, Vec::new());
-    }
-    let Some(wait) = Timespec::try_from(REPLY_WAIT).ok() else {
+    let Some(bytes) = reply(terminal, ASK_CELL) else {
         return (CellSize::NOMINAL, Vec::new());
     };
-    let mut fds = [PollFd::new(&terminal.keys, PollFlags::IN)];
-    match poll(&mut fds, Some(&wait)) {
-        Ok(_) if fds[0].revents().contains(PollFlags::IN) => {}
-        // Nothing arrived in the time a terminal that will answer takes: this one will not.
-        _ => return (CellSize::NOMINAL, Vec::new()),
-    }
-    let mut read = [0u8; 64];
-    let count = Read::read(&mut &terminal.keys, &mut read).unwrap_or(0);
-    let (cell, typed) = cell_reply(&read[..count]);
+    let (cell, typed) = cell_reply(&bytes);
     (cell.unwrap_or(CellSize::NOMINAL), typed)
 }
 

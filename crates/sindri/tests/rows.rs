@@ -132,7 +132,7 @@ fn a_surface_that_changed_relays_the_band_once_and_one_that_did_not_relays_nothi
         "a surface that changed nothing drops no row and lays none out again"
     );
 
-    rows.retune(Surface::of(None, CellSize::new(10, 20), true));
+    rows.retune(Surface::of(None, CellSize::new(10, 20), true, false));
     rows.window(Scroll::Tail, 10);
     assert_eq!(
         rows.lays(),
@@ -852,7 +852,7 @@ fn spelled(row: &Row, cols: u16) -> String {
 fn a_live_answer_that_opens_on_a_large_heading_keeps_the_cells_the_sizing_leaves() {
     let mut rows = Rows::new();
     rows.resize(40);
-    rows.retune(Surface::of(None, CellSize::new(10, 20), false).sizing(true));
+    rows.retune(Surface::of(None, CellSize::new(10, 20), false, true));
     let mut stream = Stream::new();
     stream.text("# A gate rule");
     rows.live(&stream, Some(&Pulse::live(4_200).head()));

@@ -392,7 +392,7 @@ impl Room {
         let (look, rule) = heading(level);
         self.block = look;
         self.rule = rule.map(Rule::new);
-        self.scale = match self.surface.sizes() && large(level) {
+        self.scale = match self.surface.sizing() && large(level) {
             true => size::SCALE,
             false => 1,
         };
@@ -765,13 +765,20 @@ impl Room {
     }
 
     fn flush(&mut self) {
-        if let Some(rule) = &mut self.rule {
-            rule.wrote(self.used.saturating_mul(usize::from(self.scale)));
-        }
         let gutter = self.columns();
+        let runs = self.runs(gutter);
         let scale = usize::from(self.scale);
+        if let Some(rule) = &mut self.rule {
+            // The rule is as wide as the heading is drawn: the cells the sizing leaves where it
+            // was drawn large, and the words where the band's edge left it no whole cell.
+            rule.wrote(match runs.is_empty() {
+                true => self.used,
+                false => self.used.saturating_mul(scale),
+            });
+        }
         let mut row = Row::of(self.spans());
-        for run in self.runs(gutter) {
+        let sized = !runs.is_empty();
+        for run in runs {
             row = row.sized(run);
         }
         for run in std::mem::take(&mut self.laid) {
@@ -788,7 +795,7 @@ impl Room {
             true => row.banded(Band::Well),
             false => row,
         });
-        if self.scale > 1 {
+        if sized {
             // A scaled glyph is drawn over the row under it as well, so that row is the block's
             // own: it keeps the gutter and says nothing else, because no cell of it is the frame's.
             self.first = false;
@@ -800,8 +807,9 @@ impl Room {
         self.first = false;
     }
 
-    /// The row in hand as the runs a terminal draws at more than one cell: one run per look, cut
-    /// where the band's edge leaves a glyph no whole cell of its own.
+    /// The row in hand as the runs a terminal draws at more than one cell, one run per span: none
+    /// at all where the band's edge leaves one of them no whole cells, because a scaled glyph is
+    /// never cut by a column and a row is drawn one way or the other.
     fn runs(&self, gutter: usize) -> Vec<Sized> {
         if self.scale == 1 {
             return Vec::new();
@@ -809,23 +817,15 @@ impl Room {
         let room = self.room_cells();
         let mut runs: Vec<Sized> = Vec::new();
         let mut left = gutter;
+        let mut used = 0usize;
         for (text, look) in &self.line {
-            let budget = room.saturating_sub(left);
-            let (head, whole) =
-                match usize::from(pen::cells(text)) * usize::from(self.scale) <= budget {
-                    true => (text.clone(), true),
-                    false => (split_at(text, budget / usize::from(self.scale)).0, false),
-                };
-            let drawn = usize::from(pen::cells(&head)) * usize::from(self.scale);
-            if drawn == 0 || drawn > budget {
-                break;
+            let run = Sized::new(pen::columns(left), self.scale, text.as_str(), *look);
+            used = used.saturating_add(usize::from(run.width()));
+            if used > room {
+                return Vec::new();
             }
-            let run = Sized::new(pen::columns(left), self.scale, head, *look);
             left = left.saturating_add(usize::from(run.width()));
             runs.push(run);
-            if !whole {
-                break;
-            }
         }
         runs
     }

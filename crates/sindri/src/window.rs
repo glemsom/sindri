@@ -17,7 +17,7 @@ use crate::osc;
 /// and none that do not, because a title a terminal mangles is worse than the shell's own. A VTE
 /// names only its version, and no version is known to have learned the mark.
 pub fn speaks(term: Option<&str>, program: Option<&str>) -> bool {
-    link::named(term, program)
+    link::named(term, program, link::HYPERLINKS)
 }
 
 /// What a launch says to its terminal: the status document a status bar reads, and — where the
