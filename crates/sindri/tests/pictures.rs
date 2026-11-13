@@ -13,7 +13,7 @@ use ratatui::layout::{Position, Rect};
 use sindri::composer::{Key, Outcome};
 use sindri::face;
 use sindri::graphics::{Ceiling, CellSize};
-use sindri::ledger::{self, COLUMNS, Ctx, Facts};
+use sindri::ledger::{self, Ctx, Facts, Rail};
 use sindri::mark::Cell;
 use sindri::markdown;
 use sindri::picture::{self, Surface};
@@ -475,11 +475,13 @@ fn shared_band(cols: u16, rows: u16) -> Rect {
     }
 }
 
-/// The rail's own columns of that band: the last thirty-two, down the frame's right-hand edge.
+/// The rail's own columns of that band: the ones the frame's width gives it, down its right-hand
+/// edge.
 fn rail_band(cols: u16, rows: u16) -> Rect {
+    let columns = Rail::columns(cols);
     Rect {
-        x: cols - COLUMNS,
-        width: COLUMNS,
+        x: cols - columns,
+        width: columns,
         ..shared_band(cols, rows)
     }
 }
@@ -958,16 +960,29 @@ fn the_face_is_placed_over_the_top_rows_of_the_rail_above_the_first_block() {
             );
         }
 
-        let first = rail.y + face.rows();
+        let rule = rail.y + face.rows();
+        assert_eq!(
+            rail_row(&painted, rail, rule).trim_end(),
+            "─".repeat(usize::from(rail.width)),
+            "the face is closed by the one rule the rail draws in its body"
+        );
+        let first = rule + 1;
         assert_eq!(
             rail_row(&painted, rail, first).trim_end(),
-            "wire                   anthropic",
-            "the first block stands on the row under the face, whole"
+            "wire      anthropic",
+            "and the first block stands on the row under that rule, whole"
         );
         assert_eq!(
             rail_row(&painted, rail, first + 1).trim_end(),
-            "model         claude-sonnet-4-5…",
-            "and the block under it reads in the contract's order, under the face and not over it"
+            format!(
+                "model     {}",
+                match cols {
+                    100 => "claude-sonnet-4-5…",
+                    _ => "claude-sonnet-4-5-20250929",
+                }
+            ),
+            "and the block under it reads in the contract's order, under the face and not over \
+             it, with the served name whole where the wider frame's rail holds it"
         );
     }
 }
@@ -987,7 +1002,8 @@ fn every_fact_the_rail_drew_without_a_face_is_drawn_whole_below_one() {
                 .filter(|row| !row.is_empty())
                 .collect()
         };
-        let under = u16::try_from(pictured_rows(&with).len()).expect("the band's rows");
+        // the rows the face takes, and the one under them that holds the rule closing it
+        let under = u16::try_from(pictured_rows(&with).len()).expect("the band's rows") + 1;
 
         assert_eq!(
             stated(&with, rail.y + under),
@@ -1041,9 +1057,9 @@ fn a_frame_the_face_is_turned_off_for_is_the_frame_a_terminal_that_places_no_pic
         );
         assert_eq!(
             rail_row(&off, rail, rail.y).trim_end(),
-            "wire                   anthropic",
+            "wire      anthropic",
             "the facts stand from the rail's first row, and the row under them is the second \
-             fact: no band is reserved for a face that is not drawn"
+             fact: no band is reserved for a face that is not drawn, and no rule closes one"
         );
         assert_eq!(
             off, placeless,
@@ -1076,7 +1092,7 @@ fn a_terminal_that_places_no_picture_draws_the_facts_from_the_rails_first_row() 
         );
         assert_eq!(
             rail_row(&painted, rail, rail.y).trim_end(),
-            "wire                   anthropic",
+            "wire      anthropic",
             "the facts stand from the rail's first row, as they did before the face was drawn"
         );
     }

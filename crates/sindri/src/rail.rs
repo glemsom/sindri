@@ -3,9 +3,14 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
+use crate::ink::Ink;
 use crate::ledger::{self, Facts, Rail, RailBand};
 use crate::palette::{Band, Edge, Palette};
 use crate::pen;
+
+/// The one rule the rail draws in its body: the face is closed by a line, and the blocks under it
+/// are parted by air rather than by a rule each.
+const HAIRLINE: char = '─';
 
 pub fn paint(facts: &Facts, rail: Rail, band: RailBand, buffer: &mut Buffer, palette: &Palette) {
     let area = band.area;
@@ -15,12 +20,35 @@ pub fn paint(facts: &Facts, rail: Rail, band: RailBand, buffer: &mut Buffer, pal
     pen::claim(buffer, area, palette.ground(Some(Band::Rail)));
     if rail == Rail::Ledger {
         elevation(buffer, area, palette);
+        under_the_face(band, buffer, palette);
     }
     ledger::draw(
         &ledger::rows(facts, rail.into(), band.facts),
         buffer,
         palette,
     );
+}
+
+/// The rule that closes a face drawn over the rail's top rows, and nothing when the band holds no
+/// picture or no row under one.
+fn under_the_face(band: RailBand, buffer: &mut Buffer, palette: &Palette) {
+    let Some(picture) = band.picture else {
+        return;
+    };
+    let y = picture.y.saturating_add(picture.height);
+    if y < band.area.bottom() {
+        pen::rule(
+            buffer,
+            Rect {
+                y,
+                height: 1,
+                ..band.area
+            },
+            HAIRLINE,
+            Ink::Dim,
+            palette,
+        );
+    }
 }
 
 /// The two ends a ledger's band carries light at: the rule down the column it meets the
@@ -52,7 +80,11 @@ mod tests {
 
     use super::*;
     use crate::ink::Ink;
-    use crate::ledger::{COLUMNS, Ctx, FIELD, FULL_CELL, GAP, METER, tokens};
+    use crate::ledger::{Ctx, FIELD, FLOOR, FULL_CELL, GAP, METER, Rail, tokens};
+
+    /// The band a ledger test stands in: the rail at its floor, which is what the narrowest frame
+    /// that holds one is handed.
+    const COLUMNS: u16 = FLOOR;
     use crate::palette::Edge;
     use crate::pen;
     use crate::readback::{column_of, inks, under};
@@ -196,7 +228,7 @@ mod tests {
 
     #[test]
     fn a_picture_over_the_rails_top_rows_is_drawn_on_the_rails_ground_and_no_fact_stands_there() {
-        let area = band(COLUMNS, 17);
+        let area = band(COLUMNS, 30);
         let mut buffer = Buffer::empty(area);
 
         super::paint(
@@ -230,9 +262,21 @@ mod tests {
             );
         }
         assert_eq!(
+            under(&buffer, area.x, 11),
+            PALETTE.edge(Edge::Lit),
+            "and the rule that closes the face is written over the boundary's ground and never \
+             in place of it, so one line of the rail's edge is not left unlit"
+        );
+        assert_eq!(
             glyphs(&buffer, 11).trim_end(),
-            "wire                   anthropic",
-            "and the first block stands on the row under the picture"
+            pen::filled(COLUMNS, '─').trim_end(),
+            "the face is closed by the one rule the rail draws in its body, and the block under \
+             it is parted from it by no second line"
+        );
+        assert_eq!(
+            glyphs(&buffer, 12).trim_end(),
+            "wire      anthropic",
+            "so the first block stands on the row under that rule"
         );
     }
 
@@ -432,13 +476,13 @@ mod tests {
         assert_eq!(
             rows[..7],
             [
-                "wire                   anthropic",
-                "model         claude-sonnet-4-5…",
-                "think                       high",
-                "────────────────────────────────",
+                "wire      anthropic             ",
+                "model     claude-sonnet-4-5…    ",
+                "think     high                  ",
+                "                                ",
                 "turns                    3 / 250",
                 "cache                        88%",
-                "────────────────────────────────",
+                "                                ",
             ],
             "a frame before the first reply has no size, so it draws no ctx row and the \
              block closes up under the turns"
@@ -488,16 +532,16 @@ mod tests {
         assert_eq!(
             rows,
             [
-                "wire                   anthropic",
-                "model              claude-sonnet",
-                "think                       high",
+                "wire      anthropic             ",
+                "model     claude-sonnet         ",
+                "think     high                  ",
             ],
             "the model block holds the fact, one row below the model it is about"
         );
     }
 
     #[test]
-    fn the_ledger_reads_its_blocks_in_the_contracts_order_with_a_hairline_between_two() {
+    fn the_ledger_reads_its_blocks_in_the_contracts_order_with_air_between_two() {
         let mut buffer = Buffer::empty(band(COLUMNS, 17));
 
         paint(
@@ -512,30 +556,30 @@ mod tests {
         assert_eq!(
             rows,
             [
-                "wire                   anthropic",
-                "model         claude-sonnet-4-5…",
-                "think                       high",
-                "────────────────────────────────",
+                "wire      anthropic             ",
+                "model     claude-sonnet-4-5…    ",
+                "think     high                  ",
+                "                                ",
                 "turns                    3 / 250",
                 "ctx                        48.2k",
                 "cache                        88%",
-                "────────────────────────────────",
-                "workspace   …/.worktrees/46-rail",
-                "branch         spec/1-capability",
-                "────────────────────────────────",
+                "                                ",
+                "workspace …/.worktrees/46-rail  ",
+                "branch    spec/1-capability     ",
+                "                                ",
                 "skills                         2",
-                "────────────────────────────────",
-                "sandbox                    bwrap",
-                "────────────────────────────────",
-                "session                 9f2c7a41",
-                "temp              …/9f2c7a41/tmp",
+                "                                ",
+                "sandbox   bwrap                 ",
+                "                                ",
+                "session   9f2c7a41              ",
+                "temp      …/9f2c7a41/tmp        ",
             ],
-            "six blocks, a hairline between two of them, nothing given up at this width"
+            "six blocks, an empty row between two of them, nothing given up at this width"
         );
         assert_eq!(
             inks(&buffer, 3, &PALETTE),
-            [(Ink::Dim, 32)],
-            "the hairline runs the rail's width"
+            [(Ink::Plain, 32)],
+            "the row between two blocks is the rail's own ground and no rule is drawn on it"
         );
         assert_eq!(
             inks(&buffer, 4, &PALETTE),
@@ -564,7 +608,7 @@ mod tests {
 
         assert_eq!(
             (glyphs(&buffer, 0).trim_end(), glyphs(&buffer, 1).trim_end()),
-            ("model              claude-sonnet", ""),
+            ("model     claude-sonnet", ""),
             "a rail handed no wire has no wire row, and nothing went, so no row counts it"
         );
     }
@@ -572,9 +616,9 @@ mod tests {
     #[test]
     fn a_ledger_row_draws_the_wire_by_its_word_and_nothing_beside_it() {
         for (word, row) in [
-            ("anthropic", "wire                   anthropic"),
-            ("openai", "wire                      openai"),
-            ("copilot", "wire                     copilot"),
+            ("anthropic", "wire      anthropic             "),
+            ("openai", "wire      openai                "),
+            ("copilot", "wire      copilot               "),
         ] {
             let facts = Facts {
                 wire: Some(String::from(word)),
@@ -617,8 +661,8 @@ mod tests {
         assert_eq!(
             glyphs(&buffer, 0),
             "+1 more                         ",
-            "a branch wider than a thirty-two column rail leaves no room for its value, so \
-             the fact goes and the row says so"
+            "a branch wider than the rail's whole column leaves no room for its value, so the \
+             fact goes and the row says so"
         );
         assert!(
             !glyphs(&buffer, 0).contains("spec/a"),
@@ -644,7 +688,7 @@ mod tests {
 
         assert_eq!(
             glyphs(&ledger, 0),
-            "model         claude-sonnet-4-5…",
+            "model     claude-sonnet-4-5…    ",
             "a dated name takes the value column whole, and the mark says the date stamp went"
         );
 
@@ -712,13 +756,13 @@ mod tests {
         assert_eq!(
             rows,
             [
-                "wire                   anthropic",
-                "model         claude-sonnet-4-5…",
-                "think                       high",
-                "────────────────────────────────",
+                "wire      anthropic             ",
+                "model     claude-sonnet-4-5…    ",
+                "think     high                  ",
+                "                                ",
                 "turns                    3 / 250",
-                "────────────────────────────────",
-                "sandbox                    bwrap",
+                "                                ",
+                "sandbox   bwrap                 ",
                 "+7 more                         ",
             ],
             "temp, cache, session, branch, skills, ctx and workspace went, in that \
@@ -742,9 +786,9 @@ mod tests {
         assert_eq!(
             rows,
             [
-                "model         claude-sonnet-4-5…",
-                "────────────────────────────────",
-                "sandbox                    bwrap",
+                "model     claude-sonnet-4-5…    ",
+                "                                ",
+                "sandbox   bwrap                 ",
                 "+10 more                        ",
             ],
             "thinking is given up before the model it sits under, so the model keeps its row"
@@ -974,12 +1018,12 @@ mod tests {
 
         assert_eq!(
             glyphs(&buffer, 0),
-            "model              claude-sonnet",
+            "model     claude-sonnet         ",
             "the label in its ten-column field and the value against the rail's last column"
         );
         assert_eq!(
             glyphs(&buffer, 1),
-            "think                       high",
+            "think     high                  ",
             "and a value of another width ends in that same column: one hanging edge, and \
              no run of leaders out to it"
         );

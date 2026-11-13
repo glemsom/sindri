@@ -24,8 +24,18 @@ fn drawn(text: &str) -> usize {
     usize::from(pen::cells(text))
 }
 
-/// The frame width the ledger gives way at: a hundred-column frame is the last that holds one.
-pub const NARROW: u16 = 100;
+/// The frame width the ledger gives way at: the narrowest that holds the transcript's floor beside
+/// the rail's own, below which the rail is one strip.
+pub const NARROW: u16 = FLOOR + TRANSCRIPT;
+
+/// The narrowest the rail's column is drawn, and the widest: a frame that holds a ledger is handed
+/// the floor, and one wide enough for the ceiling is handed no more.
+pub(crate) const FLOOR: u16 = 32;
+pub(crate) const CEILING: u16 = 44;
+
+/// The columns the transcript keeps before the rail takes any more than its floor: the rail grows
+/// into what a frame holds over this, so the transcript's own width moves by a column at a time.
+const TRANSCRIPT: u16 = 68;
 
 /// The two shapes a frame's rail is drawn in: the ledger's column beside a transcript, which has
 /// room for a pair beside its meter, and the strip along a band's bottom row, which has room for
@@ -37,14 +47,29 @@ pub enum Rail {
 }
 
 impl Rail {
-    /// The rail a frame `width` columns wide draws: the strip below a hundred columns, and the
-    /// ledger's column from a hundred up.
+    /// The rail a frame `width` columns wide draws: the strip below [`NARROW`] columns, and the
+    /// ledger's column from it up.
     pub fn of(width: u16) -> Rail {
         if width < NARROW {
             Rail::Strip
         } else {
             Rail::Ledger
         }
+    }
+
+    /// The columns a frame `width` wide is drawn down its right-hand edge: what it holds over the
+    /// transcript between its floor and its ceiling. A wide frame draws a served name whole where a
+    /// narrow one cuts it to its head, and a frame narrower than the floor is handed all of itself.
+    pub const fn columns(width: u16) -> u16 {
+        let over = width.saturating_sub(TRANSCRIPT);
+        let columns = if over < FLOOR {
+            FLOOR
+        } else if over > CEILING {
+            CEILING
+        } else {
+            over
+        };
+        if columns > width { width } else { columns }
     }
 }
 
@@ -214,6 +239,32 @@ impl Kind {
             Kind::End => "end",
         }
     }
+
+    /// Which way a fact of this kind hangs: the kinds whose value is a number shape the digits,
+    /// and the kinds whose value is a word are said as one phrase with the label.
+    fn hang(self) -> Hang {
+        match self {
+            Kind::Turns
+            | Kind::Ctx
+            | Kind::Cache
+            | Kind::Skills
+            | Kind::Input
+            | Kind::Output
+            | Kind::Total
+            | Kind::Cached
+            | Kind::Reasoning
+            | Kind::Exit => Hang::Right,
+            _ => Hang::Left,
+        }
+    }
+}
+
+/// Which edge of its row a fact's value hangs on: a number against the row's last column, so the
+/// digits of two numbers line up, and a word from the label, so the two read as one phrase.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Hang {
+    Left,
+    Right,
 }
 
 /// What a launch knows before its first run: the wire and the model the config names, the
@@ -545,16 +596,13 @@ pub(crate) fn short_id(guid: &str) -> &str {
     }
 }
 
-/// The columns the ledger takes down a frame's right-hand edge.
-pub const COLUMNS: u16 = 32;
-
 /// The columns a label field holds, whatever the label says, so every label starts in one column
 /// and every value hangs from the field's far side.
 pub(crate) const FIELD: u16 = 10;
 
-/// The columns a fact's value is cut to, whatever shape reads it: a ledger's field comes off the
-/// front of its column, and a strip's copy of a name is cut the same way.
-const VALUE: usize = (COLUMNS - FIELD) as usize;
+/// The columns the strip's one row cuts a value to: the room the rail's floor leaves beside its
+/// field, which is what a row carrying four facts can count on.
+const VALUE: usize = (FLOOR - FIELD) as usize;
 
 /// What lies between two facts on the strip's one row, the gap the footer puts between its hints.
 pub(crate) const GAP: &str = " · ";
@@ -619,9 +667,9 @@ impl RailBand {
         }
     }
 
-    /// The same band with a picture `cols` by `rows` drawn over its top, centred in its columns, and
-    /// every fact laid beneath it. A picture larger than the band is cut to it rather than drawn
-    /// past the rail's own rows.
+    /// The same band with a picture `cols` by `rows` drawn over its top, centred in its columns, a
+    /// row under it kept for the rule that closes the face, and every fact laid beneath that. A
+    /// picture larger than the band is cut to it rather than drawn past the rail's own rows.
     pub fn with_picture(mut self, cols: u16, rows: u16) -> RailBand {
         let cols = cols.min(self.area.width);
         let rows = rows.min(self.area.height);
@@ -635,9 +683,10 @@ impl RailBand {
             width: cols,
             height: rows,
         });
+        let under = rows.saturating_add(1).min(self.area.height);
         self.facts = Rect {
-            y: self.area.y.saturating_add(rows),
-            height: self.area.height.saturating_sub(rows),
+            y: self.area.y.saturating_add(under),
+            height: self.area.height.saturating_sub(under),
             ..self.area
         };
         self
@@ -652,9 +701,9 @@ pub struct Share {
     pub rail: Option<(Rail, RailBand)>,
 }
 
-/// Cuts the band the transcript and the rail share: thirty-two columns down the right while the
-/// frame is wide enough to hold a column, one strip along the band's bottom row below a hundred. A
-/// frame that knows no fact draws no rail, and the transcript loses no room to one.
+/// Cuts the band the transcript and the rail share: the rail's own columns down the right while the
+/// frame is wide enough to hold a column, one strip along the band's bottom row below it. A frame
+/// that knows no fact draws no rail, and the transcript loses no room to one.
 pub fn split(facts: &Facts, band: Rect) -> Share {
     let shape = Rail::of(band.width);
     if band.width == 0 || band.height == 0 || known(facts, shape.into()).is_empty() {
@@ -665,7 +714,7 @@ pub fn split(facts: &Facts, band: Rect) -> Share {
     }
     let (transcript, rail) = match shape {
         Rail::Ledger => {
-            let columns = COLUMNS.min(band.width);
+            let columns = Rail::columns(band.width);
             let x = band.x.saturating_add(band.width - columns);
             (
                 Rect {
@@ -719,7 +768,7 @@ pub(crate) fn draw(rows: &[Row], buffer: &mut Buffer, palette: &Palette) {
     }
 }
 
-/// The ledger's rows, or the strip's one: the blocks the rail reads, a hairline between two that
+/// The ledger's rows, or the strip's one: the blocks the rail reads, an empty row between two that
 /// both kept a fact, and the count of what went in a row of its own.
 fn rail_rows(facts: &Facts, rail: Rail, area: Rect) -> Vec<Row> {
     let kept = kept(facts, rail, area);
@@ -737,7 +786,10 @@ fn rail_rows(facts: &Facts, rail: Rail, area: Rect) -> Vec<Row> {
                 };
                 match line {
                     Line::Fact(fact) => labelled(row, fact),
-                    Line::Hairline => hairline_row(row),
+                    Line::Air => Row {
+                        y: row.y,
+                        parts: Vec::new(),
+                    },
                     Line::Went(went) => Row::run(row.x, row.y, more(went), Ink::Muted),
                 }
             })
@@ -848,15 +900,21 @@ impl Part {
     }
 }
 
-/// A fact's row: its label in the field from the row's left edge, and its value hung on the far edge
-/// of the band. A fact whose label is no word hangs its value on that edge and says no more.
+/// A fact's row: its label in the field from the row's left edge, and its value hanging the way the
+/// value hangs — a number on the far edge of the band, a word from the field. A fact whose label is
+/// no word hangs its value from the row's left edge.
 fn labelled(area: Rect, fact: &Fact) -> Row {
     let mut parts = Vec::new();
+    let mut from = area.x;
     if let Some(label) = fact.label {
         parts.push((area.x, Part::Run(pen::pad(label, FIELD), Ink::Dim)));
+        from = area.x.saturating_add(FIELD);
     }
-    let x = pen::hanging(area, pen::columns(fact.value.columns()))
-        .expect("a fact is fitted to the row it is laid in");
+    let x = match fact.hang {
+        Hang::Right => pen::hanging(area, pen::columns(fact.value.columns()))
+            .expect("a fact is fitted to the row it is laid in"),
+        Hang::Left => from,
+    };
     parts.push((x, Part::Value(fact.value.clone())));
     Row { y: area.y, parts }
 }
@@ -926,6 +984,7 @@ struct Fact {
     /// field in front of it.
     label: Option<&'static str>,
     cut: Cut,
+    hang: Hang,
     value: Value,
 }
 
@@ -935,6 +994,7 @@ impl Fact {
             kind,
             label: Some(kind.label()),
             cut: Cut::Word,
+            hang: kind.hang(),
             value: Value::new(value),
         }
     }
@@ -968,6 +1028,7 @@ impl Fact {
     fn bare(kind: Kind, name: impl Into<String>) -> Fact {
         Fact {
             label: None,
+            hang: Hang::Left,
             ..Fact::named(kind, name)
         }
     }
@@ -1000,7 +1061,7 @@ struct Kept {
 /// One row of the ledger, before it is a row of runs.
 enum Line<'a> {
     Fact(&'a Fact),
-    Hairline,
+    Air,
     Went(usize),
 }
 
@@ -1172,8 +1233,8 @@ fn known(facts: &Facts, shape: Shape) -> Vec<Fact> {
     stated
 }
 
-/// The ledger's rows in the order they are read, with a hairline between two blocks that both kept
-/// a fact and the count of what went at the foot when anything did.
+/// The ledger's rows in the order they are read, with an empty row between two blocks that both
+/// kept a fact and the count of what went at the foot when anything did.
 fn ledger_lines(kept: &[Fact], went: usize) -> Vec<Line<'_>> {
     let mut lines = Vec::new();
     let mut written = 0;
@@ -1186,7 +1247,7 @@ fn ledger_lines(kept: &[Fact], went: usize) -> Vec<Line<'_>> {
             continue;
         }
         if written > 0 {
-            lines.push(Line::Hairline);
+            lines.push(Line::Air);
         }
         lines.extend(facts.into_iter().map(Line::Fact));
         written += 1;
@@ -1458,8 +1519,13 @@ mod tests {
     use crate::pen;
     use crate::readback::{column_of, inks};
 
-    /// The columns a rail's row leaves a value: its thirty-two less the ten its label field holds.
-    const ROOM: usize = 22;
+    /// The columns a rail's row leaves a value: the rail's floor less the ten its label field
+    /// holds.
+    const ROOM: usize = (FLOOR - FIELD) as usize;
+
+    /// The band a ledger test stands in: the rail at its floor, which is what the narrowest frame
+    /// that holds one is handed.
+    const COLUMNS: u16 = FLOOR;
 
     #[test]
     fn the_facts_a_launch_holds_before_a_run_are_what_a_prompt_is_pointed_at() {
@@ -2020,21 +2086,31 @@ mod tests {
         buffer
     }
 
-    /// A row `width` columns wide with `value` hanging on its far edge, the way a fact whose value
-    /// is its own name is drawn.
-    fn hanging_row(value: &str, width: u16) -> String {
-        let at = pen::hanging(band(width, 1), pen::cells(value)).expect("a row that holds it");
-        format!("{}{value}", pen::blank(at))
+    /// A row `width` columns wide whose value says its own name: a bare name is no number, so it
+    /// starts the row it stands on.
+    fn bare_row(value: &str, width: u16) -> String {
+        let mut row = String::from(value);
+        row.push_str(&pen::blank(width.saturating_sub(pen::cells(value))));
+        row
     }
 
-    /// A labelled row `width` columns wide: the label in the field and its value on the far edge.
-    fn labelled_row(label: &str, value: &str, width: u16) -> String {
+    /// A labelled row `width` columns wide whose value is a number: the label in the field and the
+    /// value on the far edge.
+    fn hung_row(label: &str, value: &str, width: u16) -> String {
         let at = pen::hanging(band(width, 1), pen::cells(value)).expect("a row that holds it");
         format!(
             "{}{}{value}",
             pen::pad(label, FIELD),
             pen::blank(at.saturating_sub(FIELD))
         )
+    }
+
+    /// A labelled row `width` columns wide whose value is a word: the label in the field and the
+    /// value reading on from it.
+    fn said_row(label: &str, value: &str, width: u16) -> String {
+        let mut row = format!("{}{value}", pen::pad(label, FIELD));
+        row.push_str(&pen::blank(width.saturating_sub(pen::cells(&row))));
+        row
     }
 
     /// One row of a painted band, as a reader sees its glyphs.
@@ -2259,7 +2335,7 @@ mod tests {
     }
 
     #[test]
-    fn a_name_with_no_label_of_its_own_hangs_on_the_column_s_hanging_edge() {
+    fn a_name_with_no_label_of_its_own_starts_the_row_it_stands_on() {
         let area = band(81, 40);
 
         let buffer = painted(&run(), area);
@@ -2270,9 +2346,9 @@ mod tests {
             .collect();
         assert_eq!(
             names,
-            [hanging_row("bash", 81), hanging_row("records", 81)],
-            "a value is a value however its row is labelled, so a loaded name reads on the \
-             column its siblings hang on"
+            [bare_row("bash", 81), bare_row("records", 81)],
+            "a name with no label of its own is no number, so it starts the row it stands on \
+             with no field and no run of blanks in front of it"
         );
     }
 
@@ -2317,7 +2393,7 @@ mod tests {
     }
 
     #[test]
-    fn a_screen_row_sets_its_label_dim_and_its_value_plain_on_the_column_s_hanging_edge() {
+    fn a_screen_row_sets_its_label_dim_and_its_value_plain_where_the_value_hangs() {
         let area = band(81, 40);
 
         let buffer = painted(&run(), area);
@@ -2325,8 +2401,8 @@ mod tests {
         let wire = glyphs(&buffer, 1);
         assert_eq!(
             wire,
-            labelled_row("wire", "anthropic", 81),
-            "the label in its field and the value against the column's last column"
+            said_row("wire", "anthropic", 81),
+            "the label in its field and the word reading on from it"
         );
         assert_eq!(
             inks(&buffer, 1, &Palette::TRUECOLOR),
@@ -2372,7 +2448,7 @@ mod tests {
         let meter = format!("{FULL_CELL}{}", pen::filled(empty, EMPTY_CELL));
         assert_eq!(
             glyphs(&buffer, 8),
-            labelled_row("ctx", &format!("{meter} 48.2k / 200k"), 81),
+            hung_row("ctx", &format!("{meter} 48.2k / 200k"), 81),
             "a quarter of the window fills one of the meter's six cells, beside the size it is \
              a share of"
         );
@@ -2406,7 +2482,7 @@ mod tests {
             let row = (0..area.height)
                 .find(|y| glyphs(&buffer, *y).trim_end().starts_with("stopped"))
                 .expect("the screen draws the state the run stopped in");
-            let at = (area.right() - 7, row);
+            let at = (FIELD, row);
 
             assert_eq!(
                 Ink::of(
@@ -2484,9 +2560,9 @@ mod tests {
             screen(&facts, band(81, 40)),
             [
                 (0, stated(&[(0, "run")])),
-                (1, stated(&[(0, "wire      "), (72, "anthropic")])),
-                (2, stated(&[(0, "model     "), (55, SERVED)])),
-                (3, stated(&[(0, "think     "), (77, "high")])),
+                (1, stated(&[(0, "wire      "), (10, "anthropic")])),
+                (2, stated(&[(0, "model     "), (10, SERVED)])),
+                (3, stated(&[(0, "think     "), (10, "high")])),
             ],
             "a block is named in the column's first row and each fact below it carries its value \
              on the column's last column, whole where the column holds it"
@@ -2494,31 +2570,45 @@ mod tests {
     }
 
     #[test]
-    fn the_ledger_lays_its_blocks_in_the_order_they_are_read_with_a_hairline_between_two() {
-        let hairline = pen::filled(COLUMNS, '─');
-
+    fn the_ledger_lays_its_blocks_in_the_order_they_are_read_with_air_between_two() {
         assert_eq!(
             laid(&frame(), Shape::Ledger, band(COLUMNS, 17)),
             [
-                stated(&[(0, "wire      "), (23, "anthropic")]),
-                stated(&[(0, "model     "), (14, CUT)]),
-                stated(&[(0, "think     "), (28, "high")]),
-                stated(&[(0, &hairline)]),
+                stated(&[(0, "wire      "), (10, "anthropic")]),
+                stated(&[(0, "model     "), (10, CUT)]),
+                stated(&[(0, "think     "), (10, "high")]),
+                stated(&[]),
                 stated(&[(0, "turns     "), (25, "3 / 250")]),
                 stated(&[(0, "ctx       "), (27, "48.2k")]),
                 stated(&[(0, "cache     "), (29, "88%")]),
-                stated(&[(0, &hairline)]),
-                stated(&[(0, "workspace "), (12, "…/.worktrees/46-rail")]),
-                stated(&[(0, "branch    "), (15, "spec/1-capability")]),
-                stated(&[(0, &hairline)]),
+                stated(&[]),
+                stated(&[(0, "workspace "), (10, "…/.worktrees/46-rail")]),
+                stated(&[(0, "branch    "), (10, "spec/1-capability")]),
+                stated(&[]),
                 stated(&[(0, "skills    "), (31, "2")]),
-                stated(&[(0, &hairline)]),
-                stated(&[(0, "sandbox   "), (27, "bwrap")]),
-                stated(&[(0, &hairline)]),
-                stated(&[(0, "session   "), (24, "9f2c7a41")]),
-                stated(&[(0, "temp      "), (18, "…/9f2c7a41/tmp")]),
+                stated(&[]),
+                stated(&[(0, "sandbox   "), (10, "bwrap")]),
+                stated(&[]),
+                stated(&[(0, "session   "), (10, "9f2c7a41")]),
+                stated(&[(0, "temp      "), (10, "…/9f2c7a41/tmp")]),
             ],
-            "six blocks, a hairline between two of them, and nothing given up at this height"
+            "six blocks, an empty row between two of them, and nothing given up at this height"
+        );
+
+        let rules: Vec<usize> = laid(&frame(), Shape::Ledger, band(COLUMNS, 17))
+            .iter()
+            .enumerate()
+            .filter(|(_, parts)| {
+                parts
+                    .iter()
+                    .any(|(_, glyphs)| glyphs.chars().all(|glyph| glyph == HAIRLINE))
+            })
+            .map(|(row, _)| row)
+            .collect();
+        assert!(
+            rules.is_empty(),
+            "the rail draws a rule on rows {rules:?}: the blocks are parted by air, and the \
+             column's only rules are the one under the face and the shadow under its last row"
         );
     }
 
@@ -2540,18 +2630,16 @@ mod tests {
 
     #[test]
     fn a_band_too_short_gives_facts_up_in_the_sacrifice_order_and_the_last_row_counts_what_went() {
-        let hairline = pen::filled(COLUMNS, '─');
-
         assert_eq!(
             laid(&frame(), Shape::Ledger, band(COLUMNS, 8)),
             [
-                stated(&[(0, "wire      "), (23, "anthropic")]),
-                stated(&[(0, "model     "), (14, CUT)]),
-                stated(&[(0, "think     "), (28, "high")]),
-                stated(&[(0, &hairline)]),
+                stated(&[(0, "wire      "), (10, "anthropic")]),
+                stated(&[(0, "model     "), (10, CUT)]),
+                stated(&[(0, "think     "), (10, "high")]),
+                stated(&[]),
                 stated(&[(0, "turns     "), (25, "3 / 250")]),
-                stated(&[(0, &hairline)]),
-                stated(&[(0, "sandbox   "), (27, "bwrap")]),
+                stated(&[]),
+                stated(&[(0, "sandbox   "), (10, "bwrap")]),
                 stated(&[(0, "+7 more")]),
             ],
             "temp, cache, session, branch, skills, ctx and workspace went, in that order, and the \
@@ -2560,28 +2648,82 @@ mod tests {
     }
 
     #[test]
-    fn the_ledger_and_the_strip_give_up_the_same_fact_for_the_same_reason() {
-        for width in 20..=200u16 {
-            let rail = Rail::of(width);
-            let room = match rail {
-                Rail::Ledger => COLUMNS,
-                Rail::Strip => width,
-            };
+    fn a_numbers_digits_line_up_on_the_last_column_and_a_words_read_on_from_its_label() {
+        let rows = laid(&frame(), Shape::Ledger, band(COLUMNS, 17));
+        let value = |label: &str| -> (u16, String) {
+            rows.iter()
+                .find_map(|parts| match parts.as_slice() {
+                    [(0, field), (at, glyphs)] if field.trim_end() == label => {
+                        Some((*at, glyphs.clone()))
+                    }
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("the {label} row of the ledger"))
+        };
 
+        for label in ["turns", "ctx", "cache", "skills"] {
+            let (at, glyphs) = value(label);
             assert_eq!(
-                laid(&unnamed(), rail.into(), band(room, 2)),
-                [stated(&[(0, "+1 more")])],
-                "at {width} columns a name no column can hold whole is given up by the {rail:?} \
-                 and counted, and never drawn in part"
+                usize::from(at) + usize::from(pen::cells(&glyphs)),
+                usize::from(COLUMNS),
+                "{label}'s {glyphs:?} does not end in the rail's last column: a number hangs \
+                 against that edge so its digits line up with every other number's"
+            );
+        }
+
+        for label in [
+            "wire",
+            "model",
+            "think",
+            "workspace",
+            "branch",
+            "sandbox",
+            "session",
+            "temp",
+        ] {
+            let (at, _) = value(label);
+            assert_eq!(
+                at, FIELD,
+                "{label}'s value starts in {at}: a word hangs from its label, so the two read \
+                 as one phrase with no run of blanks between them"
             );
         }
     }
 
-    /// One fact whose value fits no value column, whatever the room: a served name with no hyphen
-    /// to break at.
+    #[test]
+    fn a_name_that_goes_for_want_of_room_is_drawn_whole_once_the_rail_grew_to_hold_it() {
+        for width in 20..=200u16 {
+            let rail = Rail::of(width);
+            let room = match rail {
+                Rail::Ledger => Rail::columns(width),
+                Rail::Strip => width,
+            };
+            let drawn_whole = match rail {
+                Rail::Ledger => value_room(room) >= pen::cells(UNNAMED) as usize,
+                Rail::Strip => false,
+            };
+            let expected = match drawn_whole {
+                true => stated(&[(0, "model     "), (FIELD, UNNAMED)]),
+                false => stated(&[(0, "+1 more")]),
+            };
+
+            let drawn = laid(&unnamed(), rail.into(), band(room, 2));
+            assert_eq!(
+                drawn,
+                [expected],
+                "at {width} columns the {rail:?} draws a name with no hyphen to break at as \
+                 {drawn:?}: a name no column of it holds whole is given up and counted, and one a \
+                 grown rail holds is drawn whole and never in part"
+            );
+        }
+    }
+
+    /// A served name with no hyphen to break at, so no cut of it can keep a segment of it.
+    const UNNAMED: &str = "aservednamethatnobreaksanywhere";
+
     fn unnamed() -> Facts {
         Facts {
-            model: Some(String::from("aservednamethatnobreaksanywhere")),
+            model: Some(String::from(UNNAMED)),
             ..Facts::default()
         }
     }
@@ -2591,7 +2733,7 @@ mod tests {
         for width in 20..=200u16 {
             let rail = Rail::of(width);
             let room = match rail {
-                Rail::Ledger => COLUMNS,
+                Rail::Ledger => Rail::columns(width),
                 Rail::Strip => width,
             };
             for height in 1..=20 {
@@ -2628,31 +2770,47 @@ mod tests {
         assert_eq!(
             split(&frame(), band(120, 37)),
             Share {
-                transcript: band(88, 37),
+                transcript: band(120 - CEILING, 37),
                 rail: Some((
                     Rail::Ledger,
                     RailBand::of(Rect {
-                        x: 88,
-                        ..band(COLUMNS, 37)
+                        x: 120 - CEILING,
+                        ..band(CEILING, 37)
                     })
                 )),
             },
-            "a hundred columns and up holds a ledger down the frame's right-hand edge, band high"
+            "a frame wide enough for the rail's ceiling holds a ledger that wide, band high, and \
+             the transcript keeps what is left"
         );
         assert_eq!(
-            split(&frame(), band(99, 21)),
+            split(&frame(), band(NARROW, 37)),
             Share {
-                transcript: band(99, 20),
+                transcript: band(NARROW - FLOOR, 37),
+                rail: Some((
+                    Rail::Ledger,
+                    RailBand::of(Rect {
+                        x: NARROW - FLOOR,
+                        ..band(FLOOR, 37)
+                    })
+                )),
+            },
+            "and the narrowest frame that holds a ledger is the transcript's own floor beside the \
+             rail's"
+        );
+        assert_eq!(
+            split(&frame(), band(NARROW - 1, 21)),
+            Share {
+                transcript: band(NARROW - 1, 20),
                 rail: Some((
                     Rail::Strip,
                     RailBand::of(Rect {
                         y: 20,
                         height: 1,
-                        ..band(99, 1)
+                        ..band(NARROW - 1, 1)
                     })
                 )),
             },
-            "below a hundred the strip takes the band's bottom row and no columns"
+            "below that the strip takes the band's bottom row and no columns"
         );
     }
 
@@ -2670,13 +2828,13 @@ mod tests {
                     height: 11,
                 }),
                 facts: Rect {
-                    y: 11,
-                    height: 26,
+                    y: 12,
+                    height: 25,
                     ..area
                 },
             },
-            "a nineteen-cell picture is centred in the rail's thirty-two columns, and the facts \
-             take every row under it"
+            "a nineteen-cell picture is centred in the rail's columns, one row under it is kept \
+             for the rule that closes the face, and the facts take every row under that"
         );
         assert_eq!(
             RailBand::of(area).picture,
@@ -2714,16 +2872,124 @@ mod tests {
     }
 
     #[test]
-    fn a_hundred_columns_is_the_last_frame_the_ledger_is_a_column_in() {
+    fn the_rail_s_column_is_a_fact_about_the_frame_between_a_floor_and_a_ceiling() {
         assert_eq!(
-            Rail::of(100),
-            Rail::Ledger,
-            "the strip is what a frame below a hundred columns gets, so a hundred still holds the \
-             ledger"
+            Rail::columns(NARROW),
+            FLOOR,
+            "the narrowest frame that holds a ledger takes the rail's floor and no less"
         );
-        assert_eq!(Rail::of(99), Rail::Strip, "and ninety-nine is below it");
+        assert!(
+            Rail::columns(NARROW + 24) > FLOOR,
+            "and a wider frame gives the rail more of itself, so the column is a fact about \
+             the frame and not a width written down"
+        );
+        assert_eq!(
+            Rail::columns(400),
+            CEILING,
+            "but never more than the ceiling, however wide the real terminal is"
+        );
+        assert_eq!(
+            Rail::columns(20),
+            20,
+            "and a frame narrower than the floor is handed all of itself, so the column is never \
+             wider than the band it is drawn in"
+        );
+    }
+
+    #[test]
+    fn a_wide_frame_draws_the_whole_served_name_where_the_narrowest_ledger_cuts_it_to_its_head() {
+        let facts = Facts {
+            model: Some(String::from(SERVED)),
+            ..Facts::default()
+        };
+
+        assert_eq!(
+            model_drawn(&facts, NARROW),
+            CUT,
+            "the rail's floor leaves a value column narrower than a dated name, and the head \
+             with its mark is what is drawn"
+        );
+        assert_eq!(
+            model_drawn(&facts, NARROW + 60),
+            SERVED,
+            "and a wider frame's rail holds the served name whole: the value column is the \
+             rail's own, so widening the rail is what stops the cut"
+        );
+    }
+
+    /// The model's value as a frame `frame` columns wide draws it, read off the rail beside the
+    /// transcript.
+    fn model_drawn(facts: &Facts, frame: u16) -> String {
+        let share = split(facts, band(frame, 24));
+        let (shape, rail) = share.rail.expect("a rail in a frame that knows a fact");
+        rows(facts, shape.into(), rail.facts)
+            .iter()
+            .flat_map(Row::parts)
+            .find_map(|(_, part)| match part {
+                Part::Value(value) => Some(value.text().to_owned()),
+                Part::Run(..) => None,
+            })
+            .expect("the model's own row")
+    }
+
+    #[test]
+    fn the_width_a_frame_loses_its_ledger_at_is_the_rails_floor_beside_the_transcripts() {
+        assert_eq!(
+            NARROW,
+            FLOOR + TRANSCRIPT,
+            "the threshold is derived: the narrowest frame that holds a ledger is the rail's own \
+             floor beside the columns the transcript keeps"
+        );
+        assert_eq!(
+            Rail::of(NARROW),
+            Rail::Ledger,
+            "so the narrowest frame the transcript still has its floor in holds the ledger"
+        );
+        assert_eq!(
+            Rail::of(NARROW - 1),
+            Rail::Strip,
+            "and one column under it is the strip, which costs the transcript no columns"
+        );
         assert_eq!(Rail::of(20), Rail::Strip, "the narrowest frame there is");
         assert_eq!(Rail::of(200), Rail::Ledger, "the widest");
+    }
+
+    #[test]
+    fn the_transcript_moves_a_column_at_a_time_and_gives_up_the_rail_only_where_the_shape_changes()
+    {
+        let mut crossing = None;
+        for width in 21..=200u16 {
+            let narrow = split(&frame(), band(width - 1, 40)).transcript.width;
+            let wide = split(&frame(), band(width, 40)).transcript.width;
+            if Rail::of(width - 1) != Rail::of(width) {
+                crossing = Some((width, narrow, wide));
+                continue;
+            }
+            assert!(
+                wide.abs_diff(narrow) <= 1,
+                "at {width} columns the transcript is {wide} wide where {narrow} was a column \
+                 ago: a keystroke reflows a whole rail's worth of prose"
+            );
+        }
+        let (at, strip, ledger) = crossing.expect("a width where the strip becomes the ledger");
+        assert_eq!(
+            at, NARROW,
+            "the transcript reflows at the one width the shape changes at"
+        );
+        assert_eq!(
+            Rail::columns(at),
+            FLOOR,
+            "the rail appears at its narrowest and never at a grown column, so the one reflow a \
+             resize to this width costs is the least a rail can cost"
+        );
+        assert!(
+            strip - ledger < Rail::columns(at),
+            "at {at} columns the transcript gives up {} of its {strip} columns, which is the \
+             rail's whole column of {}: what a keystroke at this width reflows is less than the \
+             rail it makes room for",
+            strip - ledger,
+            Rail::columns(at)
+        );
     }
 
     #[test]
@@ -2793,7 +3059,7 @@ mod tests {
         for width in 20..=200u16 {
             let rail = Rail::of(width);
             let room = match rail {
-                Rail::Ledger => COLUMNS,
+                Rail::Ledger => Rail::columns(width),
                 Rail::Strip => width,
             };
             let shape = Shape::from(rail);
@@ -2802,7 +3068,7 @@ mod tests {
                 ..Facts::default()
             };
             let fits_in = match rail {
-                Rail::Ledger => value_room(COLUMNS),
+                Rail::Ledger => value_room(Rail::columns(width)),
                 Rail::Strip => VALUE,
             };
             let value = rows(&facts, shape, band(room, 1))

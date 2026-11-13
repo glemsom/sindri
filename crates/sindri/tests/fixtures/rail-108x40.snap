@@ -1,0 +1,45 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+rail at 108x40
+00 |turn 1 ─────────────────────────────────────────────────────────────wire      anthropic                     | dim:78 plain:30
+01 |✓ exit 0  bash  412 bytes · 23 ms                                   model     claude-sonnet-4-5-20250929    | ok:1 dim:32 plain:35 dim:10 plain:30
+02 |  src/rows.rs: the glyph a turn opens with                          think     high                          | plain:68 dim:10 plain:30
+03 |  src/rows.rs: a word longer than a row is broken                                                           | plain:108
+04 |  Rendering lives in the front end and not in the core, because an  turns                           6 /  250| plain:68 dim:10 plain:30
+05 |  entry is a fact and never a rendering: the TUI and any reader drawctx                  █░░░░░ 48.2k / 200k| plain:68 dim:10 plain:12 dim:5 plain:13
+06 |  one run from one value, and the core may not name a terminal at   cache                                88%| plain:68 dim:10 plain:30
+07 |  all.                                                                                                      | plain:108
+08 |                                                                    workspace …/sindri/.worktrees/46-rail   | plain:68 dim:10 plain:30
+09 |                                                                    branch    spec/1-capability             | plain:68 dim:10 plain:30
+10 |                                                                                                            | plain:108
+11 |                                                                    skills                                 2| plain:68 dim:10 plain:30
+12 |                                                                                                            | plain:108
+13 |                                                                    sandbox   bwrap                         | plain:68 dim:10 plain:30
+14 |                                                                                                            | plain:108
+15 |                                                                    session   9f2c7a41                      | plain:68 dim:10 plain:30
+16 |                                                                    temp      …/sindri/sessions/9f2c7a41/tmp| plain:68 dim:10 plain:30
+17 |                                                                                                            | plain:108
+18 |                                                                                                            | plain:108
+19 |                                                                                                            | plain:108
+20 |                                                                                                            | plain:108
+21 |                                                                                                            | plain:108
+22 |                                                                                                            | plain:108
+23 |                                                                                                            | plain:108
+24 |                                                                                                            | plain:108
+25 |                                                                                                            | plain:108
+26 |                                                                                                            | plain:108
+27 |                                                                                                            | plain:108
+28 |                                                                                                            | plain:108
+29 |                                                                                                            | plain:108
+30 |                                                                                                            | plain:108
+31 |                                                                                                            | plain:108
+32 |                                                                                                            | plain:108
+33 |                                                                                                            | plain:108
+34 |                                                                                                            | plain:108
+35 |                                                                                                            | plain:108
+36 |                                                                                                            | plain:108
+37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:108
+38 |› what should the run do?                                                                                   | dim:25 plain:83
+39 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · / commands                                              | muted:10 dim:3 muted:6 dim:3 muted:13 dim:3 muted:11 dim:3 muted:10 plain:46
