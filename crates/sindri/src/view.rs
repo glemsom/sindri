@@ -113,8 +113,8 @@ pub struct View {
     pictures: Pictures,
     cell_size: CellSize,
     palette: Palette,
-    /// The destinations this frame names: what travels beside its cells, because no cell carries
-    /// one, and what the backend that draws the frame writes around the runs they cover.
+    /// The destinations this frame names: what travels beside its cells, never in them, because
+    /// no cell carries one.
     links: Links,
 }
 
@@ -562,8 +562,7 @@ impl View {
         self.composer.set_state(state);
     }
 
-    /// The destinations this frame names, laid on the rows it drew: a cell is a way to somewhere
-    /// because the frame says so beside it, never because of the glyph it holds.
+    /// The destinations this frame names, laid on the rows it drew.
     pub fn links(&self) -> &Links {
         &self.links
     }
@@ -616,9 +615,8 @@ impl View {
         let Some((name, leaves)) = screen.labels() else {
             return;
         };
-        // The band under a card takes no key, so the frame under it is no way to anywhere: what
-        // the card covers, and its own cells, are the card's.
-        self.links.cover(area);
+        // The band under a card takes no key, so the frame under it is no way to anywhere.
+        self.links = Links::none();
         let body = card::paint(area, name, leaves, buffer, &self.palette);
         self.paint_screen(screen, body, buffer);
     }

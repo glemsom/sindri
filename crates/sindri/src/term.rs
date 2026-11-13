@@ -216,26 +216,21 @@ pub(crate) fn canvas_at(
 }
 
 /// Paints the frame the view holds now, and puts the terminal's cursor where the view says. The
-/// steps are `Terminal::draw`'s own, written here because the destinations a frame names are only
-/// known once it is painted, and the backend must hold them before the frame is written.
+/// buffer is painted first, because the ways a frame names are known only after it is painted and
+/// the backend must hold them before the frame is written.
 pub(crate) fn paint(canvas: &mut Canvas<'_>, view: &mut View) -> io::Result<()> {
     canvas.autoresize()?;
-    let cursor = {
-        let mut frame = canvas.get_frame();
-        view.paint(frame.area(), frame.buffer_mut());
-        view.cursor(frame.area())
-    };
+    let area = canvas.current_buffer_mut().area;
+    view.paint(area, canvas.current_buffer_mut());
+    let cursor = view.cursor(area);
     canvas.backend_mut().links(view.links());
-    canvas.flush()?;
-    match cursor {
-        Some(at) => {
-            canvas.show_cursor()?;
-            canvas.set_cursor_position(at)?;
-        }
-        None => canvas.hide_cursor()?,
-    }
-    canvas.swap_buffers();
-    RatatuiBackend::flush(canvas.backend_mut())
+    canvas
+        .draw(|frame| {
+            if let Some(at) = cursor {
+                frame.set_cursor_position(at);
+            }
+        })
+        .map(|_| ())
 }
 
 /// What the terminal is to be given back as: the state raw mode replaced and the two fds it is
@@ -380,11 +375,24 @@ pub(crate) mod pty {
             }
         }
 
+        /// Every byte the terminal has been handed: what the first read waits for, and then
+        /// everything else it says, because one read of a pseudo-terminal is as much as had
+        /// arrived and a frame is several writes.
         pub(crate) fn drawn(&mut self) -> String {
-            let mut drawn = [0u8; 4096];
-            let mut master = &self.master;
-            let count = master.read(&mut drawn).expect("the terminal's screen");
-            String::from_utf8_lossy(&drawn[..count]).into_owned()
+            let mut drawn = Vec::new();
+            loop {
+                let mut chunk = [0u8; 4096];
+                let mut master = &self.master;
+                let count = master.read(&mut chunk).expect("the terminal's screen");
+                if count == 0 {
+                    break;
+                }
+                drawn.extend_from_slice(&chunk[..count]);
+                if self.silent() {
+                    break;
+                }
+            }
+            String::from_utf8_lossy(&drawn).into_owned()
         }
 
         pub(crate) fn resize(&self, cols: u16, rows: u16, xpixel: u16, ypixel: u16) {
@@ -457,12 +465,25 @@ mod tests {
         );
     }
 
-    /// One row of a frame, the words `spans`, and the destinations it names, drawn through a
-    /// pseudo-terminal of this process's own: the bytes the terminal at the far end is handed.
-    fn drawn(spans: &[(&str, Ink)], links: Links, places: bool) -> String {
-        let area = Rect::new(0, 0, 40, 1);
+    /// A frame of `width` by `height` cells, the words each of `rows` holds, and the destinations
+    /// it names, drawn through a pseudo-terminal of this process's own: the bytes the terminal at
+    /// the far end is handed.
+    fn drawn(width: u16, height: u16, rows: &[(u16, &str)], links: Links, places: bool) -> String {
+        let area = Rect::new(0, 0, width, height);
         let mut buffer = Buffer::empty(area);
-        pen::write(&mut buffer, area, spans, Clip::Edge, &Palette::TRUECOLOR);
+        for (y, words) in rows {
+            pen::write(
+                &mut buffer,
+                Rect {
+                    y: *y,
+                    height: 1,
+                    ..area
+                },
+                &[(*words, Ink::Plain)],
+                Clip::Edge,
+                &Palette::TRUECOLOR,
+            );
+        }
         let mut pty = Pty::open();
         let mut backend = Backend::new(
             pty.slave
@@ -477,6 +498,13 @@ mod tests {
         backend.flush().expect("a written row");
         drop(backend);
         pty.drawn()
+    }
+
+    /// The ways `links` name, laid at frame row 0: how a row hands the frame what it names.
+    fn ways(links: &[Link]) -> Links {
+        let mut ways = Links::none();
+        ways.lay(0, 0, links);
+        ways
     }
 
     /// What a terminal reads of a frame as the ways it opens and closes and the words it writes:
@@ -526,10 +554,10 @@ mod tests {
 
     #[test]
     fn a_run_that_names_a_destination_is_written_around_the_cells_it_covers() {
-        let links = Links::of([(0, Link::new(4, 4, "https://example.test/spec"))]);
+        let links = ways(&[Link::new(4, 4, "https://example.test/spec")]);
 
         assert_eq!(
-            spoken(&drawn(&[("the spec is here", Ink::Plain)], links, true)),
+            spoken(&drawn(40, 1, &[(0, "the spec is here")], links, true)),
             [
                 "the ",
                 "opens https://example.test/spec",
@@ -543,13 +571,13 @@ mod tests {
 
     #[test]
     fn two_runs_that_name_one_destination_are_one_link() {
-        let links = Links::of([
-            (0, Link::new(0, 3, "https://example.test/spec")),
-            (0, Link::new(3, 5, "https://example.test/spec")),
+        let links = ways(&[
+            Link::new(0, 3, "https://example.test/spec"),
+            Link::new(3, 5, "https://example.test/spec"),
         ]);
 
         assert_eq!(
-            spoken(&drawn(&[("one spec", Ink::Plain)], links, true)),
+            spoken(&drawn(40, 1, &[(0, "one spec")], links, true)),
             ["opens https://example.test/spec", "one spec", "closes"],
             "two runs of one frame naming one destination are one way to it"
         );
@@ -557,10 +585,10 @@ mod tests {
 
     #[test]
     fn a_run_that_names_no_destination_closes_the_one_before_it() {
-        let links = Links::of([(0, Link::new(0, 3, "https://example.test/spec"))]);
+        let links = ways(&[Link::new(0, 3, "https://example.test/spec")]);
 
         assert_eq!(
-            spoken(&drawn(&[("the spec is here", Ink::Plain)], links, true)),
+            spoken(&drawn(40, 1, &[(0, "the spec is here")], links, true)),
             [
                 "opens https://example.test/spec",
                 "the",
@@ -572,9 +600,70 @@ mod tests {
     }
 
     #[test]
+    fn a_run_wider_than_the_row_it_was_laid_on_carries_nothing_to_the_row_below() {
+        let mut links = Links::none();
+        links.lay(0, 0, &[Link::new(0, 80, "https://example.test/spec")]);
+
+        assert_eq!(
+            spoken(&drawn(
+                12,
+                2,
+                &[(0, "the spec"), (1, "its gate")],
+                links,
+                true
+            )),
+            [
+                "opens https://example.test/spec",
+                "the spec",
+                "closes",
+                "its gate"
+            ],
+            "a run is one row's: the row below it is drawn with no destination at all"
+        );
+    }
+
+    /// A frame written through `paint`, and the same frame written through the canvas's own draw:
+    /// what the launch paints is what a reader would have seen from the library it draws through.
+    fn written(pty: &Pty, launch: bool) {
+        let terminal =
+            Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
+        let mut canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
+        let mut view = View::boot();
+        match launch {
+            true => {
+                paint(&mut canvas, &mut view).expect("a painted frame");
+            }
+            false => {
+                canvas
+                    .draw(|frame| {
+                        view.paint(frame.area(), frame.buffer_mut());
+                        if let Some(at) = view.cursor(frame.area()) {
+                            frame.set_cursor_position(at);
+                        }
+                    })
+                    .expect("a drawn frame");
+            }
+        }
+    }
+
+    #[test]
+    fn the_frame_the_launch_paints_is_the_frame_the_canvas_draws() {
+        let mut launch = Pty::open();
+        let mut canvas = Pty::open();
+        written(&launch, true);
+        written(&canvas, false);
+
+        assert_eq!(
+            launch.drawn(),
+            canvas.drawn(),
+            "the cursor the view hands the canvas is placed, and the frame beside it is the frame"
+        );
+    }
+
+    #[test]
     fn a_terminal_that_places_no_hyperlink_is_handed_the_words_and_no_sequence() {
-        let links = Links::of([(0, Link::new(0, 16, "https://example.test/spec"))]);
-        let handed = drawn(&[("the spec is here", Ink::Plain)], links, false);
+        let links = ways(&[Link::new(0, 16, "https://example.test/spec")]);
+        let handed = drawn(40, 1, &[(0, "the spec is here")], links, false);
 
         assert_eq!(spoken(&handed), ["the spec is here"]);
         assert!(

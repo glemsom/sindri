@@ -1,7 +1,8 @@
 //! The terminal's own hyperlink: a run of cells can be a way to somewhere, and the way is written
 //! around that run by the backend that draws the frame, because no cell carries a destination.
 
-use ratatui::layout::Rect;
+/// The oldest VTE that places a hyperlink: 0.50, said as a terminal says it.
+const OLDEST_VTE: u32 = 5000;
 
 /// One run of a row's cells that is a way to somewhere: the columns it covers, measured from the
 /// left edge of the row it was laid out in, and the destination a cell of it opens.
@@ -47,69 +48,19 @@ impl Links {
         Links::default()
     }
 
-    pub fn of(laid: impl IntoIterator<Item = (u16, Link)>) -> Links {
-        Links {
-            laid: laid.into_iter().collect(),
-        }
+    /// Lays the links a row names at the frame's row `row`, from the frame's column `left`: a row
+    /// is laid out from its own left edge and drawn where the frame puts it.
+    pub fn lay(&mut self, row: u16, left: u16, links: &[Link]) {
+        self.laid
+            .extend(links.iter().map(|link| (row, link.shifted(left))));
     }
 
-    /// Lays the links a row names at the frame's row `y`, from the frame's column `x`: a row is
-    /// laid out from its own left edge and drawn where the frame puts it.
-    pub fn lay(&mut self, y: u16, x: u16, links: &[Link]) {
-        self.laid.extend(links.iter().map(|link| {
-            (
-                y,
-                Link {
-                    left: link.left.saturating_add(x),
-                    ..link.clone()
-                },
-            )
-        }));
-    }
-
-    /// The destination the cell at `row`'s `column` names, and none where it names one.
+    /// The destination the cell at `row`'s `column` names, when it names one.
     pub fn at(&self, row: u16, column: u16) -> Option<&str> {
         self.laid
             .iter()
             .find(|(y, link)| *y == row && link.covers(column))
             .map(|(_, link)| link.destination.as_str())
-    }
-
-    /// No cell of `area` names a destination: what is drawn over a frame is its own, and a way
-    /// behind it is not a way a reader can take while it is covered.
-    pub fn cover(&mut self, area: Rect) {
-        let mut kept = Vec::with_capacity(self.laid.len());
-        for (y, link) in self.laid.drain(..) {
-            if y < area.y || y >= area.bottom() {
-                kept.push((y, link));
-                continue;
-            }
-            let end = link.left.saturating_add(link.width);
-            if end <= area.x || link.left >= area.right() {
-                kept.push((y, link));
-                continue;
-            }
-            if link.left < area.x {
-                kept.push((
-                    y,
-                    Link {
-                        width: area.x - link.left,
-                        ..link.clone()
-                    },
-                ));
-            }
-            if end > area.right() {
-                kept.push((
-                    y,
-                    Link {
-                        left: area.right(),
-                        width: end - area.right(),
-                        ..link
-                    },
-                ));
-            }
-        }
-        self.laid = kept;
     }
 
     pub fn is_empty(&self) -> bool {
@@ -118,7 +69,8 @@ impl Links {
 }
 
 /// Whether a terminal places a hyperlink, read off the names it gives itself: the ones that speak
-/// `OSC 8`, and no guess at a terminal that may not, because a destination is never drawn.
+/// `OSC 8`, and no guess at a terminal that may not, because a destination is never drawn. A VTE
+/// terminal says which version it is, and the version that learned `OSC 8` is the oldest that does.
 pub fn speaks(term: Option<&str>, program: Option<&str>, vte: Option<&str>) -> bool {
     let names_one = |word: &str| {
         let word = word.to_ascii_lowercase();
@@ -138,28 +90,37 @@ pub fn speaks(term: Option<&str>, program: Option<&str>, vte: Option<&str>) -> b
     };
     term.is_some_and(names_one)
         || program.is_some_and(names_one)
-        || vte.is_some_and(|version| !version.trim().is_empty())
+        || vte.is_some_and(|version| {
+            version
+                .trim()
+                .parse::<u32>()
+                .is_ok_and(|version| version >= OLDEST_VTE)
+        })
 }
 
 #[cfg(test)]
 mod tests {
-    use ratatui::layout::Rect;
-
     use super::*;
+
+    /// The ways `links` name, laid at frame row `row` from its left edge.
+    fn ways(row: u16, links: &[Link]) -> Links {
+        let mut ways = Links::none();
+        ways.lay(row, 0, links);
+        ways
+    }
 
     #[test]
     fn the_links_of_a_frame_are_read_at_the_cells_they_cover() {
-        let mut links = Links::none();
-        links.lay(3, 2, &[Link::new(4, 9, "https://example.test/spec")]);
+        let links = ways(3, &[Link::new(4, 9, "https://example.test/spec")]);
 
         assert_eq!(
             links.at(3, 6),
             Some("https://example.test/spec"),
             "a cell the run covers names the destination"
         );
-        assert_eq!(links.at(3, 5), None, "the column before it names none");
+        assert_eq!(links.at(3, 3), None, "the column before it names none");
         assert_eq!(
-            links.at(3, 15),
+            links.at(3, 13),
             None,
             "and the run ends after its last column, so the cell past it is no way to anywhere"
         );
@@ -171,9 +132,26 @@ mod tests {
     }
 
     #[test]
-    fn a_link_that_ends_before_the_next_one_begins_covers_nothing_between_them() {
+    fn a_way_laid_where_its_row_was_drawn_begins_where_the_row_was_drawn() {
         let mut links = Links::none();
-        links.lay(0, 0, &[Link::new(0, 3, "one"), Link::new(5, 3, "two")]);
+        links.lay(3, 5, &[Link::new(0, 4, "https://example.test/spec")]);
+
+        assert_eq!(
+            links.at(3, 5),
+            Some("https://example.test/spec"),
+            "a row laid out from its own edge is drawn from the frame's column, and its way with it"
+        );
+        assert_eq!(
+            links.at(3, 4),
+            None,
+            "and no cell before the row is a way there"
+        );
+        assert_eq!(links.at(3, 9), None, "nor any cell past the run");
+    }
+
+    #[test]
+    fn a_link_that_ends_before_the_next_one_begins_covers_nothing_between_them() {
+        let links = ways(0, &[Link::new(0, 3, "one"), Link::new(5, 3, "two")]);
 
         assert_eq!(links.at(0, 2), Some("one"));
         assert_eq!(
@@ -182,25 +160,6 @@ mod tests {
             "the columns between two runs name no destination"
         );
         assert_eq!(links.at(0, 7), Some("two"));
-    }
-
-    #[test]
-    fn an_area_a_surface_is_drawn_over_names_no_destination() {
-        let mut links = Links::none();
-        links.lay(0, 0, &[Link::new(2, 10, "https://example.test/spec")]);
-
-        links.cover(Rect::new(0, 0, 8, 24));
-
-        assert_eq!(
-            links.at(0, 6),
-            None,
-            "the cells a card covers are the card's, and the way behind it goes with them"
-        );
-        assert_eq!(
-            links.at(0, 10),
-            Some("https://example.test/spec"),
-            "and the run the area leaves is still a way to where it named"
-        );
     }
 
     #[test]
@@ -218,6 +177,10 @@ mod tests {
         assert!(
             speaks(Some("xterm-256color"), None, Some("6000")),
             "a VTE terminal places a hyperlink and says so by its version"
+        );
+        assert!(
+            !speaks(Some("xterm-256color"), None, Some("4900")),
+            "a VTE older than the one that learned a hyperlink places none"
         );
         assert!(
             !speaks(Some("xterm-256color"), None, Some("")),

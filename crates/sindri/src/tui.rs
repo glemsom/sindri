@@ -107,8 +107,8 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
         named("TERM").as_deref(),
         named("TERM_PROGRAM").as_deref(),
     );
-    // What a terminal places is a fact of the launch, resolved once with the palette: a terminal
-    // that speaks no hyperlink is handed the words and no sequence, and nothing asks on a key.
+    // Resolved once with the palette: a terminal that speaks no hyperlink is handed the words
+    // and no sequence, and nothing asks again on a key.
     let places = link::speaks(
         named("TERM").as_deref(),
         named("TERM_PROGRAM").as_deref(),

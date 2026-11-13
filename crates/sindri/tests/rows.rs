@@ -880,23 +880,18 @@ fn a_row_that_names_no_destination_is_drawn_as_it_was_and_lays_nothing() {
 }
 
 #[test]
-fn a_way_a_row_names_does_not_carry_to_the_row_below_it() {
+fn a_run_wider_than_the_row_it_was_laid_on_names_nothing_on_the_row_below() {
     let area = Rect::new(0, 0, 20, 2);
-    let mut links = Links::none();
     let mut buffer = Buffer::empty(area);
-    let above = Row::of([(String::from("the spec"), Ink::Plain)]).linking(
-        0,
-        8,
-        "https://example.test/spec",
-    );
-    let below = Row::of([(String::from("and its gates"), Ink::Plain)]);
-    above.paint(
+    let mut links = Links::none();
+    let row = Row::of([(String::from("the spec"), Ink::Plain)]).linking(0, 80, "https://x.test/s");
+    row.paint(
         Rect { height: 1, ..area },
         &mut buffer,
         &Palette::TRUECOLOR,
         &mut links,
     );
-    below.paint(
+    Row::of([(String::from("and its gate"), Ink::Plain)]).paint(
         Rect {
             y: 1,
             height: 1,
@@ -907,11 +902,17 @@ fn a_way_a_row_names_does_not_carry_to_the_row_below_it() {
         &mut links,
     );
 
-    assert_eq!(links.at(0, 4), Some("https://example.test/spec"));
+    assert_eq!(links.at(0, 18), Some("https://x.test/s"));
     assert_eq!(
-        links.at(1, 4),
+        links.at(0, 19),
+        Some("https://x.test/s"),
+        "the run covers every cell of the row it was laid on, to its last"
+    );
+    assert_eq!(
+        links.at(1, 0),
         None,
-        "the row a run was wrapped onto names nothing: a way is a run of one row"
+        "and no cell of the row below it is a way anywhere: a run is one row's, and a wrap is \
+         the next row's own name"
     );
 }
 

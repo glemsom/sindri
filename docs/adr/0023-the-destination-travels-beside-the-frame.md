@@ -28,9 +28,10 @@ destination can be said in two looks; a destination kept in a look would be a se
 same thing, and it would follow that look into every row drawn in it. A run is the narrower claim: the
 columns of one row, and what a cell of them opens.
 
-**A run is one row's.** A link is measured from the row's left edge, so a run wider than the band is
-each row's own name and no row carries a destination beyond itself. What the backend tracks is where
-the destination changes: two runs side by side that name one destination are written as one link, and
+**A run is one row's.** A link is measured from the row's left edge, so the row it was laid on is the
+only row that names it: a run wider than the band covers that row to its last cell and carries nothing
+to the row below, and a run that wraps is the next row's own to name. What the backend tracks is where
+the destination changes — two runs side by side that name one destination are written as one link, and
 a cell naming none closes the one before it.
 
 **A frame closes what it opens.** Every pass ends with the closing sequence, and a way is opened for
@@ -39,13 +40,13 @@ middle of a link is still a way there, and no cell a later pass writes is a way 
 belonged to.
 
 **A terminal that places no hyperlink is handed the words and no sequence.** `link::speaks` reads the
-names a terminal gives itself, resolved once when the launch settles what its terminal can do, and
-`term::Backend` holds that answer: a terminal nobody can vouch for is handed the same frame and no
-bytes but the words.
+names a terminal gives itself — the ones that speak `OSC 8`, and the oldest VTE version that learned
+it — resolved once when the launch settles what its terminal can do, and `term::Backend` holds that
+answer: a terminal nobody can vouch for is handed the same frame and no bytes but the words.
 
 **A band under a card names nothing.** A screen is drawn over the frame it was opened from and the
-band under it takes no key, so a card's paint covers the ways the frame behind it laid: no cell a
-reader cannot reach is a way to somewhere.
+band under it takes no key, so a frame with a card over it gives up the ways it laid: no cell a reader
+cannot reach is a way to somewhere.
 
 ## What a reader is held to
 
@@ -53,8 +54,7 @@ reader cannot reach is a way to somewhere.
   column.
 - A destination opens before the run's first cell and closes after its last; two runs naming one
   destination side by side are one link, and a run naming none closes the one before it.
-- A run is one row's: a run wrapped onto the next row names it there, and no destination crosses a
-  row.
+- A run is one row's: the row it was laid on names it, and no destination crosses a row.
 - A terminal that places no hyperlink is handed the words and no sequence.
 - A frame with a screen open over it is no way to anywhere.
 - A destination is written as the terminal's hyperlink and never as glyphs, so a copy of the frame
