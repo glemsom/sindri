@@ -22,13 +22,6 @@ The reader's own words a run was asked with: the first fact of the session's tra
 wire is asked last, after the turns that came before it.
 _Avoid_: Query, question, input, message (that one is the wire's)
 
-**Draft**:
-The words a reader is typing, before they are a prompt: set in the gutter an answer is set in,
-opened by the sigil that stands in it, and wrapped under that gutter when a line is wider than the
-band. An empty draft says what the band can do there in a dim placeholder, and the first glyph a
-reader types takes it away.
-_Avoid_: Text box, buffer, field
-
 **Turn**:
 One request to the model and the tool calls it asks for. Not a unit of progress.
 _Avoid_: Step, iteration, wave
@@ -42,63 +35,12 @@ How many tokens the model's window holds, when a reader names it in the config. 
 one and nothing here guesses, so a run with none named has a size and no share of it.
 _Avoid_: Context limit, token budget, max context
 
-**Exit**:
-How one call ended: a code, the timeout that killed it, the user's word, or a signal. A fact of
-the result entry.
-_Avoid_: Verdict (that one is the wire's), status, outcome, result
-
 **Status**:
 `idle`, `working`, `done`, `blocked`, `error`, with one coarse line of the run's own words — never
 the command, the prompt or the answer.
 _Avoid_: Progress, notice, indicator
 
-## The facts
-
-**Ledger**:
-The one module that holds a run's **facts**, the one way each **value** is spelled, and the rows the
-facts are laid out in — the size in tokens, the pair whose halves line up on a slash, the meter a
-share fills and the ink it is read in, the cut of a value to the room its row leaves it — the head of
-a name, the tail of a path, the whole of a word — the em dash a fact is owed, the first eight of a
-GUID, the blocks and the order they are read in, the air between two that both kept a fact, the way a
-value hangs — a number on the row's last column, a word from its label — the order facts are given
-up in, the row that counts what went, and the columns a **stats screen** widens them to. No drawing spells a fact for itself, and no drawing decides where one goes: a fact
-reads one way wherever it is said.
-_Avoid_: Facts module, layout module, status bar, sidebar
-
-**Rail**:
-The ledger's adapter to a frame: a band and the shape it is drawn in, the rows the ledger lays there
-drawn, and no rule of its own about which fact goes where. Its column is a fact about the frame
-between a floor and a ceiling, so a wide frame draws the served name whole, and the one rule it draws
-in its body — under a face — closes the picture it stands above.
-_Avoid_: Status bar, sidebar, panel, dock
-
-**Strip**:
-The shape the rail draws in a frame too narrow to hold a column: the ledger's row along a band's
-bottom row, read left to right with a gap between two facts and its count at the end. The other shape
-the rail draws is the ledger's own column, beside the transcript, from the width that holds the
-transcript's floor beside the rail's; the **stats screen** is the ledger widened.
-_Avoid_: Status line, footer bar, ticker
-
-**Fact**:
-One named thing a run holds, drawn as a label and a **value**: the wire, the served name, the route,
-thinking, the turns, the window, the cache, the spend, the workspace, the branch, the commit, the
-skills, the sandbox, the state a run stopped in and its instants, the session, the temp. A fact
-nobody can state is absent rather than blank, a fact a launch names and a run has yet to fill is an
-em dash, and a value that is its own name — a loaded skill — starts the row it stands on, because no
-field stands in front of it.
-_Avoid_: Row, field, item, stat
-
-**Value**:
-The glyphs one fact is drawn as, the meter beside a share of a window, and the ink it is read in. It
-hangs the way its own shape reads: a number against the row's last column, so the digits of two
-numbers line up, and a word from its label, so the two read as one phrase.
-_Avoid_: Text, string, cell
-
 ## Confinement
-
-**Writable set**:
-The canonical, absolute, distinct, non-nested paths a run may write, never `/`.
-_Avoid_: Allowed paths, whitelist, mounts
 
 **Session temp**:
 Per-session scratch mapped to `TMPDIR`, alive as long as the session, unseen by any other run.
@@ -159,87 +101,6 @@ _Avoid_: Engine, library, backend
 A way of driving the core — the TUI or batch mode; owns no decision the core could make.
 _Avoid_: UI, client, interface
 
-**Ink**:
-A colour role asked for by name — dim, muted, accent, ok, err — never a literal colour.
-_Avoid_: Colour, style, RGB
-
-**Face**:
-One of the weights an ink can wear beyond its colour — bold, italic, reversed, faint — and a look
-wears a set of them, so the accent dimmed is a face on the accent, a strong word inside a heading
-wears two, and neither is a second ink. A look that wears none is `plain`.
-_Avoid_: Style, emphasis, attribute
-
-**Underline**:
-The line a look draws under the cells it is written in, in an ink of its own and never a face: a link
-wears one, and a cell that carries one still reads back as its ink and its faces.
-_Avoid_: Rule (that one fills a row), decoration, border
-
-**Link**:
-A run of a row's cells that is a way to somewhere: the words are drawn as they are, and the
-**destination** it opens travels beside the frame — written by the backend that draws it — so no
-cell spends a column on one and a copy of the frame takes the words.
-_Avoid_: Hyperlink, URL, anchor
-
-**Destination**:
-Where a **link** goes: an address written around the run it covers as the terminal's own hyperlink,
-never as glyphs of the frame, and absent for a terminal nobody can vouch for.
-_Avoid_: Target, href, address
-
-**Palette**:
-The colours the seven inks, the three bands and the ramp a raised surface is drawn on, resolved once
-at boot from what the terminal says it can do: one design, spelled in truecolour, in ANSI, or not at
-all.
-_Avoid_: Theme, scheme, colours
-
-**Band**:
-One of the three places a frame paints a background under its cells — the rail, the composer band,
-the well the transcript and each code fence in it sit in. A raised band is drawn on a ramp and a
-flat one in a single colour. A cell on a band still reads back as its ink.
-_Avoid_: Panel, colour, stripe
-
-**Edge**:
-The light a raised surface catches along its top and its side, and the shadow it leaves under its
-bottom: the two ends of a ramp, beside the three bands, and never an ink.
-_Avoid_: Border, elevation, highlight
-
-**Accent edge**:
-The accent in the faint face along the edge row of the one surface that takes the keys — the
-composer at rest, the card while a screen is open — where every surface that takes none keeps the
-dim edge, and a terminal that draws no colour is given neither. It recedes while the **window** is
-unfocused. Not an **edge**: an edge is the ground a row is raised on, and this is the ink written on
-it.
-_Avoid_: Focus ring, highlight, active border
-
-**Ramp**:
-The grounds a raised surface's face is drawn in, one per row, from the lit edge along its top to the
-shadow under its bottom, so a band of any height reads as one raised surface and its cells keep
-their ink.
-_Avoid_: Gradient, fade, shading
-
-**Meter**:
-The six cells a share of a window is drawn as, filled to the share: a ceiling can be a meter, and a
-hit rate — which has no ceiling — never is.
-_Avoid_: Bar, gauge, progress bar, sparkline
-
-**Sizing**:
-The cells a heading is drawn over where the terminal draws text at more than one cell: the two highest
-levels at twice the cell, measured by the footprint they leave rather than by the glyphs they are
-written as, so one never crosses the band's edge and wraps where the footprint stops fitting. The row
-under a large one is the block's own — it keeps the gutter and says nothing else — and a terminal that
-draws no large text keeps today's spelling.
-_Avoid_: Large text, scaling, zoom
-
-**Picture**:
-An image an answer points at, the diagram a fence becomes, or **Sindri's face** — measured into its
-**footprint** of cells before a pixel is spent, drawn as a **placement** over those rows.
-_Avoid_: Image (that is the `src`), graphic, thumbnail, raster (one way of drawing one)
-
-**Surface**:
-The four facts a row is measured against — the workspace, the pixels in a cell, whether this terminal
-places pictures at all, and whether it draws text at more than one cell. A heading is laid out as the
-cells the sizing leaves, so a row's width is the width it is drawn at.
-_Avoid_: Context, environment, settings
-
 **Sindri's face**:
 The picture of Sindri that travels in the **artefact** beside the bundled font, measured from its
 own header into a **footprint** and drawn over those cells — decoration, so a terminal that places
@@ -254,11 +115,6 @@ The frame a screen is drawn on: a rounded border carrying the screen's name in i
 the key that leaves in its bottom, at most seventy-two columns wide and centred, and — under fifty
 — the whole frame with its title row and no border.
 _Avoid_: Modal, dialog, popup, overlay, sheet
-
-**Scrim**:
-The frame behind a card, painted and dimmed rather than skipped: a reader sees the transcript
-they will return to and sees that no band under the card takes a key.
-_Avoid_: Backdrop, shade, veil, mask
 
 **Path picker**:
 The screen `@` opens: the workspace's files as `git` reads them, nearest first, capped at eight
@@ -275,34 +131,12 @@ too short or too narrow for the face it is drawn without it and reserves no row.
 never again.
 _Avoid_: Splash screen, welcome screen, landing page, boot animation
 
-**Stats screen**:
-The screen `/stats` opens: the facts the rail is too narrow to hold — the route, the spend, the
-instants, the whole GUID, the whole temp, the whole workspace — drawn from the record the run wrote
-and the facts it was handed, and settled rather than live. It is the ledger's second adapter: the
-band in, and the rows the ledger widens into as many columns as hold a whole one.
-_Avoid_: Status screen, dashboard, details, inspector
-
-**Hint**:
-One key named beside the word that says what pressing it does, in the footer's row and in the card
-that lists the keys: the key in the look a key wears and its meaning in a quieter one, the same two
-wherever a hint is drawn. The footer keeps them in survival order, most valuable first, gives them up
-from its end, and writes down only keys the composer answers.
-_Avoid_: Shortcut, keybinding, tip, cheatsheet
-
 **Key protocol**:
 What a launch asks of its terminal when it takes the screen, so a key that names no glyph arrives as
 a report of itself rather than as a byte: `Shift+Enter` breaks a line where `Enter` sends one. It is
 pushed on the terminal's own stack and popped first on every way out, and a terminal that speaks none
 is handed the same frame and the same keys.
 _Avoid_: Keyboard enhancement, CSI u, key encoding
-
-**Window**:
-The terminal around the frame, carrying what the run is doing without a cell of its own: the title
-naming the workspace and the state, the **progress mark** a streaming run wears, and the notification
-a run that ended while nobody was looking raises. Written only where the terminal names itself as one
-that takes these sequences, so a reader on a terminal that takes none is handed the same frame and
-the status document alone.
-_Avoid_: Frame (that one is the cells), chrome, shell, terminal title
 
 **Progress mark**:
 The terminal's own indeterminate progress indicator, worn while a run streams and taken away by every
@@ -321,15 +155,3 @@ _Avoid_: Active, selected, current window
 The one file the product ships, static and `x86_64-unknown-linux-musl`, built and held by the
 release stage. What the evals hold to a golden is a fixture, not this.
 _Avoid_: Build, build output, package
-
-## The paper trail
-
-**Spec**:
-What must be true — the acceptance criteria of the issue that asked for the work — and never the
-reason it is built this way.
-_Avoid_: Requirement, plan (an ADR is the reason)
-
-**ADR**:
-One numbered file under `docs/adr/`, holding one decision: what was chosen, why, and what a reader
-is held to.
-_Avoid_: Note, memo, doc, record (the run writes those)
