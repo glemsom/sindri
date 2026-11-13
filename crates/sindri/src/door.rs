@@ -6,6 +6,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use crate::ink::{Face, Ink, Look};
+use crate::link::Links;
 use crate::palette::Palette;
 use crate::pen;
 use crate::rows::{Row, wrap_under};
@@ -36,7 +37,7 @@ const HANG: u16 = 2;
 
 /// Paints the door into the band the transcript is drawn in, indented as an answer is. A line
 /// wider than the band wraps under its own column, so a narrow frame is never shown half a word.
-pub fn paint(area: Rect, buffer: &mut Buffer, palette: &Palette) {
+pub fn paint(area: Rect, buffer: &mut Buffer, palette: &Palette, links: &mut Links) {
     let room = area.width.saturating_sub(INDENT);
     if room == 0 {
         return;
@@ -59,6 +60,7 @@ pub fn paint(area: Rect, buffer: &mut Buffer, palette: &Palette) {
             },
             buffer,
             palette,
+            links,
         );
         y = y.saturating_add(1);
     }
