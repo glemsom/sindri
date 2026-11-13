@@ -31,6 +31,13 @@ const ANSWER: &str =
 const ANSWER_CACHED: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_stream_cached.sse");
 
+/// The footer's first hint, as the glyphs a terminal paints and as the bytes that carry them: a key
+/// and the word that says what it does are two looks, so the escape between them stands inside the
+/// row's bytes and not inside the glyphs it is read back as.
+const FIRST_HINT: &str = "Enter send";
+
+const FIRST_KEY: &[u8] = b"Enter";
+
 /// The stream's word, split the way it streams: a frame repaints only the cells a fragment
 /// changed, so a test looks for both halves and never for one run of words.
 const ANSWER_WORDS: [&str; 2] = ["Hello", "world"];
@@ -532,7 +539,7 @@ fn the_cell_size_is_asked_of_the_terminal_once_however_many_frames_it_paints() {
     let (session, mut pty, drawn) = Session::open(&ground);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -563,7 +570,7 @@ fn the_cell_size_is_asked_of_the_terminal_once_however_many_frames_it_paints() {
         bytes
             .windows(ASK_CELL.len())
             .position(|window| window == ASK_CELL)
-            .zip(bytes.windows(10).position(|window| window == b"Enter send"))
+            .zip(at(&bytes, FIRST_KEY))
             .is_some_and(|(asked_at, boot_at)| asked_at < boot_at),
         "and it was asked before the first frame was painted, so the frame was drawn at \
          an answer rather than at a guess"
@@ -576,7 +583,7 @@ fn the_key_protocol_is_asked_for_before_the_first_frame_and_given_back_first_on_
     let (session, mut pty, drawn) = Session::open(&ground);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -584,7 +591,7 @@ fn the_key_protocol_is_asked_for_before_the_first_frame_and_given_back_first_on_
     let (screen, ask, frame) = (
         at(&bytes, b"\x1b[?1049h"),
         at(&bytes, ASK_KEYS),
-        at(&bytes, b"Enter send"),
+        at(&bytes, FIRST_KEY),
     );
     assert!(
         matches!((screen, ask, frame), (Some(screen), Some(ask), Some(_)) if screen < ask),
@@ -616,7 +623,7 @@ fn a_terminal_that_names_itself_wears_the_title_is_asked_for_its_focus_and_gives
     let (session, mut pty, drawn) = Session::named(&ground, &wire, "xterm-kitty");
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -656,7 +663,7 @@ fn a_run_that_ends_while_nobody_is_looking_raises_one_notification() {
     let (session, mut pty, drawn) = Session::named(&ground, &wire, "xterm-kitty");
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -691,7 +698,7 @@ fn a_run_a_reader_watches_end_raises_no_notification() {
     let (session, mut pty, drawn) = Session::named(&ground, &wire, "xterm-kitty");
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -800,7 +807,7 @@ fn an_idle_terminal_is_painted_once_and_then_left_alone() {
         drawn.text()
     );
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn once: {:?}",
         drawn.text()
     );
@@ -835,7 +842,7 @@ fn an_at_walks_the_workspace_the_launch_stands_in() {
     let (_session, mut pty, drawn) = Session::open(&ground);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -984,7 +991,7 @@ fn composer_rows(drawn: &str) -> Option<u16> {
         if run.glyphs.starts_with('─') && run.column == 1 {
             hairline = Some(run.row);
         }
-        if run.glyphs.contains("Enter send") {
+        if run.glyphs.contains(FIRST_HINT) {
             footer = Some(run.row);
         }
     }
@@ -1076,7 +1083,7 @@ fn a_bracketed_paste_arrives_as_one_draft_with_its_line_breaks_kept() {
     let (session, mut pty, drawn) = Session::open(&ground);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -1123,7 +1130,7 @@ fn a_paste_that_arrives_as_a_burst_is_one_draft_too() {
     let (session, mut pty, drawn) = Session::open(&ground);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -1149,7 +1156,7 @@ fn a_reported_ctrl_enter_breaks_the_line_rather_than_sending() {
     let (session, mut pty, drawn) = Session::open(&ground);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -1174,7 +1181,7 @@ fn a_key_the_protocol_reports_by_name_is_the_key_the_terminal_speaks() {
     let (session, mut pty, drawn) = Session::open(&ground);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -1220,7 +1227,7 @@ fn a_reported_shift_enter_breaks_the_line_rather_than_sending() {
     let (session, mut pty, drawn) = Session::open(&ground);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -1258,7 +1265,7 @@ fn drafted(ground: &Ground, keys: &[&[u8]]) -> String {
     let (session, mut pty, drawn) = Session::open(ground);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -1284,7 +1291,7 @@ fn enter_takes_the_draft_out_of_the_composer() {
     let (session, mut pty, drawn) = Session::asking(&ground, &wire);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -1322,7 +1329,7 @@ fn ctrl_c_when_idle_clears_the_draft_and_leaves_the_launch_running() {
     let (session, mut pty, drawn) = Session::open(&ground);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -1355,7 +1362,7 @@ fn question_mark_opens_the_keys_screen_and_escape_gives_the_frame_back() {
     let (session, mut pty, drawn) = Session::open(&ground);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -1498,7 +1505,7 @@ fn ctrl_c_in_a_run_cancels_it_and_keeps_the_draft() {
     let (session, mut pty, drawn) = Session::asking(&ground, &wire);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -1568,7 +1575,7 @@ fn a_cancelled_run_settles_as_cancelled_and_the_settled_frame_is_left_alone() {
     let (session, mut pty, drawn) = Session::asking(&ground, &wire);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -1628,7 +1635,7 @@ fn a_live_run_draws_the_facts_it_was_handed_and_its_first_turn_moves_them() {
     let (session, mut pty, drawn) = Session::starting(command);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -1737,7 +1744,7 @@ fn the_stats_screen_draws_the_record_the_run_handed_its_frame() {
     let (session, mut pty, drawn) = Session::starting(launch);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -1828,7 +1835,7 @@ fn an_outside_sigint_stops_the_run_and_gives_the_terminal_back() {
     let (session, mut pty, drawn) = Session::asking(&ground, &wire);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -1912,7 +1919,7 @@ fn enter_during_a_run_keeps_the_prompt_above_the_composer() {
     let (session, mut pty, drawn) = Session::asking(&ground, &wire);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -1950,7 +1957,7 @@ fn the_prompts_typed_during_a_run_run_in_the_order_they_were_typed() {
     let (session, mut pty, drawn) = Session::asking(&ground, &wire);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -1993,7 +2000,7 @@ fn ctrl_x_drops_the_newest_prompt_the_queue_holds() {
     let (session, mut pty, drawn) = Session::asking(&ground, &wire);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -2038,7 +2045,7 @@ fn up_on_the_first_line_takes_the_newest_queued_prompt_back() {
     let (session, mut pty, drawn) = Session::asking(&ground, &wire);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -2128,7 +2135,7 @@ fn slash_model_offers_the_names_the_wire_serves_and_enter_writes_the_one_chosen(
     let (session, mut pty, drawn) = Session::asking(&ground, &wire);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -2185,7 +2192,7 @@ fn slash_model_with_a_name_sets_a_model_the_wire_never_offered() {
     let (session, mut pty, drawn) = Session::open(&ground);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -2221,7 +2228,7 @@ fn a_model_chosen_mid_launch_supersedes_the_session_and_the_next_prompt_runs_on_
     let (session, mut pty, drawn) = reading_the_model_from_the_config(&ground, &wire);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -2289,7 +2296,7 @@ fn slash_help_opens_the_keys_in_force_and_slash_settings_its_own_screen() {
     let (session, mut pty, drawn) = Session::open(&ground);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -2334,7 +2341,7 @@ fn slash_quit_quits_as_ctrl_q_does() {
     let (session, mut pty, drawn) = Session::open(&ground);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -2366,7 +2373,7 @@ fn the_rail_keeps_its_session_its_turns_and_its_size_across_two_prompts() {
     let (session, mut pty, drawn) = Session::starting(launch);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -2429,7 +2436,7 @@ fn a_file_in_the_session_temp_outlives_the_next_prompt_and_goes_when_the_launch_
     let (session, mut pty, drawn) = Session::asking(&ground, &wire);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -2498,7 +2505,7 @@ fn two_prompts_in_one_launch_leave_one_session_that_counts_both() {
     let (session, mut pty, drawn) = Session::asking(&ground, &wire);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -2564,7 +2571,7 @@ fn slash_new_clears_the_frame_and_leaves_the_session_it_holds_alone() {
     let (session, mut pty, drawn) = Session::asking(&ground, &wire);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -2612,7 +2619,7 @@ fn a_second_prompt_in_one_launch_is_asked_with_the_first_beside_its_answer() {
     let (session, mut pty, drawn) = Session::asking(&ground, &wire);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -2652,7 +2659,7 @@ fn a_prompt_queued_behind_a_live_run_joins_the_conversation_at_the_turn_it_was_a
     let (session, mut pty, drawn) = Session::asking(&ground, &wire);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -2709,7 +2716,7 @@ fn slash_new_empties_what_the_next_prompt_is_asked_with() {
     let (session, mut pty, drawn) = Session::asking(&ground, &wire);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -2760,7 +2767,7 @@ fn slash_new_under_a_live_run_keeps_the_turns_it_superseded_out_of_the_next_prom
     let (session, mut pty, drawn) = Session::asking(&ground, &wire);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
@@ -2804,7 +2811,7 @@ fn a_cancelled_run_leaves_the_turn_it_ended_in_what_the_next_prompt_carries() {
     let (session, mut pty, drawn) = Session::asking(&ground, &wire);
 
     assert!(
-        drawn.wait_for(b"Enter send"),
+        drawn.wait_for(FIRST_KEY),
         "the boot frame is drawn: {:?}",
         drawn.text()
     );

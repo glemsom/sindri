@@ -22,7 +22,7 @@ use crate::door;
 use crate::face;
 use crate::graphics::CellSize;
 use crate::ink::{Ink, Look};
-use crate::keys::{Act, Mode, Stack};
+use crate::keys::{self, Act, Mode, Stack};
 use crate::ledger::{Boot, Facts, Rail, Share};
 use crate::link::Links;
 use crate::mark::{Cell, Mark, Span};
@@ -40,17 +40,49 @@ use crate::settings::Settings;
 use crate::stats;
 use crate::stream::Stream;
 
-/// The hints in survival order, most valuable first: the order a narrower footer gives
-/// them up in, from the end, and longer than any width draws.
-const HINTS: [&str; 8] = [
-    "Enter send",
-    "? keys",
-    "Ctrl-C cancel",
-    "Ctrl-Q quit",
-    "/ commands",
-    "@ files",
-    "↑ queue",
-    "Shift+Enter newline",
+/// The hints in survival order, most valuable first: the order a narrower footer gives them up
+/// in. A hint is the key a reader presses and the word that says what it does.
+#[derive(Clone, Copy)]
+struct Hint {
+    key: &'static str,
+    does: &'static str,
+}
+
+impl Hint {
+    fn cells(&self) -> u16 {
+        pen::cells(self.key) + 1 + pen::cells(self.does)
+    }
+}
+
+const HINTS: [Hint; 7] = [
+    Hint {
+        key: "Enter",
+        does: "send",
+    },
+    Hint {
+        key: "?",
+        does: "keys",
+    },
+    Hint {
+        key: "Ctrl-C",
+        does: "cancel",
+    },
+    Hint {
+        key: "Ctrl-Q",
+        does: "quit",
+    },
+    Hint {
+        key: "Ctrl-J",
+        does: "newline",
+    },
+    Hint {
+        key: "@",
+        does: "files",
+    },
+    Hint {
+        key: "↑",
+        does: "queue",
+    },
 ];
 
 const GAP: &str = " · ";
@@ -910,7 +942,7 @@ impl View {
                         buffer,
                         area,
                         y,
-                        &[(name.as_str(), Ink::Muted), (line, Ink::Plain)],
+                        &[(name.as_str(), keys::KEY), (line, keys::DOES)],
                         &self.palette,
                     );
                     y = y.saturating_add(1);
@@ -1147,9 +1179,15 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16) -> Bands {
     }
 }
 
-/// Writes one row of a screen, each span in its own ink. A row the frame's right edge has no room
+/// Writes one row of a screen, each span in its own look. A row the frame's right edge has no room
 /// for is not drawn at all: a screen's row is whole or it is not there.
-fn screen_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)], palette: &Palette) {
+fn screen_row<S: AsRef<str>, D: Copy + Into<Look>>(
+    buffer: &mut Buffer,
+    area: Rect,
+    y: u16,
+    spans: &[(S, D)],
+    palette: &Palette,
+) {
     pen::write(
         buffer,
         Rect {
@@ -1200,13 +1238,15 @@ fn cut_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)], palet
 }
 
 /// One row of hints, in survival order.
-fn hints_row(buffer: &mut Buffer, area: Rect, hints: &[&str], palette: &Palette) {
-    let mut spans: Vec<(&str, Ink)> = Vec::new();
+fn hints_row(buffer: &mut Buffer, area: Rect, hints: &[Hint], palette: &Palette) {
+    let mut spans: Vec<(&str, Look)> = Vec::new();
     for (index, hint) in kept(hints, area.width).into_iter().enumerate() {
         if index > 0 {
-            spans.push((GAP, Ink::Dim));
+            spans.push((GAP, Look::plain(Ink::Dim)));
         }
-        spans.push((hint, Ink::Muted));
+        spans.push((hint.key, keys::KEY));
+        spans.push((" ", keys::DOES));
+        spans.push((hint.does, keys::DOES));
     }
     pen::write(buffer, area, &spans, Clip::Whole, palette);
 }
@@ -1214,17 +1254,17 @@ fn hints_row(buffer: &mut Buffer, area: Rect, hints: &[&str], palette: &Palette)
 /// The hints a footer `width` columns wide draws, in survival order, stopping at the first that
 /// does not fit, gap included: a later and shorter hint is never taken in its place, because the
 /// order is the whole of what the table says.
-fn kept<'a>(hints: &[&'a str], width: u16) -> Vec<&'a str> {
+fn kept(hints: &[Hint], width: u16) -> Vec<Hint> {
     let gap = pen::cells(GAP);
-    let mut kept: Vec<&'a str> = Vec::new();
+    let mut kept: Vec<Hint> = Vec::new();
     let mut taken: u16 = 0;
     for hint in hints.iter().take(wanted(width)) {
-        let room = pen::cells(hint) + if kept.is_empty() { 0 } else { gap };
+        let room = hint.cells() + if kept.is_empty() { 0 } else { gap };
         if taken.saturating_add(room) > width {
             break;
         }
         taken += room;
-        kept.push(hint);
+        kept.push(*hint);
     }
     kept
 }
@@ -2195,13 +2235,22 @@ mod tests {
             .collect()
     }
 
-    /// The hints a footer `width` columns wide draws from `hints`, as the row is left.
-    fn hints_drawn(hints: &[&str], width: u16) -> String {
+    /// The row `hints` are drawn as in a footer `width` columns wide.
+    fn hints_drawn(hints: &[Hint], width: u16) -> Buffer {
         let palette = Palette::TRUECOLOR;
         let area = Rect::new(0, 0, width, 1);
         let mut buffer = Buffer::empty(area);
+        pen::claim(&mut buffer, area, palette.ground(None));
         hints_row(&mut buffer, area, hints, &palette);
-        drawn_row(&buffer, area.y).trim_end().to_owned()
+        buffer
+    }
+
+    /// The hints as the footer draws them: each key, one blank, and the word it does.
+    fn said(hints: &[Hint]) -> Vec<String> {
+        hints
+            .iter()
+            .map(|hint| format!("{} {}", hint.key, hint.does))
+            .collect()
     }
 
     fn footer(cols: u16, rows: u16) -> String {
@@ -2216,9 +2265,10 @@ mod tests {
     fn a_hundred_and_twenty_columns_hold_the_seven_hints_the_table_names() {
         assert_eq!(
             footer(120, 24).trim_end(),
-            "Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · / commands · @ files · ↑ queue",
-            "§57's table gives a 120-column footer seven hints, in survival order and \
-             separated by one gap"
+            "Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · Ctrl-J newline · @ files · \
+             ↑ queue",
+            "a 120-column footer draws every hint the table holds, in survival order and separated \
+             by one gap"
         );
     }
 
@@ -2226,9 +2276,9 @@ mod tests {
     fn five_hints_are_kept_from_a_hundred_columns_and_ninety_nine_keeps_two() {
         assert_eq!(
             footer(100, 24).trim_end(),
-            "Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · / commands",
-            "a hundred columns is the narrowest frame §57 gives five hints, so the two \
-             that go are the queue's and the picker's"
+            "Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · Ctrl-J newline",
+            "a hundred columns is the narrowest frame that gives five hints, so the two \
+             that go are the picker's and the queue's"
         );
         assert_eq!(
             footer(99, 24).trim_end(),
@@ -2248,6 +2298,7 @@ mod tests {
 
     #[test]
     fn no_hint_is_cut_mid_word_at_any_width_between_twenty_and_two_hundred() {
+        let said = said(&HINTS);
         for width in 20..=200u16 {
             let drawn = footer(width, 24);
             let row = drawn.trim_end();
@@ -2258,8 +2309,11 @@ mod tests {
             };
 
             assert_eq!(
-                parts.as_slice(),
-                &HINTS[..parts.len()],
+                parts,
+                said[..parts.len()]
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<Vec<&str>>(),
                 "at {width} columns the footer reads {row:?}, which is not a run of whole \
                  hints from the front of the table"
             );
@@ -2268,13 +2322,15 @@ mod tests {
 
     #[test]
     fn the_first_two_hints_are_drawn_at_every_width_from_twenty_columns() {
+        let said = said(&HINTS);
+        let floor: Vec<&str> = said[..FLOOR].iter().map(String::as_str).collect();
         for width in 20..=200u16 {
             let row = footer(width, 24);
             let hints: Vec<&str> = row.trim_end().split(GAP).collect();
 
             assert_eq!(
                 hints.get(..FLOOR),
-                Some(&HINTS[..FLOOR]),
+                Some(&floor[..]),
                 "at {width} columns the footer reads {:?}: the two hints §12 never takes \
                  away are drawn whole at every width, and 60 is not a special case of that",
                 row.trim_end()
@@ -2284,17 +2340,37 @@ mod tests {
 
     #[test]
     fn a_footer_hint_holding_a_wide_glyph_is_not_drawn_past_the_rows_edge() {
-        let hints = ["Enter", "日本"];
+        let hints = [
+            Hint {
+                key: "Enter",
+                does: "send",
+            },
+            Hint {
+                key: "日本",
+                does: "語",
+            },
+        ];
 
+        let narrow = hints_drawn(&hints, 19);
         assert_eq!(
-            hints_drawn(&hints, 10),
-            "Enter",
-            "ten columns hold the first hint and neither the gap nor the four the wide one \
+            drawn_row(&narrow, 0).trim_end(),
+            "Enter send",
+            "nineteen columns hold the first hint and neither the gap nor the seven the wide one \
              takes, so it is given up whole rather than drawn over the row's edge"
         );
+
+        let wide = hints_drawn(&hints, 20);
+        let drawn: String = (13..20)
+            .map(|x| {
+                wide.cell((x, 0))
+                    .expect("a cell of the row")
+                    .symbol()
+                    .to_owned()
+            })
+            .filter(|symbol| !symbol.trim().is_empty())
+            .collect();
         assert_eq!(
-            hints_drawn(&hints, 12),
-            "Enter · 日 本",
+            drawn, "日本語",
             "and where the row does hold it, each wide glyph is drawn in the two columns it \
              occupies and the row ends at its last one"
         );
@@ -2314,6 +2390,151 @@ mod tests {
             "",
             "eight columns hold no hint at all, which is what the floor gives way to"
         );
+    }
+
+    /// Whether `one` reads louder than `other`: the frame's own order of light, and the weight a
+    /// look wears on top of it.
+    fn louder(one: Look, other: Look) -> bool {
+        let rank = |look: Look| {
+            let ink = match look.ink() {
+                Ink::Plain => 3,
+                Ink::Muted => 2,
+                Ink::Dim => 1,
+                _ => 0,
+            };
+            ink * 2 + u8::from(look.faces().has(Face::Bold))
+        };
+        rank(one) > rank(other)
+    }
+
+    /// The runs of row `y` from `from` to `to` as the cells are drawn, each with the look it reads
+    /// back in.
+    fn runs_of(
+        buffer: &Buffer,
+        palette: &Palette,
+        y: u16,
+        from: u16,
+        to: u16,
+    ) -> Vec<(Look, String)> {
+        let mut runs: Vec<(Look, String)> = Vec::new();
+        for x in from..to {
+            let look = look_at(buffer, palette, x, y);
+            let glyph = buffer
+                .cell((x, y))
+                .expect("a cell of the row")
+                .symbol()
+                .to_owned();
+            match runs.last_mut() {
+                Some((last, text)) if *last == look => text.push_str(&glyph),
+                _ => runs.push((look, glyph)),
+            }
+        }
+        runs
+    }
+
+    #[test]
+    fn the_footer_draws_each_hint_as_a_key_and_the_words_that_say_what_it_does() {
+        let palette = Palette::TRUECOLOR;
+        for cols in [130, 120, 100, 60] {
+            let mut view = View::boot();
+            let area = screen(cols, 24);
+            let mut buffer = Buffer::empty(area);
+            view.paint(area, &mut buffer);
+
+            let row = area.bottom() - 1;
+            let drawn = drawn_row(&buffer, row);
+            let mut tail = 0;
+            for hint in kept(&HINTS, cols) {
+                let at = tail + drawn[tail..].find(hint.key).expect("a kept key is drawn");
+                let x = pen::cells(&drawn[..at]);
+                let key_look = look_at(&buffer, &palette, x, row);
+                let does_look = look_at(&buffer, &palette, x + pen::cells(hint.key) + 1, row);
+                assert_eq!(
+                    key_look,
+                    keys::KEY,
+                    "at {cols} columns the key {:?} is not drawn in the look a key is drawn in",
+                    hint.key
+                );
+                assert_eq!(
+                    does_look,
+                    keys::DOES,
+                    "at {cols} columns the word {:?} is not drawn in the look a meaning is",
+                    hint.does
+                );
+                assert!(
+                    louder(key_look, does_look),
+                    "at {cols} columns {:?} draws its key in {key_look:?} and what it does in \
+                     {does_look:?}: a key is the thing to press, so it is read louder than the \
+                     words that say what pressing it does",
+                    hint.key
+                );
+                tail = at + hint.key.len();
+            }
+        }
+    }
+
+    #[test]
+    fn the_card_that_lists_the_keys_draws_every_key_no_quieter_than_the_line_that_explains_it() {
+        let palette = Palette::TRUECOLOR;
+        let mut view = View::boot();
+        view.key(Key::Char('?'));
+        let area = screen(120, 40);
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+
+        let (left, right) = card_columns(&buffer);
+        let mut listed = 0;
+        for y in area.y + 1..area.bottom() - 1 {
+            let runs: Vec<(Look, String)> = runs_of(&buffer, &palette, y, left + 1, right)
+                .into_iter()
+                .filter(|(_, text)| !text.trim().is_empty())
+                .collect();
+            match runs.as_slice() {
+                [] | [_] => {}
+                [(key, _), (does, _), ..] => {
+                    listed += 1;
+                    assert_eq!(*key, keys::KEY, "row {y} draws its key in another look");
+                    assert_eq!(*does, keys::DOES, "row {y} draws its line in another look");
+                    assert!(
+                        louder(*key, *does),
+                        "row {y} of the card draws its key in {key:?} over the line in {does:?}: \
+                         the list is turned the right way up, so a key is never the quieter of the \
+                         two things a row says"
+                    );
+                }
+            }
+        }
+        assert_eq!(
+            listed,
+            Mode::Composer.table().len() + Mode::Keys.table().len(),
+            "every key of the stack the card sits on is one row of its list"
+        );
+    }
+
+    #[test]
+    fn no_hint_is_written_that_no_width_draws() {
+        assert_eq!(
+            kept(&HINTS, u16::MAX).len(),
+            HINTS.len(),
+            "the widest frame a row is drawn in draws every hint the table writes: a hint no width \
+             reaches is a key the footer hints at and never says"
+        );
+    }
+
+    #[test]
+    fn every_hint_names_a_key_the_composer_answers() {
+        for hint in HINTS {
+            let bound = Mode::Composer
+                .table()
+                .iter()
+                .any(|binding| binding.name.split(", ").any(|name| name == hint.key));
+            assert!(
+                bound,
+                "the footer names {:?} and no row of the composer's table answers to it: a hint is \
+                 drawn in a row only where it is a key that works",
+                hint.key
+            );
+        }
     }
 
     #[test]

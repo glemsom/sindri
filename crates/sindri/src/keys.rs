@@ -1,4 +1,11 @@
 use crate::composer::Key;
+use crate::ink::{Faces, Ink, Look};
+
+/// The look a key is drawn in wherever a hint names it, and the look the words that say what
+/// pressing it does hang in: a key is the thing to press, so it wears the weight of one.
+pub const KEY: Look = Look::plain(Ink::Plain).wearing(Faces::BOLD);
+
+pub const DOES: Look = Look::plain(Ink::Muted);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {

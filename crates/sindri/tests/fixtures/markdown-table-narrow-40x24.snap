@@ -26,4 +26,4 @@ markdown-table-narrow at 40x24
 20 |                                        | plain:40
 21 |────────────────────────────────────────| accent+faint:40
 22 |› what should the run do?               | dim:25 plain:15
-23 |Enter send · ? keys                     | muted:10 dim:3 muted:6 plain:21
+23 |Enter send · ? keys                     | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:5 plain:21

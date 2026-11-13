@@ -273,6 +273,13 @@ and the facts it was handed, and settled rather than live. It is the ledger's se
 band in, and the rows the ledger widens into as many columns as hold a whole one.
 _Avoid_: Status screen, dashboard, details, inspector
 
+**Hint**:
+One key the footer names and the word that says what pressing it does, drawn as the two things they
+are: the key in the look a key wears and its meaning in a quieter one, the same two wherever a hint
+is drawn. The row keeps them in survival order, most valuable first, gives them up from its end, and
+writes down only keys the composer answers.
+_Avoid_: Shortcut, keybinding, tip, cheatsheet
+
 **Key protocol**:
 What a launch asks of its terminal when it takes the screen, so a key that names no glyph arrives as
 a report of itself rather than as a byte: `Shift+Enter` breaks a line where `Enter` sends one. It is
