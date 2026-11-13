@@ -144,6 +144,21 @@ fn markdown_headings_80x24_is_six_levels_from_a_ruled_bold_to_a_dim_bold() {
 }
 
 #[test]
+fn markdown_headings_40x24_is_the_same_six_levels_wrapped_at_the_band() {
+    fixture::assert_frame("markdown-headings", 40, 24);
+}
+
+#[test]
+fn markdown_headings_large_80x24_is_the_two_highest_levels_at_twice_the_cell() {
+    fixture::assert_frame("markdown-headings-large", 80, 24);
+}
+
+#[test]
+fn markdown_headings_large_40x24_is_those_levels_wrapped_and_measured_by_what_they_leave() {
+    fixture::assert_frame("markdown-headings-large", 40, 24);
+}
+
+#[test]
 fn markdown_lists_80x24_is_a_bullet_and_an_ordinal_two_spaces_per_depth() {
     fixture::assert_frame("markdown-lists", 80, 24);
 }

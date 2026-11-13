@@ -104,6 +104,7 @@ fn named(name: &str) -> View {
             "eight: the question to ask",
         ])),
         "markdown-headings" => construct(headings()),
+        "markdown-headings-large" => sized(headings()),
         "markdown-lists" => construct(lists()),
         "markdown-table" => construct(table()),
         "markdown-quote" => construct(quoted()),
@@ -218,6 +219,14 @@ fn model_screen() -> View {
 
 fn construct(text: &str) -> View {
     View::of(vec![answer(1, text)], Scroll::Tail)
+}
+
+/// The same answer on a terminal that draws text at more than one cell: the two highest headings are
+/// laid out as the cells the sizing leaves and measured by them.
+fn sized(text: &str) -> View {
+    let mut view = construct(text);
+    view.set_sizing(true);
+    view
 }
 
 fn headings() -> &'static str {

@@ -13,6 +13,7 @@ use sindri::pen;
 use sindri::picture::Surface;
 use sindri::pulse::Pulse;
 use sindri::rows::{Row, Rows, Scroll, Window, layout, layout_on};
+use sindri::size::Sizes;
 use sindri::stream::Stream;
 use sindri_core::config::Config;
 use sindri_core::open::Ground;
@@ -131,7 +132,7 @@ fn a_surface_that_changed_relays_the_band_once_and_one_that_did_not_relays_nothi
         "a surface that changed nothing drops no row and lays none out again"
     );
 
-    rows.retune(Surface::of(None, CellSize::new(10, 20), true));
+    rows.retune(Surface::of(None, CellSize::new(10, 20), true, false));
     rows.window(Scroll::Tail, 10);
     assert_eq!(
         rows.lays(),
@@ -728,6 +729,7 @@ fn a_path_wider_than_the_body_is_one_destination_on_each_row() {
             &mut buffer,
             &Palette::TRUECOLOR,
             &mut links,
+            &mut Sizes::none(),
         );
     }
     let destinations: Vec<&str> = (0..u16::try_from(rows.len() - 1).unwrap())
@@ -799,7 +801,13 @@ fn painted(row: &Row, cols: u16) -> Vec<(char, Look)> {
     let palette = Palette::TRUECOLOR;
     let area = Rect::new(0, 0, cols, 1);
     let mut buffer = Buffer::empty(area);
-    row.paint(area, &mut buffer, &palette, &mut Links::none());
+    row.paint(
+        area,
+        &mut buffer,
+        &palette,
+        &mut Links::none(),
+        &mut Sizes::none(),
+    );
     (0..row.width())
         .map(|x| {
             let cell = buffer
@@ -811,6 +819,55 @@ fn painted(row: &Row, cols: u16) -> Vec<(char, Look)> {
             (glyph, look)
         })
         .collect()
+}
+
+/// A row as a terminal that sizes text draws it: the cells the runs it names leave, written once the
+/// band it stands in is known, which is when the frame writes them.
+fn spelled(row: &Row, cols: u16) -> String {
+    let band = Rect::new(0, 0, cols, 4);
+    let mut buffer = Buffer::empty(band);
+    let mut sizes = Sizes::none();
+    row.paint(
+        Rect { height: 1, ..band },
+        &mut buffer,
+        &Palette::TRUECOLOR,
+        &mut Links::none(),
+        &mut sizes,
+    );
+    sizes.settle(band, &mut buffer, &Palette::TRUECOLOR);
+    (0..row.width())
+        .map(|x| {
+            buffer
+                .cell((x, 0))
+                .expect("a cell of the row")
+                .symbol()
+                .to_owned()
+        })
+        .collect::<String>()
+        .trim_end()
+        .to_owned()
+}
+
+#[test]
+fn a_live_answer_that_opens_on_a_large_heading_keeps_the_cells_the_sizing_leaves() {
+    let mut rows = Rows::new();
+    rows.resize(40);
+    rows.retune(Surface::of(None, CellSize::new(10, 20), false, true));
+    let mut stream = Stream::new();
+    stream.text("# A gate rule");
+    rows.live(&stream, Some(&Pulse::live(4_200).head()));
+
+    let heading = rows.rows(0)[1].clone();
+    assert_eq!(
+        spelled(&heading, 40),
+        "  A   g a t e   r u l e",
+        "the heading under the marker's row is drawn at twice the cell: {heading:?}"
+    );
+    assert_eq!(
+        heading.glyphs().trim_start(),
+        "A gate rule",
+        "and the row is copied as its words: {heading:?}"
+    );
 }
 
 fn said(row: &[(char, Look)]) -> String {
@@ -987,7 +1044,13 @@ fn a_fence_that_opens_a_live_answer_keeps_its_well_under_the_marker() {
 fn laid(row: &Row, area: Rect) -> (Buffer, Links) {
     let mut buffer = Buffer::empty(area);
     let mut links = Links::none();
-    row.paint(area, &mut buffer, &Palette::TRUECOLOR, &mut links);
+    row.paint(
+        area,
+        &mut buffer,
+        &Palette::TRUECOLOR,
+        &mut links,
+        &mut Sizes::none(),
+    );
     (buffer, links)
 }
 
@@ -1055,6 +1118,7 @@ fn a_run_wider_than_the_row_it_was_laid_on_names_nothing_on_the_row_below() {
         &mut buffer,
         &Palette::TRUECOLOR,
         &mut links,
+        &mut Sizes::none(),
     );
     Row::of([(String::from("and its gate"), Ink::Plain)]).paint(
         Rect {
@@ -1065,6 +1129,7 @@ fn a_run_wider_than_the_row_it_was_laid_on_names_nothing_on_the_row_below() {
         &mut buffer,
         &Palette::TRUECOLOR,
         &mut links,
+        &mut Sizes::none(),
     );
 
     assert_eq!(links.at(0, 18), Some("https://x.test/s"));

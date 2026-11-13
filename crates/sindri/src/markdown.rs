@@ -15,6 +15,7 @@ use crate::palette::Band;
 use crate::pen;
 use crate::picture::{self, Picture, Surface};
 use crate::rows::{Row, split_at};
+use crate::size::{self, Sized};
 
 /// The parser's options: GFM tables on, because CommonMark leaves tables out. No other extension
 /// is enabled, so a footnote, a strikethrough and a task list parse as plain prose.
@@ -112,6 +113,12 @@ fn kinds() -> &'static [(Scope, Ink)] {
     })
 }
 
+/// Whether a level is drawn at twice the cell where the terminal sizes text: the two highest,
+/// which are the two a long answer's shape is read from.
+fn large(level: HeadingLevel) -> bool {
+    matches!(level, HeadingLevel::H1 | HeadingLevel::H2)
+}
+
 /// The look a level of heading is drawn in, and the mark of the rule it carries under it: the
 /// double under the highest, the single under the one beneath it, and none under a level told
 /// apart by its ink and its weight alone.
@@ -197,6 +204,9 @@ struct Room {
     /// are what its block is spoken of as. Nothing is drawn until it closes, because its words
     /// are inside it.
     image: Option<(String, String)>,
+    /// How many cells a glyph of the block in hand is drawn over: two inside a heading a terminal
+    /// sizes text for, and one everywhere else.
+    scale: u16,
 }
 
 impl Room {
@@ -223,6 +233,7 @@ impl Room {
             reserve: 0,
             surface: surface.clone(),
             image: None,
+            scale: 1,
         }
     }
 
@@ -381,6 +392,10 @@ impl Room {
         let (look, rule) = heading(level);
         self.block = look;
         self.rule = rule.map(Rule::new);
+        self.scale = match self.surface.sizing() && large(level) {
+            true => size::SCALE,
+            false => 1,
+        };
     }
 
     /// A heading closes under the rule its level carries, in the block's own gutter, so a
@@ -389,7 +404,8 @@ impl Room {
         self.flush_if_written();
         let rule = self.rule.take();
         self.block = Look::plain(Ink::Plain);
-        let run = rule.map_or_else(String::new, |rule| rule.run(self.room()));
+        self.scale = 1;
+        let run = rule.map_or_else(String::new, |rule| rule.run(self.room_cells()));
         if !run.is_empty() {
             let mut spans = self.gutter();
             spans.push((run, Look::plain(Ink::Dim)));
@@ -749,15 +765,27 @@ impl Room {
     }
 
     fn flush(&mut self) {
-        if let Some(rule) = &mut self.rule {
-            rule.wrote(self.used);
-        }
         let gutter = self.columns();
+        let runs = self.runs(gutter);
+        let scale = usize::from(self.scale);
+        if let Some(rule) = &mut self.rule {
+            // The rule is as wide as the heading is drawn: the cells the sizing leaves where it
+            // was drawn large, and the words where the band's edge left it no whole cell.
+            rule.wrote(match runs.is_empty() {
+                true => self.used,
+                false => self.used.saturating_mul(scale),
+            });
+        }
         let mut row = Row::of(self.spans());
+        let sized = !runs.is_empty();
+        for run in runs {
+            row = row.sized(run);
+        }
         for run in std::mem::take(&mut self.laid) {
             row = row.linking(
-                u16::try_from(gutter.saturating_add(run.left)).unwrap_or(u16::MAX),
-                u16::try_from(run.width).unwrap_or(u16::MAX),
+                u16::try_from(gutter.saturating_add(run.left.saturating_mul(scale)))
+                    .unwrap_or(u16::MAX),
+                u16::try_from(run.width.saturating_mul(scale)).unwrap_or(u16::MAX),
                 run.destination,
             );
         }
@@ -767,9 +795,39 @@ impl Room {
             true => row.banded(Band::Well),
             false => row,
         });
+        if sized {
+            // A scaled glyph is drawn over the row under it as well, so that row is the block's
+            // own: it keeps the gutter and says nothing else, because no cell of it is the frame's.
+            self.first = false;
+            let under = Row::of(self.gutter());
+            self.push(under);
+        }
         self.used = 0;
         self.spaced = false;
         self.first = false;
+    }
+
+    /// The row in hand as the runs a terminal draws at more than one cell, one run per span: none
+    /// at all where the band's edge leaves one of them no whole cells, because a scaled glyph is
+    /// never cut by a column and a row is drawn one way or the other.
+    fn runs(&self, gutter: usize) -> Vec<Sized> {
+        if self.scale == 1 {
+            return Vec::new();
+        }
+        let room = self.room_cells();
+        let mut runs: Vec<Sized> = Vec::new();
+        let mut left = gutter;
+        let mut used = 0usize;
+        for (text, look) in &self.line {
+            let run = Sized::new(pen::columns(left), self.scale, text.as_str(), *look);
+            used = used.saturating_add(usize::from(run.width()));
+            if used > room {
+                return Vec::new();
+            }
+            left = left.saturating_add(usize::from(run.width()));
+            runs.push(run);
+        }
+        runs
     }
 
     /// The spans of the row in hand: the gutter of the block, then the words placed in it.
@@ -828,8 +886,15 @@ impl Room {
     }
 
     /// The columns a word of the block in hand has: at least one, because a row that could hold
-    /// nothing would break every word into nothing forever.
+    /// nothing would break every word into nothing forever. A glyph drawn at more than one cell
+    /// spends that many of them, so a large block has the band's columns divided by its scale.
     fn room(&self) -> usize {
+        (self.room_cells() / usize::from(self.scale)).max(1)
+    }
+
+    /// The columns the block in hand is drawn across: the band's, less the gutters it is set in
+    /// and the columns of the first row a marker stands beside.
+    fn room_cells(&self) -> usize {
         let bars: usize = self
             .lead
             .iter()

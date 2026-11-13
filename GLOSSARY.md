@@ -221,14 +221,23 @@ The six cells a share of a window is drawn as, filled to the share: a ceiling ca
 hit rate — which has no ceiling — never is.
 _Avoid_: Bar, gauge, progress bar, sparkline
 
+**Sizing**:
+The cells a heading is drawn over where the terminal draws text at more than one cell: the two highest
+levels at twice the cell, measured by the footprint they leave rather than by the glyphs they are
+written as, so one never crosses the band's edge and wraps where the footprint stops fitting. The row
+under a large one is the block's own — it keeps the gutter and says nothing else — and a terminal that
+draws no large text keeps today's spelling.
+_Avoid_: Large text, scaling, zoom
+
 **Picture**:
 An image an answer points at, the diagram a fence becomes, or **Sindri's face** — measured into its
 **footprint** of cells before a pixel is spent, drawn as a **placement** over those rows.
 _Avoid_: Image (that is the `src`), graphic, thumbnail, raster (one way of drawing one)
 
 **Surface**:
-The three facts a picture is measured against — the workspace, the pixels in a cell, whether this
-terminal places pictures at all.
+The four facts a row is measured against — the workspace, the pixels in a cell, whether this terminal
+places pictures at all, and whether it draws text at more than one cell. A heading is laid out as the
+cells the sizing leaves, so a row's width is the width it is drawn at.
 _Avoid_: Context, environment, settings
 
 **Sindri's face**:

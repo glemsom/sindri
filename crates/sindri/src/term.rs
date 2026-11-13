@@ -3,19 +3,22 @@
 //! canvas frames are painted through, and the telling a sequence is written out by.
 
 use std::fs::File;
-use std::io::{self, IsTerminal, Write};
+use std::io::{self, IsTerminal, Read, Write};
 use std::os::fd::{AsFd, BorrowedFd};
 use std::panic::{self, PanicHookInfo};
 use std::sync::{Mutex, MutexGuard, Once, OnceLock};
+use std::time::Duration;
 
 use ratatui::backend::{Backend as RatatuiBackend, ClearType, CrosstermBackend, WindowSize};
 use ratatui::buffer::Cell;
 use ratatui::layout::{Position, Size};
+use rustix::event::{PollFd, PollFlags, Timespec, poll};
 use rustix::termios::{InputModes, OptionalActions, Termios, tcgetattr, tcsetattr};
 use sindri::graphics::CellSize;
 use sindri::link::Links;
 use sindri::picture;
 use sindri::pictures::Pictures;
+use sindri::size::{Laid, Sizes};
 use sindri::view::View;
 
 use crate::osc;
@@ -104,11 +107,12 @@ impl Drop for Screen {
 pub(crate) type Canvas<'a> = ratatui::Terminal<Backend<&'a File>>;
 
 /// Writes a frame to a terminal, with each destination a run of its cells names opened before the
-/// run's first cell and closed after its last. A cell is a glyph and a look and has no room for a
-/// destination, so the frame's ways travel beside it and are written here.
+/// run's first cell and closed after its last, and each run of cells drawn at more than one cell
+/// written as the sequence that draws it: a cell has room for neither, so both travel beside it.
 pub(crate) struct Backend<W: Write> {
     screen: CrosstermBackend<W>,
     links: Links,
+    sizes: Sizes,
     places: bool,
 }
 
@@ -119,6 +123,7 @@ impl<W: Write> Backend<W> {
         Backend {
             screen: CrosstermBackend::new(screen),
             links: Links::none(),
+            sizes: Sizes::none(),
             places,
         }
     }
@@ -126,6 +131,40 @@ impl<W: Write> Backend<W> {
     /// The destinations the frame about to be written names.
     fn links(&mut self, links: &Links) {
         self.links.clone_from(links);
+    }
+
+    /// The runs the frame about to be written draws at more than one cell.
+    fn sizes(&mut self, sizes: &Sizes) {
+        self.sizes.clone_from(sizes);
+    }
+
+    /// One run drawn as the sequence that makes it: written in the ink of the cell the diff handed
+    /// over, because the sequence draws the words and no cell of them is written.
+    fn large(
+        screen: &mut CrosstermBackend<W>,
+        links: &Links,
+        laid: &Laid,
+        ink: &Cell,
+        places: bool,
+    ) -> io::Result<()> {
+        let run = laid.run();
+        let mut sequence = ink.clone();
+        sequence.set_symbol(&String::from_utf8_lossy(&osc::sized(
+            run.scale(),
+            run.words(),
+        )));
+        let destination = match places {
+            true => links.at(laid.row(), laid.left()).map(String::from),
+            false => None,
+        };
+        if let Some(destination) = &destination {
+            screen.write_all(&osc::link(destination))?;
+        }
+        screen.draw(std::iter::once((laid.left(), laid.row(), &sequence)))?;
+        if destination.is_some() {
+            screen.write_all(&osc::link(""))?;
+        }
+        Ok(())
     }
 
     /// One run of cells and the destination it names: opened before the first of them and closed
@@ -152,7 +191,29 @@ impl<W: Write> RatatuiBackend for Backend<W> {
     {
         let mut cells: Vec<(u16, u16, &Cell)> = Vec::new();
         let mut naming: Option<String> = None;
+        let mut written: Vec<(u16, u16)> = Vec::new();
         for (x, y, cell) in content {
+            let block = self
+                .sizes
+                .covers(y, x)
+                .map(|laid| (laid.row(), laid.left()));
+            if let Some((row, left)) = block {
+                // The cells of a block are the sequence's on its first row, and the rows under it
+                // are the block's and no cells of the frame at all.
+                if row != y {
+                    continue;
+                }
+                let run = std::mem::take(&mut cells);
+                self.run(naming.as_deref(), &run)?;
+                naming = None;
+                if !written.contains(&(row, left))
+                    && let Some(laid) = self.sizes.covers(y, x)
+                {
+                    written.push((row, left));
+                    Backend::<W>::large(&mut self.screen, &self.links, laid, cell, self.places)?;
+                }
+                continue;
+            }
             let destination = match self.places {
                 true => self.links.at(y, x),
                 false => None,
@@ -239,6 +300,7 @@ pub(crate) fn paint(canvas: &mut Canvas<'_>, view: &mut View) -> io::Result<()> 
     view.paint(area, canvas.current_buffer_mut());
     let cursor = view.cursor(area);
     canvas.backend_mut().links(view.links());
+    canvas.backend_mut().sizes(view.sizes());
     canvas
         .draw(|frame| {
             if let Some(at) = cursor {
@@ -316,6 +378,27 @@ pub(crate) fn tell(out: &File, sequence: &[u8]) -> io::Result<()> {
     let mut out = out;
     out.write_all(sequence)?;
     out.flush()
+}
+
+/// The time a terminal that will answer a question takes to: one that cannot says nothing, and a
+/// launch is never held open for it.
+pub(crate) const REPLY_WAIT: Duration = Duration::from_millis(120);
+
+/// Writes `ask` and reads whatever the terminal says back within the wait, or nothing at all when
+/// it does not answer. The bytes are the terminal's, and a key typed while it thought is among them.
+pub(crate) fn reply(terminal: &Terminal, ask: &[u8]) -> Option<Vec<u8>> {
+    if tell(&terminal.screen, ask).is_err() {
+        return None;
+    }
+    let wait = Timespec::try_from(REPLY_WAIT).ok()?;
+    let mut fds = [PollFd::new(&terminal.keys, PollFlags::IN)];
+    match poll(&mut fds, Some(&wait)) {
+        Ok(_) if fds[0].revents().contains(PollFlags::IN) => {}
+        _ => return None,
+    }
+    let mut read = [0u8; 64];
+    let count = Read::read(&mut &terminal.keys, &mut read).ok()?;
+    Some(read[..count].to_vec())
 }
 
 /// A lock held for the length of one statement: a panic hook that blocked on a poisoned lock
@@ -452,10 +535,12 @@ mod tests {
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
     use rustix::termios::LocalModes;
-    use sindri::ink::Ink;
+    use sindri::ink::{Ink, Look};
     use sindri::link::{Link, Links};
     use sindri::palette::Palette;
     use sindri::pen::{self, Clip};
+    use sindri::rows::Scroll;
+    use sindri::size::{SCALE, Sized};
 
     use sindri_core::config::Config;
     use sindri_core::open::Ground;
@@ -533,6 +618,26 @@ mod tests {
             .draw(Buffer::empty(area).diff(&buffer).into_iter())
             .expect("a drawn row");
         backend.flush().expect("a written row");
+        drop(backend);
+        pty.drawn()
+    }
+
+    /// The bytes a terminal at the far end of a pseudo-terminal is handed for a frame and the runs
+    /// it draws at more than one cell.
+    fn spelled(buffer: Buffer, sizes: Sizes) -> String {
+        let area = *buffer.area();
+        let mut pty = Pty::open();
+        let mut backend = Backend::new(
+            pty.slave
+                .try_clone()
+                .expect("a second handle on the screen"),
+            false,
+        );
+        backend.sizes(&sizes);
+        backend
+            .draw(Buffer::empty(area).diff(&buffer).into_iter())
+            .expect("a drawn frame");
+        backend.flush().expect("a written frame");
         drop(backend);
         pty.drawn()
     }
@@ -744,6 +849,7 @@ mod tests {
                 &mut frame,
                 &Palette::TRUECOLOR,
                 &mut links,
+                &mut Sizes::none(),
             );
         }
 
@@ -767,6 +873,80 @@ mod tests {
         assert!(
             places.contains("\x1b]8;;file://"),
             "and the path a call names is handed the file it was judged against"
+        );
+    }
+
+    #[test]
+    fn a_frame_whose_terminal_sizes_text_hands_it_the_heading_as_the_sequence_that_draws_it() {
+        let mut pty = Pty::open();
+        let terminal =
+            Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
+        let area = painted_at();
+        let mut canvas = canvas_at(&terminal, area).expect("a canvas over it");
+        let mut view = View::of(
+            vec![Entry::Assistant {
+                turn: 1,
+                text: SecretSet::default().redact("# A gate rule"),
+            }],
+            Scroll::Tail,
+        );
+        view.set_sizing(true);
+
+        paint(&mut canvas, &mut view).expect("a painted frame");
+        drop(canvas);
+
+        let drawn = pty.drawn();
+        assert!(
+            drawn.contains("\x1b]66;s=2;A gate rule\x1b\\"),
+            "the heading is handed the terminal as the one sequence that draws it: {drawn:?}"
+        );
+        assert!(
+            !words(&drawn).contains("A   g a t e"),
+            "and no cell of it is written as the cells the sizing leaves: {drawn:?}"
+        );
+    }
+
+    #[test]
+    fn a_run_drawn_at_twice_the_cell_is_the_sequence_that_draws_it_and_no_cell_of_it_is_written() {
+        let area = Rect::new(0, 0, 20, 2);
+        let run = Sized::new(0, SCALE, "The rule", Look::plain(Ink::Plain));
+        let mut buffer = Buffer::empty(area);
+        pen::write(
+            &mut buffer,
+            Rect { height: 1, ..area },
+            &[(run.spelling(), Ink::Plain)],
+            Clip::Edge,
+            &Palette::TRUECOLOR,
+        );
+        // A cell under the block that no row of the frame wrote: a block is two rows of cells, and
+        // the terminal draws the second of them.
+        pen::write(
+            &mut buffer,
+            Rect {
+                y: 1,
+                height: 1,
+                ..area
+            },
+            &[("nowhere", Ink::Plain)],
+            Clip::Edge,
+            &Palette::TRUECOLOR,
+        );
+        let mut sizes = Sizes::none();
+        sizes.lay(0, 0, std::slice::from_ref(&run));
+
+        let drawn = spelled(buffer, sizes);
+
+        assert!(
+            drawn.contains("\x1b]66;s=2;The rule\x1b\\"),
+            "the words go out as the one sequence that draws them large: {drawn:?}"
+        );
+        assert!(
+            !words(&drawn).contains("T h e"),
+            "and no cell of the run is written as the cells it leaves: {drawn:?}"
+        );
+        assert!(
+            !words(&drawn).contains("nowhere"),
+            "a cell on the row under a block is the block's and no cell of the frame: {drawn:?}"
         );
     }
 

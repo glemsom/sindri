@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+markdown-headings-large at 80x24
+00 |                                                                                | plain:80
+01 |  M a r k d o w n   r e n d e r i n g                                           | plain:2 plain+bold:36 plain:42
+02 |                                                                                | plain:80
+03 |  ════════════════════════════════════                                          | plain:2 dim:36 plain:42
+04 |                                                                                | plain:80
+05 |  T h e   s c a l e   o f   h e a d i n g s ,   t w o   r u l e d   a n d       | plain:2 plain+bold:72 plain:6
+06 |                                                                                | plain:80
+07 |  f o u r   n o t                                                               | plain:2 plain+bold:16 plain:62
+08 |                                                                                | plain:80
+09 |  ────────────────────────────────────────────────────────────────────────      | plain:2 dim:72 plain:6
+10 |                                                                                | plain:80
+11 |  A third level, muted and bold                                                 | plain:2 muted+bold:29 plain:49
+12 |                                                                                | plain:80
+13 |  A fourth, muted and bare                                                      | plain:2 muted:24 plain:54
+14 |                                                                                | plain:80
+15 |  A fifth, dim and bold                                                         | plain:2 dim+bold:21 plain:57
+16 |                                                                                | plain:80
+17 |  A sixth, dim and both                                                         | plain:2 dim+bold+italic:21 plain:57
+18 |                                                                                | plain:80
+19 |                                                                                | plain:80
+20 |                                                                                | plain:80
+21 |────────────────────────────────────────────────────────────────────────────────| accent+faint:80
+22 |› what should the run do?                                                       | dim:25 plain:55
+23 |Enter send · ? keys                                                             | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:5 plain:61

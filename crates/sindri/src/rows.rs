@@ -11,11 +11,13 @@ use sindri_core::tools::OPEN;
 
 use crate::ink::{Ink, Look};
 use crate::link::{Link, Links, Way};
+use crate::mark;
 use crate::markdown;
 use crate::palette::{Band, Palette};
 use crate::pen::{self, Clip};
 use crate::picture::{self, Surface};
 use crate::pulse::Head;
+use crate::size::{self, Sized, Sizes};
 use crate::stream::Stream;
 
 /// How far a body sits inside the row that names it, and the blank gutter an answer is
@@ -45,6 +47,9 @@ pub struct Row {
     /// The band this row sits on, when it is one row of a well: a code fence is a block of
     /// cells, so each of its rows paints the surface under its words.
     band: Option<Band>,
+    /// The runs of this row a terminal draws at more than one cell: the row is measured by the
+    /// cells they leave, and its spans say the words they are written as.
+    sizes: Vec<Sized>,
 }
 
 impl Row {
@@ -64,7 +69,15 @@ impl Row {
             links: Vec::new(),
             picture: None,
             band: None,
+            sizes: Vec::new(),
         }
+    }
+
+    /// The same row with one more run drawn at more than one cell: the run covers the cells of the
+    /// words its span says, so a row of them is measured by the footprint and not by the glyphs.
+    pub fn sized(mut self, run: Sized) -> Row {
+        self.sizes.push(run);
+        self
     }
 
     /// The same row, drawn on `band`: the surface reaches the cells its words leave blank, so a
@@ -93,6 +106,7 @@ impl Row {
             links: Vec::new(),
             picture: None,
             band: None,
+            sizes: Vec::new(),
         }
     }
 
@@ -108,11 +122,20 @@ impl Row {
         &self.links
     }
 
+    /// The columns this row is drawn in: its spans measured as they are written, and the cells a
+    /// sized run leaves around them, which is what a row of them takes of the band.
     pub fn width(&self) -> u16 {
-        self.spans
+        let written = self
+            .spans
             .iter()
             .map(|(text, _)| pen::cells(text))
-            .fold(0, u16::saturating_add)
+            .fold(0, u16::saturating_add);
+        written.saturating_add(
+            self.sizes
+                .iter()
+                .map(|run| run.width().saturating_sub(pen::cells(run.words())))
+                .fold(0, u16::saturating_add),
+        )
     }
 
     pub fn spans(&self) -> &[(String, Look)] {
@@ -131,6 +154,7 @@ impl Row {
             picture: self.picture.clone(),
             band: self.band,
             links: self.links.iter().map(|link| link.shifted(shifts)).collect(),
+            sizes: self.sizes.iter().map(|run| run.shifted(shifts)).collect(),
             ..Row::of(spans)
         }
     }
@@ -143,11 +167,14 @@ impl Row {
         spans.extend(other.spans.iter().cloned());
         let mut links = self.links;
         links.extend(other.links.iter().map(|link| link.shifted(shifts)));
+        let mut sizes = self.sizes;
+        sizes.extend(other.sizes.iter().map(|run| run.shifted(shifts)));
         Row {
             spans,
             links,
             picture: self.picture,
             band: self.band,
+            sizes,
         }
     }
 
@@ -155,12 +182,40 @@ impl Row {
         self.spans.iter().map(|(text, _)| text.as_str()).collect()
     }
 
-    pub fn paint(&self, area: Rect, buffer: &mut Buffer, palette: &Palette, links: &mut Links) {
+    /// The glyphs this row says, each with the column it is drawn from and the columns it covers: a
+    /// glyph of a run drawn at more than one cell is one word over that many.
+    pub fn glyph_columns(&self) -> Vec<mark::Glyph> {
+        let mut glyphs = Vec::new();
+        let mut column = 0u16;
+        for (text, _) in &self.spans {
+            for glyph in text.chars() {
+                let scale = self
+                    .sizes
+                    .iter()
+                    .find(|run| run.covers(column))
+                    .map_or(1, size::Sized::scale);
+                let width = pen::cell(glyph).saturating_mul(scale);
+                glyphs.push((column, glyph, width));
+                column = column.saturating_add(width);
+            }
+        }
+        glyphs
+    }
+
+    pub fn paint(
+        &self,
+        area: Rect,
+        buffer: &mut Buffer,
+        palette: &Palette,
+        links: &mut Links,
+        sizes: &mut Sizes,
+    ) {
         if let Some(band) = self.band {
             pen::claim(buffer, area, palette.ground(Some(band)));
         }
         pen::write(buffer, area, &self.spans, Clip::Edge, palette);
         links.lay(area.y, area.x, &self.links);
+        sizes.lay(area.y, area.x, &self.sizes);
     }
 }
 
@@ -252,6 +307,7 @@ pub(crate) fn answer_on(text: &str, cols: u16, head: Option<&Head>, surface: &Su
                 .iter()
                 .map(|link| link.shifted(shifts))
                 .collect(),
+            sizes: first.sizes.iter().map(|run| run.shifted(shifts)).collect(),
             ..Row::of(spans)
         });
     }

@@ -12,6 +12,7 @@ mod paste; // the terminal's echo is off while the key is typed
 mod reports; // the threads a run and a wire listing land their reports on, and the pass that takes them
 mod sessions; // reads past runs back
 mod signal; // the one door an outside `SIGINT` comes through
+mod sizing; // the text-sizing question and the bounded wait for its answer
 mod term; // the terminal as a resource: raw mode, the alternate screen, the panic restore, the canvas, and the telling
 mod tui; // the launch: the loop, a key's outcome, where a prompt starts a run, and the endings
 mod window; // the terminal outside the frame: its title, its mark, its notification and its focus
