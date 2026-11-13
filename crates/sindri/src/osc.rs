@@ -43,10 +43,8 @@ pub fn notification(words: &str) -> Vec<u8> {
     sequence(b"\x1b]9;", &format!("{lead}{words}"))
 }
 
-/// The mark a streaming run wears.
 const MARK: &[u8] = b"\x1b]9;4;3\x1b\\";
 
-/// The state that takes it away, worn by every run that is not streaming.
 const CLEAR: &[u8] = b"\x1b]9;4;0\x1b\\";
 
 /// A sequence's opening, the words it carries, and `ST` after them. The words are filtered of every

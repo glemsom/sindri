@@ -449,17 +449,9 @@ impl Session {
         Session::starting(command)
     }
 
-    /// A launch on a terminal that names itself: the name is the whole of what a terminal that
-    /// takes the window's sequences is read from.
-    fn named(ground: &Ground, term: &str) -> (Session, Pty, Drawn) {
-        let mut command = ground.command();
-        command.env("TERM", term);
-        Session::starting(command)
-    }
-
-    /// A launch that can run a prompt on a terminal that names itself, which is the whole of what a
-    /// terminal that takes the window's sequences is read from.
-    fn named_asking(ground: &Ground, wire: &Wire, term: &str) -> (Session, Pty, Drawn) {
+    /// A launch on a terminal that names itself, which is the whole of what a terminal that takes
+    /// the window's sequences is read from.
+    fn named(ground: &Ground, wire: &Wire, term: &str) -> (Session, Pty, Drawn) {
         let mut command = ground.command();
         command
             .arg("--yolo-unsafe")
@@ -620,7 +612,8 @@ fn the_key_protocol_is_asked_for_before_the_first_frame_and_given_back_first_on_
 #[test]
 fn a_terminal_that_names_itself_wears_the_title_is_asked_for_its_focus_and_gives_it_up() {
     let ground = Ground::new();
-    let (session, mut pty, drawn) = Session::named(&ground, "xterm-kitty");
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::named(&ground, &wire, "xterm-kitty");
 
     assert!(
         drawn.wait_for(b"Enter send"),
@@ -660,7 +653,7 @@ fn notifications(bytes: &[u8]) -> usize {
 fn a_run_that_ends_while_nobody_is_looking_raises_one_notification() {
     let ground = Ground::new();
     let wire = Wire::holding();
-    let (session, mut pty, drawn) = Session::named_asking(&ground, &wire, "xterm-kitty");
+    let (session, mut pty, drawn) = Session::named(&ground, &wire, "xterm-kitty");
 
     assert!(
         drawn.wait_for(b"Enter send"),
@@ -693,7 +686,7 @@ fn a_run_that_ends_while_nobody_is_looking_raises_one_notification() {
 fn a_run_a_reader_watches_end_raises_no_notification() {
     let ground = Ground::new();
     let wire = Wire::holding();
-    let (session, mut pty, drawn) = Session::named_asking(&ground, &wire, "xterm-kitty");
+    let (session, mut pty, drawn) = Session::named(&ground, &wire, "xterm-kitty");
 
     assert!(
         drawn.wait_for(b"Enter send"),

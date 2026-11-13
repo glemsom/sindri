@@ -818,8 +818,8 @@ impl View {
         }
     }
 
-    /// The look the one surface that takes the keys draws its edge row in: the accent while this
-    /// window is the one being read, and the dim edge while nobody is reading it.
+    /// The look the one surface that takes the keys draws its edge row in, given what the
+    /// terminal has reported about who is reading.
     fn edge(&self) -> Look {
         match self.focus {
             Focus::Focused => self.palette.accent_edge(),

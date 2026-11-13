@@ -21,7 +21,9 @@ frame are untouched by this work.
 are the status's own: `Status::workspace` is the directory name the status document already carries,
 and `Phase::word` is the `idle`, `working`, `done`, `blocked` or `error` the document already
 carries, so a title is not a second spelling of a fact. A turn inside one state names the same title,
-and the window keeps the state it last wrote rather than repainting a title bar for nothing.
+and the window keeps the state it last wrote rather than repainting a title bar for nothing. The title
+is the one thing not given back on the way out: the shell that follows sets its own, and a title stack
+is a sequence fewer terminals keep than the title itself.
 
 **The mark is indeterminate, and every way out of a run clears it.** `OSC 9;4;3` asks the terminal for
 its own indeterminate progress indicator, because a turn is a count and never a share: turn 12 of 250
@@ -45,11 +47,13 @@ surface that takes the keys lets its accent go while nobody is reading it and ta
 the reader comes back. A window that has never reported is the one being read, so a terminal that
 takes none of these sequences draws the accent edge it always drew.
 
-**The window is written where the terminal names itself, and never guessed at.** `window::speaks`
-reads the names a terminal gives itself, as `link::speaks` does for a hyperlink, and writes nothing to
-one that says nothing: a title a terminal would mangle is worse than the shell's own. A query is not
-the answer, because a query is a read of the input a filter does not make. The `status` key gates the
-whole window, because it is the reader's one way of saying their terminal is to be left quiet.
+**The window is written where the terminal names itself, and never guessed at.** `link::named` is the
+one read of the names a terminal gives itself, and both `link::speaks` and `window::speaks` are asked
+from it; nothing is written to a terminal that says nothing, because a title a terminal would mangle
+is worse than the shell's own. A VTE names only its version, and no version is known to have learned
+the mark, so one is left out. A query is not the answer either: a query is a read of the input a
+filter does not make. The `status` key gates the whole window, because it is the reader's one way of
+saying their terminal is to be left quiet.
 
 ## What a reader is held to
 

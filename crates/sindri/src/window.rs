@@ -9,29 +9,15 @@ use std::time::Instant;
 use sindri_core::records::{Phase, Status, Told};
 use sindri_core::status::Throttle;
 
+use sindri::link;
+
 use crate::osc;
 
-/// Whether a terminal takes the sequences a window is written with, read off the names it gives
-/// itself. A terminal that says nothing is asked for nothing: its reader is handed the frame it has
-/// always been handed. A VTE is left out, because no one version learned a title and a mark.
+/// Whether a terminal takes the sequences a window is written with: the ones that name themselves,
+/// and none that do not, because a title a terminal mangles is worse than the shell's own. A VTE
+/// names only its version, and no version is known to have learned the mark.
 pub fn speaks(term: Option<&str>, program: Option<&str>) -> bool {
-    let names_one = |word: &str| {
-        let word = word.to_ascii_lowercase();
-        [
-            "kitty",
-            "ghostty",
-            "wezterm",
-            "iterm",
-            "vscode",
-            "alacritty",
-            "foot",
-            "contour",
-            "rio",
-        ]
-        .iter()
-        .any(|name| word.contains(name))
-    };
-    term.is_some_and(names_one) || program.is_some_and(names_one)
+    link::named(term, program)
 }
 
 /// What a launch says to its terminal: the status document a status bar reads, and — where the
@@ -46,8 +32,8 @@ pub struct Window<W: Write> {
     window: Option<WindowState>,
 }
 
-/// The three things the window says besides the status: the state its title names, the mark it
-/// wears, and whether the terminal says anyone is looking.
+/// What the window says besides the status: the state its title names, the mark it wears, and
+/// whether the terminal says anyone is looking.
 struct WindowState {
     state: Option<Phase>,
     marked: Option<bool>,
@@ -133,7 +119,6 @@ impl<W: Write> Window<W> {
         let mut said = Vec::new();
         if window.state != Some(phase) {
             said.extend(osc::title(report.workspace(), phase.word()));
-            // A reader who watched the run end is a reader who needs no telling.
             if matches!(phase, Phase::Done | Phase::Error) && !window.focused {
                 said.extend(osc::notification(&format!(
                     "{}: {}",
@@ -143,7 +128,7 @@ impl<W: Write> Window<W> {
             }
             window.state = Some(phase);
         }
-        let marked = matches!(phase, Phase::Working | Phase::Blocked);
+        let marked = phase == Phase::Working;
         if window.marked != Some(marked) {
             said.extend(osc::progress(marked));
             window.marked = Some(marked);

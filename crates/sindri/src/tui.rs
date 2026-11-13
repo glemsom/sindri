@@ -186,7 +186,7 @@ enum Ending {
 /// frame is never drawn. A key, a signal and a live run's fragment are all fds in that wait.
 #[allow(
     clippy::too_many_arguments,
-    reason = "the one seam every mode's key is handed through, the teller a run is announced to, and the launch the session lasts on"
+    reason = "the one seam every mode's key is handed through, the telling a run is announced to, and the launch the session lasts on"
 )]
 fn keys(
     terminal: &Terminal,
@@ -450,7 +450,7 @@ fn answer(
 /// ends the launch rather than being drawn: a screen that swallowed the reason would be one silence.
 #[allow(
     clippy::too_many_arguments,
-    reason = "the one seam a prompt starts a run through, and the teller it is announced to"
+    reason = "the one seam a prompt starts a run through, and the telling it is announced to"
 )]
 fn send(
     prompt: Prompt,

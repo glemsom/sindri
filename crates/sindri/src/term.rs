@@ -855,6 +855,7 @@ mod tests {
 
     #[test]
     fn a_panic_gives_the_terminal_back_before_the_guard_can() {
+        let _one_screen = lock(&ONE_SCREEN);
         let mut pty = Pty::open();
         let before = pty.attrs();
         let terminal =
