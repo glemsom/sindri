@@ -19,6 +19,10 @@ fn looks(row: &Row) -> Vec<Look> {
     row.spans().iter().map(|(_, look)| *look).collect()
 }
 
+fn wears(row: &Row, word: &str, look: Look) -> bool {
+    row.spans().contains(&(String::from(word), look))
+}
+
 #[test]
 fn a_heading_is_bold_and_an_h1_stands_under_one_blank_row() {
     let rows = markdown::rows(
@@ -141,58 +145,49 @@ fn a_strong_run_is_bold_and_an_emphasis_run_is_italic_in_prose_and_in_a_list() {
         "the marks are drawn and not spoken"
     );
     assert!(
-        rows[0]
-            .spans()
-            .contains(&(String::from("strong"), Look::new(Ink::Plain, Face::Bold))),
+        wears(&rows[0], "strong", Look::new(Ink::Plain, Face::Bold)),
         "a strong word is the frame's own ink worn bold: {:?}",
         rows[0].spans()
     );
     assert!(
-        rows[0].spans().contains(&(
-            String::from("emphasised"),
-            Look::new(Ink::Plain, Face::Italic)
-        )),
+        wears(&rows[0], "emphasised", Look::new(Ink::Plain, Face::Italic)),
         "an emphasised one is the same ink worn italic: {:?}",
         rows[0].spans()
     );
     assert!(
-        rows[1]
-            .spans()
-            .contains(&(String::from("strong"), Look::new(Ink::Plain, Face::Bold))),
+        wears(&rows[1], "strong", Look::new(Ink::Plain, Face::Bold)),
         "a list's bullet is its own and its strong word is still bold: {:?}",
         rows[1].spans()
     );
     assert!(
-        rows[2].spans().contains(&(
-            String::from("emphasised"),
-            Look::new(Ink::Plain, Face::Italic)
-        )),
+        wears(&rows[2], "emphasised", Look::new(Ink::Plain, Face::Italic)),
         "and its emphasised word still italic: {:?}",
         rows[2].spans()
     );
 }
 
-/// A heading is a weight of its own, so an emphasis inside one is that weight and the mark's
-/// together: an h1's italic is bold and italic, an h3's is dim and both, and an h4's — which is
-/// set in no weight of its own — is the mark alone.
 #[test]
 fn emphasis_inside_a_heading_wears_the_headings_weight_and_keeps_its_level() {
     let rows = markdown::rows(
-        "# an *a* word\n\n## a *b* word\n\n### a *c* word\n\n#### a *d* word",
+        "# an *a* word\n\n## a *b* word\n\n### a *c* word\n\n#### a *d* word\n\n##### a *e* \
+         word\n\n###### a *f* word",
         40,
     );
     let heads: Vec<&Row> = rows.iter().filter(|row| !words(row).is_empty()).collect();
 
+    let bold = Faces::BOLD.and(Faces::ITALIC);
     let wanted = [
-        ("a", Look::new(Ink::Plain, Faces::BOLD.and(Faces::ITALIC))),
-        ("b", Look::new(Ink::Plain, Faces::BOLD.and(Faces::ITALIC))),
-        ("c", Look::new(Ink::Dim, Faces::BOLD.and(Faces::ITALIC))),
+        ("a", Look::new(Ink::Plain, bold)),
+        ("b", Look::new(Ink::Plain, bold)),
+        ("c", Look::new(Ink::Dim, bold)),
         ("d", Look::new(Ink::Plain, Faces::ITALIC)),
+        ("e", Look::new(Ink::Plain, Faces::ITALIC)),
+        ("f", Look::new(Ink::Plain, Faces::ITALIC)),
     ];
     assert_eq!(heads.len(), wanted.len(), "one row per heading: {rows:?}");
     for (row, (letter, look)) in heads.iter().zip(wanted) {
         assert!(
-            row.spans().contains(&(String::from(letter), look)),
+            wears(row, letter, look),
             "the emphasised {letter:?} is {look:?}, because the mark and the heading's own \
              weight compose and the ink stays the level's: {:?}",
             row.spans()
@@ -212,12 +207,9 @@ fn emphasis_inside_a_quote_keeps_the_quotes_ink_and_its_gutter() {
         );
     }
     assert!(
-        rows.iter().any(|row| row.spans().contains(&(
-            String::from("emphasised"),
-            Look::new(Ink::Plain, Face::Italic)
-        ))),
-        "an emphasised word in a quote is the quote's own ink worn italic: {:?}",
-        rows.iter().map(Row::spans).collect::<Vec<_>>()
+        rows.iter()
+            .any(|row| wears(row, "emphasised", Look::new(Ink::Plain, Face::Italic))),
+        "an emphasised word in a quote is the quote's own ink worn italic: {rows:?}"
     );
 }
 
@@ -225,12 +217,19 @@ fn emphasis_inside_a_quote_keeps_the_quotes_ink_and_its_gutter() {
 /// a renderer that reformatted a fence's words would be editing what it was told to keep.
 #[test]
 fn a_fences_words_are_drawn_as_the_fence_drew_them_and_a_mark_inside_one_stays_a_glyph() {
-    let rows = markdown::rows("```\n**bold** and *italic* stay glyphs\n```", 40);
+    let rows = markdown::rows(
+        "```\n**bold** and *italic* stay glyphs\n```\n\nand `a **b** c` in a span",
+        40,
+    );
 
     assert_eq!(
         drawn(&rows),
-        ["▏ **bold** and *italic* stay glyphs"],
-        "the marks are glyphs of the fence and never weights of a word"
+        [
+            "▏ **bold** and *italic* stay glyphs",
+            "",
+            "and a **b** c in a span"
+        ],
+        "the marks are glyphs of code and never weights of a word"
     );
     assert!(
         rows[0].spans()[1..]
@@ -239,26 +238,29 @@ fn a_fences_words_are_drawn_as_the_fence_drew_them_and_a_mark_inside_one_stays_a
         "not one word of a fence wears a face the fence did not give it: {:?}",
         rows[0].spans()
     );
+    assert!(
+        wears(&rows[2], "a **b** c", Look::new(Ink::Muted, Face::Reversed)),
+        "a span keeps the look code is read in, mark and all: {:?}",
+        rows[2].spans()
+    );
 }
 
 #[test]
 fn an_emphasis_that_opens_and_never_closes_leaves_the_rows_after_it_unemphasised() {
     let rows = markdown::rows(
-        "an **open mark that never closes and the words after it",
+        "an **open mark that never closes and the words after it\n\nand the block under it",
         20,
     );
 
     assert!(
         words(&rows[0]).contains("**open"),
-        "a mark no closing mark answers is a glyph and not a weight: {:?}",
-        drawn(&rows)
+        "a mark no closing mark answers is a glyph and not a weight: {rows:?}"
     );
     assert!(
         rows.iter()
             .flat_map(Row::spans)
             .all(|(_, look)| *look == Look::plain(Ink::Plain)),
-        "and every row of it is drawn plainly: {:?}",
-        rows.iter().map(Row::spans).collect::<Vec<_>>()
+        "and every row after it is drawn plainly: {rows:?}"
     );
 }
 

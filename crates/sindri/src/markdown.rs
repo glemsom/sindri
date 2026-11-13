@@ -85,8 +85,6 @@ struct Room {
     used: usize,
     spaced: bool,
     block: Look,
-    /// The emphasis open inside the block in hand, outermost first: a word wears the ink the
-    /// block gave it and the faces every emphasis around it asked for.
     emphasis: Vec<Face>,
     lead: Vec<(String, Look)>,
     /// The markers of the list items open, outermost first: every row is indented by the ones
@@ -142,7 +140,7 @@ impl Room {
     }
 
     fn event(&mut self, event: Event, span: &str) {
-        let worn = self.look();
+        let worn = self.block.wearing(self.faces());
         match event {
             Event::Start(Tag::Paragraph) => self.gap(),
             Event::End(TagEnd::Paragraph) => self.flush_if_written(),
@@ -248,7 +246,7 @@ impl Room {
             // `muted` rather than over no colour, because `mark` is reverse over no colour
             // and the two would otherwise be one look.
             Event::Code(text) => {
-                let reversed = self.worn(Look::new(Ink::Muted, Face::Reversed));
+                let reversed = Look::new(Ink::Muted, Face::Reversed);
                 match &mut self.table {
                     Some(table) => table.text(&text, reversed),
                     None => {
@@ -310,17 +308,11 @@ impl Room {
         self.spaced = space;
     }
 
-    /// `look` wearing every face the emphasis open around it asked for, so a run keeps the ink
-    /// the block gave it and gains no weight the block did not.
-    fn worn(&self, look: Look) -> Look {
+    /// The faces every mark open inside the block in hand adds to the ink it is written in.
+    fn faces(&self) -> Faces {
         self.emphasis
             .iter()
-            .fold(look, |worn, face| worn.wearing(Faces::wearing(*face)))
-    }
-
-    /// The look a word of the block in hand is drawn in, its own and every emphasis over it.
-    fn look(&self) -> Look {
-        self.worn(self.block)
+            .fold(Faces::PLAIN, |worn, face| worn.and(Faces::wearing(*face)))
     }
 
     /// One run of glyphs placed at the end of the row in hand, carried to the next row when it
