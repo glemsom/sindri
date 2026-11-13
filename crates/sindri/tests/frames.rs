@@ -34,6 +34,11 @@ fn transcript_scrolled_120x40_cuts_the_top_entry_mid_row() {
 }
 
 #[test]
+fn transcript_scrolled_80x24_cuts_the_top_entry_and_says_how_many_rows_back_it_stands() {
+    fixture::assert_frame("transcript-scrolled", 80, 24);
+}
+
+#[test]
 fn streaming_120x40_is_a_run_whose_answer_and_thought_are_still_landing() {
     fixture::assert_frame("streaming", 120, 40);
 }
@@ -234,12 +239,12 @@ fn rail_40x24_is_the_strip_down_to_the_size_and_the_model() {
 }
 
 #[test]
-fn footer_130x24_is_seven_hints_with_columns_to_spare() {
+fn footer_130x24_is_eight_hints_with_columns_to_spare() {
     fixture::assert_frame("footer", 130, 24);
 }
 
 #[test]
-fn footer_120x24_is_the_narrowest_frame_that_holds_seven_hints() {
+fn footer_120x24_is_the_narrowest_frame_that_holds_eight_hints() {
     fixture::assert_frame("footer", 120, 24);
 }
 

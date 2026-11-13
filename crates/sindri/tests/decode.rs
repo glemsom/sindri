@@ -249,6 +249,28 @@ fn the_enter_key_is_told_from_a_paste_line_break() {
 }
 
 #[test]
+fn a_page_up_and_a_page_down_arrive_as_the_keys_that_move_the_transcript() {
+    assert_eq!(
+        event(b"\x1b[5~"),
+        key(Key::PageUp),
+        "`PgUp` is `CSI 5~`, and it is the key the transcript moves back with rather \
+         than a glyph of the draft"
+    );
+    assert_eq!(event(b"\x1b[6~"), key(Key::PageDown));
+}
+
+#[test]
+fn ctrl_d_arrives_as_the_key_that_moves_the_transcript_on() {
+    assert_eq!(event(b"\x04"), key(Key::Forward));
+    assert_eq!(
+        event(b"\x1b[100;5u"),
+        key(Key::Forward),
+        "a terminal that reports the keys names `Ctrl-D` as the code of the glyph it \
+         stands on, and it is the same key the byte was"
+    );
+}
+
+#[test]
 fn ctrl_y_arrives_as_the_key_that_copies() {
     assert_eq!(
         event(b"\x19"),

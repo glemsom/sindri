@@ -32,7 +32,10 @@ pub enum Key {
     ShiftDown,
     Home,
     End,
+    PageUp,
+    PageDown,
     Copy,
+    Forward,
     Quit,
     Cancel,
     Drop,
@@ -281,8 +284,10 @@ impl Composer {
             Key::Down => Composer::edited(self.down()),
             Key::Home => Composer::edited(self.home()),
             Key::End => Composer::edited(self.end()),
-            // The mark's three keys are the frame's: a box has no mark to change.
+            // The mark's three keys and the transcript's are the frame's: a box has no mark to
+            // change and no rows to move.
             Key::ShiftUp | Key::ShiftDown | Key::Copy => Outcome::Unchanged,
+            Key::PageUp | Key::PageDown | Key::Forward => Outcome::Unchanged,
             Key::Quit => Outcome::Quit,
             Key::Cancel => self.cancel(),
             // `Ctrl-X` is the queue's and `Ctrl-U`, `Tab` and `Shift+Tab` the settings

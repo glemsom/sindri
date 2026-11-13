@@ -504,10 +504,17 @@ pub enum Scroll {
 }
 
 impl Scroll {
-    fn back(self) -> u32 {
+    pub fn back(self) -> u32 {
         match self {
             Scroll::Tail => 0,
             Scroll::Back(rows) => rows,
+        }
+    }
+
+    pub fn behind(back: u32) -> Scroll {
+        match back {
+            0 => Scroll::Tail,
+            rows => Scroll::Back(rows),
         }
     }
 }
@@ -724,6 +731,11 @@ impl Rows {
             height = height.saturating_add(u32::try_from(self.rows(at).len()).unwrap_or(u32::MAX));
         }
         height
+    }
+
+    /// How far back a window of `height` rows may stand so its top is the transcript's first row.
+    pub fn deepest(&mut self, height: u16) -> u32 {
+        self.height().saturating_sub(u32::from(height))
     }
 
     /// The entries a band of `height` rows at `scroll` intersects, in order. The walk is
