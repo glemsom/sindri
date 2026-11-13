@@ -12,6 +12,7 @@ pub struct Surface {
     workspace: Option<PathBuf>,
     cell: CellSize,
     draws: bool,
+    sizes: bool,
 }
 
 impl Surface {
@@ -24,7 +25,19 @@ impl Surface {
             workspace: workspace.map(Path::to_path_buf),
             cell,
             draws,
+            sizes: false,
         }
+    }
+
+    /// The same surface on a terminal that draws text at more than one cell: a heading is laid out
+    /// as the footprint the sizing leaves, so the width a row is measured by is the drawn one.
+    pub fn sizing(mut self, sizes: bool) -> Surface {
+        self.sizes = sizes;
+        self
+    }
+
+    pub fn sizes(&self) -> bool {
+        self.sizes
     }
 
     pub fn workspace(&self) -> Option<&Path> {

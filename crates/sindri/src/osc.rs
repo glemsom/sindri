@@ -9,6 +9,13 @@ pub fn copy(text: &str) -> Vec<u8> {
     sequence
 }
 
+/// `OSC 66 ; s=<scale> ; <words> ST`: the words drawn over `scale` cells each way, so a heading of
+/// them stands twice the cell high and wide. The metadata names the scale alone, because a terminal
+/// splits the words into cells as it would without the sequence, and the row was measured so.
+pub fn sized(scale: u16, words: &str) -> Vec<u8> {
+    sequence(format!("\x1b]66;s={scale};").as_bytes(), words)
+}
+
 /// `OSC 8 ; ; <destination> ST`: the cells written after it are a way to somewhere until the
 /// same sequence with no destination closes them. A destination is words a wire wrote, so no
 /// glyph of it is written as part of the sequence it is carried in.
@@ -109,6 +116,15 @@ mod tests {
             copy("sindri"),
             b"\x1b]52;c;c2luZHJp\x1b\\".to_vec(),
             "OSC 52, the system clipboard, the words as base64, ST"
+        );
+    }
+
+    #[test]
+    fn a_sized_run_leaves_as_the_sequence_that_names_its_scale_and_the_words_it_draws() {
+        assert_eq!(
+            sized(2, "The fence rule"),
+            b"\x1b]66;s=2;The fence rule\x1b\\".to_vec(),
+            "OSC 66, the scale as metadata, the words, ST"
         );
     }
 

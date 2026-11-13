@@ -4,11 +4,14 @@
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use sindri::graphics::CellSize;
 use sindri::ink::{Face, Faces, Ink, Look};
 use sindri::link::Links;
 use sindri::markdown;
 use sindri::palette::{Band, Palette};
+use sindri::picture::Surface;
 use sindri::rows::Row;
+use sindri::size::Sizes;
 
 fn words(row: &Row) -> String {
     row.spans().iter().map(|(text, _)| text.as_str()).collect()
@@ -229,7 +232,13 @@ fn ways(rows: &[Row]) -> Links {
     let mut links = Links::none();
     for (at, row) in rows.iter().enumerate() {
         let area = Rect::new(0, u16::try_from(at).unwrap(), 120, 1);
-        row.paint(area, &mut buffer, &Palette::TRUECOLOR, &mut links);
+        row.paint(
+            area,
+            &mut buffer,
+            &Palette::TRUECOLOR,
+            &mut links,
+            &mut Sizes::none(),
+        );
     }
     links
 }
@@ -1049,4 +1058,144 @@ fn the_sentence_saying_a_diagram_will_not_draw_is_prose_and_not_code() {
         [Some(Band::Well), Some(Band::Well), None],
         "the tag and the source are the well's, and the row under them is no code: {under:?}"
     );
+}
+
+/// The surface a terminal that draws text at more than one cell is measured against: its headings
+/// are laid out as the cells the sizing leaves, and drawn as the words they are.
+fn large() -> Surface {
+    Surface::of(None, CellSize::NOMINAL, false).sizing(true)
+}
+
+#[test]
+fn the_two_highest_headings_are_drawn_at_twice_the_cell_and_a_lower_level_is_not() {
+    let rows = markdown::rows_on("# One\n\n## Two\n\n### Three", 40, 0, &large());
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            "",
+            "One",
+            "",
+            "══════",
+            "",
+            "Two",
+            "",
+            "──────",
+            "",
+            "Three"
+        ],
+        "the two highest levels stand on a large row with half a row of their own under it, \
+         and are ruled as wide as the cells the sizing leaves; the third is the words it is"
+    );
+    for (at, word) in [(1usize, "One"), (5, "Two")] {
+        let row = &rows[at];
+        assert_eq!(
+            row.width(),
+            6,
+            "three glyphs at twice the cell are six columns, and the row is measured by them: \
+             {row:?}"
+        );
+        assert_eq!(
+            row.glyphs(),
+            word,
+            "the row is written as its words and drawn as the cells around them: {row:?}"
+        );
+    }
+}
+
+#[test]
+fn a_terminal_that_draws_no_large_text_is_handed_the_heading_it_is_handed_today() {
+    let said = "# One\n\n## Two\n\n### Three";
+
+    assert_eq!(
+        drawn(&markdown::rows_on(said, 40, 0, &Surface::none())),
+        ["", "One", "═══", "", "Two", "───", "", "Three"],
+        "a terminal that draws no large text is handed one row per heading and no half row"
+    );
+    assert_eq!(
+        drawn(&markdown::rows_on(
+            said,
+            40,
+            0,
+            &Surface::of(None, CellSize::NOMINAL, false).sizing(false)
+        )),
+        drawn(&markdown::rows_on(said, 40, 0, &Surface::none())),
+        "a surface that says the terminal sizes no text is the surface of a terminal that \
+         places no picture"
+    );
+}
+
+#[test]
+fn a_large_heading_wider_than_the_band_is_cut_by_the_bands_edge_and_never_by_a_column() {
+    let rows = markdown::rows_on("# abcdefghijklmnopqrstuvwxyz", 20, 0, &large());
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            "",
+            "abcdefghij",
+            "",
+            "klmnopqrst",
+            "",
+            "uvwxyz",
+            "",
+            "════════════════════",
+        ],
+        "ten glyphs at twice the cell fill the band's twenty columns, and the rule under them is \
+         as wide as the widest of them"
+    );
+    let widths: Vec<u16> = rows.iter().map(Row::width).collect();
+    assert_eq!(
+        widths,
+        [0, 20, 0, 20, 0, 12, 0, 20],
+        "each large row is the cells its glyphs leave, and never a column past the band"
+    );
+
+    let wide = markdown::rows_on("# 日本語日本語", 20, 0, &large());
+    let widths: Vec<u16> = wide.iter().map(Row::width).collect();
+    assert_eq!(
+        widths,
+        [0, 20, 0, 4, 0, 20],
+        "a glyph two cells wide leaves four at twice the cell, so five of them are the bands's \
+         twenty columns and the sixth is the row under it"
+    );
+}
+
+#[test]
+fn a_wrapped_large_heading_keeps_one_large_row_to_a_line_and_the_rows_under_it_keep_the_gutter() {
+    let rows = markdown::rows_on(
+        "> ## a heading behind a bar, wide enough to be drawn over several lines",
+        20,
+        0,
+        &large(),
+    );
+
+    let said: Vec<String> = rows.iter().map(words).collect();
+    let rule = said.len() - 1;
+    assert!(
+        said[rule].starts_with("▏ ─"),
+        "the heading closes under its rule, behind the bar it stands in: {said:?}"
+    );
+    assert_eq!(
+        rule % 2,
+        0,
+        "every line of the heading is a large row with half a row under it: {said:?}"
+    );
+    for (at, row) in rows.iter().enumerate().take(rule) {
+        assert_eq!(
+            row.spans().first().map(|(text, _)| text.as_str()),
+            Some("▏ "),
+            "row {at} of the quote kept its bar: {said:?}"
+        );
+        assert!(
+            row.width() <= 20,
+            "row {at} ran past the band it was laid out for: {said:?}"
+        );
+        if at % 2 == 1 {
+            assert_eq!(
+                said[at], "▏ ",
+                "the row under a large one is the block's: it keeps the bar and says nothing else"
+            );
+        }
+    }
 }

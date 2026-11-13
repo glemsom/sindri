@@ -37,6 +37,7 @@ use crate::queue::Queue;
 use crate::rail;
 use crate::rows::{INDENT, Row, Rows, Scroll, wrap};
 use crate::settings::Settings;
+use crate::size::Sizes;
 use crate::stats;
 use crate::stream::Stream;
 
@@ -150,6 +151,11 @@ pub struct View {
     /// The destinations this frame names: what travels beside its cells, never in them, because
     /// no cell carries one.
     links: Links,
+    /// The runs of this frame a terminal draws at more than one cell, laid on the rows it drew.
+    sizes: Sizes,
+    /// Whether this launch's terminal draws text at more than one cell at all: a surface a heading
+    /// is measured against, and never a question a paint asks again.
+    sizing: bool,
     focus: Focus,
 }
 
@@ -303,6 +309,7 @@ impl View {
             self.cell_size,
             self.pictures.draws(),
         )
+        .sizing(self.sizing)
     }
 
     /// The surface Sindri's face is measured against: a frame the reader turned the face off for is
@@ -635,6 +642,17 @@ impl View {
         &self.links
     }
 
+    /// The runs of this frame a terminal draws at more than one cell, laid on the rows it drew.
+    pub fn sizes(&self) -> &Sizes {
+        &self.sizes
+    }
+
+    /// Whether the terminal this frame is drawn on sizes text: asked once at boot, because a
+    /// heading is laid out as the cells the sizing leaves and never re-laid on a key.
+    pub fn set_sizes(&mut self, sizes: bool) {
+        self.sizing = sizes;
+    }
+
     /// Hands the frame its newest answer's marker. The elapsed time is the caller's, because a
     /// frame holds no clock, and a settled marker keeps the number the run stopped at.
     pub fn set_pulse(&mut self, pulse: Option<Pulse>) {
@@ -646,6 +664,7 @@ impl View {
     /// composer's rows are measured when the frame is drawn and never cached.
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) {
         self.links = Links::none();
+        self.sizes = Sizes::none();
         pen::claim(buffer, area, self.palette.ground(None));
         self.composer.set_room(View::room(area.width));
         let bands = bands(area, self.composer.rows(), self.queue.rows());
@@ -679,8 +698,8 @@ impl View {
                 buffer,
                 &self.palette,
                 &mut self.links,
+                &mut self.sizes,
                 &mut self.pictures,
-                self.cell_size,
                 &surface,
             );
         }
@@ -691,10 +710,15 @@ impl View {
         // reader sees the transcript they will return to, and sees that it is out of reach.
         let screen = self.stack.top();
         let Some((name, leaves)) = screen.labels() else {
+            // A heading is drawn as the cells the sizing leaves once the band it stands in is
+            // known: one with no row of that band under it is the words it says.
+            self.sizes.settle(share.transcript, buffer, &self.palette);
             return;
         };
-        // The band under a card takes no key, so the frame under it is no way to anywhere.
+        // The band under a card takes no key, so the frame under it is no way to anywhere — and no
+        // heading of it is drawn large, because the scrim is read as the words it holds.
         self.links = Links::none();
+        self.sizes = Sizes::none();
         let body = card::paint(area, name, leaves, buffer, self.edge(), &self.palette);
         self.paint_screen(screen, body, buffer);
     }
@@ -751,6 +775,7 @@ impl View {
                     buffer,
                     &self.palette,
                     &mut self.links,
+                    &mut self.sizes,
                 );
                 // Placed after the row's words, because it is drawn over them: a terminal that
                 // places no picture leaves the reader the words.
@@ -2608,6 +2633,66 @@ mod tests {
         assert_eq!(
             gutter, "\u{203a} ",
             "the columns before the draft are not the sigil that opens it in the gutter"
+        );
+    }
+
+    /// Whether any row of the frame holds `said`.
+    fn holds(buffer: &Buffer, said: &str) -> bool {
+        (buffer.area.y..buffer.area.bottom()).any(|y| drawn_row(buffer, y).contains(said))
+    }
+
+    #[test]
+    fn the_terminal_that_sizes_text_decides_whether_a_heading_is_drawn_as_the_cells_it_leaves() {
+        let area = screen(60, 12);
+        for (sizes, said) in [(true, "A   g a t e"), (false, "A gate")] {
+            let mut view = View::of(
+                vec![Entry::Assistant {
+                    turn: 1,
+                    text: SecretSet::default().redact("# A gate"),
+                }],
+                Scroll::Tail,
+            );
+            view.set_palette(Palette::TRUECOLOR);
+            view.set_sizes(sizes);
+            let mut buffer = Buffer::empty(area);
+            view.paint(area, &mut buffer);
+
+            assert!(
+                holds(&buffer, said),
+                "a frame whose terminal sizes text: {sizes} is not drawn as {said:?}: {:?}",
+                (area.y..area.bottom())
+                    .map(|y| drawn_row(&buffer, y))
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[test]
+    fn a_frame_with_a_screen_over_it_draws_its_headings_as_the_words_they_are() {
+        let area = screen(100, 30);
+        let mut view = View::of(
+            vec![Entry::Assistant {
+                turn: 1,
+                text: SecretSet::default().redact("# A gate"),
+            }],
+            Scroll::Tail,
+        );
+        view.set_palette(Palette::TRUECOLOR);
+        view.set_sizes(true);
+        view.key(Key::Char('?'));
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+
+        assert!(
+            holds(&buffer, "A gate"),
+            "the frame behind the card is read as the words it holds: {:?}",
+            (area.y..area.bottom())
+                .map(|y| drawn_row(&buffer, y))
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            !holds(&buffer, "A   g a t e"),
+            "and no heading of it is drawn large, because a band under a card takes no key"
         );
     }
 

@@ -16,6 +16,7 @@ use sindri::graphics::CellSize;
 use sindri::link::Links;
 use sindri::picture;
 use sindri::pictures::Pictures;
+use sindri::size::{Laid, Sizes};
 use sindri::view::View;
 
 use crate::osc;
@@ -104,11 +105,12 @@ impl Drop for Screen {
 pub(crate) type Canvas<'a> = ratatui::Terminal<Backend<&'a File>>;
 
 /// Writes a frame to a terminal, with each destination a run of its cells names opened before the
-/// run's first cell and closed after its last. A cell is a glyph and a look and has no room for a
-/// destination, so the frame's ways travel beside it and are written here.
+/// run's first cell and closed after its last, and each run of cells drawn at more than one cell
+/// written as the sequence that draws it: a cell has room for neither, so both travel beside it.
 pub(crate) struct Backend<W: Write> {
     screen: CrosstermBackend<W>,
     links: Links,
+    sizes: Sizes,
     places: bool,
 }
 
@@ -119,6 +121,7 @@ impl<W: Write> Backend<W> {
         Backend {
             screen: CrosstermBackend::new(screen),
             links: Links::none(),
+            sizes: Sizes::none(),
             places,
         }
     }
@@ -126,6 +129,35 @@ impl<W: Write> Backend<W> {
     /// The destinations the frame about to be written names.
     fn links(&mut self, links: &Links) {
         self.links.clone_from(links);
+    }
+
+    /// The runs the frame about to be written draws at more than one cell.
+    fn sizes(&mut self, sizes: &Sizes) {
+        self.sizes.clone_from(sizes);
+    }
+
+    /// One run drawn as the sequence that makes it: written in the ink of the cell the diff handed
+    /// over, because the sequence draws the words and no cell of them is written.
+    fn large(&mut self, laid: &Laid, ink: &Cell) -> io::Result<()> {
+        let run = laid.run();
+        let mut sequence = ink.clone();
+        sequence.set_symbol(&String::from_utf8_lossy(&osc::sized(
+            run.scale(),
+            run.words(),
+        )));
+        let destination = match self.places {
+            true => self.links.at(laid.row(), laid.left()).map(String::from),
+            false => None,
+        };
+        if let Some(destination) = &destination {
+            self.screen.write_all(&osc::link(destination))?;
+        }
+        self.screen
+            .draw(std::iter::once((laid.left(), laid.row(), &sequence)))?;
+        if destination.is_some() {
+            self.screen.write_all(&osc::link(""))?;
+        }
+        Ok(())
     }
 
     /// One run of cells and the destination it names: opened before the first of them and closed
@@ -152,7 +184,24 @@ impl<W: Write> RatatuiBackend for Backend<W> {
     {
         let mut cells: Vec<(u16, u16, &Cell)> = Vec::new();
         let mut naming: Option<String> = None;
+        let mut drawn: Vec<usize> = Vec::new();
         for (x, y, cell) in content {
+            // A cell under a block is the block's: the terminal draws it, and the two rows it
+            // stands on are one glyph.
+            if self.sizes.under(y, x) {
+                continue;
+            }
+            if let Some(at) = self.sizes.above(y, x) {
+                let run = std::mem::take(&mut cells);
+                self.run(naming.as_deref(), &run)?;
+                naming = None;
+                if !drawn.contains(&at) {
+                    drawn.push(at);
+                    let laid = self.sizes.laid()[at].clone();
+                    self.large(&laid, cell)?;
+                }
+                continue;
+            }
             let destination = match self.places {
                 true => self.links.at(y, x),
                 false => None,
@@ -239,6 +288,7 @@ pub(crate) fn paint(canvas: &mut Canvas<'_>, view: &mut View) -> io::Result<()> 
     view.paint(area, canvas.current_buffer_mut());
     let cursor = view.cursor(area);
     canvas.backend_mut().links(view.links());
+    canvas.backend_mut().sizes(view.sizes());
     canvas
         .draw(|frame| {
             if let Some(at) = cursor {
@@ -452,10 +502,11 @@ mod tests {
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
     use rustix::termios::LocalModes;
-    use sindri::ink::Ink;
+    use sindri::ink::{Ink, Look};
     use sindri::link::{Link, Links};
     use sindri::palette::Palette;
     use sindri::pen::{self, Clip};
+    use sindri::size::{SCALE, Sized};
 
     use sindri_core::config::Config;
     use sindri_core::open::Ground;
@@ -533,6 +584,26 @@ mod tests {
             .draw(Buffer::empty(area).diff(&buffer).into_iter())
             .expect("a drawn row");
         backend.flush().expect("a written row");
+        drop(backend);
+        pty.drawn()
+    }
+
+    /// The bytes a terminal at the far end of a pseudo-terminal is handed for a frame and the runs
+    /// it draws at more than one cell.
+    fn spelled(buffer: Buffer, sizes: Sizes) -> String {
+        let area = *buffer.area();
+        let mut pty = Pty::open();
+        let mut backend = Backend::new(
+            pty.slave
+                .try_clone()
+                .expect("a second handle on the screen"),
+            false,
+        );
+        backend.sizes(&sizes);
+        backend
+            .draw(Buffer::empty(area).diff(&buffer).into_iter())
+            .expect("a drawn frame");
+        backend.flush().expect("a written frame");
         drop(backend);
         pty.drawn()
     }
@@ -744,6 +815,7 @@ mod tests {
                 &mut frame,
                 &Palette::TRUECOLOR,
                 &mut links,
+                &mut Sizes::none(),
             );
         }
 
@@ -767,6 +839,50 @@ mod tests {
         assert!(
             places.contains("\x1b]8;;file://"),
             "and the path a call names is handed the file it was judged against"
+        );
+    }
+
+    #[test]
+    fn a_run_drawn_at_twice_the_cell_is_the_sequence_that_draws_it_and_no_cell_of_it_is_written() {
+        let area = Rect::new(0, 0, 20, 2);
+        let run = Sized::new(0, SCALE, "The rule", Look::plain(Ink::Plain));
+        let mut buffer = Buffer::empty(area);
+        pen::write(
+            &mut buffer,
+            Rect { height: 1, ..area },
+            &[(run.spelling(), Ink::Plain)],
+            Clip::Edge,
+            &Palette::TRUECOLOR,
+        );
+        // A cell under the block that no row of the frame wrote: a block is two rows of cells, and
+        // the terminal draws the second of them.
+        pen::write(
+            &mut buffer,
+            Rect {
+                y: 1,
+                height: 1,
+                ..area
+            },
+            &[("nowhere", Ink::Plain)],
+            Clip::Edge,
+            &Palette::TRUECOLOR,
+        );
+        let mut sizes = Sizes::none();
+        sizes.lay(0, 0, std::slice::from_ref(&run));
+
+        let drawn = spelled(buffer, sizes);
+
+        assert!(
+            drawn.contains("\x1b]66;s=2;The rule\x1b\\"),
+            "the words go out as the one sequence that draws them large: {drawn:?}"
+        );
+        assert!(
+            !words(&drawn).contains("T h e"),
+            "and no cell of the run is written as the cells it leaves: {drawn:?}"
+        );
+        assert!(
+            !words(&drawn).contains("nowhere"),
+            "a cell on the row under a block is the block's and no cell of the frame: {drawn:?}"
         );
     }
 

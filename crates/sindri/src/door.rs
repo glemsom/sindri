@@ -6,7 +6,6 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use crate::face;
-use crate::graphics::CellSize;
 use crate::ink::{Face, Ink, Look};
 use crate::link::Links;
 use crate::palette::Palette;
@@ -14,6 +13,7 @@ use crate::pen;
 use crate::picture::Surface;
 use crate::pictures::Pictures;
 use crate::rows::{Row, wrap_under};
+use crate::size::Sizes;
 
 const WORDMARK: &str = "sindri";
 
@@ -48,8 +48,8 @@ pub fn paint(
     buffer: &mut Buffer,
     palette: &Palette,
     links: &mut Links,
+    sizes: &mut Sizes,
     pictures: &mut Pictures,
-    cell: CellSize,
     surface: &Surface,
 ) {
     if area.width == 0 || area.height == 0 {
@@ -83,7 +83,7 @@ pub fn paint(
     if let Some(face) = &face {
         pictures.place(
             face,
-            cell,
+            surface.cell(),
             Rect {
                 x,
                 y,
@@ -108,6 +108,7 @@ pub fn paint(
             buffer,
             palette,
             links,
+            sizes,
         );
         y = y.saturating_add(1);
     }

@@ -15,6 +15,7 @@ use sindri::link;
 use sindri::palette::Palette;
 use sindri::pulse::{self, Pulse};
 use sindri::settings::persist;
+use sindri::size;
 use sindri::view::View;
 use sindri_core::config::{Config, Environment, Process, Touched};
 use sindri_core::records::Told;
@@ -110,6 +111,12 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
         named("TERM").as_deref(),
         named("TERM_PROGRAM").as_deref(),
     );
+    // Asked once with the palette: a terminal that draws text at more than one cell is handed the
+    // headings the sizing leaves, and one that says nothing is handed the heading it is handed today.
+    view.set_sizes(size::speaks(
+        named("TERM").as_deref(),
+        named("TERM_PROGRAM").as_deref(),
+    ));
     // Resolved once with the palette: a terminal that speaks no hyperlink is handed the words
     // and no sequence, and nothing asks again on a key.
     let places = link::speaks(

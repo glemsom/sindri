@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+markdown-headings at 40x24
+00 |                                        | plain:40
+01 |  Markdown rendering                    | plain:2 plain+bold:18 plain:20
+02 |  ══════════════════                    | plain:2 dim:18 plain:20
+03 |                                        | plain:40
+04 |  The scale of headings, two ruled and  | plain:2 plain+bold:36 plain:2
+05 |  four not                              | plain:2 plain+bold:8 plain:30
+06 |  ────────────────────────────────────  | plain:2 dim:36 plain:2
+07 |                                        | plain:40
+08 |  A third level, muted and bold         | plain:2 muted+bold:29 plain:9
+09 |                                        | plain:40
+10 |  A fourth, muted and bare              | plain:2 muted:24 plain:14
+11 |                                        | plain:40
+12 |  A fifth, dim and bold                 | plain:2 dim+bold:21 plain:17
+13 |                                        | plain:40
+14 |  A sixth, dim and both                 | plain:2 dim+bold+italic:21 plain:17
+15 |                                        | plain:40
+16 |                                        | plain:40
+17 |                                        | plain:40
+18 |                                        | plain:40
+19 |                                        | plain:40
+20 |                                        | plain:40
+21 |────────────────────────────────────────| accent+faint:40
+22 |› what should the run do?               | dim:25 plain:15
+23 |Enter send · ? keys                     | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:5 plain:21
