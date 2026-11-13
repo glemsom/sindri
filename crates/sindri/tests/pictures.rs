@@ -13,7 +13,7 @@ use ratatui::layout::{Position, Rect};
 use sindri::composer::{Key, Outcome};
 use sindri::face;
 use sindri::graphics::{Ceiling, CellSize};
-use sindri::ledger::{self, Ctx, Facts, Rail};
+use sindri::ledger::{self, Boot, Ctx, Facts, Rail};
 use sindri::mark::Cell;
 use sindri::markdown;
 use sindri::picture::{self, Surface};
@@ -23,6 +23,7 @@ use sindri::view::View;
 use sindri_core::policy::Enforcement;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
+use sindri_core::wire::Wire;
 
 fn workspace(width: u32, height: u32) -> (tempfile::TempDir, PathBuf) {
     let root = tempfile::tempdir().expect("a directory to stand in");
@@ -90,6 +91,43 @@ fn a_face_too_tall_for_its_band_gives_way_on_rows_and_never_on_shape() {
         (shape - 795.0 / 989.0).abs() < 0.1,
         "and what is drawn keeps the face's shape of {}, not the band's: {shape}",
         795.0 / 989.0
+    );
+}
+
+#[test]
+fn the_face_over_the_wordmark_is_measured_into_the_rows_the_band_leaves_it_and_no_more() {
+    let over = face::over_wordmark(76, 40, &carried(true)).expect("a band this tall holds it");
+
+    assert_eq!(
+        (over.cols(), over.rows()),
+        (25, 15),
+        "eighty cells by fifty fitted under seventy-six columns and the sixteen rows it is drawn \
+         in at most is twenty-five by fifteen"
+    );
+    assert_eq!(
+        face::over_wordmark(76, 16, &carried(true))
+            .expect("sixteen rows are the whole of its height")
+            .rows(),
+        over.rows(),
+        "a band with more rows than the face takes is given the same face: the cap and not the \
+         band's height is what it gives way to"
+    );
+}
+
+#[test]
+fn a_band_too_short_or_too_narrow_for_the_face_over_the_wordmark_is_given_none() {
+    assert!(
+        face::over_wordmark(76, 7, &carried(true)).is_none(),
+        "seven rows over the block are six under the face's own shape, which is a smudge and not \
+         the picture the door opens on"
+    );
+    assert!(
+        face::over_wordmark(11, 40, &carried(true)).is_none(),
+        "and eleven columns are too few for it whatever rows stand under them"
+    );
+    assert!(
+        face::over_wordmark(76, 40, &carried(false)).is_none(),
+        "a terminal that places no picture is given no face, so the door reserves no row for one"
     );
 }
 
@@ -450,6 +488,24 @@ fn railed_facts() -> Facts {
         )),
         ..Facts::default()
     }
+}
+
+/// The door a launch opens on, with the facts a launch already holds beside it: a session and a
+/// temp are a run's own, so the rail draws an em dash for each.
+fn door(draws: bool) -> View {
+    let mut view = View::boot();
+    view.set_cell_size(cell());
+    if draws {
+        view.set_pictures(Pictures::kitty(cell()));
+    }
+    view.door(Boot {
+        wire: Some(Wire::Anthropic),
+        model: Some(String::from("claude-sonnet-4-5")),
+        workspace: PathBuf::from("/home/glemsom/Documents/git/sindri"),
+        branch: Some(String::from("spec/1-capability")),
+        enforcement: Enforcement::Bubblewrap,
+    });
+    view
 }
 
 /// A frame whose rail carries the twelve facts, and a transcript of nothing: the rail is the picture
@@ -1077,6 +1133,49 @@ fn a_frame_the_face_is_turned_off_for_is_the_frame_a_terminal_that_places_no_pic
              reserved before"
         );
     }
+}
+
+#[test]
+fn the_rail_beside_the_door_loses_no_fact_to_the_face_over_its_wordmark() {
+    let mut pictured = door(true);
+    let with = painted_at(&mut pictured, (120, 40));
+    let mut placeless = door(false);
+    let without = painted_at(&mut placeless, (120, 40));
+    let rail = rail_band(120, 40);
+
+    let stated = |buffer: &Buffer| -> Vec<String> {
+        (rail.y..rail.bottom())
+            .map(|y| rail_row(buffer, rail, y).trim_end().to_owned())
+            .filter(|row| !row.is_empty())
+            .collect()
+    };
+    assert_eq!(
+        stated(&with),
+        stated(&without),
+        "the door's rail draws the facts a terminal that places no picture draws, so the face over \
+         the wordmark takes no row of one"
+    );
+    assert_eq!(
+        stated(&with).first().map(String::as_str),
+        Some("wire      anthropic"),
+        "and the first of them stands on the rail's first row, under no face"
+    );
+    assert!(
+        !pictured_rows(&with).is_empty(),
+        "the door draws the face over the band an answer goes in"
+    );
+    let taken = (rail.y..rail.bottom())
+        .flat_map(|y| (rail.x..rail.right()).map(move |x| (x, y)))
+        .filter(|(x, y)| {
+            with.cell((*x, *y))
+                .is_some_and(|cell| cell.skip || cell.symbol().contains(PLACEHOLDER))
+        })
+        .count();
+    assert_eq!(
+        taken, 0,
+        "and no cell of the rail's columns is a placement: the face is the door's own, over its \
+         wordmark"
+    );
 }
 
 #[test]

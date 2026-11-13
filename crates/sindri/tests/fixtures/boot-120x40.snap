@@ -3,13 +3,13 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 boot at 120x40
-00 |  sindri                                                                    wire      anthropic                         | plain:2 accent+bold:6 plain:68 dim:10 plain:34
+00 |                                                                            wire      anthropic                         | plain:76 dim:10 plain:34
 01 |                                                                            model     claude-sonnet-4-5                 | plain:76 dim:10 plain:34
-02 |  An AI agent that is a Unix filter and a terminal UI over one core.                                                    | plain:120
+02 |                                                                                                                        | plain:120
 03 |                                                                            workspace /srv/workspace                    | plain:76 dim:10 plain:34
-04 |  /model     ask the wire what it serves, and name the one to run           branch    main                              | plain:2 accent:11 dim:52 plain:11 dim:10 plain:34
-05 |  /settings  the keys the config holds, and the value each is set to                                                    | plain:2 accent:11 dim:55 plain:52
-06 |  /stats     the facts the rail is too narrow to hold                       sandbox   bwrap                             | plain:2 accent:11 dim:40 plain:23 dim:10 plain:34
+04 |                                                                            branch    main                              | plain:76 dim:10 plain:34
+05 |                                                                                                                        | plain:120
+06 |                                                                            sandbox   bwrap                             | plain:76 dim:10 plain:34
 07 |                                                                                                                        | plain:120
 08 |                                                                            session   —                                 | plain:76 dim:10 plain:34
 09 |                                                                            temp      —                                 | plain:76 dim:10 plain:34
@@ -18,13 +18,13 @@ boot at 120x40
 12 |                                                                                                                        | plain:120
 13 |                                                                                                                        | plain:120
 14 |                                                                                                                        | plain:120
-15 |                                                                                                                        | plain:120
+15 |     sindri                                                                                                             | plain:5 accent+bold:6 plain:109
 16 |                                                                                                                        | plain:120
-17 |                                                                                                                        | plain:120
+17 |     An AI agent that is a Unix filter and a terminal UI over one core.                                                 | plain:120
 18 |                                                                                                                        | plain:120
-19 |                                                                                                                        | plain:120
-20 |                                                                                                                        | plain:120
-21 |                                                                                                                        | plain:120
+19 |     /model     ask the wire what it serves, and name the one to run                                                    | plain:5 accent:11 dim:52 plain:52
+20 |     /settings  the keys the config holds, and the value each is set to                                                 | plain:5 accent:11 dim:55 plain:49
+21 |     /stats     the facts the rail is too narrow to hold                                                                | plain:5 accent:11 dim:40 plain:64
 22 |                                                                                                                        | plain:120
 23 |                                                                                                                        | plain:120
 24 |                                                                                                                        | plain:120
