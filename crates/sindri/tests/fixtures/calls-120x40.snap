@@ -42,4 +42,4 @@ calls at 120x40
 36 |                                                                                                                        | plain:120
 37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:120
 38 |› what should the run do?                                                                                               | dim:25 plain:95
-39 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · / commands · @ files · ↑ queue                                      | muted:10 dim:3 muted:6 dim:3 muted:13 dim:3 muted:11 dim:3 muted:10 dim:3 muted:7 dim:3 muted:7 plain:38
+39 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · Ctrl-J newline · @ files · ↑ queue                                  | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:7 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:6 plain:34

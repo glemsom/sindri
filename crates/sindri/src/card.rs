@@ -5,6 +5,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use crate::ink::{Ink, Look};
+use crate::keys;
 use crate::palette::Palette;
 use crate::pen::{self, Clip};
 
@@ -151,7 +152,11 @@ fn footed(buffer: &mut Buffer, card: Rect, leaves: &str, palette: &Palette) {
             width: card.width.saturating_sub(LEAVES_INSET * 2),
             ..row
         },
-        &[(" ", Ink::Dim), (leaves, Ink::Muted), (" ", Ink::Dim)],
+        &[
+            (" ", Look::plain(Ink::Dim)),
+            (leaves, keys::KEY),
+            (" ", Look::plain(Ink::Dim)),
+        ],
         palette,
     );
 }

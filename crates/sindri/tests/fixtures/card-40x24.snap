@@ -5,25 +5,25 @@ expression: drawn
 card at 40x24
 00 |── ? keys ──────────────────────────────| accent+faint:40
 01 |  keys                                  | plain:2 dim:4 plain:34
-02 |  Esc                  close this       | plain:2 muted:21 plain:17
-03 |                       screen           | plain:2 muted:21 plain:17
-04 |  ?                    close this       | plain:2 muted:21 plain:17
-05 |                       screen           | plain:2 muted:21 plain:17
+02 |  Esc                  close this       | plain:2 plain+bold:21 muted:10 plain:7
+03 |                       screen           | plain:2 plain+bold:21 muted:6 plain:11
+04 |  ?                    close this       | plain:2 plain+bold:21 muted:10 plain:7
+05 |                       screen           | plain:2 plain+bold:21 muted:6 plain:11
 06 |  composer                              | plain:2 dim:8 plain:30
-07 |  ?                    the keys, while  | plain:2 muted:21 plain:17
-08 |                       the draft is     | plain:2 muted:21 plain:17
-09 |                       empty            | plain:2 muted:21 plain:17
-10 |  @                    the files of     | plain:2 muted:21 plain:17
-11 |                       the workspace,   | plain:2 muted:21 plain:17
-12 |                       while it starts  | plain:2 muted:21 plain:17
-13 |                       a word           | plain:2 muted:21 plain:17
-14 |  Enter                send the prompt  | plain:2 muted:21 plain:17
-15 |  Shift+Enter, Ctrl-J  a line break in  | plain:2 muted:21 plain:17
-16 |                       the draft        | plain:2 muted:21 plain:17
-17 |  ↑                    the newest       | plain:2 muted:21 plain:17
-18 |                       queued prompt,   | plain:2 muted:21 plain:17
-19 |                       or the line      | plain:2 muted:21 plain:17
-20 |                       above            | plain:2 muted:21 plain:17
-21 |  Ctrl-X               drop the newest  | plain:2 muted:21 plain:17
-22 |                       queued prompt    | plain:2 muted:21 plain:17
-23 |  ↓                    the line below   | plain:2 muted:21 plain:17
+07 |  ?                    the keys, while  | plain:2 plain+bold:21 muted:15 plain:2
+08 |                       the draft is     | plain:2 plain+bold:21 muted:12 plain:5
+09 |                       empty            | plain:2 plain+bold:21 muted:5 plain:12
+10 |  @                    the files of     | plain:2 plain+bold:21 muted:12 plain:5
+11 |                       the workspace,   | plain:2 plain+bold:21 muted:14 plain:3
+12 |                       while it starts  | plain:2 plain+bold:21 muted:15 plain:2
+13 |                       a word           | plain:2 plain+bold:21 muted:6 plain:11
+14 |  Enter                send the prompt  | plain:2 plain+bold:21 muted:15 plain:2
+15 |  Shift+Enter, Ctrl-J  a line break in  | plain:2 plain+bold:21 muted:15 plain:2
+16 |                       the draft        | plain:2 plain+bold:21 muted:9 plain:8
+17 |  ↑                    the newest       | plain:2 plain+bold:21 muted:10 plain:7
+18 |                       queued prompt,   | plain:2 plain+bold:21 muted:14 plain:3
+19 |                       or the line      | plain:2 plain+bold:21 muted:11 plain:6
+20 |                       above            | plain:2 plain+bold:21 muted:5 plain:12
+21 |  Ctrl-X               drop the newest  | plain:2 plain+bold:21 muted:15 plain:2
+22 |                       queued prompt    | plain:2 plain+bold:21 muted:13 plain:4
+23 |  ↓                    the line below   | plain:2 plain+bold:21 muted:14 plain:3

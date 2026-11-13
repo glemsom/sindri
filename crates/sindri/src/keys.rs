@@ -1,4 +1,11 @@
 use crate::composer::Key;
+use crate::ink::{Faces, Ink, Look};
+
+/// The look a key is drawn in wherever a key is named.
+pub const KEY: Look = Look::plain(Ink::Plain).wearing(Faces::BOLD);
+
+/// The look the words that say what a key does hang in, quieter than the key they explain.
+pub const MEANING: Look = Look::plain(Ink::Muted);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {

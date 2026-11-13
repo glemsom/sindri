@@ -42,4 +42,4 @@ rail at 108x40
 36 |                                                                                                            | plain:108
 37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:108
 38 |› what should the run do?                                                                                   | dim:25 plain:83
-39 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · / commands                                              | muted:10 dim:3 muted:6 dim:3 muted:13 dim:3 muted:11 dim:3 muted:10 plain:46
+39 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · Ctrl-J newline                                          | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:7 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:42
