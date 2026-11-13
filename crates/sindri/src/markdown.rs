@@ -142,7 +142,7 @@ impl Room {
 
     fn event(&mut self, event: Event, span: &str) {
         match event {
-            Event::Start(Tag::Paragraph) => self.gap(),
+            Event::Start(Tag::Paragraph) => self.open_block(),
             Event::End(TagEnd::Paragraph) => self.flush_if_written(),
             Event::Start(Tag::Heading { level, .. }) => self.open_heading(level),
             Event::End(TagEnd::Heading(_)) => {
@@ -165,7 +165,7 @@ impl Room {
             Event::Start(Tag::Item) => self.open_item(),
             Event::End(TagEnd::Item) => self.close_item(),
             Event::Start(Tag::Table(_)) => {
-                self.gap();
+                self.open_block();
                 self.table = Some(Table::default());
             }
             Event::End(TagEnd::Table) => self.draw_table(),
@@ -282,7 +282,7 @@ impl Room {
     }
 
     fn open_heading(&mut self, level: HeadingLevel) {
-        self.gap();
+        self.open_block();
         if level == HeadingLevel::H1 && self.rows.is_empty() {
             self.push(Row::blank());
         }
@@ -418,7 +418,7 @@ impl Room {
     /// line to line. A language no syntax definition names is drawn plain rather than refused:
     /// an unknown language is the wire's business and never the run's error.
     fn open_code(&mut self, kind: CodeBlockKind, span: &str) {
-        self.gap();
+        self.open_block();
         self.lead.push((String::from("▏ "), Look::plain(Ink::Dim)));
         let tag = match kind {
             CodeBlockKind::Fenced(tag) => tag.trim().to_owned(),
@@ -509,7 +509,7 @@ impl Room {
     }
 
     fn open_quote(&mut self) {
-        self.gap();
+        self.open_block();
         self.lead.push((String::from("▏ "), Look::plain(Ink::Dim)));
     }
 
@@ -579,12 +579,16 @@ impl Room {
         self.gap();
     }
 
+    /// A block opens: a mark never outlives the block it opened in, so no face is carried into
+    /// one the wire did not write it in.
+    fn open_block(&mut self) {
+        self.faces.clear();
+        self.gap();
+    }
+
     /// One blank row between two blocks, nothing at the top of the answer and never two blank
     /// rows where a block already stands under one.
     fn gap(&mut self) {
-        // Every block that can hold a mark is entered through here, and a mark never outlives
-        // the block it opened in.
-        self.faces.clear();
         if !self.rows.is_empty() && !self.blank {
             self.push(Row::blank());
         }
