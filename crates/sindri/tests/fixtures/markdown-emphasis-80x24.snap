@@ -6,9 +6,9 @@ markdown-emphasis at 80x24
 00 |  A strong word is bold, an emphasis is italic, and one word can be both at     | plain:19 plain+bold:4 plain:17 plain+italic:6 plain:22 plain+bold+italic:4 plain:8
 01 |  once.                                                                         | plain:80
 02 |                                                                                | plain:80
-03 |  A heading keeps its level: bold and italic inside it                          | plain:2 plain+bold:36 plain+bold+italic:6 plain+bold:10 plain:26
+03 |  A heading keeps its level: bold, italic and both inside it                    | plain:2 plain+bold:33 plain+bold+italic:6 plain+bold:5 plain+bold+italic:4 plain+bold:10 plain:20
 04 |                                                                                | plain:80
-05 |  ▏ and a quote keeps its ink and its gutter, even here                         | plain:2 dim:2 plain:42 plain+italic:4 plain:1 plain+italic:4 plain:25
+05 |  ▏ a quote keeps its ink and its gutter, even here                             | plain:2 dim:2 plain:38 plain+italic:4 plain:1 plain+italic:4 plain:29
 06 |                                                                                | plain:80
 07 |  ▏ **bold** and *italic* stay glyphs in a fence                                | plain:2 dim:2 plain:76
 08 |                                                                                | plain:80

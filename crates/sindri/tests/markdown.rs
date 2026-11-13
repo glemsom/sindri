@@ -20,7 +20,9 @@ fn looks(row: &Row) -> Vec<Look> {
 }
 
 fn wears(row: &Row, word: &str, look: Look) -> bool {
-    row.spans().contains(&(String::from(word), look))
+    row.spans()
+        .iter()
+        .any(|(said, worn)| said == word && *worn == look)
 }
 
 #[test]
@@ -213,8 +215,6 @@ fn emphasis_inside_a_quote_keeps_the_quotes_ink_and_its_gutter() {
     );
 }
 
-/// CommonMark reads no mark inside a fence, so the wire's markdown is drawn as the wire wrote it:
-/// a renderer that reformatted a fence's words would be editing what it was told to keep.
 #[test]
 fn a_fences_words_are_drawn_as_the_fence_drew_them_and_a_mark_inside_one_stays_a_glyph() {
     let rows = markdown::rows(

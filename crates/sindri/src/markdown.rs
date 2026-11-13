@@ -85,7 +85,8 @@ struct Room {
     used: usize,
     spaced: bool,
     block: Look,
-    emphasis: Vec<Face>,
+    /// The faces the marks open inside the block in hand asked for, outermost first.
+    faces: Vec<Face>,
     lead: Vec<(String, Look)>,
     /// The markers of the list items open, outermost first: every row is indented by the ones
     /// outside it and by the width of the innermost, so each depth costs the columns a `•` takes.
@@ -123,7 +124,7 @@ impl Room {
             used: 0,
             spaced: false,
             block: Look::plain(Ink::Plain),
-            emphasis: Vec::new(),
+            faces: Vec::new(),
             lead: Vec::new(),
             marks: Vec::new(),
             lists: Vec::new(),
@@ -140,7 +141,6 @@ impl Room {
     }
 
     fn event(&mut self, event: Event, span: &str) {
-        let worn = self.block.wearing(self.faces());
         match event {
             Event::Start(Tag::Paragraph) => self.gap(),
             Event::End(TagEnd::Paragraph) => self.flush_if_written(),
@@ -199,15 +199,15 @@ impl Room {
                     table.close_cell();
                 }
             }
-            // Emphasis nests, so it is a stack and not a flag: a word inside two of them wears
-            // both faces, and the ink it is written in stays the block's.
-            Event::Start(Tag::Strong) => self.emphasis.push(Face::Bold),
+            // A mark adds a face to a run and never an ink: the word keeps the colour the block
+            // gave it.
+            Event::Start(Tag::Strong) => self.faces.push(Face::Bold),
             Event::End(TagEnd::Strong) => {
-                self.emphasis.pop();
+                self.faces.pop();
             }
-            Event::Start(Tag::Emphasis) => self.emphasis.push(Face::Italic),
+            Event::Start(Tag::Emphasis) => self.faces.push(Face::Italic),
             Event::End(TagEnd::Emphasis) => {
-                self.emphasis.pop();
+                self.faces.pop();
             }
             Event::Start(Tag::CodeBlock(kind)) => self.open_code(kind, span),
             Event::End(TagEnd::CodeBlock) => self.close_code(),
@@ -225,6 +225,7 @@ impl Room {
                     }
                 }
                 None => {
+                    let worn = self.block.wearing(self.worn());
                     match &mut self.table {
                         // A cell is measured only once the whole table has been read.
                         Some(table) => table.text(&text, worn),
@@ -265,13 +266,16 @@ impl Room {
             Event::End(TagEnd::Link) => self.close_link(),
             // A soft break is the line the source was wrapped on, not one the writer drew:
             // the paragraph is reflowed to the room.
-            Event::SoftBreak => match &mut self.table {
-                Some(table) => table.text(" ", worn),
-                None => match &mut self.image {
-                    Some((_, alt)) => alt.push(' '),
-                    None => self.spaced = true,
-                },
-            },
+            Event::SoftBreak => {
+                let worn = self.block.wearing(self.worn());
+                match &mut self.table {
+                    Some(table) => table.text(" ", worn),
+                    None => match &mut self.image {
+                        Some((_, alt)) => alt.push(' '),
+                        None => self.spaced = true,
+                    },
+                }
+            }
             Event::HardBreak => self.flush_if_written(),
             _ => {}
         }
@@ -308,9 +312,8 @@ impl Room {
         self.spaced = space;
     }
 
-    /// The faces every mark open inside the block in hand adds to the ink it is written in.
-    fn faces(&self) -> Faces {
-        self.emphasis
+    fn worn(&self) -> Faces {
+        self.faces
             .iter()
             .fold(Faces::PLAIN, |worn, face| worn.and(Faces::wearing(*face)))
     }
@@ -579,6 +582,9 @@ impl Room {
     /// One blank row between two blocks, nothing at the top of the answer and never two blank
     /// rows where a block already stands under one.
     fn gap(&mut self) {
+        // Every block that can hold a mark is entered through here, and a mark never outlives
+        // the block it opened in.
+        self.faces.clear();
         if !self.rows.is_empty() && !self.blank {
             self.push(Row::blank());
         }

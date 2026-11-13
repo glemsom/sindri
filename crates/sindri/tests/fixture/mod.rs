@@ -245,12 +245,9 @@ fn inline() -> &'static str {
      F=boot-120x40` is how a look is eyeballed before it is blessed."
 }
 
-/// The marks an answer wears, and the two places a mark is not a weight: a heading, where the
-/// mark composes with the heading's own, and a fence, where the mark stays the glyph the wire
-/// wrote.
 fn emphasised() -> &'static str {
     "A strong word is **bold**, an emphasis is *italic*, and one word can be ***both*** at \
-     once.\n\n## A heading keeps its level: **bold** and *italic* inside it\n\n> and a quote \
+     once.\n\n## A heading keeps its level: **bold**, *italic* and ***both*** inside it\n\n> a quote \
      keeps its ink and its gutter, *even here*\n\n```\n**bold** and *italic* stay glyphs in a \
      fence\n```"
 }

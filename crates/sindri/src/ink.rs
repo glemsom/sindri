@@ -215,8 +215,8 @@ impl Look {
         }
     }
 
-    /// The same look wearing `faces` as well: a strong word inside a heading is the heading's
-    /// weight and the strong one together, and the ink stays the block's own.
+    /// The same look wearing `faces` as well, so a strong word inside a heading is the heading's
+    /// weight and the strong one together and the ink stays the block's own.
     pub const fn wearing(self, faces: Faces) -> Look {
         Look {
             faces: self.faces.and(faces),
