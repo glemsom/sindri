@@ -8,7 +8,7 @@ use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, T
 use syntect::parsing::{ParseState, Scope, ScopeStack, SyntaxSet};
 
 use crate::graphics::Ceiling;
-use crate::ink::{Face, Ink, Look};
+use crate::ink::{Face, Faces, Ink, Look};
 use crate::mermaid::{self, Fence};
 use crate::palette::Band;
 use crate::pen;
@@ -85,6 +85,8 @@ struct Room {
     used: usize,
     spaced: bool,
     block: Look,
+    /// The faces the marks open inside the block in hand asked for, outermost first.
+    faces: Vec<Face>,
     lead: Vec<(String, Look)>,
     /// The markers of the list items open, outermost first: every row is indented by the ones
     /// outside it and by the width of the innermost, so each depth costs the columns a `•` takes.
@@ -122,6 +124,7 @@ impl Room {
             used: 0,
             spaced: false,
             block: Look::plain(Ink::Plain),
+            faces: Vec::new(),
             lead: Vec::new(),
             marks: Vec::new(),
             lists: Vec::new(),
@@ -139,7 +142,7 @@ impl Room {
 
     fn event(&mut self, event: Event, span: &str) {
         match event {
-            Event::Start(Tag::Paragraph) => self.gap(),
+            Event::Start(Tag::Paragraph) => self.open_block(),
             Event::End(TagEnd::Paragraph) => self.flush_if_written(),
             Event::Start(Tag::Heading { level, .. }) => self.open_heading(level),
             Event::End(TagEnd::Heading(_)) => {
@@ -162,7 +165,7 @@ impl Room {
             Event::Start(Tag::Item) => self.open_item(),
             Event::End(TagEnd::Item) => self.close_item(),
             Event::Start(Tag::Table(_)) => {
-                self.gap();
+                self.open_block();
                 self.table = Some(Table::default());
             }
             Event::End(TagEnd::Table) => self.draw_table(),
@@ -196,6 +199,16 @@ impl Room {
                     table.close_cell();
                 }
             }
+            // A mark adds a face to a run and never an ink: the word keeps the colour the block
+            // gave it.
+            Event::Start(Tag::Strong) => self.faces.push(Face::Bold),
+            Event::End(TagEnd::Strong) => {
+                self.faces.pop();
+            }
+            Event::Start(Tag::Emphasis) => self.faces.push(Face::Italic),
+            Event::End(TagEnd::Emphasis) => {
+                self.faces.pop();
+            }
             Event::Start(Tag::CodeBlock(kind)) => self.open_code(kind, span),
             Event::End(TagEnd::CodeBlock) => self.close_code(),
             Event::Text(text) => match &mut self.code {
@@ -211,21 +224,24 @@ impl Room {
                         self.flush();
                     }
                 }
-                None => match &mut self.table {
-                    // A cell is measured only once the whole table has been read.
-                    Some(table) => table.text(&text, self.block),
-                    // A picture's words are kept aside for the row it is spoken of on:
-                    // they are the block's, not the paragraph's.
-                    None => match &mut self.image {
-                        Some((_, alt)) => alt.push_str(&text),
-                        None => {
-                            if let Some((_, said)) = &mut self.link {
-                                said.push_str(&text);
+                None => {
+                    let worn = self.block.wearing(self.worn());
+                    match &mut self.table {
+                        // A cell is measured only once the whole table has been read.
+                        Some(table) => table.text(&text, worn),
+                        // A picture's words are kept aside for the row it is spoken of on:
+                        // they are the block's, not the paragraph's.
+                        None => match &mut self.image {
+                            Some((_, alt)) => alt.push_str(&text),
+                            None => {
+                                if let Some((_, said)) = &mut self.link {
+                                    said.push_str(&text);
+                                }
+                                self.prose(&text, worn);
                             }
-                            self.prose(&text, self.block);
-                        }
-                    },
-                },
+                        },
+                    }
+                }
             },
             // Inline code keeps the spacing it was written with. It is reversed over
             // `muted` rather than over no colour, because `mark` is reverse over no colour
@@ -250,20 +266,23 @@ impl Room {
             Event::End(TagEnd::Link) => self.close_link(),
             // A soft break is the line the source was wrapped on, not one the writer drew:
             // the paragraph is reflowed to the room.
-            Event::SoftBreak => match &mut self.table {
-                Some(table) => table.text(" ", self.block),
-                None => match &mut self.image {
-                    Some((_, alt)) => alt.push(' '),
-                    None => self.spaced = true,
-                },
-            },
+            Event::SoftBreak => {
+                let worn = self.block.wearing(self.worn());
+                match &mut self.table {
+                    Some(table) => table.text(" ", worn),
+                    None => match &mut self.image {
+                        Some((_, alt)) => alt.push(' '),
+                        None => self.spaced = true,
+                    },
+                }
+            }
             Event::HardBreak => self.flush_if_written(),
             _ => {}
         }
     }
 
     fn open_heading(&mut self, level: HeadingLevel) {
-        self.gap();
+        self.open_block();
         if level == HeadingLevel::H1 && self.rows.is_empty() {
             self.push(Row::blank());
         }
@@ -291,6 +310,12 @@ impl Room {
             space = false;
         }
         self.spaced = space;
+    }
+
+    fn worn(&self) -> Faces {
+        self.faces
+            .iter()
+            .fold(Faces::PLAIN, |worn, face| worn.and(Faces::wearing(*face)))
     }
 
     /// One run of glyphs placed at the end of the row in hand, carried to the next row when it
@@ -393,7 +418,7 @@ impl Room {
     /// line to line. A language no syntax definition names is drawn plain rather than refused:
     /// an unknown language is the wire's business and never the run's error.
     fn open_code(&mut self, kind: CodeBlockKind, span: &str) {
-        self.gap();
+        self.open_block();
         self.lead.push((String::from("▏ "), Look::plain(Ink::Dim)));
         let tag = match kind {
             CodeBlockKind::Fenced(tag) => tag.trim().to_owned(),
@@ -484,7 +509,7 @@ impl Room {
     }
 
     fn open_quote(&mut self) {
-        self.gap();
+        self.open_block();
         self.lead.push((String::from("▏ "), Look::plain(Ink::Dim)));
     }
 
@@ -551,6 +576,13 @@ impl Room {
         // The last row of a picture is a cell of the picture, so it does not stand in for
         // the gap after it.
         self.blank = false;
+        self.gap();
+    }
+
+    /// A block opens: a mark never outlives the block it opened in, so no face is carried into
+    /// one the wire did not write it in.
+    fn open_block(&mut self) {
+        self.faces.clear();
         self.gap();
     }
 

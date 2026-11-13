@@ -159,6 +159,11 @@ fn markdown_inline_80x24_is_a_run_of_code_set_reversed_in_a_paragraph() {
 }
 
 #[test]
+fn markdown_emphasis_80x24_is_bold_italic_both_and_both_inside_a_heading() {
+    fixture::assert_frame("markdown-emphasis", 80, 24);
+}
+
+#[test]
 fn markdown_link_80x24_is_a_link_that_prints_the_url_its_words_hide() {
     fixture::assert_frame("markdown-link", 80, 24);
 }

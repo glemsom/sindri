@@ -215,6 +215,15 @@ impl Look {
         }
     }
 
+    /// The same look wearing `faces` as well, so a strong word inside a heading is the heading's
+    /// weight and the strong one together and the ink stays the block's own.
+    pub const fn wearing(self, faces: Faces) -> Look {
+        Look {
+            faces: self.faces.and(faces),
+            ..self
+        }
+    }
+
     /// The same look with a line drawn under it, in an ink of its own: what a link will wear.
     pub const fn underlined(self, underline: Ink) -> Look {
         Look {

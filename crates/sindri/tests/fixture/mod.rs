@@ -106,6 +106,7 @@ fn named(name: &str) -> View {
         "markdown-quote" => construct(quoted()),
         "markdown-code" => construct(code()),
         "markdown-inline" => construct(inline()),
+        "markdown-emphasis" => construct(emphasised()),
         "markdown-link" => construct(link()),
         "markdown-table-narrow" => construct(narrow()),
         // The same answer in both, three of its four fragments under the live marker and all of it
@@ -242,6 +243,13 @@ fn code() -> &'static str {
 fn inline() -> &'static str {
     "Run `make check` before the gate: it is the definition of done, and `make frame \
      F=boot-120x40` is how a look is eyeballed before it is blessed."
+}
+
+fn emphasised() -> &'static str {
+    "A strong word is **bold**, an emphasis is *italic*, and one word can be ***both*** at \
+     once.\n\n## A heading keeps its level: **bold**, *italic* and ***both*** inside it\n\n> a quote \
+     keeps its ink and its gutter, *even here*\n\n```\n**bold** and *italic* stay glyphs in a \
+     fence\n```"
 }
 
 fn link() -> &'static str {
