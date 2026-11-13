@@ -26,7 +26,7 @@ fn wears(row: &Row, word: &str, look: Look) -> bool {
 }
 
 /// One level of heading as a reader meets it: the look its words wear, and the rule it carries
-/// under them, which is the other half of what a level is told apart by.
+/// under them.
 fn heading_block(level: usize) -> (Look, Option<String>) {
     let said = format!("{} L{level}", "#".repeat(level));
     let word = format!("L{level}");
@@ -67,18 +67,17 @@ fn no_level_of_a_heading_is_drawn_as_the_prose_around_it() {
 
 #[test]
 fn the_scale_of_headings_runs_from_bold_prose_to_dim_bold() {
-    let scale: Vec<(Look, Option<String>)> = (1..=6).map(heading_block).collect();
-    let looks: Vec<Look> = scale.iter().map(|(look, _)| *look).collect();
+    let blocks: Vec<(Look, Option<String>)> = (1..=6).map(heading_block).collect();
+    let scale: Vec<Look> = blocks.iter().map(|(look, _)| *look).collect();
 
-    for (at, pair) in scale.windows(2).enumerate() {
+    for (at, pair) in blocks.windows(2).enumerate() {
         assert_ne!(
             pair[0],
             pair[1],
-            "a level {} and the level under it are drawn alike: {scale:?}",
+            "a level {} and the level under it are drawn the same way: {blocks:?}",
             at + 1
         );
     }
-    let scale = looks;
     assert_eq!(
         scale[2],
         Look::new(Ink::Muted, Face::Bold),
@@ -97,6 +96,11 @@ fn the_scale_of_headings_runs_from_bold_prose_to_dim_bold() {
             at + 1
         );
     }
+    assert!(
+        !scale[4].faces().has(Face::Italic) && scale[5].faces().has(Face::Italic),
+        "the lowest level is the one worn slanted, so it and the level over it are not one \
+         look: {scale:?}"
+    );
 }
 
 #[test]
@@ -113,7 +117,7 @@ fn an_h1_stands_under_one_blank_row_of_its_own() {
 #[test]
 fn an_answer_that_opens_on_an_h1_opens_on_a_blank_row() {
     let rows = markdown::rows("# The fence rule", 40);
-    assert_eq!(drawn(&rows), ["", "The fence rule", "══════════════"]);
+    assert_eq!(drawn(&rows)[..2], ["", "The fence rule"]);
     assert_eq!(rows[0].width(), 0, "the blank row says nothing at all");
 }
 
@@ -715,6 +719,68 @@ fn a_cell_wider_than_a_frame_that_holds_no_row_wraps_inside_the_room_it_has() {
     assert!(
         !flat.contains('│'),
         "no bar is drawn between two columns that stand one over the other: {flat}"
+    );
+}
+
+#[test]
+fn a_table_in_a_quote_keeps_the_gutter_of_the_block_it_stands_in() {
+    let rows = markdown::rows(
+        "> a quote says\n>\n> | a | b |\n> | --- | --- |\n> | one | two |",
+        40,
+    );
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            "▏ a quote says",
+            "",
+            "▏ a   │ b",
+            "▏ ────┼────",
+            "▏ one │ two",
+        ],
+        "every row of a table in a quote stands behind the bar the prose does"
+    );
+    for row in &rows[2..] {
+        assert_eq!(
+            row.spans().first(),
+            Some(&(String::from("▏ "), Look::plain(Ink::Dim))),
+            "the table's own rows open with the bar: {row:?}"
+        );
+        assert!(
+            row.width() <= 38,
+            "and they are laid out in the room the bar leaves them: {row:?}"
+        );
+    }
+}
+
+#[test]
+fn a_heading_and_a_table_still_arriving_are_drawn_as_the_blocks_they_will_be() {
+    let heading = markdown::rows("## a heading the wire is still writing", 40);
+    assert_eq!(
+        drawn(&heading),
+        [
+            "a heading the wire is still writing",
+            "───────────────────────────────────",
+        ],
+        "a heading is ruled under what has arrived of it"
+    );
+
+    let table = markdown::rows("| a | b |\n| --- | --- |\n| one | two", 40);
+    assert_eq!(
+        drawn(&table),
+        ["a   │ b", "────┼────", "one │ two"],
+        "a table still arriving is a header and the body that has arrived"
+    );
+    let header = Look::new(Ink::Plain, Face::Bold);
+    assert!(
+        wears(&table[0], "a", header) && wears(&table[0], "b", header),
+        "a header cell is drawn as a header whether or not the table closed: {:?}",
+        table[0].spans()
+    );
+    assert!(
+        wears(&table[2], "one", Look::plain(Ink::Plain)),
+        "and the row under the rule is body: {:?}",
+        table[2].spans()
     );
 }
 
