@@ -67,11 +67,39 @@ fn kinds() -> &'static [(Scope, Ink)] {
     })
 }
 
-fn heading(level: HeadingLevel) -> Look {
+/// The look a level of heading is drawn in, and the mark of the rule it carries under it: the
+/// double under the highest, the single under the one beneath it, and none under a level told
+/// apart by its ink and its weight alone.
+fn heading(level: HeadingLevel) -> (Look, Option<char>) {
     match level {
-        HeadingLevel::H1 | HeadingLevel::H2 => Look::new(Ink::Plain, Face::Bold),
-        HeadingLevel::H3 => Look::new(Ink::Dim, Face::Bold),
-        HeadingLevel::H4 | HeadingLevel::H5 | HeadingLevel::H6 => Look::plain(Ink::Plain),
+        HeadingLevel::H1 => (Look::new(Ink::Plain, Face::Bold), Some('═')),
+        HeadingLevel::H2 => (Look::new(Ink::Plain, Face::Bold), Some('─')),
+        HeadingLevel::H3 => (Look::new(Ink::Muted, Face::Bold), None),
+        HeadingLevel::H4 => (Look::plain(Ink::Muted), None),
+        HeadingLevel::H5 => (Look::new(Ink::Dim, Face::Bold), None),
+        HeadingLevel::H6 => (Look::new(Ink::Dim, Faces::BOLD.and(Faces::ITALIC)), None),
+    }
+}
+
+/// The rule under the heading in hand: the mark it is drawn with and the width of the widest row
+/// the heading has written, which is the width the rule is drawn at.
+struct Rule {
+    mark: char,
+    wide: usize,
+}
+
+impl Rule {
+    fn new(mark: char) -> Rule {
+        Rule { mark, wide: 0 }
+    }
+
+    fn wrote(&mut self, cells: usize) {
+        self.wide = self.wide.max(cells);
+    }
+
+    /// The run of marks the rule is drawn as, no wider than the room the heading's rows had.
+    fn run(&self, room: usize) -> String {
+        pen::filled(pen::columns(self.wide.min(room)), self.mark)
     }
 }
 
@@ -102,6 +130,7 @@ struct Room {
     /// The table in hand: read whole before a row of it is drawn, because a column is as wide
     /// as the widest cell the table holds.
     table: Option<Table>,
+    rule: Option<Rule>,
     /// The link being said: its destination and the words said over it, so the URL is printed
     /// only when it says something the words did not.
     link: Option<(String, String)>,
@@ -134,6 +163,7 @@ impl Room {
             code: None,
             mermaid: None,
             table: None,
+            rule: None,
             reserve: 0,
             surface: surface.clone(),
             image: None,
@@ -145,10 +175,7 @@ impl Room {
             Event::Start(Tag::Paragraph) => self.open_block(),
             Event::End(TagEnd::Paragraph) => self.flush_if_written(),
             Event::Start(Tag::Heading { level, .. }) => self.open_heading(level),
-            Event::End(TagEnd::Heading(_)) => {
-                self.flush_if_written();
-                self.block = Look::plain(Ink::Plain);
-            }
+            Event::End(TagEnd::Heading(_)) => self.close_heading(),
             Event::Start(Tag::BlockQuote(_)) => self.open_quote(),
             Event::End(TagEnd::BlockQuote(_)) => {
                 self.flush_if_written();
@@ -286,7 +313,23 @@ impl Room {
         if level == HeadingLevel::H1 && self.rows.is_empty() {
             self.push(Row::blank());
         }
-        self.block = heading(level);
+        let (look, rule) = heading(level);
+        self.block = look;
+        self.rule = rule.map(Rule::new);
+    }
+
+    /// A heading closes under the rule its level carries, in the block's own gutter, so a
+    /// heading in a quote keeps the bar behind its rule.
+    fn close_heading(&mut self) {
+        self.flush_if_written();
+        let rule = self.rule.take();
+        self.block = Look::plain(Ink::Plain);
+        let run = rule.map_or_else(String::new, |rule| rule.run(self.room()));
+        if !run.is_empty() {
+            let mut spans = self.gutter();
+            spans.push((run, Look::plain(Ink::Dim)));
+            self.push(Row::of(spans));
+        }
     }
 
     /// The words of a paragraph, heading or item, placed one at a time, so a word the row
@@ -376,39 +419,47 @@ impl Room {
         let available = self.room();
         let naturals: Vec<usize> = (0..columns).map(|at| table.width(at)).collect();
         let Some(widths) = fit(&naturals, available.saturating_sub(3 * (columns - 1))) else {
-            self.draw_cells(&table, available);
+            self.draw_columns(&table, available);
             return;
         };
 
         let head = table.lines(&widths);
         for line in &head {
             let row = joined(line, &widths);
-            self.push(row);
+            self.guttered(row);
         }
-        self.push(header_rule(&widths));
+        let rule = header_rule(&widths);
+        self.guttered(rule);
         for cells in table.body() {
             for line in lines_of(cells, &widths) {
                 let row = joined(&line, &widths);
-                self.push(row);
+                self.guttered(row);
             }
         }
     }
 
-    fn draw_cells(&mut self, table: &Table, available: usize) {
-        for (at, cells) in std::iter::once(&table.head)
-            .chain(table.rows.iter())
-            .enumerate()
-        {
-            if at == 1 {
-                self.push(Row::of([(
-                    pen::filled(pen::columns(available), '─'),
-                    Look::plain(Ink::Dim),
-                )]));
+    /// A table with no row of it to be drawn on: each column is drawn in its turn, its heading
+    /// over its own cells, and a dim rule under that heading as wide as the column.
+    fn draw_columns(&mut self, table: &Table, available: usize) {
+        for at in 0..table.columns() {
+            if at > 0 {
+                self.gap();
             }
-            for cell in cells {
-                for line in lines_of(std::slice::from_ref(cell), &[available]) {
-                    let row = joined(&line, &[available]);
-                    self.push(row);
+            let cells =
+                std::iter::once(table.head.get(at)).chain(table.rows.iter().map(|row| row.get(at)));
+            for (position, cell) in cells.enumerate() {
+                if let Some(cell) = cell {
+                    for line in lines_of(std::slice::from_ref(cell), &[available]) {
+                        let row = joined(&line, &[available]);
+                        self.guttered(row);
+                    }
+                }
+                if position == 0 {
+                    let rule = Row::of([(
+                        pen::filled(pen::columns(available), '─'),
+                        Look::plain(Ink::Dim),
+                    )]);
+                    self.guttered(rule);
                 }
             }
         }
@@ -481,7 +532,7 @@ impl Room {
     fn pictured(&mut self, at: usize, picture: &Picture) {
         let height = at.saturating_add(usize::from(picture.rows()));
         while self.rows.len() < height {
-            self.rows.push(Row::of(self.opening()));
+            self.rows.push(Row::of(self.spans()));
         }
         if let Some(row) = self.rows.get_mut(at) {
             *row = row.clone().pictured_over(picture.clone());
@@ -595,9 +646,11 @@ impl Room {
     }
 
     fn flush(&mut self) {
-        let opening = self.opening();
+        if let Some(rule) = &mut self.rule {
+            rule.wrote(self.used);
+        }
+        let row = Row::of(self.spans());
         self.line.clear();
-        let row = Row::of(opening);
         // A fence is one block of cells, so the tag and every line under it paint the well.
         self.push(match self.code.is_some() {
             true => row.banded(Band::Well),
@@ -608,7 +661,17 @@ impl Room {
         self.first = false;
     }
 
-    fn opening(&self) -> Vec<(String, Look)> {
+    /// The spans of the row in hand: the gutter of the block, then the words placed in it.
+    fn spans(&self) -> Vec<(String, Look)> {
+        let mut spans = self.gutter();
+        spans.extend(self.line.iter().cloned());
+        spans
+    }
+
+    /// The columns every row of the block in hand gives up before its words: the bars it is
+    /// quoted behind, and the marks it is indented by — the innermost of them said on an item's
+    /// first row alone.
+    fn gutter(&self) -> Vec<(String, Look)> {
         let mut spans = self.lead.clone();
         for (at, mark) in self.marks.iter().enumerate() {
             let innermost = at + 1 == self.marks.len();
@@ -618,8 +681,20 @@ impl Room {
             };
             spans.push((text, Look::plain(Ink::Plain)));
         }
-        spans.extend(self.line.iter().cloned());
         spans
+    }
+
+    /// `row` as it is drawn in the block in hand: behind the bars the block is quoted behind and
+    /// under the marks it is indented by, so a table in a quote keeps the quote's gutter.
+    fn guttered(&mut self, row: Row) {
+        if self.lead.is_empty() && self.marks.is_empty() {
+            self.push(row);
+            return;
+        }
+        let mut spans = self.gutter();
+        self.first = false;
+        spans.extend(row.spans().iter().cloned());
+        self.push(Row::of(spans));
     }
 
     fn flush_if_written(&mut self) {
@@ -803,10 +878,15 @@ struct Table {
 type Cell = Vec<(String, Look)>;
 
 impl Table {
+    /// A cell's words, worn bold while the header is being read.
     fn text(&mut self, text: &str, look: Look) {
         if text.is_empty() {
             return;
         }
+        let look = match self.heading {
+            true => look.wearing(Faces::BOLD),
+            false => look,
+        };
         self.cell.push((String::from(text), look));
     }
 
@@ -921,7 +1001,7 @@ fn joined(line: &[Cell], widths: &[usize]) -> Row {
     for (at, width) in widths.iter().enumerate() {
         if at > 0 {
             spans.extend(
-                Row::of([(String::from(" │ "), Ink::Plain)])
+                Row::of([(String::from(" │ "), Look::plain(Ink::Dim))])
                     .spans()
                     .to_vec(),
             );
@@ -952,7 +1032,7 @@ fn header_rule(widths: &[usize]) -> Row {
         }
         text.push_str(&pen::filled(pen::columns(*width), '─'));
     }
-    Row::of([(text, Ink::Dim)])
+    Row::of([(text, Look::plain(Ink::Dim))])
 }
 
 fn measured(cell: &[(String, Look)]) -> usize {

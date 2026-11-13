@@ -25,61 +25,177 @@ fn wears(row: &Row, word: &str, look: Look) -> bool {
         .any(|(said, worn)| said == word && *worn == look)
 }
 
+/// One level of heading as a reader meets it: the look its words wear, and the rule it carries
+/// under them.
+fn heading_block(level: usize) -> (Look, Option<String>) {
+    let said = format!("{} L{level}", "#".repeat(level));
+    let word = format!("L{level}");
+    let rows = markdown::rows(&said, 40);
+    let row = rows
+        .iter()
+        .find(|row| words(row).contains(&word))
+        .unwrap_or_else(|| panic!("the row an h{level} is said on: {}", drawn(&rows).join("|")));
+    let looked: Vec<Look> = row
+        .spans()
+        .iter()
+        .filter(|(said, _)| said == &word)
+        .map(|(_, look)| *look)
+        .collect();
+    assert_eq!(
+        looked.len(),
+        1,
+        "the heading's own words wear one look: {row:?}"
+    );
+    let rule = drawn(&rows)
+        .into_iter()
+        .find(|row| row.chars().all(|glyph| glyph == '═' || glyph == '─'));
+    (looked[0], rule)
+}
+
 #[test]
-fn a_heading_is_bold_and_an_h1_stands_under_one_blank_row() {
-    let rows = markdown::rows(
-        "prose first\n\n# One\n## Two\n### Three\n#### Four\n##### Five\n###### Six",
-        40,
-    );
-    assert_eq!(
-        drawn(&rows),
-        [
-            "prose first",
-            "",
-            "One",
-            "",
-            "Two",
-            "",
-            "Three",
-            "",
-            "Four",
-            "",
-            "Five",
-            "",
-            "Six"
-        ],
-        "every block stands under one blank row, and the h1 under one of its own"
-    );
-    assert_eq!(
-        looks(&rows[2]),
-        [Look::new(Ink::Plain, Face::Bold)],
-        "an h1 is set bold"
-    );
-    assert_eq!(
-        looks(&rows[4]),
-        [Look::new(Ink::Plain, Face::Bold)],
-        "and so is an h2"
-    );
-    assert_eq!(
-        looks(&rows[6]),
-        [Look::new(Ink::Dim, Face::Bold)],
-        "an h3 is bold in dim ink"
-    );
-    for level in [8, 10, 12] {
-        assert_eq!(
-            looks(&rows[level]),
-            [Look::plain(Ink::Plain)],
-            "h4 to h6 are plain: {:?}",
-            rows[level]
+fn no_level_of_a_heading_is_drawn_as_the_prose_around_it() {
+    let prose = Look::plain(Ink::Plain);
+
+    for level in 1..=6 {
+        assert_ne!(
+            heading_block(level).0,
+            prose,
+            "an h{level} is drawn as the prose around it, so its level says nothing"
         );
     }
 }
 
 #[test]
+fn the_scale_of_headings_runs_from_bold_prose_to_dim_bold() {
+    let blocks: Vec<(Look, Option<String>)> = (1..=6).map(heading_block).collect();
+    let scale: Vec<Look> = blocks.iter().map(|(look, _)| *look).collect();
+
+    for (at, pair) in blocks.windows(2).enumerate() {
+        assert_ne!(
+            pair[0],
+            pair[1],
+            "a level {} and the level under it are drawn the same way: {blocks:?}",
+            at + 1
+        );
+    }
+    assert_eq!(
+        scale[2],
+        Look::new(Ink::Muted, Face::Bold),
+        "the third level is muted and bold: {scale:?}"
+    );
+    assert_eq!(
+        scale[3],
+        Look::plain(Ink::Muted),
+        "the fourth is muted and no weight: {scale:?}"
+    );
+    for (at, look) in scale.iter().enumerate().skip(4) {
+        assert_eq!(look.ink(), Ink::Dim, "an h{} is dim: {scale:?}", at + 1);
+        assert!(
+            look.faces().has(Face::Bold),
+            "an h{} is dim and bold: {scale:?}",
+            at + 1
+        );
+    }
+    assert!(
+        !scale[4].faces().has(Face::Italic) && scale[5].faces().has(Face::Italic),
+        "the lowest level is the one worn slanted, so it and the level over it are not one \
+         look: {scale:?}"
+    );
+}
+
+#[test]
+fn an_h1_stands_under_one_blank_row_of_its_own() {
+    let rows = markdown::rows("prose first\n\n# One", 40);
+
+    assert_eq!(
+        drawn(&rows),
+        ["prose first", "", "One", "═══"],
+        "the one blank row above an h1 is the block's, and the rule is the h1's own"
+    );
+}
+
+#[test]
 fn an_answer_that_opens_on_an_h1_opens_on_a_blank_row() {
     let rows = markdown::rows("# The fence rule", 40);
-    assert_eq!(drawn(&rows), ["", "The fence rule"]);
+    assert_eq!(drawn(&rows)[..2], ["", "The fence rule"]);
     assert_eq!(rows[0].width(), 0, "the blank row says nothing at all");
+}
+
+#[test]
+fn the_two_highest_levels_carry_a_rule_as_wide_as_their_own_words() {
+    let h1 = drawn(&markdown::rows("# The fence rule", 40));
+    assert_eq!(
+        h1,
+        ["", "The fence rule", "══════════════"],
+        "the highest level is ruled under, as wide as the words above it"
+    );
+
+    let h2 = drawn(&markdown::rows("## A row is one line", 40));
+    assert_eq!(
+        h2,
+        ["A row is one line", "─────────────────"],
+        "the level under it carries a rule of its own, and one of a single glyph, so the two \
+         are drawn apart"
+    );
+
+    for level in 3..=6 {
+        let rows = drawn(&markdown::rows(&format!("{} low", "#".repeat(level)), 40));
+        assert_eq!(
+            rows,
+            ["low"],
+            "a level this low is told apart by its ink and carries no rule"
+        );
+    }
+}
+
+#[test]
+fn a_rule_is_no_wider_than_the_room_the_heading_had() {
+    let rows = markdown::rows("## a heading too wide for one row of this room", 20);
+
+    for row in &rows {
+        assert!(
+            row.width() <= 20,
+            "a row ran past the room it was laid out for: {row:?}"
+        );
+    }
+    let rule = rows
+        .iter()
+        .find(|row| words(row).starts_with('─'))
+        .expect("the rule under the heading");
+    assert_eq!(
+        rule.width(),
+        19,
+        "a wrapped heading is ruled by its widest row, which the room held: {rows:?}"
+    );
+}
+
+#[test]
+fn a_heading_in_a_quote_keeps_the_bar_and_carries_its_rule_behind_it() {
+    let rows = markdown::rows("> ## a heading behind a bar", 40);
+
+    assert_eq!(
+        drawn(&rows),
+        ["▏ a heading behind a bar", "▏ ──────────────────────",],
+        "the rule is the heading's own width and stands behind the quote's bar"
+    );
+    for row in &rows {
+        assert_eq!(
+            row.spans().first(),
+            Some(&(String::from("▏ "), Look::plain(Ink::Dim))),
+            "every row of the quote opens with its bar: {row:?}"
+        );
+    }
+}
+
+#[test]
+fn a_heading_that_opens_an_item_hangs_its_rule_under_the_items_gutter() {
+    let rows = markdown::rows("- ## an item's heading", 40);
+
+    assert_eq!(
+        drawn(&rows),
+        ["• an item's heading", "  ─────────────────"],
+        "the rule hangs under the words, past the bullet's own columns"
+    );
 }
 
 #[test]
@@ -170,29 +286,28 @@ fn a_strong_run_is_bold_and_an_emphasis_run_is_italic_in_prose_and_in_a_list() {
 
 #[test]
 fn emphasis_inside_a_heading_wears_the_headings_weight_and_keeps_its_level() {
-    let rows = markdown::rows(
-        "# an *a* word\n\n## a *b* word\n\n### a *c* word\n\n#### a *d* word\n\n##### a *e* \
-         word\n\n###### a *f* word",
-        40,
-    );
-    let heads: Vec<&Row> = rows.iter().filter(|row| !words(row).is_empty()).collect();
-
-    let bold = Faces::BOLD.and(Faces::ITALIC);
+    let both = Faces::BOLD.and(Faces::ITALIC);
     let wanted = [
-        ("a", Look::new(Ink::Plain, bold)),
-        ("b", Look::new(Ink::Plain, bold)),
-        ("c", Look::new(Ink::Dim, bold)),
-        ("d", Look::new(Ink::Plain, Faces::ITALIC)),
-        ("e", Look::new(Ink::Plain, Faces::ITALIC)),
-        ("f", Look::new(Ink::Plain, Faces::ITALIC)),
+        Look::new(Ink::Plain, both),
+        Look::new(Ink::Plain, both),
+        Look::new(Ink::Muted, both),
+        Look::new(Ink::Muted, Faces::ITALIC),
+        Look::new(Ink::Dim, both),
+        Look::new(Ink::Dim, both.and(Faces::ITALIC)),
     ];
-    assert_eq!(heads.len(), wanted.len(), "one row per heading: {rows:?}");
-    for (row, (letter, look)) in heads.iter().zip(wanted) {
-        assert!(
-            wears(row, letter, look),
-            "the emphasised {letter:?} is {look:?}, because the mark and the heading's own \
-             weight compose and the ink stays the level's: {:?}",
-            row.spans()
+
+    for (at, look) in wanted.into_iter().enumerate() {
+        let rows = markdown::rows(&format!("{} an *q* word", "#".repeat(at + 1)), 40);
+        let said = rows
+            .iter()
+            .flat_map(Row::spans)
+            .find(|(text, _)| text.contains('q'));
+        assert_eq!(
+            said.map(|(_, worn)| *worn),
+            Some(look),
+            "the emphasised word on the level {} is {look:?}, because the mark and the \
+             heading's own weight compose and the ink stays the level's: {rows:?}",
+            at + 1
         );
     }
 }
@@ -453,6 +568,58 @@ fn a_table_rules_one_line_under_its_header_and_draws_no_outer_border() {
 }
 
 #[test]
+fn a_tables_header_row_is_drawn_as_a_header_and_its_bars_recede_to_the_dim_ink() {
+    let rows = markdown::rows(
+        "| construct | rendering |\n| --- | --- |\n| heading | bold |\n| code | reversed |",
+        40,
+    );
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            "construct │ rendering",
+            "──────────┼──────────",
+            "heading   │ bold",
+            "code      │ reversed",
+        ],
+        "the header's words, the rule under them, and the body under the rule"
+    );
+
+    let header = Look::new(Ink::Plain, Face::Bold);
+    assert!(
+        wears(&rows[0], "construct", header) && wears(&rows[0], "rendering", header),
+        "a header cell is the frame's ink worn bold, so the eye lands on it: {:?}",
+        rows[0].spans()
+    );
+    assert!(
+        wears(&rows[2], "heading", Look::plain(Ink::Plain)),
+        "and a body cell beside it is the prose around it: {:?}",
+        rows[2].spans()
+    );
+
+    let dim = Look::plain(Ink::Dim);
+    for row in &rows {
+        let bars: Vec<&Look> = row
+            .spans()
+            .iter()
+            .filter(|(said, _)| said.contains('│'))
+            .map(|(_, look)| look)
+            .collect();
+        assert!(
+            bars.is_empty() || bars.iter().all(|look| **look == dim),
+            "the bars that join the columns recede to the dim ink, and the header's does too: \
+             {row:?}"
+        );
+    }
+    assert_eq!(
+        looks(&rows[1]),
+        [dim],
+        "and so does the rule under the header: {:?}",
+        rows[1]
+    );
+}
+
+#[test]
 fn a_table_wider_than_the_room_wraps_inside_its_cells_and_keeps_every_word() {
     let text = "| a heading is bold | a code block is guttered by its language | an unknown \
                 language is plain |\n| --- | --- | --- |\n| one blank row above an h1 | the \
@@ -487,6 +654,133 @@ fn a_table_wider_than_the_room_wraps_inside_its_cells_and_keeps_every_word() {
         rules[0].chars().all(|glyph| glyph == '─' || glyph == '┼'),
         "the rule is the header's own row with its words spent as rules: {:?}",
         rules[0]
+    );
+}
+
+#[test]
+fn a_table_too_narrow_for_one_row_wraps_each_column_under_its_own_heading() {
+    let rows = markdown::rows(
+        "| a | b | c |\n| --- | --- | --- |\n| one | two | three |",
+        8,
+    );
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            "a",
+            "────────",
+            "one",
+            "",
+            "b",
+            "────────",
+            "two",
+            "",
+            "c",
+            "────────",
+            "three",
+        ],
+        "a column keeps its own heading over its own cells when no row of the table fits"
+    );
+
+    let header = Look::new(Ink::Plain, Face::Bold);
+    for at in [0, 4, 8] {
+        assert_eq!(
+            looks(&rows[at]),
+            [header],
+            "the heading over a column is still drawn as a header: {:?}",
+            rows[at]
+        );
+        assert_eq!(
+            looks(&rows[at + 1]),
+            [Look::plain(Ink::Dim)],
+            "under a dim rule"
+        );
+    }
+}
+
+#[test]
+fn a_cell_wider_than_a_frame_that_holds_no_row_wraps_inside_the_room_it_has() {
+    let rows = markdown::rows(
+        "| a construct | b | c |\n| --- | --- | --- |\n| a cell that wraps | two | three |",
+        8,
+    );
+
+    for row in &rows {
+        assert!(
+            row.width() <= 16,
+            "a row ran past the room it was laid out for: {row:?}"
+        );
+    }
+    let flat = drawn(&rows).join(" ");
+    assert!(
+        flat.contains("a cell that") && flat.contains("wraps"),
+        "a cell's words are kept when it wraps: {flat}"
+    );
+    assert!(
+        !flat.contains('│'),
+        "no bar is drawn between two columns that stand one over the other: {flat}"
+    );
+}
+
+#[test]
+fn a_table_in_a_quote_keeps_the_gutter_of_the_block_it_stands_in() {
+    let rows = markdown::rows(
+        "> a quote says\n>\n> | a | b |\n> | --- | --- |\n> | one | two |",
+        40,
+    );
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            "▏ a quote says",
+            "",
+            "▏ a   │ b",
+            "▏ ────┼────",
+            "▏ one │ two",
+        ],
+        "every row of a table in a quote stands behind the bar the prose does"
+    );
+    for row in &rows[2..] {
+        assert_eq!(
+            row.spans().first(),
+            Some(&(String::from("▏ "), Look::plain(Ink::Dim))),
+            "the table's own rows open with the bar: {row:?}"
+        );
+        assert!(
+            row.width() <= 38,
+            "and they are laid out in the room the bar leaves them: {row:?}"
+        );
+    }
+}
+
+#[test]
+fn a_heading_and_a_table_still_arriving_are_drawn_as_the_blocks_they_will_be() {
+    let heading = markdown::rows("## a heading the wire is still writing", 40);
+    assert_eq!(
+        drawn(&heading),
+        [
+            "a heading the wire is still writing",
+            "───────────────────────────────────",
+        ],
+        "a heading is ruled under what has arrived of it"
+    );
+
+    let table = markdown::rows("| a | b |\n| --- | --- |\n| one | two", 40);
+    assert_eq!(
+        drawn(&table),
+        ["a   │ b", "────┼────", "one │ two"],
+        "a table still arriving is a header and the body that has arrived"
+    );
+    let header = Look::new(Ink::Plain, Face::Bold);
+    assert!(
+        wears(&table[0], "a", header) && wears(&table[0], "b", header),
+        "a header cell is drawn as a header whether or not the table closed: {:?}",
+        table[0].spans()
+    );
+    assert!(
+        wears(&table[2], "one", Look::plain(Ink::Plain)),
+        "and the row under the rule is body: {:?}",
+        table[2].spans()
     );
 }
 

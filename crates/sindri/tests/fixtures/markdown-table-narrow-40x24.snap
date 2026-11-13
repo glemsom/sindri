@@ -3,17 +3,17 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 markdown-table-narrow at 40x24
-00 |  a heading of the  │ a table wider than| plain:40
-01 |  first level is    │ the band it is    | plain:40
-02 |  bold and stands   │ drawn in wraps    | plain:40
-03 |  under one blank   │ inside its cells  | plain:40
-04 |  row wherever it   │ and keeps the rule| plain:40
-05 |  stands            │ under its header  | plain:40
+00 |  a heading of the  │ a table wider than| plain:2 plain+bold:1 plain:1 plain+bold:7 plain:1 plain+bold:2 plain:1 plain+bold:3 plain:1 dim:3 plain+bold:1 plain:1 plain+bold:5 plain:1 plain+bold:5 plain:1 plain+bold:4
+01 |  first level is    │ the band it is    | plain:2 plain+bold:5 plain:1 plain+bold:5 plain:1 plain+bold:2 plain:3 dim:3 plain+bold:3 plain:1 plain+bold:4 plain:1 plain+bold:2 plain:1 plain+bold:2 plain:4
+02 |  bold and stands   │ drawn in wraps    | plain:2 plain+bold:4 plain:1 plain+bold:3 plain:1 plain+bold:6 plain:2 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:5 plain:4
+03 |  under one blank   │ inside its cells  | plain:2 plain+bold:5 plain:1 plain+bold:3 plain:1 plain+bold:5 plain:2 dim:3 plain+bold:6 plain:1 plain+bold:3 plain:1 plain+bold:5 plain:2
+04 |  row wherever it   │ and keeps the rule| plain:2 plain+bold:3 plain:1 plain+bold:8 plain:1 plain+bold:2 plain:2 dim:3 plain+bold:3 plain:1 plain+bold:5 plain:1 plain+bold:3 plain:1 plain+bold:4
+05 |  stands            │ under its header  | plain:2 plain+bold:6 plain:11 dim:3 plain+bold:5 plain:1 plain+bold:3 plain:1 plain+bold:6 plain:2
 06 |  ──────────────────┼───────────────────| plain:2 dim:38
-07 |  a code block      │ is guttered by its| plain:40
-08 |                    │ language's tag and| plain:40
-09 |                    │ highlighted by    | plain:40
-10 |                    │ syntect           | plain:40
+07 |  a code block      │ is guttered by its| plain:19 dim:3 plain:18
+08 |                    │ language's tag and| plain:19 dim:3 plain:18
+09 |                    │ highlighted by    | plain:19 dim:3 plain:18
+10 |                    │ syntect           | plain:19 dim:3 plain:18
 11 |                                        | plain:40
 12 |                                        | plain:40
 13 |                                        | plain:40

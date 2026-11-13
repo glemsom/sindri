@@ -3,11 +3,11 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 markdown-table at 80x24
-00 |  construct │ rendering                                                         | plain:80
+00 |  construct │ rendering                                                         | plain:2 plain+bold:9 dim:3 plain+bold:9 plain:57
 01 |  ──────────┼─────────────────────────────────────────────────                  | plain:2 dim:60 plain:18
-02 |  heading   │ bold, one blank row above                                         | plain:80
-03 |  table     │ columns joined by a bar, a rule under the header                  | plain:80
-04 |  code      │ a bar down its left and the language's tag                        | plain:80
+02 |  heading   │ bold, one blank row above                                         | plain:11 dim:3 plain:66
+03 |  table     │ columns joined by a bar, a rule under the header                  | plain:11 dim:3 plain:66
+04 |  code      │ a bar down its left and the language's tag                        | plain:11 dim:3 plain:66
 05 |                                                                                | plain:80
 06 |                                                                                | plain:80
 07 |                                                                                | plain:80

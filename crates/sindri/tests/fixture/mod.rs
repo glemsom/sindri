@@ -214,8 +214,9 @@ fn construct(text: &str) -> View {
 }
 
 fn headings() -> &'static str {
-    "# Markdown rendering\n\n## Headings, tables and highlighted code\n\n### A rule the \
-     fixtures hold\n\n#### A fourth level\n\n##### A fifth level\n\n###### A sixth level"
+    "# Markdown rendering\n\n## The scale of headings, two ruled and four not\n\n### A third \
+     level, muted and bold\n\n#### A fourth, muted and bare\n\n##### A fifth, dim and \
+     bold\n\n###### A sixth, dim and both"
 }
 
 fn lists() -> &'static str {
@@ -231,8 +232,9 @@ fn table() -> &'static str {
 }
 
 fn quoted() -> &'static str {
-    "> A fence still open while streaming renders as a code block, so a half-written \
-     diagram never costs a raster pass and never flickers while it is being typed."
+    "> ## A heading that keeps the bar\n>\n> A fence still open while streaming renders as a \
+     code block, so a half-written diagram never costs a raster pass and never flickers while \
+     it is being typed.\n>\n> - ### an item's heading, two columns further in"
 }
 
 fn code() -> &'static str {
