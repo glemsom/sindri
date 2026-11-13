@@ -11,6 +11,7 @@ use rustix::event::Timespec;
 use rustix::event::{PollFd, PollFlags, poll};
 use sindri::composer::{Outcome, Prompt, State};
 use sindri::decode::{Decoder, Event};
+use sindri::link;
 use sindri::palette::Palette;
 use sindri::pulse::{self, Pulse};
 use sindri::settings::persist;
@@ -106,12 +107,19 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
         named("TERM").as_deref(),
         named("TERM_PROGRAM").as_deref(),
     );
+    // Resolved once with the palette: a terminal that speaks no hyperlink is handed the words
+    // and no sequence, and nothing asks again on a key.
+    let places = link::speaks(
+        named("TERM").as_deref(),
+        named("TERM_PROGRAM").as_deref(),
+        named("VTE_VERSION").as_deref(),
+    );
     view.set_workspace(workspace.clone());
     // Read the way `launch` reads it, so the name `/skill:name` accepts and a name a run could
     // call come from one catalog.
     view.set_home(crate::launch::home());
     view.door(boot);
-    let mut canvas = match canvas(&terminal) {
+    let mut canvas = match canvas(&terminal, places) {
         Ok(canvas) => canvas,
         Err(error) => {
             return crate::refuse(&format!("the frame could not be painted: {error}"), SETUP);

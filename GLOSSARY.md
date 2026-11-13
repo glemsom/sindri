@@ -162,6 +162,17 @@ The line a look draws under the cells it is written in, in an ink of its own and
 will wear one, and a cell that carries one still reads back as its ink and its faces.
 _Avoid_: Rule (that one fills a row), decoration, border
 
+**Link**:
+A run of a row's cells that is a way to somewhere: the words are drawn as they are, and the
+**destination** it opens travels beside the frame — written by the backend that draws it — so no
+cell spends a column on one and a copy of the frame takes the words.
+_Avoid_: Hyperlink, URL, anchor
+
+**Destination**:
+Where a **link** goes: an address written around the run it covers as the terminal's own hyperlink,
+never as glyphs of the frame, and absent for a terminal nobody can vouch for.
+_Avoid_: Target, href, address
+
 **Palette**:
 The colours the seven inks, the three bands and the ramp a raised surface is drawn on, resolved once
 at boot from what the terminal says it can do: one design, spelled in truecolour, in ANSI, or not at

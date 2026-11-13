@@ -14,6 +14,22 @@ pub fn copy(text: &str) -> Vec<u8> {
     sequence
 }
 
+/// `OSC 8 ; ; <destination> ST`: the cells written after it are a way to somewhere until the
+/// same sequence with no destination closes them. A destination is words a wire wrote, so no
+/// glyph of it is written as part of the sequence it is carried in.
+pub fn link(destination: &str) -> Vec<u8> {
+    let mut sequence = Vec::from(&b"\x1b]8;;"[..]);
+    sequence.extend(
+        destination
+            .chars()
+            .filter(|glyph| !glyph.is_control())
+            .collect::<String>()
+            .bytes(),
+    );
+    sequence.extend_from_slice(b"\x1b\\");
+    sequence
+}
+
 /// `OSC 7501 ; <document> ST`, the document being the JSON `status.json` holds: a reader takes
 /// it whole after the single `;`, so a workspace named `weird;dir` cannot split it. Written
 /// unqueried and always, because a detection query needs a stdin read a filter does not do.
@@ -112,6 +128,29 @@ mod tests {
             copy("sindri"),
             b"\x1b]52;c;c2luZHJp\x1b\\".to_vec(),
             "OSC 52, the system clipboard, the words as base64, ST"
+        );
+    }
+
+    #[test]
+    fn a_link_leaves_as_the_sequence_that_opens_it_and_the_empty_one_that_closes_it() {
+        assert_eq!(
+            link("https://example.test/spec"),
+            b"\x1b]8;;https://example.test/spec\x1b\\".to_vec(),
+            "OSC 8, no params, the destination, ST"
+        );
+        assert_eq!(
+            link(""),
+            b"\x1b]8;;\x1b\\".to_vec(),
+            "and no destination at all, which closes the one before it"
+        );
+    }
+
+    #[test]
+    fn a_destination_that_carries_a_sequence_of_its_own_cannot_end_the_one_it_is_in() {
+        assert_eq!(
+            link("https://example.test/\x1b]8;;\x07evil"),
+            b"\x1b]8;;https://example.test/]8;;evil\x1b\\".to_vec(),
+            "a destination is words the wire wrote: no glyph of it ends the sequence that carries it"
         );
     }
 

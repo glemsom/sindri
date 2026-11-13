@@ -7,6 +7,7 @@ use ratatui::layout::Rect;
 
 use sindri::graphics::CellSize;
 use sindri::ink::{Ink, Look};
+use sindri::link::Links;
 use sindri::palette::{Band, Palette};
 use sindri::pen;
 use sindri::picture::Surface;
@@ -633,7 +634,7 @@ fn painted(row: &Row, cols: u16) -> Vec<(char, Look)> {
     let palette = Palette::TRUECOLOR;
     let area = Rect::new(0, 0, cols, 1);
     let mut buffer = Buffer::empty(area);
-    row.paint(area, &mut buffer, &palette);
+    row.paint(area, &mut buffer, &palette, &mut Links::none());
     (0..row.width())
         .map(|x| {
             let cell = buffer
@@ -814,5 +815,128 @@ fn a_fence_that_opens_a_live_answer_keeps_its_well_under_the_marker() {
     assert!(
         laid.len() > 1 && laid.iter().all(|band| *band == Some(Band::Well)),
         "the fence opens the answer, so every row of it sits in the well: {laid:?}"
+    );
+}
+
+/// A row is painted at the frame's own row and column, and what it names is laid there beside it.
+fn laid(row: &Row, area: Rect) -> (Buffer, Links) {
+    let mut buffer = Buffer::empty(area);
+    let mut links = Links::none();
+    row.paint(area, &mut buffer, &Palette::TRUECOLOR, &mut links);
+    (buffer, links)
+}
+
+#[test]
+fn a_run_of_a_row_that_names_a_destination_is_drawn_word_for_word_and_names_it_beside_the_frame() {
+    let row = Row::of([
+        (String::from("  "), Ink::Plain),
+        (String::from("the spec"), Ink::Muted),
+    ])
+    .linking(2, 8, "https://example.test/spec");
+
+    let (_, links) = laid(&row, Rect::new(0, 3, 40, 1));
+
+    assert_eq!(
+        links.at(3, 2),
+        Some("https://example.test/spec"),
+        "the run's first cell names the destination the frame writes before it"
+    );
+    assert_eq!(
+        links.at(3, 9),
+        Some("https://example.test/spec"),
+        "and so does its last"
+    );
+    assert_eq!(links.at(3, 10), None, "no cell past the run is a way there");
+    assert_eq!(
+        links.at(3, 1),
+        None,
+        "and the gutter before it is no way to anywhere"
+    );
+    assert_eq!(
+        row.width(),
+        10,
+        "the destination spent no column: the row is as wide as its words"
+    );
+}
+
+#[test]
+fn a_row_that_names_no_destination_is_drawn_as_it_was_and_lays_nothing() {
+    let row = Row::of([
+        (String::from("  "), Ink::Plain),
+        (String::from("keys"), Ink::Plain),
+    ]);
+
+    let (buffer, links) = laid(&row, Rect::new(0, 0, 40, 1));
+
+    assert!(
+        links.is_empty(),
+        "a row that names nothing leaves the frame no way to anywhere"
+    );
+    assert_eq!(
+        buffer.cell((2, 0)).expect("a cell of the row").symbol(),
+        "k",
+        "and its words are drawn where they always were"
+    );
+}
+
+#[test]
+fn a_run_wider_than_the_row_it_was_laid_on_names_nothing_on_the_row_below() {
+    let area = Rect::new(0, 0, 20, 2);
+    let mut buffer = Buffer::empty(area);
+    let mut links = Links::none();
+    let row = Row::of([(String::from("the spec"), Ink::Plain)]).linking(0, 80, "https://x.test/s");
+    row.paint(
+        Rect { height: 1, ..area },
+        &mut buffer,
+        &Palette::TRUECOLOR,
+        &mut links,
+    );
+    Row::of([(String::from("and its gate"), Ink::Plain)]).paint(
+        Rect {
+            y: 1,
+            height: 1,
+            ..area
+        },
+        &mut buffer,
+        &Palette::TRUECOLOR,
+        &mut links,
+    );
+
+    assert_eq!(links.at(0, 18), Some("https://x.test/s"));
+    assert_eq!(
+        links.at(0, 19),
+        Some("https://x.test/s"),
+        "the run covers every cell of the row it was laid on, to its last"
+    );
+    assert_eq!(
+        links.at(1, 0),
+        None,
+        "and no cell of the row below it is a way anywhere: a run is one row's, and a wrap is \
+         the next row's own name"
+    );
+}
+
+#[test]
+fn a_row_set_under_a_gutter_moves_the_run_it_names_with_its_words() {
+    let row = Row::of([(String::from("the spec"), Ink::Plain)])
+        .linking(0, 8, "https://example.test/spec")
+        .indented("│ ", Ink::Dim);
+
+    let (buffer, links) = laid(&row, Rect::new(0, 0, 40, 1));
+
+    assert_eq!(
+        buffer.cell((0, 0)).expect("a cell of the row").symbol(),
+        "│",
+        "the gutter is the row's first column"
+    );
+    assert_eq!(
+        links.at(0, 2),
+        Some("https://example.test/spec"),
+        "and the way begins where the words it covers do"
+    );
+    assert_eq!(
+        links.at(0, 1),
+        None,
+        "never on the gutter the words were moved past"
     );
 }

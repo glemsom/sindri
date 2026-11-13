@@ -23,6 +23,7 @@ use crate::graphics::CellSize;
 use crate::ink::{Ink, Look};
 use crate::keys::{Act, Mode, Stack};
 use crate::ledger::{Boot, Facts, Rail, Share};
+use crate::link::Links;
 use crate::mark::{Cell, Mark, Span};
 use crate::models::Models;
 use crate::palette::{Band, Palette};
@@ -112,6 +113,9 @@ pub struct View {
     pictures: Pictures,
     cell_size: CellSize,
     palette: Palette,
+    /// The destinations this frame names: what travels beside its cells, never in them, because
+    /// no cell carries one.
+    links: Links,
 }
 
 /// Whether a frame is drawn with Sindri's face over its rail.
@@ -558,6 +562,11 @@ impl View {
         self.composer.set_state(state);
     }
 
+    /// The destinations this frame names, laid on the rows it drew.
+    pub fn links(&self) -> &Links {
+        &self.links
+    }
+
     /// Hands the frame its newest answer's marker. The elapsed time is the caller's, because a
     /// frame holds no clock, and a settled marker keeps the number the run stopped at.
     pub fn set_pulse(&mut self, pulse: Option<Pulse>) {
@@ -568,6 +577,7 @@ impl View {
     /// transcript is, so a resize invalidates it here and the same pass reflows; the
     /// composer's rows are measured when the frame is drawn and never cached.
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) {
+        self.links = Links::none();
         pen::claim(buffer, area, self.palette.ground(None));
         self.composer.set_room(View::room(area.width));
         let bands = bands(area, self.composer.rows(), self.queue.rows());
@@ -594,7 +604,7 @@ impl View {
         }
         self.transcript(share.transcript, buffer);
         if self.door {
-            door::paint(share.transcript, buffer, &self.palette);
+            door::paint(share.transcript, buffer, &self.palette, &mut self.links);
         }
         self.queue_band(bands.queue, buffer);
         self.composer_band(bands.composer, buffer);
@@ -605,6 +615,8 @@ impl View {
         let Some((name, leaves)) = screen.labels() else {
             return;
         };
+        // The band under a card takes no key, so the frame under it is no way to anywhere.
+        self.links = Links::none();
         let body = card::paint(area, name, leaves, buffer, &self.palette);
         self.paint_screen(screen, body, buffer);
     }
@@ -659,6 +671,7 @@ impl View {
                     },
                     buffer,
                     &self.palette,
+                    &mut self.links,
                 );
                 // Placed after the row's words, because it is drawn over them: a terminal that
                 // places no picture leaves the reader the words.

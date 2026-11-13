@@ -8,6 +8,7 @@ use sindri_core::records::Entry;
 use sindri_core::run::Exit;
 
 use crate::ink::{Ink, Look};
+use crate::link::{Link, Links};
 use crate::markdown;
 use crate::palette::{Band, Palette};
 use crate::pen::{self, Clip};
@@ -33,6 +34,9 @@ const HAIRLINE: char = '─';
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Row {
     spans: Vec<(String, Look)>,
+    /// The runs of this row's cells that are ways to somewhere, measured from its left edge: a
+    /// destination is no cell's own, so it is kept beside the words and written by the frame.
+    links: Vec<Link>,
     /// The picture this row stands on, when it is the first row of a block one is drawn
     /// over: the placement goes to the terminal, the row's words are what a copy takes.
     picture: Option<picture::Picture>,
@@ -55,6 +59,7 @@ impl Row {
                 .map(|(text, look)| (text, look.into()))
                 .filter(|(text, _)| !text.is_empty())
                 .collect(),
+            links: Vec::new(),
             picture: None,
             band: None,
         }
@@ -83,9 +88,22 @@ impl Row {
     pub fn blank() -> Row {
         Row {
             spans: Vec::new(),
+            links: Vec::new(),
             picture: None,
             band: None,
         }
+    }
+
+    /// The run of this row's cells that begins `left` columns in and is `width` columns wide is a
+    /// way to `destination`: the words are drawn as they are, and the frame writes the way around
+    /// them. A row that names none is drawn as it was.
+    pub fn linking(mut self, left: u16, width: u16, destination: impl Into<String>) -> Row {
+        self.links.push(Link::new(left, width, destination));
+        self
+    }
+
+    pub(crate) fn links(&self) -> &[Link] {
+        &self.links
     }
 
     pub fn width(&self) -> u16 {
@@ -106,9 +124,11 @@ impl Row {
         let mut spans: Vec<(String, Look)> = Vec::with_capacity(self.spans.len() + 1);
         spans.push((String::from(gutter), Look::plain(ink)));
         spans.extend(self.spans.iter().cloned());
+        let shifts = pen::cells(gutter);
         Row {
             picture: self.picture.clone(),
             band: self.band,
+            links: self.links.iter().map(|link| link.shifted(shifts)).collect(),
             ..Row::of(spans)
         }
     }
@@ -117,11 +137,12 @@ impl Row {
         self.spans.iter().map(|(text, _)| text.as_str()).collect()
     }
 
-    pub fn paint(&self, area: Rect, buffer: &mut Buffer, palette: &Palette) {
+    pub fn paint(&self, area: Rect, buffer: &mut Buffer, palette: &Palette, links: &mut Links) {
         if let Some(band) = self.band {
             pen::claim(buffer, area, palette.ground(Some(band)));
         }
         pen::write(buffer, area, &self.spans, Clip::Edge, palette);
+        links.lay(area.y, area.x, &self.links);
     }
 }
 
@@ -202,8 +223,14 @@ pub(crate) fn answer_on(text: &str, cols: u16, head: Option<&Head>, surface: &Su
             .collect();
         spans.push((String::from(" "), Look::plain(Ink::Plain)));
         spans.extend(first.spans().iter().cloned());
+        let shifts = head.width().saturating_add(1);
         laid.push(Row {
             band: first.band,
+            links: first
+                .links()
+                .iter()
+                .map(|link| link.shifted(shifts))
+                .collect(),
             ..Row::of(spans)
         });
     }

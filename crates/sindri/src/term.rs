@@ -8,12 +8,17 @@ use std::os::fd::{AsFd, BorrowedFd};
 use std::panic::{self, PanicHookInfo};
 use std::sync::{Mutex, MutexGuard, Once, OnceLock};
 
-use ratatui::backend::CrosstermBackend;
+use ratatui::backend::{Backend as RatatuiBackend, ClearType, CrosstermBackend, WindowSize};
+use ratatui::buffer::Cell;
+use ratatui::layout::{Position, Size};
 use rustix::termios::{InputModes, OptionalActions, Termios, tcgetattr, tcsetattr};
 use sindri::graphics::CellSize;
+use sindri::link::Links;
 use sindri::picture;
 use sindri::pictures::Pictures;
 use sindri::view::View;
+
+use crate::osc;
 
 /// Takes the alternate screen with the cursor hidden, so the first frame is not drawn around a
 /// caret the last shell left, asks for bracketed paste so a paste is one edit, and pushes the key
@@ -81,37 +86,151 @@ impl Drop for Screen {
 
 /// The screen frames are painted through, taken once: a canvas that remembered nothing would
 /// rewrite every cell of the frame on every key.
-pub(crate) type Canvas<'a> = ratatui::Terminal<CrosstermBackend<&'a File>>;
+pub(crate) type Canvas<'a> = ratatui::Terminal<Backend<&'a File>>;
 
-pub(crate) fn canvas(terminal: &Terminal) -> io::Result<Canvas<'_>> {
-    ratatui::Terminal::new(CrosstermBackend::new(&terminal.screen))
+/// Writes a frame to a terminal, with each destination a run of its cells names opened before the
+/// run's first cell and closed after its last. A cell is a glyph and a look and has no room for a
+/// destination, so the frame's ways travel beside it and are written here.
+pub(crate) struct Backend<W: Write> {
+    screen: CrosstermBackend<W>,
+    links: Links,
+    places: bool,
 }
 
-/// The same canvas at a size already known, so nothing is asked of the operating system.
+impl<W: Write> Backend<W> {
+    /// A terminal that places no hyperlink is handed the words and no sequence: `places` is what
+    /// the launch was told, and nothing here asks again.
+    fn new(screen: W, places: bool) -> Backend<W> {
+        Backend {
+            screen: CrosstermBackend::new(screen),
+            links: Links::none(),
+            places,
+        }
+    }
+
+    /// The destinations the frame about to be written names.
+    fn links(&mut self, links: &Links) {
+        self.links.clone_from(links);
+    }
+
+    /// One run of cells and the destination it names: opened before the first of them and closed
+    /// after the last, so no cell past the run is a way to anywhere.
+    fn run(&mut self, destination: Option<&str>, cells: &[(u16, u16, &Cell)]) -> io::Result<()> {
+        if let Some(destination) = destination {
+            self.screen.write_all(&osc::link(destination))?;
+        }
+        self.screen.draw(cells.iter().copied())?;
+        if destination.is_some() {
+            self.screen.write_all(&osc::link(""))?;
+        }
+        Ok(())
+    }
+}
+
+impl<W: Write> RatatuiBackend for Backend<W> {
+    /// The cells are written in runs of one destination, so two runs naming one destination are
+    /// one link and a run naming none closes the one before it. A frame never leaves a destination
+    /// open: what follows the frame would be a way to it.
+    fn draw<'a, I>(&mut self, content: I) -> io::Result<()>
+    where
+        I: Iterator<Item = (u16, u16, &'a Cell)>,
+    {
+        let mut cells: Vec<(u16, u16, &Cell)> = Vec::new();
+        let mut naming: Option<String> = None;
+        for (x, y, cell) in content {
+            let destination = match self.places {
+                true => self.links.at(y, x),
+                false => None,
+            };
+            if destination != naming.as_deref() {
+                let next = destination.map(String::from);
+                let run = std::mem::take(&mut cells);
+                self.run(naming.as_deref(), &run)?;
+                naming = next;
+            }
+            cells.push((x, y, cell));
+        }
+        let run = std::mem::take(&mut cells);
+        self.run(naming.as_deref(), &run)
+    }
+
+    fn hide_cursor(&mut self) -> io::Result<()> {
+        self.screen.hide_cursor()
+    }
+
+    fn show_cursor(&mut self) -> io::Result<()> {
+        self.screen.show_cursor()
+    }
+
+    fn get_cursor_position(&mut self) -> io::Result<Position> {
+        self.screen.get_cursor_position()
+    }
+
+    fn set_cursor_position<P: Into<Position>>(&mut self, position: P) -> io::Result<()> {
+        self.screen.set_cursor_position(position)
+    }
+
+    fn clear(&mut self) -> io::Result<()> {
+        self.screen.clear()
+    }
+
+    fn size(&self) -> io::Result<Size> {
+        self.screen.size()
+    }
+
+    fn window_size(&mut self) -> io::Result<WindowSize> {
+        self.screen.window_size()
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        RatatuiBackend::flush(&mut self.screen)
+    }
+
+    fn append_lines(&mut self, count: u16) -> io::Result<()> {
+        self.screen.append_lines(count)
+    }
+
+    fn clear_region(&mut self, clear: ClearType) -> io::Result<()> {
+        self.screen.clear_region(clear)
+    }
+}
+
+pub(crate) fn canvas(terminal: &Terminal, places: bool) -> io::Result<Canvas<'_>> {
+    ratatui::Terminal::new(Backend::new(&terminal.screen, places))
+}
+
+/// The same canvas at a size already known, so nothing is asked of the operating system:
 /// crossterm answers a size question by opening `/dev/tty` and, with none to open, by running
-/// `tput`, whose `fork` a suite's parallel threads can have refused for want of process slots.
+/// `tput`, whose `fork` a suite's threads can have refused. A test's canvas places no hyperlink.
 #[cfg(test)]
 pub(crate) fn canvas_at(
     terminal: &Terminal,
     area: ratatui::layout::Rect,
 ) -> io::Result<Canvas<'_>> {
     ratatui::Terminal::with_options(
-        CrosstermBackend::new(&terminal.screen),
+        Backend::new(&terminal.screen, false),
         ratatui::TerminalOptions {
             viewport: ratatui::Viewport::Fixed(area),
         },
     )
 }
 
-/// Paints the frame the view holds now, and puts the terminal's cursor where the view says.
+/// Paints the frame the view holds now, and puts the terminal's cursor where the view says. The
+/// buffer is painted first, because the ways a frame names are known only after it is painted and
+/// the backend must hold them before the frame is written.
 pub(crate) fn paint(canvas: &mut Canvas<'_>, view: &mut View) -> io::Result<()> {
-    canvas.draw(|frame| {
-        view.paint(frame.area(), frame.buffer_mut());
-        if let Some(at) = view.cursor(frame.area()) {
-            frame.set_cursor_position(at);
-        }
-    })?;
-    Ok(())
+    canvas.autoresize()?;
+    let area = canvas.current_buffer_mut().area;
+    view.paint(area, canvas.current_buffer_mut());
+    let cursor = view.cursor(area);
+    canvas.backend_mut().links(view.links());
+    canvas
+        .draw(|frame| {
+            if let Some(at) = cursor {
+                frame.set_cursor_position(at);
+            }
+        })
+        .map(|_| ())
 }
 
 /// What the terminal is to be given back as: the state raw mode replaced and the two fds it is
@@ -256,11 +375,24 @@ pub(crate) mod pty {
             }
         }
 
+        /// Every byte the terminal has been handed: what the first read waits for, and then
+        /// everything else it says, because one read of a pseudo-terminal is as much as had
+        /// arrived and a frame is several writes.
         pub(crate) fn drawn(&mut self) -> String {
-            let mut drawn = [0u8; 4096];
-            let mut master = &self.master;
-            let count = master.read(&mut drawn).expect("the terminal's screen");
-            String::from_utf8_lossy(&drawn[..count]).into_owned()
+            let mut drawn = Vec::new();
+            loop {
+                let mut chunk = [0u8; 4096];
+                let mut master = &self.master;
+                let count = master.read(&mut chunk).expect("the terminal's screen");
+                if count == 0 {
+                    break;
+                }
+                drawn.extend_from_slice(&chunk[..count]);
+                if self.silent() {
+                    break;
+                }
+            }
+            String::from_utf8_lossy(&drawn).into_owned()
         }
 
         pub(crate) fn resize(&self, cols: u16, rows: u16, xpixel: u16, ypixel: u16) {
@@ -297,7 +429,13 @@ mod tests {
 
     use std::panic;
 
+    use ratatui::buffer::Buffer;
+    use ratatui::layout::Rect;
     use rustix::termios::LocalModes;
+    use sindri::ink::Ink;
+    use sindri::link::{Link, Links};
+    use sindri::palette::Palette;
+    use sindri::pen::{self, Clip};
 
     use crate::term::pty::Pty;
 
@@ -324,6 +462,213 @@ mod tests {
             !silent.pictures().draws(),
             "and a terminal that names no protocol is handed none, which is the words of a \
              picture and no placement"
+        );
+    }
+
+    /// A frame of `width` by `height` cells, the words each of `rows` holds, and the destinations
+    /// it names, drawn through a pseudo-terminal of this process's own: the bytes the terminal at
+    /// the far end is handed.
+    fn drawn(width: u16, height: u16, rows: &[(u16, &str)], links: Links, places: bool) -> String {
+        let area = Rect::new(0, 0, width, height);
+        let mut buffer = Buffer::empty(area);
+        for (y, words) in rows {
+            pen::write(
+                &mut buffer,
+                Rect {
+                    y: *y,
+                    height: 1,
+                    ..area
+                },
+                &[(*words, Ink::Plain)],
+                Clip::Edge,
+                &Palette::TRUECOLOR,
+            );
+        }
+        let mut pty = Pty::open();
+        let mut backend = Backend::new(
+            pty.slave
+                .try_clone()
+                .expect("a second handle on the screen"),
+            places,
+        );
+        backend.links(&links);
+        backend
+            .draw(Buffer::empty(area).diff(&buffer).into_iter())
+            .expect("a drawn row");
+        backend.flush().expect("a written row");
+        drop(backend);
+        pty.drawn()
+    }
+
+    /// The ways `links` name, laid at frame row 0: how a row hands the frame what it names.
+    fn ways(links: &[Link]) -> Links {
+        let mut ways = Links::none();
+        ways.lay(0, 0, links);
+        ways
+    }
+
+    /// What a terminal reads of a frame as the ways it opens and closes and the words it writes:
+    /// every other sequence is dropped, because where a way begins and ends is what this proves.
+    fn spoken(drawn: &str) -> Vec<String> {
+        let mut said = Vec::new();
+        let mut words = String::new();
+        let mut rest = drawn;
+        while let Some(at) = rest.find('\x1b') {
+            words.push_str(&rest[..at]);
+            rest = &rest[at..];
+            let (sequence, tail) = escaped(rest);
+            rest = tail;
+            if let Some(destination) = sequence
+                .strip_prefix("\x1b]8;;")
+                .and_then(|said| said.strip_suffix("\x1b\\"))
+            {
+                if !words.is_empty() {
+                    said.push(std::mem::take(&mut words));
+                }
+                said.push(match destination.is_empty() {
+                    true => String::from("closes"),
+                    false => format!("opens {destination}"),
+                });
+            }
+        }
+        words.push_str(rest);
+        if !words.is_empty() {
+            said.push(words);
+        }
+        said
+    }
+
+    /// One escape sequence and the bytes after it: an OSC runs to its `ST`, a CSI to the byte that
+    /// ends it, and anything else is the two bytes it was written as.
+    fn escaped(bytes: &str) -> (&str, &str) {
+        let end = match bytes.as_bytes().get(1) {
+            Some(b']') => bytes.find("\x1b\\").map_or(bytes.len(), |at| at + 2),
+            Some(b'[') => bytes
+                .bytes()
+                .position(|byte| (0x40..=0x7e).contains(&byte) && byte != b'[')
+                .map_or(bytes.len(), |at| at + 1),
+            _ => 2.min(bytes.len()),
+        };
+        bytes.split_at(end)
+    }
+
+    #[test]
+    fn a_run_that_names_a_destination_is_written_around_the_cells_it_covers() {
+        let links = ways(&[Link::new(4, 4, "https://example.test/spec")]);
+
+        assert_eq!(
+            spoken(&drawn(40, 1, &[(0, "the spec is here")], links, true)),
+            [
+                "the ",
+                "opens https://example.test/spec",
+                "spec",
+                "closes",
+                " is here"
+            ],
+            "the way opens before the run's first cell and closes after its last"
+        );
+    }
+
+    #[test]
+    fn two_runs_that_name_one_destination_are_one_link() {
+        let links = ways(&[
+            Link::new(0, 3, "https://example.test/spec"),
+            Link::new(3, 5, "https://example.test/spec"),
+        ]);
+
+        assert_eq!(
+            spoken(&drawn(40, 1, &[(0, "one spec")], links, true)),
+            ["opens https://example.test/spec", "one spec", "closes"],
+            "two runs of one frame naming one destination are one way to it"
+        );
+    }
+
+    #[test]
+    fn a_run_that_names_no_destination_closes_the_one_before_it() {
+        let links = ways(&[Link::new(0, 3, "https://example.test/spec")]);
+
+        assert_eq!(
+            spoken(&drawn(40, 1, &[(0, "the spec is here")], links, true)),
+            [
+                "opens https://example.test/spec",
+                "the",
+                "closes",
+                " spec is here"
+            ],
+            "a cell the run does not cover is no way to anywhere, so the way before it is closed"
+        );
+    }
+
+    #[test]
+    fn a_run_wider_than_the_row_it_was_laid_on_carries_nothing_to_the_row_below() {
+        let mut links = Links::none();
+        links.lay(0, 0, &[Link::new(0, 80, "https://example.test/spec")]);
+
+        assert_eq!(
+            spoken(&drawn(
+                12,
+                2,
+                &[(0, "the spec"), (1, "its gate")],
+                links,
+                true
+            )),
+            [
+                "opens https://example.test/spec",
+                "the spec",
+                "closes",
+                "its gate"
+            ],
+            "a run is one row's: the row below it is drawn with no destination at all"
+        );
+    }
+
+    /// A frame written through `paint`, and the same frame written through the canvas's own draw:
+    /// what the launch paints is what a reader would have seen from the library it draws through.
+    fn written(pty: &Pty, launch: bool) {
+        let terminal =
+            Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
+        let mut canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
+        let mut view = View::boot();
+        match launch {
+            true => {
+                paint(&mut canvas, &mut view).expect("a painted frame");
+            }
+            false => {
+                canvas
+                    .draw(|frame| {
+                        view.paint(frame.area(), frame.buffer_mut());
+                        if let Some(at) = view.cursor(frame.area()) {
+                            frame.set_cursor_position(at);
+                        }
+                    })
+                    .expect("a drawn frame");
+            }
+        }
+    }
+
+    #[test]
+    fn the_frame_the_launch_paints_is_the_frame_the_canvas_draws() {
+        let mut launch = Pty::open();
+        let mut canvas = Pty::open();
+        written(&launch, true);
+        written(&canvas, false);
+
+        assert_eq!(
+            launch.drawn(),
+            canvas.drawn(),
+            "the cursor the view hands the canvas is placed, and the frame beside it is the frame"
+        );
+    }
+
+    #[test]
+    fn a_terminal_that_places_no_hyperlink_is_handed_the_words_and_no_sequence() {
+        let links = ways(&[Link::new(0, 16, "https://example.test/spec")]);
+        let handed = drawn(40, 1, &[(0, "the spec is here")], links, false);
+
+        assert_eq!(spoken(&handed), ["the spec is here"]);
+        assert!(
+            !handed.contains("\x1b]8;"),
+            "and no sequence at all: {handed:?}"
         );
     }
 
