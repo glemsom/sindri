@@ -121,6 +121,19 @@ impl Way {
 /// `OSC 8`, and no guess at a terminal that may not, because a destination is never drawn. A VTE
 /// terminal says which version it is, and the version that learned `OSC 8` is the oldest that does.
 pub fn speaks(term: Option<&str>, program: Option<&str>, vte: Option<&str>) -> bool {
+    named(term, program)
+        || vte.is_some_and(|version| {
+            version
+                .trim()
+                .parse::<u32>()
+                .is_ok_and(|version| version >= OLDEST_VTE)
+        })
+}
+
+/// Whether a terminal names itself after one this product can vouch for: the one read every
+/// capability is asked from, because what a terminal can do is said by the name it gives itself
+/// and never guessed at one that says nothing.
+pub fn named(term: Option<&str>, program: Option<&str>) -> bool {
     let names_one = |word: &str| {
         let word = word.to_ascii_lowercase();
         [
@@ -137,14 +150,7 @@ pub fn speaks(term: Option<&str>, program: Option<&str>, vte: Option<&str>) -> b
         .iter()
         .any(|name| word.contains(name))
     };
-    term.is_some_and(names_one)
-        || program.is_some_and(names_one)
-        || vte.is_some_and(|version| {
-            version
-                .trim()
-                .parse::<u32>()
-                .is_ok_and(|version| version >= OLDEST_VTE)
-        })
+    term.is_some_and(names_one) || program.is_some_and(names_one)
 }
 
 #[cfg(test)]

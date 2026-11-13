@@ -11,7 +11,7 @@ use sindri_core::tools::FrontEnd;
 
 use crate::cli::{Cli, Format};
 use crate::launch::{Launch, Turns};
-use crate::osc::Teller;
+use crate::window::Window;
 
 /// The exit code for a run that had nothing to run *with*, or an answer it could not write.
 const SETUP: u8 = 3;
@@ -83,7 +83,8 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
     };
     let figure = launch.figure();
     let max_turns = launch.max_turns();
-    let mut telling = Teller::new(io::stderr(), tells(config), &figure.workspace);
+    // A filter took no screen: its stderr carries the status document and no window.
+    let mut telling = Window::new(io::stderr(), tells(config), &figure.workspace, false);
     quietly(telling.say(Told::Asking { turn: 1 }));
 
     narrate(
@@ -159,7 +160,7 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
 struct Says<'a> {
     cli: &'a Cli,
     turns: u32,
-    telling: &'a mut Teller<io::Stderr>,
+    telling: &'a mut Window<io::Stderr>,
 }
 
 impl Turns for Says<'_> {

@@ -14,6 +14,7 @@ mod sessions; // reads past runs back
 mod signal; // the one door an outside `SIGINT` comes through
 mod term; // the terminal as a resource: raw mode, the alternate screen, the panic restore, the canvas, and the telling
 mod tui; // the launch: the loop, a key's outcome, where a prompt starts a run, and the endings
+mod window; // the terminal outside the frame: its title, its mark, its notification and its focus
 
 use std::process::ExitCode;
 

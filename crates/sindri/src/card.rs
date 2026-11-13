@@ -33,14 +33,21 @@ const SIDE: char = '│';
 /// Paints a card named `name`, whose key that leaves is `leaves`, into `area`, and returns the band
 /// the screen inside it draws in: the card's columns less its border and inset, and its rows less
 /// its border.
-pub fn paint(area: Rect, name: &str, leaves: &str, buffer: &mut Buffer, palette: &Palette) -> Rect {
+pub fn paint(
+    area: Rect,
+    name: &str,
+    leaves: &str,
+    buffer: &mut Buffer,
+    edge: Look,
+    palette: &Palette,
+) -> Rect {
     if area.width < NARROW {
-        return bleeding(area, name, buffer, palette);
+        return bleeding(area, name, buffer, edge, palette);
     }
     // A card that is the whole frame has no gutter left to grey, and a scrim painted under it
     // would be covered in the same pass.
     scrim(area, buffer, palette);
-    boxed(area, name, leaves, buffer, palette)
+    boxed(area, name, leaves, buffer, edge, palette)
 }
 
 /// Dims every cell of the frame a card is opened from, so no glyph behind it is read at the
@@ -56,7 +63,14 @@ fn grounded(buffer: &mut Buffer, rect: Rect, palette: &Palette) {
     pen::ground(buffer, rect, palette.ground(None));
 }
 
-fn boxed(area: Rect, name: &str, leaves: &str, buffer: &mut Buffer, palette: &Palette) -> Rect {
+fn boxed(
+    area: Rect,
+    name: &str,
+    leaves: &str,
+    buffer: &mut Buffer,
+    edge: Look,
+    palette: &Palette,
+) -> Rect {
     let width = area.width.min(WIDTH);
     let card = Rect {
         x: area.x + (area.width - width) / 2,
@@ -66,14 +80,8 @@ fn boxed(area: Rect, name: &str, leaves: &str, buffer: &mut Buffer, palette: &Pa
     grounded(buffer, card, palette);
 
     let last = card.bottom() - 1;
-    pen::rule(
-        buffer,
-        Rect { height: 1, ..card },
-        RULE,
-        palette.accent_edge(),
-        palette,
-    );
-    headed(buffer, card, name, palette);
+    pen::rule(buffer, Rect { height: 1, ..card }, RULE, edge, palette);
+    headed(buffer, card, name, edge, palette);
     if area.height > 1 {
         for y in card.y + 1..last {
             sides(buffer, card, y, palette);
@@ -91,10 +99,10 @@ fn boxed(area: Rect, name: &str, leaves: &str, buffer: &mut Buffer, palette: &Pa
 
 /// The card a frame too narrow or too short to hold one is drawn as: the title row, and the body it
 /// heads at the card's own inset, with no border to spend columns and rows on.
-fn bleeding(area: Rect, name: &str, buffer: &mut Buffer, palette: &Palette) -> Rect {
+fn bleeding(area: Rect, name: &str, buffer: &mut Buffer, edge: Look, palette: &Palette) -> Rect {
     grounded(buffer, area, palette);
     let head = Rect { height: 1, ..area };
-    pen::rule(buffer, head, RULE, palette.accent_edge(), palette);
+    pen::rule(buffer, head, RULE, edge, palette);
     labelled(buffer, head, name, palette);
     Rect {
         x: area.x.saturating_add(INSET),
@@ -104,9 +112,9 @@ fn bleeding(area: Rect, name: &str, buffer: &mut Buffer, palette: &Palette) -> R
     }
 }
 
-fn headed(buffer: &mut Buffer, card: Rect, name: &str, palette: &Palette) {
+fn headed(buffer: &mut Buffer, card: Rect, name: &str, edge: Look, palette: &Palette) {
     labelled(buffer, Rect { height: 1, ..card }, name, palette);
-    corners(buffer, card, card.y, TOP, palette.accent_edge(), palette);
+    corners(buffer, card, card.y, TOP, edge, palette);
 }
 
 fn corners(

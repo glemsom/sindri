@@ -40,12 +40,13 @@ fn a_copy_leaves_the_terminal_by_osc_52_and_asks_no_clipboard_utility() {
     let mut config = sindri_core::config::Config::default();
     let environment = std::collections::BTreeMap::new();
     let wake = Arc::new(Wake::open().expect("a wake"));
-    let mut telling = Teller::new(
+    let mut telling = Window::new(
         pty.slave
             .try_clone()
             .expect("a second handle on the terminal"),
         true,
         std::path::Path::new("/work/sindri"),
+        false,
     );
     let mut running = None;
     let mut asking = None;
@@ -122,12 +123,13 @@ fn enter_at_the_settings_modal_writes_the_file_and_the_next_prompt_runs_on_it() 
     let mut view = View::boot();
     view.open_settings(&config);
     let wake = Arc::new(Wake::open().expect("a wake"));
-    let mut telling = Teller::new(
+    let mut telling = Window::new(
         pty.slave
             .try_clone()
             .expect("a second handle on the terminal"),
         true,
         std::path::Path::new("/work/sindri"),
+        false,
     );
     let mut running = None;
     let mut asking = None;
@@ -248,12 +250,13 @@ fn a_settings_visit_that_turns_the_face_off_repaints_the_frame_it_leaves_without
         Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
     let mut canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
     let wake = Arc::new(Wake::open().expect("a wake"));
-    let mut telling = Teller::new(
+    let mut telling = Window::new(
         pty.slave
             .try_clone()
             .expect("a second handle on the terminal"),
         true,
         std::path::Path::new("/work/sindri"),
+        false,
     );
     let mut running = None;
     let mut asking = None;

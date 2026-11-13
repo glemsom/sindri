@@ -75,6 +75,11 @@ const ASK_KEYS: &[u8] = b"\x1b[>1u";
 /// `CSI < u` pops that push, so the shell gets back the terminal it lent.
 const GIVE_BACK_KEYS: &[u8] = b"\x1b[<u";
 
+/// `CSI ? 1004 h`: the focus report is asked for when the screen is taken, and `l` gives it up.
+const ASK_FOCUS: &[u8] = b"\x1b[?1004h";
+
+const GIVE_UP_FOCUS: &[u8] = b"\x1b[?1004l";
+
 const SERVED: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_models.json");
 
@@ -444,6 +449,17 @@ impl Session {
         Session::starting(command)
     }
 
+    /// A launch on a terminal that names itself, which is the whole of what a terminal that takes
+    /// the window's sequences is read from.
+    fn named(ground: &Ground, wire: &Wire, term: &str) -> (Session, Pty, Drawn) {
+        let mut command = ground.command();
+        command
+            .arg("--yolo-unsafe")
+            .env("SINDRI_BASE_URL", wire.base_url())
+            .env("TERM", term);
+        Session::starting(command)
+    }
+
     fn starting(mut command: Command) -> (Session, Pty, Drawn) {
         let pty = Pty::open();
         let child = command
@@ -590,6 +606,104 @@ fn the_key_protocol_is_asked_for_before_the_first_frame_and_given_back_first_on_
         matches!((given_back, screen), (Some(given_back), Some(screen)) if given_back < screen),
         "and it is given back first: the screen goes after the protocol, and these came at \
          {given_back:?} and {screen:?}"
+    );
+}
+
+#[test]
+fn a_terminal_that_names_itself_wears_the_title_is_asked_for_its_focus_and_gives_it_up() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::named(&ground, &wire, "xterm-kitty");
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    assert!(
+        drawn.wait_for("\x1b]2;workspace \u{2014} idle\x1b\\".as_bytes()),
+        "the title names the workspace the launch is in and the state it is in: {:?}",
+        drawn.text()
+    );
+    assert!(
+        drawn.wait_for(ASK_FOCUS),
+        "the terminal is asked which of its windows is being read: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+    assert!(
+        drawn.wait_for(GIVE_UP_FOCUS),
+        "and gives the report up on the way out: {:?}",
+        drawn.text()
+    );
+}
+
+/// The notification bodies on the wire: the progress mark shares their sequence and is told apart
+/// by the state digit after it.
+fn notifications(bytes: &[u8]) -> usize {
+    let text = text(bytes);
+    text.match_indices("\x1b]9;")
+        .filter(|(at, _)| !text[at + 4..].starts_with("4;"))
+        .count()
+}
+
+#[test]
+fn a_run_that_ends_while_nobody_is_looking_raises_one_notification() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::named(&ground, &wire, "xterm-kitty");
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask(&mut pty, &drawn, &wire);
+    // The terminal says nobody is looking, which is the report no key can stand in for.
+    pty.type_bytes(b"\x1b[O");
+    wire.release();
+    answered(&drawn);
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+    let bytes = drawn.bytes();
+    assert_eq!(
+        notifications(&bytes),
+        1,
+        "one notification for the run that ended while the window was unfocused: {:?}",
+        text(&bytes)
+    );
+    assert!(
+        contains(&bytes, b"\x1b]9;workspace: answered\x1b\\"),
+        "and it says what the run did, in the workspace it did it in: {:?}",
+        text(&bytes)
+    );
+}
+
+#[test]
+fn a_run_a_reader_watches_end_raises_no_notification() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::named(&ground, &wire, "xterm-kitty");
+
+    assert!(
+        drawn.wait_for(b"Enter send"),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask(&mut pty, &drawn, &wire);
+    wire.release();
+    answered(&drawn);
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+    assert_eq!(
+        notifications(&drawn.bytes()),
+        0,
+        "a run the reader watched end is a run they saw end: {:?}",
+        drawn.text()
     );
 }
 
