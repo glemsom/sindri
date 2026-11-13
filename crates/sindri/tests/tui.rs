@@ -660,9 +660,11 @@ fn a_run_that_ends_while_nobody_is_looking_raises_one_notification() {
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
-    ask(&mut pty, &drawn, &wire);
-    // The terminal says nobody is looking, which is the report no key can stand in for.
+    // The terminal says nobody is looking, which is the report no key can stand in for: typed
+    // before the prompt, because a report and a stop that land in one pass are answered in the
+    // loop's own order, and a test may not lean on which of the two is read first.
     pty.type_bytes(b"\x1b[O");
+    ask(&mut pty, &drawn, &wire);
     wire.release();
     answered(&drawn);
 

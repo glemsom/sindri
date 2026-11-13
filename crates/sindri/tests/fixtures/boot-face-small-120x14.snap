@@ -1,0 +1,19 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+boot-face-small at 120x14
+00 |                                                                            wire      anthropic                         | plain:76 dim:10 plain:34
+01 |                                                                            model     claude-sonnet-4-5                 | plain:76 dim:10 plain:34
+02 |     sindri                                                                                                             | plain:5 accent+bold:6 plain:109
+03 |                                                                            workspace /srv/workspace                    | plain:76 dim:10 plain:34
+04 |     An AI agent that is a Unix filter and a terminal UI over one core.     branch    main                              | plain:76 dim:10 plain:34
+05 |                                                                                                                        | plain:120
+06 |     /model     ask the wire what it serves, and name the one to run        sandbox   bwrap                             | plain:5 accent:11 dim:52 plain:8 dim:10 plain:34
+07 |     /settings  the keys the config holds, and the value each is set to                                                 | plain:5 accent:11 dim:55 plain:49
+08 |     /stats     the facts the rail is too narrow to hold                    session   —                                 | plain:5 accent:11 dim:40 plain:20 dim:10 plain:34
+09 |                                                                            temp      —                                 | plain:76 dim:10 plain:34
+10 |                                                                                                                        | plain:120
+11 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:120
+12 |› what should the run do?                                                                                               | dim:25 plain:95
+13 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · / commands · @ files · ↑ queue                                      | muted:10 dim:3 muted:6 dim:3 muted:13 dim:3 muted:11 dim:3 muted:10 dim:3 muted:7 dim:3 muted:7 plain:38

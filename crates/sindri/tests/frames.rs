@@ -14,6 +14,16 @@ fn boot_80x24_is_every_line_of_the_door_and_no_rail_beside_it() {
 }
 
 #[test]
+fn boot_face_120x40_is_the_face_over_the_wordmark_with_the_rail_whole_beside_it() {
+    fixture::assert_frame("boot-face", 120, 40);
+}
+
+#[test]
+fn boot_face_small_120x14_is_the_door_of_a_frame_too_short_for_the_face() {
+    fixture::assert_frame("boot-face-small", 120, 14);
+}
+
+#[test]
 fn transcript_120x40_is_a_run_laid_out_at_the_tail() {
     fixture::assert_frame("transcript", 120, 40);
 }
