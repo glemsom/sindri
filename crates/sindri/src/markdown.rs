@@ -65,9 +65,9 @@ pub fn body(text: &str, cols: u16, way: &Way) -> Option<Vec<Row>> {
             let (before, from) = rest.split_at(at);
             let (named_words, after) = from.split_at(way.written().len());
             room.prose(before, plain);
-            room.link = Some(way.destination().to_owned());
+            room.destination = Some(way.destination().to_owned());
             room.prose(named_words, marked);
-            room.link = None;
+            room.destination = None;
             rest = after;
             named = true;
         }
@@ -184,8 +184,8 @@ struct Room {
     /// as the widest cell the table holds.
     table: Option<Table>,
     rule: Option<Rule>,
-    /// The way being said: where the words being placed go, and nothing beside them.
-    link: Option<String>,
+    /// The destination the words in hand are a way to, while a link is being said.
+    destination: Option<String>,
     /// The runs of the row in hand that are ways to somewhere, measured from the words' own left
     /// edge: laid as the words land, so a link that wraps is a run on each row it wrote.
     laid: Vec<Laid>,
@@ -214,7 +214,7 @@ impl Room {
             lists: Vec::new(),
             first: true,
             blank: true,
-            link: None,
+            destination: None,
             laid: Vec::new(),
             code: None,
             mermaid: None,
@@ -309,11 +309,11 @@ impl Room {
                 }
                 None => {
                     let worn = self.block.wearing(self.worn());
-                    let linked = match self.link.is_some() {
+                    let linked = match self.destination.is_some() {
                         true => worn.underlined(UNDERLINE),
                         false => worn,
                     };
-                    let way = self.link.clone();
+                    let way = self.destination.clone();
                     match &mut self.table {
                         // A cell is measured only once the whole table has been read.
                         Some(table) => table.text(&text, linked, way.as_deref()),
@@ -330,8 +330,11 @@ impl Room {
             // `muted` rather than over no colour, because `mark` is reverse over no colour
             // and the two would otherwise be one look.
             Event::Code(text) => {
-                let reversed = Look::new(Ink::Muted, Face::Reversed);
-                let way = self.link.clone();
+                let reversed = match self.destination.is_some() {
+                    true => Look::new(Ink::Muted, Face::Reversed).underlined(UNDERLINE),
+                    false => Look::new(Ink::Muted, Face::Reversed),
+                };
+                let way = self.destination.clone();
                 match &mut self.table {
                     Some(table) => table.text(&text, reversed, way.as_deref()),
                     None => {
@@ -345,16 +348,20 @@ impl Room {
             }
             Event::End(TagEnd::Image) => self.close_image(),
             Event::Start(Tag::Link { dest_url, .. }) => {
-                self.link = Some(String::from(&*dest_url));
+                self.destination = Some(String::from(&*dest_url));
             }
-            Event::End(TagEnd::Link) => self.link = None,
+            Event::End(TagEnd::Link) => self.destination = None,
             // A soft break is the line the source was wrapped on, not one the writer drew:
             // the paragraph is reflowed to the room.
             Event::SoftBreak => {
                 let worn = self.block.wearing(self.worn());
-                let way = self.link.clone();
+                let linked = match self.destination.is_some() {
+                    true => worn.underlined(UNDERLINE),
+                    false => worn,
+                };
+                let way = self.destination.clone();
                 match &mut self.table {
-                    Some(table) => table.text(" ", worn, way.as_deref()),
+                    Some(table) => table.text(" ", linked, way.as_deref()),
                     None => match &mut self.image {
                         Some((_, alt)) => alt.push(' '),
                         None => self.spaced = true,
@@ -430,7 +437,7 @@ impl Room {
             let gap = usize::from(space && self.used > 0);
             if self.used + gap + usize::from(pen::cells(rest)) <= room {
                 if gap == 1 {
-                    self.between(look);
+                    self.between();
                 }
                 self.linked(rest, look);
                 return;
@@ -451,12 +458,13 @@ impl Room {
         }
     }
 
-    /// The space between two words: the block's own, unless it stands between two words of one
-    /// way, where the way's look carries it so a link's line and the cells a reader opens are one.
-    fn between(&mut self, look: Look) {
+    /// The space between two words: the block's own, and between two words of one way the block's
+    /// with the line a way wears, so a link's line and the cells a reader opens are one.
+    fn between(&mut self) {
         match self.reaches() {
             true => {
-                self.extend(" ", look);
+                let at = self.block.underlined(UNDERLINE);
+                self.extend(" ", at);
                 if let Some(run) = self.laid.last_mut() {
                     run.width = run.width.saturating_add(1);
                 }
@@ -471,7 +479,7 @@ impl Room {
     /// Whether the way being said already covers the column the next word begins at, which is
     /// what makes the space before it the way's own rather than the block's.
     fn reaches(&self) -> bool {
-        let Some(destination) = &self.link else {
+        let Some(destination) = &self.destination else {
             return false;
         };
         self.laid.last().is_some_and(|run| {
@@ -486,7 +494,7 @@ impl Room {
         let left = self.used;
         let width = usize::from(pen::cells(text));
         self.extend(text, look);
-        let Some(destination) = &self.link else {
+        let Some(destination) = &self.destination else {
             return;
         };
         match self.laid.last_mut() {
@@ -803,10 +811,9 @@ impl Room {
             self.push(row);
             return;
         }
-        let mut spans = self.gutter();
+        let gutter = Row::of(self.gutter());
         self.first = false;
-        spans.extend(row.spans().iter().cloned());
-        self.push(Row::of(spans));
+        self.push(gutter.followed_by(&row));
     }
 
     fn flush_if_written(&mut self) {
@@ -1107,10 +1114,10 @@ fn lines_of(cells: &[Cell], widths: &[usize]) -> Vec<Vec<Row>> {
             // one: a cell is measured for the words that fit it.
             let mut room = Room::new(u16::try_from(*width).unwrap_or(u16::MAX), &Surface::none());
             for said in cells.get(at).into_iter().flatten() {
-                room.link = said.destination.clone();
+                room.destination = said.destination.clone();
                 room.prose(&said.text, said.look);
             }
-            room.link = None;
+            room.destination = None;
             room.flush_if_written();
             room.rows
         })

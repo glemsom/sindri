@@ -10,7 +10,7 @@ use sindri_core::run::Exit;
 use sindri_core::tools::OPEN;
 
 use crate::ink::{Ink, Look};
-use crate::link::{self, Link, Links, Way};
+use crate::link::{Link, Links, Way};
 use crate::markdown;
 use crate::palette::{Band, Palette};
 use crate::pen::{self, Clip};
@@ -168,9 +168,9 @@ pub fn layout(entry: &Entry, cols: u16) -> Vec<Row> {
     layout_on(entry, cols, &Surface::none(), None)
 }
 
-/// The same entry on a `surface`, and with the `ground` a run judges a target from: a path a call
-/// names is a way to the file only where that judgement holds it openable, and a frame handed no
-/// ground lays every path as it always did.
+/// The same entry on a `surface`, with the `ground` a run judges a target from: a path a call names
+/// is a way only where that judgement holds it openable, and a frame handed none lays every path as
+/// the words it was written as.
 pub fn layout_on(entry: &Entry, cols: u16, surface: &Surface, ground: Option<&Ground>) -> Vec<Row> {
     let cols = cols.max(1);
     match entry {
@@ -287,7 +287,7 @@ fn way(name: &str, arguments: &str, ground: Option<&Ground>) -> Option<Way> {
     }
     let written = open::named_path(arguments)?;
     match ground?.judge(arguments).ok()? {
-        Opening::File(path) => Some(Way::new(written, link::destination(&path))),
+        Opening::File(path) => Some(Way::of(written, &path)),
         Opening::Url(_) => None,
     }
 }

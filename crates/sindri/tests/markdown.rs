@@ -371,6 +371,53 @@ fn a_link_a_table_holds_is_a_way_to_its_destination_as_its_words() {
 }
 
 #[test]
+fn a_link_a_table_in_a_quote_holds_carries_its_destination_past_the_bar() {
+    let rows = markdown::rows(
+        "> | a link |\n> | --- |\n> | [the gate](https://example.test/gate) |",
+        60,
+    );
+
+    assert_eq!(
+        drawn(&rows).last().map(String::as_str),
+        Some("▏ the gate"),
+        "the table keeps the quote's own gutter: {rows:?}"
+    );
+    assert_eq!(
+        ways(&rows).at(2, 2),
+        Some("https://example.test/gate"),
+        "and the way the cell names is moved with its words, past the bar"
+    );
+    assert_eq!(
+        ways(&rows).at(2, 1),
+        None,
+        "never onto the bar the words were moved past"
+    );
+}
+
+#[test]
+fn a_code_span_inside_a_link_is_a_way_to_the_destination_in_its_own_look() {
+    let rows = markdown::rows("read [the `gate` word](https://example.test/gate)", 60);
+
+    assert_eq!(drawn(&rows), ["read the gate word"]);
+    assert!(
+        wears(
+            &rows[0],
+            "gate",
+            Look::new(Ink::Muted, Face::Reversed).underlined(Ink::Dim)
+        ),
+        "a code span keeps its own look and wears the line a way wears: {:?}",
+        rows[0].spans()
+    );
+    let links = ways(&rows);
+    assert_eq!(
+        links.at(0, 9),
+        Some("https://example.test/gate"),
+        "and it is a way to the destination the words were written over"
+    );
+    assert_eq!(links.at(0, 12), Some("https://example.test/gate"));
+}
+
+#[test]
 fn a_link_a_table_holds_that_spells_its_own_destination_says_it_once() {
     let rows = markdown::rows(
         "| link |\n| --- |\n| [https://x.test/s](https://x.test/s) |",

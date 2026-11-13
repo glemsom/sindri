@@ -201,8 +201,8 @@ impl Launch {
         }
     }
 
-    /// Where this run stands when it judges a target: the writable set, the session temp and the
-    /// workspace a relative path is read from, which is the judgement a frame draws a path by.
+    /// Where this run stands when it judges a target, or nothing when a session has no temp to
+    /// resolve: a frame handed none draws every path as the words it was written as.
     pub fn ground(&self) -> Option<Ground> {
         Ground::new(
             &self.boundary,

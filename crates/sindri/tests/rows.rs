@@ -641,8 +641,7 @@ fn named(which: u32, name: &str, arguments: &str) -> Entry {
     }
 }
 
-/// The ground a run standing in `workspace` judges a target from: the writable set, the session
-/// temp and the directory a relative path is read from, all resolved.
+/// The ground a run standing in `workspace` judges a target from.
 fn ground(workspace: &std::path::Path) -> Ground {
     let boundary = Boundary::from_config(&Config::default(), workspace, Enforcement::Bubblewrap)
         .expect("the boundary holds");

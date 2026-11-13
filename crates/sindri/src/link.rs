@@ -72,7 +72,7 @@ impl Links {
 
 /// The destination a judged file is a way to: the terminal's own `file` URL, spelled as a URI so
 /// a path with a space in it is one word to the terminal that opens it.
-pub fn destination(path: &Path) -> String {
+fn destination(path: &Path) -> String {
     let mut url = String::from("file://");
     for glyph in path.display().to_string().chars() {
         match glyph {
@@ -98,10 +98,12 @@ pub struct Way {
 }
 
 impl Way {
-    pub fn new(written: impl Into<String>, destination: impl Into<String>) -> Way {
+    /// The path a call wrote and the file the run judged those words to be: the destination is made
+    /// from the file, so a way is never two strings in an order somebody has to remember.
+    pub fn of(written: impl Into<String>, path: &Path) -> Way {
         Way {
             written: written.into(),
-            destination: destination.into(),
+            destination: destination(path),
         }
     }
 
