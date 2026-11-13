@@ -30,7 +30,7 @@ pub const NARROW: u16 = FLOOR + TRANSCRIPT;
 
 /// The narrowest the rail's column is drawn, and the widest: a frame that holds a ledger is handed
 /// the floor, and one wide enough for the ceiling is handed no more.
-pub const FLOOR: u16 = 32;
+pub(crate) const FLOOR: u16 = 32;
 pub(crate) const CEILING: u16 = 44;
 
 /// The columns the transcript keeps before the rail takes any more than its floor: the rail grows
@@ -239,17 +239,7 @@ impl Kind {
             Kind::End => "end",
         }
     }
-}
 
-/// Which edge of its row a fact's value hangs on: a number against the row's last column, so the
-/// digits of two numbers line up, and a word from the label, so the two read as one phrase.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Hang {
-    Left,
-    Right,
-}
-
-impl Kind {
     /// Which way a fact of this kind hangs: the kinds whose value is a number shape the digits,
     /// and the kinds whose value is a word are said as one phrase with the label.
     fn hang(self) -> Hang {
@@ -267,6 +257,14 @@ impl Kind {
             _ => Hang::Left,
         }
     }
+}
+
+/// Which edge of its row a fact's value hangs on: a number against the row's last column, so the
+/// digits of two numbers line up, and a word from the label, so the two read as one phrase.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Hang {
+    Left,
+    Right,
 }
 
 /// What a launch knows before its first run: the wire and the model the config names, the
