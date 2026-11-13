@@ -41,47 +41,47 @@ use crate::stats;
 use crate::stream::Stream;
 
 /// The hints in survival order, most valuable first: the order a narrower footer gives them up
-/// in. A hint is the key a reader presses and the word that says what it does.
+/// in.
 #[derive(Clone, Copy)]
 struct Hint {
     key: &'static str,
-    does: &'static str,
+    meaning: &'static str,
 }
 
 impl Hint {
     fn cells(&self) -> u16 {
-        pen::cells(self.key) + 1 + pen::cells(self.does)
+        pen::cells(self.key) + 1 + pen::cells(self.meaning)
     }
 }
 
 const HINTS: [Hint; 7] = [
     Hint {
         key: "Enter",
-        does: "send",
+        meaning: "send",
     },
     Hint {
         key: "?",
-        does: "keys",
+        meaning: "keys",
     },
     Hint {
         key: "Ctrl-C",
-        does: "cancel",
+        meaning: "cancel",
     },
     Hint {
         key: "Ctrl-Q",
-        does: "quit",
+        meaning: "quit",
     },
     Hint {
         key: "Ctrl-J",
-        does: "newline",
+        meaning: "newline",
     },
     Hint {
         key: "@",
-        does: "files",
+        meaning: "files",
     },
     Hint {
         key: "↑",
-        does: "queue",
+        meaning: "queue",
     },
 ];
 
@@ -942,7 +942,7 @@ impl View {
                         buffer,
                         area,
                         y,
-                        &[(name.as_str(), keys::KEY), (line, keys::DOES)],
+                        &[(name.as_str(), keys::KEY), (line, keys::MEANING)],
                         &self.palette,
                     );
                     y = y.saturating_add(1);
@@ -1245,8 +1245,8 @@ fn hints_row(buffer: &mut Buffer, area: Rect, hints: &[Hint], palette: &Palette)
             spans.push((GAP, Look::plain(Ink::Dim)));
         }
         spans.push((hint.key, keys::KEY));
-        spans.push((" ", keys::DOES));
-        spans.push((hint.does, keys::DOES));
+        spans.push((" ", keys::MEANING));
+        spans.push((hint.meaning, keys::MEANING));
     }
     pen::write(buffer, area, &spans, Clip::Whole, palette);
 }
@@ -2245,11 +2245,11 @@ mod tests {
         buffer
     }
 
-    /// The hints as the footer draws them: each key, one blank, and the word it does.
+    /// The hints as the footer draws them: each key, one blank, and the word it means.
     fn said(hints: &[Hint]) -> Vec<String> {
         hints
             .iter()
-            .map(|hint| format!("{} {}", hint.key, hint.does))
+            .map(|hint| format!("{} {}", hint.key, hint.meaning))
             .collect()
     }
 
@@ -2331,8 +2331,8 @@ mod tests {
             assert_eq!(
                 hints.get(..FLOOR),
                 Some(&floor[..]),
-                "at {width} columns the footer reads {:?}: the two hints §12 never takes \
-                 away are drawn whole at every width, and 60 is not a special case of that",
+                "at {width} columns the footer reads {:?}: the two hints the floor never gives \
+                 up are drawn whole at every width, and 60 is not a special case of that",
                 row.trim_end()
             );
         }
@@ -2343,11 +2343,11 @@ mod tests {
         let hints = [
             Hint {
                 key: "Enter",
-                does: "send",
+                meaning: "send",
             },
             Hint {
                 key: "日本",
-                does: "語",
+                meaning: "語",
             },
         ];
 
@@ -2360,7 +2360,7 @@ mod tests {
         );
 
         let wide = hints_drawn(&hints, 20);
-        let drawn: String = (13..20)
+        let drawn: String = (pen::cells("Enter send") + pen::cells(GAP)..20)
             .map(|x| {
                 wide.cell((x, 0))
                     .expect("a cell of the row")
@@ -2457,16 +2457,9 @@ mod tests {
                 );
                 assert_eq!(
                     does_look,
-                    keys::DOES,
+                    keys::MEANING,
                     "at {cols} columns the word {:?} is not drawn in the look a meaning is",
-                    hint.does
-                );
-                assert!(
-                    louder(key_look, does_look),
-                    "at {cols} columns {:?} draws its key in {key_look:?} and what it does in \
-                     {does_look:?}: a key is the thing to press, so it is read louder than the \
-                     words that say what pressing it does",
-                    hint.key
+                    hint.meaning
                 );
                 tail = at + hint.key.len();
             }
@@ -2491,15 +2484,13 @@ mod tests {
                 .collect();
             match runs.as_slice() {
                 [] | [_] => {}
-                [(key, _), (does, _), ..] => {
+                [(key, _), (meaning, _), ..] => {
                     listed += 1;
                     assert_eq!(*key, keys::KEY, "row {y} draws its key in another look");
-                    assert_eq!(*does, keys::DOES, "row {y} draws its line in another look");
-                    assert!(
-                        louder(*key, *does),
-                        "row {y} of the card draws its key in {key:?} over the line in {does:?}: \
-                         the list is turned the right way up, so a key is never the quieter of the \
-                         two things a row says"
+                    assert_eq!(
+                        *meaning,
+                        keys::MEANING,
+                        "row {y} draws the line that explains its key in another look"
                     );
                 }
             }
@@ -2512,13 +2503,30 @@ mod tests {
     }
 
     #[test]
-    fn no_hint_is_written_that_no_width_draws() {
-        assert_eq!(
-            kept(&HINTS, u16::MAX).len(),
-            HINTS.len(),
-            "the widest frame a row is drawn in draws every hint the table writes: a hint no width \
-             reaches is a key the footer hints at and never says"
+    fn a_key_is_drawn_louder_than_the_words_that_say_what_pressing_it_does() {
+        assert!(
+            louder(keys::KEY, keys::MEANING),
+            "a key is drawn in {:?} and its meaning in {:?}: a key is the thing to press, so it is \
+             never the quieter of the two things a hint says",
+            keys::KEY,
+            keys::MEANING
         );
+    }
+
+    #[test]
+    fn no_hint_is_written_that_no_width_draws() {
+        let drawn: Vec<&str> = (20..=200u16)
+            .flat_map(|width| kept(&HINTS, width))
+            .map(|hint| hint.key)
+            .collect();
+        for hint in HINTS {
+            assert!(
+                drawn.contains(&hint.key),
+                "no footer between twenty and two hundred columns draws {:?}, so it is a key the \
+                 table writes down and no reader is ever shown",
+                hint.key
+            );
+        }
     }
 
     #[test]
