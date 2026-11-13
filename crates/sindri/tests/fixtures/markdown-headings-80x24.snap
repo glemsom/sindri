@@ -5,18 +5,18 @@ expression: drawn
 markdown-headings at 80x24
 00 |                                                                                | plain:80
 01 |  Markdown rendering                                                            | plain:2 plain+bold:18 plain:60
-02 |                                                                                | plain:80
-03 |  Headings, tables and highlighted code                                         | plain:2 plain+bold:37 plain:41
-04 |                                                                                | plain:80
-05 |  A rule the fixtures hold                                                      | plain:2 dim+bold:24 plain:54
+02 |  ══════════════════                                                            | plain:2 dim:18 plain:60
+03 |                                                                                | plain:80
+04 |  The scale of headings, two ruled and four not                                 | plain:2 plain+bold:45 plain:33
+05 |  ─────────────────────────────────────────────                                 | plain:2 dim:45 plain:33
 06 |                                                                                | plain:80
-07 |  A fourth level                                                                | plain:80
+07 |  A third level, muted and bold                                                 | plain:2 muted+bold:29 plain:49
 08 |                                                                                | plain:80
-09 |  A fifth level                                                                 | plain:80
+09 |  A fourth, muted and bare                                                      | plain:2 muted:24 plain:54
 10 |                                                                                | plain:80
-11 |  A sixth level                                                                 | plain:80
+11 |  A fifth, dim and bold                                                         | plain:2 dim+bold:21 plain:57
 12 |                                                                                | plain:80
-13 |                                                                                | plain:80
+13 |  A sixth, dim and both                                                         | plain:2 dim+bold+italic:21 plain:57
 14 |                                                                                | plain:80
 15 |                                                                                | plain:80
 16 |                                                                                | plain:80

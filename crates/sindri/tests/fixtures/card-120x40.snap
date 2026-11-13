@@ -3,34 +3,34 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 card at 120x40
-00 |✓ exit 0  bash  96 bytes╭─ ? keys ─────────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
-01 |  check: fmt ... ok     │ keys                                                                 │net-4-5-20250929        | dim:25 plain:1 dim:4 plain:65 dim:25
-02 |  check: clippy ... ok  │ Esc                  close this screen                               │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-03 |  check: test ... ok    │ ?                    close this screen                               │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-04 |  check: frames ... ok  │ composer                                                             │                6 /  250| dim:25 plain:1 dim:8 plain:61 dim:25
-05 |  What that buys is the │ ?                    the keys, while the draft is empty              │     █░░░░░ 48.2k / 200k| dim:25 plain:1 muted:21 plain:48 dim:25
-06 |  window is a row offset│ @                    the files of the workspace, while it starts a   │                     88%| dim:25 plain:1 muted:21 plain:48 dim:25
-07 |  between the tail and t│                      word                                            │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-08 |  Each is laid out once │ Enter                send the prompt                                 │ri/.worktrees/46-rail   | dim:25 plain:1 muted:21 plain:48 dim:25
-09 |  costs one layout per e│ Shift+Enter, Ctrl-J  a line break in the draft                       │ability                 | dim:25 plain:1 muted:21 plain:48 dim:25
-10 |turn 5 ─────────────────│ ↑                    the newest queued prompt, or the line above     │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-11 |✓ exit 0  bash  128 byte│ Ctrl-X               drop the newest queued prompt                   │                       2| dim:25 plain:1 muted:21 plain:48 dim:25
-12 |  crates/sindri/src/rows│ ↓                    the line below                                  │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-13 |  crates/sindri/tests/ro│ Shift+↓              grow the mark a row down                        │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-14 |  The transcript's unit │ Shift+↑              grow the mark a row up                          │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-15 |  line, so the same run │ ←                    a glyph left                                    │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-16 |  transcript and by what│ →                    a glyph right                                   │essions/9f2c7a41/tmp    | dim:25 plain:1 muted:21 plain:48 dim:25
-17 |                        │ Home                 the start of the line                           │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-18 |  construct │ where it s│ End                  the end of the line                             │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-19 |  ──────────┼───────────│ Ctrl-Y               copy the mark, or the last answer               │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-20 |  heading   │ in the ans│ Backspace            erase the glyph before the caret                │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-21 |  code      │ behind a b│ Ctrl-C               cancel the run, or clear the draft              │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-22 |  table     │ columns jo│ Ctrl-Q               quit                                            │                        | dim:25 plain:1 muted:21 plain:48 dim:25
-23 |turn 6 ─────────────────│                                                                      │                        | dim:25 plain:70 dim:25
-24 |✓ exit 0  bash  104 byte│                                                                      │                        | dim:25 plain:70 dim:25
-25 |  check: frame calls ...│                                                                      │                        | dim:25 plain:70 dim:25
-26 |  check: frame transcrip│                                                                      │                        | dim:25 plain:70 dim:25
-27 |  A row is one line     │                                                                      │                        | dim:25 plain:70 dim:25
+00 |  check: fmt ... ok     ╭─ ? keys ─────────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
+01 |  check: clippy ... ok  │ keys                                                                 │net-4-5-20250929        | dim:25 plain:1 dim:4 plain:65 dim:25
+02 |  check: test ... ok    │ Esc                  close this screen                               │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+03 |  check: frames ... ok  │ ?                    close this screen                               │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+04 |  What that buys is the │ composer                                                             │                6 /  250| dim:25 plain:1 dim:8 plain:61 dim:25
+05 |  window is a row offset│ ?                    the keys, while the draft is empty              │     █░░░░░ 48.2k / 200k| dim:25 plain:1 muted:21 plain:48 dim:25
+06 |  between the tail and t│ @                    the files of the workspace, while it starts a   │                     88%| dim:25 plain:1 muted:21 plain:48 dim:25
+07 |  Each is laid out once │                      word                                            │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+08 |  costs one layout per e│ Enter                send the prompt                                 │ri/.worktrees/46-rail   | dim:25 plain:1 muted:21 plain:48 dim:25
+09 |turn 5 ─────────────────│ Shift+Enter, Ctrl-J  a line break in the draft                       │ability                 | dim:25 plain:1 muted:21 plain:48 dim:25
+10 |✓ exit 0  bash  128 byte│ ↑                    the newest queued prompt, or the line above     │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+11 |  crates/sindri/src/rows│ Ctrl-X               drop the newest queued prompt                   │                       2| dim:25 plain:1 muted:21 plain:48 dim:25
+12 |  crates/sindri/tests/ro│ ↓                    the line below                                  │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+13 |  The transcript's unit │ Shift+↓              grow the mark a row down                        │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+14 |  line, so the same run │ Shift+↑              grow the mark a row up                          │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+15 |  transcript and by what│ ←                    a glyph left                                    │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+16 |                        │ →                    a glyph right                                   │essions/9f2c7a41/tmp    | dim:25 plain:1 muted:21 plain:48 dim:25
+17 |  construct │ where it s│ Home                 the start of the line                           │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+18 |  ──────────┼───────────│ End                  the end of the line                             │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+19 |  heading   │ in the ans│ Ctrl-Y               copy the mark, or the last answer               │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+20 |  code      │ behind a b│ Backspace            erase the glyph before the caret                │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+21 |  table     │ columns jo│ Ctrl-C               cancel the run, or clear the draft              │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+22 |turn 6 ─────────────────│ Ctrl-Q               quit                                            │                        | dim:25 plain:1 muted:21 plain:48 dim:25
+23 |✓ exit 0  bash  104 byte│                                                                      │                        | dim:25 plain:70 dim:25
+24 |  check: frame calls ...│                                                                      │                        | dim:25 plain:70 dim:25
+25 |  check: frame transcrip│                                                                      │                        | dim:25 plain:70 dim:25
+26 |  A row is one line     │                                                                      │                        | dim:25 plain:70 dim:25
+27 |  ─────────────────     │                                                                      │                        | dim:25 plain:70 dim:25
 28 |                        │                                                                      │                        | dim:25 plain:70 dim:25
 29 |  A row says the exit co│                                                                      │                        | dim:25 plain:70 dim:25
 30 |  fact the record holds │                                                                      │                        | dim:25 plain:70 dim:25

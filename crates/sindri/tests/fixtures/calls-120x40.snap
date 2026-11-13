@@ -18,14 +18,14 @@ calls at 120x40
 12 |turn 4 ─────────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
 13 |✗ cancelled  bash  0 bytes · 3400 ms                                        sandbox   bwrap                             | err:1 dim:35 plain:40 dim:10 plain:34
 14 |  What a verdict says                                                                                                   | plain:2 plain+bold:19 plain:99
-15 |                                                                            session   9f2c7a41                          | plain:76 dim:10 plain:34
-16 |  The run stopped on the user's word: Ctrl-C cancels and keeps the draft, sotemp      …/sindri/sessions/9f2c7a41/tmp    | plain:38 muted+reversed:6 plain:32 dim:10 plain:34
-17 |  the row says ✗ cancelled rather than leaving a spinner turning for a                                                  | plain:15 muted+reversed:11 plain:94
-18 |  result that will never come.                                                                                          | plain:120
-19 |turn 5 ─────────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
-20 |… bash                                                                                                                  | dim:6 plain:114
-21 |  {"command": "make check STAGES=test"}                                                                                 | plain:120
-22 |                                                                                                                        | plain:120
+15 |  ───────────────────                                                       session   9f2c7a41                          | plain:2 dim:19 plain:55 dim:10 plain:34
+16 |                                                                            temp      …/sindri/sessions/9f2c7a41/tmp    | plain:76 dim:10 plain:34
+17 |  The run stopped on the user's word: Ctrl-C cancels and keeps the draft, so                                            | plain:38 muted+reversed:6 plain:76
+18 |  the row says ✗ cancelled rather than leaving a spinner turning for a                                                  | plain:15 muted+reversed:11 plain:94
+19 |  result that will never come.                                                                                          | plain:120
+20 |turn 5 ─────────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
+21 |… bash                                                                                                                  | dim:6 plain:114
+22 |  {"command": "make check STAGES=test"}                                                                                 | plain:120
 23 |                                                                                                                        | plain:120
 24 |                                                                                                                        | plain:120
 25 |                                                                                                                        | plain:120

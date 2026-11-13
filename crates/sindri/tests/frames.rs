@@ -129,7 +129,7 @@ fn scrolled_120x40_is_a_composer_showing_the_last_five_rows_of_a_taller_draft() 
 }
 
 #[test]
-fn markdown_headings_80x24_is_a_heading_at_each_of_the_four_renderings() {
+fn markdown_headings_80x24_is_six_levels_from_a_ruled_bold_to_a_dim_bold() {
     fixture::assert_frame("markdown-headings", 80, 24);
 }
 
@@ -139,12 +139,12 @@ fn markdown_lists_80x24_is_a_bullet_and_an_ordinal_two_spaces_per_depth() {
 }
 
 #[test]
-fn markdown_table_80x24_is_columns_ruled_under_their_header_and_never_bordered() {
+fn markdown_table_80x24_is_a_bold_header_ruled_in_dim_and_never_bordered() {
     fixture::assert_frame("markdown-table", 80, 24);
 }
 
 #[test]
-fn markdown_quote_80x24_is_prose_set_behind_one_dim_bar() {
+fn markdown_quote_80x24_is_a_heading_and_prose_behind_one_dim_bar() {
     fixture::assert_frame("markdown-quote", 80, 24);
 }
 
