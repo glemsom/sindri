@@ -84,7 +84,8 @@ One named thing a run holds, drawn as a label and a **value**: the wire, the ser
 thinking, the turns, the window, the cache, the spend, the workspace, the branch, the commit, the
 skills, the sandbox, the state a run stopped in and its instants, the session, the temp. A fact
 nobody can state is absent rather than blank, a fact a launch names and a run has yet to fill is an
-em dash, and a value that is its own name — a loaded skill — hangs where its siblings' values do.
+em dash, and a value that is its own name — a loaded skill — starts the row it stands on, because no
+field stands in front of it.
 _Avoid_: Row, field, item, stat
 
 **Value**:

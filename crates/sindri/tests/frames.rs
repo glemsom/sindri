@@ -169,8 +169,13 @@ fn markdown_table_narrow_40x24_is_a_wide_table_wrapped_inside_its_cells() {
 }
 
 #[test]
-fn rail_160x40_is_a_wide_frames_rail_at_its_ceiling_and_holds_the_served_name_whole() {
+fn rail_160x40_is_a_wide_frame_s_rail_at_its_ceiling_with_the_served_name_whole() {
     fixture::assert_frame("rail", 160, 40);
+}
+
+#[test]
+fn rail_108x40_is_the_rail_grown_past_its_floor_and_under_its_ceiling() {
+    fixture::assert_frame("rail", 108, 40);
 }
 
 #[test]

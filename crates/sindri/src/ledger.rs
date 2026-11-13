@@ -31,7 +31,7 @@ pub const NARROW: u16 = FLOOR + TRANSCRIPT;
 /// The narrowest the rail's column is drawn, and the widest: a frame that holds a ledger is handed
 /// the floor, and one wide enough for the ceiling is handed no more.
 pub const FLOOR: u16 = 32;
-pub const CEILING: u16 = 44;
+pub(crate) const CEILING: u16 = 44;
 
 /// The columns the transcript keeps before the rail takes any more than its floor: the rail grows
 /// into what a frame holds over this, so the transcript's own width moves by a column at a time.
@@ -58,17 +58,18 @@ impl Rail {
     }
 
     /// The columns a frame `width` wide is drawn down its right-hand edge: what it holds over the
-    /// transcript, between the rail's floor and its ceiling, so a wide frame draws a served name
-    /// whole where a narrow one cuts it to its head.
+    /// transcript between its floor and its ceiling. A wide frame draws a served name whole where a
+    /// narrow one cuts it to its head, and a frame narrower than the floor is handed all of itself.
     pub const fn columns(width: u16) -> u16 {
         let over = width.saturating_sub(TRANSCRIPT);
-        if over < FLOOR {
+        let columns = if over < FLOOR {
             FLOOR
         } else if over > CEILING {
             CEILING
         } else {
             over
-        }
+        };
+        if columns > width { width } else { columns }
     }
 }
 
@@ -263,19 +264,7 @@ impl Kind {
             | Kind::Cached
             | Kind::Reasoning
             | Kind::Exit => Hang::Right,
-            Kind::Wire
-            | Kind::Model
-            | Kind::Think
-            | Kind::Workspace
-            | Kind::Branch
-            | Kind::Sandbox
-            | Kind::Session
-            | Kind::Temp
-            | Kind::Route
-            | Kind::Commit
-            | Kind::Stopped
-            | Kind::Start
-            | Kind::End => Hang::Left,
+            _ => Hang::Left,
         }
     }
 }
@@ -613,8 +602,8 @@ pub(crate) fn short_id(guid: &str) -> &str {
 /// and every value hangs from the field's far side.
 pub(crate) const FIELD: u16 = 10;
 
-/// The columns a fact's value is cut to on the strip, whatever the frame's width: the room the
-/// rail's floor leaves beside its field, so a name is cut the same way in both shapes.
+/// The columns the strip's one row cuts a value to: the room the rail's floor leaves beside its
+/// field, which is what a row carrying four facts can count on.
 const VALUE: usize = (FLOOR - FIELD) as usize;
 
 /// What lies between two facts on the strip's one row, the gap the footer puts between its hints.
@@ -696,7 +685,6 @@ impl RailBand {
             width: cols,
             height: rows,
         });
-        // The face keeps the one rule the rail draws in its body, and the facts stand under it.
         let under = rows.saturating_add(1).min(self.area.height);
         self.facts = Rect {
             y: self.area.y.saturating_add(under),
@@ -728,7 +716,7 @@ pub fn split(facts: &Facts, band: Rect) -> Share {
     }
     let (transcript, rail) = match shape {
         Rail::Ledger => {
-            let columns = Rail::columns(band.width).min(band.width);
+            let columns = Rail::columns(band.width);
             let x = band.x.saturating_add(band.width - columns);
             (
                 Rect {
@@ -1075,7 +1063,6 @@ struct Kept {
 /// One row of the ledger, before it is a row of runs.
 enum Line<'a> {
     Fact(&'a Fact),
-    /// The empty row between two blocks: the groups are parted by air and by no rule.
     Air,
     Went(usize),
 }
@@ -1536,10 +1523,11 @@ mod tests {
 
     /// The columns a rail's row leaves a value: the rail's floor less the ten its label field
     /// holds.
-    const ROOM: usize = 22;
+    const ROOM: usize = (FLOOR - FIELD) as usize;
 
-    /// The columns the last frame that holds a ledger takes, which is the rail at its floor.
-    const COLUMNS: u16 = Rail::columns(NARROW);
+    /// The band a ledger test stands in: the rail at its floor, which is what the narrowest frame
+    /// that holds one is handed.
+    const COLUMNS: u16 = FLOOR;
 
     #[test]
     fn the_facts_a_launch_holds_before_a_run_are_what_a_prompt_is_pointed_at() {
@@ -2705,28 +2693,39 @@ mod tests {
     }
 
     #[test]
-    fn the_ledger_and_the_strip_give_up_the_same_fact_for_the_same_reason() {
+    fn a_name_that_goes_for_want_of_room_is_drawn_whole_once_the_rail_grew_to_hold_it() {
         for width in 20..=200u16 {
             let rail = Rail::of(width);
             let room = match rail {
-                Rail::Ledger => COLUMNS,
+                Rail::Ledger => Rail::columns(width),
                 Rail::Strip => width,
             };
+            let drawn_whole = match rail {
+                Rail::Ledger => value_room(room) >= pen::cells(UNNAMED) as usize,
+                Rail::Strip => false,
+            };
+            let expected = match drawn_whole {
+                true => stated(&[(0, "model     "), (FIELD, UNNAMED)]),
+                false => stated(&[(0, "+1 more")]),
+            };
 
+            let drawn = laid(&unnamed(), rail.into(), band(room, 2));
             assert_eq!(
-                laid(&unnamed(), rail.into(), band(room, 2)),
-                [stated(&[(0, "+1 more")])],
-                "at {width} columns a name no column can hold whole is given up by the {rail:?} \
-                 and counted, and never drawn in part"
+                drawn,
+                [expected],
+                "at {width} columns the {rail:?} draws a name with no hyphen to break at as \
+                 {drawn:?}: a name no column of it holds whole is given up and counted, and one a \
+                 grown rail holds is drawn whole and never in part"
             );
         }
     }
 
-    /// One fact whose value fits no value column, whatever the room: a served name with no hyphen
-    /// to break at.
+    /// A served name with no hyphen to break at, so no cut of it can keep a segment of it.
+    const UNNAMED: &str = "aservednamethatnobreaksanywhere";
+
     fn unnamed() -> Facts {
         Facts {
-            model: Some(String::from("aservednamethatnobreaksanywhere")),
+            model: Some(String::from(UNNAMED)),
             ..Facts::default()
         }
     }
@@ -2736,7 +2735,7 @@ mod tests {
         for width in 20..=200u16 {
             let rail = Rail::of(width);
             let room = match rail {
-                Rail::Ledger => COLUMNS,
+                Rail::Ledger => Rail::columns(width),
                 Rail::Strip => width,
             };
             for height in 1..=20 {
@@ -2875,7 +2874,7 @@ mod tests {
     }
 
     #[test]
-    fn the_rails_column_is_a_fact_about_the_frame_between_a_floor_and_a_ceiling() {
+    fn the_rail_s_column_is_a_fact_about_the_frame_between_a_floor_and_a_ceiling() {
         assert_eq!(
             Rail::columns(NARROW),
             FLOOR,
@@ -2893,13 +2892,14 @@ mod tests {
         );
         assert_eq!(
             Rail::columns(20),
-            FLOOR,
-            "a frame too narrow to hold the floor is handed the floor and never nought columns"
+            20,
+            "and a frame narrower than the floor is handed all of itself, so the column is never \
+             wider than the band it is drawn in"
         );
     }
 
     #[test]
-    fn a_wide_frame_draws_the_whole_served_name_where_a_hundred_columns_cut_it_to_its_head() {
+    fn a_wide_frame_draws_the_whole_served_name_where_the_narrowest_ledger_cuts_it_to_its_head() {
         let facts = Facts {
             model: Some(String::from(SERVED)),
             ..Facts::default()
@@ -2957,7 +2957,8 @@ mod tests {
     }
 
     #[test]
-    fn no_two_adjacent_widths_reflow_the_transcript_by_the_rails_whole_column() {
+    fn the_transcript_moves_a_column_at_a_time_and_gives_up_the_rail_only_where_the_shape_changes()
+    {
         let mut crossing = None;
         for width in 21..=200u16 {
             let narrow = split(&frame(), band(width - 1, 40)).transcript.width;
@@ -2977,13 +2978,18 @@ mod tests {
             at, NARROW,
             "the transcript reflows at the one width the shape changes at"
         );
+        assert_eq!(
+            Rail::columns(at),
+            FLOOR,
+            "the rail appears at its narrowest and never at a grown column, so the one reflow a \
+             resize to this width costs is the least a rail can cost"
+        );
         assert!(
             strip - ledger < Rail::columns(at),
-            "at {at} columns the transcript gives up {} of its {} columns, which is the rail's \
-             whole column of {}: the rail appears a column's worth of prose at a time and never \
-             all at once",
+            "at {at} columns the transcript gives up {} of its {strip} columns, which is the \
+             rail's whole column of {}: what a keystroke at this width reflows is less than the \
+             rail it makes room for",
             strip - ledger,
-            strip,
             Rail::columns(at)
         );
     }
@@ -3055,7 +3061,7 @@ mod tests {
         for width in 20..=200u16 {
             let rail = Rail::of(width);
             let room = match rail {
-                Rail::Ledger => COLUMNS,
+                Rail::Ledger => Rail::columns(width),
                 Rail::Strip => width,
             };
             let shape = Shape::from(rail);
@@ -3064,7 +3070,7 @@ mod tests {
                 ..Facts::default()
             };
             let fits_in = match rail {
-                Rail::Ledger => value_room(COLUMNS),
+                Rail::Ledger => value_room(Rail::columns(width)),
                 Rail::Strip => VALUE,
             };
             let value = rows(&facts, shape, band(room, 1))

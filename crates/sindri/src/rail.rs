@@ -80,10 +80,11 @@ mod tests {
 
     use super::*;
     use crate::ink::Ink;
-    use crate::ledger::{Ctx, FIELD, FULL_CELL, GAP, METER, NARROW, Rail, tokens};
+    use crate::ledger::{Ctx, FIELD, FLOOR, FULL_CELL, GAP, METER, Rail, tokens};
 
-    /// The columns the last frame that holds a ledger takes, which is the rail at its floor.
-    const COLUMNS: u16 = Rail::columns(NARROW);
+    /// The band a ledger test stands in: the rail at its floor, which is what the narrowest frame
+    /// that holds one is handed.
+    const COLUMNS: u16 = FLOOR;
     use crate::palette::Edge;
     use crate::pen;
     use crate::readback::{column_of, inks, under};
@@ -260,6 +261,12 @@ mod tests {
                  the rail stops short of its own top"
             );
         }
+        assert_eq!(
+            under(&buffer, area.x, 11),
+            PALETTE.edge(Edge::Lit),
+            "and the rule that closes the face is written over the boundary's ground and never \
+             in place of it, so one line of the rail's edge is not left unlit"
+        );
         assert_eq!(
             glyphs(&buffer, 11).trim_end(),
             pen::filled(COLUMNS, '─').trim_end(),
