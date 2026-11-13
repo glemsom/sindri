@@ -8,7 +8,7 @@ use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, T
 use syntect::parsing::{ParseState, Scope, ScopeStack, SyntaxSet};
 
 use crate::graphics::Ceiling;
-use crate::ink::{Face, Ink, Look};
+use crate::ink::{Face, Faces, Ink, Look};
 use crate::mermaid::{self, Fence};
 use crate::palette::Band;
 use crate::pen;
@@ -85,6 +85,9 @@ struct Room {
     used: usize,
     spaced: bool,
     block: Look,
+    /// The emphasis open inside the block in hand, outermost first: a word wears the ink the
+    /// block gave it and the faces every emphasis around it asked for.
+    emphasis: Vec<Face>,
     lead: Vec<(String, Look)>,
     /// The markers of the list items open, outermost first: every row is indented by the ones
     /// outside it and by the width of the innermost, so each depth costs the columns a `•` takes.
@@ -122,6 +125,7 @@ impl Room {
             used: 0,
             spaced: false,
             block: Look::plain(Ink::Plain),
+            emphasis: Vec::new(),
             lead: Vec::new(),
             marks: Vec::new(),
             lists: Vec::new(),
@@ -138,6 +142,7 @@ impl Room {
     }
 
     fn event(&mut self, event: Event, span: &str) {
+        let worn = self.look();
         match event {
             Event::Start(Tag::Paragraph) => self.gap(),
             Event::End(TagEnd::Paragraph) => self.flush_if_written(),
@@ -196,6 +201,16 @@ impl Room {
                     table.close_cell();
                 }
             }
+            // Emphasis nests, so it is a stack and not a flag: a word inside two of them wears
+            // both faces, and the ink it is written in stays the block's.
+            Event::Start(Tag::Strong) => self.emphasis.push(Face::Bold),
+            Event::End(TagEnd::Strong) => {
+                self.emphasis.pop();
+            }
+            Event::Start(Tag::Emphasis) => self.emphasis.push(Face::Italic),
+            Event::End(TagEnd::Emphasis) => {
+                self.emphasis.pop();
+            }
             Event::Start(Tag::CodeBlock(kind)) => self.open_code(kind, span),
             Event::End(TagEnd::CodeBlock) => self.close_code(),
             Event::Text(text) => match &mut self.code {
@@ -211,27 +226,29 @@ impl Room {
                         self.flush();
                     }
                 }
-                None => match &mut self.table {
-                    // A cell is measured only once the whole table has been read.
-                    Some(table) => table.text(&text, self.block),
-                    // A picture's words are kept aside for the row it is spoken of on:
-                    // they are the block's, not the paragraph's.
-                    None => match &mut self.image {
-                        Some((_, alt)) => alt.push_str(&text),
-                        None => {
-                            if let Some((_, said)) = &mut self.link {
-                                said.push_str(&text);
+                None => {
+                    match &mut self.table {
+                        // A cell is measured only once the whole table has been read.
+                        Some(table) => table.text(&text, worn),
+                        // A picture's words are kept aside for the row it is spoken of on:
+                        // they are the block's, not the paragraph's.
+                        None => match &mut self.image {
+                            Some((_, alt)) => alt.push_str(&text),
+                            None => {
+                                if let Some((_, said)) = &mut self.link {
+                                    said.push_str(&text);
+                                }
+                                self.prose(&text, worn);
                             }
-                            self.prose(&text, self.block);
-                        }
-                    },
-                },
+                        },
+                    }
+                }
             },
             // Inline code keeps the spacing it was written with. It is reversed over
             // `muted` rather than over no colour, because `mark` is reverse over no colour
             // and the two would otherwise be one look.
             Event::Code(text) => {
-                let reversed = Look::new(Ink::Muted, Face::Reversed);
+                let reversed = self.worn(Look::new(Ink::Muted, Face::Reversed));
                 match &mut self.table {
                     Some(table) => table.text(&text, reversed),
                     None => {
@@ -251,7 +268,7 @@ impl Room {
             // A soft break is the line the source was wrapped on, not one the writer drew:
             // the paragraph is reflowed to the room.
             Event::SoftBreak => match &mut self.table {
-                Some(table) => table.text(" ", self.block),
+                Some(table) => table.text(" ", worn),
                 None => match &mut self.image {
                     Some((_, alt)) => alt.push(' '),
                     None => self.spaced = true,
@@ -291,6 +308,19 @@ impl Room {
             space = false;
         }
         self.spaced = space;
+    }
+
+    /// `look` wearing every face the emphasis open around it asked for, so a run keeps the ink
+    /// the block gave it and gains no weight the block did not.
+    fn worn(&self, look: Look) -> Look {
+        self.emphasis
+            .iter()
+            .fold(look, |worn, face| worn.wearing(Faces::wearing(*face)))
+    }
+
+    /// The look a word of the block in hand is drawn in, its own and every emphasis over it.
+    fn look(&self) -> Look {
+        self.worn(self.block)
     }
 
     /// One run of glyphs placed at the end of the row in hand, carried to the next row when it

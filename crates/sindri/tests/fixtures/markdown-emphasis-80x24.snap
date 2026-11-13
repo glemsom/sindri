@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+markdown-emphasis at 80x24
+00 |  A strong word is bold, an emphasis is italic, and one word can be both at     | plain:19 plain+bold:4 plain:17 plain+italic:6 plain:22 plain+bold+italic:4 plain:8
+01 |  once.                                                                         | plain:80
+02 |                                                                                | plain:80
+03 |  A heading keeps its level: bold and italic inside it                          | plain:2 plain+bold:36 plain+bold+italic:6 plain+bold:10 plain:26
+04 |                                                                                | plain:80
+05 |  ▏ and a quote keeps its ink and its gutter, even here                         | plain:2 dim:2 plain:42 plain+italic:4 plain:1 plain+italic:4 plain:25
+06 |                                                                                | plain:80
+07 |  ▏ **bold** and *italic* stay glyphs in a fence                                | plain:2 dim:2 plain:76
+08 |                                                                                | plain:80
+09 |                                                                                | plain:80
+10 |                                                                                | plain:80
+11 |                                                                                | plain:80
+12 |                                                                                | plain:80
+13 |                                                                                | plain:80
+14 |                                                                                | plain:80
+15 |                                                                                | plain:80
+16 |                                                                                | plain:80
+17 |                                                                                | plain:80
+18 |                                                                                | plain:80
+19 |                                                                                | plain:80
+20 |                                                                                | plain:80
+21 |────────────────────────────────────────────────────────────────────────────────| accent+faint:80
+22 |› what should the run do?                                                       | dim:25 plain:55
+23 |Enter send · ? keys                                                             | muted:10 dim:3 muted:6 plain:61
