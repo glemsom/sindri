@@ -644,7 +644,7 @@ fn named(which: u32, name: &str, arguments: &str) -> Entry {
 /// The ground a run standing in `workspace` judges a target from: the writable set, the session
 /// temp and the directory a relative path is read from, all resolved.
 fn ground(workspace: &std::path::Path) -> Ground {
-    let boundary = Boundary::from_config(&Config::default(), workspace, Enforcement::Unsafe)
+    let boundary = Boundary::from_config(&Config::default(), workspace, Enforcement::Bubblewrap)
         .expect("the boundary holds");
     Ground::new(&boundary, workspace, workspace).expect("the ground resolves")
 }
@@ -744,6 +744,34 @@ fn a_path_wider_than_the_body_is_one_destination_on_each_row() {
             .all(|said| *said == destination.as_str()),
         "and each row it was broken over carries the whole destination, never half of it: \
          {destinations:?}"
+    );
+}
+
+#[test]
+fn the_words_a_way_is_drawn_on_are_the_value_the_run_read_the_path_from() {
+    let tree = tempfile::tempdir().expect("a temp workspace");
+    std::fs::write(tree.path().join("notes.html"), "body").expect("the file");
+    let entry = named(1, "open", r#"{"note": "notes.html", "path": "notes.html"}"#);
+
+    let rows = layout_on(&entry, 50, &Surface::none(), Some(&ground(tree.path())));
+
+    let resolved = std::fs::canonicalize(tree.path().join("notes.html")).expect("the file");
+    let destination = format!("file://{}", resolved.display());
+    let (_, links) = laid(&rows[1], Rect::new(0, 0, 50, 1));
+    assert_eq!(
+        links.at(0, 12),
+        None,
+        "a value that spells the path is no way to it: only the path the run read is"
+    );
+    assert_eq!(
+        links.at(0, 34),
+        Some(destination.as_str()),
+        "and the path's own value is the way there"
+    );
+    assert_eq!(
+        links.at(0, 43),
+        Some(destination.as_str()),
+        "to its last cell"
     );
 }
 

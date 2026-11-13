@@ -10,7 +10,7 @@ use sindri_core::run::Exit;
 use sindri_core::tools::OPEN;
 
 use crate::ink::{Ink, Look};
-use crate::link::{self, Link, Links};
+use crate::link::{self, Link, Links, Way};
 use crate::markdown;
 use crate::palette::{Band, Palette};
 use crate::pen::{self, Clip};
@@ -132,6 +132,22 @@ impl Row {
             band: self.band,
             links: self.links.iter().map(|link| link.shifted(shifts)).collect(),
             ..Row::of(spans)
+        }
+    }
+
+    /// This row with `other`'s words set after its own, and the ways `other` names moved past the
+    /// columns this row covers: two cells of a table are one row, and each keeps its own ways.
+    pub(crate) fn followed_by(self, other: &Row) -> Row {
+        let shifts = self.width();
+        let mut spans = self.spans;
+        spans.extend(other.spans.iter().cloned());
+        let mut links = self.links;
+        links.extend(other.links.iter().map(|link| link.shifted(shifts)));
+        Row {
+            spans,
+            links,
+            picture: self.picture,
+            band: self.band,
         }
     }
 
@@ -265,13 +281,13 @@ fn opening(name: &str, arguments: &str, cols: u16, ground: Option<&Ground>) -> V
 /// The way a call names, when the run judged it one: the path as its words were written, which is
 /// how the row's cells are found, and the file the judgement resolved them to. A call that names
 /// nothing the run would open is no way at all.
-fn way(name: &str, arguments: &str, ground: Option<&Ground>) -> Option<(String, String)> {
+fn way(name: &str, arguments: &str, ground: Option<&Ground>) -> Option<Way> {
     if name != OPEN {
         return None;
     }
     let written = open::named_path(arguments)?;
     match ground?.judge(arguments).ok()? {
-        Opening::File(path) => Some((written, link::file(&path))),
+        Opening::File(path) => Some(Way::new(written, link::destination(&path))),
         Opening::Url(_) => None,
     }
 }
@@ -340,13 +356,12 @@ fn clip(text: &str, room: u16) -> String {
 /// The words of a tool's arguments or its result, set in the gutter a body is set from. A body
 /// that names a way to a file is laid with that path's own cells a way there, and every other
 /// body is laid as the wrapping lays it.
-fn body(text: &str, cols: u16, way: Option<(String, String)>) -> Vec<Row> {
+fn body(text: &str, cols: u16, way: Option<Way>) -> Vec<Row> {
     if text.is_empty() {
         return Vec::new();
     }
     let (gutter, room) = margin(INDENT, cols);
-    let named =
-        way.and_then(|(written, destination)| markdown::named(text, room, &written, &destination));
+    let named = way.and_then(|way| markdown::body(text, room, &way));
     match named {
         Some(rows) => rows
             .into_iter()
@@ -453,8 +468,6 @@ pub struct Rows {
     /// What a picture in an answer is measured against — the cell, and whether this terminal
     /// places one — because how many rows a picture takes is part of the rows it was laid out as.
     surface: Surface,
-    /// Where the run stands when it asks to open something, because whether a path a call names
-    /// is a way to the file is part of the row it was laid out as.
     ground: Option<Ground>,
 }
 
@@ -588,21 +601,17 @@ impl Rows {
             return;
         }
         self.cols = cols;
-        for held in &mut self.held {
-            held.rows = None;
-        }
+        self.unlay();
     }
 
     /// Where the run stands when it judges a target: a ground that arrives or moves drops every
-    /// row, because a path a call names is drawn a way or not by it.
-    pub fn stand(&mut self, ground: Option<Ground>) {
-        if ground == self.ground {
+    /// row, because whether a path a call names is a way is a fact of that row.
+    pub fn stand(&mut self, ground: Option<&Ground>) {
+        if ground == self.ground.as_ref() {
             return;
         }
-        self.ground = ground;
-        for held in &mut self.held {
-            held.rows = None;
-        }
+        self.ground = ground.cloned();
+        self.unlay();
     }
 
     pub fn retune(&mut self, surface: Surface) {
@@ -610,6 +619,12 @@ impl Rows {
             return;
         }
         self.surface = surface;
+        self.unlay();
+    }
+
+    /// Drops every row: a fact a row was laid out against has moved, and a row is only a drawing
+    /// of the facts that made it.
+    fn unlay(&mut self) {
         for held in &mut self.held {
             held.rows = None;
         }

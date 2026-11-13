@@ -72,7 +72,7 @@ impl Links {
 
 /// The destination a judged file is a way to: the terminal's own `file` URL, spelled as a URI so
 /// a path with a space in it is one word to the terminal that opens it.
-pub fn file(path: &Path) -> String {
+pub fn destination(path: &Path) -> String {
     let mut url = String::from("file://");
     for glyph in path.display().to_string().chars() {
         match glyph {
@@ -87,6 +87,32 @@ pub fn file(path: &Path) -> String {
         }
     }
     url
+}
+
+/// The words of a tool row that are a way to a file, and where they go: the path as the call wrote
+/// it, which is how the row's cells are found, and the destination the run's judgement made of it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Way {
+    written: String,
+    destination: String,
+}
+
+impl Way {
+    pub fn new(written: impl Into<String>, destination: impl Into<String>) -> Way {
+        Way {
+            written: written.into(),
+            destination: destination.into(),
+        }
+    }
+
+    /// The path as the words it was written with.
+    pub fn written(&self) -> &str {
+        &self.written
+    }
+
+    pub fn destination(&self) -> &str {
+        &self.destination
+    }
 }
 
 /// Whether a terminal places a hyperlink, read off the names it gives itself: the ones that speak
@@ -186,16 +212,16 @@ mod tests {
     #[test]
     fn a_file_is_a_way_to_the_path_it_resolved_to_spelled_as_one_uri_word() {
         assert_eq!(
-            file(Path::new("/workspace/notes.html")),
+            destination(Path::new("/workspace/notes.html")),
             "file:///workspace/notes.html"
         );
         assert_eq!(
-            file(Path::new("/workspace/my notes.html")),
+            destination(Path::new("/workspace/my notes.html")),
             "file:///workspace/my%20notes.html",
             "a space in a path is escaped, or the terminal reads two words where there is one"
         );
         assert_eq!(
-            file(Path::new("/workspace/100% done.md")),
+            destination(Path::new("/workspace/100% done.md")),
             "file:///workspace/100%25%20done.md",
             "and so is the character an escape begins with"
         );

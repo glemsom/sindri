@@ -343,7 +343,7 @@ fn a_link_inside_a_quote_carries_its_destination_past_the_quotes_bar() {
 }
 
 #[test]
-fn a_link_a_table_holds_is_followed_by_the_destination_it_cannot_carry() {
+fn a_link_a_table_holds_is_a_way_to_its_destination_as_its_words() {
     let rows = markdown::rows(
         "| a link |\n| --- |\n| [the gate](https://example.test/gate) |",
         60,
@@ -351,13 +351,42 @@ fn a_link_a_table_holds_is_followed_by_the_destination_it_cannot_carry() {
 
     assert_eq!(
         drawn(&rows).last().map(String::as_str),
-        Some("the gate https://example.test/gate"),
-        "a cell is measured whole before a row of it is drawn, so the words there are followed \
-         by the destination: {rows:?}"
+        Some("the gate"),
+        "a cell is measured whole before a row of it is drawn, and it still says its words \
+         alone: {rows:?}"
     );
     assert!(
-        ways(&rows).is_empty(),
-        "and no cell of a table is a way there, because no cell could be handed one"
+        wears(rows.last().expect("a row"), "the gate", way()),
+        "and the words wear the line a way wears: {:?}",
+        rows.last().map(Row::spans)
+    );
+    let links = ways(&rows);
+    assert_eq!(
+        links.at(2, 0),
+        Some("https://example.test/gate"),
+        "the cell's first cell opens the destination the words were written over"
+    );
+    assert_eq!(links.at(2, 7), Some("https://example.test/gate"));
+    assert_eq!(links.at(2, 8), None, "and the way ends with the words");
+}
+
+#[test]
+fn a_link_a_table_holds_that_spells_its_own_destination_says_it_once() {
+    let rows = markdown::rows(
+        "| link |\n| --- |\n| [https://x.test/s](https://x.test/s) |",
+        60,
+    );
+
+    assert!(
+        drawn(&rows)
+            .iter()
+            .all(|row| row.matches("https://x.test/s").count() <= 1),
+        "the destination is said once, as the words that spell it: {rows:?}"
+    );
+    assert_eq!(
+        ways(&rows).at(2, 0),
+        Some("https://x.test/s"),
+        "and those words are the way there"
     );
 }
 

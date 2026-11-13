@@ -281,7 +281,7 @@ fn ways() -> View {
 
 /// The ground a run standing in `workspace` judges a target from.
 fn ground(workspace: &std::path::Path) -> Ground {
-    let boundary = Boundary::from_config(&Config::default(), workspace, Enforcement::Unsafe)
+    let boundary = Boundary::from_config(&Config::default(), workspace, Enforcement::Bubblewrap)
         .expect("the boundary holds");
     Ground::new(&boundary, workspace, workspace).expect("the ground resolves")
 }

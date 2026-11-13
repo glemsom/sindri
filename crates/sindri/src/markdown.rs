@@ -9,6 +9,7 @@ use syntect::parsing::{ParseState, Scope, ScopeStack, SyntaxSet};
 
 use crate::graphics::Ceiling;
 use crate::ink::{Face, Faces, Ink, Look};
+use crate::link::Way;
 use crate::mermaid::{self, Fence};
 use crate::palette::Band;
 use crate::pen;
@@ -19,9 +20,9 @@ use crate::rows::{Row, split_at};
 /// is enabled, so a footnote, a strikethrough and a task list parse as plain prose.
 const OPTIONS: Options = Options::ENABLE_TABLES;
 
-/// The ink the line under a way's words is drawn in: an ink of its own and never a face, in the
-/// ink a fact beside the prose is read in, so the words keep the colour the block gave them.
-const WAY: Ink = Ink::Dim;
+/// The line under a way's words, in the ink a fact beside the prose is read in: an ink of its own
+/// and never a face, so the words keep the colour the block gave them.
+const UNDERLINE: Ink = Ink::Dim;
 
 pub fn rows(text: &str, cols: u16) -> Vec<Row> {
     rows_under(text, cols, 0)
@@ -47,25 +48,25 @@ pub fn rows_on(text: &str, cols: u16, reserve: u16, surface: &Surface) -> Vec<Ro
     room.finish()
 }
 
-/// A tool row's words laid as the rows a body is drawn as, with the run of `path` a way to
-/// `destination`: a path wider than the row is broken over two rows, each carrying the whole
-/// destination. Nothing is laid when the words do not hold the path.
-pub fn named(text: &str, cols: u16, path: &str, destination: &str) -> Option<Vec<Row>> {
-    if path.is_empty() {
+/// A tool row's body laid as the rows it is drawn as, with the path it names a way to the file the
+/// run judged: a path wider than the row is broken over two rows, each carrying the whole
+/// destination. Nothing is laid when the words do not name the path.
+pub fn body(text: &str, cols: u16, way: &Way) -> Option<Vec<Row>> {
+    if way.written().is_empty() {
         return None;
     }
     let mut room = Room::new(cols.max(1), &Surface::none());
     let plain = Look::plain(Ink::Plain);
-    let marked = plain.underlined(WAY);
+    let marked = plain.underlined(UNDERLINE);
     let mut named = false;
     for line in text.split('\n') {
         let mut rest = line;
-        while let Some(at) = rest.find(path) {
+        while let Some(at) = as_a_value(rest, way.written()) {
             let (before, from) = rest.split_at(at);
-            let (way, after) = from.split_at(path.len());
+            let (named_words, after) = from.split_at(way.written().len());
             room.prose(before, plain);
-            room.link = Some((destination.to_owned(), way.to_owned()));
-            room.prose(way, marked);
+            room.link = Some(way.destination().to_owned());
+            room.prose(named_words, marked);
             room.link = None;
             rest = after;
             named = true;
@@ -74,6 +75,17 @@ pub fn named(text: &str, cols: u16, path: &str, destination: &str) -> Option<Vec
         room.flush();
     }
     named.then_some(room.rows)
+}
+
+/// Where `text` writes `path` as the value of the `path` a call names rather than as a word that
+/// spells it: a call writes its arguments as JSON, and the cells a way is drawn on are the ones the
+/// run read the path from, never a value that happens to say the same.
+fn as_a_value(text: &str, path: &str) -> Option<usize> {
+    let key = text.find("\"path\"")?;
+    let after = &text[key..];
+    let at = key + after.find(':')? + after[after.find(':')?..].find(path)?;
+    let quoted = text[..at].ends_with('"') && text[at + path.len()..].starts_with('"');
+    quoted.then_some(at)
 }
 
 fn syntaxes() -> &'static SyntaxSet {
@@ -172,8 +184,8 @@ struct Room {
     /// as the widest cell the table holds.
     table: Option<Table>,
     rule: Option<Rule>,
-    /// The link being said: its destination and the words said over it.
-    link: Option<(String, String)>,
+    /// The way being said: where the words being placed go, and nothing beside them.
+    link: Option<String>,
     /// The runs of the row in hand that are ways to somewhere, measured from the words' own left
     /// edge: laid as the words land, so a link that wraps is a run on each row it wrote.
     laid: Vec<Laid>,
@@ -298,22 +310,18 @@ impl Room {
                 None => {
                     let worn = self.block.wearing(self.worn());
                     let linked = match self.link.is_some() {
-                        true => worn.underlined(WAY),
+                        true => worn.underlined(UNDERLINE),
                         false => worn,
                     };
+                    let way = self.link.clone();
                     match &mut self.table {
                         // A cell is measured only once the whole table has been read.
-                        Some(table) => table.text(&text, worn),
+                        Some(table) => table.text(&text, linked, way.as_deref()),
                         // A picture's words are kept aside for the row it is spoken of on:
                         // they are the block's, not the paragraph's.
                         None => match &mut self.image {
                             Some((_, alt)) => alt.push_str(&text),
-                            None => {
-                                if let Some((_, said)) = &mut self.link {
-                                    said.push_str(&text);
-                                }
-                                self.prose(&text, linked);
-                            }
+                            None => self.prose(&text, linked),
                         },
                     }
                 }
@@ -323,8 +331,9 @@ impl Room {
             // and the two would otherwise be one look.
             Event::Code(text) => {
                 let reversed = Look::new(Ink::Muted, Face::Reversed);
+                let way = self.link.clone();
                 match &mut self.table {
-                    Some(table) => table.text(&text, reversed),
+                    Some(table) => table.text(&text, reversed, way.as_deref()),
                     None => {
                         self.place(&text, reversed, self.spaced);
                         self.spaced = false;
@@ -336,15 +345,16 @@ impl Room {
             }
             Event::End(TagEnd::Image) => self.close_image(),
             Event::Start(Tag::Link { dest_url, .. }) => {
-                self.link = Some((String::from(&*dest_url), String::new()));
+                self.link = Some(String::from(&*dest_url));
             }
-            Event::End(TagEnd::Link) => self.close_link(),
+            Event::End(TagEnd::Link) => self.link = None,
             // A soft break is the line the source was wrapped on, not one the writer drew:
             // the paragraph is reflowed to the room.
             Event::SoftBreak => {
                 let worn = self.block.wearing(self.worn());
+                let way = self.link.clone();
                 match &mut self.table {
-                    Some(table) => table.text(" ", worn),
+                    Some(table) => table.text(" ", worn, way.as_deref()),
                     None => match &mut self.image {
                         Some((_, alt)) => alt.push(' '),
                         None => self.spaced = true,
@@ -461,7 +471,7 @@ impl Room {
     /// Whether the way being said already covers the column the next word begins at, which is
     /// what makes the space before it the way's own rather than the block's.
     fn reaches(&self) -> bool {
-        let Some((destination, _)) = &self.link else {
+        let Some(destination) = &self.link else {
             return false;
         };
         self.laid.last().is_some_and(|run| {
@@ -476,7 +486,7 @@ impl Room {
         let left = self.used;
         let width = usize::from(pen::cells(text));
         self.extend(text, look);
-        let Some((destination, _)) = &self.link else {
+        let Some(destination) = &self.link else {
             return;
         };
         match self.laid.last_mut() {
@@ -520,9 +530,8 @@ impl Room {
             return;
         };
 
-        let head = table.lines(&widths);
-        for line in &head {
-            let row = joined(line, &widths);
+        for line in table.lines(&widths) {
+            let row = joined(&line, &widths);
             self.guttered(row);
         }
         let rule = header_rule(&widths);
@@ -679,21 +688,6 @@ impl Room {
         self.flush_if_written();
         self.marks.pop();
         self.first = false;
-    }
-
-    /// A link closes: its words are the whole of it, and the destination travels beside the row
-    /// they were written on. A cell is measured whole before a row of it is drawn, so the words a
-    /// table holds are followed by the destination — the one place it is said at all.
-    fn close_link(&mut self) {
-        let Some((dest, said)) = self.link.take() else {
-            return;
-        };
-        if said.trim() == dest {
-            return;
-        }
-        if let Some(table) = &mut self.table {
-            table.text(&format!(" {dest}"), Look::plain(WAY));
-        }
     }
 
     /// A picture closes: the block it is, spoken of as its words on the first of its rows and
@@ -989,15 +983,24 @@ struct Table {
     head: Vec<Cell>,
     rows: Vec<Vec<Cell>>,
     row: Vec<Cell>,
-    cell: Vec<(String, Look)>,
+    cell: Cell,
     heading: bool,
 }
 
-type Cell = Vec<(String, Look)>;
+type Cell = Vec<Said>;
+
+/// One run of a cell's words, and where it goes when it is a way somewhere: a cell is measured
+/// whole before a row of it is drawn, so what it names travels with the words it was written as.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Said {
+    text: String,
+    look: Look,
+    destination: Option<String>,
+}
 
 impl Table {
     /// A cell's words, worn bold while the header is being read.
-    fn text(&mut self, text: &str, look: Look) {
+    fn text(&mut self, text: &str, look: Look, destination: Option<&str>) {
         if text.is_empty() {
             return;
         }
@@ -1005,7 +1008,17 @@ impl Table {
             true => look.wearing(Faces::BOLD),
             false => look,
         };
-        self.cell.push((String::from(text), look));
+        let destination = destination.map(str::to_owned);
+        match self.cell.last_mut() {
+            Some(said) if said.look == look && said.destination == destination => {
+                said.text.push_str(text);
+            }
+            _ => self.cell.push(Said {
+                text: String::from(text),
+                look,
+                destination,
+            }),
+        }
     }
 
     fn close_cell(&mut self) {
@@ -1041,7 +1054,7 @@ impl Table {
             .unwrap_or(0)
     }
 
-    fn lines(&self, widths: &[usize]) -> Vec<Vec<Cell>> {
+    fn lines(&self, widths: &[usize]) -> Vec<Vec<Row>> {
         lines_of(&self.head, widths)
     }
 
@@ -1085,22 +1098,21 @@ fn fit(naturals: &[usize], budget: usize) -> Option<Vec<usize>> {
     Some(widths)
 }
 
-fn lines_of(cells: &[Cell], widths: &[usize]) -> Vec<Vec<Cell>> {
-    let wrapped: Vec<Vec<Cell>> = widths
+fn lines_of(cells: &[Cell], widths: &[usize]) -> Vec<Vec<Row>> {
+    let wrapped: Vec<Vec<Row>> = widths
         .iter()
         .enumerate()
         .map(|(at, width)| {
             // A picture's height is not a column's width, so this room has no surface for
             // one: a cell is measured for the words that fit it.
             let mut room = Room::new(u16::try_from(*width).unwrap_or(u16::MAX), &Surface::none());
-            for (text, look) in cells.get(at).into_iter().flatten() {
-                room.prose(text, *look);
+            for said in cells.get(at).into_iter().flatten() {
+                room.link = said.destination.clone();
+                room.prose(&said.text, said.look);
             }
+            room.link = None;
             room.flush_if_written();
             room.rows
-                .into_iter()
-                .map(|row| row.spans().to_vec())
-                .collect::<Vec<Cell>>()
         })
         .collect();
     let tall = wrapped.iter().map(Vec::len).max().unwrap_or(0);
@@ -1108,36 +1120,36 @@ fn lines_of(cells: &[Cell], widths: &[usize]) -> Vec<Vec<Cell>> {
         .map(|line| {
             wrapped
                 .iter()
-                .map(|cell| cell.get(line).cloned().unwrap_or_default())
+                .map(|cell| cell.get(line).cloned().unwrap_or_else(Row::blank))
                 .collect()
         })
         .collect()
 }
 
-fn joined(line: &[Cell], widths: &[usize]) -> Row {
-    let mut spans: Vec<(String, Look)> = Vec::new();
+fn joined(line: &[Row], widths: &[usize]) -> Row {
+    let mut row = Row::blank();
     for (at, width) in widths.iter().enumerate() {
         if at > 0 {
-            spans.extend(
-                Row::of([(String::from(" │ "), Look::plain(Ink::Dim))])
-                    .spans()
-                    .to_vec(),
-            );
+            row = row.followed_by(&Row::of([(String::from(" │ "), Look::plain(Ink::Dim))]));
         }
-        let cell: &[(String, Look)] = line.get(at).map(Vec::as_slice).unwrap_or_default();
-        spans.extend(cell.iter().cloned());
+        let cell = line.get(at);
+        let wrote = cell.map_or(0, Row::width);
+        if let Some(cell) = cell {
+            row = row.followed_by(cell);
+        }
         // The last column keeps no blank past its words: padding it would draw cells that
         // say nothing, and a row is a run of glyphs and not a box.
         let last = at + 1 == widths.len();
         let pad = match last {
             true => 0,
-            false => width.saturating_sub(measured(cell)),
+            false => width.saturating_sub(usize::from(wrote)),
         };
         if pad > 0 {
-            spans.push((pen::blank(pen::columns(pad)), Look::plain(Ink::Plain)));
+            let blank = pen::blank(pen::columns(pad));
+            row = row.followed_by(&Row::of([(blank, Look::plain(Ink::Plain))]));
         }
     }
-    Row::of(spans)
+    row
 }
 
 /// The rule under a header: the header's own row with every word spent as `─` and every bar
@@ -1153,8 +1165,8 @@ fn header_rule(widths: &[usize]) -> Row {
     Row::of([(text, Look::plain(Ink::Dim))])
 }
 
-fn measured(cell: &[(String, Look)]) -> usize {
+fn measured(cell: &[Said]) -> usize {
     cell.iter()
-        .map(|(text, _)| usize::from(pen::cells(text)))
+        .map(|said| usize::from(pen::cells(&said.text)))
         .sum()
 }

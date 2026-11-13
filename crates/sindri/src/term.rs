@@ -437,6 +437,9 @@ mod tests {
     use sindri::palette::Palette;
     use sindri::pen::{self, Clip};
 
+    use sindri_core::config::Config;
+    use sindri_core::open::Ground;
+    use sindri_core::policy::{Boundary, Enforcement};
     use sindri_core::records::Entry;
     use sindri_core::redact::SecretSet;
 
@@ -508,6 +511,19 @@ mod tests {
         backend.flush().expect("a written row");
         drop(backend);
         pty.drawn()
+    }
+
+    /// The ground a run judges a target from in this test: the tree the product is built in, whose
+    /// `GLOSSARY.md` is a file a call can name and be judged against.
+    fn ground() -> Ground {
+        let workspace = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .nth(2)
+            .expect("the tree the product is built in");
+        let boundary =
+            Boundary::from_config(&Config::default(), workspace, Enforcement::Bubblewrap)
+                .expect("the boundary holds");
+        Ground::new(&boundary, workspace, workspace).expect("the ground resolves")
     }
 
     /// The ways `links` name, laid at frame row 0: how a row hands the frame what it names.
@@ -684,13 +700,15 @@ mod tests {
         let mut frame = Buffer::empty(area);
         let mut links = Links::none();
         let answer = sindri::markdown::rows("see [the gate](https://example.test/gate)", 60);
-        let call = sindri::rows::layout(
+        let call = sindri::rows::layout_on(
             &Entry::Call {
                 turn: 1,
                 name: SecretSet::default().redact("open"),
                 arguments: SecretSet::default().redact(r#"{"path": "GLOSSARY.md"}"#),
             },
             60,
+            &sindri::picture::Surface::none(),
+            Some(&ground()),
         );
         for (y, row) in answer.iter().chain(call.iter()).enumerate() {
             row.paint(
@@ -721,6 +739,10 @@ mod tests {
         assert!(
             places.contains("\x1b]8;;https://example.test/gate\x1b\\"),
             "where the terminal that places one is handed the destination around the words"
+        );
+        assert!(
+            places.contains("\x1b]8;;file://"),
+            "and the path a call names is handed the file it was judged against"
         );
     }
 
