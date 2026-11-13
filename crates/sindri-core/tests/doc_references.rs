@@ -53,9 +53,13 @@ fn read(root: &Path, name: &str) -> Document {
 }
 
 /// The ADRs the directory holds, listed at run time so a new one is covered without touching this
-/// file. Anything but a hidden file is a record, so a stray name is judged rather than passed over.
+/// file. Anything but a hidden file is a record, so a stray name is judged rather than passed over;
+/// a tree that keeps no ADRs yet has nothing to judge.
 fn adrs(root: &Path) -> Vec<Adr> {
     let directory = root.join("docs/adr");
+    if !directory.is_dir() {
+        return Vec::new();
+    }
     let listing = fs::read_dir(&directory)
         .unwrap_or_else(|error| panic!("cannot list {}: {error}", directory.display()));
     let mut adrs: Vec<Adr> = listing
@@ -71,11 +75,6 @@ fn adrs(root: &Path) -> Vec<Adr> {
         .map(|file| Adr::named(&file))
         .collect();
     adrs.sort_by(|left, right| left.file.cmp(&right.file));
-    assert!(
-        !adrs.is_empty(),
-        "{} holds no ADR to check references against",
-        directory.display()
-    );
     adrs
 }
 
