@@ -28,7 +28,7 @@ use sindri_core::provider::transport::{Canned, Replay};
 use sindri_core::provider::{Client, Credential, Deltas};
 use sindri_core::records::{Dials, Entry, SessionDocument, Usage};
 use sindri_core::redact::SecretSet;
-use sindri_core::run::{Exit, State as RunState, Stop};
+use sindri_core::run::{Budget, Exit, State as RunState, Stop};
 use sindri_core::wire::Wire;
 
 const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
@@ -125,6 +125,8 @@ fn named(name: &str) -> View {
         // under the settled one; nine point four seconds is under ten, so that marker keeps its decimal.
         "pulse-live" => with_pulse(Pulse::live(4_200), &PULSE_ANSWER[..3]),
         "pulse-settled" => with_pulse(Pulse::settled(&Stop::Final, 9_400), &PULSE_ANSWER),
+        "stops" => running(stops(), Scroll::Tail),
+        "stop" => stopped_on(wire_refused()),
         "queue" => queue(),
         "keys" => {
             let mut view = View::boot();
@@ -737,6 +739,41 @@ fn with_pulse(pulse: Pulse, said: &[&str]) -> View {
         view.text(fragment);
     }
     view.set_pulse(Some(pulse));
+    view
+}
+
+/// The failure a run can end on, in the words a wire gives it: the one stop that carries a line.
+fn wire_refused() -> Stop {
+    Stop::Error(SecretSet::default().redact("the wire refused the request: 401 unauthorized"))
+}
+
+/// One entry of every stop a run can end on, one above the other, so the five words and the two
+/// marks are read at once.
+fn stops() -> Vec<Entry> {
+    vec![
+        Stop::Final,
+        Stop::MaxTurns,
+        Stop::Budget(Budget::Clock),
+        Stop::Cancelled,
+        wire_refused(),
+    ]
+    .into_iter()
+    .map(|stop| Entry::Stop { stop })
+    .collect()
+}
+
+const STOP_ANSWER: [&str; 4] = [
+    "A run that stopped for a reason says the reason, and it says it twice: once in ",
+    "the marker beside the answer it ended on, and once in the entry the record keeps ",
+    "where the run ended. A failure carries one line of the run's own words about it, ",
+    "and a final answer and a cancellation carry no line they do not have.",
+];
+
+/// The frame a failed run leaves: the marker settled on the answer it last said, and the stop entry
+/// the record keeps under it.
+fn stopped_on(stop: Stop) -> View {
+    let mut view = with_pulse(Pulse::settled(&stop, 1_240), &STOP_ANSWER);
+    view.stopped(&stop);
     view
 }
 

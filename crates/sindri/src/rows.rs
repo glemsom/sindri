@@ -8,7 +8,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use sindri_core::open::{Ground, Opening};
 use sindri_core::records::Entry;
-use sindri_core::run::Exit;
+use sindri_core::run::{Exit, Stop};
 use sindri_core::tools::OPEN;
 
 use crate::ink::{Ink, Look};
@@ -294,6 +294,7 @@ fn laid(
         Entry::Assistant { text, .. } => (answer_on(&text.to_string(), cols, None, surface), None),
         Entry::Reasoning { text, .. } => (thought(&text.to_string(), cols), None),
         Entry::Prompt { text } => (asked(&text.to_string(), cols), None),
+        Entry::Stop { stop } => (stopped(stop, cols), None),
     }
 }
 
@@ -326,6 +327,24 @@ fn folded(mut rows: Vec<Row>, cols: u16, fold: Fold) -> (Vec<Row>, Option<usize>
 fn kept_back(kept: usize, cols: u16) -> Row {
     let words = format!("{kept} rows kept back");
     marked(&KEPT.to_string(), Ink::Dim, vec![(words, Ink::Dim)], cols)
+}
+
+/// The rows a stop is drawn as: the mark it wears with its own word beside it, and one line of the
+/// run's own words under it when the stop is an error, since a reader is owed one line and no more.
+fn stopped(stop: &Stop, cols: u16) -> Vec<Row> {
+    let (marker, ink) = stop_mark(stop);
+    let mut rows = vec![marked(
+        &marker.to_string(),
+        ink,
+        vec![(String::from(stop.word()), Ink::Dim)],
+        cols,
+    )];
+    if let Stop::Error(message) = stop {
+        let said = message.to_string();
+        let line = said.lines().next().unwrap_or_default();
+        rows.extend(body(line, cols, None, Ink::Muted));
+    }
+    rows
 }
 
 fn asked(text: &str, cols: u16) -> Vec<Row> {
@@ -555,6 +574,15 @@ fn answered(
     (rows, kept)
 }
 
+/// The check a run that answered settles on and the cross every other stop wears: the marker at the
+/// head of an answer and the stop's own entry read this pair, so no two drawings of one stop disagree.
+pub(crate) fn stop_mark(stop: &Stop) -> (char, Ink) {
+    match stop {
+        Stop::Final => (CHECK, Ink::Ok),
+        Stop::MaxTurns | Stop::Budget(_) | Stop::Cancelled | Stop::Error(_) => (CROSS, Ink::Err),
+    }
+}
+
 fn mark(exit: Exit) -> char {
     if exit.is_ok() { CHECK } else { CROSS }
 }
@@ -763,6 +791,9 @@ pub struct Rows {
     /// places one — because how many rows a picture takes is part of the rows it was laid out as.
     surface: Surface,
     ground: Option<Ground>,
+    /// Whether the stop this cache holds last is the one the turn in flight ended, which stands above
+    /// it, and never the stop a run before it left.
+    ended: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -796,6 +827,13 @@ impl Rows {
         Rows::default()
     }
 
+    /// Holds the stop a run ended on at the transcript's end: the words that run last said are theirs
+    /// to keep above it, so the reason a run stopped is the last word of the run it ended.
+    pub(crate) fn stopped(&mut self, stop: Stop) {
+        self.push(Entry::Stop { stop });
+        self.ended = true;
+    }
+
     /// Holds one more entry, unlaid. A result settles the entry the call it answers opened rather
     /// than opening one under it, and that entry is drawn as the call's rows and the result's under
     /// them — unless this cache never held that call, an older transcript's entry read on its own.
@@ -826,44 +864,56 @@ impl Rows {
         }
         let revision = stream.revision();
         let head = head.cloned();
-        if let Some(Held {
-            what:
-                What::Live {
-                    revision: at,
-                    head: mark,
-                },
-            rows: Some(_),
-            ..
-        }) = self.held.last()
-            && *at == revision
+        let at = self.live_at();
+        if let Some(held) = at.map(|at| &self.held[at])
+            && let What::Live {
+                revision: laid,
+                head: mark,
+            } = &held.what
+            && held.rows.is_some()
+            && *laid == revision
             && *mark == head
         {
             return;
         }
         let rows = stream.rows_on(self.cols, head.as_ref(), &self.surface);
-        match self.held.last_mut() {
-            Some(held) if matches!(held.what, What::Live { .. }) => {
+        match at {
+            Some(at) => {
+                let held = &mut self.held[at];
                 held.what = What::Live { revision, head };
                 held.rows = Some(rows);
             }
-            _ => self.held.push(Held {
-                what: What::Live { revision, head },
-                result: None,
-                rows: Some(rows),
-                fold: Fold::Closed,
-                kept: None,
-            }),
+            None => {
+                let held = Held {
+                    what: What::Live { revision, head },
+                    result: None,
+                    rows: Some(rows),
+                    fold: Fold::Closed,
+                    kept: None,
+                };
+                match self.ended {
+                    true => self.held.insert(self.held.len() - 1, held),
+                    false => self.held.push(held),
+                }
+                self.ended = false;
+            }
         }
         self.lays += 1;
     }
 
-    fn retire(&mut self) {
-        if matches!(
-            self.held.last().map(|held| &held.what),
-            Some(What::Live { .. })
-        ) {
-            self.held.pop();
-        }
+    /// Where the turn in flight stands, which a stop that landed under it leaves in its own place:
+    /// the turn is found rather than taken to be the newest entry.
+    fn live_at(&self) -> Option<usize> {
+        self.held
+            .iter()
+            .position(|held| matches!(held.what, What::Live { .. }))
+    }
+
+    /// Drops the turn in flight, wherever it stands: the run it belonged to has said its last word.
+    pub(crate) fn retire(&mut self) {
+        self.held
+            .retain(|held| !matches!(held.what, What::Live { .. }));
+        self.ended = false;
     }
 
     /// The oldest call of `turn` whose result has not landed, because a wave of calls and

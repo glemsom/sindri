@@ -6,6 +6,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use sindri::composer::Key;
+use sindri::ink::Ink;
 use sindri::pen;
 use sindri::pulse::{Pulse, STEP_MS, format_duration, pulse_glyph};
 use sindri::view::View;
@@ -163,43 +164,56 @@ fn a_run_that_reached_its_answer_settles_on_a_check_and_the_duration_it_stopped_
 }
 
 #[test]
-fn a_run_that_never_answered_settles_on_a_cross_and_the_duration_it_stopped_at() {
-    for stop in [failed(), Stop::MaxTurns, Stop::Budget(Budget::Clock)] {
+fn a_settled_marker_says_the_stops_own_word_and_only_a_final_answer_goes_without_one() {
+    let stops = [
+        (Stop::Final, "✓ 3.1s", '✓', Ink::Ok),
+        (Stop::MaxTurns, "✗ max_turns 3.1s", '✗', Ink::Err),
+        (Stop::Budget(Budget::Clock), "✗ budget 3.1s", '✗', Ink::Err),
+        (Stop::Budget(Budget::Output), "✗ budget 3.1s", '✗', Ink::Err),
+        (Stop::Cancelled, "✗ cancelled 3.1s", '✗', Ink::Err),
+        (failed(), "✗ error 3.1s", '✗', Ink::Err),
+    ];
+    for (stop, said, glyph, ink) in stops {
         let settled = Pulse::settled(&stop, 3_100);
         assert_eq!(
             settled.head().text(),
-            "✗ 3.1s",
-            "{} answered nothing, so it wears the cross",
-            stop.word()
+            said,
+            "a run that stopped for a reason says the reason, and a final answer says none"
         );
         assert_eq!(
             settled.head().spans()[0],
-            (String::from("✗"), sindri::ink::Ink::Err)
+            (glyph.to_string(), ink),
+            "the glyph is the mark that stop wears"
         );
     }
 }
 
 #[test]
-fn a_cancelled_run_settles_as_cancelled_and_never_as_a_failure() {
+fn a_cancelled_run_settles_as_cancelled_and_is_never_mistaken_for_a_failure() {
     let cancelled = Pulse::settled(&Stop::Cancelled, 5_000);
 
     assert_eq!(
         cancelled.head().text(),
         "✗ cancelled 5.0s",
-        "the user's own word is said, not left to read as a failure"
+        "the reader's own word is said, not left to read as a failure"
+    );
+    assert_eq!(
+        cancelled.head().spans()[0],
+        Pulse::settled(&failed(), 5_000).head().spans()[0],
+        "both wear the cross, so the word beside it is what tells them apart"
     );
     assert_ne!(
         cancelled.head().text(),
         Pulse::settled(&failed(), 5_000).head().text(),
-        "and it is not the mark a failure wears"
+        "and the words are what tell them apart"
     );
 }
 
 #[test]
 fn the_widest_marker_asks_for_one_cell_and_fourteen_columns() {
-    let widest = Pulse::settled(&Stop::Cancelled, 5_000);
+    let widest = Pulse::settled(&Stop::MaxTurns, 5_000);
 
-    assert_eq!(widest.words(), "cancelled 5.0s");
+    assert_eq!(widest.words(), "max_turns 5.0s");
     assert_eq!(
         pen::cells(&widest.words()),
         14,

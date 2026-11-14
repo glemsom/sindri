@@ -13,7 +13,7 @@ use sindri_core::open::Ground;
 use sindri_core::provider::Deltas;
 use sindri_core::provider::served::Listing;
 use sindri_core::records::{Entry, SessionDocument};
-use sindri_core::run::{Exchange, Load, Loaded};
+use sindri_core::run::{Exchange, Load, Loaded, Stop};
 use sindri_core::skills::{Catalog, Skill};
 
 use crate::card;
@@ -266,6 +266,7 @@ impl View {
     /// it was drawn as goes, and the door with it. A run starting now is asked under the
     /// conversation that stands, so whatever `/new` superseded is behind it.
     pub fn settle(&mut self) {
+        self.rows.retire();
         self.stream = Stream::new();
         self.scroll = Scroll::Tail;
         self.door = false;
@@ -367,6 +368,12 @@ impl View {
 
     pub fn refuse(&mut self, reason: &str) {
         self.settings.refuse(reason);
+    }
+
+    /// The stop the run ended on, laid in the transcript where the run ended: the entry the record
+    /// keeps, wearing the same word as the marker beside it.
+    pub fn stopped(&mut self, stop: &Stop) {
+        self.rows.stopped(stop.clone());
     }
 
     pub fn set_record(&mut self, document: &SessionDocument) {

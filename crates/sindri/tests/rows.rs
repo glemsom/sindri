@@ -15,13 +15,14 @@ use sindri::pulse::Pulse;
 use sindri::rows::{Row, Rows, Scroll, Window, layout, layout_on};
 use sindri::size::Sizes;
 use sindri::stream::Stream;
+use sindri::view::View;
 use sindri_core::config::Config;
 use sindri_core::open::Ground;
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::provider::Deltas;
 use sindri_core::records::{Entry, read_transcript, transcript_path};
 use sindri_core::redact::SecretSet;
-use sindri_core::run::Exit;
+use sindri_core::run::{Budget, Exit, Stop};
 
 fn turn(which: u32) -> Entry {
     Entry::Turn { turn: which }
@@ -2035,4 +2036,220 @@ fn a_band_with_nothing_to_point_at_draws_no_thumb() {
         roomy.thumb(Scroll::Back(44), 36).is_some(),
         "and four columns hold the gutter beside a word, so the thumb is drawn there"
     );
+}
+
+/// The stop a run ends on: the one entry whose word is the reason a reader missed.
+fn stop_entry(stop: Stop) -> Entry {
+    Entry::Stop { stop }
+}
+
+fn failed() -> Stop {
+    Stop::Error(SecretSet::default().redact("the wire refused\nafter the second try"))
+}
+
+#[test]
+fn every_stop_is_drawn_under_its_own_word_on_the_mark_it_wears() {
+    let stops = [
+        (Stop::Final, "✓ final", Ink::Ok),
+        (Stop::MaxTurns, "✗ max_turns", Ink::Err),
+        (Stop::Budget(Budget::Clock), "✗ budget", Ink::Err),
+        (Stop::Budget(Budget::Output), "✗ budget", Ink::Err),
+        (Stop::Cancelled, "✗ cancelled", Ink::Err),
+        (failed(), "✗ error", Ink::Err),
+    ];
+    for (stop, said, ink) in stops {
+        let rows = layout(&stop_entry(stop.clone()), 40);
+
+        assert_eq!(
+            words(&rows[0]),
+            said,
+            "{} is drawn under its own word, so a reader reads why it stopped",
+            stop.word()
+        );
+        assert_eq!(
+            inks(&rows[0]),
+            vec![ink, Ink::Plain, Ink::Dim],
+            "the mark in the ink its verdict wears, and the word a rung quieter than it"
+        );
+    }
+}
+
+#[test]
+fn an_error_stop_carries_one_line_of_its_words_and_no_other_stop_carries_a_line() {
+    let rows = layout(&stop_entry(failed()), 60);
+    let drawn: Vec<String> = rows.iter().map(words).collect();
+
+    assert_eq!(
+        drawn,
+        vec![String::from("✗ error"), String::from("  the wire refused")],
+        "an error carries one line of the run's own words about it, and the rest stays unsaid: \
+         {drawn:?}"
+    );
+
+    for stop in [
+        Stop::Final,
+        Stop::MaxTurns,
+        Stop::Budget(Budget::Clock),
+        Stop::Cancelled,
+    ] {
+        let rows = layout(&stop_entry(stop.clone()), 60);
+        assert_eq!(
+            rows.len(),
+            1,
+            "{} says its word and carries no line under it: {rows:?}",
+            stop.word()
+        );
+    }
+}
+
+#[test]
+fn a_stop_gives_up_its_mark_before_a_word_in_a_band_too_narrow_for_both() {
+    let entry = stop_entry(failed());
+
+    for row in layout(&entry, 2) {
+        assert!(
+            row.width() <= 2,
+            "a row of two columns holds no word past them: {row:?}"
+        );
+        assert!(
+            !row.glyphs().contains('✗'),
+            "the mark is given up rather than the words: {row:?}"
+        );
+    }
+
+    let narrow = layout(&entry, 3);
+    let head = &narrow[0];
+    assert_eq!(
+        drawn_at(head, 0),
+        Some('✗'),
+        "three columns hold the mark: {head:?}"
+    );
+    assert_eq!(
+        words_column(head),
+        Some(2),
+        "and the word the cross was given up for follows it: {head:?}"
+    );
+}
+
+#[test]
+fn a_stop_read_back_from_a_transcript_is_drawn_with_the_reason_a_reader_missed() {
+    let directory = tempfile::tempdir().expect("a session directory");
+    std::fs::write(
+        transcript_path(directory.path()),
+        "{\"kind\":\"stop\",\"stop\":{\"error\":\"the wire went away\"}}\n",
+    )
+    .expect("a transcript a run wrote");
+    let read = read_transcript(directory.path()).expect("the transcript reads back");
+
+    let drawn: Vec<String> = read
+        .entries()
+        .iter()
+        .flat_map(|entry| layout(entry, 80))
+        .map(|row| words(&row))
+        .collect();
+
+    assert_eq!(
+        drawn,
+        vec![
+            String::from("✗ error"),
+            String::from("  the wire went away")
+        ],
+        "a stop written by one run reads back as the reason the run stopped: {drawn:?}"
+    );
+}
+
+/// The rows of a frame at `cols` by `rows`: what a reader is handed, painted through the one seam.
+fn frame(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
+    let area = Rect::new(0, 0, cols, rows);
+    let mut buffer = Buffer::empty(area);
+    view.paint(area, &mut buffer);
+    (0..rows)
+        .map(|y| {
+            (0..cols)
+                .map(|x| {
+                    buffer
+                        .cell((x, y))
+                        .and_then(|cell| cell.symbol().chars().next())
+                        .unwrap_or(' ')
+                })
+                .collect::<String>()
+                .trim_end()
+                .to_owned()
+        })
+        .collect()
+}
+
+#[test]
+fn a_run_that_starts_after_a_stop_says_its_words_below_that_stops_entry() {
+    let mut view = View::boot();
+    view.set_pulse(Some(Pulse::live(0)));
+    view.text("the first run's answer");
+    view.set_pulse(Some(Pulse::settled(&Stop::Final, 1_200)));
+    view.stopped(&Stop::Final);
+    let ended = frame(&mut view, 60, 12);
+
+    assert_eq!(
+        ended[0], "✓ 1.2s the first run's answer",
+        "the marker settles on the answer the run ended on: {ended:?}"
+    );
+    assert_eq!(
+        ended[1], "✓ final",
+        "and the stop it ended on is the transcript's last entry till a run follows it: {ended:?}"
+    );
+
+    view.settle();
+    view.set_pulse(Some(Pulse::live(0)));
+    view.text("the second run is working");
+    let after = frame(&mut view, 60, 12);
+    let at = |said: &str| {
+        after
+            .iter()
+            .position(|row| row == said)
+            .unwrap_or_else(|| panic!("the frame draws {said:?}: {after:?}"))
+    };
+
+    assert!(
+        at("✓ final") < at("⠋ 0.0s the second run is working"),
+        "the run after it says its words under that stop rather than above it: {after:?}"
+    );
+}
+
+#[test]
+fn a_stop_and_the_marker_beside_it_say_the_same_word_and_never_two() {
+    let stop = failed();
+    let mut view = View::boot();
+    view.text("the answer the run got before it stopped");
+    view.set_pulse(Some(Pulse::settled(&stop, 1_240)));
+    view.stopped(&stop);
+    let drawn = frame(&mut view, 40, 12);
+    let whole = drawn.join("\n");
+    let at = |said: &str| {
+        drawn
+            .iter()
+            .position(|row| row == said)
+            .unwrap_or_else(|| panic!("the frame draws {said:?}: {whole}"))
+    };
+    let marker = at("✗ error 1.2s the answer the run got");
+    let entry = at("✗ error");
+
+    assert_eq!(
+        drawn[marker + 1],
+        "  before it stopped",
+        "the marker settles on the run's answer: {whole}"
+    );
+    assert_eq!(
+        drawn[entry + 1],
+        "  the wire refused",
+        "and the run's own words about it stand under the stop: {whole}"
+    );
+    assert!(
+        marker < entry,
+        "the stop the run ended on is the transcript's last entry, under its answer: {whole}"
+    );
+    for word in ["final", "max_turns", "budget", "cancelled"] {
+        assert!(
+            !whole.contains(word),
+            "a frame that stopped on an error says no other reason than error: {whole}"
+        );
+    }
 }

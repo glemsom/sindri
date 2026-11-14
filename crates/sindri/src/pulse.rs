@@ -2,6 +2,7 @@ use sindri_core::run::Stop;
 
 use crate::ink::Ink;
 use crate::pen;
+use crate::rows::stop_mark;
 
 /// Also the wait a live run gives the loop in `tui`.
 pub const STEP_MS: u64 = 80;
@@ -49,26 +50,25 @@ impl Pulse {
         }
     }
 
-    /// A cancelled run says so: `cancelled 5.0s`, never the bare cross a failure wears.
+    /// A run that stopped says why: `cancelled 5.0s`, `error 3.1s`, and only a final answer
+    /// goes without a word.
     pub fn words(&self) -> String {
         match self {
             Pulse::Live { elapsed_ms } => format_duration(*elapsed_ms),
             Pulse::Settled {
-                stop: Stop::Cancelled,
+                stop: Stop::Final,
                 elapsed_ms,
-            } => format!("cancelled {}", format_duration(*elapsed_ms)),
-            Pulse::Settled { elapsed_ms, .. } => format_duration(*elapsed_ms),
+            } => format_duration(*elapsed_ms),
+            Pulse::Settled { stop, elapsed_ms } => {
+                format!("{} {}", stop.word(), format_duration(*elapsed_ms))
+            }
         }
     }
 
-    /// The check and the cross are the pair a tool row ends with, in the same two inks.
     fn mark(&self) -> (char, Ink) {
         match self {
             Pulse::Live { elapsed_ms } => (pulse_glyph(*elapsed_ms), Ink::Accent),
-            Pulse::Settled {
-                stop: Stop::Final, ..
-            } => ('✓', Ink::Ok),
-            Pulse::Settled { .. } => ('✗', Ink::Err),
+            Pulse::Settled { stop, .. } => stop_mark(stop),
         }
     }
 
