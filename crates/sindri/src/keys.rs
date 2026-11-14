@@ -41,11 +41,17 @@ impl Mode {
     /// The two labels a screen wears on its card: its name, and the key its own table binds to
     /// leaving it. A draft has neither, because it is no screen.
     pub fn labels(self) -> Option<(&'static str, &'static str)> {
-        let leaves = self
-            .table()
-            .iter()
-            .find(|binding| binding.act == Act::Close)?;
-        Some((self.title()?, leaves.name))
+        Some((self.title()?, self.leaves()?))
+    }
+
+    /// The key this mode's table binds to leaving it, and `None` when it binds none.
+    pub fn leaves(self) -> Option<&'static str> {
+        Some(
+            self.table()
+                .iter()
+                .find(|binding| binding.act == Act::Close)?
+                .name,
+        )
     }
 
     /// The name a screen wears in its card's top border, and `None` for the draft, which is no
@@ -118,7 +124,7 @@ pub struct Binding {
     pub act: Act,
 }
 
-const COMPOSER: [Binding; 22] = [
+const COMPOSER: [Binding; 23] = [
     Binding {
         key: Key::Char('?'),
         name: "?",
@@ -136,6 +142,12 @@ const COMPOSER: [Binding; 22] = [
         name: "Enter",
         does: "send the prompt",
         act: Act::Draft,
+    },
+    Binding {
+        key: Key::Escape,
+        name: "Esc",
+        does: "close the commands card, and the draft as it was",
+        act: Act::Close,
     },
     Binding {
         key: Key::Newline,

@@ -18,12 +18,12 @@ card at 40x24
 12 |                       while it starts  | plain:2 plain+bold:21 muted:15 plain:2
 13 |                       a word           | plain:2 plain+bold:21 muted:6 plain:11
 14 |  Enter                send the prompt  | plain:2 plain+bold:21 muted:15 plain:2
-15 |  Shift+Enter, Ctrl-J  a line break in  | plain:2 plain+bold:21 muted:15 plain:2
-16 |                       the draft        | plain:2 plain+bold:21 muted:9 plain:8
-17 |  ↑                    the newest       | plain:2 plain+bold:21 muted:10 plain:7
-18 |                       queued prompt,   | plain:2 plain+bold:21 muted:14 plain:3
-19 |                       or the line      | plain:2 plain+bold:21 muted:11 plain:6
-20 |                       above            | plain:2 plain+bold:21 muted:5 plain:12
-21 |  Ctrl-X               drop the newest  | plain:2 plain+bold:21 muted:15 plain:2
-22 |                       queued prompt    | plain:2 plain+bold:21 muted:13 plain:4
-23 |  ⋯ 33 rows kept back                   | plain:2 dim:19 plain:19
+15 |  Esc                  close the        | plain:2 plain+bold:21 muted:9 plain:8
+16 |                       commands card,   | plain:2 plain+bold:21 muted:14 plain:3
+17 |                       and the draft    | plain:2 plain+bold:21 muted:13 plain:4
+18 |                       as it was        | plain:2 plain+bold:21 muted:9 plain:8
+19 |  Shift+Enter, Ctrl-J  a line break in  | plain:2 plain+bold:21 muted:15 plain:2
+20 |                       the draft        | plain:2 plain+bold:21 muted:9 plain:8
+21 |  ↑                    the newest       | plain:2 plain+bold:21 muted:10 plain:7
+22 |                       queued prompt,   | plain:2 plain+bold:21 muted:14 plain:3
+23 |  ⋯ 37 rows kept back                   | plain:2 dim:19 plain:19

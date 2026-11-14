@@ -26,4 +26,4 @@ wrapped at 80x24
 20 |› the draft is set where an answer is set, and a line of it wider than the band | dim:2 plain:78
 21 |  wraps under the gutter — 日 本 語  keeps both its columns — while a line the     | dim:2 plain:78
 22 |  reader broke is one row of its own.                                           | dim:2 plain:78
-23 |Enter send · ? keys                                                             | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:5 plain:61
+23 |Enter send · / commands · ? keys                                                | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:5 plain:48

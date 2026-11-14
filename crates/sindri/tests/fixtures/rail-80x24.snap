@@ -26,4 +26,4 @@ rail at 80x24
 20 |ctx █░░░░░ · state ⠹ running · model claude-sonnet-4-5… · sandbox bwrap         | dim:4 plain:1 dim:14 accent:9 dim:9 plain:18 dim:11 plain:14
 21 |────────────────────────────────────────────────────────────────────────────────| accent+faint:80
 22 |› what should the run do?                                                       | dim:25 plain:55
-23 |Enter send · ? keys                                                             | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:5 plain:61
+23 |Enter send · / commands · ? keys                                                | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:5 plain:48

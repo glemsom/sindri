@@ -53,6 +53,14 @@ fn painted(view: &mut View) -> String {
     rows_of(&drawn)
 }
 
+/// Whether the commands card is drawn: its name hangs in the top row of a border, and the footer
+/// names the same words on a row of its own.
+fn card_open(view: &mut View) -> bool {
+    painted(view)
+        .lines()
+        .any(|row| row.trim_start().starts_with('\u{256d}') && row.contains("/ commands"))
+}
+
 fn rows_of(buffer: &Buffer) -> String {
     let area = buffer.area;
     let mut lines: Vec<String> = Vec::new();
@@ -347,4 +355,156 @@ fn a_frame_with_no_workspace_loads_no_skill() {
 
     assert_eq!(say(&mut view, "/skill:commit-message"), Outcome::Unchanged);
     assert!(view.loaded().names().is_empty());
+}
+
+#[test]
+fn a_draft_whose_first_glyph_is_a_slash_draws_the_commands_card() {
+    let root = workspace_with("commit-message", "");
+    let mut view = frame(root.path());
+    view.paste("/");
+
+    assert!(
+        card_open(&mut view),
+        "a draft that begins with a slash opens the commands card: {}",
+        painted(&mut view)
+    );
+    let drawn = painted(&mut view);
+    for said in ["/model", "/quit", "end the launch"] {
+        assert!(
+            drawn.contains(said),
+            "the card names the command and the one line that says what it does, and the frame \
+             draws no {said:?}: {drawn}"
+        );
+    }
+}
+
+#[test]
+fn the_commands_card_narrows_as_the_reader_types() {
+    let root = workspace_with("commit-message", "");
+    let mut view = frame(root.path());
+    view.paste("/s");
+
+    let drawn = painted(&mut view);
+    assert!(
+        drawn.contains("/settings") && drawn.contains("/skill"),
+        "`/s` leaves the commands that hold it: {drawn}"
+    );
+    assert!(
+        !drawn.contains("/new"),
+        "and the commands that hold nothing of it go: {drawn}"
+    );
+}
+
+#[test]
+fn enter_on_a_narrowed_draft_does_what_the_row_names() {
+    let root = workspace_with("commit-message", "");
+    let mut view = frame(root.path());
+    view.paste("/qu");
+
+    assert_eq!(
+        view.key(Key::Enter),
+        Outcome::Quit,
+        "the row the draft names is the command `Enter` sends, so `/qu` ends the launch as \
+         `/quit` does"
+    );
+}
+
+#[test]
+fn enter_on_a_draft_naming_no_command_still_sends_the_draft() {
+    let root = workspace_with("commit-message", "");
+    let mut view = frame(root.path());
+    view.paste("/skillet");
+
+    let sent = view.key(Key::Enter);
+
+    match sent {
+        Outcome::Send(prompt) => assert_eq!(
+            prompt.text(),
+            "/skillet",
+            "a word no command holds is the reader's own words, and the model is asked them"
+        ),
+        other => panic!("a draft no command holds is sent, and this one was answered {other:?}"),
+    }
+    assert!(
+        !card_open(&mut view),
+        "and the card that held no row is closed: {}",
+        painted(&mut view)
+    );
+}
+
+#[test]
+fn choosing_a_command_closes_the_commands_card() {
+    let root = workspace_with("commit-message", "");
+    let mut view = frame(root.path());
+    view.paste("/set");
+    assert!(card_open(&mut view));
+
+    assert_eq!(view.key(Key::Enter), Outcome::Settings);
+    assert!(
+        !card_open(&mut view),
+        "the row was chosen, so the card that offered it has done its work: {}",
+        painted(&mut view)
+    );
+}
+
+#[test]
+fn enter_keeps_the_argument_typed_after_the_narrowed_word() {
+    let root = workspace_with("commit-message", "");
+    let mut view = frame(root.path());
+    view.paste("/model a-name");
+
+    assert_eq!(
+        view.key(Key::Enter),
+        Outcome::Model(String::from("a-name")),
+        "the words after the name are the argument the command takes, and choosing the row \
+         does not throw them away"
+    );
+}
+
+#[test]
+fn escape_closes_the_commands_card_and_leaves_the_draft_as_it_was() {
+    let root = workspace_with("commit-message", "");
+    let mut view = frame(root.path());
+    view.paste("/s");
+
+    assert_eq!(view.key(Key::Escape), Outcome::Edited);
+    assert!(
+        !card_open(&mut view),
+        "the reader waved the card away: {}",
+        painted(&mut view)
+    );
+    assert_eq!(view.composer().text(), "/s", "and the draft is untouched");
+
+    match view.key(Key::Enter) {
+        Outcome::Send(prompt) => assert_eq!(
+            prompt.text(),
+            "/s",
+            "a card waved away stays away for that draft, so the draft is a prompt again"
+        ),
+        other => panic!("a draft whose card was closed is sent, and this one was {other:?}"),
+    }
+}
+
+#[test]
+fn a_command_that_takes_a_word_is_written_into_the_draft_to_name_it() {
+    let root = workspace_with("commit-message", "");
+    let mut view = frame(root.path());
+    view.paste("/sk");
+
+    assert_eq!(view.key(Key::Enter), Outcome::Edited);
+    assert_eq!(
+        view.composer().text(),
+        "/skill",
+        "`/skill` is no command without a word after it, so the row writes the name and the \
+         reader says which skill"
+    );
+    assert!(
+        card_open(&mut view),
+        "the card stands while the word is named: {}",
+        painted(&mut view)
+    );
+
+    view.paste(":commit-message");
+    assert_eq!(view.key(Key::Enter), Outcome::Edited);
+    assert_eq!(view.loaded().names(), ["commit-message"]);
 }

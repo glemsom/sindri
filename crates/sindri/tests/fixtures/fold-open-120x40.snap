@@ -42,4 +42,4 @@ fold-open at 120x40
 36 |                                                                                                                        | plain:120
 37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:120
 38 |› what should the run do?                                                                                               | dim:25 plain:95
-39 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · Ctrl-J newline · @ files · ↑ queue · End follow the run             | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:7 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:3 muted:15 plain:13
+39 |Enter send · / commands · ? keys · Ctrl-C cancel · Ctrl-Q quit · Ctrl-J newline · @ files · ↑ queue · End follow the run| plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:7 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:3 muted:15

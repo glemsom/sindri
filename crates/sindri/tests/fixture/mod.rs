@@ -111,6 +111,11 @@ fn named(name: &str) -> View {
             "seven: the session it left",
             "eight: the question to ask",
         ])),
+        "commands" => View::typing(draft(&["/"])),
+        "commands-narrow" => View::typing(draft(&["/s"])),
+        "commands-none" => View::typing(draft(&[
+            "/usr/local/bin is not on the path the run is handed",
+        ])),
         "markdown-headings" => construct(headings()),
         "markdown-headings-large" => sized(headings()),
         "markdown-lists" => construct(lists()),
