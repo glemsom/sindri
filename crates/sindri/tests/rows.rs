@@ -1467,12 +1467,12 @@ fn thumb_of(turns: u32, band: u16, scroll: Scroll) -> Option<sindri::rows::Thumb
     for which in 1..=turns {
         rows.push(turn(which));
     }
-    let total = rows.height();
     assert_eq!(
-        total, turns,
+        rows.height(),
+        turns,
         "one turn divider is one row of a 120-column band"
     );
-    rows.thumb(scroll, total, band)
+    rows.thumb(scroll, band)
 }
 
 #[test]
@@ -1520,7 +1520,7 @@ fn the_thumb_follows_the_window_row_for_row() {
 }
 
 #[test]
-fn no_thumb_is_drawn_where_the_band_has_no_room_to_say_where_the_window_stands() {
+fn a_band_with_nothing_to_point_at_draws_no_thumb() {
     assert_eq!(
         thumb_of(80, 36, Scroll::Tail),
         None,
@@ -1537,15 +1537,27 @@ fn no_thumb_is_drawn_where_the_band_has_no_room_to_say_where_the_window_stands()
         "a band of one row has no share of the whole to point at"
     );
 
-    let mut narrow = Rows::new();
-    narrow.resize(2);
-    for which in 1..=80 {
-        narrow.push(turn(which));
+    for cols in 2..=3 {
+        let mut narrow = Rows::new();
+        narrow.resize(cols);
+        for which in 1..=80 {
+            narrow.push(turn(which));
+        }
+        assert_eq!(
+            narrow.thumb(Scroll::Back(44), 36),
+            None,
+            "a band of {cols} columns holds no gutter beside a wide glyph, which is set in the \
+             first column instead: it loses the thumb before it loses a word"
+        );
     }
-    let total = narrow.height();
-    assert_eq!(
-        narrow.thumb(Scroll::Back(44), total, 36),
-        None,
-        "a band too narrow for a gutter has given it up, and loses the thumb before it loses a word"
+
+    let mut roomy = Rows::new();
+    roomy.resize(4);
+    for which in 1..=80 {
+        roomy.push(turn(which));
+    }
+    assert!(
+        roomy.thumb(Scroll::Back(44), 36).is_some(),
+        "and four columns hold the gutter beside a word, so the thumb is drawn there"
     );
 }

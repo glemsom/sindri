@@ -856,7 +856,7 @@ impl View {
         self.scroll = Scroll::of(back);
         self.band = area.height;
         self.total = Some(total);
-        let thumb = self.rows.thumb(self.scroll, total, area.height);
+        let thumb = self.rows.thumb(self.scroll, area.height);
         let window = self.rows.window(self.scroll, area.height);
         let mut y = area.y;
         let mut lines = Vec::new();
@@ -876,7 +876,7 @@ impl View {
                     &mut self.sizes,
                 );
                 if let Some(thumb) = &thumb {
-                    thumb.paint(area, y.saturating_sub(area.y), buffer, &self.palette);
+                    thumb.paint(area, y, buffer, &self.palette);
                 }
                 // Written after the row's words and the thumb, so a block's first cell is the
                 // picture's: a refused picture places nothing and leaves the thumb that cell.
@@ -3304,14 +3304,22 @@ mod tests {
         painted(&mut view, 120, rows)
     }
 
+    /// The first row of `buffer` between `from` and `to` a picture is placed over, if one is.
+    fn placed_row(buffer: &Buffer, from: u16, to: u16) -> Option<u16> {
+        (from..to).find(|y| {
+            (0..buffer.area.width)
+                .any(|x| placed(buffer.cell((x, *y)).expect("a cell of the frame")))
+        })
+    }
+
     #[test]
     fn a_row_a_picture_is_placed_over_keeps_the_cell_that_places_it() {
+        // A band this tall places the hundred-row field whole, where a fixture's frame refuses it.
         let rows = 107;
         let buffer = field(rows);
 
-        let over = (0..rows)
-            .find(|y| (0..120).any(|x| placed(buffer.cell((x, *y)).expect("a cell of the frame"))))
-            .expect("a band this tall places the tall field over a row of it");
+        let over = placed_row(&buffer, 0, rows)
+            .expect("a band this tall places the tall field over a row");
         assert!(
             placed(buffer.cell((0, over)).expect("a cell of the picture's row")),
             "row {over} of the band carries the bytes that place the picture in its first cell, \
@@ -3332,10 +3340,9 @@ mod tests {
     fn the_thumb_keeps_its_cell_on_a_row_whose_picture_was_refused() {
         let buffer = field(40);
 
-        assert!(
-            !(0..40).any(
-                |y| (0..120).any(|x| placed(buffer.cell((x, y)).expect("a cell of the frame")))
-            ),
+        assert_eq!(
+            placed_row(&buffer, 0, 40),
+            None,
             "the tall field's block is taller than the band, so it is placed over no cell at all"
         );
         let over = (0..40)
@@ -3435,6 +3442,55 @@ mod tests {
             thumb_rows(&narrow),
             Vec::<u16>::new(),
             "a band too narrow for a gutter keeps its words and gives the thumb up"
+        );
+        assert!(
+            drawn_row(&narrow, 0).starts_with("tu"),
+            "the band of two columns holds no gutter and sets the turn's own words in its first \
+             column, which the thumb has left alone: {:?}",
+            drawn_row(&narrow, 0)
+        );
+    }
+
+    /// A frame whose first entry is a thought of one wide glyph, which a band this narrow sets in
+    /// its first column because the gutter would leave it no room.
+    fn wide(cols: u16) -> Buffer {
+        let mut entries = vec![Entry::Reasoning {
+            turn: 1,
+            text: SecretSet::default().redact("\u{8003}"),
+        }];
+        entries.extend((1..=79).map(|turn| Entry::Turn { turn }));
+        // A window taken further back than the transcript reaches lands on its first row.
+        painted(&mut View::of(entries, Scroll::Back(u32::MAX)), cols, 40)
+    }
+
+    #[test]
+    fn a_band_that_leaves_a_row_no_gutter_keeps_its_word_and_gives_up_the_thumb() {
+        let buffer = wide(3);
+
+        assert_eq!(
+            thumb_rows(&buffer),
+            Vec::<u16>::new(),
+            "three columns leave a wide glyph no room beside the gutter, so the row gives the \
+             gutter up and the thumb has no column of its own to stand in"
+        );
+        let said: Vec<String> = (0..40)
+            .map(|y| drawn_row(&buffer, y))
+            .filter(|row| row.starts_with('\u{8003}'))
+            .collect();
+        assert_eq!(
+            said.len(),
+            1,
+            "the thought's wide glyph stands in the first column of its own row, which the thumb \
+             has left to it rather than writing over: {:?}",
+            (0..40)
+                .map(|y| drawn_row(&buffer, y))
+                .collect::<Vec<String>>()
+        );
+
+        let roomy = wide(4);
+        assert!(
+            !thumb_rows(&roomy).is_empty(),
+            "and four columns hold the gutter beside that glyph, so the thumb is drawn again"
         );
     }
 

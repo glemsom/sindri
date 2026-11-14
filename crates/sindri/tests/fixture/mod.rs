@@ -465,7 +465,7 @@ pub fn document() -> SessionDocument {
 }
 
 /// A transcript of eighty turn dividers, one row each, so the rows of the band the thumb covers are
-/// counted against the picture.
+/// counted off the frame.
 fn thumbing(scroll: Scroll) -> View {
     View::of((1..=80).map(|turn| Entry::Turn { turn }), scroll)
 }

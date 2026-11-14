@@ -587,10 +587,6 @@ pub struct Thumb {
 }
 
 impl Thumb {
-    pub fn top(&self) -> u16 {
-        self.top
-    }
-
     pub fn span(&self) -> u16 {
         self.span
     }
@@ -599,15 +595,14 @@ impl Thumb {
         self.top..self.top + self.span
     }
 
-    /// The thumb stands in the gutter's glyph column: the gutter's blank column is what keeps the
-    /// words off it, so it takes no column the words were set in. It draws one cell, on `row` of
-    /// the band, and nothing on a row the thumb does not cover.
-    pub(crate) fn paint(&self, area: Rect, row: u16, buffer: &mut Buffer, palette: &Palette) {
-        if !self.rows().contains(&row) {
-            return;
+    /// The thumb stands in the gutter's glyph column, where the blank column after it is what keeps
+    /// the words off it.
+    pub(crate) fn paint(&self, area: Rect, y: u16, buffer: &mut Buffer, palette: &Palette) {
+        if let Some(row) = y.checked_sub(area.y)
+            && self.rows().contains(&row)
+        {
+            pen::glyph(buffer, area.x, y, THUMB, Ink::Dim, palette);
         }
-        let y = area.y.saturating_add(row);
-        pen::glyph(buffer, area.x, y, THUMB, Ink::Dim, palette);
     }
 }
 
@@ -825,11 +820,13 @@ impl Rows {
         height
     }
 
-    /// The thumb a window `scroll` rows behind the tail of a transcript `total` rows tall draws in
-    /// a band `band` rows tall, and none where the transcript is no taller than the band, the band
-    /// is one row, the band has given up its gutter, or the reader is at the tail.
-    pub fn thumb(&self, scroll: Scroll, total: u32, band: u16) -> Option<Thumb> {
-        if self.cols() <= pen::cells(INDENT)
+    /// The thumb a window `scroll` rows behind the tail of this transcript draws in a band `band`
+    /// rows tall, and none where there is nothing left out of view or the band holds no gutter.
+    pub fn thumb(&mut self, scroll: Scroll, band: u16) -> Option<Thumb> {
+        let total = self.height();
+        // A band this narrow leaves a wide glyph no room beside the gutter, and the row gives the
+        // gutter up for it: there the thumb would stand on the word instead.
+        if self.cols() <= pen::cells(INDENT) + 1
             || band < 2
             || total <= u32::from(band)
             || scroll.back() == 0
@@ -840,6 +837,8 @@ impl Rows {
         let above = deepest.saturating_sub(u64::from(scroll.back()));
         let band = u64::from(band);
         let total = u64::from(total);
+        // The band's share of the whole, rounded to the nearest cell and never to none: a thumb the
+        // reader cannot see says nothing about where they stand.
         let span = ((band * band + total / 2) / total).max(1);
         let room = band - span;
         let top = (room * above + deepest / 2) / deepest;
