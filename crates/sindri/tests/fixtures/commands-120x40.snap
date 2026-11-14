@@ -1,0 +1,45 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+commands at 120x40
+00 |                                                                                                                        | dim:120
+01 |                                                                                                                        | dim:120
+02 |                                                                                                                        | dim:120
+03 |                                                                                                                        | dim:120
+04 |                                                                                                                        | dim:120
+05 |                                                                                                                        | dim:120
+06 |                                                                                                                        | dim:120
+07 |                                                                                                                        | dim:120
+08 |                                                                                                                        | dim:120
+09 |                                                                                                                        | dim:120
+10 |                                                                                                                        | dim:120
+11 |                                                                                                                        | dim:120
+12 |                                                                                                                        | dim:120
+13 |                                                                                                                        | dim:120
+14 |                                                                                                                        | dim:120
+15 |                        ╭─ / commands ─────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
+16 |                        │ › /help      the keys in force                                       │                        | dim:25 plain:1 accent:13 dim:17 plain:39 dim:25
+17 |                        │   /model     ask the wire what it serves, and name the one to run    │                        | dim:25 plain:14 dim:52 plain:4 dim:25
+18 |                        │   /new       start the conversation again, and forget the last one   │                        | dim:25 plain:14 dim:53 plain:3 dim:25
+19 |                        │   /quit      end the launch                                          │                        | dim:25 plain:14 dim:14 plain:42 dim:25
+20 |                        │   /settings  the keys the config holds, and the value each is set to │                        | dim:25 plain:14 dim:55 plain:1 dim:25
+21 |                        │   /skill     load a skill by name                                    │                        | dim:25 plain:14 dim:20 plain:36 dim:25
+22 |                        │   /stats     the facts the rail is too narrow to hold                │                        | dim:25 plain:14 dim:40 plain:16 dim:25
+23 |                        ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
+24 |                                                                                                                        | dim:120
+25 |                                                                                                                        | dim:120
+26 |                                                                                                                        | dim:120
+27 |                                                                                                                        | dim:120
+28 |                                                                                                                        | dim:120
+29 |                                                                                                                        | dim:120
+30 |                                                                                                                        | dim:120
+31 |                                                                                                                        | dim:120
+32 |                                                                                                                        | dim:120
+33 |                                                                                                                        | dim:120
+34 |                                                                                                                        | dim:120
+35 |                                                                                                                        | dim:120
+36 |                                                                                                                        | dim:120
+37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+38 |› /                                                                                                                     | dim:120
+39 |Enter send · / commands · ? keys · Ctrl-C cancel · Ctrl-Q quit · Ctrl-J newline · @ files · ↑ queue · End follow the run| dim:120

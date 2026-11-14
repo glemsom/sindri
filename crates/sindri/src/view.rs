@@ -57,10 +57,14 @@ impl Hint {
     }
 }
 
-const HINTS: [Hint; 8] = [
+const HINTS: [Hint; 9] = [
     Hint {
         key: "Enter",
         meaning: "send",
+    },
+    Hint {
+        key: "/",
+        meaning: "commands",
     },
     Hint {
         key: "?",
@@ -98,7 +102,7 @@ const GAP: &str = " · ";
 /// row that says where the frame stands.
 const SEPARATOR: Look = Look::plain(Ink::Dim);
 
-const STEPS: [(u16, usize); 2] = [(120, 8), (100, 5)];
+const STEPS: [(u16, usize); 2] = [(120, 9), (100, 5)];
 
 /// The first two of `HINTS`: held at every width and given up last.
 const FLOOR: usize = 2;
@@ -132,6 +136,10 @@ const MODELS_EMPTY: &str = "no served name answers";
 
 const NAMES_GAP: u16 = 2;
 
+/// The name the commands card carries in its top border, in the shape `? keys` and `@ files`
+/// wear theirs.
+const COMMANDS_CARD: &str = "/ commands";
+
 #[derive(Debug, Default, Clone)]
 pub struct View {
     rows: Rows,
@@ -163,6 +171,9 @@ pub struct View {
     loaded: Loaded,
     home: Option<PathBuf>,
     settings: Settings,
+    /// The draft the reader waved the commands card away for: the card stays closed while the draft
+    /// holds those words, and a draft that changes gives it back.
+    dismissed: Option<String>,
     face: Face,
     pictures: Pictures,
     cell_size: CellSize,
@@ -490,12 +501,43 @@ impl View {
 
     fn draft(&mut self, key: Key) -> Outcome {
         match self.composer.key(key) {
-            Outcome::Send(prompt) => match commands::read(prompt.text()) {
-                Some(command) => self.answer(command),
-                None => Outcome::Send(prompt),
-            },
+            Outcome::Send(prompt) => self.sent(prompt),
             outcome => outcome,
         }
+    }
+
+    /// A draft sent: a line that names a command is answered, and one that only begins a word the
+    /// commands card holds is the first row's line instead.
+    fn sent(&mut self, prompt: Prompt) -> Outcome {
+        if let Some(command) = commands::read(prompt.text()) {
+            return self.answer(command);
+        }
+        let Some(card) = self.card_of(prompt.text()) else {
+            return Outcome::Send(prompt);
+        };
+        let line = card.line();
+        match commands::read(&line) {
+            Some(command) => self.answer(command),
+            None => {
+                self.composer.insert(&line);
+                Outcome::Edited
+            }
+        }
+    }
+
+    /// The commands card the draft in the composer opens, unless the reader waved it away for this
+    /// very draft.
+    fn card(&self) -> Option<commands::Card> {
+        self.card_of(self.composer.text())
+    }
+
+    /// The commands card `draft` opens. A sent draft is read from its own words, because the
+    /// composer is empty by the time the frame answers it.
+    fn card_of(&self, draft: &str) -> Option<commands::Card> {
+        if self.dismissed.as_deref() == Some(draft) {
+            return None;
+        }
+        commands::Card::of(draft)
     }
 
     fn answer(&mut self, command: Command) -> Outcome {
@@ -659,6 +701,10 @@ impl View {
     }
 
     fn close(&mut self) -> Outcome {
+        if self.stack.modal().is_none() && self.card().is_some() {
+            self.dismissed = Some(self.composer.text().to_owned());
+            return Outcome::Edited;
+        }
         let closed = self.stack.top();
         self.stack.close();
         if self.stack.top() == closed {
@@ -857,6 +903,20 @@ impl View {
             // known: one with no row of that band under it is the words it says.
             self.sizes.settle(share.transcript, buffer, &self.palette);
             self.highlight(share.transcript, buffer);
+            if let Some(card) = self.card() {
+                let body = ScreenBody::Rows(self.command_rows(&card));
+                let width = card::body_width(area);
+                let body_area = card::paint(
+                    area,
+                    COMMANDS_CARD,
+                    Mode::Composer.leaves(),
+                    body.held(width),
+                    buffer,
+                    self.edge(),
+                    &self.palette,
+                );
+                body.paint(body_area, buffer, &self.palette);
+            }
             return;
         };
         // The band under a card takes no key, so the frame under it is no way to anywhere — and no
@@ -1259,6 +1319,32 @@ impl View {
             ]));
         }
         rows
+    }
+
+    /// The commands card: the rows the word after the slash leaves, each command with the one line
+    /// that says what it does, the row the draft names first and marked.
+    fn command_rows(&self, card: &commands::Card) -> Vec<ScreenRow> {
+        let widest = card
+            .rows()
+            .iter()
+            .map(|said| pen::cells(said.name) + NAMES_GAP)
+            .max()
+            .unwrap_or(0);
+        card.rows()
+            .iter()
+            .enumerate()
+            .map(|(at, said)| {
+                let (marker, ink) = match at {
+                    0 => (ROW_MARK, Ink::Accent),
+                    _ => (ROW_GAP, Ink::Plain),
+                };
+                cut_row(vec![
+                    (marker.to_owned(), Look::plain(ink)),
+                    (pen::pad(said.name, widest), Look::plain(ink)),
+                    (said.says.to_owned(), Ink::Dim.into()),
+                ])
+            })
+            .collect()
     }
 
     /// A value too wide for the frame is cut at its right edge rather than dropped, as the
@@ -1958,7 +2044,7 @@ mod tests {
         );
         assert_eq!(
             drawn_row(&buffer, buffer.area.bottom() - 1).trim_end(),
-            "Enter send · ? keys",
+            "Enter send · / commands",
             "the raised band takes no row the footer had, and its floor of hints is drawn"
         );
     }
@@ -2554,11 +2640,11 @@ mod tests {
     }
 
     #[test]
-    fn a_hundred_and_twenty_columns_hold_the_eight_hints_the_table_names() {
+    fn a_hundred_and_twenty_columns_hold_the_nine_hints_the_table_names() {
         assert_eq!(
             footer(120, 24).trim_end(),
-            "Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · Ctrl-J newline · @ files · \
-             ↑ queue · End follow the run",
+            "Enter send · / commands · ? keys · Ctrl-C cancel · Ctrl-Q quit · Ctrl-J newline · \
+             @ files · ↑ queue · End follow the run",
             "a 120-column footer draws every hint the table holds, in survival order and separated \
              by one gap, and the hint that returns to the tail is the last of them"
         );
@@ -2581,13 +2667,13 @@ mod tests {
     fn five_hints_are_kept_from_a_hundred_columns_and_ninety_nine_keeps_two() {
         assert_eq!(
             footer(100, 24).trim_end(),
-            "Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · Ctrl-J newline",
-            "a hundred columns is the narrowest frame that gives five hints, so the two \
-             that go are the picker's and the queue's"
+            "Enter send · / commands · ? keys · Ctrl-C cancel · Ctrl-Q quit",
+            "a hundred columns is the narrowest frame that gives five hints, so the ones \
+             that go are the newline, the picker's and the queue's"
         );
         assert_eq!(
             footer(99, 24).trim_end(),
-            "Enter send · ? keys",
+            "Enter send · / commands",
             "one column under it and the footer is back to the two the floor holds"
         );
     }
@@ -2596,7 +2682,7 @@ mod tests {
     fn sixty_columns_keep_the_two_hints_no_width_takes_away() {
         assert_eq!(
             footer(60, 24).trim_end(),
-            "Enter send · ? keys",
+            "Enter send · / commands",
             "the floor is the floor at sixty columns as it is at ninety-nine"
         );
     }
@@ -2626,10 +2712,19 @@ mod tests {
     }
 
     #[test]
-    fn the_first_two_hints_are_drawn_at_every_width_from_twenty_columns() {
+    fn the_first_two_hints_are_drawn_at_every_width_from_the_floor_s_own_width() {
         let said = said(&HINTS);
         let floor: Vec<&str> = said[..FLOOR].iter().map(String::as_str).collect();
-        for width in 20..=200u16 {
+        let needed: u16 = said[..FLOOR]
+            .iter()
+            .map(|hint| pen::cells(hint))
+            .sum::<u16>()
+            + pen::cells(GAP) * u16::try_from(FLOOR - 1).unwrap_or(0);
+        assert_eq!(
+            needed, 23,
+            "the two hints the floor holds need twenty-three columns"
+        );
+        for width in needed..=200u16 {
             let row = footer(width, 24);
             let hints: Vec<&str> = row.trim_end().split(GAP).collect();
 
@@ -2637,7 +2732,20 @@ mod tests {
                 hints.get(..FLOOR),
                 Some(&floor[..]),
                 "at {width} columns the footer reads {:?}: the two hints the floor never gives \
-                 up are drawn whole at every width, and 60 is not a special case of that",
+                 up are drawn whole at every width their own cells fit in",
+                row.trim_end()
+            );
+        }
+    }
+
+    #[test]
+    fn the_slash_is_drawn_in_the_footer_at_every_width_from_the_floor_s_own_width() {
+        for width in 23..=200u16 {
+            let row = footer(width, 24);
+            assert!(
+                row.contains("/ commands"),
+                "at {width} columns the footer reads {:?}: the key that opens the commands is \
+                 named wherever a hint is drawn, so a reader who never opened the card finds it",
                 row.trim_end()
             );
         }
@@ -3471,16 +3579,26 @@ mod tests {
     }
 
     #[test]
-    fn every_hint_names_a_key_the_composer_answers() {
+    fn every_hint_names_a_key_or_a_glyph_the_composer_answers() {
         for hint in HINTS {
             let bound = Mode::Composer
                 .table()
                 .iter()
                 .any(|binding| binding.name.split(", ").any(|name| name == hint.key));
+            let glyph = match hint.key {
+                key if key.len() == 1 && key.chars().all(|glyph| glyph.is_ascii_graphic()) => {
+                    key.chars().next()
+                }
+                _ => None,
+            };
+            let typed = glyph.is_some_and(|glyph| {
+                let mut composer = Composer::new();
+                composer.key(Key::Char(glyph)) == Outcome::Edited && composer.text() == hint.key
+            });
             assert!(
-                bound,
-                "the footer names {:?} and no row of the composer's table answers to it: a hint is \
-                 drawn in a row only where it is a key that works",
+                bound || typed,
+                "the footer names {:?} and nothing answers to it: a hint is drawn in a row only \
+                 where it is a key that works, or a glyph the draft takes",
                 hint.key
             );
         }

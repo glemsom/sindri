@@ -229,6 +229,21 @@ fn scrolled_120x40_is_a_composer_showing_the_last_five_rows_of_a_taller_draft() 
 }
 
 #[test]
+fn commands_120x40_is_the_card_a_slash_opens_with_every_command_and_the_line_that_explains_it() {
+    fixture::assert_frame("commands", 120, 40);
+}
+
+#[test]
+fn commands_narrow_120x40_is_that_card_narrowed_to_the_commands_the_word_holds() {
+    fixture::assert_frame("commands-narrow", 120, 40);
+}
+
+#[test]
+fn commands_none_120x40_is_a_draft_naming_no_command_and_no_card_over_it() {
+    fixture::assert_frame("commands-none", 120, 40);
+}
+
+#[test]
 fn markdown_headings_80x24_is_six_levels_from_a_ruled_bold_to_a_dim_bold() {
     fixture::assert_frame("markdown-headings", 80, 24);
 }
@@ -324,17 +339,17 @@ fn rail_40x24_is_the_strip_down_to_the_size_and_the_state() {
 }
 
 #[test]
-fn footer_130x24_is_eight_hints_with_columns_to_spare() {
+fn footer_130x24_is_the_nine_hints_with_columns_to_spare() {
     fixture::assert_frame("footer", 130, 24);
 }
 
 #[test]
-fn footer_120x24_is_the_narrowest_frame_that_holds_eight_hints() {
+fn footer_120x24_is_the_narrowest_frame_that_holds_every_hint_the_table_names() {
     fixture::assert_frame("footer", 120, 24);
 }
 
 #[test]
-fn footer_119x24_is_the_first_width_that_gives_the_seventh_hint_up() {
+fn footer_119x24_is_the_step_under_it_that_keeps_five() {
     fixture::assert_frame("footer", 119, 24);
 }
 

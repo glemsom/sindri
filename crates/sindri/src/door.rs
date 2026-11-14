@@ -5,6 +5,7 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
+use crate::commands;
 use crate::face;
 use crate::ink::{Face, Ink, Look};
 use crate::link::Links;
@@ -18,19 +19,6 @@ use crate::size::Sizes;
 const WORDMARK: &str = "sindri";
 
 const WHAT: &str = "An AI agent that is a Unix filter and a terminal UI over one core.";
-
-/// The commands a reader can open with, and the one line each that says what it does.
-const COMMANDS: [(&str, &str); 3] = [
-    (
-        "/model",
-        "ask the wire what it serves, and name the one to run",
-    ),
-    (
-        "/settings",
-        "the keys the config holds, and the value each is set to",
-    ),
-    ("/stats", "the facts the rail is too narrow to hold"),
-];
 
 /// The columns between a command and the line that explains it: enough that the three lines start
 /// in one column whatever the width of the command they hang from.
@@ -134,29 +122,28 @@ fn block(room: u16) -> Vec<Row> {
 /// the line that explains it, and — where the band leaves that line less than the command's own
 /// width — the two set on rows of their own, so no word of either is cut at the edge.
 fn commands(room: u16) -> Vec<Row> {
-    let column = COMMANDS
-        .iter()
-        .map(|(command, _)| pen::cells(command))
-        .max()
-        .unwrap_or(0)
-        + HANG;
+    let named = || commands::LIST.iter().take(commands::NAMED);
+    let column = named().map(|said| pen::cells(said.name)).max().unwrap_or(0) + HANG;
     let hang = pen::blank(column);
     let mut rows = Vec::new();
-    for (command, said) in COMMANDS {
+    for said in named() {
         if room < column.saturating_mul(2) {
-            rows.push(Row::of([(String::from(command), Look::plain(Ink::Accent))]));
+            rows.push(Row::of([(
+                String::from(said.name),
+                Look::plain(Ink::Accent),
+            )]));
             rows.extend(
-                wrap_under(said, room, room)
+                wrap_under(said.says, room, room)
                     .into_iter()
                     .map(|line| Row::of([(line, Look::plain(Ink::Dim))])),
             );
             continue;
         }
         let hanging = room - column;
-        let mut lines = wrap_under(said, hanging, hanging).into_iter();
+        let mut lines = wrap_under(said.says, hanging, hanging).into_iter();
         if let Some(first) = lines.next() {
             rows.push(Row::of([
-                (pen::pad(command, column), Look::plain(Ink::Accent)),
+                (pen::pad(said.name, column), Look::plain(Ink::Accent)),
                 (first, Look::plain(Ink::Dim)),
             ]));
         }

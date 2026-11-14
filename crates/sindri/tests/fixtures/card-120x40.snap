@@ -7,39 +7,39 @@ card at 120x40
 01 |  window is a row offset from the tail, so resolving one walks the entries  model     claude-sonnet-4-5-20250929        | dim:120
 02 |  between the tail and the window and lays out every one of them on the way.think     high                              | dim:120
 03 |  Each is laid out once and kept, so the whole history scrolled through                                                 | dim:120
-04 |  costs one layout per entry and scrolling it again costs none.             turns                               6 /  250| dim:120
-05 |─ turn 5 ───────────────╭─ ? keys ─────────────────────────────────────────────────────────────╮     █░░░░░ 48.2k / 200k| dim:24 accent+faint:72 dim:24
-06 |✓ bash                  │ keys                                                                 │                     88%| dim:25 plain:1 dim:4 plain:65 dim:25
-07 |  git diff --stat       │ Esc                  close this screen                               │                        | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
-08 |✓ exit 0  9 ms · 128 byt│ ?                    close this screen                               │ri/.worktrees/46-rail   | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
-09 |  crates/sindri/src/rows│ composer                                                             │ability                 | dim:25 plain:1 dim:8 plain:61 dim:25
-10 |  crates/sindri/tests/ro│ ?                    the keys, while the draft is empty              │                        | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
-11 |  The transcript's unit │ @                    the files of the workspace, while it starts a   │                       2| dim:25 plain:1 plain+bold:21 muted:45 plain:3 dim:25
-12 |  line, so the same run │                      word                                            │                        | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
-13 |  transcript and by what│ Enter                send the prompt                                 │                        | dim:25 plain:1 plain+bold:21 muted:15 plain:33 dim:25
-14 |                        │ Shift+Enter, Ctrl-J  a line break in the draft                       │                        | dim:25 plain:1 plain+bold:21 muted:25 plain:23 dim:25
-15 |  construct │ where it s│ ↑                    the newest queued prompt, or the line above     │                        | dim:25 plain:1 plain+bold:21 muted:43 plain:5 dim:25
-16 |  ──────────┼───────────│ Ctrl-X               drop the newest queued prompt                   │essions/9f2c7a41/tmp    | dim:25 plain:1 plain+bold:21 muted:29 plain:19 dim:25
-17 |  heading   │ in the ans│ ↓                    the line below                                  │                        | dim:25 plain:1 plain+bold:21 muted:14 plain:34 dim:25
-18 |  code      │ behind a b│ PgUp                 the transcript a band back                      │                        | dim:25 plain:1 plain+bold:21 muted:26 plain:22 dim:25
-19 |  table     │ columns jo│ Ctrl-U               the transcript a band back                      │                        | dim:25 plain:1 plain+bold:21 muted:26 plain:22 dim:25
-20 |─ turn 6 ───────────────│ PgDn                 the transcript a band on                        │                        | dim:25 plain:1 plain+bold:21 muted:24 plain:24 dim:25
-21 |✓ bash                  │ Ctrl-D               the transcript a band on                        │                        | dim:25 plain:1 plain+bold:21 muted:24 plain:24 dim:25
-22 |  make check STAGES=fram│ Shift+↓              grow the mark a row down                        │                        | dim:25 plain:1 plain+bold:21 muted:24 plain:24 dim:25
-23 |✓ exit 0  31 ms · 104 by│ Shift+↑              grow the mark a row up                          │                        | dim:25 plain:1 plain+bold:21 muted:22 plain:26 dim:25
-24 |  check: frame calls ...│ ←                    a glyph left                                    │                        | dim:25 plain:1 plain+bold:21 muted:12 plain:36 dim:25
-25 |  check: frame transcrip│ →                    a glyph right                                   │                        | dim:25 plain:1 plain+bold:21 muted:13 plain:35 dim:25
-26 |  A row is one line     │ Home                 the start of the line                           │                        | dim:25 plain:1 plain+bold:21 muted:21 plain:27 dim:25
-27 |  ─────────────────     │ End                  the tail of the run, or the end of the line     │                        | dim:25 plain:1 plain+bold:21 muted:43 plain:5 dim:25
-28 |                        │ Ctrl-Y               copy the mark, or the last answer               │                        | dim:25 plain:1 plain+bold:21 muted:33 plain:15 dim:25
-29 |  A row says the exit co│ Ctrl-O               open or fold the newest result                  │                        | dim:25 plain:1 plain+bold:21 muted:30 plain:18 dim:25
-30 |  fact the record holds │ Backspace            erase the glyph before the caret                │                        | dim:25 plain:1 plain+bold:21 muted:32 plain:16 dim:25
-31 |                        │ Ctrl-C               cancel the run, or clear the draft              │                        | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
-32 |▏ rust                  │ Ctrl-Q               quit                                            │                        | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
-33 |▏ fn main() {           ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
-34 |▏     let row = Row::of(spans);                                                                                         | dim:120
+04 |  costs one layout per e╭─ ? keys ─────────────────────────────────────────────────────────────╮                6 /  250| dim:24 accent+faint:72 dim:24
+05 |─ turn 5 ───────────────│ keys                                                                 │     █░░░░░ 48.2k / 200k| dim:25 plain:1 dim:4 plain:65 dim:25
+06 |✓ bash                  │ Esc                  close this screen                               │                     88%| dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
+07 |  git diff --stat       │ ?                    close this screen                               │                        | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
+08 |✓ exit 0  9 ms · 128 byt│ composer                                                             │ri/.worktrees/46-rail   | dim:25 plain:1 dim:8 plain:61 dim:25
+09 |  crates/sindri/src/rows│ ?                    the keys, while the draft is empty              │ability                 | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
+10 |  crates/sindri/tests/ro│ @                    the files of the workspace, while it starts a   │                        | dim:25 plain:1 plain+bold:21 muted:45 plain:3 dim:25
+11 |  The transcript's unit │                      word                                            │                       2| dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
+12 |  line, so the same run │ Enter                send the prompt                                 │                        | dim:25 plain:1 plain+bold:21 muted:15 plain:33 dim:25
+13 |  transcript and by what│ Esc                  close the commands card, and the draft as it    │                        | dim:25 plain:1 plain+bold:21 muted:44 plain:4 dim:25
+14 |                        │                      was                                             │                        | dim:25 plain:1 plain+bold:21 muted:3 plain:45 dim:25
+15 |  construct │ where it s│ Shift+Enter, Ctrl-J  a line break in the draft                       │                        | dim:25 plain:1 plain+bold:21 muted:25 plain:23 dim:25
+16 |  ──────────┼───────────│ ↑                    the newest queued prompt, or the line above     │essions/9f2c7a41/tmp    | dim:25 plain:1 plain+bold:21 muted:43 plain:5 dim:25
+17 |  heading   │ in the ans│ Ctrl-X               drop the newest queued prompt                   │                        | dim:25 plain:1 plain+bold:21 muted:29 plain:19 dim:25
+18 |  code      │ behind a b│ ↓                    the line below                                  │                        | dim:25 plain:1 plain+bold:21 muted:14 plain:34 dim:25
+19 |  table     │ columns jo│ PgUp                 the transcript a band back                      │                        | dim:25 plain:1 plain+bold:21 muted:26 plain:22 dim:25
+20 |─ turn 6 ───────────────│ Ctrl-U               the transcript a band back                      │                        | dim:25 plain:1 plain+bold:21 muted:26 plain:22 dim:25
+21 |✓ bash                  │ PgDn                 the transcript a band on                        │                        | dim:25 plain:1 plain+bold:21 muted:24 plain:24 dim:25
+22 |  make check STAGES=fram│ Ctrl-D               the transcript a band on                        │                        | dim:25 plain:1 plain+bold:21 muted:24 plain:24 dim:25
+23 |✓ exit 0  31 ms · 104 by│ Shift+↓              grow the mark a row down                        │                        | dim:25 plain:1 plain+bold:21 muted:24 plain:24 dim:25
+24 |  check: frame calls ...│ Shift+↑              grow the mark a row up                          │                        | dim:25 plain:1 plain+bold:21 muted:22 plain:26 dim:25
+25 |  check: frame transcrip│ ←                    a glyph left                                    │                        | dim:25 plain:1 plain+bold:21 muted:12 plain:36 dim:25
+26 |  A row is one line     │ →                    a glyph right                                   │                        | dim:25 plain:1 plain+bold:21 muted:13 plain:35 dim:25
+27 |  ─────────────────     │ Home                 the start of the line                           │                        | dim:25 plain:1 plain+bold:21 muted:21 plain:27 dim:25
+28 |                        │ End                  the tail of the run, or the end of the line     │                        | dim:25 plain:1 plain+bold:21 muted:43 plain:5 dim:25
+29 |  A row says the exit co│ Ctrl-Y               copy the mark, or the last answer               │                        | dim:25 plain:1 plain+bold:21 muted:33 plain:15 dim:25
+30 |  fact the record holds │ Ctrl-O               open or fold the newest result                  │                        | dim:25 plain:1 plain+bold:21 muted:30 plain:18 dim:25
+31 |                        │ Backspace            erase the glyph before the caret                │                        | dim:25 plain:1 plain+bold:21 muted:32 plain:16 dim:25
+32 |▏ rust                  │ Ctrl-C               cancel the run, or clear the draft              │                        | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
+33 |▏ fn main() {           │ Ctrl-Q               quit                                            │                        | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
+34 |▏     let row = Row::of(╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
 35 |▏     row.paint(area, buffer);                                                                                          | dim:120
 36 |▏ }                                                                                                                     | dim:120
 37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
 38 |› what should the run do?                                                                                               | dim:120
-39 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · Ctrl-J newline · @ files · ↑ queue · End follow the run             | dim:120
+39 |Enter send · / commands · ? keys · Ctrl-C cancel · Ctrl-Q quit · Ctrl-J newline · @ files · ↑ queue · End follow the run| dim:120
