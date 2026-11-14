@@ -12,6 +12,7 @@ use sindri::graphics::CellSize;
 use sindri::ink::{Ink, Look};
 use sindri::ledger::Boot;
 use sindri::link::Links;
+use sindri::markdown;
 use sindri::palette::{Band, Palette};
 use sindri::pen;
 use sindri::picture::Surface;
@@ -1809,6 +1810,99 @@ fn a_fence_that_opens_a_live_answer_keeps_its_well_under_the_marker() {
     );
 }
 
+#[test]
+fn a_fence_that_opens_a_live_answer_keeps_its_picture_under_the_marker() {
+    let text = "```mermaid\nflowchart TD\n  A-->B\n```\nand the prose under it\n";
+    let surface = Surface::of(None, CellSize::new(10, 20), true, false);
+    let mut rows = Rows::new();
+    rows.resize(40);
+    rows.retune(surface.clone());
+    let mut stream = Stream::new();
+    stream.text(text);
+    let head = Pulse::live(4_200).head();
+    rows.live(&stream, Some(&head));
+
+    let laid = rows.rows(0);
+    let picture = laid[0]
+        .picture()
+        .expect("the fence opens the marked answer, so its picture stands under the marker")
+        .rows();
+    assert!(
+        laid.len() >= usize::from(picture),
+        "the rows laid are the picture's block: {picture} rows of picture, {} of answer",
+        laid.len()
+    );
+    let marked = painted(&laid[0], 40);
+    assert!(
+        said(&marked).starts_with(&head.text()),
+        "the marker stands in the row's own gutter, from the first column: {}",
+        said(&marked)
+    );
+
+    let mut settled = Rows::new();
+    settled.resize(40);
+    settled.retune(surface);
+    settled.push(Entry::Assistant {
+        turn: 1,
+        text: SecretSet::default().redact(text),
+    });
+    let drawn = settled.rows(0);
+    assert_eq!(
+        drawn.iter().position(|row| row.picture().is_some()),
+        laid.iter().position(|row| row.picture().is_some()),
+        "the answer settled draws its picture on the same row the marker's answer does"
+    );
+}
+
+#[test]
+fn a_row_set_under_a_marker_moves_the_run_it_names_with_its_words() {
+    let mut rows = Rows::new();
+    rows.resize(40);
+    let mut stream = Stream::new();
+    stream.text("[the spec](https://example.test/spec) and the prose under it\n");
+    let head = Pulse::live(4_200).head();
+    rows.live(&stream, Some(&head));
+
+    let marked = rows.rows(0)[0].clone();
+    let (buffer, links) = laid(&marked, Rect::new(0, 0, 40, 1));
+    let drawn: String = (0..marked.width())
+        .map(|x| {
+            buffer
+                .cell((x, 0))
+                .expect("a cell of the row")
+                .symbol()
+                .to_owned()
+        })
+        .collect();
+    let at = drawn
+        .find("the spec")
+        .expect("the answer's own words stand in the row");
+    let column = u16::try_from(drawn[..at].chars().count()).expect("a column of a row this wide");
+
+    assert_eq!(
+        links.at(0, column),
+        Some("https://example.test/spec"),
+        "the way begins on the first cell of `the spec`: {drawn:?}"
+    );
+    assert_eq!(
+        links.at(0, column + 7),
+        Some("https://example.test/spec"),
+        "and covers its last"
+    );
+    assert_eq!(
+        links.at(0, column + 8),
+        None,
+        "no cell past it is a way there"
+    );
+    for column in 0..=head.width() {
+        assert_eq!(
+            links.at(0, column),
+            None,
+            "column {column} is the marker's own, and names nothing"
+        );
+    }
+}
+
 /// A row is painted at the frame's own row and column, and what it names is laid there beside it.
 fn laid(row: &Row, area: Rect) -> (Buffer, Links) {
     let mut buffer = Buffer::empty(area);
@@ -1919,7 +2013,7 @@ fn a_run_wider_than_the_row_it_was_laid_on_names_nothing_on_the_row_below() {
 fn a_row_set_under_a_gutter_moves_the_run_it_names_with_its_words() {
     let row = Row::of([(String::from("the spec"), Ink::Plain)])
         .linking(0, 8, "https://example.test/spec")
-        .indented("│ ", Ink::Dim);
+        .guttered("│ ", Ink::Dim);
 
     let (buffer, links) = laid(&row, Rect::new(0, 0, 40, 1));
 
@@ -1937,6 +2031,38 @@ fn a_row_set_under_a_gutter_moves_the_run_it_names_with_its_words() {
         links.at(0, 1),
         None,
         "never on the gutter the words were moved past"
+    );
+}
+
+#[test]
+fn a_row_set_under_a_gutter_keeps_the_picture_it_stands_on() {
+    let surface = Surface::of(None, CellSize::new(10, 20), true, false);
+    let rows = markdown::rows_on("```mermaid\nflowchart TD\n  A-->B\n```", 40, 0, &surface);
+    let at = rows
+        .iter()
+        .position(|row| row.picture().is_some())
+        .expect("the fence is a diagram on a terminal that places pictures");
+    let guttered = rows[at].clone().guttered("│ ", Ink::Dim);
+
+    assert_eq!(
+        guttered.picture(),
+        rows[at].picture(),
+        "a picture is placed from the band's own edge, so a gutter moves the words and not it"
+    );
+    assert_eq!(
+        guttered.width(),
+        rows[at].width() + 2,
+        "and the gutter takes its two columns of the row: {guttered:?}"
+    );
+    assert_eq!(
+        drawn_at(&guttered, 0),
+        Some('│'),
+        "the gutter is the row's first column: {guttered:?}"
+    );
+    assert_eq!(
+        words_column(&guttered),
+        words_column(&rows[at]).map(|column| column + 2),
+        "and the words stand past it: {guttered:?}"
     );
 }
 

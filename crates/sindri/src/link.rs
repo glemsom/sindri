@@ -24,8 +24,8 @@ impl Link {
         }
     }
 
-    /// The same run `by` columns further right: a row indented under a gutter moves the runs it
-    /// names with the words they cover.
+    /// The same run `by` columns further right: a run is measured from the left edge of the row it
+    /// was laid on, so a row set further right moves it with the words it names.
     pub(crate) fn shifted(&self, by: u16) -> Link {
         Link {
             left: self.left.saturating_add(by),
