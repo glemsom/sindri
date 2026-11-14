@@ -7,7 +7,7 @@ use std::time::Duration;
 use sindri_core::config::Config;
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::records::{Entry, Facts, Record, read_transcript};
-use sindri_core::redact::SecretSet;
+use sindri_core::redact::{Redacted, SecretSet};
 use sindri_core::run::{Acted, Call, Exit, Limits};
 use sindri_core::session::Session;
 use sindri_core::wire::Wire;
@@ -80,15 +80,18 @@ fn walk(entry: &Entry) -> Vec<(&'static str, String)> {
         Entry::Turn { turn } => vec![("turn", turn.to_string())],
         Entry::Call {
             turn,
+            id,
             name,
             arguments,
         } => vec![
             ("turn", turn.to_string()),
+            ("id", masked(id)),
             ("name", name.to_string()),
             ("arguments", arguments.to_string()),
         ],
         Entry::Result {
             turn,
+            id,
             name,
             text,
             bytes,
@@ -96,6 +99,7 @@ fn walk(entry: &Entry) -> Vec<(&'static str, String)> {
             exit,
         } => vec![
             ("turn", turn.to_string()),
+            ("id", masked(id)),
             ("name", name.to_string()),
             ("text", text.to_string()),
             ("bytes", bytes.to_string()),
@@ -116,8 +120,13 @@ fn walk(entry: &Entry) -> Vec<(&'static str, String)> {
     }
 }
 
+/// What an identity the walk reads is written as, and nothing where the entry names no call.
+fn masked(id: &Option<Redacted>) -> String {
+    id.as_ref().map(ToString::to_string).unwrap_or_default()
+}
+
 fn planted(field: &str) -> bool {
-    matches!(field, "name" | "arguments" | "text")
+    matches!(field, "id" | "name" | "arguments" | "text")
 }
 
 /// The transcript the walk reads, written through the record a run writes through, so redaction
@@ -126,7 +135,7 @@ fn written(ground: &Ground) -> Vec<String> {
     let session = ground.session();
     let mut record = ground.record(&session);
     let call = Call::new(
-        "toolu_1",
+        format!("toolu_{SECRET}"),
         SECRET,
         format!(r#"{{"command": "echo {SECRET}"}}"#),
     );

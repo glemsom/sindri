@@ -269,11 +269,13 @@ fn every_row_fits_the_width_it_was_laid_out_for() {
         Entry::Turn { turn: 1000 },
         Entry::Call {
             turn: 1,
+            id: None,
             name: secrets.redact("a-tool-whose-name-is-longer-than-the-band-it-is-drawn-in"),
             arguments: secrets.redact(""),
         },
         Entry::Result {
             turn: 1,
+            id: None,
             name: secrets.redact("bash"),
             text: secrets.redact("unbreakableandunforgivingwordthatnospacecansplit\n日本語の答え"),
             bytes: u64::MAX,
@@ -360,6 +362,7 @@ fn every_kind(secrets: &SecretSet) -> Vec<Entry> {
         },
         Entry::Call {
             turn: 1,
+            id: None,
             name: secrets.redact("bash"),
             arguments: secrets.redact("ls -la"),
         },
@@ -633,6 +636,7 @@ fn an_entry_with_nothing_to_say_is_still_one_row() {
         },
         Entry::Call {
             turn: 1,
+            id: None,
             name: secrets.redact("bash"),
             arguments: secrets.redact(""),
         },
@@ -913,6 +917,7 @@ fn a_live_run_opens_the_answers_row_before_it_has_said_anything() {
 fn call(which: u32) -> Entry {
     Entry::Call {
         turn: which,
+        id: None,
         name: SecretSet::default().redact("bash"),
         arguments: SecretSet::default().redact(r#"{"command": "ls"}"#),
     }
@@ -921,6 +926,28 @@ fn call(which: u32) -> Entry {
 fn result(which: u32, exit: Exit) -> Entry {
     Entry::Result {
         turn: which,
+        id: None,
+        name: SecretSet::default().redact("bash"),
+        text: SecretSet::default().redact("exit 0\na.txt\n"),
+        bytes: 7,
+        elapsed_ms: 2,
+        exit: Some(exit),
+    }
+}
+
+fn call_of(which: u32, identity: &str) -> Entry {
+    Entry::Call {
+        turn: which,
+        id: Some(SecretSet::default().redact(identity)),
+        name: SecretSet::default().redact("bash"),
+        arguments: SecretSet::default().redact(r#"{"command": "ls"}"#),
+    }
+}
+
+fn result_of(which: u32, identity: &str, exit: Exit) -> Entry {
+    Entry::Result {
+        turn: which,
+        id: Some(SecretSet::default().redact(identity)),
         name: SecretSet::default().redact("bash"),
         text: SecretSet::default().redact("exit 0\na.txt\n"),
         bytes: 7,
@@ -937,6 +964,7 @@ fn long_result(which: u32) -> Entry {
         .join("\n");
     Entry::Result {
         turn: which,
+        id: None,
         name: SecretSet::default().redact("bash"),
         text: SecretSet::default().redact(&text),
         bytes: 640,
@@ -955,6 +983,7 @@ fn drawn_inks(laid: &[Row], cols: u16) -> Vec<Ink> {
 fn named(which: u32, name: &str, arguments: &str) -> Entry {
     Entry::Call {
         turn: which,
+        id: None,
         name: SecretSet::default().redact(name),
         arguments: SecretSet::default().redact(arguments),
     }
@@ -1247,6 +1276,7 @@ fn a_result_row_says_the_verdict_the_duration_and_the_size_and_repeats_no_name_t
 fn a_result_with_no_verdict_says_the_numbers_and_guesses_no_exit() {
     let entry = Entry::Result {
         turn: 1,
+        id: None,
         name: SecretSet::default().redact("bash"),
         text: SecretSet::default().redact("a.txt"),
         bytes: 7,
@@ -1398,6 +1428,7 @@ fn a_result_longer_than_its_fold_draws_its_head_its_last_row_and_the_count_of_ro
 fn a_result_its_whole_fold_holds_is_drawn_whole() {
     let entry = Entry::Result {
         turn: 1,
+        id: None,
         name: SecretSet::default().redact("bash"),
         text: SecretSet::default().redact("a.txt\nb.txt\nc.txt\nd.txt"),
         bytes: 40,
@@ -1590,6 +1621,51 @@ fn a_session_read_back_is_folded_again() {
 }
 
 #[test]
+fn a_transcript_whose_calls_hold_no_identity_is_still_drawn_by_the_older_rule() {
+    let directory = tempfile::tempdir().expect("a session directory");
+    let written = [
+        turn(1),
+        call(1),
+        call(1),
+        result(1, Exit::Code(0)),
+        result(1, Exit::Code(1)),
+    ];
+    let lines: Vec<String> = written
+        .iter()
+        .map(|entry| serde_json::to_string(entry).expect("an entry is one line of a transcript"))
+        .collect();
+    assert!(
+        !lines.iter().any(|line| line.contains("\"id\"")),
+        "an entry holding no identity is the line this product wrote before identities existed: \
+         {lines:?}"
+    );
+    std::fs::write(
+        transcript_path(directory.path()),
+        format!("{}\n", lines.join("\n")),
+    )
+    .expect("a transcript a run wrote");
+    let read = read_transcript(directory.path()).expect("the transcript reads back");
+
+    let mut rows = Rows::new();
+    rows.resize(80);
+    for entry in read.entries().iter().cloned() {
+        rows.push(entry);
+    }
+
+    assert_eq!(rows.len(), 3, "the turn and the two calls it holds");
+    assert_eq!(
+        said(&painted(&rows.rows(1)[2], 80)),
+        "✓ exit 0  2 ms · 7 bytes",
+        "with no identity to pair by, the first result settles the first call"
+    );
+    assert_eq!(
+        said(&painted(&rows.rows(2)[2], 80)),
+        "✗ exit 1  2 ms · 7 bytes",
+        "and the second settles the second, so a session from either side of this change draws"
+    );
+}
+
+#[test]
 fn an_answer_is_never_folded_however_long_it_runs() {
     let text: String = (1..=40)
         .map(|line| format!("line {line} of the answer.\n"))
@@ -1718,6 +1794,55 @@ fn a_wave_of_calls_settles_its_rows_in_the_order_the_run_wrote_them() {
         said(&painted(&rows.rows(1)[2], 80)),
         "✗ exit 1  2 ms · 7 bytes",
         "and the second settles the second"
+    );
+}
+
+#[test]
+fn a_result_settles_the_call_it_names_when_a_turn_holds_two_calls_to_one_tool() {
+    let mut rows = Rows::new();
+    rows.resize(80);
+    rows.push(call_of(1, "toolu_1"));
+    rows.push(call_of(1, "toolu_2"));
+    rows.push(result_of(1, "toolu_2", Exit::Code(1)));
+    rows.push(result_of(1, "toolu_1", Exit::Code(0)));
+
+    assert_eq!(rows.len(), 2, "two calls, two rows");
+    assert_eq!(
+        said(&painted(&rows.rows(0)[2], 80)),
+        "✓ exit 0  2 ms · 7 bytes",
+        "the first call wears the verdict of the result that named it, though that result landed \
+         after the one that named the call below it"
+    );
+    assert_eq!(
+        said(&painted(&rows.rows(1)[2], 80)),
+        "✗ exit 1  2 ms · 7 bytes",
+        "and the second call wears the verdict of its own result, so neither is guessed"
+    );
+}
+
+#[test]
+fn a_result_naming_a_call_the_cache_never_held_opens_a_row_of_its_own() {
+    let mut rows = Rows::new();
+    rows.resize(80);
+    rows.push(call_of(1, "toolu_1"));
+    rows.push(result_of(1, "toolu_2", Exit::Code(0)));
+
+    assert_eq!(
+        rows.len(),
+        2,
+        "a result settles no call it does not name, so it opens a row under the one it leaves \
+         waiting"
+    );
+    assert_eq!(
+        said(&painted(&rows.rows(0)[0], 80)),
+        "… bash",
+        "the call the result never named still waits for its own"
+    );
+    assert_eq!(
+        said(&painted(&rows.rows(1)[0], 80)),
+        "✓ exit 0  bash  2 ms · 7 bytes",
+        "and the result stands alone, saying its verdict and the name the call row it never \
+         settled would have held"
     );
 }
 

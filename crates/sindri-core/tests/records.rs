@@ -394,10 +394,17 @@ fn a_tool_call_and_its_result_are_two_entries_of_their_own_facts() {
         lines(&session.directory().join("transcript.jsonl")),
         vec![
             json!({"kind": "turn", "turn": 1}),
-            json!({"kind": "call", "turn": 1, "name": "bash", "arguments": r#"{"command": "ls"}"#}),
+            json!({
+                "kind": "call",
+                "turn": 1,
+                "id": "toolu_1",
+                "name": "bash",
+                "arguments": r#"{"command": "ls"}"#,
+            }),
             json!({
                 "kind": "result",
                 "turn": 1,
+                "id": "toolu_1",
                 "name": "bash",
                 "text": "exit 0\na.txt\n",
                 "bytes": 6,
@@ -479,6 +486,7 @@ fn a_result_line_written_before_the_verdict_existed_still_reads() {
         transcript.entries(),
         [Entry::Result {
             turn: 1,
+            id: None,
             name: SecretSet::default().redact("bash"),
             text: SecretSet::default().redact("exit 0\n"),
             bytes: 7,
@@ -486,6 +494,132 @@ fn a_result_line_written_before_the_verdict_existed_still_reads() {
             exit: None,
         }],
         "a result nobody recorded a verdict for says nothing it does not know"
+    );
+}
+
+#[test]
+fn an_entry_that_names_no_call_is_written_without_an_identity() {
+    let secrets = SecretSet::default();
+    let entries = [
+        Entry::Call {
+            turn: 1,
+            id: None,
+            name: secrets.redact("bash"),
+            arguments: secrets.redact(r#"{"command": "ls"}"#),
+        },
+        Entry::Result {
+            turn: 1,
+            id: None,
+            name: secrets.redact("bash"),
+            text: secrets.redact("exit 0\n"),
+            bytes: 7,
+            elapsed_ms: 2,
+            exit: Some(Exit::Code(0)),
+        },
+    ];
+
+    for entry in &entries {
+        let line = serde_json::to_string(entry).expect("an entry is written");
+        assert!(
+            !line.contains("id"),
+            "a field with nothing in it is left out rather than written as `null`: {line}"
+        );
+    }
+}
+
+#[test]
+fn a_transcript_written_before_calls_held_an_identity_still_reads_with_none() {
+    let ground = Ground::new();
+    let session = ground.session();
+    let older = [
+        json!({"kind": "turn", "turn": 1}),
+        json!({"kind": "call", "turn": 1, "name": "bash", "arguments": r#"{"command": "ls"}"#}),
+        json!({
+            "kind": "result",
+            "turn": 1,
+            "name": "bash",
+            "text": "exit 0\n",
+            "bytes": 7,
+            "elapsed_ms": 2,
+            "exit": {"code": 0},
+        }),
+    ]
+    .map(|line| line.to_string())
+    .join("\n");
+    std::fs::write(
+        session.directory().join("transcript.jsonl"),
+        format!("{older}\n"),
+    )
+    .expect("a transcript written before this change");
+
+    let transcript = read_transcript(session.directory()).expect("an older transcript reads");
+
+    assert_eq!(
+        transcript.skipped(),
+        0,
+        "every line is an entry, not a skip"
+    );
+    assert_eq!(
+        transcript.entries(),
+        [
+            Entry::Turn { turn: 1 },
+            Entry::Call {
+                turn: 1,
+                id: None,
+                name: SecretSet::default().redact("bash"),
+                arguments: SecretSet::default().redact(r#"{"command": "ls"}"#),
+            },
+            Entry::Result {
+                turn: 1,
+                id: None,
+                name: SecretSet::default().redact("bash"),
+                text: SecretSet::default().redact("exit 0\n"),
+                bytes: 7,
+                elapsed_ms: 2,
+                exit: Some(Exit::Code(0)),
+            },
+        ],
+        "a call and a result written before either held an identity read holding none"
+    );
+}
+
+#[test]
+fn a_call_and_the_entry_its_result_is_written_as_carry_the_identity_the_wire_gave_it() {
+    let ground = Ground::new();
+    let session = ground.session();
+    let mut record = ground.record(&session);
+    let call = Call::new("toolu_7", "bash", r#"{"command": "ls"}"#);
+
+    record.turn_started(1).expect("a turn start is recorded");
+    record.called(1, &call).expect("a call is recorded");
+    record
+        .resulted(
+            1,
+            &call,
+            &Acted {
+                text: String::from("exit 0\na.txt\n"),
+                bytes: 6,
+                elapsed: Duration::from_millis(12),
+                exit: Exit::Code(0),
+            },
+        )
+        .expect("a result is recorded");
+
+    let transcript = read_transcript(session.directory()).expect("the transcript reads");
+    let entries = transcript.entries();
+    let (Entry::Call { id: called, .. }, Entry::Result { id: answered, .. }) =
+        (&entries[1], &entries[2])
+    else {
+        panic!("the call and the result stand under the turn: {entries:?}");
+    };
+    assert_eq!(
+        called,
+        &Some(SecretSet::default().redact("toolu_7")),
+        "the entry the call is written as carries the identity the wire gave it: {entries:?}"
+    );
+    assert_eq!(
+        answered, called,
+        "and so does the entry its result is written as, so the two name one call: {entries:?}"
     );
 }
 
@@ -1282,11 +1416,13 @@ fn a_killed_run_still_reads() {
             Entry::Turn { turn },
             Entry::Call {
                 turn,
+                id: Some(SecretSet::default().redact("toolu_1")),
                 name: SecretSet::default().redact("bash"),
                 arguments: SecretSet::default().redact(r#"{"command": "echo hello"}"#),
             },
             Entry::Result {
                 turn,
+                id: Some(SecretSet::default().redact("toolu_1")),
                 name: SecretSet::default().redact("bash"),
                 text: SecretSet::default().redact("exit 0\nhello\n"),
                 bytes: 12,

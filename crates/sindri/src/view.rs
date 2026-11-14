@@ -3021,12 +3021,14 @@ mod tests {
                 Entry::Turn { turn: 1 },
                 Entry::Call {
                     turn: 1,
+                    id: None,
                     name: SecretSet::default().redact("bash"),
                     arguments: SecretSet::default()
                         .redact(r#"{"command": "cargo test -p sindri --test rows"}"#),
                 },
                 Entry::Result {
                     turn: 1,
+                    id: None,
                     name: SecretSet::default().redact("bash"),
                     text: SecretSet::default().redact(&output),
                     bytes: 640,

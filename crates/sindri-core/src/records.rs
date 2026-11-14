@@ -25,11 +25,15 @@ pub enum Entry {
     },
     Call {
         turn: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        id: Option<Redacted>,
         name: Redacted,
         arguments: Redacted,
     },
     Result {
         turn: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        id: Option<Redacted>,
         name: Redacted,
         text: Redacted,
         bytes: u64,
@@ -199,6 +203,7 @@ impl Record {
     pub fn called(&mut self, turn: u32, call: &Call) -> Result<(), RecordError> {
         self.append(Entry::Call {
             turn,
+            id: Some(self.secrets.redact(call.id.clone())),
             name: self.secrets.redact(call.name.clone()),
             arguments: self.secrets.redact(call.arguments.clone()),
         })
@@ -206,6 +211,7 @@ impl Record {
     pub fn resulted(&mut self, turn: u32, call: &Call, acted: &Acted) -> Result<(), RecordError> {
         self.append(Entry::Result {
             turn,
+            id: Some(self.secrets.redact(call.id.clone())),
             name: self.secrets.redact(call.name.clone()),
             text: self.secrets.redact(acted.text.clone()),
             bytes: acted.bytes,
