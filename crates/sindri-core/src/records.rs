@@ -4,7 +4,7 @@ use crate::redact::{Redacted, SecretSet};
 use crate::run::{Limits, State, Stop};
 use crate::session::{Session, SessionError};
 pub use crate::turn::Usage;
-use crate::turn::{Acted, Call, Exit};
+use crate::turn::{Exit, Turn};
 use crate::wire::Wire;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
@@ -112,6 +112,7 @@ pub struct Record {
     secrets: SecretSet,
     transcript: File,
     statuses: File,
+    turns_before: u32,
 }
 impl Record {
     pub fn open(session: &Session, facts: Facts<'_>) -> Result<Record, RecordError> {
@@ -142,6 +143,7 @@ impl Record {
             secrets: facts.secrets.clone(),
             transcript,
             statuses,
+            turns_before: 0,
         };
         record.write_document()?;
         Ok(record)
@@ -153,17 +155,12 @@ impl Record {
         &self.document
     }
     /// A run joins the session this record keeps: the session is in flight again, and the end the
-    /// run before it reached is not this one's. The turns it already counted stay counted.
+    /// run before it reached is not this one's. Its turns are numbered after those the session
+    /// already counted.
     pub fn began(&mut self) -> Result<(), RecordError> {
+        self.turns_before = self.document.turns;
         self.document.stopped = State::Running;
         self.document.end = None;
-        self.write_document()
-    }
-    /// The session's turn, which is what the document counts and what the transcript is numbered by:
-    /// a turn a later prompt takes is numbered after the turns every prompt before it ended.
-    pub fn turn_started(&mut self, turn: u32) -> Result<(), RecordError> {
-        self.append(Entry::Turn { turn })?;
-        self.document.turns = turn;
         self.write_document()
     }
     pub fn asked(&mut self, text: &str) -> Result<(), RecordError> {
@@ -171,36 +168,52 @@ impl Record {
             text: self.secrets.redact(text),
         })
     }
-    pub fn called(&mut self, turn: u32, call: &Call) -> Result<(), RecordError> {
-        self.append(Entry::Call {
-            turn,
-            id: Some(self.secrets.redact(call.id.clone())),
-            name: self.secrets.redact(call.name.clone()),
-            arguments: self.secrets.redact(call.arguments.clone()),
-        })
-    }
-    pub fn resulted(&mut self, turn: u32, call: &Call, acted: &Acted) -> Result<(), RecordError> {
-        self.append(Entry::Result {
-            turn,
-            id: Some(self.secrets.redact(call.id.clone())),
-            name: self.secrets.redact(call.name.clone()),
-            text: self.secrets.redact(acted.text.clone()),
-            bytes: acted.bytes,
-            elapsed_ms: millis(acted.elapsed),
-            exit: Some(acted.exit),
-        })
-    }
-    pub fn reasoned(&mut self, turn: u32, text: &str) -> Result<(), RecordError> {
-        self.append(Entry::Reasoning {
-            turn,
-            text: self.secrets.redact(text),
-        })
-    }
-    pub fn answered(&mut self, turn: u32, text: &str) -> Result<(), RecordError> {
-        self.append(Entry::Assistant {
-            turn,
-            text: self.secrets.redact(text),
-        })
+    /// The order is the transcript's, and its readers read it: each call before the result it
+    /// answered, and the answer last.
+    pub fn wrote(&mut self, turn: &Turn) -> Result<(), RecordError> {
+        let number = self.turns_before + turn.turn;
+        let opened = Entry::Turn { turn: number };
+        self.append(opened)?;
+        for (at, call) in turn.calls.iter().enumerate() {
+            let id = self.secrets.redact(call.id.clone());
+            let name = self.secrets.redact(call.name.clone());
+            let called = Entry::Call {
+                turn: number,
+                id: Some(id.clone()),
+                name: name.clone(),
+                arguments: self.secrets.redact(call.arguments.clone()),
+            };
+            self.append(called)?;
+            // A call the run never answered — a tool that failed, a stop mid-turn — is still a
+            // call the turn asked for, and no result is invented for it.
+            let Some(acted) = turn.results.get(at) else {
+                continue;
+            };
+            let resulted = Entry::Result {
+                turn: number,
+                id: Some(id),
+                name,
+                text: self.secrets.redact(acted.text.clone()),
+                bytes: acted.bytes,
+                elapsed_ms: millis(acted.elapsed),
+                exit: Some(acted.exit),
+            };
+            self.append(resulted)?;
+        }
+        if let Some(reasoning) = turn.reasoning.as_deref().filter(|text| !text.is_empty()) {
+            let reasoned = Entry::Reasoning {
+                turn: number,
+                text: self.secrets.redact(reasoning),
+            };
+            self.append(reasoned)?;
+        }
+        let answered = Entry::Assistant {
+            turn: number,
+            text: self.secrets.redact(&turn.text),
+        };
+        self.append(answered)?;
+        self.document.turns = number;
+        self.write_document()
     }
     pub fn stopped(&mut self, state: &State) -> Result<(), RecordError> {
         self.document.stopped = state.clone();

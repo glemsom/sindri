@@ -355,6 +355,7 @@ fn a_turn_is_replayed_with_each_call_beside_the_text_that_call_answered() {
         text: String::from("reading it twice"),
         calls: vec![listing, counting],
         results: vec![listed, counted],
+        reasoning: None,
         usage: Usage::default(),
     };
     let ask = ask()

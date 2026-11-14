@@ -261,22 +261,20 @@ impl Spent {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Reply {
     pub text: String,
+    pub reasoning: Option<String>,
     pub calls: Vec<Call>,
     pub usage: Usage,
 }
 
 impl Reply {
     pub fn answer(text: impl Into<String>) -> Reply {
-        Reply {
-            text: text.into(),
-            calls: Vec::new(),
-            usage: Usage::default(),
-        }
+        Reply::asking(text, [])
     }
 
     pub fn asking(text: impl Into<String>, calls: impl IntoIterator<Item = Call>) -> Reply {
         Reply {
             text: text.into(),
+            reasoning: None,
             calls: calls.into_iter().collect(),
             usage: Usage::default(),
         }
@@ -534,6 +532,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
             text: reply.text.clone(),
             calls: reply.calls.clone(),
             results,
+            reasoning: reply.reasoning.clone(),
             usage: reply.usage,
         });
 

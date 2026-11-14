@@ -11,7 +11,7 @@ use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::provider::Route;
 use sindri_core::records::{Facts, Record, choose, read_sessions};
 use sindri_core::redact::SecretSet;
-use sindri_core::run::{Limits, State, Stop};
+use sindri_core::run::{Limits, State, Stop, Turn};
 use sindri_core::session::{Session, sessions_root};
 use sindri_core::wire::Wire;
 use tempfile::TempDir;
@@ -204,8 +204,9 @@ fn a_run_that_was_recorded_reads_back_as_the_run_it_was() {
         },
     )
     .expect("a record");
-    record.turn_started(1).expect("a turn");
-    record.answered(1, "Hello world").expect("an answer");
+    record
+        .wrote(&Turn::answered(1, "triage this", "Hello world"))
+        .expect("a turn is written whole");
     record
         .stopped(&State::Stopped(Stop::Final))
         .expect("a stop");

@@ -16,7 +16,7 @@ use sindri_core::records::{
     self, Entry, Facts, Record, Status, Told, Usage, read_transcript, timestamp,
 };
 use sindri_core::redact::{MASK, SecretSet};
-use sindri_core::run::{Acted, Budget, Call, Exit, Limits, State, Stop};
+use sindri_core::run::{Acted, Budget, Call, Exit, Limits, State, Stop, Turn};
 use sindri_core::session::Session;
 use sindri_core::wire::Wire;
 use tempfile::TempDir;
@@ -300,10 +300,9 @@ fn the_prompt_the_run_was_asked_is_the_first_entry_of_its_transcript() {
     let mut record = ground.record(&session);
 
     record.asked("triage this").expect("a prompt is recorded");
-    record.turn_started(1).expect("a turn start is recorded");
     record
-        .answered(1, "one file.")
-        .expect("an answer is recorded");
+        .wrote(&Turn::answered(1, "triage this", "one file."))
+        .expect("a turn is written whole");
 
     let written = lines(&session.directory().join("transcript.jsonl"));
     assert_eq!(
@@ -328,22 +327,28 @@ fn the_prompt_the_run_was_asked_is_the_first_entry_of_its_transcript() {
 }
 
 #[test]
-fn a_turn_start_writes_one_entry_and_moves_the_turn_count() {
+fn every_turn_written_moves_the_turn_count_the_document_keeps() {
     let ground = Ground::new();
     let session = ground.session();
     let mut record = ground.record(&session);
 
-    record.turn_started(1).expect("a turn start is recorded");
-    record.turn_started(2).expect("a turn start is recorded");
+    record
+        .wrote(&Turn::answered(1, "triage this", "one file."))
+        .expect("a turn is written whole");
+    record
+        .wrote(&Turn::answered(2, "and the rest?", "two files."))
+        .expect("a turn is written whole");
 
     let written = lines(&session.directory().join("transcript.jsonl"));
     assert_eq!(
         written,
         vec![
             json!({"kind": "turn", "turn": 1}),
-            json!({"kind": "turn", "turn": 2})
+            json!({"kind": "assistant", "turn": 1, "text": "one file."}),
+            json!({"kind": "turn", "turn": 2}),
+            json!({"kind": "assistant", "turn": 2, "text": "two files."}),
         ],
-        "one entry per turn start, in the order they happened, as facts"
+        "each turn is written under its own number, in the order the run took them: {written:?}"
     );
     assert_eq!(
         json(&session.directory().join("session.json"))["turns"],
@@ -354,7 +359,18 @@ fn a_turn_start_writes_one_entry_and_moves_the_turn_count() {
     let transcript = read_transcript(session.directory()).expect("the transcript reads");
     assert_eq!(
         transcript.entries(),
-        [Entry::Turn { turn: 1 }, Entry::Turn { turn: 2 }]
+        [
+            Entry::Turn { turn: 1 },
+            Entry::Assistant {
+                turn: 1,
+                text: SecretSet::default().redact("one file."),
+            },
+            Entry::Turn { turn: 2 },
+            Entry::Assistant {
+                turn: 2,
+                text: SecretSet::default().redact("two files."),
+            },
+        ]
     );
     assert_eq!(transcript.skipped(), 0, "nothing was skipped");
 }
@@ -376,20 +392,18 @@ fn a_tool_call_and_its_result_are_two_entries_of_their_own_facts() {
     let mut record = ground.record(&session);
     let call = Call::new("toolu_1", "bash", r#"{"command": "ls"}"#);
 
-    record.turn_started(1).expect("a turn start is recorded");
-    record.called(1, &call).expect("a call is recorded");
     record
-        .resulted(
-            1,
-            &call,
-            &Acted {
+        .wrote(&Turn {
+            calls: vec![call.clone()],
+            results: vec![Acted {
                 text: String::from("exit 0\na.txt\n"),
                 bytes: 6,
                 elapsed: Duration::from_millis(12),
                 exit: Exit::Code(0),
-            },
-        )
-        .expect("a result is recorded");
+            }],
+            ..Turn::answered(1, "triage this", "")
+        })
+        .expect("a turn is written whole");
 
     assert_eq!(
         lines(&session.directory().join("transcript.jsonl")),
@@ -412,6 +426,7 @@ fn a_tool_call_and_its_result_are_two_entries_of_their_own_facts() {
                 "elapsed_ms": 12,
                 "exit": {"code": 0},
             }),
+            json!({"kind": "assistant", "turn": 1, "text": ""}),
         ],
         "a call and what it did are facts, in the order they happened"
     );
@@ -431,27 +446,26 @@ fn a_result_writes_the_verdict_its_call_settled_with() {
         (4, Exit::Cancelled),
     ] {
         record
-            .resulted(
-                turn,
-                &call,
-                &Acted {
+            .wrote(&Turn {
+                calls: vec![call.clone()],
+                results: vec![Acted {
                     text: String::from("exit 0\n"),
                     bytes: 7,
                     elapsed: Duration::from_millis(2),
                     exit,
-                },
-            )
-            .expect("a result is recorded");
+                }],
+                ..Turn::answered(turn, "triage this", "")
+            })
+            .expect("a turn is written whole");
     }
 
     let written = std::fs::read_to_string(session.directory().join("transcript.jsonl"))
         .expect("the transcript");
     let verdicts: Vec<Value> = written
         .lines()
-        .map(|line| {
-            let entry: Value = serde_json::from_str(line).expect("every line is JSON");
-            entry["exit"].clone()
-        })
+        .map(|line| serde_json::from_str::<Value>(line).expect("every line is JSON"))
+        .filter(|entry| entry["kind"] == json!("result"))
+        .map(|entry| entry["exit"].clone())
         .collect();
     assert_eq!(
         verdicts,
@@ -591,20 +605,18 @@ fn a_call_and_the_entry_its_result_is_written_as_carry_the_identity_the_wire_gav
     let mut record = ground.record(&session);
     let call = Call::new("toolu_7", "bash", r#"{"command": "ls"}"#);
 
-    record.turn_started(1).expect("a turn start is recorded");
-    record.called(1, &call).expect("a call is recorded");
     record
-        .resulted(
-            1,
-            &call,
-            &Acted {
+        .wrote(&Turn {
+            calls: vec![call.clone()],
+            results: vec![Acted {
                 text: String::from("exit 0\na.txt\n"),
                 bytes: 6,
                 elapsed: Duration::from_millis(12),
                 exit: Exit::Code(0),
-            },
-        )
-        .expect("a result is recorded");
+            }],
+            ..Turn::answered(1, "triage this", "")
+        })
+        .expect("a turn is written whole");
 
     let transcript = read_transcript(session.directory()).expect("the transcript reads");
     let entries = transcript.entries();
@@ -632,22 +644,20 @@ fn a_turn_of_two_calls_writes_each_result_beside_the_call_it_answers() {
     let first = Call::new("toolu_1", "bash", r#"{"command": "ls a"}"#);
     let second = Call::new("toolu_2", "bash", r#"{"command": "ls b"}"#);
 
-    record.turn_started(1).expect("a turn start is recorded");
-    for (call, text) in [(&first, "a.txt\n"), (&second, "b.txt\n")] {
-        record.called(1, call).expect("a call is recorded");
-        record
-            .resulted(
-                1,
-                call,
-                &Acted {
+    record
+        .wrote(&Turn {
+            calls: vec![first.clone(), second.clone()],
+            results: ["a.txt\n", "b.txt\n"]
+                .map(|text| Acted {
                     text: String::from(text),
                     bytes: 6,
                     elapsed: Duration::from_millis(2),
                     exit: Exit::Code(0),
-                },
-            )
-            .expect("a result is recorded");
-    }
+                })
+                .to_vec(),
+            ..Turn::answered(1, "triage this", "")
+        })
+        .expect("a turn is written whole");
 
     let transcript = read_transcript(session.directory()).expect("the transcript reads");
     let entries = transcript.entries();
@@ -693,15 +703,21 @@ fn the_assistant_entry_lands_when_the_turn_ends() {
     let mut record = ground.record(&session);
     let call = Call::new("toolu_1", "bash", r#"{"command": "ls"}"#);
 
-    record.turn_started(1).expect("a turn start is recorded");
-    record.called(1, &call).expect("a call is recorded");
     record
-        .answered(1, "one file.")
-        .expect("an answer is recorded");
-    record.turn_started(2).expect("a turn start is recorded");
+        .wrote(&Turn {
+            calls: vec![call.clone()],
+            results: vec![Acted {
+                text: String::from("a.txt\n"),
+                bytes: 6,
+                elapsed: Duration::from_millis(2),
+                exit: Exit::Code(0),
+            }],
+            ..Turn::answered(1, "triage this", "one file.")
+        })
+        .expect("a turn is written whole");
     record
-        .answered(2, "nothing else.")
-        .expect("an answer is recorded");
+        .wrote(&Turn::answered(2, "and the rest?", "nothing else."))
+        .expect("a turn is written whole");
 
     let written = lines(&session.directory().join("transcript.jsonl"));
     assert_eq!(
@@ -720,20 +736,180 @@ fn the_assistant_entry_lands_when_the_turn_ends() {
 }
 
 #[test]
-fn a_thought_lands_as_its_own_entry_beside_the_answer() {
+fn a_turn_written_and_read_back_shows_every_entry_kind_a_turn_can_produce() {
+    let ground = Ground::new();
+    let session = ground.session();
+    let mut record = ground.record(&session);
+    let listing = Call::new("toolu_1", "bash", r#"{"command": "ls a"}"#);
+    let counting = Call::new("toolu_2", "bash", r#"{"command": "wc -l b"}"#);
+
+    record
+        .wrote(&Turn {
+            turn: 1,
+            prompt: String::from("triage this"),
+            text: String::from("two files."),
+            calls: vec![listing.clone(), counting.clone()],
+            results: vec![
+                Acted {
+                    text: String::from("a.txt\n"),
+                    bytes: 6,
+                    elapsed: Duration::from_millis(2),
+                    exit: Exit::Code(0),
+                },
+                Acted {
+                    text: String::from("12 b.txt\n"),
+                    bytes: 9,
+                    elapsed: Duration::from_millis(3),
+                    exit: Exit::Code(1),
+                },
+            ],
+            reasoning: Some(String::from("list both before answering")),
+            usage: Usage::default(),
+        })
+        .expect("a turn is written whole");
+
+    let transcript = read_transcript(session.directory()).expect("the transcript reads");
+    let secrets = SecretSet::default();
+    assert_eq!(
+        transcript.entries(),
+        [
+            Entry::Turn { turn: 1 },
+            Entry::Call {
+                turn: 1,
+                id: Some(secrets.redact("toolu_1")),
+                name: secrets.redact("bash"),
+                arguments: secrets.redact(r#"{"command": "ls a"}"#),
+            },
+            Entry::Result {
+                turn: 1,
+                id: Some(secrets.redact("toolu_1")),
+                name: secrets.redact("bash"),
+                text: secrets.redact("a.txt\n"),
+                bytes: 6,
+                elapsed_ms: 2,
+                exit: Some(Exit::Code(0)),
+            },
+            Entry::Call {
+                turn: 1,
+                id: Some(secrets.redact("toolu_2")),
+                name: secrets.redact("bash"),
+                arguments: secrets.redact(r#"{"command": "wc -l b"}"#),
+            },
+            Entry::Result {
+                turn: 1,
+                id: Some(secrets.redact("toolu_2")),
+                name: secrets.redact("bash"),
+                text: secrets.redact("12 b.txt\n"),
+                bytes: 9,
+                elapsed_ms: 3,
+                exit: Some(Exit::Code(1)),
+            },
+            Entry::Reasoning {
+                turn: 1,
+                text: secrets.redact("list both before answering"),
+            },
+            Entry::Assistant {
+                turn: 1,
+                text: secrets.redact("two files."),
+            },
+        ],
+        "a turn is written whole: its number, each call beside what it answered, the thought \
+         behind it, and the answer last"
+    );
+    assert_eq!(transcript.skipped(), 0, "nothing was skipped");
+}
+
+#[test]
+fn the_session_numbers_a_turn_after_the_turns_the_prompts_before_it_counted() {
+    let ground = Ground::new();
+    let session = ground.session();
+    let mut record = ground.record(&session);
+
+    record
+        .wrote(&Turn::answered(1, "triage this", "one file."))
+        .expect("a turn is written whole");
+    record.began().expect("a second prompt joins the session");
+    record
+        .wrote(&Turn::answered(1, "and the rest?", "two files."))
+        .expect("a turn is written whole");
+
+    let transcript = read_transcript(session.directory()).expect("the transcript reads");
+    let numbers: Vec<u32> = transcript
+        .entries()
+        .iter()
+        .filter_map(|entry| match entry {
+            Entry::Turn { turn } | Entry::Assistant { turn, .. } => Some(*turn),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        numbers,
+        [1, 1, 2, 2],
+        "a second prompt's turn is numbered against the session's count, not against its own \
+         run: {:?}",
+        transcript.entries()
+    );
+    assert_eq!(
+        json(&session.directory().join("session.json"))["turns"],
+        json!(2),
+        "and the document counts the turns both prompts ended"
+    );
+}
+
+#[test]
+fn a_turn_that_reasoned_nothing_writes_no_reasoning_entry() {
+    let ground = Ground::new();
+    let session = ground.session();
+    let mut record = ground.record(&session);
+
+    for (turn, reasoning) in [(1, None), (2, Some(String::new()))] {
+        record
+            .wrote(&Turn {
+                reasoning,
+                ..Turn::answered(turn, "triage this", "one file.")
+            })
+            .expect("a turn is written whole");
+    }
+
+    let transcript = read_transcript(session.directory()).expect("the transcript reads");
+    assert!(
+        !transcript
+            .entries()
+            .iter()
+            .any(|entry| matches!(entry, Entry::Reasoning { .. })),
+        "a turn whose model reasoned nothing has no thought to write, whether it reported none at \
+         all or reported none in words: {:?}",
+        transcript.entries()
+    );
+    assert_eq!(
+        transcript.entries().len(),
+        4,
+        "each turn and the answer it got, and nothing between them: {:?}",
+        transcript.entries()
+    );
+}
+
+#[test]
+fn a_turns_thought_is_written_masked_and_its_answer_after_it() {
     let ground = Ground::new().holding("hunter2");
     let session = ground.session();
     let mut record = ground.record(&session);
 
-    record.turn_started(1).expect("a turn start is recorded");
     record
-        .reasoned(1, "the key is hunter2, so read the file before answering")
-        .expect("a thought is recorded");
-    record
-        .answered(1, "one file.")
-        .expect("an answer is recorded");
+        .wrote(&Turn {
+            reasoning: Some(String::from(
+                "the key is hunter2, so read the file before answering",
+            )),
+            ..Turn::answered(
+                1,
+                "the key is hunter2, so triage this",
+                "the key is hunter2",
+            )
+        })
+        .expect("a turn is written whole");
 
-    let written = lines(&session.directory().join("transcript.jsonl"));
+    let path = session.directory().join("transcript.jsonl");
+    let written = lines(&path);
     assert_eq!(
         written,
         vec![
@@ -743,30 +919,82 @@ fn a_thought_lands_as_its_own_entry_beside_the_answer() {
                 "turn": 1,
                 "text": format!("the key is {MASK}, so read the file before answering"),
             }),
-            json!({"kind": "assistant", "turn": 1, "text": "one file."}),
+            json!({"kind": "assistant", "turn": 1, "text": format!("the key is {MASK}")}),
         ],
-        "a thought is written when it lands, in the order the turn said it: {written:?}"
+        "a thought stands between the turn and its answer, masked as every other fact is: \
+         {written:?}"
     );
+    let transcript = read_transcript(session.directory()).expect("the transcript reads");
+    assert_eq!(
+        transcript.entries()[1],
+        Entry::Reasoning {
+            turn: 1,
+            text: SecretSet::default().redact(format!(
+                "the key is {MASK}, so read the file before answering"
+            )),
+        },
+        "and it reads back as the thought of that turn: {:?}",
+        transcript.entries()
+    );
+    assert_eq!(transcript.skipped(), 0, "nothing was skipped");
+}
+
+#[test]
+fn a_call_the_run_never_answered_is_written_as_the_call_it_was() {
+    let ground = Ground::new();
+    let session = ground.session();
+    let mut record = ground.record(&session);
+    let listed = Call::new("toolu_1", "bash", r#"{"command": "ls a"}"#);
+    let killed = Call::new("toolu_2", "bash", r#"{"command": "ls b"}"#);
+
+    record
+        .wrote(&Turn {
+            calls: vec![listed.clone(), killed.clone()],
+            results: vec![Acted {
+                text: String::from("a.txt\n"),
+                bytes: 6,
+                elapsed: Duration::from_millis(2),
+                exit: Exit::Code(0),
+            }],
+            ..Turn::answered(1, "triage this", "one file.")
+        })
+        .expect("a turn is written whole");
 
     let transcript = read_transcript(session.directory()).expect("the transcript reads");
+    let secrets = SecretSet::default();
     assert_eq!(
         transcript.entries(),
         [
             Entry::Turn { turn: 1 },
-            Entry::Reasoning {
+            Entry::Call {
                 turn: 1,
-                text: SecretSet::default().redact(format!(
-                    "the key is {MASK}, so read the file before answering"
-                )),
+                id: Some(secrets.redact("toolu_1")),
+                name: secrets.redact("bash"),
+                arguments: secrets.redact(r#"{"command": "ls a"}"#),
+            },
+            Entry::Result {
+                turn: 1,
+                id: Some(secrets.redact("toolu_1")),
+                name: secrets.redact("bash"),
+                text: secrets.redact("a.txt\n"),
+                bytes: 6,
+                elapsed_ms: 2,
+                exit: Some(Exit::Code(0)),
+            },
+            Entry::Call {
+                turn: 1,
+                id: Some(secrets.redact("toolu_2")),
+                name: secrets.redact("bash"),
+                arguments: secrets.redact(r#"{"command": "ls b"}"#),
             },
             Entry::Assistant {
                 turn: 1,
-                text: SecretSet::default().redact("one file."),
+                text: secrets.redact("one file."),
             },
         ],
-        "the thought reads back as its own fact, and the answer still follows it"
+        "a second call whose tool never answered is a fact of the turn, and no result is \
+         invented for it"
     );
-    assert_eq!(transcript.skipped(), 0, "nothing was skipped");
 }
 
 #[test]
@@ -779,23 +1007,23 @@ fn no_line_of_the_record_carries_a_secret() {
     record
         .asked("the key is hunter2, so triage this")
         .expect("a prompt is recorded");
-    record.turn_started(1).expect("a turn start is recorded");
-    record.called(1, &call).expect("a call is recorded");
     record
-        .resulted(
-            1,
-            &call,
-            &Acted {
+        .wrote(&Turn {
+            calls: vec![call.clone()],
+            results: vec![Acted {
                 text: String::from("hunter2\n"),
                 bytes: 8,
                 elapsed: Duration::from_millis(1),
                 exit: Exit::Code(0),
-            },
-        )
-        .expect("a result is recorded");
-    record
-        .answered(1, "the key is hunter2")
-        .expect("an answer is recorded");
+            }],
+            reasoning: Some(String::from("the key is hunter2, so read the file")),
+            ..Turn::answered(
+                1,
+                "the key is hunter2, so triage this",
+                "the key is hunter2",
+            )
+        })
+        .expect("a turn is written whole");
 
     let path = session.directory().join("transcript.jsonl");
     let written = std::fs::read_to_string(&path).expect("the transcript");
@@ -870,10 +1098,9 @@ fn a_stop_appends_one_entry_after_everything_the_run_did() {
     let ground = Ground::new();
     let session = ground.session();
     let mut record = ground.record(&session);
-    record.turn_started(1).expect("a turn start is recorded");
     record
-        .answered(1, "one file.")
-        .expect("an answer is recorded");
+        .wrote(&Turn::answered(1, "triage this", "one file."))
+        .expect("a turn is written whole");
 
     record
         .stopped(&State::Stopped(Stop::Final))
@@ -991,7 +1218,9 @@ fn a_running_state_appends_no_stop_to_the_transcript() {
     let ground = Ground::new();
     let session = ground.session();
     let mut record = ground.record(&session);
-    record.turn_started(1).expect("a turn start is recorded");
+    record
+        .wrote(&Turn::answered(1, "triage this", "one file."))
+        .expect("a turn is written whole");
 
     record
         .stopped(&State::Running)
@@ -1000,7 +1229,13 @@ fn a_running_state_appends_no_stop_to_the_transcript() {
     let transcript = read_transcript(session.directory()).expect("the transcript reads");
     assert_eq!(
         transcript.entries(),
-        [Entry::Turn { turn: 1 }],
+        [
+            Entry::Turn { turn: 1 },
+            Entry::Assistant {
+                turn: 1,
+                text: SecretSet::default().redact("one file."),
+            },
+        ],
         "only the turn the run took is written, and no stop follows it"
     );
 }
@@ -1010,7 +1245,9 @@ fn a_run_joining_the_record_says_a_run_is_in_flight_again_and_owns_no_end() {
     let ground = Ground::new();
     let session = ground.session();
     let mut record = ground.record(&session);
-    record.turn_started(1).expect("a turn start is recorded");
+    record
+        .wrote(&Turn::answered(1, "triage this", "one file."))
+        .expect("a turn is written whole");
     record
         .stopped(&State::Stopped(Stop::Final))
         .expect("the run stops");
@@ -1201,7 +1438,9 @@ fn a_kind_this_build_does_not_know_is_skipped_and_the_rest_loads() {
     let mut record = ground.record(&session);
     let path = session.directory().join("transcript.jsonl");
 
-    record.turn_started(1).expect("a turn start is recorded");
+    record
+        .wrote(&Turn::answered(1, "triage this", "one file."))
+        .expect("a turn is written whole");
     // What a newer `sindri` may write: a kind this build has never heard of, its own fields, and a
     // line that was cut short by a kill.
     push(
@@ -1209,12 +1448,25 @@ fn a_kind_this_build_does_not_know_is_skipped_and_the_rest_loads() {
         r#"{"kind": "thinking", "turn": 1, "thought": "a newer build wrote this"}"#,
     );
     push(&path, r#"{"kind": "turn", "turn": "#);
-    record.turn_started(2).expect("a turn start is recorded");
+    record
+        .wrote(&Turn::answered(2, "and the rest?", "two files."))
+        .expect("a turn is written whole");
 
     let transcript = read_transcript(session.directory()).expect("the transcript reads");
     assert_eq!(
         transcript.entries(),
-        [Entry::Turn { turn: 1 }, Entry::Turn { turn: 2 }],
+        [
+            Entry::Turn { turn: 1 },
+            Entry::Assistant {
+                turn: 1,
+                text: SecretSet::default().redact("one file."),
+            },
+            Entry::Turn { turn: 2 },
+            Entry::Assistant {
+                turn: 2,
+                text: SecretSet::default().redact("two files."),
+            },
+        ],
         "an unknown kind and a torn line cost their own lines and nothing else"
     );
     assert_eq!(
@@ -1274,7 +1526,9 @@ fn finishing_empties_the_temp_and_keeps_the_record() {
     let ground = Ground::new();
     let session = ground.session();
     let mut record = ground.record(&session);
-    record.turn_started(1).expect("a turn start is recorded");
+    record
+        .wrote(&Turn::answered(1, "triage this", "one file."))
+        .expect("a turn is written whole");
     let scratch = session.temp().join("left-behind.txt");
     std::fs::write(&scratch, "scratch\n").expect("a file in the session temp");
 
@@ -1398,14 +1652,13 @@ fn child_writes_entries_until_it_is_killed() {
     println!("guid {}", session.guid());
     println!("dir {}", session.directory().display());
     for turn in 1..=1_000u32 {
-        record.turn_started(turn).expect("a turn start is recorded");
-        record.called(turn, &call).expect("a call is recorded");
         record
-            .resulted(turn, &call, &acted)
-            .expect("a result is recorded");
-        record
-            .answered(turn, "hello.")
-            .expect("an answer is recorded");
+            .wrote(&Turn {
+                calls: vec![call.clone()],
+                results: vec![acted.clone()],
+                ..Turn::answered(turn, "hi", "hello.")
+            })
+            .expect("a turn is written whole");
         record
             .charged(&Usage {
                 input: Some(11),

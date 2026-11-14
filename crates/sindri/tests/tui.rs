@@ -2752,6 +2752,51 @@ fn a_second_prompt_in_one_launch_is_asked_with_the_first_beside_its_answer() {
 }
 
 #[test]
+fn a_second_prompt_numbers_its_turn_against_the_session() {
+    let ground = Ground::new();
+    let wire = Wire::holding_a_cached_reply();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    ask_words(&mut pty, &drawn, &wire, "hi my name is Glenn");
+    wire.release();
+    assert!(
+        turn_counted(&ground.state, 1),
+        "the first prompt's run is written as the session's first turn: {}",
+        document(&ground.state)
+    );
+    ask_words(&mut pty, &drawn, &wire, "what is my name?");
+    wire.release();
+    assert!(
+        turn_counted(&ground.state, 2),
+        "the second prompt's run is written as the session's second turn: {}",
+        document(&ground.state)
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+
+    let found = directories(&ground.state);
+    let written = transcript(&found[0]);
+    let turns: Vec<u64> = written
+        .iter()
+        .filter(|entry| entry["kind"] == "turn")
+        .map(|entry| entry["turn"].as_u64().expect("a turn is numbered"))
+        .collect();
+    assert_eq!(
+        turns,
+        [1, 2],
+        "the second prompt's turn is numbered against the session and not against its own run: \
+         {written:?}"
+    );
+}
+
+#[test]
 fn a_prompt_queued_behind_a_live_run_joins_the_conversation_at_the_turn_it_was_asked() {
     let ground = Ground::new();
     let wire = Wire::holding();

@@ -458,17 +458,27 @@ fn a_run_that_answered_records_its_turn_and_why_it_stopped() {
 
     let transcript =
         std::fs::read_to_string(ground.session().join("transcript.jsonl")).expect("the transcript");
-    let kinds: Vec<String> = transcript
+    let entries: Vec<serde_json::Value> = transcript
         .lines()
-        .map(|line| {
-            let entry: serde_json::Value = serde_json::from_str(line).expect("an entry");
-            entry["kind"].as_str().expect("a kind").to_owned()
-        })
+        .map(|line| serde_json::from_str(line).expect("an entry"))
+        .collect();
+    let kinds: Vec<&str> = entries
+        .iter()
+        .map(|entry| entry["kind"].as_str().expect("a kind"))
         .collect();
     assert_eq!(
         kinds,
-        ["prompt", "turn", "assistant", "stop"],
-        "what was asked, the turn, the answer, then why the run stopped: {transcript}"
+        ["prompt", "turn", "reasoning", "assistant", "stop"],
+        "what was asked, the turn and the thought behind it, the answer, then why the run \
+         stopped: {transcript}"
+    );
+    let thought = entries
+        .iter()
+        .find(|entry| entry["kind"] == "reasoning")
+        .unwrap_or_else(|| panic!("the reasoning the wire streamed is kept: {transcript}"));
+    assert_eq!(
+        thought["text"], "Let me think.",
+        "as the words the wire streamed, and nothing else: {transcript}"
     );
 }
 
@@ -1219,10 +1229,12 @@ fn a_reply_that_asks_for_the_files_in_the_folder_runs_bash_and_answers_with_what
             "result",
             "assistant",
             "turn",
+            "reasoning",
             "assistant",
             "stop"
         ],
-        "the call and what came of it are facts of the turn they ran in: {transcript}"
+        "the call and what came of it are facts of the turn they ran in, and the thought the \
+         second turn was thought through is a fact of its own: {transcript}"
     );
     assert!(
         transcript.contains("note.txt"),

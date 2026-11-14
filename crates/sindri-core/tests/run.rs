@@ -66,6 +66,9 @@ impl Responder for Scripted {
         }
         .expect("a reply is scripted");
         deltas.text(&reply.text);
+        if let Some(reasoning) = &reply.reasoning {
+            deltas.reasoning(reasoning);
+        }
         Ok(reply)
     }
 }
@@ -225,6 +228,31 @@ fn a_turn_holds_the_prompt_the_run_was_asked() {
 }
 
 #[test]
+fn a_run_keeps_the_reasoning_its_reply_brought_beside_the_turn_it_produced() {
+    let mut run = Run::new(
+        "why does the retry test fail?",
+        Scripted::answering([Reply {
+            reasoning: Some(String::from("read the retry helper first")),
+            ..Reply::answer("it was the retry")
+        }]),
+        Tools::cheap(),
+    );
+
+    run.drive(&mut Transcript::default());
+
+    assert_eq!(
+        run.history()[0].reasoning.as_deref(),
+        Some("read the retry helper first"),
+        "the thought a turn was thought through rides the turn, so the record has it to write"
+    );
+    assert_eq!(
+        run.kept().reasoning.as_deref(),
+        Some("read the retry helper first"),
+        "and the turn a conversation keeps carries it too"
+    );
+}
+
+#[test]
 fn an_ask_that_reported_no_input_leaves_the_size_unknown_rather_than_zero() {
     let mut run = Run::new(
         "say hi",
@@ -328,6 +356,7 @@ fn a_responder_is_handed_the_very_turn_the_run_keeps() {
             elapsed: Duration::ZERO,
             exit: Exit::Code(0),
         }],
+        reasoning: None,
         usage: Usage {
             input: Some(1_200),
             output: Some(20),
@@ -395,6 +424,7 @@ fn a_run_keeps_the_very_turn_it_took() {
             elapsed: Duration::ZERO,
             exit: Exit::Code(0),
         }],
+        reasoning: None,
         usage: Usage {
             input: Some(1_200),
             output: Some(20),

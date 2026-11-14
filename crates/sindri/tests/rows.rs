@@ -25,9 +25,11 @@ use sindri_core::config::Config;
 use sindri_core::open::Ground;
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::provider::Deltas;
-use sindri_core::records::{Entry, read_transcript, transcript_path};
+use sindri_core::records::{Entry, Facts, Record, read_transcript, transcript_path};
 use sindri_core::redact::SecretSet;
-use sindri_core::run::{Budget, Exit, Stop};
+use sindri_core::run::{Budget, Exit, Limits, Stop, Turn};
+use sindri_core::session::Session;
+use sindri_core::wire::Wire;
 
 fn turn(which: u32) -> Entry {
     Entry::Turn { turn: which }
@@ -1604,6 +1606,79 @@ fn a_session_read_back_is_folded_again() {
     assert!(
         !drawn.iter().any(|row| row.contains("a_row_of_output_12")),
         "and the rows it keeps back are kept back on the way in: {drawn:?}"
+    );
+}
+
+#[test]
+fn a_reasoning_entry_a_run_wrote_is_drawn_from_the_transcript_it_left() {
+    let root = tempfile::tempdir().expect("a temp ground");
+    let workspace = root.path().join("workspace");
+    let state = root.path().join("state");
+    for path in [&workspace, &state] {
+        std::fs::create_dir_all(path).expect("a directory");
+    }
+    let boundary = Boundary::from_config(&Config::default(), &workspace, Enforcement::Unsafe)
+        .expect("the boundary holds");
+    let limits = Limits::default();
+    let secrets = SecretSet::default();
+    let session = Session::create(&state).expect("a session");
+    let mut record = Record::open(
+        &session,
+        Facts {
+            wire: Wire::Anthropic,
+            model: "claude-sonnet-4",
+            route: None,
+            thinking: false,
+            boundary: &boundary,
+            limits: &limits,
+            workspace: &workspace,
+            secrets: &secrets,
+        },
+    )
+    .expect("a record");
+    record
+        .wrote(&Turn {
+            reasoning: Some(String::from(
+                "the fence is the question: a fence still open is code",
+            )),
+            ..Turn::answered(1, "read the fence rule", "a fence still open is code")
+        })
+        .expect("a turn is written whole");
+    drop(record);
+
+    let read = read_transcript(session.directory()).expect("the transcript reads back");
+    assert!(
+        matches!(read.entries().get(1), Some(Entry::Reasoning { .. })),
+        "the run's own record holds the thought its turn was thought through: {:?}",
+        read.entries()
+    );
+
+    let mut rows = Rows::new();
+    rows.resize(80);
+    for entry in read.entries().iter().cloned() {
+        rows.push(entry);
+    }
+
+    let thought = &rows.rows(1)[0];
+    assert_eq!(
+        drawn_at(thought, 0),
+        Some('│'),
+        "the bar of a thought is drawn from the entry the record holds: {thought:?}"
+    );
+    assert!(
+        words(thought).contains("the fence is the question"),
+        "and the words behind it are the reasoning the run wrote: {thought:?}"
+    );
+    assert_eq!(
+        inks(thought),
+        [Ink::Dim, Ink::Muted],
+        "in the ink reasoning is read in: {thought:?}"
+    );
+
+    let answer = &rows.rows(2)[0];
+    assert!(
+        said(&painted(answer, 80)).starts_with("  a fence still open is code"),
+        "an answer read back is drawn after the thought of its own turn: {answer:?}"
     );
 }
 
