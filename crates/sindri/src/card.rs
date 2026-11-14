@@ -31,24 +31,60 @@ const RULE: char = '─';
 
 const SIDE: char = '│';
 
+/// The mark a card says the rows it keeps back with: the ellipsis the fold counts in.
+const ELLIPSIS: char = '\u{22EF}';
+
+/// The columns a screen lays its rows in, so it can measure a body before a card is painted for it.
+pub fn body_width(area: Rect) -> u16 {
+    area.width.min(WIDTH).saturating_sub(INSET * 2)
+}
+
 /// Paints a card named `name`, whose key that leaves is `leaves`, into `area`, and returns the band
-/// the screen inside it draws in: the card's columns less its border and inset, and its rows less
-/// its border.
+/// the screen inside it draws in: the card's columns less its border and inset, and the rows of a
+/// body `rows` tall that the frame has room for.
 pub fn paint(
     area: Rect,
     name: &str,
     leaves: &str,
+    rows: u16,
     buffer: &mut Buffer,
     edge: Look,
     palette: &Palette,
 ) -> Rect {
     if area.width < NARROW {
-        return bleeding(area, name, buffer, edge, palette);
+        return bleeding(area, name, rows, buffer, edge, palette);
     }
     // A card that is the whole frame has no gutter left to grey, and a scrim painted under it
     // would be covered in the same pass.
     scrim(area, buffer, palette);
-    boxed(area, name, leaves, buffer, edge, palette)
+    boxed(area, name, leaves, rows, buffer, edge, palette)
+}
+
+/// The rows of a body `rows` tall a band of `room` rows holds, and how many of them it keeps back:
+/// a body with any row kept back gives one of the room's rows to the row that counts them.
+fn capped(rows: u16, room: u16) -> (u16, u16) {
+    match rows > room && room > 0 {
+        true => (room - 1, rows - (room - 1)),
+        false => (rows.min(room), 0),
+    }
+}
+
+/// The row under the body `held` that says how many rows of it the card could not hold.
+fn counted(buffer: &mut Buffer, held: Rect, rows: u16, palette: &Palette) {
+    pen::write(
+        buffer,
+        Rect {
+            y: held.bottom(),
+            height: 1,
+            ..held
+        },
+        &[(
+            format!("{ELLIPSIS} {rows} rows kept back"),
+            Look::plain(Ink::Dim),
+        )],
+        Clip::Edge,
+        palette,
+    );
 }
 
 /// Dims every cell of the frame a card is opened from, so no glyph behind it is read at the
@@ -68,49 +104,72 @@ fn boxed(
     area: Rect,
     name: &str,
     leaves: &str,
+    rows: u16,
     buffer: &mut Buffer,
     edge: Look,
     palette: &Palette,
 ) -> Rect {
     let width = area.width.min(WIDTH);
+    let height = rows.saturating_add(2).min(area.height);
     let card = Rect {
         x: area.x + (area.width - width) / 2,
+        y: area.y + (area.height - height) / 2,
         width,
-        ..area
+        height,
     };
     grounded(buffer, card, palette);
+
+    let (held, kept) = capped(rows, height.saturating_sub(2));
+    let body = Rect {
+        x: card.x + INSET,
+        y: card.y.saturating_add(1),
+        width: body_width(area),
+        height: held,
+    };
+    if card.height == 0 {
+        return body;
+    }
 
     let last = card.bottom() - 1;
     pen::rule(buffer, Rect { height: 1, ..card }, RULE, edge, palette);
     headed(buffer, card, name, edge, palette);
-    if area.height > 1 {
+    if card.height > 1 {
         for y in card.y + 1..last {
             sides(buffer, card, y, palette);
         }
         footed(buffer, card, leaves, palette);
     }
-
-    Rect {
-        x: card.x + INSET,
-        y: card.y + 1,
-        width: width.saturating_sub(INSET * 2),
-        height: area.height.saturating_sub(2),
+    if kept > 0 {
+        counted(buffer, body, kept, palette);
     }
+    body
 }
 
 /// The card a frame too narrow or too short to hold one is drawn as: the title row, and the body it
 /// heads at the card's own inset, with no border to spend columns and rows on.
-fn bleeding(area: Rect, name: &str, buffer: &mut Buffer, edge: Look, palette: &Palette) -> Rect {
+fn bleeding(
+    area: Rect,
+    name: &str,
+    rows: u16,
+    buffer: &mut Buffer,
+    edge: Look,
+    palette: &Palette,
+) -> Rect {
     grounded(buffer, area, palette);
     let head = Rect { height: 1, ..area };
     pen::rule(buffer, head, RULE, edge, palette);
     labelled(buffer, head, name, palette);
-    Rect {
+    let (held, kept) = capped(rows, area.height.saturating_sub(1));
+    let body = Rect {
         x: area.x.saturating_add(INSET),
         y: area.y.saturating_add(1),
-        width: area.width.saturating_sub(INSET * 2),
-        height: area.height.saturating_sub(1),
+        width: body_width(area),
+        height: held,
+    };
+    if kept > 0 {
+        counted(buffer, body, kept, palette);
     }
+    body
 }
 
 fn headed(buffer: &mut Buffer, card: Rect, name: &str, edge: Look, palette: &Palette) {

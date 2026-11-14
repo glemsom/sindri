@@ -816,8 +816,8 @@ fn rail_rows(facts: &Facts, rail: Rail, area: Rect, marker: Option<&Pulse>) -> V
 }
 
 /// The screen's rows: each column's blocks in the order the ledger reads them, a rule over every
-/// block below the first in its column, and the count of what the band could not hold at the last
-/// column's foot.
+/// block below the first in its column, and the count of what the band could not hold on the row
+/// under the last column's last one.
 fn sheet_rows(facts: &Facts, area: Rect) -> Vec<Row> {
     let sheet = sheet(&known(facts, Shape::Screen, None), area);
     let mut rows = Vec::new();
@@ -843,15 +843,10 @@ fn sheet_rows(facts: &Facts, area: Rect) -> Vec<Row> {
         }
     }
     if sheet.went > 0
-        && area.height > 0
         && let Some(column) = sheet.columns.last()
     {
-        rows.push(Row::run(
-            column.x,
-            area.bottom() - 1,
-            more(sheet.went),
-            Ink::Muted,
-        ));
+        let y = rows.last().map_or(area.y, |row| row.y().saturating_add(1));
+        rows.push(Row::run(column.x, y, more(sheet.went), Ink::Muted));
     }
     rows
 }
@@ -1375,7 +1370,7 @@ const SCREEN_BLOCKS: [(&str, &[Kind]); 8] = [
 #[derive(Default)]
 struct Sheet {
     columns: Vec<Column>,
-    /// The rows no column could hold, counted at the last column's foot.
+    /// The rows no column could hold, counted under the last column's last row.
     went: usize,
 }
 
@@ -2466,7 +2461,7 @@ mod tests {
     }
 
     #[test]
-    fn a_block_is_drawn_whole_and_what_the_band_cannot_hold_is_counted_at_its_last_column_s_foot() {
+    fn a_block_is_drawn_whole_and_what_the_band_cannot_hold_is_counted_under_its_last_column() {
         let facts = Facts { ..frame() }.recorded(
             &document("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61"),
             &[String::from("bash")],
@@ -2494,12 +2489,19 @@ mod tests {
                 ("+8 more", 61),
             ],
             "the blocks flow into the columns whole, a block that does not fit moves on rather \
-             than being split, and the count of what went stands at the last column's foot"
+             than being split, and the count of what went stands under the last column"
+        );
+        let (y, parts) = laid.last().cloned().expect("the band counts what went");
+        assert_eq!(
+            parts,
+            vec![(61, String::from("+8 more"))],
+            "the count of what went belongs to the last column, under its last row: {laid:?}"
         );
         assert_eq!(
-            laid.last().cloned(),
-            Some((area.bottom() - 1, vec![(61, String::from("+8 more"))])),
-            "the count is the band's last row, whatever the columns above it leave blank"
+            y,
+            laid[laid.len() - 2].0 + 1,
+            "and the screen's rows are contiguous, so the card drawn on them is as tall as the \
+             rows it holds: {laid:?}"
         );
     }
 

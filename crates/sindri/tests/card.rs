@@ -15,8 +15,12 @@ use sindri::keys::{Act, Mode};
 use sindri::palette::Palette;
 use sindri::view::View;
 use sindri_core::config::Config;
+use sindri_core::provider::served::{Listing, Where};
+use sindri_core::provider::transport::{Canned, Replay};
+use sindri_core::provider::{Client, Credential};
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
+use sindri_core::wire::Wire;
 
 const SCREENS: [Mode; 5] = [
     Mode::Keys,
@@ -70,6 +74,18 @@ fn opened(over: View, mode: Mode) -> View {
         "the screen a test asked for is the one up"
     );
     view
+}
+
+const ANTHROPIC_MODELS: &str =
+    include_str!("../../sindri-core/tests/fixtures/providers/anthropic_models.json");
+
+/// The names a recorded Anthropic listing serves, read through the listing code the screen reads.
+fn served() -> Listing {
+    let replay = Replay::new([Canned::reply(200, ANTHROPIC_MODELS)]);
+    let at = Where::own(Wire::Anthropic);
+    Client::over(replay, SecretSet::default())
+        .waits(|_| {})
+        .served(&at, &Credential::new("sk-ant-recorded"), &at)
 }
 
 fn on_screen(mode: Mode) -> View {
@@ -134,18 +150,27 @@ fn column_of(buffer: &Buffer, y: u16, glyph: char) -> Option<u16> {
     })
 }
 
-/// The card's own columns of one row, found by its top row's corners: the frame a card was opened
-/// from is still on the screen either side of it.
+/// The rows the card's two borders stand on and the columns its corners are drawn at, or none for a
+/// card a frame under fifty columns draws with no border at all.
+fn corners(buffer: &Buffer) -> Option<(u16, u16, u16, u16)> {
+    let rows = buffer.area.y..buffer.area.bottom();
+    let top = rows
+        .clone()
+        .find(|y| column_of(buffer, *y, '╭').is_some())?;
+    let bottom = rows.rev().find(|y| column_of(buffer, *y, '╰').is_some())?;
+    Some((
+        top,
+        bottom,
+        column_of(buffer, top, '╭').expect("a left corner"),
+        column_of(buffer, top, '╮').expect("a right corner"),
+    ))
+}
+
+/// The card's own columns of one row: the frame a card was opened from is still on the screen
+/// either side of it.
 fn of_card(buffer: &Buffer, y: u16) -> String {
-    let top: Vec<char> = row(buffer, 0).chars().collect();
-    let left = top
-        .iter()
-        .position(|glyph| *glyph == '╭')
-        .expect("a left corner");
-    let right = top
-        .iter()
-        .rposition(|glyph| *glyph == '╮')
-        .expect("a right corner");
+    let (_, _, left, right) = corners(buffer).expect("a card drawn with its border");
+    let (left, right) = (usize::from(left), usize::from(right));
     row(buffer, y)
         .chars()
         .skip(left)
@@ -153,22 +178,43 @@ fn of_card(buffer: &Buffer, y: u16) -> String {
         .collect()
 }
 
+/// The words one row of the card's body draws, between its two sides, with the blanks it pads its
+/// end with dropped.
+fn said(buffer: &Buffer, y: u16) -> String {
+    let (_, _, left, right) = corners(buffer).expect("a card drawn with its border");
+    let (left, right) = (usize::from(left), usize::from(right) + 1);
+    row(buffer, y)
+        .chars()
+        .skip(left + 1)
+        .take(right - left - 2)
+        .collect::<String>()
+        .trim_end()
+        .to_owned()
+}
+
+/// Every row of the card's body, top to bottom, as the words each draws.
+fn body_rows(buffer: &Buffer) -> Vec<String> {
+    let (top, bottom, ..) = corners(buffer).expect("a card drawn with its border");
+    (top + 1..bottom).map(|y| said(buffer, y)).collect()
+}
+
 #[test]
 fn a_card_is_at_most_seventy_two_columns_wide_and_centred() {
     for (cols, left) in [(120, 24), (100, 14), (73, 0), (72, 0)] {
         let buffer = painted(&mut on_screen(Mode::Keys), cols, 24);
+        let (top, _, corner, _) = corners(&buffer).expect("a card drawn with its border");
         assert_eq!(
-            column_of(&buffer, 0, '╭'),
-            Some(left),
+            corner,
+            left,
             "at {cols} columns a 72-column card stands in column {left}, and the border of \
              one that is not centred stands somewhere else: {:?}",
-            row(&buffer, 0)
+            row(&buffer, top)
         );
         assert_eq!(
-            column_of(&buffer, 0, '╮'),
+            column_of(&buffer, top, '╮'),
             Some(left + 71),
             "and its right corner is seventy-one columns on from its left one: {:?}",
-            row(&buffer, 0)
+            row(&buffer, top)
         );
     }
 }
@@ -177,37 +223,39 @@ fn a_card_is_at_most_seventy_two_columns_wide_and_centred() {
 fn a_screen_names_itself_in_the_top_border_and_the_key_that_leaves_in_the_bottom() {
     for mode in SCREENS {
         let buffer = painted(&mut on_screen(mode), 120, 40);
-        let top = of_card(&buffer, 0);
+        let (top, bottom, ..) = corners(&buffer).expect("a card drawn with its border");
+
+        let named = of_card(&buffer, top);
         assert!(
-            top.starts_with('╭') && top.ends_with('╮'),
-            "{} is drawn on a card whose top row is a rounded rule: {top:?}",
+            named.starts_with('╭') && named.ends_with('╮'),
+            "{} is drawn on a card whose top row is a rounded rule: {named:?}",
             name(mode)
         );
         assert!(
-            top.contains(name(mode)),
-            "and the row says which screen it is, in {}'s own name: {top:?}",
+            named.contains(name(mode)),
+            "and the row says which screen it is, in {}'s own name: {named:?}",
             name(mode)
         );
 
-        let last = buffer.area.bottom() - 1;
-        let bottom = of_card(&buffer, last);
+        let leaving = of_card(&buffer, bottom);
         assert!(
-            bottom.starts_with('╰') && bottom.ends_with('╯'),
-            "{} is drawn on a card whose bottom row is a rounded rule: {bottom:?}",
+            leaving.starts_with('╰') && leaving.ends_with('╯'),
+            "{} is drawn on a card whose bottom row is a rounded rule: {leaving:?}",
             name(mode)
         );
         assert!(
-            bottom.contains(leaves(mode)),
+            leaving.contains(leaves(mode)),
             "and the row says `{}`, the key the screen's own table binds to leaving it, so the \
-             reader need not close the screen to find out: {bottom:?}",
+             reader need not close the screen to find out: {leaving:?}",
             leaves(mode)
         );
 
-        let side = of_card(&buffer, 1);
-        assert!(
-            side.starts_with('│') && side.ends_with('│'),
-            "and the rows between them are the card's two sides: {side:?}"
-        );
+        for side in (top + 1..bottom).map(|y| of_card(&buffer, y)) {
+            assert!(
+                side.starts_with('│') && side.ends_with('│'),
+                "and the rows between them are the card's two sides: {side:?}"
+            );
+        }
     }
 }
 
@@ -219,30 +267,35 @@ fn every_screen_open_over_the_frame_carries_the_accent_on_the_edge_row_of_its_ca
     for (cols, rows) in [(120, 40), (40, 24)] {
         for mode in SCREENS {
             let buffer = painted(&mut on_screen(mode), cols, rows);
-            let top = row(&buffer, 0);
-            // A card too narrow to hold a border is the whole frame, and one that holds it is
-            // drawn between its corners with the frame it dimmed either side of it.
-            let left = column_of(&buffer, 0, '╭').unwrap_or(0);
-            let right = column_of(&buffer, 0, '╮').unwrap_or(cols - 1);
+            // A card too narrow to hold a border is the whole frame with its title row first, and
+            // one that holds it is drawn between its corners with the frame it dimmed either side.
+            let card = corners(&buffer);
+            let (top, bottom, left, right) = match card {
+                Some((top, bottom, left, right)) => (top, bottom, left, right),
+                None => (buffer.area.y, buffer.area.y, 0, cols - 1),
+            };
+            let edge = row(&buffer, top);
             assert!(
-                top.contains(name(mode)),
-                "{} is drawn on the card's edge row: {top:?}",
+                edge.contains(name(mode)),
+                "{} is drawn on the card's edge row: {edge:?}",
                 name(mode)
             );
             for column in left..=right {
                 assert_eq!(
-                    look(&buffer, &palette, column, 0),
+                    look(&buffer, &palette, column, top),
                     faint,
                     "column {column} of {}'s edge row at {cols} columns is not the accent drawn \
-                     faint, and the card is the surface that takes the keys: {top:?}",
+                     faint, and the card is the surface that takes the keys: {edge:?}",
                     name(mode)
                 );
             }
+            if card.is_none() {
+                continue;
+            }
 
-            let last = buffer.area.bottom() - 1;
             for column in left..=right {
                 assert_ne!(
-                    look(&buffer, &palette, column, last),
+                    look(&buffer, &palette, column, bottom),
                     faint,
                     "column {column} of the row that says how to leave {} carries the accent too, \
                      and one card lights one row",
@@ -259,25 +312,25 @@ fn a_card_drawn_in_no_colour_keeps_the_accent_on_its_name_and_draws_no_accent_ed
     let mut view = on_screen(Mode::Keys);
     view.set_palette(palette);
     let buffer = painted(&mut view, 120, 40);
-    let top = row(&buffer, 0);
-    let left = column_of(&buffer, 0, '╭').expect("a left corner");
-    let named_at = top
+    let (top, _, left, _) = corners(&buffer).expect("a card drawn with its border");
+    let named_at = row(&buffer, top)
         .find(name(Mode::Keys))
         .expect("the screen's own name in the edge row of its card");
-    let named_at = sindri::pen::cells(&top[..named_at]);
+    let named_at = sindri::pen::cells(&row(&buffer, top)[..named_at]);
 
     assert_eq!(
-        look(&buffer, &palette, left, 0),
+        look(&buffer, &palette, left, top),
         Look::plain(Ink::Dim),
         "the card's edge row is the dim edge it always drew: a reader who asked for no colour is \
          given no accent edge to see, and their focus is carried by the card's border and the \
          scrim"
     );
     assert_eq!(
-        look(&buffer, &palette, named_at, 0),
+        look(&buffer, &palette, named_at, top),
         Look::plain(Ink::Accent),
         "and the name that row carries is the accent it always was, so every screen such a \
-         terminal draws is the screen it drew before: {top:?}"
+         terminal draws is the screen it drew before: {:?}",
+        row(&buffer, top)
     );
 }
 
@@ -288,10 +341,10 @@ fn a_card_drawn_in_a_window_nobody_is_reading_keeps_the_dim_edge() {
     view.set_palette(palette);
     view.set_focused(false);
     let buffer = painted(&mut view, 120, 40);
-    let left = column_of(&buffer, 0, '╭').expect("a left corner");
+    let (top, _, left, _) = corners(&buffer).expect("a card drawn with its border");
 
     assert_eq!(
-        look(&buffer, &palette, left, 0),
+        look(&buffer, &palette, left, top),
         palette.dim_edge(),
         "the card is the surface that takes the keys, and it lights its edge for a reader who is \
          reading it: nobody is, so the edge recedes and the card's border carries it"
@@ -383,23 +436,22 @@ fn the_card_covers_the_frame_behind_it_rather_than_letting_it_read_through() {
     view.open_settings(&Config::default());
     let buffer = painted(&mut view, 120, 40);
 
-    let inside: String = (1..39).map(|y| of_card(&buffer, y)).collect();
+    let inside = body_rows(&buffer).join("\n");
     assert!(
         !inside.contains("opened over it"),
         "the transcript behind the card is dimmed and covered, and no row of the card reads \
          through it: {inside:?}"
     );
     assert!(
-        of_card(&buffer, 2).contains("model"),
-        "and the card's own rows are what is on it: {:?}",
-        of_card(&buffer, 2)
+        inside.contains("model"),
+        "and the card's own rows are what is on it: {inside:?}"
     );
 }
 
 #[test]
 fn the_words_of_a_row_are_never_cut_by_the_card_they_are_drawn_in() {
     let buffer = painted(&mut on_screen(Mode::Keys), 120, 40);
-    let body: Vec<String> = (1..39).map(|y| of_card(&buffer, y)).collect();
+    let body = body_rows(&buffer);
     let drawn: HashSet<&str> = body.iter().flat_map(|row| row.split_whitespace()).collect();
 
     for binding in Mode::Composer.table() {
@@ -420,7 +472,7 @@ fn the_reason_a_value_was_refused_is_drawn_whole_however_narrow_the_card() {
     view.open_settings(&Config::default());
     view.refuse("max_turns two hundred will not parse: invalid digit found in string");
     let buffer = painted(&mut view, 120, 40);
-    let body: Vec<String> = (1..39).map(|y| of_card(&buffer, y)).collect();
+    let body = body_rows(&buffer);
     let drawn: HashSet<&str> = body.iter().flat_map(|row| row.split_whitespace()).collect();
 
     for word in ["parse:", "invalid", "digit", "found", "string"] {
@@ -483,6 +535,7 @@ fn a_name_too_wide_for_its_row_is_cut_at_the_rows_right_edge() {
         buffer.area,
         &name,
         "",
+        4,
         &mut buffer,
         edge,
         &Palette::TRUECOLOR,
@@ -511,6 +564,7 @@ fn a_key_the_bottom_row_has_no_room_for_is_refused_whole() {
         buffer.area,
         "?",
         &leaves,
+        4,
         &mut buffer,
         edge,
         &Palette::TRUECOLOR,
@@ -533,6 +587,7 @@ fn a_key_as_wide_as_the_bottom_row_allows_keeps_the_corners_it_hangs_between() {
         buffer.area,
         "?",
         &leaves,
+        4,
         &mut buffer,
         edge,
         &Palette::TRUECOLOR,
@@ -544,5 +599,379 @@ fn a_key_as_wide_as_the_bottom_row_allows_keeps_the_corners_it_hangs_between() {
         format!("╰─ {} ─╯", "k".repeat(66)),
         "the widest key the bottom row holds hangs between a column of rule and the corners, \
          which it does not cover"
+    );
+}
+
+/// The ellipsis a card marks a row it keeps back with.
+const ELLIPSIS: char = '\u{22EF}';
+
+/// The card a frame of `cols` by `rows` paints when the screen inside it holds `holds` rows, and
+/// the band the screen's own rows are drawn in.
+fn card_in(cols: u16, rows: u16, holds: u16) -> (Buffer, Rect) {
+    let mut buffer = Buffer::empty(Rect::new(0, 0, cols, rows));
+    let edge = Palette::TRUECOLOR.accent_edge();
+    let body = sindri::card::paint(
+        buffer.area,
+        "? keys",
+        "esc",
+        holds,
+        &mut buffer,
+        edge,
+        &Palette::TRUECOLOR,
+    );
+    (buffer, body)
+}
+
+/// The cell at `x`, `y` of the frame, as the glyph drawn in it.
+fn glyph_at(buffer: &Buffer, x: u16, y: u16) -> String {
+    buffer
+        .cell((x, y))
+        .expect("a cell of the frame")
+        .symbol()
+        .to_owned()
+}
+
+/// Row `y` of the frame read through the `width` columns of `body`, with the blanks it leaves at
+/// its end dropped.
+fn words(buffer: &Buffer, body: Rect, y: u16) -> String {
+    row(buffer, y)
+        .chars()
+        .skip(usize::from(body.x))
+        .take(usize::from(body.width))
+        .collect::<String>()
+        .trim_end()
+        .to_owned()
+}
+
+#[test]
+fn a_card_is_as_tall_as_its_body_and_its_two_borders_and_centred_in_the_frame() {
+    let (buffer, body) = card_in(80, 20, 4);
+    assert_eq!(
+        glyph_at(&buffer, 4, 7),
+        "╭",
+        "a card holding four rows is six rows tall — its body and its two borders — and a frame \
+         of twenty has a gap of fourteen to centre it in, whose spare row falls below: {:?}",
+        rows(&buffer)
+    );
+    assert_eq!(
+        glyph_at(&buffer, 75, 12),
+        "╯",
+        "and its bottom border is the last of those six rows, seven rows below the first: {:?}",
+        rows(&buffer)
+    );
+    assert_eq!(
+        body,
+        Rect::new(6, 8, 68, 4),
+        "the body is the four rows the screen holds, under the top border and between the card's \
+         two columns of inset: {:?}",
+        rows(&buffer)
+    );
+    assert_eq!(
+        glyph_at(&buffer, 4, 6),
+        " ",
+        "no row above the card is its own, so the frame under it is not covered: {:?}",
+        rows(&buffer)
+    );
+    assert_eq!(
+        glyph_at(&buffer, 4, 13),
+        " ",
+        "and no row under it is either: {:?}",
+        rows(&buffer)
+    );
+
+    let (buffer, body) = card_in(80, 20, 5);
+    assert_eq!(
+        glyph_at(&buffer, 4, 6),
+        "╭",
+        "a card holding five rows is seven rows tall, and the gap of thirteen it is centred in \
+         leaves its spare row below it, so its top border is row 6: {:?}",
+        rows(&buffer)
+    );
+    assert_eq!(
+        glyph_at(&buffer, 75, 12),
+        "╯",
+        "and its bottom border is row 12, the same row a card one row shorter ends on: {:?}",
+        rows(&buffer)
+    );
+    assert_eq!(
+        body,
+        Rect::new(6, 7, 68, 5),
+        "the body is the five rows the screen holds, under the top border: {:?}",
+        rows(&buffer)
+    );
+}
+
+#[test]
+fn a_body_taller_than_the_frame_is_capped_and_the_card_says_how_many_rows_it_keeps_back() {
+    let (buffer, body) = card_in(80, 20, 60);
+    assert_eq!(
+        glyph_at(&buffer, 4, 0),
+        "╭",
+        "a body of sixty rows in a frame of twenty is capped at the frame, so its top border is \
+         the frame's first row: {:?}",
+        rows(&buffer)
+    );
+    assert_eq!(
+        glyph_at(&buffer, 75, 19),
+        "╯",
+        "and its bottom border the frame's last: {:?}",
+        rows(&buffer)
+    );
+    assert_eq!(
+        body,
+        Rect::new(6, 1, 68, 17),
+        "the eighteen rows between the borders give one up to the row that says how many it keeps \
+         back, so the screen draws in seventeen of them: {:?}",
+        rows(&buffer)
+    );
+    assert_eq!(
+        words(&buffer, body, 18),
+        format!("{ELLIPSIS} 43 rows kept back"),
+        "the row above the bottom border says how many of the sixty rows the card could not hold, \
+         marked with the ellipsis the fold counts in: {:?}",
+        rows(&buffer)
+    );
+    assert_eq!(
+        look(&buffer, &Palette::TRUECOLOR, body.x, 18),
+        Look::plain(Ink::Dim),
+        "and it is said in the dim ink of the words a card keeps back: {:?}",
+        rows(&buffer)
+    );
+    assert_eq!(
+        glyph_at(&buffer, 4, 19),
+        "╰",
+        "the bottom border is still drawn"
+    );
+    assert_eq!(glyph_at(&buffer, 75, 19), "╯", "with both its corners");
+    assert!(
+        row(&buffer, 19).contains("esc"),
+        "and it still names the key that leaves: {:?}",
+        row(&buffer, 19)
+    );
+}
+
+#[test]
+fn a_card_covers_no_row_of_the_frame_its_body_and_borders_do_not_need() {
+    let mut buffer = Buffer::empty(Rect::new(0, 0, 80, 20));
+    for y in 0..20 {
+        for x in 0..80 {
+            if let Some(cell) = buffer.cell_mut((x, y)) {
+                cell.set_symbol("#");
+            }
+        }
+    }
+    let edge = Palette::TRUECOLOR.accent_edge();
+    sindri::card::paint(
+        buffer.area,
+        "? keys",
+        "esc",
+        4,
+        &mut buffer,
+        edge,
+        &Palette::TRUECOLOR,
+    );
+
+    for y in (0..7).chain(13..20) {
+        assert_eq!(
+            row(&buffer, y),
+            "#".repeat(80),
+            "row {y} of the frame is neither a border of the card nor a row of its body, so the \
+             glyph the frame drew there is still the one on it: {:?}",
+            rows(&buffer)
+        );
+    }
+    let card: Vec<String> = (7..13)
+        .map(|y| row(&buffer, y).chars().skip(4).take(72).collect::<String>())
+        .collect();
+    for (y, row) in (7..13).zip(&card) {
+        assert!(
+            !row.contains('#'),
+            "row {y} is the card's own, and no glyph the frame drew behind it reads through: {row:?}"
+        );
+    }
+}
+
+#[test]
+fn a_frame_under_fifty_columns_bleeds_a_body_too_tall_for_it_and_counts_the_rows_it_keeps_back() {
+    let (buffer, body) = card_in(40, 24, 40);
+    let first = row(&buffer, 0);
+    assert!(
+        first.starts_with('─') && first.contains("? keys"),
+        "a frame under fifty columns has no border to spend columns on, so its first row is the \
+         card's title row: {first:?}"
+    );
+    assert_eq!(
+        body,
+        Rect::new(2, 1, 36, 22),
+        "the body keeps all but the last row of the frame, less the one it gives up to the row \
+         that says how many it keeps back: {:?}",
+        rows(&buffer)
+    );
+    assert_eq!(
+        words(&buffer, body, 23),
+        format!("{ELLIPSIS} 18 rows kept back"),
+        "the frame's last row says how many of the forty rows it could not hold: {:?}",
+        rows(&buffer)
+    );
+    let screen = rows(&buffer).join("\n");
+    for border in ['╭', '╮', '╰', '╯', '│'] {
+        assert!(
+            !screen.contains(border),
+            "and no border is drawn, because the columns one costs are the reader's: {screen}"
+        );
+    }
+}
+
+#[test]
+fn a_frame_too_short_for_a_body_draws_its_borders_and_counts_no_rows() {
+    let (buffer, body) = card_in(120, 2, 60);
+    assert_eq!(
+        body,
+        Rect::new(26, 1, 68, 0),
+        "two rows hold the card's top border and its bottom one, and nothing between them for a \
+         body to be drawn in: {:?}",
+        rows(&buffer)
+    );
+    assert!(
+        row(&buffer, 0).contains("? keys"),
+        "so the top border names the screen: {:?}",
+        row(&buffer, 0)
+    );
+    let last = row(&buffer, 1);
+    assert_eq!(
+        glyph_at(&buffer, 24, 1),
+        "╰",
+        "and the bottom border is drawn under it: {last:?}"
+    );
+    assert!(last.contains("esc"), "naming the key that leaves: {last:?}");
+    let screen = rows(&buffer).join("\n");
+    assert!(
+        !screen.contains("kept back"),
+        "and no row of a card with none to draw the screen in says what it keeps back: {screen:?}"
+    );
+}
+
+#[test]
+fn every_screen_is_drawn_on_a_card_as_tall_as_the_rows_it_holds() {
+    for (cols, tall) in [(120, 40), (80, 24)] {
+        for mode in SCREENS {
+            let buffer = painted(&mut on_screen(mode), cols, tall);
+            let (top, bottom, ..) = corners(&buffer).unwrap_or_else(|| {
+                panic!(
+                    "{} is drawn on a card with a border at {cols}x{tall}: {:?}",
+                    name(mode),
+                    rows(&buffer)
+                )
+            });
+            let above = top - buffer.area.y;
+            let below = buffer.area.bottom() - 1 - bottom;
+            let held = bottom - top - 1;
+
+            assert!(
+                held == 0 || !said(&buffer, bottom - 1).trim().is_empty(),
+                "{}'s card at {cols}x{tall} ends where its body ends, so the last of the {held} \
+                 rows it holds is the one above its bottom border and not a blank row it did not \
+                 need: {:?}",
+                name(mode),
+                rows(&buffer)
+            );
+            assert!(
+                above == below || above + 1 == below,
+                "{}'s card at {cols}x{tall} is centred: {above} rows of frame above it and \
+                 {below} below, and a card with no spare row carries the one it cannot share \
+                 under it: {:?}",
+                name(mode),
+                rows(&buffer)
+            );
+        }
+    }
+}
+
+#[test]
+fn the_model_list_is_a_card_as_tall_as_the_names_it_holds() {
+    let mut view = opened(conversation(), Mode::Models);
+    view.set_served(served());
+    let buffer = painted(&mut view, 120, 40);
+
+    let (top, bottom, ..) = corners(&buffer).expect("a card drawn with its border");
+    assert_eq!(
+        (top, bottom),
+        (17, 21),
+        "the card holding the query row and the two names a wire served is five rows — those \
+         three and its two borders — and a frame of forty has a gap of thirty-five to centre it \
+         in, whose spare row falls below: {:?}",
+        rows(&buffer)
+    );
+    let named = of_card(&buffer, top);
+    assert!(
+        named.starts_with("╭─ /model") && named.ends_with('╮'),
+        "the top border wears the screen's own name: {named:?}"
+    );
+    assert_eq!(
+        said(&buffer, 18).trim_start(),
+        "query:",
+        "the query is the first row of the body: {:?}",
+        row(&buffer, 18)
+    );
+    assert!(
+        said(&buffer, 19).contains("claude-sonnet-4-6"),
+        "and the name the wire served first is the row under it: {:?}",
+        row(&buffer, 19)
+    );
+    assert!(
+        said(&buffer, 20).contains("claude-haiku-4-5"),
+        "the second name the wire served is the last row the card holds: {:?}",
+        row(&buffer, 20)
+    );
+    let leaving = of_card(&buffer, bottom);
+    assert!(
+        leaving.starts_with('╰') && leaving.contains(leaves(Mode::Models)),
+        "and the card ends on its bottom border, five rows under its top one: {leaving:?}"
+    );
+    assert!(
+        corners(&buffer).is_some_and(|(_, bottom, ..)| bottom == 21),
+        "so the frame the card was opened from is on the screen again under it: {:?}",
+        row(&buffer, 22)
+    );
+}
+
+#[test]
+fn a_card_the_frame_cannot_hold_keeps_back_the_rows_it_does_not_draw() {
+    let whole = painted(&mut on_screen(Mode::Keys), 120, 40);
+    let capped = painted(&mut on_screen(Mode::Keys), 80, 24);
+
+    let held = body_rows(&whole);
+    let (top, bottom, ..) = corners(&capped).expect("a card drawn with its border");
+    let drawn: Vec<String> = (top + 1..bottom - 1).map(|y| said(&capped, y)).collect();
+    let count = said(&capped, bottom - 1);
+    assert!(
+        drawn.len() < held.len(),
+        "a frame of twenty-four rows cannot hold the keys list a frame of forty draws: {} rows \\
+         against {}",
+        drawn.len(),
+        held.len()
+    );
+    assert_eq!(
+        drawn[..],
+        held[..drawn.len()],
+        "the card too short for the list draws the first rows of it, in the same order and with \
+         the same words: {:?}",
+        rows(&capped)
+    );
+    let kept = held.len() - drawn.len();
+    let told: usize = count
+        .split_whitespace()
+        .nth(1)
+        .and_then(|said| said.parse().ok())
+        .unwrap_or_else(|| {
+            panic!(
+                "the card's own count row says how many rows it keeps back: {count:?}, {:?}",
+                rows(&capped)
+            )
+        });
+    assert_eq!(
+        told, kept,
+        "and the rows it kept back are the difference between the rows the list holds and the rows \
+         the card draws: {count:?}"
     );
 }

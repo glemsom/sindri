@@ -26,4 +26,4 @@ card at 40x24
 20 |                       above            | plain:2 plain+bold:21 muted:5 plain:12
 21 |  Ctrl-X               drop the newest  | plain:2 plain+bold:21 muted:15 plain:2
 22 |                       queued prompt    | plain:2 plain+bold:21 muted:13 plain:4
-23 |  ↓                    the line below   | plain:2 plain+bold:21 muted:14 plain:3
+23 |  ⋯ 33 rows kept back                   | plain:2 dim:19 plain:19

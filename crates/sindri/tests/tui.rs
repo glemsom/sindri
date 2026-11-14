@@ -1041,14 +1041,6 @@ fn inside(row: &str) -> &str {
     row.trim_matches(['\u{2502}', ' '])
 }
 
-/// Whether row `y` of the screen the terminal holds — counted from the escape that put the cursor
-/// there, so the first row is row one — says `needle`.
-fn named(drawn: &str, y: u16, needle: &str) -> bool {
-    picture(drawn)
-        .get(&y)
-        .is_some_and(|row| row.contains(needle))
-}
-
 /// Whether the rail says `value` at the end of the row `label` heads. The blanks between the
 /// glyphs are the layout's and not the fact's, so they are dropped from both sides: a block pads
 /// its pairs into one slash column, and a path shorter than its column is drawn whole.
@@ -2157,9 +2149,11 @@ fn slash_model_offers_the_names_the_wire_serves_and_enter_writes_the_one_chosen(
 
     pty.type_bytes(b"haiku");
     assert!(
-        drawn.wait_until(|frame| row_of(frame, "Claude Haiku 4.5") == Some(3)),
+        drawn.wait_until(|frame| {
+            row_of(frame, "Claude Haiku 4.5") == row_of(frame, "query:").map(|query| query + 1)
+        }),
         "the names are ranked as the query is typed, so the haiku model is the first row \
-         under the box and the sonnet model is no row at all: {:?}",
+         under the query and the sonnet model is no row at all: {:?}",
         drawn.text()
     );
     pty.type_bytes(b"\r");
@@ -2318,7 +2312,7 @@ fn slash_help_opens_the_keys_in_force_and_slash_settings_its_own_screen() {
     );
     command(&mut pty, &drawn, "/settings");
     assert!(
-        drawn.wait_until(|frame| named(frame, 1, "settings")),
+        drawn.wait_until(|frame| showing(frame, "╭─ /settings")),
         "`/settings` opens its own screen, its name in the top border of the card it is drawn \
          on: {:?}",
         drawn.text()
@@ -2326,7 +2320,7 @@ fn slash_help_opens_the_keys_in_force_and_slash_settings_its_own_screen() {
 
     pty.type_bytes(b"\x1b");
     assert!(
-        drawn.wait_until(|frame| !named(frame, 1, "settings")),
+        drawn.wait_until(|frame| !showing(frame, "╭─ /settings")),
         "Esc closed the settings screen: {:?}",
         drawn.text()
     );

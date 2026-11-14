@@ -159,8 +159,9 @@ _Avoid_: Scrollbar, handle, scroll indicator
 
 **Card**:
 The frame a screen is drawn on: a rounded border carrying the screen's name in its top row and
-the key that leaves in its bottom, at most seventy-two columns wide and centred, and — under fifty
-— the whole frame with its title row and no border.
+the key that leaves in its bottom, at most seventy-two columns wide and as tall as the rows the body
+holds, centred — a body taller than the frame is capped, and the card counts the rows it keeps back —
+and under fifty columns the whole frame with its title row and no border.
 _Avoid_: Modal, dialog, popup, overlay, sheet
 
 **Path picker**:

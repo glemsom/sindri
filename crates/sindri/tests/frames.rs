@@ -139,12 +139,12 @@ fn keys_120x40_lists_the_keys_of_the_stack_it_sits_on() {
 }
 
 #[test]
-fn card_120x40_is_a_screen_drawn_over_the_transcript_it_was_opened_from() {
+fn card_120x40_is_a_card_as_tall_as_the_keys_it_lists_over_the_transcript_it_was_opened_from() {
     fixture::assert_frame("card", 120, 40);
 }
 
 #[test]
-fn card_40x24_is_a_card_at_a_width_that_bleeds_to_the_frames_edges() {
+fn card_40x24_is_a_card_bled_to_the_frames_edges_that_counts_the_rows_it_keeps_back() {
     fixture::assert_frame("card", 40, 24);
 }
 
@@ -154,8 +154,13 @@ fn files_120x40_is_the_eight_files_nearest_the_workspace() {
 }
 
 #[test]
-fn models_120x40_is_the_names_the_wire_served_as_one_screen() {
+fn models_120x40_is_a_card_as_tall_as_the_two_names_the_wire_served() {
     fixture::assert_frame("models", 120, 40);
+}
+
+#[test]
+fn models_80x24_is_that_card_of_two_names_over_a_shorter_frame() {
+    fixture::assert_frame("models", 80, 24);
 }
 
 #[test]
@@ -169,12 +174,12 @@ fn settings_refused_120x40_is_a_value_the_screen_will_not_take_naming_its_key() 
 }
 
 #[test]
-fn stats_120x40_is_the_facts_the_rail_gives_up_drawn_whole() {
+fn stats_120x40_is_the_facts_the_rail_gives_up_and_the_rows_a_whole_frame_cannot_hold() {
     fixture::assert_frame("stats", 120, 40);
 }
 
 #[test]
-fn stats_80x24_is_that_screen_on_a_band_that_counts_the_rows_it_cannot_hold() {
+fn stats_80x24_is_that_screen_on_a_card_that_counts_the_rows_it_keeps_back() {
     fixture::assert_frame("stats", 80, 24);
 }
 

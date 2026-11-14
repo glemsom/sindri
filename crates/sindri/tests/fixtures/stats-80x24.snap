@@ -21,9 +21,9 @@ stats at 80x24
 15 |    │ total                                                          51.3k │    | dim:5 plain:1 dim:10 plain:59 dim:5
 16 |    │ cached                                                           12k │    | dim:5 plain:1 dim:10 plain:59 dim:5
 17 |    │ reasoning                                                        900 │    | dim:5 plain:1 dim:10 plain:59 dim:5
-18 |    │                                                                      │    | dim:5 plain:70 dim:5
-19 |    │                                                                      │    | dim:5 plain:70 dim:5
-20 |ctx │                                                                      │lity| dim:5 plain:70 dim:5
-21 |────│                                                                      │────| dim:5 plain:70 dim:5
-22 |› wh│ +12 more                                                             │    | dim:5 plain:1 muted:8 plain:61 dim:5
+18 |    │ ──────────────────────────────────────────────────────────────────── │    | dim:5 plain:1 dim:68 plain:1 dim:5
+19 |    │ place                                                                │    | dim:5 plain:1 dim:5 plain:64 dim:5
+20 |ctx │ workspace /home/glemsom/Documents/git/sindri/.worktrees/46-rail      │lity| dim:5 plain:1 dim:10 plain:59 dim:5
+21 |────│ branch    spec/1-capability                                          │────| dim:5 plain:1 dim:10 plain:59 dim:5
+22 |› wh│ ⋯ 18 rows kept back                                                  │    | dim:5 plain:1 dim:19 plain:50 dim:5
 23 |Ente╰──────────────────────────────────────────────────────────────── Esc ─╯    | dim:70 plain+bold:3 dim:7

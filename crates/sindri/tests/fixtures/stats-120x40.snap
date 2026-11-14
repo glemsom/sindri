@@ -39,7 +39,7 @@ stats at 120x40
 33 |                        │ skills                                                               │                        | dim:25 plain:1 dim:6 plain:63 dim:25
 34 |                        │ bash                                                                 │                        | dim:25 plain:70 dim:25
 35 |                        │ records                                                              │                        | dim:25 plain:70 dim:25
-36 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-37 |────────────────────────│                                                                      │────────────────────────| dim:25 plain:70 dim:25
-38 |› what should the run do│ +2 more                                                              │                        | dim:25 plain:1 muted:7 plain:62 dim:25
+36 |                        │ ──────────────────────────────────────────────────────────────────── │                        | dim:25 plain:1 dim:68 plain:1 dim:25
+37 |────────────────────────│ session                                                              │────────────────────────| dim:25 plain:1 dim:7 plain:62 dim:25
+38 |› what should the run do│ ⋯ 2 rows kept back                                                   │                        | dim:25 plain:1 dim:18 plain:51 dim:25
 39 |Enter send · ? keys · Ct╰──────────────────────────────────────────────────────────────── Esc ─╯low the run             | dim:90 plain+bold:3 dim:27

@@ -862,17 +862,51 @@ impl View {
         self.links = Links::none();
         self.sizes = Sizes::none();
         self.highlight(share.transcript, buffer);
-        let body = card::paint(area, name, leaves, buffer, self.edge(), &self.palette);
-        self.paint_screen(screen, body, buffer);
+        // A screen's rows are laid once, so the card's height and the picture it holds are one
+        // fact and cannot drift apart.
+        let width = card::body_width(area);
+        let rows = self.screen_rows(screen, width);
+        let holds = match screen {
+            Mode::Stats => stats::height(&self.stats(), width),
+            _ => pen::columns(rows.len()),
+        };
+        let body = card::paint(
+            area,
+            name,
+            leaves,
+            holds,
+            buffer,
+            self.edge(),
+            &self.palette,
+        );
+        if screen == Mode::Stats {
+            stats::paint(&self.stats(), body, buffer, &self.palette);
+            return;
+        }
+        for (row, y) in rows.iter().zip(body.y..body.bottom()) {
+            pen::write(
+                buffer,
+                Rect {
+                    y,
+                    height: 1,
+                    ..body
+                },
+                &row.spans,
+                row.clip,
+                &self.palette,
+            );
+        }
     }
 
-    fn paint_screen(&mut self, screen: Mode, body: Rect, buffer: &mut Buffer) {
+    /// The rows a screen holds, laid at `width` and drawn by the card it is handed: the card is as
+    /// tall as this, and its own count row says which of them the frame had no room for.
+    fn screen_rows(&self, screen: Mode, width: u16) -> Vec<ScreenRow> {
         match screen {
-            Mode::Files => self.files_screen(body, buffer),
-            Mode::Models => self.models_screen(body, buffer),
-            Mode::Settings => self.settings_screen(body, buffer),
-            Mode::Stats => stats::paint(&self.stats(), body, buffer, &self.palette),
-            Mode::Composer | Mode::Keys => self.keys_screen(body, buffer),
+            Mode::Files => self.files_rows(),
+            Mode::Models => self.models_rows(),
+            Mode::Settings => self.settings_rows(width),
+            Mode::Composer | Mode::Keys => self.keys_rows(width),
+            Mode::Stats => Vec::new(),
         }
     }
 
@@ -1003,7 +1037,7 @@ impl View {
         let Some(label) = self.queue.label() else {
             return;
         };
-        screen_row(buffer, area, area.y, &[(&label, Ink::Dim)], &self.palette);
+        whole_row(buffer, area, area.y, &[(&label, Ink::Dim)], &self.palette);
     }
 
     /// How many rows a frame off the tail spends saying so: the one row above the composer, and
@@ -1034,7 +1068,7 @@ impl View {
         }
         let mut spans: Vec<(&str, Look)> = vec![(count.as_str(), keys::MEANING), (GAP, SEPARATOR)];
         spans.extend(keyed("End", "follows the run"));
-        screen_row(buffer, area, area.y, &spans, &self.palette);
+        whole_row(buffer, area, area.y, &spans, &self.palette);
     }
 
     /// The composer is a raised surface and not a flat band: the lit edge along its top row, the
@@ -1147,7 +1181,7 @@ impl View {
     /// A description wider than the card wraps under its own column rather than losing its tail:
     /// the card is narrower than the band was, and a key without the line that explains it is a
     /// key a reader has to try.
-    fn keys_screen(&self, area: Rect, buffer: &mut Buffer) {
+    fn keys_rows(&self, width: u16) -> Vec<ScreenRow> {
         let modes: Vec<Mode> = self.stack.modes().collect();
         let name_width = modes
             .iter()
@@ -1156,169 +1190,121 @@ impl View {
             .max()
             .unwrap_or(0);
         let hang = pen::blank(name_width);
-        let room = area.width.saturating_sub(name_width);
-        let mut y = area.y;
+        let room = width.saturating_sub(name_width);
+        let mut rows = Vec::new();
         for mode in modes {
-            if y >= area.bottom() {
-                return;
-            }
-            screen_row(buffer, area, y, &[(mode.name(), Ink::Dim)], &self.palette);
-            y = y.saturating_add(1);
+            rows.push(screen_row(vec![(mode.name().to_owned(), Ink::Dim.into())]));
             for binding in mode.table() {
                 for (at, line) in wrap(binding.does, room).iter().enumerate() {
-                    if y >= area.bottom() {
-                        return;
-                    }
                     let name = match at {
                         0 => pen::pad(binding.name, name_width),
                         _ => hang.clone(),
                     };
-                    screen_row(
-                        buffer,
-                        area,
-                        y,
-                        &[(name.as_str(), keys::KEY), (line, keys::MEANING)],
-                        &self.palette,
-                    );
-                    y = y.saturating_add(1);
+                    rows.push(screen_row(vec![
+                        (name, keys::KEY),
+                        (line.clone(), keys::MEANING),
+                    ]));
                 }
             }
         }
+        rows
     }
 
     /// The `@` picker: the query, then the rows it leaves, the selection marked. A query or a path
     /// wider than the frame is cut at its right edge rather than dropped: whole-or-nothing is a
     /// rule about hints and facts, and a reader wants the value they are pointing at.
-    fn files_screen(&self, area: Rect, buffer: &mut Buffer) {
-        let mut y = area.y;
-        if y < area.bottom() {
-            cut_row(
-                buffer,
-                area,
-                y,
-                &[(PICKER_QUERY, Ink::Dim), (self.picker.query(), Ink::Muted)],
-                &self.palette,
-            );
+    fn files_rows(&self) -> Vec<ScreenRow> {
+        let mut rows = vec![cut_row(vec![
+            (PICKER_QUERY.to_owned(), Ink::Dim.into()),
+            (self.picker.query().to_owned(), Ink::Muted.into()),
+        ])];
+        let paths = self.picker.rows();
+        if paths.is_empty() {
+            rows.push(screen_row(vec![(PICKER_EMPTY.to_owned(), Ink::Dim.into())]));
+            return rows;
         }
-        let rows = self.picker.rows();
-        if rows.is_empty() {
-            y = y.saturating_add(1);
-            if y < area.bottom() {
-                screen_row(buffer, area, y, &[(PICKER_EMPTY, Ink::Dim)], &self.palette);
-            }
-            return;
-        }
-        for (at, path) in rows.iter().enumerate() {
-            y = y.saturating_add(1);
-            if y >= area.bottom() {
-                return;
-            }
+        for (at, path) in paths.iter().enumerate() {
             let (marker, ink) = match at == self.picker.selected() {
                 true => (ROW_MARK, Ink::Accent),
                 false => (ROW_GAP, Ink::Plain),
             };
-            cut_row(
-                buffer,
-                area,
-                y,
-                &[(marker, ink), (path, ink)],
-                &self.palette,
-            );
+            let ink = Look::plain(ink);
+            rows.push(cut_row(vec![
+                (marker.to_owned(), ink),
+                ((*path).to_owned(), ink),
+            ]));
         }
+        rows
     }
 
     /// A wire that has not answered is one line saying it was asked, and one that could not
     /// answer is a hint rather than a refusal: a model named by hand still runs.
-    fn models_screen(&self, area: Rect, buffer: &mut Buffer) {
-        let mut y = area.y;
-        if y < area.bottom() {
-            cut_row(
-                buffer,
-                area,
-                y,
-                &[(MODELS_QUERY, Ink::Dim), (self.models.query(), Ink::Muted)],
-                &self.palette,
-            );
-        }
-        let rows = self.models.rows();
+    fn models_rows(&self) -> Vec<ScreenRow> {
+        let mut rows = vec![cut_row(vec![
+            (MODELS_QUERY.to_owned(), Ink::Dim.into()),
+            (self.models.query().to_owned(), Ink::Muted.into()),
+        ])];
+        let names = self.models.rows();
         let said = match self.models.hint() {
             _ if self.models.waiting() => Some(MODELS_ASKING),
             Some(hint) => Some(hint),
-            None if rows.is_empty() => Some(MODELS_EMPTY),
+            None if names.is_empty() => Some(MODELS_EMPTY),
             None => None,
         };
         if let Some(said) = said {
-            y = y.saturating_add(1);
-            if y < area.bottom() {
-                screen_row(buffer, area, y, &[(said, Ink::Dim)], &self.palette);
-            }
-            return;
+            rows.push(screen_row(vec![(said.to_owned(), Ink::Dim.into())]));
+            return rows;
         }
-        let widest = rows
+        let widest = names
             .iter()
             .map(|(id, _)| pen::cells(id) + NAMES_GAP)
             .max()
             .unwrap_or(0);
-        for (at, (id, label)) in rows.iter().enumerate() {
-            y = y.saturating_add(1);
-            if y >= area.bottom() {
-                return;
-            }
+        for (at, (id, label)) in names.iter().enumerate() {
             let (marker, ink) = match at == self.models.selected() {
                 true => (ROW_MARK, Ink::Accent),
                 false => (ROW_GAP, Ink::Plain),
             };
-            let name = pen::pad(id, widest);
-            cut_row(
-                buffer,
-                area,
-                y,
-                &[(marker, ink), (&name, ink), (label, Ink::Dim)],
-                &self.palette,
-            );
+            let ink = Look::plain(ink);
+            rows.push(cut_row(vec![
+                (marker.to_owned(), ink),
+                (pen::pad(id, widest), ink),
+                ((*label).to_owned(), Ink::Dim.into()),
+            ]));
         }
+        rows
     }
 
     /// A value too wide for the frame is cut at its right edge rather than dropped, as the
     /// picker's paths are, and a refusal under the list names the key to change.
-    fn settings_screen(&self, area: Rect, buffer: &mut Buffer) {
+    fn settings_rows(&self, width: u16) -> Vec<ScreenRow> {
         let key_width = Config::KEYS
             .iter()
             .map(|key| pen::cells(key) + SETTINGS_GAP)
             .max()
             .unwrap_or(0);
-        let mut y = area.y;
+        let mut rows = Vec::new();
         for (at, (key, text)) in self.settings.rows().enumerate() {
-            if y >= area.bottom() {
-                return;
-            }
             let (marker, name_ink, value_ink) = match at == self.settings.current() {
                 true => (ROW_MARK, Ink::Accent, Ink::Accent),
                 false => (ROW_GAP, Ink::Muted, Ink::Plain),
             };
-            let name = pen::pad(key, key_width);
-            cut_row(
-                buffer,
-                area,
-                y,
-                &[(marker, name_ink), (&name, name_ink), (text, value_ink)],
-                &self.palette,
-            );
-            y = y.saturating_add(1);
+            rows.push(cut_row(vec![
+                (marker.to_owned(), Look::plain(name_ink)),
+                (pen::pad(key, key_width), Look::plain(name_ink)),
+                (text.to_owned(), Look::plain(value_ink)),
+            ]));
         }
         let Some(refusal) = self.settings.refusal() else {
-            return;
+            return rows;
         };
         // A blank row under the list, so the refusal reads as a verdict on the visit and not as the
         // last key's value.
-        y = y.saturating_add(2);
-        for line in wrap(refusal, area.width) {
-            if y >= area.bottom() {
-                return;
-            }
-            cut_row(buffer, area, y, &[(&line, Ink::Err)], &self.palette);
-            y = y.saturating_add(1);
+        rows.push(screen_row(Vec::new()));
+        for line in wrap(refusal, width) {
+            rows.push(cut_row(vec![(line, Ink::Err.into())]));
         }
+        rows
     }
 
     /// The facts the screen draws: the ones the frame holds, and the ones the record wrote. A
@@ -1433,9 +1419,24 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16, notice_rows: u16) -> B
     }
 }
 
-/// Writes one row of a screen, each span in its own look. A row the frame's right edge has no room
-/// for is not drawn at all: a screen's row is whole or it is not there.
-fn screen_row<S: AsRef<str>, D: Copy + Into<Look>>(
+/// One row of a screen as data: the spans it draws, each in its own look, and the rule that decides
+/// what happens to a row the card has no room for.
+struct ScreenRow {
+    spans: Vec<(String, Look)>,
+    clip: Clip,
+}
+
+/// A row whole or not there at all: a hint or a fact is never read in part.
+fn screen_row(spans: Vec<(String, Look)>) -> ScreenRow {
+    ScreenRow {
+        spans,
+        clip: Clip::Whole,
+    }
+}
+
+/// Writes one row of a band, each span in its own look. A row the band's right edge has no room
+/// for is not drawn at all: a hint or a fact is whole or it is not there.
+fn whole_row<S: AsRef<str>, D: Copy + Into<Look>>(
     buffer: &mut Buffer,
     area: Rect,
     y: u16,
@@ -1455,6 +1456,14 @@ fn screen_row<S: AsRef<str>, D: Copy + Into<Look>>(
     );
 }
 
+/// A row cut at its right edge: a value that runs on is cut rather than dropped.
+fn cut_row(spans: Vec<(String, Look)>) -> ScreenRow {
+    ScreenRow {
+        spans,
+        clip: Clip::Edge,
+    }
+}
+
 /// Writes one row of the draft. The sigil opens the first row and every row a wrap gave the draft
 /// keeps the gutter blank under it, so the draft's first column is the answer's on all of them.
 fn draft_row(buffer: &mut Buffer, area: Rect, opens: bool, words: (&str, Ink), palette: &Palette) {
@@ -1470,22 +1479,6 @@ fn draft_row(buffer: &mut Buffer, area: Rect, opens: bool, words: (&str, Ink), p
             ..area
         },
         &[(gutter, Ink::Dim), words],
-        Clip::Edge,
-        palette,
-    );
-}
-
-/// Writes one row cut at the frame's right edge: a value that runs on is cut, where a hint or a
-/// fact is whole or not drawn.
-fn cut_row(buffer: &mut Buffer, area: Rect, y: u16, spans: &[(&str, Ink)], palette: &Palette) {
-    pen::write(
-        buffer,
-        Rect {
-            y,
-            height: 1,
-            ..area
-        },
-        spans,
         Clip::Edge,
         palette,
     );
@@ -1544,6 +1537,7 @@ mod tests {
     //! under the cells, which a fixture reads by ink and never by background.
 
     use sindri_core::policy::Enforcement;
+
     use sindri_core::redact::SecretSet;
     use sindri_core::run::Exit;
 
@@ -1585,28 +1579,43 @@ mod tests {
             .unwrap_or_else(|| panic!("row {y}, column {x} reads back as no look"))
     }
 
-    /// The columns between the two corners of the card drawn in `buffer`, which are the columns
-    /// of the frame under it.
-    fn card_columns(buffer: &Buffer) -> (u16, u16) {
-        let mut corners = (None, None);
-        for x in buffer.area.x..buffer.area.right() {
-            let glyph = buffer
-                .cell((x, buffer.area.y))
-                .expect("a cell of the card's edge row")
-                .symbol();
-            match glyph {
-                "╭" => corners.0 = Some(x),
-                "╮" => corners.1 = Some(x),
-                _ => {}
-            }
-        }
-        let (Some(left), Some(right)) = corners else {
-            panic!(
-                "the card's edge row has two corners: {:?}",
-                drawn_row(buffer, buffer.area.y)
-            );
+    /// The rows the card's two borders stand on and the columns its corners are drawn at: the frame
+    /// it was opened from is still on the screen either side of it.
+    fn card_frame(buffer: &Buffer) -> (u16, u16, u16, u16) {
+        let found = |y: u16, glyph: char| {
+            (buffer.area.x..buffer.area.right()).find(|x| {
+                buffer
+                    .cell((*x, y))
+                    .is_some_and(|cell| cell.symbol() == glyph.to_string())
+            })
         };
+        let rows = buffer.area.y..buffer.area.bottom();
+        let top = rows
+            .clone()
+            .find(|y| found(*y, '╭').is_some())
+            .expect("the card has an edge row");
+        let bottom = rows
+            .rev()
+            .find(|y| found(*y, '╰').is_some())
+            .expect("the card has a foot");
+        (
+            top,
+            bottom,
+            found(top, '╭').expect("a left corner"),
+            found(top, '╮').expect("a right corner"),
+        )
+    }
+
+    /// The columns between the two corners of the card, which are the columns of the frame under it.
+    fn card_columns(buffer: &Buffer) -> (u16, u16) {
+        let (_, _, left, right) = card_frame(buffer);
         (left, right)
+    }
+
+    /// The rows the card's body is drawn in: between its two borders.
+    fn card_body(buffer: &Buffer) -> Range<u16> {
+        let (top, bottom, ..) = card_frame(buffer);
+        top + 1..bottom
     }
 
     /// A frame holding a draft of `lines` lines painted in `palette` at `cols` by `rows`, and the
@@ -1776,9 +1785,8 @@ mod tests {
                 band.x,
                 band.right()
             );
-            // The card is as tall as the frame and covers the composer down to its last row, so
-            // the composer's edge row is read in the card's two gutters, where the scrim would
-            // have left an accent bright rather than dimmed.
+            // The composer's edge row is read in the card's two gutters, where the scrim leaves
+            // an accent dimmed rather than bright.
             for x in (band.x..left).chain(right + 1..band.right()) {
                 assert_eq!(
                     look_at(&buffer, &palette, x, band.y),
@@ -2754,7 +2762,7 @@ mod tests {
 
         let (left, right) = card_columns(&buffer);
         let mut listed = 0;
-        for y in area.y + 1..area.bottom() - 1 {
+        for y in card_body(&buffer) {
             let runs: Vec<(Look, String)> = runs_of(&buffer, &palette, y, left + 1, right)
                 .into_iter()
                 .filter(|(_, text)| !text.trim().is_empty())
@@ -3392,7 +3400,7 @@ mod tests {
         let mut view = View::boot();
         view.key(Key::Char('?'));
         let buffer = painted(&mut view, 120, 40);
-        let body = (buffer.area.y + 1..buffer.area.bottom() - 1)
+        let body = card_body(&buffer)
             .map(|y| drawn_row(&buffer, y))
             .collect::<Vec<_>>()
             .join("\n");
