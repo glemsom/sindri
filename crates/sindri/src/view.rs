@@ -27,7 +27,7 @@ use crate::ink::{Ink, Look};
 use crate::keys::{self, Act, Mode, Stack};
 use crate::ledger::{Boot, Facts, Rail, Share};
 use crate::link::Links;
-use crate::list::{self, Choice, Item, ScreenRow};
+use crate::list::{self, Beside, Choice, Item, ScreenRow};
 use crate::mark::{Cell, Mark, Span};
 use crate::models::Models;
 use crate::palette::{Band, Palette};
@@ -1391,12 +1391,7 @@ impl View {
         list::List {
             query: Some(self.models.query()),
             said,
-            items: list::columned(
-                names
-                    .into_iter()
-                    .map(|(name, says)| (name, (says, Ink::Dim))),
-                Ink::Plain,
-            ),
+            items: list::columned(names.into_iter(), Ink::Plain, Beside::Own(Ink::Dim)),
             selected: self.models.selected(),
             marker: ROW_MARK,
             choice: Some(Choice::Model),
@@ -1407,26 +1402,20 @@ impl View {
     /// A value too wide for the frame is cut at its right edge rather than dropped, as the
     /// picker's paths are, and a refusal under the list names the key to change.
     fn settings_rows(&self, width: u16) -> Vec<ScreenRow> {
+        // A key is the schema's own and a value borrows the visit, so the column holds the pair for
+        // the shorter of the two lifetimes.
+        let keys: Vec<(&str, &str)> = self.settings.rows().collect();
         let mut rows = list::List {
             query: None,
             said: None,
-            items: list::columned(
-                self.settings.rows().enumerate().map(|(at, (key, text))| {
-                    let ink = match at == self.settings.current() {
-                        true => Ink::Accent,
-                        false => Ink::Plain,
-                    };
-                    (key, (text, ink))
-                }),
-                Ink::Muted,
-            ),
+            items: list::columned(keys.into_iter(), Ink::Muted, Beside::Row),
             selected: self.settings.current(),
             marker: ROW_MARK,
             choice: None,
         }
         .rows();
-        if let Some(refusal) = self.settings.refusal() {
-            rows.extend(list::verdict(refusal, width));
+        if let Some(reason) = self.settings.refusal() {
+            rows.extend(list::refusal(reason, width));
         }
         rows
     }
@@ -1646,10 +1635,9 @@ fn command_rows(card: &commands::Card) -> Vec<ScreenRow> {
         query: None,
         said: None,
         items: list::columned(
-            card.rows()
-                .iter()
-                .map(|said| (said.name, (said.says, Ink::Dim))),
+            card.rows().iter().map(|said| (said.name, said.says)),
             Ink::Plain,
+            Beside::Own(Ink::Dim),
         ),
         selected: 0,
         marker: ROW_MARK,

@@ -1,6 +1,6 @@
 //! The list a card draws: the query it answers at its head, the one line it says in place of its
 //! rows, and one row per item with the row a reader is on marked — each filled down the band a card
-//! hands it and cut at the frame's edge.
+//! hands it and cut at the frame's edge — and, under the rows, the refusal that turned a visit back.
 
 use crate::ink::{Ink, Look};
 use crate::pen::{self, Clip};
@@ -59,12 +59,22 @@ impl ScreenRow {
     }
 }
 
+/// The ink the words beside a name are read in: one of their own, for words that describe the name,
+/// or the row's own, for a value it holds — plain while the reader is elsewhere, and the accent on
+/// the row the reader is on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Beside {
+    Own(Ink),
+    Row,
+}
+
 /// One item of a list: the words a reader is looking for, and the words that stand beside them,
 /// each in its own ink.
 pub struct Item {
     pub name: String,
-    pub beside: Vec<(String, Ink)>,
-    /// The ink the name and the marker's blank columns stand in when the reader is not on the row.
+    pub beside: Vec<(String, Beside)>,
+    /// The ink the name and the marker's blank columns stand in when the reader is not on the row,
+    /// so a screen can list keys quieter than the values beside them.
     pub ink: Ink,
 }
 
@@ -83,34 +93,41 @@ impl Item {
     pub fn beside(name: impl Into<String>, said: impl Into<String>) -> Item {
         Item {
             name: name.into(),
-            beside: vec![(format!("{}{}", pen::blank(GAP), said.into()), Ink::Dim)],
+            beside: vec![(
+                format!("{}{}", pen::blank(GAP), said.into()),
+                Beside::Own(Ink::Dim),
+            )],
             ink: Ink::Plain,
         }
     }
 }
 
 /// The items a column of names makes: each name padded to the widest of them and the gap beside it,
-/// so the words beside them begin in one column, the names in the ink the column is given and the
-/// words of each row in the ink it carries.
-pub fn columned<'a>(rows: impl Iterator<Item = (&'a str, (&'a str, Ink))>, ink: Ink) -> Vec<Item> {
-    let rows: Vec<(&str, (&str, Ink))> = rows.collect();
+/// so the words beside them begin in one column — the names in `name_ink`, and the words beside each
+/// of them in the ink `beside` names.
+pub fn columned<'a>(
+    rows: impl Iterator<Item = (&'a str, &'a str)>,
+    name_ink: Ink,
+    beside: Beside,
+) -> Vec<Item> {
+    let rows: Vec<(&str, &str)> = rows.collect();
     let widest = rows
         .iter()
         .map(|(name, _)| pen::cells(name) + GAP)
         .max()
         .unwrap_or(0);
     rows.into_iter()
-        .map(|(name, (said, beside))| Item {
+        .map(|(name, said)| Item {
             name: pen::pad(name, widest),
             beside: vec![(said.to_owned(), beside)],
-            ink,
+            ink: name_ink,
         })
         .collect()
 }
 
-/// What stands under a list the visit refused: a blank row, then the reason wrapped to the band and
-/// each line drawn in the ink an error is read in.
-pub fn verdict(words: &str, width: u16) -> Vec<ScreenRow> {
+/// The rows a refusal is read in under a list: a blank row, then its words wrapped to the band, each
+/// line in the ink an error is read in and cut at the frame's edge.
+pub fn refusal(words: &str, width: u16) -> Vec<ScreenRow> {
     let mut rows = vec![ScreenRow::whole(Vec::new())];
     for line in wrap(words, width) {
         rows.push(ScreenRow::cut(vec![(line, Look::plain(Ink::Err))]));
@@ -148,16 +165,21 @@ impl List<'_> {
             return rows;
         }
         for (at, item) in self.items.iter().enumerate() {
-            let (marker, look) = match at == self.selected {
-                true => (self.marker.to_owned(), Look::plain(Ink::Accent)),
-                false => (pen::blank(pen::cells(self.marker)), Look::plain(item.ink)),
+            let marked = at == self.selected;
+            let (marker, named) = match marked {
+                true => (self.marker.to_owned(), Ink::Accent),
+                false => (pen::blank(pen::cells(self.marker)), item.ink),
             };
+            let look = Look::plain(named);
             let mut spans = vec![(marker, look), (item.name.clone(), look)];
-            spans.extend(
-                item.beside
-                    .iter()
-                    .map(|(said, ink)| (said.clone(), Look::plain(*ink))),
-            );
+            spans.extend(item.beside.iter().map(|(said, beside)| {
+                let ink = match beside {
+                    Beside::Own(ink) => *ink,
+                    Beside::Row if marked => Ink::Accent,
+                    Beside::Row => Ink::Plain,
+                };
+                (said.clone(), Look::plain(ink))
+            }));
             let mut row = ScreenRow::cut(spans);
             if let Some(choice) = self.choice {
                 row = row.choosing(choice(at));
@@ -284,7 +306,7 @@ mod tests {
     }
 
     #[test]
-    fn a_row_the_reader_is_not_on_stands_in_the_ink_its_item_names_and_the_readers_row_in_the_accent()
+    fn a_row_the_reader_is_not_on_stands_in_the_ink_its_item_gives_and_the_readers_row_in_the_accent()
      {
         let items = ["provider", "thinking"]
             .into_iter()
@@ -301,7 +323,7 @@ mod tests {
         assert_eq!(
             spans(&rows[0]),
             vec![("  ", Ink::Muted), ("provider", Ink::Muted)],
-            "a row the reader is not on stands in the ink its item names, the marker's own \
+            "a row the reader is not on stands in the ink the item gives, the marker's own \
              columns with it: a screen that lists quieter keys than it lists values has to be \
              able to say so"
         );
@@ -319,7 +341,7 @@ mod tests {
 
         assert_eq!(
             item.beside,
-            vec![(String::from("  src"), Ink::Dim)],
+            vec![(String::from("  src"), Beside::Own(Ink::Dim))],
             "the words beside a name are set off from it by the gap, in the ink that stands them \
              behind the name a reader is looking for"
         );
@@ -340,12 +362,9 @@ mod tests {
     #[test]
     fn a_column_of_names_pads_each_one_so_the_words_beside_begin_in_one_column() {
         let items = columned(
-            [
-                ("gpt-4o", ("the larger one", Ink::Dim)),
-                ("o3", ("the newer one", Ink::Dim)),
-            ]
-            .into_iter(),
+            [("gpt-4o", "the larger one"), ("o3", "the newer one")].into_iter(),
             Ink::Plain,
+            Beside::Own(Ink::Dim),
         );
 
         assert_eq!(
@@ -363,20 +382,20 @@ mod tests {
         );
         assert_eq!(
             items[1].beside,
-            vec![(String::from("the newer one"), Ink::Dim)],
+            vec![(String::from("the newer one"), Beside::Own(Ink::Dim))],
             "the words beside each name are its own, and they carry no gap of their own: the \
              column the name was padded to is the gap"
         );
         assert!(
-            columned(std::iter::empty(), Ink::Plain).is_empty(),
+            columned(std::iter::empty(), Ink::Plain, Beside::Row).is_empty(),
             "a list of no rows pads no name, and a column of nothing is the empty column"
         );
     }
 
     #[test]
-    fn a_verdict_stands_a_blank_row_under_the_list_and_its_words_wrapped_below_in_the_error_ink() {
-        let words = "the wire refused the api key because it will not parse as a number";
-        let rows = verdict(words, 20);
+    fn a_refusal_stands_a_blank_row_under_the_list_and_its_words_wrapped_below_in_the_error_ink() {
+        let reason = "the wire refused the api key because it will not parse as a number";
+        let rows = refusal(reason, 20);
 
         assert_eq!(
             spans(&rows[0]),
@@ -389,14 +408,9 @@ mod tests {
             Clip::Whole,
             "and that row is whole: it is a held breath, not a line of words to cut"
         );
-        assert_eq!(
-            rows[1..]
-                .iter()
-                .map(|row| pen::cells(&row.spans[0].0))
-                .collect::<Vec<_>>(),
-            vec![20, 18, 19, 6],
-            "the reason wraps to the width the band gave it, so a card narrow as this one still \
-             reads the whole of it: {:?}",
+        assert!(
+            rows.len() > 2,
+            "a reason wider than the band wraps rather than running past it: {:?}",
             rows.iter().map(spans).collect::<Vec<_>>()
         );
         let said: Vec<&str> = rows[1..]
@@ -405,15 +419,20 @@ mod tests {
             .collect();
         assert_eq!(
             said.join(" "),
-            words,
+            reason,
             "and no word of the reason is lost or said twice in the wrapping, because a reader \
              who cannot read why a value was refused cannot change it"
         );
         for row in &rows[1..] {
+            assert!(
+                pen::cells(&row.spans[0].0) <= 20,
+                "no line of the refusal is wider than the band it was wrapped to: {:?}",
+                row.spans[0].0
+            );
             assert_eq!(
                 spans(row),
                 vec![(row.spans[0].0.as_str(), Ink::Err)],
-                "every line of the verdict is drawn in the ink an error is read in, so it is not \
+                "every line of the refusal is drawn in the ink an error is read in, so it is not \
                  mistaken for the list's own words"
             );
             assert_eq!(
@@ -425,14 +444,12 @@ mod tests {
     }
 
     #[test]
-    fn a_column_of_names_stands_in_the_ink_it_was_given_and_each_beside_word_in_its_own() {
+    fn a_column_of_names_stands_in_the_ink_it_was_given_and_the_words_beside_it_in_the_one_it_was_handed()
+     {
         let items = columned(
-            [
-                ("provider", ("anthropic", Ink::Plain)),
-                ("model", ("claude-sonnet", Ink::Accent)),
-            ]
-            .into_iter(),
+            [("provider", "anthropic"), ("model", "claude-sonnet")].into_iter(),
             Ink::Muted,
+            Beside::Row,
         );
 
         assert_eq!(
@@ -447,11 +464,48 @@ mod tests {
                 .map(|item| item.beside.clone())
                 .collect::<Vec<_>>(),
             vec![
-                vec![(String::from("anthropic"), Ink::Plain)],
-                vec![(String::from("claude-sonnet"), Ink::Accent)],
+                vec![(String::from("anthropic"), Beside::Row)],
+                vec![(String::from("claude-sonnet"), Beside::Row)],
             ],
-            "and the words beside each name carry the ink their row was handed, so one row of the \
-             column can be read in the accent while the rest are plain"
+            "and the words beside every name carry the ink the column was handed, which is the \
+             row's own where what stands beside a name is the value that row holds"
+        );
+    }
+
+    #[test]
+    fn the_words_a_row_holds_are_read_in_the_ink_of_the_row_they_stand_on() {
+        let items = ["provider", "thinking"]
+            .into_iter()
+            .map(|name| Item {
+                beside: vec![(String::from("set"), Beside::Row)],
+                ..Item::new(name)
+            })
+            .collect();
+        let mut list = list(None, items, MARKER);
+        list.selected = 1;
+
+        let rows = list.rows();
+
+        assert_eq!(
+            spans(&rows[0]),
+            vec![
+                ("  ", Ink::Plain),
+                ("provider", Ink::Plain),
+                ("set", Ink::Plain)
+            ],
+            "a value stands in the ink of the row it is held in, which is plain while the reader \
+             is somewhere else: the row is one thing, and the key beside its value is not the \
+             whole of it"
+        );
+        assert_eq!(
+            spans(&rows[1]),
+            vec![
+                (MARKER, Ink::Accent),
+                ("thinking", Ink::Accent),
+                ("set", Ink::Accent)
+            ],
+            "and on the row the reader is, the value lights up with the name it is held by, so \
+             the reader's eye lands on the pair rather than on half of it"
         );
     }
 

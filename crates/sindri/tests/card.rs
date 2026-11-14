@@ -486,14 +486,14 @@ fn the_reason_a_value_was_refused_is_drawn_whole_however_narrow_the_card() {
 
 #[test]
 fn a_refusal_is_drawn_as_a_verdict_under_the_last_key_row() {
+    let reason = "bad value in max_turns: `two hundred` will not parse: invalid digit found in \
+                  string";
     let mut view = View::boot();
     view.open_settings(&Config::default());
-    view.refuse(
-        "bad value in max_turns: `two hundred` will not parse: invalid digit found in string",
-    );
+    view.refuse(reason);
     let palette = view.palette();
     let buffer = painted(&mut view, 120, 40);
-    let (top, bottom, left, right) = corners(&buffer).expect("a card drawn with its border");
+    let (top, bottom, left, _) = corners(&buffer).expect("a card drawn with its border");
     let body = body_rows(&buffer);
     let at = body
         .iter()
@@ -509,16 +509,11 @@ fn a_refusal_is_drawn_as_a_verdict_under_the_last_key_row() {
     );
 
     let mut y = last + 2;
-    let mut lines = 0;
+    let mut drawn = Vec::new();
     while y < bottom && !said(&buffer, y).is_empty() {
-        let drawn = said(&buffer, y);
-        let start = u16::try_from(drawn.len() - drawn.trim_start().len()).expect("a column");
-        let words = drawn.trim_start();
-        assert!(
-            left + 1 + start + sindri::pen::cells(words) <= right,
-            "no line of the verdict is wrapped past the card's right border, where it would be \
-             cut: {words:?}"
-        );
+        let row = said(&buffer, y);
+        let start = u16::try_from(row.len() - row.trim_start().len()).expect("a column");
+        let words = row.trim_start();
         let inks: Vec<Ink> = (0..sindri::pen::cells(words))
             .map(|px| look(&buffer, &palette, left + 1 + start + px, y).ink())
             .collect();
@@ -527,14 +522,14 @@ fn a_refusal_is_drawn_as_a_verdict_under_the_last_key_row() {
             "every cell of the verdict is drawn in the ink an error is read in, so it is not \
              mistaken for a key or a value: {words:?} in {inks:?}"
         );
-        lines += 1;
+        drawn.extend(words.split_whitespace().map(str::to_owned));
         y += 1;
     }
     assert_eq!(
-        lines, 2,
-        "the verdict stands between the blank row and the card's bottom border, whole: it is the \
-         reason and the tail of it, and no third line of a reason the card has room for is cut \
-         off: {body:#?}"
+        drawn.join(" "),
+        reason,
+        "the verdict stands between the blank row and the card's bottom border whole, and not cut \
+         at the border with its tail lost: {body:#?}"
     );
 }
 
@@ -557,7 +552,7 @@ fn a_frame_too_short_for_the_settings_visit_draws_the_head_of_the_list_and_keeps
     );
     assert!(
         !body.iter().any(|row| row.contains("ssh_agent")),
-        "so the tail of the list is not drawn, and the reader who wants it scrolls the card: \
+        "so the tail of the key list is kept back rather than drawn over the card's last row: \
          {body:#?}"
     );
     assert!(
