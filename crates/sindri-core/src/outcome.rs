@@ -42,7 +42,7 @@ impl Outcome {
         let tool_calls = run
             .history()
             .iter()
-            .map(|exchange| u64::try_from(exchange.calls.len()).unwrap_or(u64::MAX))
+            .map(|turn| u64::try_from(turn.calls.len()).unwrap_or(u64::MAX))
             .fold(0u64, u64::saturating_add);
         Some(Outcome {
             answer: run.answer().map(str::to_owned),

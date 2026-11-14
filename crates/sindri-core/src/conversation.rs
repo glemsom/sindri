@@ -1,11 +1,11 @@
 //! The conversation is what outlives a run in a launch that holds one. `clear` is the whole of what
 //! `/new` owes it: what it holds before that is never joined to the run after it.
 
-use crate::run::Exchange;
+use crate::turn::Turn;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Conversation {
-    exchanges: Vec<Exchange>,
+    turns: Vec<Turn>,
 }
 
 impl Conversation {
@@ -13,17 +13,17 @@ impl Conversation {
         Conversation::default()
     }
 
-    /// The prompts a run joining now is asked after, in the order they ended.
-    pub fn exchanges(&self) -> &[Exchange] {
-        &self.exchanges
+    /// The turns a run joining now is asked after, in the order they ended.
+    pub fn turns(&self) -> &[Turn] {
+        &self.turns
     }
 
-    pub fn join(&mut self, kept: Exchange) {
-        self.exchanges.push(kept);
+    pub fn join(&mut self, kept: Turn) {
+        self.turns.push(kept);
     }
 
     /// `/new`: the conversation starts again, so the run that joins next carries nothing.
     pub fn clear(&mut self) {
-        self.exchanges.clear();
+        self.turns.clear();
     }
 }

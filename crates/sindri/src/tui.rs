@@ -583,7 +583,7 @@ impl<'a> Loop<'a> {
                     self.view.set_record(&document);
                     painted = true;
                 }
-                // No cell: the transcript already drew the exchange it keeps.
+                // No cell: the transcript already drew the turn it keeps.
                 Report::Kept(kept) => self.view.kept(&kept),
                 Report::Stopped {
                     stop,

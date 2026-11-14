@@ -15,10 +15,13 @@ use serde_json::Value;
 use crate::bash::{self, Outcome};
 use crate::config::Config;
 use crate::policy::{Boundary, DEFAULT_COMMAND_BUDGET_MS, DEFAULT_OUTPUT_BUDGET_BYTES};
-use crate::provider::{Deltas, Failure, Usage};
+use crate::provider::{Deltas, Failure};
 use crate::redact::{Redacted, SecretSet};
 use crate::skills::Catalog;
 use crate::tools::{BASH, SKILL, ToolSet};
+use crate::turn::Usage;
+
+pub use crate::turn::{Acted, Call, Exit, Turn};
 
 pub const DEFAULT_MAX_TURNS: u32 = 250;
 
@@ -255,37 +258,6 @@ impl Spent {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Call {
-    /// The wire's own identity for this call, which its result is answered against.
-    pub id: String,
-    pub name: String,
-    pub arguments: String,
-}
-
-impl Call {
-    pub fn new(
-        id: impl Into<String>,
-        name: impl Into<String>,
-        arguments: impl Into<String>,
-    ) -> Self {
-        Call {
-            id: id.into(),
-            name: name.into(),
-            arguments: arguments.into(),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Exit {
-    Code(i32),
-    Signalled,
-    TimedOut,
-    Cancelled,
-}
-
 impl Exit {
     pub fn of(outcome: &Outcome) -> Exit {
         if outcome.cancelled {
@@ -299,27 +271,6 @@ impl Exit {
             None => Exit::Signalled,
         }
     }
-
-    pub fn word(self) -> String {
-        match self {
-            Exit::Code(code) => format!("exit {code}"),
-            Exit::Signalled => String::from("killed by a signal"),
-            Exit::TimedOut => String::from("timed out"),
-            Exit::Cancelled => String::from("cancelled"),
-        }
-    }
-
-    pub fn is_ok(self) -> bool {
-        self == Exit::Code(0)
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Acted {
-    pub text: String,
-    pub bytes: u64,
-    pub elapsed: Duration,
-    pub exit: Exit,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -353,21 +304,11 @@ impl Reply {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Exchange {
-    pub turn: u32,
-    pub prompt: String,
-    pub text: String,
-    pub calls: Vec<Call>,
-    pub results: Vec<Acted>,
-    pub usage: Usage,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Request {
     turn: u32,
     prompt: String,
-    earlier: Vec<Exchange>,
-    history: Vec<Exchange>,
+    earlier: Vec<Turn>,
+    history: Vec<Turn>,
     skills: Vec<String>,
     tools: Vec<String>,
 }
@@ -381,11 +322,11 @@ impl Request {
         &self.prompt
     }
 
-    pub fn earlier(&self) -> &[Exchange] {
+    pub fn earlier(&self) -> &[Turn] {
         &self.earlier
     }
 
-    pub fn history(&self) -> &[Exchange] {
+    pub fn history(&self) -> &[Turn] {
         &self.history
     }
 
@@ -452,8 +393,8 @@ pub struct Run<R, A> {
     spent: Spent,
     turns: u32,
     skills: Loaded,
-    earlier: Vec<Exchange>,
-    history: Vec<Exchange>,
+    earlier: Vec<Turn>,
+    history: Vec<Turn>,
     answer: Option<String>,
     state: State,
 }
@@ -491,9 +432,9 @@ impl<R: Responder, A: Executor> Run<R, A> {
         self
     }
 
-    /// The prompts that ended before this run, each beside the answer it got: a wire is asked with
-    /// the exchange the new prompt joins, not with its own words alone.
-    pub fn earlier(mut self, earlier: impl IntoIterator<Item = Exchange>) -> Self {
+    /// The turns that ended before this run, each beside the answer it got: a wire is asked with
+    /// the turn the new prompt joins, not with its own words alone.
+    pub fn earlier(mut self, earlier: impl IntoIterator<Item = Turn>) -> Self {
         self.earlier = earlier.into_iter().collect();
         self
     }
@@ -519,15 +460,15 @@ impl<R: Responder, A: Executor> Run<R, A> {
         self.spent
     }
 
-    pub fn history(&self) -> &[Exchange] {
+    pub fn history(&self) -> &[Turn] {
         &self.history
     }
 
-    /// The exchange a conversation keeps for this run: the prompt it was asked with beside the words
-    /// of the turn it ended on, and those words alone when no turn ended before it stopped.
-    pub fn kept(&self) -> Exchange {
+    /// The turn a conversation keeps for this run: the prompt it was asked with beside the words of
+    /// the turn it ended on, and those words alone when no turn ended before it stopped.
+    pub fn kept(&self) -> Turn {
         let last = self.history.last();
-        Exchange {
+        Turn {
             turn: self.turns,
             prompt: self.prompt.clone(),
             text: last.map(|ended| ended.text.clone()).unwrap_or_default(),
@@ -605,9 +546,9 @@ impl<R: Responder, A: Executor> Run<R, A> {
             }
         }
 
-        // The turn is kept once its calls have run, so the exchange a later ask replays carries
-        // what each call answered rather than a call the model would read as never having run.
-        self.history.push(Exchange {
+        // The turn is kept once its calls have run, so the turn a later ask replays carries what
+        // each call answered rather than a call the model would read as never having run.
+        self.history.push(Turn {
             turn: self.turns,
             prompt: self.prompt.clone(),
             text: reply.text.clone(),

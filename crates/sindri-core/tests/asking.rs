@@ -7,9 +7,9 @@ use sindri_core::asking::Asking;
 use sindri_core::config::Config;
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::provider::transport::{Canned, Replay};
-use sindri_core::provider::{Ask, Client, Deltas, Usage};
+use sindri_core::provider::{Ask, Client, Deltas};
 use sindri_core::redact::{Redacted, SecretSet};
-use sindri_core::run::{Acted, Call, Exchange, Executor, Loaded, Run, State, Stop};
+use sindri_core::run::{Acted, Call, Executor, Loaded, Run, State, Stop, Turn};
 use sindri_core::skills::Catalog;
 use sindri_core::tools::{FrontEnd, ToolSet};
 use sindri_core::wire::Wire;
@@ -63,15 +63,8 @@ impl Deltas for Transcript {
     fn reasoning(&mut self, _fragment: &str) {}
 }
 
-fn turned(turn: u32, prompt: &str, answer: &str) -> Exchange {
-    Exchange {
-        turn,
-        prompt: String::from(prompt),
-        text: String::from(answer),
-        calls: Vec::new(),
-        results: Vec::new(),
-        usage: Usage::default(),
-    }
+fn turned(turn: u32, prompt: &str, answer: &str) -> Turn {
+    Turn::answered(turn, prompt, answer)
 }
 
 fn asked(replay: &Replay) -> Value {
@@ -151,7 +144,7 @@ fn a_reply_carries_what_its_ask_spent_and_the_total_stays_the_runs() {
     assert_eq!(
         first.history()[0].usage.input,
         Some(11),
-        "the turn's exchange says what that turn's ask was handed"
+        "the turn says what that turn's ask was handed"
     );
     assert_eq!(
         second.history()[0].usage.input,

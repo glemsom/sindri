@@ -2,23 +2,15 @@
 //! order they ended, and nothing at all once the reader starts over.
 
 use sindri_core::conversation::Conversation;
-use sindri_core::provider::Usage;
-use sindri_core::run::Exchange;
+use sindri_core::run::Turn;
 
-fn ended(prompt: &str, text: &str) -> Exchange {
-    Exchange {
-        turn: 1,
-        prompt: String::from(prompt),
-        text: String::from(text),
-        calls: Vec::new(),
-        results: Vec::new(),
-        usage: Usage::default(),
-    }
+fn ended(prompt: &str, text: &str) -> Turn {
+    Turn::answered(1, prompt, text)
 }
 
 fn replayed(conversation: &Conversation) -> Vec<(&str, &str)> {
     conversation
-        .exchanges()
+        .turns()
         .iter()
         .map(|kept| (kept.prompt.as_str(), kept.text.as_str()))
         .collect()
@@ -46,11 +38,7 @@ fn a_prompt_joins_beside_the_answer_it_got() {
         [("hi my name is Glenn", "nice to meet you, Glenn")],
         "the words asked and the words they got, whole"
     );
-    assert_eq!(
-        conversation.exchanges().len(),
-        1,
-        "one prompt is one exchange"
-    );
+    assert_eq!(conversation.turns().len(), 1, "one prompt is one turn");
 }
 
 #[test]
@@ -97,7 +85,7 @@ fn starting_over_empties_what_the_run_that_joins_next_is_asked_with() {
     conversation.clear();
 
     assert!(
-        conversation.exchanges().is_empty(),
+        conversation.turns().is_empty(),
         "`/new` starts the conversation again"
     );
     assert_eq!(

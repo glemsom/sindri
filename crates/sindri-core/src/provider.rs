@@ -35,6 +35,8 @@ use crate::redact::{MASK, Redacted, SecretSet};
 use crate::tools::Tool;
 use crate::wire::Wire;
 
+pub use crate::turn::{Call, Turn, Usage};
+
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct Credential(Option<String>);
 
@@ -61,69 +63,6 @@ impl fmt::Debug for Credential {
     }
 }
 
-/// A prompt beside the answer it got.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Earlier {
-    pub prompt: String,
-    pub answer: String,
-}
-
-/// A call the model asked for: the wire's identity for it, the tool's name, and the arguments
-/// as JSON text, so a call that does not parse still reaches the executor that judges it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Call {
-    pub id: String,
-    pub name: String,
-    pub arguments: String,
-}
-
-/// A turn already taken: the words it answered with, and each call it asked for beside the text
-/// that call answered with. The next ask replays these, so the model reads what its calls printed.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Turn {
-    pub text: String,
-    pub calls: Vec<(Call, String)>,
-}
-
-impl Turn {
-    /// The messages this turn adds to the conversation: what the model said and asked for, then a
-    /// message of results answering those calls. Anthropic pairs results to calls by the wire's own
-    /// id, so the id is carried rather than minted here.
-    fn messages(&self) -> Vec<Message> {
-        let mut content = Vec::new();
-        if !self.text.trim().is_empty() {
-            content.push(AssistantContent::text(self.text.clone()));
-        }
-        let mut results = Vec::new();
-        for (call, answered) in &self.calls {
-            let Ok(name) = ToolName::new(call.name.clone()) else {
-                continue;
-            };
-            let id = CallId::from_wire(call.id.clone());
-            let arguments =
-                serde_json::from_str(&call.arguments).unwrap_or(serde_json::Value::Null);
-            content.push(AssistantContent::ToolCall(ToolCall::new(
-                id.clone(),
-                ToolFunction::new(name.clone(), arguments),
-            )));
-            results.push(ToolResult {
-                call: id,
-                name,
-                content: vec![ToolResultContent::text(answered.clone())],
-                is_error: false,
-            });
-        }
-        if content.is_empty() {
-            return Vec::new();
-        }
-        let mut messages = vec![Message::Assistant(AssistantMessage::new(content))];
-        if !results.is_empty() {
-            messages.push(Message::tool_results(results));
-        }
-        messages
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ask {
     wire: Wire,
@@ -131,7 +70,7 @@ pub struct Ask {
     base_url: Option<String>,
     credential: Credential,
     preamble: Option<String>,
-    earlier: Vec<Earlier>,
+    earlier: Vec<Turn>,
     turns: Vec<Turn>,
     tools: Vec<ToolDefinition>,
     prompt: String,
@@ -166,7 +105,7 @@ impl Ask {
         self
     }
 
-    pub fn earlier(mut self, earlier: impl IntoIterator<Item = Earlier>) -> Self {
+    pub fn earlier(mut self, earlier: impl IntoIterator<Item = Turn>) -> Self {
         self.earlier = earlier.into_iter().collect();
         self
     }
@@ -241,8 +180,8 @@ impl Ask {
         let mut messages = Vec::new();
         for ended in &self.earlier {
             messages.push(Message::user(ended.prompt.clone()));
-            if !ended.answer.trim().is_empty() {
-                messages.push(Message::assistant(ended.answer.clone()));
+            if !ended.text.trim().is_empty() {
+                messages.push(Message::assistant(ended.text.clone()));
             }
         }
         messages
@@ -251,7 +190,7 @@ impl Ask {
     fn request(&self) -> CompletionRequest {
         let mut conversation = self.replayed();
         conversation.push(Message::user(self.prompt.clone()));
-        conversation.extend(self.turns.iter().flat_map(Turn::messages));
+        conversation.extend(self.turns.iter().flat_map(turn_messages));
         // A request's last message is what is being asked, and `messages` adds ahead of it: the run's
         // newest turn ends the conversation, and its prompt when it has taken none.
         let last = conversation.pop().expect("the prompt was pushed");
@@ -267,6 +206,42 @@ impl Ask {
     }
 }
 
+/// The messages one turn adds to the conversation: what the model said and asked for, then a
+/// message of results answering those calls. Anthropic pairs results to calls by the wire's own id,
+/// so the id is carried rather than minted here.
+fn turn_messages(turn: &Turn) -> Vec<Message> {
+    let mut content = Vec::new();
+    if !turn.text.trim().is_empty() {
+        content.push(AssistantContent::text(turn.text.clone()));
+    }
+    let mut results = Vec::new();
+    for (call, acted) in turn.calls.iter().zip(&turn.results) {
+        let Ok(name) = ToolName::new(call.name.clone()) else {
+            continue;
+        };
+        let id = CallId::from_wire(call.id.clone());
+        let arguments = serde_json::from_str(&call.arguments).unwrap_or(serde_json::Value::Null);
+        content.push(AssistantContent::ToolCall(ToolCall::new(
+            id.clone(),
+            ToolFunction::new(name.clone(), arguments),
+        )));
+        results.push(ToolResult {
+            call: id,
+            name,
+            content: vec![ToolResultContent::text(acted.text.clone())],
+            is_error: false,
+        });
+    }
+    if content.is_empty() {
+        return Vec::new();
+    }
+    let mut messages = vec![Message::Assistant(AssistantMessage::new(content))];
+    if !results.is_empty() {
+        messages.push(Message::tool_results(results));
+    }
+    messages
+}
+
 pub trait Deltas {
     fn text(&mut self, fragment: &str);
 
@@ -277,15 +252,6 @@ impl Deltas for () {
     fn text(&mut self, _fragment: &str) {}
 
     fn reasoning(&mut self, _fragment: &str) {}
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Usage {
-    pub input: Option<u64>,
-    pub output: Option<u64>,
-    pub total: Option<u64>,
-    pub cached_input: Option<u64>,
-    pub reasoning: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

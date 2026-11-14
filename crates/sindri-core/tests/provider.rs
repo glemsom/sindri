@@ -4,7 +4,7 @@
 
 use serde_json::{Value, json};
 use sindri_core::provider::transport::{Canned, Http, Replay};
-use sindri_core::provider::{Ask, Client, Credential, Deltas, Earlier, Route, Verdict};
+use sindri_core::provider::{Ask, Client, Credential, Deltas, Route, Turn, Verdict};
 use sindri_core::redact::SecretSet;
 use sindri_core::wire::Wire;
 
@@ -259,10 +259,11 @@ fn an_openai_ask_on_the_responses_route_replays_the_turns_that_ended_before_it()
     let ask = Ask::new(Wire::Openai, "gpt-5")
         .key("sk-recorded")
         .prompt("what is my name?")
-        .earlier([Earlier {
-            prompt: String::from("hi my name is Glenn"),
-            answer: String::from("nice to meet you, Glenn"),
-        }]);
+        .earlier([Turn::answered(
+            1,
+            "hi my name is Glenn",
+            "nice to meet you, Glenn",
+        )]);
 
     client_over(&replay)
         .ask(&ask, &mut Transcript::default())
@@ -307,10 +308,11 @@ fn an_openai_ask_on_the_chat_route_replays_them_the_way_that_route_spells_them()
         .key("sk-recorded")
         .prompt("what is my name?")
         .route(Route::Chat)
-        .earlier([Earlier {
-            prompt: String::from("hi my name is Glenn"),
-            answer: String::from("nice to meet you, Glenn"),
-        }]);
+        .earlier([Turn::answered(
+            1,
+            "hi my name is Glenn",
+            "nice to meet you, Glenn",
+        )]);
 
     client_over(&replay)
         .ask(&ask, &mut Transcript::default())

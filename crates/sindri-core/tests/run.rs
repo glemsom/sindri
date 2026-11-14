@@ -14,8 +14,8 @@ use sindri_core::policy::{
 use sindri_core::provider::{Deltas, Failure, Usage};
 use sindri_core::redact::{Redacted, SecretSet};
 use sindri_core::run::{
-    Acted, Budget, Call, Cancel, Exchange, Executor, Exit, Limits, Load, Loaded, Reply, Request,
-    Responder, Run, Shell, State, Stop,
+    Acted, Budget, Call, Cancel, Executor, Exit, Limits, Load, Loaded, Reply, Request, Responder,
+    Run, Shell, State, Stop, Turn,
 };
 use sindri_core::skills::Catalog;
 use sindri_core::tools::{FrontEnd, ToolSet};
@@ -175,7 +175,7 @@ fn a_turn_is_one_request_and_the_calls_it_asks_for() {
 }
 
 #[test]
-fn a_turns_exchange_carries_what_that_turns_ask_spent_and_not_the_total() {
+fn a_turn_carries_what_that_turns_ask_spent_and_not_the_total() {
     let mut run = Run::new(
         "count the files",
         Scripted::answering([
@@ -188,11 +188,11 @@ fn a_turns_exchange_carries_what_that_turns_ask_spent_and_not_the_total() {
     run.drive(&mut Transcript::default());
 
     let history = run.history();
-    assert_eq!(history.len(), 2, "two asks, two exchanges");
+    assert_eq!(history.len(), 2, "two asks, two turns");
     assert_eq!(
         history[1].usage.input,
         Some(1_400),
-        "the second exchange is the second ask's input, and never the sum of both"
+        "the second turn is the second ask's input, and never the sum of both"
     );
     assert_eq!(
         history[0].usage.input,
@@ -202,12 +202,12 @@ fn a_turns_exchange_carries_what_that_turns_ask_spent_and_not_the_total() {
     assert_eq!(
         history[1].usage.output,
         Some(9),
-        "the output rides the same exchange, so one turn's cost is in one place"
+        "the output rides the same turn, so one turn's cost is in one place"
     );
 }
 
 #[test]
-fn a_turns_exchange_holds_the_prompt_the_run_was_asked() {
+fn a_turn_holds_the_prompt_the_run_was_asked() {
     let mut run = Run::new(
         "count the files",
         Scripted::answering([Reply::answer("twelve")]),
@@ -219,7 +219,7 @@ fn a_turns_exchange_holds_the_prompt_the_run_was_asked() {
     assert_eq!(
         run.history()[0].prompt,
         "count the files",
-        "a turn is the prompt beside the answer it got, so an exchange keeps the reader's own \
+        "a turn is the prompt beside the answer it got, so it keeps the reader's own \
          words and not only what came back"
     );
 }
@@ -254,15 +254,8 @@ fn an_ask_that_reported_no_input_leaves_the_size_unknown_rather_than_zero() {
     );
 }
 
-fn ended(turn: u32, prompt: &str, text: &str) -> Exchange {
-    Exchange {
-        turn,
-        prompt: String::from(prompt),
-        text: String::from(text),
-        calls: Vec::new(),
-        results: Vec::new(),
-        usage: Usage::default(),
-    }
+fn ended(turn: u32, prompt: &str, text: &str) -> Turn {
+    Turn::answered(turn, prompt, text)
 }
 
 #[test]

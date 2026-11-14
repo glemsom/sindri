@@ -14,7 +14,7 @@ use sindri_core::provider::Deltas;
 use sindri_core::provider::served::Listing;
 use sindri_core::records::{Entry, SessionDocument};
 use sindri_core::redact::SecretSet;
-use sindri_core::run::{Exchange, Load, Loaded, Stop};
+use sindri_core::run::{Load, Loaded, Stop, Turn};
 use sindri_core::skills::{Catalog, Skill};
 
 use crate::card;
@@ -347,15 +347,15 @@ impl View {
         &self.stream
     }
 
-    /// The prompts the run a draft is about to start joins, in the order they ended.
-    pub fn earlier(&self) -> Vec<Exchange> {
-        self.conversation.exchanges().to_vec()
+    /// The turns the run a draft is about to start joins, in the order they ended.
+    pub fn earlier(&self) -> Vec<Turn> {
+        self.conversation.turns().to_vec()
     }
 
     /// Keeps the prompt the run that stopped was asked with beside the answer it got, so the prompt
     /// after it joins the conversation at the turn it was asked — unless `/new` was pressed while
     /// that run was in flight, whose words belong to the conversation it emptied.
-    pub fn kept(&mut self, ended: &Exchange) {
+    pub fn kept(&mut self, ended: &Turn) {
         if !self.superseded {
             self.conversation.join(ended.clone());
         }

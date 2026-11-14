@@ -13,7 +13,7 @@ use sindri_core::provider::Deltas;
 use sindri_core::provider::served::Listing;
 use sindri_core::records::{SessionDocument, Told};
 use sindri_core::redact::SecretSet;
-use sindri_core::run::{Cancel, Exchange, Stop};
+use sindri_core::run::{Cancel, Stop, Turn};
 
 use crate::launch::{Launch, Turns};
 use crate::signal::Wake;
@@ -33,7 +33,7 @@ impl Running {
     pub(crate) fn start(
         launch: Launch,
         prompt: Prompt,
-        earlier: Vec<Exchange>,
+        earlier: Vec<Turn>,
         wake: Arc<Wake>,
     ) -> Running {
         let cancel = Cancel::new();
@@ -126,7 +126,7 @@ pub(crate) enum Report {
     Told(Told),
     Facts(Facts),
     Record(SessionDocument),
-    Kept(Exchange),
+    Kept(Turn),
     Stopped {
         stop: Stop,
         elapsed_ms: u64,
@@ -161,7 +161,7 @@ impl Turns for Reports {
     /// A turn that asked for calls keeps the run going, so the count a status bar wants moves on; a
     /// turn that asked for none ended the run, and the stop reason is the word a terminal is owed,
     /// since "asking the model" would be a status about a turn this run will never start.
-    fn turn(&mut self, ended: &Exchange) {
+    fn turn(&mut self, ended: &Turn) {
         if !ended.calls.is_empty() {
             self.push(Report::Told(Told::Asking {
                 turn: ended.turn + 1,
@@ -177,7 +177,7 @@ impl Turns for Reports {
         self.push(Report::Record(document.clone()));
     }
 
-    fn kept(&mut self, kept: &Exchange) {
+    fn kept(&mut self, kept: &Turn) {
         self.push(Report::Kept(kept.clone()));
     }
 }

@@ -1,9 +1,10 @@
 use crate::policy::{Boundary, Enforcement, PolicyRecord};
 use crate::provider::Route;
-use crate::provider::Usage as Ask;
 use crate::redact::{Redacted, SecretSet};
-use crate::run::{Acted, Call, Exit, Limits, State, Stop};
+use crate::run::{Limits, State, Stop};
 use crate::session::{Session, SessionError};
+pub use crate::turn::Usage;
+use crate::turn::{Acted, Call, Exit};
 use crate::wire::Wire;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
@@ -79,36 +80,6 @@ impl Dials {
             command_budget_ms: millis(limits.clock()),
             output_budget_bytes: limits.output(),
         }
-    }
-}
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(default)]
-pub struct Usage {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub input: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub output: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub total: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cached_input: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reasoning: Option<u64>,
-}
-impl Usage {
-    pub fn charge(&mut self, ask: &Ask) {
-        self.input = added(self.input, ask.input);
-        self.output = added(self.output, ask.output);
-        self.total = added(self.total, ask.total);
-        self.cached_input = added(self.cached_input, ask.cached_input);
-        self.reasoning = added(self.reasoning, ask.reasoning);
-    }
-}
-fn added(total: Option<u64>, ask: Option<u64>) -> Option<u64> {
-    match (total, ask) {
-        (Some(total), Some(ask)) => Some(total.saturating_add(ask)),
-        (Some(total), None) => Some(total),
-        (None, ask) => ask,
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -250,8 +221,8 @@ impl Record {
         self.document.usage = usage;
         self.write_document()
     }
-    pub fn charged(&mut self, ask: &Ask) -> Result<(), RecordError> {
-        self.document.usage.charge(ask);
+    pub fn charged(&mut self, usage: &Usage) -> Result<(), RecordError> {
+        self.document.usage.charge(usage);
         self.write_document()
     }
     pub fn told(&mut self, told: Told) -> Result<(), RecordError> {

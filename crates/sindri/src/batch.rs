@@ -6,7 +6,7 @@ use sindri_core::config::Config;
 use sindri_core::outcome::Outcome;
 use sindri_core::provider::Deltas;
 use sindri_core::records::Told;
-use sindri_core::run::{Cancel, Exchange, Stop};
+use sindri_core::run::{Cancel, Stop, Turn};
 use sindri_core::tools::FrontEnd;
 
 use crate::cli::{Cli, Format};
@@ -164,7 +164,7 @@ struct Says<'a> {
 }
 
 impl Turns for Says<'_> {
-    fn turn(&mut self, ended: &Exchange) {
+    fn turn(&mut self, ended: &Turn) {
         self.turns = ended.turn;
         narrate(self.cli, &format!("turn {}", self.turns));
         // Before this turn's own word: a filter nobody watches has no other clock to go by.
