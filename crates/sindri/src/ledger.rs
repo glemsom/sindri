@@ -2026,7 +2026,7 @@ mod tests {
     }
 
     /// The one stop that carries a line of the run's own words.
-    fn failure() -> Stop {
+    fn wire_refused() -> Stop {
         Stop::Error(SecretSet::default().redact("the wire went away"))
     }
 
@@ -2101,7 +2101,7 @@ mod tests {
             (Stop::MaxTurns, '✗', Ink::Err),
             (Stop::Budget(Budget::Clock), '✗', Ink::Err),
             (Stop::Cancelled, '✗', Ink::Err),
-            (failure(), '✗', Ink::Err),
+            (wire_refused(), '✗', Ink::Err),
         ] {
             let facts = Facts {
                 state: Some(RunState::Stopped(stop.clone())),
@@ -2210,6 +2210,12 @@ mod tests {
             strip(40),
             format!("ctx █░░░░░ · state ⠋ running · +11 more{}", pen::blank(1)),
             "and a narrower one keeps the state where the model has gone, counting what went"
+        );
+        assert_eq!(
+            strip(27),
+            format!("ctx █░░░░░ · +12 more{}", pen::blank(6)),
+            "a strip too narrow to hold the size and the state beside it keeps the size alone, \
+             because the state is the last fact the strip lets go and never the first"
         );
 
         for width in 28..NARROW {

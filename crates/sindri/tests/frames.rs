@@ -289,7 +289,7 @@ fn rail_99x24_is_the_first_frame_that_is_one_strip() {
 }
 
 #[test]
-fn rail_80x24_is_the_strip_holding_its_four_facts_and_no_count() {
+fn rail_80x24_is_the_strip_holding_four_of_its_five_facts_and_no_count() {
     fixture::assert_frame("rail", 80, 24);
 }
 

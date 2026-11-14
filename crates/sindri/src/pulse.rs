@@ -65,11 +65,11 @@ impl Pulse {
         }
     }
 
-    /// The glyph a live marker is stepping on, and none once it has settled: the one rule the
-    /// answer's head and the rail's state row both read.
-    pub fn stepping(&self) -> Option<char> {
+    /// The glyph the marker wears while a run is live, and none once it has settled: the rail's state
+    /// row reads it, so the row and the answer's head never show two steps of one run.
+    pub(crate) fn stepping(&self) -> Option<char> {
         match self {
-            Pulse::Live { elapsed_ms } => Some(pulse_glyph(*elapsed_ms)),
+            Pulse::Live { .. } => Some(self.mark().0),
             Pulse::Settled { .. } => None,
         }
     }
