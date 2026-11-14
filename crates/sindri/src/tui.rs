@@ -229,6 +229,8 @@ impl Loop<'_> {
         let mut decoder = Decoder::new();
         let mut read = [0u8; 4096];
         let mut interrupted = false;
+        // Owned, not borrowed from the loop: the reader the poll waits on is held across the
+        // answer that borrows the loop mutably.
         let wake = Arc::clone(&self.wake);
 
         // Read before the first frame was painted: the loop answers these keys here rather than
@@ -412,8 +414,8 @@ impl Loop<'_> {
                 tell(&self.terminal.screen, &crate::osc::copy(&words))?;
                 Ok(None)
             }
-            // Written through the settings modal's own save — atomic, 0600, patching only the
-            // `model` key — and the config resolved again. A file that will not take it refuses
+            // Written through the settings card's own save — atomic, 0600, patching only the `model`
+            // key — and the config resolved again. A file that will not take it refuses
             // the launch: a name silently not written is a silence this front end must not keep.
             Outcome::Model(name) => {
                 let mut touched = Touched::new();

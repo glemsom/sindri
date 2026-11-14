@@ -1,6 +1,6 @@
-//! The launch's own contracts, each driving one key's outcome through a pseudo-terminal of this
-//! process's own: a copy written down the wire, a settings visit whose value is saved, a run that
-//! cannot start leaving its row, and the loop answering a key typed before its first frame.
+//! The launch's own contracts, each driving one event through a pseudo-terminal of this process's
+//! own: a copy written down the wire, a settings visit whose value is saved or refused, a run that
+//! cannot start leaving its row, a focus report, and a key typed before the first frame.
 
 use std::fs::File;
 use std::os::fd::AsFd;
@@ -177,6 +177,68 @@ fn enter_at_the_settings_modal_writes_the_file_and_the_next_prompt_runs_on_it() 
     );
 }
 
+#[test]
+fn a_settings_value_the_schema_refuses_names_its_row_and_writes_nothing() {
+    let (home, environment) = config_home("model = \"old-model\"\n");
+    let path = home.path().join("sindri").join("config.toml");
+    let cli = Cli::parse_from(["sindri"]);
+    let config = Config::resolve(&environment, cli.flags()).expect("a config");
+    let pty = Pty::open();
+    let terminal =
+        Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
+    let canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
+    let mut view = View::boot();
+    view.open_settings(&config);
+    let telling = Window::new(
+        pty.slave
+            .try_clone()
+            .expect("a second handle on the terminal"),
+        true,
+        std::path::Path::new("/work/sindri"),
+        false,
+    );
+    let environment: &dyn Environment = &environment;
+
+    walk_to(&mut view, "context_window");
+    view.key(Key::Char('0'));
+    let mut live = Loop {
+        terminal: &terminal,
+        canvas,
+        view,
+        cli: &cli,
+        config,
+        environment,
+        telling,
+        wake: Arc::new(Wake::open().expect("a wake")),
+        launch: None,
+        running: None,
+        asking: None,
+    };
+
+    let ended = live
+        .answer(Event::Key(Key::Enter))
+        .expect("the refusal is drawn");
+
+    assert!(
+        ended.is_none(),
+        "a value the schema refuses is a row on the frame, and not the end of the launch"
+    );
+    let refusal = live
+        .view
+        .settings()
+        .refusal()
+        .unwrap_or_else(|| panic!("the settings screen says why the value will not do"));
+    assert!(
+        refusal.contains("context_window"),
+        "the refusal names the row a reader has to go and fix, and it says: {refusal}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&path).expect("the file the write landed in"),
+        "model = \"old-model\"\n",
+        "and nothing is written at all"
+    );
+}
+
 const FRAME: (u16, u16) = (120, 40);
 
 fn cell() -> CellSize {
@@ -199,20 +261,24 @@ fn railed(config: &Config) -> View {
     view
 }
 
-/// Whether this frame paints the face, read off the cells a placement covers.
-fn draws_the_face(view: &mut View) -> bool {
+fn painted(view: &mut View) -> ratatui::buffer::Buffer {
     let (cols, rows) = FRAME;
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(cols, rows))
         .expect("a headless screen of that size");
-    let painted = terminal
+    terminal
         .draw(|frame| view.paint(frame.area(), frame.buffer_mut()))
         .expect("the frame is painted")
         .buffer
-        .clone();
-    let area = painted.area;
+        .clone()
+}
+
+/// Whether this frame paints the face, read off the cells a placement covers.
+fn draws_the_face(view: &mut View) -> bool {
+    let frame = painted(view);
+    let area = frame.area;
     (area.y..area.bottom()).any(|y| {
         (area.x..area.right()).any(|x| {
-            painted
+            frame
                 .cell((x, y))
                 .is_some_and(|cell| cell.symbol().contains(PLACEHOLDER))
         })
@@ -315,27 +381,20 @@ fn staged() -> (Pty, Terminal, Window<File>) {
     (pty, terminal, telling)
 }
 
-/// The look every cell of the frame the view paints now is drawn in, at the frame a launch opens
-/// on: the row and column it stands at, and the look it reads back as.
-fn looks(view: &mut View) -> Vec<((u16, u16), Look)> {
-    let (cols, rows) = FRAME;
-    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(cols, rows))
-        .expect("a headless screen of that size");
-    let painted = terminal
-        .draw(|frame| view.paint(frame.area(), frame.buffer_mut()))
-        .expect("the frame is painted")
-        .buffer
-        .clone();
-    let area = painted.area;
-    let palette = Palette::TRUECOLOR;
+fn cells_wearing(view: &mut View, palette: &Palette, look: Look) -> Vec<(u16, u16)> {
+    let frame = painted(view);
+    let area = frame.area;
     (area.y..area.bottom())
         .flat_map(|y| (area.x..area.right()).map(move |x| (x, y)))
-        .filter_map(|at| Some(((at.0, at.1), Look::of(painted.cell(at)?, &palette)?)))
+        .filter(|at| {
+            frame
+                .cell(*at)
+                .and_then(|cell| Look::of(cell, palette))
+                .is_some_and(|worn| worn == look)
+        })
         .collect()
 }
 
-/// The payload of every OSC sequence the stream was handed: what a terminal at the far end reads,
-/// with the bytes around it taken off.
 fn sequences(written: &str) -> Vec<&str> {
     written
         .split("\x1b]")
@@ -515,7 +574,7 @@ fn a_quit_typed_before_the_first_frame_is_answered_by_the_loop() {
 }
 
 #[test]
-fn a_focus_report_recedes_the_frame_and_the_launch_still_raises_its_notification() {
+fn a_focus_report_recedes_the_frame_and_the_stop_nobody_watched_raises_the_notification() {
     let (mut pty, terminal, _) = staged();
     let canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
     let cli = Cli::parse_from(["sindri"]);
@@ -546,19 +605,10 @@ fn a_focus_report_recedes_the_frame_and_the_launch_still_raises_its_notification
     let palette = Palette::TRUECOLOR;
     live.view.set_palette(palette);
     live.view.paste("the draft the composer band is drawn from");
-
-    let held = looks(&mut live.view);
-    let edge = held
-        .iter()
-        .find(|(_, look)| *look == palette.accent_edge())
-        .map(|(at, _)| at.1)
-        .unwrap_or_else(|| {
-            panic!("the surface that takes the keys wears the accent edge: {held:?}")
-        });
+    let lit = cells_wearing(&mut live.view, &palette, palette.accent_edge());
     assert!(
-        held.iter()
-            .all(|((_, y), look)| *y != edge || *look != palette.dim_edge()),
-        "and no cell of that row has receded yet, so the reader is being read"
+        !lit.is_empty(),
+        "the surface that takes the keys wears the accent edge while the reader is read: {lit:?}"
     );
 
     let ended = live
@@ -566,17 +616,11 @@ fn a_focus_report_recedes_the_frame_and_the_launch_still_raises_its_notification
         .expect("the report is answered");
 
     assert!(ended.is_none(), "a focus report never ends the launch");
-    let away = looks(&mut live.view);
+    let away = cells_wearing(&mut live.view, &palette, palette.dim_edge());
     assert!(
-        !away.iter().any(|(_, look)| *look == palette.accent_edge()),
-        "the accent recedes while the terminal says nobody is looking"
+        lit.iter().all(|at| away.contains(at)),
+        "every cell that wore the accent recedes to the dim edge while nobody is looking: {away:?}"
     );
-    assert!(
-        away.iter()
-            .any(|((_, y), look)| *y == edge && *look == palette.dim_edge()),
-        "and the edge the frame is drawn with is the dim one"
-    );
-
     live.telling
         .say(Told::Stopped {
             turn: 1,
@@ -586,8 +630,13 @@ fn a_focus_report_recedes_the_frame_and_the_launch_still_raises_its_notification
     let drawn = pty.drawn();
     let said = sequences(&drawn);
     assert!(
-        said.iter()
-            .any(|payload| payload.starts_with("9;") && !payload.starts_with("9;4;")),
-        "the report the value answered is the one a run that ends unwatched is told by: {said:?}"
+        said.iter().any(|payload| payload.starts_with("9;sindri: ")),
+        "a run that ends while the report says nobody is reading raises the notification: {said:?}"
+    );
+    live.answer(Event::Focus(true)).expect("the reader is back");
+    assert_eq!(
+        cells_wearing(&mut live.view, &palette, palette.accent_edge()),
+        lit,
+        "and the edge returns to the cells it left once the terminal says the reader is back"
     );
 }
