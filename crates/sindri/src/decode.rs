@@ -2,6 +2,8 @@
 //! half of a sequence one read brought, and asks a terminal for nothing.
 
 use crate::composer::Key;
+use crate::mark::Cell;
+use crate::pointer::{Notch, Pointer};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Event {
@@ -9,6 +11,8 @@ pub enum Event {
     Paste(String),
     /// Whether the terminal says this window is the one being read: a report and never a key.
     Focus(bool),
+    /// The pointer's own report: a wheel's notch or a press, and never a key.
+    Pointer(Pointer),
 }
 
 /// What one look at the front of the bytes came to: an event, bytes consumed that answer
@@ -31,6 +35,13 @@ const UNANSWERED: u32 = 2 | 8 | 16 | 32;
 
 /// Caps lock and num lock, which a report carries beside the keys held and which name no key.
 const LOCKS: u32 = 64 | 128;
+
+/// The bits a pointer report's button carries for the keys held beside it: shift, alt and ctrl say
+/// nothing about which button was pressed.
+const MODIFIERS: u32 = 4 | 8 | 16;
+
+/// The bit a pointer report sets when the pointer moved rather than pressed.
+const MOTION: u32 = 32;
 
 /// `ESC [ 2 0 1 ~`: the sequence that ends a bracketed paste, so all before it is one paste.
 const PASTE_END: &[u8] = b"\x1b[201~";
@@ -173,6 +184,10 @@ impl Decoder {
                 self.pasting = true;
                 Step::Taken
             }
+            (b'M' | b'm', params) if params.starts_with('<') => match pointer(last, params) {
+                Some(pointer) => Step::Event(Event::Pointer(pointer)),
+                None => Step::Taken,
+            },
             (b'u', _) => match reported(&params) {
                 Some(key) => Step::Event(Event::Key(key)),
                 None => Step::Taken,
@@ -279,6 +294,33 @@ fn control(byte: u8) -> Option<Key> {
         b'\r' => Some(Key::Enter),
         ESCAPE => Some(Key::Escape),
         0x20..=0x7e => Some(Key::Char(char::from(byte))),
+        _ => None,
+    }
+}
+
+/// The pointer one SGR report names: `CSI < b ; x ; y M` for a press and `m` for a release, and
+/// the wheel is a button like the rest. A report naming no act of this frame's — a release, a
+/// move, a button nothing hangs from — is no event at all.
+fn pointer(last: u8, params: &str) -> Option<Pointer> {
+    // A release says which button let go, and nothing a frame answers lets go.
+    if last != b'M' {
+        return None;
+    }
+    let mut fields = params.strip_prefix('<')?.split(';');
+    let button: u32 = fields.next()?.parse().ok()?;
+    let column: u16 = fields.next()?.parse().ok()?;
+    let row: u16 = fields.next()?.parse().ok()?;
+    let button = button & !MODIFIERS;
+    if button & MOTION != 0 {
+        return None;
+    }
+    match button {
+        0 => Some(Pointer::Press(Cell::new(
+            row.saturating_sub(1),
+            column.saturating_sub(1),
+        ))),
+        64 => Some(Pointer::Wheel(Notch::Up)),
+        65 => Some(Pointer::Wheel(Notch::Down)),
         _ => None,
     }
 }

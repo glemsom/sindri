@@ -1055,7 +1055,27 @@ fn draft(lines: &[&str]) -> Composer {
 }
 
 fn drawn(name: &str, cols: u16, rows: u16) -> String {
+    drawn_taking(name, cols, rows, false)
+}
+
+/// The same frame drawn where the terminal reports a pointer and where it reports none: a pointer
+/// is never drawn into a cell, so the two are the one frame.
+pub fn assert_pointer_draws_the_same_cells(name: &str, cols: u16, rows: u16) {
+    let fixture = format!("{name}-{cols}x{rows}");
+    let taken = drawn_taking(name, cols, rows, true);
+    let none = drawn_taking(name, cols, rows, false);
+
+    assert_eq!(
+        taken, none,
+        "a pointer is never a cell: the frame {fixture} drawn where the terminal reports one is \
+         the frame drawn where it reports none"
+    );
+    println!("\ncheck: frame {fixture} pointer ... ok");
+}
+
+fn drawn_taking(name: &str, cols: u16, rows: u16, pointer: bool) -> String {
     let mut view = named(name);
+    view.set_pointer(pointer);
     let palette = view.palette();
     let mut terminal =
         Terminal::new(TestBackend::new(cols, rows)).expect("a headless screen of that size");

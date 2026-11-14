@@ -354,6 +354,15 @@ impl Composer {
         }
     }
 
+    /// The whole draft rewritten as `text`, the caret after its last glyph: what a card's row sends,
+    /// where the reader's own words are given up for the row's.
+    pub fn rewrite(&mut self, text: &str) {
+        self.text.clear();
+        self.text.push_str(text);
+        self.cursor = self.text.len();
+        self.follow();
+    }
+
     pub fn insert(&mut self, text: &str) {
         self.text.insert_str(self.cursor, text);
         self.cursor += text.len();
@@ -495,6 +504,30 @@ mod tests {
             Outcome::Send(prompt) => prompt.text().to_owned(),
             other => panic!("the draft should have been sent, and {other:?} came instead"),
         }
+    }
+
+    #[test]
+    fn a_draft_rewritten_is_the_whole_text_with_the_caret_after_its_last_glyph() {
+        let mut composer = holding("half a thought, and the rest of it");
+        composer.key(Key::Left);
+        composer.rewrite("/settings");
+
+        assert_eq!(
+            composer.text(),
+            "/settings",
+            "a rewrite gives up the reader's own words for the text it is handed"
+        );
+        assert_eq!(
+            composer.cursor(),
+            "/settings".len(),
+            "and leaves the caret after the last glyph, so the next key types on from there"
+        );
+        assert_eq!(
+            composer.key(Key::Char('x')),
+            Outcome::Edited,
+            "which is a key the draft takes"
+        );
+        assert_eq!(composer.text(), "/settingsx");
     }
 
     #[test]

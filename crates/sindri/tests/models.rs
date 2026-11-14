@@ -2,9 +2,13 @@
 //! Every listing is read through the real listing code from a recorded catalogue, so no test passes on a name
 //! this tree made up. What happens to a chosen name afterwards is `tests/tui.rs`'s.
 
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
 use sindri::composer::{Key, Outcome};
 use sindri::keys::Mode;
+use sindri::mark::Cell;
 use sindri::models::{CAP, Models};
+use sindri::pointer::Pointer;
 use sindri::view::View;
 
 use sindri_core::provider::served::{Listing, Where};
@@ -116,6 +120,32 @@ fn a_query_that_starts_a_later_name_puts_it_first() {
     }
 
     assert_eq!(models.chosen(), Some(SECOND));
+}
+
+#[test]
+fn a_row_the_list_holds_is_chosen_by_a_press_on_it_and_one_it_does_not_holds_nothing() {
+    let mut models = Models::new();
+    models.served(listed());
+    let rows = models.rows().len();
+
+    assert!(
+        models.select(1),
+        "the second row of the list is a press the screen takes"
+    );
+    assert_eq!(
+        models.chosen(),
+        Some(SECOND),
+        "and the selection moves to the row the press landed on"
+    );
+    assert!(
+        !models.select(rows + 7),
+        "a press past the last row is a row no list holds"
+    );
+    assert_eq!(
+        models.selected(),
+        1,
+        "so the selection stays on the row it was"
+    );
 }
 
 #[test]
@@ -264,6 +294,60 @@ fn enter_takes_the_chosen_name_and_closes_the_screen() {
         "and the screen that was up is closed: the name is taken and there is nothing left \
          to choose"
     );
+}
+
+/// The row of a 120 by 40 frame the screen draws `said` on, painted on the way: a press lands on the
+/// cells a row was drawn in, so the cells are what a test reads.
+fn row_holding(view: &mut View, said: &str) -> u16 {
+    let area = Rect::new(0, 0, 120, 40);
+    let mut buffer = Buffer::empty(area);
+    view.paint(area, &mut buffer);
+    (area.y..area.bottom())
+        .find(|y| {
+            (area.x..area.right())
+                .map(|x| buffer.cell((x, *y)).expect("a cell of the row").symbol())
+                .collect::<String>()
+                .contains(said)
+        })
+        .unwrap_or_else(|| panic!("the screen draws {said:?} on no row of it"))
+}
+
+#[test]
+fn a_press_on_a_served_row_names_that_name_and_closes_the_screen() {
+    let mut view = screen();
+    view.set_pointer(true);
+    let row = row_holding(&mut view, SECOND);
+
+    assert_eq!(
+        view.pointer(Pointer::Press(Cell::new(row, 40))),
+        Outcome::Model(String::from(SECOND)),
+        "a press on the second row names the name that row hangs from, as `Enter` on it does"
+    );
+    assert_eq!(
+        view.mode(),
+        Mode::Composer,
+        "and the screen it was chosen from is closed, as the key closes it"
+    );
+}
+
+#[test]
+fn a_press_on_no_row_of_the_model_screen_names_nothing() {
+    let mut view = screen();
+    view.set_pointer(true);
+    let query = row_holding(&mut view, "query:");
+    let name = row_holding(&mut view, SECOND);
+
+    for (at, why) in [
+        (Cell::new(query, 40), "the row the query is typed on"),
+        (Cell::new(name, 5), "a cell outside the card"),
+    ] {
+        assert_eq!(
+            view.pointer(Pointer::Press(at)),
+            Outcome::Unchanged,
+            "a press on {why} chooses no row, so no model is named"
+        );
+        assert_eq!(view.mode(), Mode::Models, "and the screen stays open");
+    }
 }
 
 #[test]

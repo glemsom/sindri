@@ -74,6 +74,16 @@ impl Models {
         }
     }
 
+    /// The row a press landed on: the selection moves to it, and a press on no row of the list moves
+    /// nothing.
+    pub fn select(&mut self, at: usize) -> bool {
+        if at >= self.rows().len() {
+            return false;
+        }
+        self.selected = at;
+        true
+    }
+
     pub fn up(&mut self) -> bool {
         let moved = self.selected > 0;
         self.selected = self.selected.saturating_sub(1);

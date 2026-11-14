@@ -110,22 +110,19 @@ impl Card {
         &self.rows
     }
 
-    /// The row the draft names: the first, because the card ranks the row the reader means there
-    /// and `Enter` takes it.
-    pub fn chosen(&self) -> Option<Row> {
-        self.rows.first().copied()
-    }
-
     /// What choosing the first row sends: the draft itself where its word already starts the name,
     /// and the name followed by what the word left otherwise.
     pub fn spelling(&self) -> String {
-        let Some(chosen) = self.chosen() else {
-            return self.draft.clone();
-        };
-        match self.word.starts_with(chosen.name) {
+        self.spelling_of(0).unwrap_or_else(|| self.draft.clone())
+    }
+
+    /// The draft as the row at `at` spells it: the row's name followed by what the word left.
+    pub fn spelling_of(&self, at: usize) -> Option<String> {
+        let chosen = self.rows.get(at)?;
+        Some(match self.word.starts_with(chosen.name) {
             true => self.draft.clone(),
             false => format!("{}{}", chosen.name, self.tail),
-        }
+        })
     }
 }
 
@@ -243,6 +240,27 @@ mod tests {
             spelling("/"),
             HELP,
             "a bare slash names the first row of the list, which is the one `Enter` sends"
+        );
+    }
+
+    #[test]
+    fn every_row_of_the_card_spells_the_line_it_sends() {
+        let card = Card::of("/n").expect("a card holds this word");
+
+        assert_eq!(
+            card.spelling_of(0),
+            Some(String::from(NEW)),
+            "the first row the card draws is the line `Enter` sends"
+        );
+        assert_eq!(
+            card.spelling_of(1),
+            Some(String::from(SETTINGS)),
+            "and a row under it spells its own name with what the word left"
+        );
+        assert_eq!(
+            card.spelling_of(2),
+            None,
+            "a row the card does not hold spells nothing at all"
         );
     }
 

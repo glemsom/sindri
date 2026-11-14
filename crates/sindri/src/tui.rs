@@ -13,6 +13,7 @@ use sindri::composer::{Outcome, Prompt, State};
 use sindri::decode::{Decoder, Event};
 use sindri::link;
 use sindri::palette::Palette;
+use sindri::pointer;
 use sindri::pulse::{self, Pulse};
 use sindri::settings::persist;
 use sindri::size;
@@ -88,7 +89,13 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     // Asked once, before the screen is taken: the terminal that takes the window's sequences is the
     // one asked to report its focus, and one nobody can vouch for is asked nothing at all.
     let windowed = window::speaks(named("TERM").as_deref(), named("TERM_PROGRAM").as_deref());
-    let screen = match Screen::take(&terminal, windowed) {
+    // Asked once with the window's sequences, and of the terminal that answers for both.
+    let pointer = pointer::speaks(
+        named("TERM").as_deref(),
+        named("TERM_PROGRAM").as_deref(),
+        named("VTE_VERSION").as_deref(),
+    );
+    let screen = match Screen::take(&terminal, windowed, pointer) {
         Ok(screen) => screen,
         Err(error) => {
             return crate::refuse(&format!("the terminal would not go raw: {error}"), SETUP);
@@ -123,6 +130,7 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
         false => false,
     };
     view.set_sizing(sizing);
+    view.set_pointer(pointer);
     // Resolved once with the palette: a terminal that speaks no hyperlink is handed the words
     // and no sequence, and nothing asks again on a key.
     let places = link::speaks(
@@ -359,7 +367,7 @@ fn answer(
     telling: &mut Window<File>,
     launch: &mut Option<Launch>,
 ) -> io::Result<Option<Ending>> {
-    let key = match event {
+    let outcome = match event {
         // A paste is one edit and never a key, so nothing inside one can send: the composer is
         // handed the whole text with its line breaks in it.
         Event::Paste(text) => {
@@ -375,9 +383,12 @@ fn answer(
             paint(canvas, view)?;
             return Ok(None);
         }
-        Event::Key(key) => key,
+        // The one seam a pointer's act and a key's act both come through: what the frame makes of
+        // each, and what the terminal does about it, is the same.
+        Event::Key(key) => view.key(key),
+        Event::Pointer(pointer) => view.pointer(pointer),
     };
-    match view.key(key) {
+    match outcome {
         Outcome::Unchanged => Ok(None),
         Outcome::Edited => {
             paint(canvas, view)?;

@@ -40,6 +40,14 @@ const GIVE_BACK_SCREEN: &[u8] = b"\x1b[<u\x1b[?2004l\x1b[?25h\x1b[?1049l";
 /// `CSI ? 1004 l`: the report is given up, or a shell is left sending one.
 const GIVE_UP_FOCUS: &[u8] = b"\x1b[?1004l";
 
+/// `CSI ? 1000 h` and `CSI ? 1006 h`: the terminal reports a press and the wheel in the `SGR`
+/// spelling, which is the one that names the cell a press landed on. Asked of a terminal that
+/// reports a pointer, and of no other.
+const TAKE_POINTER: &[u8] = b"\x1b[?1000h\x1b[?1006h";
+
+/// `CSI ? 1000 l` and `CSI ? 1006 l`: the report is given up, or a shell is left sending presses.
+const GIVE_UP_POINTER: &[u8] = b"\x1b[?1000l\x1b[?1006l";
+
 pub(crate) struct Terminal {
     pub(crate) keys: File,
     pub(crate) screen: File,
@@ -63,9 +71,10 @@ impl Terminal {
 pub(crate) struct Screen;
 
 impl Screen {
-    /// `window` is whether the terminal takes the sequences a window is written with: the screen is
-    /// taken either way, and a terminal that takes none is asked for no report and handed no mark.
-    pub(crate) fn take(terminal: &Terminal, window: bool) -> io::Result<Screen> {
+    /// `window` is whether the terminal takes the sequences a window is written with, and `pointer`
+    /// whether it reports one: the screen is taken either way, and a terminal nobody can vouch for
+    /// is asked for no report at all.
+    pub(crate) fn take(terminal: &Terminal, window: bool, pointer: bool) -> io::Result<Screen> {
         guard_panics();
         let saved = tcgetattr(&terminal.keys)?;
         let mut raw = saved.clone();
@@ -82,11 +91,15 @@ impl Screen {
             screen: terminal.screen.try_clone()?,
             saved,
             window,
+            pointer,
         };
         *lock(&GIVE_BACK) = Some(restore);
         let mut taking = TAKE_SCREEN.to_vec();
         if window {
             taking.extend_from_slice(ASK_FOCUS);
+        }
+        if pointer {
+            taking.extend_from_slice(TAKE_POINTER);
         }
         if let Err(error) = tell(&terminal.screen, &taking) {
             give_back();
@@ -320,6 +333,7 @@ struct Restore {
     screen: File,
     saved: Termios,
     window: bool,
+    pointer: bool,
 }
 
 impl Restore {
@@ -333,6 +347,9 @@ impl Restore {
             // A mark outlives the process that set it, so the run it named is over whichever way
             // this launch ends: a panic that unwinds past the guard still takes it away.
             giving.extend(osc::progress(false));
+        }
+        if self.pointer {
+            giving.extend_from_slice(GIVE_UP_POINTER);
         }
         let _ = tell(&self.screen, &giving);
         let _ = tcsetattr(&self.keys, OptionalActions::Now, &self.saved);
@@ -991,7 +1008,7 @@ mod tests {
         let mut pty = Pty::open();
         let terminal =
             Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
-        let screen = Screen::take(&terminal, true).expect("the screen is taken");
+        let screen = Screen::take(&terminal, true, false).expect("the screen is taken");
 
         let asked = pty.drawn();
         assert!(
@@ -1018,7 +1035,7 @@ mod tests {
         let mut pty = Pty::open();
         let terminal =
             Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
-        let screen = Screen::take(&terminal, false).expect("the screen is taken");
+        let screen = Screen::take(&terminal, false, false).expect("the screen is taken");
         let asked = pty.drawn();
 
         drop(screen);
@@ -1034,13 +1051,57 @@ mod tests {
     }
 
     #[test]
+    fn a_terminal_that_reports_a_pointer_is_asked_for_one_and_gives_it_up() {
+        let _one_screen = lock(&ONE_SCREEN);
+        let mut pty = Pty::open();
+        let terminal =
+            Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
+        let screen = Screen::take(&terminal, false, true).expect("the screen is taken");
+
+        let asked = pty.drawn();
+        assert!(
+            asked.contains(std::str::from_utf8(TAKE_POINTER).expect("a printable sequence")),
+            "the terminal reports the press and the wheel in the spelling that names a cell: \
+             {asked:?}"
+        );
+
+        drop(screen);
+        let given = pty.drawn();
+        assert!(
+            given.contains(std::str::from_utf8(GIVE_UP_POINTER).expect("a printable sequence")),
+            "and gives the report up on the way out, or a shell is left sending presses: \
+             {given:?}"
+        );
+    }
+
+    #[test]
+    fn a_terminal_that_reports_no_pointer_is_asked_for_none_and_has_none_to_give_up() {
+        let _one_screen = lock(&ONE_SCREEN);
+        let mut pty = Pty::open();
+        let terminal =
+            Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
+        let screen = Screen::take(&terminal, true, false).expect("the screen is taken");
+        let asked = pty.drawn();
+
+        drop(screen);
+        let given = pty.drawn();
+
+        for drawn in [asked, given] {
+            assert!(
+                !drawn.contains("1000") && !drawn.contains("1006"),
+                "a terminal nobody can vouch for is handed no pointer sequence: {drawn:?}"
+            );
+        }
+    }
+
+    #[test]
     fn a_panic_gives_the_terminal_back_before_the_guard_can() {
         let _one_screen = lock(&ONE_SCREEN);
         let mut pty = Pty::open();
         let before = pty.attrs();
         let terminal =
             Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
-        let screen = Screen::take(&terminal, false).expect("the screen is taken");
+        let screen = Screen::take(&terminal, false, false).expect("the screen is taken");
 
         assert!(
             !pty.attrs().local_modes.contains(LocalModes::ICANON),
