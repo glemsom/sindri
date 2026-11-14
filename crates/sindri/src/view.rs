@@ -115,8 +115,6 @@ const PICKER_QUERY: &str = "query: ";
 
 const PICKER_EMPTY: &str = "no file answers";
 
-/// Between a file's name and the directory it sits in: two blanks, so a directory reads as the
-/// quieter half of one row rather than a second word.
 const PICKER_GAP: &str = "  ";
 
 /// The glyph before the row a key acts on, in the picker and in the settings modal both:
@@ -1205,16 +1203,16 @@ impl View {
             rows.push(screen_row(vec![(PICKER_EMPTY.to_owned(), Ink::Dim.into())]));
             return rows;
         }
-        for (at, (name, directory)) in files.iter().enumerate() {
+        for (at, file) in files.iter().enumerate() {
             let (marker, ink) = match at == self.picker.selected() {
                 true => (ROW_MARK, Ink::Accent),
                 false => (ROW_GAP, Ink::Plain),
             };
             let ink = Look::plain(ink);
-            let mut spans = vec![(marker.to_owned(), ink), ((*name).to_owned(), ink)];
-            if !directory.is_empty() {
+            let mut spans = vec![(marker.to_owned(), ink), (file.name.to_owned(), ink)];
+            if !file.directory.is_empty() {
                 spans.push((PICKER_GAP.to_owned(), Ink::Dim.into()));
-                spans.push(((*directory).to_owned(), Ink::Dim.into()));
+                spans.push((file.directory.to_owned(), Ink::Dim.into()));
             }
             rows.push(cut_row(spans));
         }

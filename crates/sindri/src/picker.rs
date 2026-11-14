@@ -9,7 +9,11 @@ use crate::composer::Key;
 pub const CAP: usize = 8;
 
 /// A row of the picker: the file's name, and the directory it sits in.
-pub type Row<'a> = (&'a str, &'a str);
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Row<'a> {
+    pub name: &'a str,
+    pub directory: &'a str,
+}
 
 /// How a query sits in a path, strongest first: the order of the variants is the order the rows
 /// come in.
@@ -63,13 +67,11 @@ impl Picker {
 
     /// Every path the query leaves, in one total order: rank, then nearness, then the path itself.
     fn ranked(&self) -> Vec<&str> {
+        let query = self.query.to_lowercase();
         let mut ranked: Vec<(Rank, usize, &str)> = self
             .files
             .iter()
-            .filter_map(|path| {
-                let rank = rank(path, &self.query)?;
-                Some((rank, nearness(path), path.as_str()))
-            })
+            .filter_map(|path| Some((rank(path, &query)?, nearness(path), path.as_str())))
             .collect();
         ranked.sort_unstable();
         ranked.into_iter().map(|(_, _, path)| path).collect()
@@ -81,7 +83,11 @@ impl Picker {
 
     /// How many files the query leaves, whether or not the card has a row for them.
     pub fn matches(&self) -> usize {
-        self.ranked().len()
+        let query = self.query.to_lowercase();
+        self.files
+            .iter()
+            .filter(|path| rank(path, &query).is_some())
+            .count()
     }
 
     pub fn key(&mut self, key: Key) -> bool {
@@ -102,10 +108,12 @@ impl Picker {
         }
     }
 
-    /// The row the selection stands on may be one the edit took away, so an edit puts it back on
-    /// the nearest row: where a reader who narrowed the list is looking.
+    /// An edit re-ranks the rows, so one the query took away sends the selection back to the
+    /// nearest row; a row the query still leaves keeps it where the reader put it.
     fn reselect(&mut self) {
-        self.selected = 0;
+        if self.selected >= self.rows().len() {
+            self.selected = 0;
+        }
     }
 
     pub fn up(&mut self) -> bool {
@@ -162,31 +170,32 @@ fn nearness(path: &str) -> usize {
     path.matches('/').count()
 }
 
-/// How `query` sits in `path`, or none when it does not sit in it at all: an empty query is a
-/// query every name starts.
+/// How `query`, read as lowercase, sits in `path`, or none when it does not sit in it at all: an
+/// empty query is a query every name starts.
 fn rank(path: &str, query: &str) -> Option<Rank> {
-    let (name, _) = split(path);
     if query.is_empty() {
         return Some(Rank::NameStarts);
     }
-    let query = query.to_lowercase();
-    let name = name.to_lowercase();
-    if name.starts_with(&query) {
+    let name = split(path).name.to_lowercase();
+    if name.starts_with(query) {
         return Some(Rank::NameStarts);
     }
-    if name.contains(&query) {
+    if name.contains(query) {
         return Some(Rank::NameHolds);
     }
     path.to_lowercase()
-        .contains(&query)
+        .contains(query)
         .then_some(Rank::PathHolds)
 }
 
 /// The file's name and the directory it sits in, which spell the path back with a `/` between them.
-fn split(path: &str) -> (&str, &str) {
+fn split(path: &str) -> Row<'_> {
     match path.rsplit_once('/') {
-        Some((directory, name)) => (name, directory),
-        None => (path, ""),
+        Some((directory, name)) => Row { name, directory },
+        None => Row {
+            name: path,
+            directory: "",
+        },
     }
 }
 
@@ -210,9 +219,9 @@ mod tests {
         picker
             .rows()
             .into_iter()
-            .map(|(name, directory)| match directory {
-                "" => name.to_owned(),
-                directory => format!("{directory}/{name}"),
+            .map(|row| match row.directory {
+                "" => row.name.to_owned(),
+                directory => format!("{directory}/{}", row.name),
             })
             .collect()
     }
@@ -310,17 +319,18 @@ mod tests {
     #[test]
     fn two_matches_of_one_rank_come_in_one_order_every_time() {
         let root = workspace(&["zebra.rs", "alpha.rs"]);
+        let once = offered(&Picker::walk(root.path()));
+        let twice = offered(&Picker::walk(root.path()));
 
         assert_eq!(
-            offered(&Picker::walk(root.path())),
+            once,
             vec![String::from("alpha.rs"), String::from("zebra.rs")],
             "the walk hands back siblings in whatever order the filesystem keeps them, so two \
              names of one rank are ordered here: the path is the last word on it, and \
              `alpha.rs` sorts before `zebra.rs`"
         );
         assert_eq!(
-            offered(&Picker::walk(root.path())),
-            offered(&Picker::walk(root.path())),
+            twice, once,
             "and a second walk of the same workspace offers the same list in the same order, \
              because nothing about the order is left to the filesystem"
         );
@@ -332,7 +342,16 @@ mod tests {
 
         assert_eq!(
             Picker::walk(root.path()).rows(),
-            vec![("rows.rs", ""), ("note.md", "docs/adr")],
+            vec![
+                Row {
+                    name: "rows.rs",
+                    directory: ""
+                },
+                Row {
+                    name: "note.md",
+                    directory: "docs/adr"
+                },
+            ],
             "a row a reader reads is the name they are looking for with the directory it sits \
              in beside it, and a file at the top of the workspace has no directory to name"
         );
@@ -430,13 +449,13 @@ mod tests {
 
     #[test]
     fn the_selection_stays_on_a_drawn_row_as_the_query_narrows_widens_and_empties() {
-        let root = workspace(&["rows.rs", "rail.rs", "view.rs"]);
-        let mut picker = narrowed(root.path(), "r");
+        let root = workspace(&["rock.rs", "rover.rs", "rows.rs", "view.rs"]);
+        let mut picker = Picker::walk(root.path());
         picker.down();
         picker.down();
-        assert_eq!(picker.selected(), 2, "the third of three rows is selected");
+        assert_eq!(picker.selected(), 2, "the third of four rows is selected");
 
-        for (query, drawn) in [("ro", 1), ("r", 3), ("", 3)] {
+        for (query, drawn) in [("o", 3), ("ro", 3), ("row", 1), ("", 4)] {
             while !picker.query().is_empty() {
                 picker.key(Key::Backspace);
             }
@@ -470,19 +489,49 @@ mod tests {
     }
 
     #[test]
-    fn a_narrower_query_puts_the_selection_back_on_the_nearest_row() {
+    fn a_query_that_still_leaves_the_selected_row_keeps_the_selection_on_it() {
         let root = workspace(&["rows.rs", "rail.rs"]);
         let mut picker = Picker::walk(root.path());
         picker.down();
-        assert_eq!(picker.selected(), 1, "the second row is selected");
+        assert_eq!(
+            picker.rows()[1].name,
+            "rows.rs",
+            "the selection stands on the second row, which is `rows.rs`"
+        );
 
         picker.key(Key::Char('r'));
 
         assert_eq!(
             picker.selected(),
+            1,
+            "`r` leaves both files in the order they stood, so the row the reader pointed at \
+             is still drawn and the selection stays on it"
+        );
+        assert_eq!(
+            picker.rows()[1].name,
+            "rows.rs",
+            "which is still the file the reader pointed at"
+        );
+    }
+
+    #[test]
+    fn a_query_that_takes_the_selected_row_away_puts_the_selection_back_on_the_nearest_row() {
+        let root = workspace(&["rows.rs", "rail.rs"]);
+        let mut picker = Picker::walk(root.path());
+        picker.down();
+
+        picker.key(Key::Char('o'));
+
+        assert_eq!(
+            picker.rows().len(),
+            1,
+            "`o` leaves `rows.rs` and nothing else, so the row the selection stood on is gone"
+        );
+        assert_eq!(
+            picker.selected(),
             0,
-            "a query that leaves a shorter list cannot keep a row that may be gone, and the \
-             nearest file the query leaves is the one a reader means"
+            "and a row the query took away cannot hold the selection: the nearest row the \
+             query leaves is the one a reader means"
         );
     }
 

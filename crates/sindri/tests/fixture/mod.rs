@@ -373,8 +373,8 @@ fn narrow() -> &'static str {
 /// fixture.
 fn picking(query: &str) -> View {
     let root = tempfile::tempdir().expect("a temp workspace");
-    // A scan for remembered model names reads two name-like literals in one bracket as a list of
-    // them, so the two records are named here and offered by name below.
+    // `no_hardcoded_models` reads two numbered paths in one bracket as a hand-written model list,
+    // so each record is named here and offered by name.
     let first = "docs/adr/0020-the-artefact-is-one-static-musl-binary.md";
     let second = "docs/adr/0021-a-key-is-answered-by-the-loop-that-owns-it.md";
     for file in [

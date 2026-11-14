@@ -12,6 +12,7 @@ use sindri::composer::{Composer, Key, Outcome};
 use sindri::ink::{Ink, Look};
 use sindri::keys::Mode;
 use sindri::palette::Palette;
+use sindri::picker::Row;
 use sindri::view::View;
 
 fn workspace(files: &[&str]) -> tempfile::TempDir {
@@ -136,7 +137,10 @@ fn a_glyph_typed_at_the_picker_narrows_it_and_never_reaches_the_draft() {
     assert_eq!(view.picker().query(), "rail");
     assert_eq!(
         view.picker().rows(),
-        vec![("rail.rs", "")],
+        vec![Row {
+            name: "rail.rs",
+            directory: ""
+        }],
         "the query narrows the rows as it is typed"
     );
     assert_eq!(
@@ -315,10 +319,18 @@ fn the_workspace_a_frame_walks_is_the_one_it_was_told() {
 
     assert_eq!(
         view.picker().rows(),
-        vec![("only-this.rs", "")],
+        vec![Row {
+            name: "only-this.rs",
+            directory: ""
+        }],
         "the walk is of the workspace the frame was handed, and of nothing else"
     );
 }
+
+/// The widths a card is drawn at: a card is at most seventy-two columns wide, so a wide frame gives
+/// the body sixty-eight columns, fifty gives forty-six, and under fifty the card bleeds to the
+/// frame and gives thirty-six.
+const WIDTHS: [u16; 3] = [120, 50, 40];
 
 #[test]
 fn each_row_draws_the_files_name_and_the_directory_it_sits_in_at_every_width_that_holds_a_path() {
@@ -327,7 +339,7 @@ fn each_row_draws_the_files_name_and_the_directory_it_sits_in_at_every_width_tha
     view.key(Key::Char('@'));
     let palette = Palette::default();
 
-    for cols in [120, 80, 40] {
+    for cols in WIDTHS {
         let buffer = painted(&mut view, cols, 40);
         let rows = frame_rows(&buffer);
         for (name, directory) in [("rows.rs", ""), ("view.rs", "src"), ("note.md", "docs/adr")] {
@@ -368,6 +380,32 @@ fn each_row_draws_the_files_name_and_the_directory_it_sits_in_at_every_width_tha
             }
         }
     }
+}
+
+#[test]
+fn a_name_too_wide_for_the_card_is_cut_before_its_directory_is_drawn() {
+    let root = workspace(&[
+        "a-file-name-that-is-wider-than-the-card-holds.md",
+        "src/rows.rs",
+    ]);
+    let mut view = standing(root.path());
+    view.key(Key::Char('@'));
+
+    let buffer = painted(&mut view, 40, 40);
+    let rows = frame_rows(&buffer);
+    let said = rows
+        .iter()
+        .find(|row| row.contains("a-file-name"))
+        .unwrap_or_else(|| panic!("the long name is drawn on no row: {rows:?}"))
+        .trim()
+        .to_owned();
+
+    assert_eq!(
+        said, "\u{203a} a-file-name-that-is-wider-than-the",
+        "a row is cut at the card's right edge, and the name comes first, its own mark ahead of \
+         it, so the name is what a narrow card keeps: half a directory with no name in front of \
+         it names no file at all"
+    );
 }
 
 #[test]
