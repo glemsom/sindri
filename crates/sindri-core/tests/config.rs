@@ -1,5 +1,5 @@
 //! Proves the config is one file whose keys layer file, then `SINDRI_*` environment, then flags,
-//! and that nothing else is ever read.
+//! and that a key also comes from the variable the resolved wire names — and from nothing else.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -27,6 +27,11 @@ fn resolved(home: &Path, vars: &[(&str, &str)], flags: Flags) -> Result<Config, 
     let mut environment = environment(vars);
     environment.insert(String::from("XDG_CONFIG_HOME"), home.display().to_string());
     Config::resolve(&environment, flags)
+}
+
+fn resolved_in(text: &str, vars: &[(&str, &str)], flags: Flags) -> Config {
+    let home = config_home(text);
+    resolved(home.path(), vars, flags).expect("the config loads")
 }
 
 /// One worked example of every key in the schema, spelled as the file spells it: the independent
@@ -373,6 +378,136 @@ fn a_flag_beats_both_the_file_and_the_environment() {
     .expect("the config loads");
 
     assert_eq!(config.model.as_deref(), Some("from-the-flag"));
+}
+
+#[test]
+fn the_wire_own_variable_is_where_a_launch_takes_its_key_from() {
+    let home = config_home("provider = \"anthropic\"\nmodel = \"claude-sonnet-4-5\"\n");
+
+    let config = resolved(
+        home.path(),
+        &[("ANTHROPIC_API_KEY", "sk-ant-the-wires-own")],
+        Flags::default(),
+    )
+    .expect("the config loads");
+
+    assert_eq!(
+        config.api_key.as_deref(),
+        Some("sk-ant-the-wires-own"),
+        "no flag, no SINDRI_API_KEY and no key in the file: the variable the wire names supplies it"
+    );
+}
+
+#[test]
+fn the_wire_the_layering_names_is_the_one_whose_variable_is_read() {
+    let home = config_home("provider = \"openai\"\nmodel = \"gpt-5\"\n");
+
+    let config = resolved(
+        home.path(),
+        &[
+            ("OPENAI_API_KEY", "sk-the-openai-one"),
+            ("ANTHROPIC_API_KEY", "sk-the-anthropic-one"),
+        ],
+        Flags::default(),
+    )
+    .expect("the config loads");
+
+    assert_eq!(
+        config.api_key.as_deref(),
+        Some("sk-the-openai-one"),
+        "the file names openai, so the variable an openai run reads is the one read: another \
+         wire's variable is not a credential for this run"
+    );
+}
+
+#[test]
+fn a_wire_that_signs_in_names_no_variable_to_read() {
+    let home = config_home("provider = \"copilot\"\nmodel = \"gpt-5\"\n");
+
+    let config = resolved(
+        home.path(),
+        &[("ANTHROPIC_API_KEY", "sk-the-anthropic-one")],
+        Flags::default(),
+    )
+    .expect("the config loads");
+
+    assert_eq!(
+        config.api_key, None,
+        "copilot signs in rather than holding a key, so it names no variable and reads none"
+    );
+}
+
+#[test]
+fn the_flag_supplies_the_key_and_wins_over_the_exported_one() {
+    let config = resolved_in(
+        "",
+        &[
+            ("SINDRI_PROVIDER", "anthropic"),
+            ("SINDRI_MODEL", "claude-sonnet-4-5"),
+            ("ANTHROPIC_API_KEY", "sk-ant-the-exported-one"),
+        ],
+        Flags {
+            api_key: Some(String::from("sk-ant-the-flag")),
+            ..Flags::default()
+        },
+    );
+
+    assert_eq!(
+        config.api_key.as_deref(),
+        Some("sk-ant-the-flag"),
+        "a flag is read above the environment, which is read above the file"
+    );
+}
+
+#[test]
+fn sindris_own_variable_wins_over_the_wires() {
+    let config = resolved_in(
+        "",
+        &[
+            ("SINDRI_PROVIDER", "anthropic"),
+            ("SINDRI_MODEL", "claude-sonnet-4-5"),
+            ("SINDRI_API_KEY", "sk-ant-named-explicitly"),
+            ("ANTHROPIC_API_KEY", "sk-ant-the-fallback"),
+        ],
+        Flags::default(),
+    );
+
+    assert_eq!(
+        config.api_key.as_deref(),
+        Some("sk-ant-named-explicitly"),
+        "the variable that names Sindri is more specific than the wire's own"
+    );
+}
+
+#[test]
+fn an_exported_key_wins_over_a_key_in_the_file() {
+    let config = resolved_in(
+        "provider = \"anthropic\"\nmodel = \"claude-sonnet-4-5\"\napi_key = \"sk-ant-in-the-file\"\n",
+        &[("ANTHROPIC_API_KEY", "sk-ant-exported")],
+        Flags::default(),
+    );
+
+    assert_eq!(
+        config.api_key.as_deref(),
+        Some("sk-ant-exported"),
+        "an exported key wins, which is the whole point of reading the environment above the file"
+    );
+}
+
+#[test]
+fn a_key_in_the_file_is_the_last_word_when_no_variable_holds_one() {
+    let config = resolved_in(
+        "provider = \"anthropic\"\nmodel = \"claude-sonnet-4-5\"\napi_key = \"sk-ant-in-the-file\"\n",
+        &[],
+        Flags::default(),
+    );
+
+    assert_eq!(
+        config.api_key.as_deref(),
+        Some("sk-ant-in-the-file"),
+        "nothing above the file spoke and the wire's variable is empty, so the key a person \
+         wrote is the one the run holds"
+    );
 }
 
 #[test]

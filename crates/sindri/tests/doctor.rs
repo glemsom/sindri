@@ -131,6 +131,38 @@ fn row<'a>(stdout: &'a str, name: &str) -> &'a str {
         .unwrap_or_else(|| panic!("doctor never listed `{name}`:\n{stdout}"))
 }
 
+const WIRE_KEY: &str = "sk-ant-a-key-no-report-may-draw";
+
+#[test]
+fn a_key_in_the_wires_own_variable_is_a_run_the_doctor_describes() {
+    let ground = Ground::new();
+    let directory = ground.config.join("sindri");
+    std::fs::create_dir_all(&directory).expect("the config directory");
+    std::fs::write(
+        directory.join("config.toml"),
+        "provider = \"anthropic\"\nmodel = \"claude-sonnet-4-5\"\n",
+    )
+    .expect("the config file");
+    let path = std::env::var("PATH").expect("this machine has a PATH");
+
+    let output = run(ground
+        .command(&path)
+        .env("ANTHROPIC_API_KEY", WIRE_KEY)
+        .args(["doctor"]));
+
+    a_report_was_made(&output);
+    let out = text(&output.stdout);
+    let err = text(&output.stderr);
+    assert!(
+        err.is_empty(),
+        "the only key the config holds is the one the wire names, so nothing refuses: {err}"
+    );
+    assert!(
+        !out.contains(WIRE_KEY) && !err.contains(WIRE_KEY),
+        "a report describes a run and never the credential it holds: stdout:\n{out}\nstderr:\n{err}"
+    );
+}
+
 #[test]
 fn every_skill_found_is_listed_with_the_scope_it_came_from() {
     let ground = Ground::new();

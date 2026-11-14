@@ -257,10 +257,53 @@ impl Config {
         }
         secrets
     }
+    /// The flags over the `SINDRI_*` variables over the file, and the key taken from a flag or
+    /// `SINDRI_API_KEY`, else the variable the resolved wire names, else the one the file holds.
     pub fn resolve(environment: &impl Environment, flags: Flags) -> Result<Config, ConfigError> {
         let file = Config::load(environment)?;
-        let environment = Config::from_environment(environment)?;
-        Ok(Config::from(flags).above(environment.above(file)))
+        let above = Config::from(flags).above(Config::from_environment(environment)?);
+        let wire_key = above
+            .provider
+            .or(file.provider)
+            .and_then(Wire::credential_variable)
+            .and_then(|name| spoken(environment, name));
+        let key = above.api_key.clone().or(wire_key);
+        let mut config = above.above(file);
+        config.api_key = key.or(config.api_key.take());
+        Ok(config)
+    }
+    pub fn missing(&self) -> Vec<&'static str> {
+        let mut missing = Vec::new();
+        if self.provider.is_none() {
+            missing.push("provider");
+        }
+        if self.model.is_none() {
+            missing.push("model");
+        }
+        let key_asked_for = self
+            .provider
+            .is_some_and(|wire| wire.credential_variable().is_some());
+        if key_asked_for && self.api_key.is_none() {
+            missing.push("api_key");
+        }
+        missing
+    }
+    pub fn is_ready(&self) -> bool {
+        self.missing().is_empty()
+    }
+    pub fn api_key_row(&self, path: &Path) -> String {
+        let mut sources: Vec<&str> = Vec::new();
+        if let Some(variable) = self.provider.and_then(Wire::credential_variable) {
+            sources.push(variable);
+        }
+        sources.push("SINDRI_API_KEY");
+        sources.push("--api-key");
+        format!(
+            "api key   from {}\n          will be written to {}, mode {:04o}\n          and is never shown again",
+            or_list(&sources),
+            path.display(),
+            MODE,
+        )
     }
 }
 impl fmt::Debug for Config {
@@ -488,6 +531,13 @@ fn headers_of(key: &str, text: &str) -> Result<Vec<String>, ConfigError> {
     let headers = listed(text);
     header_shape(key, &headers)?;
     Ok(headers)
+}
+fn or_list(items: &[&str]) -> String {
+    match items {
+        [] => String::new(),
+        [only] => (*only).to_owned(),
+        [head @ .., last] => format!("{} or {last}", head.join(", ")),
+    }
 }
 fn on_or_empty(value: Option<bool>) -> String {
     value.map(|on| on.to_string()).unwrap_or_default()

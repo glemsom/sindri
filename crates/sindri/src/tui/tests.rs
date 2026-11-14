@@ -72,6 +72,24 @@ fn config_home(
     (home, environment)
 }
 
+#[test]
+fn the_harness_resolves_the_config_a_launch_runs_on() {
+    let (_home, mut environment) =
+        config_home("provider = \"anthropic\"\nmodel = \"claude-sonnet-4-5\"\n");
+    environment.insert(
+        String::from("ANTHROPIC_API_KEY"),
+        String::from("sk-ant-the-wires-own"),
+    );
+    let stage = Stage::open();
+
+    assert_eq!(
+        stage.config(&environment).api_key.as_deref(),
+        Some("sk-ant-the-wires-own"),
+        "a screen test resolves through the door a launch uses, so it cannot pass on a config \
+         production never builds"
+    );
+}
+
 /// A pseudo-terminal of this process's own, with the launch standing on it: the keyboard and the
 /// screen it was handed, and the reader that says what the screen has been given.
 struct Stage {

@@ -46,11 +46,11 @@ fn main() -> ExitCode {
     };
 
     // On stderr, because stdout is the answer's alone.
-    if asked.is_none() || !first_run.is_ready() || cli.is_verbose() {
+    if asked.is_none() || !first_run.config().is_ready() || cli.is_verbose() {
         eprintln!("{}", first_run.api_key_row());
     }
 
-    if first_run.missing().contains(&"api_key") {
+    if first_run.config().missing().contains(&"api_key") {
         // A pipe is words to ask and never a credential: a key is pasted only at a terminal.
         if asked.is_some() && !batch::stdin_is_terminal() {
             return refuse(&short_of(&first_run), USAGE);
@@ -76,7 +76,7 @@ fn main() -> ExitCode {
         };
     }
 
-    if !first_run.is_ready() {
+    if !first_run.config().is_ready() {
         return refuse(&short_of(&first_run), USAGE);
     }
 
@@ -91,7 +91,7 @@ fn main() -> ExitCode {
 }
 
 fn short_of(first_run: &FirstRun) -> String {
-    let missing = first_run.missing();
+    let missing = first_run.config().missing();
     format!(
         "a run needs {}: set {} in {} or in the environment",
         missing.join(", "),
