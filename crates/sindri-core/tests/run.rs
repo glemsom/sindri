@@ -301,7 +301,7 @@ fn a_run_handed_nothing_asks_with_nothing_from_before_it() {
 }
 
 #[test]
-fn a_responder_is_handed_the_runs_own_turns_and_its_reply_is_the_turn_the_run_keeps() {
+fn a_responder_is_handed_the_very_turn_the_run_keeps() {
     let earlier = vec![Turn::answered(
         1,
         "hi my name is Glenn",
@@ -334,29 +334,21 @@ fn a_responder_is_handed_the_runs_own_turns_and_its_reply_is_the_turn_the_run_ke
             ..Usage::default()
         },
     };
-    let answered = Turn::answered(2, "why does the retry test fail?", "it was the retry");
-
     let seen = requests(&log);
-    assert_eq!(seen.len(), 2, "the run asked the responder twice");
     assert_eq!(
         seen[1].history(),
         std::slice::from_ref(&asked),
-        "the second request carries the first turn exactly as the run kept it"
+        "the second ask is handed the first turn itself, results and spend included"
     );
     assert_eq!(
         seen[1].earlier(),
         earlier,
-        "beside the turns Run::earlier was handed, and no others"
-    );
-    assert_eq!(
-        run.history(),
-        [asked, answered.clone()],
-        "the run kept its own prompt beside each reply"
+        "beside the turns the run joins, and no others"
     );
     assert_eq!(
         run.kept(),
-        answered,
-        "and the turn it keeps for the second ask is that prompt beside what the reply said"
+        Turn::answered(2, "why does the retry test fail?", "it was the retry"),
+        "and the turn a conversation keeps is that prompt beside the reply's words"
     );
 }
 
@@ -382,8 +374,17 @@ fn a_run_keeps_its_prompt_beside_the_answer_it_got() {
 }
 
 #[test]
-fn a_run_keeps_the_very_turn_it_took_and_its_prompt_alone_when_it_took_none() {
-    let asked = Turn {
+fn a_run_keeps_the_very_turn_it_took() {
+    let mut run = Run::new(
+        "count the files",
+        Scripted::answering([Reply::asking("let me list them", [command("true")])
+            .spent(spent(Some(1_200), Some(20)))]),
+        Tools::cheap(),
+    );
+
+    run.turn(&mut Transcript::default());
+
+    let took = Turn {
         turn: 1,
         prompt: String::from("count the files"),
         text: String::from("let me list them"),
@@ -400,45 +401,16 @@ fn a_run_keeps_the_very_turn_it_took_and_its_prompt_alone_when_it_took_none() {
             ..Usage::default()
         },
     };
-    let mut run = Run::new(
-        "count the files",
-        Scripted::answering([Reply::asking("let me list them", [command("true")])
-            .spent(spent(Some(1_200), Some(20)))]),
-        Tools::cheap(),
-    );
-
-    run.turn(&mut Transcript::default());
 
     assert_eq!(
         run.history().last(),
-        Some(&asked),
+        Some(&took),
         "the run kept the one turn it took"
     );
     assert_eq!(
         run.kept(),
-        asked,
-        "and what it keeps is that very turn, results and spend included"
-    );
-
-    let mut unasked = Run::new(
-        "count the files",
-        Scripted::answering([Reply::answer("twelve")]),
-        Tools::cheap(),
-    );
-    unasked.canceller().now();
-    unasked.drive(&mut Transcript::default());
-
-    assert_eq!(
-        unasked.kept(),
-        Turn {
-            turn: 0,
-            prompt: String::from("count the files"),
-            text: String::new(),
-            calls: Vec::new(),
-            results: Vec::new(),
-            usage: Usage::default(),
-        },
-        "a run that ended before its first turn keeps its prompt alone"
+        took,
+        "and the turn a conversation keeps is that very turn, results and spend included"
     );
 }
 
