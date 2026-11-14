@@ -14,45 +14,45 @@ const QUIT: &str = "/quit";
 
 /// A command a reader sends from the draft, and the one line that says what it does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Said {
+pub struct Row {
     pub name: &'static str,
     pub says: &'static str,
 }
 
 /// The commands a launch holds: the three the front door names first, and then the rest.
-pub const LIST: [Said; 7] = [
-    Said {
+pub const TABLE: [Row; 7] = [
+    Row {
         name: MODEL,
         says: "ask the wire what it serves, and name the one to run",
     },
-    Said {
+    Row {
         name: SETTINGS,
         says: "the keys the config holds, and the value each is set to",
     },
-    Said {
+    Row {
         name: STATS,
         says: "the facts the rail is too narrow to hold",
     },
-    Said {
+    Row {
         name: NEW,
         says: "start the conversation again, and forget the last one",
     },
-    Said {
+    Row {
         name: SKILL,
         says: "load a skill by name",
     },
-    Said {
+    Row {
         name: HELP,
         says: "the keys in force",
     },
-    Said {
+    Row {
         name: QUIT,
         says: "end the launch",
     },
 ];
 
-/// How many of the list the front door names.
-pub const NAMED: usize = 3;
+/// The first `DOOR` of the table are the commands the front door names.
+pub const DOOR: usize = 3;
 
 /// The commands card: the draft read as a word after a slash, and the rows that word leaves, ranked
 /// the way a picker ranks — a name the word starts before a name it holds, and one order for ties.
@@ -60,7 +60,7 @@ pub struct Card {
     draft: String,
     word: String,
     tail: String,
-    rows: Vec<Said>,
+    rows: Vec<Row>,
 }
 
 impl Card {
@@ -74,17 +74,17 @@ impl Card {
         let word = draft.split_whitespace().next().unwrap_or_default();
         let body = word.strip_prefix('/').unwrap_or_default();
         let asked = body.split(':').next().unwrap_or_default().to_lowercase();
-        let mut held: Vec<(u8, Said)> = LIST
+        let mut held: Vec<(u8, Row)> = TABLE
             .iter()
-            .filter_map(|said| {
-                let name = said
+            .filter_map(|row| {
+                let name = row
                     .name
                     .strip_prefix('/')
                     .unwrap_or_default()
                     .to_lowercase();
                 match (name.starts_with(&asked), name.contains(&asked)) {
-                    (true, _) => Some((0, *said)),
-                    (false, true) => Some((1, *said)),
+                    (true, _) => Some((0, *row)),
+                    (false, true) => Some((1, *row)),
                     (false, false) => None,
                 }
             })
@@ -94,31 +94,31 @@ impl Card {
         }
         held.sort_by(|(left, one), (right, other)| left.cmp(right).then(one.name.cmp(other.name)));
         let tail = match word.find(':') {
-            Some(at) => &draft[at..],
+            Some(at) => &word[at..],
             None => &draft[word.len()..],
         };
         Some(Card {
             draft: draft.to_owned(),
             word: word.to_owned(),
             tail: tail.to_owned(),
-            rows: held.into_iter().map(|(_, said)| said).collect(),
+            rows: held.into_iter().map(|(_, row)| row).collect(),
         })
     }
 
     /// The rows the word leaves, in the order the card draws them.
-    pub fn rows(&self) -> &[Said] {
+    pub fn rows(&self) -> &[Row] {
         &self.rows
     }
 
     /// The row the draft names: the first, because the card ranks the row the reader means there
     /// and `Enter` takes it.
-    pub fn chosen(&self) -> Option<Said> {
+    pub fn chosen(&self) -> Option<Row> {
         self.rows.first().copied()
     }
 
-    /// The line choosing the first row sends: the draft itself where its word already starts the
-    /// name, and the name followed by what the word left otherwise.
-    pub fn line(&self) -> String {
+    /// What choosing the first row sends: the draft itself where its word already starts the name,
+    /// and the name followed by what the word left otherwise.
+    pub fn spelling(&self) -> String {
         let Some(chosen) = self.chosen() else {
             return self.draft.clone();
         };
@@ -174,20 +174,25 @@ fn named(name: &str) -> Option<Command> {
 mod tests {
     use super::*;
 
-    fn line(draft: &str) -> String {
-        Card::of(draft).expect("a card holds this draft").line()
+    fn spelling(draft: &str) -> String {
+        Card::of(draft).expect("a card holds this draft").spelling()
     }
 
     /// The rows a draft leaves, by name, in the order the card draws them.
     fn names(draft: &str) -> Vec<&'static str> {
         Card::of(draft)
-            .map(|card| card.rows().iter().map(|said| said.name).collect())
+            .map(|card| card.rows().iter().map(|row| row.name).collect())
             .unwrap_or_default()
     }
 
     #[test]
     fn a_bare_slash_holds_every_command_in_one_order() {
-        assert_eq!(names("/"), [HELP, MODEL, NEW, QUIT, SETTINGS, SKILL, STATS]);
+        assert_eq!(
+            names("/"),
+            [HELP, MODEL, NEW, QUIT, SETTINGS, SKILL, STATS],
+            "every command starts the empty word, so the list is the table in the one order its \
+             names give it"
+        );
     }
 
     #[test]
@@ -227,29 +232,17 @@ mod tests {
     }
 
     #[test]
-    fn the_line_a_chosen_row_is_sent_as() {
-        assert_eq!(line("/mod"), "/model");
-        assert_eq!(line("/model"), "/model");
-        assert_eq!(line("/model gpt-5"), "/model gpt-5");
-        assert_eq!(line("/skill:commit"), "/skill:commit");
-        assert_eq!(line("/quit "), "/quit");
-    }
-
-    #[test]
-    fn the_line_a_card_sends_is_a_command_but_for_the_one_that_takes_a_word() {
-        for said in LIST.iter().filter(|said| said.name != SKILL) {
-            let named = format!("/{}", &said.name[1..2]);
-            assert!(
-                read(&line(&named)).is_some(),
-                "a row of the card is sent as {:?}, and that line is no command: a reader who \
-                 chose the row is handed their words back as a prompt",
-                line(&named)
-            );
-        }
+    fn the_word_the_draft_names_is_sent_as_the_command_it_stands_for() {
+        assert_eq!(spelling("/mod"), "/model");
+        assert_eq!(spelling("/model"), "/model");
+        assert_eq!(spelling("/model gpt-5"), "/model gpt-5");
+        assert_eq!(spelling("/skill:commit"), "/skill:commit");
+        assert_eq!(spelling("/qui"), "/quit");
+        assert_eq!(spelling("/quit "), "/quit");
         assert_eq!(
-            read(&Card::of("/").expect("a bare slash holds the card").line()),
-            Some(Command::Help),
-            "the bare slash names the first row, and that row is a line the frame answers"
+            spelling("/"),
+            HELP,
+            "a bare slash names the first row of the list, which is the one `Enter` sends"
         );
     }
 
@@ -264,8 +257,8 @@ mod tests {
     }
 
     #[test]
-    fn the_seven_names_the_list_holds_are_seven_different_names() {
-        let names: Vec<&str> = LIST.iter().map(|said| said.name).collect();
+    fn the_seven_names_the_table_holds_are_seven_different_names() {
+        let names: Vec<&str> = TABLE.iter().map(|row| row.name).collect();
         let mut unique = names.clone();
         unique.sort_unstable();
         unique.dedup();
@@ -278,11 +271,11 @@ mod tests {
 
     #[test]
     fn every_name_but_the_one_that_takes_a_word_reads_back_as_a_command() {
-        for said in LIST.iter().filter(|said| said.name != SKILL) {
+        for row in TABLE.iter().filter(|row| row.name != SKILL) {
             assert!(
-                read(said.name).is_some(),
+                read(row.name).is_some(),
                 "the list names {:?} and a line of it is no command the frame answers",
-                said.name
+                row.name
             );
         }
         assert!(

@@ -41,15 +41,17 @@ impl Mode {
     /// The two labels a screen wears on its card: its name, and the key its own table binds to
     /// leaving it. A draft has neither, because it is no screen.
     pub fn labels(self) -> Option<(&'static str, &'static str)> {
-        Some((self.title()?, self.leaves()))
+        Some((self.title()?, self.leaves()?))
     }
 
-    /// The key this mode's table binds to leaving it, and `""` when it binds none.
-    pub fn leaves(self) -> &'static str {
-        self.table()
-            .iter()
-            .find(|binding| binding.act == Act::Close)
-            .map_or("", |binding| binding.name)
+    /// The key this mode's table binds to leaving it, and `None` when it binds none.
+    pub fn leaves(self) -> Option<&'static str> {
+        Some(
+            self.table()
+                .iter()
+                .find(|binding| binding.act == Act::Close)?
+                .name,
+        )
     }
 
     /// The name a screen wears in its card's top border, and `None` for the draft, which is no

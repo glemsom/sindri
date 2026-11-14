@@ -104,8 +104,8 @@ const SEPARATOR: Look = Look::plain(Ink::Dim);
 
 const STEPS: [(u16, usize); 2] = [(120, 9), (100, 5)];
 
-/// The first two of `HINTS`: held at every width and given up last.
-const FLOOR: usize = 2;
+/// The first three of `HINTS`: held at every width that holds them and given up last.
+const FLOOR: usize = 3;
 
 const HAIRLINE: char = '─';
 
@@ -515,7 +515,7 @@ impl View {
         let Some(card) = self.card_of(prompt.text()) else {
             return Outcome::Send(prompt);
         };
-        let line = card.line();
+        let line = card.spelling();
         match commands::read(&line) {
             Some(command) => self.answer(command),
             None => {
@@ -898,25 +898,11 @@ impl View {
         // A screen is drawn over the frame it was opened from rather than in place of it: the
         // reader sees the transcript they will return to, and sees that it is out of reach.
         let screen = self.stack.top();
-        let Some((name, leaves)) = screen.labels() else {
+        let Some((name, leaves, body)) = self.over(area, screen) else {
             // A heading is drawn as the cells the sizing leaves once the band it stands in is
             // known: one with no row of that band under it is the words it says.
             self.sizes.settle(share.transcript, buffer, &self.palette);
             self.highlight(share.transcript, buffer);
-            if let Some(card) = self.card() {
-                let body = ScreenBody::Rows(self.command_rows(&card));
-                let width = card::body_width(area);
-                let body_area = card::paint(
-                    area,
-                    COMMANDS_CARD,
-                    Mode::Composer.leaves(),
-                    body.held(width),
-                    buffer,
-                    self.edge(),
-                    &self.palette,
-                );
-                body.paint(body_area, buffer, &self.palette);
-            }
             return;
         };
         // The band under a card takes no key, so the frame under it is no way to anywhere — and no
@@ -925,17 +911,28 @@ impl View {
         self.sizes = Sizes::none();
         self.highlight(share.transcript, buffer);
         let width = card::body_width(area);
-        let screen_body = self.screen_body(screen, width);
-        let body = card::paint(
+        let held = card::paint(
             area,
             name,
             leaves,
-            screen_body.held(width),
+            body.held(width),
             buffer,
             self.edge(),
             &self.palette,
         );
-        screen_body.paint(body, buffer, &self.palette);
+        body.paint(held, buffer, &self.palette);
+    }
+
+    /// The card this frame carries over itself: the screen on top of the stack, or — a draft
+    /// beginning with a slash being no screen — the commands card its words open.
+    fn over(&self, area: Rect, screen: Mode) -> Option<(&'static str, &'static str, ScreenBody)> {
+        if let Some((name, leaves)) = screen.labels() {
+            let width = card::body_width(area);
+            return Some((name, leaves, self.screen_body(screen, width)));
+        }
+        let card = self.card()?;
+        let leaves = Mode::Composer.leaves()?;
+        Some((COMMANDS_CARD, leaves, ScreenBody::Rows(command_rows(&card))))
     }
 
     /// What a screen holds, laid at the width the card gives it: the card is as tall as this, and
@@ -1301,50 +1298,8 @@ impl View {
             rows.push(screen_row(vec![(said.to_owned(), Ink::Dim.into())]));
             return rows;
         }
-        let widest = names
-            .iter()
-            .map(|(id, _)| pen::cells(id) + NAMES_GAP)
-            .max()
-            .unwrap_or(0);
-        for (at, (id, label)) in names.iter().enumerate() {
-            let (marker, ink) = match at == self.models.selected() {
-                true => (ROW_MARK, Ink::Accent),
-                false => (ROW_GAP, Ink::Plain),
-            };
-            let ink = Look::plain(ink);
-            rows.push(cut_row(vec![
-                (marker.to_owned(), ink),
-                (pen::pad(id, widest), ink),
-                ((*label).to_owned(), Ink::Dim.into()),
-            ]));
-        }
+        rows.extend(listed(&names, self.models.selected()));
         rows
-    }
-
-    /// The commands card: the rows the word after the slash leaves, each command with the one line
-    /// that says what it does, the row the draft names first and marked.
-    fn command_rows(&self, card: &commands::Card) -> Vec<ScreenRow> {
-        let widest = card
-            .rows()
-            .iter()
-            .map(|said| pen::cells(said.name) + NAMES_GAP)
-            .max()
-            .unwrap_or(0);
-        card.rows()
-            .iter()
-            .enumerate()
-            .map(|(at, said)| {
-                let (marker, ink) = match at {
-                    0 => (ROW_MARK, Ink::Accent),
-                    _ => (ROW_GAP, Ink::Plain),
-                };
-                cut_row(vec![
-                    (marker.to_owned(), Look::plain(ink)),
-                    (pen::pad(said.name, widest), Look::plain(ink)),
-                    (said.says.to_owned(), Ink::Dim.into()),
-                ])
-            })
-            .collect()
     }
 
     /// A value too wide for the frame is cut at its right edge rather than dropped, as the
@@ -1560,6 +1515,42 @@ fn whole_row<S: AsRef<str>, D: Copy + Into<Look>>(
         Clip::Whole,
         palette,
     );
+}
+
+/// One row per name of a list: the marker the row the reader is on wears, the name padded to the
+/// widest of them, and the line that says what it is set quieter beside it.
+fn listed(rows: &[(&str, &str)], selected: usize) -> Vec<ScreenRow> {
+    let widest = rows
+        .iter()
+        .map(|(name, _)| pen::cells(name) + NAMES_GAP)
+        .max()
+        .unwrap_or(0);
+    rows.iter()
+        .enumerate()
+        .map(|(at, (name, says))| {
+            let (marker, ink) = match at == selected {
+                true => (ROW_MARK, Ink::Accent),
+                false => (ROW_GAP, Ink::Plain),
+            };
+            let ink = Look::plain(ink);
+            cut_row(vec![
+                (marker.to_owned(), ink),
+                (pen::pad(name, widest), ink),
+                ((*says).to_owned(), Ink::Dim.into()),
+            ])
+        })
+        .collect()
+}
+
+/// The commands card's own rows: each command the word after the slash leaves with the one line
+/// that says what it does, and the row the draft names marked because `Enter` takes it.
+fn command_rows(card: &commands::Card) -> Vec<ScreenRow> {
+    let named: Vec<(&str, &str)> = card
+        .rows()
+        .iter()
+        .map(|said| (said.name, said.says))
+        .collect();
+    listed(&named, 0)
 }
 
 /// A row cut at its right edge: a value that runs on is cut rather than dropped.
@@ -2044,7 +2035,7 @@ mod tests {
         );
         assert_eq!(
             drawn_row(&buffer, buffer.area.bottom() - 1).trim_end(),
-            "Enter send · / commands",
+            "Enter send · / commands · ? keys",
             "the raised band takes no row the footer had, and its floor of hints is drawn"
         );
     }
@@ -2664,7 +2655,7 @@ mod tests {
     }
 
     #[test]
-    fn five_hints_are_kept_from_a_hundred_columns_and_ninety_nine_keeps_two() {
+    fn five_hints_are_kept_from_a_hundred_columns_and_ninety_nine_keeps_three() {
         assert_eq!(
             footer(100, 24).trim_end(),
             "Enter send · / commands · ? keys · Ctrl-C cancel · Ctrl-Q quit",
@@ -2673,16 +2664,16 @@ mod tests {
         );
         assert_eq!(
             footer(99, 24).trim_end(),
-            "Enter send · / commands",
-            "one column under it and the footer is back to the two the floor holds"
+            "Enter send · / commands · ? keys",
+            "one column under it and the footer is back to the three the floor holds"
         );
     }
 
     #[test]
-    fn sixty_columns_keep_the_two_hints_no_width_takes_away() {
+    fn sixty_columns_keep_the_three_hints_no_width_takes_away() {
         assert_eq!(
             footer(60, 24).trim_end(),
-            "Enter send · / commands",
+            "Enter send · / commands · ? keys",
             "the floor is the floor at sixty columns as it is at ninety-nine"
         );
     }
@@ -2712,7 +2703,7 @@ mod tests {
     }
 
     #[test]
-    fn the_first_two_hints_are_drawn_at_every_width_from_the_floor_s_own_width() {
+    fn the_floor_s_hints_are_drawn_at_every_width_from_the_floor_s_own_width() {
         let said = said(&HINTS);
         let floor: Vec<&str> = said[..FLOOR].iter().map(String::as_str).collect();
         let needed: u16 = said[..FLOOR]
@@ -2721,8 +2712,8 @@ mod tests {
             .sum::<u16>()
             + pen::cells(GAP) * u16::try_from(FLOOR - 1).unwrap_or(0);
         assert_eq!(
-            needed, 23,
-            "the two hints the floor holds need twenty-three columns"
+            needed, 32,
+            "the three hints the floor holds need thirty-two columns"
         );
         for width in needed..=200u16 {
             let row = footer(width, 24);
@@ -2731,15 +2722,15 @@ mod tests {
             assert_eq!(
                 hints.get(..FLOOR),
                 Some(&floor[..]),
-                "at {width} columns the footer reads {:?}: the two hints the floor never gives \
-                 up are drawn whole at every width their own cells fit in",
+                "at {width} columns the footer reads {:?}: the three hints the floor never \
+                 gives up are drawn whole at every width their own cells fit in",
                 row.trim_end()
             );
         }
     }
 
     #[test]
-    fn the_slash_is_drawn_in_the_footer_at_every_width_from_the_floor_s_own_width() {
+    fn the_slash_is_drawn_in_the_footer_at_every_width_that_holds_a_hint_after_it() {
         for width in 23..=200u16 {
             let row = footer(width, 24);
             assert!(
@@ -3579,26 +3570,24 @@ mod tests {
     }
 
     #[test]
-    fn every_hint_names_a_key_or_a_glyph_the_composer_answers() {
+    fn every_hint_names_a_key_the_composer_answers_or_a_glyph_that_opens_the_commands_card() {
         for hint in HINTS {
             let bound = Mode::Composer
                 .table()
                 .iter()
                 .any(|binding| binding.name.split(", ").any(|name| name == hint.key));
-            let glyph = match hint.key {
-                key if key.len() == 1 && key.chars().all(|glyph| glyph.is_ascii_graphic()) => {
-                    key.chars().next()
+            let opens = match hint.key.chars().next() {
+                Some(glyph) if pen::cells(hint.key) == 1 => {
+                    let mut view = View::boot();
+                    view.key(Key::Char(glyph));
+                    view.card().is_some() && view.composer().text() == hint.key
                 }
-                _ => None,
+                _ => false,
             };
-            let typed = glyph.is_some_and(|glyph| {
-                let mut composer = Composer::new();
-                composer.key(Key::Char(glyph)) == Outcome::Edited && composer.text() == hint.key
-            });
             assert!(
-                bound || typed,
+                bound || opens,
                 "the footer names {:?} and nothing answers to it: a hint is drawn in a row only \
-                 where it is a key that works, or a glyph the draft takes",
+                 where it is a key that works, or a glyph the draft takes into a card",
                 hint.key
             );
         }
