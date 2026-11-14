@@ -21,6 +21,7 @@ use sindri::view::View;
 use sindri_core::config::{Config, Environment, Process, Touched};
 use sindri_core::provider::Deltas;
 use sindri_core::records::Told;
+use sindri_core::session::Session;
 use sindri_core::tools::FrontEnd;
 
 use crate::cell::probed_cell;
@@ -42,6 +43,10 @@ const SETUP: u8 = 3;
 const CANCELLED: u8 = 130;
 
 const MODEL: &str = "model";
+
+/// How long a launch that is ending waits for a cancelled run to hand its session back: long enough
+/// for a run to write its ending, short enough that a wire which never answers cannot hold a quit.
+const GRACE: Duration = Duration::from_secs(2);
 
 /// The frame a launch opens on, as far as the config alone decides it.
 fn opened(config: &Config) -> View {
@@ -168,7 +173,7 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
         return crate::refuse(&format!("the status could not be written: {error}"), SETUP);
     }
     let keys = live.keys(&signals, &typed);
-    let launch = live.launch.take();
+    let launch = live.ending();
     drop(live);
     // Given back before a word is said about the ending: a refusal is a line for the shell, and
     // not a smear over a frame.
@@ -201,6 +206,9 @@ struct Loop<'a> {
     environment: &'a dyn Environment,
     telling: Window<File>,
     launch: Option<Launch>,
+    /// The session the last prompt was started on, kept here because a run owns the launch it was
+    /// handed: a launch that ends empties the temp of its session either way.
+    session: Option<Session>,
     running: Option<Running>,
     asking: Option<Asking>,
     wake: Arc<Wake>,
@@ -252,6 +260,7 @@ impl<'a> Loop<'a> {
             environment,
             telling,
             launch: None,
+            session: None,
             running: None,
             asking: None,
             wake,
@@ -492,6 +501,7 @@ impl<'a> Loop<'a> {
                 }
             }
         };
+        self.session = Some(launching.session());
         self.view.settle();
         // The ground a path a call names is drawn against is the one the run it starts will judge by.
         let ground = launching.ground();
@@ -510,6 +520,24 @@ impl<'a> Loop<'a> {
         self.paint()?;
         self.told(Told::Asking { turn: 1 })?;
         Ok(())
+    }
+
+    /// The launch the loop ends with, whether or not a run is in flight when it ends: a run still
+    /// going is cancelled and given `GRACE` to hand the launch back, and the temp of the session it
+    /// ran in is emptied here, where a run that never came back cannot leave it behind.
+    fn ending(&mut self) -> Option<Launch> {
+        if let Some(flight) = self.running.take() {
+            flight.cancel();
+            if flight.finished_within(GRACE) {
+                self.launch = flight.handed_back();
+            }
+        }
+        if let Some(mut session) = self.session.take()
+            && let Err(error) = session.finish()
+        {
+            eprintln!("sindri: {error}");
+        }
+        self.launch.take()
     }
 
     /// Starts the next prompt the queue is holding, once the run before it has stopped: one prompt

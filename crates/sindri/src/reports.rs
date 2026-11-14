@@ -96,7 +96,21 @@ impl Running {
         std::mem::take(&mut *lock(&self.pending))
     }
 
-    /// The launch the run handed back, or nothing if its thread panicked.
+    /// Whether the run's thread ended within `grace`: a wait rather than a join, because a request
+    /// the wire never answers must not hold a launch that is ending.
+    pub(crate) fn finished_within(&self, grace: Duration) -> bool {
+        let deadline = Instant::now() + grace;
+        while Instant::now() < deadline {
+            if self.thread.is_finished() {
+                return true;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        self.thread.is_finished()
+    }
+
+    /// The launch the run handed back, or nothing if its thread panicked. Only ever called on a
+    /// thread that has ended: `join` on a live one blocks until the run does.
     pub(crate) fn handed_back(self) -> Option<Launch> {
         self.thread.join().ok()
     }

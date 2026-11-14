@@ -873,8 +873,9 @@ fn an_idle_terminal_is_painted_once_and_then_left_alone() {
     );
 
     // Everything after it is a repaint nobody asked for: no timer, no tick, no idle frame —
-    // the loop is asleep in `read` until a key or a fact arrives.
-    let painted = drawn.bytes().len();
+    // the loop is asleep in `read` until a key or a fact arrives. The count is taken once the frame
+    // has landed: a paint is many writes, so the length the moment its last word arrives is short.
+    let painted = drawn.settled().len();
     thread::sleep(Duration::from_millis(600));
     assert_eq!(
         drawn.bytes().len(),
@@ -889,6 +890,41 @@ fn an_idle_terminal_is_painted_once_and_then_left_alone() {
         Some(0),
         "the quiet launch was asleep in read, not dead: {}",
         drawn.text()
+    );
+}
+
+#[test]
+fn a_quit_during_a_run_closes_the_session_that_run_holds() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    // The run is in flight and the wire is holding its reply, so the session is the run thread's
+    // and not the loop's: the ending has to reach the thread to close it.
+    ask_words(&mut pty, &drawn, &wire, "hi my name is Glenn");
+    let directory = directories(&ground.state)
+        .into_iter()
+        .next()
+        .expect("the prompt the launch started opened a session");
+    let scratch = directory.join("tmp").join("scratch.txt");
+    std::fs::write(&scratch, "kept\n").expect("a file in the session temp");
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+
+    assert!(
+        !scratch.exists(),
+        "a launch that quit mid-run empties the temp of the session it held"
+    );
+    assert!(
+        directory.join("session.json").is_file(),
+        "and keeps the record the run wrote: {}",
+        directory.display()
     );
 }
 
@@ -2520,6 +2556,11 @@ fn a_file_in_the_session_temp_outlives_the_next_prompt_and_goes_when_the_launch_
         document_in(&directory)
     );
     assert!(
+        recorded(&ground.state, r#""stopped": "final""#),
+        "its ending is on the record before the launch is quit: {}",
+        document_in(&directory)
+    );
+    assert!(
         scratch.is_file(),
         "the file survives the prompt after it, because the session it was written in is the one the \
          next prompt runs in: {}",
@@ -2575,6 +2616,11 @@ fn two_prompts_in_one_launch_leave_one_session_that_counts_both() {
     assert!(
         turn_counted(&ground.state, 2),
         "the second prompt's turn is counted on the same record, not in a record of its own: {}",
+        document(&ground.state)
+    );
+    assert!(
+        recorded(&ground.state, r#""stopped": "final""#),
+        "and its ending, with what it spent, is on the record before the launch is quit: {}",
         document(&ground.state)
     );
 

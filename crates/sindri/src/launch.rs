@@ -279,6 +279,12 @@ impl Launch {
         outcome.ok_or_else(|| Refusal::new("the run ended with no stop reason to report", SETUP))
     }
 
+    /// The session the run on this launch uses, held by whoever started the run: a run owns the
+    /// launch while it is in flight, so the temp of the session has to be reachable without it.
+    pub fn session(&self) -> Session {
+        self.session.clone()
+    }
+
     /// The conversation the session held is over: its temp goes and the directory, the record and the
     /// spill are kept, so a launch that ended still reads.
     pub fn close(&mut self) {
