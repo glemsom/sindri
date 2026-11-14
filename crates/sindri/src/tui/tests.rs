@@ -13,6 +13,7 @@ use sindri::ink::Look;
 use sindri::ledger::Boot;
 use sindri::pictures::{PLACEHOLDER, Pictures};
 use sindri::rows::Scroll;
+use sindri_core::first_run::FirstRun;
 use sindri_core::policy::Enforcement;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
@@ -110,9 +111,12 @@ impl Stage {
         }
     }
 
-    /// The config the launch resolves from `environment`, as the launch is handed it.
+    /// The config the launch resolves from `environment`, resolved as `main` resolves one.
     fn config(&self, environment: &impl Environment) -> Config {
-        Config::resolve(environment, self.cli.flags()).expect("a config")
+        FirstRun::resolve(environment, self.cli.flags())
+            .expect("a config")
+            .config()
+            .clone()
     }
 
     /// The launch this terminal draws, with `view` as the frame it draws and `config` as the run a

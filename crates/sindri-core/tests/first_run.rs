@@ -4,25 +4,30 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use sindri_core::config::{Config, Flags};
+use sindri_core::config::Flags;
 use sindri_core::first_run::FirstRun;
-use sindri_core::wire::Wire;
 use tempfile::TempDir;
 
-fn row_for(wire: Option<Wire>, path: &str) -> String {
-    Config {
-        provider: wire,
-        ..Config::default()
-    }
-    .api_key_row(Path::new(path))
+fn first_run_environment(home: &Path, vars: &[(&str, &str)]) -> BTreeMap<String, String> {
+    let mut environment: BTreeMap<String, String> = vars
+        .iter()
+        .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
+        .collect();
+    environment.insert(String::from("XDG_CONFIG_HOME"), home.display().to_string());
+    environment
+}
+
+fn resolved_in(home: &Path, vars: &[(&str, &str)]) -> FirstRun {
+    FirstRun::resolve(&first_run_environment(home, vars), Flags::default())
+        .expect("a resolved config")
 }
 
 #[test]
 fn the_row_names_the_variable_the_path_and_the_mode() {
-    let row = row_for(Some(Wire::Anthropic), "/xdg/sindri/config.toml");
+    let first_run = resolved_in(Path::new("/xdg"), &[("SINDRI_PROVIDER", "anthropic")]);
 
     assert_eq!(
-        row,
+        first_run.api_key_row(),
         "\
 api key   from ANTHROPIC_API_KEY, SINDRI_API_KEY or --api-key
           will be written to /xdg/sindri/config.toml, mode 0600
@@ -32,7 +37,7 @@ api key   from ANTHROPIC_API_KEY, SINDRI_API_KEY or --api-key
 
 #[test]
 fn the_row_names_the_openai_variable_when_that_is_the_wire() {
-    let row = row_for(Some(Wire::Openai), "/xdg/sindri/config.toml");
+    let row = resolved_in(Path::new("/xdg"), &[("SINDRI_PROVIDER", "openai")]).api_key_row();
 
     assert!(
         row.contains("OPENAI_API_KEY, SINDRI_API_KEY or --api-key"),
@@ -42,19 +47,21 @@ fn the_row_names_the_openai_variable_when_that_is_the_wire() {
 }
 
 #[test]
-fn the_row_names_the_path_it_was_given_rather_than_a_guess() {
-    let path = "/home/someone/.config/sindri/config.toml";
+fn the_row_names_the_file_the_environment_points_at_rather_than_a_guess() {
+    let home = bare_home();
+    let path = home.path().join("sindri").join("config.toml");
+
+    let row = resolved_in(home.path(), &[("SINDRI_PROVIDER", "anthropic")]).api_key_row();
 
     assert!(
-        row_for(Some(Wire::Anthropic), path)
-            .contains("will be written to /home/someone/.config/sindri/config.toml, mode 0600"),
-        "the row names the exact file and its mode"
+        row.contains(&format!("will be written to {}, mode 0600", path.display())),
+        "the row names the exact file and its mode: {row}"
     );
 }
 
 #[test]
 fn a_row_for_a_wire_that_needs_no_key_names_no_variable() {
-    let row = row_for(None, "/xdg/sindri/config.toml");
+    let row = resolved_in(Path::new("/xdg"), &[]).api_key_row();
 
     assert!(
         row.contains("from SINDRI_API_KEY or --api-key,")
@@ -62,15 +69,6 @@ fn a_row_for_a_wire_that_needs_no_key_names_no_variable() {
         "with no wire there is no per-wire variable to name: {row}"
     );
     assert!(!row.contains("ANTHROPIC_API_KEY"), "{row}");
-}
-
-fn first_run_environment(home: &Path, vars: &[(&str, &str)]) -> BTreeMap<String, String> {
-    let mut environment: BTreeMap<String, String> = vars
-        .iter()
-        .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
-        .collect();
-    environment.insert(String::from("XDG_CONFIG_HOME"), home.display().to_string());
-    environment
 }
 
 fn bare_home() -> TempDir {

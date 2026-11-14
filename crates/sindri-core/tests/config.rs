@@ -399,6 +399,26 @@ fn the_wire_own_variable_is_where_a_launch_takes_its_key_from() {
 }
 
 #[test]
+fn a_config_whose_key_only_the_wire_own_variable_holds_is_ready() {
+    let config = resolved_in(
+        "provider = \"anthropic\"\nmodel = \"claude-sonnet-4-5\"\n",
+        &[("ANTHROPIC_API_KEY", "sk-ant-the-wires-own")],
+        Flags::default(),
+    );
+
+    assert!(
+        config.is_ready(),
+        "a wire, a model and the key its own variable holds are a run that starts: {:?}",
+        config.missing()
+    );
+    assert_eq!(
+        config.api_key.as_deref(),
+        Some("sk-ant-the-wires-own"),
+        "and it is that variable's value the config holds, not another's"
+    );
+}
+
+#[test]
 fn the_wire_the_layering_names_is_the_one_whose_variable_is_read() {
     let home = config_home("provider = \"openai\"\nmodel = \"gpt-5\"\n");
 

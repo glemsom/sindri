@@ -193,8 +193,6 @@ impl Kept for Settings {
     }
 }
 
-/// Writes the rows a reader touched and hands back the config in force, resolved through the one
-/// door a launch resolves through.
 pub fn persist(
     environment: &impl Environment,
     touched: &Touched,
