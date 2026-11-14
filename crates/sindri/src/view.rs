@@ -39,7 +39,7 @@ use crate::pointer::{Notch, Pointer};
 use crate::pulse::Pulse;
 use crate::queue::Queue;
 use crate::rail;
-use crate::rows::{INDENT, Row, Rows, Scroll, wrap};
+use crate::rows::{INDENT, Row, Rows, Scroll};
 use crate::settings::Settings;
 use crate::size::Sizes;
 use crate::stats;
@@ -137,8 +137,6 @@ const HAIRLINE: char = '─';
 /// The sigil that opens the draft, standing in the gutter an answer is set from — `rows::INDENT`
 /// columns wide, so the reader's own words begin where the run's do.
 const SIGIL: &str = "\u{203a} ";
-
-const KEYS_GAP: u16 = 2;
 
 const PICKER_EMPTY: &str = "no file answers";
 
@@ -1314,36 +1312,26 @@ impl View {
         width.saturating_sub(pen::cells(INDENT))
     }
 
-    /// A description wider than the card wraps under its own column rather than losing its tail:
-    /// the card is narrower than the band was, and a key without the line that explains it is a
-    /// key a reader has to try.
+    /// Every mode's name as a heading over the keys it binds, each key in one column and what it
+    /// does beside it: a description wider than the card wraps under its own column rather than
+    /// losing its tail, because a key without the line that explains it is a key a reader has to
+    /// try.
     fn keys_rows(&self, width: u16) -> Vec<ScreenRow> {
         let modes: Vec<Mode> = self.stack.modes().collect();
-        let name_width = modes
-            .iter()
-            .flat_map(|mode| mode.table())
-            .map(|binding| pen::cells(binding.name) + KEYS_GAP)
-            .max()
-            .unwrap_or(0);
-        let hang = pen::blank(name_width);
-        let room = width.saturating_sub(name_width);
+        let column = list::Column::of(
+            modes
+                .iter()
+                .flat_map(|mode| mode.table())
+                .map(|binding| binding.name),
+            width,
+            keys::KEY,
+            keys::MEANING,
+        );
         let mut rows = Vec::new();
         for mode in modes {
-            rows.push(ScreenRow::whole(vec![(
-                mode.name().to_owned(),
-                Ink::Dim.into(),
-            )]));
+            rows.push(list::head(mode.name(), Ink::Dim));
             for binding in mode.table() {
-                for (at, line) in wrap(binding.does, room).iter().enumerate() {
-                    let name = match at {
-                        0 => pen::pad(binding.name, name_width),
-                        _ => hang.clone(),
-                    };
-                    rows.push(ScreenRow::whole(vec![
-                        (name, keys::KEY),
-                        (line.clone(), keys::MEANING),
-                    ]));
-                }
+                rows.extend(column.hung(binding.name, binding.does));
             }
         }
         rows

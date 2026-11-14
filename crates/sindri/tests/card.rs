@@ -467,6 +467,46 @@ fn the_words_of_a_row_are_never_cut_by_the_card_they_are_drawn_in() {
 }
 
 #[test]
+fn a_description_wider_than_the_card_wraps_under_its_own_column_and_hangs_under_it() {
+    let buffer = painted(&mut on_screen(Mode::Keys), 120, 40);
+    let body = body_rows(&buffer);
+    let does = Mode::Composer
+        .table()
+        .iter()
+        .find(|binding| binding.name == "@")
+        .expect("the empty draft binds `@` to the files of the workspace")
+        .does;
+    let opens: Vec<&str> = does.split_whitespace().take(4).collect();
+    let first = body
+        .iter()
+        .position(|row| row.contains(&opens.join(" ")))
+        .unwrap_or_else(|| {
+            panic!(
+                "no row of the keys screen says `{}`: {body:#?}",
+                opens.join(" ")
+            )
+        });
+    let start = body[first]
+        .find(&opens.join(" "))
+        .expect("the row the line begins on says its first words");
+    let column = body[first][..start].chars().count();
+    let under = &body[first + 1];
+    let hung: Vec<&str> = under.split_whitespace().collect();
+    let words: Vec<&str> = does.split_whitespace().collect();
+    assert!(
+        !hung.is_empty() && words.ends_with(&hung),
+        "the line this test is about is wider than the columns the card has left for it, and the \
+         row under it says the words it had no room for: {:?} then {under:?}",
+        body[first]
+    );
+    assert!(
+        under.chars().take(column).all(|glyph| glyph == ' '),
+        "and that row is blank up to the column the description begins in, so a wrapped line \
+         hangs under the line above it rather than standing as a name of its own: {under:?}"
+    );
+}
+
+#[test]
 fn the_reason_a_value_was_refused_is_drawn_whole_however_narrow_the_card() {
     let mut view = View::boot();
     view.open_settings(&Config::default());

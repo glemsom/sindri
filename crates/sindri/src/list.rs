@@ -111,11 +111,7 @@ pub fn columned<'a>(
     beside: Beside,
 ) -> Vec<Item> {
     let rows: Vec<(&str, &str)> = rows.collect();
-    let widest = rows
-        .iter()
-        .map(|(name, _)| pen::cells(name) + GAP)
-        .max()
-        .unwrap_or(0);
+    let widest = widest(rows.iter().map(|(name, _)| *name));
     rows.into_iter()
         .map(|(name, said)| Item {
             name: pen::pad(name, widest),
@@ -123,6 +119,63 @@ pub fn columned<'a>(
             ink: name_ink,
         })
         .collect()
+}
+
+/// The columns the widest of `names` takes beside the gap after it: the one column a table of names
+/// keeps, whether it is read as items of a list or drawn beside the lines that explain them.
+fn widest<'a>(names: impl Iterator<Item = &'a str>) -> u16 {
+    names.map(|name| pen::cells(name) + GAP).max().unwrap_or(0)
+}
+
+/// The column a table of names keeps, and the band the words beside them are wrapped to: the
+/// columns a name is padded to, the width a line is wrapped to, and the two looks each is read in.
+#[derive(Clone, Copy, Debug)]
+pub struct Column {
+    columns: u16,
+    width: u16,
+    name: Look,
+    said: Look,
+}
+
+impl Column {
+    /// The column a table of `names` keeps: the widest of them and the gap after it, in a band
+    /// `width` columns wide, the names read in `name` and the words beside them in `said`.
+    pub fn of<'a>(
+        names: impl Iterator<Item = &'a str>,
+        width: u16,
+        name: Look,
+        said: Look,
+    ) -> Column {
+        Column {
+            columns: widest(names),
+            width,
+            name,
+            said,
+        }
+    }
+
+    /// The rows one name and the line that explains it make: the name in the column's own
+    /// columns, its line wrapped under that column, and every row after the first hanging at it,
+    /// so a description wider than the band loses no word.
+    pub fn hung(&self, name: &str, said: &str) -> Vec<ScreenRow> {
+        let hang = pen::blank(self.columns);
+        wrap(said, self.width.saturating_sub(self.columns))
+            .into_iter()
+            .enumerate()
+            .map(|(at, line)| {
+                let lead = match at {
+                    0 => pen::pad(name, self.columns),
+                    _ => hang.clone(),
+                };
+                ScreenRow::whole(vec![(lead, self.name), (line, self.said)])
+            })
+            .collect()
+    }
+}
+
+/// The row a group's name stands on at the head of the rows it names: whole, or not drawn at all.
+pub fn head(words: &str, ink: Ink) -> ScreenRow {
+    ScreenRow::whole(vec![(words.to_owned(), Look::plain(ink))])
 }
 
 /// The rows a refusal is read in under a list: a blank row, then its words wrapped to the band, each
@@ -193,6 +246,7 @@ impl List<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ink::Face;
 
     const MARKER: &str = "\u{203a} ";
 
@@ -390,6 +444,124 @@ mod tests {
             columned(std::iter::empty(), Ink::Plain, Beside::Row).is_empty(),
             "a list of no rows pads no name, and a column of nothing is the empty column"
         );
+    }
+
+    #[test]
+    fn a_column_of_names_hangs_a_line_wider_than_the_band_under_the_column_it_begins_in() {
+        let column = Column::of(
+            ["@", "Esc"].into_iter(),
+            20,
+            Look::new(Ink::Plain, Face::Bold),
+            Look::plain(Ink::Dim),
+        );
+        let said = "the files of the workspace, while it starts a word";
+        let rows = column.hung("@", said);
+
+        assert!(
+            rows.len() > 1,
+            "a line wider than the band it is wrapped to takes more than one row: {:?}",
+            rows.iter().map(spans).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            rows[0].spans[0].0,
+            pen::pad("@", pen::cells("Esc") + GAP),
+            "the first row of the column names the thing it is a row of, padded out to the widest \
+             name and the gap after it, so the words beside every name begin in one column"
+        );
+        for row in &rows[1..] {
+            assert_eq!(
+                row.spans[0].0,
+                pen::blank(pen::cells("Esc") + GAP),
+                "and every row after the first hangs at that column in blanks alone: the words of \
+                 a wrapped line are read as one line, not as a new name"
+            );
+        }
+        let wrapped: Vec<&str> = rows
+            .iter()
+            .flat_map(|row| row.spans[1].0.split_whitespace())
+            .collect();
+        assert_eq!(
+            wrapped.join(" "),
+            said,
+            "no word of a line wider than the band is lost or said twice in the wrapping, because \
+             a key without the line that explains it is a key a reader has to try"
+        );
+        for row in &rows {
+            assert!(
+                pen::cells(&row.spans[1].0) <= 20 - (pen::cells("Esc") + GAP),
+                "no line of the column is wider than the band left beside the names: {:?}",
+                row.spans[1].0
+            );
+            assert_eq!(
+                row.spans[0].1,
+                Look::new(Ink::Plain, Face::Bold),
+                "the name and the blanks that hang under it stand in the look the column was \
+                 given for its names"
+            );
+            assert_eq!(
+                row.spans[1].1,
+                Look::plain(Ink::Dim),
+                "and the words beside them stand in the column's own look for what it says"
+            );
+            assert_eq!(
+                row.clip,
+                Clip::Whole,
+                "a row wrapped to the band is never cut by the card it is drawn in"
+            );
+        }
+    }
+
+    #[test]
+    fn a_group_heading_is_whole_and_says_its_words_in_the_ink_it_was_given() {
+        let row = head("composer", Ink::Dim);
+
+        assert_eq!(
+            spans(&row),
+            vec![("composer", Ink::Dim)],
+            "the row a group's name stands on is the name alone, read in the ink the group was \
+             given"
+        );
+        assert_eq!(
+            row.clip,
+            Clip::Whole,
+            "and a heading is whole: half a group's name says nothing of the rows under it"
+        );
+    }
+
+    #[test]
+    fn a_table_of_no_names_keeps_no_column_so_its_words_wrap_to_the_whole_band() {
+        let column = Column::of(
+            std::iter::empty(),
+            12,
+            Look::plain(Ink::Plain),
+            Look::plain(Ink::Dim),
+        );
+        let rows = column.hung("Esc", "the files of the workspace, while it starts a word");
+
+        assert_eq!(
+            rows[0].spans[0].0, "Esc",
+            "a table of no names keeps no column, so the name it is handed is padded out to \
+             nothing"
+        );
+        for row in &rows[1..] {
+            assert!(
+                row.spans[0].0.is_empty(),
+                "and no column is held blank where a table with names in it hangs: {:?}",
+                row.spans[0].0
+            );
+        }
+        let lines: Vec<&str> = rows.iter().map(|row| row.spans[1].0.as_str()).collect();
+        assert!(
+            lines.iter().any(|line| pen::cells(line) > 7),
+            "the words beside a name wrap to the whole band rather than to the band less a column \
+             nothing keeps: {lines:?}"
+        );
+        for line in &lines {
+            assert!(
+                pen::cells(line) <= 12,
+                "and no line of them is wider than the band it was wrapped to: {line:?}"
+            );
+        }
     }
 
     #[test]
