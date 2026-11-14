@@ -4,7 +4,7 @@ use sindri_core::redact::MASK;
 
 use crate::composer::Key;
 use crate::ink::Ink;
-use crate::kept::{Kept, Step};
+use crate::kept::{Kept, Move};
 use crate::list::{self, Beside, ScreenRow};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -86,16 +86,6 @@ impl Settings {
             return false;
         }
         self.current = (self.current + 1) % self.rows.len();
-        true
-    }
-
-    /// The row a press landed on: the visit stands on it, and a press on no row of the visit moves
-    /// nothing.
-    pub fn select(&mut self, at: usize) -> bool {
-        if at >= self.rows.len() {
-            return false;
-        }
-        self.current = at;
         true
     }
 
@@ -187,10 +177,10 @@ impl Settings {
 }
 
 impl Kept for Settings {
-    fn step(&mut self, step: Step) -> bool {
-        match step {
-            Step::Previous => self.up(),
-            Step::Next => self.down(),
+    fn walked(&mut self, way: Move) -> bool {
+        match way {
+            Move::Previous => self.up(),
+            Move::Next => self.down(),
         }
     }
 
@@ -198,8 +188,9 @@ impl Kept for Settings {
         self.key(key)
     }
 
-    fn press(&mut self, at: usize) -> bool {
-        self.select(at)
+    /// A visit's rows hang no choice, so no press is ever read as one.
+    fn pressed(&mut self, _at: usize) -> bool {
+        false
     }
 }
 

@@ -6,7 +6,7 @@ use std::path::Path;
 
 use crate::composer::Key;
 use crate::ink::{Ink, Look};
-use crate::kept::{Kept, Step};
+use crate::kept::{Kept, Move};
 use crate::list::{self, Item, ScreenRow};
 
 pub const CAP: usize = 8;
@@ -243,10 +243,10 @@ fn split(path: &str) -> Row<'_> {
 }
 
 impl Kept for Picker {
-    fn step(&mut self, step: Step) -> bool {
-        match step {
-            Step::Previous => self.up(),
-            Step::Next => self.down(),
+    fn walked(&mut self, way: Move) -> bool {
+        match way {
+            Move::Previous => self.up(),
+            Move::Next => self.down(),
         }
     }
 
@@ -254,7 +254,7 @@ impl Kept for Picker {
         self.key(key)
     }
 
-    fn press(&mut self, at: usize) -> bool {
+    fn pressed(&mut self, at: usize) -> bool {
         self.select(at)
     }
 }

@@ -1,6 +1,5 @@
 use crate::composer::Key;
 use crate::ink::{Faces, Ink, Look};
-use crate::kept::List;
 use crate::list::{self, Column, ScreenRow};
 
 /// The look a key is drawn in wherever a key is named.
@@ -408,19 +407,6 @@ pub enum Body {
     Settings,
     /// The facts a run holds, laid out whole as the record wrote them rather than set in rows.
     Ledger,
-}
-
-impl Body {
-    /// The list this body's rows are kept in, and `None` where they are no list a reader walks: the
-    /// keys screen's rows are keys nothing moves through, and the ledger's are facts laid whole.
-    pub fn kept(self) -> Option<List> {
-        match self {
-            Body::Files => Some(List::Files),
-            Body::Models => Some(List::Models),
-            Body::Settings => Some(List::Settings),
-            Body::Keys | Body::Ledger => None,
-        }
-    }
 }
 
 /// What a mode is called, what its card wears, the keys it answers, what a printable key falls back

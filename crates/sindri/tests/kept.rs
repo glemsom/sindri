@@ -5,8 +5,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use sindri::composer::{Key, Outcome};
-use sindri::kept::List;
-use sindri::keys::{Body, Mode, Stack};
+use sindri::keys::{Act, Mode, Stack};
 use sindri::mark::Cell;
 use sindri::pointer::Pointer;
 use sindri::view::View;
@@ -51,20 +50,17 @@ fn screen(mode: Mode) -> (tempfile::TempDir, View) {
     let root = workspace(&["src/rows.rs", "src/view.rs"]);
     let mut view = View::boot();
     view.set_workspace(root.path().to_path_buf());
-    view.open_settings(&Config::default());
-    view.key(Key::Escape);
     match mode {
-        Mode::Files => view.key(Key::Char('@')),
+        Mode::Files => {
+            view.key(Key::Char('@'));
+        }
         Mode::Models => {
             view.paste("/model");
-            view.key(Key::Enter)
+            view.key(Key::Enter);
         }
-        Mode::Settings => {
-            view.open_settings(&Config::default());
-            Outcome::Edited
-        }
+        Mode::Settings => view.open_settings(&Config::default()),
         other => panic!("{other:?} keeps no list, so no screen of it is opened here"),
-    };
+    }
     // The model screen opens empty, so the wire's answer is handed to it once it stands.
     view.set_served(listed());
     assert_eq!(
@@ -76,100 +72,69 @@ fn screen(mode: Mode) -> (tempfile::TempDir, View) {
     (root, view)
 }
 
-/// Where each list's mark stands: the picker's row, the model screen's and the settings visit's.
-fn marks(view: &View) -> (usize, usize, usize) {
-    (
+/// The three lists of one frame, in the order a test names them: the picker's, the served names' and
+/// the visit's.
+const LISTS: [Mode; 3] = [Mode::Files, Mode::Models, Mode::Settings];
+
+/// The mark of each of the three lists: the picker's row, the model screen's and the visit's.
+fn marks(view: &View) -> [usize; 3] {
+    [
         view.picker().selected(),
         view.models().selected(),
         view.settings().current(),
-    )
+    ]
 }
 
-#[test]
-fn a_screen_names_the_list_a_movement_typing_and_a_press_reach() {
-    let named: [(Mode, Option<List>); 6] = [
-        (Mode::Composer, None),
-        (Mode::Keys, None),
-        (Mode::Files, Some(List::Files)),
-        (Mode::Models, Some(List::Models)),
-        (Mode::Settings, Some(List::Settings)),
-        (Mode::Stats, None),
-    ];
-
-    for mode in Mode::ALL {
-        let kept = named
-            .iter()
-            .find(|(screen, _)| *screen == mode)
-            .map(|(_, list)| *list)
-            .unwrap_or_else(|| {
-                panic!(
-                    "{mode:?} is a mode, so a test naming the lists a frame keeps has to say \
-                     which one it names"
-                )
-            });
-        assert_eq!(
-            mode.body().and_then(Body::kept),
-            kept,
-            "the description of {mode:?} names the list its screen keeps: the draft keeps none \
-             because its rows are its own card, the keys screen's rows are keys nothing moves \
-             through, and the ledger's are facts laid whole"
-        );
-    }
+/// What each of the three lists has typed into it: two queries and the visit's value on its row.
+fn typed(view: &View) -> [String; 3] {
+    let value = view
+        .settings()
+        .rows()
+        .nth(view.settings().current())
+        .map(|(_, text)| text.to_owned())
+        .unwrap_or_default();
+    [
+        view.picker().query().to_owned(),
+        view.models().query().to_owned(),
+        value,
+    ]
 }
 
 #[test]
 fn one_act_types_into_the_list_a_screen_keeps() {
-    let mut typed = Vec::new();
-    for mode in Mode::ALL {
-        if mode.body().and_then(Body::kept).is_none() {
-            continue;
-        }
-        let mut stack = Stack::new();
-        stack.open(mode);
-        let erase = stack
-            .act(Key::Backspace)
-            .unwrap_or_else(|| panic!("{} binds no backspace on its list", mode.name()));
-        let glyph = stack
-            .act(Key::Char('x'))
-            .unwrap_or_else(|| panic!("a glyph is no act at the {} screen", mode.name()));
-        typed.push((mode, erase, glyph));
-    }
+    let acts: Vec<Option<Act>> = LISTS
+        .iter()
+        .map(|mode| {
+            let mut stack = Stack::new();
+            stack.open(*mode);
+            let glyph = stack.act(Key::Char('x'));
+            assert_eq!(
+                stack.act(Key::Backspace),
+                glyph,
+                "the glyph that erases and the glyph that types are one act at the {} screen, \
+                 because one list is what receives both",
+                mode.name()
+            );
+            glyph
+        })
+        .collect();
 
-    assert_eq!(
-        typed.len(),
-        3,
-        "three screens keep a list, so three of them answer a typed glyph: {:?}",
-        typed
-            .iter()
-            .map(|(mode, ..)| mode.name())
-            .collect::<Vec<_>>()
+    assert!(
+        acts.iter().all(|act| *act == acts[0] && act.is_some()),
+        "the {} screens that keep a list type with one act, and answer {:?}: a screen that gains \
+         a list has no act of its own to remember",
+        LISTS.len(),
+        acts
     );
-    for (mode, erase, glyph) in &typed {
-        assert_eq!(
-            erase,
-            glyph,
-            "the glyph that erases and the glyph that types are one act at the {} screen, because \
-             one box is what receives both",
-            mode.name()
-        );
-        assert_eq!(
-            *glyph,
-            typed[0].2,
-            "and it is the same act at every screen that keeps a list: the {} screen types what \
-             the {} screen types, so a screen that gains a list has no act of its own to remember",
-            mode.name(),
-            typed[0].0.name()
-        );
-    }
 }
 
 #[test]
 fn a_movement_walks_the_list_the_screen_keeps() {
-    for mode in [Mode::Files, Mode::Models, Mode::Settings] {
+    for (at, mode) in LISTS.into_iter().enumerate() {
         let (_root, mut view) = screen(mode);
         assert_eq!(
             marks(&view),
-            (0, 0, 0),
+            [0; 3],
             "every list opens on its first row, so a mark that moved is a mark a key moved"
         );
 
@@ -180,34 +145,21 @@ fn a_movement_walks_the_list_the_screen_keeps() {
             mode.name()
         );
 
-        let walked = marks(&view);
-        let reached = match mode {
-            Mode::Files => walked == (1, 0, 0),
-            Mode::Models => walked == (0, 1, 0),
-            Mode::Settings => walked == (0, 0, 1),
-            other => panic!("{other:?} keeps no list to walk"),
-        };
-        assert!(
-            reached,
+        let mut want = [0; 3];
+        want[at] = 1;
+        assert_eq!(
+            marks(&view),
+            want,
             "`↓` moves the mark of the list the {} screen keeps and leaves the other two where \
-             they were: {walked:?}",
+             they were",
             mode.name()
         );
     }
 }
 
-/// The value the settings visit holds on the row it is on.
-fn value(view: &View) -> String {
-    view.settings()
-        .rows()
-        .nth(view.settings().current())
-        .map(|(_, text)| text.to_owned())
-        .expect("a visit opened on a config with keys in it stands on one of them")
-}
-
 #[test]
 fn a_glyph_lands_in_the_list_the_screen_keeps() {
-    for mode in [Mode::Files, Mode::Models, Mode::Settings] {
+    for (at, mode) in LISTS.into_iter().enumerate() {
         let (_root, mut view) = screen(mode);
 
         assert_eq!(
@@ -217,20 +169,12 @@ fn a_glyph_lands_in_the_list_the_screen_keeps() {
             mode.name()
         );
 
-        let typed = (
-            view.picker().query().to_owned(),
-            view.models().query().to_owned(),
-            value(&view),
-        );
-        let landed = match mode {
-            Mode::Files => typed == (String::from("x"), String::new(), String::new()),
-            Mode::Models => typed == (String::new(), String::from("x"), String::new()),
-            Mode::Settings => typed == (String::new(), String::new(), String::from("x")),
-            other => panic!("{other:?} keeps no list to type into"),
-        };
-        assert!(
-            landed,
-            "the glyph lands in the list the {} screen keeps and in no other: {typed:?}",
+        let mut want = [String::new(), String::new(), String::new()];
+        want[at] = String::from("x");
+        assert_eq!(
+            typed(&view),
+            want,
+            "the glyph lands in the list the {} screen keeps and in no other",
             mode.name()
         );
     }

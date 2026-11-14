@@ -23,7 +23,7 @@ use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, PLACEHOLDER, Prompt
 use crate::face;
 use crate::graphics::CellSize;
 use crate::ink::{Ink, Look};
-use crate::kept::{self, Kept};
+use crate::kept::{Kept, Move};
 use crate::keys::{self, Act, Body, Mode, Stack};
 use crate::ledger::{Boot, Facts, Rail, Share};
 use crate::link::Links;
@@ -510,8 +510,8 @@ impl View {
             Act::Keys => self.keys(key),
             Act::Files => self.at(key),
             Act::Query => self.typed(key),
-            Act::Previous => self.step(kept::Step::Previous),
-            Act::Next => self.step(kept::Step::Next),
+            Act::Previous => self.step(Move::Previous),
+            Act::Next => self.step(Move::Next),
             Act::Pick => self.pick(),
             Act::Choose => self.choose(),
             Act::Flip => self.flip(),
@@ -713,10 +713,11 @@ impl View {
     /// The list the screen on top keeps, and `None` where it keeps none: the draft's rows are its own
     /// card, the keys screen's are keys nothing walks, and the ledger's are laid whole.
     fn kept_list(&mut self) -> Option<&mut dyn Kept> {
-        match self.stack.top().body()?.kept()? {
-            kept::List::Files => Some(&mut self.picker),
-            kept::List::Models => Some(&mut self.models),
-            kept::List::Settings => Some(&mut self.settings),
+        match self.stack.top().body()? {
+            Body::Files => Some(&mut self.picker),
+            Body::Models => Some(&mut self.models),
+            Body::Settings => Some(&mut self.settings),
+            Body::Keys | Body::Ledger => None,
         }
     }
 
@@ -728,8 +729,8 @@ impl View {
         }
     }
 
-    fn step(&mut self, step: kept::Step) -> Outcome {
-        let moved = self.kept_list().is_some_and(|list| list.step(step));
+    fn step(&mut self, way: Move) -> Outcome {
+        let moved = self.kept_list().is_some_and(|list| list.walked(way));
         match moved {
             true => Outcome::Edited,
             false => Outcome::Unchanged,
@@ -925,7 +926,7 @@ impl View {
     /// keeps no list falls to the draft's own card, whose press writes the line the row spells.
     fn chosen(&mut self, at: usize) -> bool {
         if let Some(list) = self.kept_list() {
-            return list.press(at);
+            return list.pressed(at);
         }
         let Some(line) = self.card().and_then(|card| card.spelling_of(at)) else {
             return false;
