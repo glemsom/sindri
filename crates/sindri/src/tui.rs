@@ -1,5 +1,6 @@
 //! The launch: the loop that reads the terminal until it ends, what the terminal does about the
-//! outcome a key hands back, where a prompt starts a run, and the endings a launch has.
+//! outcome a key hands back, where a prompt starts a run and a landed report goes, and the endings
+//! a launch has.
 
 use std::fs::File;
 use std::io::{self, Read};
@@ -19,13 +20,14 @@ use sindri::settings::persist;
 use sindri::size;
 use sindri::view::View;
 use sindri_core::config::{Config, Environment, Process, Touched};
+use sindri_core::provider::Deltas;
 use sindri_core::records::Told;
 use sindri_core::tools::FrontEnd;
 
 use crate::cell::probed_cell;
 use crate::cli::Cli;
 use crate::launch::{Launch, Refusal};
-use crate::reports::{Asking, Running, ask, served, take};
+use crate::reports::{Asking, Report, Running, ask};
 use crate::signal::{Signals, Wake};
 use crate::sizing::probed_sizing;
 use crate::term::{Canvas, Screen, Terminal, canvas, hand_pictures, missing_terminal, paint, tell};
@@ -206,7 +208,7 @@ enum Ending {
     Refused(Refusal),
 }
 
-/// The launch's loop: the state every step of it is handed, held once for the whole launch.
+/// The launch's loop: what one launch holds, and the steps every pass of it takes.
 struct Loop<'a> {
     terminal: &'a Terminal,
     canvas: Canvas<'a>,
@@ -282,27 +284,11 @@ impl Loop<'_> {
 
             if woken {
                 wake.drain();
-                served(&mut self.canvas, &mut self.view, &mut self.asking)?;
-                if take(
-                    &mut self.canvas,
-                    &mut self.view,
-                    &mut self.running,
-                    &mut self.telling,
-                    &mut self.launch,
-                )? && !interrupted
-                {
+                self.served()?;
+                if self.take()? && !interrupted {
                     // A launch the user's own word ended starts nothing: the queue waits for a
                     // reader who still wants it.
-                    resume(
-                        &mut self.canvas,
-                        &mut self.view,
-                        &mut self.running,
-                        &mut self.launch,
-                        self.cli,
-                        &mut self.config,
-                        &wake,
-                        &mut self.telling,
-                    )?;
+                    self.resume()?;
                 }
             }
 
@@ -376,17 +362,7 @@ impl Loop<'_> {
                 Ok(None)
             }
             Outcome::Send(prompt) => {
-                send(
-                    prompt,
-                    &mut self.canvas,
-                    &mut self.view,
-                    &mut self.running,
-                    &mut self.launch,
-                    self.cli,
-                    &self.config,
-                    &self.wake,
-                    &mut self.telling,
-                )?;
+                self.send(prompt)?;
                 Ok(None)
             }
             // The keys a reader touched go through the core's owner-only atomic save, and the
@@ -446,90 +422,144 @@ impl Loop<'_> {
             Outcome::Quit => Ok(Some(Ending::Quit)),
         }
     }
-}
 
-/// Starts the run a sent draft asks for, on a thread of its own. A session the launch already holds
-/// is the one it runs in, and one that cannot run at all is drawn rather than being the end of the
-/// launch: a screen that swallowed the reason would be one silence.
-#[allow(
-    clippy::too_many_arguments,
-    reason = "the one seam a prompt starts a run through, and the telling it is announced to"
-)]
-fn send(
-    prompt: Prompt,
-    canvas: &mut Canvas<'_>,
-    view: &mut View,
-    running: &mut Option<Running>,
-    launch: &mut Option<Launch>,
-    cli: &Cli,
-    config: &Config,
-    wake: &Arc<Wake>,
-    telling: &mut Window<File>,
-) -> io::Result<()> {
-    if running.is_some() {
-        view.enqueue(prompt);
-        paint(canvas, view)?;
-        return Ok(());
-    }
-    let launching = match launch.take() {
-        Some(held) if held.runs_on(config) => held,
-        // The session a launch holds records one wire, model, route and boundary: a config that names
-        // another is the end of that session, and the prompt after it opens the next.
-        ended => {
-            if let Some(mut ended) = ended {
-                ended.close();
-            }
-            match Launch::open(cli, config, FrontEnd::Terminal) {
-                Ok(opened) => opened,
-                Err(refusal) => {
-                    view.run_refused(refusal.message(), prompt);
-                    paint(canvas, view)?;
-                    return Ok(());
+    /// Starts the run a sent draft asks for, on a thread of its own. A session the launch already
+    /// holds is the one it runs in, and one that cannot run at all is drawn rather than being the
+    /// end of the launch: a screen that swallowed the reason would be one silence.
+    fn send(&mut self, prompt: Prompt) -> io::Result<()> {
+        if self.running.is_some() {
+            self.view.enqueue(prompt);
+            paint(&mut self.canvas, &mut self.view)?;
+            return Ok(());
+        }
+        let launching = match self.launch.take() {
+            Some(held) if held.runs_on(&self.config) => held,
+            // The session a launch holds records one wire, model, route and boundary: a config that
+            // names another is the end of that session, and the prompt after it opens the next.
+            ended => {
+                if let Some(mut ended) = ended {
+                    ended.close();
+                }
+                match Launch::open(self.cli, &self.config, FrontEnd::Terminal) {
+                    Ok(opened) => opened,
+                    Err(refusal) => {
+                        self.view.run_refused(refusal.message(), prompt);
+                        paint(&mut self.canvas, &mut self.view)?;
+                        return Ok(());
+                    }
                 }
             }
-        }
-    };
-    view.settle();
-    // The ground a path a call names is drawn against is the one the run it starts will judge by.
-    view.set_ground(launching.ground());
-    view.set_state(State::Running);
-    *running = Some(Running::start(
-        launching,
-        prompt,
-        view.earlier(),
-        Arc::clone(wake),
-    ));
-    // The marker before the run has said anything: the first step of the cycle and no time on the
-    // clock yet, so the frame a prompt is sent from already says a run has begun.
-    view.set_pulse(Some(Pulse::live(0)));
-    paint(canvas, view)?;
-    telling.say(Told::Asking { turn: 1 })?;
-    Ok(())
-}
+        };
+        self.view.settle();
+        // The ground a path a call names is drawn against is the one the run it starts will judge by.
+        let ground = launching.ground();
+        self.view.set_ground(ground);
+        self.view.set_state(State::Running);
+        let earlier = self.view.earlier();
+        self.running = Some(Running::start(
+            launching,
+            prompt,
+            earlier,
+            Arc::clone(&self.wake),
+        ));
+        // The marker before the run has said anything: the first step of the cycle and no time on
+        // the clock yet, so the frame a prompt is sent from already says a run has begun.
+        self.view.set_pulse(Some(Pulse::live(0)));
+        paint(&mut self.canvas, &mut self.view)?;
+        self.telling.say(Told::Asking { turn: 1 })?;
+        Ok(())
+    }
 
-/// Starts the next prompt the queue is holding, once the run before it has stopped: one prompt
-/// per stop, oldest first. A launch that cannot run is the row `send` draws, and the prompt it
-/// takes with it out of the queue is the frame's again.
-#[allow(
-    clippy::too_many_arguments,
-    reason = "the same seam `send` is, plus the prompt a run that stopped left queued"
-)]
-fn resume(
-    canvas: &mut Canvas<'_>,
-    view: &mut View,
-    running: &mut Option<Running>,
-    launch: &mut Option<Launch>,
-    cli: &Cli,
-    config: &mut Config,
-    wake: &Arc<Wake>,
-    telling: &mut Window<File>,
-) -> io::Result<()> {
-    let Some(prompt) = view.dequeue() else {
-        return Ok(());
-    };
-    send(
-        prompt, canvas, view, running, launch, cli, config, wake, telling,
-    )
+    /// Starts the next prompt the queue is holding, once the run before it has stopped: one prompt
+    /// per stop, oldest first. A launch that cannot run is the row `send` draws, and the prompt it
+    /// takes with it out of the queue is the frame's again.
+    fn resume(&mut self) -> io::Result<()> {
+        let Some(prompt) = self.view.dequeue() else {
+            return Ok(());
+        };
+        self.send(prompt)
+    }
+
+    /// Takes everything the run left and puts it on the frame, and says whether the run ended. A run
+    /// that ended leaves the composer idle and its thread is joined rather than left for the process
+    /// to exit under — which is where the launch the run ran on is taken back, for the prompt after
+    /// it.
+    fn take(&mut self) -> io::Result<bool> {
+        let Some(flight) = self.running.as_mut() else {
+            return Ok(false);
+        };
+        let left = flight.left();
+        let mut painted = false;
+        let mut stopped = None;
+        for report in left {
+            match report {
+                Report::Text(fragment) => {
+                    self.view.text(&fragment);
+                    painted = true;
+                }
+                Report::Reasoning(fragment) => {
+                    self.view.reasoning(&fragment);
+                    painted = true;
+                }
+                // A status changes no cell: it is written by the one thing here that owns a tty.
+                Report::Told(told) => self.telling.say(told)?,
+                Report::Facts(facts) => {
+                    self.view.set_facts(facts);
+                    painted = true;
+                }
+                Report::Record(document) => {
+                    self.view.set_record(&document);
+                    painted = true;
+                }
+                // No cell: the transcript already drew the exchange it keeps.
+                Report::Kept(kept) => self.view.kept(&kept),
+                Report::Stopped {
+                    stop,
+                    elapsed_ms,
+                    turns,
+                } => stopped = Some((stop, elapsed_ms, turns)),
+            }
+        }
+        if let Some((ref stop, elapsed_ms, turns)) = stopped {
+            // Said at once, whatever the pace says about a turn: a stop reason is a change of state.
+            self.telling.say(Told::Stopped {
+                turn: turns,
+                stop: stop.clone(),
+            })?;
+            // The last frame the run itself paints: once it is gone the wait goes back to forever,
+            // and the settled marker stays on the frame for every later paint to draw.
+            self.view.set_pulse(Some(Pulse::settled(stop, elapsed_ms)));
+            self.view.stopped(stop);
+            self.view.set_state(State::Idle);
+            painted = true;
+            if let Some(flight) = self.running.take()
+                && let Some(taken) = flight.joined()
+            {
+                // A run that panicked took its launch with it, so the next prompt opens a session of
+                // its own rather than running on one nothing knows the state of.
+                self.launch = Some(taken);
+            }
+        }
+        if painted {
+            paint(&mut self.canvas, &mut self.view)?;
+        }
+        Ok(stopped.is_some())
+    }
+
+    /// Puts the names a wire answered with on the frame, and drops the thread that asked them: the
+    /// `/model` screen is painted once with the listing it was waiting for.
+    fn served(&mut self) -> io::Result<()> {
+        let landed = self.asking.as_mut().and_then(Asking::landed);
+        let Some(listing) = landed else {
+            return Ok(());
+        };
+        self.view.set_served(listing);
+        paint(&mut self.canvas, &mut self.view)?;
+        if let Some(flight) = self.asking.take() {
+            flight.joined();
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

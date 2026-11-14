@@ -1,17 +1,13 @@
-//! The threads a run in flight and a wire listing run on, the reports they land, and the pass
-//! that takes them: a flight pushes a fragment and raises the pipe a signal uses, and the pass
-//! puts it on the frame when the loop wakes. Nothing here reads a key.
+//! The threads a run in flight and a wire listing run on, and the reports they land: a flight
+//! pushes a fragment and raises the pipe a signal uses, and the loop puts it on the frame when it
+//! wakes. Nothing here reads a key.
 
-use std::fs::File;
-use std::io;
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use sindri::composer::{Prompt, State};
+use sindri::composer::Prompt;
 use sindri::ledger::Facts;
-use sindri::pulse::Pulse;
-use sindri::view::View;
 use sindri_core::config::Config;
 use sindri_core::provider::Deltas;
 use sindri_core::provider::served::Listing;
@@ -21,8 +17,7 @@ use sindri_core::run::{Cancel, Exchange, Stop};
 
 use crate::launch::{Launch, Turns};
 use crate::signal::Wake;
-use crate::term::{Canvas, lock, paint};
-use crate::window::Window;
+use crate::term::lock;
 
 pub(crate) struct Running {
     cancel: Cancel,
@@ -94,13 +89,23 @@ impl Running {
     pub(crate) fn elapsed_ms(&self) -> u64 {
         millis(self.started.elapsed())
     }
+
+    /// Everything the run left since the last pass.
+    pub(crate) fn left(&mut self) -> Vec<Report> {
+        std::mem::take(&mut *lock(&self.pending))
+    }
+
+    /// The launch the run handed back, or nothing if the run's thread panicked.
+    pub(crate) fn joined(self) -> Option<Launch> {
+        self.thread.join().ok()
+    }
 }
 
 fn millis(span: Duration) -> u64 {
     u64::try_from(span.as_millis()).unwrap_or(u64::MAX)
 }
 
-enum Report {
+pub(crate) enum Report {
     Text(String),
     Reasoning(String),
     Told(Told),
@@ -162,77 +167,6 @@ impl Turns for Reports {
     }
 }
 
-/// Takes everything the run left and puts it on the frame, and says whether the run ended. A run
-/// that ended leaves the composer idle and its thread is joined rather than left for the process to
-/// exit under — which is where the launch the run ran on is taken back, for the prompt after it.
-pub(crate) fn take(
-    canvas: &mut Canvas<'_>,
-    view: &mut View,
-    running: &mut Option<Running>,
-    telling: &mut Window<File>,
-    launch: &mut Option<Launch>,
-) -> io::Result<bool> {
-    let Some(flight) = running.as_ref() else {
-        return Ok(false);
-    };
-    let left = std::mem::take(&mut *lock(&flight.pending));
-    let mut painted = false;
-    let mut stopped = None;
-    for report in left {
-        match report {
-            Report::Text(fragment) => {
-                view.text(&fragment);
-                painted = true;
-            }
-            Report::Reasoning(fragment) => {
-                view.reasoning(&fragment);
-                painted = true;
-            }
-            // A status changes no cell: it is written by the one thing here that owns a tty.
-            Report::Told(told) => telling.say(told)?,
-            Report::Facts(facts) => {
-                view.set_facts(facts);
-                painted = true;
-            }
-            Report::Record(document) => {
-                view.set_record(&document);
-                painted = true;
-            }
-            // No cell: the transcript already drew the exchange it keeps.
-            Report::Kept(kept) => view.kept(&kept),
-            Report::Stopped {
-                stop,
-                elapsed_ms,
-                turns,
-            } => stopped = Some((stop, elapsed_ms, turns)),
-        }
-    }
-    if let Some((ref stop, elapsed_ms, turns)) = stopped {
-        // Said at once, whatever the pace says about a turn: a stop reason is a change of state.
-        telling.say(Told::Stopped {
-            turn: turns,
-            stop: stop.clone(),
-        })?;
-        // The last frame the run itself paints: once it is gone the wait goes back to forever,
-        // and the settled marker stays on the frame for every later paint to draw.
-        view.set_pulse(Some(Pulse::settled(stop, elapsed_ms)));
-        view.stopped(stop);
-        view.set_state(State::Idle);
-        painted = true;
-        if let Some(flight) = running.take()
-            && let Ok(taken) = flight.thread.join()
-        {
-            // A run that panicked took its launch with it, so the next prompt opens a session of its
-            // own rather than running on one nothing knows the state of.
-            *launch = Some(taken);
-        }
-    }
-    if painted {
-        paint(canvas, view)?;
-    }
-    Ok(stopped.is_some())
-}
-
 /// A wire being asked what it serves, on a thread of its own: `/model` opens its screen at once
 /// and the names land when they land, because the loop owes a key its answer now.
 pub(crate) struct Asking {
@@ -260,24 +194,13 @@ pub(crate) fn ask(config: &Config, wake: &Arc<Wake>) -> Option<Asking> {
     Some(Asking { landing, thread })
 }
 
-/// Puts the names a wire answered with on the frame, and drops the thread that asked them: the
-/// `/model` screen is painted once with the listing it was waiting for.
-pub(crate) fn served(
-    canvas: &mut Canvas<'_>,
-    view: &mut View,
-    asking: &mut Option<Asking>,
-) -> io::Result<()> {
-    let landed = match asking.as_ref() {
-        Some(flight) => lock(&flight.landing).take(),
-        None => None,
-    };
-    let Some(listing) = landed else {
-        return Ok(());
-    };
-    view.set_served(listing);
-    paint(canvas, view)?;
-    if let Some(flight) = asking.take() {
-        let _ = flight.thread.join();
+impl Asking {
+    /// The listing the wire answered with, once.
+    pub(crate) fn landed(&mut self) -> Option<Listing> {
+        lock(&self.landing).take()
     }
-    Ok(())
+
+    pub(crate) fn joined(self) {
+        let _ = self.thread.join();
+    }
 }

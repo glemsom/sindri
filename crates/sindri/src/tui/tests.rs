@@ -458,44 +458,81 @@ fn a_run_that_cannot_start_leaves_its_row_and_the_draft_and_never_ends_the_launc
     );
 }
 
-/// Starts one prompt out of the queue through the launch, on a config no run can start from.
-fn refused_from_the_queue(view: &mut View, terminal: &Terminal, telling: &mut Window<File>) {
-    let mut canvas = canvas_at(terminal, painted_at()).expect("a canvas over it");
+#[test]
+fn a_pass_with_no_run_in_flight_lands_nothing_and_ends_nothing() {
+    let (_pty, terminal, telling) = staged();
+    let canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
     let cli = Cli::parse_from(["sindri"]);
-    let mut config = Config::default();
-    let wake = Arc::new(Wake::open().expect("a wake"));
-    let mut running = None;
-    let mut launch = None;
-
-    resume(
-        &mut canvas,
-        view,
-        &mut running,
-        &mut launch,
-        &cli,
-        &mut config,
-        &wake,
+    let environment = std::collections::BTreeMap::new();
+    let environment: &dyn Environment = &environment;
+    let mut live = Loop {
+        terminal: &terminal,
+        canvas,
+        view: View::boot(),
+        cli: &cli,
+        config: Config::default(),
+        environment,
         telling,
-    )
-    .expect("the refusal is drawn");
+        wake: Arc::new(Wake::open().expect("a wake")),
+        launch: None,
+        running: None,
+        asking: None,
+    };
+
+    let ended = live
+        .take()
+        .expect("a pass with nothing to land is no failure");
+
+    assert!(
+        !ended,
+        "a pass with no run in flight ends no run and resumes"
+    );
+    assert!(
+        live.launch.is_none(),
+        "and the launch the loop holds is the one it held, with none of its own opened"
+    );
+}
+
+/// Starts one prompt out of the queue through the live loop, on a config no run can start from.
+fn refused_from_the_queue(live: &mut Loop<'_>) {
+    live.resume().expect("the refusal is drawn");
 }
 
 #[test]
 fn a_refused_prompt_out_of_the_queue_is_the_draft_again_and_the_launch_stands() {
-    let (mut pty, terminal, mut telling) = staged();
+    let (mut pty, terminal, telling) = staged();
+    let canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
     let mut view = View::boot();
     view.enqueue(prompt_of("run the test that failed and read it"));
     view.enqueue(prompt_of("then the fmt check"));
+    let cli = Cli::parse_from(["sindri"]);
+    // No provider and no model: `Launch::open` refuses before it touches a sandbox, a session or a
+    // wire.
+    let environment = std::collections::BTreeMap::new();
+    let environment: &dyn Environment = &environment;
+    let mut live = Loop {
+        terminal: &terminal,
+        canvas,
+        view,
+        cli: &cli,
+        config: Config::default(),
+        environment,
+        telling,
+        wake: Arc::new(Wake::open().expect("a wake")),
+        launch: None,
+        running: None,
+        asking: None,
+    };
 
-    refused_from_the_queue(&mut view, &terminal, &mut telling);
+    refused_from_the_queue(&mut live);
 
     assert_eq!(
-        view.queue().len(),
+        live.view.queue().len(),
         1,
         "the prompt behind the one that could not run waits there still"
     );
     assert_eq!(
-        view.composer().text(),
+        live.view.composer().text(),
         "run the test that failed and read it",
         "and the words it was asked with are the reader's draft again, to send or to change"
     );
@@ -508,31 +545,50 @@ fn a_refused_prompt_out_of_the_queue_is_the_draft_again_and_the_launch_stands() 
 
 #[test]
 fn a_refused_prompt_waits_in_the_queue_again_while_the_reader_has_a_draft_of_their_own() {
-    let (mut pty, terminal, mut telling) = staged();
+    let (mut pty, terminal, telling) = staged();
+    let canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
     let mut view = View::boot();
     view.enqueue(prompt_of("run the test that failed and read it"));
     view.enqueue(prompt_of("then the fmt check"));
     view.paste("and then the release check");
+    let cli = Cli::parse_from(["sindri"]);
+    // No provider and no model: `Launch::open` refuses before it touches a sandbox, a session or a
+    // wire.
+    let environment = std::collections::BTreeMap::new();
+    let environment: &dyn Environment = &environment;
+    let mut live = Loop {
+        terminal: &terminal,
+        canvas,
+        view,
+        cli: &cli,
+        config: Config::default(),
+        environment,
+        telling,
+        wake: Arc::new(Wake::open().expect("a wake")),
+        launch: None,
+        running: None,
+        asking: None,
+    };
 
-    refused_from_the_queue(&mut view, &terminal, &mut telling);
+    refused_from_the_queue(&mut live);
 
     assert_eq!(
-        view.composer().text(),
+        live.view.composer().text(),
         "and then the release check",
         "a draft the reader has typed since is theirs, and no refusal takes it"
     );
     assert_eq!(
-        view.queue().len(),
+        live.view.queue().len(),
         2,
         "so the prompt that could not run waits in the queue again rather than nowhere"
     );
     assert_eq!(
-        view.dequeue().as_ref().map(Prompt::text),
+        live.view.dequeue().as_ref().map(Prompt::text),
         Some("then the fmt check"),
         "behind the prompt it was queued behind"
     );
     assert_eq!(
-        view.dequeue().as_ref().map(Prompt::text),
+        live.view.dequeue().as_ref().map(Prompt::text),
         Some("run the test that failed and read it"),
         "and ahead of nothing it has lost"
     );
