@@ -4,8 +4,8 @@ expression: drawn
 ---
 transcript-scrolled at 120x40
 00 |  what it shows and no more.                                                wire      anthropic                         | plain:76 dim:10 plain:34
-01 |turn 4 ─────────────────────────────────────────────────────────────────────model     claude-sonnet-4-5-20250929        | dim:86 plain:34
-02 |✓ exit 0  bash  96 bytes · 118 ms                                           think     high                              | ok:1 dim:32 plain:43 dim:10 plain:34
+01 |─ turn 4 ───────────────────────────────────────────────────────────────────model     claude-sonnet-4-5-20250929        | dim:86 plain:34
+02 |✓ exit 0  bash  96 bytes · 118 ms                                           think     high                              | ok:1 plain:1 dim:31 plain:43 dim:10 plain:34
 03 |  check: fmt ... ok                                                                                                     | plain:120
 04 |  check: clippy ... ok                                                      turns                               6 /  250| plain:76 dim:10 plain:34
 05 |  check: test ... ok                                                        ctx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
@@ -15,8 +15,8 @@ transcript-scrolled at 120x40
 09 |  between the tail and the window and lays out every one of them on the way.branch    spec/1-capability                 | plain:76 dim:10 plain:34
 10 |  Each is laid out once and kept, so the whole history scrolled through                                                 | plain:120
 11 |  costs one layout per entry and scrolling it again costs none.             skills                                     2| plain:76 dim:10 plain:34
-12 |turn 5 ─────────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
-13 |✓ exit 0  bash  128 bytes · 9 ms                                            sandbox   bwrap                             | ok:1 dim:31 plain:44 dim:10 plain:34
+12 |─ turn 5 ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
+13 |✓ exit 0  bash  128 bytes · 9 ms                                            sandbox   bwrap                             | ok:1 plain:1 dim:30 plain:44 dim:10 plain:34
 14 |  crates/sindri/src/rows.rs | 412 +++++++++++++                                                                         | plain:120
 15 |  crates/sindri/tests/rows.rs | 198 +++++++++                               session   9f2c7a41                          | plain:76 dim:10 plain:34
 16 |  The transcript's unit is the entry. An entry never carries a formatted    temp      …/sindri/sessions/9f2c7a41/tmp    | plain:76 dim:10 plain:34
@@ -28,8 +28,8 @@ transcript-scrolled at 120x40
 22 |  heading   │ in the answer's own gutter                                                                                | plain:11 dim:3 plain:106
 23 |  code      │ behind a bar, highlighted                                                                                 | plain:11 dim:3 plain:106
 24 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
-25 |turn 6 ─────────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
-26 |✓ exit 0  bash  104 bytes · 31 ms                                                                                       | ok:1 dim:32 plain:87
+25 |─ turn 6 ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
+26 |✓ exit 0  bash  104 bytes · 31 ms                                                                                       | ok:1 plain:1 dim:31 plain:87
 27 |  check: frame calls ... ok                                                                                             | plain:120
 28 |  check: frame transcript ... ok                                                                                        | plain:120
 29 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101
@@ -38,7 +38,7 @@ transcript-scrolled at 120x40
 32 |  A row says the exit code and not the command, because the verdict is a                                                | plain:120
 33 |  fact the record holds and the command is a fact the row above it holds.                                               | plain:120
 34 |                                                                                                                        | plain:120
-35 |  ▏ rust                                                                                                                | plain:2 dim:6 plain:112
+35 |▏ rust                                                                                                                  | dim:6 plain:114
 36 |4 rows back · End follows the run                                                                                       | muted:11 dim:3 plain+bold:3 muted:16 plain:87
 37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:120
 38 |› what should the run do?                                                                                               | dim:25 plain:95

@@ -2,7 +2,7 @@ use sindri_core::provider::Deltas;
 
 use crate::picture::Surface;
 use crate::pulse::Head;
-use crate::rows::{Row, answer_on, thought};
+use crate::rows::{Row, answer_on, head_row, thought};
 
 #[derive(Clone, Debug, Default)]
 pub struct Stream {
@@ -62,9 +62,7 @@ impl Stream {
             });
         }
         if let (None, Some(head)) = (newest, head) {
-            rows.push(Row::of(
-                head.spans().iter().map(|(text, ink)| (text.clone(), *ink)),
-            ));
+            rows.push(head_row(head, cols));
         }
         rows
     }

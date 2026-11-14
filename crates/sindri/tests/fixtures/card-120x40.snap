@@ -12,7 +12,7 @@ card at 120x40
 06 |  between the tail and t│ @                    the files of the workspace, while it starts a   │                     88%| dim:25 plain:1 plain+bold:21 muted:45 plain:3 dim:25
 07 |  Each is laid out once │                      word                                            │                        | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
 08 |  costs one layout per e│ Enter                send the prompt                                 │ri/.worktrees/46-rail   | dim:25 plain:1 plain+bold:21 muted:15 plain:33 dim:25
-09 |turn 5 ─────────────────│ Shift+Enter, Ctrl-J  a line break in the draft                       │ability                 | dim:25 plain:1 plain+bold:21 muted:25 plain:23 dim:25
+09 |─ turn 5 ───────────────│ Shift+Enter, Ctrl-J  a line break in the draft                       │ability                 | dim:25 plain:1 plain+bold:21 muted:25 plain:23 dim:25
 10 |✓ exit 0  bash  128 byte│ ↑                    the newest queued prompt, or the line above     │                        | dim:25 plain:1 plain+bold:21 muted:43 plain:5 dim:25
 11 |  crates/sindri/src/rows│ Ctrl-X               drop the newest queued prompt                   │                       2| dim:25 plain:1 plain+bold:21 muted:29 plain:19 dim:25
 12 |  crates/sindri/tests/ro│ ↓                    the line below                                  │                        | dim:25 plain:1 plain+bold:21 muted:14 plain:34 dim:25
@@ -25,7 +25,7 @@ card at 120x40
 19 |  heading   │ in the ans│ ←                    a glyph left                                    │                        | dim:25 plain:1 plain+bold:21 muted:12 plain:36 dim:25
 20 |  code      │ behind a b│ →                    a glyph right                                   │                        | dim:25 plain:1 plain+bold:21 muted:13 plain:35 dim:25
 21 |  table     │ columns jo│ Home                 the start of the line                           │                        | dim:25 plain:1 plain+bold:21 muted:21 plain:27 dim:25
-22 |turn 6 ─────────────────│ End                  the tail of the run, or the end of the line     │                        | dim:25 plain:1 plain+bold:21 muted:43 plain:5 dim:25
+22 |─ turn 6 ───────────────│ End                  the tail of the run, or the end of the line     │                        | dim:25 plain:1 plain+bold:21 muted:43 plain:5 dim:25
 23 |✓ exit 0  bash  104 byte│ Ctrl-Y               copy the mark, or the last answer               │                        | dim:25 plain:1 plain+bold:21 muted:33 plain:15 dim:25
 24 |  check: frame calls ...│ Backspace            erase the glyph before the caret                │                        | dim:25 plain:1 plain+bold:21 muted:32 plain:16 dim:25
 25 |  check: frame transcrip│ Ctrl-C               cancel the run, or clear the draft              │                        | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
@@ -35,11 +35,11 @@ card at 120x40
 29 |  A row says the exit co│                                                                      │                        | dim:25 plain:70 dim:25
 30 |  fact the record holds │                                                                      │                        | dim:25 plain:70 dim:25
 31 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-32 |  ▏ rust                │                                                                      │                        | dim:25 plain:70 dim:25
-33 |  ▏ fn main() {         │                                                                      │                        | dim:25 plain:70 dim:25
-34 |  ▏     let row = Row::o│                                                                      │                        | dim:25 plain:70 dim:25
-35 |  ▏     row.paint(area, │                                                                      │                        | dim:25 plain:70 dim:25
-36 |  ▏ }                   │                                                                      │                        | dim:25 plain:70 dim:25
+32 |▏ rust                  │                                                                      │                        | dim:25 plain:70 dim:25
+33 |▏ fn main() {           │                                                                      │                        | dim:25 plain:70 dim:25
+34 |▏     let row = Row::of(│                                                                      │                        | dim:25 plain:70 dim:25
+35 |▏     row.paint(area, bu│                                                                      │                        | dim:25 plain:70 dim:25
+36 |▏ }                     │                                                                      │                        | dim:25 plain:70 dim:25
 37 |────────────────────────│                                                                      │────────────────────────| dim:25 plain:70 dim:25
 38 |› what should the run do│                                                                      │                        | dim:25 plain:70 dim:25
 39 |Enter send · ? keys · Ct╰──────────────────────────────────────────────────────────────── Esc ─╯low the run             | dim:90 plain+bold:3 dim:27

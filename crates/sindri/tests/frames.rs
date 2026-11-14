@@ -29,6 +29,16 @@ fn transcript_120x40_is_a_run_laid_out_at_the_tail() {
 }
 
 #[test]
+fn gutter_120x40_is_one_of_every_kind_of_entry_under_one_column() {
+    fixture::assert_frame("gutter", 120, 40);
+}
+
+#[test]
+fn gutter_80x24_is_that_transcript_on_the_narrower_band() {
+    fixture::assert_frame("gutter", 80, 24);
+}
+
+#[test]
 fn transcript_scrolled_120x40_cuts_the_top_entry_mid_row() {
     fixture::assert_frame("transcript-scrolled", 120, 40);
 }

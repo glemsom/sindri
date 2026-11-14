@@ -39,8 +39,23 @@ pub fn rows_under(text: &str, cols: u16, reserve: u16) -> Vec<Row> {
 /// The same markdown on a `surface`: a picture is a block, so how many rows one takes is
 /// the layout's business and only the surface can answer it.
 pub fn rows_on(text: &str, cols: u16, reserve: u16, surface: &Surface) -> Vec<Row> {
+    rows_in(text, cols, reserve, "", surface)
+}
+
+/// The same markdown set in `gutter`: the rows come back opening with it, so an answer's words
+/// begin where its entry's do and a block's bar stands in the gutter rather than past it.
+pub(crate) fn rows_in(
+    text: &str,
+    cols: u16,
+    reserve: u16,
+    gutter: &str,
+    surface: &Surface,
+) -> Vec<Row> {
     let mut room = Room::new(cols.max(1), surface);
     room.reserve = usize::from(reserve);
+    if !gutter.is_empty() {
+        room.base = vec![(String::from(gutter), Look::plain(Ink::Plain))];
+    }
     // Each event is handed the span it came from, which is how a mermaid fence knows
     // whether its own closing line has arrived or the wire is still writing it.
     for (event, span) in Parser::new_ext(text, OPTIONS).into_offset_iter() {
@@ -176,6 +191,8 @@ struct Room {
     /// The faces the marks open inside the block in hand asked for, outermost first.
     faces: Vec<Face>,
     lead: Vec<(String, Look)>,
+    /// The gutter every row of the entry opens with, which a block's own bar stands in the place of.
+    base: Vec<(String, Look)>,
     /// The markers of the list items open, outermost first: every row is indented by the ones
     /// outside it and by the width of the innermost, so each depth costs the columns a `•` takes.
     marks: Vec<String>,
@@ -220,6 +237,7 @@ impl Room {
             block: Look::plain(Ink::Plain),
             faces: Vec::new(),
             lead: Vec::new(),
+            base: Vec::new(),
             marks: Vec::new(),
             lists: Vec::new(),
             first: true,
@@ -678,6 +696,10 @@ impl Room {
     fn verbatim(&mut self, text: &str, look: Look) {
         let mut rest = text;
         while !rest.is_empty() {
+            // A row exactly full has no column left, and the room worked out below would give it one.
+            if self.used >= self.room() {
+                self.flush();
+            }
             let room = self.room().saturating_sub(self.used).max(1);
             let (head, tail) = split_at(rest, room);
             self.extend(&head, look);
@@ -846,11 +868,29 @@ impl Room {
             .sum()
     }
 
+    /// The bars every row of the block in hand stands behind: the bar a block opened at, or the
+    /// entry's own gutter where it opened at none, so a code block's bar stands in that gutter and
+    /// its words begin where the answer's do. A band too narrow for the bars and a glyph keeps none.
+    fn bars(&self) -> &[(String, Look)] {
+        let bars = match self.lead.is_empty() {
+            true => &self.base,
+            false => &self.lead,
+        };
+        let width = bars
+            .iter()
+            .map(|(text, _)| pen::cells(text))
+            .fold(0, u16::saturating_add);
+        match self.wide > width {
+            true => bars,
+            false => &[],
+        }
+    }
+
     /// The columns every row of the block in hand gives up before its words: the bars it is
     /// quoted behind, and the marks it is indented by — the innermost of them said on an item's
     /// first row alone.
     fn gutter(&self) -> Vec<(String, Look)> {
-        let mut spans = self.lead.clone();
+        let mut spans = self.bars().to_vec();
         for (at, mark) in self.marks.iter().enumerate() {
             let innermost = at + 1 == self.marks.len();
             let text = match innermost && self.first {
@@ -865,7 +905,7 @@ impl Room {
     /// `row` as it is drawn in the block in hand: behind the bars the block is quoted behind and
     /// under the marks it is indented by, so a table in a quote keeps the quote's gutter.
     fn guttered(&mut self, row: Row) {
-        if self.lead.is_empty() && self.marks.is_empty() {
+        if self.bars().is_empty() && self.marks.is_empty() {
             self.push(row);
             return;
         }
@@ -896,7 +936,7 @@ impl Room {
     /// and the columns of the first row a marker stands beside.
     fn room_cells(&self) -> usize {
         let bars: usize = self
-            .lead
+            .bars()
             .iter()
             .map(|(text, _)| usize::from(pen::cells(text)))
             .sum();

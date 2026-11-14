@@ -9,9 +9,9 @@ markdown-emphasis at 80x24
 03 |  A heading keeps its level: bold, italic and both inside it                    | plain:2 plain+bold:33 plain+bold+italic:6 plain+bold:5 plain+bold+italic:4 plain+bold:10 plain:20
 04 |  ──────────────────────────────────────────────────────────                    | plain:2 dim:58 plain:20
 05 |                                                                                | plain:80
-06 |  ▏ a quote keeps its ink and its gutter, even here                             | plain:2 dim:2 plain:38 plain+italic:4 plain:1 plain+italic:4 plain:29
+06 |▏ a quote keeps its ink and its gutter, even here                               | dim:2 plain:38 plain+italic:4 plain:1 plain+italic:4 plain:31
 07 |                                                                                | plain:80
-08 |  ▏ **bold** and *italic* stay glyphs in a fence                                | plain:2 dim:2 plain:76
+08 |▏ **bold** and *italic* stay glyphs in a fence                                  | dim:2 plain:78
 09 |                                                                                | plain:80
 10 |                                                                                | plain:80
 11 |                                                                                | plain:80

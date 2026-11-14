@@ -12,8 +12,8 @@ transcript at 120x40
 06 |  between the tail and the window and lays out every one of them on the way.cache                                    88%| plain:76 dim:10 plain:34
 07 |  Each is laid out once and kept, so the whole history scrolled through                                                 | plain:120
 08 |  costs one layout per entry and scrolling it again costs none.             workspace …/git/sindri/.worktrees/46-rail   | plain:76 dim:10 plain:34
-09 |turn 5 ─────────────────────────────────────────────────────────────────────branch    spec/1-capability                 | dim:86 plain:34
-10 |✓ exit 0  bash  128 bytes · 9 ms                                                                                        | ok:1 dim:31 plain:88
+09 |─ turn 5 ───────────────────────────────────────────────────────────────────branch    spec/1-capability                 | dim:86 plain:34
+10 |✓ exit 0  bash  128 bytes · 9 ms                                                                                        | ok:1 plain:1 dim:30 plain:88
 11 |  crates/sindri/src/rows.rs | 412 +++++++++++++                             skills                                     2| plain:76 dim:10 plain:34
 12 |  crates/sindri/tests/rows.rs | 198 +++++++++                                                                           | plain:120
 13 |  The transcript's unit is the entry. An entry never carries a formatted    sandbox   bwrap                             | plain:76 dim:10 plain:34
@@ -25,8 +25,8 @@ transcript at 120x40
 19 |  heading   │ in the answer's own gutter                                                                                | plain:11 dim:3 plain:106
 20 |  code      │ behind a bar, highlighted                                                                                 | plain:11 dim:3 plain:106
 21 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
-22 |turn 6 ─────────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
-23 |✓ exit 0  bash  104 bytes · 31 ms                                                                                       | ok:1 dim:32 plain:87
+22 |─ turn 6 ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
+23 |✓ exit 0  bash  104 bytes · 31 ms                                                                                       | ok:1 plain:1 dim:31 plain:87
 24 |  check: frame calls ... ok                                                                                             | plain:120
 25 |  check: frame transcript ... ok                                                                                        | plain:120
 26 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101
@@ -35,11 +35,11 @@ transcript at 120x40
 29 |  A row says the exit code and not the command, because the verdict is a                                                | plain:120
 30 |  fact the record holds and the command is a fact the row above it holds.                                               | plain:120
 31 |                                                                                                                        | plain:120
-32 |  ▏ rust                                                                                                                | plain:2 dim:6 plain:112
-33 |  ▏ fn main() {                                                                                                         | plain:2 dim:2 accent:2 plain:114
-34 |  ▏     let row = Row::of(spans);                                                                                       | plain:2 dim:2 plain:4 accent:3 plain:109
-35 |  ▏     row.paint(area, buffer);                                                                                        | plain:2 dim:2 plain:116
-36 |  ▏ }                                                                                                                   | plain:2 dim:2 plain:116
+32 |▏ rust                                                                                                                  | dim:6 plain:114
+33 |▏ fn main() {                                                                                                           | dim:2 accent:2 plain:116
+34 |▏     let row = Row::of(spans);                                                                                         | dim:2 plain:4 accent:3 plain:111
+35 |▏     row.paint(area, buffer);                                                                                          | dim:2 plain:118
+36 |▏ }                                                                                                                     | dim:2 plain:118
 37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:120
 38 |› what should the run do?                                                                                               | dim:25 plain:95
 39 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · Ctrl-J newline · @ files · ↑ queue · End follow the run             | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:7 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:3 muted:15 plain:13
