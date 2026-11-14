@@ -484,7 +484,7 @@ impl Loop<'_> {
     /// that ended leaves the composer idle and its thread joined, which is where the launch it ran
     /// on is taken back for the prompt after it.
     fn take(&mut self) -> io::Result<bool> {
-        let Some(flight) = self.running.as_ref() else {
+        let Some(flight) = self.running.as_mut() else {
             return Ok(false);
         };
         let landed = flight.landed();
@@ -548,7 +548,7 @@ impl Loop<'_> {
     /// Puts the names a wire answered with on the frame, and drops the thread that asked them: the
     /// `/model` screen is painted once with the listing it was waiting for.
     fn served(&mut self) -> io::Result<()> {
-        let landed = self.asking.as_ref().and_then(Asking::landed);
+        let landed = self.asking.as_mut().and_then(Asking::landed);
         let Some(listing) = landed else {
             return Ok(());
         };

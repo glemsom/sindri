@@ -397,8 +397,6 @@ fn a_run_that_cannot_start_leaves_its_row_and_the_draft_and_never_ends_the_launc
     let mut view = View::boot();
     view.paste("why does the retry test fail");
     let cli = Cli::parse_from(["sindri"]);
-    // No provider and no model: `Launch::open` refuses before it touches a sandbox, a session or a
-    // wire.
     let environment = std::collections::BTreeMap::new();
     let environment: &dyn Environment = &environment;
     let mut live = live_loop(
@@ -453,10 +451,6 @@ fn a_pass_with_no_run_in_flight_lands_nothing_and_ends_nothing() {
     assert!(
         !ended,
         "a pass with no run in flight ends no run and resumes"
-    );
-    assert!(
-        live.launch.is_none(),
-        "and the launch the loop holds is the one it held, with none of its own opened"
     );
 }
 

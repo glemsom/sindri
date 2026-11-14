@@ -92,7 +92,7 @@ impl Running {
 
     /// Everything the run landed since the last pass. The queue is drained, so each report is
     /// handed out once.
-    pub(crate) fn landed(&self) -> Vec<Report> {
+    pub(crate) fn landed(&mut self) -> Vec<Report> {
         std::mem::take(&mut *lock(&self.pending))
     }
 
@@ -197,10 +197,12 @@ pub(crate) fn ask(config: &Config, wake: &Arc<Wake>) -> Option<Asking> {
 
 impl Asking {
     /// The listing the wire answered with, once.
-    pub(crate) fn landed(&self) -> Option<Listing> {
+    pub(crate) fn landed(&mut self) -> Option<Listing> {
         lock(&self.landing).take()
     }
 
+    /// Joins the thread that asked, and keeps no word of it: the listing was taken before, so a
+    /// thread that panicked has nothing left to say.
     pub(crate) fn joined(self) {
         let _ = self.thread.join();
     }
