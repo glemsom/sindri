@@ -2,7 +2,6 @@ pub mod card; // a screen's card: its border, its name, the key that leaves, ove
 pub mod commands; // the `/` commands: a draft line the frame answers itself
 pub mod composer; // the draft a prompt is typed into, as a value rather than a widget
 pub mod decode; // the bytes a key arrives as, answered as the key or the paste
-pub mod door; // the frame a launch opens on: a wordmark, what the product is, and three commands
 pub mod face; // the picture the binary carries: Sindri's face, measured and never said in words
 pub mod graphics; // an SVG becomes the pixels a picture is drawn in
 pub mod ink; // the look a cell is drawn in, asked for by name: its ink, its faces, its underline
@@ -29,6 +28,7 @@ pub mod rows; // the transcript's rows: one entry of the core's records laid out
 pub mod settings; // the config file's keys as one list, the value each of them holds
 pub mod size; // the runs of a row a terminal draws at twice the cell, measured by the cells they leave
 pub mod spell; // a call's arguments as the fact the tool names: the words a reader would type
+pub mod splash; // the frame a launch opens on: a wordmark, what the product is, and three commands
 pub mod stats; // the ledger's second adapter: the band a screen is handed, the rows the ledger lays
 pub mod stream; // the turn in flight: the answer and the thought of the run's newest turn, fed a
 pub mod view; // what one frame holds and where each part of it goes

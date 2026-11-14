@@ -425,8 +425,8 @@ mod tests {
         assert_eq!(
             (boot.wire, boot.model, boot.branch),
             (None, None, None),
-            "the door names nothing it cannot know, and a directory that is no checkout has no \
-             branch to name"
+            "the splash screen names nothing it cannot know, and a directory that is no checkout \
+             has no branch to name"
         );
     }
 }

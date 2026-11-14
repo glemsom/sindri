@@ -136,7 +136,7 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     // Read the way `launch` reads it, so the name `/skill:name` accepts and a name a run could
     // call come from one catalog.
     view.set_home(crate::launch::home());
-    view.door(boot);
+    view.splash(boot);
     // One telling for the whole launch, so the pace a status is told at is the launch's: the
     // screen it writes on is a second handle on the descriptor a frame is drawn on.
     let telling = match terminal.screen.try_clone() {

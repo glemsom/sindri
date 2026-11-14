@@ -195,7 +195,7 @@ holds is a draft again, and the one command that takes a word after it is writte
 the reader to name.
 _Avoid_: Palette, slash menu, command list, autocomplete
 
-**Front door**:
+**Splash screen**:
 The frame a launch opens on: the wordmark, one line saying what the product is, and three commands
 with the line that explains each, set as one block and centred in the band an answer is drawn in,
 with Sindri's face over it, beside the **rail** of the facts the launch already holds — the wire, the
@@ -203,7 +203,7 @@ model, the workspace, its branch and the enforcement, and an em dash for the ses
 run has yet to fill. In a frame too narrow for a rail's column it is drawn with no rail, and in one
 too short or too narrow for the face it is drawn without it and reserves no row. One paint pass, and
 never again.
-_Avoid_: Splash screen, welcome screen, landing page, boot animation
+_Avoid_: Front door, welcome screen, landing page, boot animation
 
 **Key protocol**:
 What a launch asks of its terminal when it takes the screen, so a key that names no glyph arrives as

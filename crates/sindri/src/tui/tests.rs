@@ -255,7 +255,7 @@ fn railed(config: &Config) -> View {
     let mut view = opened(config);
     view.set_cell_size(cell());
     view.set_pictures(Pictures::kitty(cell()));
-    view.door(Boot {
+    view.splash(Boot {
         wire: Some(Wire::Anthropic),
         model: Some(String::from("claude-sonnet-4-6")),
         workspace: PathBuf::from("/work/sindri"),

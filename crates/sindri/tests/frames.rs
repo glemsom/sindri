@@ -9,7 +9,7 @@ fn boot_120x40_is_the_frame_a_launch_opens_on() {
 }
 
 #[test]
-fn boot_80x24_is_every_line_of_the_door_and_no_rail_beside_it() {
+fn boot_80x24_is_every_line_of_the_splash_screen_and_no_rail_beside_it() {
     fixture::assert_frame("boot", 80, 24);
 }
 
@@ -19,7 +19,7 @@ fn boot_face_120x40_is_the_face_over_the_wordmark_with_the_rail_whole_beside_it(
 }
 
 #[test]
-fn boot_face_small_120x14_is_the_door_of_a_frame_too_short_for_the_face() {
+fn boot_face_small_120x14_is_the_splash_screen_of_a_frame_too_short_for_the_face() {
     fixture::assert_frame("boot-face-small", 120, 14);
 }
 
