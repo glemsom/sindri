@@ -110,6 +110,12 @@ every fact. A reader turns it off in the config, and a frame with it off reserve
 stand from the rail's first row. Not the **face** an ink wears.
 _Avoid_: Logo, avatar, mascot, icon
 
+**Band**:
+A strip of rows the frame shares out — the transcript's, the queue's, the row that says the frame
+stands off the tail, the composer's and the footer's — each drawn in the rows it was given and never
+past them.
+_Avoid_: Region, pane, panel, viewport
+
 **Card**:
 The frame a screen is drawn on: a rounded border carrying the screen's name in its top row and
 the key that leaves in its bottom, at most seventy-two columns wide and centred, and — under fifty

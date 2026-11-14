@@ -35,6 +35,12 @@ impl Stream {
         self.runs.is_empty()
     }
 
+    /// Whether a fragment of `said` opens an entry of its own rather than continuing the newest: a
+    /// run that opens an answer over its own thought opens a row as its first word does.
+    pub fn opens(&self, said: Said) -> bool {
+        self.runs.last().is_none_or(|newest| newest.said != said)
+    }
+
     pub fn said(&self) -> impl Iterator<Item = (&str, Said)> {
         self.runs.iter().map(|run| (run.words.as_str(), run.said))
     }

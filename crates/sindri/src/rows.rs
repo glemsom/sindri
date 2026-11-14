@@ -504,6 +504,7 @@ pub enum Scroll {
 }
 
 impl Scroll {
+    /// How many rows back from the tail this window stands.
     pub fn back(self) -> u32 {
         match self {
             Scroll::Tail => 0,
@@ -511,11 +512,17 @@ impl Scroll {
         }
     }
 
-    pub fn behind(back: u32) -> Scroll {
-        match back {
+    /// The window standing `rows` behind the tail, and the tail itself for none.
+    pub fn of(rows: u32) -> Scroll {
+        match rows {
             0 => Scroll::Tail,
             rows => Scroll::Back(rows),
         }
+    }
+
+    /// Whether this window stands where the run is still being drawn.
+    pub fn is_tail(self) -> bool {
+        self == Scroll::Tail
     }
 }
 

@@ -39,7 +39,7 @@ use crate::rows::{INDENT, Row, Rows, Scroll, wrap};
 use crate::settings::Settings;
 use crate::size::Sizes;
 use crate::stats;
-use crate::stream::Stream;
+use crate::stream::{Said, Stream};
 
 /// The hints in survival order, most valuable first: the order a narrower footer gives them up
 /// in.
@@ -92,6 +92,10 @@ const HINTS: [Hint; 8] = [
 
 const GAP: &str = " · ";
 
+/// The ink a gap between two hints is drawn in: quieter than the key beside it, and the same on the
+/// row that says where the frame stands.
+const SEPARATOR: Look = Look::plain(Ink::Dim);
+
 const STEPS: [(u16, usize); 2] = [(120, 8), (100, 5)];
 
 /// The first two of `HINTS`: held at every width and given up last.
@@ -129,9 +133,9 @@ pub struct View {
     rows: Rows,
     scroll: Scroll,
     /// The rows of transcript the last paint drew, and the whole transcript's height at it: what a
-    /// page moves by, and what the next paint reads a row that landed against.
+    /// page moves by, and what the next paint reads a row that has landed against.
     band: u16,
-    total: u32,
+    total: Option<u32>,
     composer: Composer,
     stream: Stream,
     queue: Queue,
@@ -212,6 +216,7 @@ impl View {
         &self.composer
     }
 
+    /// How far back from the tail the transcript is drawn.
     pub fn scroll(&self) -> Scroll {
         self.scroll
     }
@@ -384,8 +389,8 @@ impl View {
             Act::Clear => self.clear(),
             Act::Write => self.write(),
             Act::Close => self.close(),
-            Act::Back => self.page(true),
-            Act::Forward => self.page(false),
+            Act::Back => self.page(Page::Back),
+            Act::Forward => self.page(Page::Forward),
             Act::Tail => self.tail(key),
         }
     }
@@ -601,17 +606,17 @@ impl View {
         }
     }
 
-    /// A word the run says: the first of an entry that opens its row returns the frame to the tail,
-    /// and every word after it leaves the frame where the reader put it.
-    fn lands(&mut self) {
-        if self.stream.is_empty() {
+    /// A word the run says: the one that opens a new entry returns the frame to the tail, and every
+    /// word after it leaves the frame where the reader put it.
+    fn follows(&mut self, said: Said, fragment: &str) {
+        if !fragment.is_empty() && self.stream.opens(said) {
             self.scroll = Scroll::Tail;
         }
     }
 
     /// `End` off the tail is the run's tail; at the tail it is the draft's own end of line.
     fn tail(&mut self, key: Key) -> Outcome {
-        if self.scroll.back() == 0 {
+        if self.scroll.is_tail() {
             return self.draft(key);
         }
         self.scroll = Scroll::Tail;
@@ -620,18 +625,28 @@ impl View {
 
     /// A band of the transcript in one direction: the frame is moved where there is a row to move
     /// it to, and a key pressed at the first row or at the tail repaints nothing.
-    fn page(&mut self, back: bool) -> Outcome {
-        let band = u32::from(self.band);
-        let deepest = self.rows.deepest(self.band);
-        let at = match back {
-            true => self.scroll.back().saturating_add(band).min(deepest),
-            false => self.scroll.back().saturating_sub(band),
+    fn page(&mut self, by: Page) -> Outcome {
+        let rows = self.page_rows();
+        let at = match by {
+            Page::Back => self
+                .scroll
+                .back()
+                .saturating_add(rows)
+                .min(self.rows.deepest(self.band)),
+            Page::Forward => self.scroll.back().saturating_sub(rows),
         };
         if at == self.scroll.back() {
             return Outcome::Unchanged;
         }
-        self.scroll = Scroll::behind(at);
+        self.scroll = Scroll::of(at);
         Outcome::Edited
+    }
+
+    /// The rows a page moves: the band the transcript is drawn in at the tail, which is one row more
+    /// than while the row saying it is not is drawn over the band — so a page back and the page on
+    /// beside it are one band of rows.
+    fn page_rows(&self) -> u32 {
+        u32::from(self.band.saturating_add(self.notice_rows()))
     }
 
     fn up(&mut self) -> Outcome {
@@ -674,6 +689,7 @@ impl View {
     }
 
     pub fn set_state(&mut self, state: State) {
+        // A run that settled is the reader's to read, so the frame is handed back to its tail.
         if state == State::Idle {
             self.scroll = Scroll::Tail;
         }
@@ -810,6 +826,8 @@ impl View {
     /// cache this band reaches.
     fn transcript(&mut self, area: Rect, buffer: &mut Buffer) {
         pen::claim(buffer, area, self.palette.ground(Some(Band::Well)));
+        // A narrower band lays the same history out in more rows, and that is no row landing.
+        let reflowed = self.rows.cols() != area.width;
         self.rows.resize(area.width);
         // How many rows a picture takes is part of the rows an entry was laid out as, so the
         // surface reaches the cache before a window is measured.
@@ -820,20 +838,24 @@ impl View {
         let head = self.pulse.as_ref().map(Pulse::head);
         self.rows.live(&self.stream, head.as_ref());
         let total = self.rows.height();
-        let deepest = self.rows.deepest(area.height);
-        // A transcript nothing has measured yet has landed no rows: the first paint is no growth,
-        // so a frame opened a few rows back stays where it was opened.
+        // A window measured from the tail follows a run that grows; one the reader took back keeps
+        // the rows it holds, so a row that lands is given back to the count rather than rolled
+        // under them.
         let grown = match self.total {
-            0 => 0,
-            seen => total.saturating_sub(seen),
+            Some(seen) if !reflowed => total.saturating_sub(seen),
+            _ => 0,
         };
-        let back = match self.scroll.back() {
-            0 => 0,
-            back => back.saturating_add(grown).min(deepest),
+        let back = match self.scroll.is_tail() {
+            true => 0,
+            false => self
+                .scroll
+                .back()
+                .saturating_add(grown)
+                .min(self.rows.deepest(area.height)),
         };
-        self.scroll = Scroll::behind(back);
+        self.scroll = Scroll::of(back);
         self.band = area.height;
-        self.total = total;
+        self.total = Some(total);
         let window = self.rows.window(self.scroll, area.height);
         let mut y = area.y;
         let mut lines = Vec::new();
@@ -909,40 +931,31 @@ impl View {
     /// How many rows a frame off the tail spends saying so: the one row above the composer, and
     /// none at the tail, where there is nothing to say.
     fn notice_rows(&self) -> u16 {
-        match self.scroll.back() {
-            0 => 0,
-            _ => 1,
-        }
+        u16::from(!self.scroll.is_tail())
     }
 
-    /// The words a frame off the tail says about where it stands: how many rows back the reader is,
-    /// and the key that follows the run again.
-    fn notice(&self) -> Option<Vec<(String, Look)>> {
-        let back = self.scroll.back();
-        if back == 0 {
-            return None;
+    /// How far back from the tail the frame stands, in words: a frame at the tail has nothing to say.
+    fn notice(&self) -> Option<String> {
+        match self.scroll.back() {
+            0 => None,
+            1 => Some(String::from("1 row back")),
+            rows => Some(format!("{rows} rows back")),
         }
-        let count = match back {
-            1 => String::from("1 row back"),
-            rows => format!("{rows} rows back"),
-        };
-        Some(vec![
-            (count, keys::MEANING),
-            (String::from(GAP), Look::plain(Ink::Dim)),
-            (String::from("End"), keys::KEY),
-            (String::from(" follows the run"), keys::MEANING),
-        ])
     }
 
     /// The row is whole or it is not drawn, as a hint is: a frame too narrow for the words leaves
-    /// the cell blank rather than cutting the sentence that says where the reader stands.
+    /// the cells blank rather than cutting the sentence that says where the reader stands.
     fn notice_band(&self, area: Rect, buffer: &mut Buffer) {
-        let Some(spans) = self.notice() else {
+        let Some(count) = self.notice() else {
             return;
         };
+        // A band of no rows stands on the composer's edge row: the row is given up, never drawn
+        // over the surface under it.
         if area.height == 0 {
             return;
         }
+        let mut spans: Vec<(&str, Look)> = vec![(count.as_str(), keys::MEANING), (GAP, SEPARATOR)];
+        spans.extend(keyed("End", "follows the run"));
         screen_row(buffer, area, area.y, &spans, &self.palette);
     }
 
@@ -1246,12 +1259,12 @@ impl View {
 
 impl Deltas for View {
     fn text(&mut self, fragment: &str) {
-        self.lands();
+        self.follows(Said::Answer, fragment);
         self.stream.text(fragment);
     }
 
     fn reasoning(&mut self, fragment: &str) {
-        self.lands();
+        self.follows(Said::Reasoning, fragment);
         self.stream.reasoning(fragment);
     }
 }
@@ -1260,6 +1273,13 @@ impl Deltas for View {
 enum Step {
     Previous,
     Next,
+}
+
+/// The direction a page of the transcript moves the frame.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Page {
+    Back,
+    Forward,
 }
 
 struct Bands {
@@ -1398,13 +1418,21 @@ fn hints_row(buffer: &mut Buffer, area: Rect, hints: &[Hint], palette: &Palette)
     let mut spans: Vec<(&str, Look)> = Vec::new();
     for (index, hint) in kept(hints, area.width).into_iter().enumerate() {
         if index > 0 {
-            spans.push((GAP, Look::plain(Ink::Dim)));
+            spans.push((GAP, SEPARATOR));
         }
-        spans.push((hint.key, keys::KEY));
-        spans.push((" ", keys::MEANING));
-        spans.push((hint.meaning, keys::MEANING));
+        spans.extend(keyed(hint.key, hint.meaning));
     }
     pen::write(buffer, area, &spans, Clip::Whole, palette);
+}
+
+/// A key and the words that say what pressing it does, in the two looks a key and its meaning are
+/// drawn in: the footer's hints and the row above the composer are drawn by one shape.
+fn keyed<'a>(key: &'a str, meaning: &'a str) -> [(&'a str, Look); 3] {
+    [
+        (key, keys::KEY),
+        (" ", keys::MEANING),
+        (meaning, keys::MEANING),
+    ]
 }
 
 /// The hints a footer `width` columns wide draws, in survival order, stopping at the first that
@@ -2686,7 +2714,7 @@ mod tests {
     }
 
     #[test]
-    fn a_page_up_takes_the_transcript_a_bands_worth_of_rows_back() {
+    fn a_page_up_takes_the_transcript_back_by_the_band_it_is_drawn_in() {
         let mut view = turns(100);
         painted(&mut view, 120, 40);
 
@@ -2706,6 +2734,7 @@ mod tests {
             "a 120x40 frame gives the transcript thirty-seven rows — forty less the footer \
              and the composer's two — so one page moves it that far back"
         );
+        painted(&mut view, 120, 40);
         assert_eq!(
             view.key(Key::PageDown),
             Outcome::Edited,
@@ -2714,7 +2743,8 @@ mod tests {
         assert_eq!(
             view.scroll(),
             Scroll::Tail,
-            "one page on from one page back is the tail the frame started at"
+            "one page on from one page back is the tail the frame started at, though the row \
+             saying where it stands was drawn out of that same band"
         );
     }
 
@@ -2847,6 +2877,34 @@ mod tests {
     }
 
     #[test]
+    fn a_band_that_lays_the_history_out_again_does_not_move_the_reader_off_their_rows() {
+        let mut view = View::of(
+            (1..=20).map(|turn| Entry::Assistant {
+                turn,
+                text: SecretSet::default().redact(pen::filled(300, 'w')),
+            }),
+            Scroll::Tail,
+        );
+        painted(&mut view, 120, 40);
+        view.key(Key::PageUp);
+        let back = view.scroll();
+        assert_ne!(
+            back,
+            Scroll::Tail,
+            "the frame stands off the tail to begin with"
+        );
+
+        painted(&mut view, 80, 40);
+
+        assert_eq!(
+            view.scroll(),
+            back,
+            "a narrower band wraps the same history into more rows, and a reader's window is \
+             not thrown forward by their own resize"
+        );
+    }
+
+    #[test]
     fn a_row_too_narrow_for_the_words_that_say_it_is_drawn_whole_or_not_at_all() {
         let mut view = turns(100);
         painted(&mut view, 120, 40);
@@ -2902,6 +2960,28 @@ mod tests {
     }
 
     #[test]
+    fn an_answer_that_opens_its_row_under_a_thought_leaves_the_frame_at_the_tail() {
+        let mut view = turns(100);
+        view.reasoning("a thought the run says first");
+        painted(&mut view, 120, 40);
+        view.key(Key::PageUp);
+        assert_ne!(
+            view.scroll(),
+            Scroll::Tail,
+            "the frame under this test stands off the tail"
+        );
+
+        view.text("and the answer it introduces");
+
+        assert_eq!(
+            view.scroll(),
+            Scroll::Tail,
+            "an answer opens a row of its own under the thought, so it is a new entry as the \
+             run's first word is"
+        );
+    }
+
+    #[test]
     fn a_thought_that_opens_its_row_leaves_the_frame_at_the_tail() {
         let mut view = scrolled_back();
 
@@ -2951,12 +3031,30 @@ mod tests {
             Scroll::Tail,
             "the frame is painted once and stands at the tail"
         );
-        assert_eq!(view.key(Key::PageUp), Outcome::Edited);
+        assert_eq!(
+            view.key(Key::PageUp),
+            Outcome::Edited,
+            "one page back from the tail moves the frame as far as the transcript reaches"
+        );
         assert_eq!(
             view.scroll(),
             Scroll::Back(3),
             "forty rows of transcript in a band of thirty-seven leaves three rows behind the \
              frame, so the one page back is three rows and not thirty-seven"
+        );
+        painted(&mut view, 120, 40);
+        assert_eq!(
+            view.key(Key::PageUp),
+            Outcome::Edited,
+            "the row saying where the frame stands is drawn out of that band, so reaching the \
+             first row is the second press rather than the first"
+        );
+        assert_eq!(view.scroll(), Scroll::Back(4));
+        let head = painted(&mut view, 120, 40);
+        assert!(
+            drawn_row(&head, 0).starts_with("turn 1 "),
+            "the transcript's first row stands at the top of the band: {:?}",
+            drawn_row(&head, 0)
         );
         for _ in 0..3 {
             assert_eq!(
@@ -2966,7 +3064,7 @@ mod tests {
             );
             assert_eq!(
                 view.scroll(),
-                Scroll::Back(3),
+                Scroll::Back(4),
                 "and the frame stays on the first row rather than rolling round to the tail"
             );
         }
