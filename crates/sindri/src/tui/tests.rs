@@ -1,6 +1,6 @@
 //! The launch's own contracts, each driving one key's outcome through a pseudo-terminal of this
-//! process's own: a copy written down the wire, a settings visit whose value is saved, and a run
-//! that cannot start leaving its row and the launch standing.
+//! process's own: a copy written down the wire, a settings visit whose value is saved, a run that
+//! cannot start leaving its row, and the loop answering a key typed before its first frame.
 
 use std::fs::File;
 use std::os::fd::AsFd;
@@ -457,5 +457,34 @@ fn a_refused_prompt_waits_in_the_queue_again_while_the_reader_has_a_draft_of_the
     assert!(
         drawn.contains("a run needs a provider and a model"),
         "the frame carries the refusal's own words: {drawn:?}"
+    );
+}
+
+#[test]
+fn a_quit_typed_before_the_first_frame_is_answered_by_the_loop() {
+    let (_pty, terminal, telling) = staged();
+    let canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
+    let cli = Cli::parse_from(["sindri"]);
+    let environment = std::collections::BTreeMap::new();
+    let environment: &dyn Environment = &environment;
+    let signals = Signals::install().expect("a signal pipe");
+    let mut live = Loop {
+        terminal: &terminal,
+        canvas,
+        view: View::boot(),
+        cli: &cli,
+        config: Config::default(),
+        environment,
+        telling,
+        launch: None,
+        running: None,
+        asking: None,
+    };
+
+    let ended = live.keys(&signals, b"\x11").expect("the quit is answered");
+
+    assert!(
+        matches!(ended, Ending::Quit),
+        "a quit typed before the first frame is the ending the loop hands back"
     );
 }

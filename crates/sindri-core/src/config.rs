@@ -581,6 +581,12 @@ impl Environment for Process {
         env::var(name).ok()
     }
 }
+
+impl<T: Environment + ?Sized> Environment for &T {
+    fn var(&self, name: &str) -> Option<String> {
+        (**self).var(name)
+    }
+}
 pub fn config_path(environment: &impl Environment) -> Result<PathBuf, ConfigError> {
     let base = match spoken(environment, "XDG_CONFIG_HOME") {
         Some(home) => PathBuf::from(home),
