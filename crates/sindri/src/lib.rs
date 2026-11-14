@@ -19,7 +19,7 @@ pub mod picker; // the files of the workspace, walked with `ignore`
 pub mod picture; // a picture an answer points at, resolved to a file inside the workspace and measured
 pub mod pictures; // the pictures a frame has placed: every source the terminal was told about
 pub mod pulse; // the marker at the head of the newest answer: the braille glyph a live run turns
-pub mod queue; // the prompts typed while a run is live, waiting above the composer in the order
+pub mod queue; // the prompts typed while a run is live, waiting under the draft in the order
 pub mod rail; // the ledger's adapter: the rows it lays, drawn on the band it is handed
 #[cfg(test)]
 mod readback; // what a painted buffer holds, read back: the inks of a row and the column of a glyph

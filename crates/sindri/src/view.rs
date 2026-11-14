@@ -914,9 +914,8 @@ impl View {
                 &surface,
             );
         }
-        self.queue_band(bands.queue, buffer);
         self.notice_band(bands.notice, buffer);
-        self.composer_band(bands.composer, buffer);
+        self.composer_band(bands.composer, bands.queue, buffer);
         self.footer(bands.footer, buffer);
         // A screen is drawn over the frame it was opened from rather than in place of it: the
         // reader sees the transcript they will return to, and sees that it is out of reach.
@@ -1091,15 +1090,6 @@ impl View {
         }
     }
 
-    /// The queue's row: one line saying how many prompts wait above the composer, and no band
-    /// at all while none does, so the transcript takes the row.
-    fn queue_band(&self, area: Rect, buffer: &mut Buffer) {
-        let Some(label) = self.queue.label() else {
-            return;
-        };
-        whole_row(buffer, area, area.y, &[(&label, Ink::Dim)], &self.palette);
-    }
-
     /// How many rows a frame off the tail spends saying so: the one row above the composer, and
     /// none at the tail, where there is nothing to say.
     fn notice_rows(&self) -> u16 {
@@ -1134,35 +1124,36 @@ impl View {
     /// The composer is a raised surface and not a flat band: the lit edge along its top row, the
     /// shadow under its bottom, and the ground ramping between them — one claim per row, so no cell
     /// loses the ink it was written in.
-    fn composer_band(&self, area: Rect, buffer: &mut Buffer) {
-        for row in 0..area.height {
+    fn composer_band(&self, band: Rect, queue: Rect, buffer: &mut Buffer) {
+        for row in 0..band.height {
             pen::claim(
                 buffer,
                 Rect {
-                    y: area.y.saturating_add(row),
+                    y: band.y.saturating_add(row),
                     height: 1,
-                    ..area
+                    ..band
                 },
-                self.palette.raised(row, area.height),
+                self.palette.raised(row, band.height),
             );
         }
         pen::rule(
             buffer,
-            Rect { height: 1, ..area },
+            Rect { height: 1, ..band },
             HAIRLINE,
             self.composer_edge(),
             &self.palette,
         );
 
         let draft = Rect {
-            y: area.y.saturating_add(HAIRLINE_ROWS),
-            height: area.height.saturating_sub(HAIRLINE_ROWS),
-            ..area
+            y: band.y.saturating_add(HAIRLINE_ROWS),
+            height: queue.y.saturating_sub(band.y.saturating_add(HAIRLINE_ROWS)),
+            ..band
         };
         let (rows, ink) = match self.composer.text().is_empty() {
             true => (vec![PLACEHOLDER], Ink::Dim),
             false => (self.composer.lines(), Ink::Plain),
         };
+        let mut under = draft.y;
         for (row, line) in rows.iter().enumerate() {
             let Some(offset) = u16::try_from(row).ok() else {
                 break;
@@ -1174,13 +1165,56 @@ impl View {
                 break;
             }
             let opens = row == 0 && self.composer.scroll() == 0;
-            draft_row(
+            band_row(
                 buffer,
                 Rect { y, ..draft },
                 opens,
                 (*line, ink),
                 &self.palette,
             );
+            under = y.saturating_add(1);
+        }
+        if let Some(kept) = self.composer.kept_back()
+            && under < draft.bottom()
+        {
+            let counted = match kept {
+                1 => String::from("1 row kept back"),
+                kept => format!("{kept} rows kept back"),
+            };
+            band_row(
+                buffer,
+                Rect { y: under, ..draft },
+                false,
+                (&counted, Ink::Dim),
+                &self.palette,
+            );
+        }
+
+        if queue.height == 0 {
+            return;
+        }
+        let shown = self.queue.shown(queue.height);
+        let mut at = queue.y;
+        if let Some(kept) = shown.kept_back {
+            let counted = format!("{kept} more queued");
+            band_row(
+                buffer,
+                Rect { y: at, ..queue },
+                false,
+                (&counted, Ink::Dim),
+                &self.palette,
+            );
+            at = at.saturating_add(1);
+        }
+        for line in &shown.prompts {
+            band_row(
+                buffer,
+                Rect { y: at, ..queue },
+                true,
+                (line, Ink::Dim),
+                &self.palette,
+            );
+            at = at.saturating_add(1);
         }
     }
 
@@ -1414,6 +1448,7 @@ enum Page {
 
 struct Bands {
     transcript: Rect,
+    /// The composer's band's last rows: the queue's, and none at all while nothing waits.
     queue: Rect,
     notice: Rect,
     composer: Rect,
@@ -1454,9 +1489,9 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16, notice_rows: u16) -> B
     let room = above.saturating_sub(composer).saturating_sub(queue);
     let notice = notice_rows.min(room.saturating_sub(1));
     let transcript = room.saturating_sub(notice);
-    let queue_y = area.y.saturating_add(transcript);
-    let notice_y = queue_y.saturating_add(queue);
+    let notice_y = area.y.saturating_add(transcript);
     let composer_y = notice_y.saturating_add(notice);
+    let queue_y = composer_y.saturating_add(composer);
     Bands {
         transcript: Rect {
             height: transcript,
@@ -1474,11 +1509,11 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16, notice_rows: u16) -> B
         },
         composer: Rect {
             y: composer_y,
-            height: composer,
+            height: composer.saturating_add(queue),
             ..area
         },
         footer: Rect {
-            y: composer_y.saturating_add(composer),
+            y: queue_y.saturating_add(queue),
             height: footer,
             ..area
         },
@@ -1600,9 +1635,10 @@ fn cut_row(spans: Vec<(String, Look)>) -> ScreenRow {
     }
 }
 
-/// Writes one row of the draft. The sigil opens the first row and every row a wrap gave the draft
-/// keeps the gutter blank under it, so the draft's first column is the answer's on all of them.
-fn draft_row(buffer: &mut Buffer, area: Rect, opens: bool, words: (&str, Ink), palette: &Palette) {
+/// Writes one row of the composer's band. The sigil opens the row a prompt's words begin on and
+/// every other row keeps the gutter blank under it, so a line of the draft and a waited prompt both
+/// begin in the answer's first column.
+fn band_row(buffer: &mut Buffer, area: Rect, opens: bool, words: (&str, Ink), palette: &Palette) {
     let gutter = match opens {
         true => SIGIL,
         false => INDENT,
@@ -4048,6 +4084,179 @@ mod tests {
         (band.y.saturating_add(HAIRLINE_ROWS)..band.bottom())
             .map(|y| drawn_glyphs(buffer, y).trim_end().to_owned())
             .collect()
+    }
+
+    /// An idle frame holding `count` waiting prompts behind the draft `draft`, painted at `cols`
+    /// by `rows`, with the band and the queue's rows inside it.
+    fn waiting_behind(
+        palette: Palette,
+        draft: &str,
+        count: usize,
+        cols: u16,
+        rows: u16,
+    ) -> (Buffer, Rect, Rect) {
+        let mut view = View::boot();
+        view.set_palette(palette);
+        view.settle();
+        view.set_state(State::Running);
+        for at in 1..=count {
+            view.enqueue(prompt(&format!("prompt {at}")));
+        }
+        view.paste(draft);
+        let area = screen(cols, rows);
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+        let bands = bands(area, view.composer().rows(), view.queue().rows(), 0);
+        (buffer, bands.composer, bands.queue)
+    }
+
+    #[test]
+    fn a_queue_of_three_is_drawn_under_the_draft_one_prompt_to_a_row_with_the_newest_at_the_foot() {
+        let palette = Palette::TRUECOLOR;
+        let (buffer, band, queue) = waiting_behind(palette, "a draft", 3, 120, 24);
+
+        assert_eq!(
+            draft_rows(&buffer, band),
+            [
+                "\u{203a} a draft",
+                "\u{203a} prompt 1",
+                "\u{203a} prompt 2",
+                "\u{203a} prompt 3"
+            ],
+            "three waiting prompts are three rows of the composer's own band, each wearing the \
+             sigil the draft wears and the newest at the foot"
+        );
+        assert_eq!(
+            queue.height, 3,
+            "and the queue's rows are the band's last three"
+        );
+        let gutter = pen::cells(INDENT);
+        assert_eq!(
+            look_at(&buffer, &palette, gutter, queue.bottom() - 1),
+            Look::plain(Ink::Dim),
+            "a waiting prompt is the dim ink, quieter than the draft above it"
+        );
+    }
+
+    #[test]
+    fn a_queue_longer_than_its_band_draws_the_newest_it_holds_and_the_count_of_the_rest() {
+        let palette = Palette::TRUECOLOR;
+        let (buffer, band, queue) = waiting_behind(palette, "a draft", 7, 120, 24);
+
+        assert_eq!(
+            queue.height,
+            crate::queue::MAX_ROWS,
+            "the queue is given the four rows it asks for at most"
+        );
+        assert_eq!(
+            draft_rows(&buffer, band),
+            [
+                "\u{203a} a draft",
+                "  4 more queued",
+                "\u{203a} prompt 5",
+                "\u{203a} prompt 6",
+                "\u{203a} prompt 7",
+            ],
+            "so it draws the newest three and gives its first row to the count of the four the \
+             band could not hold"
+        );
+        let gutter = pen::cells(INDENT);
+        assert_eq!(
+            look_at(&buffer, &palette, gutter, queue.y),
+            Look::plain(Ink::Dim),
+            "and the count is drawn in the dim ink, with no sigil of its own"
+        );
+    }
+
+    #[test]
+    fn a_frame_with_nothing_queued_draws_no_queue_row_and_the_transcript_keeps_them_all() {
+        let palette = Palette::TRUECOLOR;
+        let (buffer, band, queue) = waiting_behind(palette, "a draft", 0, 120, 24);
+
+        assert_eq!(queue.height, 0, "nothing waiting is no queue row at all");
+        assert_eq!(
+            band.height, 2,
+            "so the band is the draft's own rows: its edge and the one row the draft takes"
+        );
+        assert_eq!(
+            draft_rows(&buffer, band),
+            ["\u{203a} a draft"],
+            "and no row under the draft belongs to a queue"
+        );
+        assert!(
+            !holds(&buffer, "more queued"),
+            "a frame with nothing queued says nothing about a queue"
+        );
+
+        let mut view = turns(100);
+        view.set_palette(palette);
+        view.paste("a draft");
+        let area = screen(120, 24);
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+        let bands = bands(area, view.composer().rows(), view.queue().rows(), 0);
+        assert_eq!(
+            bands.transcript.bottom(),
+            bands.composer.y,
+            "the transcript's band runs down to the composer's edge"
+        );
+        assert!(
+            drawn_row(&buffer, bands.composer.y - 1).contains("turn"),
+            "and the row above the edge is the transcript's own, drawn by it"
+        );
+    }
+
+    #[test]
+    fn the_transcript_keeps_every_row_the_queue_does_not_need() {
+        let area = screen(120, 24);
+        let (draft, queue) = (2, 3);
+
+        assert_eq!(
+            bands(area, draft, 0, 0).transcript.height,
+            bands(area, draft, queue, 0).transcript.height + queue,
+            "the row a queue takes is a row the transcript had, and it is given back the moment \
+             nothing waits"
+        );
+        assert_eq!(
+            bands(area, draft, 0, 0).composer.height,
+            draft,
+            "a band with no queue is the draft's rows and not a row more"
+        );
+    }
+
+    #[test]
+    fn a_draft_past_the_ceiling_says_how_many_rows_it_keeps_back_and_keeps_the_caret_inside() {
+        let palette = Palette::TRUECOLOR;
+        let draft: Vec<String> = (1..=9).map(|line| line.to_string()).collect();
+        let mut typed = Composer::new();
+        typed.paste(&draft.join("\n"));
+        let mut view = View::typing(typed);
+        view.set_palette(palette);
+        let area = screen(120, 24);
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+        let band = bands(area, view.composer().rows(), view.queue().rows(), 0).composer;
+
+        assert_eq!(
+            draft_rows(&buffer, band),
+            ["  6", "  7", "  8", "  9", "  5 rows kept back",],
+            "nine lines are drawn four at a time, and the row under them counts the five the band \
+             keeps back"
+        );
+        let gutter = pen::cells(INDENT);
+        assert_eq!(
+            look_at(&buffer, &palette, gutter, band.bottom() - 1),
+            Look::plain(Ink::Dim),
+            "the count is the dim ink"
+        );
+        let (_, y) = view
+            .cursor(area)
+            .expect("a caret is drawn for a long draft");
+        assert_eq!(
+            y,
+            band.y + band.height - 2,
+            "and the caret waits on the last row the band draws the draft in, not under it"
+        );
     }
 
     #[test]
