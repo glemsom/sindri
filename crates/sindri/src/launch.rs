@@ -27,9 +27,9 @@ const SETUP: u8 = 3;
 /// The exit code for a command line or a config that holds no run.
 const USAGE: u8 = 2;
 
-/// What a front end says about a launch that cannot run, and exits with.
-///
-/// A refusal is not a stop reason: no run started, so nothing was recorded and stdout is empty.
+/// What a front end says about a launch that cannot run: one a frame can draw leaves the launch
+/// standing, and one no frame survives is the reader's shell line and the end of the launch. No run
+/// started, so a refusal is no stop reason and nothing is recorded.
 pub struct Refusal {
     message: String,
     code: u8,

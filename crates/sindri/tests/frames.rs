@@ -124,6 +124,11 @@ fn stop_120x40_is_the_marker_and_the_stop_entry_a_failed_run_leaves() {
 }
 
 #[test]
+fn refused_120x40_is_the_entry_a_run_that_could_not_start_leaves_beside_its_draft() {
+    fixture::assert_frame("refused", 120, 40);
+}
+
+#[test]
 fn queue_120x40_counts_the_prompts_typed_during_a_run_above_the_composer() {
     fixture::assert_frame("queue", 120, 40);
 }

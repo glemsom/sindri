@@ -284,7 +284,7 @@ fn keys(
             if take(canvas, view, &mut running, telling, launch)? && !interrupted {
                 // A launch the user's own word ended starts nothing: the queue waits for a reader
                 // who still wants it.
-                if let Some(ending) = resume(
+                resume(
                     canvas,
                     view,
                     &mut running,
@@ -293,9 +293,7 @@ fn keys(
                     config,
                     &wake,
                     telling,
-                )? {
-                    return Ok(ending);
-                }
+                )?;
             }
         }
 
@@ -395,10 +393,10 @@ fn answer(
             Ok(None)
         }
         Outcome::Send(prompt) => {
-            let sent = send(
+            send(
                 prompt, canvas, view, running, launch, cli, config, wake, telling,
             )?;
-            Ok(sent)
+            Ok(None)
         }
         // The keys a reader touched go through the core's owner-only atomic save, and the launch's
         // config is resolved again so the next prompt runs on what the visit left. A value the
@@ -458,9 +456,9 @@ fn answer(
     }
 }
 
-/// Starts the run a sent draft asks for, on a thread of its own, and says whether the launch ends
-/// instead. A session the launch already holds is the one it runs in, and one that cannot run at all
-/// ends the launch rather than being drawn: a screen that swallowed the reason would be one silence.
+/// Starts the run a sent draft asks for, on a thread of its own. A session the launch already holds
+/// is the one it runs in, and one that cannot run at all is drawn rather than being the end of the
+/// launch: a screen that swallowed the reason would be one silence.
 #[allow(
     clippy::too_many_arguments,
     reason = "the one seam a prompt starts a run through, and the telling it is announced to"
@@ -475,11 +473,11 @@ fn send(
     config: &Config,
     wake: &Arc<Wake>,
     telling: &mut Window<File>,
-) -> io::Result<Option<Ending>> {
+) -> io::Result<()> {
     if running.is_some() {
         view.enqueue(prompt);
         paint(canvas, view)?;
-        return Ok(None);
+        return Ok(());
     }
     let launching = match launch.take() {
         Some(held) if held.runs_on(config) => held,
@@ -491,7 +489,11 @@ fn send(
             }
             match Launch::open(cli, config, FrontEnd::Terminal) {
                 Ok(opened) => opened,
-                Err(refusal) => return Ok(Some(Ending::Refused(refusal))),
+                Err(refusal) => {
+                    view.run_refused(refusal.message(), prompt);
+                    paint(canvas, view)?;
+                    return Ok(());
+                }
             }
         }
     };
@@ -510,12 +512,12 @@ fn send(
     view.set_pulse(Some(Pulse::live(0)));
     paint(canvas, view)?;
     telling.say(Told::Asking { turn: 1 })?;
-    Ok(None)
+    Ok(())
 }
 
 /// Starts the next prompt the queue is holding, once the run before it has stopped: one prompt
-/// per stop, oldest first. A launch that cannot run at all ends the launch here as it does from
-/// a key — the prompt is already out of the queue, and a reason nothing ran is still said.
+/// per stop, oldest first. A launch that cannot run is the row `send` draws, and the prompt it
+/// takes with it out of the queue is the frame's again.
 #[allow(
     clippy::too_many_arguments,
     reason = "the same seam `send` is, plus the prompt a run that stopped left queued"
@@ -529,9 +531,9 @@ fn resume(
     config: &mut Config,
     wake: &Arc<Wake>,
     telling: &mut Window<File>,
-) -> io::Result<Option<Ending>> {
+) -> io::Result<()> {
     let Some(prompt) = view.dequeue() else {
-        return Ok(None);
+        return Ok(());
     };
     send(
         prompt, canvas, view, running, launch, cli, config, wake, telling,

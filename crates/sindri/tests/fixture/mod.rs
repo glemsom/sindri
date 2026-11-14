@@ -127,6 +127,7 @@ fn named(name: &str) -> View {
         "pulse-settled" => with_pulse(Pulse::settled(&Stop::Final, 9_400), &PULSE_ANSWER),
         "stops" => running(stops(), Scroll::Tail),
         "stop" => stopped_on(wire_refused()),
+        "refused" => refused_run(),
         "queue" => queue(),
         "keys" => {
             let mut view = View::boot();
@@ -774,6 +775,22 @@ const STOP_ANSWER: [&str; 4] = [
 fn stopped_on(stop: Stop) -> View {
     let mut view = with_pulse(Pulse::settled(&stop, 1_240), &STOP_ANSWER);
     view.stopped(&stop);
+    view
+}
+
+/// The frame a run that could not start leaves: the entry a stop is, in the refusal's own words, and
+/// the draft that asked for it back in the composer.
+fn refused_run() -> View {
+    let mut view = running(transcript(), Scroll::Tail);
+    view.paste("why does the retry test fail");
+    match view.key(Key::Enter) {
+        Outcome::Send(prompt) => view.run_refused(
+            "cannot create the sandbox: bubblewrap is on PATH\n  fix:   install bubblewrap, or run \
+             with --yolo-unsafe to run unconfined on purpose",
+            prompt,
+        ),
+        other => panic!("a draft should have been sent, and {other:?} came instead"),
+    }
     view
 }
 

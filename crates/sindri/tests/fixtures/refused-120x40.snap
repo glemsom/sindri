@@ -1,0 +1,45 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+refused at 120x40
+00 |  between the tail and the window and lays out every one of them on the way.wire      anthropic                         | plain:76 dim:10 plain:34
+01 |  Each is laid out once and kept, so the whole history scrolled through     model     claude-sonnet-4-5-20250929        | plain:76 dim:10 plain:34
+02 |  costs one layout per entry and scrolling it again costs none.             think     high                              | plain:76 dim:10 plain:34
+03 |─ turn 5 ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
+04 |✓ bash                                                                      turns                               6 /  250| ok:1 plain:1 dim:4 plain:70 dim:10 plain:34
+05 |  git diff --stat                                                           ctx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
+06 |✓ exit 0  9 ms · 128 bytes                                                  cache                                    88%| ok:1 plain:1 dim:24 plain:50 dim:10 plain:34
+07 |  crates/sindri/src/rows.rs | 412 +++++++++++++                                                                         | muted:47 plain:73
+08 |  crates/sindri/tests/rows.rs | 198 +++++++++                               workspace …/git/sindri/.worktrees/46-rail   | muted:45 plain:31 dim:10 plain:34
+09 |  The transcript's unit is the entry. An entry never carries a formatted    branch    spec/1-capability                 | plain:76 dim:10 plain:34
+10 |  line, so the same run is drawn the same way by the TUI, by a reader of the                                            | plain:120
+11 |  transcript and by whatever front end comes next.                          skills                                     2| plain:76 dim:10 plain:34
+12 |                                                                                                                        | plain:120
+13 |  construct │ where it stands                                               sandbox   bwrap                             | plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:47 dim:10 plain:34
+14 |  ──────────┼───────────────────────────                                                                                | plain:2 dim:38 plain:80
+15 |  heading   │ in the answer's own gutter                                    session   9f2c7a41                          | plain:11 dim:3 plain:62 dim:10 plain:34
+16 |  code      │ behind a bar, highlighted                                     temp      …/sindri/sessions/9f2c7a41/tmp    | plain:11 dim:3 plain:62 dim:10 plain:34
+17 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
+18 |─ turn 6 ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
+19 |✓ bash                                                                                                                  | ok:1 plain:1 dim:4 plain:114
+20 |  make check STAGES=frames                                                                                              | plain:120
+21 |✓ exit 0  31 ms · 104 bytes                                                                                             | ok:1 plain:1 dim:25 plain:93
+22 |  check: frame calls ... ok                                                                                             | muted:27 plain:93
+23 |  check: frame transcript ... ok                                                                                        | muted:32 plain:88
+24 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101
+25 |  ─────────────────                                                                                                     | plain:2 dim:17 plain:101
+26 |                                                                                                                        | plain:120
+27 |  A row says the exit code and not the command, because the verdict is a                                                | plain:120
+28 |  fact the record holds and the command is a fact the row above it holds.                                               | plain:120
+29 |                                                                                                                        | plain:120
+30 |▏ rust                                                                                                                  | dim:6 plain:114
+31 |▏ fn main() {                                                                                                           | dim:2 accent:2 plain:116
+32 |▏     let row = Row::of(spans);                                                                                         | dim:2 plain:4 accent:3 plain:111
+33 |▏     row.paint(area, buffer);                                                                                          | dim:2 plain:118
+34 |▏ }                                                                                                                     | dim:2 plain:118
+35 |✗ error                                                                                                                 | err:1 plain:1 dim:5 plain:113
+36 |  cannot create the sandbox: bubblewrap is on PATH                                                                      | muted:50 plain:70
+37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:120
+38 |› why does the retry test fail                                                                                          | dim:2 plain:118
+39 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · Ctrl-J newline · @ files · ↑ queue · End follow the run             | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:7 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:3 muted:15 plain:13

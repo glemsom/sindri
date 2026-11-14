@@ -13,6 +13,7 @@ use sindri_core::open::Ground;
 use sindri_core::provider::Deltas;
 use sindri_core::provider::served::Listing;
 use sindri_core::records::{Entry, SessionDocument};
+use sindri_core::redact::SecretSet;
 use sindri_core::run::{Exchange, Load, Loaded, Stop};
 use sindri_core::skills::{Catalog, Skill};
 
@@ -374,6 +375,18 @@ impl View {
     /// keeps, wearing the same word as the marker beside it.
     pub fn stopped(&mut self, stop: &Stop) {
         self.rows.stopped(stop.clone());
+    }
+
+    /// A run that could not start is the entry a stop is, and the prompt it was asked with is never
+    /// lost: an empty composer takes its words back as the draft, and a draft the reader has typed
+    /// since keeps its place while the prompt waits in the queue again.
+    pub fn run_refused(&mut self, refusal: &str, prompt: Prompt) {
+        self.settle();
+        self.stopped(&Stop::Error(SecretSet::default().redact(refusal)));
+        match self.composer.text().is_empty() {
+            true => self.composer.recall(prompt),
+            false => self.enqueue(prompt),
+        }
     }
 
     pub fn set_record(&mut self, document: &SessionDocument) {
