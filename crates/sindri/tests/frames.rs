@@ -149,8 +149,23 @@ fn card_40x24_is_a_card_bled_to_the_frames_edges_that_counts_the_rows_it_keeps_b
 }
 
 #[test]
-fn files_120x40_is_the_eight_files_nearest_the_workspace() {
+fn files_120x40_is_the_eight_files_an_empty_query_leaves_and_the_count_of_all_seventeen() {
     fixture::assert_frame("files", 120, 40);
+}
+
+#[test]
+fn files_narrow_120x40_is_the_capped_list_of_a_query_ten_files_answer() {
+    fixture::assert_frame("files-narrow", 120, 40);
+}
+
+#[test]
+fn files_few_120x40_is_the_card_of_the_two_matches_the_query_leaves() {
+    fixture::assert_frame("files-few", 120, 40);
+}
+
+#[test]
+fn files_none_120x40_is_one_line_saying_no_file_answers() {
+    fixture::assert_frame("files-none", 120, 40);
 }
 
 #[test]

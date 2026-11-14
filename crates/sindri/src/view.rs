@@ -115,6 +115,8 @@ const PICKER_QUERY: &str = "query: ";
 
 const PICKER_EMPTY: &str = "no file answers";
 
+const PICKER_GAP: &str = "  ";
+
 /// The glyph before the row a key acts on, in the picker and in the settings modal both:
 /// one mark, because both screens say the same thing with it.
 const ROW_MARK: &str = "\u{203a} ";
@@ -1196,22 +1198,28 @@ impl View {
             (PICKER_QUERY.to_owned(), Ink::Dim.into()),
             (self.picker.query().to_owned(), Ink::Muted.into()),
         ])];
-        let paths = self.picker.rows();
-        if paths.is_empty() {
+        let files = self.picker.rows();
+        if files.is_empty() {
             rows.push(screen_row(vec![(PICKER_EMPTY.to_owned(), Ink::Dim.into())]));
             return rows;
         }
-        for (at, path) in paths.iter().enumerate() {
+        for (at, file) in files.iter().enumerate() {
             let (marker, ink) = match at == self.picker.selected() {
                 true => (ROW_MARK, Ink::Accent),
                 false => (ROW_GAP, Ink::Plain),
             };
             let ink = Look::plain(ink);
-            rows.push(cut_row(vec![
-                (marker.to_owned(), ink),
-                ((*path).to_owned(), ink),
-            ]));
+            let mut spans = vec![(marker.to_owned(), ink), (file.name.to_owned(), ink)];
+            if !file.directory.is_empty() {
+                spans.push((PICKER_GAP.to_owned(), Ink::Dim.into()));
+                spans.push((file.directory.to_owned(), Ink::Dim.into()));
+            }
+            rows.push(cut_row(spans));
         }
+        rows.push(screen_row(vec![(
+            format!("1\u{2013}{} of {}", files.len(), self.picker.matches()),
+            Ink::Dim.into(),
+        )]));
         rows
     }
 

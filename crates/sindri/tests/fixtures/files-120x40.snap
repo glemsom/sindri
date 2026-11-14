@@ -23,12 +23,12 @@ files at 120x40
 17 |                        │   Cargo.toml                                                         │                        | dim:25 plain:70 dim:25
 18 |                        │   GLOSSARY.md                                                        │                        | dim:25 plain:70 dim:25
 19 |                        │   Makefile                                                           │                        | dim:25 plain:70 dim:25
-20 |                        │   docs/adr/0020-the-artefact-is-one-static-musl-binary.md            │                        | dim:25 plain:70 dim:25
-21 |                        │   docs/agents/domain.md                                              │                        | dim:25 plain:70 dim:25
-22 |                        │   crates/sindri-core/src/records.rs                                  │                        | dim:25 plain:70 dim:25
-23 |                        │   crates/sindri/src/keys.rs                                          │                        | dim:25 plain:70 dim:25
-24 |                        ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
-25 |                                                                                                                        | dim:120
+20 |                        │   0020-the-artefact-is-one-static-musl-binary.md  docs/adr           │                        | dim:25 plain:49 dim:10 plain:11 dim:25
+21 |                        │   0021-a-key-is-answered-by-the-loop-that-owns-it.md  docs/adr       │                        | dim:25 plain:53 dim:10 plain:7 dim:25
+22 |                        │   domain.md  docs/agents                                             │                        | dim:25 plain:12 dim:13 plain:45 dim:25
+23 |                        │   policy.rs  crates/sindri-core/src                                  │                        | dim:25 plain:12 dim:24 plain:34 dim:25
+24 |                        │ 1–8 of 17                                                            │                        | dim:25 plain:1 dim:9 plain:60 dim:25
+25 |                        ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
 26 |                                                                                                                        | dim:120
 27 |                                                                                                                        | dim:120
 28 |                                                                                                                        | dim:120

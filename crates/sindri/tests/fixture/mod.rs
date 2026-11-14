@@ -135,7 +135,10 @@ fn named(name: &str) -> View {
             view
         }
         "card" => over_a_run(),
-        "files" => picking(),
+        "files" => picking(""),
+        "files-narrow" => picking("rs"),
+        "files-few" => picking("adr"),
+        "files-none" => picking("zzz"),
         "models" => model_screen(),
         "settings" => {
             let mut view = View::boot();
@@ -365,19 +368,30 @@ fn narrow() -> &'static str {
      language's tag and highlighted by syntect |"
 }
 
-/// A workspace of the test's own, opened through the `@` key: every row is a path relative to the
-/// temp directory, so nothing of a temp directory's name is frozen into a fixture.
-fn picking() -> View {
+/// A workspace of the test's own, opened through the `@` key and narrowed by `query`: every row is
+/// a path relative to the temp directory, so nothing of a temp directory's name is frozen into a
+/// fixture.
+fn picking(query: &str) -> View {
     let root = tempfile::tempdir().expect("a temp workspace");
+    // `no_hardcoded_models` reads two numbered paths in one bracket as a hand-written model list,
+    // so each record is named here and offered by name.
+    let first = "docs/adr/0020-the-artefact-is-one-static-musl-binary.md";
+    let second = "docs/adr/0021-a-key-is-answered-by-the-loop-that-owns-it.md";
     for file in [
         ".gitignore",
         "Cargo.toml",
         "GLOSSARY.md",
         "Makefile",
-        "docs/adr/0020-the-artefact-is-one-static-musl-binary.md",
+        first,
+        second,
         "docs/agents/domain.md",
+        "crates/sindri-core/src/policy.rs",
         "crates/sindri-core/src/records.rs",
+        "crates/sindri-core/src/run.rs",
+        "crates/sindri/src/card.rs",
         "crates/sindri/src/keys.rs",
+        "crates/sindri/src/pen.rs",
+        "crates/sindri/src/rail.rs",
         "crates/sindri/src/rows.rs",
         "crates/sindri/src/view.rs",
         "crates/sindri/tests/frames.rs",
@@ -395,6 +409,9 @@ fn picking() -> View {
     let mut view = View::boot();
     view.set_workspace(root.path().to_path_buf());
     view.key(Key::Char('@'));
+    for glyph in query.chars() {
+        view.key(Key::Char(glyph));
+    }
     view
 }
 

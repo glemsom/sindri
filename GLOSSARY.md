@@ -165,8 +165,10 @@ and under fifty columns the whole frame with its title row and no border.
 _Avoid_: Modal, dialog, popup, overlay, sheet
 
 **Path picker**:
-The screen `@` opens: the workspace's files as `git` reads them, nearest first, capped at eight
-rows.
+The screen `@` opens: the workspace's files as `git` reads them, ranked by how the query sits in one —
+a name it starts, a name it holds, a path it holds — and nearest first within a rank. The card draws
+the first eight as the file's name with the directory it sits in set quieter beside it, and one row
+under them saying which matches it shows and how many the query left.
 _Avoid_: File browser, autocomplete, fuzzy finder, file search
 
 **Front door**:
