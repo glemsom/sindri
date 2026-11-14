@@ -82,7 +82,7 @@ mod tests {
     /// own answer is the whole of what a picture needs.
     #[test]
     fn a_terminal_that_reports_its_pixels_is_asked_no_question() {
-        let mut pty = Pty::open();
+        let pty = Pty::open();
         pty.resize(80, 24, 800, 480);
         let terminal =
             Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
@@ -103,7 +103,7 @@ mod tests {
 
     #[test]
     fn a_terminal_that_answers_nothing_is_drawn_at_the_nominal_cell() {
-        let mut pty = Pty::open();
+        let pty = Pty::open();
         pty.resize(80, 24, 0, 0);
         let terminal =
             Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");

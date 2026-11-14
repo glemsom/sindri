@@ -2,9 +2,9 @@
 //! own: a copy written down the wire, a settings visit whose value is saved or refused, a run that
 //! cannot start leaving its row, a focus report, and a key typed before the first frame.
 
-use std::fs::File;
 use std::os::fd::AsFd;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use clap::Parser;
 use sindri::composer::{Composer, Key, Outcome, Prompt};
@@ -19,16 +19,14 @@ use sindri_core::redact::SecretSet;
 use sindri_core::run::Stop;
 use sindri_core::wire::Wire;
 
+use crate::term::Terminal;
 use crate::term::pty::Pty;
-use crate::term::{Terminal, canvas_at, painted_at};
 
 use super::*;
 
 #[test]
 fn a_copy_leaves_the_terminal_by_osc_52_and_asks_no_clipboard_utility() {
-    let mut pty = Pty::open();
-    let terminal =
-        Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
+    let stage = Stage::open();
     let view = View::of(
         vec![Entry::Assistant {
             turn: 1,
@@ -39,32 +37,15 @@ fn a_copy_leaves_the_terminal_by_osc_52_and_asks_no_clipboard_utility() {
 
     // No mark, so `Ctrl-Y` copies the last answer: the words go down the wire the frame does,
     // which is what makes a copy work over SSH.
-    let cli = Cli::parse_from(["sindri"]);
     let environment = std::collections::BTreeMap::new();
-    let environment: &dyn Environment = &environment;
-    let telling = Window::new(
-        pty.slave
-            .try_clone()
-            .expect("a second handle on the terminal"),
-        true,
-        std::path::Path::new("/work/sindri"),
-        false,
-    );
-    let mut live = live_loop(
-        &terminal,
-        &cli,
-        sindri_core::config::Config::default(),
-        environment,
-        view,
-        telling,
-    );
+    let mut live = stage.launch(view, Config::default(), &environment);
 
     let ended = live
         .answer(Event::Key(Key::Copy))
         .expect("the copy is written");
 
     assert!(ended.is_none(), "a copy is not the key that quits");
-    let drawn = pty.drawn();
+    let drawn = stage.drawn();
     let sequence = crate::osc::copy("read the transcript");
     assert!(
         drawn.contains(std::str::from_utf8(&sequence).expect("a printable sequence")),
@@ -91,27 +72,84 @@ fn config_home(
     (home, environment)
 }
 
-/// A launch standing on `terminal`, with `view` as the frame it draws and nothing in flight.
-fn live_loop<'a>(
-    terminal: &'a Terminal,
-    cli: &'a Cli,
-    config: Config,
-    environment: &'a dyn Environment,
-    view: View,
-    telling: Window<File>,
-) -> Loop<'a> {
-    Loop {
-        terminal,
-        canvas: canvas_at(terminal, painted_at()).expect("a canvas over it"),
-        view,
-        cli,
-        config,
-        environment,
-        telling,
-        wake: Arc::new(Wake::open().expect("a wake")),
-        launch: None,
-        running: None,
-        asking: None,
+/// A pseudo-terminal of this process's own, with the launch standing on it: the keyboard and the
+/// screen it was handed, and the reader that says what the screen has been given.
+struct Stage {
+    pty: Pty,
+    terminal: Terminal,
+    cli: Cli,
+}
+
+impl Stage {
+    fn open() -> Stage {
+        let pty = Pty::open();
+        let terminal =
+            Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
+        Stage {
+            pty,
+            terminal,
+            cli: Cli::parse_from(["sindri"]),
+        }
+    }
+
+    /// The config the launch resolves from `environment`, as the launch is handed it.
+    fn config(&self, environment: &impl Environment) -> Config {
+        Config::resolve(environment, self.cli.flags()).expect("a config")
+    }
+
+    /// The launch this terminal draws, with `view` as the frame it draws and `config` as the run a
+    /// prompt will ask for.
+    fn launch<'a>(
+        &'a self,
+        view: View,
+        config: Config,
+        environment: &'a dyn Environment,
+    ) -> Loop<'a> {
+        self.told_in(view, config, environment, false)
+    }
+
+    /// The same launch where the stream carries a window, which is the only thing that reports the
+    /// reader's focus and raises a notification.
+    fn launch_in_a_window<'a>(
+        &'a self,
+        view: View,
+        config: Config,
+        environment: &'a dyn Environment,
+    ) -> Loop<'a> {
+        self.told_in(view, config, environment, true)
+    }
+
+    /// Every byte this terminal has been handed, and nothing it says next.
+    fn drawn(&self) -> String {
+        self.pty.drawn()
+    }
+
+    fn told_in<'a>(
+        &'a self,
+        view: View,
+        config: Config,
+        environment: &'a dyn Environment,
+        carries: bool,
+    ) -> Loop<'a> {
+        let telling = Window::new(
+            self.pty
+                .slave
+                .try_clone()
+                .expect("a second handle on the terminal"),
+            config.tells_status(),
+            std::path::Path::new("/work/sindri"),
+            carries,
+        );
+        Loop::new(
+            &self.terminal,
+            &self.cli,
+            config,
+            environment,
+            view,
+            telling,
+            Arc::new(Wake::open().expect("a wake")),
+        )
+        .expect("a launch")
     }
 }
 
@@ -134,29 +172,17 @@ fn walk_to(view: &mut View, key: &str) {
 fn enter_at_the_settings_modal_writes_the_file_and_the_next_prompt_runs_on_it() {
     let (home, environment) = config_home("# mine\nmodel = \"old-model\"\n");
     let path = home.path().join("sindri").join("config.toml");
-    let cli = Cli::parse_from(["sindri"]);
-    let config = Config::resolve(&environment, cli.flags()).expect("a config");
-    let pty = Pty::open();
-    let terminal =
-        Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
+    let stage = Stage::open();
+    let config = stage.config(&environment);
     let mut view = View::boot();
     view.open_settings(&config);
-    let telling = Window::new(
-        pty.slave
-            .try_clone()
-            .expect("a second handle on the terminal"),
-        true,
-        std::path::Path::new("/work/sindri"),
-        false,
-    );
-    let environment: &dyn Environment = &environment;
 
     walk_to(&mut view, "model");
     view.key(Key::Clear);
     for glyph in "new-model".chars() {
         view.key(Key::Char(glyph));
     }
-    let mut live = live_loop(&terminal, &cli, config, environment, view, telling);
+    let mut live = stage.launch(view, config, &environment);
 
     let ended = live
         .answer(Event::Key(Key::Enter))
@@ -170,12 +196,12 @@ fn enter_at_the_settings_modal_writes_the_file_and_the_next_prompt_runs_on_it() 
          byte it was"
     );
     assert_eq!(
-        live.view.mode(),
+        live.mode(),
         sindri::keys::Mode::Composer,
         "and the visit is over, so the draft has the keys again"
     );
     assert_eq!(
-        live.config.model.as_deref(),
+        live.config().model.as_deref(),
         Some("new-model"),
         "the launch's config is resolved again from what the visit wrote, so the next \
          prompt — the run `send` starts from this very value — runs on it"
@@ -186,26 +212,14 @@ fn enter_at_the_settings_modal_writes_the_file_and_the_next_prompt_runs_on_it() 
 fn a_settings_value_the_schema_refuses_names_its_row_and_writes_nothing() {
     let (home, environment) = config_home("model = \"old-model\"\n");
     let path = home.path().join("sindri").join("config.toml");
-    let cli = Cli::parse_from(["sindri"]);
-    let config = Config::resolve(&environment, cli.flags()).expect("a config");
-    let pty = Pty::open();
-    let terminal =
-        Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
+    let stage = Stage::open();
+    let config = stage.config(&environment);
     let mut view = View::boot();
     view.open_settings(&config);
-    let telling = Window::new(
-        pty.slave
-            .try_clone()
-            .expect("a second handle on the terminal"),
-        true,
-        std::path::Path::new("/work/sindri"),
-        false,
-    );
-    let environment: &dyn Environment = &environment;
 
     walk_to(&mut view, "context_window");
     view.key(Key::Char('0'));
-    let mut live = live_loop(&terminal, &cli, config, environment, view, telling);
+    let mut live = stage.launch(view, config, &environment);
 
     let ended = live
         .answer(Event::Key(Key::Enter))
@@ -216,8 +230,6 @@ fn a_settings_value_the_schema_refuses_names_its_row_and_writes_nothing() {
         "a value the schema refuses is a row on the frame, and not the end of the launch"
     );
     let refusal = live
-        .view
-        .settings()
         .refusal()
         .unwrap_or_else(|| panic!("the settings screen says why the value will not do"));
     assert!(
@@ -297,30 +309,18 @@ fn a_launch_opens_on_the_face_unless_its_config_turns_it_off() {
 fn a_settings_visit_that_turns_the_face_off_repaints_the_frame_it_leaves_without_one() {
     let (home, environment) = config_home("face = true\n");
     let path = home.path().join("sindri").join("config.toml");
-    let cli = Cli::parse_from(["sindri"]);
-    let config = Config::resolve(&environment, cli.flags()).expect("a config");
+    let stage = Stage::open();
+    let config = stage.config(&environment);
     let mut view = railed(&config);
     assert!(
         draws_the_face(&mut view),
         "the frame the visit is opened from draws the face the file speaks for"
     );
-    let pty = Pty::open();
-    let terminal =
-        Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
-    let telling = Window::new(
-        pty.slave
-            .try_clone()
-            .expect("a second handle on the terminal"),
-        true,
-        std::path::Path::new("/work/sindri"),
-        false,
-    );
-    let environment: &dyn Environment = &environment;
 
     view.open_settings(&config);
     walk_to(&mut view, "face");
     view.key(Key::Char(' '));
-    let mut live = live_loop(&terminal, &cli, config, environment, view, telling);
+    let mut live = stage.launch(view, config, &environment);
 
     let ended = live
         .answer(Event::Key(Key::Enter))
@@ -333,31 +333,14 @@ fn a_settings_visit_that_turns_the_face_off_repaints_the_frame_it_leaves_without
         "the row the reader flipped is the only line the write touches"
     );
     assert_eq!(
-        live.view.mode(),
+        live.mode(),
         sindri::keys::Mode::Composer,
         "and the visit is over, so the draft has the keys again"
     );
     assert!(
-        !draws_the_face(&mut live.view),
+        !live.draws_the_face(),
         "the frame the visit leaves reserves no band for a face it will not draw"
     );
-}
-
-/// The terminal a key is driven through with no loop around it: the frame's own pseudo-terminal, the
-/// terminal over it, and the window the launch is announced in.
-fn staged() -> (Pty, Terminal, Window<File>) {
-    let pty = Pty::open();
-    let terminal =
-        Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
-    let telling = Window::new(
-        pty.slave
-            .try_clone()
-            .expect("a second handle on the terminal"),
-        true,
-        std::path::Path::new("/work/sindri"),
-        false,
-    );
-    (pty, terminal, telling)
 }
 
 fn cells_wearing(view: &mut View, palette: &Palette, look: Look) -> Vec<(u16, u16)> {
@@ -372,6 +355,42 @@ fn cells_wearing(view: &mut View, palette: &Palette, look: Look) -> Vec<(u16, u1
                 .is_some_and(|worn| worn == look)
         })
         .collect()
+}
+
+/// What a test asks of a launch: the frame it holds, the config the run will ask by, and the words it
+/// has told. A test never reads a field of it.
+impl Loop<'_> {
+    fn mode(&self) -> sindri::keys::Mode {
+        self.view.mode()
+    }
+
+    fn config(&self) -> &Config {
+        &self.config
+    }
+
+    fn draft(&self) -> &str {
+        self.view.composer().text()
+    }
+
+    fn queued(&self) -> usize {
+        self.view.queue().len()
+    }
+
+    fn dequeue(&mut self) -> Option<Prompt> {
+        self.view.dequeue()
+    }
+
+    fn refusal(&self) -> Option<&str> {
+        self.view.settings().refusal()
+    }
+
+    fn draws_the_face(&mut self) -> bool {
+        draws_the_face(&mut self.view)
+    }
+
+    fn cells(&mut self, palette: &Palette, look: Look) -> Vec<(u16, u16)> {
+        cells_wearing(&mut self.view, palette, look)
+    }
 }
 
 fn sequences(written: &str) -> Vec<&str> {
@@ -393,20 +412,11 @@ fn prompt_of(text: &str) -> Prompt {
 
 #[test]
 fn a_run_that_cannot_start_leaves_its_row_and_the_draft_and_never_ends_the_launch() {
-    let (mut pty, terminal, telling) = staged();
+    let stage = Stage::open();
     let mut view = View::boot();
     view.paste("why does the retry test fail");
-    let cli = Cli::parse_from(["sindri"]);
     let environment = std::collections::BTreeMap::new();
-    let environment: &dyn Environment = &environment;
-    let mut live = live_loop(
-        &terminal,
-        &cli,
-        Config::default(),
-        environment,
-        view,
-        telling,
-    );
+    let mut live = stage.launch(view, Config::default(), &environment);
 
     let ended = live
         .answer(Event::Key(Key::Enter))
@@ -416,7 +426,7 @@ fn a_run_that_cannot_start_leaves_its_row_and_the_draft_and_never_ends_the_launc
         ended.is_none(),
         "a run that could not start is a row in the frame, and not the end of the launch"
     );
-    let drawn = pty.drawn();
+    let drawn = stage.drawn();
     let refusal = drawn
         .find("a run needs a provider and a model")
         .unwrap_or_else(|| panic!("the frame carries the refusal's own words: {drawn:?}"));
@@ -431,18 +441,9 @@ fn a_run_that_cannot_start_leaves_its_row_and_the_draft_and_never_ends_the_launc
 
 #[test]
 fn a_pass_with_no_run_in_flight_lands_nothing_and_ends_nothing() {
-    let (_pty, terminal, telling) = staged();
-    let cli = Cli::parse_from(["sindri"]);
+    let stage = Stage::open();
     let environment = std::collections::BTreeMap::new();
-    let environment: &dyn Environment = &environment;
-    let mut live = live_loop(
-        &terminal,
-        &cli,
-        Config::default(),
-        environment,
-        View::boot(),
-        telling,
-    );
+    let mut live = stage.launch(View::boot(), Config::default(), &environment);
 
     let ended = live
         .take()
@@ -456,37 +457,28 @@ fn a_pass_with_no_run_in_flight_lands_nothing_and_ends_nothing() {
 
 #[test]
 fn a_refused_prompt_out_of_the_queue_is_the_draft_again_and_the_launch_stands() {
-    let (mut pty, terminal, telling) = staged();
+    let stage = Stage::open();
     let mut view = View::boot();
     view.enqueue(prompt_of("run the test that failed and read it"));
     view.enqueue(prompt_of("then the fmt check"));
-    let cli = Cli::parse_from(["sindri"]);
     // No provider and no model: `Launch::open` refuses before it touches a sandbox, a session or a
     // wire.
     let environment = std::collections::BTreeMap::new();
-    let environment: &dyn Environment = &environment;
-    let mut live = live_loop(
-        &terminal,
-        &cli,
-        Config::default(),
-        environment,
-        view,
-        telling,
-    );
+    let mut live = stage.launch(view, Config::default(), &environment);
 
     live.resume().expect("the refusal is drawn");
 
     assert_eq!(
-        live.view.queue().len(),
+        live.queued(),
         1,
         "the prompt behind the one that could not run waits there still"
     );
     assert_eq!(
-        live.view.composer().text(),
+        live.draft(),
         "run the test that failed and read it",
         "and the words it was asked with are the reader's draft again, to send or to change"
     );
-    let drawn = pty.drawn();
+    let drawn = stage.drawn();
     assert!(
         drawn.contains("a run needs a provider and a model"),
         "the frame carries the refusal's own words: {drawn:?}"
@@ -495,48 +487,39 @@ fn a_refused_prompt_out_of_the_queue_is_the_draft_again_and_the_launch_stands() 
 
 #[test]
 fn a_refused_prompt_waits_in_the_queue_again_while_the_reader_has_a_draft_of_their_own() {
-    let (mut pty, terminal, telling) = staged();
+    let stage = Stage::open();
     let mut view = View::boot();
     view.enqueue(prompt_of("run the test that failed and read it"));
     view.enqueue(prompt_of("then the fmt check"));
     view.paste("and then the release check");
-    let cli = Cli::parse_from(["sindri"]);
     // No provider and no model: `Launch::open` refuses before it touches a sandbox, a session or a
     // wire.
     let environment = std::collections::BTreeMap::new();
-    let environment: &dyn Environment = &environment;
-    let mut live = live_loop(
-        &terminal,
-        &cli,
-        Config::default(),
-        environment,
-        view,
-        telling,
-    );
+    let mut live = stage.launch(view, Config::default(), &environment);
 
     live.resume().expect("the refusal is drawn");
 
     assert_eq!(
-        live.view.composer().text(),
+        live.draft(),
         "and then the release check",
         "a draft the reader has typed since is theirs, and no refusal takes it"
     );
     assert_eq!(
-        live.view.queue().len(),
+        live.queued(),
         2,
         "so the prompt that could not run waits in the queue again rather than nowhere"
     );
     assert_eq!(
-        live.view.dequeue().as_ref().map(Prompt::text),
+        live.dequeue().as_ref().map(Prompt::text),
         Some("then the fmt check"),
         "behind the prompt it was queued behind"
     );
     assert_eq!(
-        live.view.dequeue().as_ref().map(Prompt::text),
+        live.dequeue().as_ref().map(Prompt::text),
         Some("run the test that failed and read it"),
         "and ahead of nothing it has lost"
     );
-    let drawn = pty.drawn();
+    let drawn = stage.drawn();
     assert!(
         drawn.contains("a run needs a provider and a model"),
         "the frame carries the refusal's own words: {drawn:?}"
@@ -545,19 +528,10 @@ fn a_refused_prompt_waits_in_the_queue_again_while_the_reader_has_a_draft_of_the
 
 #[test]
 fn a_quit_typed_before_the_first_frame_is_answered_by_the_loop() {
-    let (_pty, terminal, telling) = staged();
-    let cli = Cli::parse_from(["sindri"]);
+    let stage = Stage::open();
     let environment = std::collections::BTreeMap::new();
-    let environment: &dyn Environment = &environment;
     let signals = Signals::install().expect("a signal pipe");
-    let mut live = live_loop(
-        &terminal,
-        &cli,
-        Config::default(),
-        environment,
-        View::boot(),
-        telling,
-    );
+    let mut live = stage.launch(View::boot(), Config::default(), &environment);
 
     let ended = live.keys(&signals, b"\x11").expect("the quit is answered");
 
@@ -569,31 +543,15 @@ fn a_quit_typed_before_the_first_frame_is_answered_by_the_loop() {
 
 #[test]
 fn a_focus_report_recedes_the_frame_and_the_stop_nobody_watched_raises_the_notification() {
-    let (mut pty, terminal, _) = staged();
-    let cli = Cli::parse_from(["sindri"]);
+    let stage = Stage::open();
     let environment = std::collections::BTreeMap::new();
-    let environment: &dyn Environment = &environment;
-    // A stream that carries a window: nothing else raises a notification at all.
-    let telling = Window::new(
-        pty.slave
-            .try_clone()
-            .expect("a second handle on the terminal"),
-        true,
-        std::path::Path::new("/work/sindri"),
-        true,
-    );
-    let mut live = live_loop(
-        &terminal,
-        &cli,
-        Config::default(),
-        environment,
-        View::boot(),
-        telling,
-    );
     let palette = Palette::TRUECOLOR;
-    live.view.set_palette(palette);
-    live.view.paste("the draft the composer band is drawn from");
-    let lit = cells_wearing(&mut live.view, &palette, palette.accent_edge());
+    let mut view = View::boot();
+    view.set_palette(palette);
+    view.paste("the draft the composer band is drawn from");
+    // A stream that carries a window: nothing else raises a notification at all.
+    let mut live = stage.launch_in_a_window(view, Config::default(), &environment);
+    let lit = live.cells(&palette, palette.accent_edge());
     assert!(
         !lit.is_empty(),
         "the surface that takes the keys wears the accent edge while the reader is read: {lit:?}"
@@ -604,18 +562,17 @@ fn a_focus_report_recedes_the_frame_and_the_stop_nobody_watched_raises_the_notif
         .expect("the report is answered");
 
     assert!(ended.is_none(), "a focus report never ends the launch");
-    let away = cells_wearing(&mut live.view, &palette, palette.dim_edge());
+    let away = live.cells(&palette, palette.dim_edge());
     assert!(
         lit.iter().all(|at| away.contains(at)),
         "every cell that wore the accent recedes to the dim edge while nobody is looking: {away:?}"
     );
-    live.telling
-        .say(Told::Stopped {
-            turn: 1,
-            stop: Stop::Final,
-        })
-        .expect("the run's ending is told");
-    let drawn = pty.drawn();
+    live.told(Told::Stopped {
+        turn: 1,
+        stop: Stop::Final,
+    })
+    .expect("the run's ending is told");
+    let drawn = stage.drawn();
     let said = sequences(&drawn);
     assert!(
         said.iter().any(|payload| payload.starts_with("9;sindri: ")),
@@ -623,7 +580,7 @@ fn a_focus_report_recedes_the_frame_and_the_stop_nobody_watched_raises_the_notif
     );
     live.answer(Event::Focus(true)).expect("the reader is back");
     assert_eq!(
-        cells_wearing(&mut live.view, &palette, palette.accent_edge()),
+        live.cells(&palette, palette.accent_edge()),
         lit,
         "and the edge returns to the cells it left once the terminal says the reader is back"
     );

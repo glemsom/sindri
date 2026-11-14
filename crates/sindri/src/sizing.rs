@@ -106,7 +106,7 @@ mod tests {
 
     #[test]
     fn a_terminal_that_answers_nothing_is_asked_and_reads_no_large_text() {
-        let mut pty = Pty::open();
+        let pty = Pty::open();
         pty.resize(80, 24, 0, 0);
         let terminal =
             Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to ask");

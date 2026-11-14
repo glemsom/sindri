@@ -12,7 +12,6 @@ use rustix::event::Timespec;
 use rustix::event::{PollFd, PollFlags, poll};
 use sindri::composer::{Outcome, Prompt, State};
 use sindri::decode::{Decoder, Event};
-use sindri::link;
 use sindri::palette::Palette;
 use sindri::pointer;
 use sindri::pulse::{self, Pulse};
@@ -30,7 +29,7 @@ use crate::launch::{Launch, Refusal};
 use crate::reports::{Asking, Report, Running, ask};
 use crate::signal::{Signals, Wake};
 use crate::sizing::probed_sizing;
-use crate::term::{Canvas, Screen, Terminal, canvas, hand_pictures, missing_terminal, paint, tell};
+use crate::term::{Canvas, Screen, Terminal, hand_pictures, missing_terminal, paint, tell};
 use crate::window::{self, Window};
 
 /// A launch that cannot be a run, or a screen it cannot draw on: exit 2.
@@ -133,57 +132,41 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     };
     view.set_sizing(sizing);
     view.set_pointer(pointer);
-    // Resolved once with the palette: a terminal that speaks no hyperlink is handed the words
-    // and no sequence, and nothing asks again on a key.
-    let places = link::speaks(
-        named("TERM").as_deref(),
-        named("TERM_PROGRAM").as_deref(),
-        named("VTE_VERSION").as_deref(),
-    );
     view.set_workspace(workspace.clone());
     // Read the way `launch` reads it, so the name `/skill:name` accepts and a name a run could
     // call come from one catalog.
     view.set_home(crate::launch::home());
     view.door(boot);
-    let mut canvas = match canvas(&terminal, places) {
-        Ok(canvas) => canvas,
-        Err(error) => {
-            return crate::refuse(&format!("the frame could not be painted: {error}"), SETUP);
-        }
-    };
-    if let Err(error) = paint(&mut canvas, &mut view) {
-        return crate::refuse(&format!("the frame could not be painted: {error}"), SETUP);
-    }
     // One telling for the whole launch, so the pace a status is told at is the launch's: the
     // screen it writes on is a second handle on the descriptor a frame is drawn on.
-    let mut telling = match terminal.screen.try_clone() {
+    let telling = match terminal.screen.try_clone() {
         Ok(screen) => Window::new(screen, config.tells_status(), &workspace, windowed),
         Err(error) => {
             return crate::refuse(&format!("the terminal could not be told: {error}"), SETUP);
         }
     };
-    if let Err(error) = telling.say(Told::Idle) {
-        return crate::refuse(&format!("the status could not be written: {error}"), SETUP);
-    }
-    // Replaced by a visit to the settings modal: the file is written once and resolved again,
-    // so the prompt after the visit runs on what it holds.
-    let config = config.clone();
-    let environment: &dyn Environment = &Process;
     // The session is the launch's and not a run's: the first prompt opens it, every prompt after runs
     // in it, and it ends with the launch.
-    let mut live = Loop {
-        terminal: &terminal,
-        canvas,
-        view,
+    let mut live = match Loop::new(
+        &terminal,
         cli,
-        config,
-        environment,
+        config.clone(),
+        &Process,
+        view,
         telling,
-        launch: None,
-        running: None,
-        asking: None,
-        wake: signals.wake(),
+        signals.wake(),
+    ) {
+        Ok(live) => live,
+        Err(error) => {
+            return crate::refuse(&format!("the frame could not be painted: {error}"), SETUP);
+        }
     };
+    if let Err(error) = live.paint() {
+        return crate::refuse(&format!("the frame could not be painted: {error}"), SETUP);
+    }
+    if let Err(error) = live.told(Told::Idle) {
+        return crate::refuse(&format!("the status could not be written: {error}"), SETUP);
+    }
     let keys = live.keys(&signals, &typed);
     let launch = live.launch.take();
     drop(live);
@@ -223,7 +206,66 @@ struct Loop<'a> {
     wake: Arc<Wake>,
 }
 
-impl Loop<'_> {
+impl<'a> Loop<'a> {
+    /// The canvas a launch draws on: the area its terminal reports, placing the hyperlink it says it
+    /// speaks, asked once here and never again on a key.
+    #[cfg(not(test))]
+    fn canvas<'t>(terminal: &'t Terminal, environment: &dyn Environment) -> io::Result<Canvas<'t>> {
+        let (term, program, vte) = (
+            environment.var("TERM"),
+            environment.var("TERM_PROGRAM"),
+            environment.var("VTE_VERSION"),
+        );
+        crate::term::canvas(
+            terminal,
+            sindri::link::speaks(term.as_deref(), program.as_deref(), vte.as_deref()),
+        )
+    }
+
+    /// The same canvas over the area a test named, placing no hyperlink.
+    #[cfg(test)]
+    fn canvas<'t>(
+        terminal: &'t Terminal,
+        _environment: &dyn Environment,
+    ) -> io::Result<Canvas<'t>> {
+        crate::term::canvas_at(terminal, crate::term::painted_at())
+    }
+
+    /// The launch's loop, holding a canvas of its own and nothing in flight. `wake` is shared with
+    /// the signal handler and with every run the loop starts, so a report and a `SIGINT` break the
+    /// one wait.
+    fn new(
+        terminal: &'a Terminal,
+        cli: &'a Cli,
+        config: Config,
+        environment: &'a dyn Environment,
+        view: View,
+        telling: Window<File>,
+        wake: Arc<Wake>,
+    ) -> io::Result<Loop<'a>> {
+        Ok(Loop {
+            terminal,
+            canvas: Self::canvas(terminal, environment)?,
+            view,
+            cli,
+            config,
+            environment,
+            telling,
+            launch: None,
+            running: None,
+            asking: None,
+            wake,
+        })
+    }
+
+    fn paint(&mut self) -> io::Result<()> {
+        paint(&mut self.canvas, &mut self.view)
+    }
+
+    fn told(&mut self, told: Told) -> io::Result<()> {
+        self.telling.say(told)
+    }
+
     /// Reads the terminal until the launch ends, one event at a time, and paints only when an event
     /// changed the frame: the wait sleeps in `poll` and draws nothing meanwhile, so an idle frame
     /// is never drawn. A key, a signal and a live run's fragment are all fds in that wait.
@@ -316,7 +358,7 @@ impl Loop<'_> {
             // Not an idle frame: a live run's marker has stepped, so the frame that drew the last
             // glyph is now wrong.
             if !keyed && !woken && self.running.is_some() {
-                paint(&mut self.canvas, &mut self.view)?;
+                self.paint()?;
             }
         }
     }
@@ -330,7 +372,7 @@ impl Loop<'_> {
             // is handed the whole text with its line breaks in it.
             Event::Paste(text) => {
                 self.view.paste(&text);
-                paint(&mut self.canvas, &mut self.view)?;
+                self.paint()?;
                 return Ok(None);
             }
             // The one report a reader never sent: the frame recedes while nobody is reading it,
@@ -338,7 +380,7 @@ impl Loop<'_> {
             Event::Focus(focused) => {
                 self.view.set_focused(focused);
                 self.telling.focused(focused);
-                paint(&mut self.canvas, &mut self.view)?;
+                self.paint()?;
                 return Ok(None);
             }
             // The one seam a pointer's act and a key's act both come through: what the frame
@@ -349,7 +391,7 @@ impl Loop<'_> {
         match outcome {
             Outcome::Unchanged => Ok(None),
             Outcome::Edited => {
-                paint(&mut self.canvas, &mut self.view)?;
+                self.paint()?;
                 Ok(None)
             }
             // The flag an outside `SIGINT` sets too: the keyboard and the signal are one path,
@@ -358,7 +400,7 @@ impl Loop<'_> {
                 if let Some(flight) = &self.running {
                     flight.cancel();
                 }
-                paint(&mut self.canvas, &mut self.view)?;
+                self.paint()?;
                 Ok(None)
             }
             Outcome::Send(prompt) => {
@@ -381,7 +423,7 @@ impl Loop<'_> {
                     }
                     Err(error) => self.view.refuse(&error.to_string()),
                 }
-                paint(&mut self.canvas, &mut self.view)?;
+                self.paint()?;
                 Ok(None)
             }
             // Written here because this module is the one that owns the tty, and nothing is
@@ -399,7 +441,7 @@ impl Loop<'_> {
                 match persist(&self.environment, &touched, self.cli.flags()) {
                     Ok(fresh) => {
                         self.config = fresh;
-                        paint(&mut self.canvas, &mut self.view)?;
+                        self.paint()?;
                         Ok(None)
                     }
                     Err(error) => Ok(Some(Ending::Refused(Refusal::new(
@@ -411,12 +453,12 @@ impl Loop<'_> {
             // The frame holds no config, so the screen is seeded from the one the launch resolved.
             Outcome::Settings => {
                 self.view.open_settings(&self.config);
-                paint(&mut self.canvas, &mut self.view)?;
+                self.paint()?;
                 Ok(None)
             }
             Outcome::Served => {
                 self.asking = ask(&self.config, &self.wake);
-                paint(&mut self.canvas, &mut self.view)?;
+                self.paint()?;
                 Ok(None)
             }
             Outcome::Quit => Ok(Some(Ending::Quit)),
@@ -429,7 +471,7 @@ impl Loop<'_> {
     fn send(&mut self, prompt: Prompt) -> io::Result<()> {
         if self.running.is_some() {
             self.view.enqueue(prompt);
-            paint(&mut self.canvas, &mut self.view)?;
+            self.paint()?;
             return Ok(());
         }
         let launching = match self.launch.take() {
@@ -444,7 +486,7 @@ impl Loop<'_> {
                     Ok(opened) => opened,
                     Err(refusal) => {
                         self.view.run_refused(refusal.message(), prompt);
-                        paint(&mut self.canvas, &mut self.view)?;
+                        self.paint()?;
                         return Ok(());
                     }
                 }
@@ -465,8 +507,8 @@ impl Loop<'_> {
         // The marker before the run has said anything: the first step of the cycle and no time on
         // the clock yet, so the frame a prompt is sent from already says a run has begun.
         self.view.set_pulse(Some(Pulse::live(0)));
-        paint(&mut self.canvas, &mut self.view)?;
-        self.telling.say(Told::Asking { turn: 1 })?;
+        self.paint()?;
+        self.told(Told::Asking { turn: 1 })?;
         Ok(())
     }
 
@@ -501,7 +543,7 @@ impl Loop<'_> {
                     painted = true;
                 }
                 // A status changes no cell: it is written by the one thing here that owns a tty.
-                Report::Told(told) => self.telling.say(told)?,
+                Report::Told(told) => self.told(told)?,
                 Report::Facts(facts) => {
                     self.view.set_facts(facts);
                     painted = true;
@@ -521,7 +563,7 @@ impl Loop<'_> {
         }
         if let Some((ref stop, elapsed_ms, turns)) = stopped {
             // Said at once, whatever the pace says about a turn: a stop reason is a change of state.
-            self.telling.say(Told::Stopped {
+            self.told(Told::Stopped {
                 turn: turns,
                 stop: stop.clone(),
             })?;
@@ -540,7 +582,7 @@ impl Loop<'_> {
             }
         }
         if painted {
-            paint(&mut self.canvas, &mut self.view)?;
+            self.paint()?;
         }
         Ok(stopped.is_some())
     }
@@ -553,7 +595,7 @@ impl Loop<'_> {
             return Ok(());
         };
         self.view.set_served(listing);
-        paint(&mut self.canvas, &mut self.view)?;
+        self.paint()?;
         if let Some(flight) = self.asking.take() {
             flight.joined();
         }

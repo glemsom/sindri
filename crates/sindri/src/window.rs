@@ -381,7 +381,7 @@ mod tests {
 
     #[test]
     fn a_pseudo_terminal_reads_the_title_the_mark_and_one_notification_off_the_wire() {
-        let mut pty = Pty::open();
+        let pty = Pty::open();
         {
             let mut window = Window::new(
                 pty.slave.try_clone().expect("a handle on the terminal"),

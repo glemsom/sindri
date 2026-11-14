@@ -284,6 +284,7 @@ impl<W: Write> RatatuiBackend for Backend<W> {
     }
 }
 
+#[cfg(not(test))]
 pub(crate) fn canvas(terminal: &Terminal, places: bool) -> io::Result<Canvas<'_>> {
     ratatui::Terminal::new(Backend::new(&terminal.screen, places))
 }
@@ -501,7 +502,7 @@ pub(crate) mod pty {
         /// Every byte the terminal has been handed and nothing it says next: one read is as much as
         /// had arrived and a frame is several writes, so the reads go on until the terminal is
         /// silent — and never wait for a word it does not owe.
-        pub(crate) fn drawn(&mut self) -> String {
+        pub(crate) fn drawn(&self) -> String {
             let mut drawn = Vec::new();
             while !self.silent() {
                 let mut chunk = [0u8; 4096];
@@ -530,7 +531,7 @@ pub(crate) mod pty {
 
         /// Whether the terminal has been written nothing at all: a master with no byte waiting
         /// is a terminal nobody spoke to, and asking must not block the way a read would.
-        pub(crate) fn silent(&mut self) -> bool {
+        pub(crate) fn silent(&self) -> bool {
             let mut fds = [PollFd::new(&self.master, PollFlags::IN)];
             let wait = Timespec::try_from(Duration::from_millis(20)).expect("a span");
             poll(&mut fds, Some(&wait)).is_ok() && !fds[0].revents().contains(PollFlags::IN)
@@ -623,7 +624,7 @@ mod tests {
     /// it names, told whether that terminal places a hyperlink.
     fn handed(buffer: Buffer, links: Links, places: bool) -> String {
         let area = *buffer.area();
-        let mut pty = Pty::open();
+        let pty = Pty::open();
         let mut backend = Backend::new(
             pty.slave
                 .try_clone()
@@ -643,7 +644,7 @@ mod tests {
     /// it draws at more than one cell.
     fn spelled(buffer: Buffer, sizes: Sizes) -> String {
         let area = *buffer.area();
-        let mut pty = Pty::open();
+        let pty = Pty::open();
         let mut backend = Backend::new(
             pty.slave
                 .try_clone()
@@ -828,8 +829,8 @@ mod tests {
 
     #[test]
     fn the_frame_the_launch_paints_is_the_frame_the_canvas_draws() {
-        let mut launch = Pty::open();
-        let mut canvas = Pty::open();
+        let launch = Pty::open();
+        let canvas = Pty::open();
         written(&launch, true);
         written(&canvas, false);
 
@@ -895,7 +896,7 @@ mod tests {
 
     #[test]
     fn a_frame_whose_terminal_sizes_text_hands_it_the_heading_as_the_sequence_that_draws_it() {
-        let mut pty = Pty::open();
+        let pty = Pty::open();
         let terminal =
             Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
         let area = painted_at();
@@ -1005,7 +1006,7 @@ mod tests {
     #[test]
     fn a_terminal_that_takes_the_window_sequences_is_asked_for_its_focus_and_gives_it_up() {
         let _one_screen = lock(&ONE_SCREEN);
-        let mut pty = Pty::open();
+        let pty = Pty::open();
         let terminal =
             Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
         let screen = Screen::take(&terminal, true, false).expect("the screen is taken");
@@ -1032,7 +1033,7 @@ mod tests {
     #[test]
     fn a_terminal_that_takes_none_of_the_window_sequences_is_asked_for_nothing() {
         let _one_screen = lock(&ONE_SCREEN);
-        let mut pty = Pty::open();
+        let pty = Pty::open();
         let terminal =
             Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
         let screen = Screen::take(&terminal, false, false).expect("the screen is taken");
@@ -1053,7 +1054,7 @@ mod tests {
     #[test]
     fn a_terminal_that_reports_a_pointer_is_asked_for_one_and_gives_it_up() {
         let _one_screen = lock(&ONE_SCREEN);
-        let mut pty = Pty::open();
+        let pty = Pty::open();
         let terminal =
             Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
         let screen = Screen::take(&terminal, false, true).expect("the screen is taken");
@@ -1077,7 +1078,7 @@ mod tests {
     #[test]
     fn a_terminal_that_reports_no_pointer_is_asked_for_none_and_has_none_to_give_up() {
         let _one_screen = lock(&ONE_SCREEN);
-        let mut pty = Pty::open();
+        let pty = Pty::open();
         let terminal =
             Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
         let screen = Screen::take(&terminal, true, false).expect("the screen is taken");
@@ -1097,7 +1098,7 @@ mod tests {
     #[test]
     fn a_panic_gives_the_terminal_back_before_the_guard_can() {
         let _one_screen = lock(&ONE_SCREEN);
-        let mut pty = Pty::open();
+        let pty = Pty::open();
         let before = pty.attrs();
         let terminal =
             Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
