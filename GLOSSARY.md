@@ -38,6 +38,13 @@ have. The marker at the head of the newest answer settles on the same word, so n
 stop disagree.
 _Avoid_: Exit status, failure, termination, reason
 
+**State**:
+Whether a run is running or the stop it ended on, in one word: `running` while it is, and the stop's
+own word once it ends. The rail's first row is the state — under the frame's marker while a run is
+live, and in the ink that stop earns — and the screen's stop block says the same word beside the exit
+it left.
+_Avoid_: Status, phase, progress
+
 **Refusal**:
 Why no run could start — no credential, a sandbox that will not build, a config the schema refuses. A
 run's refusal is drawn in the transcript as the entry a stop is drawn as, in the refusal's own words;

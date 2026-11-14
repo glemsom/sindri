@@ -12,7 +12,7 @@ rail at 99x24
 06 |  Rendering lives in the front end and not in the core, because an entry is a fact and never a     | plain:99
 07 |  rendering: the TUI and any reader draw one run from one value, and the core may not name a       | plain:99
 08 |  terminal at all.                                                                                 | plain:99
-09 |                                                                                                   | plain:99
+09 |⠹ 4.2s                                                                                             | accent:1 plain:1 dim:4 plain:93
 10 |                                                                                                   | plain:99
 11 |                                                                                                   | plain:99
 12 |                                                                                                   | plain:99
@@ -23,7 +23,7 @@ rail at 99x24
 17 |                                                                                                   | plain:99
 18 |                                                                                                   | plain:99
 19 |                                                                                                   | plain:99
-20 |ctx █░░░░░ · model claude-sonnet-4-5… · sandbox bwrap · branch spec/1-capability · +8 more         | dim:4 plain:1 dim:14 plain:18 dim:11 plain:5 dim:10 plain:17 dim:3 muted:7 plain:9
+20 |ctx █░░░░░ · state ⠹ running · model claude-sonnet-4-5… · sandbox bwrap · branch spec/1-capability | dim:4 plain:1 dim:14 accent:9 dim:9 plain:18 dim:11 plain:5 dim:10 plain:18
 21 |───────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:99
 22 |› what should the run do?                                                                          | dim:25 plain:74
 23 |Enter send · ? keys                                                                                | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:5 plain:80

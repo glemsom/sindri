@@ -7,12 +7,13 @@ use ratatui::layout::Rect;
 
 use sindri::composer::Key;
 use sindri::ink::Ink;
+use sindri::ledger::Facts;
 use sindri::pen;
 use sindri::pulse::{Pulse, STEP_MS, format_duration, pulse_glyph};
 use sindri::view::View;
 use sindri_core::provider::Deltas;
 use sindri_core::redact::SecretSet;
-use sindri_core::run::{Budget, Stop};
+use sindri_core::run::{Budget, State as RunState, Stop};
 
 const GLYPHS: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
@@ -220,6 +221,42 @@ fn the_widest_marker_asks_for_one_cell_and_fourteen_columns() {
         "fourteen columns is the most any marker says beside its glyph"
     );
     assert_eq!(widest.head().width(), 16);
+}
+
+#[test]
+fn the_rail_s_state_row_steps_with_the_answer_s_marker() {
+    let mut view = answering();
+    view.set_facts(Facts {
+        state: Some(RunState::Running),
+        ..Facts::default()
+    });
+    view.set_pulse(Some(Pulse::live(4_200)));
+    let rows = frame(&mut view, 60, 12);
+    let state_row = rows
+        .iter()
+        .position(|row| row.starts_with("state "))
+        .expect("the rail says what the run is doing");
+
+    assert_eq!(
+        rows[0], "⠹ 4.2s The marker is one cell and at most fourteen",
+        "the answer's head wears the step the frame is on"
+    );
+    assert_eq!(
+        rows[state_row], "state ⠹ running",
+        "and the rail's own row wears the same one, so no two drawings show two steps"
+    );
+
+    view.set_pulse(Some(Pulse::live(4_280)));
+    let rows = frame(&mut view, 60, 12);
+
+    assert_eq!(
+        rows[0], "⠸ 4.2s The marker is one cell and at most fourteen",
+        "one step later the head has moved"
+    );
+    assert_eq!(
+        rows[state_row], "state ⠸ running",
+        "and the rail's row has moved with it"
+    );
 }
 
 #[test]

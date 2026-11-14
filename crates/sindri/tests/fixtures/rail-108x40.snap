@@ -3,25 +3,25 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 rail at 108x40
-00 |─ turn 1 ───────────────────────────────────────────────────────────wire      anthropic                     | dim:78 plain:30
-01 |✓ bash                                                              model     claude-sonnet-4-5-20250929    | ok:1 plain:1 dim:4 plain:62 dim:10 plain:30
-02 |  rg -n 'fence' src                                                 think     high                          | plain:68 dim:10 plain:30
-03 |✓ exit 0  23 ms · 412 bytes                                                                                 | ok:1 plain:1 dim:25 plain:81
-04 |  src/rows.rs: the glyph a turn opens with                          turns                           6 /  250| muted:42 plain:26 dim:10 plain:30
-05 |  src/rows.rs: a word longer than a row is broken                   ctx                  █░░░░░ 48.2k / 200k| muted:49 plain:19 dim:10 plain:12 dim:5 plain:13
-06 |  Rendering lives in the front end and not in the core, because an  cache                                88%| plain:68 dim:10 plain:30
-07 |  entry is a fact and never a rendering: the TUI and any reader draw                                        | plain:108
-08 |  one run from one value, and the core may not name a terminal at   workspace …/sindri/.worktrees/46-rail   | plain:68 dim:10 plain:30
-09 |  all.                                                              branch    spec/1-capability             | plain:68 dim:10 plain:30
-10 |                                                                                                            | plain:108
-11 |                                                                    skills                                 2| plain:68 dim:10 plain:30
+00 |─ turn 1 ───────────────────────────────────────────────────────────state     ⠹ running                     | dim:78 accent:9 plain:21
+01 |✓ bash                                                                                                      | ok:1 plain:1 dim:4 plain:102
+02 |  rg -n 'fence' src                                                 wire      anthropic                     | plain:68 dim:10 plain:30
+03 |✓ exit 0  23 ms · 412 bytes                                         model     claude-sonnet-4-5-20250929    | ok:1 plain:1 dim:25 plain:41 dim:10 plain:30
+04 |  src/rows.rs: the glyph a turn opens with                          think     high                          | muted:42 plain:26 dim:10 plain:30
+05 |  src/rows.rs: a word longer than a row is broken                                                           | muted:49 plain:59
+06 |  Rendering lives in the front end and not in the core, because an  turns                           6 /  250| plain:68 dim:10 plain:30
+07 |  entry is a fact and never a rendering: the TUI and any reader drawctx                  █░░░░░ 48.2k / 200k| plain:68 dim:10 plain:12 dim:5 plain:13
+08 |  one run from one value, and the core may not name a terminal at   cache                                88%| plain:68 dim:10 plain:30
+09 |  all.                                                                                                      | plain:108
+10 |⠹ 4.2s                                                              workspace …/sindri/.worktrees/46-rail   | accent:1 plain:1 dim:4 plain:62 dim:10 plain:30
+11 |                                                                    branch    spec/1-capability             | plain:68 dim:10 plain:30
 12 |                                                                                                            | plain:108
-13 |                                                                    sandbox   bwrap                         | plain:68 dim:10 plain:30
+13 |                                                                    skills                                 2| plain:68 dim:10 plain:30
 14 |                                                                                                            | plain:108
-15 |                                                                    session   9f2c7a41                      | plain:68 dim:10 plain:30
-16 |                                                                    temp      …/sindri/sessions/9f2c7a41/tmp| plain:68 dim:10 plain:30
-17 |                                                                                                            | plain:108
-18 |                                                                                                            | plain:108
+15 |                                                                    sandbox   bwrap                         | plain:68 dim:10 plain:30
+16 |                                                                                                            | plain:108
+17 |                                                                    session   9f2c7a41                      | plain:68 dim:10 plain:30
+18 |                                                                    temp      …/sindri/sessions/9f2c7a41/tmp| plain:68 dim:10 plain:30
 19 |                                                                                                            | plain:108
 20 |                                                                                                            | plain:108
 21 |                                                                                                            | plain:108

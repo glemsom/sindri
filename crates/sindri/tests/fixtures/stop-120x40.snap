@@ -3,25 +3,25 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 stop at 120x40
-00 |─ turn 1 ───────────────────────────────────────────────────────────────────wire      anthropic                         | dim:86 plain:34
-01 |✓ bash                                                                      model     claude-sonnet-4-5-20250929        | ok:1 plain:1 dim:4 plain:70 dim:10 plain:34
-02 |  rg -n 'fence' src                                                         think     high                              | plain:76 dim:10 plain:34
-03 |✓ exit 0  23 ms · 412 bytes                                                                                             | ok:1 plain:1 dim:25 plain:93
-04 |  src/rows.rs: the glyph a turn opens with                                  turns                               6 /  250| muted:42 plain:34 dim:10 plain:34
-05 |  src/rows.rs: a word longer than a row is broken                           ctx                      █░░░░░ 48.2k / 200k| muted:49 plain:27 dim:10 plain:16 dim:5 plain:13
-06 |  Rendering lives in the front end and not in the core, because an entry is cache                                    88%| plain:76 dim:10 plain:34
-07 |  a fact and never a rendering: the TUI and any reader draw one run from one                                            | plain:120
-08 |  value, and the core may not name a terminal at all.                       workspace …/git/sindri/.worktrees/46-rail   | plain:76 dim:10 plain:34
-09 |─ turn 2 ───────────────────────────────────────────────────────────────────branch    spec/1-capability                 | dim:86 plain:34
-10 |│ The marker is a clock, so the row it heads is laid out again whenever the                                             | dim:2 muted:73 plain:45
-11 |│ mark it wears moves, and a step that changes nothing costs nothing.       skills                                     2| dim:2 muted:67 plain:7 dim:10 plain:34
+00 |─ turn 1 ───────────────────────────────────────────────────────────────────state     ✗ error                           | dim:86 err:7 plain:27
+01 |✓ bash                                                                                                                  | ok:1 plain:1 dim:4 plain:114
+02 |  rg -n 'fence' src                                                         wire      anthropic                         | plain:76 dim:10 plain:34
+03 |✓ exit 0  23 ms · 412 bytes                                                 model     claude-sonnet-4-5-20250929        | ok:1 plain:1 dim:25 plain:49 dim:10 plain:34
+04 |  src/rows.rs: the glyph a turn opens with                                  think     high                              | muted:42 plain:34 dim:10 plain:34
+05 |  src/rows.rs: a word longer than a row is broken                                                                       | muted:49 plain:71
+06 |  Rendering lives in the front end and not in the core, because an entry is turns                               6 /  250| plain:76 dim:10 plain:34
+07 |  a fact and never a rendering: the TUI and any reader draw one run from onectx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
+08 |  value, and the core may not name a terminal at all.                       cache                                    88%| plain:76 dim:10 plain:34
+09 |─ turn 2 ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
+10 |│ The marker is a clock, so the row it heads is laid out again whenever the workspace …/git/sindri/.worktrees/46-rail   | dim:2 muted:73 plain:1 dim:10 plain:34
+11 |│ mark it wears moves, and a step that changes nothing costs nothing.       branch    spec/1-capability                 | dim:2 muted:67 plain:7 dim:10 plain:34
 12 |✗ error 1.2s A run that stopped for a reason says the reason, and it says it                                            | err:1 plain:1 muted:10 plain:108
-13 |  twice: once in the marker beside the answer it ended on, and once in the  sandbox   bwrap                             | plain:76 dim:10 plain:34
+13 |  twice: once in the marker beside the answer it ended on, and once in the  skills                                     2| plain:76 dim:10 plain:34
 14 |  entry the record keeps where the run ended. A failure carries one line of                                             | plain:120
-15 |  the run's own words about it, and a final answer and a cancellation carry session   9f2c7a41                          | plain:76 dim:10 plain:34
-16 |  no line they do not have.                                                 temp      …/sindri/sessions/9f2c7a41/tmp    | plain:76 dim:10 plain:34
-17 |✗ error                                                                                                                 | err:1 plain:1 dim:5 plain:113
-18 |  the wire refused the request: 401 unauthorized                                                                        | muted:48 plain:72
+15 |  the run's own words about it, and a final answer and a cancellation carry sandbox   bwrap                             | plain:76 dim:10 plain:34
+16 |  no line they do not have.                                                                                             | plain:120
+17 |✗ error                                                                     session   9f2c7a41                          | err:1 plain:1 dim:5 plain:69 dim:10 plain:34
+18 |  the wire refused the request: 401 unauthorized                            temp      …/sindri/sessions/9f2c7a41/tmp    | muted:48 plain:28 dim:10 plain:34
 19 |                                                                                                                        | plain:120
 20 |                                                                                                                        | plain:120
 21 |                                                                                                                        | plain:120

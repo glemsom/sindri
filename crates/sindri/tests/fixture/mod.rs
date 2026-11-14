@@ -78,7 +78,7 @@ fn named(name: &str) -> View {
         "thumb-head" => thumbing(Scroll::Back(44)),
         "thumb-middle" => thumbing(Scroll::Back(22)),
         "thumb-tail" => thumbing(Scroll::Tail),
-        "rail" => running(opening(), Scroll::Tail),
+        "rail" => live(opening(), Scroll::Tail),
         "face" => faced(true),
         "face-off" => faced(false),
         "streaming" => streaming(),
@@ -529,6 +529,18 @@ fn running(entries: Vec<Entry>, scroll: Scroll) -> View {
     view
 }
 
+/// A live run's rail: the facts a run in flight holds and the marker its newest answer wears, so
+/// the rail's own row steps with the frame's marker.
+fn live(entries: Vec<Entry>, scroll: Scroll) -> View {
+    let mut view = running(entries, scroll);
+    view.set_facts(Facts {
+        state: Some(RunState::Running),
+        ..facts()
+    });
+    view.set_pulse(Some(Pulse::live(4_200)));
+    view
+}
+
 pub fn facts() -> Facts {
     Facts {
         wire: Some(String::from("anthropic")),
@@ -727,6 +739,10 @@ const PULSE_ANSWER: [&str; 4] = [
 ];
 
 fn with_pulse(pulse: Pulse, said: &[&str]) -> View {
+    let state = match &pulse {
+        Pulse::Live { .. } => RunState::Running,
+        Pulse::Settled { stop, .. } => RunState::Stopped(stop.clone()),
+    };
     let mut entries = opening();
     entries.push(Entry::Turn { turn: 2 });
     let mut view = running(entries, Scroll::Tail);
@@ -739,6 +755,10 @@ fn with_pulse(pulse: Pulse, said: &[&str]) -> View {
     for fragment in said {
         view.text(fragment);
     }
+    view.set_facts(Facts {
+        state: Some(state),
+        ..facts()
+    });
     view.set_pulse(Some(pulse));
     view
 }

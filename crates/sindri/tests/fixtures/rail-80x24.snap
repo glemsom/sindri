@@ -12,7 +12,7 @@ rail at 80x24
 06 |  Rendering lives in the front end and not in the core, because an entry is a   | plain:80
 07 |  fact and never a rendering: the TUI and any reader draw one run from one      | plain:80
 08 |  value, and the core may not name a terminal at all.                           | plain:80
-09 |                                                                                | plain:80
+09 |⠹ 4.2s                                                                          | accent:1 plain:1 dim:4 plain:74
 10 |                                                                                | plain:80
 11 |                                                                                | plain:80
 12 |                                                                                | plain:80
@@ -23,7 +23,7 @@ rail at 80x24
 17 |                                                                                | plain:80
 18 |                                                                                | plain:80
 19 |                                                                                | plain:80
-20 |ctx █░░░░░ · model claude-sonnet-4-5… · sandbox bwrap · branch spec/1-capability| dim:4 plain:1 dim:14 plain:18 dim:11 plain:5 dim:10 plain:17
+20 |ctx █░░░░░ · state ⠹ running · model claude-sonnet-4-5… · sandbox bwrap         | dim:4 plain:1 dim:14 accent:9 dim:9 plain:18 dim:11 plain:14
 21 |────────────────────────────────────────────────────────────────────────────────| accent+faint:80
 22 |› what should the run do?                                                       | dim:25 plain:55
 23 |Enter send · ? keys                                                             | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:5 plain:61

@@ -17,6 +17,8 @@ use sindri_core::wire::Wire;
 use crate::ink::Ink;
 use crate::palette::Palette;
 use crate::pen;
+use crate::pulse::Pulse;
+use crate::rows::stop_mark;
 
 /// The columns `text` draws in, a wide glyph counted as the two cells it takes: a value is
 /// measured by what a row shows and never by how many glyphs it is made of.
@@ -122,7 +124,7 @@ pub struct Ctx {
 impl Ctx {
     /// The size and the meter of the share of its window, from one derivation so a row's words and
     /// its meter cannot disagree. The ledger says the size against its window; the strip keeps only
-    /// the meter, because its one row is shared with three other facts.
+    /// the meter, because its one row is shared with four other facts.
     pub(crate) fn spelled(&self, shape: Shape) -> Value {
         let Some(fill) = self.fill() else {
             return Value::new(tokens(self.size));
@@ -204,6 +206,7 @@ pub(crate) enum Kind {
     Cached,
     Reasoning,
     Commit,
+    State,
     Stopped,
     Exit,
     Start,
@@ -233,6 +236,7 @@ impl Kind {
             Kind::Cached => "cached",
             Kind::Reasoning => "reasoning",
             Kind::Commit => "commit",
+            Kind::State => "state",
             Kind::Stopped => "stopped",
             Kind::Exit => "exit",
             Kind::Start => "start",
@@ -309,7 +313,8 @@ pub struct Facts {
     pub commit: Option<String>,
     pub start: Option<String>,
     pub end: Option<String>,
-    pub stopped: Option<State>,
+    /// The run's state, in the word it is running under or the stop it ended on.
+    pub state: Option<State>,
     /// The skills the run loaded, in load order: a rail column has room for how many and the screen
     /// for every name.
     pub loaded: Vec<String>,
@@ -329,6 +334,7 @@ impl Facts {
             branch: document.branch.clone(),
             session: Some(session.guid().to_owned()),
             temp: Some(session.temp().to_path_buf()),
+            state: Some(document.stopped.clone()),
             ..Facts::default()
         }
     }
@@ -350,14 +356,14 @@ impl Facts {
     }
 
     /// The facts a run's record wrote, added to the ones a frame was handed: what the run spent and
-    /// when it stopped are the record's to say, and no drawing reads one off it again.
+    /// the state it ended on are the record's to say, and no drawing reads one off it again.
     pub fn recorded(mut self, document: &SessionDocument, loaded: &[String]) -> Facts {
         self.route = document.route;
         self.spend = document.usage;
         self.commit = document.commit.clone();
         self.start = Some(document.start.clone());
         self.end = document.end.clone();
-        self.stopped = Some(document.stopped.clone());
+        self.state = Some(document.stopped.clone());
         self.loaded = loaded.to_vec();
         self
     }
@@ -601,7 +607,7 @@ pub(crate) fn short_id(guid: &str) -> &str {
 pub(crate) const FIELD: u16 = 10;
 
 /// The columns the strip's one row cuts a value to: the room the rail's floor leaves beside its
-/// field, which is what a row carrying four facts can count on.
+/// field, which is what a row carrying five facts can count on.
 const VALUE: usize = (FLOOR - FIELD) as usize;
 
 /// What lies between two facts on the strip's one row, the gap the footer puts between its hints.
@@ -610,8 +616,10 @@ pub(crate) const GAP: &str = " · ";
 const HAIRLINE: char = '─';
 
 /// The ledger's blocks, top to bottom, each with the facts that belong in it: the order is a
-/// contract, and a fact's place in it is fixed.
-const BLOCKS: [&[Kind]; 6] = [
+/// contract, and a fact's place in it is fixed. The state stands first, because what the run is
+/// doing is what a reader looks for before what it holds.
+const BLOCKS: [&[Kind]; 7] = [
+    &[Kind::State],
     &[Kind::Wire, Kind::Model, Kind::Think],
     &[Kind::Turns, Kind::Ctx, Kind::Cache],
     &[Kind::Workspace, Kind::Branch],
@@ -620,17 +628,25 @@ const BLOCKS: [&[Kind]; 6] = [
     &[Kind::Session, Kind::Temp],
 ];
 
-/// The four facts the strip carries, in the order it reads them: its one row asks a different
+/// The five facts the strip carries, in the order it reads them: its one row asks a different
 /// question than the ledger's blocks do, so its list is its own.
-const STRIP_FACTS: [Kind; 4] = [Kind::Ctx, Kind::Model, Kind::Sandbox, Kind::Branch];
+const STRIP_FACTS: [Kind; 5] = [
+    Kind::Ctx,
+    Kind::State,
+    Kind::Model,
+    Kind::Sandbox,
+    Kind::Branch,
+];
 
-/// The order the strip gives its facts up in: read from the tail, so the run's size — the head, the
-/// one a reader watches — is what it never gives up.
-const STRIP_SACRIFICE: [Kind; 3] = [Kind::Branch, Kind::Sandbox, Kind::Model];
+/// The order the strip gives its facts up in: the state goes after every fact it may, so what the
+/// run is doing outlives the model, the posture and the branch; and the size it never gives up
+/// stands ahead of it.
+const STRIP_SACRIFICE: [Kind; 4] = [Kind::Branch, Kind::Sandbox, Kind::Model, Kind::State];
 
 /// The ledger's sacrifice order, the first to go first. The sandbox posture is deliberately absent,
-/// because it never goes, so no loop over this list can reach it.
-const SACRIFICE: [Kind; 11] = [
+/// because it never goes, so no loop over this list can reach it; the state goes last, after every
+/// fact the rail may give up.
+const SACRIFICE: [Kind; 12] = [
     Kind::Temp,
     Kind::Cache,
     Kind::Session,
@@ -642,6 +658,7 @@ const SACRIFICE: [Kind; 11] = [
     Kind::Wire,
     Kind::Think,
     Kind::Model,
+    Kind::State,
 ];
 
 /// The rail's band as a picture cuts it: the cells a picture is drawn over at the top of the rail
@@ -706,7 +723,7 @@ pub struct Share {
 /// that knows no fact draws no rail, and the transcript loses no room to one.
 pub fn split(facts: &Facts, band: Rect) -> Share {
     let shape = Rail::of(band.width);
-    if band.width == 0 || band.height == 0 || known(facts, shape.into()).is_empty() {
+    if band.width == 0 || band.height == 0 || known(facts, shape.into(), None).is_empty() {
         return Share {
             transcript: band,
             rail: None,
@@ -747,14 +764,14 @@ pub fn split(facts: &Facts, band: Rect) -> Share {
     }
 }
 
-/// The rows `shape` lays on `area`, in the order it reads them: every row a shape draws, the row of
-/// the band it stands on and the column each part starts at. No more rows are laid than the band
-/// holds, so a shape with nothing left to give up loses its count rather than its floor.
-pub(crate) fn rows(facts: &Facts, shape: Shape, area: Rect) -> Vec<Row> {
+/// The rows `shape` lays on `area`, in the order it reads them: the row of the band each stands on
+/// and the column each part starts at, never more of them than the band holds. A live rail's state
+/// row wears the marker's step, and a shape handed none draws none.
+pub(crate) fn rows(facts: &Facts, shape: Shape, area: Rect, marker: Option<&Pulse>) -> Vec<Row> {
     match shape {
         Shape::Screen => sheet_rows(facts, area),
-        Shape::Ledger => rail_rows(facts, Rail::Ledger, area),
-        Shape::Strip => rail_rows(facts, Rail::Strip, area),
+        Shape::Ledger => rail_rows(facts, Rail::Ledger, area, marker),
+        Shape::Strip => rail_rows(facts, Rail::Strip, area, marker),
     }
 }
 
@@ -770,8 +787,8 @@ pub(crate) fn draw(rows: &[Row], buffer: &mut Buffer, palette: &Palette) {
 
 /// The ledger's rows, or the strip's one: the blocks the rail reads, an empty row between two that
 /// both kept a fact, and the count of what went in a row of its own.
-fn rail_rows(facts: &Facts, rail: Rail, area: Rect) -> Vec<Row> {
-    let kept = kept(facts, rail, area);
+fn rail_rows(facts: &Facts, rail: Rail, area: Rect, marker: Option<&Pulse>) -> Vec<Row> {
+    let kept = kept(facts, rail, area, marker);
     match rail {
         Rail::Ledger => ledger_lines(&kept.facts, kept.went)
             .into_iter()
@@ -802,7 +819,7 @@ fn rail_rows(facts: &Facts, rail: Rail, area: Rect) -> Vec<Row> {
 /// block below the first in its column, and the count of what the band could not hold at the last
 /// column's foot.
 fn sheet_rows(facts: &Facts, area: Rect) -> Vec<Row> {
-    let sheet = sheet(&known(facts, Shape::Screen), area);
+    let sheet = sheet(&known(facts, Shape::Screen, None), area);
     let mut rows = Vec::new();
     for column in &sheet.columns {
         let mut y = area.y;
@@ -1068,8 +1085,8 @@ enum Line<'a> {
 /// The ledger gives its facts up in a settled order beside the row that says how many went; the
 /// strip gives them up from the tail of its own list, but its count is the last item of its one
 /// row, so the room takes the count first.
-fn kept(facts: &Facts, rail: Rail, area: Rect) -> Kept {
-    let known = known(facts, rail.into());
+fn kept(facts: &Facts, rail: Rail, area: Rect, marker: Option<&Pulse>) -> Kept {
+    let known = known(facts, rail.into(), marker);
     let total = known.len();
     let mut kept: Vec<Fact> = known
         .into_iter()
@@ -1115,7 +1132,7 @@ fn kept(facts: &Facts, rail: Rail, area: Rect) -> Kept {
 /// Every fact this frame knows, in the order the shape reads them, each value spelled whole the way
 /// that shape spells it. What the room then takes off a value is the cut's business, not this
 /// spelling's.
-fn known(facts: &Facts, shape: Shape) -> Vec<Fact> {
+fn known(facts: &Facts, shape: Shape, marker: Option<&Pulse>) -> Vec<Fact> {
     let short = facts.session.as_deref().map(short_id);
     let mut stated = Vec::new();
     if let Some(wire) = &facts.wire {
@@ -1173,7 +1190,7 @@ fn known(facts: &Facts, shape: Shape) -> Vec<Fact> {
         stated.push(Fact::new(Kind::Skills, facts.loaded.len().to_string()));
     }
     if shape == Shape::Screen
-        && let Some(state) = &facts.stopped
+        && let Some(state) = &facts.state
     {
         let ink = match state.is_running() {
             true => Ink::Accent,
@@ -1191,6 +1208,11 @@ fn known(facts: &Facts, shape: Shape) -> Vec<Fact> {
                 stated.push(Fact::new(instant.0, at.clone()));
             }
         }
+    }
+    if shape != Shape::Screen
+        && let Some(state) = &facts.state
+    {
+        stated.push(Fact::valued(Kind::State, state_value(state, marker)));
     }
     if let Some(sandbox) = facts.sandbox {
         let word = match shape {
@@ -1231,6 +1253,21 @@ fn known(facts: &Facts, shape: Shape) -> Vec<Fact> {
         Shape::Strip => stated.sort_by_key(|fact| strip_place(fact.kind)),
     }
     stated
+}
+
+/// The run's own row: the state's own word under the glyph the frame or the stop earns. A live row
+/// takes the marker's step and a stopped row the mark that stop earns, so no two drawings of one
+/// run disagree about what it is doing.
+fn state_value(state: &State, marker: Option<&Pulse>) -> Value {
+    let Some(stop) = state.stop() else {
+        let word = match marker.and_then(Pulse::stepping) {
+            Some(glyph) => format!("{glyph} {}", state.word()),
+            None => state.word().to_owned(),
+        };
+        return Value::new(word).inked(Ink::Accent);
+    };
+    let (glyph, ink) = stop_mark(stop);
+    Value::new(format!("{glyph} {}", state.word())).inked(ink)
 }
 
 /// The ledger's rows in the order they are read, with an empty row between two blocks that both
@@ -1511,7 +1548,8 @@ mod tests {
     use sindri_core::provider::Route;
     use sindri_core::provider::Usage as Report;
     use sindri_core::records::{Dials, SessionDocument, Usage};
-    use sindri_core::run::{State as RunState, Stop};
+    use sindri_core::redact::SecretSet;
+    use sindri_core::run::{Budget, State as RunState, Stop};
     use sindri_core::session::Session;
     use sindri_core::wire::Wire;
 
@@ -1645,7 +1683,7 @@ mod tests {
             (
                 facts.route,
                 facts.spend,
-                facts.stopped.as_ref().map(RunState::word)
+                facts.state.as_ref().map(RunState::word)
             ),
             (Some(Route::Chat), document.usage, Some("final")),
             "the route the run took, what it spent and the state it stopped in are a record's \
@@ -1987,6 +2025,213 @@ mod tests {
         }
     }
 
+    /// The one stop that carries a line of the run's own words.
+    fn wire_refused() -> Stop {
+        Stop::Error(SecretSet::default().redact("the wire went away"))
+    }
+
+    /// The facts a frame holds while its run is live.
+    fn live() -> Facts {
+        Facts {
+            state: Some(RunState::Running),
+            ..frame()
+        }
+    }
+
+    /// A shape's rows on `area`, painted as the adapter paints them: the ground under every cell,
+    /// then the rows the ledger laid.
+    fn painted_shape(facts: &Facts, shape: Shape, area: Rect, marker: Option<&Pulse>) -> Buffer {
+        let palette = Palette::TRUECOLOR;
+        let mut buffer = Buffer::empty(area);
+        pen::claim(&mut buffer, area, palette.ground(None));
+        draw(&rows(facts, shape, area, marker), &mut buffer, &palette);
+        buffer
+    }
+
+    #[test]
+    fn the_rail_s_first_row_says_the_run_is_running_and_steps_with_the_marker() {
+        let first = |at: Option<u64>| {
+            laid(
+                &live(),
+                Shape::Ledger,
+                band(COLUMNS, 19),
+                at.map(Pulse::live).as_ref(),
+            )
+            .into_iter()
+            .next()
+            .expect("the rail's first row")
+        };
+
+        assert_eq!(
+            first(Some(0)),
+            stated(&[(0, "state     "), (10, "⠋ running")]),
+            "a live run's first row says the state it is in, under the glyph the frame is on"
+        );
+        assert_eq!(
+            first(Some(160)),
+            stated(&[(0, "state     "), (10, "⠹ running")]),
+            "and two steps of eighty milliseconds later the row has stepped with the frame"
+        );
+        assert_eq!(
+            first(None),
+            stated(&[(0, "state     "), (10, "running")]),
+            "a rail handed no marker says the state and no glyph, never a step it has not taken"
+        );
+
+        let buffer = painted_shape(
+            &live(),
+            Shape::Ledger,
+            band(COLUMNS, 19),
+            Some(&Pulse::live(0)),
+        );
+        assert_eq!(
+            Ink::of(
+                buffer.cell((10, 0)).expect("the state's first cell"),
+                &Palette::TRUECOLOR
+            ),
+            Some(Ink::Accent),
+            "the row says something is happening, so it is read in the accent ink"
+        );
+    }
+
+    #[test]
+    fn a_stopped_run_s_row_is_the_stop_s_own_word_under_the_mark_that_stop_earns() {
+        for (stop, glyph, ink) in [
+            (Stop::Final, '✓', Ink::Ok),
+            (Stop::MaxTurns, '✗', Ink::Err),
+            (Stop::Budget(Budget::Clock), '✗', Ink::Err),
+            (Stop::Cancelled, '✗', Ink::Err),
+            (wire_refused(), '✗', Ink::Err),
+        ] {
+            let facts = Facts {
+                state: Some(RunState::Stopped(stop.clone())),
+                ..frame()
+            };
+            let area = band(COLUMNS, 19);
+            let value = format!("{glyph} {}", stop.word());
+
+            assert_eq!(
+                laid(&facts, Shape::Ledger, area, None)[0],
+                stated(&[(0, "state     "), (10, value.as_str())]),
+                "a run stopped on {} says so in its own word, under the mark that stop wears",
+                stop.word()
+            );
+            assert_eq!(
+                Ink::of(
+                    painted_shape(&facts, Shape::Ledger, area, None)
+                        .cell((10, 0))
+                        .expect("the state's first cell"),
+                    &Palette::TRUECOLOR
+                ),
+                Some(ink),
+                "and the mark is read in the ink that stop earns"
+            );
+        }
+    }
+
+    #[test]
+    fn a_live_run_wears_no_stop_s_mark_whatever_the_frame_s_marker_settled_on() {
+        let area = band(COLUMNS, 19);
+        let settled = Pulse::settled(&Stop::MaxTurns, 1_240);
+
+        assert_eq!(
+            laid(&live(), Shape::Ledger, area, Some(&settled))[0],
+            stated(&[(0, "state     "), (10, "running")]),
+            "a run that is still going says running, and never the word its marker settled on"
+        );
+        assert_eq!(
+            Ink::of(
+                painted_shape(&live(), Shape::Ledger, area, Some(&settled))
+                    .cell((10, 0))
+                    .expect("the state's first cell"),
+                &Palette::TRUECOLOR
+            ),
+            Some(Ink::Accent),
+            "and it is read in the accent, so the row and the head never say two steps"
+        );
+    }
+
+    #[test]
+    fn the_state_is_the_last_fact_the_rail_gives_up_and_the_sandbox_outlives_it() {
+        let facts = Facts {
+            state: Some(RunState::Running),
+            sandbox: Some(Enforcement::Bubblewrap),
+            ..Facts::default()
+        };
+
+        assert_eq!(
+            laid(&facts, Shape::Ledger, band(COLUMNS, 3), None),
+            [
+                stated(&[(0, "state     "), (10, "running")]),
+                stated(&[]),
+                stated(&[(0, "sandbox   "), (10, "bwrap")]),
+            ],
+            "a three-row rail holds the run's state, the air under it and the posture that \
+             confines it"
+        );
+        assert_eq!(
+            laid(&facts, Shape::Ledger, band(COLUMNS, 2), None),
+            [
+                stated(&[(0, "sandbox   "), (10, "bwrap")]),
+                stated(&[(0, "+1 more")]),
+            ],
+            "and a two-row rail gives the state up before the sandbox, which never goes"
+        );
+    }
+
+    #[test]
+    fn the_strip_carries_the_state_beside_the_size_and_lets_it_go_after_every_fact_it_may() {
+        let facts = Facts {
+            state: Some(RunState::Running),
+            ctx: Some(Ctx {
+                size: 48_200,
+                window: Some(200_000),
+            }),
+            ..frame()
+        };
+        let marker = Pulse::live(0);
+        let strip = |width: u16| {
+            glyphs(
+                &painted_shape(&facts, Shape::Strip, band(width, 1), Some(&marker)),
+                0,
+            )
+        };
+
+        assert_eq!(
+            strip(80),
+            format!(
+                "ctx █░░░░░ · state ⠋ running · model claude-sonnet-4-5… · sandbox bwrap{}",
+                pen::blank(9)
+            ),
+            "a strip under the rail's threshold carries the run's state beside the size it \
+             watches, and holds it where the branch it carries no room for has gone"
+        );
+        assert_eq!(
+            strip(40),
+            format!("ctx █░░░░░ · state ⠋ running · +11 more{}", pen::blank(1)),
+            "and a narrower one keeps the state where the model has gone, counting what went"
+        );
+        assert_eq!(
+            strip(27),
+            format!("ctx █░░░░░ · +12 more{}", pen::blank(6)),
+            "a strip too narrow to hold the size and the state beside it keeps the size alone, \
+             because the state is the last fact the strip lets go and never the first"
+        );
+
+        for width in 28..NARROW {
+            let row = strip(width);
+            assert!(
+                row.contains("state ⠋ running"),
+                "a {width}-column strip holds the run's size and its state, so it says what \
+                 the run is doing: {row:?}"
+            );
+            assert!(
+                pen::cells(&row) <= width,
+                "and no fact is laid past the {width} columns it was given: {row:?}"
+            );
+        }
+    }
+
     /// One row as a test states it: the column each of its parts starts in, and the glyphs it draws.
     fn stated(parts: &[(u16, &str)]) -> Vec<(u16, String)> {
         parts
@@ -1997,8 +2242,13 @@ mod tests {
 
     /// The rows a shape lays on `area`, each read as the columns its parts start in and the glyphs
     /// they draw.
-    fn laid(facts: &Facts, shape: Shape, area: Rect) -> Vec<Vec<(u16, String)>> {
-        rows(facts, shape, area)
+    fn laid(
+        facts: &Facts,
+        shape: Shape,
+        area: Rect,
+        marker: Option<&Pulse>,
+    ) -> Vec<Vec<(u16, String)>> {
+        rows(facts, shape, area, marker)
             .iter()
             .map(|row| {
                 row.parts()
@@ -2018,7 +2268,7 @@ mod tests {
     /// The screen's rows on `area`, each read as the row of the band it is drawn on, the column
     /// each of its parts starts at, and the glyphs they draw.
     fn screen(facts: &Facts, area: Rect) -> Vec<(u16, Vec<(u16, String)>)> {
-        rows(facts, Shape::Screen, area)
+        rows(facts, Shape::Screen, area, None)
             .iter()
             .map(|row| {
                 (
@@ -2082,7 +2332,11 @@ mod tests {
         let palette = Palette::TRUECOLOR;
         let mut buffer = Buffer::empty(area);
         pen::claim(&mut buffer, area, palette.ground(None));
-        draw(&rows(facts, Shape::Screen, area), &mut buffer, &palette);
+        draw(
+            &rows(facts, Shape::Screen, area, None),
+            &mut buffer,
+            &palette,
+        );
         buffer
     }
 
@@ -2198,7 +2452,7 @@ mod tests {
             "the GUID is thirty-six columns and the row holds thirty, so it is not drawn in \
              part: {drawn:?}"
         );
-        for row in rows(&facts, Shape::Screen, area) {
+        for row in rows(&facts, Shape::Screen, area, None) {
             for (at, part) in row.parts() {
                 assert!(
                     usize::from(*at) + usize::from(part.columns()) <= usize::from(area.width),
@@ -2282,7 +2536,7 @@ mod tests {
     fn no_row_of_a_screen_is_laid_past_the_band_it_is_drawn_in() {
         for width in 20..=200u16 {
             for height in 1..=20 {
-                for row in rows(&run(), Shape::Screen, band(width, height)) {
+                for row in rows(&run(), Shape::Screen, band(width, height), None) {
                     assert!(
                         row.y() < height,
                         "a row stands on row {} of a band {height} high",
@@ -2355,7 +2609,7 @@ mod tests {
     #[test]
     fn a_column_is_never_narrower_than_a_whole_one_and_a_screen_handed_nothing_draws_no_row() {
         for width in 20..=200u16 {
-            let mut starts: Vec<u16> = rows(&run(), Shape::Screen, band(width, 40))
+            let mut starts: Vec<u16> = rows(&run(), Shape::Screen, band(width, 40), None)
                 .iter()
                 .filter_map(|row| match row.parts() {
                     [(x, Part::Run(label, Ink::Dim))]
@@ -2386,7 +2640,7 @@ mod tests {
         }
 
         assert_eq!(
-            rows(&Facts::default(), Shape::Screen, band(120, 40)),
+            rows(&Facts::default(), Shape::Screen, band(120, 40), None),
             [],
             "a screen handed no fact and no record has nothing to place"
         );
@@ -2572,7 +2826,7 @@ mod tests {
     #[test]
     fn the_ledger_lays_its_blocks_in_the_order_they_are_read_with_air_between_two() {
         assert_eq!(
-            laid(&frame(), Shape::Ledger, band(COLUMNS, 17)),
+            laid(&frame(), Shape::Ledger, band(COLUMNS, 17), None),
             [
                 stated(&[(0, "wire      "), (10, "anthropic")]),
                 stated(&[(0, "model     "), (10, CUT)]),
@@ -2595,7 +2849,7 @@ mod tests {
             "six blocks, an empty row between two of them, and nothing given up at this height"
         );
 
-        let rules: Vec<usize> = laid(&frame(), Shape::Ledger, band(COLUMNS, 17))
+        let rules: Vec<usize> = laid(&frame(), Shape::Ledger, band(COLUMNS, 17), None)
             .iter()
             .enumerate()
             .filter(|(_, parts)| {
@@ -2613,9 +2867,9 @@ mod tests {
     }
 
     #[test]
-    fn the_strip_lays_its_four_facts_on_one_row_with_one_gap_between_two() {
+    fn the_strip_lays_the_facts_it_carries_on_one_row_with_one_gap_between_two() {
         assert_eq!(
-            laid(&frame(), Shape::Strip, band(40, 1)),
+            laid(&frame(), Shape::Strip, band(40, 1), None),
             [stated(&[
                 (0, "ctx "),
                 (4, "48.2k"),
@@ -2623,15 +2877,15 @@ mod tests {
                 (12, "model "),
                 (18, CUT),
             ])],
-            "the strip's one row reads its own four facts, and the room left is not enough for the \
-             count of the eight it does not carry"
+            "the strip's one row reads the facts of its own list, and the room left is not \
+             enough for the count of the eight it does not carry"
         );
     }
 
     #[test]
     fn a_band_too_short_gives_facts_up_in_the_sacrifice_order_and_the_last_row_counts_what_went() {
         assert_eq!(
-            laid(&frame(), Shape::Ledger, band(COLUMNS, 8)),
+            laid(&frame(), Shape::Ledger, band(COLUMNS, 8), None),
             [
                 stated(&[(0, "wire      "), (10, "anthropic")]),
                 stated(&[(0, "model     "), (10, CUT)]),
@@ -2649,7 +2903,7 @@ mod tests {
 
     #[test]
     fn a_numbers_digits_line_up_on_the_last_column_and_a_words_read_on_from_its_label() {
-        let rows = laid(&frame(), Shape::Ledger, band(COLUMNS, 17));
+        let rows = laid(&frame(), Shape::Ledger, band(COLUMNS, 17), None);
         let value = |label: &str| -> (u16, String) {
             rows.iter()
                 .find_map(|parts| match parts.as_slice() {
@@ -2707,7 +2961,7 @@ mod tests {
                 false => stated(&[(0, "+1 more")]),
             };
 
-            let drawn = laid(&unnamed(), rail.into(), band(room, 2));
+            let drawn = laid(&unnamed(), rail.into(), band(room, 2), None);
             assert_eq!(
                 drawn,
                 [expected],
@@ -2745,7 +2999,7 @@ mod tests {
     /// Every row a shape lays on `area` starts inside the band and ends inside it, and the band's
     /// height holds them all.
     fn assert_laid_inside(facts: &Facts, shape: Shape, area: Rect, room: u16) {
-        let laid = rows(facts, shape, area);
+        let laid = rows(facts, shape, area, None);
 
         assert!(
             laid.len() <= usize::from(area.height),
@@ -2922,7 +3176,7 @@ mod tests {
     fn model_drawn(facts: &Facts, frame: u16) -> String {
         let share = split(facts, band(frame, 24));
         let (shape, rail) = share.rail.expect("a rail in a frame that knows a fact");
-        rows(facts, shape.into(), rail.facts)
+        rows(facts, shape.into(), rail.facts, None)
             .iter()
             .flat_map(Row::parts)
             .find_map(|(_, part)| match part {
@@ -3007,9 +3261,10 @@ mod tests {
                 "turns",
                 "wire",
                 "think",
-                "model"
+                "model",
+                "state"
             ],
-            "the sacrifice order, the first to go first"
+            "the sacrifice order, the first to go first, and the state the last fact it lets go"
         );
         assert!(
             !SACRIFICE.contains(&Kind::Sandbox),
@@ -3021,18 +3276,19 @@ mod tests {
     fn the_strip_carries_its_own_list_in_the_order_a_reader_watches_it() {
         assert_eq!(
             STRIP_FACTS.map(Kind::label),
-            ["ctx", "model", "sandbox", "branch"],
-            "the thing you watch, the thing you are, the thing that confines you, and the thing \
-             you are standing on"
+            ["ctx", "state", "model", "sandbox", "branch"],
+            "the thing you watch, what it is doing, the thing you are, the thing that confines \
+             you, and the thing you are standing on"
         );
 
         let tail = STRIP_FACTS.map(Kind::label);
         let tail = &tail[1..];
         assert_eq!(
             STRIP_SACRIFICE.map(Kind::label),
-            [tail[2], tail[1], tail[0]],
+            [tail[3], tail[2], tail[1], tail[0]],
             "and what the strip gives up is that list without its head, read from the tail, so \
-             the run's size is the one fact it never goes without"
+             the run's size is the one fact it never goes without and the state is the last it \
+             lets go"
         );
         assert!(
             !STRIP_FACTS.contains(&Kind::Turns),
@@ -3071,7 +3327,7 @@ mod tests {
                 Rail::Ledger => value_room(Rail::columns(width)),
                 Rail::Strip => VALUE,
             };
-            let value = rows(&facts, shape, band(room, 1))
+            let value = rows(&facts, shape, band(room, 1), None)
                 .iter()
                 .flat_map(Row::parts)
                 .find_map(|(_, part)| match part {
