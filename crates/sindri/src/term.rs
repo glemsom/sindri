@@ -344,14 +344,12 @@ impl Restore {
         let mut giving = GIVE_BACK_SCREEN.to_vec();
         if self.window {
             giving.extend_from_slice(GIVE_UP_FOCUS);
-        }
-        if self.pointer {
-            giving.extend_from_slice(GIVE_UP_POINTER);
-        }
-        if self.window {
             // A mark outlives the process that set it, so the run it named is over whichever way
             // this launch ends: a panic that unwinds past the guard still takes it away.
             giving.extend(osc::progress(false));
+        }
+        if self.pointer {
+            giving.extend_from_slice(GIVE_UP_POINTER);
         }
         let _ = tell(&self.screen, &giving);
         let _ = tcsetattr(&self.keys, OptionalActions::Now, &self.saved);

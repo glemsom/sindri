@@ -110,12 +110,6 @@ impl Card {
         &self.rows
     }
 
-    /// The row the draft names: the first, because the card ranks the row the reader means there
-    /// and `Enter` takes it.
-    pub fn chosen(&self) -> Option<Row> {
-        self.rows.first().copied()
-    }
-
     /// What choosing the first row sends: the draft itself where its word already starts the name,
     /// and the name followed by what the word left otherwise.
     pub fn spelling(&self) -> String {

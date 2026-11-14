@@ -4,10 +4,11 @@
 use crate::link;
 use crate::mark::Cell;
 
-/// Whether a terminal reports a pointer, read off the names it gives itself: the ones this
-/// product vouches for are the ones that speak `OSC 8`, and none that says nothing.
-pub fn speaks(term: Option<&str>, program: Option<&str>) -> bool {
-    link::named(term, program, link::HYPERLINKS)
+/// Whether a terminal reports a pointer, read off the names it gives itself: the ones that place a
+/// hyperlink are the ones a pointer is asked of, because no terminal that draws a link fails to
+/// report a press. A terminal that says nothing reports none.
+pub fn speaks(term: Option<&str>, program: Option<&str>, vte: Option<&str>) -> bool {
+    link::speaks(term, program, vte)
 }
 
 /// What the pointer did, as one input to a frame: never a key, because a notch moves and a
@@ -34,20 +35,28 @@ mod tests {
     #[test]
     fn a_pointer_is_asked_of_the_terminals_a_hyperlink_is_placed_on_and_of_no_other() {
         assert!(
-            speaks(Some("xterm-kitty"), None),
+            speaks(Some("xterm-kitty"), None, None),
             "a terminal that names itself after one that reports a pointer is asked for one"
         );
         assert!(
-            speaks(Some("xterm-256color"), Some("WezTerm")),
+            speaks(Some("xterm-256color"), Some("WezTerm"), None),
             "and one named by the program that runs it"
         );
         assert!(
-            !speaks(Some("xterm-256color"), None),
-            "an xterm reports no pointer this frame knows how to read"
+            speaks(Some("xterm-256color"), None, Some("6000")),
+            "a VTE places a hyperlink and reports a pointer from the version that learned one"
         );
         assert!(
-            !speaks(None, None),
-            "and neither does one that names nothing"
+            !speaks(Some("xterm-256color"), None, Some("4900")),
+            "and an older one is handed a frame that takes none"
+        );
+        assert!(
+            !speaks(Some("xterm-256color"), None, None),
+            "an xterm names no pointer this frame knows how to read"
+        );
+        assert!(
+            !speaks(None, None, None),
+            "and neither does a terminal that names nothing"
         );
     }
 }

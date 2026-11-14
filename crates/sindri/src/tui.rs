@@ -89,10 +89,13 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     // Asked once, before the screen is taken: the terminal that takes the window's sequences is the
     // one asked to report its focus, and one nobody can vouch for is asked nothing at all.
     let windowed = window::speaks(named("TERM").as_deref(), named("TERM_PROGRAM").as_deref());
-    // Asked once, before the screen is taken: a terminal nobody can vouch for is handed a frame
-    // that takes no pointer, exactly as it is drawn today.
-    let pointers = pointer::speaks(named("TERM").as_deref(), named("TERM_PROGRAM").as_deref());
-    let screen = match Screen::take(&terminal, windowed, pointers) {
+    // Asked once with the window's sequences, and of the terminal that answers for both.
+    let pointer = pointer::speaks(
+        named("TERM").as_deref(),
+        named("TERM_PROGRAM").as_deref(),
+        named("VTE_VERSION").as_deref(),
+    );
+    let screen = match Screen::take(&terminal, windowed, pointer) {
         Ok(screen) => screen,
         Err(error) => {
             return crate::refuse(&format!("the terminal would not go raw: {error}"), SETUP);
@@ -127,7 +130,7 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
         false => false,
     };
     view.set_sizing(sizing);
-    view.set_pointer(pointers);
+    view.set_pointer(pointer);
     // Resolved once with the palette: a terminal that speaks no hyperlink is handed the words
     // and no sequence, and nothing asks again on a key.
     let places = link::speaks(

@@ -214,7 +214,7 @@ pub struct View {
     /// drawn in the cells it always was.
     pointer: bool,
     /// The rows of the card this frame drew that a press chooses, laid where their cells were drawn.
-    clicks: Vec<Click>,
+    presses: Vec<Press>,
     focus: Focus,
 }
 
@@ -858,19 +858,18 @@ impl View {
         self.sizing = sizing;
     }
 
-    /// Whether this launch's terminal reports a pointer, asked once at boot: a frame drawn where it
-    /// does not is drawn in the cells it always was.
-    pub fn set_pointer(&mut self, taken: bool) {
-        self.pointer = taken;
+    /// Whether this launch's terminal reports a pointer, asked once at boot.
+    pub fn set_pointer(&mut self, pointer: bool) {
+        self.pointer = pointer;
     }
 
-    /// What the pointer did, as the frame's answer: a notch moves the transcript through the one key
-    /// table, and a press chooses the row it landed on.
-    pub fn pointer(&mut self, pointer: Pointer) -> Outcome {
+    /// What the terminal's pointer report is answered with: a notch moves the transcript through the
+    /// one key table, and a press chooses the row it landed on.
+    pub fn pointer(&mut self, report: Pointer) -> Outcome {
         if !self.pointer {
             return Outcome::Unchanged;
         }
-        match pointer {
+        match report {
             Pointer::Wheel(Notch::Up) => self.key(Key::PageUp),
             Pointer::Wheel(Notch::Down) => self.key(Key::PageDown),
             Pointer::Press(at) => self.pressed(at),
@@ -880,10 +879,10 @@ impl View {
     /// A press on a row of a card: the row is chosen, and then the key it hangs from is sent, which
     /// is `Enter` for every row a card draws.
     fn pressed(&mut self, at: Cell) -> Outcome {
-        let Some(click) = self.clicks.iter().find(|click| click.covers(at)).copied() else {
+        let Some(press) = self.presses.iter().find(|press| press.covers(at)).copied() else {
             return Outcome::Unchanged;
         };
-        if !self.chosen(click.choice) {
+        if !self.chosen(press.choice) {
             return Outcome::Unchanged;
         }
         self.key(Key::Enter)
@@ -916,7 +915,7 @@ impl View {
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) {
         self.links = Links::none();
         self.sizes = Sizes::none();
-        self.clicks.clear();
+        self.presses.clear();
         pen::claim(buffer, area, self.palette.ground(None));
         self.composer.set_room(View::room(area.width));
         let bands = bands(
@@ -984,7 +983,6 @@ impl View {
         // heading of it is drawn large, because the scrim is read as the words it holds.
         self.links = Links::none();
         self.sizes = Sizes::none();
-        self.clicks.clear();
         self.highlight(share.transcript, buffer);
         let width = card::body_width(area);
         let held = card::paint(
@@ -996,7 +994,7 @@ impl View {
             self.edge(),
             &self.palette,
         );
-        self.clicks = body.paint(held, buffer, &self.palette);
+        self.presses = body.paint(held, buffer, &self.palette);
     }
 
     /// The card this frame carries over itself: the screen on top of the stack, or — a draft
@@ -1592,10 +1590,10 @@ impl ScreenBody {
 
     /// Draws the screen in `body`, and never in a row the card did not give it, with the rows a press
     /// chooses laid where they were written.
-    fn paint(&self, body: Rect, buffer: &mut Buffer, palette: &Palette) -> Vec<Click> {
+    fn paint(&self, body: Rect, buffer: &mut Buffer, palette: &Palette) -> Vec<Press> {
         match self {
             ScreenBody::Rows(rows) => {
-                let mut clicks = Vec::new();
+                let mut presses = Vec::new();
                 for (row, y) in rows.iter().zip(body.y..body.bottom()) {
                     let area = Rect {
                         y,
@@ -1604,10 +1602,10 @@ impl ScreenBody {
                     };
                     pen::write(buffer, area, &row.spans, row.clip, palette);
                     if let Some(choice) = row.choice {
-                        clicks.push(Click { area, choice });
+                        presses.push(Press { area, choice });
                     }
                 }
-                clicks
+                presses
             }
             ScreenBody::Ledger(facts) => {
                 stats::paint(facts, body, buffer, palette);
@@ -1628,12 +1626,12 @@ enum Choice {
 
 /// One row of a card a press chooses, and the cells it was written into.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Click {
+struct Press {
     area: Rect,
     choice: Choice,
 }
 
-impl Click {
+impl Press {
     /// Whether a press at `at` landed on this row: the row it is drawn on, and a column of it.
     fn covers(&self, at: Cell) -> bool {
         at.row == self.area.y && (self.area.x..self.area.right()).contains(&at.column)
