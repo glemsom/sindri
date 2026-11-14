@@ -6,7 +6,8 @@ use std::path::Path;
 
 use crate::composer::Key;
 use crate::ink::{Ink, Look};
-use crate::list::{self, Choice, Item, ScreenRow};
+use crate::kept::{Kept, Move};
+use crate::list::{self, Item, ScreenRow};
 
 pub const CAP: usize = 8;
 
@@ -138,7 +139,7 @@ impl Picker {
             items,
             selected: self.selected(),
             marker: list::MARK,
-            choice: Some(Choice::File),
+            chooses: true,
         }
         .rows();
         if !files.is_empty() {
@@ -238,6 +239,23 @@ fn split(path: &str) -> Row<'_> {
             name: path,
             directory: "",
         },
+    }
+}
+
+impl Kept for Picker {
+    fn walked(&mut self, way: Move) -> bool {
+        match way {
+            Move::Previous => self.up(),
+            Move::Next => self.down(),
+        }
+    }
+
+    fn typed(&mut self, key: Key) -> bool {
+        self.key(key)
+    }
+
+    fn pressed(&mut self, at: usize) -> bool {
+        self.select(at)
     }
 }
 

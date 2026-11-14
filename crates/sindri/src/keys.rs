@@ -95,7 +95,6 @@ pub enum Act {
     Next,
     Pick,
     Choose,
-    Value,
     Flip,
     Clear,
     Write,
@@ -387,7 +386,7 @@ const SETTINGS: [Binding; 9] = [
         key: Key::Backspace,
         name: "Backspace",
         does: "erase the last glyph of the value",
-        act: Act::Value,
+        act: Act::Query,
     },
 ];
 
@@ -461,7 +460,7 @@ pub const DESCRIPTIONS: [Description; 6] = [
         name: "settings",
         title: Some("/settings"),
         table: &SETTINGS,
-        fallback: Some(Act::Value),
+        fallback: Some(Act::Query),
         body: Some(Body::Settings),
     },
     Description {

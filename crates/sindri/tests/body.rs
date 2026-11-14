@@ -5,7 +5,7 @@
 use sindri::composer::{Key, Outcome};
 use sindri::keys::{Body, Mode};
 use sindri::ledger::Facts;
-use sindri::list::{Choice, ScreenRow};
+use sindri::list::ScreenRow;
 use sindri::view::{ScreenBody, View};
 use sindri_core::config::Config;
 use sindri_core::provider::Route;
@@ -119,11 +119,12 @@ fn the_path_picker_body_holds_the_query_row_first_and_the_count_of_matches_last(
         "and the row under the files counts the matches the query left and the ones it shows, \
          both of them the two the workspace holds: {words:#?}"
     );
-    assert!(
-        rows(&body).iter().any(|row| row
-            .choice
-            .is_some_and(|chosen| matches!(chosen, Choice::File(_)))),
-        "a file row hangs the choice a press lands on, so the card is not a picture: {words:#?}"
+    let places: Vec<Option<usize>> = rows(&body).iter().map(|row| row.choice).collect();
+    assert_eq!(
+        places,
+        vec![None, Some(0), Some(1), None],
+        "each row a file is drawn on hangs the place a press chooses in its screen's list, and \
+         the query row above them and the count row under them hang none: {words:#?}"
     );
 }
 
