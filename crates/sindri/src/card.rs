@@ -39,9 +39,9 @@ pub fn body_width(area: Rect) -> u16 {
     area.width.min(WIDTH).saturating_sub(INSET * 2)
 }
 
-/// Paints a card named `name`, whose key that leaves is `leaves`, into `area`, and returns the band
-/// the screen inside it draws in: the card's columns less its border and inset, and the rows of a
-/// body `rows` tall that the frame has room for.
+/// Paints a card named `name`, whose key that leaves is `leaves`, into `area`, and returns the rows
+/// the screen inside it draws in: the card's columns less its border and inset, and as many of the
+/// body's `rows` as the frame has room for.
 pub fn paint(
     area: Rect,
     name: &str,
@@ -60,8 +60,8 @@ pub fn paint(
     boxed(area, name, leaves, rows, buffer, edge, palette)
 }
 
-/// The rows of a body `rows` tall a band of `room` rows holds, and how many of them it keeps back:
-/// a body with any row kept back gives one of the room's rows to the row that counts them.
+/// The rows of a body `rows` tall that `room` rows hold, and how many of them it keeps back: a body
+/// with any row kept back gives one of the room's rows to the row that counts them.
 fn capped(rows: u16, room: u16) -> (u16, u16) {
     match rows > room && room > 0 {
         true => (room - 1, rows - (room - 1)),

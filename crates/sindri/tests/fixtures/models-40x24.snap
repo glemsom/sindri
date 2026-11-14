@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+models at 40x24
+00 |── /model ──────────────────────────────| accent+faint:40
+01 |  query:                                | plain:2 dim:7 plain:31
+02 |  › claude-sonnet-4-6  Claude Sonnet 4  | plain:2 accent:21 dim:15 plain:2
+03 |    claude-haiku-4-5   Claude Haiku 4.  | plain:23 dim:15 plain:2
+04 |                                        | plain:40
+05 |                                        | plain:40
+06 |                                        | plain:40
+07 |                                        | plain:40
+08 |                                        | plain:40
+09 |                                        | plain:40
+10 |                                        | plain:40
+11 |                                        | plain:40
+12 |                                        | plain:40
+13 |                                        | plain:40
+14 |                                        | plain:40
+15 |                                        | plain:40
+16 |                                        | plain:40
+17 |                                        | plain:40
+18 |                                        | plain:40
+19 |                                        | plain:40
+20 |                                        | plain:40
+21 |                                        | plain:40
+22 |                                        | plain:40
+23 |                                        | plain:40

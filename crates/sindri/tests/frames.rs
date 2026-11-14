@@ -164,6 +164,11 @@ fn models_80x24_is_that_card_of_two_names_over_a_shorter_frame() {
 }
 
 #[test]
+fn models_40x24_is_a_bled_card_as_tall_as_the_two_names_it_holds() {
+    fixture::assert_frame("models", 40, 24);
+}
+
+#[test]
 fn settings_120x40_is_the_keys_the_schema_has_and_the_value_each_holds() {
     fixture::assert_frame("settings", 120, 40);
 }

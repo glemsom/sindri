@@ -883,6 +883,15 @@ fn every_screen_is_drawn_on_a_card_as_tall_as_the_rows_it_holds() {
                 name(mode),
                 rows(&buffer)
             );
+            assert!(
+                above + below > 0 || said(&buffer, bottom - 1).contains("kept back"),
+                "{}'s card at {cols}x{tall} is the whole frame, and a card is only as tall as the \
+                 frame when its body is taller than the room it has: the row above its bottom \
+                 border says how many rows it keeps back, where a card that is the frame's height \
+                 and says nothing is the card this screen was drawn on before: {:?}",
+                name(mode),
+                rows(&buffer)
+            );
         }
     }
 }

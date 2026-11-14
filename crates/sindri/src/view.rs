@@ -862,51 +862,29 @@ impl View {
         self.links = Links::none();
         self.sizes = Sizes::none();
         self.highlight(share.transcript, buffer);
-        // A screen's rows are laid once, so the card's height and the picture it holds are one
-        // fact and cannot drift apart.
         let width = card::body_width(area);
-        let rows = self.screen_rows(screen, width);
-        let holds = match screen {
-            Mode::Stats => stats::height(&self.stats(), width),
-            _ => pen::columns(rows.len()),
-        };
+        let screen_body = self.screen_body(screen, width);
         let body = card::paint(
             area,
             name,
             leaves,
-            holds,
+            screen_body.held(width),
             buffer,
             self.edge(),
             &self.palette,
         );
-        if screen == Mode::Stats {
-            stats::paint(&self.stats(), body, buffer, &self.palette);
-            return;
-        }
-        for (row, y) in rows.iter().zip(body.y..body.bottom()) {
-            pen::write(
-                buffer,
-                Rect {
-                    y,
-                    height: 1,
-                    ..body
-                },
-                &row.spans,
-                row.clip,
-                &self.palette,
-            );
-        }
+        screen_body.paint(body, buffer, &self.palette);
     }
 
-    /// The rows a screen holds, laid at `width` and drawn by the card it is handed: the card is as
-    /// tall as this, and its own count row says which of them the frame had no room for.
-    fn screen_rows(&self, screen: Mode, width: u16) -> Vec<ScreenRow> {
+    /// What a screen holds, laid at the width the card gives it: the card is as tall as this, and
+    /// its own count row says which rows the frame had no room for.
+    fn screen_body(&self, screen: Mode, width: u16) -> ScreenBody {
         match screen {
-            Mode::Files => self.files_rows(),
-            Mode::Models => self.models_rows(),
-            Mode::Settings => self.settings_rows(width),
-            Mode::Composer | Mode::Keys => self.keys_rows(width),
-            Mode::Stats => Vec::new(),
+            Mode::Files => ScreenBody::Rows(self.files_rows()),
+            Mode::Models => ScreenBody::Rows(self.models_rows()),
+            Mode::Settings => ScreenBody::Rows(self.settings_rows(width)),
+            Mode::Composer | Mode::Keys => ScreenBody::Rows(self.keys_rows(width)),
+            Mode::Stats => ScreenBody::Ledger(Box::new(self.stats())),
         }
     }
 
@@ -1416,6 +1394,40 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16, notice_rows: u16) -> B
             height: footer,
             ..area
         },
+    }
+}
+
+/// What a screen holds: the rows a card is as tall as, or the ledger's own layout, which is laid
+/// whole and capped only by the rows the card gives it.
+enum ScreenBody {
+    Rows(Vec<ScreenRow>),
+    Ledger(Box<Facts>),
+}
+
+impl ScreenBody {
+    /// How many rows the screen holds, which the card is this many plus its two borders tall.
+    fn held(&self, width: u16) -> u16 {
+        match self {
+            ScreenBody::Rows(rows) => u16::try_from(rows.len()).unwrap_or(u16::MAX),
+            ScreenBody::Ledger(facts) => stats::height(facts, width),
+        }
+    }
+
+    /// Draws the screen in `body`, and never in a row the card did not give it.
+    fn paint(&self, body: Rect, buffer: &mut Buffer, palette: &Palette) {
+        match self {
+            ScreenBody::Rows(rows) => {
+                for (row, y) in rows.iter().zip(body.y..body.bottom()) {
+                    let area = Rect {
+                        y,
+                        height: 1,
+                        ..body
+                    };
+                    pen::write(buffer, area, &row.spans, row.clip, palette);
+                }
+            }
+            ScreenBody::Ledger(facts) => stats::paint(facts, body, buffer, palette),
+        }
     }
 }
 
