@@ -142,8 +142,8 @@ const KEYS_GAP: u16 = 2;
 
 const PICKER_EMPTY: &str = "no file answers";
 
-/// The glyph before the row a key acts on, in the picker and in the settings modal both:
-/// one mark, because both screens say the same thing with it.
+/// The glyph before the row a reader is on, in every list a card draws: one mark, because every
+/// screen that lists says the same thing with it.
 const ROW_MARK: &str = "\u{203a} ";
 const ROW_GAP: &str = "  ";
 
@@ -1352,9 +1352,8 @@ impl View {
         rows
     }
 
-    /// The `@` picker: the query, then the rows it leaves, the selection marked. A query or a path
-    /// wider than the frame is cut at its right edge rather than dropped: whole-or-nothing is a
-    /// rule about hints and facts, and a reader wants the value they are pointing at.
+    /// The `@` picker: the files the workspace walks, the query they answer with the row a reader
+    /// is on marked, and under them the count of which matches it shows and how many the query left.
     fn files_rows(&self) -> Vec<ScreenRow> {
         let files = self.picker.rows();
         let items = files

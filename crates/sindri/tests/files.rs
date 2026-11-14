@@ -472,11 +472,12 @@ fn a_band_too_short_for_the_picker_draws_the_rows_that_fit_and_keeps_the_rest_ba
         .iter()
         .rposition(|row| row.contains('╰'))
         .expect("a card drawn with its bottom border");
+    let border: Vec<char> = rows[top].chars().collect();
     let corner = |glyph: char| {
-        rows[top]
-            .chars()
-            .position(|said| said == glyph)
-            .unwrap_or_else(|| panic!("the card's top border opens on a corner: {:?}", rows[top]))
+        border
+            .iter()
+            .position(|said| *said == glyph)
+            .unwrap_or_else(|| panic!("the card's top border carries both its corners: {border:?}"))
     };
     let (left, right) = (corner('╭'), corner('╮'));
     for said in &rows[top + 1..bottom] {

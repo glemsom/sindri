@@ -30,7 +30,7 @@ pub struct ScreenRow {
 }
 
 impl ScreenRow {
-    /// A row whole or not there at all: a hint or a fact is never read in part.
+    /// A row whole or not there at all.
     pub fn whole(spans: Vec<(String, Look)>) -> ScreenRow {
         ScreenRow {
             spans,
@@ -74,8 +74,8 @@ impl Item {
         }
     }
 
-    /// An item whose name says what it is and whose words beside it say the rest: the two set apart
-    /// by the gap, the words the quieter of the two.
+    /// An item whose name says what it is and whose words beside it say the rest: the gap between
+    /// them, and those words set in the quieter ink.
     pub fn beside(name: impl Into<String>, said: impl Into<String>) -> Item {
         Item {
             name: name.into(),
@@ -339,13 +339,9 @@ mod tests {
 
     #[test]
     fn the_row_a_press_chooses_hangs_from_the_row_of_the_list_it_was_drawn_in() {
-        fn model(at: usize) -> Choice {
-            Choice::Model(at)
-        }
-
         let items = ["a", "b", "c"].into_iter().map(Item::new).collect();
         let mut names = list(Some(""), items, MARKER);
-        names.choice = Some(model);
+        names.choice = Some(Choice::Model);
 
         let rows = names.rows();
 

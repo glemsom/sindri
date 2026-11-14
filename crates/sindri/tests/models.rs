@@ -296,6 +296,47 @@ fn enter_takes_the_chosen_name_and_closes_the_screen() {
     );
 }
 
+/// Every row of a frame `cols` by `rows`, as the glyphs it draws, painted on the way.
+fn frame(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
+    let area = Rect::new(0, 0, cols, rows);
+    let mut buffer = Buffer::empty(area);
+    view.paint(area, &mut buffer);
+    (area.y..area.bottom())
+        .map(|y| {
+            (area.x..area.right())
+                .map(|x| buffer.cell((x, y)).expect("a cell of the row").symbol())
+                .collect()
+        })
+        .collect()
+}
+
+/// The rows a card's two borders hold, each as the words it says.
+fn body(frame: &[String]) -> Vec<String> {
+    let top = frame
+        .iter()
+        .position(|row| row.contains('\u{256d}'))
+        .expect("a card drawn with its top border");
+    let bottom = frame
+        .iter()
+        .rposition(|row| row.contains('\u{2570}'))
+        .expect("a card drawn with its bottom border");
+    frame[top + 1..bottom]
+        .iter()
+        .map(|said| {
+            let glyphs: Vec<char> = said.chars().collect();
+            match (
+                glyphs.iter().position(|glyph| *glyph == '\u{2502}'),
+                glyphs.iter().rposition(|glyph| *glyph == '\u{2502}'),
+            ) {
+                (Some(left), Some(right)) => glyphs[left + 1..right].iter().collect::<String>(),
+                _ => said.clone(),
+            }
+            .trim()
+            .to_owned()
+        })
+        .collect()
+}
+
 /// The row of a 120 by 40 frame the screen draws `said` on, painted on the way: a press lands on the
 /// cells a row was drawn in, so the cells are what a test reads.
 fn row_holding(view: &mut View, said: &str) -> u16 {
@@ -388,4 +429,38 @@ fn a_query_that_leaves_no_row_leaves_the_screen_open() {
          would be a screen that swallowed the query"
     );
     assert_eq!(view.mode(), Mode::Models);
+}
+
+#[test]
+fn a_band_too_short_for_the_served_names_draws_the_head_of_the_list_and_counts_the_rest() {
+    let mut view = screen();
+    let held = body(&frame(&mut view, 120, 40));
+    let drawn = body(&frame(&mut view, 120, 4));
+
+    assert_eq!(
+        held.len(),
+        3,
+        "the query and the two names the wire served are the whole list: {held:?}"
+    );
+    assert_eq!(
+        drawn.len(),
+        2,
+        "a frame of four rows holds the card's two borders and two rows of the body, and a card \
+         that cannot hold the list spends one of them counting the rows it keeps back: {drawn:?}"
+    );
+    assert_eq!(
+        drawn[0], held[0],
+        "so the row a reader is still shown is the head of the list, in the words it says in a \
+         frame that holds all of it"
+    );
+    assert_eq!(
+        drawn[1], "\u{22ef} 2 rows kept back",
+        "and the row under it says how many of the three the card could not hold: {drawn:?}"
+    );
+    assert!(
+        !frame(&mut view, 120, 4)
+            .iter()
+            .any(|row| row.contains(FIRST)),
+        "and no name is drawn past the band the card gave the list: {drawn:?}"
+    );
 }
