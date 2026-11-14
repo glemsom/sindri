@@ -169,7 +169,8 @@ impl Row {
         }
     }
 
-    pub fn indented(self, gutter: &str, ink: Ink) -> Row {
+    /// This row opening with `gutter` the way every row of an entry does, its words set past it.
+    pub fn guttered(self, gutter: &str, ink: Ink) -> Row {
         if self.spans.is_empty() {
             return self;
         }
@@ -190,21 +191,17 @@ impl Row {
         row.spans.append(&mut moved.spans);
         row.links.append(&mut moved.links);
         row.sizes.append(&mut moved.sizes);
-        row.picture = row.picture.or(moved.picture);
         row
     }
 
     /// This row with `head`'s words standing in the place of the span it opens with, and a blank
-    /// after them: the columns the head takes beyond that span are the shift the rest of the row
-    /// moves by, so its words and everything measured from them stay together.
-    pub(crate) fn headed_by(self, head: &Row) -> Row {
-        let replaced = self.spans.first().map_or(0, |(text, _)| pen::cells(text));
-        let shift = head.width().saturating_add(1).saturating_sub(replaced);
-        let mut row = self.shifted(shift);
-        let opening = usize::from(!row.spans.is_empty());
+    /// after them: `by` is how many columns past that span the head takes, which is the shift every
+    /// run the row keeps moves by.
+    pub(crate) fn headed_by(self, head: &Row, by: u16) -> Row {
+        let mut row = self.shifted(by);
         let mut spans = head.spans.clone();
         spans.push((String::from(" "), Look::plain(Ink::Plain)));
-        spans.extend(row.spans.drain(opening..));
+        spans.extend(row.spans.split_off(row.spans.len().min(1)));
         row.spans = spans;
         row
     }
@@ -404,7 +401,7 @@ pub(crate) fn answer_on(text: &str, cols: u16, head: Option<&Head>, surface: &Su
     if let Some(head) = head
         && let Some(first) = rows.next()
     {
-        laid.push(first.headed_by(&head_row(head, cols)));
+        laid.push(first.headed_by(&head_row(head, cols), reserve));
     }
     laid.extend(rows);
     laid
@@ -521,7 +518,7 @@ fn settled(name: Option<&str>, exit: Option<Exit>, bytes: u64, elapsed_ms: u64, 
         ),
         None => {
             let (gutter, room) = margin(INDENT, cols);
-            fitted(vec![(numbers, Ink::Dim)], room).indented(gutter, Ink::Plain)
+            fitted(vec![(numbers, Ink::Dim)], room).guttered(gutter, Ink::Plain)
         }
     }
 }
@@ -627,7 +624,7 @@ fn body(text: &str, cols: u16, way: Option<Way>, ink: Ink) -> Vec<Row> {
     match named {
         Some(rows) => rows
             .into_iter()
-            .map(|row| row.indented(gutter, ink))
+            .map(|row| row.guttered(gutter, ink))
             .collect(),
         None => wrap(text, room)
             .into_iter()
@@ -643,7 +640,7 @@ fn divider(lead: &str, cols: u16) -> Row {
     let lead = clip(lead, room);
     let filled = room.saturating_sub(pen::cells(&lead));
     let line = format!("{lead}{}", pen::filled(filled, HAIRLINE));
-    Row::of([(line, Ink::Dim)]).indented(gutter, Ink::Dim)
+    Row::of([(line, Ink::Dim)]).guttered(gutter, Ink::Dim)
 }
 
 /// One row of `line` set past `gutter`, the gutter in `mark`'s ink and the words in `words`'': the

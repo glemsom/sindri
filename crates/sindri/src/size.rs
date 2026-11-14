@@ -49,7 +49,7 @@ impl Sized {
         self.left <= at && at < self.left.saturating_add(self.width)
     }
 
-    /// The same run `by` columns further right: a row indented under a gutter moves the cells it
+    /// The same run `by` columns further right: a row that opens with a gutter moves the cells it
     /// covers with the words they are.
     pub(crate) fn shifted(&self, by: u16) -> Sized {
         Sized {

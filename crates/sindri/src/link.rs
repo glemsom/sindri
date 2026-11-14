@@ -24,7 +24,7 @@ impl Link {
         }
     }
 
-    /// The same run `by` columns further right: a row indented under a gutter moves the runs it
+    /// The same run `by` columns further right: a row that opens with a gutter moves the runs it
     /// names with the words they cover.
     pub(crate) fn shifted(&self, by: u16) -> Link {
         Link {

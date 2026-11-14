@@ -2016,7 +2016,7 @@ fn a_run_wider_than_the_row_it_was_laid_on_names_nothing_on_the_row_below() {
 fn a_row_set_under_a_gutter_moves_the_run_it_names_with_its_words() {
     let row = Row::of([(String::from("the spec"), Ink::Plain)])
         .linking(0, 8, "https://example.test/spec")
-        .indented("│ ", Ink::Dim);
+        .guttered("│ ", Ink::Dim);
 
     let (buffer, links) = laid(&row, Rect::new(0, 0, 40, 1));
 
