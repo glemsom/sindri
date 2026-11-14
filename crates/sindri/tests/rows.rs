@@ -12,6 +12,7 @@ use sindri::graphics::CellSize;
 use sindri::ink::{Ink, Look};
 use sindri::ledger::Boot;
 use sindri::link::Links;
+use sindri::markdown;
 use sindri::palette::{Band, Palette};
 use sindri::pen;
 use sindri::picture::Surface;
@@ -1809,8 +1810,6 @@ fn a_fence_that_opens_a_live_answer_keeps_its_well_under_the_marker() {
     );
 }
 
-/// A fence that opens a live answer stands the same picture under the marker's row as the answer
-/// does once it has settled: the marker is a head, never a hole a diagram falls through.
 #[test]
 fn a_fence_that_opens_a_live_answer_keeps_its_picture_under_the_marker() {
     let text = "```mermaid\nflowchart TD\n  A-->B\n```\nand the prose under it\n";
@@ -1855,8 +1854,6 @@ fn a_fence_that_opens_a_live_answer_keeps_its_picture_under_the_marker() {
     );
 }
 
-/// The marker heads the answer's first row by pushing its words aside, so a way the answer opens
-/// with is named from the cell `the spec` begins on and never from a column the marker stands in.
 #[test]
 fn a_row_set_under_a_marker_moves_the_run_it_names_with_its_words() {
     let mut rows = Rows::new();
@@ -2034,6 +2031,38 @@ fn a_row_set_under_a_gutter_moves_the_run_it_names_with_its_words() {
         links.at(0, 1),
         None,
         "never on the gutter the words were moved past"
+    );
+}
+
+#[test]
+fn a_row_set_under_a_gutter_keeps_the_picture_it_stands_on() {
+    let surface = Surface::of(None, CellSize::new(10, 20), true, false);
+    let rows = markdown::rows_on("```mermaid\nflowchart TD\n  A-->B\n```", 40, 0, &surface);
+    let at = rows
+        .iter()
+        .position(|row| row.picture().is_some())
+        .expect("the fence is a diagram on a terminal that places pictures");
+    let guttered = rows[at].clone().guttered("│ ", Ink::Dim);
+
+    assert_eq!(
+        guttered.picture(),
+        rows[at].picture(),
+        "a picture is placed from the band's own edge, so a gutter moves the words and not it"
+    );
+    assert_eq!(
+        guttered.width(),
+        rows[at].width() + 2,
+        "and the gutter takes its two columns of the row: {guttered:?}"
+    );
+    assert_eq!(
+        drawn_at(&guttered, 0),
+        Some('│'),
+        "the gutter is the row's first column: {guttered:?}"
+    );
+    assert_eq!(
+        words_column(&guttered),
+        words_column(&rows[at]).map(|column| column + 2),
+        "and the words stand past it: {guttered:?}"
     );
 }
 
