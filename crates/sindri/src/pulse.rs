@@ -65,6 +65,15 @@ impl Pulse {
         }
     }
 
+    /// The glyph a live marker is stepping on, and none once it has settled: the one rule the
+    /// answer's head and the rail's state row both read.
+    pub fn stepping(&self) -> Option<char> {
+        match self {
+            Pulse::Live { elapsed_ms } => Some(pulse_glyph(*elapsed_ms)),
+            Pulse::Settled { .. } => None,
+        }
+    }
+
     fn mark(&self) -> (char, Ink) {
         match self {
             Pulse::Live { elapsed_ms } => (pulse_glyph(*elapsed_ms), Ink::Accent),

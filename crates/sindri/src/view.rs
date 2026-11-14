@@ -818,7 +818,14 @@ impl View {
                 Some(picture) => band.with_picture(picture.cols(), picture.rows()),
                 None => band,
             };
-            rail::paint(&self.rail, shape, band, buffer, &self.palette);
+            rail::paint(
+                &self.rail,
+                shape,
+                band,
+                self.pulse.as_ref(),
+                buffer,
+                &self.palette,
+            );
             if let (Some(picture), Some(cells)) = (&picture, band.picture) {
                 self.pictures.place(picture, self.cell_size, cells, buffer);
             }

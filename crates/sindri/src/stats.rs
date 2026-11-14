@@ -7,5 +7,9 @@ use crate::ledger::{self, Facts, Shape};
 use crate::palette::Palette;
 
 pub fn paint(facts: &Facts, area: Rect, buffer: &mut Buffer, palette: &Palette) {
-    ledger::draw(&ledger::rows(facts, Shape::Screen, area), buffer, palette);
+    ledger::draw(
+        &ledger::rows(facts, Shape::Screen, area, None),
+        buffer,
+        palette,
+    );
 }

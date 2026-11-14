@@ -294,7 +294,7 @@ fn rail_80x24_is_the_strip_holding_its_four_facts_and_no_count() {
 }
 
 #[test]
-fn rail_40x24_is_the_strip_down_to_the_size_and_the_model() {
+fn rail_40x24_is_the_strip_down_to_the_size_and_the_state() {
     fixture::assert_frame("rail", 40, 24);
 }
 
