@@ -2,6 +2,8 @@
 //! leaves in its bottom row, the frame behind it painted and dimmed, and the geometry a card takes
 //! at a frame too narrow to hold one.
 
+mod caps; // the terminals these frames are drawn on
+
 use std::collections::HashSet;
 
 use ratatui::Terminal;
@@ -9,6 +11,7 @@ use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
+use sindri::capability::Capabilities;
 use sindri::composer::Key;
 use sindri::ink::{Face, Ink, Look};
 use sindri::keys::{Act, Mode};
@@ -105,6 +108,11 @@ fn painted(view: &mut View, cols: u16, rows: u16) -> Buffer {
 
 /// A frame with a run in it and no draft, so every screen opens on its own key.
 fn conversation() -> View {
+    conversation_in(Capabilities::default())
+}
+
+/// The same conversation on `capabilities`: the frame a card is opened over, drawn in other colours.
+fn conversation_in(capabilities: Capabilities) -> View {
     let entries = [
         Entry::Turn { turn: 1 },
         Entry::Assistant {
@@ -114,7 +122,7 @@ fn conversation() -> View {
             ),
         },
     ];
-    View::of(entries, sindri::rows::Scroll::Tail)
+    View::of(capabilities, entries, sindri::rows::Scroll::Tail)
 }
 
 /// The same frame with a draft typed into it, so the composer band is behind the card too.
@@ -311,8 +319,7 @@ fn every_screen_open_over_the_frame_carries_the_accent_on_the_edge_row_of_its_ca
 #[test]
 fn a_card_drawn_in_no_colour_keeps_the_accent_on_its_name_and_draws_no_accent_edge() {
     let palette = Palette::SLOTS;
-    let mut view = on_screen(Mode::Keys);
-    view.set_palette(palette);
+    let mut view = opened(conversation_in(caps::inked(palette)), Mode::Keys);
     let buffer = painted(&mut view, 120, 40);
     let (top, _, left, _) = corners(&buffer).expect("a card drawn with its border");
     let named_at = row(&buffer, top)
@@ -340,7 +347,6 @@ fn a_card_drawn_in_no_colour_keeps_the_accent_on_its_name_and_draws_no_accent_ed
 fn a_card_drawn_in_a_window_nobody_is_reading_keeps_the_dim_edge() {
     let palette = Palette::TRUECOLOR;
     let mut view = on_screen(Mode::Keys);
-    view.set_palette(palette);
     view.set_focused(false);
     let buffer = painted(&mut view, 120, 40);
     let (top, _, left, _) = corners(&buffer).expect("a card drawn with its border");
@@ -356,7 +362,7 @@ fn a_card_drawn_in_a_window_nobody_is_reading_keeps_the_dim_edge() {
 #[test]
 fn the_frame_behind_a_card_is_painted_and_dimmed() {
     let mut view = drafted();
-    let palette = view.palette();
+    let palette = view.capabilities().palette();
     let before = painted(&mut view, 120, 40);
 
     view.open_settings(&Config::default());
@@ -528,7 +534,7 @@ fn a_description_wider_than_the_card_wraps_under_its_own_column_and_hangs_under_
 
 #[test]
 fn the_reason_a_value_was_refused_is_drawn_whole_however_narrow_the_card() {
-    let mut view = View::boot();
+    let mut view = View::boot(Capabilities::default());
     view.open_settings(&Config::default());
     view.refuse("max_turns two hundred will not parse: invalid digit found in string");
     let buffer = painted(&mut view, 120, 40);
@@ -548,10 +554,10 @@ fn the_reason_a_value_was_refused_is_drawn_whole_however_narrow_the_card() {
 fn a_refusal_is_drawn_as_a_verdict_under_the_last_key_row() {
     let reason = "bad value in max_turns: `two hundred` will not parse: invalid digit found in \
                   string";
-    let mut view = View::boot();
+    let mut view = View::boot(Capabilities::default());
     view.open_settings(&Config::default());
     view.refuse(reason);
-    let palette = view.palette();
+    let palette = view.capabilities().palette();
     let buffer = painted(&mut view, 120, 40);
     let (top, bottom, left, _) = corners(&buffer).expect("a card drawn with its border");
     let body = body_rows(&buffer);
@@ -596,7 +602,7 @@ fn a_refusal_is_drawn_as_a_verdict_under_the_last_key_row() {
 #[test]
 fn a_frame_too_short_for_the_settings_visit_draws_the_head_of_the_list_and_keeps_the_verdict_back()
 {
-    let mut view = View::boot();
+    let mut view = View::boot(Capabilities::default());
     view.open_settings(&Config::default());
     view.refuse(
         "bad value in max_turns: `two hundred` will not parse: invalid digit found in string",

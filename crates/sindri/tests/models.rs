@@ -2,8 +2,11 @@
 //! Every listing is read through the real listing code from a recorded catalogue, so no test passes on a name
 //! this tree made up. What happens to a chosen name afterwards is `tests/tui.rs`'s.
 
+mod caps; // the terminals these frames are drawn on
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::keys::Mode;
 use sindri::mark::Cell;
@@ -270,8 +273,8 @@ fn a_key_a_filter_box_has_no_use_for_moves_nothing() {
     assert_eq!(models.query(), "");
 }
 
-fn screen() -> View {
-    let mut view = View::boot();
+fn screen(capabilities: Capabilities) -> View {
+    let mut view = View::boot(capabilities);
     view.paste("/model");
     view.key(Key::Enter);
     view.set_served(listed());
@@ -281,7 +284,7 @@ fn screen() -> View {
 
 #[test]
 fn enter_takes_the_chosen_name_and_closes_the_screen() {
-    let mut view = screen();
+    let mut view = screen(Capabilities::default());
 
     assert_eq!(
         view.key(Key::Enter),
@@ -356,8 +359,7 @@ fn row_holding(view: &mut View, said: &str) -> (u16, Painted) {
 
 #[test]
 fn a_press_on_a_served_row_names_that_name_and_closes_the_screen() {
-    let mut view = screen();
-    view.set_pointer(true);
+    let mut view = screen(caps::pointing());
     let (row, told) = row_holding(&mut view, SECOND);
 
     assert_eq!(
@@ -374,8 +376,7 @@ fn a_press_on_a_served_row_names_that_name_and_closes_the_screen() {
 
 #[test]
 fn a_press_on_no_row_of_the_model_screen_names_nothing() {
-    let mut view = screen();
-    view.set_pointer(true);
+    let mut view = screen(caps::pointing());
     let (query, _) = row_holding(&mut view, "query:");
     let (name, told) = row_holding(&mut view, SECOND);
 
@@ -394,7 +395,7 @@ fn a_press_on_no_row_of_the_model_screen_names_nothing() {
 
 #[test]
 fn a_key_at_the_model_screen_reaches_no_draft() {
-    let mut view = screen();
+    let mut view = screen(Capabilities::default());
 
     for key in [Key::Char('x'), Key::Enter, Key::Down] {
         view.key(key);
@@ -410,7 +411,7 @@ fn a_key_at_the_model_screen_reaches_no_draft() {
 
 #[test]
 fn escape_closes_the_screen_and_names_no_model() {
-    let mut view = screen();
+    let mut view = screen(Capabilities::default());
 
     assert_eq!(view.key(Key::Escape), Outcome::Edited);
     assert_eq!(view.mode(), Mode::Composer);
@@ -418,7 +419,7 @@ fn escape_closes_the_screen_and_names_no_model() {
 
 #[test]
 fn a_query_that_leaves_no_row_leaves_the_screen_open() {
-    let mut view = screen();
+    let mut view = screen(Capabilities::default());
     for glyph in "a-name-the-wire-never-served".chars() {
         view.key(Key::Char(glyph));
     }
@@ -434,7 +435,7 @@ fn a_query_that_leaves_no_row_leaves_the_screen_open() {
 
 #[test]
 fn a_band_too_short_for_the_served_names_draws_the_head_of_the_list_and_counts_the_rest() {
-    let mut view = screen();
+    let mut view = screen(Capabilities::default());
     let held = body(&frame(&mut view, 120, 40));
     let drawn = body(&frame(&mut view, 120, 4));
 

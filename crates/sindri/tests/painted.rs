@@ -2,9 +2,12 @@
 //! one cell, the rows a press chooses, and what it drew of the transcript, read off the value rather
 //! than off the frame.
 
+mod caps; // the terminals these frames are drawn on
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
+use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::mark::Cell;
 use sindri::pointer::Pointer;
@@ -64,6 +67,7 @@ fn drawn_at(buffer: &Buffer, said: &str) -> (u16, u16) {
 #[test]
 fn a_pass_hands_back_the_destination_a_row_named() {
     let mut view = View::of(
+        Capabilities::default(),
         answer("see [the gate](https://example.test/gate)"),
         Scroll::Tail,
     );
@@ -80,8 +84,7 @@ fn a_pass_hands_back_the_destination_a_row_named() {
 
 #[test]
 fn a_pass_hands_back_the_run_it_draws_at_more_than_one_cell() {
-    let mut view = View::of(answer("# A gate rule"), Scroll::Tail);
-    view.set_sizing(true);
+    let mut view = View::of(caps::kitty(), answer("# A gate rule"), Scroll::Tail);
     let (buffer, told) = painted_and_told(&mut view, 120, 40);
     let laid = told.sizes().laid();
 
@@ -101,8 +104,7 @@ fn a_pass_hands_back_the_run_it_draws_at_more_than_one_cell() {
 
 #[test]
 fn a_press_on_a_row_the_pass_laid_chooses_that_row() {
-    let mut view = View::boot();
-    view.set_pointer(true);
+    let mut view = View::boot(caps::pointing());
     view.key(Key::Char('/'));
     let (buffer, told) = painted_and_told(&mut view, 120, 40);
     let (row, _) = drawn_at(&buffer, "/quit");
@@ -117,11 +119,10 @@ fn a_press_on_a_row_the_pass_laid_chooses_that_row() {
 #[test]
 fn a_pass_under_a_card_tells_the_terminal_nothing_of_the_frame_beneath_it() {
     let mut view = View::of(
+        caps::kitty(),
         answer("# A gate rule\n\nsee [the gate](https://example.test/gate)"),
         Scroll::Tail,
     );
-    view.set_sizing(true);
-    view.set_pointer(true);
     view.key(Key::Char('/'));
     let (buffer, told) = painted_and_told(&mut view, 120, 40);
 
@@ -143,7 +144,11 @@ fn a_pass_under_a_card_tells_the_terminal_nothing_of_the_frame_beneath_it() {
 
 #[test]
 fn a_pass_hands_back_the_height_the_whole_transcript_held() {
-    let mut view = View::of(answer("- gate\n- rule\n- mark"), Scroll::Tail);
+    let mut view = View::of(
+        Capabilities::default(),
+        answer("- gate\n- rule\n- mark"),
+        Scroll::Tail,
+    );
     let (_, told) = painted_and_told(&mut view, 120, 40);
 
     assert_eq!(
@@ -155,7 +160,7 @@ fn a_pass_hands_back_the_height_the_whole_transcript_held() {
 
 #[test]
 fn a_pass_hands_back_the_band_a_page_moves_by() {
-    let mut view = View::of(turns(200), Scroll::Tail);
+    let mut view = View::of(Capabilities::default(), turns(200), Scroll::Tail);
     let (_, told) = painted_and_told(&mut view, 120, 40);
     let band = u32::from(told.drawn().band());
 
@@ -182,6 +187,7 @@ fn a_pass_hands_back_the_band_a_page_moves_by() {
 #[test]
 fn a_pass_hands_back_the_entry_it_laid_on_a_row() {
     let mut view = View::of(
+        Capabilities::default(),
         [turns(1), answer("- gate\n- rule\n- mark")].concat(),
         Scroll::Tail,
     );
@@ -207,7 +213,11 @@ fn a_pass_hands_back_the_entry_it_laid_on_a_row() {
 
 #[test]
 fn a_pass_hands_back_the_span_a_copy_takes() {
-    let mut view = View::of(answer("- gate\n- rule\n- mark"), Scroll::Tail);
+    let mut view = View::of(
+        Capabilities::default(),
+        answer("- gate\n- rule\n- mark"),
+        Scroll::Tail,
+    );
     let (buffer, _) = painted_and_told(&mut view, 120, 40);
     let (row, column) = drawn_at(&buffer, "rule");
 
@@ -223,7 +233,11 @@ fn a_pass_hands_back_the_span_a_copy_takes() {
 
 #[test]
 fn an_act_that_replaces_the_transcript_empties_what_the_pass_drew() {
-    let mut view = View::of(answer("- gate\n- rule\n- mark"), Scroll::Tail);
+    let mut view = View::of(
+        Capabilities::default(),
+        answer("- gate\n- rule\n- mark"),
+        Scroll::Tail,
+    );
     let (buffer, _) = painted_and_told(&mut view, 120, 40);
     let (row, column) = drawn_at(&buffer, "rule");
     view.drag(Cell::new(row, column), Cell::new(row, column + 3));

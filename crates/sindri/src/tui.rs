@@ -10,13 +10,12 @@ use std::time::Duration;
 
 use rustix::event::Timespec;
 use rustix::event::{PollFd, PollFlags, poll};
+use sindri::capability::Capabilities;
 use sindri::composer::{Outcome, Prompt, State};
 use sindri::decode::{Decoder, Event};
-use sindri::palette::Palette;
 use sindri::pointer;
 use sindri::pulse::{self, Pulse};
 use sindri::settings::persist;
-use sindri::size;
 use sindri::view::{Painted, View};
 use sindri_core::config::{Config, Environment, Process, Touched};
 use sindri_core::provider::Deltas;
@@ -24,13 +23,11 @@ use sindri_core::records::Told;
 use sindri_core::session::Session;
 use sindri_core::tools::FrontEnd;
 
-use crate::cell::probed_cell;
 use crate::cli::Cli;
 use crate::launch::{Launch, Refusal};
 use crate::reports::{Asking, Report, Running, ask};
 use crate::signal::{Signals, Wake};
-use crate::sizing::probed_sizing;
-use crate::term::{Canvas, Screen, Terminal, hand_pictures, missing_terminal, paint, tell};
+use crate::term::{Canvas, Screen, Terminal, missing_terminal, paint, tell};
 use crate::window::{self, Window};
 
 /// A launch that cannot be a run, or a screen it cannot draw on: exit 2.
@@ -47,13 +44,6 @@ const MODEL: &str = "model";
 /// How long a launch that is ending waits for a cancelled run to hand its session back: long enough
 /// for a run to write its ending, short enough that a wire which never answers cannot hold a quit.
 const GRACE: Duration = Duration::from_secs(2);
-
-/// The frame a launch opens on, as far as the config alone decides it.
-fn opened(config: &Config) -> View {
-    let mut view = View::boot();
-    view.set_face(config.draws_face());
-    view
-}
 
 pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     if let Some(reason) = missing_terminal() {
@@ -91,15 +81,17 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     // What the run the prompt will ask for is, read behind the reader's own shell rather than
     // behind a blank frame: the repository is asked for its branch once, before the first paint.
     let boot = crate::launch::boot(cli, config, &workspace);
-    let named = |key: &str| std::env::var(key).ok();
     // Asked once, before the screen is taken: the terminal that takes the window's sequences is the
     // one asked to report its focus, and one nobody can vouch for is asked nothing at all.
-    let windowed = window::speaks(named("TERM").as_deref(), named("TERM_PROGRAM").as_deref());
+    let windowed = window::speaks(
+        Process.var("TERM").as_deref(),
+        Process.var("TERM_PROGRAM").as_deref(),
+    );
     // Asked once with the window's sequences, and of the terminal that answers for both.
     let pointer = pointer::speaks(
-        named("TERM").as_deref(),
-        named("TERM_PROGRAM").as_deref(),
-        named("VTE_VERSION").as_deref(),
+        Process.var("TERM").as_deref(),
+        Process.var("TERM_PROGRAM").as_deref(),
+        Process.var("VTE_VERSION").as_deref(),
     );
     let screen = match Screen::take(&terminal, windowed, pointer) {
         Ok(screen) => screen,
@@ -107,36 +99,11 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
             return crate::refuse(&format!("the terminal would not go raw: {error}"), SETUP);
         }
     };
-    // The cell size is asked before the first frame, and a key typed while the launch waited is
-    // handed to the loop rather than dropped.
-    let (cell_size, mut typed) = probed_cell(&terminal);
-    let mut view = opened(config);
-    view.set_cell_size(cell_size);
-    // Resolved once, before the first frame: what a terminal can do is a fact of the launch and
-    // not a question every paint asks again.
-    view.set_palette(Palette::probed(
-        named("NO_COLOR").as_deref(),
-        named("TERM").as_deref(),
-        named("COLORTERM").as_deref(),
-    ));
-    hand_pictures(
-        &mut view,
-        cell_size,
-        named("TERM").as_deref(),
-        named("TERM_PROGRAM").as_deref(),
-    );
-    // A terminal that names itself after one that draws large text is asked whether it does, and
-    // one that says nothing is handed the spelling its glyphs are.
-    let sizing = match size::speaks(named("TERM").as_deref(), named("TERM_PROGRAM").as_deref()) {
-        true => {
-            let (sizing, keys) = probed_sizing(&terminal);
-            typed.extend(keys);
-            sizing
-        }
-        false => false,
-    };
-    view.set_sizing(sizing);
-    view.set_pointer(pointer);
+    // Probed once, before the first frame: what the terminal can do is a fact of the launch and
+    // not a question every paint asks again. A key typed while it thought is handed to the loop
+    // rather than dropped.
+    let (capabilities, typed) = Capabilities::probed(&Process, &terminal, config.draws_face());
+    let mut view = View::boot(capabilities);
     view.set_workspace(workspace.clone());
     // Read the way `launch` reads it, so the name `/skill:name` accepts and a name a run could
     // call come from one catalog.
@@ -430,7 +397,12 @@ impl<'a> Loop<'a> {
                         // the telling at the next report, and `face` turned off repaints the
                         // frame without one, rather than at the next launch.
                         self.telling.switch(self.config.tells_status())?;
-                        self.view.set_face(self.config.draws_face());
+                        let capabilities = self
+                            .view
+                            .capabilities()
+                            .clone()
+                            .faced(self.config.draws_face());
+                        self.view.drawn_on(capabilities);
                         self.view.saved();
                     }
                     Err(error) => self.view.refuse(&error.to_string()),

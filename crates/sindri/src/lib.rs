@@ -1,3 +1,4 @@
+pub mod capability; // what the terminal a frame draws on can do: its cell, its colours, its sizing, its pointer, its pictures and the face over the rail
 pub mod card; // a screen's card: its border, its name, the key that leaves, over the frame it dims
 pub mod commands; // the `/` commands: a draft line the frame answers itself
 pub mod composer; // the draft a prompt is typed into, as a value rather than a widget

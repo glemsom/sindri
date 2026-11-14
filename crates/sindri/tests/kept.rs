@@ -1,9 +1,12 @@
 //! What a screen keeps: the list a cursor movement walks, the query a typed glyph reaches and the row
 //! a press chooses, each answered by the description of the screen rather than by matching on it.
 
+mod caps; // the terminals these frames are drawn on
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
+use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::keys::{Act, Mode, Stack};
 use sindri::mark::Cell;
@@ -46,9 +49,9 @@ fn workspace(files: &[&str]) -> tempfile::TempDir {
 
 /// A frame holding every list there is — a workspace the picker walks, the names the wire served and
 /// the keys the config holds — with `mode` open on top of it.
-fn screen(mode: Mode) -> (tempfile::TempDir, View) {
+fn screen(mode: Mode, capabilities: Capabilities) -> (tempfile::TempDir, View) {
     let root = workspace(&["src/rows.rs", "src/view.rs"]);
-    let mut view = View::boot();
+    let mut view = View::boot(capabilities);
     view.set_workspace(root.path().to_path_buf());
     match mode {
         Mode::Files => {
@@ -131,7 +134,7 @@ fn one_act_types_into_the_list_a_screen_keeps() {
 #[test]
 fn a_movement_walks_the_list_the_screen_keeps() {
     for (at, mode) in LISTS.into_iter().enumerate() {
-        let (_root, mut view) = screen(mode);
+        let (_root, mut view) = screen(mode, Capabilities::default());
         assert_eq!(
             marks(&view),
             [0; 3],
@@ -160,7 +163,7 @@ fn a_movement_walks_the_list_the_screen_keeps() {
 #[test]
 fn a_glyph_lands_in_the_list_the_screen_keeps() {
     for (at, mode) in LISTS.into_iter().enumerate() {
-        let (_root, mut view) = screen(mode);
+        let (_root, mut view) = screen(mode, Capabilities::default());
 
         assert_eq!(
             view.key(Key::Char('x')),
@@ -182,8 +185,7 @@ fn a_glyph_lands_in_the_list_the_screen_keeps() {
 
 #[test]
 fn a_press_on_a_row_of_the_visit_is_no_act() {
-    let (_root, mut view) = screen(Mode::Settings);
-    view.set_pointer(true);
+    let (_root, mut view) = screen(Mode::Settings, caps::pointing());
     let area = Rect::new(0, 0, 120, 40);
     let mut buffer = Buffer::empty(area);
     let told = view.paint(area, &mut buffer);

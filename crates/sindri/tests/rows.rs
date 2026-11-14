@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
+use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::graphics::CellSize;
 use sindri::ink::{Ink, Look};
@@ -2538,7 +2539,7 @@ fn frame(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
 
 #[test]
 fn a_run_that_starts_after_a_stop_says_its_words_below_that_stops_entry() {
-    let mut view = View::boot();
+    let mut view = View::boot(Capabilities::default());
     view.set_pulse(Some(Pulse::live(0)));
     view.text("the first run's answer");
     view.set_pulse(Some(Pulse::settled(&Stop::Final, 1_200)));
@@ -2573,7 +2574,7 @@ fn a_run_that_starts_after_a_stop_says_its_words_below_that_stops_entry() {
 
 #[test]
 fn a_refusal_is_the_entry_a_stop_is_beside_the_draft_that_asked_for_it() {
-    let mut view = View::boot();
+    let mut view = View::boot(Capabilities::default());
     view.splash(Boot {
         wire: None,
         model: None,
@@ -2615,7 +2616,7 @@ fn a_refusal_is_the_entry_a_stop_is_beside_the_draft_that_asked_for_it() {
 #[test]
 fn a_stop_and_the_marker_beside_it_say_the_same_word_and_never_two() {
     let stop = failed();
-    let mut view = View::boot();
+    let mut view = View::boot(Capabilities::default());
     view.text("the answer the run got before it stopped");
     view.set_pulse(Some(Pulse::settled(&stop, 1_240)));
     view.stopped(&stop);

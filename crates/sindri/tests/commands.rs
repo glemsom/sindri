@@ -8,6 +8,7 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 
+use sindri::capability::Capabilities;
 use sindri::commands::{self, Command};
 use sindri::composer::{Key, Outcome};
 use sindri::keys::Mode;
@@ -24,7 +25,7 @@ fn say(view: &mut View, line: &str) -> Outcome {
 }
 
 fn frame(workspace: &Path) -> View {
-    let mut view = View::boot();
+    let mut view = View::boot(Capabilities::default());
     view.set_workspace(workspace.to_path_buf());
     view
 }
@@ -237,7 +238,7 @@ fn new_clears_the_transcript_the_frame_held() {
             text: SecretSet::default().redact("the answer the conversation was about"),
         },
     ];
-    let mut view = View::of(entries, sindri::rows::Scroll::Tail);
+    let mut view = View::of(Capabilities::default(), entries, sindri::rows::Scroll::Tail);
     view.set_workspace(root.path().to_path_buf());
     assert!(
         painted(&mut view).contains("the answer the conversation was about"),
@@ -353,7 +354,7 @@ fn the_commands_are_read_off_the_draft_the_reader_typed() {
 fn a_frame_with_no_workspace_loads_no_skill() {
     // A frame told no workspace has no catalog to ask, and offering a skill from a directory no run
     // could read would name a name nothing can load.
-    let mut view = View::boot();
+    let mut view = View::boot(Capabilities::default());
 
     assert_eq!(say(&mut view, "/skill:commit-message"), Outcome::Unchanged);
     assert!(view.loaded().names().is_empty());

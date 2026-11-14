@@ -7,11 +7,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use clap::Parser;
+
 use sindri::composer::{Composer, Key, Outcome, Prompt};
-use sindri::graphics::CellSize;
 use sindri::ink::Look;
 use sindri::ledger::Boot;
-use sindri::pictures::{PLACEHOLDER, Pictures};
+use sindri::palette::Palette;
+use sindri::pictures::PLACEHOLDER;
 use sindri::rows::Scroll;
 use sindri_core::first_run::FirstRun;
 use sindri_core::policy::Enforcement;
@@ -29,6 +30,7 @@ use super::*;
 fn a_copy_leaves_the_terminal_by_osc_52_and_asks_no_clipboard_utility() {
     let stage = Stage::open();
     let view = View::of(
+        Capabilities::default(),
         vec![Entry::Assistant {
             turn: 1,
             text: SecretSet::default().redact("read the transcript"),
@@ -196,7 +198,7 @@ fn enter_at_the_settings_modal_writes_the_file_and_the_next_prompt_runs_on_it() 
     let path = home.path().join("sindri").join("config.toml");
     let stage = Stage::open();
     let config = stage.config(&environment);
-    let mut view = View::boot();
+    let mut view = View::boot(Capabilities::default());
     view.open_settings(&config);
 
     walk_to(&mut view, "model");
@@ -236,7 +238,7 @@ fn a_settings_value_the_schema_refuses_names_its_row_and_writes_nothing() {
     let path = home.path().join("sindri").join("config.toml");
     let stage = Stage::open();
     let config = stage.config(&environment);
-    let mut view = View::boot();
+    let mut view = View::boot(Capabilities::default());
     view.open_settings(&config);
 
     walk_to(&mut view, "context_window");
@@ -267,16 +269,10 @@ fn a_settings_value_the_schema_refuses_names_its_row_and_writes_nothing() {
 
 const FRAME: (u16, u16) = (120, 40);
 
-fn cell() -> CellSize {
-    CellSize::new(10, 20)
-}
-
 /// The frame a launch opens on, with a rail of facts and a terminal that places pictures: the two
 /// things the face is drawn over and in.
 fn railed(config: &Config) -> View {
-    let mut view = opened(config);
-    view.set_cell_size(cell());
-    view.set_pictures(Pictures::kitty(cell()));
+    let mut view = View::boot(crate::caps::pictured().faced(config.draws_face()));
     view.splash(Boot {
         wire: Some(Wire::Anthropic),
         model: Some(String::from("claude-sonnet-4-6")),
@@ -367,6 +363,40 @@ fn a_settings_visit_that_turns_the_face_off_repaints_the_frame_it_leaves_without
     );
 }
 
+/// The face a visit turns off is a picture the launch's first frame has already placed: a value
+/// handed again is the frame's own, so no placement is made into pixels a second time.
+#[test]
+fn a_settings_visit_that_turns_the_face_off_makes_no_picture_into_pixels_again() {
+    let (_home, environment) = config_home("face = true\n");
+    let stage = Stage::open();
+    let config = stage.config(&environment);
+    let mut view = railed(&config);
+    view.open_settings(&config);
+    walk_to(&mut view, "face");
+    view.key(Key::Char(' '));
+    let mut live = stage.launch(view, config, &environment);
+
+    assert_eq!(
+        live.rasterises("face.png"),
+        0,
+        "no frame has drawn the face yet, so none was made into pixels"
+    );
+    assert!(live.draws_the_face(), "the launch's first frame draws it");
+
+    let ended = live
+        .answer(Event::Key(Key::Enter))
+        .expect("the write is made");
+
+    assert!(ended.is_none(), "a write is not the key that quits");
+    assert!(!live.draws_the_face(), "the face is turned off");
+    assert_eq!(
+        live.rasterises("face.png"),
+        1,
+        "and the picture the first frame placed is the one the frame holds after the visit, so \
+         nothing was transmitted twice"
+    );
+}
+
 fn cells_wearing(view: &mut View, palette: &Palette, look: Look) -> Vec<(u16, u16)> {
     let frame = painted(view);
     let area = frame.area;
@@ -412,6 +442,12 @@ impl Loop<'_> {
         draws_the_face(&mut self.view)
     }
 
+    /// How many times this frame has made `source` into pixels: a picture placed twice is a
+    /// transmission the reader waited for twice.
+    fn rasterises(&self, source: &str) -> usize {
+        self.view.capabilities().pictures().rasterises(source)
+    }
+
     fn cells(&mut self, palette: &Palette, look: Look) -> Vec<(u16, u16)> {
         cells_wearing(&mut self.view, palette, look)
     }
@@ -437,7 +473,7 @@ fn prompt_of(text: &str) -> Prompt {
 #[test]
 fn a_run_that_cannot_start_leaves_its_row_and_the_draft_and_never_ends_the_launch() {
     let stage = Stage::open();
-    let mut view = View::boot();
+    let mut view = View::boot(Capabilities::default());
     view.paste("why does the retry test fail");
     let environment = std::collections::BTreeMap::new();
     let mut live = stage.launch(view, Config::default(), &environment);
@@ -467,7 +503,11 @@ fn a_run_that_cannot_start_leaves_its_row_and_the_draft_and_never_ends_the_launc
 fn a_pass_with_no_run_in_flight_lands_nothing_and_ends_nothing() {
     let stage = Stage::open();
     let environment = std::collections::BTreeMap::new();
-    let mut live = stage.launch(View::boot(), Config::default(), &environment);
+    let mut live = stage.launch(
+        View::boot(Capabilities::default()),
+        Config::default(),
+        &environment,
+    );
 
     let ended = live
         .take()
@@ -482,7 +522,7 @@ fn a_pass_with_no_run_in_flight_lands_nothing_and_ends_nothing() {
 #[test]
 fn a_refused_prompt_out_of_the_queue_is_the_draft_again_and_the_launch_stands() {
     let stage = Stage::open();
-    let mut view = View::boot();
+    let mut view = View::boot(Capabilities::default());
     view.enqueue(prompt_of("run the test that failed and read it"));
     view.enqueue(prompt_of("then the fmt check"));
     // No provider and no model: `Launch::open` refuses before it touches a sandbox, a session or a
@@ -512,7 +552,7 @@ fn a_refused_prompt_out_of_the_queue_is_the_draft_again_and_the_launch_stands() 
 #[test]
 fn a_refused_prompt_waits_in_the_queue_again_while_the_reader_has_a_draft_of_their_own() {
     let stage = Stage::open();
-    let mut view = View::boot();
+    let mut view = View::boot(Capabilities::default());
     view.enqueue(prompt_of("run the test that failed and read it"));
     view.enqueue(prompt_of("then the fmt check"));
     view.paste("and then the release check");
@@ -555,7 +595,11 @@ fn a_quit_typed_before_the_first_frame_is_answered_by_the_loop() {
     let stage = Stage::open();
     let environment = std::collections::BTreeMap::new();
     let signals = Signals::install().expect("a signal pipe");
-    let mut live = stage.launch(View::boot(), Config::default(), &environment);
+    let mut live = stage.launch(
+        View::boot(Capabilities::default()),
+        Config::default(),
+        &environment,
+    );
 
     let ended = live.keys(&signals, b"\x11").expect("the quit is answered");
 
@@ -570,8 +614,7 @@ fn a_focus_report_recedes_the_frame_and_the_stop_nobody_watched_raises_the_notif
     let stage = Stage::open();
     let environment = std::collections::BTreeMap::new();
     let palette = Palette::TRUECOLOR;
-    let mut view = View::boot();
-    view.set_palette(palette);
+    let mut view = View::boot(Capabilities::default());
     view.paste("the draft the composer band is drawn from");
     // A stream that carries a window: nothing else raises a notification at all.
     let mut live = stage.launch_in_a_window(view, Config::default(), &environment);

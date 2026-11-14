@@ -2,10 +2,13 @@
 //! frame painted from it, the cells the highlight covers read back out of that buffer, and those bytes held
 //! to what `Ctrl-Y` hands out. A snapshot would compare the frame with a copy of itself.
 
+mod caps; // the terminals these frames are drawn on
+
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 
+use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::ink::Ink;
 use sindri::mark::Cell;
@@ -92,11 +95,11 @@ fn copied(view: &mut View) -> String {
 
 #[test]
 fn what_the_highlight_covers_is_byte_for_byte_what_the_copy_takes() {
-    let mut view = View::of(transcript(), Scroll::Tail);
+    let mut view = View::of(Capabilities::default(), transcript(), Scroll::Tail);
     view.drag(Cell::new(1, 2), Cell::new(6, 80));
 
     let frame = painted(&mut view);
-    let marked = highlighted(&frame, &view.palette());
+    let marked = highlighted(&frame, &view.capabilities().palette());
     let taken = copied(&mut view);
 
     assert!(
@@ -113,7 +116,7 @@ fn what_the_highlight_covers_is_byte_for_byte_what_the_copy_takes() {
 
 #[test]
 fn a_redraw_keeps_the_highlight_and_ctrl_y_copies_it_again() {
-    let mut view = View::of(transcript(), Scroll::Tail);
+    let mut view = View::of(Capabilities::default(), transcript(), Scroll::Tail);
     view.drag(Cell::new(1, 2), Cell::new(4, 60));
 
     let before = painted(&mut view);
@@ -123,8 +126,8 @@ fn a_redraw_keeps_the_highlight_and_ctrl_y_copies_it_again() {
 
     assert!(!taken.is_empty(), "there was a mark to copy: {before:?}");
     assert_eq!(
-        highlighted(&after, &view.palette()),
-        highlighted(&before, &view.palette()),
+        highlighted(&after, &view.capabilities().palette()),
+        highlighted(&before, &view.capabilities().palette()),
         "a redraw keeps the highlight, because the mark is corners of the band and not a \
          picture of a frame that has been thrown away"
     );
@@ -137,7 +140,7 @@ fn a_redraw_keeps_the_highlight_and_ctrl_y_copies_it_again() {
 
 #[test]
 fn ctrl_y_with_no_mark_copies_the_last_answer() {
-    let mut view = View::of(transcript(), Scroll::Tail);
+    let mut view = View::of(Capabilities::default(), transcript(), Scroll::Tail);
 
     let taken = copied(&mut view);
 
@@ -150,7 +153,7 @@ fn ctrl_y_with_no_mark_copies_the_last_answer() {
 
 #[test]
 fn ctrl_y_on_a_frame_with_nothing_marked_and_no_answer_hands_out_nothing() {
-    let mut view = View::boot();
+    let mut view = View::boot(Capabilities::default());
 
     // Painted first, because a copy reads the span the last paint drew.
     painted(&mut view);
@@ -165,7 +168,7 @@ fn ctrl_y_on_a_frame_with_nothing_marked_and_no_answer_hands_out_nothing() {
 
 #[test]
 fn shift_down_extends_the_mark_a_whole_row_at_a_time() {
-    let mut view = View::of(transcript(), Scroll::Tail);
+    let mut view = View::of(Capabilities::default(), transcript(), Scroll::Tail);
     view.drag(Cell::new(1, 2), Cell::new(1, 60));
     let one_row = copied(&mut view);
 
@@ -199,7 +202,7 @@ fn shift_down_extends_the_mark_a_whole_row_at_a_time() {
 
 #[test]
 fn the_shift_arrows_do_nothing_when_no_mark_has_been_dragged() {
-    let mut view = View::of(transcript(), Scroll::Tail);
+    let mut view = View::of(Capabilities::default(), transcript(), Scroll::Tail);
     painted(&mut view);
 
     assert_eq!(
@@ -212,12 +215,15 @@ fn the_shift_arrows_do_nothing_when_no_mark_has_been_dragged() {
 
 #[test]
 fn a_heading_drawn_large_is_marked_in_the_mark_ink_and_copied_as_its_words() {
-    let mut view = View::of(vec![answer(1, "# A gate rule")], Scroll::Tail);
-    view.set_sizing(true);
+    let mut view = View::of(
+        caps::kitty(),
+        vec![answer(1, "# A gate rule")],
+        Scroll::Tail,
+    );
     view.drag(Cell::new(0, 0), Cell::new(40, 100));
 
     let frame = painted(&mut view);
-    let palette = view.palette();
+    let palette = view.capabilities().palette();
     let row_of = |y: u16| -> String {
         (frame.area.x..frame.area.right())
             .map(|x| buffer_cell(&frame, x, y).symbol().to_owned())
