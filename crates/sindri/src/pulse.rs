@@ -49,15 +49,18 @@ impl Pulse {
         }
     }
 
-    /// A cancelled run says so: `cancelled 5.0s`, never the bare cross a failure wears.
+    /// A run that stopped says why: `cancelled 5.0s`, `error 3.1s`, and only a final answer
+    /// goes without a word.
     pub fn words(&self) -> String {
         match self {
             Pulse::Live { elapsed_ms } => format_duration(*elapsed_ms),
             Pulse::Settled {
-                stop: Stop::Cancelled,
+                stop: Stop::Final,
                 elapsed_ms,
-            } => format!("cancelled {}", format_duration(*elapsed_ms)),
-            Pulse::Settled { elapsed_ms, .. } => format_duration(*elapsed_ms),
+            } => format_duration(*elapsed_ms),
+            Pulse::Settled { stop, elapsed_ms } => {
+                format!("{} {}", stop.word(), format_duration(*elapsed_ms))
+            }
         }
     }
 
@@ -65,10 +68,7 @@ impl Pulse {
     fn mark(&self) -> (char, Ink) {
         match self {
             Pulse::Live { elapsed_ms } => (pulse_glyph(*elapsed_ms), Ink::Accent),
-            Pulse::Settled {
-                stop: Stop::Final, ..
-            } => ('✓', Ink::Ok),
-            Pulse::Settled { .. } => ('✗', Ink::Err),
+            Pulse::Settled { stop, .. } => stop_mark(stop),
         }
     }
 
@@ -87,6 +87,14 @@ impl Pulse {
                 (format!(" {}", self.words()), self.words_ink()),
             ],
         }
+    }
+}
+
+/// The mark a stop wears, derived once so the marker and the stop's own entry cannot disagree.
+pub(crate) fn stop_mark(stop: &Stop) -> (char, Ink) {
+    match stop {
+        Stop::Final => ('✓', Ink::Ok),
+        Stop::MaxTurns | Stop::Budget(_) | Stop::Cancelled | Stop::Error(_) => ('✗', Ink::Err),
     }
 }
 

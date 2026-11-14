@@ -114,6 +114,16 @@ fn pulse_settled_120x40_is_the_marker_a_stopped_run_settled_on() {
 }
 
 #[test]
+fn stops_120x40_is_one_entry_of_every_stop_a_run_can_end_on() {
+    fixture::assert_frame("stops", 120, 40);
+}
+
+#[test]
+fn stop_120x40_is_the_marker_and_the_stop_entry_a_failed_run_leaves() {
+    fixture::assert_frame("stop", 120, 40);
+}
+
+#[test]
 fn queue_120x40_counts_the_prompts_typed_during_a_run_above_the_composer() {
     fixture::assert_frame("queue", 120, 40);
 }

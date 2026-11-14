@@ -323,6 +323,56 @@ fn show_json_hands_on_the_prompt_beside_the_answer() {
 }
 
 #[test]
+fn a_reading_names_the_stop_and_an_errors_own_line_under_it() {
+    let state = State::empty();
+    state.recording(&[
+        json!({"kind": "turn", "turn": 1}),
+        json!({"kind": "stop", "stop": {"error": "the wire refused"}}),
+    ]);
+
+    let shown = state.sindri(&["sessions", "show", FIRST]);
+
+    assert_eq!(
+        shown.status.code(),
+        Some(0),
+        "reading a run back is not a failure"
+    );
+    let said = text(&shown.stdout);
+    let lines: Vec<&str> = said.lines().collect();
+    let stop = lines
+        .iter()
+        .position(|line| *line == "  stop error")
+        .unwrap_or_else(|| panic!("a reading names the stop the run ended on: {said}"));
+    assert_eq!(
+        lines[stop + 1],
+        "    the wire refused",
+        "and carries one line of the run's own words under it: {said}"
+    );
+}
+
+#[test]
+fn a_reading_names_a_stop_with_no_words_and_carries_no_line_under_it() {
+    let state = State::empty();
+    state.recording(&[
+        json!({"kind": "turn", "turn": 1}),
+        json!({"kind": "stop", "stop": "max_turns"}),
+    ]);
+
+    let shown = state.sindri(&["sessions", "show", FIRST]);
+
+    assert_eq!(
+        shown.status.code(),
+        Some(0),
+        "reading a run back is not a failure"
+    );
+    let said = text(&shown.stdout);
+    assert!(
+        said.contains("  stop max_turns\nstatus 0 documents\n"),
+        "the stop is its word and no line follows it: {said}"
+    );
+}
+
+#[test]
 fn a_record_written_before_the_prompt_was_a_fact_reads_with_no_prompt_line() {
     let state = State::empty();
     state.recording(&[

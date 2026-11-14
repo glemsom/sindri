@@ -109,6 +109,10 @@ fn walk(entry: &Entry) -> Vec<(&'static str, String)> {
             vec![("turn", turn.to_string()), ("text", text.to_string())]
         }
         Entry::Prompt { text } => vec![("text", text.to_string())],
+        Entry::Stop { stop } => vec![(
+            "stop",
+            stop.detail().unwrap_or_else(|| stop.word().to_owned()),
+        )],
     }
 }
 

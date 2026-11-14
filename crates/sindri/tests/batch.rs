@@ -454,8 +454,8 @@ fn a_run_that_answered_records_its_turn_and_why_it_stopped() {
         .collect();
     assert_eq!(
         kinds,
-        ["prompt", "turn", "assistant"],
-        "what was asked, the turn, then the answer: {transcript}"
+        ["prompt", "turn", "assistant", "stop"],
+        "what was asked, the turn, the answer, then why the run stopped: {transcript}"
     );
 }
 

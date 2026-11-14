@@ -30,6 +30,14 @@ _Avoid_: Step, iteration, wave
 The text a run produces for stdout — the only thing on stdout in batch mode.
 _Avoid_: Response, output, result
 
+**Stop**:
+The reason a run ended — `final`, `max_turns`, `budget`, `cancelled` or `error` — in its own word. It
+is laid in the transcript where the run ended: an error with one line of the run's own words about
+it, redacted as every other fact is, and a final answer or a cancellation with no line it does not
+have. The marker at the head of the newest answer settles on the same word, so no two drawings of one
+stop disagree.
+_Avoid_: Exit status, failure, termination, reason
+
 **Context window**:
 How many tokens the model's window holds, when a reader names it in the config. No wire reports
 one and nothing here guesses, so a run with none named has a size and no share of it.

@@ -669,6 +669,146 @@ fn every_stop_reason_writes_its_own_word_and_nothing_else() {
 }
 
 #[test]
+fn a_stop_appends_one_entry_after_everything_the_run_did() {
+    let ground = Ground::new();
+    let session = ground.session();
+    let mut record = ground.record(&session);
+    record.turn_started(1).expect("a turn start is recorded");
+    record
+        .answered(1, "one file.")
+        .expect("an answer is recorded");
+
+    record
+        .stopped(&State::Stopped(Stop::Final))
+        .expect("a stop reason is recorded");
+
+    let transcript = read_transcript(session.directory()).expect("the transcript reads");
+    assert_eq!(
+        transcript.entries().last(),
+        Some(&Entry::Stop { stop: Stop::Final }),
+        "the stop is the last line of the transcript: {:?}",
+        transcript.entries()
+    );
+    assert_eq!(
+        transcript.entries().len(),
+        3,
+        "and it is one line, added to the two the run already wrote"
+    );
+}
+
+#[test]
+fn every_stop_reason_appends_its_own_word_to_the_transcript() {
+    let ground = Ground::new();
+    let stops: [(State, &str); 5] = [
+        (
+            State::Stopped(Stop::Final),
+            r#"{"kind":"stop","stop":"final"}"#,
+        ),
+        (
+            State::Stopped(Stop::MaxTurns),
+            r#"{"kind":"stop","stop":"max_turns"}"#,
+        ),
+        (
+            State::Stopped(Stop::Budget(Budget::Clock)),
+            r#"{"kind":"stop","stop":{"budget":"clock"}}"#,
+        ),
+        (
+            State::Stopped(Stop::Budget(Budget::Output)),
+            r#"{"kind":"stop","stop":{"budget":"output"}}"#,
+        ),
+        (
+            State::Stopped(Stop::Cancelled),
+            r#"{"kind":"stop","stop":"cancelled"}"#,
+        ),
+    ];
+
+    for (state, line) in stops {
+        let session = ground.session();
+        let mut record = ground.record(&session);
+        record.stopped(&state).expect("a stop reason is recorded");
+
+        let written = std::fs::read_to_string(session.directory().join("transcript.jsonl"))
+            .expect("the transcript");
+        assert_eq!(
+            written.trim_end(),
+            line,
+            "the stop is its own word and nothing else: {written}"
+        );
+
+        let transcript = read_transcript(session.directory()).expect("the transcript reads");
+        let word = match transcript.entries() {
+            [Entry::Stop { stop }] => stop.word(),
+            other => panic!("the transcript is one stop and nothing else: {other:?}"),
+        };
+        assert_eq!(word, state.word(), "and it reads back as the same word");
+    }
+}
+
+#[test]
+fn an_error_stop_carries_one_line_of_the_runs_words_masked_by_the_records_secrets() {
+    let ground = Ground::new().holding("hunter2");
+    let session = ground.session();
+    let mut record = ground.record(&session);
+    let refused = Stop::Error(SecretSet::default().redact("the wire refused hunter2"));
+
+    record
+        .stopped(&State::Stopped(refused))
+        .expect("a stop reason is recorded");
+
+    let written = std::fs::read_to_string(session.directory().join("transcript.jsonl"))
+        .expect("the transcript");
+    assert!(
+        !written.contains("hunter2"),
+        "the record is a window that cannot carry a secret: {written}"
+    );
+    assert_eq!(
+        written.trim_end(),
+        format!(r#"{{"kind":"stop","stop":{{"error":"the wire refused {MASK}"}}}}"#),
+        "one line of the run's own words, and nothing else: {written}"
+    );
+}
+
+#[test]
+fn a_final_or_cancelled_stop_is_its_word_and_carries_no_detail() {
+    let ground = Ground::new();
+
+    for stop in [Stop::Final, Stop::Cancelled] {
+        let session = ground.session();
+        let mut record = ground.record(&session);
+        record
+            .stopped(&State::Stopped(stop.clone()))
+            .expect("a stop reason is recorded");
+
+        let written = std::fs::read_to_string(session.directory().join("transcript.jsonl"))
+            .expect("the transcript");
+        assert_eq!(
+            written.trim_end(),
+            format!(r#"{{"kind":"stop","stop":"{}"}}"#, stop.word()),
+            "the stop is its word and nothing else: {written}"
+        );
+    }
+}
+
+#[test]
+fn a_running_state_appends_no_stop_to_the_transcript() {
+    let ground = Ground::new();
+    let session = ground.session();
+    let mut record = ground.record(&session);
+    record.turn_started(1).expect("a turn start is recorded");
+
+    record
+        .stopped(&State::Running)
+        .expect("a running state appends nothing");
+
+    let transcript = read_transcript(session.directory()).expect("the transcript reads");
+    assert_eq!(
+        transcript.entries(),
+        [Entry::Turn { turn: 1 }],
+        "only the turn the run took is written, and no stop follows it"
+    );
+}
+
+#[test]
 fn a_run_joining_the_record_says_a_run_is_in_flight_again_and_owns_no_end() {
     let ground = Ground::new();
     let session = ground.session();

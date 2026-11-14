@@ -8,7 +8,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use sindri_core::open::{Ground, Opening};
 use sindri_core::records::Entry;
-use sindri_core::run::Exit;
+use sindri_core::run::{Exit, Stop};
 use sindri_core::tools::OPEN;
 
 use crate::ink::{Ink, Look};
@@ -18,7 +18,7 @@ use crate::markdown;
 use crate::palette::{Band, Palette};
 use crate::pen::{self, Clip};
 use crate::picture::{self, Surface};
-use crate::pulse::Head;
+use crate::pulse::{Head, stop_mark};
 use crate::size::{self, Sized, Sizes};
 use crate::spell;
 use crate::stream::Stream;
@@ -294,6 +294,7 @@ fn laid(
         Entry::Assistant { text, .. } => (answer_on(&text.to_string(), cols, None, surface), None),
         Entry::Reasoning { text, .. } => (thought(&text.to_string(), cols), None),
         Entry::Prompt { text } => (asked(&text.to_string(), cols), None),
+        Entry::Stop { stop } => (stopped(stop, cols), None),
     }
 }
 
@@ -326,6 +327,24 @@ fn folded(mut rows: Vec<Row>, cols: u16, fold: Fold) -> (Vec<Row>, Option<usize>
 fn kept_back(kept: usize, cols: u16) -> Row {
     let words = format!("{kept} rows kept back");
     marked(&KEPT.to_string(), Ink::Dim, vec![(words, Ink::Dim)], cols)
+}
+
+/// The rows a stop is drawn as: the mark it wears with its own word beside it, and one line of the
+/// run's own words under it when the stop is an error, since a reader is owed one line and no more.
+fn stopped(stop: &Stop, cols: u16) -> Vec<Row> {
+    let (marker, ink) = stop_mark(stop);
+    let mut rows = vec![marked(
+        &marker.to_string(),
+        ink,
+        vec![(String::from(stop.word()), Ink::Dim)],
+        cols,
+    )];
+    if let Stop::Error(message) = stop {
+        let said = message.to_string();
+        let line = said.lines().next().unwrap_or_default();
+        rows.extend(body(line, cols, None, Ink::Muted));
+    }
+    rows
 }
 
 fn asked(text: &str, cols: u16) -> Vec<Row> {
@@ -826,44 +845,59 @@ impl Rows {
         }
         let revision = stream.revision();
         let head = head.cloned();
-        if let Some(Held {
-            what:
-                What::Live {
-                    revision: at,
-                    head: mark,
-                },
-            rows: Some(_),
-            ..
-        }) = self.held.last()
-            && *at == revision
+        let at = self.live_at();
+        if let Some(held) = at.map(|at| &self.held[at])
+            && let What::Live {
+                revision: laid,
+                head: mark,
+            } = &held.what
+            && held.rows.is_some()
+            && *laid == revision
             && *mark == head
         {
             return;
         }
         let rows = stream.rows_on(self.cols, head.as_ref(), &self.surface);
-        match self.held.last_mut() {
-            Some(held) if matches!(held.what, What::Live { .. }) => {
+        match at {
+            Some(at) => {
+                let held = &mut self.held[at];
                 held.what = What::Live { revision, head };
                 held.rows = Some(rows);
             }
-            _ => self.held.push(Held {
-                what: What::Live { revision, head },
-                result: None,
-                rows: Some(rows),
-                fold: Fold::Closed,
-                kept: None,
-            }),
+            None => {
+                let held = Held {
+                    what: What::Live { revision, head },
+                    result: None,
+                    rows: Some(rows),
+                    fold: Fold::Closed,
+                    kept: None,
+                };
+                // A stop is the transcript's newest row, so the turn in flight it ended stands
+                // ahead of it and the reason the run stopped is the last word.
+                match self.held.last() {
+                    Some(Held {
+                        what: What::Fact(Entry::Stop { .. }),
+                        ..
+                    }) => self.held.insert(self.held.len() - 1, held),
+                    _ => self.held.push(held),
+                }
+            }
         }
         self.lays += 1;
     }
 
-    fn retire(&mut self) {
-        if matches!(
-            self.held.last().map(|held| &held.what),
-            Some(What::Live { .. })
-        ) {
-            self.held.pop();
-        }
+    /// Where the turn in flight stands, which a stop that landed under it leaves in its own place:
+    /// the turn is found rather than taken to be the newest entry.
+    fn live_at(&self) -> Option<usize> {
+        self.held
+            .iter()
+            .position(|held| matches!(held.what, What::Live { .. }))
+    }
+
+    /// Drops the turn in flight, wherever it stands: the run it belonged to has said its last word.
+    pub(crate) fn retire(&mut self) {
+        self.held
+            .retain(|held| !matches!(held.what, What::Live { .. }));
     }
 
     /// The oldest call of `turn` whose result has not landed, because a wave of calls and

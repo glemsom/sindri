@@ -216,6 +216,7 @@ pub(crate) fn take(
         // The last frame the run itself paints: once it is gone the wait goes back to forever,
         // and the settled marker stays on the frame for every later paint to draw.
         view.set_pulse(Some(Pulse::settled(stop, elapsed_ms)));
+        view.stopped(stop);
         view.set_state(State::Idle);
         painted = true;
         if let Some(flight) = running.take()

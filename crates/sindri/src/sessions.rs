@@ -7,7 +7,7 @@ use sindri_core::records::{
     Entry, Recorded, Status, Usage, choose, document_path, read_lines, read_sessions, read_status,
     read_transcript, status_path, transcript_path,
 };
-use sindri_core::run::Exit;
+use sindri_core::run::{Exit, Stop};
 use sindri_core::session;
 
 use crate::cli::SessionsAction;
@@ -186,6 +186,10 @@ fn entry_lines(entry: &Entry) -> Vec<String> {
             under(format!("  assistant in turn {turn}"), &text.to_string())
         }
         Entry::Prompt { text } => under(String::from("  prompt"), &text.to_string()),
+        Entry::Stop { stop } => match stop {
+            Stop::Error(message) => under(String::from("  stop error"), &message.to_string()),
+            stop => vec![format!("  stop {}", stop.word())],
+        },
     }
 }
 
