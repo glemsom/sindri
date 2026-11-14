@@ -112,7 +112,7 @@ pub struct Record {
     secrets: SecretSet,
     transcript: File,
     statuses: File,
-    counted: u32,
+    turns_before: u32,
 }
 impl Record {
     pub fn open(session: &Session, facts: Facts<'_>) -> Result<Record, RecordError> {
@@ -143,7 +143,7 @@ impl Record {
             secrets: facts.secrets.clone(),
             transcript,
             statuses,
-            counted: 0,
+            turns_before: 0,
         };
         record.write_document()?;
         Ok(record)
@@ -158,7 +158,7 @@ impl Record {
     /// run before it reached is not this one's. Its turns are numbered after those the session
     /// already counted.
     pub fn began(&mut self) -> Result<(), RecordError> {
-        self.counted = self.document.turns;
+        self.turns_before = self.document.turns;
         self.document.stopped = State::Running;
         self.document.end = None;
         self.write_document()
@@ -168,43 +168,50 @@ impl Record {
             text: self.secrets.redact(text),
         })
     }
-    /// Writes one turn whole, in the format's order: its number, each call beside what it
-    /// answered, the reasoning behind it where there was any, and the answer.
+    /// The order is the transcript's, and its readers read it: each call before the result it
+    /// answered, and the answer last.
     pub fn wrote(&mut self, turn: &Turn) -> Result<(), RecordError> {
-        let number = self.counted + turn.turn;
+        let number = self.turns_before + turn.turn;
         let opened = Entry::Turn { turn: number };
         self.append(opened)?;
-        for (call, acted) in turn.calls.iter().zip(&turn.results) {
-            let asked = Entry::Call {
+        for (at, call) in turn.calls.iter().enumerate() {
+            let id = self.secrets.redact(call.id.clone());
+            let name = self.secrets.redact(call.name.clone());
+            let called = Entry::Call {
                 turn: number,
-                id: Some(self.secrets.redact(call.id.clone())),
-                name: self.secrets.redact(call.name.clone()),
+                id: Some(id.clone()),
+                name: name.clone(),
                 arguments: self.secrets.redact(call.arguments.clone()),
             };
-            self.append(asked)?;
-            let answered = Entry::Result {
+            self.append(called)?;
+            // A call the run never answered — a tool that failed, a stop mid-turn — is still a
+            // call the turn asked for, and no result is invented for it.
+            let Some(acted) = turn.results.get(at) else {
+                continue;
+            };
+            let resulted = Entry::Result {
                 turn: number,
-                id: Some(self.secrets.redact(call.id.clone())),
-                name: self.secrets.redact(call.name.clone()),
+                id: Some(id),
+                name,
                 text: self.secrets.redact(acted.text.clone()),
                 bytes: acted.bytes,
                 elapsed_ms: millis(acted.elapsed),
                 exit: Some(acted.exit),
             };
-            self.append(answered)?;
+            self.append(resulted)?;
         }
         if let Some(reasoning) = turn.reasoning.as_deref().filter(|text| !text.is_empty()) {
-            let thought = Entry::Reasoning {
+            let reasoned = Entry::Reasoning {
                 turn: number,
                 text: self.secrets.redact(reasoning),
             };
-            self.append(thought)?;
+            self.append(reasoned)?;
         }
-        let said = Entry::Assistant {
+        let answered = Entry::Assistant {
             turn: number,
             text: self.secrets.redact(&turn.text),
         };
-        self.append(said)?;
+        self.append(answered)?;
         self.document.turns = number;
         self.write_document()
     }

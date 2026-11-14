@@ -463,11 +463,9 @@ fn a_result_writes_the_verdict_its_call_settled_with() {
         .expect("the transcript");
     let verdicts: Vec<Value> = written
         .lines()
-        .map(|line| {
-            let entry: Value = serde_json::from_str(line).expect("every line is JSON");
-            entry["exit"].clone()
-        })
-        .filter(|exit| !exit.is_null())
+        .map(|line| serde_json::from_str::<Value>(line).expect("every line is JSON"))
+        .filter(|entry| entry["kind"] == json!("result"))
+        .map(|entry| entry["exit"].clone())
         .collect();
     assert_eq!(
         verdicts,
@@ -864,9 +862,14 @@ fn a_turn_that_reasoned_nothing_writes_no_reasoning_entry() {
     let session = ground.session();
     let mut record = ground.record(&session);
 
-    record
-        .wrote(&Turn::answered(1, "triage this", "one file."))
-        .expect("a turn is written whole");
+    for (turn, reasoning) in [(1, None), (2, Some(String::new()))] {
+        record
+            .wrote(&Turn {
+                reasoning,
+                ..Turn::answered(turn, "triage this", "one file.")
+            })
+            .expect("a turn is written whole");
+    }
 
     let transcript = read_transcript(session.directory()).expect("the transcript reads");
     assert!(
@@ -874,19 +877,20 @@ fn a_turn_that_reasoned_nothing_writes_no_reasoning_entry() {
             .entries()
             .iter()
             .any(|entry| matches!(entry, Entry::Reasoning { .. })),
-        "a turn whose model reasoned nothing has no thought to write: {:?}",
+        "a turn whose model reasoned nothing has no thought to write, whether it reported none at \
+         all or reported none in words: {:?}",
         transcript.entries()
     );
     assert_eq!(
         transcript.entries().len(),
-        2,
-        "the turn and the answer it got, and nothing between them: {:?}",
+        4,
+        "each turn and the answer it got, and nothing between them: {:?}",
         transcript.entries()
     );
 }
 
 #[test]
-fn a_turns_reasoning_is_written_masked_and_its_answer_after_it() {
+fn a_turns_thought_is_written_masked_and_its_answer_after_it() {
     let ground = Ground::new().holding("hunter2");
     let session = ground.session();
     let mut record = ground.record(&session);
@@ -904,49 +908,8 @@ fn a_turns_reasoning_is_written_masked_and_its_answer_after_it() {
         })
         .expect("a turn is written whole");
 
-    let transcript = read_transcript(session.directory()).expect("the transcript reads");
-    let secrets = SecretSet::default();
-    assert_eq!(
-        transcript.entries(),
-        [
-            Entry::Turn { turn: 1 },
-            Entry::Reasoning {
-                turn: 1,
-                text: secrets.redact(format!(
-                    "the key is {MASK}, so read the file before answering"
-                )),
-            },
-            Entry::Assistant {
-                turn: 1,
-                text: secrets.redact(format!("the key is {MASK}")),
-            },
-        ],
-        "a thought is masked as every other fact is, and the answer is written behind it"
-    );
-    let written = std::fs::read_to_string(session.directory().join("transcript.jsonl"))
-        .expect("the transcript");
-    assert!(
-        !written.contains("hunter2"),
-        "the record is a window that cannot carry a secret: {written}"
-    );
-}
-
-#[test]
-fn a_thought_lands_as_its_own_entry_beside_the_answer() {
-    let ground = Ground::new().holding("hunter2");
-    let session = ground.session();
-    let mut record = ground.record(&session);
-
-    record
-        .wrote(&Turn {
-            reasoning: Some(String::from(
-                "the key is hunter2, so read the file before answering",
-            )),
-            ..Turn::answered(1, "the key is hunter2, so triage this", "one file.")
-        })
-        .expect("a turn is written whole");
-
-    let written = lines(&session.directory().join("transcript.jsonl"));
+    let path = session.directory().join("transcript.jsonl");
+    let written = lines(&path);
     assert_eq!(
         written,
         vec![
@@ -956,30 +919,82 @@ fn a_thought_lands_as_its_own_entry_beside_the_answer() {
                 "turn": 1,
                 "text": format!("the key is {MASK}, so read the file before answering"),
             }),
-            json!({"kind": "assistant", "turn": 1, "text": "one file."}),
+            json!({"kind": "assistant", "turn": 1, "text": format!("the key is {MASK}")}),
         ],
-        "a thought is written when it lands, in the order the turn said it: {written:?}"
+        "a thought stands between the turn and its answer, masked as every other fact is: \
+         {written:?}"
     );
+    let transcript = read_transcript(session.directory()).expect("the transcript reads");
+    assert_eq!(
+        transcript.entries()[1],
+        Entry::Reasoning {
+            turn: 1,
+            text: SecretSet::default().redact(format!(
+                "the key is {MASK}, so read the file before answering"
+            )),
+        },
+        "and it reads back as the thought of that turn: {:?}",
+        transcript.entries()
+    );
+    assert_eq!(transcript.skipped(), 0, "nothing was skipped");
+}
+
+#[test]
+fn a_call_the_run_never_answered_is_written_as_the_call_it_was() {
+    let ground = Ground::new();
+    let session = ground.session();
+    let mut record = ground.record(&session);
+    let listed = Call::new("toolu_1", "bash", r#"{"command": "ls a"}"#);
+    let killed = Call::new("toolu_2", "bash", r#"{"command": "ls b"}"#);
+
+    record
+        .wrote(&Turn {
+            calls: vec![listed.clone(), killed.clone()],
+            results: vec![Acted {
+                text: String::from("a.txt\n"),
+                bytes: 6,
+                elapsed: Duration::from_millis(2),
+                exit: Exit::Code(0),
+            }],
+            ..Turn::answered(1, "triage this", "one file.")
+        })
+        .expect("a turn is written whole");
 
     let transcript = read_transcript(session.directory()).expect("the transcript reads");
+    let secrets = SecretSet::default();
     assert_eq!(
         transcript.entries(),
         [
             Entry::Turn { turn: 1 },
-            Entry::Reasoning {
+            Entry::Call {
                 turn: 1,
-                text: SecretSet::default().redact(format!(
-                    "the key is {MASK}, so read the file before answering"
-                )),
+                id: Some(secrets.redact("toolu_1")),
+                name: secrets.redact("bash"),
+                arguments: secrets.redact(r#"{"command": "ls a"}"#),
+            },
+            Entry::Result {
+                turn: 1,
+                id: Some(secrets.redact("toolu_1")),
+                name: secrets.redact("bash"),
+                text: secrets.redact("a.txt\n"),
+                bytes: 6,
+                elapsed_ms: 2,
+                exit: Some(Exit::Code(0)),
+            },
+            Entry::Call {
+                turn: 1,
+                id: Some(secrets.redact("toolu_2")),
+                name: secrets.redact("bash"),
+                arguments: secrets.redact(r#"{"command": "ls b"}"#),
             },
             Entry::Assistant {
                 turn: 1,
-                text: SecretSet::default().redact("one file."),
+                text: secrets.redact("one file."),
             },
         ],
-        "the thought reads back as its own fact, and the answer still follows it"
+        "a second call whose tool never answered is a fact of the turn, and no result is \
+         invented for it"
     );
-    assert_eq!(transcript.skipped(), 0, "nothing was skipped");
 }
 
 #[test]

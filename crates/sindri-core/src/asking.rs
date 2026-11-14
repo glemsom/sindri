@@ -3,7 +3,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::provider::{Ask, Client, Deltas, Failure};
+use crate::provider::{Answer, Ask, Client, Deltas, Failure};
 use crate::run::{Reply, Request, Responder};
 use crate::tools::ToolSet;
 use crate::turn::Usage;
@@ -51,11 +51,17 @@ impl Responder for Asking {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .charge(&answer.usage);
-        Ok(Reply {
+        Ok(Reply::from(answer))
+    }
+}
+
+impl From<Answer> for Reply {
+    fn from(answer: Answer) -> Reply {
+        Reply {
             text: answer.text,
             reasoning: answer.reasoning,
             calls: answer.calls,
             usage: answer.usage,
-        })
+        }
     }
 }

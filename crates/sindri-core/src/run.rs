@@ -268,12 +268,7 @@ pub struct Reply {
 
 impl Reply {
     pub fn answer(text: impl Into<String>) -> Reply {
-        Reply {
-            text: text.into(),
-            reasoning: None,
-            calls: Vec::new(),
-            usage: Usage::default(),
-        }
+        Reply::asking(text, [])
     }
 
     pub fn asking(text: impl Into<String>, calls: impl IntoIterator<Item = Call>) -> Reply {

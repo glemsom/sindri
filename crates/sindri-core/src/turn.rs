@@ -4,8 +4,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-/// A turn already taken: what it answered, and each call it asked for beside what that call
-/// answered. The next ask replays these, so the model reads what its calls printed.
+/// A turn already taken: the next ask replays it, so the model reads what its calls printed.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Turn {
     pub turn: u32,

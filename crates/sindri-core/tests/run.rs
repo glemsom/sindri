@@ -66,6 +66,9 @@ impl Responder for Scripted {
         }
         .expect("a reply is scripted");
         deltas.text(&reply.text);
+        if let Some(reasoning) = &reply.reasoning {
+            deltas.reasoning(reasoning);
+        }
         Ok(reply)
     }
 }
@@ -221,6 +224,31 @@ fn a_turn_holds_the_prompt_the_run_was_asked() {
         "count the files",
         "a turn is the prompt beside the answer it got, so it keeps the reader's own \
          words and not only what came back"
+    );
+}
+
+#[test]
+fn a_run_keeps_the_reasoning_its_reply_brought_beside_the_turn_it_produced() {
+    let mut run = Run::new(
+        "why does the retry test fail?",
+        Scripted::answering([Reply {
+            reasoning: Some(String::from("read the retry helper first")),
+            ..Reply::answer("it was the retry")
+        }]),
+        Tools::cheap(),
+    );
+
+    run.drive(&mut Transcript::default());
+
+    assert_eq!(
+        run.history()[0].reasoning.as_deref(),
+        Some("read the retry helper first"),
+        "the thought a turn was thought through rides the turn, so the record has it to write"
+    );
+    assert_eq!(
+        run.kept().reasoning.as_deref(),
+        Some("read the retry helper first"),
+        "and the turn a conversation keeps carries it too"
     );
 }
 
