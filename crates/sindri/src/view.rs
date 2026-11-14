@@ -39,7 +39,7 @@ use crate::rows::{INDENT, Row, Rows, Scroll, wrap};
 use crate::settings::Settings;
 use crate::size::Sizes;
 use crate::stats;
-use crate::stream::Stream;
+use crate::stream::{Said, Stream};
 
 /// The hints in survival order, most valuable first: the order a narrower footer gives them up
 /// in.
@@ -55,7 +55,7 @@ impl Hint {
     }
 }
 
-const HINTS: [Hint; 7] = [
+const HINTS: [Hint; 8] = [
     Hint {
         key: "Enter",
         meaning: "send",
@@ -84,11 +84,19 @@ const HINTS: [Hint; 7] = [
         key: "↑",
         meaning: "queue",
     },
+    Hint {
+        key: "End",
+        meaning: "follow the run",
+    },
 ];
 
 const GAP: &str = " · ";
 
-const STEPS: [(u16, usize); 2] = [(120, 7), (100, 5)];
+/// The ink a gap between two hints is drawn in: quieter than the key beside it, and the same on the
+/// row that says where the frame stands.
+const SEPARATOR: Look = Look::plain(Ink::Dim);
+
+const STEPS: [(u16, usize); 2] = [(120, 8), (100, 5)];
 
 /// The first two of `HINTS`: held at every width and given up last.
 const FLOOR: usize = 2;
@@ -124,6 +132,10 @@ const NAMES_GAP: u16 = 2;
 pub struct View {
     rows: Rows,
     scroll: Scroll,
+    /// The rows of transcript the last paint drew, and the whole transcript's height at it: what a
+    /// page moves by, and what the next paint reads a row that has landed against.
+    band: u16,
+    total: Option<u32>,
     composer: Composer,
     stream: Stream,
     queue: Queue,
@@ -204,6 +216,11 @@ impl View {
         &self.composer
     }
 
+    /// How far back from the tail the transcript is drawn.
+    pub fn scroll(&self) -> Scroll {
+        self.scroll
+    }
+
     pub fn queue(&self) -> &Queue {
         &self.queue
     }
@@ -239,6 +256,7 @@ impl View {
     /// conversation that stands, so whatever `/new` superseded is behind it.
     pub fn settle(&mut self) {
         self.stream = Stream::new();
+        self.scroll = Scroll::Tail;
         self.door = false;
         self.superseded = false;
     }
@@ -371,6 +389,9 @@ impl View {
             Act::Clear => self.clear(),
             Act::Write => self.write(),
             Act::Close => self.close(),
+            Act::Back => self.page(Page::Back),
+            Act::Forward => self.page(Page::Forward),
+            Act::Tail => self.tail(key),
         }
     }
 
@@ -585,6 +606,49 @@ impl View {
         }
     }
 
+    /// A word the run says: the one that opens a new entry returns the frame to the tail, and every
+    /// word after it leaves the frame where the reader put it.
+    fn follows(&mut self, said: Said, fragment: &str) {
+        if !fragment.is_empty() && self.stream.opens(said) {
+            self.scroll = Scroll::Tail;
+        }
+    }
+
+    /// `End` off the tail is the run's tail; at the tail it is the draft's own end of line.
+    fn tail(&mut self, key: Key) -> Outcome {
+        if self.scroll.is_tail() {
+            return self.draft(key);
+        }
+        self.scroll = Scroll::Tail;
+        Outcome::Edited
+    }
+
+    /// A band of the transcript in one direction: the frame is moved where there is a row to move
+    /// it to, and a key pressed at the first row or at the tail repaints nothing.
+    fn page(&mut self, by: Page) -> Outcome {
+        let rows = self.page_rows();
+        let at = match by {
+            Page::Back => self
+                .scroll
+                .back()
+                .saturating_add(rows)
+                .min(self.rows.deepest(self.band)),
+            Page::Forward => self.scroll.back().saturating_sub(rows),
+        };
+        if at == self.scroll.back() {
+            return Outcome::Unchanged;
+        }
+        self.scroll = Scroll::of(at);
+        Outcome::Edited
+    }
+
+    /// The rows a page moves: the band the transcript is drawn in at the tail, which is one row more
+    /// than while the row saying it is not is drawn over the band — so a page back and the page on
+    /// beside it are one band of rows.
+    fn page_rows(&self) -> u32 {
+        u32::from(self.band.saturating_add(self.notice_rows()))
+    }
+
     fn up(&mut self) -> Outcome {
         if !self.composer.on_first_line() {
             return self.composer.key(Key::Up);
@@ -625,6 +689,10 @@ impl View {
     }
 
     pub fn set_state(&mut self, state: State) {
+        // A run that settled is the reader's to read, so the frame is handed back to its tail.
+        if state == State::Idle {
+            self.scroll = Scroll::Tail;
+        }
         self.composer.set_state(state);
     }
 
@@ -667,7 +735,12 @@ impl View {
         self.sizes = Sizes::none();
         pen::claim(buffer, area, self.palette.ground(None));
         self.composer.set_room(View::room(area.width));
-        let bands = bands(area, self.composer.rows(), self.queue.rows());
+        let bands = bands(
+            area,
+            self.composer.rows(),
+            self.queue.rows(),
+            self.notice_rows(),
+        );
         // The rail's share is taken from the transcript's band before the transcript is laid out
         // in what is left: a row's width is the width it is drawn at.
         let share = self.split(bands.transcript);
@@ -704,6 +777,7 @@ impl View {
             );
         }
         self.queue_band(bands.queue, buffer);
+        self.notice_band(bands.notice, buffer);
         self.composer_band(bands.composer, buffer);
         self.footer(bands.footer, buffer);
         // A screen is drawn over the frame it was opened from rather than in place of it: the
@@ -752,6 +826,8 @@ impl View {
     /// cache this band reaches.
     fn transcript(&mut self, area: Rect, buffer: &mut Buffer) {
         pen::claim(buffer, area, self.palette.ground(Some(Band::Well)));
+        // A narrower band lays the same history out in more rows, and that is no row landing.
+        let reflowed = self.rows.cols() != area.width;
         self.rows.resize(area.width);
         // How many rows a picture takes is part of the rows an entry was laid out as, so the
         // surface reaches the cache before a window is measured.
@@ -761,6 +837,25 @@ impl View {
         // wrapped around it, and the prose it introduces is never cut by the mark.
         let head = self.pulse.as_ref().map(Pulse::head);
         self.rows.live(&self.stream, head.as_ref());
+        let total = self.rows.height();
+        // A window measured from the tail follows a run that grows; one the reader took back keeps
+        // the rows it holds, so a row that lands is given back to the count rather than rolled
+        // under them.
+        let grown = match self.total {
+            Some(seen) if !reflowed => total.saturating_sub(seen),
+            _ => 0,
+        };
+        let back = match self.scroll.is_tail() {
+            true => 0,
+            false => self
+                .scroll
+                .back()
+                .saturating_add(grown)
+                .min(self.rows.deepest(area.height)),
+        };
+        self.scroll = Scroll::of(back);
+        self.band = area.height;
+        self.total = Some(total);
         let window = self.rows.window(self.scroll, area.height);
         let mut y = area.y;
         let mut lines = Vec::new();
@@ -831,6 +926,37 @@ impl View {
             return;
         };
         screen_row(buffer, area, area.y, &[(&label, Ink::Dim)], &self.palette);
+    }
+
+    /// How many rows a frame off the tail spends saying so: the one row above the composer, and
+    /// none at the tail, where there is nothing to say.
+    fn notice_rows(&self) -> u16 {
+        u16::from(!self.scroll.is_tail())
+    }
+
+    /// How far back from the tail the frame stands, in words: a frame at the tail has nothing to say.
+    fn notice(&self) -> Option<String> {
+        match self.scroll.back() {
+            0 => None,
+            1 => Some(String::from("1 row back")),
+            rows => Some(format!("{rows} rows back")),
+        }
+    }
+
+    /// The row is whole or it is not drawn, as a hint is: a frame too narrow for the words leaves
+    /// the cells blank rather than cutting the sentence that says where the reader stands.
+    fn notice_band(&self, area: Rect, buffer: &mut Buffer) {
+        let Some(count) = self.notice() else {
+            return;
+        };
+        // A band of no rows stands on the composer's edge row: the row is given up, never drawn
+        // over the surface under it.
+        if area.height == 0 {
+            return;
+        }
+        let mut spans: Vec<(&str, Look)> = vec![(count.as_str(), keys::MEANING), (GAP, SEPARATOR)];
+        spans.extend(keyed("End", "follows the run"));
+        screen_row(buffer, area, area.y, &spans, &self.palette);
     }
 
     /// The composer is a raised surface and not a flat band: the lit edge along its top row, the
@@ -913,7 +1039,12 @@ impl View {
         if self.stack.modal().is_some() {
             return None;
         }
-        let bands = bands(area, self.composer.rows(), self.queue.rows());
+        let bands = bands(
+            area,
+            self.composer.rows(),
+            self.queue.rows(),
+            self.notice_rows(),
+        );
         let (row, column) = self.composer.caret();
         let y = bands
             .composer
@@ -1128,10 +1259,12 @@ impl View {
 
 impl Deltas for View {
     fn text(&mut self, fragment: &str) {
+        self.follows(Said::Answer, fragment);
         self.stream.text(fragment);
     }
 
     fn reasoning(&mut self, fragment: &str) {
+        self.follows(Said::Reasoning, fragment);
         self.stream.reasoning(fragment);
     }
 }
@@ -1142,9 +1275,17 @@ enum Step {
     Next,
 }
 
+/// The direction a page of the transcript moves the frame.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Page {
+    Back,
+    Forward,
+}
+
 struct Bands {
     transcript: Rect,
     queue: Rect,
+    notice: Rect,
     composer: Rect,
     footer: Rect,
 }
@@ -1175,13 +1316,17 @@ fn place(
     pictures.place(picture, cell, block, buffer);
 }
 
-fn bands(area: Rect, composer_rows: u16, queue_rows: u16) -> Bands {
+fn bands(area: Rect, composer_rows: u16, queue_rows: u16, notice_rows: u16) -> Bands {
     let footer = area.height.min(1);
     let above = area.height.saturating_sub(footer);
     let composer = composer_rows.min(above);
     let queue = queue_rows.min(above.saturating_sub(composer));
-    let transcript = above.saturating_sub(composer).saturating_sub(queue);
+    let room = above.saturating_sub(composer).saturating_sub(queue);
+    let notice = notice_rows.min(room.saturating_sub(1));
+    let transcript = room.saturating_sub(notice);
     let queue_y = area.y.saturating_add(transcript);
+    let notice_y = queue_y.saturating_add(queue);
+    let composer_y = notice_y.saturating_add(notice);
     Bands {
         transcript: Rect {
             height: transcript,
@@ -1192,13 +1337,18 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16) -> Bands {
             height: queue,
             ..area
         },
+        notice: Rect {
+            y: notice_y,
+            height: notice,
+            ..area
+        },
         composer: Rect {
-            y: queue_y.saturating_add(queue),
+            y: composer_y,
             height: composer,
             ..area
         },
         footer: Rect {
-            y: queue_y.saturating_add(queue).saturating_add(composer),
+            y: composer_y.saturating_add(composer),
             height: footer,
             ..area
         },
@@ -1268,13 +1418,21 @@ fn hints_row(buffer: &mut Buffer, area: Rect, hints: &[Hint], palette: &Palette)
     let mut spans: Vec<(&str, Look)> = Vec::new();
     for (index, hint) in kept(hints, area.width).into_iter().enumerate() {
         if index > 0 {
-            spans.push((GAP, Look::plain(Ink::Dim)));
+            spans.push((GAP, SEPARATOR));
         }
-        spans.push((hint.key, keys::KEY));
-        spans.push((" ", keys::MEANING));
-        spans.push((hint.meaning, keys::MEANING));
+        spans.extend(keyed(hint.key, hint.meaning));
     }
     pen::write(buffer, area, &spans, Clip::Whole, palette);
+}
+
+/// A key and the words that say what pressing it does, in the two looks a key and its meaning are
+/// drawn in: the footer's hints and the row above the composer are drawn by one shape.
+fn keyed<'a>(key: &'a str, meaning: &'a str) -> [(&'a str, Look); 3] {
+    [
+        (key, keys::KEY),
+        (" ", keys::MEANING),
+        (meaning, keys::MEANING),
+    ]
 }
 
 /// The hints a footer `width` columns wide draws, in survival order, stopping at the first that
@@ -1382,7 +1540,7 @@ mod tests {
         let area = screen(cols, rows);
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
-        let band = bands(area, view.composer().rows(), view.queue().rows()).composer;
+        let band = bands(area, view.composer().rows(), view.queue().rows(), 0).composer;
         (buffer, band)
     }
 
@@ -1529,7 +1687,7 @@ mod tests {
             let area = screen(120, 40);
             let mut buffer = Buffer::empty(area);
             view.paint(area, &mut buffer);
-            let band = bands(area, view.composer().rows(), view.queue().rows()).composer;
+            let band = bands(area, view.composer().rows(), view.queue().rows(), 0).composer;
             let (left, right) = card_columns(&buffer);
             assert!(
                 band.x < left && right + 1 < band.right(),
@@ -1558,7 +1716,7 @@ mod tests {
         let area = screen(120, 40);
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
-        let band = bands(area, view.composer().rows(), view.queue().rows()).composer;
+        let band = bands(area, view.composer().rows(), view.queue().rows(), 0).composer;
         look_at(&buffer, palette, band.x, band.y)
     }
 
@@ -1715,7 +1873,7 @@ mod tests {
             let mut buffer = Buffer::empty(area);
             view.paint(area, &mut buffer);
 
-            let bands = bands(area, view.composer().rows(), view.queue().rows());
+            let bands = bands(area, view.composer().rows(), view.queue().rows(), 0);
             let share = view.split(bands.transcript);
             let (shape, band) = share.rail.expect("a frame this wide holds a ledger");
             let rail = band.area;
@@ -1860,7 +2018,7 @@ mod tests {
         let area = screen(cols, rows);
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
-        let band = bands(area, view.composer().rows(), view.queue().rows()).transcript;
+        let band = bands(area, view.composer().rows(), view.queue().rows(), 0).transcript;
         (buffer, view.split(band).transcript)
     }
 
@@ -2288,13 +2446,26 @@ mod tests {
     }
 
     #[test]
-    fn a_hundred_and_twenty_columns_hold_the_seven_hints_the_table_names() {
+    fn a_hundred_and_twenty_columns_hold_the_eight_hints_the_table_names() {
         assert_eq!(
             footer(120, 24).trim_end(),
             "Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · Ctrl-J newline · @ files · \
-             ↑ queue",
+             ↑ queue · End follow the run",
             "a 120-column footer draws every hint the table holds, in survival order and separated \
-             by one gap"
+             by one gap, and the hint that returns to the tail is the last of them"
+        );
+    }
+
+    #[test]
+    fn the_hint_that_returns_to_the_tail_is_drawn_at_a_hundred_and_twenty_columns() {
+        assert!(
+            footer(120, 24).contains("End follow the run"),
+            "a frame wide enough for the whole table keeps the key that follows the run \
+             again, which is the one the row above the composer names too"
+        );
+        assert!(
+            !footer(119, 24).contains("End"),
+            "and the width under it gives that hint up rather than cutting it"
         );
     }
 
@@ -2528,6 +2699,473 @@ mod tests {
         );
     }
 
+    /// A frame whose transcript is `count` rows of turn dividers, each saying which turn it is:
+    /// where a row stands in the frame is then a fact of what the row says.
+    fn turns(count: u32) -> View {
+        View::of((1..=count).map(|turn| Entry::Turn { turn }), Scroll::Tail)
+    }
+
+    /// The cells a frame `cols` by `rows` is painted into.
+    fn painted(view: &mut View, cols: u16, rows: u16) -> Buffer {
+        let area = screen(cols, rows);
+        let mut buffer = Buffer::empty(area);
+        view.paint(area, &mut buffer);
+        buffer
+    }
+
+    #[test]
+    fn a_page_up_takes_the_transcript_back_by_the_band_it_is_drawn_in() {
+        let mut view = turns(100);
+        painted(&mut view, 120, 40);
+
+        assert_eq!(
+            view.scroll(),
+            Scroll::Tail,
+            "a frame painted once is at the tail"
+        );
+        assert_eq!(
+            view.key(Key::PageUp),
+            Outcome::Edited,
+            "a page up is a frame to paint"
+        );
+        assert_eq!(
+            view.scroll(),
+            Scroll::Back(37),
+            "a 120x40 frame gives the transcript thirty-seven rows — forty less the footer \
+             and the composer's two — so one page moves it that far back"
+        );
+        painted(&mut view, 120, 40);
+        assert_eq!(
+            view.key(Key::PageDown),
+            Outcome::Edited,
+            "and a page down brings it back"
+        );
+        assert_eq!(
+            view.scroll(),
+            Scroll::Tail,
+            "one page on from one page back is the tail the frame started at, though the row \
+             saying where it stands was drawn out of that same band"
+        );
+    }
+
+    /// A frame painted at the tail and then taken a page back, which is the state every return to
+    /// the tail is asked to leave.
+    fn scrolled_back() -> View {
+        let mut view = turns(100);
+        painted(&mut view, 120, 40);
+        view.key(Key::PageUp);
+        assert_eq!(
+            view.scroll(),
+            Scroll::Back(37),
+            "the frame under these tests is one page off the tail to begin with"
+        );
+        view
+    }
+
+    /// The one row a frame draws saying the transcript is scrolled back, and the row it stands on.
+    fn notice_of(buffer: &Buffer) -> (String, u16) {
+        let area = buffer.area;
+        for y in area.y..area.bottom() {
+            let row = drawn_row(buffer, y);
+            if row.contains("rows back") || row.contains("1 row back") {
+                return (row, y);
+            }
+        }
+        panic!(
+            "no row of the frame says how many rows back it stands: {:?}",
+            (area.y..area.bottom())
+                .map(|y| drawn_row(buffer, y))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn a_frame_off_the_tail_says_how_far_back_it_stands_and_the_key_that_follows_the_run() {
+        let palette = Palette::TRUECOLOR;
+        let mut view = scrolled_back();
+        view.set_palette(palette);
+        let buffer = painted(&mut view, 120, 40);
+
+        let (drawn, y) = notice_of(&buffer);
+        assert_eq!(
+            drawn.trim_end(),
+            "37 rows back \u{b7} End follows the run",
+            "the row says how many rows back the frame stands and the key that returns it"
+        );
+        assert_eq!(
+            y, 36,
+            "the row stands above the composer's edge row, which is the thirty-seventh of \
+             forty, rather than in the transcript it is a fact about"
+        );
+
+        let back = drawn.find("rows back").expect("the count");
+        assert_eq!(
+            look_at(&buffer, &palette, pen::cells(&drawn[..back]), y),
+            keys::MEANING,
+            "the count is drawn in the look a meaning hangs in"
+        );
+        let end = drawn.find("End").expect("the key");
+        let column = pen::cells(&drawn[..end]);
+        assert_eq!(
+            look_at(&buffer, &palette, column, y),
+            keys::KEY,
+            "the key that follows the run again is drawn in the look a key is drawn in"
+        );
+        assert_eq!(
+            look_at(&buffer, &palette, column - pen::cells(GAP), y),
+            Look::plain(Ink::Dim),
+            "and the gap between them is dimmer than either, so the row reads as one sentence"
+        );
+    }
+
+    #[test]
+    fn one_row_back_is_said_in_the_singular() {
+        let mut view = View::of((1..=100).map(|turn| Entry::Turn { turn }), Scroll::Back(1));
+        let buffer = painted(&mut view, 120, 40);
+
+        let (drawn, _) = notice_of(&buffer);
+        assert_eq!(
+            drawn.trim_end(),
+            "1 row back \u{b7} End follows the run",
+            "one row is a count of one row, and not of one rows"
+        );
+    }
+
+    #[test]
+    fn a_frame_at_the_tail_draws_no_row_saying_it_is_scrolled_back() {
+        let mut view = turns(100);
+        let buffer = painted(&mut view, 120, 40);
+
+        assert_eq!(
+            view.scroll(),
+            Scroll::Tail,
+            "the frame these cells were painted from stands at the tail"
+        );
+        assert!(
+            !holds(&buffer, "rows back") && !holds(&buffer, "follows the run"),
+            "a frame at the tail has nothing to say about where it stands: {:?}",
+            (buffer.area.y..buffer.area.bottom())
+                .map(|y| drawn_row(&buffer, y))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn a_row_that_lands_while_the_reader_is_scrolled_back_holds_the_window_still() {
+        let mut view = turns(100);
+        view.text("a first word of an answer");
+        painted(&mut view, 120, 40);
+        view.key(Key::PageUp);
+        let before = painted(&mut view, 120, 40);
+
+        view.text(&pen::filled(200, 'x'));
+        let after = painted(&mut view, 120, 40);
+
+        assert_eq!(
+            drawn_row(&after, 0),
+            drawn_row(&before, 0),
+            "a row that lands at the tail must not roll the window forward under a reader who \
+             is reading back"
+        );
+        let (now, _) = notice_of(&after);
+        assert_eq!(
+            now.trim_end(),
+            "39 rows back \u{b7} End follows the run",
+            "the two rows the answer landed are added to the count of rows back: the frame \
+             holds the rows it was reading rather than sliding with the tail"
+        );
+    }
+
+    #[test]
+    fn a_band_that_lays_the_history_out_again_does_not_move_the_reader_off_their_rows() {
+        let mut view = View::of(
+            (1..=20).map(|turn| Entry::Assistant {
+                turn,
+                text: SecretSet::default().redact(pen::filled(300, 'w')),
+            }),
+            Scroll::Tail,
+        );
+        painted(&mut view, 120, 40);
+        view.key(Key::PageUp);
+        let back = view.scroll();
+        assert_ne!(
+            back,
+            Scroll::Tail,
+            "the frame stands off the tail to begin with"
+        );
+
+        painted(&mut view, 80, 40);
+
+        assert_eq!(
+            view.scroll(),
+            back,
+            "a narrower band wraps the same history into more rows, and a reader's window is \
+             not thrown forward by their own resize"
+        );
+    }
+
+    #[test]
+    fn a_row_too_narrow_for_the_words_that_say_it_is_drawn_whole_or_not_at_all() {
+        let mut view = turns(100);
+        painted(&mut view, 120, 40);
+        view.key(Key::PageUp);
+
+        let narrow = painted(&mut view, 20, 40);
+        assert!(
+            !holds(&narrow, "rows back") && !holds(&narrow, "End follows"),
+            "a twenty-column row holds neither the count nor the key whole, so it holds \
+             neither of them at all"
+        );
+
+        let roomy = painted(&mut view, 40, 40);
+        assert!(
+            holds(&roomy, "37 rows back \u{b7} End follows the run"),
+            "and forty columns hold the whole row"
+        );
+    }
+
+    #[test]
+    fn a_frame_too_short_for_the_row_gives_it_up_before_the_transcript_loses_its_last_row() {
+        let mut view = turns(100);
+        painted(&mut view, 120, 40);
+        view.key(Key::PageUp);
+
+        let close = painted(&mut view, 120, 4);
+        assert!(
+            !holds(&close, "rows back"),
+            "a frame of four rows holds the composer's two, so the row that says where the \
+             reader stands is given up and the transcript keeps its row: {:?}",
+            (close.area.y..close.area.bottom())
+                .map(|y| drawn_row(&close, y))
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            drawn_row(&close, 0).starts_with("turn "),
+            "and the transcript's one row is still drawn in the row above the composer: {:?}",
+            drawn_row(&close, 0)
+        );
+    }
+
+    #[test]
+    fn a_new_entry_leaves_the_frame_at_the_tail() {
+        let mut view = scrolled_back();
+
+        view.text("the first word of an answer");
+
+        assert_eq!(
+            view.scroll(),
+            Scroll::Tail,
+            "an answer that opens its row puts the frame back at the tail without being asked"
+        );
+    }
+
+    #[test]
+    fn an_answer_that_opens_its_row_under_a_thought_leaves_the_frame_at_the_tail() {
+        let mut view = turns(100);
+        view.reasoning("a thought the run says first");
+        painted(&mut view, 120, 40);
+        view.key(Key::PageUp);
+        assert_ne!(
+            view.scroll(),
+            Scroll::Tail,
+            "the frame under this test stands off the tail"
+        );
+
+        view.text("and the answer it introduces");
+
+        assert_eq!(
+            view.scroll(),
+            Scroll::Tail,
+            "an answer opens a row of its own under the thought, so it is a new entry as the \
+             run's first word is"
+        );
+    }
+
+    #[test]
+    fn a_thought_that_opens_its_row_leaves_the_frame_at_the_tail() {
+        let mut view = scrolled_back();
+
+        view.reasoning("the first word of a thought");
+
+        assert_eq!(
+            view.scroll(),
+            Scroll::Tail,
+            "the run's first reasoning is a new entry as its answer is"
+        );
+    }
+
+    #[test]
+    fn a_sent_prompt_leaves_the_frame_at_the_tail() {
+        let mut view = scrolled_back();
+
+        view.settle();
+
+        assert_eq!(
+            view.scroll(),
+            Scroll::Tail,
+            "a prompt the reader sends is a run they mean to watch, so the frame is handed \
+             back to its tail"
+        );
+    }
+
+    #[test]
+    fn a_settled_run_leaves_the_frame_at_the_tail() {
+        let mut view = scrolled_back();
+
+        view.set_state(State::Idle);
+
+        assert_eq!(
+            view.scroll(),
+            Scroll::Tail,
+            "a run that has settled puts the frame back at the tail"
+        );
+    }
+
+    #[test]
+    fn a_page_up_at_the_first_row_stops_there_rather_than_wrapping_to_the_tail() {
+        let mut view = turns(40);
+        painted(&mut view, 120, 40);
+
+        assert_eq!(
+            view.scroll(),
+            Scroll::Tail,
+            "the frame is painted once and stands at the tail"
+        );
+        assert_eq!(
+            view.key(Key::PageUp),
+            Outcome::Edited,
+            "one page back from the tail moves the frame as far as the transcript reaches"
+        );
+        assert_eq!(
+            view.scroll(),
+            Scroll::Back(3),
+            "forty rows of transcript in a band of thirty-seven leaves three rows behind the \
+             frame, so the one page back is three rows and not thirty-seven"
+        );
+        painted(&mut view, 120, 40);
+        assert_eq!(
+            view.key(Key::PageUp),
+            Outcome::Edited,
+            "the row saying where the frame stands is drawn out of that band, so reaching the \
+             first row is the second press rather than the first"
+        );
+        assert_eq!(view.scroll(), Scroll::Back(4));
+        let head = painted(&mut view, 120, 40);
+        assert!(
+            drawn_row(&head, 0).starts_with("turn 1 "),
+            "the transcript's first row stands at the top of the band: {:?}",
+            drawn_row(&head, 0)
+        );
+        for _ in 0..3 {
+            assert_eq!(
+                view.key(Key::PageUp),
+                Outcome::Unchanged,
+                "a press at the first row has nowhere to go, so it repaints nothing"
+            );
+            assert_eq!(
+                view.scroll(),
+                Scroll::Back(4),
+                "and the frame stays on the first row rather than rolling round to the tail"
+            );
+        }
+    }
+
+    #[test]
+    fn a_page_down_at_the_tail_stops_there_rather_than_wrapping_to_the_first_row() {
+        let mut view = turns(40);
+        painted(&mut view, 120, 40);
+
+        assert_eq!(
+            view.key(Key::PageDown),
+            Outcome::Unchanged,
+            "a frame at the tail has no row on to move to"
+        );
+        assert_eq!(view.scroll(), Scroll::Tail);
+    }
+
+    #[test]
+    fn end_returns_the_frame_to_the_tail_and_the_caret_to_its_line_at_it() {
+        let mut view = turns(100);
+        painted(&mut view, 120, 40);
+        view.key(Key::PageUp);
+
+        assert_eq!(
+            view.key(Key::End),
+            Outcome::Edited,
+            "off the tail, `End` is the tail of the run and a frame to paint"
+        );
+        assert_eq!(view.scroll(), Scroll::Tail);
+
+        view.paste("a line of my own");
+        view.key(Key::Home);
+        assert_eq!(
+            view.key(Key::End),
+            Outcome::Edited,
+            "at the tail the same key is the draft's own end of line"
+        );
+        assert_eq!(
+            view.composer().caret(),
+            (0, 16),
+            "so the caret waits after the last glyph of the draft rather than moving the \
+             frame it is already at the tail of"
+        );
+    }
+
+    #[test]
+    fn a_ctrl_u_and_a_ctrl_d_are_the_same_two_pages() {
+        let mut view = turns(100);
+        painted(&mut view, 120, 40);
+        view.key(Key::PageUp);
+        let paged = view.scroll();
+
+        view.key(Key::PageDown);
+        assert_eq!(view.scroll(), Scroll::Tail);
+        assert_eq!(
+            view.key(Key::Clear),
+            Outcome::Edited,
+            "`Ctrl-U` is a page back as `PgUp` is"
+        );
+        assert_eq!(
+            view.scroll(),
+            paged,
+            "the two spellings of one page are one act, so they move the frame by the same rows"
+        );
+        assert_eq!(view.key(Key::Forward), Outcome::Edited);
+        assert_eq!(
+            view.scroll(),
+            Scroll::Tail,
+            "and `Ctrl-D` brings it on as `PgDn` does"
+        );
+    }
+
+    #[test]
+    fn the_card_that_lists_the_keys_names_the_two_pages_and_the_tail() {
+        let mut view = View::boot();
+        view.key(Key::Char('?'));
+        let buffer = painted(&mut view, 120, 40);
+        let body = (buffer.area.y + 1..buffer.area.bottom() - 1)
+            .map(|y| drawn_row(&buffer, y))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        for said in [
+            "PgUp",
+            "the transcript a band back",
+            "Ctrl-U",
+            "PgDn",
+            "the transcript a band on",
+            "Ctrl-D",
+            "End",
+            "the tail of the run, or the end of the line",
+        ] {
+            assert!(
+                body.contains(said),
+                "the card that lists the keys does not name {said:?}: the keys the frame \
+                 answers are named where keys are named"
+            );
+        }
+    }
+
     #[test]
     fn a_key_is_drawn_louder_than_the_words_that_say_what_pressing_it_does() {
         assert!(
@@ -2729,7 +3367,7 @@ mod tests {
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
 
-        let band = bands(area, view.composer().rows(), view.queue().rows()).composer;
+        let band = bands(area, view.composer().rows(), view.queue().rows(), 0).composer;
         let wide = |count| pen::filled(count, '日');
         assert_eq!(
             draft_rows(&buffer, band),
@@ -2754,7 +3392,7 @@ mod tests {
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
 
-        let band = bands(area, view.composer().rows(), view.queue().rows()).composer;
+        let band = bands(area, view.composer().rows(), view.queue().rows(), 0).composer;
         let (empty, _) = place_of(&buffer, PLACEHOLDER);
         let gutter = pen::cells(INDENT);
         assert!(
@@ -2789,7 +3427,7 @@ mod tests {
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
 
-        let band = bands(area, view.composer().rows(), view.queue().rows()).composer;
+        let band = bands(area, view.composer().rows(), view.queue().rows(), 0).composer;
         let (drawn, column) = place_of(&buffer, "a draft of mine");
         assert_eq!(
             column, 2,

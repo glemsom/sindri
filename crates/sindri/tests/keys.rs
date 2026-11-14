@@ -72,6 +72,51 @@ fn every_row_of_a_table_says_what_its_key_is_and_does() {
     }
 }
 
+/// The act the table of `mode` gives `key`, or nothing where no row of it answers.
+fn act_of(mode: Mode, key: Key) -> Option<Act> {
+    mode.table()
+        .iter()
+        .find(|binding| binding.key == key)
+        .map(|binding| binding.act)
+}
+
+#[test]
+fn the_four_keys_that_move_the_transcript_are_one_band_each_way() {
+    assert_eq!(act_of(Mode::Composer, Key::PageUp), Some(Act::Back));
+    assert_eq!(
+        act_of(Mode::Composer, Key::Clear),
+        Some(Act::Back),
+        "`Ctrl-U` is the same band back as `PgUp`, and on the draft it is no longer a key \
+         nobody answers"
+    );
+    assert_eq!(act_of(Mode::Composer, Key::PageDown), Some(Act::Forward));
+    assert_eq!(
+        act_of(Mode::Composer, Key::Forward),
+        Some(Act::Forward),
+        "`Ctrl-D` is the same band on as `PgDn`"
+    );
+}
+
+#[test]
+fn end_returns_the_frame_to_the_tail_and_is_the_carets_own_only_there() {
+    assert_eq!(
+        act_of(Mode::Composer, Key::End),
+        Some(Act::Tail),
+        "`End` is the tail of the run, and the end of the line only when the frame is \
+         already there"
+    );
+}
+
+#[test]
+fn the_settings_screen_still_empties_a_value_with_a_ctrl_u() {
+    assert_eq!(
+        act_of(Mode::Settings, Key::Clear),
+        Some(Act::Clear),
+        "the one key two modes answer is each mode's own act: the transcript moves on the \
+         draft and a value is unset at the settings screen"
+    );
+}
+
 #[test]
 fn the_stats_screen_is_the_sixth_mode_and_answers_escape_and_nothing_else() {
     assert_eq!(

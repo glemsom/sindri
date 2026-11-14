@@ -104,6 +104,9 @@ pub enum Act {
     Flip,
     Clear,
     Write,
+    Back,
+    Forward,
+    Tail,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -114,7 +117,7 @@ pub struct Binding {
     pub act: Act,
 }
 
-const COMPOSER: [Binding; 17] = [
+const COMPOSER: [Binding; 21] = [
     Binding {
         key: Key::Char('?'),
         name: "?",
@@ -158,6 +161,30 @@ const COMPOSER: [Binding; 17] = [
         act: Act::Draft,
     },
     Binding {
+        key: Key::PageUp,
+        name: "PgUp",
+        does: "the transcript a band back",
+        act: Act::Back,
+    },
+    Binding {
+        key: Key::Clear,
+        name: "Ctrl-U",
+        does: "the transcript a band back",
+        act: Act::Back,
+    },
+    Binding {
+        key: Key::PageDown,
+        name: "PgDn",
+        does: "the transcript a band on",
+        act: Act::Forward,
+    },
+    Binding {
+        key: Key::Forward,
+        name: "Ctrl-D",
+        does: "the transcript a band on",
+        act: Act::Forward,
+    },
+    Binding {
         key: Key::ShiftDown,
         name: "Shift+↓",
         does: "grow the mark a row down",
@@ -190,8 +217,8 @@ const COMPOSER: [Binding; 17] = [
     Binding {
         key: Key::End,
         name: "End",
-        does: "the end of the line",
-        act: Act::Draft,
+        does: "the tail of the run, or the end of the line",
+        act: Act::Tail,
     },
     Binding {
         key: Key::Copy,

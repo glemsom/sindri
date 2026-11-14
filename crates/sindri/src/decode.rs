@@ -167,6 +167,8 @@ impl Decoder {
             (b'O', _) => Step::Event(Event::Focus(false)),
             (b'H', _) | (b'~', "1") | (b'~', "7") => Step::Event(Event::Key(Key::Home)),
             (b'F', _) | (b'~', "4") | (b'~', "8") => Step::Event(Event::Key(Key::End)),
+            (b'~', "5") => Step::Event(Event::Key(Key::PageUp)),
+            (b'~', "6") => Step::Event(Event::Key(Key::PageDown)),
             (b'~', "200") => {
                 self.pasting = true;
                 Step::Taken
@@ -261,6 +263,7 @@ fn arrow(last: u8) -> Option<Key> {
 fn control(byte: u8) -> Option<Key> {
     match byte {
         0x03 => Some(Key::Cancel),
+        0x04 => Some(Key::Forward),
         0x15 => Some(Key::Clear),
         0x18 => Some(Key::Drop),
         b'\t' => Some(Key::Tab),
