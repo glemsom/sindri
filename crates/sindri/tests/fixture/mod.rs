@@ -8,7 +8,7 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::{Buffer, Cell};
 use ratatui::layout::Rect;
-use sindri::composer::{Composer, Key, Outcome};
+use sindri::composer::{Composer, Key, Outcome, State};
 use sindri::graphics::CellSize;
 use sindri::ink::{Faces, Ink, Look};
 use sindri::ledger::{Boot, Ctx, Facts};
@@ -153,6 +153,8 @@ fn named(name: &str) -> View {
         "settings-refused" => refused(),
         "stats" => stats(),
         "footer" => View::boot(),
+        "footer-live" => asked(),
+        "footer-queue" => waiting(asked(), DURING_A_RUN),
         "picture" => pictured(),
         "mark" => {
             let mut view = View::of(transcript(), Scroll::Tail);
@@ -356,6 +358,7 @@ fn tools() -> View {
         Scroll::Tail,
     );
     view.set_ground(Some(ground(workspace)));
+    view.set_state(State::Running);
     view
 }
 
@@ -560,6 +563,7 @@ fn live(entries: Vec<Entry>, scroll: Scroll) -> View {
         ..facts()
     });
     view.set_pulse(Some(Pulse::live(4_200)));
+    view.set_state(State::Running);
     view
 }
 
@@ -732,6 +736,7 @@ fn streaming() -> View {
     let mut entries = transcript();
     entries.push(Entry::Turn { turn: 6 });
     let mut view = running(entries, Scroll::Tail);
+    view.set_state(State::Running);
     for fragment in [
         "The ticket asks whether the tail survives. ",
         "A fence still streaming is a code block, ",
@@ -776,6 +781,9 @@ fn with_pulse(pulse: Pulse, said: &[&str]) -> View {
     }
     for fragment in said {
         view.text(fragment);
+    }
+    if state == RunState::Running {
+        view.set_state(State::Running);
     }
     view.set_facts(Facts {
         state: Some(state),
@@ -836,20 +844,37 @@ fn refused_run() -> View {
     view
 }
 
+const DURING_A_RUN: &[&str] = &[
+    "run the test that failed and read it",
+    "then the fmt check",
+    "and say why the retry hid it",
+];
+
 fn queue() -> View {
     let mut view = running(transcript(), Scroll::Tail);
-    for prompt in [
-        "run the test that failed and read it",
-        "then the fmt check",
-        "and say why the retry hid it",
-    ] {
+    view.set_state(State::Running);
+    let mut view = waiting(view, DURING_A_RUN);
+    view.paste("and this one while they wait");
+    view
+}
+
+fn waiting(mut view: View, prompts: &[&str]) -> View {
+    for prompt in prompts {
         view.paste(prompt);
         match view.key(Key::Enter) {
             Outcome::Send(prompt) => view.enqueue(prompt),
             other => panic!("a draft should have been sent, and {other:?} came instead"),
         }
     }
-    view.paste("and this one while they wait");
+    view
+}
+
+/// The frame a prompt just sent leaves: a run in flight and nothing said yet.
+fn asked() -> View {
+    let mut view = View::boot();
+    view.settle();
+    view.set_state(State::Running);
+    view.set_pulse(Some(Pulse::live(0)));
     view
 }
 

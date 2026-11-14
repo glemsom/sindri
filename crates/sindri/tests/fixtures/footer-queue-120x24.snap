@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+footer-queue at 120x24
+00 |⠋ 0.0s                                                                                                                  | accent:1 plain:1 dim:4 plain:114
+01 |                                                                                                                        | plain:120
+02 |                                                                                                                        | plain:120
+03 |                                                                                                                        | plain:120
+04 |                                                                                                                        | plain:120
+05 |                                                                                                                        | plain:120
+06 |                                                                                                                        | plain:120
+07 |                                                                                                                        | plain:120
+08 |                                                                                                                        | plain:120
+09 |                                                                                                                        | plain:120
+10 |                                                                                                                        | plain:120
+11 |                                                                                                                        | plain:120
+12 |                                                                                                                        | plain:120
+13 |                                                                                                                        | plain:120
+14 |                                                                                                                        | plain:120
+15 |                                                                                                                        | plain:120
+16 |                                                                                                                        | plain:120
+17 |                                                                                                                        | plain:120
+18 |                                                                                                                        | plain:120
+19 |                                                                                                                        | plain:120
+20 |3 queued                                                                                                                | dim:8 plain:112
+21 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:120
+22 |› what should the run do?                                                                                               | dim:25 plain:95
+23 |Ctrl-C cancel · ↑ 3 queued · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                               | plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:31

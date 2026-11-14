@@ -138,6 +138,13 @@ stands off the tail, the composer's and the footer's — each drawn in the rows 
 past them.
 _Avoid_: Region, pane, panel, viewport
 
+**Footer**:
+The frame's last row: the hints of what a key does **this** frame can honour, most valuable first, each
+giving up its tail as the row narrows, and a key the frame cannot answer not named at all. An idle
+draft names sending, the commands, the files and the keys; a run in flight names cancelling and never
+sending; and a queue behind the draft is counted where the key that recalls one stands.
+_Avoid_: Status bar, help line, key bar
+
 **Gutter**:
 The two columns every row of an entry opens with, ahead of its words: the glyph that says what the
 row is — a turn's rule, a prompt's sigil, a call's or result's mark, a thought's or code block's bar —

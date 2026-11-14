@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+footer at 40x24
+00 |                                        | plain:40
+01 |                                        | plain:40
+02 |                                        | plain:40
+03 |                                        | plain:40
+04 |                                        | plain:40
+05 |                                        | plain:40
+06 |                                        | plain:40
+07 |                                        | plain:40
+08 |                                        | plain:40
+09 |                                        | plain:40
+10 |                                        | plain:40
+11 |                                        | plain:40
+12 |                                        | plain:40
+13 |                                        | plain:40
+14 |                                        | plain:40
+15 |                                        | plain:40
+16 |                                        | plain:40
+17 |                                        | plain:40
+18 |                                        | plain:40
+19 |                                        | plain:40
+20 |                                        | plain:40
+21 |────────────────────────────────────────| accent+faint:40
+22 |› what should the run do?               | dim:25 plain:15
+23 |Enter send · / commands · @ files       | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 plain:7

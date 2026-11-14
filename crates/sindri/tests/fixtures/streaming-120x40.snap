@@ -42,4 +42,4 @@ streaming at 120x40
 36 |▏     let  tail = fence.words();                                                                                        | dim:2 plain:4 accent:3 plain:111
 37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:120
 38 |› what should the run do?                                                                                               | dim:25 plain:95
-39 |Enter send · / commands · ? keys · Ctrl-C cancel · Ctrl-Q quit · Ctrl-J newline · @ files · ↑ queue · End follow the run| plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:7 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:3 muted:15
+39 |Ctrl-C cancel · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                            | plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:44
