@@ -124,7 +124,7 @@ A way of driving the core — the TUI or batch mode; owns no decision the core c
 _Avoid_: UI, client, interface
 
 **Sindri's face**:
-The picture of Sindri that travels in the **artefact** beside the bundled font, measured from its
+The picture of Sindri that the `sindri` binary carries beside the bundled font, measured from its
 own header into a **footprint** and drawn over those cells — decoration, so a terminal that places
 no picture is given no cells and no words for it. It stands over the **rail**'s top rows while a
 run is live, and over the wordmark of the **splash screen**, where the rail beside it keeps every
@@ -146,25 +146,6 @@ giving up its tail as the row narrows, and a key the frame cannot answer not nam
 draft names sending, the commands, the files and the keys; a run in flight names cancelling and never
 sending; and a queue behind the draft is counted where the key that recalls one stands.
 _Avoid_: Status bar, help line, key bar
-
-**Gutter**:
-The two columns every row of an entry opens with, ahead of its words: the glyph that says what the
-row is — a turn's rule, a prompt's sigil, a call's or result's mark, a thought's or code block's bar —
-and the blank after it. A band too narrow to hold the gutter gives up the glyph before it cuts a word.
-_Avoid_: Margin, indent, padding
-
-**Fold**:
-What a reader is shown of a result: the rows of its head, a row counting the rows kept back, and its
-last row, drawn in a quieter ink than the answer's behind the **gutter** the call opened. One key
-opens and closes the newest one, the mark grown over a row opens it, an answer has none, and a fold
-belongs to the layout, so a transcript read back is folded again.
-_Avoid_: Collapse, expander, accordion, truncation
-
-**Thumb**:
-The one cell of the gutter that says where a window stands in a transcript taller than its band:
-its span the band's share of the whole and its row the window's, drawn only off the tail and
-given up with the gutter.
-_Avoid_: Scrollbar, handle, scroll indicator
 
 **Card**:
 The frame a screen is drawn on: a rounded border carrying the screen's name in its top row and
@@ -232,8 +213,3 @@ is taken, one notch moves the transcript as the page keys do, a press on a card'
 row and sends the key it hangs from, and a press on no row of a card is no act at all. A pointer
 is never drawn into a cell.
 _Avoid_: Mouse, cursor (that one is the terminal's own), hover
-
-**Artefact**:
-The one file the product ships, static and `x86_64-unknown-linux-musl`, built and held by the
-release stage. What the evals hold to a golden is a fixture, not this.
-_Avoid_: Build, build output, package
