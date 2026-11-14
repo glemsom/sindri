@@ -1459,3 +1459,93 @@ fn a_row_set_under_a_gutter_moves_the_run_it_names_with_its_words() {
         "never on the gutter the words were moved past"
     );
 }
+
+/// The thumb a transcript of `turns` rows draws in a band `band` rows tall, read at `scroll`.
+fn thumb_of(turns: u32, band: u16, scroll: Scroll) -> Option<sindri::rows::Thumb> {
+    let mut rows = Rows::new();
+    rows.resize(120);
+    for which in 1..=turns {
+        rows.push(turn(which));
+    }
+    let total = rows.height();
+    assert_eq!(
+        total, turns,
+        "one turn divider is one row of a 120-column band"
+    );
+    rows.thumb(scroll, total, band)
+}
+
+#[test]
+fn the_thumb_spans_the_bands_share_of_a_transcript_taller_than_it() {
+    let half = thumb_of(80, 40, Scroll::Back(40))
+        .expect("a band of forty rows of an eighty-row transcript has a thumb");
+    assert_eq!(
+        half.span(),
+        20,
+        "a band of forty rows is half of an eighty-row transcript, so its thumb covers half the band"
+    );
+
+    let skinny = thumb_of(80, 36, Scroll::Back(44))
+        .expect("a band of thirty-six rows of one has a thumb too");
+    assert_eq!(
+        skinny.span(),
+        16,
+        "thirty-six rows of eighty is sixteen and a fifth of the band, which a reader is shown as sixteen: a thumb rounds to the nearest cell and never to none"
+    );
+}
+
+#[test]
+fn the_thumb_follows_the_window_row_for_row() {
+    let head =
+        thumb_of(80, 36, Scroll::Back(44)).expect("a head that is off the tail draws a thumb");
+    assert_eq!(
+        head.rows(),
+        0..16,
+        "at the head of the transcript the thumb opens the band, covering the sixteen rows of it that are the whole transcript's share"
+    );
+
+    let middle = thumb_of(80, 36, Scroll::Back(22)).expect("half way back still draws a thumb");
+    assert_eq!(
+        middle.rows(),
+        10..26,
+        "half way from the head to the tail stands the thumb half way down the twenty rows the band leaves it"
+    );
+
+    let foot = thumb_of(80, 36, Scroll::Back(1)).expect("one row off the tail still draws a thumb");
+    assert_eq!(
+        foot.rows(),
+        20..36,
+        "one row off the tail stands the thumb at the foot of the band, so the reader sees it leave"
+    );
+}
+
+#[test]
+fn no_thumb_is_drawn_where_the_band_has_no_room_to_say_where_the_window_stands() {
+    assert_eq!(
+        thumb_of(80, 36, Scroll::Tail),
+        None,
+        "a reader following the run at the tail is shown the newest rows, and a thumb there would sit on them"
+    );
+    assert_eq!(
+        thumb_of(36, 36, Scroll::Back(1)),
+        None,
+        "a transcript no taller than its band is all in view, so there is nothing to point at"
+    );
+    assert_eq!(
+        thumb_of(80, 1, Scroll::Back(1)),
+        None,
+        "a band of one row has no share of the whole to point at"
+    );
+
+    let mut narrow = Rows::new();
+    narrow.resize(2);
+    for which in 1..=80 {
+        narrow.push(turn(which));
+    }
+    let total = narrow.height();
+    assert_eq!(
+        narrow.thumb(Scroll::Back(44), total, 36),
+        None,
+        "a band too narrow for a gutter has given it up, and loses the thumb before it loses a word"
+    );
+}

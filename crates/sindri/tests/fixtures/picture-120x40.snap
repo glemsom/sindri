@@ -3,18 +3,18 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 picture at 120x40
-00 |  a diagram outside the workspace                                                                                       | plain:2 dim:1 plain:1 dim:7 plain:1 dim:7 plain:1 dim:3 plain:1 dim:9 plain:87
-01 |  ../outside-the-workspace.svg is outside the workspace, and only a file the run could read is drawn                    | plain:2 dim:28 plain:1 dim:2 plain:1 dim:7 plain:1 dim:3 plain:1 dim:10 plain:1 dim:3 plain:1 dim:4 plain:1 dim:1 plain:1 dim:4 plain:1 dim:3 plain:1 dim:3 plain:1 dim:5 plain:1 dim:4 plain:1 dim:2 plain:1 dim:5 plain:20
-02 |                                                                                                                        | plain:120
-03 |  a tall field                                                                                                          | plain:2 dim:1 plain:1 dim:4 plain:1 dim:5 plain:106
-04 |                                                                                                                        | plain:120
-05 |                                                                                                                        | plain:120
-06 |                                                                                                                        | plain:120
-07 |                                                                                                                        | plain:120
-08 |                                                                                                                        | plain:120
-09 |                                                                                                                        | plain:120
-10 |                                                                                                                        | plain:120
-11 |                                                                                                                        | plain:120
+00 |█ a diagram outside the workspace                                                                                       | dim:1 plain:1 dim:1 plain:1 dim:7 plain:1 dim:7 plain:1 dim:3 plain:1 dim:9 plain:87
+01 |█ ../outside-the-workspace.svg is outside the workspace, and only a file the run could read is drawn                    | dim:1 plain:1 dim:28 plain:1 dim:2 plain:1 dim:7 plain:1 dim:3 plain:1 dim:10 plain:1 dim:3 plain:1 dim:4 plain:1 dim:1 plain:1 dim:4 plain:1 dim:3 plain:1 dim:3 plain:1 dim:5 plain:1 dim:4 plain:1 dim:2 plain:1 dim:5 plain:20
+02 |█                                                                                                                       | dim:1 plain:119
+03 |█ a tall field                                                                                                          | dim:1 plain:1 dim:1 plain:1 dim:4 plain:1 dim:5 plain:106
+04 |█                                                                                                                       | dim:1 plain:119
+05 |█                                                                                                                       | dim:1 plain:119
+06 |█                                                                                                                       | dim:1 plain:119
+07 |█                                                                                                                       | dim:1 plain:119
+08 |█                                                                                                                       | dim:1 plain:119
+09 |█                                                                                                                       | dim:1 plain:119
+10 |█                                                                                                                       | dim:1 plain:119
+11 |█                                                                                                                       | dim:1 plain:119
 12 |                                                                                                                        | plain:120
 13 |                                                                                                                        | plain:120
 14 |                                                                                                                        | plain:120

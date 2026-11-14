@@ -2,6 +2,8 @@
 //! laid out at: either one changing drops them all, because a row's height is a fact
 //! about that measurement and about nothing else.
 
+use std::ops::Range;
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use sindri_core::open::{self, Ground, Opening};
@@ -573,6 +575,42 @@ impl Scroll {
     }
 }
 
+/// The cell a thumb is drawn of.
+pub(crate) const THUMB: char = '█';
+
+/// Where a window stands in a transcript taller than the band it is read in: the rows of the
+/// gutter its thumb covers, counted from the band's first row.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Thumb {
+    top: u16,
+    span: u16,
+}
+
+impl Thumb {
+    pub fn top(&self) -> u16 {
+        self.top
+    }
+
+    pub fn span(&self) -> u16 {
+        self.span
+    }
+
+    pub fn rows(&self) -> Range<u16> {
+        self.top..self.top + self.span
+    }
+
+    /// The thumb stands in the gutter's glyph column: the gutter's blank column is what keeps the
+    /// words off it, so it takes no column the words were set in. It draws one cell, on `row` of
+    /// the band, and nothing on a row the thumb does not cover.
+    pub(crate) fn paint(&self, area: Rect, row: u16, buffer: &mut Buffer, palette: &Palette) {
+        if !self.rows().contains(&row) {
+            return;
+        }
+        let y = area.y.saturating_add(row);
+        pen::glyph(buffer, area.x, y, THUMB, Ink::Dim, palette);
+    }
+}
+
 /// Every entry a transcript holds, each with the rows it was laid out as at one width,
 /// and nothing it was not drawn as.
 #[derive(Clone, Debug, Default)]
@@ -785,6 +823,30 @@ impl Rows {
             height = height.saturating_add(u32::try_from(self.rows(at).len()).unwrap_or(u32::MAX));
         }
         height
+    }
+
+    /// The thumb a window `scroll` rows behind the tail of a transcript `total` rows tall draws in
+    /// a band `band` rows tall, and none where the transcript is no taller than the band, the band
+    /// is one row, the band has given up its gutter, or the reader is at the tail.
+    pub fn thumb(&self, scroll: Scroll, total: u32, band: u16) -> Option<Thumb> {
+        if self.cols() <= pen::cells(INDENT)
+            || band < 2
+            || total <= u32::from(band)
+            || scroll.back() == 0
+        {
+            return None;
+        }
+        let deepest = u64::from(total - u32::from(band));
+        let above = deepest.saturating_sub(u64::from(scroll.back()));
+        let band = u64::from(band);
+        let total = u64::from(total);
+        let span = ((band * band + total / 2) / total).max(1);
+        let room = band - span;
+        let top = (room * above + deepest / 2) / deepest;
+        Some(Thumb {
+            top: u16::try_from(top.min(room)).unwrap_or(u16::MAX),
+            span: u16::try_from(span).unwrap_or(u16::MAX),
+        })
     }
 
     /// How far back a window of `height` rows may stand so its top is the transcript's first row.

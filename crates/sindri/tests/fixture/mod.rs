@@ -75,6 +75,9 @@ fn named(name: &str) -> View {
         "transcript" => running(transcript(), Scroll::Tail),
         "gutter" => View::of(gutter(), Scroll::Tail),
         "transcript-scrolled" => running(transcript(), Scroll::Back(4)),
+        "thumb-head" => thumbing(Scroll::Back(44)),
+        "thumb-middle" => thumbing(Scroll::Back(22)),
+        "thumb-tail" => thumbing(Scroll::Tail),
         "rail" => running(opening(), Scroll::Tail),
         "face" => faced(true),
         "face-off" => faced(false),
@@ -459,6 +462,12 @@ pub fn document() -> SessionDocument {
         route: Some(Route::Chat),
         thinking: true,
     }
+}
+
+/// A transcript of eighty turn dividers, one row each, so the rows of the band the thumb covers are
+/// counted against the picture.
+fn thumbing(scroll: Scroll) -> View {
+    View::of((1..=80).map(|turn| Entry::Turn { turn }), scroll)
 }
 
 fn running(entries: Vec<Entry>, scroll: Scroll) -> View {
