@@ -467,6 +467,64 @@ fn the_words_of_a_row_are_never_cut_by_the_card_they_are_drawn_in() {
 }
 
 #[test]
+fn a_description_wider_than_the_card_wraps_under_its_own_column_and_hangs_under_it() {
+    let buffer = painted(&mut on_screen(Mode::Keys), 120, 40);
+    let body = body_rows(&buffer);
+    let does = Mode::Composer
+        .table()
+        .iter()
+        .find(|binding| binding.name == "@")
+        .expect("the empty draft binds `@` to the files of the workspace")
+        .does;
+    let first_words: Vec<&str> = does.split_whitespace().take(3).collect();
+    let begins = body
+        .iter()
+        .position(|row| row.contains(&first_words.join(" ")))
+        .unwrap_or_else(|| {
+            panic!(
+                "no row of the keys screen says `{}`: {body:#?}",
+                first_words.join(" ")
+            )
+        });
+    let column = body[begins]
+        .find(&first_words.join(" "))
+        .expect("the row the line begins on says its first words");
+    let mut under = begins + 1;
+    while under < body.len() && body[under].len() >= column {
+        let lead: String = body[under].chars().take(column).collect();
+        if !lead.trim().is_empty() || body[under].trim().is_empty() {
+            break;
+        }
+        under += 1;
+    }
+    assert!(
+        under > begins + 1,
+        "the line `{}` is wider than the columns the card has left for it, so it takes more than \
+         one row: {body:#?}",
+        does
+    );
+    let wrapped: String = body[begins..under]
+        .iter()
+        .map(|row| row.chars().skip(column).collect::<String>())
+        .collect::<Vec<String>>()
+        .join(" ");
+    assert_eq!(
+        wrapped.split_whitespace().collect::<Vec<&str>>().join(" "),
+        does,
+        "and the rows under the first say the words it had no room for, in order and without \
+         losing one: {body:#?}"
+    );
+    for row in &body[begins + 1..under] {
+        assert!(
+            row.chars().take(column).all(|glyph| glyph == ' '),
+            "every row a description wraps onto is blank up to the column it begins in, so a \
+             wrapped line hangs under the line above it rather than standing as a name of its own: \
+             {row:?}"
+        );
+    }
+}
+
+#[test]
 fn the_reason_a_value_was_refused_is_drawn_whole_however_narrow_the_card() {
     let mut view = View::boot();
     view.open_settings(&Config::default());
