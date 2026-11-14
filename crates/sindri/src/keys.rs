@@ -27,15 +27,15 @@ impl Mode {
         Mode::Stats,
     ];
 
+    pub fn description(self) -> &'static Description {
+        DESCRIPTIONS
+            .iter()
+            .find(|described| described.mode == self)
+            .expect("a mode with no description has no name, no table and no card to wear")
+    }
+
     pub fn name(self) -> &'static str {
-        match self {
-            Mode::Composer => "composer",
-            Mode::Keys => "keys",
-            Mode::Files => "files",
-            Mode::Models => "model",
-            Mode::Settings => "settings",
-            Mode::Stats => "stats",
-        }
+        self.description().name
     }
 
     /// The two labels a screen wears on its card: its name, and the key its own table binds to
@@ -47,7 +47,8 @@ impl Mode {
     /// The key this mode's table binds to leaving it, and `None` when it binds none.
     pub fn leaves(self) -> Option<&'static str> {
         Some(
-            self.table()
+            self.description()
+                .table
                 .iter()
                 .find(|binding| binding.act == Act::Close)?
                 .name,
@@ -57,36 +58,17 @@ impl Mode {
     /// The name a screen wears in its card's top border, and `None` for the draft, which is no
     /// screen and takes no card.
     pub fn title(self) -> Option<&'static str> {
-        match self {
-            Mode::Composer => None,
-            Mode::Keys => Some("? keys"),
-            Mode::Files => Some("@ files"),
-            Mode::Models => Some("/model"),
-            Mode::Settings => Some("/settings"),
-            Mode::Stats => Some("/stats"),
-        }
+        self.description().title
     }
 
     pub fn table(self) -> &'static [Binding] {
-        match self {
-            Mode::Composer => &COMPOSER,
-            Mode::Keys => &KEYS,
-            Mode::Files => &FILES,
-            Mode::Models => &MODELS,
-            Mode::Settings => &SETTINGS,
-            Mode::Stats => &STATS,
-        }
+        self.description().table
     }
 
     /// A screen has none — nothing is typed into a screen — where a draft, a query and a
     /// settings value fall to that text box's own map.
     fn fallback(self) -> Option<Act> {
-        match self {
-            Mode::Composer => Some(Act::Draft),
-            Mode::Files | Mode::Models => Some(Act::Query),
-            Mode::Settings => Some(Act::Value),
-            Mode::Keys | Mode::Stats => None,
-        }
+        self.description().fallback
     }
 }
 
@@ -409,6 +391,62 @@ const STATS: [Binding; 1] = [Binding {
     does: "close this screen, and the draft as it was",
     act: Act::Close,
 }];
+
+/// What a mode is called, what its card wears, the keys it answers and what a printable key falls
+/// back to. The draft states no title, which is how a mode is handed no card.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Description {
+    pub mode: Mode,
+    pub name: &'static str,
+    pub title: Option<&'static str>,
+    pub table: &'static [Binding],
+    pub fallback: Option<Act>,
+}
+
+pub const DESCRIPTIONS: [Description; 6] = [
+    Description {
+        mode: Mode::Composer,
+        name: "composer",
+        title: None,
+        table: &COMPOSER,
+        fallback: Some(Act::Draft),
+    },
+    Description {
+        mode: Mode::Keys,
+        name: "keys",
+        title: Some("? keys"),
+        table: &KEYS,
+        fallback: None,
+    },
+    Description {
+        mode: Mode::Files,
+        name: "files",
+        title: Some("@ files"),
+        table: &FILES,
+        fallback: Some(Act::Query),
+    },
+    Description {
+        mode: Mode::Models,
+        name: "model",
+        title: Some("/model"),
+        table: &MODELS,
+        fallback: Some(Act::Query),
+    },
+    Description {
+        mode: Mode::Settings,
+        name: "settings",
+        title: Some("/settings"),
+        table: &SETTINGS,
+        fallback: Some(Act::Value),
+    },
+    Description {
+        mode: Mode::Stats,
+        name: "stats",
+        title: Some("/stats"),
+        table: &STATS,
+        fallback: None,
+    },
+];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Stack {

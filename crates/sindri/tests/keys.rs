@@ -2,7 +2,7 @@
 //! answers only its own keys, and `?` and `↑` resolving where the tables say they do.
 
 use sindri::composer::{Composer, Key, Outcome};
-use sindri::keys::{Act, Mode};
+use sindri::keys::{Act, DESCRIPTIONS, Description, Mode};
 use sindri::view::View;
 
 fn typed(lines: &[&str]) -> Composer {
@@ -384,5 +384,75 @@ fn a_paste_while_a_screen_is_open_reaches_no_draft() {
         "",
         "a screen has no draft, so a clipboard's lines land nowhere rather than in a \
          draft the reader cannot read"
+    );
+}
+
+#[test]
+fn every_mode_is_described_by_exactly_one_entry() {
+    for mode in Mode::ALL {
+        let describing: Vec<&Description> = DESCRIPTIONS
+            .iter()
+            .filter(|described| described.mode == mode)
+            .collect();
+
+        assert_eq!(
+            describing.len(),
+            1,
+            "a mode states its name, its card's title, its table and what a printable key \
+             falls to in one entry, and {mode:?} has {}: a mode with none has no keys to \
+             answer, and one with two has no answer to which describes it",
+            describing.len()
+        );
+    }
+
+    for described in DESCRIPTIONS {
+        assert!(
+            Mode::ALL.contains(&described.mode),
+            "{:?} is described, and no variant of `Mode::ALL` is named {:?}: an entry left \
+             over describes a screen nothing can open",
+            described.mode,
+            described.mode
+        );
+    }
+
+    assert_eq!(
+        DESCRIPTIONS.len(),
+        Mode::ALL.len(),
+        "one entry per screen and no more: a count that differs is an entry twice or a mode \
+         left undescribed"
+    );
+}
+
+#[test]
+fn the_draft_is_the_one_mode_that_wears_no_card() {
+    let draft = Mode::Composer.description();
+
+    assert_eq!(
+        draft.title, None,
+        "a draft is no screen and takes no card, so the entry that describes it names no \
+         title for a card's top row: that is how the card is taken away"
+    );
+    assert!(
+        draft.table.iter().any(|binding| binding.act == Act::Close),
+        "the draft's `Esc` still closes the commands card, so the empty title is what takes \
+         the card away and not a table with no exit in it"
+    );
+
+    let carded: Vec<Mode> = Mode::ALL
+        .into_iter()
+        .filter(|mode| mode.labels().is_some())
+        .collect();
+
+    assert_eq!(
+        carded,
+        vec![
+            Mode::Keys,
+            Mode::Files,
+            Mode::Models,
+            Mode::Settings,
+            Mode::Stats
+        ],
+        "the five screens wear a card and the draft wears none, and each card's two labels \
+         are its screen's name and the key its own table binds to leaving it"
     );
 }
