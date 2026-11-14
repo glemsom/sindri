@@ -136,7 +136,8 @@ _Avoid_: Logo, avatar, mascot, icon
 A strip of rows the frame shares out — the transcript's, the composer's, the row that says the frame
 stands off the tail, and the footer's — each drawn in the rows it was given and never past them. A
 queued prompt has no band of its own: it stands in the composer's, under the draft, one prompt to a
-row and the newest at the foot.
+row and the newest at the foot. What a band cannot hold it counts: the rows of a draft past the
+composer's ceiling, and the prompts of a queue past the rows it was given.
 _Avoid_: Region, pane, panel, viewport
 
 **Footer**:

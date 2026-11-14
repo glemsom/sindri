@@ -129,17 +129,19 @@ impl Composer {
     /// The rows of the draft the band draws: the ceiling's window, less the row under it that
     /// counts the rows kept back while any are.
     pub fn visible_rows(&self) -> u16 {
-        Composer::window(self.drawn().len())
+        Composer::visible(self.drawn().len())
     }
 
     /// The rows of the draft the band does not draw, and `None` while it draws every one of them.
     pub fn kept_back(&self) -> Option<u16> {
         let drawn = u16::try_from(self.drawn().len()).unwrap_or(u16::MAX);
-        let window = Composer::window(usize::from(drawn));
-        (drawn > window).then(|| drawn - window)
+        let visible = Composer::visible(usize::from(drawn));
+        (drawn > visible).then(|| drawn - visible)
     }
 
-    fn window(drawn: usize) -> u16 {
+    /// How many rows of a draft `drawn` rows long the band draws: the ceiling's window, and one row
+    /// less while the row under it counts the rows kept back.
+    fn visible(drawn: usize) -> u16 {
         let room = u16::try_from(drawn)
             .unwrap_or(u16::MAX)
             .min(MAX_ROWS - HAIRLINE_ROWS);
@@ -157,7 +159,7 @@ impl Composer {
 
     pub fn lines(&self) -> Vec<&str> {
         let (drawn, _, first) = self.laid();
-        let visible = usize::from(self.visible_rows());
+        let visible = usize::from(Composer::visible(drawn.len()));
         drawn
             .iter()
             .skip(first)
@@ -189,7 +191,7 @@ impl Composer {
             .unwrap_or(u16::MAX)
             .saturating_add(HAIRLINE_ROWS)
             .clamp(MIN_ROWS, MAX_ROWS);
-        let visible = usize::from(Composer::window(drawn.len()));
+        let visible = usize::from(Composer::visible(drawn.len()));
         let first = self.scroll.min(drawn.len().saturating_sub(visible));
         (drawn, rows, first)
     }
@@ -439,7 +441,7 @@ impl Composer {
     fn follow(&mut self) {
         let drawn = self.drawn();
         let row = self.row_at(&drawn, self.cursor);
-        let visible = usize::from(Composer::window(drawn.len()));
+        let visible = usize::from(Composer::visible(drawn.len()));
         if row < self.scroll {
             self.scroll = row;
         } else if row >= self.scroll + visible {
@@ -670,6 +672,31 @@ mod tests {
             composer.caret(),
             (3, 1),
             "the cursor is on the last row the window draws, inside the band"
+        );
+    }
+
+    #[test]
+    fn a_caret_in_the_middle_of_a_long_draft_keeps_its_row_and_counts_the_rows_outside_it() {
+        let mut composer = numbered(9);
+        for _ in 0..4 {
+            composer.key(Key::Up);
+        }
+
+        assert_eq!(
+            composer.lines(),
+            vec!["5", "6", "7", "8"],
+            "four rows up from the foot, the window starts at the fifth line"
+        );
+        assert_eq!(
+            composer.kept_back(),
+            Some(5),
+            "and counts the rows it draws on neither side of the window: four above it and the \
+             last one under it"
+        );
+        assert_eq!(
+            composer.caret(),
+            (0, 1),
+            "the caret waits on the window's first row, and the count row stays under the window"
         );
     }
 

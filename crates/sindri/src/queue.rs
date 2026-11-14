@@ -1,11 +1,12 @@
 use std::collections::VecDeque;
 
-use crate::composer::{self, Prompt};
+use crate::composer::Prompt;
 
-/// The rows the queue takes of the composer's band at most.
-pub const MAX_ROWS: u16 = composer::MAX_ROWS - composer::MIN_ROWS;
+/// The rows the queue adds to the composer's band at most, the count of the rest among them.
+pub const MAX_ROWS: u16 = 4;
 
-/// What the band draws of the queue in the rows it gives it.
+/// What the band draws of the queue in the rows it gives it: the count stands above the prompts
+/// it counts, and takes one of those rows to do it.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Shown {
     pub kept_back: Option<usize>,
@@ -47,15 +48,18 @@ impl Queue {
         (!self.waiting.is_empty()).then(|| format!("{} queued", self.waiting.len()))
     }
 
+    /// The count takes a row only while a prompt keeps one: a band of a single row is handed the
+    /// newest prompt, and the footer says how deep the queue is.
     pub fn shown(&self, room: u16) -> Shown {
         let room = usize::from(room);
         let len = self.waiting.len();
-        let drawn = match len > room {
-            true => room.saturating_sub(1),
-            false => len,
+        let counted = len > room && room > 1;
+        let drawn = match counted {
+            true => room - 1,
+            false => len.min(room),
         };
         Shown {
-            kept_back: (room > 0 && len > drawn).then(|| len - drawn),
+            kept_back: counted.then(|| len - drawn),
             prompts: self
                 .waiting
                 .iter()
@@ -230,6 +234,24 @@ mod tests {
     }
 
     #[test]
+    fn a_band_of_one_row_draws_the_newest_prompt_and_never_only_a_count() {
+        let mut queue = Queue::new();
+        for text in ["one", "two", "three"] {
+            queue.push(prompt(text));
+        }
+
+        assert_eq!(
+            queue.shown(1),
+            Shown {
+                kept_back: None,
+                prompts: vec![String::from("three")],
+            },
+            "the one row a squeezed band has goes to the prompt the reader typed last, and never \
+             to a number standing where a thought should be"
+        );
+    }
+
+    #[test]
     fn nothing_waiting_is_no_row_drawn_and_nothing_counted_back() {
         assert_eq!(Queue::new().shown(MAX_ROWS), Shown::default());
     }
@@ -272,7 +294,8 @@ mod tests {
         assert_eq!(
             queue.rows(),
             MAX_ROWS,
-            "and however deep the queue, it asks for no more than the band has to give it"
+            "and however deep the queue, it asks for no more than its ceiling, so the transcript \
+             keeps every row past it"
         );
     }
 }

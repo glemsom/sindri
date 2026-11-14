@@ -1922,7 +1922,7 @@ fn enter_during_a_run_keeps_the_prompt_in_the_composer_under_the_draft() {
     let frame = drawn.text();
     let waited = picture(&frame)
         .into_iter()
-        .find(|(_, row)| row.starts_with("\u{203a} read the test that failed"))
+        .find(|(_, glyphs)| glyphs.starts_with("\u{203a} read the test that failed"))
         .map(|(row, _)| row);
     assert!(
         waited

@@ -1448,6 +1448,7 @@ enum Page {
 
 struct Bands {
     transcript: Rect,
+    /// The composer's band's last rows: the queue's, and none at all while nothing waits.
     queue: Rect,
     notice: Rect,
     composer: Rect,
@@ -4145,7 +4146,7 @@ mod tests {
         assert_eq!(
             queue.height,
             crate::queue::MAX_ROWS,
-            "the queue is given the four rows the composer's band leaves to spare"
+            "the queue is given the four rows it asks for at most"
         );
         assert_eq!(
             draft_rows(&buffer, band),
