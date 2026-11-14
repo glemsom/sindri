@@ -4,6 +4,7 @@ use sindri_core::redact::MASK;
 
 use crate::composer::Key;
 use crate::ink::Ink;
+use crate::kept::{Kept, Step};
 use crate::list::{self, Beside, ScreenRow};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -59,7 +60,7 @@ impl Settings {
             items: list::columned(keys.into_iter(), Ink::Muted, Beside::Row),
             selected: self.current(),
             marker: list::MARK,
-            choice: None,
+            chooses: false,
         }
         .rows();
         if let Some(reason) = self.refusal() {
@@ -85,6 +86,16 @@ impl Settings {
             return false;
         }
         self.current = (self.current + 1) % self.rows.len();
+        true
+    }
+
+    /// The row a press landed on: the visit stands on it, and a press on no row of the visit moves
+    /// nothing.
+    pub fn select(&mut self, at: usize) -> bool {
+        if at >= self.rows.len() {
+            return false;
+        }
+        self.current = at;
         true
     }
 
@@ -172,6 +183,23 @@ impl Settings {
             row.text.clear();
         }
         masked
+    }
+}
+
+impl Kept for Settings {
+    fn step(&mut self, step: Step) -> bool {
+        match step {
+            Step::Previous => self.up(),
+            Step::Next => self.down(),
+        }
+    }
+
+    fn typed(&mut self, key: Key) -> bool {
+        self.key(key)
+    }
+
+    fn press(&mut self, at: usize) -> bool {
+        self.select(at)
     }
 }
 

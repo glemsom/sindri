@@ -1,5 +1,6 @@
 use crate::composer::Key;
 use crate::ink::{Faces, Ink, Look};
+use crate::kept::List;
 use crate::list::{self, Column, ScreenRow};
 
 /// The look a key is drawn in wherever a key is named.
@@ -95,7 +96,6 @@ pub enum Act {
     Next,
     Pick,
     Choose,
-    Value,
     Flip,
     Clear,
     Write,
@@ -387,7 +387,7 @@ const SETTINGS: [Binding; 9] = [
         key: Key::Backspace,
         name: "Backspace",
         does: "erase the last glyph of the value",
-        act: Act::Value,
+        act: Act::Query,
     },
 ];
 
@@ -408,6 +408,19 @@ pub enum Body {
     Settings,
     /// The facts a run holds, laid out whole as the record wrote them rather than set in rows.
     Ledger,
+}
+
+impl Body {
+    /// The list this body's rows are kept in, and `None` where they are no list a reader walks: the
+    /// keys screen's rows are keys nothing moves through, and the ledger's are facts laid whole.
+    pub fn kept(self) -> Option<List> {
+        match self {
+            Body::Files => Some(List::Files),
+            Body::Models => Some(List::Models),
+            Body::Settings => Some(List::Settings),
+            Body::Keys | Body::Ledger => None,
+        }
+    }
 }
 
 /// What a mode is called, what its card wears, the keys it answers, what a printable key falls back
@@ -461,7 +474,7 @@ pub const DESCRIPTIONS: [Description; 6] = [
         name: "settings",
         title: Some("/settings"),
         table: &SETTINGS,
-        fallback: Some(Act::Value),
+        fallback: Some(Act::Query),
         body: Some(Body::Settings),
     },
     Description {

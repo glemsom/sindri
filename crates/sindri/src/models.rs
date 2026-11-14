@@ -2,7 +2,8 @@ use sindri_core::provider::served::Listing;
 
 use crate::composer::Key;
 use crate::ink::Ink;
-use crate::list::{self, Beside, Choice, ScreenRow};
+use crate::kept::{Kept, Step};
+use crate::list::{self, Beside, ScreenRow};
 
 pub const CAP: usize = 8;
 
@@ -81,7 +82,7 @@ impl Models {
             items: list::columned(names.into_iter(), Ink::Plain, Beside::Own(Ink::Dim)),
             selected: self.selected(),
             marker: list::MARK,
-            choice: Some(Choice::Model),
+            chooses: true,
         }
         .rows()
     }
@@ -130,6 +131,23 @@ impl Models {
 
     pub fn chosen(&self) -> Option<&str> {
         self.rows().get(self.selected).map(|(id, _)| *id)
+    }
+}
+
+impl Kept for Models {
+    fn step(&mut self, step: Step) -> bool {
+        match step {
+            Step::Previous => self.up(),
+            Step::Next => self.down(),
+        }
+    }
+
+    fn typed(&mut self, key: Key) -> bool {
+        self.key(key)
+    }
+
+    fn press(&mut self, at: usize) -> bool {
+        self.select(at)
     }
 }
 

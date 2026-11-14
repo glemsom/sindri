@@ -5,7 +5,7 @@
 use sindri::composer::{Key, Outcome};
 use sindri::keys::{Body, Mode};
 use sindri::ledger::Facts;
-use sindri::list::{Choice, ScreenRow};
+use sindri::list::ScreenRow;
 use sindri::view::{ScreenBody, View};
 use sindri_core::config::Config;
 use sindri_core::provider::Route;
@@ -120,9 +120,7 @@ fn the_path_picker_body_holds_the_query_row_first_and_the_count_of_matches_last(
          both of them the two the workspace holds: {words:#?}"
     );
     assert!(
-        rows(&body).iter().any(|row| row
-            .choice
-            .is_some_and(|chosen| matches!(chosen, Choice::File(_)))),
+        rows(&body).iter().any(|row| row.choice.is_some()),
         "a file row hangs the choice a press lands on, so the card is not a picture: {words:#?}"
     );
 }

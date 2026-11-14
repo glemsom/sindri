@@ -23,10 +23,11 @@ use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, PLACEHOLDER, Prompt
 use crate::face;
 use crate::graphics::CellSize;
 use crate::ink::{Ink, Look};
+use crate::kept::{self, Kept};
 use crate::keys::{self, Act, Body, Mode, Stack};
 use crate::ledger::{Boot, Facts, Rail, Share};
 use crate::link::Links;
-use crate::list::{self, Beside, Choice, ScreenRow};
+use crate::list::{self, Beside, ScreenRow};
 use crate::mark::{Cell, Mark, Span};
 use crate::models::Models;
 use crate::palette::{Band, Palette};
@@ -222,8 +223,8 @@ impl Painted {
         &self.drawn
     }
 
-    /// The choice the row a press at `at` landed on hangs from, when it landed on one.
-    fn press(&self, at: Cell) -> Option<Choice> {
+    /// The row a press at `at` landed on, as the list its screen keeps names it, when it landed on one.
+    fn press(&self, at: Cell) -> Option<usize> {
         self.presses
             .iter()
             .find(|press| press.covers(at))
@@ -508,12 +509,11 @@ impl View {
             Act::Drop => self.drop_newest(),
             Act::Keys => self.keys(key),
             Act::Files => self.at(key),
-            Act::Query => self.query(key),
-            Act::Previous => self.step(Step::Previous),
-            Act::Next => self.step(Step::Next),
+            Act::Query => self.typed(key),
+            Act::Previous => self.step(kept::Step::Previous),
+            Act::Next => self.step(kept::Step::Next),
             Act::Pick => self.pick(),
             Act::Choose => self.choose(),
-            Act::Value => self.value(key),
             Act::Flip => self.flip(),
             Act::Clear => self.clear(),
             Act::Write => self.write(),
@@ -710,26 +710,26 @@ impl View {
         Outcome::Edited
     }
 
-    fn query(&mut self, key: Key) -> Outcome {
-        let changed = match self.stack.top() {
-            Mode::Models => self.models.key(key),
-            _ => self.picker.key(key),
-        };
+    /// The list the screen on top keeps, and `None` where it keeps none: the draft's rows are its own
+    /// card, the keys screen's are keys nothing walks, and the ledger's are laid whole.
+    fn kept_list(&mut self) -> Option<&mut dyn Kept> {
+        match self.stack.top().body()?.kept()? {
+            kept::List::Files => Some(&mut self.picker),
+            kept::List::Models => Some(&mut self.models),
+            kept::List::Settings => Some(&mut self.settings),
+        }
+    }
+
+    fn typed(&mut self, key: Key) -> Outcome {
+        let changed = self.kept_list().is_some_and(|list| list.typed(key));
         match changed {
             true => Outcome::Edited,
             false => Outcome::Unchanged,
         }
     }
 
-    fn step(&mut self, step: Step) -> Outcome {
-        let moved = match (self.stack.top(), step) {
-            (Mode::Models, Step::Previous) => self.models.up(),
-            (Mode::Models, Step::Next) => self.models.down(),
-            (Mode::Settings, Step::Previous) => self.settings.up(),
-            (Mode::Settings, Step::Next) => self.settings.down(),
-            (_, Step::Previous) => self.picker.up(),
-            (_, Step::Next) => self.picker.down(),
-        };
+    fn step(&mut self, step: kept::Step) -> Outcome {
+        let moved = self.kept_list().is_some_and(|list| list.step(step));
         match moved {
             true => Outcome::Edited,
             false => Outcome::Unchanged,
@@ -743,13 +743,6 @@ impl View {
         self.composer.insert(&word);
         self.stack.close();
         Outcome::Edited
-    }
-
-    fn value(&mut self, key: Key) -> Outcome {
-        match self.settings.key(key) {
-            true => Outcome::Edited,
-            false => Outcome::Unchanged,
-        }
     }
 
     /// `Space` at the settings modal: a flip on a toggle and a glyph everywhere else, because a
@@ -919,28 +912,26 @@ impl View {
     /// A press on a row of a card: the row is chosen, and then the key it hangs from is sent, which
     /// is `Enter` for every row a card draws.
     fn pressed(&mut self, painted: &Painted, at: Cell) -> Outcome {
-        let Some(choice) = painted.press(at) else {
+        let Some(row) = painted.press(at) else {
             return Outcome::Unchanged;
         };
-        if !self.chosen(choice) {
+        if !self.chosen(row) {
             return Outcome::Unchanged;
         }
         self.key(Key::Enter)
     }
 
-    /// The row a press landed on, chosen: `true` when it is a row the frame still holds.
-    fn chosen(&mut self, choice: Choice) -> bool {
-        match choice {
-            Choice::File(at) => self.picker.select(at),
-            Choice::Model(at) => self.models.select(at),
-            Choice::Command(at) => {
-                let Some(line) = self.card().and_then(|card| card.spelling_of(at)) else {
-                    return false;
-                };
-                self.composer.rewrite(&line);
-                true
-            }
+    /// The row a press landed on, chosen: `true` when it is a row the frame still holds. A screen that
+    /// keeps no list falls to the draft's own card, whose press writes the line the row spells.
+    fn chosen(&mut self, at: usize) -> bool {
+        if let Some(list) = self.kept_list() {
+            return list.press(at);
         }
+        let Some(line) = self.card().and_then(|card| card.spelling_of(at)) else {
+            return false;
+        };
+        self.composer.rewrite(&line);
+        true
     }
 
     /// Hands the frame its newest answer's marker. The elapsed time is the caller's, because a
@@ -1430,12 +1421,6 @@ impl Deltas for View {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Step {
-    Previous,
-    Next,
-}
-
 /// The direction a page of the transcript moves the frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Page {
@@ -1564,7 +1549,7 @@ impl ScreenBody {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Press {
     area: Rect,
-    choice: Choice,
+    choice: usize,
 }
 
 impl Press {
@@ -1609,7 +1594,7 @@ fn command_rows(card: &commands::Card) -> Vec<ScreenRow> {
         ),
         selected: 0,
         marker: list::MARK,
-        choice: Some(Choice::Command),
+        chooses: true,
     }
     .rows()
 }

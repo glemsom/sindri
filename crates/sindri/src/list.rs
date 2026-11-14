@@ -16,22 +16,13 @@ const QUERY: &str = "query: ";
 /// screen that lists says the same thing with it.
 pub const MARK: &str = "\u{203a} ";
 
-/// What a row of a card chooses when a press lands on it: a file the picker offers, a name the wire
-/// served, or a command the draft's word leaves.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Choice {
-    File(usize),
-    Model(usize),
-    Command(usize),
-}
-
 /// One row of a card as data: the spans it draws, each in its own look, and the rule that decides
 /// what happens to a row the card has no room for.
 pub struct ScreenRow {
     pub spans: Vec<(String, Look)>,
     pub clip: Clip,
-    /// What a press on this row chooses, or nothing where no key hangs from it.
-    pub choice: Option<Choice>,
+    /// The place this row holds in the list its screen keeps, or nothing where no key hangs from it.
+    pub choice: Option<usize>,
 }
 
 impl ScreenRow {
@@ -53,11 +44,10 @@ impl ScreenRow {
         }
     }
 
-    /// The same row, marked as one a press chooses: a card's rows are the ones a click has an act
-    /// for.
-    pub fn choosing(self, choice: Choice) -> ScreenRow {
+    /// The same row, marked as the `at`th of the list its screen keeps: a press on it lands there.
+    pub fn choosing(self, at: usize) -> ScreenRow {
         ScreenRow {
-            choice: Some(choice),
+            choice: Some(at),
             ..self
         }
     }
@@ -202,7 +192,8 @@ pub struct List<'a> {
     pub items: Vec<Item>,
     pub selected: usize,
     pub marker: &'a str,
-    pub choice: Option<fn(usize) -> Choice>,
+    /// Whether a press on its rows chooses them, which the screen keeping the list is the one to say.
+    pub chooses: bool,
 }
 
 impl List<'_> {
@@ -237,8 +228,8 @@ impl List<'_> {
                 (said.clone(), Look::plain(ink))
             }));
             let mut row = ScreenRow::cut(spans);
-            if let Some(choice) = self.choice {
-                row = row.choosing(choice(at));
+            if self.chooses {
+                row = row.choosing(at);
             }
             rows.push(row);
         }
@@ -268,7 +259,7 @@ mod tests {
             items,
             selected: 0,
             marker,
-            choice: None,
+            chooses: false,
         }
     }
 
@@ -714,18 +705,13 @@ mod tests {
     fn the_row_a_press_chooses_hangs_from_the_row_of_the_list_it_was_drawn_in() {
         let items = ["a", "b", "c"].into_iter().map(Item::new).collect();
         let mut names = list(Some(""), items, MARKER);
-        names.choice = Some(Choice::Model);
+        names.chooses = true;
 
         let rows = names.rows();
 
         assert_eq!(
             rows.iter().map(|row| row.choice).collect::<Vec<_>>(),
-            vec![
-                None,
-                Some(Choice::Model(0)),
-                Some(Choice::Model(1)),
-                Some(Choice::Model(2))
-            ],
+            vec![None, Some(0), Some(1), Some(2)],
             "a press on a row chooses the item that row was drawn for, and the query line above \
              them chooses nothing: a click there is a click on no name"
         );
