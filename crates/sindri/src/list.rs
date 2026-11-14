@@ -4,6 +4,7 @@
 
 use crate::ink::{Ink, Look};
 use crate::pen::{self, Clip};
+use crate::rows::wrap;
 
 /// The columns a row keeps beside a name, before the words that stand beside it.
 const GAP: u16 = 2;
@@ -63,6 +64,8 @@ impl ScreenRow {
 pub struct Item {
     pub name: String,
     pub beside: Vec<(String, Ink)>,
+    /// The ink the name and the marker's blank columns stand in when the reader is not on the row.
+    pub ink: Ink,
 }
 
 impl Item {
@@ -71,6 +74,7 @@ impl Item {
         Item {
             name: name.into(),
             beside: Vec::new(),
+            ink: Ink::Plain,
         }
     }
 
@@ -80,25 +84,38 @@ impl Item {
         Item {
             name: name.into(),
             beside: vec![(format!("{}{}", pen::blank(GAP), said.into()), Ink::Dim)],
+            ink: Ink::Plain,
         }
     }
 }
 
 /// The items a column of names makes: each name padded to the widest of them and the gap beside it,
-/// so the words beside them begin in one column, each set quieter than the name.
-pub fn columned<'a>(rows: impl Iterator<Item = (&'a str, &'a str)>) -> Vec<Item> {
-    let rows: Vec<(&str, &str)> = rows.collect();
+/// so the words beside them begin in one column, the names in the ink the column is given and the
+/// words of each row in the ink it carries.
+pub fn columned<'a>(rows: impl Iterator<Item = (&'a str, (&'a str, Ink))>, ink: Ink) -> Vec<Item> {
+    let rows: Vec<(&str, (&str, Ink))> = rows.collect();
     let widest = rows
         .iter()
         .map(|(name, _)| pen::cells(name) + GAP)
         .max()
         .unwrap_or(0);
     rows.into_iter()
-        .map(|(name, said)| Item {
+        .map(|(name, (said, beside))| Item {
             name: pen::pad(name, widest),
-            beside: vec![(said.to_owned(), Ink::Dim)],
+            beside: vec![(said.to_owned(), beside)],
+            ink,
         })
         .collect()
+}
+
+/// What stands under a list the visit refused: a blank row, then the reason wrapped to the band and
+/// each line drawn in the ink an error is read in.
+pub fn verdict(words: &str, width: u16) -> Vec<ScreenRow> {
+    let mut rows = vec![ScreenRow::whole(Vec::new())];
+    for line in wrap(words, width) {
+        rows.push(ScreenRow::cut(vec![(line, Look::plain(Ink::Err))]));
+    }
+    rows
 }
 
 /// What a list shows: the query it answers, the one line it says in place of its rows, one row per
@@ -133,7 +150,7 @@ impl List<'_> {
         for (at, item) in self.items.iter().enumerate() {
             let (marker, look) = match at == self.selected {
                 true => (self.marker.to_owned(), Look::plain(Ink::Accent)),
-                false => (pen::blank(pen::cells(self.marker)), Look::plain(Ink::Plain)),
+                false => (pen::blank(pen::cells(self.marker)), Look::plain(item.ink)),
             };
             let mut spans = vec![(marker, look), (item.name.clone(), look)];
             spans.extend(
@@ -267,6 +284,36 @@ mod tests {
     }
 
     #[test]
+    fn a_row_the_reader_is_not_on_stands_in_the_ink_its_item_names_and_the_readers_row_in_the_accent()
+     {
+        let items = ["provider", "thinking"]
+            .into_iter()
+            .map(|name| Item {
+                ink: Ink::Muted,
+                ..Item::new(name)
+            })
+            .collect();
+        let mut list = list(None, items, MARKER);
+        list.selected = 1;
+
+        let rows = list.rows();
+
+        assert_eq!(
+            spans(&rows[0]),
+            vec![("  ", Ink::Muted), ("provider", Ink::Muted)],
+            "a row the reader is not on stands in the ink its item names, the marker's own \
+             columns with it: a screen that lists quieter keys than it lists values has to be \
+             able to say so"
+        );
+        assert_eq!(
+            spans(&rows[1]),
+            vec![(MARKER, Ink::Accent), ("thinking", Ink::Accent)],
+            "and the row the reader is on is the accent whatever its item names, because the \
+             reader's eye is what the accent is for"
+        );
+    }
+
+    #[test]
     fn the_words_beside_a_name_begin_the_gap_after_it_in_the_quieter_ink() {
         let item = Item::beside("rows.rs", "src");
 
@@ -292,7 +339,14 @@ mod tests {
 
     #[test]
     fn a_column_of_names_pads_each_one_so_the_words_beside_begin_in_one_column() {
-        let items = columned([("gpt-4o", "the larger one"), ("o3", "the newer one")].into_iter());
+        let items = columned(
+            [
+                ("gpt-4o", ("the larger one", Ink::Dim)),
+                ("o3", ("the newer one", Ink::Dim)),
+            ]
+            .into_iter(),
+            Ink::Plain,
+        );
 
         assert_eq!(
             items
@@ -314,8 +368,90 @@ mod tests {
              column the name was padded to is the gap"
         );
         assert!(
-            columned(std::iter::empty()).is_empty(),
+            columned(std::iter::empty(), Ink::Plain).is_empty(),
             "a list of no rows pads no name, and a column of nothing is the empty column"
+        );
+    }
+
+    #[test]
+    fn a_verdict_stands_a_blank_row_under_the_list_and_its_words_wrapped_below_in_the_error_ink() {
+        let words = "the wire refused the api key because it will not parse as a number";
+        let rows = verdict(words, 20);
+
+        assert_eq!(
+            spans(&rows[0]),
+            Vec::new(),
+            "the refusal stands a blank row under the list, so it reads as a verdict on the visit \
+             and not as the last key's value"
+        );
+        assert_eq!(
+            rows[0].clip,
+            Clip::Whole,
+            "and that row is whole: it is a held breath, not a line of words to cut"
+        );
+        assert_eq!(
+            rows[1..]
+                .iter()
+                .map(|row| pen::cells(&row.spans[0].0))
+                .collect::<Vec<_>>(),
+            vec![20, 18, 19, 6],
+            "the reason wraps to the width the band gave it, so a card narrow as this one still \
+             reads the whole of it: {:?}",
+            rows.iter().map(spans).collect::<Vec<_>>()
+        );
+        let said: Vec<&str> = rows[1..]
+            .iter()
+            .flat_map(|row| row.spans[0].0.split_whitespace())
+            .collect();
+        assert_eq!(
+            said.join(" "),
+            words,
+            "and no word of the reason is lost or said twice in the wrapping, because a reader \
+             who cannot read why a value was refused cannot change it"
+        );
+        for row in &rows[1..] {
+            assert_eq!(
+                spans(row),
+                vec![(row.spans[0].0.as_str(), Ink::Err)],
+                "every line of the verdict is drawn in the ink an error is read in, so it is not \
+                 mistaken for the list's own words"
+            );
+            assert_eq!(
+                row.clip,
+                Clip::Edge,
+                "a line wider than the frame is cut at its right edge rather than dropped"
+            );
+        }
+    }
+
+    #[test]
+    fn a_column_of_names_stands_in_the_ink_it_was_given_and_each_beside_word_in_its_own() {
+        let items = columned(
+            [
+                ("provider", ("anthropic", Ink::Plain)),
+                ("model", ("claude-sonnet", Ink::Accent)),
+            ]
+            .into_iter(),
+            Ink::Muted,
+        );
+
+        assert_eq!(
+            items.iter().map(|item| item.ink).collect::<Vec<_>>(),
+            vec![Ink::Muted, Ink::Muted],
+            "every name of the column stands in the ink the column was given, so one ink says \
+             what the whole column of names is"
+        );
+        assert_eq!(
+            items
+                .iter()
+                .map(|item| item.beside.clone())
+                .collect::<Vec<_>>(),
+            vec![
+                vec![(String::from("anthropic"), Ink::Plain)],
+                vec![(String::from("claude-sonnet"), Ink::Accent)],
+            ],
+            "and the words beside each name carry the ink their row was handed, so one row of the \
+             column can be read in the accent while the rest are plain"
         );
     }
 

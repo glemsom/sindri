@@ -485,6 +485,96 @@ fn the_reason_a_value_was_refused_is_drawn_whole_however_narrow_the_card() {
 }
 
 #[test]
+fn a_refusal_is_drawn_as_a_verdict_under_the_last_key_row() {
+    let mut view = View::boot();
+    view.open_settings(&Config::default());
+    view.refuse(
+        "bad value in max_turns: `two hundred` will not parse: invalid digit found in string",
+    );
+    let palette = view.palette();
+    let buffer = painted(&mut view, 120, 40);
+    let (top, bottom, left, right) = corners(&buffer).expect("a card drawn with its border");
+    let body = body_rows(&buffer);
+    let at = body
+        .iter()
+        .position(|row| row.trim_start().starts_with("ssh_agent"))
+        .expect("the last key of the schema drawn in the card");
+    let last = top + 1 + u16::try_from(at).expect("a row of the card");
+
+    assert_eq!(
+        said(&buffer, last + 1),
+        "",
+        "a blank row stands under the last key, so the refusal reads as a verdict on the visit and \
+         not as that key's value: {body:#?}"
+    );
+
+    let mut y = last + 2;
+    let mut lines = 0;
+    while y < bottom && !said(&buffer, y).is_empty() {
+        let drawn = said(&buffer, y);
+        let start = u16::try_from(drawn.len() - drawn.trim_start().len()).expect("a column");
+        let words = drawn.trim_start();
+        assert!(
+            left + 1 + start + sindri::pen::cells(words) <= right,
+            "no line of the verdict is wrapped past the card's right border, where it would be \
+             cut: {words:?}"
+        );
+        let inks: Vec<Ink> = (0..sindri::pen::cells(words))
+            .map(|px| look(&buffer, &palette, left + 1 + start + px, y).ink())
+            .collect();
+        assert!(
+            inks.iter().all(|ink| *ink == Ink::Err),
+            "every cell of the verdict is drawn in the ink an error is read in, so it is not \
+             mistaken for a key or a value: {words:?} in {inks:?}"
+        );
+        lines += 1;
+        y += 1;
+    }
+    assert_eq!(
+        lines, 2,
+        "the verdict stands between the blank row and the card's bottom border, whole: it is the \
+         reason and the tail of it, and no third line of a reason the card has room for is cut \
+         off: {body:#?}"
+    );
+}
+
+#[test]
+fn a_frame_too_short_for_the_settings_visit_draws_the_head_of_the_list_and_keeps_the_verdict_back()
+{
+    let mut view = View::boot();
+    view.open_settings(&Config::default());
+    view.refuse(
+        "bad value in max_turns: `two hundred` will not parse: invalid digit found in string",
+    );
+    let buffer = painted(&mut view, 120, 14);
+    let body = body_rows(&buffer);
+    let frame = rows(&buffer).join("\n");
+
+    assert!(
+        body.first().is_some_and(|row| row.contains("provider")),
+        "fourteen rows hold the card's borders and eleven of its body, and the head of the key \
+         list is what those eleven rows are for: {body:#?}"
+    );
+    assert!(
+        !body.iter().any(|row| row.contains("ssh_agent")),
+        "so the tail of the list is not drawn, and the reader who wants it scrolls the card: \
+         {body:#?}"
+    );
+    assert!(
+        body.iter().any(|row| row.ends_with("rows kept back")),
+        "the card's own count row says how much of the visit it could not hold, in the last row \
+         the body has: {body:#?}"
+    );
+    for word in ["parse:", "invalid", "digit", "hundred"] {
+        assert!(
+            !frame.contains(word),
+            "a verdict the frame has no room for is not drawn at all rather than cut into `{word}`, \
+             which would say a reason the reader cannot read: {frame}"
+        );
+    }
+}
+
+#[test]
 fn no_band_behind_a_card_takes_the_key_the_screen_does_not() {
     for mode in SCREENS {
         let mut view = opened(conversation(), mode);
