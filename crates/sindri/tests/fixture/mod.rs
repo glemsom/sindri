@@ -83,6 +83,7 @@ fn named(name: &str) -> View {
         "face-off" => faced(false),
         "streaming" => streaming(),
         "calls" => running(calls(), Scroll::Tail),
+        "tools" => tools(),
         "fold" => fold(false),
         "fold-open" => fold(true),
         "fold-answer" => folded_beside_an_answer(),
@@ -294,6 +295,52 @@ fn ways() -> View {
             ),
             call(2, "open", r#"{"path": "GLOSSARY.md"}"#),
             call(3, "open", r#"{"path": "site.html"}"#),
+        ],
+        Scroll::Tail,
+    );
+    view.set_ground(Some(ground(workspace)));
+    view
+}
+
+/// One call of each tool this product has: the settled three beside the result each one wrote, and
+/// then a turn whose three calls are still in flight — the row says the thing the call names, and a
+/// result says the verdict, the duration and the size and never the name the call row holds.
+fn tools() -> View {
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("the tree the product is built in");
+    let mut view = View::of(
+        vec![
+            Entry::Turn { turn: 1 },
+            call(
+                1,
+                "bash",
+                r#"{"command": "rg -n 'the gutter' crates/sindri/src"}"#,
+            ),
+            result(
+                1,
+                "bash",
+                Exit::Code(0),
+                "src/rows.rs: the glyph a turn opens with",
+                412,
+                23,
+            ),
+            call(1, "open", r#"{"path": "GLOSSARY.md"}"#),
+            result(1, "open", Exit::Code(0), "", 0, 4),
+            call(1, "skill", r#"{"name": "rust-review"}"#),
+            result(
+                1,
+                "skill",
+                Exit::Code(0),
+                "the rust-review skill is loaded",
+                33,
+                2,
+            ),
+            Entry::Turn { turn: 2 },
+            call(2, "bash", r#"{"command": "cargo test --workspace"}"#),
+            call(2, "open", r#"{"path": "docs/agents/domain.md"}"#),
+            call(2, "skill", r#"{"name": "code-review"}"#),
         ],
         Scroll::Tail,
     );

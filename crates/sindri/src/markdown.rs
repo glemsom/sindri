@@ -64,9 +64,9 @@ pub(crate) fn rows_in(
     room.finish()
 }
 
-/// A tool row's body laid as the rows it is drawn as, with the path it names a way to the file the
-/// run judged: a path wider than the row is broken over two rows, each carrying the whole
-/// destination. Nothing is laid when the words do not name the path.
+/// A call's body laid as the rows it is drawn as, with the path it names a way to the file the run
+/// judged: a path wider than the row is broken over two rows, each carrying the whole destination.
+/// Nothing is laid when the words do not name the path.
 pub fn body(text: &str, cols: u16, way: &Way) -> Option<Vec<Row>> {
     if way.written().is_empty() {
         return None;
@@ -77,7 +77,7 @@ pub fn body(text: &str, cols: u16, way: &Way) -> Option<Vec<Row>> {
     let mut named = false;
     for line in text.split('\n') {
         let mut rest = line;
-        while let Some(at) = as_a_value(rest, way.written()) {
+        while let Some(at) = rest.find(way.written()) {
             let (before, from) = rest.split_at(at);
             let (named_words, after) = from.split_at(way.written().len());
             room.prose(before, plain);
@@ -91,17 +91,6 @@ pub fn body(text: &str, cols: u16, way: &Way) -> Option<Vec<Row>> {
         room.flush();
     }
     named.then_some(room.rows)
-}
-
-/// Where `text` writes `path` as the value of the `path` a call names rather than as a word that
-/// spells it: a call writes its arguments as JSON, and the cells a way is drawn on are the ones the
-/// run read the path from, never a value that happens to say the same.
-fn as_a_value(text: &str, path: &str) -> Option<usize> {
-    let key = text.find("\"path\"")?;
-    let after = &text[key..];
-    let at = key + after.find(':')? + after[after.find(':')?..].find(path)?;
-    let quoted = text[..at].ends_with('"') && text[at + path.len()..].starts_with('"');
-    quoted.then_some(at)
 }
 
 fn syntaxes() -> &'static SyntaxSet {

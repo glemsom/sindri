@@ -3,21 +3,21 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 streaming at 120x40
-00 |─ turn 5 ───────────────────────────────────────────────────────────────────wire      anthropic                         | dim:86 plain:34
-01 |✓ exit 0  bash  128 bytes · 9 ms                                            model     claude-sonnet-4-5-20250929        | ok:1 plain:1 dim:30 plain:44 dim:10 plain:34
-02 |  crates/sindri/src/rows.rs | 412 +++++++++++++                             think     high                              | muted:47 plain:29 dim:10 plain:34
-03 |  crates/sindri/tests/rows.rs | 198 +++++++++                                                                           | muted:45 plain:75
-04 |  The transcript's unit is the entry. An entry never carries a formatted    turns                               6 /  250| plain:76 dim:10 plain:34
-05 |  line, so the same run is drawn the same way by the TUI, by a reader of thectx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
-06 |  transcript and by whatever front end comes next.                          cache                                    88%| plain:76 dim:10 plain:34
-07 |                                                                                                                        | plain:120
-08 |  construct │ where it stands                                               workspace …/git/sindri/.worktrees/46-rail   | plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:47 dim:10 plain:34
-09 |  ──────────┼───────────────────────────                                    branch    spec/1-capability                 | plain:2 dim:38 plain:36 dim:10 plain:34
-10 |  heading   │ in the answer's own gutter                                                                                | plain:11 dim:3 plain:106
-11 |  code      │ behind a bar, highlighted                                     skills                                     2| plain:11 dim:3 plain:62 dim:10 plain:34
-12 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
-13 |─ turn 6 ───────────────────────────────────────────────────────────────────sandbox   bwrap                             | dim:86 plain:34
-14 |✓ exit 0  bash  104 bytes · 31 ms                                                                                       | ok:1 plain:1 dim:31 plain:87
+00 |  crates/sindri/src/rows.rs | 412 +++++++++++++                             wire      anthropic                         | muted:47 plain:29 dim:10 plain:34
+01 |  crates/sindri/tests/rows.rs | 198 +++++++++                               model     claude-sonnet-4-5-20250929        | muted:45 plain:31 dim:10 plain:34
+02 |  The transcript's unit is the entry. An entry never carries a formatted    think     high                              | plain:76 dim:10 plain:34
+03 |  line, so the same run is drawn the same way by the TUI, by a reader of the                                            | plain:120
+04 |  transcript and by whatever front end comes next.                          turns                               6 /  250| plain:76 dim:10 plain:34
+05 |                                                                            ctx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
+06 |  construct │ where it stands                                               cache                                    88%| plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:47 dim:10 plain:34
+07 |  ──────────┼───────────────────────────                                                                                | plain:2 dim:38 plain:80
+08 |  heading   │ in the answer's own gutter                                    workspace …/git/sindri/.worktrees/46-rail   | plain:11 dim:3 plain:62 dim:10 plain:34
+09 |  code      │ behind a bar, highlighted                                     branch    spec/1-capability                 | plain:11 dim:3 plain:62 dim:10 plain:34
+10 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
+11 |─ turn 6 ───────────────────────────────────────────────────────────────────skills                                     2| dim:86 plain:34
+12 |✓ bash                                                                                                                  | ok:1 plain:1 dim:4 plain:114
+13 |  make check STAGES=frames                                                  sandbox   bwrap                             | plain:76 dim:10 plain:34
+14 |✓ exit 0  31 ms · 104 bytes                                                                                             | ok:1 plain:1 dim:25 plain:93
 15 |  check: frame calls ... ok                                                 session   9f2c7a41                          | muted:27 plain:49 dim:10 plain:34
 16 |  check: frame transcript ... ok                                            temp      …/sindri/sessions/9f2c7a41/tmp    | muted:32 plain:44 dim:10 plain:34
 17 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101

@@ -4,19 +4,19 @@ expression: drawn
 ---
 rail at 40x24
 00 |─ turn 1 ───────────────────────────────| dim:40
-01 |✓ exit 0  bash  412 bytes · 23 ms       | ok:1 plain:1 dim:31 plain:7
-02 |  src/rows.rs: the glyph a turn opens   | muted:37 plain:3
-03 |  with                                  | muted:6 plain:34
-04 |  src/rows.rs: a word longer than a row | muted:39 plain:1
-05 |  is broken                             | muted:11 plain:29
-06 |  Rendering lives in the front end and  | plain:40
-07 |  not in the core, because an entry is a| plain:40
-08 |  fact and never a rendering: the TUI   | plain:40
-09 |  and any reader draw one run from one  | plain:40
-10 |  value, and the core may not name a    | plain:40
-11 |  terminal at all.                      | plain:40
-12 |                                        | plain:40
-13 |                                        | plain:40
+01 |✓ bash                                  | ok:1 plain:1 dim:4 plain:34
+02 |  rg -n 'fence' src                     | plain:40
+03 |✓ exit 0  23 ms · 412 bytes             | ok:1 plain:1 dim:25 plain:13
+04 |  src/rows.rs: the glyph a turn opens   | muted:37 plain:3
+05 |  with                                  | muted:6 plain:34
+06 |  src/rows.rs: a word longer than a row | muted:39 plain:1
+07 |  is broken                             | muted:11 plain:29
+08 |  Rendering lives in the front end and  | plain:40
+09 |  not in the core, because an entry is a| plain:40
+10 |  fact and never a rendering: the TUI   | plain:40
+11 |  and any reader draw one run from one  | plain:40
+12 |  value, and the core may not name a    | plain:40
+13 |  terminal at all.                      | plain:40
 14 |                                        | plain:40
 15 |                                        | plain:40
 16 |                                        | plain:40

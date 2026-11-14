@@ -3,30 +3,30 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 mark at 120x40
-00 |─ turn 4 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
-01 |✓ exit 0  bash  96 bytes · 118 ms                                                                                       | ok:1 plain:1 dim:31 plain:87
-02 |  check: fmt ... ok                                                                                                     | muted:19 plain:101
-03 |  check: clippy ... ok                                                                                                  | muted:22 plain:98
-04 |  check: test ... ok                                                                                                    | muted:20 plain:100
-05 |  check: frames ... ok                                                                                                  | muted:22 plain:98
-06 |  What that buys is the plain case and what it costs is the scrolled one: a window is a row offset from the tail, so    | plain:120
-07 |  resolving one walks the entries between the tail and the window and lays out every one of them on the way. Each is    | plain:120
-08 |  laid out once and kept, so the whole history scrolled through costs one layout per entry and scrolling it again costs | plain:120
-09 |  none.                                                                                                                 | plain:120
-10 |─ turn 5 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
-11 |✓ exit 0  bash  128 bytes · 9 ms                                                                                        | ok:1 plain:1 dim:30 plain:88
-12 |  crates/sindri/src/rows.rs | 412 +++++++++++++                                                                         | muted:47 plain:73
-13 |  crates/sindri/tests/rows.rs | 198 +++++++++                                                                           | muted:45 plain:75
-14 |  The transcript's unit is the entry. An entry never carries a formatted line, so the same run is drawn the same way by | plain:120
-15 |  the TUI, by a reader of the transcript and by whatever front end comes next.                                          | plain:120
-16 |                                                                                                                        | plain:120
-17 |  construct │ where it stands                                                                                           | plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:91
-18 |  ──────────┼───────────────────────────                                                                                | plain:2 dim:38 plain:80
-19 |  heading   │ in the answer's own gutter                                                                                | plain:11 dim:3 plain:106
-20 |  code      │ behind a bar, highlighted                                                                                 | plain:2 mark:37 plain:81
-21 |  table     │ columns joined by a bar                                                                                   | plain:2 mark:35 plain:83
-22 |─ turn 6 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────| mark:71 dim:49
-23 |✓ exit 0  bash  104 bytes · 31 ms                                                                                       | mark:33 plain:87
+00 |  check: test ... ok                                                                                                    | muted:20 plain:100
+01 |  check: frames ... ok                                                                                                  | muted:22 plain:98
+02 |  What that buys is the plain case and what it costs is the scrolled one: a window is a row offset from the tail, so    | plain:120
+03 |  resolving one walks the entries between the tail and the window and lays out every one of them on the way. Each is    | plain:120
+04 |  laid out once and kept, so the whole history scrolled through costs one layout per entry and scrolling it again costs | plain:120
+05 |  none.                                                                                                                 | plain:120
+06 |─ turn 5 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+07 |✓ bash                                                                                                                  | ok:1 plain:1 dim:4 plain:114
+08 |  git diff --stat                                                                                                       | plain:120
+09 |✓ exit 0  9 ms · 128 bytes                                                                                              | ok:1 plain:1 dim:24 plain:94
+10 |  crates/sindri/src/rows.rs | 412 +++++++++++++                                                                         | muted:47 plain:73
+11 |  crates/sindri/tests/rows.rs | 198 +++++++++                                                                           | muted:45 plain:75
+12 |  The transcript's unit is the entry. An entry never carries a formatted line, so the same run is drawn the same way by | plain:120
+13 |  the TUI, by a reader of the transcript and by whatever front end comes next.                                          | plain:120
+14 |                                                                                                                        | plain:120
+15 |  construct │ where it stands                                                                                           | plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:91
+16 |  ──────────┼───────────────────────────                                                                                | plain:2 dim:38 plain:80
+17 |  heading   │ in the answer's own gutter                                                                                | plain:11 dim:3 plain:106
+18 |  code      │ behind a bar, highlighted                                                                                 | plain:11 dim:3 plain:106
+19 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
+20 |─ turn 6 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────| mark:71 dim:49
+21 |✓ bash                                                                                                                  | mark:6 plain:114
+22 |  make check STAGES=frames                                                                                              | plain:2 mark:24 plain:94
+23 |✓ exit 0  31 ms · 104 bytes                                                                                             | mark:27 plain:93
 24 |  check: frame calls ... ok                                                                                             | muted:27 plain:93
 25 |  check: frame transcript ... ok                                                                                        | muted:32 plain:88
 26 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101

@@ -3,19 +3,19 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 transcript-scrolled at 80x24
-00 |  so the same run is drawn the same way by the TUI, by a reader of the          | plain:80
-01 |  transcript and by whatever front end comes next.                              | plain:80
-02 |                                                                                | plain:80
-03 |  construct │ where it stands                                                   | plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:51
-04 |  ──────────┼───────────────────────────                                        | plain:2 dim:38 plain:40
-05 |  heading   │ in the answer's own gutter                                        | plain:11 dim:3 plain:66
-06 |  code      │ behind a bar, highlighted                                         | plain:11 dim:3 plain:66
-07 |  table     │ columns joined by a bar                                           | plain:11 dim:3 plain:66
-08 |─ turn 6 ───────────────────────────────────────────────────────────────────────| dim:80
-09 |✓ exit 0  bash  104 bytes · 31 ms                                               | ok:1 plain:1 dim:31 plain:47
+00 |                                                                                | plain:80
+01 |  construct │ where it stands                                                   | plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:51
+02 |  ──────────┼───────────────────────────                                        | plain:2 dim:38 plain:40
+03 |  heading   │ in the answer's own gutter                                        | plain:11 dim:3 plain:66
+04 |  code      │ behind a bar, highlighted                                         | plain:11 dim:3 plain:66
+05 |  table     │ columns joined by a bar                                           | plain:11 dim:3 plain:66
+06 |─ turn 6 ───────────────────────────────────────────────────────────────────────| dim:80
+07 |✓ bash                                                                          | ok:1 plain:1 dim:4 plain:74
+08 |  make check STAGES=frames                                                      | plain:80
+09 |✓ exit 0  31 ms · 104 bytes                                                     | ok:1 plain:1 dim:25 plain:53
 10 |  check: frame calls ... ok                                                     | muted:27 plain:53
 11 |  check: frame transcript ... ok                                                | muted:32 plain:48
-12 |█ A row is one line                                                             | dim:1 plain:1 plain+bold:17 plain:61
+12 |  A row is one line                                                             | plain:2 plain+bold:17 plain:61
 13 |█ ─────────────────                                                             | dim:1 plain:1 dim:17 plain:61
 14 |█                                                                               | dim:1 plain:79
 15 |█ A row says the exit code and not the command, because the verdict is a fact   | dim:1 plain:79

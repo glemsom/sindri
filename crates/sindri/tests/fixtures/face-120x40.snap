@@ -4,14 +4,14 @@ expression: drawn
 ---
 face at 120x40
 00 |─ turn 1 ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
-01 |✓ exit 0  bash  412 bytes · 23 ms                                                                                       | ok:1 plain:1 dim:31 plain:87
-02 |  src/rows.rs: the glyph a turn opens with                                                                              | muted:42 plain:78
-03 |  src/rows.rs: a word longer than a row is broken                                                                       | muted:49 plain:71
-04 |  Rendering lives in the front end and not in the core, because an entry is                                             | plain:120
-05 |  a fact and never a rendering: the TUI and any reader draw one run from one                                            | plain:120
-06 |  value, and the core may not name a terminal at all.                                                                   | plain:120
-07 |                                                                                                                        | plain:120
-08 |                                                                                                                        | plain:120
+01 |✓ bash                                                                                                                  | ok:1 plain:1 dim:4 plain:114
+02 |  rg -n 'fence' src                                                                                                     | plain:120
+03 |✓ exit 0  23 ms · 412 bytes                                                                                             | ok:1 plain:1 dim:25 plain:93
+04 |  src/rows.rs: the glyph a turn opens with                                                                              | muted:42 plain:78
+05 |  src/rows.rs: a word longer than a row is broken                                                                       | muted:49 plain:71
+06 |  Rendering lives in the front end and not in the core, because an entry is                                             | plain:120
+07 |  a fact and never a rendering: the TUI and any reader draw one run from one                                            | plain:120
+08 |  value, and the core may not name a terminal at all.                                                                   | plain:120
 09 |                                                                                                                        | plain:120
 10 |                                                                                                                        | plain:120
 11 |                                                                            ────────────────────────────────────────────| plain:76 dim:44
