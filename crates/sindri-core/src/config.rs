@@ -259,8 +259,45 @@ impl Config {
     }
     pub fn resolve(environment: &impl Environment, flags: Flags) -> Result<Config, ConfigError> {
         let file = Config::load(environment)?;
-        let environment = Config::from_environment(environment)?;
-        Ok(Config::from(flags).above(environment.above(file)))
+        let above = Config::from(flags).above(Config::from_environment(environment)?);
+        let wire_key = above
+            .provider
+            .or(file.provider)
+            .and_then(Wire::credential_variable)
+            .and_then(|name| spoken(environment, name));
+        let spoken_key = above.api_key.clone();
+        let written_key = file.api_key.clone();
+        let mut config = above.above(file);
+        config.api_key = spoken_key.or(wire_key).or(written_key);
+        Ok(config)
+    }
+    pub fn credential_variables(&self) -> Vec<&'static str> {
+        let mut variables: Vec<&'static str> = self
+            .provider
+            .and_then(Wire::credential_variable)
+            .into_iter()
+            .collect();
+        variables.push("SINDRI_API_KEY");
+        variables
+    }
+    pub fn missing(&self) -> Vec<&'static str> {
+        let mut missing = Vec::new();
+        if self.provider.is_none() {
+            missing.push("provider");
+        }
+        if self.model.is_none() {
+            missing.push("model");
+        }
+        let key_asked_for = self
+            .provider
+            .is_some_and(|wire| wire.credential_variable().is_some());
+        if key_asked_for && self.api_key.is_none() {
+            missing.push("api_key");
+        }
+        missing
+    }
+    pub fn is_ready(&self) -> bool {
+        self.missing().is_empty()
     }
 }
 impl fmt::Debug for Config {
