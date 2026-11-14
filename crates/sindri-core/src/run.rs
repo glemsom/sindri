@@ -449,18 +449,13 @@ impl<R: Responder, A: Executor> Run<R, A> {
         &self.history
     }
 
-    /// The turn a conversation keeps for this run: the prompt it was asked with beside the words of
-    /// the turn it ended on, and those words alone when no turn ended before it stopped.
+    /// The turn a conversation keeps for this run: the last turn it took, results and spend
+    /// included, and the prompt alone when it took none.
     pub fn kept(&self) -> Turn {
-        let last = self.history.last();
-        Turn {
-            turn: self.turns,
-            prompt: self.prompt.clone(),
-            text: last.map(|ended| ended.text.clone()).unwrap_or_default(),
-            calls: last.map(|ended| ended.calls.clone()).unwrap_or_default(),
-            results: last.map(|ended| ended.results.clone()).unwrap_or_default(),
-            usage: last.map(|ended| ended.usage).unwrap_or_default(),
-        }
+        self.history
+            .last()
+            .cloned()
+            .unwrap_or_else(|| Turn::answered(self.turns, self.prompt.clone(), ""))
     }
 
     pub fn skills(&self) -> &[String] {

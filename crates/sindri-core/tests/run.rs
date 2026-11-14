@@ -301,6 +301,58 @@ fn a_run_handed_nothing_asks_with_nothing_from_before_it() {
 }
 
 #[test]
+fn a_responder_is_handed_the_very_turn_the_run_keeps() {
+    let earlier = vec![Turn::answered(
+        1,
+        "hi my name is Glenn",
+        "nice to meet you, Glenn",
+    )];
+    let model = Scripted::answering([
+        Reply::asking("running it", [command("true")]).spent(spent(Some(1_200), Some(20))),
+        Reply::answer("it was the retry"),
+    ]);
+    let log = model.log();
+    let mut run =
+        Run::new("why does the retry test fail?", model, Tools::cheap()).earlier(earlier.clone());
+
+    run.drive(&mut Transcript::default());
+
+    let asked = Turn {
+        turn: 1,
+        prompt: String::from("why does the retry test fail?"),
+        text: String::from("running it"),
+        calls: vec![Call::new("toolu_1", "bash", r#"{"command":"true"}"#)],
+        results: vec![Acted {
+            text: String::from("exit 0\n"),
+            bytes: 0,
+            elapsed: Duration::ZERO,
+            exit: Exit::Code(0),
+        }],
+        usage: Usage {
+            input: Some(1_200),
+            output: Some(20),
+            ..Usage::default()
+        },
+    };
+    let seen = requests(&log);
+    assert_eq!(
+        seen[1].history(),
+        std::slice::from_ref(&asked),
+        "the second ask is handed the first turn itself, results and spend included"
+    );
+    assert_eq!(
+        seen[1].earlier(),
+        earlier,
+        "beside the turns the run joins, and no others"
+    );
+    assert_eq!(
+        run.kept(),
+        Turn::answered(2, "why does the retry test fail?", "it was the retry"),
+        "and the turn a conversation keeps is that prompt beside the reply's words"
+    );
+}
+
+#[test]
 fn a_run_keeps_its_prompt_beside_the_answer_it_got() {
     let model = Scripted::answering([
         Reply::asking("let me read the test", [command("true")]),
@@ -318,6 +370,47 @@ fn a_run_keeps_its_prompt_beside_the_answer_it_got() {
     assert_eq!(
         kept.text, "it was the retry",
         "beside the turn it ended on, and never the words of a turn before it"
+    );
+}
+
+#[test]
+fn a_run_keeps_the_very_turn_it_took() {
+    let mut run = Run::new(
+        "count the files",
+        Scripted::answering([Reply::asking("let me list them", [command("true")])
+            .spent(spent(Some(1_200), Some(20)))]),
+        Tools::cheap(),
+    );
+
+    run.turn(&mut Transcript::default());
+
+    let took = Turn {
+        turn: 1,
+        prompt: String::from("count the files"),
+        text: String::from("let me list them"),
+        calls: vec![Call::new("toolu_1", "bash", r#"{"command":"true"}"#)],
+        results: vec![Acted {
+            text: String::from("exit 0\n"),
+            bytes: 0,
+            elapsed: Duration::ZERO,
+            exit: Exit::Code(0),
+        }],
+        usage: Usage {
+            input: Some(1_200),
+            output: Some(20),
+            ..Usage::default()
+        },
+    };
+
+    assert_eq!(
+        run.history().last(),
+        Some(&took),
+        "the run kept the one turn it took"
+    );
+    assert_eq!(
+        run.kept(),
+        took,
+        "and the turn a conversation keeps is that very turn, results and spend included"
     );
 }
 

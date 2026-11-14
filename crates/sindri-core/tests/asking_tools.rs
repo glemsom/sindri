@@ -4,15 +4,17 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use serde_json::Value;
 use sindri_core::asking::Asking;
 use sindri_core::config::Config;
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::provider::transport::{Canned, Replay};
 use sindri_core::provider::{Ask, Client, Route};
 use sindri_core::redact::{Redacted, SecretSet};
-use sindri_core::run::{Acted, Call, Executor, Exit, Loaded, Run, State, Stop};
+use sindri_core::run::{Acted, Call, Executor, Exit, Loaded, Run, State, Stop, Turn};
 use sindri_core::skills::Catalog;
 use sindri_core::tools::{FrontEnd, ToolSet};
+use sindri_core::turn::Usage;
 use sindri_core::wire::Wire;
 
 const PLAIN: &str = include_str!("fixtures/providers/anthropic_stream.sse");
@@ -159,6 +161,54 @@ const OPENAI_TOOL_USE: &str = include_str!("fixtures/providers/openai_chat_tool_
 
 const OPENAI_PLAIN: &str = include_str!("fixtures/providers/copilot_chat_stream.sse");
 
+fn anthropic_ask() -> Ask {
+    Ask::new(Wire::Anthropic, "claude-sonnet-4-6").key("sk-ant-recorded")
+}
+
+fn openai_chat_ask() -> Ask {
+    Ask::new(Wire::Openai, "gpt-4o-2024-11-20")
+        .key("sk-recorded")
+        .route(Route::Chat)
+}
+
+fn copilot_chat_ask() -> Ask {
+    Ask::new(Wire::Copilot, "gpt-4o-2024-11-20")
+        .key("sk-recorded")
+        .route(Route::Chat)
+}
+
+struct Case {
+    wire: Wire,
+    ask: fn() -> Ask,
+    call: &'static str,
+    calling: &'static str,
+    plain: &'static str,
+}
+
+const CASES: [Case; 3] = [
+    Case {
+        wire: Wire::Anthropic,
+        ask: anthropic_ask,
+        call: "toolu_01",
+        calling: TOOL_USE,
+        plain: PLAIN,
+    },
+    Case {
+        wire: Wire::Openai,
+        ask: openai_chat_ask,
+        call: "call_01",
+        calling: OPENAI_TOOL_USE,
+        plain: OPENAI_PLAIN,
+    },
+    Case {
+        wire: Wire::Copilot,
+        ask: copilot_chat_ask,
+        call: "call_01",
+        calling: OPENAI_TOOL_USE,
+        plain: OPENAI_PLAIN,
+    },
+];
+
 #[test]
 fn an_openai_shaped_wire_is_told_the_tools_and_answers_with_a_call_too() {
     let replay = Replay::new([
@@ -190,4 +240,150 @@ fn an_openai_shaped_wire_is_told_the_tools_and_answers_with_a_call_too() {
     );
     assert_eq!(ran.names(), ["bash"], "and its call reaches the executor");
     assert_eq!(run.answer(), Some("Hello from Copilot"));
+}
+
+#[test]
+fn every_wire_the_tree_declares_replays_one_turn_with_each_call_beside_what_it_answered() {
+    let declared: Vec<&str> = CASES.iter().map(|case| case.wire.word()).collect();
+    assert_eq!(
+        declared,
+        Wire::WORDS,
+        "a wire cannot be declared without being proven here"
+    );
+
+    for case in &CASES {
+        let replay = Replay::new([Canned::stream(case.calling), Canned::stream(case.plain)]);
+        let tools = tools();
+        let mut run = Run::new(
+            "List files in this folder",
+            Asking::new(client_over(&replay), (case.ask)(), tools.clone()),
+            Ran::default(),
+        )
+        .tools(&tools);
+
+        let state = run.drive(&mut ());
+
+        assert_eq!(
+            state,
+            State::Stopped(Stop::Final),
+            "{} answers the turn it replayed",
+            case.wire
+        );
+        let requests = replay.requests();
+        assert_eq!(
+            requests.len(),
+            2,
+            "{} asks again with what the call answered",
+            case.wire
+        );
+        let second = &requests[1].body;
+        assert_eq!(
+            second.matches(case.call).count(),
+            2,
+            "{} carries the call's identity once as the call and once as the answer to it: {second}",
+            case.wire
+        );
+        assert!(
+            second.contains("Cargo.toml"),
+            "{} carries the text the call answered with: {second}",
+            case.wire
+        );
+    }
+}
+
+fn answered_with(body: &Value, id: &str) -> String {
+    let mut answered = String::new();
+    for message in body["messages"]
+        .as_array()
+        .expect("the messages are a list")
+    {
+        for block in message["content"].as_array().into_iter().flatten() {
+            if block["type"] == "tool_result" && block["tool_use_id"] == id {
+                answered.push_str(block["content"][0]["text"].as_str().unwrap_or_default());
+            }
+        }
+    }
+    answered
+}
+
+fn asked_for(body: &Value) -> Vec<(String, String)> {
+    let mut calls = Vec::new();
+    for message in body["messages"]
+        .as_array()
+        .expect("the messages are a list")
+    {
+        for block in message["content"].as_array().into_iter().flatten() {
+            if block["type"] == "tool_use" {
+                calls.push((
+                    block["id"].as_str().unwrap_or_default().to_owned(),
+                    block["input"]["command"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_owned(),
+                ));
+            }
+        }
+    }
+    calls
+}
+
+fn read(which: char, command: &str, answered: &str) -> (Call, Acted) {
+    (
+        Call::new(
+            format!("toolu_{which}"),
+            "bash",
+            format!(r#"{{"command":"{command}"}}"#),
+        ),
+        Acted {
+            text: String::from(answered),
+            bytes: u64::try_from(answered.len()).expect("a short result"),
+            elapsed: Duration::from_millis(20),
+            exit: Exit::Code(0),
+        },
+    )
+}
+
+#[test]
+fn a_turn_is_replayed_with_each_call_beside_the_text_that_call_answered() {
+    let replay = Replay::new([Canned::stream(PLAIN)]);
+    let tools = tools();
+    let (listing, listed) = read('a', "ls", "Cargo.toml");
+    let (counting, counted) = read('b', "wc -l", "12 Cargo.toml");
+    let ended = Turn {
+        turn: 1,
+        prompt: String::from("read the crate"),
+        text: String::from("reading it twice"),
+        calls: vec![listing, counting],
+        results: vec![listed, counted],
+        usage: Usage::default(),
+    };
+    let ask = ask()
+        .turns([ended])
+        .tools(tools.tools())
+        .prompt("what changed?");
+
+    client_over(&replay)
+        .ask(&ask, &mut ())
+        .expect("a recorded reply answers");
+
+    let body: Value =
+        serde_json::from_str(&replay.requests()[0].body).expect("a wire's body is JSON");
+    assert_eq!(
+        asked_for(&body),
+        [
+            (String::from("toolu_a"), String::from("ls")),
+            (String::from("toolu_b"), String::from("wc -l")),
+        ],
+        "each call is replayed with the wire's own identity for it, in the order it was asked"
+    );
+    assert_eq!(
+        answered_with(&body, "toolu_a"),
+        "Cargo.toml",
+        "and the result sent against a call is that call's own answer"
+    );
+    assert_eq!(
+        answered_with(&body, "toolu_b"),
+        "12 Cargo.toml",
+        "never the answer of the call beside it"
+    );
 }
